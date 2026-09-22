@@ -3,11 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
   return { history: vi.fn(), list: vi.fn(), activeRun: vi.fn(), send: vi.fn(), uuid: vi.fn(),
-    create: vi.fn(), mainConversation: vi.fn(), saveMainConversation: vi.fn(), subscribe: vi.fn(), unsubscribe: vi.fn() };
+    create: vi.fn(), mainConversation: vi.fn(), saveMainConversation: vi.fn(), subscribe: vi.fn(), unsubscribe: vi.fn(), cachedHistory: vi.fn(), rememberHistory: vi.fn() };
 });
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {
   history = mocks.history; list = mocks.list; activeRun = mocks.activeRun; send = mocks.send; uuid = mocks.uuid;
   create = mocks.create; mainConversation = mocks.mainConversation; saveMainConversation = mocks.saveMainConversation;
+  cachedHistory = mocks.cachedHistory; rememberHistory = mocks.rememberHistory;
 } }));
 vi.mock('../entry/src/main/ets/service/realtimeClient.ets', () => ({ realtimeClient: {
   subscribe: mocks.subscribe, unsubscribe: mocks.unsubscribe, start() {}, turnClaim() {},
@@ -20,6 +21,25 @@ const page = (id: string, text: string, before = '') => ({
   pagination: { hasMore: !!before, nextBeforeCursor: before },
 });
 describe('chat history isolation', () => {
+  it('seeds saved history while offline and replaces it with an authoritative response', async () => {
+    mocks.cachedHistory.mockResolvedValue(page('one', 'saved')); mocks.history.mockRejectedValueOnce(new Error('OFFLINE'));
+    const chat = new XopcChatViewModel(); await chat.open('one');
+    expect(chat.rows[0].text).toBe('saved'); expect(chat.cachedHistory).toBe(true);
+    chat.connection = 'connected'; expect(await chat.send('unsafe cached send')).toBe(false);
+    mocks.history.mockResolvedValueOnce(page('one', 'fresh')); await chat.retryHistory();
+    expect(chat.rows[0].text).toBe('fresh'); expect(chat.cachedHistory).toBe(false); chat.dispose();
+  });
+  it('never lets a delayed cache overwrite the network or another conversation', async () => {
+    let resolve!: (value: ReturnType<typeof page>) => void;
+    mocks.cachedHistory.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    mocks.history.mockResolvedValueOnce(page('one', 'fresh'));
+    const chat = new XopcChatViewModel(); await chat.open('one'); resolve(page('one', 'stale')); await Promise.resolve();
+    expect(chat.rows[0].text).toBe('fresh'); expect(chat.cachedHistory).toBe(false);
+    mocks.cachedHistory.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    mocks.history.mockRejectedValueOnce(new Error('OFFLINE')); await chat.open('two');
+    mocks.history.mockResolvedValueOnce(page('three', 'current')); await chat.open('three'); resolve(page('two', 'wrong')); await Promise.resolve();
+    expect(chat.rows[0].text).toBe('current'); chat.dispose();
+  });
   it.each(['reset', 'gap'])('does not stitch retained pages across a transcript %s', async reason => {
     const history = (ids: string[], transcriptId = 't') => ({ session: { key: 'one', transcriptId, messages: ids.map(id => ({ id, role: 'user', content: id })) }, pagination: { hasMore: true, nextBeforeCursor: ids[0] } });
     mocks.history.mockResolvedValueOnce(history(['3', '4']));
@@ -41,7 +61,7 @@ describe('chat history isolation', () => {
     expect(mocks.history).toHaveBeenLastCalledWith('one', 'oldest');
     expect(chat.rows.map(row => row.id)).toEqual(['0', '1', '2', '3', '4', '5']); chat.dispose();
   });
-  beforeEach(() => { vi.resetAllMocks(); mocks.activeRun.mockResolvedValue({ active: false }); mocks.saveMainConversation.mockResolvedValue(undefined); });
+  beforeEach(() => { vi.resetAllMocks(); mocks.activeRun.mockResolvedValue({ active: false }); mocks.saveMainConversation.mockResolvedValue(undefined); mocks.rememberHistory.mockResolvedValue(undefined); });
   it('opens a requested conversation as the persistent main chat and switches run subscriptions', async () => {
     mocks.history.mockImplementation(async (id) => page(id, id));
     mocks.activeRun.mockImplementation(async (id) => ({ active: true, runId: id + '-run' }));

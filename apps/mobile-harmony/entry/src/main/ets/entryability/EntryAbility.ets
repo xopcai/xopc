@@ -24,8 +24,8 @@ export default class EntryAbility extends UIAbility {
   onCreate(want: Want): void { if (want.uri) notificationNavigation.receive(want.uri); }
   onNewWant(want: Want): void { if (want.uri) notificationNavigation.receive(want.uri); }
   onForeground(): void { gatewaySession.setForeground(true); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
-  onBackground(): void { gatewaySession.setForeground(false); realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.stop(); }
-  onDestroy(): void { realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.stop(); }
+  onBackground(): void { gatewaySession.setForeground(false); realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.disableContinuous(); }
+  onDestroy(): void { realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.disableContinuous(); }
   onWindowStageCreate(stage: window.WindowStage): void {
     stage.loadContent('pages/Index', (error: BusinessError): void => {
       if (error.code) {
