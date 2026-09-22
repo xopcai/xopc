@@ -51,25 +51,36 @@ export async function fuzzySearchWorkspaceFiles(
   }
   const q = query.trim();
   const capped = Math.min(Math.max(limit, 1), FILE_SEARCH_MAX_LIMIT);
+  const directories = new Set<string>();
+  for (const file of files) {
+    const parts = file.split('/');
+    for (let end = 1; end < parts.length; end += 1) {
+      const directory = parts.slice(0, end).join('/');
+      if (directory) directories.add(directory);
+    }
+  }
+  const candidates: WorkspaceFileSearchEntry[] = [
+    ...directories,
+  ].map((path) => ({ name: basename(path), path, isDirectory: true }));
+  candidates.push(...files.map((path) => ({ name: basename(path), path, isDirectory: false })));
 
   type Row = WorkspaceFileSearchEntry & { score: number };
   const rows: Row[] = [];
 
   if (!q) {
-    const sorted = [...files].sort((a, b) => a.localeCompare(b));
-    for (const rel of sorted.slice(0, capped)) {
-      rows.push({ name: basename(rel), path: rel, isDirectory: false, score: 0 });
+    const sorted = candidates.sort((a, b) => a.path.localeCompare(b.path));
+    for (const candidate of sorted.slice(0, capped)) {
+      rows.push({ ...candidate, score: 0 });
     }
     return rows.map(({ name, path, isDirectory }) => ({ name, path, isDirectory }));
   }
 
-  for (const rel of files) {
-    const name = basename(rel);
-    const scorePath = fuzzySubsequenceScore(q, rel);
-    const scoreName = fuzzySubsequenceScore(q, name);
+  for (const candidate of candidates) {
+    const scorePath = fuzzySubsequenceScore(q, candidate.path);
+    const scoreName = fuzzySubsequenceScore(q, candidate.name);
     const score = Math.max(scorePath ?? -Infinity, scoreName ?? -Infinity);
     if (score === -Infinity) continue;
-    rows.push({ name, path: rel, isDirectory: false, score });
+    rows.push({ ...candidate, score });
   }
 
   rows.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));

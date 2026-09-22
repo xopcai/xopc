@@ -140,11 +140,21 @@ describe('files routes', () => {
     writeFileSync(join(root, 'docs', 'report.md'), 'report');
     const { app } = appFor(root);
     const spaceId = fileSpaceId(realpathSync(root));
-    for (const q of ['dcrpt', 'docs/', '']) {
-      const response = await app.request(`/api/files/search?spaceId=${spaceId}&q=${encodeURIComponent(q)}`);
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ items: [{ relativePath: 'docs/report.md' }] });
-    }
+    const fuzzyResponse = await app.request(`/api/files/search?spaceId=${spaceId}&q=dcrpt`);
+    expect(fuzzyResponse.status).toBe(200);
+    expect(await fuzzyResponse.json()).toMatchObject({ items: [{ relativePath: 'docs/report.md' }] });
+
+    const pathResponse = await app.request(`/api/files/search?spaceId=${spaceId}&q=${encodeURIComponent('docs/')}`);
+    expect(pathResponse.status).toBe(200);
+    expect(await pathResponse.json()).toMatchObject({ items: [{ relativePath: 'docs/report.md' }] });
+
+    const emptyResponse = await app.request(`/api/files/search?spaceId=${spaceId}&q=`);
+    expect(emptyResponse.status).toBe(200);
+    const emptyBody = await emptyResponse.json() as { items: Array<{ relativePath: string; kind: string }> };
+    expect(emptyBody.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ relativePath: 'docs', kind: 'directory' }),
+      expect.objectContaining({ relativePath: 'docs/report.md', kind: 'file' }),
+    ]));
   });
 
   it('returns only the newest files across nested directories', async () => {

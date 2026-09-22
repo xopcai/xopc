@@ -67,24 +67,38 @@ describe('messagesToClientHistory', () => {
     ]);
   });
 
-  it.each(['note', 'task'])('exposes only safe source context summaries for user-message chips', (kind) => {
-    const rows = [{
-      role: 'user',
-      content: 'question',
-      metadata: {
-        sourceContexts: [{
-          kind, sourceId: 'note-1', version: '42', title: 'Plan', tokenEstimate: 12,
-        }],
-        internalSecret: 'do-not-expose',
-      },
-    }] as never[];
+  it.each(['note', 'task', 'file', 'session', 'browser_tab', 'browser_page', 'mcp_resource'] as const)(
+    'exposes safe %s source context summaries for user-message chips',
+    (kind) => {
+      const rows = [{
+        role: 'user',
+        content: 'question',
+        metadata: {
+          sourceContexts: [{
+            kind,
+            sourceId: 'source-1',
+            version: '42',
+            title: 'Plan',
+            tokenEstimate: 12,
+            ...(kind === 'file' ? { fileKind: 'directory' } : {}),
+            text: 'must not be exposed',
+          }],
+          internalSecret: 'do-not-expose',
+        },
+      }] as never[];
 
-    expect(transcriptRowsToClientHistory(rows)[0]?.metadata).toEqual({
-      sourceContexts: [{
-        kind, sourceId: 'note-1', version: '42', title: 'Plan', tokenEstimate: 12,
-      }],
-    });
-  });
+      expect(transcriptRowsToClientHistory(rows)[0]?.metadata).toEqual({
+        sourceContexts: [{
+          kind,
+          sourceId: 'source-1',
+          version: '42',
+          title: 'Plan',
+          tokenEstimate: 12,
+          ...(kind === 'file' ? { fileKind: 'directory' } : {}),
+        }],
+      });
+    },
+  );
 
   const imageMedia = {
     id: 'photo---id.png',

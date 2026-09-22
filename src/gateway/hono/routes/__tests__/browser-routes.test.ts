@@ -74,6 +74,12 @@ function createEnabledApp(connected: boolean) {
 }
 
 describe('browser routes', () => {
+  it('requires a conversation when listing attached tabs', async () => {
+    const response = await createApp().request('/api/browser/tabs');
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: 'BAD_REQUEST' } });
+  });
+
   it('reports an explicitly disabled Browser Control state', async () => {
     const response = await createApp().request('/api/browser/status');
 

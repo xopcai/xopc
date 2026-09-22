@@ -38,6 +38,7 @@ describe('ChatComposerInput contextual suggestion', () => {
         editingFollowUpId: null,
         onCancelEditFollowUp: vi.fn(),
         attachmentsLen: 0,
+        contextRefsLen: 0,
         isComposing: false,
         valueRef,
         adjustHeight: vi.fn(),
@@ -78,6 +79,49 @@ describe('ChatComposerInput contextual suggestion', () => {
     expect(acceptEmptySuggestion).toHaveBeenCalledTimes(1);
   });
 
+  it('sends a reference-only draft with Enter', () => {
+    const send = vi.fn();
+    const editorRef = { current: null } as MutableRefObject<HTMLDivElement | null>;
+    const kbdRef = {
+      current: {
+        adapters: [],
+        send,
+        runBusy: false,
+        pendingFollowUpsCount: 0,
+        editingFollowUpId: null,
+        onCancelEditFollowUp: vi.fn(),
+        attachmentsLen: 0,
+        contextRefsLen: 1,
+        isComposing: false,
+        valueRef: { current: '' },
+        adjustHeight: vi.fn(),
+        editorRef,
+      },
+    } as MutableRefObject<ComposerKbdContext>;
+
+    act(() => {
+      root.render(
+        <ChatComposerInput
+          editorRef={editorRef}
+          disabled={false}
+          placeholder="Message"
+          onWireInput={() => {}}
+          adjustHeight={() => {}}
+          processFiles={async () => {}}
+          processPastedText={async () => {}}
+          setIsComposing={() => {}}
+          kbdRef={kbdRef}
+          chatMessages={{ clipboardFileTypeUnsupported: 'Unsupported' }}
+        />,
+      );
+    });
+
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    act(() => editorRef.current?.dispatchEvent(enter));
+    expect(enter.defaultPrevented).toBe(true);
+    expect(send).toHaveBeenCalledOnce();
+  });
+
   it('keeps the editor DOM mounted while voice status temporarily hides it', () => {
     const editorRef = { current: null } as MutableRefObject<HTMLDivElement | null>;
     const valueRef = { current: 'draft text' };
@@ -90,6 +134,7 @@ describe('ChatComposerInput contextual suggestion', () => {
         editingFollowUpId: null,
         onCancelEditFollowUp: vi.fn(),
         attachmentsLen: 0,
+        contextRefsLen: 0,
         isComposing: false,
         valueRef,
         adjustHeight: vi.fn(),

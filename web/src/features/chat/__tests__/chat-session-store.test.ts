@@ -182,6 +182,41 @@ describe('useChatSessionStore', () => {
     expect(getChatSessionSnapshot(conversationId)?.messages[0]?.contextRefs).toEqual(optimistic.contextRefs);
   });
 
+  it('keeps user attachments and folder refs when a committed snapshot omits display metadata', () => {
+    const optimistic: Message = {
+      role: 'user',
+      turnId: 'turn-1',
+      content: [{ type: 'text', text: 'inspect this folder' }],
+      attachments: [{ name: 'diagram.png', mimeType: 'image/png', type: 'image' }],
+      contextRefs: [{
+        kind: 'file',
+        fileKind: 'directory',
+        sourceId: 'apps/mobile-expo',
+        version: '42',
+        title: 'mobile-expo',
+      }],
+      timestamp: 10,
+    };
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...idleSlice,
+      messages: [optimistic],
+    });
+
+    useChatSessionStore.getState().setCommittedSnapshot(conversationId, {
+      messages: [{
+        role: 'user',
+        turnId: 'turn-1',
+        content: [{ type: 'text', text: 'inspect this folder' }],
+        timestamp: 11,
+      }],
+      hasMore: false,
+    });
+
+    const message = getChatSessionSnapshot(conversationId)?.messages[0];
+    expect(message?.attachments).toEqual(optimistic.attachments);
+    expect(message?.contextRefs).toEqual(optimistic.contextRefs);
+  });
+
   it('setCommittedSnapshot preserves live slice messages', () => {
     useChatSessionStore.getState().initSessionSnapshot(conversationId, {
       ...idleSlice,

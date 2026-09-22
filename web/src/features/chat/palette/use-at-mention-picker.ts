@@ -1,16 +1,20 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDebounce } from 'use-debounce';
 
-import { fetchWorkspaceBrowseEntries, searchWorkspaceFiles, type AtMentionItem } from '@/features/chat/palette/at-mention-api';
+import {
+  atMentionProviders,
+  fetchWorkspaceBrowseEntries,
+  type AtMentionFileItem,
+  type AtMentionItem,
+  type AtMentionItemKind,
+} from '@/features/chat/palette/at-mention-api';
 import { getRecentAtPaths } from '@/features/chat/palette/at-mention-recent';
-import { listNotes } from '@/features/notes/notes-api';
-import { messages } from '@/i18n/messages';
-import { useAsyncResource } from '@/lib/use-async-resource';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const DEBOUNCE_MS = 150;
-const MAX_FILE_ITEMS = 10;
-const MAX_NOTE_ITEMS = 5;
+const PROVIDER_ORDER: readonly AtMentionItemKind[] = [
+  'file', 'note', 'session', 'browser_tab', 'skill', 'agent', 'mcp_server', 'mcp_resource',
+];
 
 export interface AtRange {
   start: number;
@@ -18,37 +22,52 @@ export interface AtRange {
   query: string;
 }
 
-/**
- * Active `@…` mention for file picker: last `@` before caret, query is non-whitespace tail, not an email
- * local-part character (ASCII alnum+_) right before `@`, and not already inside a serialized
- * `@(file|doc|url|symbol):` token. The composer always suppresses the `/` (slash) palette while this
- * range is active so path queries like `sub/dir` never open both menus.
- */
-export function detectAtRange(text: string, cursor: number): AtRange | null {
-  const len = text.length;
-  let c = Math.min(Math.max(cursor, 0), len);
-  if (c < 1) return null;
-  const before = text.slice(0, c);
-  const match = before.match(/@([^\s]*)$/);
-  if (!match || match.index === undefined) return null;
-  const start = match.index;
-  if (start > 0 && /[a-zA-Z0-9_]/.test(text[start - 1])) {
-    return null;
-  }
-  const tail = before.slice(start);
-  if (/^@(file|doc|url|symbol):/.test(tail)) {
-    return null;
-  }
+export interface AtMentionSection {
+  kind: AtMentionItemKind;
+  items: AtMentionItem[];
+  loading: boolean;
+  error: string | null;
+}
+
+type ProviderState = Record<AtMentionItemKind, Omit<AtMentionSection, 'kind'>>;
+
+function emptyProviderState(loading: boolean): ProviderState {
+  const state = { items: [], loading, error: null };
   return {
-    start,
-    end: c,
-    query: match[1] ?? '',
+    file: { ...state },
+    note: { ...state },
+    session: { ...state },
+    skill: { ...state },
+    agent: { ...state },
+    browser_tab: { ...state },
+    mcp_server: { ...state },
+    mcp_resource: { ...state },
   };
 }
 
+/** Returns the unfinished `@query` immediately before the caret, excluding email addresses. */
+export function detectAtRange(text: string, cursor: number): AtRange | null {
+  const boundedCursor = Math.min(Math.max(cursor, 0), text.length);
+  if (boundedCursor < 1) return null;
+  const before = text.slice(0, boundedCursor);
+  const match = before.match(/@((?:\\.|[^\s])*)$/);
+  if (!match || match.index === undefined) return null;
+  const start = match.index;
+  if (start > 0 && /[a-zA-Z0-9_]/.test(text[start - 1])) return null;
+  const query = (match[1] ?? '').replace(/\\([\\\s])/gu, '$1');
+  return { start, end: boundedCursor, query };
+}
+
+export function escapeAtQuery(query: string): string {
+  return query.replace(/[\\\s]/gu, (value) => `\\${value}`);
+}
+
 function isBrowseModeQuery(query: string): boolean {
-  const q = query.trim();
-  return q.length > 0 && q.endsWith('/') && !/^https?:\/\//i.test(q);
+  const normalized = query.trim();
+  return normalized.length > 0
+    && normalized.endsWith('/')
+    && !normalized.startsWith('mcp:')
+    && !/^https?:\/\//i.test(normalized);
 }
 
 export function browseDirFromQuery(query: string): string {
@@ -56,10 +75,10 @@ export function browseDirFromQuery(query: string): string {
 }
 
 export function browseParentDir(dir: string): string {
-  const d = dir.replace(/\/+$/, '');
-  if (!d) return '';
-  const i = d.lastIndexOf('/');
-  return i <= 0 ? '' : d.slice(0, i);
+  const normalized = dir.replace(/\/+$/, '');
+  if (!normalized) return '';
+  const separator = normalized.lastIndexOf('/');
+  return separator <= 0 ? '' : normalized.slice(0, separator);
 }
 
 function clampPaletteIndex(index: number, length: number): number {
@@ -67,146 +86,186 @@ function clampPaletteIndex(index: number, length: number): number {
   return Math.min(index, length - 1);
 }
 
+function toFileItem(entry: {
+  id: string;
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  revision: string;
+}): AtMentionFileItem {
+  return {
+    id: `file:${entry.id}`,
+    kind: 'file',
+    name: entry.name,
+    description: entry.path,
+    relativePath: entry.path,
+    isDirectory: entry.isDirectory,
+    fileRef: { sourceId: entry.id, expectedVersion: entry.revision },
+  };
+}
+
 export function useAtMentionPicker(
   value: string,
   cursor: number,
   options: {
     conversationId: string | null;
+    currentAgentId?: string;
     slashPaletteOpen: boolean;
     isComposing?: boolean;
-    selectedNoteIds?: ReadonlySet<string>;
+    selectedContextKeys?: ReadonlySet<string>;
     /** When provided, skips internal `detectAtRange` computation. */
     precomputedAtRange?: AtRange | null;
   },
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const language = useLocaleStore((s) => s.language);
+  const [providerState, setProviderState] = useState<ProviderState>(() => emptyProviderState(false));
+  const requestGeneration = useRef(0);
+  const language = useLocaleStore((state) => state.language);
 
   const atRange = useMemo(() => {
-    if (options.precomputedAtRange !== undefined) {
-      if (options.isComposing) return null;
-      if (options.slashPaletteOpen) return null;
-      return options.precomputedAtRange;
-    }
-    if (options.isComposing) return null;
-    if (options.slashPaletteOpen) return null;
+    if (options.isComposing || options.slashPaletteOpen) return null;
+    if (options.precomputedAtRange !== undefined) return options.precomputedAtRange;
     return detectAtRange(value, cursor);
   }, [value, cursor, options.slashPaletteOpen, options.isComposing, options.precomputedAtRange]);
 
   const pickerActive = atRange !== null;
-  const rawQuery = pickerActive ? (atRange?.query ?? '') : '';
+  const rawQuery = pickerActive ? atRange.query : '';
   const [debouncedQueryRaw] = useDebounce(rawQuery, DEBOUNCE_MS);
   const debouncedQuery = pickerActive ? debouncedQueryRaw : '';
-
   const conversationId = options.conversationId?.trim() ?? '';
-  const selectedNoteIdsKey = [...(options.selectedNoteIds ?? [])].sort().join('\0');
-  const itemsResource = useAsyncResource(
-    async () => {
-      if (!conversationId) {
-        return [] as AtMentionItem[];
-      }
+  const selectedContextKeys = options.selectedContextKeys ?? new Set<string>();
+  const selectedContextKeysKey = [...selectedContextKeys].sort().join('\0');
 
-      if (isBrowseModeQuery(debouncedQuery)) {
-        const dir = browseDirFromQuery(debouncedQuery);
-        const entries = await fetchWorkspaceBrowseEntries(dir, { conversationId });
-        const mapped = entries.map((e) => ({
-          kind: 'file' as const,
-          name: e.name,
-          relativePath: e.path,
-          isDirectory: e.isDirectory,
-        }));
-        const browseUp: AtMentionItem = {
-          kind: 'file',
-          name: '..',
-          relativePath: '',
-          isDirectory: true,
-          isBrowseUp: true,
-        };
-        return dir ? [browseUp, ...mapped] : mapped;
-      }
-
-      const [raw, notesPayload] = await Promise.all([
-        searchWorkspaceFiles(debouncedQuery, {
-          conversationId,
-          limit: MAX_FILE_ITEMS,
-        }),
-        listNotes({
-          ...(debouncedQuery.trim() ? { search: debouncedQuery.trim() } : {}),
-          limit: MAX_NOTE_ITEMS,
-          sortBy: 'updatedAt',
-          sortOrder: 'desc',
-        }).catch(() => ({ items: [], total: 0 })),
-      ]);
-      const recentPaths = getRecentAtPaths(conversationId);
-      const recentItems: AtMentionItem[] = [];
-      const seen = new Set(raw.map((r) => r.relativePath));
-      for (const p of recentPaths) {
-        if (seen.has(p)) continue;
-        seen.add(p);
-        const base = p.replace(/\/$/, '').split('/').pop() ?? p;
-        recentItems.push({
-          kind: 'file',
-          name: base,
-          relativePath: p,
-          isDirectory: p.endsWith('/'),
-          isRecent: true,
-        });
-        if (recentItems.length >= 5) break;
-      }
-      const selectedNoteIds = options.selectedNoteIds ?? new Set<string>();
-      const noteItems: AtMentionItem[] = notesPayload.items
-        .filter((note) => note.status !== 'trashed' && !selectedNoteIds.has(note.id))
-        .map((note) => ({
-          kind: 'note',
-          name: note.title?.trim() || note.snippet?.trim() || messages(language).chat.commandPalette.untitledNote,
-          description: note.snippet?.trim() || '',
-          noteRef: { sourceId: note.id, expectedVersion: String(note.updatedAt) },
-        }));
-      return [...noteItems, ...recentItems, ...raw];
-    },
-    [debouncedQuery, language, selectedNoteIdsKey, conversationId],
-    {
-      enabled: pickerActive && Boolean(conversationId),
-      initial: [] as AtMentionItem[],
-      errorData: [] as AtMentionItem[],
-    },
-  );
-
-  const items = pickerActive ? itemsResource.data : [];
-  const loading = pickerActive ? itemsResource.loading : false;
-  const error =
-    pickerActive && itemsResource.error != null
-      ? itemsResource.error instanceof Error
-        ? itemsResource.error.message
-        : String(itemsResource.error)
-      : null;
-
-  const rangeStart = atRange?.start;
-  const rangeEnd = atRange?.end;
-  const selectionKey = `${rangeStart ?? ''}:${rangeEnd ?? ''}:${debouncedQuery}`;
-  const trackedSelectionKeyRef = useRef(selectionKey);
-  if (trackedSelectionKeyRef.current !== selectionKey) {
-    trackedSelectionKeyRef.current = selectionKey;
-    if (selectedIndex !== 0) {
-      setSelectedIndex(0);
+  useEffect(() => {
+    const generation = ++requestGeneration.current;
+    if (!pickerActive || !conversationId) {
+      setProviderState(emptyProviderState(false));
+      return;
     }
-  }
+
+    const context = {
+      conversationId,
+      currentAgentId: options.currentAgentId,
+      language,
+      selectedContextKeys: new Set(selectedContextKeysKey ? selectedContextKeysKey.split('\0') : []),
+      recentPaths: new Set(getRecentAtPaths(conversationId)),
+    };
+
+    if (/^mcp:[^/]+\//u.test(debouncedQuery)) {
+      const loadingState = emptyProviderState(false);
+      loadingState.mcp_resource = { items: [], loading: true, error: null };
+      setProviderState(loadingState);
+      const provider = atMentionProviders.find((candidate) => candidate.kind === 'mcp_resource')!;
+      void provider.search(debouncedQuery, context)
+        .then((items) => {
+          if (requestGeneration.current !== generation) return;
+          setProviderState((current) => ({
+            ...current,
+            mcp_resource: { items, loading: false, error: null },
+          }));
+        })
+        .catch((error: unknown) => {
+          if (requestGeneration.current !== generation) return;
+          setProviderState((current) => ({
+            ...current,
+            mcp_resource: {
+              items: [], loading: false,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          }));
+        });
+      return;
+    }
+
+    if (isBrowseModeQuery(debouncedQuery)) {
+      const loadingState = emptyProviderState(false);
+      loadingState.file = { items: [], loading: true, error: null };
+      setProviderState(loadingState);
+      const dir = browseDirFromQuery(debouncedQuery);
+      void fetchWorkspaceBrowseEntries(dir, { conversationId, agentId: options.currentAgentId })
+        .then((entries) => {
+          if (requestGeneration.current !== generation) return;
+          const browseUp: AtMentionFileItem = {
+            id: `browse-up:${dir}`,
+            kind: 'file',
+            name: '..',
+            description: browseParentDir(dir) || '/',
+            relativePath: '',
+            isDirectory: true,
+            isBrowseUp: true,
+          };
+          setProviderState((current) => ({
+            ...current,
+            file: { items: [browseUp, ...entries.map(toFileItem)], loading: false, error: null },
+          }));
+        })
+        .catch((error: unknown) => {
+          if (requestGeneration.current !== generation) return;
+          setProviderState((current) => ({
+            ...current,
+            file: {
+              items: [], loading: false,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          }));
+        });
+      return;
+    }
+
+    setProviderState(emptyProviderState(true));
+    for (const provider of atMentionProviders) {
+      void provider.search(debouncedQuery, context)
+        .then((items) => {
+          if (requestGeneration.current !== generation) return;
+          setProviderState((current) => ({
+            ...current,
+            [provider.kind]: { items, loading: false, error: null },
+          }));
+        })
+        .catch((error: unknown) => {
+          if (requestGeneration.current !== generation) return;
+          setProviderState((current) => ({
+            ...current,
+            [provider.kind]: {
+              items: [], loading: false,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          }));
+        });
+    }
+  }, [
+    pickerActive,
+    conversationId,
+    debouncedQuery,
+    language,
+    options.currentAgentId,
+    selectedContextKeysKey,
+  ]);
+
+  const sections = useMemo<AtMentionSection[]>(() => PROVIDER_ORDER.map((kind) => ({
+    kind,
+    ...providerState[kind],
+  })), [providerState]);
+  const items = pickerActive ? sections.flatMap((section) => section.items) : [];
+  const loading = pickerActive && sections.some((section) => section.loading);
+  const errors = sections.flatMap((section) => section.error ? [section.error] : []);
+  const error = !loading && items.length === 0 ? (errors[0] ?? null) : null;
+
+  const selectionKey = `${atRange?.start ?? ''}:${atRange?.end ?? ''}:${debouncedQuery}`;
+  useEffect(() => setSelectedIndex(0), [selectionKey]);
   const resolvedSelectedIndex = clampPaletteIndex(selectedIndex, items.length);
 
-  const onNavigate = useCallback(
-    (dir: 'up' | 'down') => {
-      if (items.length === 0) return;
-      setSelectedIndex((i) => {
-        if (dir === 'down') return (i + 1) % items.length;
-        return (i - 1 + items.length) % items.length;
-      });
-    },
-    [items.length],
-  );
+  const onNavigate = useCallback((direction: 'up' | 'down') => {
+    if (items.length === 0) return;
+    setSelectedIndex((index) => direction === 'down'
+      ? (index + 1) % items.length
+      : (index - 1 + items.length) % items.length);
+  }, [items.length]);
 
   return {
     open: pickerActive,
     atRange,
+    sections,
     items,
     selectedIndex: resolvedSelectedIndex,
     query: atRange?.query ?? '',

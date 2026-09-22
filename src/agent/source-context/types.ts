@@ -15,7 +15,7 @@ export interface SessionSourceBinding {
 }
 
 export interface TurnContextRef {
-  kind: 'note' | 'task';
+  kind: 'note' | 'task' | 'file' | 'session' | 'browser_tab' | 'mcp_resource';
   sourceId: string;
   expectedVersion?: string;
 }
@@ -30,10 +30,11 @@ export interface SourceContextRefSummary {
   url?: string;
   capturedAt?: number;
   documentId?: string;
+  fileKind?: 'file' | 'directory';
 }
 
 export interface AgentSourceContext {
-  kind: SessionSourceBinding['kind'] | 'task' | 'browser_page' | 'app_context';
+  kind: SessionSourceBinding['kind'] | 'task' | 'file' | 'session' | 'mcp_resource' | 'browser_tab' | 'browser_page' | 'app_context';
   sourceId: string;
   version: string;
   title: string;
@@ -44,6 +45,7 @@ export interface AgentSourceContext {
   url?: string;
   capturedAt?: number;
   documentId?: string;
+  fileKind?: 'file' | 'directory';
   appContext?: AppContextEnvelope;
   appContextGrant?: AppContextGrant;
 }
@@ -59,13 +61,15 @@ export function summarizeSourceContext(context: AgentSourceContext): SourceConte
     url: context.url,
     capturedAt: context.capturedAt,
     documentId: context.documentId,
+    fileKind: context.fileKind,
   };
 }
 
 export function isTurnContextRef(value: unknown): value is TurnContextRef {
   if (!value || typeof value !== 'object') return false;
   const row = value as Record<string, unknown>;
-  return (row.kind === 'note' || row.kind === 'task')
+  return (row.kind === 'note' || row.kind === 'task' || row.kind === 'file' || row.kind === 'session'
+    || row.kind === 'browser_tab' || row.kind === 'mcp_resource')
     && typeof row.sourceId === 'string'
     && row.sourceId.trim().length > 0
     && (row.expectedVersion === undefined || typeof row.expectedVersion === 'string');
