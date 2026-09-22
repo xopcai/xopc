@@ -36,6 +36,7 @@ describe('memory-config', () => {
       reserveTokens: 12_000,
       keepRecentTokens: 20_000,
       summaryMaxTokens: 16_000,
+      reasoningLevel: 'off',
     });
     expect(ConfigSchema.safeParse({ userContext: { contextPlanning: { compaction: true } } }).success)
       .toBe(false);

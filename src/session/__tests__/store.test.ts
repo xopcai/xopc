@@ -5,6 +5,7 @@ import { tmpdir } from 'os';
 
 import * as modelCalls from '../../providers/model-call.js';
 import { ConfigSchema } from '../../config/schema.js';
+import { DurableState } from '../../storage/sqlite/durable-state.js';
 import {
   closeXopcDatabase,
   getSessionConfig,
@@ -520,6 +521,26 @@ describe('SessionStore', () => {
       });
     });
 
+    it('persists chunk progress in SQLite and clears it only after the boundary is committed', async () => {
+      const key = 'a31b9f8a-37b3-4c4a-a6d1-7d433f6d58ee';
+      const messages = Array.from({ length: 12 }, (_, index) => ({
+        role: 'user' as const,
+        content: `line-${index}`,
+      }));
+      await store.saveMessages(key, messages, { metadata: { agentId: 'main' } });
+      const state = new DurableState<unknown>('session-compaction-progress', key);
+      vi.spyOn((store as any).compactor, 'compact').mockImplementation(async (...args: any[]) => {
+        args[4].checkpoint.save({ marker: 'saved' });
+        expect(state.get('active')).toEqual({ marker: 'saved' });
+        return compactionResult(messages, 'condensed topic', 8, 9_000, 1_200);
+      });
+
+      await store.compact(key, messages, { provider: 'test', id: 'model' } as any);
+
+      expect(state.get('active')).toBeUndefined();
+      expect(await store.listCompactionBoundaries(key)).toHaveLength(1);
+    });
+
     it('loads the configured cap and refreshes it for subsequent compactions', async () => {
       const config = ConfigSchema.parse({ userContext: { contextPlanning: { compaction: { summaryMaxTokens: 2_000 } } } });
       const configuredStore = new SessionStore({ config });
@@ -554,7 +575,7 @@ describe('SessionStore', () => {
       const afterHook = vi.fn();
       store.setCompactionHooks({ after: afterHook });
       const completion = vi.spyOn(modelCalls, 'completeWithResolvedCredentials').mockResolvedValue({
-        content: [{ type: 'text', text: '{"items":[' }], stopReason: 'length', usage: { output: 8_000 },
+        content: [{ type: 'text', text: '{"upserts":[' }], stopReason: 'length', usage: { output: 8_000 },
       } as never);
       try {
         await expect(store.compact(key, messages, {

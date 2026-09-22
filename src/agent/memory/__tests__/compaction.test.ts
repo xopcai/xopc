@@ -41,7 +41,7 @@ function sources(rows: AgentMessage[], startSeq = 1): TranscriptSourceEntry[] {
 
 function ledger(seq = 1, text = 'The job change is ongoing.'): string {
   return JSON.stringify({
-    items: [{
+    upserts: [{
       kind: 'current_state',
       text,
       status: 'active',
@@ -86,22 +86,35 @@ describe('SessionCompactor', () => {
           content: expect.stringContaining('<record seq="1" entry_id="entry-1">'),
         })],
       }),
-      expect.objectContaining({ maxTokens: 4000, reasoning: 'low' }),
+      expect.objectContaining({ maxTokens: 4000 }),
     );
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[2]).not.toHaveProperty('reasoning');
+  });
+
+  it('only enables low reasoning when explicitly configured', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValueOnce(completion(ledger()));
+    await new SessionCompactor({
+      minMessagesBeforeCompact: 4,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
+      reasoningLevel: 'low',
+      gapAudit: false,
+    }).compact(sources(conversation()), model, undefined, true);
+
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[2]).toMatchObject({
+      reasoning: 'low',
+    });
   });
 
   it('preserves old facts across repeated compactions while reading only new raw deltas', async () => {
     vi.mocked(completeWithResolvedCredentials)
       .mockResolvedValueOnce(completion(JSON.stringify({
-        items: [
-          { kind: 'decision', text: 'Keep the existing plan.', status: 'active', sourceSeqs: [1], identifiers: [] },
+        upserts: [
           { kind: 'current_state', text: 'New work is underway.', status: 'active', sourceSeqs: [14], identifiers: [] },
         ],
       })))
       .mockResolvedValueOnce(completion(JSON.stringify({
-        items: [
-          { kind: 'decision', text: 'Keep the existing plan.', status: 'active', sourceSeqs: [1], identifiers: [] },
-          { kind: 'current_state', text: 'New work is underway.', status: 'active', sourceSeqs: [14], identifiers: [] },
+        upserts: [
           { kind: 'next_action', text: 'Finish the final verification.', status: 'active', sourceSeqs: [19], identifiers: [] },
         ],
       })));
@@ -221,7 +234,7 @@ describe('SessionCompactor', () => {
     const repair = String(vi.mocked(completeWithResolvedCredentials).mock.calls[1]?.[1].messages[0]?.content);
     expect(repair).toContain('<record seq="1"');
     expect(repair).toContain('I am married, have two children');
-    expect(repair).toContain('Previous ledger:');
+    expect(repair).toContain('Current ledger:');
   });
 
   it('runs an independent gap audit for risky source records and merges omissions', async () => {
@@ -230,14 +243,7 @@ describe('SessionCompactor', () => {
     vi.mocked(completeWithResolvedCredentials)
       .mockResolvedValueOnce(completion(ledger(1, 'The release plan is being updated.')))
       .mockResolvedValueOnce(completion(JSON.stringify({
-        items: [
-          {
-            kind: 'current_state',
-            text: 'The release plan is being updated.',
-            status: 'active',
-            sourceSeqs: [1],
-            identifiers: ['/tmp/release-plan.md'],
-          },
+        upserts: [
           {
             kind: 'pending_user_ask',
             text: 'Update /tmp/release-plan.md before replying.',
@@ -313,6 +319,46 @@ describe('SessionCompactor', () => {
     expect(prompts.join('')).not.toContain('omitted');
   });
 
+  it('resumes from the last durable chunk checkpoint after an interrupted compaction', async () => {
+    let stored: unknown;
+    const checkpoint = {
+      load: vi.fn(() => stored),
+      save: vi.fn((value) => { stored = value; }),
+      clear: vi.fn(() => { stored = undefined; }),
+    };
+    const entries = sources([
+      { role: 'user', content: `BEGIN-${'x'.repeat(22_000)}-END` } as AgentMessage,
+      { role: 'assistant', content: 'ack' } as AgentMessage,
+      { role: 'user', content: 'keep this turn' } as AgentMessage,
+      { role: 'assistant', content: 'kept' } as AgentMessage,
+    ]);
+    const compactor = new SessionCompactor({
+      minMessagesBeforeCompact: 2,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
+      summaryChunkTokens: 2_000,
+      summaryRetries: 0,
+      gapAudit: false,
+    });
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce(completion(ledger(1)))
+      .mockRejectedValueOnce(new Error('gateway restarted'));
+
+    await expect(compactor.compact(entries, model, undefined, true, { checkpoint }))
+      .rejects.toThrow('gateway restarted');
+    expect(checkpoint.save).toHaveBeenCalledTimes(1);
+
+    vi.mocked(completeWithResolvedCredentials).mockReset();
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(completion(ledger(1)));
+    const result = await compactor.compact(entries, model, undefined, true, { checkpoint });
+    const resumedPrompts = vi.mocked(completeWithResolvedCredentials).mock.calls
+      .map((call) => String(call[1].messages[0]?.content));
+
+    expect(result.compacted).toBe(true);
+    expect(resumedPrompts.join('')).not.toContain('BEGIN-');
+    expect(resumedPrompts.join('')).toContain('-END');
+  });
+
   it('fails closed and then uses a fallback model when configured', async () => {
     vi.mocked(completeWithResolvedCredentials)
       .mockRejectedValueOnce(new Error('primary unavailable'))
@@ -357,7 +403,7 @@ describe('SessionCompactor', () => {
   it.each([
     [],
     [{ type: 'thinking', thinking: 'private reasoning' }],
-    [{ type: 'text', text: '{"items":[' }],
+    [{ type: 'text', text: '{"upserts":[' }],
     [{ type: 'text', text: ledger() }],
   ].map((content) => ({ content })))('regenerates every length response with more budget, never repairing it ($content)', async ({ content }) => {
     vi.mocked(completeWithResolvedCredentials)
@@ -474,7 +520,7 @@ describe('SessionCompactor', () => {
     const reason = new Error('parent deadline');
     vi.mocked(completeWithResolvedCredentials)
       .mockResolvedValueOnce(completion(ledger(1, 'Inspect /tmp/job.log.')))
-      .mockImplementationOnce(async () => { controller.abort(reason); return completion('{"items":[]}'); });
+      .mockImplementationOnce(async () => { controller.abort(reason); return completion('{"upserts":[]}'); });
     const rows = conversation();
     rows[0] = { role: 'user', content: 'Inspect /tmp/job.log.' } as AgentMessage;
     await expect(new SessionCompactor({ keepRecentTokens: 1, recentTurnsPreserve: 1 })
@@ -487,11 +533,11 @@ describe('SessionCompactor', () => {
     let count = 0;
     vi.mocked(completeWithResolvedCredentials).mockImplementation(async (_model, context) => {
       const prompt = String(context.messages[0]?.content);
-      const records = prompt.split(/Transcript records \(chunk \d+\):\n/)[1]!.split('\n\nReturn the complete updated JSON ledger.')[0]!;
+      const records = prompt.split(/Transcript records \(chunk \d+\):\n/)[1]!.split('\n\nReturn only the JSON delta of upserts.')[0]!;
       seenRecords.push(records);
       expect(Math.ceil((context.systemPrompt ?? '').length / 4) + Math.ceil(prompt.length / 4) + 32 + 4_096 + 2_000).toBeLessThanOrEqual(10_000);
       count += 1;
-      return completion(ledger(1, 'fact '.repeat(count === 1 ? 800 : 1_000)));
+      return completion(ledger(1, 'fact '.repeat(count === 1 ? 300 : 380)));
     });
     const rows = sources([
       { role: 'user', content: 'BEGIN-' + 'x'.repeat(30_000) + '-END' } as AgentMessage,
