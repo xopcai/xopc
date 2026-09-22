@@ -6,6 +6,40 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps local app capability endpoints without intercepting management routes', () => {
+    for (const path of ['/api/local-app-capabilities/ext', '/api/local-app-capabilities/ext/xopc.notes.get/invocations']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('local-app-capabilities');
+    }
+    for (const path of ['/api/local-app-capabilities-other/ext', '/api/local-apps/ext', '/api/local-app-capabilities/ext/grant']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('local-app-capabilities');
+    }
+  });
+  it('keeps draft and preview adapters in their authenticated domain bundles', () => {
+    for (const path of ['/api/automations/draft', '/api/automations/simulate', '/api/automation-runs/run/repair-draft']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('automations');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/notes/note/ai/edit')?.id).toBe('notes');
+    for (const path of ['/api/automations-other/draft', '/api/notes-other/note/ai/edit']) {
+      expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
+    }
+  });
+  it('does not intercept eagerly registered local app acceptance routes', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/local-apps/app/acceptance-runs')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/local-apps-other/app/acceptance-runs')).toBeUndefined();
+  });
+  it('does not intercept eagerly registered project pin adapters', () => {
+    for (const path of ['/api/projects/id/pin', '/api/projects/id/unpin']) {
+      expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/projects-other/id/pin')).toBeUndefined();
+  });
+  it('separates operation invocation from the connector marketplace', () => {
+    for (const path of ['/api/capabilities/operations', '/api/capabilities/operations/xopc.notes.get', '/api/capabilities/operations/xopc.notes.get/invocations']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('capability-operations');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/capabilities/connectors')?.id).toBe('capabilities');
+    expect(findAuthenticatedLazyRouteBundle('/api/capabilities/operations-other')?.id).not.toBe('capability-operations');
+  });
   it('maps CLI authorization, accounts and policy routes', () => {
     for (const path of ['/api/connectors/executions/id/artifact', '/api/connectors/feishu-workspace/executions', '/api/connectors/feishu-workspace/accounts', '/api/connectors/feishu-workspace/authorizations', '/api/connectors/feishu-workspace/policy', '/api/connectors/authorizations/id', '/api/connectors/authorizations/id/cancel', '/api/connectors/authorizations/id/artifact', '/api/connectors/accounts/id']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('connectors');

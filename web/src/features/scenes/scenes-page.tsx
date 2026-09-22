@@ -1,4 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import { PageContextCaptureButton } from '@/features/chat/context/page-context-capture-button';
 import { ArrowLeft, CalendarDays, CirclePause, Inbox, RefreshCw, Settings2, Sparkles, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation, useMatch, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -19,6 +20,7 @@ import { ScheduleEditor } from './schedule-editor';
 import { MailSourcePicker } from './mail-source-picker';
 import { MailDeadlineEditor } from './mail-deadline-editor';
 import { CreateTaskFollowUp, TaskFollowUpDetail } from './task-follow-up';
+import { useSceneRealtime } from './use-scene-realtime';
 
 const fieldClass = 'min-h-11 w-full rounded-md border border-edge bg-surface-panel px-3 py-2 text-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:text-sm';
 const panelClass = 'min-w-0 rounded-xl border border-edge bg-surface-panel p-4 sm:p-6';
@@ -57,6 +59,7 @@ export function ScenesPage() {
 }
 
 function SceneContent() {
+  useSceneRealtime();
   const { activationId, templateKey } = useParams();
   const inbox = useMatch('/scenes/inbox');
   const zh = useLocaleStore((state) => state.language) === 'zh';
@@ -287,6 +290,7 @@ function ReadOnlySceneDetail({ id }: { id: string }) {
   if (!detail.data) return <Loading />;
   const activation = detail.data.activation;
   return <><SceneDirtyGuard dirty={dirty} zh={zh} /><header className="space-y-3"><h1 className="break-words text-wrap text-xl font-semibold text-fg">{activation.goal}</h1>
+    <PageContextCaptureButton resource={{ kind: 'scene', id: activation.id, revision: String(activation.revision) }} disabled={dirty || busy} />
     <p className="text-sm text-fg-muted">{statusText(activation.status === 'active' && activation.setupMissing?.length ? 'needs_setup' : activation.status, zh)}</p>
     <p className="text-sm text-fg-muted">{(zh ? '只准备建议和成果，不自动发送或写入外部系统。' : 'Prepares suggestions and results. Does not send or write to external systems.')}</p>
     <div className="flex flex-wrap gap-3"><Button variant="primary" disabled={busy || activation.status !== 'active'} onClick={() => void act(true)}>{busy ? (zh ? '处理中…' : 'Working…') : (zh ? '现在检查' : 'Check now')}</Button>
@@ -302,7 +306,7 @@ function ReadOnlySceneDetail({ id }: { id: string }) {
       <ul className="mt-2 list-inside list-disc text-sm text-fg-muted">{activation.setupMissing.map(item => <li key={item}>{({ notes: zh ? '填写安排和约束' : 'Provide arrangements and constraints', schedule: zh ? '设置周期检查时间' : 'Set a recurring review time', deadline: zh ? '设置邮件跟进截止时间' : 'Set a mail follow-up deadline' } as Record<string, string>)[item]}</li>)}</ul>
     </section>}
     <SceneDiagnostics activationId={id} zh={zh} />
-    {['active', 'paused', 'needs_setup'].includes(activation.status) && <GoalEditor key={activation.revision} activation={activation} zh={zh} onDirty={setGoalDirty} onSaved={() => { void detail.mutate(); void results.mutate(); void runs.mutate(); }} />}
+    {['active', 'paused', 'needs_setup'].includes(activation.status) && <GoalEditor key={activation.id} activation={activation} zh={zh} onDirty={setGoalDirty} onSaved={() => { void detail.mutate(); void results.mutate(); void runs.mutate(); }} />}
     {activation.permissions.contextProviders.includes('user_notes') && <NotesEditor path={path} zh={zh} onDirty={setNotesDirty} onSaved={() => { void detail.mutate(); void results.mutate(); void runs.mutate(); }} />}
     {(activation.templateKey === 'mail-follow-up' ? <MailDeadlineEditor activation={activation} zh={zh} onDirty={setScheduleDirty} onChanged={() => { void detail.mutate(); void results.mutate(); void runs.mutate(); }} /> : <ScheduleEditor activation={activation} zh={zh} onDirty={setScheduleDirty} onChanged={() => void detail.mutate()} />)}
     {selectedResult && <LinkedSceneResult activationId={id} presentationId={selectedResult} zh={zh} />}
@@ -320,18 +324,21 @@ function ReadOnlySceneDetail({ id }: { id: string }) {
 }
 
 function GoalEditor({ activation, zh, onDirty, onSaved }: { activation: SceneActivation; zh: boolean; onDirty: (dirty: boolean) => void; onSaved: () => void }) {
-  const [goal, setGoal] = useState(activation.goal);
+  const [draft, setDraft] = useState<{ base: SceneActivation; goal: string } | null>(null);
+  const goal = draft?.goal ?? activation.goal;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   useEffect(() => { onDirty(goal !== activation.goal); return () => onDirty(false); }, [goal, activation.goal, onDirty]);
   return <details className={`${panelClass} space-y-3`}><summary className="cursor-pointer">{zh ? '修改目标' : 'Edit goal'}</summary>
     <p className="text-sm text-fg-muted">{zh ? '保存后暂停检查并撤回旧建议。确认设置后恢复；邮件跟进时间需另行恢复。' : 'Saving pauses checks and withdraws previous suggestions. Review settings before resuming, including mail deadlines.'}</p>
-    <label className={labelClass}>{zh ? '新目标' : 'New goal'}<textarea value={goal} maxLength={4000} onChange={e => setGoal(e.target.value)} className={fieldClass} /></label>
+    <label className={labelClass}>{zh ? '新目标' : 'New goal'}<textarea disabled={busy} value={goal} maxLength={4000} onChange={e => setDraft(previous => ({ base: previous?.base ?? activation, goal: e.target.value }))} className={fieldClass} /></label>
     <Button disabled={busy || !goal.trim() || goal === activation.goal} onClick={() => {
       setBusy(true); setError(undefined);
-      void sceneWrite(`/activations/${activation.id}`, 'PATCH', { expectedRevision: activation.revision, goal, scope: activation.scope, permissions: activation.permissions })
-        .then(onSaved).catch(setError).finally(() => setBusy(false));
+      const base = draft?.base ?? activation;
+      void sceneWrite(`/activations/${activation.id}`, 'PATCH', { expectedRevision: base.revision, goal, scope: base.scope, permissions: base.permissions })
+        .then(() => { setDraft(null); onSaved(); }).catch(setError).finally(() => setBusy(false));
     }}>{zh ? '保存目标' : 'Save goal'}</Button>
+    {draft && <Button type="button" variant="ghost" disabled={busy} onClick={() => { setDraft(null); setError(undefined); }}>{zh ? '放弃修改' : 'Discard edits'}</Button>}
     {error != null && <p role="alert" className="text-danger">{sceneErrorText(error, zh)}</p>}
   </details>;
 }

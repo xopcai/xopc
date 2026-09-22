@@ -1,7 +1,8 @@
 import { BrowserSubscriptionService } from '../../../../notifications/browserSubscriptions.js';
 import { ScenePreferenceService } from '../../../../scenes/preferences.js';
 import type { AddressInfo } from 'node:net';
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
+import { randomUUID } from 'node:crypto';
 
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
@@ -12,10 +13,12 @@ import { SceneInboxService } from '../../../../scenes/inbox.js';
 import { SceneMetrics } from '../../../../scenes/metrics.js';
 import { SceneMailContextProvider } from '../../../../scenes/mailContext.js';
 import { SceneRepository } from '../../../../scenes/repository.js';
-import { installSceneStorage } from '../../../../storage/sqlite/scenes-schema.js';
+import { openXopcDatabase, closeXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
+import { getSqliteDatabase } from '../../../../storage/sqlite/transaction.js';
 import { SceneApplicationService } from '../../../../scenes/service.js';
 import { familyPlanTemplate, mailFollowUpTemplate } from '../../../../scenes/templates.js';
 import { SceneUserNotesProvider } from '../../../../scenes/userNotes.js';
+import { createXopcUseTool } from '../../../../agent/tools/xopc-use-tool.js';
 import { auth } from '../../middleware/auth.js';
 import { gatewayScopes } from '../../middleware/scopes.js';
 import type { AuthenticatedRouteDeps } from '../deps.js';
@@ -30,15 +33,17 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
   let deps: AuthenticatedRouteDeps;
   const input = { templateKey: familyPlanTemplate.key, templateVersion: familyPlanTemplate.version, goal: 'Keep family arrangements manageable.',
     scope: { kind: 'personal' }, permissions: { accountIds: [], contextProviders: ['user_notes'], effectHandlers: [] } };
-  const request = (path: string, method = 'GET', body?: unknown, authenticated = true, key = 'request') => fetch(`${origin}/api/scenes${path}`, {
+  const request = (path: string, method = 'GET', body?: unknown, authenticated = true,
+    key = method === 'POST' && path === '/activations' ? 'request'
+      : method === 'POST' && path.endsWith('/checks') ? path : randomUUID()) => fetch(`${origin}/api/scenes${path}`, {
     method, headers: { 'content-type': 'application/json', 'Idempotency-Key': key, ...(authenticated ? { authorization: 'Bearer scenes-http-test' } : {}) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   beforeEach(async () => {
     resetLazyRouteBundlesForTests();
-    db = new DatabaseSync(':memory:');
-    db.exec('PRAGMA foreign_keys = ON');
-    installSceneStorage(db);
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: ':memory:' });
+    db = getSqliteDatabase();
 
     repository = new SceneRepository(db);
     repository.installTemplate(familyPlanTemplate);
@@ -61,8 +66,31 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
   });
   afterEach(async () => {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-    db.close();
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
     resetLazyRouteBundlesForTests();
+  });
+
+  it('shares scoped scene reads between original HTTP, generic capabilities and Agent', async () => {
+    const activation = repository.createActivation({ ownerId: 'local-owner', workspaceId: 'workspace' }, input);
+    const capabilityPath = `${origin}/api/capabilities/operations/xopc.scenes.get`;
+    const headers = { authorization: 'Bearer scenes-http-test', 'content-type': 'application/json' };
+    const descriptor = await (await fetch(capabilityPath, { headers })).json();
+    const read = async (value: unknown) => fetch(`${capabilityPath}/invocations`, { method: 'POST', headers,
+      body: JSON.stringify({ input: value, majorVersion: descriptor.majorVersion, descriptorDigest: descriptor.descriptorDigest }) });
+    const response = await read({ id: activation.id });
+    expect(response.status).toBe(200);
+    const result = (await response.json()).data;
+    expect(await (await request(`/activations/${activation.id}`)).json()).toEqual({ activation: result.activation });
+    const tool = createXopcUseTool({ getSceneAccess: () => ({ services: deps.scenes!, principal: { ownerId: 'local-owner', workspaceId: 'workspace' } }) });
+    expect((await tool.execute('read', { mode: 'scene', command: 'get', args: { id: activation.id } })).details.result).toEqual(result);
+    expect((await read({ id: activation.id, ownerId: 'other' })).status).toBe(400);
+    const other = repository.createActivation({ ownerId: 'other', workspaceId: 'workspace' }, input);
+    expect((await read({ id: other.id })).status).toBe(404);
+    const otherWorkspace = repository.createActivation({ ownerId: 'local-owner', workspaceId: 'other-workspace' }, input);
+    expect((await read({ id: otherWorkspace.id })).status).toBe(404);
+    const denied = createXopcUseTool({ getSceneAccess: () => ({ services: deps.scenes!, principal: { ownerId: 'local-owner', workspaceId: 'workspace' } }), authorizeCapability: () => false });
+    await expect(denied.execute('denied', { mode: 'scene', command: 'get', args: { id: activation.id } })).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('controls checking independently of reminders and validates push subscriptions through auth', async () => {
@@ -129,8 +157,8 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
     const first = (await (await request('/activations', 'POST', input)).json()).activation;
     const second = (await (await request('/activations', 'POST', { ...input, goal: 'Another arrangement' }, true, 'second')).json()).activation;
     for (const activation of [first, second]) {
-      await request(`/activations/${activation.id}/notes`, 'PATCH', { expectedRevision: 0, content: activation.goal });
-      await request(`/activations/${activation.id}/checks`, 'POST');
+      expect((await request(`/activations/${activation.id}/notes`, 'PATCH', { expectedRevision: 0, content: activation.goal })).status).toBe(200);
+      expect((await request(`/activations/${activation.id}/checks`, 'POST')).status).toBe(202);
       await runtime.runNext('http-test');
     }
     const firstPage = await (await request(`/outcomes?activationId=${first.id}&limit=1`)).json();
@@ -220,7 +248,6 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
     db.exec("UPDATE scene_presentations SET status = 'resolved', expires_at = 0 WHERE id = 'card-0'");
     expect(await (await request('/presentations/card-0')).json()).toMatchObject({ outcome: { readOnly: true } });
     expect((await request('/presentations/card-0', 'PATCH', { read: false })).status).toBe(409);
-    db.exec('CREATE TABLE notification_events(event_id TEXT PRIMARY KEY)');
     db.prepare('INSERT INTO notification_digests VALUES (?, ?, ?, ?, ?, NULL)').run('digest', principal.ownerId, principal.workspaceId, 'historical', 1);
     db.exec("INSERT INTO notification_digest_members VALUES ('digest', 'card-0', 1), ('digest', 'card-1', 1), ('digest', 'card-25', 1)");
     expect(await (await request('/digests/digest?limit=1')).json()).toMatchObject({ nextCursor: 'card-0', outcomes: [{ id: 'card-0' }] });

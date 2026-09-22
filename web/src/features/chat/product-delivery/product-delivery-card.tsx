@@ -24,6 +24,7 @@ import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer
 import { cn } from '@/lib/cn';
 import { withDetailReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
+import { ProductDeliveryPresentation } from './product-delivery-presentation';
 
 const KIND_ICON = {
   task: Target,
@@ -111,6 +112,7 @@ export function ProductDeliveryCard({
   const location = useLocation();
   const storedLanguage = useLocaleStore((state) => state.language);
   const language = storedLanguage === 'zh' ? 'zh' : 'en';
+  if (delivery.presentation) return <ProductDeliveryPresentation presentation={delivery.presentation} />;
   if (!reference) return null;
 
   const Icon = KIND_ICON[reference.kind];

@@ -1,12 +1,15 @@
 import { createReadStream } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
+import { NoteGetOutputSchema, NoteDeleteOutputSchema, ProductReadContracts, type ProductReadId } from '@xopcai/gateway-contract';
+import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
+import { capabilityHttpContext, capabilityHttpError } from '../../../capabilities/adapters/http.js';
+import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
 import { stream } from 'hono/streaming';
 
-import { ObjectLinkService } from '../../../activity/service.js';
 import { resolveConversationId } from '../../../routing/session-key.js';
 import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.js';
 import type { CaptureChannel, CaptureSource, Note, NoteKind, NoteStatus, SnapshotTrigger } from '../../../notes/types.js';
@@ -61,7 +64,14 @@ function noteThreadName(note: Note): string {
 
 export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
-  const objectLinks = new ObjectLinkService();
+  const capabilities = createProductDispatcher(() => service.notesServiceInstance, { getProjects: () => service.projects });
+  const invokeRead = async (c: Context, operation: ProductReadId, input: unknown) =>
+    ProductReadContracts[operation].output.parse(await capabilities.call(operation, input, capabilityHttpContext(c)));
+  const invokeNote = async (c: Context, operation: string, input: unknown, key?: string) => {
+    const context = capabilityHttpContext(c);
+    return NoteGetOutputSchema.parse(await capabilities.call(operation, input, context,
+      { ...capabilities.describe(operation, context), idempotencyKey: key ?? randomUUID() }));
+  };
   const shareConfig = (): Partial<ShareConfig> => {
     const gateway = service.currentConfig?.gateway as Record<string, unknown> | undefined;
     const raw = gateway?.share;
@@ -79,18 +89,6 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     reverseProxyPublicUrl: resolveReverseProxyPublicUrl(service.currentConfig),
   });
 
-  const linkNoteToProject = (note: Note, projectId: string | undefined): void => {
-    if (!projectId) return;
-    const project = service.projects.get(projectId);
-    if (!project) return;
-    objectLinks.create({
-      id: `note:${note.id}:project:${project.id}`,
-      from: { kind: 'note', id: note.id, title: note.title },
-      to: { kind: 'project', id: project.id, title: project.name },
-      relation: 'belongs_to',
-      source: 'user',
-    });
-  };
 
   // POST /api/notes/quick-capture — minimal text capture
   authenticated.post('/api/notes/quick-capture', async (c) => {
@@ -104,131 +102,118 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     if (idempotencyKey && idempotencyKey.length > 200) {
       return c.json({ error: 'Idempotency-Key is too long' }, 400);
     }
-    const note = await service.notesServiceInstance.quickCapture(text, source, idempotencyKey || undefined);
-    return c.json({ note }, 201);
+    try {
+      return c.json(await invokeNote(c, 'xopc.notes.capture', { text, capturedVia: source }, idempotencyKey), 201);
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   // GET /api/notes — list with filters
   authenticated.get('/api/notes', async (c) => {
-    const status = c.req.query('status') as NoteStatus | undefined;
-    const kind = c.req.query('kind') as NoteKind | undefined;
-    const tag = c.req.query('tag');
-    const projectId = c.req.query('projectId')?.trim();
-    const search = c.req.query('search');
-    const pinnedRaw = c.req.query('pinned');
-    const limitRaw = c.req.query('limit');
-    const offsetRaw = c.req.query('offset');
-    const sortBy = c.req.query('sortBy') as 'createdAt' | 'updatedAt' | 'lastOpenedAt' | undefined;
-    const sortOrder = c.req.query('sortOrder') as 'asc' | 'desc' | undefined;
-
-    const result = await service.notesServiceInstance.listNotes({
-      status: status && VALID_STATUSES.has(status) ? status : undefined,
-      kind: kind && VALID_KINDS.has(kind) ? kind : undefined,
-      tag: tag || undefined,
-      projectId: projectId || undefined,
-      unassigned: c.req.query('unassigned') === 'true' || undefined,
-      agentEdited: c.req.query('agentEdited') === 'true' || undefined,
-      search: search || undefined,
-      pinned: pinnedRaw === 'true' ? true : pinnedRaw === 'false' ? false : undefined,
-      limit: limitRaw ? parseInt(limitRaw, 10) : undefined,
-      offset: offsetRaw ? parseInt(offsetRaw, 10) : undefined,
-      sortBy: sortBy === 'createdAt' || sortBy === 'updatedAt' || sortBy === 'lastOpenedAt' ? sortBy : undefined,
-      sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : undefined,
-    });
-    return c.json(result);
+    try {
+      const input: Record<string, unknown> = { ...c.req.query() };
+      for (const key of ['limit', 'offset']) if (input[key] !== undefined) input[key] = Number(input[key]);
+      for (const key of ['pinned', 'unassigned', 'agentEdited']) {
+        if (input[key] === 'true') input[key] = true;
+        if (input[key] === 'false') input[key] = false;
+      }
+      return c.json(await capabilities.call('xopc.notes.list', input, capabilityHttpContext(c)));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
-  authenticated.get('/api/notes/project-summaries', (c) => {
-    return c.json({ items: service.notesServiceInstance.listProjectSummaries() });
+  authenticated.get('/api/notes/project-summaries', async (c) => {
+    try { return c.json(await invokeRead(c, 'xopc.notes.project_summaries', {})); }
+    catch (error) { return capabilityHttpError(c, error); }
   });
 
   // POST /api/notes — full create (JSON or multipart)
   authenticated.post('/api/notes', async (c) => {
-    const contentType = c.req.header('content-type') || '';
-    const idempotencyKey = readIdempotencyKey(c.req.header('idempotency-key'));
-    if (idempotencyKey && idempotencyKey.length > 200) {
-      return c.json({ error: 'Idempotency-Key is too long' }, 400);
-    }
-
-    if (contentType.includes('multipart/form-data')) {
-      let body: Record<string, unknown>;
-      try {
-        body = await c.req.parseBody({ all: true });
-      } catch {
-        return c.json({ error: 'Invalid multipart body' }, 400);
+    try {
+      const contentType = c.req.header('content-type') || '';
+      const idempotencyKey = readIdempotencyKey(c.req.header('idempotency-key'));
+      if (idempotencyKey && idempotencyKey.length > 200) {
+        return c.json({ error: 'Idempotency-Key is too long' }, 400);
       }
 
+      if (contentType.includes('multipart/form-data')) {
+        let body: Record<string, unknown>;
+        try {
+          body = await c.req.parseBody({ all: true });
+        } catch {
+          return c.json({ error: 'Invalid multipart body' }, 400);
+        }
+
+        const markdown = typeof body.markdown === 'string' ? body.markdown.trim() : undefined;
+        const kindRaw = typeof body.kind === 'string' ? body.kind : undefined;
+        const tagsRaw = typeof body.tags === 'string' ? body.tags : undefined;
+        const source = parseCaptureSource(body as Record<string, unknown>);
+        const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
+        if (projectId && !service.projects.get(projectId)) return c.json({ error: 'Project not found' }, 400);
+
+        const { note } = await invokeNote(c, 'xopc.notes.create', {
+          markdown,
+          kind: kindRaw && VALID_KINDS.has(kindRaw as NoteKind) ? (kindRaw as NoteKind) : undefined,
+          tags: tagsRaw ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
+          capturedVia: source,
+          projectId,
+        }, idempotencyKey);
+
+        const file = body.file;
+        if (file && typeof file === 'object') {
+          let buf: Buffer | null = null;
+          let fileName = 'upload';
+          let mimeType = 'application/octet-stream';
+
+          if (file instanceof File) {
+            buf = Buffer.from(await file.arrayBuffer());
+            fileName = file.name || fileName;
+            mimeType = file.type || mimeType;
+          } else if (typeof (file as Blob).arrayBuffer === 'function') {
+            buf = Buffer.from(await (file as Blob).arrayBuffer());
+          }
+
+          if (buf) {
+            const durationRaw = body.duration;
+            const duration =
+              typeof durationRaw === 'string'
+                ? parseInt(durationRaw, 10)
+                : typeof durationRaw === 'number'
+                  ? durationRaw
+                  : undefined;
+            await service.notesServiceInstance.addAttachment(note.id, {
+              name: fileName,
+              buffer: buf,
+              mimeType,
+              duration: Number.isFinite(duration) ? duration : undefined,
+              retainWithoutReference: kindRaw === 'voice',
+            }, idempotencyKey);
+          }
+        }
+
+        const full = await service.notesServiceInstance.getNote(note.id);
+        return c.json({ note: full }, 201);
+      }
+
+      // JSON body
+      const body = await c.req.json().catch(() => ({}));
+      const title = typeof body.title === 'string' ? body.title.trim() : undefined;
       const markdown = typeof body.markdown === 'string' ? body.markdown.trim() : undefined;
       const kindRaw = typeof body.kind === 'string' ? body.kind : undefined;
-      const tagsRaw = typeof body.tags === 'string' ? body.tags : undefined;
-      const source = parseCaptureSource(body as Record<string, unknown>);
+      const tagsRaw = Array.isArray(body.tags) ? body.tags.filter((t: unknown) => typeof t === 'string') : undefined;
+      const source = parseCaptureSource(body);
       const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
       if (projectId && !service.projects.get(projectId)) return c.json({ error: 'Project not found' }, 400);
 
-      const note = await service.notesServiceInstance.createNote({
+      const { note } = await invokeNote(c, 'xopc.notes.create', {
+        title,
         markdown,
         kind: kindRaw && VALID_KINDS.has(kindRaw as NoteKind) ? (kindRaw as NoteKind) : undefined,
-        tags: tagsRaw ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
+        tags: tagsRaw,
         capturedVia: source,
+        pinned: body.pinned === true,
+        projectId,
       }, idempotencyKey);
-      linkNoteToProject(note, projectId);
-
-      const file = body.file;
-      if (file && typeof file === 'object') {
-        let buf: Buffer | null = null;
-        let fileName = 'upload';
-        let mimeType = 'application/octet-stream';
-
-        if (file instanceof File) {
-          buf = Buffer.from(await file.arrayBuffer());
-          fileName = file.name || fileName;
-          mimeType = file.type || mimeType;
-        } else if (typeof (file as Blob).arrayBuffer === 'function') {
-          buf = Buffer.from(await (file as Blob).arrayBuffer());
-        }
-
-        if (buf) {
-          const durationRaw = body.duration;
-          const duration =
-            typeof durationRaw === 'string'
-              ? parseInt(durationRaw, 10)
-              : typeof durationRaw === 'number'
-                ? durationRaw
-                : undefined;
-          await service.notesServiceInstance.addAttachment(note.id, {
-            name: fileName,
-            buffer: buf,
-            mimeType,
-            duration: Number.isFinite(duration) ? duration : undefined,
-            retainWithoutReference: kindRaw === 'voice',
-          }, idempotencyKey);
-        }
-      }
-
-      const full = await service.notesServiceInstance.getNote(note.id);
-      return c.json({ note: full }, 201);
-    }
-
-    // JSON body
-    const body = await c.req.json().catch(() => ({}));
-    const title = typeof body.title === 'string' ? body.title.trim() : undefined;
-    const markdown = typeof body.markdown === 'string' ? body.markdown.trim() : undefined;
-    const kindRaw = typeof body.kind === 'string' ? body.kind : undefined;
-    const tagsRaw = Array.isArray(body.tags) ? body.tags.filter((t: unknown) => typeof t === 'string') : undefined;
-    const source = parseCaptureSource(body);
-    const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
-    if (projectId && !service.projects.get(projectId)) return c.json({ error: 'Project not found' }, 400);
-
-    const note = await service.notesServiceInstance.createNote({
-      title,
-      markdown,
-      kind: kindRaw && VALID_KINDS.has(kindRaw as NoteKind) ? (kindRaw as NoteKind) : undefined,
-      tags: tagsRaw,
-      capturedVia: source,
-      pinned: body.pinned === true,
-    }, idempotencyKey);
-    linkNoteToProject(note, projectId);
-    return c.json({ note }, 201);
+      return c.json({ note }, 201);
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   // POST /api/notes/sync — local-first markdown sync with optimistic conflict check
@@ -416,21 +401,17 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     if (!content) {
       return c.json({ error: 'Missing required field: content' }, 400);
     }
-    const note = await service.notesServiceInstance.appendTextToNote(c.req.param('id'), content, heading);
-    if (!note) {
-      return c.json(noteNotFound(), 404);
-    }
-    return c.json({ note });
+    try {
+      return c.json(await invokeNote(c, 'xopc.notes.append', { id: c.req.param('id'), content, heading, expectedRevision: body.expectedRevision },
+        readIdempotencyKey(c.req.header('idempotency-key'))));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   // GET /api/notes/:id — single note
   authenticated.get('/api/notes/:id', async (c) => {
-    const id = c.req.param('id');
-    const note = await service.notesServiceInstance.getNote(id);
-    if (!note) {
-      return c.json(noteNotFound(), 404);
-    }
-    return c.json({ note });
+    try {
+      return c.json(await capabilities.call('xopc.notes.get', { id: c.req.param('id') }, capabilityHttpContext(c)));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.get('/api/notes/:id/shares', async (c) => {
@@ -545,44 +526,53 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
         ? body.trigger
         : 'edit';
 
-    const updated = await service.notesServiceInstance.updateNote(id, patch, trigger);
-    if (!updated) {
-      return c.json(noteNotFound(), 404);
+    const current = await service.notesServiceInstance.getNote(id);
+    if (!current) return c.json(noteNotFound(), 404);
+    if (c.req.header('idempotency-key') && body.expectedRevision === undefined) {
+      return c.json({ ok: false, error: { code: 'INVALID_INPUT', message: 'Idempotent note updates require expectedRevision from the original read' } }, 400);
     }
-    return c.json({ note: updated });
+    try {
+      return c.json(await invokeNote(c, 'xopc.notes.update', {
+        id, patch, trigger, expectedRevision: body.expectedRevision ?? current.remoteVersion ?? 1,
+      }, readIdempotencyKey(c.req.header('idempotency-key'))));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   // DELETE /api/notes/:id — delete note
   authenticated.delete('/api/notes/:id', async (c) => {
-    const id = c.req.param('id');
-    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
-    const removed = await service.notesServiceInstance.deleteNote(id);
-    if (!removed) {
-      return c.json(noteNotFound(), 404);
-    }
-    const revokedShares = body.revokeShares === false ? 0 : await noteShares().revokeForNote(id);
-    return c.json({ deleted: true, revokedShares });
+    try {
+      const id = c.req.param('id');
+      const raw = await c.req.text();
+      let body: Record<string, unknown> = {};
+      if (raw) {
+        try { body = JSON.parse(raw); } catch { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); }
+        if (!body || typeof body !== 'object' || Array.isArray(body)) throw new CapabilityError('INVALID_INPUT', 'Expected an object');
+      }
+      const key = readIdempotencyKey(c.req.header('idempotency-key'));
+      if (key && body.expectedRevision === undefined) throw new CapabilityError('INVALID_INPUT', 'Stable retries require the original expectedRevision');
+      let expectedRevision = body.expectedRevision;
+      if (expectedRevision === undefined) {
+        const note = await service.notesServiceInstance.getNote(id);
+        if (!note) throw new CapabilityError('NOT_FOUND', 'Note not found');
+        expectedRevision = note.remoteVersion ?? 1;
+      }
+      const caller = capabilityHttpContext(c);
+      const operation = 'xopc.notes.delete';
+      return c.json(NoteDeleteOutputSchema.parse(await capabilities.call(operation, { ...body, id, expectedRevision }, caller,
+        { ...capabilities.describe(operation, caller), idempotencyKey: key ?? randomUUID() })));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   // GET /api/notes/:id/history — list version snapshots
   authenticated.get('/api/notes/:id/history', async (c) => {
-    const id = c.req.param('id');
-    const entries = await service.notesServiceInstance.listNoteHistory(id);
-    return c.json({ entries });
+    try { return c.json(await invokeRead(c, 'xopc.notes.history', { id: c.req.param('id') })); }
+    catch (error) { return capabilityHttpError(c, error); }
   });
 
   // GET /api/notes/:id/history/:timestamp — get full snapshot
   authenticated.get('/api/notes/:id/history/:timestamp', async (c) => {
-    const id = c.req.param('id');
-    const timestamp = parseInt(c.req.param('timestamp'), 10);
-    if (!Number.isFinite(timestamp)) {
-      return c.json({ error: 'Invalid timestamp' }, 400);
-    }
-    const snapshot = await service.notesServiceInstance.getNoteSnapshot(id, timestamp);
-    if (!snapshot) {
-      return c.json({ error: 'Snapshot not found' }, 404);
-    }
-    return c.json({ snapshot });
+    try { return c.json(await invokeRead(c, 'xopc.notes.snapshot', { id: c.req.param('id'), timestamp: Number(c.req.param('timestamp')) })); }
+    catch (error) { return capabilityHttpError(c, error); }
   });
 
   // POST /api/notes/:id/history/restore — restore a snapshot
@@ -593,28 +583,23 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     if (!timestamp) {
       return c.json({ error: 'Missing required field: timestamp' }, 400);
     }
-    const note = await service.notesServiceInstance.restoreNoteSnapshot(id, timestamp);
-    if (!note) {
-      return c.json({ error: 'Snapshot or note not found' }, 404);
+    const current = await service.notesServiceInstance.getNote(id);
+    if (!current) return c.json(noteNotFound(), 404);
+    if (c.req.header('idempotency-key') && body.expectedRevision === undefined) {
+      return c.json({ ok: false, error: { code: 'INVALID_INPUT', message: 'Idempotent restore requires expectedRevision from the original read' } }, 400);
     }
-    return c.json({ note });
+    try {
+      return c.json(await invokeNote(c, 'xopc.notes.restore', { id, timestamp, expectedRevision: body.expectedRevision ?? current.remoteVersion ?? 1 },
+        readIdempotencyKey(c.req.header('idempotency-key'))));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   // POST /api/notes/:id/ai/edit — generate previewable markdown AI patch
   authenticated.post('/api/notes/:id/ai/edit', async (c) => {
-    const id = c.req.param('id');
-    const body = await c.req.json().catch(() => ({}));
-    const instruction = typeof body.instruction === 'string' ? body.instruction.trim() : '';
-    if (!instruction) {
-      return c.json({ error: 'Missing required field: instruction' }, 400);
-    }
-
-    const markdown = typeof body.markdown === 'string' ? body.markdown : undefined;
-    const result = await service.notesServiceInstance.createAiEditPatch(id, instruction, markdown);
-    if (!result) {
-      return c.json(noteNotFound(), 404);
-    }
-    return c.json(result);
+    try {
+      const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
+      return c.json(await capabilities.call('xopc.notes.preview_edit', { ...body, id: c.req.param('id') }, capabilityHttpContext(c)));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   // POST /api/notes/:id/media — upload attachment to existing note

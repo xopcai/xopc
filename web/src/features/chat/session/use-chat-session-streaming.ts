@@ -1,6 +1,7 @@
 import { useCallback, type RefObject } from 'react';
-import type { AgentStreamRunStatus } from '@xopcai/gateway-contract';
+import type { AgentStreamRunStatus, AppContextEnvelope } from '@xopcai/gateway-contract';
 
+import { trackInputAcceptance } from '../messages/input-acceptance';
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import {
   createAgentStreamMessagingCallbacks,
@@ -66,7 +67,8 @@ export function useChatSessionStreaming(deps: {
       levelOverride?: string,
       contextRefs?: ComposerContextRef[],
       replaceTurnId?: string,
-    ) => Promise<void>
+      appContext?: AppContextEnvelope,
+    ) => Promise<void | boolean>
   >;
 
   shouldApplyStreamUpdate: (streamConversationId: string) => boolean;
@@ -300,20 +302,21 @@ export function useChatSessionStreaming(deps: {
       levelOverride?: string,
       contextRefs?: ComposerContextRef[],
       replaceTurnId?: string,
+      appContext?: AppContextEnvelope,
     ) => {
-      if (!conversationId) return;
-      if (!shouldApplyStreamUpdate(conversationId)) return;
+      if (!conversationId) return false;
+      if (!shouldApplyStreamUpdate(conversationId)) return false;
       if (
         (!content.trim() && !attachments?.length) ||
         (sendingRef.current || streamingRef.current || chatRunManager.isStreamingFor(conversationId))
       ) {
-        return;
+        return false;
       }
 
       const trimmed = content.trim();
       if (taskId && isTaskDestructiveCommand(trimmed)) {
         setShellError('A task has one continuous conversation.');
-        return;
+        return false;
       }
       if (isBareResetCommand(trimmed) && !attachments?.length) {
         await resetCurrentSession();
@@ -328,7 +331,7 @@ export function useChatSessionStreaming(deps: {
             (message) => message.role === 'user' && message.turnId === replaceTurnId,
           )
         : -1;
-      if (replaceTurnId && replaceIndex < 0) return;
+      if (replaceTurnId && replaceIndex < 0) return false;
       chatRunManager.setUserAborted(chatId, false);
       sendingRef.current = true;
       streamingRef.current = false;
@@ -383,52 +386,56 @@ export function useChatSessionStreaming(deps: {
         }
       }
 
-      try {
-        await sessionMgrRef.current.ensureSessionExists(chatId);
+      return trackInputAcceptance(async (onInputAccepted) => {
+        try {
+          await sessionMgrRef.current.ensureSessionExists(chatId);
 
-        const sendStreamCallbacks = createAgentStreamMessagingCallbacks({
-          chatId,
-          shouldApplyStreamUpdate,
-          beforeAssistantDelta: () => {},
-          setStreamingOnStreamStart: true,
-          clearResumeRunIdOnBackgroundTerminal: false,
-          clearResumeRunIdOnVisibleError: false,
-          setError: setShellError,
-          sessionMgrRef,
-          applyLoadedSessionSnapshot,
-          finalizeMessage,
-          fq,
-        });
+          const sendStreamCallbacks = createAgentStreamMessagingCallbacks({
+            chatId,
+            shouldApplyStreamUpdate,
+            beforeAssistantDelta: () => {},
+            setStreamingOnStreamStart: true,
+            clearResumeRunIdOnBackgroundTerminal: false,
+            clearResumeRunIdOnVisibleError: false,
+            setError: setShellError,
+            sessionMgrRef,
+            applyLoadedSessionSnapshot,
+            finalizeMessage,
+            fq,
+          });
+          sendStreamCallbacks.onInputAccepted = onInputAccepted;
 
-        await chatRunManager.senderFor(chatId).send(
-          content,
-          chatId,
-          attachments,
-          effectiveThinking,
-          sendStreamCallbacks,
-          taskId,
-          replaceTurnId,
-          contextRefs,
-        );
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          store().clearStreamingState(chatId);
-          clearChatRunPresence(chatId);
-          if (shouldApplyStreamUpdate(chatId)) {
-            setShellError(JSON.stringify(buildSendFailedErrorPayload()));
+          await chatRunManager.senderFor(chatId).send(
+            content,
+            chatId,
+            attachments,
+            effectiveThinking,
+            sendStreamCallbacks,
+            taskId,
+            replaceTurnId,
+            contextRefs,
+            appContext,
+          );
+        } catch (err) {
+          if ((err as Error).name !== 'AbortError') {
+            store().clearStreamingState(chatId);
+            clearChatRunPresence(chatId);
+            if (shouldApplyStreamUpdate(chatId)) {
+              setShellError(appContext && err instanceof Error ? err.message : JSON.stringify(buildSendFailedErrorPayload()));
+            }
+            if (replaceTurnId) void loadSessionById(chatId, 0);
+          } else {
+            clearChatRunPresence(chatId);
           }
-          if (replaceTurnId) void loadSessionById(chatId, 0);
-        } else {
-          clearChatRunPresence(chatId);
+        } finally {
+          if (shouldApplyStreamUpdate(chatId)) {
+            sendingRef.current = false;
+            streamingRef.current = false;
+          }
+          store().setSessionFlags(chatId, { sending: false });
+          chatRunManager.releaseIdleSender(chatId);
         }
-      } finally {
-        if (shouldApplyStreamUpdate(chatId)) {
-          sendingRef.current = false;
-          streamingRef.current = false;
-        }
-        store().setSessionFlags(chatId, { sending: false });
-        chatRunManager.releaseIdleSender(chatId);
-      }
+      });
     },
     [
       conversationId,

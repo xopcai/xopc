@@ -28,11 +28,11 @@ function harvestDraft(opts: {
   if (!text.trim() && opts.getAttachmentCount() === 0) return null;
 
   const wirePayload = opts.wireAttachmentsPayload();
-  return {
+  return structuredClone({
     text,
     attachments: wirePayload,
     contextRefs: opts.getContextRefs(),
-  };
+  });
 }
 
 export interface UseComposerActionsOptions {
@@ -76,6 +76,8 @@ export interface UseComposerActionsReturn {
 }
 
 export function useComposerActions(options: UseComposerActionsOptions): UseComposerActionsReturn {
+  const latestOptions = useRef(options);
+  latestOptions.current = options;
   const {
     chat: m,
     runBusy,
@@ -125,6 +127,10 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     );
     commitAcceptedSend(result, () => {
       onUserTextCommitted?.(draft.text);
+      const latest = latestOptions.current;
+      if (latest.getTextValue() !== draft.text
+        || JSON.stringify(latest.wireAttachmentsPayload()) !== JSON.stringify(draft.attachments)
+        || JSON.stringify(latest.getContextRefs()) !== JSON.stringify(draft.contextRefs)) return;
       resetEditor();
       clearAttachments();
       clearContextRefs();

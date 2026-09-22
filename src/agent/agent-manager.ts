@@ -196,6 +196,7 @@ export interface AgentManagerConfig {
   /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
+  getWorkDiscovery?: () => import('../work-discovery/service.js').WorkDiscoveryService | undefined;
   getLocalAppService?: () => import('../local-apps/index.js').LocalAppService | undefined;
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
@@ -477,6 +478,7 @@ export class AgentManager implements AgentInstanceGateway {
       emitBrowserEvent: this.config.emitBrowserEvent,
       getNotesService: this.config.getNotesService,
       getProjectService: this.config.getProjectService,
+      getWorkDiscovery: this.config.getWorkDiscovery,
       getLocalAppService: this.config.getLocalAppService,
       dispatchTaskEvents: this.config.dispatchTaskEvents,
       dispatchTaskRuns: this.config.dispatchTaskRuns,

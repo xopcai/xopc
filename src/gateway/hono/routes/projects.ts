@@ -1,22 +1,21 @@
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
 import { randomUUID } from 'node:crypto';
+import { ProductReadContracts, ProjectResolveWorkspaceOutputSchema, ProjectDeleteOutputSchema, ProjectMutationOutputSchema, ProjectMilestoneOutputSchema, ProjectMilestoneDeleteOutputSchema, ProjectUpdateOutputSchema } from '@xopcai/gateway-contract';
+import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
+import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
+import { capabilityHttpContext, capabilityHttpError } from '../../../capabilities/adapters/http.js';
 
 import { ActivityService } from '../../../activity/index.js';
 import { resolveEffectiveAgentProfile } from '../../../config/agent-profile.js';
-import { ExecutionEnvironmentStore } from '../../../execution-environments/store.js';
 import {
   buildProjectLoopOverview,
   inferProjectKind,
   inferProjectExecutionMode,
   inferSuggestedProjectDefaultAgentId,
-  isValidProjectAgentId,
-  normalizeProjectAgentId,
   ProjectWorkspaceConflictError,
   ProjectWorkspaceMissingError,
   type Project,
   resolveProjectAgentId,
-  type ProjectStatus,
-  type ProjectExecutionMode,
   type ProjectWorkflowRunBrief,
 } from '../../../projects/index.js';
 import {
@@ -35,21 +34,22 @@ import {
 import { listKnowledgeItems, writeKnowledgeItem } from '../../../knowledge-memory/index.js';
 import { parseActivityIncludeRelated, parseActivityQuery } from './activity.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { getProjectUnderstandingRun } from '../../../work-discovery/repository.js';
-import { createLogger } from '../../../utils/logger.js';
+import { ProjectDeletionBlockedError, ProjectWorkspaceInUseError } from '../../../projects/project-service.js';
 
-const log = createLogger('Projects');
-
-function parseProjectStatus(raw: unknown): ProjectStatus | undefined {
-  return raw === 'planned' || raw === 'active' || raw === 'paused'
-    || raw === 'completed' || raw === 'cancelled' || raw === 'archived'
-    ? raw
-    : undefined;
+function projectWriteError(c: Context, error: unknown): Response {
+  const cause = error instanceof CapabilityError ? error.cause : error;
+  if (cause instanceof ProjectWorkspaceConflictError) {
+    return c.json({ ok: false, code: 'workspace_already_bound', error: cause.message, project: cause.project }, 409);
+  }
+  if (cause instanceof ProjectWorkspaceMissingError) {
+    return c.json({ ok: false, code: 'workspace_root_missing', error: cause.message, workspaceRoot: cause.workspaceRoot }, 409);
+  }
+  if (cause instanceof ProjectWorkspaceInUseError || cause instanceof ProjectDeletionBlockedError) {
+    return c.json({ ok: false, code: 'execution_environments_exist', error: cause.message }, 409);
+  }
+  return capabilityHttpError(c, error);
 }
 
-function parseProjectExecutionMode(raw: unknown): ProjectExecutionMode | undefined {
-  return raw === 'local_checkout' || raw === 'managed_worktree' ? raw : undefined;
-}
 
 function parseLimit(raw: string | undefined, fallback = 50): number | undefined {
   if (!raw) return undefined;
@@ -62,47 +62,7 @@ function textField(body: Record<string, unknown>, key: string): string | undefin
   return typeof value === 'string' ? value : undefined;
 }
 
-function optionalTextField(body: Record<string, unknown>, key: string): string | null | undefined {
-  if (!(key in body)) return undefined;
-  const value = body[key];
-  return typeof value === 'string' ? value : null;
-}
 
-function stringListField(body: Record<string, unknown>, key: string): string[] | undefined {
-  const value = body[key];
-  if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
-    throw new Error(`${key} must be an array of strings`);
-  }
-  return value.map((item) => item.trim()).filter(Boolean);
-}
-
-function objectField(body: Record<string, unknown>, key: string): Record<string, unknown> | undefined {
-  const value = body[key];
-  if (value === undefined) return undefined;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${key} must be an object`);
-  return value as Record<string, unknown>;
-}
-
-function optionalNumberField(body: Record<string, unknown>, key: string): number | null | undefined {
-  const value = body[key];
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${key} must be a finite number`);
-  return value;
-}
-
-function projectHealth(value: unknown): 'unknown' | 'on_track' | 'at_risk' | 'off_track' | undefined {
-  return value === 'unknown' || value === 'on_track' || value === 'at_risk' || value === 'off_track'
-    ? value
-    : undefined;
-}
-
-function milestoneStatus(value: unknown): 'planned' | 'active' | 'completed' | 'cancelled' | undefined {
-  return value === 'planned' || value === 'active' || value === 'completed' || value === 'cancelled'
-    ? value
-    : undefined;
-}
 
 function resolveEffectiveWorkspaceRoot(
   service: AuthenticatedRouteDeps['service'],
@@ -219,84 +179,50 @@ function buildProjectDigestKnowledgeContent(input: ReturnType<typeof buildProjec
 
 export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
+  const capabilities = createProductDispatcher(undefined, {
+    getProjects: () => service.projects, getConfig: () => service.currentConfig, getWorkDiscovery: () => service.workDiscovery,
+  });
+  const invokeWrite = (c: Context, operation: string, input: unknown) => {
+    const caller = capabilityHttpContext(c);
+    return capabilities.call(operation, input, caller, { ...capabilities.describe(operation, caller), idempotencyKey: c.req.header('idempotency-key') ?? randomUUID() });
+  };
+  const readBody = async (c: Context): Promise<Record<string, unknown>> => {
+    const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new CapabilityError('INVALID_INPUT', 'Expected an object');
+    return body;
+  };
+  const readOptionalBody = async (c: Context): Promise<Record<string, unknown>> => {
+    const text = await c.req.text();
+    if (!text.length) return {};
+    let body: unknown;
+    try { body = JSON.parse(text); }
+    catch { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new CapabilityError('INVALID_INPUT', 'Expected an object');
+    return body as Record<string, unknown>;
+  };
+  const milestoneRevision = (c: Context, revision: unknown) => {
+    if (revision !== undefined) return revision;
+    if (c.req.header('idempotency-key')) throw new CapabilityError('INVALID_INPUT', 'Stable retries require the original expectedRevision');
+    const milestone = service.projects.listMilestones(c.req.param('id')!).find(item => item.id === c.req.param('milestoneId'));
+    if (!milestone) throw new CapabilityError('NOT_FOUND', 'Milestone not found');
+    return milestone.updatedAt;
+  };
   const activity = new ActivityService();
   const operatingViews = new ProjectOperatingViewService(service.projects);
-  const environments = new ExecutionEnvironmentStore();
 
   authenticated.post('/api/projects', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const name = textField(body, 'name')?.trim();
-    const workspaceRoot = textField(body, 'workspaceRoot')?.trim();
-    if (body.autoUnderstand !== undefined && typeof body.autoUnderstand !== 'boolean') {
-      return c.json({ ok: false, error: 'autoUnderstand must be a boolean' }, 400);
-    }
-    if (!name && !workspaceRoot) return c.json({ ok: false, error: 'Missing name' }, 400);
-    const executionMode = parseProjectExecutionMode(body.executionMode);
-    if (body.executionMode !== undefined && !executionMode) {
-      return c.json({ ok: false, error: 'Invalid project execution mode' }, 400);
-    }
-    const hasDefaultAgentPatch = Object.hasOwn(body, 'defaultAgentId');
-    const explicitDefaultAgentId = normalizeProjectAgentId(textField(body, 'defaultAgentId'));
-    const defaultAgentId = hasDefaultAgentPatch
-      ? explicitDefaultAgentId
-      : inferSuggestedProjectDefaultAgentId({
-        config: service.currentConfig,
-        name,
-        description: textField(body, 'description'),
-        workspaceRoot,
-        projectKind: textField(body, 'projectKind'),
-      });
-    if (!isValidProjectAgentId(service.currentConfig, defaultAgentId)) {
-      return c.json({ ok: false, error: 'Default agent not found' }, 400);
-    }
     try {
-      const project = service.projects.create({
-        name,
-        description: textField(body, 'description'),
-        defaultAgentId,
-        workspaceRoot,
-        createWorkspaceRoot: body.createWorkspaceRoot === true,
-        projectKind: textField(body, 'projectKind'),
-        executionMode,
-        brief: textField(body, 'brief'),
-        instructions: textField(body, 'instructions'),
-        outcome: textField(body, 'outcome'),
-        successCriteria: stringListField(body, 'successCriteria'),
-        scope: objectField(body, 'scope'),
-        nonGoals: stringListField(body, 'nonGoals'),
-        health: projectHealth(body.health),
-        ownerId: textField(body, 'ownerId'),
-        targetAt: optionalNumberField(body, 'targetAt') ?? undefined,
-      });
-      if (body.autoUnderstand === true) {
-        try {
-          deps.service.workDiscovery.startProjectUnderstanding(project.id);
-        } catch (err) {
-          log.warn({ err, projectId: project.id }, 'Project created but understanding could not be queued');
-        }
-      }
+      const { project } = ProjectMutationOutputSchema.parse(await invokeWrite(c, 'xopc.projects.create', await readBody(c)));
       return c.json({ ok: true, project: enrichProjectWorkspace(service, project) }, 201);
-    } catch (error) {
-      if (error instanceof ProjectWorkspaceConflictError) {
-        return c.json({ ok: false, code: 'workspace_already_bound', error: error.message, project: error.project }, 409);
-      }
-      if (error instanceof ProjectWorkspaceMissingError) {
-        return c.json({ ok: false, code: 'workspace_root_missing', error: error.message, workspaceRoot: error.workspaceRoot }, 409);
-      }
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
+    } catch (error) { return projectWriteError(c, error); }
   });
 
   authenticated.get('/api/projects', async (c) => {
-    const status = parseProjectStatus(c.req.query('status'));
-    const result = service.projects.list({
-      ...(status ? { status } : {}),
-      search: c.req.query('search'),
-      sortBy: c.req.query('sortBy') as 'updatedAt' | 'createdAt' | 'name' | undefined,
-      sortOrder: c.req.query('sortOrder') as 'asc' | 'desc' | undefined,
-      limit: parseLimit(c.req.query('limit')),
-      offset: c.req.query('offset') ? Math.max(0, Number.parseInt(c.req.query('offset')!, 10) || 0) : undefined,
-    });
+    try {
+    const { includeOperating: _includeOperating, ...input } = c.req.query();
+    const result = ProductReadContracts['xopc.projects.list'].output.parse(await capabilities.call('xopc.projects.list', {
+      ...input, limit: input.limit === undefined ? undefined : Number(input.limit), offset: input.offset === undefined ? undefined : Number(input.offset),
+    }, capabilityHttpContext(c)));
     const includeOperating = c.req.query('includeOperating') === 'true';
     return c.json({
       ok: true,
@@ -308,6 +234,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         return { ...enriched, operating: view ? summarizeProjectOperatingView(view) : undefined };
       }),
     });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.get('/api/projects/suggestions', async (c) => {
@@ -333,58 +260,12 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   });
 
   authenticated.post('/api/projects/resolve-workspace', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const workspacePath = textField(body, 'workspacePath')?.trim();
-    if (!workspacePath) return c.json({ ok: false, error: 'Missing workspacePath' }, 400);
-    const agentId = textField(body, 'agentId')?.trim() || 'main';
-    const suggestedDefaultAgentId = inferSuggestedProjectDefaultAgentId({
-      config: service.currentConfig,
-      workspaceRoot: workspacePath,
-      projectKind: textField(body, 'projectKind'),
-    });
-    let match;
     try {
-      match = service.projects.resolveOrCreateForWorkspacePath({
-        workspacePath,
-        agentId,
-        defaultAgentId: suggestedDefaultAgentId,
-        autoCreate: body.autoCreate !== false,
-      });
-    } catch (error) {
-      if (error instanceof ProjectWorkspaceConflictError) {
-        match = { project: error.project, reason: 'exact' as const, created: false };
-      } else {
-        throw error;
-      }
-    }
-    if (!match) return c.json({ ok: true, project: null });
-
-    const conversationId = textField(body, 'conversationId')?.trim();
-    const projectDefaultAgentId = normalizeProjectAgentId(match.project.defaultAgentId);
-    const shouldBindRequestedSession = !projectDefaultAgentId || projectDefaultAgentId === normalizeProjectAgentId(agentId);
-    if (conversationId && shouldBindRequestedSession) {
-      const existingSession = getSessionMetadata(conversationId);
-      if (!existingSession) {
-        await service.sessionIndexInstance.saveMessages(conversationId, [], {
-          metadata: {
-            sourceChannel: 'tui',
-            sourceChatId: `default:direct:${conversationId}`,
-            sessionType: 'chat',
-            projectId: match.project.id,
-            routing: {
-              agentId,
-              source: 'tui',
-              accountId: 'default',
-              peerKind: 'direct',
-              peerId: conversationId,
-            },
-          },
-        });
-      }
-      service.projects.attachSession(conversationId, match.project.id);
-    }
-
-    return c.json({ ok: true, ...match });
+      const body = await readBody(c);
+      return c.json(ProjectResolveWorkspaceOutputSchema.parse(await invokeWrite(c, 'xopc.projects.resolve_workspace', {
+        ...body, agentId: body.agentId ?? 'main', autoCreate: body.autoCreate ?? true,
+      })));
+    } catch (error) { return projectWriteError(c, error); }
   });
 
   authenticated.get('/api/projects/:id/activity', (c) => {
@@ -474,180 +355,130 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, blocker: blocked.ok ? blocked.model : created.model }, 201);
   });
 
-  authenticated.post('/api/projects/:id/pin', async (c) => {
-    try {
-      const project = service.projects.pin(c.req.param('id'));
-      return c.json({ ok: true, project: enrichProjectWorkspace(service, project) });
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
-    }
-  });
-
-  authenticated.post('/api/projects/:id/unpin', async (c) => {
-    try {
-      const project = service.projects.unpin(c.req.param('id'));
-      return c.json({ ok: true, project: enrichProjectWorkspace(service, project) });
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
-    }
-  });
+  for (const [action, pinned] of [['pin', true], ['unpin', false]] as const) {
+    authenticated.post(`/api/projects/:id/${action}`, async (c) => {
+      try {
+        const body = await readOptionalBody(c);
+        if (Object.keys(body).some(key => key !== 'expectedVersion')) throw new CapabilityError('INVALID_INPUT', 'Unexpected pin input');
+        if (body.expectedVersion === undefined && c.req.header('idempotency-key')) {
+          throw new CapabilityError('INVALID_INPUT', 'Stable retries require the original expectedVersion');
+        }
+        const id = c.req.param('id');
+        const project = body.expectedVersion === undefined ? service.projects.get(id) : undefined;
+        if (body.expectedVersion === undefined && !project) throw new CapabilityError('NOT_FOUND', 'Project not found');
+        const result = ProjectMutationOutputSchema.parse(await invokeWrite(c, 'xopc.projects.set_pinned', {
+          id, pinned, expectedVersion: body.expectedVersion ?? project?.version,
+        }));
+        return c.json({ ok: true, project: enrichProjectWorkspace(service, result.project) });
+      } catch (error) { return capabilityHttpError(c, error); }
+    });
+  }
 
   authenticated.get('/api/projects/:id', async (c) => {
-    const project = service.projects.getWithDetails(c.req.param('id'));
-    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    return c.json({ ok: true, project: enrichProjectWorkspace(service, project) });
+    try {
+      const { project } = ProductReadContracts['xopc.projects.get'].output.parse(await capabilities.call('xopc.projects.get', { id: c.req.param('id') }, capabilityHttpContext(c)));
+      return c.json({ ok: true, project: enrichProjectWorkspace(service, project) });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
-  authenticated.get('/api/projects/:id/milestones', (c) => {
-    const project = service.projects.get(c.req.param('id'));
-    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    return c.json({ ok: true, items: service.projects.listMilestones(project.id) });
+  authenticated.get('/api/projects/:id/milestones', async (c) => {
+    try {
+      const { items } = ProductReadContracts['xopc.projects.list_milestones'].output.parse(await capabilities.call('xopc.projects.list_milestones', { id: c.req.param('id') }, capabilityHttpContext(c)));
+      return c.json({ ok: true, items });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/projects/:id/milestones', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const title = textField(body, 'title')?.trim();
-    if (!title) return c.json({ ok: false, error: 'Missing title' }, 400);
-    if (body.status !== undefined && !milestoneStatus(body.status)) {
-      return c.json({ ok: false, error: 'Invalid milestone status' }, 400);
-    }
     try {
-      const milestone = service.projects.createMilestone(c.req.param('id'), {
-        title,
-        description: textField(body, 'description'),
-        status: milestoneStatus(body.status),
-        targetAt: optionalNumberField(body, 'targetAt') ?? undefined,
-        sortOrder: optionalNumberField(body, 'sortOrder') ?? undefined,
-      });
+      const body = await readBody(c);
+      const { milestone } = ProjectMilestoneOutputSchema.parse(await invokeWrite(c, 'xopc.projects.create_milestone', { ...body, projectId: c.req.param('id') }));
       return c.json({ ok: true, milestone }, 201);
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.patch('/api/projects/:id/milestones/:milestoneId', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    if (body.status !== undefined && !milestoneStatus(body.status)) {
-      return c.json({ ok: false, error: 'Invalid milestone status' }, 400);
-    }
     try {
-      const milestone = service.projects.updateMilestone(c.req.param('id'), c.req.param('milestoneId'), {
-        ...(textField(body, 'title') !== undefined ? { title: textField(body, 'title')! } : {}),
-        ...(optionalTextField(body, 'description') !== undefined ? { description: optionalTextField(body, 'description') } : {}),
-        ...(body.status !== undefined ? { status: milestoneStatus(body.status)! } : {}),
-        ...(body.targetAt !== undefined ? { targetAt: optionalNumberField(body, 'targetAt') } : {}),
-        ...(body.sortOrder !== undefined ? { sortOrder: optionalNumberField(body, 'sortOrder')! } : {}),
-      });
+      const { expectedRevision, ...patch } = await readBody(c);
+      const { milestone } = ProjectMilestoneOutputSchema.parse(await invokeWrite(c, 'xopc.projects.update_milestone', {
+        projectId: c.req.param('id'), id: c.req.param('milestoneId'), expectedRevision: milestoneRevision(c, expectedRevision), patch,
+      }));
       return c.json({ ok: true, milestone });
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
-    }
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
-  authenticated.delete('/api/projects/:id/milestones/:milestoneId', (c) => {
-    const deleted = service.projects.deleteMilestone(c.req.param('id'), c.req.param('milestoneId'));
-    return deleted ? c.json({ ok: true }) : c.json({ ok: false, error: 'Milestone not found' }, 404);
+  authenticated.delete('/api/projects/:id/milestones/:milestoneId', async (c) => {
+    try {
+      const raw = await c.req.text();
+      let body: Record<string, unknown> = {};
+      if (raw) {
+        try { body = JSON.parse(raw); } catch { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); }
+        if (!body || typeof body !== 'object' || Array.isArray(body)) throw new CapabilityError('INVALID_INPUT', 'Expected an object');
+      }
+      ProjectMilestoneDeleteOutputSchema.parse(await invokeWrite(c, 'xopc.projects.delete_milestone', {
+        projectId: c.req.param('id'), id: c.req.param('milestoneId'), expectedRevision: milestoneRevision(c, body.expectedRevision),
+      }));
+      return c.json({ ok: true });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
-  authenticated.get('/api/projects/:id/updates', (c) => {
-    const project = service.projects.get(c.req.param('id'));
-    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    return c.json({ ok: true, items: service.projects.listUpdates(project.id, parseLimit(c.req.query('limit'), 20)) });
+  authenticated.get('/api/projects/:id/updates', async (c) => {
+    try {
+      const { items } = ProductReadContracts['xopc.projects.list_updates'].output.parse(await capabilities.call('xopc.projects.list_updates', {
+        id: c.req.param('id'), limit: c.req.query('limit') === undefined ? undefined : Number(c.req.query('limit')),
+      }, capabilityHttpContext(c)));
+      return c.json({ ok: true, items });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/projects/:id/updates', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const summary = textField(body, 'summary')?.trim();
-    const health = projectHealth(body.health);
-    if (!summary || !health) return c.json({ ok: false, error: 'Missing summary or valid health' }, 400);
     try {
-      const update = service.projects.createUpdate(c.req.param('id'), {
-        health,
-        summary,
-        progress: stringListField(body, 'progress'),
-        risks: stringListField(body, 'risks'),
-        nextSteps: stringListField(body, 'nextSteps'),
-        actor: objectField(body, 'actor') ?? { kind: 'user' },
-      });
+      const body = await readBody(c);
+      if (c.req.header('idempotency-key') && body.expectedVersion === undefined) throw new CapabilityError('INVALID_INPUT', 'Stable retries require the original expectedVersion');
+      const project = service.projects.get(c.req.param('id'));
+      if (!project && body.expectedVersion === undefined) throw new CapabilityError('NOT_FOUND', 'Project not found');
+      const { update } = ProjectUpdateOutputSchema.parse(await invokeWrite(c, 'xopc.projects.create_update', {
+        ...body, projectId: c.req.param('id'), expectedVersion: body.expectedVersion === undefined ? project?.version : body.expectedVersion,
+      }));
       return c.json({ ok: true, update }, 201);
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.patch('/api/projects/:id', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const projectId = c.req.param('id');
-    const status = parseProjectStatus(body.status);
-    const defaultAgentPatch = optionalTextField(body, 'defaultAgentId');
-    const defaultAgentId = defaultAgentPatch === undefined ? undefined : normalizeProjectAgentId(defaultAgentPatch);
-    if (body.status !== undefined && !status) return c.json({ ok: false, error: 'Invalid project status' }, 400);
-    if (body.health !== undefined && !projectHealth(body.health)) return c.json({ ok: false, error: 'Invalid project health' }, 400);
-    const executionMode = parseProjectExecutionMode(body.executionMode);
-    if (body.executionMode !== undefined && !executionMode) {
-      return c.json({ ok: false, error: 'Invalid project execution mode' }, 400);
-    }
-    if (defaultAgentId && !isValidProjectAgentId(service.currentConfig, defaultAgentId)) {
-      return c.json({ ok: false, error: 'Default agent not found' }, 400);
-    }
-    const currentProject = service.projects.get(projectId);
-    const requestedWorkspaceRoot = optionalTextField(body, 'workspaceRoot');
-    if (
-      currentProject
-      && requestedWorkspaceRoot !== undefined
-      && requestedWorkspaceRoot !== (currentProject.workspaceRoot ?? null)
-      && environments.list({ projectId, limit: 1 }).length > 0
-    ) {
-      return c.json({
-        ok: false,
-        code: 'execution_environments_exist',
-        error: 'Delete the project execution environments before changing its workspace',
-      }, 409);
-    }
     try {
-      const project = service.projects.update(projectId, {
-        ...(textField(body, 'name') !== undefined ? { name: textField(body, 'name') } : {}),
-        ...(optionalTextField(body, 'description') !== undefined ? { description: optionalTextField(body, 'description') } : {}),
-        ...(status ? { status } : {}),
-        ...(defaultAgentPatch !== undefined ? { defaultAgentId: defaultAgentId ?? null } : {}),
-        ...(optionalTextField(body, 'workspaceRoot') !== undefined ? { workspaceRoot: optionalTextField(body, 'workspaceRoot') } : {}),
-        createWorkspaceRoot: body.createWorkspaceRoot === true,
-        ...(executionMode ? { executionMode } : {}),
-        ...(optionalTextField(body, 'brief') !== undefined ? { brief: optionalTextField(body, 'brief') } : {}),
-        ...(optionalTextField(body, 'instructions') !== undefined ? { instructions: optionalTextField(body, 'instructions') } : {}),
-        ...(optionalTextField(body, 'outcome') !== undefined ? { outcome: optionalTextField(body, 'outcome') } : {}),
-        ...(body.successCriteria !== undefined ? { successCriteria: stringListField(body, 'successCriteria')! } : {}),
-        ...(body.scope !== undefined ? { scope: objectField(body, 'scope')! } : {}),
-        ...(body.nonGoals !== undefined ? { nonGoals: stringListField(body, 'nonGoals')! } : {}),
-        ...(body.health !== undefined ? { health: projectHealth(body.health)! } : {}),
-        ...(optionalTextField(body, 'ownerId') !== undefined ? { ownerId: optionalTextField(body, 'ownerId') } : {}),
-        ...(body.targetAt !== undefined ? { targetAt: optionalNumberField(body, 'targetAt') } : {}),
-      });
+      const { expectedVersion, ...patch } = await readBody(c);
+      if (expectedVersion === undefined && c.req.header('idempotency-key')) {
+        throw new CapabilityError('INVALID_INPUT', 'Stable retries require the original expectedVersion');
+      }
+      const id = c.req.param('id');
+      const current = expectedVersion === undefined ? service.projects.get(id) : undefined;
+      if (expectedVersion === undefined && !current) throw new CapabilityError('NOT_FOUND', 'Project not found');
+      const { project } = ProjectMutationOutputSchema.parse(await invokeWrite(c, 'xopc.projects.update', {
+        id, expectedVersion: expectedVersion === undefined ? current?.version : expectedVersion, patch,
+      }));
       return c.json({ ok: true, project: enrichProjectWorkspace(service, project) });
-    } catch (error) {
-      if (error instanceof ProjectWorkspaceConflictError) {
-        return c.json({ ok: false, code: 'workspace_already_bound', error: error.message, project: error.project }, 409);
-      }
-      if (error instanceof ProjectWorkspaceMissingError) {
-        return c.json({ ok: false, code: 'workspace_root_missing', error: error.message, workspaceRoot: error.workspaceRoot }, 409);
-      }
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
-    }
+    } catch (error) { return projectWriteError(c, error); }
   });
 
   authenticated.delete('/api/projects/:id', async (c) => {
-    const projectId = c.req.param('id');
-    if (environments.list({ projectId, limit: 1 }).length > 0) {
-      return c.json({
-        ok: false,
-        code: 'execution_environments_exist',
-        error: 'Delete the project execution environments before deleting the project',
-      }, 409);
+    try {
+      const body = await readOptionalBody(c);
+      if (Object.keys(body).some(key => key !== 'expectedVersion')) throw new CapabilityError('INVALID_INPUT', 'Unexpected delete input');
+      if (body.expectedVersion === undefined && c.req.header('idempotency-key')) {
+        throw new CapabilityError('INVALID_INPUT', 'Stable retries require the original expectedVersion');
+      }
+      const id = c.req.param('id');
+      const project = body.expectedVersion === undefined ? service.projects.get(id) : undefined;
+      if (body.expectedVersion === undefined && !project) throw new CapabilityError('NOT_FOUND', 'Project not found');
+      const result = ProjectDeleteOutputSchema.parse(await invokeWrite(c, 'xopc.projects.delete', {
+        id, expectedVersion: body.expectedVersion === undefined ? project?.version : body.expectedVersion,
+      }));
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof CapabilityError && error.cause instanceof ProjectDeletionBlockedError) {
+        return c.json({ ok: false, code: 'execution_environments_exist', error: error.message }, 409);
+      }
+      return capabilityHttpError(c, error);
     }
-    const understandingRun = getProjectUnderstandingRun(projectId);
-    if (understandingRun) deps.service.workDiscovery.cancelRun(understandingRun.id);
-    service.projects.delete(projectId);
-    return c.json({ ok: true });
   });
 
   authenticated.get('/api/projects/:id/sessions', async (c) => {

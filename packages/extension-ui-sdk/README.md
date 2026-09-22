@@ -86,3 +86,44 @@ pnpm -C packages/extension-ui-sdk run docs
 ## License
 
 MIT
+# Pinned Local App capabilities
+
+Installed Local Apps may declare `ui.capabilities` entries with an exact `id`,
+`majorVersion`, and `descriptorDigest` from the authenticated Gateway catalog.
+Currently supported bindings are `xopc.notes.get`, `xopc.notes.list`,
+`xopc.tasks.get`, and `xopc.tasks.list` for reads, plus `xopc.notes.create`,
+`xopc.notes.update`, and `xopc.notes.append` for local writes. Wildcards, duplicate
+IDs, undeclared operations, and supplied implementation code are rejected.
+
+Bindings are included in the release source hash and permission review. Obtain a
+fresh acceptance result and user grant after changing the release. The UI host
+binds calls to its registered iframe and reviewed release; never embed Gateway
+credentials in the app or pass an extension identity, grant, or release digest
+as capability arguments.
+
+```ts
+const descriptor = await client.capability.describe('xopc.notes.list');
+const result = await client.capability.call(descriptor.id, {
+  majorVersion: descriptor.majorVersion,
+  descriptorDigest: descriptor.descriptorDigest,
+  input: { limit: 20 },
+});
+```
+
+The host refuses undeclared or changed contracts, disabled/uninstalled apps, and
+missing or revoked grants. A release switch or revocation during a read prevents
+delivery of its result. This API currently targets installed Local Apps, not
+arbitrary Node extensions. Writes require an explicit stable `idempotencyKey`;
+retain it after timeouts or unknown outcomes. Keys are isolated by caller, app,
+and installed release. Updates also require the current note revision.
+
+Agents use `xopc_use` with `mode: "local_app"`, `command: "capabilities"`, and
+`args: { extensionId }` to discover an already granted release. Invoke with
+`command: "invoke"` and `args: { extensionId, manifestDigest, capabilityId, call }`.
+Discovery never creates a grant. Both paths share the host dispatcher and release
+checks. Task writes, destructive actions, arbitrary backend registrations, and
+external writes are not exposed by these bindings.
+
+Release validation and installation reject stale host contract digests; refresh
+the binding and repeat acceptance before publishing. Rollback verifies the stored
+artifact source hash and contract compatibility without reversing business data.

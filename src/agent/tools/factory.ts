@@ -149,6 +149,7 @@ export interface ToolFactoryDeps {
   /** Gateway: enables the `xopc_use` product-object tool. */
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
+  getWorkDiscovery?: () => import('../../work-discovery/service.js').WorkDiscoveryService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
   /** Gateway: publishes durable Task change notifications. */
   dispatchTaskEvents?: () => void;
@@ -581,6 +582,8 @@ export class AgentToolsFactory {
         ? [
             createAutomationTool({
               getAutomationService: this.deps.getAutomationService,
+              getCurrentAgentId: () => options.agentId,
+              getProjectService: this.deps.getProjectService,
             }),
           ]
         : []),
@@ -604,6 +607,7 @@ export class AgentToolsFactory {
               getSceneAccess: this.deps.getSceneAccess,
               getNotesService: this.deps.getNotesService,
               getProjectService: this.deps.getProjectService,
+              getWorkDiscovery: this.deps.getWorkDiscovery,
               getLocalAppService: this.deps.getLocalAppService,
               dispatchTaskEvents: this.deps.dispatchTaskEvents,
               dispatchTaskRuns: this.deps.dispatchTaskRuns,

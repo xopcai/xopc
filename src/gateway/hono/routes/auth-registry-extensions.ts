@@ -322,8 +322,15 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     return c.json({ grant: service.localApps.getUiGrant(c.req.param('id')) });
   });
 
-  authenticated.post('/api/extensions/:id/ui-grant', (c) => {
-    return c.json({ grant: service.localApps.grantUiPermissions(c.req.param('id')) });
+  authenticated.post('/api/extensions/:id/ui-grant', async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body.manifestDigest !== 'string' || !/^[a-f0-9]{64}$/.test(body.manifestDigest)) {
+      return c.json({ error: 'The reviewed manifestDigest is required' }, 400);
+    }
+    if (service.localApps.getUiGrant(c.req.param('id')).manifestDigest !== body.manifestDigest) {
+      return c.json({ error: 'Extension release changed; review permissions again' }, 409);
+    }
+    return c.json({ grant: service.localApps.grantUiPermissions(c.req.param('id'), body.manifestDigest) });
   });
 
   authenticated.get('/api/extensions/:id/storage', async (c) => {

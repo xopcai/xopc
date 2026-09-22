@@ -23,9 +23,9 @@ export function AssistantTurnTasks({
 }) {
   return (
     <>
-      {view.delivery ? (
-        <ProductDeliveryCard delivery={view.delivery} compact={compactProductDelivery} />
-      ) : null}
+      {view.deliveries.map(({ key, delivery }) => (
+        <ProductDeliveryCard key={key} delivery={delivery} compact={compactProductDelivery} />
+      ))}
 
       {view.outcome ? (
         <TurnOutcomeResult

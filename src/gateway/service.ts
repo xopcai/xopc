@@ -82,8 +82,8 @@ import { LocalAppService } from '../local-apps/index.js';
 import {
   TaskRepository,
   TaskApplicationService,
-  TaskOutboxDispatcher,
 } from '../tasks/index.js';
+import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
 import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
 import { TaskRunDispatcher } from '../tasks/task-run-dispatcher.js';
 import { TaskSignalService } from '../tasks/task-signal-service.js';
@@ -124,6 +124,9 @@ import { GatewaySceneHost } from './scenes/host.js';
 import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import type { SceneAccess } from '../scenes/httpServices.js';
+import { createProductDispatcher } from '../capabilities/runtime/product.js';
+import { prepareAppContext, checkAppContextAccess } from './service/app-context-access.js';
+import type { GatewayPrincipal } from './security/gateway-principal.js';
 import { ManagedComposioEventPoller } from '../connectors/composio-managed-events.js';
 import {
   applyAutomaticVoiceLanguage,
@@ -498,7 +501,14 @@ export class GatewayService {
     });
 
     this.agentRunner = new GatewayAgentRunner({
-      validateConnectionResume: input => this.connectionRecovery.preflight(input),
+      validateConnectionResume: async input => {
+        for (const source of input.contextSnapshots ?? []) {
+          if (source.kind === 'app_context') {
+            await checkAppContextAccess(source, this.appContextDispatcher(), this.auth);
+          }
+        }
+        return this.connectionRecovery.preflight(input);
+      },
       bus: this.bus,
       sessionIndex: this.sessionIndex,
       getAgentService: () => this.ensureAgentService(),
@@ -626,6 +636,7 @@ export class GatewayService {
       emitBrowserEvent: (type, payload) => this.emit(type, payload),
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,
+      getWorkDiscovery: () => this._workDiscovery ?? undefined,
       getLocalAppService: () => this.localApps,
       dispatchTaskEvents: () => this.dispatchTaskEvents(),
       dispatchTaskRuns: () => this.dispatchTaskRuns(),
@@ -738,6 +749,9 @@ export class GatewayService {
 
   private readonly taskRunDispatch = createBackgroundTask(async () => {
     new TaskSignalService().tick();
+    this.notesService.flushCommittedEffects();
+    this.projects.flushCommittedEffects();
+    this._workDiscovery?.dispatchProjectUnderstanding();
     this.dispatchTaskEvents();
     this.createTaskRunDispatcher().dispatch();
     await this.createWorkflowRunService().dispatchTaskRuns();
@@ -818,7 +832,10 @@ export class GatewayService {
   }
 
   dispatchTaskEvents(): void {
-    new TaskOutboxDispatcher(publishAutomationProductEvent).drain();
+    new DomainOutboxDispatcher(event => {
+      if (event.source === 'local_apps') this.emit(event.type, event.payload);
+      else publishAutomationProductEvent(event);
+    }).drain();
   }
 
   runAgent(
@@ -835,6 +852,18 @@ export class GatewayService {
 
   submitSessionInput(...args: Parameters<GatewayAgentRunner['submitSessionInput']>) {
     return this.agentRunner.submitSessionInput(...args);
+  }
+
+  private appContextDispatcher() {
+    return createProductDispatcher(() => this.notesService, {
+      getProjects: () => this.projects, getLocalApps: () => this.localApps,
+      getSceneAccess: () => this.sceneAccess,
+    });
+  }
+
+  prepareSessionAppContext(input: unknown, principal: GatewayPrincipal, conversationId: string, clientMessageId: string) {
+    const previous = findSessionInput(conversationId, clientMessageId)?.contextSnapshots?.find(source => source.kind === 'app_context');
+    return prepareAppContext(input, principal, this.auth, this.appContextDispatcher(), previous);
   }
 
   replaceLatestSessionTurn(...args: Parameters<GatewayAgentRunner['replaceLatestSessionTurn']>) {
@@ -1050,6 +1079,7 @@ export class GatewayService {
 
     log.debug('Starting gateway service...');
     openXopcDatabase();
+    await this.localApps.recoverPendingReleases();
     const { recoverCapabilityImports } = await import('../imports/runtime.js');
     await recoverCapabilityImports();
     this.createNotificationService().start();
@@ -1922,6 +1952,25 @@ export class GatewayService {
     this.stopAutomationProductEventBridge?.();
     this.stopSessionTranscriptAutomationEvents?.();
     this.stopAutomationProductEventBridge = onAutomationProductEvent((event) => {
+      if (event.type === 'project.deleted' && typeof event.payload.projectId === 'string') {
+        const runIds = event.payload.deletedUnderstandingRunIds;
+        if (Array.isArray(runIds) && runIds.every(id => typeof id === 'string')) {
+          this._workDiscovery?.abortDeletedProjectRuns(event.payload.projectId, runIds);
+        }
+      }
+      if (event.type === 'note.created' || event.type === 'note.updated' || event.type === 'note.deleted' || event.type === 'task.changed.v2' || event.type === 'task.deleted.v1' || event.type === 'project.changed' || event.type === 'project.created' || event.type === 'project.deleted' || event.type === 'scene.changed' || event.type === 'scene.created' || event.type === 'scene.deleted') {
+        const note = event.type.startsWith('note.');
+        const project = event.type.startsWith('project.');
+        const scene = event.type.startsWith('scene.');
+        const payload = event.payload as Record<string, unknown>;
+        if (typeof payload.sourceEventId === 'string') this.realtime.broker.publish(
+          note ? 'resources:notes' : project ? 'resources:projects' : scene ? 'resources:scenes' : 'resources:tasks', 'resource.changed', {
+            eventId: payload.sourceEventId, kind: note ? 'note' : project ? 'project' : scene ? 'scene' : 'task',
+            id: note ? payload.noteId : project ? payload.projectId : scene ? payload.sceneId : payload.taskId, revision: note || scene ? payload.revision : payload.version,
+            operation: event.type === 'task.deleted.v1' || event.type.endsWith('.deleted') ? 'deleted' : event.type.endsWith('.created') ? 'created' : 'updated',
+            ...(typeof payload.operationId === 'string' ? { operationId: payload.operationId } : {}),
+          });
+      }
       if (event.type.startsWith('task.')) {
         this.emit(event.type, event.payload);
       }

@@ -1,4 +1,6 @@
 import type { ImageContent } from '@earendil-works/pi-ai';
+import type { AppContextEnvelope } from '@xopcai/gateway-contract';
+import type { AppContextGrant } from '../../gateway/service/app-context-access.js';
 
 export interface SessionSourceBinding {
   kind: 'note';
@@ -26,7 +28,7 @@ export interface SourceContextRefSummary {
 }
 
 export interface AgentSourceContext {
-  kind: SessionSourceBinding['kind'] | 'task' | 'browser_page';
+  kind: SessionSourceBinding['kind'] | 'task' | 'browser_page' | 'app_context';
   sourceId: string;
   version: string;
   title: string;
@@ -37,6 +39,8 @@ export interface AgentSourceContext {
   url?: string;
   capturedAt?: number;
   documentId?: string;
+  appContext?: AppContextEnvelope;
+  appContextGrant?: AppContextGrant;
 }
 
 export function summarizeSourceContext(context: AgentSourceContext): SourceContextRefSummary {

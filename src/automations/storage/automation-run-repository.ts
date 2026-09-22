@@ -1,4 +1,5 @@
-import type { AutomationProductEventRun, AutomationRun, AutomationRunEvent } from '../domain/types.js';
+import type { Automation, AutomationProductEventRun, AutomationRun, AutomationRunEvent } from '../domain/types.js';
+import { AutomationSchema } from '../domain/validation.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 
 const MAX_RUNS_PER_AUTOMATION = 2000;
@@ -95,14 +96,29 @@ function trimRuns(db: ReturnType<typeof getSqliteDatabase>, automationId: string
   if (countRow.count <= MAX_RUNS_PER_AUTOMATION) return;
   const staleRunIds = db
     .prepare(
-      `SELECT run_id FROM automation_runs WHERE automation_id = ?
+      `SELECT run_id FROM automation_runs WHERE automation_id = ? AND status NOT IN ('queued', 'running', 'cancelling')
        ORDER BY created_at_ms ASC LIMIT ?`,
     )
     .all(automationId, countRow.count - TRIM_TO_RUNS) as { run_id: string }[];
   for (const { run_id: runId } of staleRunIds) {
+    db.prepare('DELETE FROM automation_run_requests WHERE run_id = ?').run(runId);
     db.prepare(`DELETE FROM automation_run_events WHERE run_id = ?`).run(runId);
     db.prepare(`DELETE FROM automation_runs WHERE run_id = ?`).run(runId);
   }
+}
+
+export function saveAutomationRunRequest(runId: string, automation: Automation): void {
+  getSqliteDatabase().prepare('INSERT INTO automation_run_requests (run_id, automation_json) VALUES (?, ?)')
+    .run(runId, JSON.stringify(automation));
+}
+
+export function getAutomationRunRequest(runId: string): Automation | null {
+  const row = getSqliteDatabase().prepare('SELECT automation_json FROM automation_run_requests WHERE run_id = ?').get(runId);
+  return row ? AutomationSchema.parse(JSON.parse(String(row.automation_json))) as Automation : null;
+}
+
+export function listUnfinishedAutomationRuns(): AutomationRun[] {
+  return (getSqliteDatabase().prepare("SELECT * FROM automation_runs WHERE status IN ('queued', 'running', 'cancelling') ORDER BY created_at_ms ASC").all() as AutomationRunRow[]).map(rowToRun);
 }
 
 export function appendAutomationRunEvent(event: AutomationRunEvent): void {
@@ -313,6 +329,7 @@ export function listAutomationRunsForProductEvent(options: {
 
 export function deleteAutomationRunsForAutomation(automationId: string): void {
   runSqliteWriteTransaction((db) => {
+    db.prepare('DELETE FROM automation_run_requests WHERE run_id IN (SELECT run_id FROM automation_runs WHERE automation_id = ?)').run(automationId);
     db.prepare(`DELETE FROM automation_run_events WHERE automation_id = ?`).run(automationId);
     db.prepare(`DELETE FROM automation_runs WHERE automation_id = ?`).run(automationId);
   });
@@ -320,7 +337,7 @@ export function deleteAutomationRunsForAutomation(automationId: string): void {
 
 export function markAutomationRunRead(runId: string, readAtMs = Date.now()): boolean {
   const result = getSqliteDatabase()
-    .prepare(`UPDATE automation_runs SET read_at_ms = ? WHERE run_id = ? AND ended_at_ms IS NOT NULL`)
+    .prepare(`UPDATE automation_runs SET read_at_ms = COALESCE(read_at_ms, ?) WHERE run_id = ? AND ended_at_ms IS NOT NULL`)
     .run(readAtMs, runId);
   return result.changes > 0;
 }

@@ -18,17 +18,27 @@ describe('gateway scopes', () => {
     expect(requiredGatewayScope('GET', '/api/connectors/approvals')).toBe('sessions.read');
     expect(requiredGatewayScope('POST', '/api/connectors/approvals/respond')).toBe('sessions.write');
     for (const [method, path] of [['GET', '/api/connectors/approvals'], ['POST', '/api/connectors/approvals/respond']]) {
-      expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, requiredGatewayScope(method, path))).toBe(true);
+      expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, requiredGatewayScope(method, path)!)).toBe(true);
     }
     for (const [method, path] of [['GET', '/api/connectors/catalog'], ['POST', '/api/connectors/approvals'], ['DELETE', '/api/connectors/approvals/respond']]) {
       expect(requiredGatewayScope(method, path)).toBe('gateway.admin');
     }
   });
   it('maps read and write operations separately', () => {
+    expect(requiredGatewayScope('POST', '/api/automations/simulate')).toBe('automations.read');
+    expect(requiredGatewayScope('POST', '/api/automations/draft')).toBe('automations.write');
+    expect(requiredGatewayScope('POST', '/api/automations/simulate-other')).toBe('automations.write');
+    expect(requiredGatewayScope('POST', '/api/notes/note/ai/edit')).toBe('workspace.read');
+    expect(requiredGatewayScope('POST', '/api/notes/note/ai/edit-other')).toBe('workspace.write');
     expect(requiredGatewayScope('GET', '/api/sessions/a')).toBe('sessions.read');
     expect(requiredGatewayScope('POST', '/api/sessions/a/inputs')).toBe('sessions.write');
     expect(requiredGatewayScope('GET', '/api/tasks')).toBe('tasks.read');
     expect(requiredGatewayScope('PATCH', '/api/tasks/a')).toBe('tasks.write');
+    expect(requiredGatewayScope('GET', '/api/task-runs/a')).toBe('tasks.read');
+    expect(requiredGatewayScope('GET', '/api/task-runs/a/events')).toBe('tasks.read');
+    expect(requiredGatewayScope('POST', '/api/task-runs/a/feedback')).toBe('tasks.write');
+    expect(requiredGatewayScope('POST', '/api/task-runs/a/cancel')).toBe('tasks.write');
+    expect(requiredGatewayScope('GET', '/api/task-runs-other')).toBe('gateway.admin');
   });
 
   it('restricts the first scene release to local administrators', () => {

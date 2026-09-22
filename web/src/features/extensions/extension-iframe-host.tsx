@@ -5,6 +5,7 @@ import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore } from '@/stores/theme-store';
+import { useGatewayStore } from '@/stores/gateway-store';
 
 import { buildExtensionAssetUrl } from './extension-asset-url';
 import { ExtensionPermissionDialog } from './extension-permission-dialog';
@@ -26,6 +27,8 @@ type IframeHostUi = {
   dynamicHeight: number;
   grantResolved: boolean;
   grantError: string | null;
+  manifestDigest: string | null;
+  grantedPermissions: string[];
 };
 
 export type ExtensionIframeHostProps = {
@@ -57,6 +60,10 @@ export function ExtensionIframeHost({
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).extensionUi;
   const router = useExtensionRouter();
+  const gatewayUrl = useGatewayStore(state => state.baseUrl);
+  const namespace = useGatewayStore(state => state.conversationId);
+  const generation = useRef(0);
+  const confirming = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const resolved = useThemeStore((s) => s.resolved);
   const displayName = extensionName?.trim() || extensionId;
@@ -76,20 +83,26 @@ export function ExtensionIframeHost({
     dynamicHeight: fixedHeight ?? Math.min(maxHeight, Math.max(minHeight, 320)),
     grantResolved: false,
     grantError: null,
+    manifestDigest: null,
+    grantedPermissions: [],
   });
   const { allowed, dialogOpen, reloadKey, loadError, dynamicHeight, grantResolved, grantError } = ui;
 
   useEffect(() => {
     let active = true;
-    dispatch({ type: 'patch', patch: { allowed: false, dialogOpen: false, grantResolved: false, grantError: null } });
+    confirming.current = false;
+    dispatch({ type: 'patch', patch: { allowed: false, dialogOpen: false, grantResolved: false, grantError: null, manifestDigest: null, grantedPermissions: [] } });
     void resolveExtensionUiGrant(extensionId).then((grant) => {
       if (!active) return;
+      if (grant.extensionId !== extensionId || !grant.manifestDigest) throw new Error('Could not verify extension permissions');
       dispatch({
         type: 'patch',
         patch: {
           allowed: grant.granted,
           dialogOpen: !grant.granted,
           grantResolved: true,
+          manifestDigest: grant.manifestDigest,
+          grantedPermissions: grant.permissions,
         },
       });
     }).catch((cause) => {
@@ -104,8 +117,8 @@ export function ExtensionIframeHost({
         },
       });
     });
-    return () => { active = false; };
-  }, [extensionId, permList]);
+    return () => { active = false; generation.current += 1; };
+  }, [extensionId, permList, gatewayUrl, namespace, reloadKey]);
 
   const setDialogOpen = useCallback(
     (open: boolean) => dispatch({ type: 'patch', patch: { dialogOpen: open } }),
@@ -121,7 +134,7 @@ export function ExtensionIframeHost({
     if (!allowed) return;
     const el = iframeRef.current;
     if (!el) return;
-    router.registerIframe(extensionId, el, permList);
+    router.registerIframe(extensionId, el, ui.grantedPermissions, ui.manifestDigest ?? undefined);
     const unsubscribe = router.subscribeExtensionEvents(extensionId, (msg) => {
       if (msg.event !== 'ui.resize') return;
       if (!msg.data || typeof msg.data !== 'object' || msg.data === null) return;
@@ -136,7 +149,7 @@ export function ExtensionIframeHost({
       unsubscribe();
       router.unregisterIframe(extensionId);
     };
-  }, [allowed, extensionId, fixedHeight, maxHeight, minHeight, permList, router]);
+  }, [allowed, extensionId, fixedHeight, maxHeight, minHeight, ui.grantedPermissions, ui.manifestDigest, router, reloadKey]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -150,15 +163,22 @@ export function ExtensionIframeHost({
       : { width: '100%', height: dynamicHeight, border: 'none' };
 
   const handleConfirmGrant = () => {
-    void confirmExtensionUiGrant(extensionId).then((grant) => {
-      if (!grant.granted) throw new Error('Permission grant was not persisted');
+    if (confirming.current || !ui.manifestDigest) return;
+    confirming.current = true;
+    const current = generation.current;
+    const isCurrent = () => generation.current === current && useGatewayStore.getState().baseUrl === gatewayUrl
+      && useGatewayStore.getState().conversationId === namespace;
+    void confirmExtensionUiGrant(extensionId, ui.manifestDigest).then((grant) => {
+      if (!isCurrent()) return;
+      if (!grant.granted || grant.extensionId !== extensionId || grant.manifestDigest !== ui.manifestDigest) throw new Error('Permission grant was not persisted');
       dispatch({ type: 'patch', patch: { allowed: true, grantError: null } });
     }).catch((cause) => {
+      if (!isCurrent()) return;
       dispatch({
         type: 'patch',
-        patch: { allowed: false, grantError: cause instanceof Error ? cause.message : String(cause) },
+        patch: { allowed: false, manifestDigest: null, grantError: cause instanceof Error ? cause.message : String(cause) },
       });
-    });
+    }).finally(() => { if (isCurrent()) confirming.current = false; });
   };
 
   if (!grantResolved) {
@@ -173,7 +193,8 @@ export function ExtensionIframeHost({
           onOpenChange={setDialogOpen}
           extensionId={extensionId}
           extensionName={displayName}
-          permissions={permList}
+          permissions={ui.grantedPermissions}
+          confirmDisabled={!ui.manifestDigest}
           onConfirm={handleConfirmGrant}
         />
         {!dialogOpen ? (
@@ -189,7 +210,7 @@ export function ExtensionIframeHost({
             <button
               type="button"
               className="mt-2 text-sm font-medium text-accent underline-offset-2 hover:underline"
-              onClick={() => dispatch({ type: 'patch', patch: { dialogOpen: true } })}
+              onClick={() => dispatch({ type: 'patch', patch: { reloadKey: reloadKey + 1 } })}
             >
               {t.reviewPermissions}
             </button>

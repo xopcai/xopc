@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { SceneConfigureSchema, SceneTransitionSchema, SceneWorkItemCreateSchema, SceneWorkItemUpdateSchema } from '@xopcai/gateway-contract';
 
-import { activationInputSchema, activationStatuses, intersectPermissions, validateTemplate,
+import { activationInputSchema, intersectPermissions, validateTemplate,
   type SceneActivation, type ScenePermission, type ScenePrincipal } from './contracts.js';
 import type { SceneContextProvider } from './execution.js';
 import { SceneConflictError, SceneRepository } from './repository.js';
@@ -19,6 +20,8 @@ export class SceneApplicationService {
     private readonly clock: () => number = Date.now,
     private readonly modelReadiness: () => string[] = () => [],
   ) {}
+
+  get database() { return this.repository.database; }
 
   async preflight(principal: ScenePrincipal, value: unknown): Promise<{ ready: boolean; missing: string[] }> {
     const input = activationInputSchema.parse(value);
@@ -45,6 +48,11 @@ export class SceneApplicationService {
     if (!requestId.trim()) throw new Error('Scene request identity is required');
     const preflight = await this.preflight(principal, value);
     if (!preflight.ready) throw new SceneSetupError(preflight.missing);
+    return this.startAfterPreflight(principal, value, requestId);
+  }
+
+  /** Commit only after a successful preflight; contains no asynchronous effects. */
+  startAfterPreflight(principal: ScenePrincipal, value: unknown, requestId: string): SceneActivation {
     const activation = this.repository.createActivation(principal, value, requestId);
     if (activation.status !== 'needs_setup') return activation;
     return this.repository.transitionActivation(principal, activation.id, activation.revision, 'active', this.clock());
@@ -60,19 +68,31 @@ export class SceneApplicationService {
   }
 
   async transition(principal: ScenePrincipal, id: string, value: unknown): Promise<SceneActivation> {
-    const input = z.strictObject({ expectedRevision: z.number().int().positive(), status: z.enum(activationStatuses) }).parse(value);
+    await this.prepareTransition(principal, id, value);
+    return this.transitionAfterPreflight(principal, id, value);
+  }
+
+  async prepareTransition(principal: ScenePrincipal, id: string, value: unknown): Promise<void> {
+    const input = SceneTransitionSchema.parse(value);
     const activation = this.repository.getActivation(principal, id);
+    if (activation.templateKey === 'task-follow-up') throw new SceneConflictError('Use the task follow-up controls');
+    if (activation.revision !== input.expectedRevision) throw new SceneConflictError('Scene activation changed');
     if (input.status === 'active') {
       const result = await this.checkReadiness(activation);
       if (!result.ready) throw new SceneSetupError(result.missing);
     }
+  }
+
+  /** The exact revision fences changes made while asynchronous readiness checks were running. */
+  transitionAfterPreflight(principal: ScenePrincipal, id: string, value: unknown): SceneActivation {
+    const input = SceneTransitionSchema.parse(value);
+    if (this.repository.getActivation(principal, id).templateKey === 'task-follow-up') throw new SceneConflictError('Use the task follow-up controls');
     return this.repository.transitionActivation(principal, id, input.expectedRevision, input.status, this.clock());
   }
 
   configure(principal: ScenePrincipal, id: string, value: unknown): SceneActivation {
     if (this.repository.getActivation(principal, id).templateKey === 'task-follow-up') throw new SceneConflictError('Use the task follow-up controls');
-    const { expectedRevision, ...input } = activationInputSchema.pick({ goal: true, scope: true, permissions: true })
-      .extend({ expectedRevision: z.number().int().positive() }).parse(value);
+    const { expectedRevision, ...input } = SceneConfigureSchema.parse(value);
     return this.repository.configureActivation(principal, id, expectedRevision, input);
   }
 
@@ -81,8 +101,7 @@ export class SceneApplicationService {
   }
 
   createWorkItem(principal: ScenePrincipal, id: string, value: unknown) {
-    const input = z.strictObject({ subjectId: z.string().trim().min(1).max(200), accountId: z.string().trim().min(1).max(200),
-      dueAt: z.number().int().refine((time) => time > this.clock(), 'Deadline must be in the future') }).parse(value);
+    const input = SceneWorkItemCreateSchema.parse(value);
     return this.repository.createWorkItem(principal, id, input, this.clock());
   }
 
@@ -92,11 +111,7 @@ export class SceneApplicationService {
   }
 
   updateWorkItem(principal: ScenePrincipal, id: string, value: unknown) {
-    const input = z.strictObject({
-      expectedRevision: z.number().int().positive(),
-      dueAt: z.number().int().nonnegative().optional(),
-      status: z.enum(['watching', 'paused', 'completed']).optional(),
-    }).parse(value);
+    const input = SceneWorkItemUpdateSchema.parse(value);
     return this.repository.updateWorkItem(principal, id, input, this.clock());
   }
 }

@@ -1,5 +1,12 @@
 {
   "chat": {
+    "pageContext": {
+      "label": "Page context", "capture": "Reference in a new chat", "preview": "Preview context",
+      "remove": "Remove page context", "frozen": "Captured snapshot. Only included when you send this message.",
+      "truncated": "Only the first 16,000 characters are included.", "draft": "Unsaved draft (user-provided)",
+      "selection": "Selected text", "pending": "Send page context as a new message after the current run, or remove it first.",
+      "unavailable": "Could not capture this page. Save your edits, refresh the page, and try again."
+    },
     "contentLinks": {
       "open": "Open in xopc",
       "failed": "Unable to open this link. Please try again.",
