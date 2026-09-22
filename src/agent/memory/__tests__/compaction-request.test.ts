@@ -1,7 +1,7 @@
 import { completeSimple, type Api, type Model } from '@earendil-works/pi-ai/compat';
 import { describe, expect, it, vi } from 'vitest';
 
-import { compactionPayloadGuard } from '../compaction-request.js';
+import { compactionPayloadGuard, initialCompactionOutputLimit } from '../compaction-request.js';
 
 const model: Model<Api> = {
   provider: 'xopc-cloud', id: 'auto', name: 'auto', api: 'openai-completions',
@@ -12,6 +12,12 @@ const model: Model<Api> = {
 
 // Use the installed adapter with a local transport; never contact a provider.
 describe('compaction provider budget contract', () => {
+  it('scales the initial delta budget with prompt size without consuming the full cap', () => {
+    expect(initialCompactionOutputLimit('system', 'small', 16_000)).toBe(4_000);
+    expect(initialCompactionOutputLimit('system', 'x'.repeat(100_000), 16_000)).toBe(8_000);
+    expect(initialCompactionOutputLimit('system', 'x'.repeat(100_000), 6_000)).toBe(6_000);
+  });
+
   it('sends a total completion cap and retains thinking-only responses with unreported reasoning usage', async () => {
     let sent: Record<string, unknown>;
     const observed = vi.fn();

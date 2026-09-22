@@ -19,6 +19,18 @@ export function compactionOutputLimit(model: Model<Api>, configured: number): nu
   return Math.min(configured, model.maxTokens > 0 ? model.maxTokens : configured);
 }
 
+/** Start large prompts closer to their likely delta size while retaining room to double on truncation. */
+export function initialCompactionOutputLimit(
+  systemPrompt: string,
+  prompt: string,
+  outputLimit: number,
+): number {
+  const estimated = Math.ceil(
+    (estimateTextTokens(systemPrompt) + estimateTextTokens(prompt)) * 0.2,
+  );
+  return Math.min(outputLimit, estimated > 4_000 ? 8_000 : 4_000);
+}
+
 export function compactionPromptFits(
   model: Model<Api>, systemPrompt: string, prompt: string, outputLimit: number,
 ): boolean {
