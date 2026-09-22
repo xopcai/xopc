@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveCapabilityDisplayStatus } from '../model-catalog-status';
+import { deriveCapabilityDisplayStatus } from '../capability-display-status';
 
 describe('deriveCapabilityDisplayStatus', () => {
   it('treats an optional capability that was never configured as neutral', () => {

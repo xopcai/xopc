@@ -4,7 +4,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HtmlPreviewFrame, prepareHtmlPreviewDocument } from '../html-preview-frame';
+import { prepareHtmlPreviewDocument } from '../html-preview-document';
+import { HtmlPreviewFrame } from '../html-preview-frame';
 
 describe('prepareHtmlPreviewDocument', () => {
   it('gives srcdoc documents their own base URL so fragment links stay in the preview', () => {

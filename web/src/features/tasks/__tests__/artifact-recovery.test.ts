@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchArtifactShare } from '../artifact-recovery';
+import { matchArtifactShare } from '../artifact-recovery.utils';
 import type { ShareItem } from '@/features/shares/shares-api';
 
 describe('artifact share matching', () => {

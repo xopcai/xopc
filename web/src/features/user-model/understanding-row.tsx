@@ -4,15 +4,9 @@ import { Button } from '@/components/ui/button';
 
 import { MemoryActions } from './memory-actions';
 import type { UserAssertion } from './user-model-api';
+import { formatUnderstandingDate, type UnderstandingLanguage } from './understanding-row.utils';
 
-type Language = 'en' | 'zh';
-
-function formatDate(value: number | undefined, language: Language): string | null {
-  if (!value) return null;
-  return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', { dateStyle: 'medium' }).format(value);
-}
-
-function authorityLabel(item: UserAssertion, language: Language): string {
+function authorityLabel(item: UserAssertion, language: UnderstandingLanguage): string {
   const labels = language === 'zh'
     ? {
         user_explicit: '你告诉我的',
@@ -29,9 +23,9 @@ function authorityLabel(item: UserAssertion, language: Language): string {
   return labels[item.authority];
 }
 
-function timeHorizon(item: UserAssertion, language: Language): string {
+function timeHorizon(item: UserAssertion, language: UnderstandingLanguage): string {
   if (item.validTo) {
-    const date = formatDate(item.validTo, language);
+    const date = formatUnderstandingDate(item.validTo, language);
     return language === 'zh' ? `适用至 ${date}` : `Applies until ${date}`;
   }
   const labels = language === 'zh'
@@ -40,36 +34,18 @@ function timeHorizon(item: UserAssertion, language: Language): string {
   return labels[item.volatility];
 }
 
-function confidenceLabel(item: UserAssertion, language: Language): string | null {
+function confidenceLabel(item: UserAssertion, language: UnderstandingLanguage): string | null {
   if (item.authority === 'user_explicit') return null;
   if (item.confidence >= 0.85) return language === 'zh' ? '把握较高' : 'High confidence';
   if (item.confidence >= 0.65) return language === 'zh' ? '把握中等' : 'Medium confidence';
   return language === 'zh' ? '证据较少' : 'Limited evidence';
 }
 
-function scopeLabel(scope: UserAssertion['scope'], language: Language): string {
+function scopeLabel(scope: UserAssertion['scope'], language: UnderstandingLanguage): string {
   const labels = language === 'zh'
     ? { global: '所有协作', agent: '当前智能体', workspace: '当前工作区', project: '当前项目', session: '当前会话' }
     : { global: 'All work', agent: 'This agent', workspace: 'This workspace', project: 'This project', session: 'This conversation' };
   return labels[scope.type];
-}
-
-export function groupUnderstandingByDate(items: UserAssertion[], language: Language, now = new Date()) {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const groups = new Map<string, UserAssertion[]>();
-  for (const item of [...items].sort((a, b) => b.recordedAt - a.recordedAt)) {
-    const label = item.recordedAt >= today.getTime()
-      ? (language === 'zh' ? '今天' : 'Today')
-      : item.recordedAt >= yesterday.getTime()
-        ? (language === 'zh' ? '昨天' : 'Yesterday')
-        : formatDate(item.recordedAt, language) ?? (language === 'zh' ? '更早' : 'Earlier');
-    const group = groups.get(label) ?? [];
-    group.push(item);
-    groups.set(label, group);
-  }
-  return [...groups].map(([label, items]) => ({ label, items }));
 }
 
 export function UnderstandingRow({
@@ -85,7 +61,7 @@ export function UnderstandingRow({
   onCorrect,
 }: {
   item: UserAssertion;
-  language: Language;
+  language: UnderstandingLanguage;
   busy: boolean;
   editing: boolean;
   draft: string;
@@ -132,7 +108,7 @@ export function UnderstandingRow({
                 <div className="my-2 space-y-1 border-l-2 border-edge pl-3 text-sm leading-6">
                   <p>{item.usable ? (zh ? '按需用于当前协作' : 'Used when relevant') : (zh ? '暂不使用，后台继续复核' : 'Not in use; reviewed automatically')}</p>
                   <p>{timeHorizon(item, language)} · {scopeLabel(item.scope, language)}{confidence ? ` · ${confidence}` : ''}</p>
-                  <p>{zh ? '最近观察：' : 'Last observed: '}{formatDate(item.observedAt, language)}</p>
+                  <p>{zh ? '最近观察：' : 'Last observed: '}{formatUnderstandingDate(item.observedAt, language)}</p>
                   {sourceLabels.length ? sourceLabels.map((label) => <p className="break-words" key={label}>{label}</p>) : <p>{zh ? '暂无更详细的来源记录' : 'No further source details available'}</p>}
                   <Button variant="ghost" className="-ml-2 px-2" disabled={busy} onClick={onEdit}>{editLabel}</Button>
                 </div>

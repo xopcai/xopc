@@ -35,7 +35,7 @@ const connector: ConnectorDefinition = {
   capabilities: ['tools'], auth: { mode: 'oauth' }, setup: {}, runtime: { type: 'composio', toolkit, role: 'toolkit' },
   ...(toolkit === 'gmail' ? { understanding: { mode: 'activity' as const, bootstrapWindowDays: 7, readOnly: true as const } } : {}),
 };
-function Fixture() {
+export function Fixture() {
   const [draft, setDraft] = useState(buildInitialDraft(connector));
   return <MemoryRouter>{params.get('stage') === 'service' ? <ConnectorServicePage />
     : params.get('stage')?.startsWith('detail') ? <InstalledConnectorDetailDialog instance={{ instanceId: 'gmail', connectorId: connector.id, displayName: 'Gmail', materialized: connector.runtime, usage: {}, config: {}, secretStatus: {} } as ConnectorInstance}

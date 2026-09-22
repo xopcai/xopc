@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { expect, it } from 'vitest';
-import { buildPickerModels } from '../model-selector';
+import { buildPickerModels } from '../model-selector.utils';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 
 const models: ConfiguredModel[] = [

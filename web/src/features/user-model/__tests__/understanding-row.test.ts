@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { UserAssertion } from '../user-model-api';
-import { groupUnderstandingByDate } from '../understanding-row';
+import { groupUnderstandingByDate } from '../understanding-row.utils';
 
 const item = (id: string, recordedAt: number) => ({ id, recordedAt } as UserAssertion);
 
