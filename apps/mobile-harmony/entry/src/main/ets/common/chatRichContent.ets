@@ -85,7 +85,8 @@ export function chatAttachments(files: XopcHistoryMedia[], prefix: string): Xopc
     const id = typeof file.id === 'string' && file.id ? file.id : prefix + ':' + output.size;
     const key = uri || workspace || id;
     const type = /^(image|audio|video)\//.test(mime) ? mime.split('/')[0] : typeof file.type === 'string' ? file.type : 'document';
-    output.set(key, { id, name, mimeType: mime, type, size: typeof file.size === 'number' ? file.size : 0, uri, workspaceRelativePath: workspace,
+    output.set(key, { id, name, mimeType: mime, type, size: typeof file.size === 'number' ? file.size : 0, uri,
+      fileId: typeof file.fileId === 'string' ? file.fileId : undefined, workspaceRelativePath: workspace,
       extractedText: typeof file.extractedText === 'string' ? file.extractedText : undefined });
   }
   return Array.from(output.values());
@@ -110,7 +111,8 @@ export function chatOutcome(raw?: XopcTurnOutcome): XopcTurnOutcome | undefined 
 export function artifactMedia(artifact: XopcArtifact): XopcHistoryMedia {
   return { id: artifact.artifactId, name: artifact.title, type: artifact.kind,
     mimeType: artifact.mimeType || (artifact.kind === 'image' ? 'image/png' : 'application/octet-stream'),
-    size: artifact.sizeBytes || 0, uri: artifact.uri || '', workspaceRelativePath: artifact.workspaceRelativePath };
+    size: artifact.sizeBytes || 0, uri: artifact.uri || '', fileId: artifact.sourceFileId,
+    workspaceRelativePath: artifact.workspaceRelativePath };
 }
 
 interface XopcToolOutputEnvelope { text?: string; content?: XopcContentBlock[]; details?: Object; delivery?: XopcProductDelivery; }
