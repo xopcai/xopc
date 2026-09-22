@@ -71,12 +71,6 @@ export type InvocationFilters = {
   effect: '' | EndpointEffect;
 };
 
-export interface ManagedEndpointSessionBinding {
-  conversationId: string;
-  endpointId: string;
-  boundAt: number;
-}
-
 async function payload<T>(response: Response): Promise<T> {
   const body = await response.json().catch(() => null) as {
     payload?: T;
@@ -101,10 +95,6 @@ export function endpointInvocationsKey(filters: InvocationFilters): string {
   return apiUrl(`/api/endpoint-tools/invocations?${params}`);
 }
 
-export function endpointBindingKey(conversationId: string): string {
-  return apiUrl(`/api/endpoint-tools/bindings/${encodeURIComponent(conversationId)}`);
-}
-
 export async function fetchManagedDevices(): Promise<ManagedDevice[]> {
   return payload<ManagedDevice[]>(await apiFetch(managedDevicesKey()));
 }
@@ -123,27 +113,4 @@ export async function revokeManagedDevices(ids: string[]): Promise<void> {
 
 export async function fetchEndpointInvocations(filters: InvocationFilters): Promise<ManagedEndpointInvocationPage> {
   return payload<ManagedEndpointInvocationPage>(await apiFetch(endpointInvocationsKey(filters)));
-}
-
-export async function fetchEndpointBinding(conversationId: string): Promise<ManagedEndpointSessionBinding | undefined> {
-  const response = await apiFetch(endpointBindingKey(conversationId));
-  if (response.status === 404) return undefined;
-  return payload<ManagedEndpointSessionBinding>(response);
-}
-
-export async function bindEndpointToSession(
-  conversationId: string,
-  endpointId: string,
-): Promise<ManagedEndpointSessionBinding> {
-  return payload<ManagedEndpointSessionBinding>(await apiFetch(endpointBindingKey(conversationId), {
-    method: 'PUT',
-    body: JSON.stringify({ endpointId }),
-  }));
-}
-
-export async function unbindEndpointFromSession(conversationId: string): Promise<boolean> {
-  const result = await payload<{ removed: boolean }>(await apiFetch(endpointBindingKey(conversationId), {
-    method: 'DELETE',
-  }));
-  return result.removed;
 }

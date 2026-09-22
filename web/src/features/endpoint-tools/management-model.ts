@@ -5,7 +5,7 @@ export type ManagedDeviceStatusFilter = 'active' | 'all' | ManagedDeviceStatus |
 
 const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1_000;
 
-export function isManagedDeviceRevoked(device: ManagedDevice): boolean {
+function isManagedDeviceRevoked(device: ManagedDevice): boolean {
   const identities = [device.access, device.principal].filter((identity) => identity !== null);
   return identities.length > 0 && identities.every((identity) => identity.revokedAt !== undefined);
 }
