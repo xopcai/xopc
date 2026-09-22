@@ -11,6 +11,7 @@ import { notificationNavigation } from '../service/notificationNavigation';
 import { layoutState } from '../service/layoutState';
 import { chatReadAloud } from '../service/chatReadAloud';
 import { decodeShareHandoff, shareIntake, SHARE_INTAKE_URI } from '../service/shareIntake';
+import { voiceCall } from '../service/voiceCall';
 
 export default class EntryAbility extends UIAbility {
   private mainWindow?: window.Window;
@@ -35,9 +36,9 @@ export default class EntryAbility extends UIAbility {
   }
   onCreate(want: Want): void { this.receiveWant(want); }
   onNewWant(want: Want): void { this.receiveWant(want); }
-  onForeground(): void { gatewaySession.setForeground(true); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
-  onBackground(): void { gatewaySession.setForeground(false); realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
-  onDestroy(): void { realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.disableContinuous(); }
+  onForeground(): void { gatewaySession.setForeground(true); voiceCall.onForeground(); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
+  onBackground(): void { gatewaySession.setForeground(false); voiceCall.onBackground(); realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
+  onDestroy(): void { voiceCall.end(); realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.disableContinuous(); }
   onWindowStageCreate(stage: window.WindowStage): void {
     stage.loadContent('pages/Index', (error: BusinessError): void => {
       if (error.code) {

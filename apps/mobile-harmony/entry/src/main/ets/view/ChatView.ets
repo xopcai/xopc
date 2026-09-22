@@ -34,6 +34,7 @@ import { XopcPaletteItem } from '../common/composerTokens';
 import { COMPOSER_INPUT_MIN, COMPOSER_INPUT_MAX, COMPOSER_TOOL_SIZE, COMPOSER_SEND_SIZE,
   composerExpanded, composerHasPayload } from '../common/composerLayout';
 import { shareIntake } from '../service/shareIntake';
+import { voiceCall, XopcVoiceCall } from '../service/voiceCall';
 
 @ComponentV2
 export struct XopcChatView {
@@ -65,6 +66,7 @@ export struct XopcChatView {
   @Computed get hasPayload(): boolean { return composerHasPayload(this.draft, this.attachments.length, this.refs.length); }
   @Local voice: XopcVoiceCapture = voiceCapture;
   @Local reader: XopcChatReadAloud = chatReadAloud;
+  @Local call: XopcVoiceCall = voiceCall;
   @Local attachments: XopcChatAttachment[] = [];
   @Local pickingAttachment: boolean = false;
   @Computed get attachmentPreviews(): XopcHistoryMedia[] {
@@ -113,11 +115,6 @@ export struct XopcChatView {
     if (next.candidate && context) this.reader.speak(context, next.candidate.text, 'auto-read-aloud:' + next.candidate.key, appSettings.effectiveLanguage());
   }
 
-  private toggleContinuousRead(): void {
-    if (this.reader.continuousConversationId === this.chat.selectedId) this.reader.disableContinuous();
-    else { this.reader.continuousConversationId = this.chat.selectedId; this.onAutoReadChange(); }
-    this.sheetOpen = false;
-  }
   private appliedRequestRevision: number = -1;
   private appliedIntakeRevision: number = -1;
 
@@ -808,6 +805,13 @@ export struct XopcChatView {
     else if (id.startsWith('reference-')) this.openReference(id.slice('reference-'.length));
     else if (id === 'new-chat') this.newConversation();
     else if (id === 'record-voice' && !this.showVoice) this.toggleVoice();
+    else if ((id === 'voice-no-tools' || id === 'voice-with-tools') && this.chat.selectedId) {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      this.reader.stop(); this.voice.cancel();
+      this.call.start(context, { conversationId: this.chat.selectedId,
+        mode: id === 'voice-with-tools' ? 'assistant' : 'natural', background: true,
+        name: this.chat.title || this.options.modelName(appSettings.effectiveLanguage()) });
+    }
   }
 
   @Builder
@@ -828,8 +832,12 @@ export struct XopcChatView {
           this.actionTile('record-voice', $r('app.string.record_voice'), $r('sys.symbol.mic'), !this.chat.runId && !this.voice.busy && this.voice.state === 'idle')
           this.actionTile('new-chat', $r('app.string.new_chat'), $r('sys.symbol.square_and_pencil'), !this.chat.sending)
         }.width('100%')
+        Row() {
+          this.actionTile('voice-no-tools', $r('app.string.voice_call_action_natural'), $r('sys.symbol.waveform'), !!this.chat.selectedId && this.call.phase === 'idle')
+          this.actionTile('voice-with-tools', $r('app.string.voice_call_action_assistant'), $r('sys.symbol.speaker_wave_2'), !!this.chat.selectedId && this.call.phase === 'idle')
+        }.width('100%')
       }.width('100%').padding({ left: 8, right: 8, bottom: 12 })
-    }.id('chat-action-panel').width('100%').height(224).scrollBar(BarState.Auto)
+    }.id('chat-action-panel').width('100%').height(312).scrollBar(BarState.Auto)
   }
 
   build() {
@@ -853,7 +861,9 @@ export struct XopcChatView {
             .onClick((): void => { this.openSheet('model'); })
         }.layoutWeight(1).justifyContent(FlexAlign.Start)
         if (this.chat.selectedId) {
-          Button('···').width(44).height(44).padding(0).fontSize(24).backgroundColor(Color.Transparent).fontColor($r('app.color.foreground'))
+          Button({ type: ButtonType.Normal }) {
+            Text('•••').fontSize(12).letterSpacing(0).fontColor($r('app.color.foreground'))
+          }.width(40).height(40).padding(0).backgroundColor(Color.Transparent)
             .id('chat-header-actions').accessibilityText($r('app.string.chat_actions')).onClick((): void => { this.openSheet('actions'); })
         }
       }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 6 })
@@ -925,8 +935,7 @@ export struct XopcChatView {
         onReference: (item: XopcReferenceItem): void => { this.addReference(item); },
         onClose: (): void => { this.sheetOpen = false; }, onRetry: (): void => { this.context.load(this.chat.selectedId); } })
     } else {
-    XopcChatOptions({ model: this.options, mode: this.sheetMode, continuousRead: this.reader.continuousConversationId === this.chat.selectedId,
-      onContinuousRead: (): void => { this.toggleContinuousRead(); },
+    XopcChatOptions({ model: this.options, mode: this.sheetMode,
       onMode: (mode: string): void => { this.sheetMode = mode; }, onClose: (): void => { this.sheetOpen = false; },
       onRetry: (): void => { this.options.load(this.chat.selectedId, this.chat.agentId); },
       onAgent: (id: string): void => { this.newConversation(id); }, onNewChat: (): void => { this.newConversation(); },

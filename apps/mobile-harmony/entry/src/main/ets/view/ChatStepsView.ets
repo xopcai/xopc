@@ -1,6 +1,6 @@
 import { XopcChatRow, XopcChatBlock, XopcChatTool, XopcPlanStep } from '../model/chat';
-import { chatActivities, chatAnswerStarted, chatToolDisplayKind, chatToolFailed } from '../common/chatRichContent';
-import { XopcChatToolView } from './ChatToolView';
+import { chatActivities, chatAnswerStarted, chatToolDisplayKind, chatToolFailed, chatToolReadGroupKey } from '../common/chatRichContent';
+import { XopcChatToolGroupView, XopcChatToolView } from './ChatToolView';
 import { XopcMarkdownView } from './MarkdownView';
 import { XopcChatDisclosure } from '../common/chatDisclosure';
 
@@ -29,6 +29,27 @@ export struct XopcChatStepsView {
     if (kind === 'fetch') return $r('app.string.chat_steps_fetching');
     return $r('app.string.chat_steps_working');
   }
+  private isReadGroupContinuation(index: number): boolean {
+    if (index <= 0) return false;
+    const current = this.visibleSteps[index].call;
+    const previous = this.visibleSteps[index - 1].call;
+    if (!current || !previous) return false;
+    const key = chatToolReadGroupKey(current);
+    return !!key && key === chatToolReadGroupKey(previous);
+  }
+  private readGroupCalls(index: number): XopcChatTool[] {
+    const first = this.visibleSteps[index]?.call;
+    if (!first) return [];
+    const key = chatToolReadGroupKey(first);
+    if (!key) return [first];
+    const calls: XopcChatTool[] = [];
+    for (let cursor = index; cursor < this.visibleSteps.length; cursor += 1) {
+      const call = this.visibleSteps[cursor].call;
+      if (!call || chatToolReadGroupKey(call) !== key) break;
+      calls.push(call);
+    }
+    return calls;
+  }
   build() {
     Column({ space: 4 }) {
       if (this.visibleSteps.length || this.active) {
@@ -43,21 +64,26 @@ export struct XopcChatStepsView {
           .backgroundColor(Color.Transparent).onClick((): void => { this.disclosure.set(this.scope + ':steps:' + this.row.id, !this.expanded); })
         if (this.expanded && this.visibleSteps.length) {
           Column({ space: 8 }) {
-            Repeat<XopcChatBlock>(this.visibleSteps).each((item: RepeatItem<XopcChatBlock>) => {
-              if (item.item.call) { XopcChatToolView({ call: item.item.call, live: !!this.row.live, disclosure: this.disclosure, scope: this.scope + ':' + this.row.id }) }
-              else if (item.item.kind === 'plan') {
+            ForEach(this.visibleSteps, (step: XopcChatBlock, index: number) => {
+              if (step.call && !this.isReadGroupContinuation(index)) {
+                if (this.readGroupCalls(index).length > 1) {
+                  XopcChatToolGroupView({ calls: this.readGroupCalls(index), disclosure: this.disclosure, scope: this.scope + ':' + this.row.id })
+                } else {
+                  XopcChatToolView({ call: step.call, live: !!this.row.live, disclosure: this.disclosure, scope: this.scope + ':' + this.row.id })
+                }
+              } else if (step.kind === 'plan') {
                 Column({ space: 8 }) {
                   Text($r('app.string.chat_plan')).fontSize(13).fontColor($r('app.color.secondary'))
-                  if (item.item.text) { XopcMarkdownView({ content: item.item.text }) }
-                  ForEach(item.item.plan || [], (step: XopcPlanStep, index: number) => {
-                    Text((step.status === 'completed' ? '✓ ' : step.status === 'in_progress' ? '◉ ' : '○ ') + step.step)
+                  if (step.text) { XopcMarkdownView({ content: step.text }) }
+                  ForEach(step.plan || [], (planStep: XopcPlanStep, planIndex: number) => {
+                    Text((planStep.status === 'completed' ? '✓ ' : planStep.status === 'in_progress' ? '◉ ' : '○ ') + planStep.step)
                       .fontSize(14).fontColor($r('app.color.foreground'))
-                  }, (step: XopcPlanStep, index: number): string => index + ':' + step.status + ':' + step.step)
+                  }, (planStep: XopcPlanStep, planIndex: number): string => planIndex + ':' + planStep.status + ':' + planStep.step)
                 }.width('100%').alignItems(HorizontalAlign.Start)
-              } else if (item.item.kind === 'diff') {
-                XopcChatToolView({ call: { id: item.item.id, name: 'apply_patch', result: item.item.text, status: 'done' }, disclosure: this.disclosure, scope: this.scope + ':' + this.row.id })
+              } else if (step.kind === 'diff') {
+                XopcChatToolView({ call: { id: step.id, name: 'apply_patch', result: step.text, status: 'done' }, disclosure: this.disclosure, scope: this.scope + ':' + this.row.id })
               }
-            }).key((step: XopcChatBlock): string => step.id)
+            }, (step: XopcChatBlock): string => step.id)
           }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 8, bottom: 4 })
             .border({ width: { left: 1 }, color: $r('app.color.border_subtle') })
         }
