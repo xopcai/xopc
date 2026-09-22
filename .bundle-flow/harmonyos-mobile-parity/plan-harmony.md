@@ -34,6 +34,12 @@ The session-management follow-up replaces the inline history list with an indepe
 
 ## Test stories
 
+### Chat re-audit continuation (2026-09-22)
+
+Use `apps/mobile-harmony/docs/chat-parity-audit-20260922.md` as the current scenario inventory. Under the existing autonomous authorization, implement continuous read-aloud completion tracking and RN speech text/language semantics, then bounded Gateway/conversation-isolated secure history-head seeding with network-wins guards and mutation invalidation. Follow with image editing, audio ownership, richer previews and stream recovery. Keep host/build/device evidence distinct; do not touch unrelated Gateway/Expo changes or reset existing working state.
+
+File preview continuation: translate Expo `AttachmentRenderer` and `FilePreviewModal` behavior into Harmony without editing Expo. Group ordinary attachments into a bounded compact list; keep audio separate; route image/Markdown/text/HTML/audio/video/binary explicitly; preserve extracted-text fallback and share/download. HTML must remain local and isolated with CSP, JavaScript/storage/file access disabled and navigation intercepted. Verify with classification/security fixtures, lint, debug/release/ohosTest builds, then non-mutating device UI evidence when HDC is available.
+
 ### RN Chat audit follow-up (2026-09-18, user approved)
 
 Implement the reviewed differences in order, then perform a separate correctness/security/performance review. No Gateway schema changes or Expo edits. Preserve paired-device data.

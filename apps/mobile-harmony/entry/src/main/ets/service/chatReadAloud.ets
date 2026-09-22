@@ -4,7 +4,7 @@ import { http } from '@kit.NetworkKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
 import { gatewaySession } from './gatewaySession';
-import { chatSpeechChunks } from '../common/speechText';
+import { chatSpeechChunks, chatSpeechLanguage } from '../common/speechText';
 
 interface XopcSpeechBody { text: string; language: string; }
 interface XopcSpeechHeaders { Authorization: string; 'Content-Type': string; }
@@ -16,6 +16,7 @@ export class XopcChatReadAloud {
   @Trace error: string = '';
   @Trace position: number = 0;
   @Trace duration: number = 0;
+  @Trace continuousConversationId: string = '';
   private generation: number = 0;
   private request?: http.HttpRequest;
   private player?: media.AVPlayer;
@@ -32,7 +33,7 @@ export class XopcChatReadAloud {
     await cleanup;
     if (generation !== this.generation) return;
     this.context = context; this.chunks = chatSpeechChunks(text); this.chunkIndex = 0; this.sourceId = id;
-    this.language = language.startsWith('zh') ? 'zh-CN' : 'en-US'; this.error = '';
+    this.language = chatSpeechLanguage(text, language); this.error = '';
     if (this.chunks.length) await this.next(generation);
   }
   private async next(generation: number): Promise<void> {
@@ -99,5 +100,6 @@ export class XopcChatReadAloud {
     this.generation++; this.request?.destroy(); this.request = undefined;
     this.state = 'idle'; this.sourceId = ''; await this.releaseOutput();
   }
+  disableContinuous(): void { this.continuousConversationId = ''; this.stop(); }
 }
 export const chatReadAloud: XopcChatReadAloud = new XopcChatReadAloud();

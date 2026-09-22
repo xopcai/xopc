@@ -6,6 +6,7 @@ import { util } from '@kit.ArkTS';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { gatewaySession } from './gatewaySession';
 import { XopcHttpError } from './transport';
+import { XopcChatAttachment } from '../model/chat';
 
 interface VoiceHeaders { Authorization: string; 'Content-Type': string; }
 interface VoicePayload { text: string; }
@@ -27,6 +28,8 @@ export class XopcVoiceCapture {
   private request?: http.HttpRequest;
   private player?: media.AVPlayer;
   private playbackFile?: fs.File;
+  private startedAt: number = 0;
+  private durationMs: number = 0;
 
   async start(context: common.UIAbilityContext): Promise<void> {
     if (this.busy || this.state !== 'idle') return;
@@ -62,6 +65,7 @@ export class XopcVoiceCapture {
       await this.recorder.start();
       if (generation !== this.generation) return;
       this.state = 'recording'; this.seconds = 0;
+      this.durationMs = 0; this.startedAt = Date.now();
       const startedAt = Date.now();
       this.timer = setInterval((): void => {
         this.seconds = Math.floor((Date.now() - startedAt) / 1000);
@@ -77,6 +81,7 @@ export class XopcVoiceCapture {
   async stop(): Promise<void> {
     if (this.busy || this.state !== 'recording') return;
     this.busy = true; this.clearTimer();
+    this.durationMs = Date.now() - this.startedAt;
     this.operation = this.finishCapture(this.generation);
     await this.operation;
   }
@@ -101,6 +106,40 @@ export class XopcVoiceCapture {
     this.operation = this.uploadRecording(language, generation).then((text: string | undefined): void => { transcript = text; });
     await this.operation;
     return generation === this.generation ? transcript : undefined;
+  }
+
+  async send(sendAttachment: (attachment: XopcChatAttachment) => Promise<boolean>): Promise<boolean> {
+    if (this.busy || this.state !== 'ready') return false;
+    this.busy = true; this.error = '';
+    const generation = this.generation;
+    let sent: boolean = false;
+    this.operation = this.sendRecording(generation, sendAttachment).then((result: boolean): void => { sent = result; });
+    await this.operation;
+    return generation === this.generation && sent;
+  }
+
+  private async sendRecording(generation: number, sendAttachment: (attachment: XopcChatAttachment) => Promise<boolean>): Promise<boolean> {
+    try {
+      if (this.durationMs < 380) throw new Error('RECORDING_TOO_SHORT');
+      const file = await fs.open(this.path, fs.OpenMode.READ_ONLY);
+      let data: ArrayBuffer;
+      try {
+        const size = (await fs.stat(file.fd)).size;
+        if (size <= 0 || size > 4 * 1024 * 1024) throw new Error('INVALID_RECORDING_SIZE');
+        data = new ArrayBuffer(size);
+        if (await fs.read(file.fd, data) !== size) throw new Error('INCOMPLETE_RECORDING');
+      } finally { await fs.close(file); }
+      const encoded = await new util.Base64Helper().encodeToString(new Uint8Array(data));
+      if (generation !== this.generation) return false;
+      const sent = await sendAttachment({ type: 'voice', name: 'voice.m4a', mimeType: 'audio/mp4',
+        size: data.byteLength, data: encoded });
+      if (generation !== this.generation) return false;
+      if (sent) { await this.cleanup(); this.state = 'idle'; this.seconds = 0; }
+      return sent;
+    } catch (error) {
+      if (generation === this.generation) this.error = (error as Error).message;
+      return false;
+    } finally { if (generation === this.generation) this.busy = false; }
   }
 
   async play(): Promise<void> {

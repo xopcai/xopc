@@ -27,7 +27,7 @@ export interface XopcArtifact { artifactId: string; sourceFileId?: string; title
 export interface XopcTurnOutcome { version: number; outcomeId: string; runId: string; turnId: string; status: string; summary?: string; deliverables: XopcArtifact[]; }
 export interface XopcProductReference { kind: string; id: string; title: string; summary?: string; status?: string; capabilities?: string[]; }
 export interface XopcProductDelivery { version: number; operation: string; primary?: XopcProductReference; related?: XopcProductReference[]; }
-export interface XopcHistoryMedia { id: string; name: string; type: string; mimeType: string; size: number; uri: string; workspaceRelativePath?: string; data?: string; }
+export interface XopcHistoryMedia { id: string; name: string; type: string; mimeType: string; size: number; uri: string; workspaceRelativePath?: string; data?: string; extractedText?: string; }
 export interface XopcHistorySource { kind: string; sourceId: string; version: string; title?: string; }
 export interface XopcMessageMetadata { sourceContexts?: XopcHistorySource[]; turnOutcome?: XopcTurnOutcome; review?: XopcContentBlock; }
 export interface XopcHistoryToolCall { id?: string; name?: string; args?: Object; result?: Object; isError?: boolean; details?: Object; }
