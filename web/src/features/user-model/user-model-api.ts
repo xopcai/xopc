@@ -71,7 +71,7 @@ export type KnowledgeItem = {
   id: string;
   content: string;
   recordClass: 'memory' | 'source_index';
-  kind: 'project_fact' | 'workspace_fact' | 'decision' | 'task_lesson' | 'commitment' | 'open_question' | 'episode' | 'note';
+  kind: 'work_thread' | 'project_fact' | 'workspace_fact' | 'decision' | 'task_lesson' | 'commitment' | 'open_question' | 'episode' | 'note';
   status: Exclude<AssertionStatus, 'conflicted'>;
   scope: Scope;
   confidence: number;

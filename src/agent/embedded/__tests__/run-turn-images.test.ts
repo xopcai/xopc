@@ -187,6 +187,12 @@ describe('runXopcEmbeddedTurn image input', () => {
       afterToolCall: vi.fn(),
       shouldStopAfterTurn: vi.fn(),
     };
+    const finishDecisions: unknown[] = [];
+    mocks.prompt.mockImplementationOnce(async () => {
+      turnPolicy.shouldStopAfterTurn.mockReturnValueOnce(true);
+      finishDecisions.push(await mocks.session.agent.finishTurn({}));
+      finishDecisions.push(await mocks.session.agent.finishTurn({}));
+    });
 
     await runXopcEmbeddedTurn({
       conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0",
@@ -212,9 +218,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     expect(turnPolicy.beforeToolCall).toHaveBeenCalledWith(context, undefined);
     expect(normalized.isError).toBe(true);
     expect(turnPolicy.afterToolCall).toHaveBeenCalledWith(expect.objectContaining({ isError: true }));
-    turnPolicy.shouldStopAfterTurn.mockReturnValueOnce(true);
-    expect(mocks.session.agent.shouldStopAfterTurn({})).toBe(true);
-    expect(mocks.session.agent.shouldStopAfterTurn({})).toBe(true);
+    expect(finishDecisions).toEqual([{ action: 'end' }, { action: 'end' }]);
   });
 
   it('reports external cancellation as a failed run outcome', async () => {
@@ -403,11 +407,12 @@ describe('runXopcEmbeddedTurn image input', () => {
       timeoutMs: 60_000,
     });
 
-    const effectiveContext = {
+    const legacyContext = {
       systemPrompt: 'complete system prompt',
       messages: [{ role: 'user', content: 'complete user message', timestamp: 1 }],
       tools: [{ name: 'example_tool', description: 'Example tool' }],
     };
+    const effectiveContext = (await import('@earendil-works/pi-ai')).normalizeContext(legacyContext as any);
 
     mocks.session.agent.streamFunction(
       { id: 'gpt-4o', provider: 'openai' },
@@ -427,7 +432,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     );
 
     expect(mocks.debug).toHaveBeenCalledWith(
-      expect.objectContaining({ effectiveContext }),
+      expect.objectContaining({ effectiveContext: legacyContext }),
       'Sending messages to AI',
     );
   });
@@ -436,7 +441,7 @@ describe('runXopcEmbeddedTurn image input', () => {
       mocks.connectionSuspended.mockReturnValue(true);
       await mocks.session.agent.afterToolCall({ toolCall: { id: 'connect', name: 'xopc_require_connection' }, args: {},
         isError: false, result: { content: [{ type: 'text', text: 'connection_required' }], details: {} } });
-      expect(mocks.session.agent.shouldStopAfterTurn({})).toBe(true);
+      await expect(mocks.session.agent.finishTurn({})).resolves.toEqual({ action: 'end' });
     });
     const result = await runXopcEmbeddedTurn({
       conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0", runId: 'connection-run',

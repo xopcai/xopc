@@ -69,10 +69,12 @@ export function cloneMessageForRender(msg: Message): Message {
   };
 }
 
-/**
- * Resume/reconnect can replay part of a stream; append only the non-overlapping suffix.
- * Example: base="abc", incoming="bcdef" => "abcdef", incoming="abc" => unchanged.
- */
+/** Append a cursor-deduplicated realtime delta without corrupting repeated text. */
+function appendStreamDelta(base: string | undefined, delta: string): string {
+  return `${base ?? ''}${delta}`;
+}
+
+/** Auxiliary streams do not carry offsets yet, so retain resume overlap handling there. */
 function appendWithOverlap(base: string, incoming: string): string {
   if (!incoming) return base;
   if (!base) return incoming;
@@ -84,6 +86,23 @@ function appendWithOverlap(base: string, incoming: string): string {
     }
   }
   return base + incoming;
+}
+
+/**
+ * Apply a delta at its authoritative message offset. A matching slice means a
+ * hydrated session snapshot already contains this event; an exact end offset
+ * means the delta is new. Other shapes cannot be reconciled safely.
+ */
+function reconcileStreamDeltaAtOffset(
+  base: string | undefined,
+  delta: string,
+  offset: number | undefined,
+): string | null {
+  const current = base ?? '';
+  if (!Number.isInteger(offset) || offset == null || offset < 0) return null;
+  if (current.slice(offset, offset + delta.length) === delta) return current;
+  if (current.length === offset) return appendStreamDelta(current, delta);
+  return null;
 }
 
 function closeStreamingThinkingIfAny(content: MessageContent[]): void {
@@ -144,13 +163,33 @@ function toolNameMatches(stored: string, fromEvent: string): boolean {
   return stored.trim().toLowerCase() === fromEvent.trim().toLowerCase();
 }
 
-export function appendTextDelta(content: MessageContent[], delta: string, segmentId?: string): void {
+export function appendTextDelta(
+  content: MessageContent[],
+  delta: string,
+  segmentId?: string,
+  options?: { offset?: number; reconcileHydratedSegment?: boolean },
+): void {
   closeStreamingThinkingIfAny(content);
 
   const last = content[content.length - 1];
   if (last?.type === 'text' && last.segmentId === segmentId) {
-    last.text = appendWithOverlap(last.text || '', delta);
+    last.text = reconcileStreamDeltaAtOffset(last.text, delta, options?.offset)
+      ?? appendStreamDelta(last.text, delta);
     return;
+  }
+  if (
+    options?.reconcileHydratedSegment
+    && segmentId
+    && last?.type === 'text'
+    && !last.segmentId
+  ) {
+    const reconciled = reconcileStreamDeltaAtOffset(last.text, delta, options.offset);
+    if (reconciled !== null) {
+      last.text = reconciled;
+      last.segmentId = segmentId;
+      last.presentation = 'pending';
+      return;
+    }
   }
   content.push({
     type: 'text',

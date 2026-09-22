@@ -28,6 +28,7 @@ const { ingestComposioConnectedSource } = vi.hoisted(() => ({
     sourceInstanceId: 'composio:composio-gmail:gmail-work',
     itemsSeen: 8,
     itemsIndexed: 6,
+    sourceItemIds: ['changed-source-item'],
     recordIds: [],
   })),
 }));

@@ -237,7 +237,7 @@ export type MessagingCallbacks = {
   onInputAccepted?: () => void;
   onStreamStart: (turnId: string) => void;
   onReplayGap?: () => void | Promise<void>;
-  onToken: (delta: string, messageId?: string) => void;
+  onToken: (delta: string, messageId?: string, offset?: number) => void;
   onAssistantMessageEnd?: (
     messageId: string,
     presentation: 'narration' | 'answer',
@@ -619,6 +619,7 @@ export class MessageSender {
           cb?.onToken(
             payload.delta,
             typeof payload.messageId === 'string' ? payload.messageId : undefined,
+            typeof payload.offset === 'number' ? payload.offset : undefined,
           );
         }
         break;

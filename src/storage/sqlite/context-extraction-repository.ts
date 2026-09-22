@@ -4,7 +4,7 @@ import { USER_CONTEXT_PRINCIPAL_ID } from '../../user-context/domain.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 export type ContextExtractionStatus = 'running' | 'completed' | 'skipped' | 'failed';
-export type ContextObjectType = 'profile' | 'rule' | 'focus' | 'understanding';
+export type ContextObjectType = 'assertion' | 'rule' | 'goal' | 'knowledge';
 
 export type ContextExtractionRun = {
   id: string;
@@ -162,13 +162,4 @@ export function getContextExtractionRun(id: string): ContextExtractionRun | null
 export function listContextExtractionOutputs(runId: string): ContextExtractionOutput[] {
   return (getSqliteDatabase().prepare(`SELECT * FROM context_extraction_outputs
     WHERE extraction_run_id = ? ORDER BY ordinal`).all(runId) as unknown as OutputRow[]).map(outputFromRow);
-}
-
-export function hasIndependentExtractionOutput(runIds: string[], objectType: ContextObjectType, objectId: string): boolean {
-  if (!runIds.length) return false;
-  const placeholders = runIds.map(() => '?').join(', ');
-  return Boolean(getSqliteDatabase().prepare(`SELECT 1 FROM context_extraction_outputs o
-    JOIN context_extraction_runs r ON r.extraction_run_id = o.extraction_run_id
-    WHERE o.extraction_run_id NOT IN (${placeholders}) AND o.object_type = ? AND o.object_id = ?
-      AND r.status = 'completed' LIMIT 1`).get(...runIds, objectType, objectId));
 }

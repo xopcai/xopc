@@ -12,6 +12,8 @@ import type { KnowledgeSourceAdapter, KnowledgeSourceItemInput, KnowledgeSyncRun
 const log = createLogger('KnowledgeIngestion');
 const MAX_PULL_PAGES = 20;
 
+export type KnowledgeIngestionResult = KnowledgeSyncRun & { changedItemIds: string[] };
+
 function deletionInputs(instanceId: string, collectionScope: string, snapshotExternalIds: string[] | undefined): KnowledgeSourceItemInput[] {
   if (!snapshotExternalIds) return [];
   const seen = new Set(snapshotExternalIds);
@@ -72,21 +74,24 @@ export class KnowledgeIngestionService {
     items: KnowledgeSourceItemInput[];
     cursorAfter?: string;
     warnings?: string[];
-  }): KnowledgeSyncRun {
+  }): KnowledgeIngestionResult {
     const cursorBefore = this.state.getCursor(params.instanceId, params.collectionScope);
     const run = startKnowledgeSyncRun({ sourceInstanceId: params.instanceId, cursorBefore });
     try {
       const stored = upsertKnowledgeSourceItems(params.items);
       this.state.setCursor(params.instanceId, params.collectionScope, params.cursorAfter);
-      return finishKnowledgeSyncRun({
-        runId: run.id,
-        status: params.warnings?.length ? 'partial' : 'succeeded',
-        cursorAfter: params.cursorAfter,
-        itemsSeen: params.items.length,
-        itemsCreated: stored.created,
-        itemsUpdated: stored.updated,
-        warnings: params.warnings,
-      });
+      return {
+        ...finishKnowledgeSyncRun({
+          runId: run.id,
+          status: params.warnings?.length ? 'partial' : 'succeeded',
+          cursorAfter: params.cursorAfter,
+          itemsSeen: params.items.length,
+          itemsCreated: stored.created,
+          itemsUpdated: stored.updated,
+          warnings: params.warnings,
+        }),
+        changedItemIds: stored.changedItemIds,
+      };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       finishKnowledgeSyncRun({ runId: run.id, status: 'failed', error: errorMessage });
@@ -100,7 +105,7 @@ export class KnowledgeIngestionService {
     collectionScope: string;
     windowStart?: string;
     signal?: AbortSignal;
-  }): Promise<KnowledgeSyncRun> {
+  }): Promise<KnowledgeIngestionResult> {
     const adapter = this.adapters.get(params.adapterKind);
     if (!adapter) {
       throw new Error(`Knowledge source adapter not found: ${params.adapterKind}`);
@@ -170,7 +175,7 @@ export class KnowledgeIngestionService {
         },
         'Knowledge source sync completed',
       );
-      return completed;
+      return { ...completed, changedItemIds: stored.changedItemIds };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       const status = signal.aborted ? 'cancelled' : 'failed';
@@ -178,11 +183,14 @@ export class KnowledgeIngestionService {
         { err, runId: run.id, sourceInstanceId: params.instanceId },
         `Knowledge source sync ${status}: ${errorMessage}`,
       );
-      return finishKnowledgeSyncRun({
-        runId: run.id,
-        status,
-        error: errorMessage,
-      });
+      return {
+        ...finishKnowledgeSyncRun({
+          runId: run.id,
+          status,
+          error: errorMessage,
+        }),
+        changedItemIds: [],
+      };
     }
   }
 }

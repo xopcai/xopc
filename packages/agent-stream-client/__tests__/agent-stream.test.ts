@@ -88,6 +88,22 @@ describe('dispatchAgentStreamEvent', () => {
     expect(cb.onThinkingEnd).toHaveBeenCalledWith('m1');
   });
 
+  it('forwards an assistant delta offset when provided', () => {
+    const cb = callbacks();
+
+    dispatchAgentStreamEvent(
+      'assistant_delta',
+      JSON.stringify(envelope('assistant_delta', 'run-1', {
+        messageId: 'm1',
+        delta: 'hi',
+        offset: 4,
+      })),
+      cb,
+    );
+
+    expect(cb.onToken).toHaveBeenCalledWith('hi', 'm1', 4);
+  });
+
   it('dispatches review output', () => {
     const cb = callbacks();
     const review = {

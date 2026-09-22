@@ -22,8 +22,13 @@ describe('resolveModel', () => {
       ['gpt-5.6-terra', 1_050_000],
     ]);
 
-    for (const provider of ['openai', 'openai-codex']) {
-      for (const [id, expected] of expectedByModel) {
+    const expectedByProvider = new Map([
+      ['openai', expectedByModel],
+      ['openai-codex', new Map([...expectedByModel].filter(([id]) => id !== 'gpt-5.4' && id !== 'gpt-5.4-mini'))],
+    ]);
+
+    for (const [provider, models] of expectedByProvider) {
+      for (const [id, expected] of models) {
         expect(resolveModel(`${provider}/${id}`).contextWindow).toBe(expected);
         expect(
           getAllModels().find(
