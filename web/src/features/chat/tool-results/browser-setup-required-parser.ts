@@ -53,3 +53,15 @@ export function parseBrowserSetupRequired(details: unknown): BrowserSetupRequire
     detail: typeof hint.detail === 'string' ? hint.detail : undefined,
   };
 }
+
+export function findLatestBrowserSetupRequired(
+  blocks: readonly { type: string; name?: string; details?: unknown }[],
+): BrowserSetupRequiredPayload | null {
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index];
+    if (block?.type !== 'tool_use' || block.name !== 'browser_use') continue;
+    const payload = parseBrowserSetupRequired(block.details);
+    if (payload) return payload;
+  }
+  return null;
+}

@@ -44,6 +44,7 @@ export const MessageList = memo(function MessageList({
   editLatestUserOnly = false,
   editRequiresTurnId = false,
   responseFeedbackEnabled,
+  activeSendFlight,
   trailingContent,
 }: {
   messages: Message[];
@@ -75,6 +76,7 @@ export const MessageList = memo(function MessageList({
   editLatestUserOnly?: boolean;
   editRequiresTurnId?: boolean;
   responseFeedbackEnabled?: boolean;
+  activeSendFlight?: { clientSubmissionId: string; messageRenderKey?: string } | null;
   /** Ephemeral UI rendered after the latest transcript message; never persisted as a message. */
   trailingContent?: ReactNode;
 }) {
@@ -124,6 +126,10 @@ export const MessageList = memo(function MessageList({
         const isStreamRow = Boolean(streaming && isLast && msg.role === 'assistant');
         const isLastUserRow = isLastUserMessageInThread(list, index);
         const key = messageRowKey(msg, index);
+        const isSendFlightTarget = Boolean(activeSendFlight && (
+          msg.clientSubmissionId === activeSendFlight.clientSubmissionId
+          || (activeSendFlight.messageRenderKey && msg.renderKey === activeSendFlight.messageRenderKey)
+        ));
         const showTimeSeparator = shouldShowChatTimeSeparator(
           msg.timestamp,
           list[index - 1]?.timestamp,
@@ -134,6 +140,9 @@ export const MessageList = memo(function MessageList({
             id={`chat-message-${index}`}
             className="scroll-mt-4"
             data-chat-message-index={index}
+            data-chat-message-row
+            data-client-submission-id={msg.clientSubmissionId}
+            data-message-render-key={msg.renderKey}
           >
             {showTimeSeparator && msg.timestamp ? (
               <div className="mb-8 flex justify-center" data-chat-time-separator>
@@ -171,8 +180,11 @@ export const MessageList = memo(function MessageList({
               suppressAssistantActions={isStreamRow}
               onEditUserMessage={onEditUserMessage}
               userMessageCanEdit={
-                (!editLatestUserOnly || isLastUserRow) && (!editRequiresTurnId || Boolean(msg.turnId))
+                (!editLatestUserOnly || isLastUserRow)
+                && (!editRequiresTurnId || Boolean(msg.turnId))
+                && msg.deliveryStatus !== 'sending'
               }
+              sendFlightHidden={isSendFlightTarget}
               responseFeedbackEnabled={responseFeedbackEnabled}
             />
           </div>

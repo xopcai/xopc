@@ -1,6 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
-import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, GitFork, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, GitFork, ListTodo, Loader2, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import type {
@@ -94,6 +94,7 @@ export const MessageBubble = memo(function MessageBubble({
   suppressAssistantActions = false,
   onEditUserMessage,
   userMessageCanEdit = true,
+  sendFlightHidden = false,
   responseFeedbackEnabled = true,
 }: {
   message: Message;
@@ -128,6 +129,7 @@ export const MessageBubble = memo(function MessageBubble({
   suppressAssistantActions?: boolean;
   onEditUserMessage?: (message: Message, messageIndex: number) => void;
   userMessageCanEdit?: boolean;
+  sendFlightHidden?: boolean;
   responseFeedbackEnabled?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -514,6 +516,7 @@ export const MessageBubble = memo(function MessageBubble({
 
         <div
           dir={isUser ? 'ltr' : undefined}
+          data-send-flight-target={isUser ? '' : undefined}
           className={cn(
             'min-w-0 text-fg',
             isUser && 'chat-user-message',
@@ -524,6 +527,8 @@ export const MessageBubble = memo(function MessageBubble({
                 : 'text-base leading-[1.6875]',
             isUser &&
               'w-fit max-w-full rounded-2xl bg-surface-hover/80 px-4 py-3 text-left dark:bg-surface-hover/50',
+            isUser && 'transition-opacity duration-150 ease-out motion-reduce:transition-none',
+            isUser && sendFlightHidden && 'opacity-0',
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">
@@ -626,8 +631,42 @@ export const MessageBubble = memo(function MessageBubble({
                 centerUserVoiceRow={userCopyText.length === 0}
               />
             ) : null}
+
           </div>
         </div>
+
+        {isUser && message.deliveryStatus ? (
+          <div
+            data-delivery-status={message.deliveryStatus}
+            role={message.deliveryStatus === 'failed' ? 'alert' : 'status'}
+            aria-live="polite"
+            className={cn(
+              'mt-1 flex min-h-5 items-center justify-end gap-1.5 pe-1 text-xs transition-opacity duration-150 ease-out motion-reduce:transition-none',
+              message.deliveryStatus === 'failed' ? 'text-danger' : 'text-fg-subtle',
+              sendFlightHidden && 'opacity-0',
+            )}
+          >
+            {message.deliveryStatus === 'sending' ? (
+              <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" strokeWidth={1.75} aria-hidden />
+            ) : (
+              <AlertCircle className="size-3.5" strokeWidth={1.75} aria-hidden />
+            )}
+            <span>
+              {message.deliveryStatus === 'sending'
+                ? m.chat.userMessageSending
+                : m.chat.userMessageSendFailed}
+            </span>
+            {message.deliveryStatus === 'failed' && onRetryUserMessageRound && messageIndex != null ? (
+              <button
+                type="button"
+                className="rounded-md px-1.5 py-0.5 font-medium text-danger underline-offset-2 hover:bg-danger/10 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40"
+                onClick={() => onRetryUserMessageRound(messageIndex)}
+              >
+                {m.chat.userMessageRetry}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {isUser && !isStreaming && !readonly ? (
           <div className="mt-1.5 flex h-8 w-full min-w-0 shrink-0 justify-end">
@@ -640,7 +679,7 @@ export const MessageBubble = memo(function MessageBubble({
                 '[@media(hover:none)_and_(pointer:coarse)]:pointer-events-auto [@media(hover:none)_and_(pointer:coarse)]:opacity-100',
               )}
             >
-              {onRetryUserMessageRound && messageIndex != null ? (
+              {onRetryUserMessageRound && messageIndex != null && message.deliveryStatus !== 'failed' ? (
                 <button
                   type="button"
                   className={cn(userMessageFooterAction, retryDisabled && 'opacity-40')}

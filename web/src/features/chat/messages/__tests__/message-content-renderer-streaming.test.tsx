@@ -171,6 +171,22 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.querySelector('.assistant-steps-scroll')).toBeNull();
   });
 
+  it('keeps browser setup prompts out of the work-log surface', () => {
+    const tool = {
+      type: 'tool_use', id: 'browser-setup', name: 'browser_use', status: 'done',
+      details: { kind: 'browser_setup_required', hint: {
+        driver: 'extension', reason: 'extension_not_connected',
+        deepLink: '/settings/agent-browser?driver=extension',
+      } },
+    } as const;
+    render([], false, false, {
+      items: [tool], active: false, status: 'partial', expandedByDefault: false, compact: false,
+    });
+
+    expect(container.textContent).not.toContain('Browser setup needed');
+    expect(container.textContent).not.toContain('Open Chrome extensions');
+  });
+
   it('keeps tool errors inside the normal work-log disclosure', () => {
     render([], false, false, {
       items: [{ type: 'tool_use', id: 'r', name: 'read_file', status: 'error', result: 'Permission denied' }],

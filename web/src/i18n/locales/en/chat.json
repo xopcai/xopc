@@ -1322,6 +1322,8 @@
     "mermaidDownloadFailed": "Diagram download failed",
     "userMessageCopy": "Copy message",
     "userMessageRetry": "Retry",
+    "userMessageSending": "Sending…",
+    "userMessageSendFailed": "Not sent",
     "userMessageEdit": "Edit in composer",
     "userMessageEditing": "Editing your latest message. Sending will replace the previous turn.",
     "userMessageEditCancel": "Cancel edit",

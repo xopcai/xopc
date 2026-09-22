@@ -32,8 +32,30 @@ export interface ComposerContextRef {
 
 export type WireContextRef = Pick<ComposerContextRef, 'kind' | 'sourceId' | 'expectedVersion'>;
 
+export interface ComposerDispatchReceipt {
+  clientSubmissionId: string;
+  messageRenderKey?: string;
+}
+
+export interface ComposerSendOptions {
+  /** Fired after the optimistic user row has been inserted into the message list. */
+  onDispatched?: (receipt: ComposerDispatchReceipt) => void;
+}
+
+export interface ComposerSendFlightEvent {
+  receipt: ComposerDispatchReceipt;
+  draft: ComposerDraft;
+  sourceRect: { left: number; top: number; width: number; height: number };
+}
+
 /** False rejects a submission without consuming the current composer draft. */
-export type ComposerSendHandler = (text: string, attachments?: WireAttachment[], thinkingLevel?: string, contextRefs?: ComposerContextRef[]) => void | boolean | Promise<void | boolean>;
+export type ComposerSendHandler = (
+  text: string,
+  attachments?: WireAttachment[],
+  thinkingLevel?: string,
+  contextRefs?: ComposerContextRef[],
+  options?: ComposerSendOptions,
+) => void | boolean | Promise<void | boolean>;
 
 export const MAX_COMPOSER_CONTEXT_REFS = 5;
 
