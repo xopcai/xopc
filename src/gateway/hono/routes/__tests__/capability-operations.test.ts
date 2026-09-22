@@ -23,6 +23,7 @@ describe('capability operation authorization', () => {
     expect(response.status).toBe(200);
     const { capabilities } = await response.json();
     expect(capabilities.map((item: { id: string }) => item.id)).toEqual([
+      'xopc.context.resolve', 'xopc.notes.preview_edit',
       'xopc.notes.project_summaries', 'xopc.notes.history', 'xopc.notes.snapshot', 'xopc.notes.get', 'xopc.notes.list',
     ]);
     expect((await app.request(`${root}/xopc.tasks.get`)).status).toBe(404);

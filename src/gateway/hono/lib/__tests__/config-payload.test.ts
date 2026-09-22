@@ -143,6 +143,7 @@ describe('buildSafeWebConfigPayload', () => {
       summaryChunkTokens: 18_000,
       summaryTimeoutMs: 90_000,
       summaryRetries: 1,
+      reasoningLevel: 'off',
       qualityGuard: false,
       gapAudit: true,
       model: 'openai/gpt-5',
