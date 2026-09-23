@@ -13,6 +13,9 @@ import { readSqliteAsset } from '../sql-assets.js';
 import { SceneRepository } from '../../../scenes/repository.js';
 import { familyPlanTemplate } from '../../../scenes/templates.js';
 
+// Full historical migrations and fsyncs may contend with parallel CI workers.
+const MIGRATION_TEST_TIMEOUT_MS = 30_000;
+
 describe('scene storage startup without historical imports', () => {
   let directory: string;
   let db: DatabaseSync;
@@ -49,7 +52,7 @@ describe('scene storage startup without historical imports', () => {
     expect(repository.getActivation(principal, activation.id).goal).toBe('Keep current user data');
     expect(() => assertSceneStorageReady(db)).not.toThrow();
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  });
+  }, MIGRATION_TEST_TIMEOUT_MS);
 
   it('initializes a fresh database through the normal startup path', () => {
     ensureXopcDatabaseSchema(db);
@@ -59,7 +62,7 @@ describe('scene storage startup without historical imports', () => {
     expect(db.prepare("SELECT name FROM sqlite_master WHERE name LIKE 'scene_%'").all().map(row => row.name))
       .toEqual(expect.arrayContaining([...SCENE_TABLES]));
     expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'scene_cutover_journal'").get()).toBeUndefined();
-  });
+  }, MIGRATION_TEST_TIMEOUT_MS);
 
   it('discards malformed experimental data and stale notifications without reading their payloads', () => {
     oldDatabase();
@@ -81,7 +84,7 @@ describe('scene storage startup without historical imports', () => {
     expect(db.prepare('SELECT event_id FROM notification_acknowledgements').all()).toEqual([{ event_id: 'keep' }]);
     expect(db.prepare('SELECT content FROM unrelated_user_data').get()?.content).toBe('keep');
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  });
+  }, MIGRATION_TEST_TIMEOUT_MS);
 
   it.each([165, 175, 177])('discards obsolete malformed payloads before older migrations run from v%s', (version) => {
     ensureSchemaMetaTable(db);
@@ -93,7 +96,7 @@ describe('scene storage startup without historical imports', () => {
     expect(() => assertSceneStorageReady(db)).not.toThrow();
     expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'proactive_preferences'").get()).toBeUndefined();
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  });
+  }, MIGRATION_TEST_TIMEOUT_MS);
 
   it('never resets new scene data on restart', () => {
     oldDatabase(); ensureXopcDatabaseSchema(db);
@@ -107,7 +110,7 @@ describe('scene storage startup without historical imports', () => {
     ensureXopcDatabaseSchema(db);
     expect(new SceneRepository(db).readNotes(principal, activation.id)?.content).toBe('Keep Sunday free');
     expect(() => assertSceneStorageReady(db)).not.toThrow();
-  });
+  }, MIGRATION_TEST_TIMEOUT_MS);
 
   it('rolls back a failed reset and safely retries the normal upgrade', () => {
     oldDatabase();
@@ -122,5 +125,5 @@ describe('scene storage startup without historical imports', () => {
     db.exec('DROP TRIGGER refuse_reset');
     ensureXopcDatabaseSchema(db);
     expect(() => assertSceneStorageReady(db)).not.toThrow();
-  });
+  }, MIGRATION_TEST_TIMEOUT_MS);
 });
