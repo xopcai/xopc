@@ -156,6 +156,8 @@ export interface ToolFactoryDeps {
   dispatchTaskEvents?: () => void;
   /** Gateway: queues Task execution for xopc_use task start/resume/verify actions. */
   dispatchTaskRuns?: () => void;
+  /** Gateway: refreshes Agent runtime state after xopc_use mutates the catalog. */
+  onAgentCatalogMutate?: () => void;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
   getWorkflowRunService?: () => WorkflowRunServiceLike | undefined;
   /** Current session skill indexing (tool gating + allowlist); used by skills_list / skill_view. */
@@ -614,6 +616,7 @@ export class AgentToolsFactory {
               getChatPreviewService: this.deps.getChatPreviewService,
               dispatchTaskEvents: this.deps.dispatchTaskEvents,
               dispatchTaskRuns: this.deps.dispatchTaskRuns,
+              onAgentCatalogMutate: this.deps.onAgentCatalogMutate,
             }),
           ]
         : []),

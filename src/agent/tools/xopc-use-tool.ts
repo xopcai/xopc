@@ -112,6 +112,7 @@ export interface XopcUseToolDeps {
   getChatPreviewService?: () => ChatPreviewService | undefined;
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
+  onAgentCatalogMutate?: () => void;
 }
 
 type XopcUseDetails = {
@@ -476,9 +477,6 @@ async function handleAgent(
     return { ok: false, error: 'idempotencyKey must be a non-empty string' };
   }
   const input = command === 'list' ? {} : fields;
-  if (dryRun && writeCommands.has(command)) {
-    return { ok: true, dryRun: true, action: command, input };
-  }
   const caller: CapabilityContext = {
     principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
     surface: 'agent',
@@ -487,10 +485,16 @@ async function handleAgent(
     authorize: deps.authorizeCapability ?? (() => true),
     signal,
   };
+  if (dryRun && writeCommands.has(command)) {
+    const validatedInput = await capabilities.validateInput(operation, input, caller);
+    return { ok: true, dryRun: true, action: command, input: validatedInput };
+  }
   const expected = writeCommands.has(command)
     ? { ...capabilities.describe(operation, caller), idempotencyKey: trimString(idempotencyKey) ?? toolCallId }
     : undefined;
-  return capabilities.call(operation, input, caller, expected);
+  const result = await capabilities.call(operation, input, caller, expected);
+  if (writeCommands.has(command)) deps.onAgentCatalogMutate?.();
+  return result;
 }
 
 async function handleProject(

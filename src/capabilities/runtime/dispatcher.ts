@@ -124,17 +124,24 @@ export class CapabilityDispatcher {
     return structuredClone(entry.descriptor);
   }
 
-  async call(id: string, input: unknown, context: CapabilityContext, expected?: { majorVersion: number; descriptorDigest: string; idempotencyKey?: string }): Promise<unknown> {
-    const descriptor = this.describe(id, context);
-    if (expected && (expected.majorVersion !== descriptor.majorVersion || expected.descriptorDigest !== descriptor.descriptorDigest)) {
-      throw new CapabilityError('CONTRACT_CHANGED', 'Capability contract changed; describe it again');
-    }
+  async validateInput(id: string, input: unknown, context: CapabilityContext): Promise<unknown> {
+    this.describe(id, context);
     const { definition } = this.entries.get(id)!;
     const parsed = definition.input.safeParse(input);
     if (!parsed.success) throw new CapabilityError('INVALID_INPUT', parsed.error.message);
     if (!await context.authorize(id, parsed.data)) throw new CapabilityError('FORBIDDEN', 'Capability resource access denied');
     context.assertCurrent?.();
     if (context.signal?.aborted) throw new CapabilityError('CANCELLED', 'Capability call cancelled');
+    return parsed.data;
+  }
+
+  async call(id: string, input: unknown, context: CapabilityContext, expected?: { majorVersion: number; descriptorDigest: string; idempotencyKey?: string }): Promise<unknown> {
+    const descriptor = this.describe(id, context);
+    if (expected && (expected.majorVersion !== descriptor.majorVersion || expected.descriptorDigest !== descriptor.descriptorDigest)) {
+      throw new CapabilityError('CONTRACT_CHANGED', 'Capability contract changed; describe it again');
+    }
+    const { definition } = this.entries.get(id)!;
+    const parsed = { data: await this.validateInput(id, input, context) } as { data: z.output<typeof definition.input> };
     if (definition.effect === 'external-write') {
       const key = expected?.idempotencyKey;
       if (!key?.trim() || key.length > 200) throw new CapabilityError('INVALID_INPUT', 'A stable idempotencyKey is required');
