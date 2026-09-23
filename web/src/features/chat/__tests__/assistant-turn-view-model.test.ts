@@ -276,7 +276,7 @@ describe('buildAssistantTurnViewModel', () => {
 
   it('keeps every structured product reference for the result tail', () => {
     const delivery = {
-      version: 1,
+      version: 2,
       operation: 'completed',
       primary: {
         kind: 'workflow_run',

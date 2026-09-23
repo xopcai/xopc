@@ -5,7 +5,7 @@ import type { Message, ReasoningLevel } from '@/features/chat/messages/messages.
 
 describe('buildAssistantTurnViewModel', () => {
   it('keeps separate deliveries while deduplicating replayed tool calls', () => {
-    const delivery = { version: 1, operation: 'opened', presentation: { kind: 'table', items: [], truncated: false } };
+    const delivery = { version: 2, operation: 'opened', presentation: { kind: 'table', items: [], truncated: false } };
     const block = { type: 'tool_use' as const, id: 'query', name: 'xopc_use', status: 'done' as const, details: { delivery } };
     const view = buildAssistantTurnViewModel({ message: { role: 'assistant', content: [block, { ...block, id: 'other-query' }, block] },
       isStreaming: false, reasoningLevel: 'off' });
@@ -128,7 +128,7 @@ describe('buildAssistantTurnViewModel', () => {
 
   it('promotes the latest object delivery to the turn result surface', () => {
     const delivery = {
-      version: 1,
+      version: 2,
       operation: 'updated',
       primary: {
         kind: 'note',
@@ -168,7 +168,7 @@ describe('buildAssistantTurnViewModel', () => {
 
   it('does not promote a note delivery that only opens an existing note', () => {
     const delivery = {
-      version: 1,
+      version: 2,
       operation: 'opened',
       primary: {
         kind: 'note',

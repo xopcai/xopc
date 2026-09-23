@@ -29,7 +29,7 @@ function published(artifactId: string, source = sourceFileId): TurnOutcomeDelive
 function written(source = sourceFileId): TranscriptStoredRow {
   return toolResult('turn-1', {
     delivery: {
-      version: 1, operation: 'updated',
+      version: 2, operation: 'updated',
       primary: { kind: 'file', id: source, title: 'report.html', capabilities: ['preview'] },
     },
   });
@@ -174,7 +174,7 @@ describe('turn outcome projector', () => {
       turnId: 'turn-1',
       rows: [toolResult('turn-1', {
         delivery: {
-          version: 1,
+          version: 2,
           operation: 'failed',
           primary: { kind: 'file', id: 'space.cmVwb3J0Lnhsc3g', title: 'report.xlsx', capabilities: ['preview'] },
           related: [{ kind: 'file', id: 'space.ZGV0YWlscy5jc3Y', title: 'details.csv', capabilities: [] }],
@@ -192,7 +192,7 @@ describe('turn outcome projector', () => {
       turnId: 'turn-1',
       rows: [toolResult('turn-1', {
         delivery: {
-          version: 1,
+          version: 2,
           operation: 'created',
           primary: { kind: 'file', id: 'opaque-id', title: 'report.xlsx', capabilities: ['preview'] },
         },
