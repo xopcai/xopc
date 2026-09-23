@@ -9,7 +9,7 @@ import { createCreateShareTool, isShareToolAvailable } from '../../agent/tools/c
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
 import { buildSessionTimeline, type SessionTimelineItem } from '../../session/transcript-outline.js';
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
-import { loadConfig, getWorkspacePath, saveConfig } from '../../config/index.js';
+import { loadConfig, getWorkspacePath } from '../../config/index.js';
 import { getAgentDefaultModelRef, type Config } from '../../config/schema.js';
 import { AgentCatalogService } from '../../agent-catalog/service.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
@@ -680,7 +680,6 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async listAgents(): Promise<TuiAgentInfo[]> {
-    const config = this.activeConfig();
     const agents = new Map<string, TuiAgentInfo>();
     for (const entry of listAgentEntries()) {
       if (entry.enabled === false) continue;
@@ -729,7 +728,6 @@ export class EmbeddedBackend implements TuiBackend {
 
   async getSessionInfo(conversationId: string): Promise<SessionInfo> {
     if (!this.agent) {
-      const config = this.activeConfig();
       const model = getAgentDefaultModelRef();
       return { model: model ?? undefined };
     }
@@ -755,7 +753,6 @@ export class EmbeddedBackend implements TuiBackend {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       log.warn({ err, conversationId, errorMessage }, `getSessionInfo failed: ${errorMessage}`);
-      const config = this.activeConfig();
       const model = getAgentDefaultModelRef();
       return { model: model ?? undefined };
     }

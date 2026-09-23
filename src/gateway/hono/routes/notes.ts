@@ -268,7 +268,6 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
 
     const body = await c.req.json().catch(() => ({}));
-    const routingCfg = service.currentConfig;
     const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : undefined;
     const project = projectId ? service.projects.get(projectId) : undefined;
     if (projectId && !project) return c.json({ error: 'Project not found' }, 400);

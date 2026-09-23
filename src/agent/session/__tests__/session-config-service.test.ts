@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigSchema } from '../../../config/schema.js';
+import { seedTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { ProjectService } from '../../../projects/project-service.js';
 import {
   closeXopcDatabase,
@@ -23,18 +24,7 @@ import { SessionConfigService } from '../session-config-service.js';
 
 const CONVERSATION_ID = "2461fb35-c457-4336-853e-bf6af54eb0c9";
 
-const minimalConfig = ConfigSchema.parse({
-  agents: {
-    default: 'main',
-    list: [
-      {
-        id: 'main',
-        profile: { name: 'Main' },
-        workspace: '~/default-ws',
-      },
-    ],
-  },
-});
+const minimalConfig = ConfigSchema.parse({});
 
 describe('SessionConfigService project workspace', () => {
   let stateDir: string;
@@ -43,6 +33,7 @@ describe('SessionConfigService project workspace', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-session-config-project-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    seedTestAgentCatalog({ agents: [{ id: 'main', profile: { name: 'Main' }, workspace: '~/default-ws' }] });
   });
 
   afterEach(() => {

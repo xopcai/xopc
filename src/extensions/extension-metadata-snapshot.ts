@@ -3,7 +3,6 @@
  */
 
 import { resolveDefaultAgentId } from '../agent/agent-scope.js';
-import type { Config } from '../config/schema.js';
 import {
   resolveAgentWorkspaceDir,
   resolveExtensionsDir,
@@ -41,9 +40,8 @@ export function buildExtensionMetadataSnapshot(
  * Resolve loader options from app config when caller omits workspace paths.
  */
 export function resolveExtensionLoaderOptionsFromConfig(
-  config: DiscoverConfig,
+  _config: DiscoverConfig,
 ): ExtensionLoaderOptions {
-  const cfg = config as Config;
   const aid = resolveDefaultAgentId();
   return {
     workspaceDir: resolveAgentWorkspaceDir(aid),

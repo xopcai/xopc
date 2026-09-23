@@ -18,6 +18,7 @@ import { resolveDelegationTools, protectDelegatedTool } from '../delegation-poli
 import { createDelegationParentPolicy } from '../delegation-parent-policy.js';
 import { AgentToolsFactory } from '../factory.js';
 import { ConfigSchema } from '../../../config/schema.js';
+import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 import type { MessageBus } from '../../../infra/bus/index.js';
 
 const fakeTool = (name: string): AgentTool<any, any> => ({ name, label: name, description: name, parameters: Type.Object({}),
@@ -101,14 +102,22 @@ describe('delegated capabilities', () => {
 
   it('rechecks live parent policies, call limits and noninteractive approval requirements', async () => {
     const config = ConfigSchema.parse({});
-    config.agents.defaults.tools.web_search = { mode: 'allow', maxCallsPerTurn: 1 };
+    const repository = new AgentCatalogRepository();
+    const updatePolicy = (mode: 'allow' | 'ask' | 'deny', maxCallsPerTurn?: number) => {
+      const settings = repository.getSettings();
+      repository.updateDefaults({
+        ...settings.defaults,
+        tools: { ...settings.defaults.tools, web_search: { mode, ...(maxCallsPerTurn ? { maxCallsPerTurn } : {}) } },
+      }, settings.revision);
+    };
+    updatePolicy('allow', 1);
     const policy = createDelegationParentPolicy({ getConfig: () => config });
     const call = { toolCall: { id: 'call', name: 'web_search', arguments: {} }, args: {} } as any;
     expect(await policy.beforeToolCall(call)).toBeUndefined();
     expect(await policy.beforeToolCall(call)).toMatchObject({ block: true });
-    config.agents.defaults.tools.web_search = { mode: 'ask' };
+    updatePolicy('ask');
     expect(await policy.beforeToolCall(call)).toMatchObject({ block: true, reason: expect.stringContaining('ask') });
-    config.agents.defaults.tools.web_search = { mode: 'deny' };
+    updatePolicy('deny');
     expect(await policy.beforeToolCall(call)).toMatchObject({ block: true, reason: expect.stringContaining('deny') });
   });
 });

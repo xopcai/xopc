@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../../../config/schema.js';
 import { ProjectService } from '../../../../projects/project-service.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
@@ -27,6 +28,7 @@ describe('project understanding through authenticated Gateway HTTP and lazy disp
     resetXopcDatabaseSingletonForTest();
     resetLazyRouteBundlesForTests();
     openXopcDatabase({ path: join(root, 'test.db') });
+    seedTestAgentCatalog();
     projects = new ProjectService();
     vi.spyOn(WorkDiscoveryService.prototype, 'getModelProcessingTarget').mockImplementation(() => { throw new Error('No model configured'); });
     const app = new Hono();

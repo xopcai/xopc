@@ -10,7 +10,6 @@ import {
   resolveAuthProfilesPath,
   resolveOAuthPath,
 } from '../config/paths.js';
-import { loadConfig } from '../config/loader.js';
 import type { Config } from '../config/schema.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 
@@ -113,7 +112,6 @@ function readOAuthAccessTokenSync(provider: string): string | undefined {
 export function resolveProviderApiKeySync(provider: string): string | undefined {
   const normalized = provider.toLowerCase();
   if (isOAuthOnlyProvider(normalized)) return readOAuthAccessTokenSync(normalized);
-  const cfg = loadConfig();
   const agentPath = resolveAgentAuthProfilesPath(getDefaultAgentId());
   const fromAgent = readApiKeyFromProfilesFile(agentPath, normalized);
   if (fromAgent) return fromAgent;
@@ -126,12 +124,11 @@ export function resolveProviderApiKeySync(provider: string): string | undefined 
 export function resolveProviderApiKeyForAgentSync(
   provider: string,
   agentId?: string,
-  config?: Config,
+  _config?: Config,
 ): string | undefined {
   const normalized = provider.toLowerCase();
   if (isOAuthOnlyProvider(normalized)) return readOAuthAccessTokenSync(normalized);
   if (agentId?.trim()) {
-    const cfg = config ?? loadConfig();
     const fromAgent = readApiKeyFromProfilesFile(
       resolveAgentAuthProfilesPath(agentId.trim()),
       normalized,
@@ -149,7 +146,6 @@ export function resolveProviderApiKeyForAgentSync(
  */
 export function hasProviderAuthOnDiskSync(provider: string): boolean {
   if (isOAuthOnlyProvider(provider.toLowerCase())) return hasOAuthTokenSync(provider);
-  const cfg = loadConfig();
   const agentPath = resolveAgentAuthProfilesPath(getDefaultAgentId());
   if (hasApiKeyInProfilesFile(agentPath, provider)) {
     return true;

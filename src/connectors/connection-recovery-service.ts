@@ -33,11 +33,6 @@ export type ConnectionAction = {
   needKey?: string; accountId?: string; candidateRef?: string; callbackUrl?: string;
 };
 
-function connectorId(need: ConnectionNeed): string {
-  if (need.target.type !== 'connector') throw new Error('Expected a connector connection.');
-  return need.target.connectorId;
-}
-
 function isConnectorNeed(need: ConnectionNeed): need is ConnectionNeed & { target: { type: 'connector'; connectorId: string } } {
   return need.target.type === 'connector';
 }

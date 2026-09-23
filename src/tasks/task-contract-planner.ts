@@ -1,6 +1,6 @@
 import type { UserMessage } from '@earendil-works/pi-ai';
 
-import { getAgentDefaultModelRef, type Config } from '../config/schema.js';
+import { getAgentDefaultModelRef } from '../config/schema.js';
 import { resolveModel } from '../providers/index.js';
 import {
   completeWithResolvedCredentials,
@@ -77,12 +77,9 @@ export function parseTaskContractResponse(raw: string): TaskContractDefinition |
 }
 
 export class ModelTaskContractPlanner implements TaskContractPlanner {
-  constructor(private readonly getConfig: () => Config) {}
-
   async plan(input: TaskContractPlanningInput): Promise<TaskContractDefinition> {
     const fallback = defineTaskContract(input.objective);
     try {
-      const config = this.getConfig();
       const model = resolveModel(getAgentDefaultModelRef());
       const prompt = [
         'Define the smallest complete, verifiable contract for the user task.',

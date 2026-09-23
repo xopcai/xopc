@@ -10,6 +10,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 import { ConfigSchema, type Config } from '../../../config/schema.js';
 import {
   buildVoicePersonaBlock,
@@ -18,15 +19,12 @@ import {
 } from '../persona-context.js';
 
 function config(coderInstructions = 'Prefer exact, practical answers.'): Config {
-  return ConfigSchema.parse({
-    agents: {
-      default: 'main',
-      list: [
-        { id: 'main', profile: { name: 'Main' } },
-        { id: 'coder', profile: { name: 'Code Voice', instructions: coderInstructions } },
-      ],
-    },
-  });
+  const repository = new AgentCatalogRepository();
+  const coder = repository.get('coder');
+  const entry = { id: 'coder', enabled: true, profile: { name: 'Code Voice', instructions: coderInstructions } };
+  if (coder) repository.update('coder', coder.revision, entry);
+  else repository.create(entry, { ready: true });
+  return ConfigSchema.parse({});
 }
 
 describe('Omni voice persona context', () => {

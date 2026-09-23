@@ -8,6 +8,7 @@ import {
   refreshOnboardModelCatalogIfNeeded,
   setPrimaryModel,
 } from '../model.js';
+import { AgentCatalogRepository } from '../../../../agent-catalog/repository.js';
 
 describe('refreshOnboardModelCatalogIfNeeded', () => {
   it('loads the XOPC Cloud catalog when the local catalog is empty', async () => {
@@ -52,23 +53,24 @@ describe('refreshOnboardModelCatalogIfNeeded', () => {
 });
 
 describe('XOPC Cloud onboard defaults', () => {
-  it('persists only the selected chat model', () => {
+  it('persists only the selected chat model', async () => {
     const config = ConfigSchema.parse({});
-    const updated = setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model');
+    const updated = await setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model');
+    const defaults = new AgentCatalogRepository().getSettings().defaults;
 
     expect(getAgentDefaultModelRef()).toBe('xopc-cloud/chat-model');
-    expect(updated.agents.defaults.models.imageUnderstanding).toBeUndefined();
-    expect(updated.agents.defaults.models.imageGeneration).toBeUndefined();
+    expect(defaults.models.imageUnderstanding).toBeUndefined();
+    expect(defaults.models.imageGeneration).toBeUndefined();
     expect(updated.tools.media?.audio).toBeUndefined();
     expect(updated.messages?.tts).toBeUndefined();
   });
 
-  it('preserves existing explicit modality settings', () => {
+  it('preserves existing explicit modality settings', async () => {
     const config = ConfigSchema.parse({
       tools: { media: { audio: { enabled: true, provider: 'xopc-local' } } },
       messages: { tts: { enabled: true, provider: 'edge', trigger: 'inbound' } },
     });
-    const updated = setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model');
+    const updated = await setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model');
     expect(updated.tools.media?.audio?.provider).toBe('xopc-local');
     expect(updated.messages?.tts?.provider).toBe('edge');
   });

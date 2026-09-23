@@ -4,6 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 import * as modelCalls from '../../providers/model-call.js';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { DurableState } from '../../storage/sqlite/durable-state.js';
 import {
@@ -58,21 +59,19 @@ describe('SessionStore', () => {
     process.env.XOPC_STATE_DIR = tempDir;
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(tempDir, 'xopc.db') });
+    seedTestAgentCatalog({
+      defaults: {
+        models: { chat: { primary: 'test/test-model', fallbacks: [] }, intents: {} },
+        skills: { mode: 'all-enabled', exclude: [] },
+        tools: {}, workflows: {}, runtime: {},
+      },
+      agents: [
+        { id: 'coder', enabled: true, workspace: join(tempDir, 'coder') },
+        { id: 'main', enabled: true, profile: { name: 'Main' }, workspace: join(tempDir, 'main') },
+      ],
+    });
     store = new SessionStore({
-      config: ConfigSchema.parse({
-        agents: {
-          default: 'main',
-          defaults: { models: { chat: { primary: 'test/test-model', fallbacks: [] }, intents: {} } },
-          list: [
-            { id: 'coder', workspace: join(tempDir, 'coder') },
-            {
-              id: 'main',
-              profile: { name: 'Main' },
-              workspace: join(tempDir, 'main'),
-            },
-          ],
-        },
-      }),
+      config: ConfigSchema.parse({}),
     });
     await store.initialize();
   });

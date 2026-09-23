@@ -8,7 +8,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { Config } from '../../config/schema.js';
 import {
   resolveAgentProfileDir,
   resolveAgentWorkspaceDir,
@@ -148,7 +147,7 @@ function ensureGitRepo(markdownWorkspaceDir: string, isBrandNew: boolean): void 
 /**
  * Ensure default (`main`) agent has reference profile Markdown templates (missing files only).
  */
-export function seedMainAgentProfileMarkdown(cfg: Config): void {
+export function seedMainAgentProfileMarkdown(): void {
   const agentId = resolveDefaultAgentId();
   seedAgentProfileMarkdownFiles(
     resolveAgentProfileDir(agentId),

@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
 import {
+  applyImageGenerationCatalogUpdate,
   getAgentImageGenerationConfig,
   getDefaultImageGenerationConfig,
   getImageGenerationCatalog,
@@ -11,43 +14,36 @@ import {
 } from '../image-generation-setup.js';
 
 function createConfig() {
-  return ConfigSchema.parse({
-    agents: {
-      default: 'main',
-      defaults: {
-        models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
-        skills: { mode: 'all-enabled', exclude: [] },
-        tools: {},
-        workflows: {},
-        runtime: {},
-      },
-      list: [
-        {
-          id: 'main',
-          enabled: true,
-          workspace: '/tmp/main',
-        },
-        {
-          id: 'studio',
-          enabled: true,
-          workspace: '/tmp/studio',
-          models: {
-            chat: { primary: 'google/gemini-3.1-pro', fallbacks: [] },
-          },
-        },
-      ],
+  initializeTestAgentCatalog({
+    defaults: {
+      models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
+      skills: { mode: 'all-enabled', exclude: [] },
+      tools: {}, workflows: {}, runtime: {},
     },
+    agents: [
+      { id: 'main', enabled: true, workspace: '/tmp/main' },
+      { id: 'studio', enabled: true, workspace: '/tmp/studio', models: {
+        chat: { primary: 'google/gemini-3.1-pro', fallbacks: [] },
+      } },
+    ],
   });
+  return ConfigSchema.parse({});
 }
 
 describe('image generation setup', () => {
-  it('configures the global default without changing agent overrides', () => {
+  it('configures the global default without changing agent overrides', async () => {
     const config = createConfig();
-    config.agents.list[1]!.models!.imageGeneration = {
-      primary: 'openai/gpt-image-1',
-      fallbacks: [],
-      autoProviderFallback: false,
-    };
+    const repository = new AgentCatalogRepository();
+    const studio = repository.get('studio')!;
+    repository.update('studio', studio.revision, {
+      id: studio.id,
+      enabled: studio.enabled,
+      workspace: studio.workspace,
+      profile: studio.profile,
+      models: { ...studio.models, imageGeneration: {
+        primary: 'openai/gpt-image-1', fallbacks: [], autoProviderFallback: false,
+      } },
+    });
 
     const result = prepareDefaultImageGenerationSetup(config, {
       providerId: 'google',
@@ -56,18 +52,19 @@ describe('image generation setup', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(getDefaultImageGenerationConfig(result.config).model?.primary).toBe(
+    await applyImageGenerationCatalogUpdate(result.catalogUpdate);
+    expect(getDefaultImageGenerationConfig().model?.primary).toBe(
       'google/gemini-3.1-flash-image',
     );
-    expect(getAgentImageGenerationConfig(result.config, 'main').model?.primary).toBe(
+    expect(getAgentImageGenerationConfig('main').model?.primary).toBe(
       'google/gemini-3.1-flash-image',
     );
-    expect(getAgentImageGenerationConfig(result.config, 'studio').model?.primary).toBe(
+    expect(getAgentImageGenerationConfig('studio').model?.primary).toBe(
       'openai/gpt-image-1',
     );
   });
 
-  it('configures only the requested agent and stores no credential', () => {
+  it('configures only the requested agent and stores no credential', async () => {
     const config = createConfig();
     const result = prepareImageGenerationSetup(config, 'studio', {
       providerId: 'google',
@@ -76,17 +73,20 @@ describe('image generation setup', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(getAgentImageGenerationConfig(result.config, 'studio').model?.primary).toBe(
+    await applyImageGenerationCatalogUpdate(result.catalogUpdate);
+    expect(getAgentImageGenerationConfig('studio').model?.primary).toBe(
       'google/gemini-3.1-flash-image',
     );
-    expect(getAgentImageGenerationConfig(result.config, 'main').model).toBeNull();
+    expect(getAgentImageGenerationConfig('main').model).toBeNull();
     expect(result.config.providers?.google).toEqual({});
     expect(JSON.stringify(result.config)).not.toContain('apiKey');
   });
 
-  it('initializes models when the requested agent has no local model config', () => {
+  it('initializes models when the requested agent has no local model config', async () => {
     const config = createConfig();
-    delete config.agents.list[1]!.models;
+    const repository = new AgentCatalogRepository();
+    const studio = repository.get('studio')!;
+    repository.update('studio', studio.revision, { id: 'studio', enabled: true, workspace: '/tmp/studio' });
 
     const result = prepareImageGenerationSetup(config, 'studio', {
       providerId: 'google',
@@ -95,14 +95,15 @@ describe('image generation setup', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.config.agents.list[1]!.models).toEqual({
+    await applyImageGenerationCatalogUpdate(result.catalogUpdate);
+    expect(new AgentCatalogRepository().get('studio')?.models).toEqual({
       imageGeneration: {
         primary: 'google/gemini-3.1-flash-image',
         fallbacks: [],
         autoProviderFallback: false,
       },
     });
-    expect(getAgentImageGenerationConfig(result.config, 'studio').model?.primary).toBe(
+    expect(getAgentImageGenerationConfig('studio').model?.primary).toBe(
       'google/gemini-3.1-flash-image',
     );
   });
@@ -162,14 +163,15 @@ describe('image generation setup', () => {
     });
   });
 
-  it('updates only the local image model override without materializing global defaults', () => {
+  it('updates only the local image model override without materializing global defaults', async () => {
     const config = createConfig();
 
     const result = prepareImageGenerationSetup(config, 'studio', { providerId: 'google' });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.config.agents.list[1]!.models).toEqual({
+    await applyImageGenerationCatalogUpdate(result.catalogUpdate);
+    expect(new AgentCatalogRepository().get('studio')?.models).toEqual({
       chat: { primary: 'google/gemini-3.1-pro', fallbacks: [] },
       imageGeneration: {
         primary: 'google/gemini-3.1-flash-image',
@@ -202,7 +204,7 @@ describe('image generation setup', () => {
 
   it('rejects unknown agents, providers, and models instead of falling back', () => {
     const config = createConfig();
-    expect(() => getAgentImageGenerationConfig(config, 'missing')).toThrow('Agent not found: missing');
+    expect(() => getAgentImageGenerationConfig('missing')).toThrow('Agent not found: missing');
     expect(prepareImageGenerationSetup(config, 'missing', { providerId: 'openai' })).toEqual({
       ok: false,
       error: 'Agent not found: missing',

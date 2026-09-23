@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import type { CapabilityContext } from '../../capabilities/runtime/dispatcher.js';
 import { createProductDispatcher } from '../../capabilities/runtime/product.js';
 import { ConfigSchema } from '../../config/schema.js';
@@ -22,6 +23,7 @@ describe('project create and edit capabilities', () => {
     directory = mkdtempSync(join(tmpdir(), 'xopc-project-writes-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(directory, 'xopc.db') });
+    seedTestAgentCatalog({ agents: [{ id: 'main', enabled: true }, { id: 'other', enabled: true }] });
     projects = new ProjectService();
   });
   afterEach(() => {
