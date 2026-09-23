@@ -71,7 +71,6 @@ describe('@ mention Note picker', () => {
     });
     expect(onSelectItem).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'note', noteRef: { sourceId: 'note-1', expectedVersion: '42' } }),
-      { shiftKey: false },
     );
   });
 });
