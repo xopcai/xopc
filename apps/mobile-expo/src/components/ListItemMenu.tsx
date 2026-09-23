@@ -36,24 +36,39 @@ export function ListItemMenu({ title, actions, onActionPress, onSelect, enabled 
   ].sort((a, b) => Number(Boolean(a.destructive)) - Number(Boolean(b.destructive)));
   return <>
     {children(() => { if (enabled) setVisible(true); })}
-    <BottomSheetModal visible={visible && enabled} onDismiss={() => setVisible(false)} title={title} scroll
+    <BottomSheetModal visible={visible && enabled} onDismiss={() => setVisible(false)} title={title} maxHeight="60%"
       onAfterDismiss={() => {
         const action = pending.current;
         pending.current = null;
         action?.();
       }}>
       <View style={styles.actions}>
-        {items.map(item => <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={item.label}
-          onPress={() => choose(item.run)} style={({ pressed }) => [styles.action, pressed && { backgroundColor: colors.surface.pressed }]}>
-          <Icon source={item.icon} size={22} color={item.destructive ? colors.semantic.error : colors.text.secondary} />
-          <Text style={[styles.label, { color: item.destructive ? colors.semantic.error : colors.text.primary }]}>{item.label}</Text>
+        <View style={[styles.actionGroup, { backgroundColor: colors.surface.grouped }]}>
+          {items.filter(item => !item.destructive).map(item => <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={item.label}
+            onPress={() => choose(item.run)} style={({ pressed }) => [styles.action, pressed && { backgroundColor: colors.surface.pressed }]}>
+            <View style={[styles.iconTile, { backgroundColor: colors.surface.panel }]}>
+              <Icon source={item.icon} size={21} color={colors.text.secondary} />
+            </View>
+            <Text style={[styles.label, { color: colors.text.primary }]}>{item.label}</Text>
+          </Pressable>)}
+        </View>
+        {items.filter(item => item.destructive).map(item => <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={item.label}
+          onPress={() => choose(item.run)} style={({ pressed }) => [styles.action, styles.destructiveAction,
+            { backgroundColor: pressed ? colors.surface.pressed : colors.surface.grouped }]}>
+          <View style={[styles.iconTile, { backgroundColor: colors.surface.panel }]}>
+            <Icon source={item.icon} size={21} color={colors.semantic.error} />
+          </View>
+          <Text style={[styles.label, { color: colors.semantic.error }]}>{item.label}</Text>
         </Pressable>)}
       </View>
     </BottomSheetModal>
   </>;
 }
 const styles = StyleSheet.create({
-  actions: { paddingHorizontal: spacing.md, gap: spacing.xs },
-  action: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radii.md },
-  label: { ...typography.ui, flex: 1 },
+  actions: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  actionGroup: { padding: spacing.xs, borderRadius: radii.xl, gap: spacing.xxs },
+  action: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.sm, borderRadius: radii.lg },
+  destructiveAction: { marginTop: spacing.xxs },
+  iconTile: { width: 36, height: 36, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  label: { ...typography.ui, flex: 1, fontWeight: '500' },
 });

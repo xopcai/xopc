@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   FileText,
   FileVideo,
+  Files,
   Globe2,
 } from 'lucide-react';
 
@@ -134,7 +135,7 @@ function ResultAttachmentRow({
 
   if (!canPreview && item.href) {
     return (
-      <li>
+      <li data-result-attachment>
         <a
           href={item.href}
           target="_blank"
@@ -149,14 +150,14 @@ function ResultAttachmentRow({
 
   if (!canPreview) {
     return (
-      <li className={className}>
+      <li className={className} data-result-attachment>
         {content}
       </li>
     );
   }
 
   return (
-    <li>
+    <li data-result-attachment>
       <button
         type="button"
         className={className}
@@ -164,6 +165,65 @@ function ResultAttachmentRow({
       >
         {content}
       </button>
+    </li>
+  );
+}
+
+function ResultAttachmentGroup({
+  attachments,
+  authToken,
+  conversationId,
+  projectId,
+  onOpen,
+  language,
+}: {
+  attachments: ResultAttachment[];
+  authToken?: string;
+  conversationId?: string | null;
+  projectId?: string | null;
+  onOpen: (attachment: MessageAttachment) => void;
+  language: 'en' | 'zh';
+}) {
+  const label = messages(language).chat.turnOutcome.fileCount
+    .replace('{{count}}', String(attachments.length));
+
+  return (
+    <li data-result-attachment-group>
+      <details className="group">
+        <summary
+          className={cn(
+            'flex min-h-14 cursor-pointer list-none items-center gap-3 px-3 py-2 text-left',
+            'hover:bg-surface-hover/65 active:bg-surface-active/70',
+            interaction.transition,
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+          )}
+        >
+          <span
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft/70 text-accent-fg"
+            aria-hidden
+          >
+            <Files className="size-4" strokeWidth={1.75} />
+          </span>
+          <span className="min-w-0 flex-1 text-sm font-medium text-fg">{label}</span>
+          <ChevronRight
+            className="size-4 shrink-0 text-fg-subtle transition-transform duration-150 ease-out group-open:rotate-90 motion-reduce:transition-none"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        </summary>
+        <ul className="m-0 list-none divide-y divide-edge-subtle border-t border-edge-subtle p-0">
+          {attachments.map((item) => (
+            <ResultAttachmentRow
+              key={item.key}
+              item={item}
+              authToken={authToken}
+              conversationId={conversationId}
+              projectId={projectId}
+              onOpen={onOpen}
+            />
+          ))}
+        </ul>
+      </details>
     </li>
   );
 }
@@ -236,16 +296,27 @@ export function AssistantResultTail({
         <TurnTail label={language === 'zh' ? '本轮交付结果' : 'Turn deliverables'}>
           <ul className="m-0 list-none divide-y divide-edge-subtle p-0">
             <ProductDeliveryRows deliveries={view.deliveries} language={language} />
-            {attachments.map((item) => (
-              <ResultAttachmentRow
-                key={item.key}
-                item={item}
+            {attachments.length > 1 ? (
+              <ResultAttachmentGroup
+                attachments={attachments}
                 authToken={authToken}
                 conversationId={conversationId}
                 projectId={projectId}
                 onOpen={preview.openAttachment}
+                language={language}
               />
-            ))}
+            ) : (
+              attachments.map((item) => (
+                <ResultAttachmentRow
+                  key={item.key}
+                  item={item}
+                  authToken={authToken}
+                  conversationId={conversationId}
+                  projectId={projectId}
+                  onOpen={preview.openAttachment}
+                />
+              ))
+            )}
           </ul>
           {queryState.truncated ? (
             <p role="status" className="border-t border-edge-subtle px-3 py-2 text-xs text-fg-muted">

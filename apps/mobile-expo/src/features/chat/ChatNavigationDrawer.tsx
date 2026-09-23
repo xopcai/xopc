@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   memo,
@@ -11,6 +11,7 @@ import {
   type Ref,
 } from 'react';
 import {
+  Alert,
   BackHandler,
   FlatList,
   Keyboard,
@@ -26,11 +27,23 @@ import ReanimatedDrawerLayout, {
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useMessages } from '../../i18n/messages';
+import { AppToast } from '../../components/AppToast';
+import { ListItemMenu, type ListItemAction } from '../../components/ListItemMenu';
+import { useMessages, t } from '../../i18n/messages';
 import { sessionDisplayName } from '../../lib/session-helpers';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
+import { refreshSessionsList } from '../../query/infinite-list-sync';
 import { queryKeys } from '../../query/keys';
-import { fetchSessionsList, type SessionListItem, type SessionsPage } from '../../query/sessions';
+import {
+  archiveSession,
+  deleteSession,
+  fetchSessionsList,
+  pinSession,
+  type SessionListItem,
+  type SessionsPage,
+  unarchiveSession,
+  unpinSession,
+} from '../../query/sessions';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { radii, spacing, typography, useTheme } from '../../theme';
@@ -59,6 +72,7 @@ export const ChatNavigationDrawer = memo(function ChatNavigationDrawer({
 }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { width: windowWidth } = useWindowDimensions();
   const { colors, elevation } = useTheme();
   const m = useMessages();
@@ -68,7 +82,10 @@ export const ChatNavigationDrawer = memo(function ChatNavigationDrawer({
   const drawerWidth = Math.min(windowWidth * 0.94, 420);
   const drawerRef = useRef<DrawerLayoutMethods>(null);
   const drawerActive = useRef(false);
+  const actionBusyRef = useRef(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [actionSessionId, setActionSessionId] = useState('');
+  const [snackMsg, setSnackMsg] = useState('');
 
   const sessionsQuery = useInfiniteQuery({
     queryKey: queryKeys.drawerSessions(activeGatewayId ?? '', '', ''),
@@ -148,6 +165,64 @@ export const ChatNavigationDrawer = memo(function ChatNavigationDrawer({
   }, [sessionsQuery.fetchNextPage, sessionsQuery.hasNextPage, sessionsQuery.isFetchingNextPage]);
   const { onEndReached, onMomentumScrollBegin } = useFlatListEndReached(loadMore);
 
+  const runSessionAction = useCallback(async (session: SessionListItem, action: ListItemAction) => {
+    if (actionBusyRef.current) return;
+    actionBusyRef.current = true;
+    setActionSessionId(session.key);
+    const isCurrent = session.key === currentConversationId;
+    try {
+      if (action.key === 'pin') {
+        await pinSession(session.key);
+        setSnackMsg(m.sessionActions.sessionPinned);
+      } else if (action.key === 'unpin') {
+        await unpinSession(session.key);
+        setSnackMsg(m.sessionActions.sessionUnpinned);
+      } else if (action.key === 'archive') {
+        await archiveSession(session.key);
+        setSnackMsg(m.sessionActions.sessionArchived);
+      } else if (action.key === 'unarchive') {
+        await unarchiveSession(session.key);
+        setSnackMsg(m.sessionActions.sessionUnarchived);
+      } else if (action.key === 'delete') {
+        await deleteSession(session.key);
+        setSnackMsg(m.sessionActions.sessionDeleted);
+      } else {
+        return;
+      }
+      await refreshSessionsList(queryClient);
+      if (isCurrent && (action.key === 'archive' || action.key === 'delete')) {
+        onDismiss();
+        onNewChat();
+      }
+    } catch (error) {
+      const fallback = action.key === 'pin' ? m.sessionActions.failedToPin
+        : action.key === 'unpin' ? m.sessionActions.failedToUnpin
+          : action.key === 'archive' ? m.sessionActions.failedToArchive
+            : action.key === 'unarchive' ? m.sessionActions.failedToUnarchive
+              : m.sessionActions.failedToDelete;
+      setSnackMsg(error instanceof Error ? error.message : fallback);
+    } finally {
+      actionBusyRef.current = false;
+      setActionSessionId('');
+    }
+  }, [currentConversationId, m.sessionActions, onDismiss, onNewChat, queryClient]);
+
+  const handleSessionAction = useCallback((session: SessionListItem, action: ListItemAction) => {
+    if (action.key !== 'delete') {
+      void runSessionAction(session, action);
+      return;
+    }
+    const name = sessionDisplayName(session, m.sessions.untitled);
+    Alert.alert(m.deleteDialog.title, t(m.deleteDialog.message, { name }), [
+      { text: m.deleteDialog.cancel, style: 'cancel' },
+      {
+        text: m.deleteDialog.delete,
+        style: 'destructive',
+        onPress: () => { void runSessionAction(session, action); },
+      },
+    ]);
+  }, [m.deleteDialog, m.sessions.untitled, runSessionAction]);
+
   const renderSession = useCallback(({ item }: { item: SessionListRow }) => {
     if (item.type === 'section') {
       return (
@@ -158,26 +233,55 @@ export const ChatNavigationDrawer = memo(function ChatNavigationDrawer({
     }
     const session = item.session;
     const current = session.key === currentConversationId;
+    const busy = session.key === actionSessionId;
+    const pinned = session.status === 'pinned';
+    const archived = session.status === 'archived';
+    const title = sessionDisplayName(session, m.sessions.untitled);
+    const actions: ListItemAction[] = [
+      pinned
+        ? { key: 'unpin', icon: 'pin-off-outline', label: m.sessionActions.unpin }
+        : { key: 'pin', icon: 'pin-outline', label: m.sessionActions.pin },
+      archived
+        ? { key: 'unarchive', icon: 'archive-arrow-up-outline', label: m.sessionActions.unarchive }
+        : { key: 'archive', icon: 'archive-arrow-down-outline', label: m.sessionActions.archive },
+      { key: 'delete', icon: 'trash-can-outline', label: m.sessionActions.delete, destructive: true },
+    ];
     return (
-      <Pressable
-        style={({ pressed }) => [
+      <ListItemMenu
+        title={title}
+        actions={actions}
+        onActionPress={action => handleSessionAction(session, action)}
+        enabled={!actionBusyRef.current}
+      >
+        {openMenu => <View style={[
           styles.sessionRow,
           current && { backgroundColor: colors.surface.active },
-          pressed && { backgroundColor: colors.surface.pressed },
-        ]}
-        onPress={() => chooseSession(session.key)}
-        accessibilityRole="button"
-        accessibilityState={{ selected: current }}
-      >
-        <View style={styles.sessionCopy}>
-          <Text style={[styles.sessionTitle, { color: colors.text.primary }]} numberOfLines={1}>
-            {sessionDisplayName(session, m.sessions.untitled)}
-          </Text>
-        </View>
-        {current ? <View style={[styles.currentDot, { backgroundColor: colors.accent.primary }]} /> : null}
-      </Pressable>
+        ]}>
+          <Pressable
+            style={({ pressed }) => [styles.sessionMain, pressed && { backgroundColor: colors.surface.pressed }]}
+            onPress={() => chooseSession(session.key)}
+            onLongPress={openMenu}
+            delayLongPress={350}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityHint={m.listInteraction.moreMenu}
+            accessibilityState={{ selected: current, busy }}
+          >
+            <View style={styles.sessionCopy}>
+              <Text style={[styles.sessionTitle, { color: colors.text.primary }]} numberOfLines={1}>
+                {title}
+              </Text>
+            </View>
+            {busy ? <ActivityIndicator size={16} /> : <>
+              {pinned ? <Icon source="pin" size={13} color={colors.accent.primary} /> : null}
+              {current ? <View style={[styles.currentDot, { backgroundColor: colors.accent.primary }]} /> : null}
+            </>}
+          </Pressable>
+        </View>}
+      </ListItemMenu>
     );
-  }, [chooseSession, colors, currentConversationId, m.sessions.untitled]);
+  }, [actionSessionId, chooseSession, colors, currentConversationId, handleSessionAction,
+    m.listInteraction.moreMenu, m.sessionActions, m.sessions.untitled]);
 
   const renderFooter = useCallback(() => sessionsQuery.isFetchingNextPage
     ? <View style={styles.listLoader}><ActivityIndicator size="small" /></View>
@@ -281,6 +385,7 @@ export const ChatNavigationDrawer = memo(function ChatNavigationDrawer({
             contentContainerStyle={styles.listContent}
             data={sessionRows}
             renderItem={renderSession}
+            extraData={actionSessionId}
             keyExtractor={item => item.key}
             ListEmptyComponent={renderEmpty}
             ListFooterComponent={renderFooter}
@@ -313,6 +418,9 @@ export const ChatNavigationDrawer = memo(function ChatNavigationDrawer({
               <Text style={[styles.newChatText, { color: colors.text.primary }]}>{copy.newChat}</Text>
             </Pressable>
           </View>
+          <AppToast visible={Boolean(snackMsg)} onDismiss={() => setSnackMsg('')}>
+            {snackMsg}
+          </AppToast>
         </View>
       )}
     >
@@ -332,7 +440,8 @@ const styles = StyleSheet.create({
   list: { flex: 1 },
   listContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
   timelineLabel: { ...typography.caption, marginTop: spacing.md, marginBottom: spacing.xs, paddingHorizontal: spacing.sm },
-  sessionRow: { minHeight: 50, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, marginVertical: spacing.xxs },
+  sessionRow: { minHeight: 50, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', marginVertical: spacing.xxs },
+  sessionMain: { minHeight: 50, flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingLeft: spacing.md, paddingRight: spacing.xs },
   sessionCopy: { flex: 1, minWidth: 0 },
   sessionTitle: { ...typography.ui, fontWeight: '500' },
   currentDot: { width: 6, height: 6, borderRadius: 3 },

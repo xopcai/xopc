@@ -442,9 +442,7 @@ export const ChatComposer = memo(function ChatComposer({
 
   const router = useRouter();
   const surface = colors.surface.elevated;
-  const border = colors.border.default;
   const accent = colors.accent.primary;
-  const shellBorder = isExpanded || mode === 'voice' ? colors.border.strong : border;
   const voiceToggleDisabled = disabled || streaming || voiceInteractionActive || call.phase !== 'idle';
   const toggleMode = useCallback(() => {
     if (voiceToggleDisabled) return;
@@ -677,7 +675,6 @@ export const ChatComposer = memo(function ChatComposer({
             styles.contextNotice,
             {
               backgroundColor: colors.surface.input,
-              borderColor: colors.semantic.warning,
             },
           ]}
           accessibilityRole="alert"
@@ -717,11 +714,11 @@ export const ChatComposer = memo(function ChatComposer({
           styles.shell,
           !embedded && elevation.raised,
           embedded && styles.embeddedShell,
-          { backgroundColor: surface, borderColor: shellBorder },
+          { backgroundColor: surface },
         ]}
       >
         {contextControl ? (
-          <View style={[styles.scopeRail, { borderBottomColor: colors.border.subtle }]}>
+          <View style={styles.scopeRail}>
             {contextControl}
           </View>
         ) : null}
@@ -775,7 +772,6 @@ export const ChatComposer = memo(function ChatComposer({
                 styles.holdPadExpanded,
                 {
                   backgroundColor: voiceInteractionActive ? colors.surface.active : colors.surface.input,
-                  borderColor: colors.border.subtle,
                 },
               ]}
               {...voice.panHandlers}
@@ -806,7 +802,6 @@ export const ChatComposer = memo(function ChatComposer({
                 styles.holdPadCompact,
                 {
                   backgroundColor: voiceInteractionActive ? colors.surface.active : colors.surface.input,
-                  borderColor: colors.border.subtle,
                 },
               ]}
               {...voice.panHandlers}
@@ -838,23 +833,20 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxs,
   },
   shell: {
-    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radii.xl,
     overflow: 'hidden',
   },
   embeddedWrap: { paddingHorizontal: spacing.sm, paddingTop: spacing.sm, paddingBottom: spacing.sm },
   embeddedShell: { borderRadius: radii.lg },
   scopeRail: {
-    minHeight: 36,
+    minHeight: 32,
     justifyContent: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
   contextNotice: {
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radii.lg,
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -934,7 +926,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   holdPadCompact: {
     flex: 1,

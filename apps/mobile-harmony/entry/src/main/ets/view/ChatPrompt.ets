@@ -31,7 +31,6 @@ export struct XopcChatPrompt {
         }
         if (this.model.error) { Text(this.model.error).fontSize(12).fontColor($r('app.color.danger')) }
       }
-    }.padding(12).width('92%').borderRadius(16).backgroundColor($r('app.color.panel'))
-      .border({ width: 1, color: $r('app.color.border_subtle') }).margin({ bottom: 8 })
+    }.padding(12).width('92%').borderRadius(16).backgroundColor($r('app.color.grouped')).margin({ bottom: 8 })
   }
 }

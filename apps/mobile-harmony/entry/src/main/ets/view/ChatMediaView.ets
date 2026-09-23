@@ -185,7 +185,7 @@ export struct XopcChatMediaView {
           }.width('100%').constraintSize({ minHeight: 48 }).padding({ left: 12, right: 12 })
         }.id('chat-preview-' + this.file.id).width('100%').padding(0)
           .backgroundColor(this.embedded ? Color.Transparent : $r('app.color.input'))
-          .border({ width: this.embedded ? 0 : 0.5, color: $r('app.color.border_subtle'), radius: 10 })
+          .borderRadius(this.embedded ? 0 : 10)
           .enabled(!this.busy && this.previewable())
           .accessibilityText($r('app.string.chat_preview_file', this.file.name)).onClick((): void => { this.openPreview(); })
       } else if (this.picture) {

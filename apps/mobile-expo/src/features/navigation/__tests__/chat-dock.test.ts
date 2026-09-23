@@ -149,7 +149,7 @@ it('places composer and tabs inside one surface, preserving navigator state and 
   expect(options?.tabBarBackground).toBeUndefined();
   expect(options?.tabBarStyle).toEqual(expect.arrayContaining([expect.objectContaining({
     marginHorizontal: 0, marginBottom: 0, height: TAB_DOCK_HEIGHT + 24,
-    paddingBottom: 28, borderRadius: 0,
+    paddingBottom: 28, borderRadius: 0, borderTopWidth: 0,
   })]));
 });
 

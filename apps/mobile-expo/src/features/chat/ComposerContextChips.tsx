@@ -17,7 +17,7 @@ export const ComposerContextChips = memo(function ComposerContextChips({ refs, o
   const { colors } = useTheme();
   if (!refs.length) return null;
   return <>
-    {refs.map((ref) => <View key={`${ref.kind}:${ref.sourceId}`} style={[styles.chip, { backgroundColor: colors.accent.soft, borderColor: colors.border.subtle }]}>
+    {refs.map((ref) => <View key={`${ref.kind}:${ref.sourceId}`} style={[styles.chip, { backgroundColor: colors.accent.soft }]}>
       <Pressable style={styles.open} accessibilityRole="button" accessibilityLabel={copy.open.replace('{{title}}', ref.title)}
         onPress={() => ref.kind === 'task' ? router.push(`/tasks/${encodeURIComponent(ref.sourceId)}`) : openNoteDetail(router, ref.sourceId)}>
       <Icon source={ref.kind === 'task' ? 'checkbox-marked-circle-outline' : 'notebook-outline'} size={15} color={colors.accent.primary} />
@@ -31,7 +31,7 @@ export const ComposerContextChips = memo(function ComposerContextChips({ refs, o
 });
 
 const styles = StyleSheet.create({
-  chip: { maxWidth: 220, minHeight: 44, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.full, paddingLeft: spacing.sm },
+  chip: { maxWidth: 220, minHeight: 44, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: radii.full, paddingLeft: spacing.sm },
   open: { minHeight: 44, flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   remove: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   label: { flexShrink: 1, ...typography.caption },

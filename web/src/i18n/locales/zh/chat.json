@@ -1142,6 +1142,7 @@
       "changes": "代码改动",
       "evidence": "验证记录",
       "deliverableCount": "{{count}} 个交付物",
+      "fileCount": "{{count}} 个文件",
       "changedFileCount": "修改 {{count}} 个文件",
       "passedCount": "{{count}} 项检查通过",
       "failedCount": "{{count}} 项检查失败",
