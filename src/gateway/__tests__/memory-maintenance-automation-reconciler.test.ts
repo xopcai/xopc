@@ -5,12 +5,17 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { AutomationTrigger } from '../../automations/domain/types.js';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { AutomationService } from '../../automations/index.js';
 import { ConfigSchema, type Config } from '../../config/schema.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { reconcileMemoryMaintenanceAutomations } from '../memory-maintenance-automation-reconciler.js';
 
 function config(workspace: string, enabled = true): Config {
+  const repository = new AgentCatalogRepository();
+  const main = repository.get('main')!;
+  repository.update('main', main.revision, { id: 'main', enabled: true, profile: { name: 'main' }, workspace });
   const base = ConfigSchema.parse({});
   return ConfigSchema.parse({
     ...base,
@@ -25,11 +30,6 @@ function config(workspace: string, enabled = true): Config {
           dailyTime: '02:30',
         },
       },
-    },
-    agents: {
-      ...base.agents,
-      default: 'main',
-      list: [{ id: 'main', enabled: true, profile: { name: 'main' }, workspace }],
     },
   });
 }
@@ -46,6 +46,7 @@ describe('memory maintenance automation reconciliation', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-memory-maintenance-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    seedTestAgentCatalog();
     service = new AutomationService();
     await service.initialize();
   });

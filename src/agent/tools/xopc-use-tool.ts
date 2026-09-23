@@ -69,11 +69,13 @@ const XopcUseToolSchema = Type.Object({
     Type.Literal('task_run'),
     Type.Literal('local_app'),
     Type.Literal('chat_preview'),
+    Type.Literal('agent'),
     Type.Literal('settings'),
   ]),
   command: Type.String({
     description:
       'Context resolve takes an explicit AppContextEnvelope; never guess a current page. Automation draft/repair_draft accept prompt/id, agentId?, language?, idempotencyKey?; simulate explains an automation without running it. Local_app record_acceptance records supplied checks and sourceHash, not proof that checks were executed. ' +
+      'Agent commands: list, get {id}, create {id, profile, workspace?, models?, skills?, tools?, workflows?, runtime?, idempotencyKey?}, update {id, expectedRevision, patch, idempotencyKey?}, set_default {id, expectedRevision, idempotencyKey?}, disable/delete/purge {id, expectedRevision, idempotencyKey?}. Purge also removes on-disk data. ' +
       'Project create accepts idempotencyKey; update/pin/unpin/delete accepts {projectId, expectedVersion?, idempotencyKey?}; stable retries require the original expectedVersion. Delete preserves workspace files and does not confirm external execution stopped. ' +
       'Project milestone writes support idempotencyKey; update_milestone/delete_milestone require original expectedRevision for stable retries, and create_update requires original expectedVersion. TaskRun cancel accepts idempotencyKey and expectedVersion, and does not confirm external execution stopped. ' +
       'Automation diagnostics: get_run/run_events {runId}, metrics {}, product_events {eventType, source?, payloadKey?, payloadValue?, limit?}; payload filters require both key and value. ' +
@@ -86,7 +88,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'context' | 'scene' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'settings';
+export type XopcUseMode = 'context' | 'scene' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -451,6 +453,44 @@ function optionalProjectWorkspaceRootArg(args: Record<string, unknown>): string 
   if (args.workspacePath !== undefined) return optionalString(args.workspacePath);
   if (args.path !== undefined) return optionalString(args.path);
   return undefined;
+}
+
+async function handleAgent(
+  command: string,
+  args: Record<string, unknown>,
+  dryRun: boolean,
+  capabilities: CapabilityDispatcher,
+  deps: XopcUseToolDeps,
+  toolCallId: string,
+  signal: AbortSignal,
+): Promise<unknown> {
+  const readCommands = new Set(['list', 'get']);
+  const writeCommands = new Set(['create', 'update', 'set_default', 'disable', 'delete', 'purge']);
+  if (!readCommands.has(command) && !writeCommands.has(command)) {
+    return { ok: false, error: `Unsupported agent command: ${command}` };
+  }
+
+  const operation = `xopc.agents.${command}`;
+  const { idempotencyKey, ...fields } = args;
+  if (idempotencyKey !== undefined && !trimString(idempotencyKey)) {
+    return { ok: false, error: 'idempotencyKey must be a non-empty string' };
+  }
+  const input = command === 'list' ? {} : fields;
+  if (dryRun && writeCommands.has(command)) {
+    return { ok: true, dryRun: true, action: command, input };
+  }
+  const caller: CapabilityContext = {
+    principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+    surface: 'agent',
+    scopes: writeCommands.has(command) ? ['gateway.admin'] : ['agents.read'],
+    actor: { kind: 'agent', id: deps.getCurrentAgentId?.() ?? 'main' },
+    authorize: deps.authorizeCapability ?? (() => true),
+    signal,
+  };
+  const expected = writeCommands.has(command)
+    ? { ...capabilities.describe(operation, caller), idempotencyKey: trimString(idempotencyKey) ?? toolCallId }
+    : undefined;
+  return capabilities.call(operation, input, caller, expected);
 }
 
 async function handleProject(
@@ -1110,7 +1150,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Operate first-class xopc objects through one safe entry point. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for scenes, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Operate first-class xopc objects through one safe entry point. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for Agents, scenes, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -1307,6 +1347,8 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
           async () =>
             mode === 'scene'
               ? await handleScene(command, args, deps, dryRun)
+              : mode === 'agent'
+                ? await handleAgent(command, args, dryRun, capabilities, deps, toolCallId, signal)
               : mode === 'project'
             ? await handleProject(command, args, deps, dryRun, capabilities)
               : mode === 'automation'

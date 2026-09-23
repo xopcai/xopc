@@ -8,6 +8,7 @@ import {
   DEFAULT_WEB_EXTRACT_MAX_LENGTH,
 } from '../web-extract.js';
 import { ConfigSchema } from '../../../config/schema.js';
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 
 vi.mock('@earendil-works/pi-ai/compat', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@earendil-works/pi-ai/compat')>();
@@ -24,21 +25,17 @@ function htmlBody(inner: string) {
 }
 
 function configWithGlobalModel() {
-  return ConfigSchema.parse({
-    agents: {
-      default: 'main',
-      defaults: {
-        models: { chat: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: [] }, intents: {} },
-      },
-      list: [
-        {
-          id: 'main',
-          profile: { name: 'Main' },
-          workspace: '~/.xopc/workspace/main',
-        },
-      ],
+  initializeTestAgentCatalog({
+    defaults: {
+      models: { chat: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: [] }, intents: {} },
+      skills: { mode: 'all-enabled', exclude: [] },
+      tools: {},
+      workflows: {},
+      runtime: {},
     },
+    agents: [{ id: 'main', enabled: true, profile: { name: 'Main' }, workspace: '~/.xopc/workspace/main' }],
   });
+  return ConfigSchema.parse({});
 }
 
 describe('stripHtmlBoilerplate', () => {

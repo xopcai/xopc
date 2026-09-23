@@ -184,23 +184,11 @@ GUI 首发仅处理 API Key 或平台令牌，不把任意第三方订阅 OAuth 
 
 本地 `models.json` 的自定义模型定义和 catalog 类型需要增加同一个可选 `computerUse` 元数据块（profileId/profileVersion）；GUI 设置页只是编辑/选择这份定义。不存在元数据时，只有用户显式选择已内置的通用 profile 并通过测试才允许使用。用户或远端声明“已验证”不等于 xopc 官方任务评测通过，UI 分别展示声明来源与本地测试结果。
 
-拟议配置片段（合并进现有配置，不是完整可运行文件）：
+Agent 默认模型与工具策略存入 SQLite Agent catalog，通过设置界面、`xopc agents` 或
+`xopc_use(mode="agent")` 修改；`xopc.json` 只保留全局 Computer runtime 配置。例如：
 
 ```json
 {
-  "agents": {
-    "defaults": {
-      "models": {
-        "computerUse": {
-          "primary": "my-dashscope/gui-plus-2026-02-26",
-          "fallbacks": []
-        }
-      },
-      "tools": {
-        "computer_use": { "mode": "ask", "maxCallsPerTurn": 80 }
-      }
-    }
-  },
   "computer": {
     "enabled": false,
     "driver": "cua",
@@ -212,6 +200,10 @@ GUI 首发仅处理 API Key 或平台令牌，不把任意第三方订阅 OAuth 
   }
 }
 ```
+
+对应的 catalog 默认项为 `models.computerUse.primary =
+"my-dashscope/gui-plus-2026-02-26"` 和 `tools.computer_use = { "mode": "ask",
+"maxCallsPerTurn": 80 }`，不再写入 JSON 配置文件。
 
 新增 `models.computerUse` 走现有 defaults → agent override 两层解析，override 为 `null` 表示取消专用路由并恢复继承主模型。不是第三套 preset/继承系统。`vision` intent 继续服务普通图像理解，不把 GUI 操作混入已有 vision 路由。
 

@@ -2,15 +2,15 @@ import { ensureSessionRecord as ensureFixtureConversation } from '../../storage/
 import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-function seedConversationFixture(): void {
-  ensureFixtureConversation("06457abd-5401-40e9-8812-7511ee1ffd70", '', {"agentId":"coder","sourceChannel":"telegram","sourceChatId":"123","sessionType":"chat","routing":{"agentId":"coder","source":"telegram","accountId":"acc_default","peerKind":"direct","peerId":"123"}});
-}
 import {
   resolveEffectiveAgentConfigForAgent,
   resolveEffectiveAgentProfile,
   resolveEffectiveAgentProfileForSession,
 } from '../agent-profile.js';
+
+function seedConversationFixture(): void {
+  ensureFixtureConversation("06457abd-5401-40e9-8812-7511ee1ffd70", '', {"agentId":"coder","sourceChannel":"telegram","sourceChatId":"123","sessionType":"chat","routing":{"agentId":"coder","source":"telegram","accountId":"acc_default","peerKind":"direct","peerId":"123"}});
+}
 
 describe('agent profile', () => {
   beforeEach(() => {

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigSchema } from '../../../config/schema.js';
+import { seedTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { ExecutionEnvironmentStore } from '../../../execution-environments/store.js';
 import {
   closeXopcDatabase,
@@ -15,15 +16,7 @@ import { SessionHydrator } from '../session-hydrator.js';
 
 const CONVERSATION_ID = 'agent:main:webchat:default:direct:missing-environment';
 
-const config = ConfigSchema.parse({
-  agents: {
-    default: 'main',
-    list: [{
-      id: 'main',
-      workspace: '/tmp/xopc-default-workspace',
-    }],
-  },
-});
+const config = ConfigSchema.parse({});
 
 describe('SessionHydrator execution environment safety', () => {
   let stateDir: string | undefined;
@@ -32,6 +25,7 @@ describe('SessionHydrator execution environment safety', () => {
     stateDir = await mkdtemp(`${tmpdir()}/xopc-session-hydrator-`);
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: `${stateDir}/xopc.db` });
+    seedTestAgentCatalog({ agents: [{ id: 'main', workspace: '/tmp/xopc-default-workspace' }] });
   });
 
   afterEach(async () => {

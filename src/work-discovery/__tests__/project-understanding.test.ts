@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { buildActiveProjectContextForPrompt } from '../../agent/context/project-context.js';
 import { ProjectService } from '../../projects/project-service.js';
 import * as workspace from '../../projects/workspace-project.js';
@@ -33,10 +34,11 @@ describe('background project understanding', () => {
     root = mkdtempSync(join(tmpdir(), 'xopc-project-understanding-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(root, 'xopc.db') });
+    seedTestAgentCatalog();
     writeFileSync(join(root, 'README.md'), '# Example\nRun pnpm test.');
     projects = new ProjectService();
     service = new WorkDiscoveryService({ projects, sessions: sessions as unknown as SessionIndex,
-      getConfig: () => ({ agents: { list: [], defaults: { models: { chat: { primary: 'openai/gpt-4o' } } } } }) as unknown as Config, emit });
+      getConfig: () => ({}) as Config, emit });
     vi.spyOn(service, 'getModelProcessingTarget').mockReturnValue({ provider: 'local', remoteModel: false });
     vi.mocked(analyzeWorkContext).mockResolvedValue({ modelRef: 'test', result: {
       projectSummary: 'Example project. See README.md.', currentState: 'Tests run with pnpm test.',

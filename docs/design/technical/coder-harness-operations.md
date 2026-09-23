@@ -30,7 +30,7 @@
 
 ## 可选 Docker 隔离
 
-配置位于 `agents.defaults.runtime.commandIsolation`，也可以由 `agents.list` 对应 agent 的 `runtime.commandIsolation` 覆盖。例如：
+全局配置位于 **设置 → Agent 默认能力** 的 `runtime.commandIsolation`，单个 Agent 可在编辑页覆盖。例如：
 
 ```json
 {
@@ -71,7 +71,7 @@ Git 命令没有专门的拦截或告警；与 Git 拼接的通用危险 shell �
 
 子任务使用父代理已经配置好的读取工具，保留账号、知识库和 Skills 范围；实现任务的文件和命令工具重新绑定至 worktree。运行时复用父回合的授权与调用计数，父代理的 deny、ask 和调用限制不能通过重复创建子任务绕过。子任务只接收 goal/context，不自动复制父会话历史；需要相关背景时应在 context 中传入。
 
-外部执行强制只读，忽略子模型传入的 `readOnly: false` 和 approvalId。宿主已有的 `batchRead` 契约可直接使用；其他 MCP/扩展/连接器操作可由用户在对应工具策略中声明 `readOnly: true`，例如 `agents.defaults.tools["mcp:docs:search"] = { "mode": "allow", "readOnly": true }`。远端 `readOnlyHint` 不授予能力。设置 `readOnly: false` 可显式撤回只读声明；工具契约变化需要重新 describe。该配置是宿主对具体操作的信任声明，不会把实际写操作转换成只读。
+外部执行强制只读，忽略子模型传入的 `readOnly: false` 和 approvalId。宿主已有的 `batchRead` 契约可直接使用；其他 MCP/扩展/连接器操作可在 Agent 默认工具策略或单 Agent 覆盖中声明 `readOnly: true`。远端 `readOnlyHint` 不授予能力。设置 `readOnly: false` 可显式撤回只读声明；工具契约变化需要重新 describe。该配置是宿主对具体操作的信任声明，不会把实际写操作转换成只读。
 
 Workflow 子任务也遵循能力过滤及父代理 deny/ask 策略，默认研究读取；显式 browser_use 可启用浏览器。原先直接在共享目录中执行写入或命令的 workflow toolset 现在会明确失败，需改用独立 worktree 的 implement 委派。无人交互的 workflow 无法满足 ask 策略时会报告需要父代理授权。
 

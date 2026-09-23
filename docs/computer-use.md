@@ -75,23 +75,15 @@ Changing the model affects new control sessions; stop and authorize again to
 switch immediately. Directory refreshes never replace an explicit selection.
 Withdrawn or incompatible selections are reported, not silently replaced.
 
-Equivalent configuration fields (merge these into existing configuration):
+Enable the native runtime in `xopc.json`:
 
 ```json
 {
-  "computer": { "enabled": true },
-  "agents": {
-    "defaults": {
-      "models": {
-        "computerUse": {
-          "primary": "dashscope-cn/gui-plus-2026-02-26",
-          "fallbacks": []
-        }
-      }
-    }
-  }
+  "computer": { "enabled": true }
 }
 ```
+
+Choose the inherited Computer Use model in **Settings → Agent defaults**, or set an explicit override in the Agent editor. Agent model selections are stored in SQLite rather than `xopc.json`.
 
 ## Approval and stopping
 

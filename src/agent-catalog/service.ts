@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { mkdir, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join, parse, relative, resolve } from 'node:path';
 
 import type { AgentDefaults, AgentEntry } from '../agent-config/index.js';
 import { resolveAgentDir, resolveAgentHomeDir, resolveAgentProfileDir, resolveUserPath } from '../agent/agent-scope.js';
@@ -49,6 +49,7 @@ export class AgentCatalogService {
         );
       }
     }
+    await this.resumePendingPurge();
   }
 
   /** Startup recovery for catalog rows committed before their directories were provisioned. */
@@ -66,6 +67,7 @@ export class AgentCatalogService {
         );
       }
     }
+    this.resumePendingPurgeSync();
   }
 
   async update(agentIdRaw: string, patch: Partial<Omit<AgentEntry, 'id'>>): Promise<StoredAgent> {
@@ -77,6 +79,55 @@ export class AgentCatalogService {
     const next = { ...entry, ...patch, id: agentId } as AgentEntry;
     await this.provision(next);
     return this.repository.update(agentId, revision, next);
+  }
+
+  /** Remove data for an Agent that has already been deleted from the catalog. */
+  async purgeEntryData(entry: AgentEntry, defaultAgentId: string): Promise<void> {
+    if (entry.id === DEFAULT_AGENT_ID) throw new Error('Refusing to purge the primary Agent');
+    const workspace = workspaceForEntry(entry, defaultAgentId);
+    const home = resolveAgentHomeDir(entry.id);
+    this.assertSafeWorkspacePurge(workspace);
+    this.assertPurgeTargetsAreNotShared(entry.id, [home, workspace], defaultAgentId);
+    if (existsSync(home)) await rm(home, { recursive: true, force: true });
+    if (existsSync(workspace) && resolve(workspace) !== resolve(home)) {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  }
+
+  validatePurgeEntry(entry: AgentEntry, defaultAgentId: string): void {
+    if (entry.id === DEFAULT_AGENT_ID) throw new Error('Refusing to purge the primary Agent');
+    const workspace = workspaceForEntry(entry, defaultAgentId);
+    this.assertSafeWorkspacePurge(workspace);
+    this.assertPurgeTargetsAreNotShared(entry.id, [resolveAgentHomeDir(entry.id), workspace], defaultAgentId);
+  }
+
+  async resumePendingPurge(): Promise<string[]> {
+    const failed: string[] = [];
+    for (const agentId of this.repository.listPendingPurgeAgentIds()) {
+      const agent = this.repository.get(agentId, { includeDeleted: true });
+      if (!agent) continue;
+      try {
+        await this.purgeEntryData(agent, this.repository.getSettings().defaultAgentId);
+        this.repository.markPurged(agentId);
+      } catch (error) {
+        this.repository.markPurgeFailed(agentId, error instanceof Error ? error.message : String(error));
+        failed.push(agentId);
+      }
+    }
+    return failed;
+  }
+
+  private resumePendingPurgeSync(): void {
+    for (const agentId of this.repository.listPendingPurgeAgentIds()) {
+      const agent = this.repository.get(agentId, { includeDeleted: true });
+      if (!agent) continue;
+      try {
+        this.purgeEntryDataSync(agent, this.repository.getSettings().defaultAgentId);
+        this.repository.markPurged(agentId);
+      } catch (error) {
+        this.repository.markPurgeFailed(agentId, error instanceof Error ? error.message : String(error));
+      }
+    }
   }
 
   setDefault(agentId: string): AgentCatalogSettings {
@@ -105,14 +156,11 @@ export class AgentCatalogService {
     const agentId = normalizeAgentId(agentIdRaw);
     const current = this.repository.get(agentId);
     if (!current) throw new Error(`Agent "${agentId}" not found`);
-    const defaultAgentId = this.repository.getSettings().defaultAgentId;
-    const workspace = workspaceForEntry(current, defaultAgentId);
-    const result = this.repository.delete(agentId);
+    if (options.purge) this.validatePurgeEntry(current, this.repository.getSettings().defaultAgentId);
+    const result = this.repository.delete(agentId, options);
     if (options.purge) {
-      if (agentId === DEFAULT_AGENT_ID) throw new Error('Refusing to purge the primary Agent');
-      const home = resolveAgentHomeDir(agentId);
-      if (existsSync(home)) await rm(home, { recursive: true, force: true });
-      if (existsSync(workspace) && workspace !== home) await rm(workspace, { recursive: true, force: true });
+      const failed = await this.resumePendingPurge();
+      if (failed.includes(agentId)) throw new Error(`Agent "${agentId}" was deleted; data purge is pending retry`);
     }
     return { removedBindings: result.removedBindings };
   }
@@ -133,5 +181,45 @@ export class AgentCatalogService {
     mkdirSync(resolveAgentDir(entry.id), { recursive: true });
     mkdirSync(profileDir, { recursive: true });
     seedAgentProfileMarkdownFiles(profileDir, workspace, { displayName: entry.profile?.name ?? entry.id });
+  }
+
+  private purgeEntryDataSync(entry: AgentEntry, defaultAgentId: string): void {
+    if (entry.id === DEFAULT_AGENT_ID) throw new Error('Refusing to purge the primary Agent');
+    const workspace = workspaceForEntry(entry, defaultAgentId);
+    const home = resolveAgentHomeDir(entry.id);
+    this.assertSafeWorkspacePurge(workspace);
+    this.assertPurgeTargetsAreNotShared(entry.id, [home, workspace], defaultAgentId);
+    if (existsSync(home)) rmSync(home, { recursive: true, force: true });
+    if (existsSync(workspace) && resolve(workspace) !== resolve(home)) {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  }
+
+  private assertSafeWorkspacePurge(workspaceRaw: string): void {
+    const workspace = resolve(workspaceRaw);
+    const stateDir = resolve(resolveStateDir(process.env));
+    const rel = relative(workspace, stateDir);
+    if (workspace === parse(workspace).root || workspace === stateDir
+      || rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) {
+      throw new Error(`Refusing to purge unsafe workspace path: ${workspace}`);
+    }
+  }
+
+  private assertPurgeTargetsAreNotShared(
+    agentId: string,
+    targetsRaw: string[],
+    defaultAgentId: string,
+  ): void {
+    const targets = [...new Set(targetsRaw.map((target) => resolve(target)))];
+    for (const other of this.repository.list()) {
+      if (other.id === agentId) continue;
+      const otherWorkspace = resolve(workspaceForEntry(other, defaultAgentId));
+      if (targets.some((target) => {
+        const rel = relative(target, otherWorkspace);
+        return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+      })) {
+        throw new Error(`Refusing to purge workspace used by Agent "${other.id}"`);
+      }
+    }
   }
 }

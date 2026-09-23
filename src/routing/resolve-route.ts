@@ -5,7 +5,7 @@
  */
 
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
-import type { BindingRule, RouteInput, RouteResult } from './bindings.js';
+import type { RouteInput, RouteResult } from './bindings.js';
 
 /**
  * Route context type (alias for RouteInput)

@@ -17,8 +17,8 @@ xopc config validate
 CLI 使用点路径：
 
 ```bash
-xopc config get agents.default
-xopc config set agents.default main
+xopc config get gateway.port
+xopc config set gateway.port 18790
 xopc config unset gateway.remote.url
 xopc config validate
 ```
@@ -50,19 +50,12 @@ Gateway 会自动重载许多设置，但凭据、扩展、消息通道和运行
 
 ## 直接编辑 JSON
 
-先备份文件，保持 JSON 语法有效，并且一次只改一个部分。最小结构示例：
+先备份文件，保持 JSON 语法有效，并且一次只改一个部分。Agent 定义、全局默认、路由绑定和客户端默认 Agent 不属于 JSON 配置；请通过 **Agent** 页面、对话或 `xopc agents` 管理。
+
+最小 JSON 结构示例：
 
 ```json
 {
-  "agents": {
-    "default": "main",
-    "list": [
-      {
-        "id": "main",
-        "enabled": true
-      }
-    ]
-  },
   "gateway": {
     "port": 18790
   }
@@ -70,6 +63,8 @@ Gateway 会自动重载许多设置，但凭据、扩展、消息通道和运行
 ```
 
 不要用此示例覆盖已有配置，它有意省略了大部分设置。需要查找字段时使用[配置参考](./reference/configuration.md)。
+
+Agent 数据事务性保存在 `~/.xopc/xopc.db`。升级后首次启动时，xopc 会备份并导入旧 Agent JSON 字段、从 `xopc.json` 删除这些字段，之后只使用 SQLite。
 
 ## 敏感信息
 

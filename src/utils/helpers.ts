@@ -1,6 +1,5 @@
 import { resolve, isAbsolute } from 'path';
 import { homedir } from 'os';
-import { loadConfig } from '../config/loader.js';
 import { resolveDefaultAgentId } from '../agent/agent-scope.js';
 import { resolveAgentWorkspaceDir } from '../config/paths.js';
 
@@ -8,7 +7,6 @@ export function getWorkspacePath(customPath?: string): string {
   if (customPath) {
     return customPath.replace(/^~/, homedir());
   }
-  const cfg = loadConfig();
   return resolveAgentWorkspaceDir(resolveDefaultAgentId());
 }
 

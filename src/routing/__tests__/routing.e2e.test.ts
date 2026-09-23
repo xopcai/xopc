@@ -5,8 +5,11 @@
  * - Inbound message → Route resolution → Session key generation → Identity links application
  */
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect } from 'vitest';
 import type { Config } from '../../config/schema.js';
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import type { AgentCatalogRepository } from '../../agent-catalog/repository.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import {
   resolveConversationId,
   getConversationRouting,
@@ -16,11 +19,23 @@ import {
 } from '../index.js';
 import { generateConversationIdWithRouting } from '../../channels/telegram/index.js';
 describe('Routing E2E', () => {
+  let catalog: AgentCatalogRepository;
+
+  beforeEach(() => {
+    catalog = initializeTestAgentCatalog({
+      agents: [
+        { id: 'main', enabled: true },
+        { id: 'researcher', enabled: true },
+        { id: 'work-assistant', enabled: true },
+      ],
+    });
+  });
+
+  afterEach(() => closeXopcDatabase());
+
   describe('Complete Message Flow', () => {
     it('should route Telegram DM message correctly', () => {
       const config: Config = {
-        agents: { default: 'main' },
-        bindings: [],
         session: {
           dmScope: 'per-account-channel-peer',
         },
@@ -58,15 +73,12 @@ describe('Routing E2E', () => {
 
     it('should route Telegram group message with binding', () => {
       const config: Config = {
-        agents: {
-          default: 'main',
-          list: [
-            { id: 'main' },
-            { id: 'researcher' },
-          ],
+        session: {
+          dmScope: 'per-account-channel-peer',
         },
-        bindings: [
-          {
+      } as Config;
+      catalog.replaceBindings([
+        {
             agentId: 'researcher',
             match: {
               channel: 'telegram',
@@ -74,11 +86,7 @@ describe('Routing E2E', () => {
             },
             priority: 100,
           } as BindingRule,
-        ],
-        session: {
-          dmScope: 'per-account-channel-peer',
-        },
-      };
+      ]);
 
       const conversationId = generateConversationIdWithRouting(
         {
@@ -98,8 +106,6 @@ describe('Routing E2E', () => {
 
     it('should apply identity links for cross-platform merging', () => {
       const config: Config = {
-        agents: { default: 'main' },
-        bindings: [],
         session: {
           dmScope: 'per-peer',
           identityLinks: {
@@ -150,9 +156,12 @@ describe('Routing E2E', () => {
 
     it('should handle multi-account isolation', () => {
       const config: Config = {
-        agents: { default: 'main' },
-        bindings: [
-          {
+        session: {
+          dmScope: 'per-account-channel-peer',
+        },
+      } as Config;
+      catalog.replaceBindings([
+        {
             agentId: 'work-assistant',
             match: {
               channel: 'telegram',
@@ -160,11 +169,7 @@ describe('Routing E2E', () => {
             },
             priority: 100,
           } as BindingRule,
-        ],
-        session: {
-          dmScope: 'per-account-channel-peer',
-        },
-      };
+      ]);
 
       // Personal account
       const personalKey = generateConversationIdWithRouting(
@@ -202,8 +207,6 @@ describe('Routing E2E', () => {
 
     it('should handle thread messages', () => {
       const config: Config = {
-        agents: { default: 'main' },
-        bindings: [],
         session: {
           dmScope: 'per-account-channel-peer',
         },
@@ -373,8 +376,6 @@ describe('Routing E2E', () => {
   describe('Edge Cases', () => {
     it('should handle empty bindings', () => {
       const config: Config = {
-        agents: { default: 'main' },
-        bindings: [],
         session: { dmScope: 'per-peer' },
       };
 

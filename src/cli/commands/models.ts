@@ -71,7 +71,7 @@ type ModelsAuthLoginOptions = {
   setDefault?: boolean;
 };
 
-function currentModelRef(config: Config): string | undefined {
+function currentModelRef(_config: Config): string | undefined {
   return getAgentDefaultModelRef();
 }
 
@@ -183,7 +183,6 @@ async function runModelsStatus(options: { json?: boolean }): Promise<void> {
 }
 
 async function runModelsSet(model: string): Promise<void> {
-  const ctx = getContextWithOpts();
   const resolved = resolveModel(model);
   const ref = modelRef(resolved.provider, resolved.id);
   setDefaultModel(ref);

@@ -82,4 +82,21 @@ describe('AgentCatalogRepository', () => {
       surfaceDefaults: { tui: 'coder' },
     });
   });
+
+  it('keeps purge intent recoverable until on-disk cleanup completes', () => {
+    const repository = new AgentCatalogRepository();
+    repository.ensureInitialized();
+    repository.create({ id: 'coder', enabled: true, profile: { name: 'Coder' } }, { ready: true });
+
+    const result = repository.delete('coder', { purge: true });
+
+    expect(result.agent).toMatchObject({ id: 'coder', enabled: false, provisioningState: 'pending' });
+    expect(repository.get('coder')).toBeNull();
+    expect(repository.get('coder', { includeDeleted: true })).toMatchObject({ id: 'coder' });
+    expect(repository.listPendingPurgeAgentIds()).toEqual(['coder']);
+
+    repository.markPurged('coder');
+    expect(repository.get('coder', { includeDeleted: true })).toBeNull();
+    expect(repository.listPendingPurgeAgentIds()).toEqual([]);
+  });
 });

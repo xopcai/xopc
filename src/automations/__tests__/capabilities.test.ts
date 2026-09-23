@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AutomationMutationOutputSchema } from '@xopcai/gateway-contract';
 
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { createProductDispatcher } from '../../capabilities/runtime/product.js';
 import type { CapabilityContext } from '../../capabilities/runtime/dispatcher.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
@@ -23,6 +24,7 @@ beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'xopc-automation-capability-'));
   resetXopcDatabaseSingletonForTest();
   openXopcDatabase({ path: join(directory, 'xopc.db') });
+  seedTestAgentCatalog();
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -93,6 +95,7 @@ describe('automation state capability', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(directory, 'xopc.db') });
+    seedTestAgentCatalog();
     const recreated = await service.create({ id: automation.id, name: 'New identity', trigger: { kind: 'manual' }, action: automation.action });
     expect(recreated.updatedAtMs).toBeGreaterThan(automation.updatedAtMs);
     expect(await invoke('delete')).toEqual(receipt);

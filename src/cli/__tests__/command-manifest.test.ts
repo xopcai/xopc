@@ -15,6 +15,7 @@ import {
 import { loadAllCommands } from '../command-loaders.js';
 import { createDefaultContext } from '../registry.js';
 import pkg from '../../../package.json' with { type: 'json' };
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 
 interface CommandEntry {
   name: string;
@@ -74,6 +75,7 @@ describe('command-manifest', () => {
   let helper: Help;
 
   beforeAll(async () => {
+    initializeTestAgentCatalog();
     program = await buildFullProgram();
     helper = new Help();
   }, 60_000);

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
 import { expect, it } from 'vitest';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { GatewayService } from '../service.js';
 import { createHonoApp } from '../hono/app.js';
@@ -12,8 +13,10 @@ import { requireConversation } from '../../storage/sqlite/conversation-repositor
 it('creates a UUID conversation through authenticated HTTP and the production route registry', async () => {
   const configPath = join(process.env.XOPC_STATE_DIR!, 'http-uuid-config.json');
   const token = 'conversation-uuid-test-token';
+  const repository = new AgentCatalogRepository();
+  const main = repository.get('main')!;
+  repository.update('main', main.revision, { id: 'main', enabled: true, workspace: process.env.XOPC_STATE_DIR });
   const config = ConfigSchema.parse({
-    agents: { default: 'main', list: [{ id: 'main', workspace: process.env.XOPC_STATE_DIR }] },
     gateway: { auth: { mode: 'token', token }, heartbeat: { enabled: false, intervalMs: 1800000 } },
   });
   writeFileSync(configPath, JSON.stringify(config));

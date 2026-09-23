@@ -25,8 +25,7 @@ Then select the Agent in a new client Session, or follow the installed command h
 ## Make it the default
 
 ```bash
-xopc config set agents.default coder
-xopc config validate
+xopc agents default coder
 ```
 
 This affects new Sessions only. Existing Sessions remain assigned to their original Agent.

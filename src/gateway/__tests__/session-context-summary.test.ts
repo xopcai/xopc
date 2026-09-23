@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ConfigSchema } from '../../config/schema.js';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { LocalWorktreeManager } from '../../execution-environments/local-worktree-manager.js';
 import { ExecutionEnvironmentStore } from '../../execution-environments/store.js';
 import { ProjectStore } from '../../projects/project-store.js';
@@ -48,7 +49,8 @@ describe('session context summary', () => {
     directory = mkdtempSync(join(tmpdir(), 'xopc-context-summary-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(directory, 'xopc.db') });
-    config = ConfigSchema.parse({ agents: { list: [{ id: 'main', workspace: directory }] } });
+    seedTestAgentCatalog({ agents: [{ id: 'main', enabled: true, workspace: directory }] });
+    config = ConfigSchema.parse({});
     projectId = new ProjectStore().create({ name: 'Project', workspaceRoot: directory }).id;
     ensureSessionRecord(conversationId, directory, { agentId: "main", projectId, customData: {
       sourceBinding: { kind: 'note', sourceId: 'note-a', version: 'v1', attachedAt: 1 }, secret: 'PRIVATE DATA',

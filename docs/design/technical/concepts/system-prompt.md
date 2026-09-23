@@ -55,7 +55,7 @@ Diagnostic logs include the session, stage, chunk, requested and actual output b
 
 xopc keeps stable instructions and project context ahead of a cache boundary, with heartbeat, channel, interaction, and active-project state after it. Provider adapters turn that boundary into separate cache blocks for Anthropic and Bedrock; implicit-prefix-cache providers receive the same ordering without the internal marker. OpenAI prompt cache routing uses a hash of the stable prompt and ordered tool schemas rather than the conversation id, so equivalent agents can reuse the same prefix while session identity remains independent.
 
-Set `agents.defaults.runtime.promptCache` once, or override `agents.list[].runtime.promptCache` for one Agent. The value is `{ "mode": "off" | "auto", "lifetime": "short" | "long" }`. `auto` lets each provider adapter select its native cache mechanism. Long lifetime can increase cache-write cost and provider-side state retention, so use it only when the stable prefix is reused across longer idle intervals.
+Set `runtime.promptCache` in **Settings → Agent defaults**, or override it for one Agent in the Agent editor. The value is `{ "mode": "off" | "auto", "lifetime": "short" | "long" }`. `auto` lets each provider adapter select its native cache mechanism. Long lifetime can increase cache-write cost and provider-side state retention, so use it only when the stable prefix is reused across longer idle intervals.
 
 ## Shared user context
 

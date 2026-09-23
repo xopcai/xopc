@@ -9,6 +9,7 @@ function seedConversationFixtures(): void {
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import type { Config } from '../../../config/schema.js';
 import { ExtensionRegistryImpl } from '../../../extensions/extension-registry-impl.js';
 import type { MemoryManager } from '../../memory/manager.js';
@@ -160,6 +161,18 @@ describe('external tool providers', () => {
   });
 
   it('enforces flat MCP tool and timeout policies', async () => {
+    initializeTestAgentCatalog({
+      defaults: {
+        models: { chat: { primary: 'openai/gpt-4.1', fallbacks: [] }, intents: {} },
+        skills: { mode: 'all-enabled', exclude: [] },
+        tools: {
+          'mcp:demo:write': { mode: 'deny' },
+          'mcp:demo:read': { mode: 'allow', timeoutMs: 1_000 },
+        },
+        workflows: {},
+        runtime: {},
+      },
+    });
     seedConversationFixtures();
     const callTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'ok' }] }));
     const runtime = {
@@ -177,26 +190,7 @@ describe('external tool providers', () => {
       })),
       callTool,
     } as unknown as SessionMcpRuntime;
-    const config = {
-      agents: {
-        default: 'main',
-        defaults: {
-          models: { chat: { primary: 'openai/gpt-4.1', fallbacks: [] }, intents: {} },
-          skills: { mode: 'all-enabled', exclude: [] },
-          tools: {
-            'mcp:demo:write': { mode: 'deny' },
-            'mcp:demo:read': { mode: 'allow', timeoutMs: 1_000 },
-          },
-          workflows: {},
-          runtime: {},
-        },
-        list: [{
-          id: 'main', enabled: true,
-          profile: { name: 'Main' },
-          workspace: '/tmp/main',
-        }],
-      },
-    } as Config;
+    const config = {} as Config;
     const provider = new McpToolProvider({
       workspace: '/tmp/workspace',
       getConfig: () => config,

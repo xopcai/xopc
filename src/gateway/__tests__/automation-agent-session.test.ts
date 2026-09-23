@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ConfigSchema } from '../../config/schema.js';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ProjectService } from '../../projects/index.js';
 import { SessionStore } from '../../session/index.js';
 import {
@@ -14,16 +15,7 @@ import {
 } from '../../storage/sqlite/index.js';
 import { prepareAutomationAgentSession } from '../automation-agent-session.js';
 
-const minimalConfig = ConfigSchema.parse({
-  agents: {
-    default: 'main',
-    list: [{
-      id: 'main',
-      profile: { name: 'Main' },
-      workspace: '~/default-ws',
-    }],
-  },
-});
+const minimalConfig = ConfigSchema.parse({});
 
 describe('prepareAutomationAgentSession', () => {
   let stateDir: string;
@@ -34,6 +26,7 @@ describe('prepareAutomationAgentSession', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-automation-session-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    seedTestAgentCatalog({ agents: [{ id: 'main', profile: { name: 'Main' }, workspace: '~/default-ws' }] });
     store = new SessionStore({ config: minimalConfig });
     projects = new ProjectService();
   });

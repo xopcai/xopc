@@ -105,7 +105,6 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
         };
       }
 
-      const config = deps.getConfig();
       const parentConversationId = deps.getCurrentConversationId?.()?.trim();
       const agentId = extractProfileAgentId(parentConversationId);
 

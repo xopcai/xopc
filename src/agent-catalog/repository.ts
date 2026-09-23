@@ -195,7 +195,12 @@ export class AgentCatalogRepository {
     });
   }
 
-  update(id: string, expectedRevision: number, entryInput: AgentEntry): StoredAgent {
+  update(
+    id: string,
+    expectedRevision: number,
+    entryInput: AgentEntry,
+    options: { reprovision?: boolean } = {},
+  ): StoredAgent {
     const agentId = normalizeAgentId(id);
     const entry = AgentEntrySchema.parse(entryInput);
     if (entry.id !== agentId) throw new Error('Agent id cannot be changed');
@@ -207,11 +212,20 @@ export class AgentCatalogRepository {
       const parts = splitEntry(entry);
       const now = Date.now();
       const result = db.prepare(`UPDATE agents SET enabled = ?, workspace_override = ?, profile_json = ?,
-        overrides_json = ?, revision = revision + 1, updated_at = ?
+        overrides_json = ?, provisioning_state = ?, provisioning_error = NULL,
+        revision = revision + 1, updated_at = ?
         WHERE id = ? AND revision = ? AND deleted_at IS NULL`)
         .run(entry.enabled === false ? 0 : 1, parts.workspace, parts.profileJson, parts.overridesJson,
-          now, agentId, expectedRevision);
+          options.reprovision ? 'pending' : 'ready', now, agentId, expectedRevision);
       if (Number(result.changes) !== 1) throw new Error('Agent revision conflict');
+      if (options.reprovision) {
+        db.prepare(`INSERT INTO agent_provisioning_jobs
+          (agent_id, operation, state, attempts, last_error, created_at, updated_at)
+          VALUES (?, 'provision', 'pending', 0, NULL, ?, ?)
+          ON CONFLICT(agent_id) DO UPDATE SET operation = 'provision', state = 'pending',
+          attempts = 0, last_error = NULL, updated_at = excluded.updated_at`)
+          .run(agentId, now, now);
+      }
       bumpCatalogRevision(now);
       return rowToAgent(db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as AgentRow);
     });
@@ -328,7 +342,37 @@ export class AgentCatalogRepository {
       .map((row) => row.agent_id);
   }
 
-  delete(agentIdRaw: string): { agent: StoredAgent; removedBindings: number } {
+  listPendingPurgeAgentIds(): string[] {
+    return (getSqliteDatabase().prepare(`SELECT agent_id FROM agent_provisioning_jobs
+      WHERE operation = 'purge' AND state IN ('pending', 'failed') ORDER BY created_at`).all() as Array<{ agent_id: string }>)
+      .map((row) => row.agent_id);
+  }
+
+  markPurged(agentIdRaw: string): void {
+    const agentId = normalizeAgentId(agentIdRaw);
+    runSqliteWriteTransaction((db) => {
+      const result = db.prepare('DELETE FROM agents WHERE id = ? AND deleted_at IS NOT NULL').run(agentId);
+      if (Number(result.changes) !== 1) throw new Error(`Deleted Agent "${agentId}" not found`);
+      bumpCatalogRevision(Date.now());
+    });
+  }
+
+  markPurgeFailed(agentIdRaw: string, errorMessage: string): void {
+    const agentId = normalizeAgentId(agentIdRaw);
+    runSqliteWriteTransaction((db) => {
+      const now = Date.now();
+      const bounded = errorMessage.slice(0, 1_000);
+      db.prepare(`UPDATE agents SET provisioning_state = 'error', provisioning_error = ?,
+        revision = revision + 1, updated_at = ? WHERE id = ? AND deleted_at IS NOT NULL`)
+        .run(bounded, now, agentId);
+      db.prepare(`UPDATE agent_provisioning_jobs SET state = 'failed', attempts = attempts + 1,
+        last_error = ?, updated_at = ? WHERE agent_id = ? AND operation = 'purge'`)
+        .run(bounded, now, agentId);
+      bumpCatalogRevision(now);
+    });
+  }
+
+  delete(agentIdRaw: string, options: { purge?: boolean } = {}): { agent: StoredAgent; removedBindings: number } {
     const agentId = normalizeAgentId(agentIdRaw);
     return runSqliteWriteTransaction((db) => {
       const settings = requireSettings();
@@ -345,9 +389,21 @@ export class AgentCatalogRepository {
       if (!row) throw new Error(`Agent "${agentId}" not found`);
       const removedBindings = Number(db.prepare('DELETE FROM agent_bindings WHERE agent_id = ?').run(agentId).changes);
       db.prepare('DELETE FROM agent_provisioning_jobs WHERE agent_id = ?').run(agentId);
-      db.prepare('DELETE FROM agents WHERE id = ?').run(agentId);
-      bumpCatalogRevision(Date.now());
-      return { agent: rowToAgent(row), removedBindings };
+      const now = Date.now();
+      if (options.purge) {
+        db.prepare(`UPDATE agents SET enabled = 0, provisioning_state = 'pending', provisioning_error = NULL,
+          revision = revision + 1, updated_at = ?, deleted_at = ? WHERE id = ?`).run(now, now, agentId);
+        db.prepare(`INSERT INTO agent_provisioning_jobs
+          (agent_id, operation, state, attempts, last_error, created_at, updated_at)
+          VALUES (?, 'purge', 'pending', 0, NULL, ?, ?)`).run(agentId, now, now);
+      } else {
+        db.prepare('DELETE FROM agents WHERE id = ?').run(agentId);
+      }
+      bumpCatalogRevision(now);
+      const agent = options.purge
+        ? rowToAgent(db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as AgentRow)
+        : rowToAgent(row);
+      return { agent, removedBindings };
     });
   }
 }

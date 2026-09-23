@@ -52,17 +52,6 @@ describe('AgentToolsFactory', () => {
       getConfig: () =>
         ConfigSchema.parse({
           browser: { enabled: false, driver: { kind: 'extension' } },
-          agents: {
-            default: 'main',
-            list: [
-              {
-                id: 'main',
-                enabled: true,
-                profile: { name: 'Main' },
-                workspace: '/tmp/xopc-tools-factory-test',
-              },
-            ],
-          },
         }),
     });
 

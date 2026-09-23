@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigSchema } from '../../../config/schema.js';
+import { seedTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { LocalWorktreeManager } from '../../../execution-environments/local-worktree-manager.js';
 import { ProjectStore } from '../../../projects/project-store.js';
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
@@ -33,7 +34,7 @@ describe('Source-driven task follow-up', () => {
   const sources = () => new TaskSourceRegistry([{ id: 'fixture_thread', label: 'Fixture source',
     normalize: reference => reference, authorized: () => listAccounts().length > 0,
     accountIds: () => ['account'], listAccounts, read }]);
-  const config = ConfigSchema.parse({ agents: { defaults: { models: { chat: { primary: 'test/model' } }, runtime: { commandIsolation: { mode: 'docker', image: `test@sha256:${'a'.repeat(64)}` } } } } });
+  const config = ConfigSchema.parse({});
   const git = (args: string[]) => execFileSync('git', args, { cwd: repository, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
   beforeEach(() => {
@@ -43,6 +44,11 @@ describe('Source-driven task follow-up', () => {
     writeFileSync(join(repository, 'app.js'), 'export const value = 1;\n');
     git(['add', 'app.js']); git(['commit', '-m', 'fixture']);
     resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(directory, 'state.db') });
+    seedTestAgentCatalog({ defaults: {
+      models: { chat: { primary: 'test/model', fallbacks: [] }, intents: {} },
+      skills: { mode: 'selected', include: [] }, tools: {}, workflows: {},
+      runtime: { commandIsolation: { mode: 'docker', image: `test@sha256:${'a'.repeat(64)}` } },
+    } });
     const project = new ProjectStore().create({ name: 'Development fixture', workspaceRoot: repository });
     conversationId = createConversation({ agentId: 'main', sourceChannel: 'webchat', sourceChatId: 'test' }).key;
     revision = 1;

@@ -17,9 +17,8 @@ export async function checkWorkspaceStatus(ctx: DoctorContext): Promise<CheckRes
     };
   }
 
-  let config;
   try {
-    config = loadConfig(ctx.configPath);
+    loadConfig(ctx.configPath);
   } catch {
     return {
       id: 'workspace-status',

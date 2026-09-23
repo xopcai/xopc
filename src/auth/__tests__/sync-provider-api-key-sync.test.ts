@@ -18,7 +18,7 @@ vi.mock('../../config/paths.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../config/paths.js')>();
   return {
     ...actual,
-    resolveAgentAuthProfilesPath: (_config: unknown, agentId: string) =>
+    resolveAgentAuthProfilesPath: (agentId: string) =>
       join(tmpRoot, 'agents', agentId, 'auth-profiles.json'),
     resolveAuthProfilesPath: () => join(tmpRoot, 'global', 'auth-profiles.json'),
     resolveOAuthPath: (p: string) => join(tmpRoot, 'oauth', `${p.toLowerCase()}.json`),

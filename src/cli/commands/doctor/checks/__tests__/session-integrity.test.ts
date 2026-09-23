@@ -4,11 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { ConfigSchema } from '../../../../../config/schema.js';
+import { seedTestAgentCatalog } from '../../../../../agent-catalog/test-support.js';
 import { SessionStore } from '../../../../../session/store.js';
-import { closeXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../../storage/sqlite/connection.js';
+import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../../storage/sqlite/connection.js';
 import { checkSessionIntegrity } from '../session-integrity.js';
 
-const testConfig = ConfigSchema.parse({ agents: { default: 'coder', list: [{ id: 'coder' }] } });
+const testConfig = ConfigSchema.parse({});
 
 describe('checkSessionIntegrity', () => {
   it('scans standalone agent session directories outside agents.list', async () => {
@@ -20,6 +21,8 @@ describe('checkSessionIntegrity', () => {
 
     try {
       await writeFile(configPath, '{}\n');
+      openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+      seedTestAgentCatalog({ defaultAgentId: 'coder', agents: [{ id: 'coder' }] });
       const standaloneStore = new SessionStore({ config: testConfig, agentId: 'coder' });
       await standaloneStore.initialize();
       await standaloneStore.saveMessages("210952aa-293a-4cd6-85b0-8c68d7087964", [
