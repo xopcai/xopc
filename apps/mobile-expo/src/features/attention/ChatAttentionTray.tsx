@@ -45,7 +45,7 @@ export function ChatAttentionTray({
   }, [gatewayId, items]);
 
   const runAction = useCallback((action: HomeAction) => {
-    if (action.type === 'open' || action.type === 'review_judgment') setSheetVisible(false);
+    if (action.type === 'open') setSheetVisible(false);
     actions.runAction(action);
   }, [actions]);
 

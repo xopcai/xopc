@@ -151,7 +151,7 @@ export function readPostCompactionContext(params: {
   let agentId = params.agentId;
   if (!agentId && params.conversationId) {
     try {
-      agentId = resolveEffectiveAgentProfileForSession(cfg, params.conversationId).agentId;
+      agentId = resolveEffectiveAgentProfileForSession(params.conversationId).agentId;
     } catch {
       return null;
     }
@@ -159,7 +159,7 @@ export function readPostCompactionContext(params: {
   if (!agentId) {
     return null;
   }
-  const agentsPath = join(resolveAgentProfileDir(cfg, agentId), 'AGENTS.md');
+  const agentsPath = join(resolveAgentProfileDir(agentId), 'AGENTS.md');
   const resolved = resolve(agentsPath);
   try {
     const content = readFileSync(resolved, 'utf-8');

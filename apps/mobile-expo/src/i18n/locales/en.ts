@@ -1348,7 +1348,7 @@ export const en = {
     attentionActionFailed: 'Could not update this issue',
     taskDefinition: 'Definition of done',
     taskCurrentPlan: 'Current plan',
-    taskNextCheck: 'Next proactive check',
+    taskNextCheck: 'Next follow-up check',
     taskExpectedOutputs: 'Expected outputs',
     taskRelations: 'Task relationships',
     taskDependencies: 'Dependencies',

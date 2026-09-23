@@ -30,7 +30,7 @@ P1 让用户听全会议、随时补听，P2 让会议结论进入后续工作�
 | 移动原生 PCM 与中断处理 | `apps/mobile-expo/modules/xopc-voice/`、`apps/mobile-expo/src/features/voice/native-audio-session.ts` | 增加原生持久录音模式；不要绕回 JS 持久化每帧音频 |
 | 移动短录音、设备配对 | `apps/mobile-expo/src/features/chat/voiceRecording.ts`、`apps/mobile-expo/src/query/voice.ts` | 复用权限/设备连接，会议录音生命周期独立于聊天组件 |
 | 域事件表和任务派发 | `domain_outbox`、`src/tasks/task-outbox-dispatcher.ts` | 提升为通用域事件派发；目前 source 固定 tasks，不能直接塞会议事件 |
-| 主动场景、授权来源与去重 | `src/proactive/{scenarios,events,execution}/` | 扩展会议准备/跟进场景，不另建轮询系统 |
+| 场景、授权来源与去重 | `src/scenes/` | 扩展会议准备/跟进场景，不另建轮询系统 |
 
 当前 `publishAutomationProductEvent` 是内存监听广播，不等于已持久交付。当前转写 `sequence` 属于整场会议，修复会重排；新引用仍必须携带不可变修订，不能只存一个 sequence。
 
@@ -48,7 +48,7 @@ flowchart TB
     Summary --> Project[会前准备与跨会议比较]
     Summary --> Task[现有任务应用服务]
     Task --> Outbox[现有域事件可靠投递]
-    Outbox --> Proactive[现有主动场景与通知]
+    Outbox --> Scene[现有场景与通知]
 ```
 
 | 决策 | 采用方案 | 取舍 |

@@ -1,11 +1,10 @@
 /**
  * Route resolution
  *
- * Combines binding rules, identity links, and config to pick an agent and session keys.
+ * Combines catalog binding rules, identity links, and session config to pick an agent.
  */
 
-import { resolveDefaultAgentId as resolveDefaultAgentIdFromConfig } from '../agent/agent-scope.js';
-import type { Config } from '../config/schema.js';
+import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import type { BindingRule, RouteInput, RouteResult } from './bindings.js';
 
 /**
@@ -57,25 +56,9 @@ export interface SessionConfig {
 }
 
 /**
- * Agent list and default id from config.
- */
-export interface AgentConfig {
-  /** Default agent id */
-  default?: string;
-  /** Registered agents */
-  list?: Array<{
-    id: string;
-    enabled?: boolean;
-    [key: string]: unknown;
-  }>;
-}
-
-/**
  * Subset of app config used for routing.
  */
 export interface RoutingConfig {
-  agents?: AgentConfig;
-  bindings?: BindingRule[] | any[];
   session?: SessionConfig;
 }
 
@@ -143,38 +126,31 @@ export function applyIdentityLinks(
 }
 
 /**
- * Default agent id from config (`agents.default`, `list[].default`, or `main`).
+ * Default Agent id from the catalog.
  */
-export function getDefaultAgentId(config: RoutingConfig): string {
-  return resolveDefaultAgentIdFromConfig(config as Config);
+export function getDefaultAgentId(): string {
+  return new AgentCatalogRepository().getSettings().defaultAgentId;
 }
 
-/**
- * Whether `agentId` appears in the enabled agent list (or list is absent).
- */
-export function agentExists(agentId: string, config: RoutingConfig): boolean {
-  if (!config.agents?.list) {
-    return true; // No list: treat every id as valid
-  }
-  
-  return config.agents.list.some(
-    (agent) => agent.enabled !== false && agent.id.toLowerCase() === agentId.toLowerCase()
-  );
+/** Whether `agentId` is enabled and fully provisioned. */
+export function agentExists(agentId: string): boolean {
+  const agent = new AgentCatalogRepository().get(agentId);
+  return agent?.enabled !== false && agent?.provisioningState === 'ready';
 }
 
 /**
  * Return `agentId` if listed, otherwise the default agent id.
  */
-export function pickFirstExistingAgentId(agentId: string, config: RoutingConfig): string {
+export function pickFirstExistingAgentId(agentId: string): string {
   if (!agentId) {
-    return getDefaultAgentId(config);
+    return getDefaultAgentId();
   }
   
-  if (agentExists(agentId, config)) {
+  if (agentExists(agentId)) {
     return agentId.toLowerCase();
   }
   
-  return getDefaultAgentId(config);
+  return getDefaultAgentId();
 }
 
 /**
@@ -206,6 +182,7 @@ export function buildRouteConversationId(
  */
 export function resolveRoute(input: ResolveRouteInput): ResolveRouteResult {
   const { config, threadId } = input;
+  const catalog = new AgentCatalogRepository().snapshot();
   
   const channel = (input.channel ?? '').trim().toLowerCase() || 'unknown';
   const accountId = normalizeAccountId(input.accountId);
@@ -214,9 +191,7 @@ export function resolveRoute(input: ResolveRouteInput): ResolveRouteResult {
   
   const peerId = applyIdentityLinks(rawPeerId, channel, config.session?.identityLinks ?? {});
   
-  const rules = Array.isArray(config.bindings)
-    ? parseBindingRules({ bindings: config.bindings })
-    : [];
+  const rules = parseBindingRules({ bindings: catalog.bindings });
   
   const bindingResult = resolveBindingRoute(
     {
@@ -229,10 +204,12 @@ export function resolveRoute(input: ResolveRouteInput): ResolveRouteResult {
       memberRoleIds: input.memberRoleIds,
     },
     rules,
-    getDefaultAgentId(config)
+    catalog.defaultAgentId
   );
   
-  const agentId = pickFirstExistingAgentId(bindingResult.agentId, config);
+  const agentId = catalog.agents.some((agent) => agent.enabled !== false && agent.id === bindingResult.agentId)
+    ? bindingResult.agentId
+    : catalog.defaultAgentId;
   
   const dmScope = config.session?.dmScope ?? 'main';
 

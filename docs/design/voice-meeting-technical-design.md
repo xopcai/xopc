@@ -44,7 +44,7 @@ flowchart TB
     Read --> Notes[笔记详情]
     Read --> Conversion[行动转换服务]
     Conversion --> Tasks[现有 TaskApplicationService]
-    Tasks --> Proactive[现有事件与主动服务]
+    Tasks --> Scene[现有事件与场景服务]
 ```
 
 建议新增模块均置于 `src/discussions/`：`recordingManifest.ts`、`recordingUpload.ts`、`transcriptRevision.ts`、`evidence.ts`、`insightPipeline.ts`、`actionConversion.ts`、`export.ts`。已有 service 负责应用编排，repository 拆分按领域职责组织。

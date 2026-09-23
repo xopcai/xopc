@@ -11,7 +11,7 @@ import { buildSessionTimeline, type SessionTimelineItem } from '../../session/tr
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { loadConfig, getWorkspacePath, saveConfig } from '../../config/index.js';
 import { getAgentDefaultModelRef, type Config } from '../../config/schema.js';
-import { setTuiDefaultAgentConfig } from '../../commands/agents.config.js';
+import { AgentCatalogService } from '../../agent-catalog/service.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
 import { evictEmbeddedSessionRunner } from '../../agent/embedded/session-runner.js';
 import { buildReviewContext, resolveGitRoot } from '../../review/review-git.js';
@@ -189,7 +189,7 @@ export class EmbeddedBackend implements TuiBackend {
     await this.refreshXopcCloudModels();
     const { AgentService } = await import('../../agent/service.js');
     const workspace = this.workspace || getWorkspacePath(config);
-    const modelId = getAgentDefaultModelRef(config);
+    const modelId = getAgentDefaultModelRef();
     const agent = new AgentService(this.bus, {
       workspace,
       model: modelId,
@@ -682,7 +682,7 @@ export class EmbeddedBackend implements TuiBackend {
   async listAgents(): Promise<TuiAgentInfo[]> {
     const config = this.activeConfig();
     const agents = new Map<string, TuiAgentInfo>();
-    for (const entry of listAgentEntries(config)) {
+    for (const entry of listAgentEntries()) {
       if (entry.enabled === false) continue;
       const id = normalizeAgentId(entry.id);
       agents.set(id, {
@@ -694,13 +694,8 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async setTuiDefaultAgent(agentId: string): Promise<{ agentId: string }> {
-    const result = setTuiDefaultAgentConfig(this.activeConfig(), agentId);
-    if (result.ok === false) {
-      throw new Error(result.message);
-    }
-    await saveConfig(result.config);
-    this.config = result.config;
-    return { agentId: result.agentId };
+    new AgentCatalogService().setSurfaceDefault('tui', agentId);
+    return { agentId: agentId.trim().toLowerCase() };
   }
 
   async renameSession(conversationId: string, name: string): Promise<{ ok: boolean }> {
@@ -735,7 +730,7 @@ export class EmbeddedBackend implements TuiBackend {
   async getSessionInfo(conversationId: string): Promise<SessionInfo> {
     if (!this.agent) {
       const config = this.activeConfig();
-      const model = getAgentDefaultModelRef(config);
+      const model = getAgentDefaultModelRef();
       return { model: model ?? undefined };
     }
     try {
@@ -761,7 +756,7 @@ export class EmbeddedBackend implements TuiBackend {
       const errorMessage = err instanceof Error ? err.message : String(err);
       log.warn({ err, conversationId, errorMessage }, `getSessionInfo failed: ${errorMessage}`);
       const config = this.activeConfig();
-      const model = getAgentDefaultModelRef(config);
+      const model = getAgentDefaultModelRef();
       return { model: model ?? undefined };
     }
   }

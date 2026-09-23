@@ -42,7 +42,8 @@ export struct XopcHomeView {
       accessibility.onAnimationReduceStateChange(this.onMotionChange);
     } catch (_) { layoutState.reduceMotion = true; }
     notificationNavigation.onTarget = (route: XopcNotificationRoute): void => {
-      if (route.target.conversationId) this.navigate({ page: 'chat', itemId: route.target.conversationId });
+      if (route.target.kind === 'home') { this.pathStack.clear(); this.tab = 0; }
+      else if (route.target.conversationId) this.navigate({ page: 'chat', itemId: route.target.conversationId });
       else if (route.target.taskId) this.navigate({ page: 'tasks', itemId: route.target.taskId });
       else if (route.target.automationId) this.navigate({ page: 'automations', itemId: route.target.automationId });
     };
@@ -78,8 +79,7 @@ export struct XopcHomeView {
     } else if (page === 'tasks' || page === 'projects' || page === 'notes' || page === 'automations' || page === 'inbox') {
       XopcWorkspaceView({ section: page === 'inbox' ? 'notes' : page === 'tasks' ? 'tasks' : page === 'projects' ? 'projects' : page === 'automations' ? 'automations' : 'notes',
         heading: page === 'inbox' ? $r('app.string.inbox') : page === 'tasks' ? $r('app.string.tasks') : page === 'projects' ? $r('app.string.projects') : page === 'automations' ? $r('app.string.automations') : $r('app.string.notes'),
-        initialId: page === 'inbox' ? '' : (param as XopcMobileRoute).itemId,
-        judgmentId: page === 'inbox' ? (param as XopcMobileRoute).itemId : '',
+        initialId: (param as XopcMobileRoute).itemId,
         noteStatus: page === 'inbox' ? 'inbox' : '', onExit: (): void => { this.pathStack.pop(); } })
     } else if (page === 'files' || page === 'session-files') {
       XopcFilesView({ initialId: page === 'files' ? (param as XopcMobileRoute).itemId : '',

@@ -27,7 +27,7 @@ export class ModelManager {
   private currentProvider: string;
   private sessionModels: Map<string, string> = new Map();
   private fixedSessionModels = new Set<string>();
-  /** Baseline model from `agents.list` / defaults merge when the session agent is created. */
+  /** Baseline model from the Agent catalog/defaults merge when the session Agent is created. */
   private sessionProfileDefaults: Map<string, string> = new Map();
   private sessionProfileFallbacks: Map<string, string[]> = new Map();
 
@@ -43,7 +43,7 @@ export class ModelManager {
    */
   updateFromConfig(config: Config): void {
     this.config = config;
-    const ref = getAgentDefaultModelRef(config);
+    const ref = getAgentDefaultModelRef();
     this.defaultModel = ref ? ref : getDefaultModelSync(config);
     this.sessionProfileDefaults.clear();
     this.sessionProfileFallbacks.clear();

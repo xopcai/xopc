@@ -8,8 +8,8 @@ import { resolveEffectiveAgentProfileForSession, resolveEffectiveAgentProfile } 
 export function buildWorkflowChildTools(childOptions: BuildChildToolsOptions): AgentTool<any, any>[] {
   const config = childOptions.getConfig();
   const profile = config ? childOptions.browserConversationId
-    ? resolveEffectiveAgentProfileForSession(config, childOptions.browserConversationId)
-    : childOptions.agentId ? resolveEffectiveAgentProfile(config, childOptions.agentId) : resolveEffectiveAgentProfileForSession(config, undefined) : undefined;
+    ? resolveEffectiveAgentProfileForSession(childOptions.browserConversationId)
+    : childOptions.agentId ? resolveEffectiveAgentProfile(childOptions.agentId) : resolveEffectiveAgentProfileForSession(undefined) : undefined;
   const childFactory = new AgentToolsFactory({
     workspace: childOptions.workspace,
     bus: childOptions.bus,

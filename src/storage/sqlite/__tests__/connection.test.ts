@@ -88,7 +88,6 @@ describe('openXopcDatabase', () => {
         'task_authority_grants',
         'domain_outbox',
         'context_snapshots',
-        'relationship_settings',
         'interaction_states',
         'user_assertion_slots',
         'user_assertions',

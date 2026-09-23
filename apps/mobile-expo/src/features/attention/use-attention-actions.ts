@@ -12,7 +12,7 @@ import {
 } from '../../query/home';
 import { queryKeys } from '../../query/keys';
 
-type RemoteAttentionAction = Exclude<HomeAction, { type: 'open' | 'review_judgment' }>;
+type RemoteAttentionAction = Exclude<HomeAction, { type: 'open' }>;
 
 export function useAttentionActions() {
   const router = useRouter();
@@ -57,10 +57,6 @@ export function useAttentionActions() {
   const runAction = useCallback((action: HomeAction) => {
     if (action.type === 'open') {
       router.push(mobileRouteForWorkbenchHref(action.href) as never);
-      return;
-    }
-    if (action.type === 'review_judgment') {
-      router.push({ pathname: '/inbox', params: { item: action.itemId } });
       return;
     }
     mutation.mutate(action);

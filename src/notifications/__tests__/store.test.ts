@@ -54,8 +54,10 @@ describe('notification persistence', () => {
     });
     expect(getNotificationDevice('old')).toBeNull();
     expect(current).toMatchObject({ locale: 'zh', preferences: { chatCompleted: true, chatFailed: false } });
+    expect(current.preferences.homeOpportunity).toBe(false);
     expect(current.leaseExpiresAt).toBeGreaterThan(current.updatedAt);
     expect(updateNotificationDevicePreferences('current', { taskCompleted: true })?.preferences.taskCompleted).toBe(true);
+    expect(updateNotificationDevicePreferences('current', { homeOpportunity: true })?.preferences.homeOpportunity).toBe(true);
     expect(listDeliverableNotificationDevices()).toHaveLength(1);
     expect(listDeliverableNotificationDevices(current.leaseExpiresAt + 1)).toHaveLength(0);
   });

@@ -64,7 +64,7 @@ export function resolveWorkspaceStatePathForMarkdownWorkspace(markdownWorkspaceD
 
 /** Resolve workspace state path from config + agent id. */
 export function resolveAgentWorkspaceStatePath(config: Config, agentId: string): string {
-  return resolveWorkspaceStatePath(config, agentId);
+  return resolveWorkspaceStatePath(agentId);
 }
 
 /** Record profile Markdown seed time (idempotent). */

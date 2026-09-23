@@ -60,7 +60,7 @@ export class WorkspaceRuntimeRegistry {
   getOrCreate(resolvedPath: string, requestedAgentId?: string): WorkspaceRuntime {
     const cfg = this.getConfig();
     const agentId = normalizeAgentId(
-      requestedAgentId?.trim() || resolveAgentIdForWorkspacePath(cfg, resolvedPath),
+      requestedAgentId?.trim() || resolveAgentIdForWorkspacePath(resolvedPath),
     );
     const runtimeKey = `${agentId}\u0000${resolvedPath}`;
     const existing = this.runtimes.get(runtimeKey);
@@ -97,7 +97,7 @@ export class WorkspaceRuntimeRegistry {
 
   /**
    * Tear down every runtime (shutdown memory providers) and forget the cache.
-   * Used by `AgentManager.updateAgentDefaults` and `AgentManager.dispose`.
+   * Used by `AgentManager.updateRuntimeConfiguration` and `AgentManager.dispose`.
    */
   async clearAll(): Promise<void> {
     this.runtimes.clear();

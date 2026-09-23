@@ -46,7 +46,7 @@ describe('getToolExecutionTitle', () => {
     ['task_run', 'cancel', 'Stopping task run…', 'Stopped task run'],
     ['local_app', 'validate', 'Checking local app…', 'Checked local app'],
     ['settings', 'open', 'Opening settings…', 'Opened settings'],
-    ['proactive', 'continue_card', 'Continuing proactive work…', 'Continued proactive work'],
+    ['scene', 'check', 'Running scene…', 'Ran scene'],
   ])('describes xopc_use %s/%s in English', (mode, command, running, completed) => {
     expect(title('en', 'xopc_use', { mode, command }, 'running')).toBe(running);
     expect(title('en', 'xopc_use', { mode, command }, 'completed')).toBe(completed);

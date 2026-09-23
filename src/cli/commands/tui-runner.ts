@@ -1,5 +1,6 @@
 import { createGatewayCredential } from '../../gateway/credential.js';
-import { detectMigrations, runBootstrapMigrationsSync } from '../../migrations/runner.js';
+import { detectMigrations } from '../../migrations/runner.js';
+import { bootstrapApplicationStateSync } from '../../bootstrap/application-state.js';
 import type { TuiOptions } from '../../tui/tui-types.js';
 
 export type TuiCliOptions = Record<string, string | boolean | undefined>;
@@ -10,7 +11,7 @@ export interface TuiLaunchOverrides {
 }
 
 export function prepareTuiStartup(configPath: string): void {
-  runBootstrapMigrationsSync(configPath);
+  bootstrapApplicationStateSync(configPath);
   const pendingMigrations = detectMigrations(configPath);
   if (pendingMigrations.length > 0) {
     console.warn(

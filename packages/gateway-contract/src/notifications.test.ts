@@ -25,14 +25,14 @@ describe('notification targets', () => {
       mobile: '/tasks/task%20one',
     },
     {
+      target: { kind: 'home' },
+      web: '/',
+      mobile: '/',
+    },
+    {
       target: { kind: 'automation_run', automationId: 'auto one', runId: 'run/one' },
       web: '/automations?automation=auto%20one&run=run%2Fone',
       mobile: '/automation/runs/run%2Fone',
-    },
-    {
-      target: { kind: 'insight', inboxItemId: 'item?one' },
-      web: '/assistant-work?item=item%3Fone',
-      mobile: '/inbox?item=item%3Fone',
     },
     {
       target: { kind: 'work_discovery', runId: 'run/one', conversationId: 'agent:main' },

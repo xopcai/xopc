@@ -26,11 +26,11 @@ export interface FilePathClassifierContext {
 }
 
 export function buildFilePathClassifierContext(cfg: Config, conversationIdRaw?: string, explicitAgentId?: string): FilePathClassifierContext {
-  const agentId = explicitAgentId ?? extractProfileAgentId(conversationIdRaw, cfg);
+  const agentId = explicitAgentId ?? extractProfileAgentId(conversationIdRaw);
   const stateDir = resolveStateDir();
   return {
     workspaceRoot: '',
-    profileMarkdownRoot: resolveAgentProfileDir(cfg, agentId),
+    profileMarkdownRoot: resolveAgentProfileDir(agentId),
     stateDir,
     skillsDir: resolveSkillsDir(),
     configFilePath: resolveConfigPath(),

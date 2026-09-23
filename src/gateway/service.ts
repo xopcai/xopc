@@ -24,7 +24,7 @@ import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.
 import { listAgentEntries, normalizeAgentId, resolveDefaultAgentId, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import { AgentService } from '../agent/service.js';
 import { getEmbeddedExecutionSession } from '../agent/embedded/execution-context.js';
-import { ensureStarterAgentsInitialized } from '../agent/starter-agents.js';
+import { bootstrapApplicationStateSync } from '../bootstrap/application-state.js';
 import { ChannelManager } from '../channels/manager.js';
 import {
   buildChannelCatalogForConfig,
@@ -73,7 +73,6 @@ import { prewarmModelRegistry } from '../providers/index.js';
 import { ModelCatalogSyncService } from '../providers/model-catalog-sync-service.js';
 import { getXopcCloudCatalogCoordinator } from '../providers/xopc-cloud-catalog-coordinator.js';
 import { collectMediaUrisFromMessages, deleteMediaUris } from '../media/session-references.js';
-import { runBootstrapMigrationsSync } from '../migrations/runner.js';
 import { createLogger, getLogDir, getRuntimeLogStats } from '../utils/logger.js';
 import { subscribeToLogs } from '../utils/logger/log-stream.js';
 import {
@@ -122,7 +121,7 @@ import {
   type GatewayReadinessSnapshot,
 } from './startup-readiness.js';
 import { createGatewayStartupTrace, type GatewayStartupTrace } from './startup-trace.js';
-import { closeXopcDatabase, openXopcDatabase } from '../storage/sqlite/index.js';
+import { closeXopcDatabase } from '../storage/sqlite/index.js';
 import { startConnectorSupervisor, type ConnectorSupervisor } from '../connectors/supervisor.js';
 import {
   startConnectorLearningCoordinator,
@@ -147,6 +146,13 @@ import {
   type ConnectedKnowledgeCoordinator,
 } from '../knowledge/index.js';
 import { EndpointToolRuntime } from '../endpoint-tools/index.js';
+import { HomeIntelligenceHost } from '../home-intelligence/host.js';
+import { HomeAdviceGenerator } from '../home-intelligence/generator.js';
+import { HomeSnapshotBuilder } from '../home-intelligence/snapshot.js';
+import { HomeCapabilityPreflightService } from '../home-intelligence/capability-preflight.js';
+import { listKnowledgeItems } from '../knowledge-memory/index.js';
+import { resolveKnowledgeReadPolicy } from '../user-context/config.js';
+import { listSessionMetadata } from '../storage/sqlite/session-repository.js';
 
 export type {
   GatewayChannelStartupPhase1Metrics,
@@ -168,6 +174,7 @@ export class GatewayService {
   private extensionLoader: ExtensionLoader | null = null;
   private extensionMetadataSnapshot: import('../extensions/extension-metadata-snapshot.js').ExtensionMetadataSnapshot | null = null;
   private sceneHost: GatewaySceneHost | null = null;
+  private homeIntelligenceHost: HomeIntelligenceHost | null = null;
   private sessionIndex: SessionIndex;
   private running = false;
   private startTime = Date.now();
@@ -195,7 +202,7 @@ export class GatewayService {
       const messages = await this.sessionIndex.loadMessages(conversationId);
       const after = await this.sessionIndex.getSessionMetadata(conversationId);
       if (after?.transcriptId !== expectedTranscriptId) throw new Error('Conversation changed while loading voice context');
-      const profile = resolveEffectiveAgentProfileForSession(this.config, conversationId);
+      const profile = resolveEffectiveAgentProfileForSession(conversationId);
       const persona = buildVoicePersonaContext({
         getConfig: () => this.config,
         conversationId,
@@ -347,17 +354,12 @@ export class GatewayService {
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
-    runBootstrapMigrationsSync(this.configPath);
+    bootstrapApplicationStateSync(this.configPath);
     this.config = loadConfig(this.configPath);
     let bootstrapConfigChanged = initializeVoiceDefaults(
       this.config,
       inferProductLanguageFromEnvironment(),
     );
-    const starterResult = ensureStarterAgentsInitialized(this.config);
-    if (starterResult.changed) {
-      this.config = starterResult.config;
-      bootstrapConfigChanged = true;
-    }
     if (sanitizeTunnelConfig(this.config)) {
       bootstrapConfigChanged = true;
     }
@@ -662,6 +664,16 @@ export class GatewayService {
     this._agentService?.refreshUserProfileContext();
   }
 
+  /** Refresh long-lived runtime caches after an Agent catalog mutation. */
+  refreshAgentCatalog(): void {
+    this._agentService?.applyRuntimeConfiguration(this.config);
+    void this.reconcileMemoryMaintenanceAutomations().catch((error) => {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.warn({ err: error, errorMessage }, `Agent catalog refresh failed: ${errorMessage}`);
+    });
+    this.emit('agent.catalog', {});
+  }
+
   private ensureAgentService(): AgentService {
     if (this._agentService) {
       return this._agentService;
@@ -669,7 +681,7 @@ export class GatewayService {
 
     this._agentService = new AgentService(this.bus, {
       workspace: this.workspacePath,
-      model: getAgentDefaultModelRef(this.config),
+      model: getAgentDefaultModelRef(),
       config: this.config,
       sessionStore: this.sessionIndex.getStore(),
       onSessionMetadataUpdated: (conversationId, patch) => {
@@ -735,7 +747,7 @@ export class GatewayService {
 
     this.automationService.setDeps({
       agentService: this._agentService,
-      getDefaultAgentId: () => getDefaultAgentId(this.config),
+      getDefaultAgentId: () => getDefaultAgentId(),
       prepareAgentSession: (input) => prepareAutomationAgentSession(
         this.sessionIndex.getStore(),
         this.projects,
@@ -1117,6 +1129,8 @@ export class GatewayService {
       await this.stop().catch((cleanupError) => log.error({ err: cleanupError }, 'Gateway startup cleanup failed'));
       await this.sceneHost?.stop();
       this.sceneHost = null;
+      this.homeIntelligenceHost?.stop();
+      this.homeIntelligenceHost = null;
       this.stopRealtimeLogBridge?.();
       this.stopRealtimeLogBridge = null;
       setPairingBroadcastSink(null);
@@ -1136,7 +1150,32 @@ export class GatewayService {
     });
 
     log.debug('Starting gateway service...');
-    openXopcDatabase();
+    const homeCapabilities = new HomeCapabilityPreflightService({
+      config: () => this.config,
+      agentId: () => resolveDefaultAgentId(),
+      skills: (agentId) => this.agentService.getAgentSkillAvailability(agentId).skills,
+      principalId: 'local-owner',
+    });
+    this.homeIntelligenceHost = new HomeIntelligenceHost(getSqliteDatabase(), {
+      principal: { ownerId: 'local-owner', workspaceId: this.workspacePath },
+      snapshot: new HomeSnapshotBuilder({
+        projects: () => this.projects.list({ limit: 500 }).items,
+        tasks: () => new TaskRepository().list({ limit: 200 }),
+        knowledge: () => listKnowledgeItems({ statuses: ['active'], limit: 200 }),
+        knowledgePolicy: () => this.config.userContext.knowledgeMemory.enabled
+          ? resolveKnowledgeReadPolicy(this.config.userContext.knowledgeMemory)
+          : { scopes: [], contentSources: [] },
+        sessions: () => listSessionMetadata({ limit: 50, excludeArchived: true }).items,
+      }),
+      generator: new HomeAdviceGenerator(() => this.config),
+      capabilities: () => homeCapabilities.inventory(),
+      resolveCapabilities: (requirements, options) => homeCapabilities.resolve(requirements, options),
+      publish: (type, payload) => this.realtime.broker.publish('gateway', type, payload),
+      notifyOpportunity: (payload) => this.emit('home.opportunity.ready', payload),
+      locale: () => 'en',
+      enabled: () => this.config.userContext.enabled,
+      dispatchTaskRuns: () => this.dispatchTaskRuns(),
+    });
     await this.localApps.recoverPendingReleases();
     const { recoverCapabilityImports } = await import('../imports/runtime.js');
     await recoverCapabilityImports();
@@ -1158,7 +1197,7 @@ export class GatewayService {
 
     const catalogCoordinator = getXopcCloudCatalogCoordinator();
     const catalog = await trace.measure('model-catalog.hydrate', () => catalogCoordinator.hydrate());
-    const defaultModel = getAgentDefaultModelRef(this.config);
+    const defaultModel = getAgentDefaultModelRef();
     if (defaultModel?.startsWith('xopc-cloud/') && catalog.source === 'none') {
       const readiness = await trace.measure('model-catalog.initial-refresh', () =>
         catalogCoordinator.ensure({
@@ -1195,7 +1234,7 @@ export class GatewayService {
       runMessageSent: (to, content, success, error, channel) =>
         this.agentService.outboundCoordinator.invokeOutboundMessageSent(to, content, success, error, channel),
     });
-    this.channelManager.enableOutboundPersistence(getDefaultAgentId(this.config));
+    this.channelManager.enableOutboundPersistence(getDefaultAgentId());
 
     if (this.extensionLoader) {
       this.extensionLoader.setRuntimeContext({
@@ -1292,7 +1331,7 @@ export class GatewayService {
 
     this.automationService.setDeps({
       agentService: this.agentService,
-      getDefaultAgentId: () => getDefaultAgentId(this.config),
+      getDefaultAgentId: () => getDefaultAgentId(),
       prepareAgentSession: (input) => prepareAutomationAgentSession(
         this.sessionIndex.getStore(),
         this.projects,
@@ -1336,7 +1375,7 @@ export class GatewayService {
     });
     this.connectorLearningCoordinator = startConnectorLearningCoordinator({
       getConfig: () => this.config,
-      resolveAgentId: () => resolveDefaultAgentId(this.config),
+      resolveAgentId: () => resolveDefaultAgentId(),
       emit: (type, payload) => this.emit(type, payload),
     });
     this.managedComposioEventPoller = new ManagedComposioEventPoller({
@@ -1348,7 +1387,7 @@ export class GatewayService {
     this.managedComposioEventPoller.start();
     this.connectedKnowledgeCoordinator = startConnectedKnowledgeCoordinator({
       resolvePipelineOptions: () => ({
-        agentId: resolveDefaultAgentId(this.config),
+        agentId: resolveDefaultAgentId(),
         workspaceId: this.currentWorkspacePath,
       }),
     });
@@ -1389,8 +1428,8 @@ export class GatewayService {
     // the in-process map so post-restart revoke/expire still cleans them.
     void import('../share/share-auto.js')
       .then(({ runStagingSweep }) => runStagingSweep(
-        [...new Set([getDefaultAgentId(this.config), ...listAgentEntries(this.config).map(entry => entry.id)])]
-          .map(agentId => resolveAgentWorkspaceDir(this.config, agentId)),
+        [...new Set([getDefaultAgentId(), ...listAgentEntries().map(entry => entry.id)])]
+          .map(agentId => resolveAgentWorkspaceDir(agentId)),
       ))
       .catch((err) => log.warn({ err }, 'Share staging sweep failed'));
 
@@ -1401,6 +1440,7 @@ export class GatewayService {
     }
 
     this.sceneHost?.start();
+    this.homeIntelligenceHost.start();
     log.debug('Gateway service started');
   }
 
@@ -1529,6 +1569,8 @@ export class GatewayService {
     await this.sideChats.disposeAll();
     await this.sceneHost?.stop();
     this.sceneHost = null;
+    this.homeIntelligenceHost?.stop();
+    this.homeIntelligenceHost = null;
     this.realtime.close();
     this.voiceRealtime.close();
 
@@ -1904,6 +1946,11 @@ export class GatewayService {
     return this.workspacePath;
   }
 
+  get homeIntelligence(): HomeIntelligenceHost {
+    if (!this.homeIntelligenceHost) throw new Error('Home intelligence is not running');
+    return this.homeIntelligenceHost;
+  }
+
   get messageBusInstance(): MessageBus {
     return this.bus;
   }
@@ -1967,8 +2014,8 @@ export class GatewayService {
 
   private collectWorkflowAgentIds(): string[] {
     const ids = new Set<string>();
-    ids.add(resolveDefaultAgentId(this.config));
-    for (const entry of listAgentEntries(this.config)) {
+    ids.add(resolveDefaultAgentId());
+    for (const entry of listAgentEntries()) {
       if (entry.enabled === false) continue;
       ids.add(normalizeAgentId(entry.id));
     }
@@ -1976,7 +2023,7 @@ export class GatewayService {
   }
 
   /** Process a message directly through the agent (for CLI mode). */
-  async processDirect(content: string, conversationId = resolveAgentMainConversationId({ agentId: getDefaultAgentId(this.config) })): Promise<string> {
+  async processDirect(content: string, conversationId = resolveAgentMainConversationId({ agentId: getDefaultAgentId() })): Promise<string> {
     return this.agentService.turnDispatcher.processDirect(
       content,
       conversationId,
@@ -1986,6 +2033,17 @@ export class GatewayService {
 
   emit(type: string, payload: unknown): void {
     if (type === 'config.reload') notifyUserContextChange({ kind: 'policy' });
+    if (type === 'connector.learning.updated' && payload && typeof payload === 'object') {
+      const job = payload as Record<string, unknown>;
+      if (job.status === 'completed'
+        && typeof job.sourceInstanceId === 'string'
+        && typeof job.updatedAt === 'string') {
+        this.homeIntelligenceHost?.sourceChanged({
+          sourceInstanceId: job.sourceInstanceId,
+          revision: job.updatedAt,
+        });
+      }
+    }
     this.realtime.broker.publish('gateway', type, payload);
     this.createNotificationService().handleGatewayEvent(type, payload);
   }
@@ -2031,6 +2089,15 @@ export class GatewayService {
       }
       if (event.type.startsWith('task.')) {
         this.emit(event.type, event.payload);
+      }
+      if (event.type.startsWith('task.') || event.type.startsWith('project.')) {
+        const payload = event.payload as Record<string, unknown>;
+        const objectId = event.type.startsWith('task.') ? payload.taskId : payload.projectId;
+        const revision = payload.version ?? payload.revision ?? 'unknown';
+        this.homeIntelligenceHost?.requestRefresh(
+          event.type.startsWith('task.') ? 'task_changed' : 'project_changed',
+          `domain:${event.type}:${String(objectId)}:${String(revision)}`,
+        );
       }
       void this.automationService.triggerEvent(event).catch((err) => {
         const em = err instanceof Error ? err.message : String(err);

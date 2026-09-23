@@ -37,7 +37,7 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
     if (!rootPath) return c.json({ ok: false, error: 'Missing rootPath' }, 400);
     try {
       const preview = await previewWorkDiscoveryRoot(rootPath);
-      const modelRef = getAgentDefaultModelRef(deps.service.currentConfig);
+      const modelRef = getAgentDefaultModelRef();
       if (!modelRef) return c.json({ ok: false, error: 'No default model configured' }, 409);
       const model = resolveModel(modelRef);
       return c.json({

@@ -308,7 +308,7 @@ export function throwCapabilityGenerationFailure(params: ThrowCapabilityGenerati
 export interface BuildNoCapabilityModelConfiguredMessageParams {
   /** Display label, e.g. "image-generation". */
   capabilityLabel: string;
-  /** Config key path, e.g. "agents.defaults.models.imageGeneration". */
+  /** Agent model capability key, e.g. "imageGeneration". */
   modelConfigKey: string;
   providers: ReadonlyArray<CapabilityProviderCandidate>;
   /** Optional env-var lookup, e.g. (id) => PROVIDER_ENV_MAP[id]. */
@@ -319,7 +319,7 @@ export function buildNoCapabilityModelConfiguredMessage(
   params: BuildNoCapabilityModelConfiguredMessageParams,
 ): string {
   const lines: string[] = [
-    `No ${params.capabilityLabel} model configured. Set agents.defaults.models.${params.modelConfigKey} ` +
+    `No ${params.capabilityLabel} model configured. Configure ${params.modelConfigKey} in global Agent defaults ` +
       `or pass modelOverride at call site.`,
   ];
   if (params.providers.length > 0) {

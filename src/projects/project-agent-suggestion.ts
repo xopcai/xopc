@@ -8,7 +8,7 @@ export function suggestProjectDefaultAgentId(input: {
   config: Config;
   kind: ProjectKindInference['kind'];
 }): string | undefined {
-  if (input.kind === 'coding' && agentExists(CODING_PROJECT_AGENT_ID, input.config)) {
+  if (input.kind === 'coding' && agentExists(CODING_PROJECT_AGENT_ID)) {
     return CODING_PROJECT_AGENT_ID;
   }
   return undefined;

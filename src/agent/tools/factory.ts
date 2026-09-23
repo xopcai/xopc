@@ -347,10 +347,10 @@ export class AgentToolsFactory {
     const imageGenerateTool = createImageGenerateTool({
       config: cfg,
       workspace,
-      agentId: options?.agentId ?? (cfg ? resolveDefaultAgentId(cfg) : 'main'),
+      agentId: options?.agentId ?? (cfg ? resolveDefaultAgentId() : 'main'),
     });
     const agentId = options?.agentId;
-    const resolvedAgentId = agentId ?? (cfg ? resolveDefaultAgentId(cfg) : 'main');
+    const resolvedAgentId = agentId ?? (cfg ? resolveDefaultAgentId() : 'main');
     const currentConversationId = () => options?.conversationId ?? this.deps.getCurrentContext?.()?.conversationId;
     const deliveryContext = () => {
       if ((currentConversationId() && getSessionMetadata(currentConversationId()!)?.sessionType === 'heartbeat')) {
@@ -366,7 +366,7 @@ export class AgentToolsFactory {
     };
     const getCommandIsolation = () => {
       const config = this.deps.getConfig?.();
-      return config ? (currentConversationId() ? resolveEffectiveAgentConfigForSession(config, currentConversationId()) : resolveEffectiveAgentConfigForAgent(config, resolvedAgentId)).config.runtime.commandIsolation : undefined;
+      return config ? (currentConversationId() ? resolveEffectiveAgentConfigForSession(currentConversationId()) : resolveEffectiveAgentConfigForAgent(resolvedAgentId)).config.runtime.commandIsolation : undefined;
     };
 
     const externalTools = createDefaultExternalToolGatewayTools({
@@ -711,8 +711,8 @@ export class AgentToolsFactory {
       const dataTools = () => {
         const config = this.deps.getConfig?.();
         const policies = config ? (currentConversationId()
-          ? resolveEffectiveAgentConfigForSession(config, currentConversationId())
-          : resolveEffectiveAgentConfigForAgent(config, resolvedAgentId)).config.tools : undefined;
+          ? resolveEffectiveAgentConfigForSession(currentConversationId())
+          : resolveEffectiveAgentConfigForAgent(resolvedAgentId)).config.tools : undefined;
         if (policies?.data_batch?.mode === 'deny') return [];
         return filterToolsByDisabledSet(core, disabled).filter(tool => policies?.[tool.name]?.mode !== 'deny');
       };

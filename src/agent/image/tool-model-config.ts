@@ -40,7 +40,7 @@ export function hasToolModelConfig(model: ToolModelConfig | undefined): boolean 
 }
 
 export function resolveDefaultModelRef(cfg?: Config): { provider: string; model: string } {
-  const ref = cfg ? getAgentDefaultModelRef(cfg) : undefined;
+  const ref = cfg ? getAgentDefaultModelRef() : undefined;
   if (ref) {
     const p = parseModelRef(ref);
     if (p) {
@@ -76,8 +76,8 @@ function resolveEffectiveModelsConfig(params: {
     return undefined;
   }
   try {
-    const agentId = params.agentId?.trim() || resolveDefaultAgentId(params.cfg);
-    return resolveEffectiveAgentConfigForAgent(params.cfg, agentId).config.models;
+    const agentId = params.agentId?.trim() || resolveDefaultAgentId();
+    return resolveEffectiveAgentConfigForAgent(agentId).config.models;
   } catch {
     return undefined;
   }
@@ -88,7 +88,7 @@ export function resolveConfiguredImageModelConfig(params: {
   agentId?: string;
 }): ToolModelConfig {
   const models = resolveEffectiveModelsConfig(params);
-  const config = models?.imageUnderstanding ?? (params.cfg ? getAgentDefaultImageModelConfig(params.cfg) : undefined);
+  const config = models?.imageUnderstanding ?? (params.cfg ? getAgentDefaultImageModelConfig() : undefined);
   return coerceToolModelConfig(config);
 }
 

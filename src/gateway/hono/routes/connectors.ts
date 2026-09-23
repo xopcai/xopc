@@ -9,6 +9,7 @@ import { resumeApprovedConnectorAction } from '../../../connectors/approval-resu
 import { getMcpOAuthManager } from '../../../agent/mcp/oauth/mcp-oauth-manager.js';
 import { ConfigPersistenceError, persistConfigMutation } from '../../../config/config-mutation.js';
 import type { Config } from '../../../config/schema.js';
+import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 import { startConnectorAuthorization } from '../../../connectors/auth-provider-registry.js';
 import { getConnectorDefinition, listConnectorCatalog, listConnectorProviders } from '../../../connectors/catalog.js';
 import { listComposioConnectorCatalog } from '../../../connectors/composio-catalog.js';
@@ -508,7 +509,7 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const config = service.currentConfig as Config;
     try {
       const policy = getComposioInstallationPolicy(config, c.req.param('toolkit'));
-      const agents = config.agents.list.filter((agent) => agent.enabled).map((agent) => ({
+      const agents = new AgentCatalogRepository().snapshot().agents.filter((agent) => agent.enabled).map((agent) => ({
         id: agent.id,
         name: agent.id,
       }));
@@ -709,7 +710,7 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       const result = await ingestLocalFolderSource({
         config,
         connectorId: c.req.param('id'),
-        agentId: resolveDefaultAgentId(config),
+        agentId: resolveDefaultAgentId(),
       });
       return c.json({ ok: true, payload: result });
     } catch (error) {

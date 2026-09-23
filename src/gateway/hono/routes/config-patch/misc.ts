@@ -14,13 +14,14 @@
  */
 import type { Config } from '../../../../config/schema.js';
 import { ComputerConfigSchema } from '../../../../computer/config.js';
-import { BindingsConfigSchema, BrowserConfigSchema, McpConfigSchema, VoiceConfigSchema } from '../../../../config/schema.js';
+import { BrowserConfigSchema, McpConfigSchema, VoiceConfigSchema } from '../../../../config/schema.js';
+import { BindingsSchema } from '../../../../routing/binding-schema.js';
+import { AgentCatalogService } from '../../../../agent-catalog/service.js';
 import { CredentialResolver } from '../../../../auth/credentials.js';
 import { isMaskedSecretPatchValue } from '../../lib/mask-secret-length.js';
 import { applyToolsWebPatch } from '../../../config-tools-web.js';
 import { mergeTunnelConfigPatch } from '../../../../tunnel/tunnel-config.js';
 import { canonicalizeConfiguredMcpServer } from '../../../../config/mcp-config-normalize.js';
-import { setTuiDefaultAgentConfig } from '../../../../commands/agents.config.js';
 import {
   mergeGatewaySkillsMarketplacePatch,
   mergeSessionConfigPatch,
@@ -144,19 +145,19 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
       return patchError('tui must be an object');
     }
     const tuiPatch = body.tui as Record<string, unknown>;
+    const catalog = new AgentCatalogService();
     if (tuiPatch.defaultAgent !== undefined) {
       if (tuiPatch.defaultAgent === null) {
-        config.tui = { ...config.tui };
-        delete config.tui.defaultAgent;
+        catalog.clearSurfaceDefault('tui');
       } else {
         if (typeof tuiPatch.defaultAgent !== 'string' || !tuiPatch.defaultAgent.trim()) {
           return patchError('tui.defaultAgent must be a non-empty string');
         }
-        const result = setTuiDefaultAgentConfig(config, tuiPatch.defaultAgent);
-        if (result.ok === false) {
-          return patchError(result.message);
+        try {
+          catalog.setSurfaceDefault('tui', tuiPatch.defaultAgent);
+        } catch (error) {
+          return patchError(error instanceof Error ? error.message : String(error));
         }
-        config.tui = result.config.tui;
       }
     }
   }
@@ -302,11 +303,15 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
     if (!Array.isArray(body.bindings)) {
       return patchError('bindings must be an array');
     }
-    const parsed = BindingsConfigSchema.safeParse(body.bindings);
+    const parsed = BindingsSchema.safeParse(body.bindings);
     if (!parsed.success) {
       return patchError(parsed.error.issues.map((i) => i.message).join('; '));
     }
-    config.bindings = parsed.data;
+    try {
+      new AgentCatalogService().replaceBindings(parsed.data);
+    } catch (error) {
+      return patchError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   if (body.mcp !== undefined) {

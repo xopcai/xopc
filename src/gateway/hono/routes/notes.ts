@@ -275,9 +275,9 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     let agentId =
       typeof body.agentId === 'string' && body.agentId.trim()
         ? body.agentId.trim().toLowerCase()
-        : project?.defaultAgentId ?? getDefaultAgentId(routingCfg);
-    if (!agentExists(agentId, routingCfg)) {
-      agentId = getDefaultAgentId(routingCfg);
+        : project?.defaultAgentId ?? getDefaultAgentId();
+    if (!agentExists(agentId)) {
+      agentId = getDefaultAgentId();
     }
 
     const sourceBinding = {

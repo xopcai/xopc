@@ -3,6 +3,7 @@ import {
   normalizeAgentId,
   resolveDefaultAgentId,
 } from '../../../agent/agent-scope.js';
+import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 import {
   buildChannelCatalogForConfig,
   buildChannelCatalogFromSnapshot,
@@ -94,6 +95,7 @@ export function buildSafeBrowserConfigForWeb(browser: unknown) {
 /** Sanitized config snapshot for GET/PATCH `/api/config` (matches persisted `service.currentConfig`). */
 export async function buildSafeWebConfigPayload(service: GatewayService, options: { locale?: string } = {}) {
   const config = service.currentConfig;
+  const agentCatalog = new AgentCatalogRepository().snapshot();
   const extensionLoader =
     typeof service.getExtensionLoader === 'function' ? service.getExtensionLoader() : undefined;
   const snapshot = extensionLoader?.getManifestSnapshot();
@@ -126,8 +128,8 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
   );
   return {
     agents: {
-      defaultId: resolveDefaultAgentId(config),
-      list: listAgentEntries(config)
+      defaultId: resolveDefaultAgentId(),
+      list: listAgentEntries()
         .filter((e) => e.enabled !== false)
         .map((e) => ({
           id: normalizeAgentId(e.id),
@@ -137,7 +139,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
           skills: e.skills,
           workflows: e.workflows,
         })),
-      defaults: config.agents.defaults,
+      defaults: agentCatalog.defaults,
     },
     computer: config.computer,
     channels: channelsPayload,
@@ -225,7 +227,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
       contextPlanning: ContextPlanningConfigSchema.parse(config.userContext?.contextPlanning),
     },
     tui: {
-      defaultAgent: config.tui?.defaultAgent ?? 'coder',
+      defaultAgent: agentCatalog.surfaceDefaults.tui ?? agentCatalog.defaultAgentId,
     },
     tunnel: {
       enabled: config.tunnel?.enabled === true,
@@ -249,7 +251,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
     tts: maskTtsConfigForWeb(config.messages?.tts),
     voice: maskRealtimeVoiceConfigForWeb(config.voice),
     tools: safeToolsWebForGet(config),
-    bindings: Array.isArray(config.bindings) ? config.bindings : [],
+    bindings: agentCatalog.bindings,
     mcp: buildSafeMcpConfigForWeb(config),
   };
 }

@@ -45,6 +45,7 @@ const STANDARD_PREFERENCES: Partial<Record<ProductNotificationType, keyof Notifi
   'task.failed': 'taskFailed', 'task.completed': 'taskCompleted',
   'automation.completed': 'automationCompleted', 'automation.failed': 'automationFailed',
   'work_discovery.completed': true, 'work_discovery.failed': true,
+  'home.opportunity': 'homeOpportunity',
 };
 
 function preferenceAllows(type: ProductNotificationType, preferences: NotificationPreferences): boolean {
@@ -63,6 +64,7 @@ function expoError(result: ExpoResult): string {
 export class NotificationService {
   private timer: ReturnType<typeof setInterval> | null = null;
   private draining = false;
+  private drainAgain = false;
   private lastMaintenanceAt = 0;
 
   constructor(private readonly options: {
@@ -123,7 +125,10 @@ export class NotificationService {
   }
 
   async drain(): Promise<void> {
-    if (this.draining) return;
+    if (this.draining) {
+      this.drainAgain = true;
+      return;
+    }
     this.draining = true;
     try {
       const now = Date.now();
@@ -140,6 +145,10 @@ export class NotificationService {
       log.warn({ err }, 'Notification delivery pass failed');
     } finally {
       this.draining = false;
+      if (this.drainAgain) {
+        this.drainAgain = false;
+        void this.drain();
+      }
     }
   }
 

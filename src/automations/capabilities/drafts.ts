@@ -34,7 +34,7 @@ export function registerAutomationDraftCapabilities(dispatcher: CapabilityDispat
     input: requestSchema.extend({ prompt: z.string().trim().min(1).max(50000) }), output: z.object({ draft: draftSchema }),
     async execute(input, context) {
       const config = configuration();
-      const draft = await new AutomationDraftService({ config }).createDraft({ ...input, agentId: input.agentId ?? resolveDefaultAgentId(config) }, context.signal);
+      const draft = await new AutomationDraftService({ config }).createDraft({ ...input, agentId: input.agentId ?? resolveDefaultAgentId() }, context.signal);
       draft.automation.safety = { mode: resolveAutomationSafetyForTrust(getUserTrustPolicy().defaultActionLevel, draft.automation.safety?.mode) };
       draft.simulation = simulateAutomation(draft.automation);
       return { draft: JSON.parse(JSON.stringify(draft)) as z.input<typeof draftSchema> };
@@ -54,7 +54,7 @@ export function registerAutomationDraftCapabilities(dispatcher: CapabilityDispat
       if (!automation) throw new ExternalEffectNotAppliedError('Automation not found', { cause: new CapabilityError('NOT_FOUND', 'Automation not found') });
       const events = await service.listRunEvents(id);
       const repair = await new AutomationDraftService({ config }).createRepairDraft({
-        agentId: agentId ?? resolveDefaultAgentId(config), automation, run, events, language,
+        agentId: agentId ?? resolveDefaultAgentId(), automation, run, events, language,
       }, context.signal);
       return { repair: JSON.parse(JSON.stringify(repair)) as z.input<typeof repairSchema> };
     },

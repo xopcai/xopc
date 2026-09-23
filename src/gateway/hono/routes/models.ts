@@ -57,6 +57,7 @@ import {
   upsertCustomImageProvider,
 } from '../../custom-image-providers.js';
 import {
+  applyImageGenerationCatalogUpdate,
   getAgentImageGenerationConfig,
   getDefaultImageGenerationConfig,
   getImageGenerationCatalog,
@@ -176,7 +177,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
   authenticated.get('/api/models/catalog', async (c) => {
     const catalog = getModelCatalogStore().load();
     const sessionConfigs = await new SessionConfigStore('').getAll();
-    const references = auditModelReferences(service.currentConfig, sessionConfigs, { catalog });
+    const references = auditModelReferences(sessionConfigs, { catalog });
     return c.json({
       ok: true,
       payload: {
@@ -597,7 +598,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.get('/api/image-generation/default', (c) => c.json({
     ok: true,
-    payload: getDefaultImageGenerationConfig(service.currentConfig as Config),
+    payload: getDefaultImageGenerationConfig(),
   }));
 
   authenticated.post(
@@ -663,10 +664,11 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
         }
         return c.json({ ok: false, error: { message: saved.error ?? 'Failed to save configuration' } }, 500);
       }
+      await applyImageGenerationCatalogUpdate(prepared.catalogUpdate);
       return c.json({
         ok: true,
         payload: {
-          default: getDefaultImageGenerationConfig(service.currentConfig as Config),
+          default: getDefaultImageGenerationConfig(),
           providers: getImageGenerationCatalog(service.currentConfig as Config),
           verification,
         },
@@ -678,10 +680,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     try {
       return c.json({
         ok: true,
-        payload: getAgentImageGenerationConfig(
-          service.currentConfig as Config,
-          c.req.param('agentId'),
-        ),
+        payload: getAgentImageGenerationConfig(c.req.param('agentId')),
       });
     } catch (error) {
       return c.json(
@@ -755,10 +754,11 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
         }
         return c.json({ ok: false, error: { message: saved.error ?? 'Failed to save configuration' } }, 500);
       }
+      await applyImageGenerationCatalogUpdate(prepared.catalogUpdate);
       return c.json({
         ok: true,
         payload: {
-          agent: getAgentImageGenerationConfig(service.currentConfig as Config, c.req.param('agentId')),
+          agent: getAgentImageGenerationConfig(c.req.param('agentId')),
           providers: getImageGenerationCatalog(service.currentConfig as Config),
           verification,
         },

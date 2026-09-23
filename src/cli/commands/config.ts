@@ -104,9 +104,8 @@ function createConfigCommand(ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
-        'xopc config get agents.list',
-        'xopc config get agents.defaults',
-        'xopc config set agents.default main',
+        'xopc config get gateway.port',
+        'xopc config set commands.restart false',
         'xopc config show',
         'xopc config validate',
         'xopc config token              # Show gateway token info',
@@ -298,8 +297,8 @@ register({
   metadata: {
     category: 'utility',
     examples: [
-      'xopc config get agents.list',
-      'xopc config set agents.default main',
+      'xopc config get gateway.port',
+      'xopc config set commands.restart false',
       'xopc config show',
       'xopc config validate',
       'xopc config token',

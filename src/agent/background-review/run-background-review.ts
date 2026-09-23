@@ -122,7 +122,7 @@ function resolveInterpreterRuntime(params: Pick<RunUserModelReviewParams, 'conve
   const processingPolicy = config?.userContext.userModel.processingPolicy ?? 'remote_allowed';
   let model: Model<Api> | undefined;
   if (config) {
-    const agentId = extractProfileAgentId(params.conversationId, config);
+    const agentId = extractProfileAgentId(params.conversationId);
     const ref = resolveModelIntentRef(config, agentId, 'understanding');
     if (ref) {
       try {
@@ -228,7 +228,7 @@ async function executeReview(params: {
   }
   try {
     const config = params.getConfig();
-    const agentId = config ? extractProfileAgentId(params.conversationId, config) : 'main';
+    const agentId = config ? extractProfileAgentId(params.conversationId) : 'main';
     const write = config?.userContext.userModel.writePolicy ?? 'deny';
     const result = executeUserModelInterpretation({
       interpretation,

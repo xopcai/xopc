@@ -21,7 +21,7 @@ When the user presses **Finish**:
 - confirmed live segments become the canonical transcript when complete; otherwise the original recording is normalized and transcribed in bounded sequential chunks;
 - AI generates the final title, summary, key points, decisions, actions, risks, and open questions;
 - the Note is updated directly and marked processed;
-- a bounded completion event enters the proactive follow-up pipeline.
+- a bounded completion event enters the Scene follow-up pipeline.
 
 The user supplies audio. AI handles title, structure, and project context. There is no mandatory metadata form and no review page.
 
@@ -59,7 +59,7 @@ sequenceDiagram
     participant STT as Speech-to-text
     participant FW as Final worker
     participant N as Note
-    participant PA as Proactive pipeline
+    participant PA as Scene pipeline
 
     U->>UI: Press Record discussion
     UI->>UI: Request microphone and start
@@ -174,7 +174,7 @@ Context supplied by a project page is marked `context` and is not presented as a
 - Workers use conditional state updates, leases, three bounded attempts, and stage-aware retry.
 - Provider calls and file IO never run inside SQLite write transactions.
 - Realtime payloads contain identifiers and status only; transcript text is fetched from authenticated routes.
-- Proactive completion events contain bounded counts and identifiers, not raw transcript text.
+- Scene completion events contain bounded counts and identifiers, not raw transcript text.
 - The consent acknowledgement is explicit but does not add friction to subsequent recordings.
 - Audio deletion is explicit and does not remove the resulting Note or transcript.
 

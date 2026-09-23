@@ -22,7 +22,7 @@ export async function buildDirectUserMessageContent(opts: {
   const modelRef =
     sk !== ''
       ? opts.modelManager.getModelForSession(sk)
-      : getAgentDefaultModelRef(opts.config) ?? getDefaultModelSync(opts.config);
+      : getAgentDefaultModelRef() ?? getDefaultModelSync(opts.config);
 
   return buildTranscriptUserMessage({
     text: opts.content,

@@ -109,7 +109,7 @@ export function registerContextSourceRoutes(authenticated: Hono, deps: Authentic
   });
 
   authenticated.get('/api/context-sources/content-candidates', (c) => c.json({
-    candidates: listConnectedContentCandidates({ agentId: resolveDefaultAgentId(deps.service.currentConfig) }),
+    candidates: listConnectedContentCandidates({ agentId: resolveDefaultAgentId() }),
   }));
 
   authenticated.post('/api/context-sources/content-reads', limited, async (c) => {
@@ -119,7 +119,7 @@ export function registerContextSourceRoutes(authenticated: Hono, deps: Authentic
       : [];
     try {
       return c.json({ result: await readConnectedContent({
-        sourceItemIds, agentId: resolveDefaultAgentId(deps.service.currentConfig),
+        sourceItemIds, agentId: resolveDefaultAgentId(),
       }) });
     } catch (error) {
       return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);

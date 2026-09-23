@@ -143,6 +143,22 @@ describe('notificationPlanFromGatewayEvent', () => {
     });
   });
 
+  it('maps a high-value home opportunity to a stable home notification', () => {
+    expect(notificationPlanFromGatewayEvent('home.opportunity.ready', {
+      notificationKey: 'stable-key',
+      opportunityId: 'opportunity-1',
+      title: 'Prepare the launch review',
+    })).toMatchObject({
+      dedupeKey: 'home.opportunity:stable-key',
+      notification: {
+        type: 'home.opportunity',
+        target: { kind: 'home' },
+        priority: 'high',
+        body: { en: 'Prepare the launch review', zh: 'Prepare the launch review' },
+      },
+    });
+  });
+
 
   it('ignores unrelated and malformed events', () => {
     expect(notificationPlanFromGatewayEvent('session.updated', {})).toBeNull();

@@ -44,10 +44,10 @@ export function resolveExtensionLoaderOptionsFromConfig(
   config: DiscoverConfig,
 ): ExtensionLoaderOptions {
   const cfg = config as Config;
-  const aid = resolveDefaultAgentId(cfg);
+  const aid = resolveDefaultAgentId();
   return {
-    workspaceDir: resolveAgentWorkspaceDir(cfg, aid),
+    workspaceDir: resolveAgentWorkspaceDir(aid),
     extensionsDir: resolveExtensionsDir(),
-    workspaceExtensionsDir: resolveWorkspaceExtensionsDir(cfg, aid),
+    workspaceExtensionsDir: resolveWorkspaceExtensionsDir(aid),
   };
 }

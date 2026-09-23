@@ -159,14 +159,14 @@ function resolveDiscoveryPaths(
   workspaceExtensionsDir: string | null;
 } {
   const cfg = config ? asSchemaConfig(config) : null;
-  const aid = cfg ? resolveDefaultAgentId(cfg) : null;
+  const aid = cfg ? resolveDefaultAgentId() : null;
 
   return {
     bundledDir: resolveBundledExtensionsDir(),
     globalDir: options.extensionsDir ?? resolveExtensionsDir(),
     workspaceExtensionsDir:
       options.workspaceExtensionsDir ??
-      (cfg && aid ? resolveWorkspaceExtensionsDir(cfg, aid) : null),
+      (cfg && aid ? resolveWorkspaceExtensionsDir(aid) : null),
   };
 }
 

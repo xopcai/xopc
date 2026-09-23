@@ -8,9 +8,7 @@ import { join, resolve as pathResolve } from 'node:path';
 import {
   listAgentEntries,
   normalizeAgentId,
-  resolveAgentDir,
   resolveAgentProfileDir,
-  resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
   resolveUserPath,
   validateAgentIdForNewAgent,
@@ -19,16 +17,9 @@ import {
   AGENT_PROFILE_MARKDOWN_SYSTEM_FILES,
   REQUIRED_AGENT_PROFILE_MARKDOWN_FILE_SET,
 } from '../agent/context/workspace.js';
-import { seedAgentProfileMarkdownFiles } from '../agent/context/workspace-seed.js';
-import type { AgentModelsOverride, EffectiveAgentConfig, SkillOverride } from '../agent-config/index.js';
-import {
-  applyAgentConfig,
-  findAgentEntryIndex,
-  getAgentDeleteBlocker,
-  pruneAgentConfig,
-  removeAgentDirsFromDisk,
-} from '../commands/agents.config.js';
-import type { Config } from '../config/schema.js';
+import type { AgentEntry, AgentModelsOverride, EffectiveAgentConfig, SkillOverride } from '../agent-config/index.js';
+import { AgentCatalogRepository } from '../agent-catalog/repository.js';
+import { AgentCatalogService } from '../agent-catalog/service.js';
 import { WORKSPACE_FILES } from '../config/paths.js';
 import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
 import { GATEWAY_BUILTIN_TOOL_IDS } from './agent-builtin-tools.js';
@@ -46,7 +37,7 @@ export type GatewayAgentRow = {
   workspace: string;
   /** Absolute directory for profile Markdown (`SOUL.md`, …) and gateway avatars: `agents/<id>/profile/`. */
   profileDir: string;
-  override: Config['agents']['list'][number];
+  override: AgentEntry;
   effective: EffectiveAgentConfig;
   sources: Record<string, 'system' | 'global' | 'agent'>;
   isDefault: boolean;
@@ -63,9 +54,9 @@ export type GatewayAgentEffectiveConfigResponse = {
   sources: Record<string, 'system' | 'global' | 'agent'>;
 };
 
-function collectAgentIdsForList(cfg: Config): string[] {
-  const entries = listAgentEntries(cfg).filter((e) => e.enabled !== false);
-  const defaultId = resolveDefaultAgentId(cfg);
+function collectAgentIdsForList(): string[] {
+  const entries = listAgentEntries().filter((e) => e.enabled !== false);
+  const defaultId = resolveDefaultAgentId();
   if (entries.length === 0) {
     return [defaultId];
   }
@@ -105,18 +96,17 @@ export function parseIdentityMarkdown(content: string): {
 }
 
 export async function listGatewayAgents(
-  cfg: Config,
   _options: { locale?: string } = {},
 ): Promise<GatewayAgentsListResponse> {
-  const defaultId = resolveDefaultAgentId(cfg);
+  const defaultId = resolveDefaultAgentId();
   const agents: GatewayAgentRow[] = [];
-  for (const id of collectAgentIdsForList(cfg)) {
-    const profile = resolveEffectiveAgentProfile(cfg, id);
-    const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
+  for (const id of collectAgentIdsForList()) {
+    const profile = resolveEffectiveAgentProfile(id);
+    const entry = listAgentEntries().find((e) => normalizeAgentId(e.id) === id);
     if (!entry) continue;
     let identity: ReturnType<typeof parseIdentityMarkdown> = {};
     try {
-      const identityPath = join(resolveAgentProfileDir(cfg, id), WORKSPACE_FILES.IDENTITY);
+      const identityPath = join(resolveAgentProfileDir(id), WORKSPACE_FILES.IDENTITY);
       const content = await readFile(identityPath, 'utf-8');
       identity = parseIdentityMarkdown(content);
     } catch {
@@ -129,7 +119,7 @@ export async function listGatewayAgents(
       ...(identity.language ? { language: identity.language } : {}),
       ...(identity.avatar ? { avatar: identity.avatar } : {}),
       workspace: profile.resolvedWorkspacePath,
-      profileDir: resolveAgentProfileDir(cfg, id),
+      profileDir: resolveAgentProfileDir(id),
       override: structuredClone(entry),
       effective: structuredClone(profile.config),
       sources: { ...profile.sources },
@@ -141,11 +131,10 @@ export async function listGatewayAgents(
 }
 
 export function getGatewayAgentEffectiveConfig(
-  cfg: Config,
   agentIdRaw: string,
 ): AgentAdminResult<GatewayAgentEffectiveConfigResponse> {
   const agentId = normalizeAgentId(agentIdRaw);
-  const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === agentId);
+  const entry = listAgentEntries().find((e) => normalizeAgentId(e.id) === agentId);
   if (!entry) {
     return { ok: false, error: `agent "${agentId}" not found`, status: 404 };
   }
@@ -153,7 +142,7 @@ export function getGatewayAgentEffectiveConfig(
     return {
       ok: true,
       data: (() => {
-        const profile = resolveEffectiveAgentProfile(cfg, agentId);
+        const profile = resolveEffectiveAgentProfile(agentId);
         return { config: profile.config, sources: profile.sources };
       })(),
     };
@@ -170,7 +159,7 @@ export type CreateAgentBody = {
   /** Optional id seed; normalized agent id defaults from the profile name when omitted. */
   id?: string;
   workspace?: string;
-  profile: NonNullable<Config['agents']['list'][number]['profile']>;
+  profile: NonNullable<AgentEntry['profile']>;
 };
 
 export type AgentAdminHttpStatus = 400 | 404 | 409;
@@ -179,152 +168,83 @@ export type AgentAdminResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; status?: AgentAdminHttpStatus };
 
-export function prepareCreateAgent(
-  cfg: Config,
+export async function createGatewayAgent(
   body: CreateAgentBody,
-): AgentAdminResult<{ nextConfig: Config; agentId: string; workspace: string }> {
+): Promise<AgentAdminResult<{ agentId: string; workspace: string }>> {
   const idRes = validateAgentIdForNewAgent(body.id, body.profile.name);
   if (idRes.ok === false) {
     return { ok: false, error: idRes.error, status: 400 };
   }
   const agentId = idRes.agentId;
-  if (findAgentEntryIndex(listAgentEntries(cfg), agentId) >= 0) {
+  if (new AgentCatalogRepository().get(agentId, { includeDeleted: true })) {
     return { ok: false, error: `agent "${agentId}" already exists`, status: 409 };
   }
 
   const wsAbs = resolveUserPath(body.workspace?.trim() || `~/.xopc/workspace/${agentId}`);
-  const next = applyAgentConfig(cfg, {
-    agentId,
-    ...(body.workspace?.trim() ? { workspace: wsAbs } : {}),
-    profile: structuredClone(body.profile),
-  });
-
-  return { ok: true, data: { nextConfig: next, agentId, workspace: wsAbs } };
-}
-
-export async function finalizeCreateAgentDirs(
-  cfg: Config,
-  agentId: string,
-): Promise<AgentAdminResult<void>> {
-  const wsPath = resolveAgentWorkspaceDir(cfg, agentId);
-  const profilePath = resolveAgentProfileDir(cfg, agentId);
-  const adPath = resolveAgentDir(cfg, agentId);
-  await mkdir(wsPath, { recursive: true });
-  await mkdir(profilePath, { recursive: true });
-  await mkdir(adPath, { recursive: true });
-  const id = normalizeAgentId(agentId);
-  const entry = listAgentEntries(cfg).find((candidate) => normalizeAgentId(candidate.id) === id);
-  seedAgentProfileMarkdownFiles(profilePath, wsPath, { displayName: entry?.profile?.name ?? id });
-
-  return { ok: true, data: undefined };
+  try {
+    await new AgentCatalogService().create({
+      id: agentId,
+      enabled: true,
+      workspace: wsAbs,
+      profile: structuredClone(body.profile),
+    });
+    return { ok: true, data: { agentId, workspace: wsAbs } };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error), status: 400 };
+  }
 }
 
 export type UpdateAgentBody = {
   workspace?: string | null;
-  profile?: Config['agents']['list'][number]['profile'] | null;
+  profile?: AgentEntry['profile'] | null;
   models?: AgentModelsOverride | null;
   setDefault?: boolean;
   skills?: SkillOverride | null;
-  tools?: NonNullable<Config['agents']['list']>[number]['tools'] | null;
-  workflows?: NonNullable<Config['agents']['list']>[number]['workflows'] | null;
-  runtime?: NonNullable<Config['agents']['list']>[number]['runtime'] | null;
+  tools?: AgentEntry['tools'] | null;
+  workflows?: AgentEntry['workflows'] | null;
+  runtime?: AgentEntry['runtime'] | null;
 };
 
-export function prepareUpdateAgent(
-  cfg: Config,
+export async function updateGatewayAgent(
   agentIdRaw: string,
   body: UpdateAgentBody,
-): AgentAdminResult<{ nextConfig: Config }> {
+): Promise<AgentAdminResult<void>> {
   const agentId = normalizeAgentId(agentIdRaw);
-  const list = [...listAgentEntries(cfg)];
-  const idx = findAgentEntryIndex(list, agentId);
-  if (idx < 0) {
+  if (!new AgentCatalogRepository().get(agentId)) {
     return { ok: false, error: `agent "${agentId}" not found`, status: 404 };
   }
-
-  type Entry = (typeof list)[number];
-  const entry: Entry = { ...list[idx] };
-
-  if (body.workspace !== undefined) {
-    const workspace = body.workspace?.trim();
-    if (workspace) entry.workspace = resolveUserPath(workspace);
-    else delete entry.workspace;
+  const patch: Partial<Omit<AgentEntry, 'id'>> = {};
+  if (body.workspace !== undefined) patch.workspace = body.workspace?.trim() ? resolveUserPath(body.workspace) : undefined;
+  if (body.profile !== undefined) patch.profile = body.profile ?? undefined;
+  if (body.models !== undefined) patch.models = body.models ?? undefined;
+  if (body.skills !== undefined) patch.skills = body.skills ?? undefined;
+  if (body.tools !== undefined) patch.tools = body.tools ?? undefined;
+  if (body.workflows !== undefined) patch.workflows = body.workflows ?? undefined;
+  if (body.runtime !== undefined) patch.runtime = body.runtime ?? undefined;
+  try {
+    const service = new AgentCatalogService();
+    await service.update(agentId, patch);
+    if (body.setDefault === true) service.setDefault(agentId);
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error), status: 400 };
   }
-  if (body.profile !== undefined) {
-    if (body.profile === null) delete entry.profile;
-    else entry.profile = structuredClone(body.profile);
-  }
-  if (body.models !== undefined) {
-    if (body.models === null) {
-      delete entry.models;
-    } else {
-      entry.models = structuredClone(body.models);
-    }
-  }
-
-  if (body.skills !== undefined) {
-    if (body.skills === null) {
-      delete entry.skills;
-    } else {
-      entry.skills = structuredClone(body.skills);
-    }
-  }
-
-  if (body.tools !== undefined) {
-    if (body.tools === null) {
-      delete entry.tools;
-    } else {
-      entry.tools = body.tools;
-    }
-  }
-  if (body.workflows !== undefined) {
-    if (body.workflows === null) delete entry.workflows;
-    else entry.workflows = structuredClone(body.workflows);
-  }
-  if (body.runtime !== undefined) {
-    if (body.runtime === null) delete entry.runtime;
-    else entry.runtime = structuredClone(body.runtime);
-  }
-
-  list[idx] = entry;
-  let next: Config = {
-    ...cfg,
-    agents: {
-      ...cfg.agents,
-      list,
-    },
-  };
-
-  if (body.setDefault === true) {
-    next = {
-      ...next,
-      agents: {
-        ...next.agents,
-        default: agentId,
-      },
-    };
-  }
-  return { ok: true, data: { nextConfig: next } };
 }
 
-export function prepareDeleteAgent(
-  cfg: Config,
+export async function deleteGatewayAgent(
   agentIdRaw: string,
-): AgentAdminResult<{ nextConfig: Config; agentId: string }> {
+  options: { purge?: boolean } = {},
+): Promise<AgentAdminResult<{ agentId: string; removedBindings: number }>> {
   const agentId = normalizeAgentId(agentIdRaw);
-  const blocker = getAgentDeleteBlocker(cfg, agentId);
-  if (blocker) {
-    return { ok: false, error: blocker, status: 400 };
-  }
-  if (findAgentEntryIndex(listAgentEntries(cfg), agentId) < 0) {
+  if (!new AgentCatalogRepository().get(agentId)) {
     return { ok: false, error: `agent "${agentId}" not found`, status: 404 };
   }
-  const { config: pruned } = pruneAgentConfig(cfg, agentId);
-  return { ok: true, data: { nextConfig: pruned, agentId } };
-}
-
-export async function runAfterDeletePurge(cfg: Config, agentId: string): Promise<void> {
-  await removeAgentDirsFromDisk(cfg, agentId);
+  try {
+    const result = await new AgentCatalogService().delete(agentId, options);
+    return { ok: true, data: { agentId, removedBindings: result.removedBindings } };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error), status: 400 };
+  }
 }
 
 export type AgentFileEntry = {
@@ -334,8 +254,8 @@ export type AgentFileEntry = {
   updatedAtMs?: number;
 };
 
-async function profileMarkdownRootReal(cfg: Config, agentId: string): Promise<string> {
-  const dir = resolveAgentProfileDir(cfg, agentId);
+async function profileMarkdownRootReal(agentId: string): Promise<string> {
+  const dir = resolveAgentProfileDir(agentId);
   await mkdir(dir, { recursive: true });
   try {
     return await realpath(dir);
@@ -352,14 +272,13 @@ function assertAllowedFile(name: string): AgentAdminResult<never> | null {
 }
 
 export async function listAgentProfileFiles(
-  cfg: Config,
   agentId: string,
 ): Promise<AgentAdminResult<{ agentId: string; profileDir: string; files: AgentFileEntry[] }>> {
   const id = normalizeAgentId(agentId);
-  if (collectAgentIdsForList(cfg).every((x) => x !== id)) {
+  if (collectAgentIdsForList().every((x) => x !== id)) {
     return { ok: false, error: `agent "${id}" not found`, status: 404 };
   }
-  const root = await profileMarkdownRootReal(cfg, id);
+  const root = await profileMarkdownRootReal(id);
   const names = [...EDITABLE_PROFILE_MARKDOWN_NAMES];
   const files: AgentFileEntry[] = [];
   for (const name of names.sort((a, b) => a.localeCompare(b))) {
@@ -390,7 +309,6 @@ export async function listAgentProfileFiles(
 }
 
 export async function readAgentProfileFile(
-  cfg: Config,
   agentId: string,
   name: string,
 ): Promise<AgentAdminResult<{ agentId: string; content: string; path: string }>> {
@@ -399,10 +317,10 @@ export async function readAgentProfileFile(
     return bad;
   }
   const id = normalizeAgentId(agentId);
-  if (collectAgentIdsForList(cfg).every((x) => x !== id)) {
+  if (collectAgentIdsForList().every((x) => x !== id)) {
     return { ok: false, error: `agent "${id}" not found`, status: 404 };
   }
-  const root = await profileMarkdownRootReal(cfg, id);
+  const root = await profileMarkdownRootReal(id);
   const abs = resolveWorkspaceSafePath(root, name);
   if (!abs) {
     return { ok: false, error: 'invalid path', status: 400 };
@@ -416,7 +334,6 @@ export async function readAgentProfileFile(
 }
 
 export async function writeAgentProfileFile(
-  cfg: Config,
   agentId: string,
   name: string,
   content: string,
@@ -426,15 +343,15 @@ export async function writeAgentProfileFile(
     return bad;
   }
   const id = normalizeAgentId(agentId);
-  if (collectAgentIdsForList(cfg).every((x) => x !== id)) {
+  if (collectAgentIdsForList().every((x) => x !== id)) {
     return { ok: false, error: `agent "${id}" not found`, status: 404 };
   }
-  const root = await profileMarkdownRootReal(cfg, id);
+  const root = await profileMarkdownRootReal(id);
   const abs = resolveWorkspaceSafePath(root, name);
   if (!abs) {
     return { ok: false, error: 'invalid path', status: 400 };
   }
-  const rootReal = await profileMarkdownRootReal(cfg, id);
+  const rootReal = await profileMarkdownRootReal(id);
   if (!isPathUnderWorkspace(rootReal, abs)) {
     return { ok: false, error: 'path escapes profile markdown root', status: 400 };
   }
@@ -486,23 +403,22 @@ function detectImageMimeFromBytes(buf: Uint8Array): 'image/png' | 'image/jpeg' |
   return null;
 }
 
-function assertAgentExistsForAvatar(cfg: Config, id: string): AgentAdminResult<never> | null {
-  if (collectAgentIdsForList(cfg).every((x) => x !== id)) {
+function assertAgentExistsForAvatar(id: string): AgentAdminResult<never> | null {
+  if (collectAgentIdsForList().every((x) => x !== id)) {
     return { ok: false, error: `agent "${id}" not found`, status: 404 };
   }
   return null;
 }
 
 export async function readAgentAvatarFile(
-  cfg: Config,
   agentId: string,
 ): Promise<AgentAdminResult<{ agentId: string; buffer: Buffer; contentType: string; path: string }>> {
-  const missingAgent = assertAgentExistsForAvatar(cfg, agentId);
+  const missingAgent = assertAgentExistsForAvatar(agentId);
   if (missingAgent) {
     return missingAgent;
   }
   const id = normalizeAgentId(agentId);
-  const root = await profileMarkdownRootReal(cfg, id);
+  const root = await profileMarkdownRootReal(id);
   for (const name of agentAvatarFilenames()) {
     const abs = resolveWorkspaceSafePath(root, name);
     if (!abs) {
@@ -527,12 +443,11 @@ export async function readAgentAvatarFile(
 }
 
 export async function writeAgentAvatarFromBase64(
-  cfg: Config,
   agentId: string,
   base64: string,
   mimeType: string,
 ): Promise<AgentAdminResult<{ agentId: string; path: string }>> {
-  const missingAgent = assertAgentExistsForAvatar(cfg, agentId);
+  const missingAgent = assertAgentExistsForAvatar(agentId);
   if (missingAgent) {
     return missingAgent;
   }
@@ -555,8 +470,8 @@ export async function writeAgentAvatarFromBase64(
     return { ok: false, error: 'file content does not match declared image type', status: 400 };
   }
 
-  const root = await profileMarkdownRootReal(cfg, id);
-  const rootReal = await profileMarkdownRootReal(cfg, id);
+  const root = await profileMarkdownRootReal(id);
+  const rootReal = await profileMarkdownRootReal(id);
   const targetName = `${AGENT_AVATAR_BASENAME}${ext}`;
   const abs = resolveWorkspaceSafePath(root, targetName);
   if (!abs || !isPathUnderWorkspace(rootReal, abs)) {
@@ -593,14 +508,14 @@ function extMatchesDetectedMime(
 }
 
 /** Remove any `agent-avatar.*` in the agent profile markdown root. Idempotent: ok even when no file existed. */
-export async function deleteAgentAvatarFile(cfg: Config, agentId: string): Promise<AgentAdminResult<{ agentId: string }>> {
-  const missingAgent = assertAgentExistsForAvatar(cfg, agentId);
+export async function deleteAgentAvatarFile(agentId: string): Promise<AgentAdminResult<{ agentId: string }>> {
+  const missingAgent = assertAgentExistsForAvatar(agentId);
   if (missingAgent) {
     return missingAgent;
   }
   const id = normalizeAgentId(agentId);
-  const root = await profileMarkdownRootReal(cfg, id);
-  const rootReal = await profileMarkdownRootReal(cfg, id);
+  const root = await profileMarkdownRootReal(id);
+  const rootReal = await profileMarkdownRootReal(id);
   for (const name of agentAvatarFilenames()) {
     const abs = resolveWorkspaceSafePath(root, name);
     if (!abs || !isPathUnderWorkspace(rootReal, abs)) {

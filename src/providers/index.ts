@@ -88,7 +88,7 @@ export function resolveModel(ref: string): Model<Api> {
 	const trimmedRef = typeof ref === 'string' ? ref.trim() : '';
 	if (!trimmedRef) {
 		throw new Error(
-			'No default model configured. Choose a model in onboarding or set agents.defaults.models.chat.primary.',
+			'No default model configured. Choose a model in onboarding or update global Agent defaults.',
 		);
 	}
 
@@ -459,7 +459,7 @@ export function providerSupportsApiKey(provider: string): boolean {
  * 2. Empty string only when no default model is present in the loaded config
  */
 export async function getDefaultModel(config?: Config | null | undefined): Promise<string> {
-  const modelRef = config ? getAgentDefaultModelRef(config) : undefined;
+  const modelRef = config ? getAgentDefaultModelRef() : undefined;
   if (modelRef) {
     const availableModels = await getAvailableModels();
     const configured = availableModels.find(m =>
@@ -483,7 +483,7 @@ export async function getDefaultModel(config?: Config | null | undefined): Promi
  * setup flows can prompt for the global default model.
  */
 export function getDefaultModelSync(config?: Config | null | undefined): string {
-  const modelRef = config ? getAgentDefaultModelRef(config) : undefined;
+  const modelRef = config ? getAgentDefaultModelRef() : undefined;
   if (modelRef) {
     return modelRef;
   }

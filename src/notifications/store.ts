@@ -326,7 +326,7 @@ export function pruneNotificationEvents(before: number): number {
 }
 
 export function deferNotificationDelivery(eventId: string, deviceId: string, nextAttemptAt: number): void {
-  getSqliteDatabase().prepare("UPDATE notification_deliveries SET next_attempt_at = ?, last_error = 'Proactive quiet hours' WHERE event_id = ? AND device_id = ? AND status = 'pending'").run(nextAttemptAt, eventId, deviceId);
+  getSqliteDatabase().prepare("UPDATE notification_deliveries SET next_attempt_at = ?, last_error = 'Notification quiet hours' WHERE event_id = ? AND device_id = ? AND status = 'pending'").run(nextAttemptAt, eventId, deviceId);
 }
 
 export function getNotificationEvent(id: string): ProductNotification | null {

@@ -1,7 +1,7 @@
 import { getImageGenerationProvider } from '../agent/image/generation/provider-registry.js';
+import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { parseImageGenerationModelRef } from '../agent/image/generation/model-ref.js';
 import { isComputerModel, isDedicatedComputerProfile } from '../computer/model-policy.js';
-import type { Config } from '../config/schema.js';
 import type { SessionAgentConfig } from '../session/config-types.js';
 import { getModelCatalogStore, type ModelCatalogSnapshot } from './model-catalog-store.js';
 import { getModelRegistry, type ModelRegistry } from './model-registry.js';
@@ -87,13 +87,13 @@ function collectModelPolicy(out: CollectedReference[], value: unknown, location:
 }
 
 function collectReferences(
-  config: Config,
   sessionConfigs: ReadonlyMap<string, SessionAgentConfig>,
 ): CollectedReference[] {
   const out: CollectedReference[] = [];
-  collectModelPolicy(out, config.agents.defaults.models, 'agents.defaults.models');
-  for (const agent of config.agents.list) {
-    collectModelPolicy(out, agent.models, `agents.list.${agent.id}.models`);
+  const catalog = new AgentCatalogRepository().snapshot();
+  collectModelPolicy(out, catalog.defaults.models, 'agentCatalog.defaults.models');
+  for (const agent of catalog.agents) {
+    collectModelPolicy(out, agent.models, `agentCatalog.agents.${agent.id}.models`);
   }
   for (const [conversationId, sessionConfig] of sessionConfigs) {
     addRef(out, sessionConfig.modelOverride, `sessions.${conversationId}.modelOverride`);
@@ -123,7 +123,6 @@ function hasImageGenerationModel(ref: string): boolean {
 }
 
 export function auditModelReferences(
-  config: Config,
   sessionConfigs: ReadonlyMap<string, SessionAgentConfig> = new Map(),
   deps: {
     registry?: ModelRegistry;
@@ -135,7 +134,7 @@ export function auditModelReferences(
   const catalog = deps.catalog ?? getModelCatalogStore().load();
   const resolveImageGenerationModel = deps.resolveImageGenerationModel ?? hasImageGenerationModel;
   const grouped = new Map<string, CollectedReference[]>();
-  for (const reference of collectReferences(config, sessionConfigs)) {
+  for (const reference of collectReferences(sessionConfigs)) {
     const references = grouped.get(reference.ref) ?? [];
     references.push(reference);
     grouped.set(reference.ref, references);

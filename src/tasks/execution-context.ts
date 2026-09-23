@@ -3,8 +3,8 @@ import { isXopcDatabaseOpen } from '../storage/sqlite/index.js';
 import { getExecutionEnvironmentForSession } from '../execution-environments/subject.js';
 import type { ExecutionEnvironmentKind } from '../execution-environments/types.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
-export type ExecutionOrigin = 'chat' | 'task' | 'workflow' | 'automation' | 'browser' | 'proactive';
-export type ExecutionTrigger = 'user' | 'schedule' | 'webhook' | 'proactive' | 'retry';
+export type ExecutionOrigin = 'chat' | 'task' | 'workflow' | 'automation' | 'browser' | 'heartbeat';
+export type ExecutionTrigger = 'user' | 'schedule' | 'webhook' | 'heartbeat' | 'retry';
 
 export interface ExecutionContext {
   runId: string;
@@ -21,8 +21,8 @@ export interface ExecutionContext {
   contextTraceId?: string;
 }
 
-const ORIGINS = new Set<ExecutionOrigin>(['chat', 'task', 'workflow', 'automation', 'browser', 'proactive']);
-const TRIGGERS = new Set<ExecutionTrigger>(['user', 'schedule', 'webhook', 'proactive', 'retry']);
+const ORIGINS = new Set<ExecutionOrigin>(['chat', 'task', 'workflow', 'automation', 'browser', 'heartbeat']);
+const TRIGGERS = new Set<ExecutionTrigger>(['user', 'schedule', 'webhook', 'heartbeat', 'retry']);
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
@@ -34,7 +34,7 @@ function metadataOrigin(metadata: SessionMetadata, taskId?: string): ExecutionOr
   if (taskId) return 'task';
   if (metadata.sessionType === 'workflow-run' || metadata.sessionType === 'workflow-subagent') return 'workflow';
   if (metadata.sessionType === 'cron') return 'automation';
-  if (metadata.sessionType === 'heartbeat') return 'proactive';
+  if (metadata.sessionType === 'heartbeat') return 'heartbeat';
   if (optionalString(metadata.customData?.browserRecipeId)) return 'browser';
   return 'chat';
 }
@@ -43,7 +43,7 @@ function metadataTrigger(metadata: SessionMetadata): ExecutionTrigger {
   const explicit = optionalString(metadata.customData?.triggerKind);
   if (explicit && TRIGGERS.has(explicit as ExecutionTrigger)) return explicit as ExecutionTrigger;
   if (metadata.sessionType === 'cron') return 'schedule';
-  if (metadata.sessionType === 'heartbeat') return 'proactive';
+  if (metadata.sessionType === 'heartbeat') return 'heartbeat';
   return 'user';
 }
 

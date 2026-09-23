@@ -17,6 +17,7 @@
  */
 import { existsSync, rmSync } from 'node:fs';
 
+import { resolveDefaultAgentId } from '../../agent/agent-scope.js';
 import type { Config } from '../../config/schema.js';
 import type { AgentService } from '../../agent/service.js';
 import type { ChannelManager } from '../../channels/manager.js';
@@ -329,7 +330,7 @@ export class GatewayMarketplaceService {
   }
 
   private getDefaultAgentId(): string {
-    return this.opts.getConfig().agents?.default || 'main';
+    return resolveDefaultAgentId();
   }
 
   private getInstallAvailability(skillId: string): SkillInstallAvailability {

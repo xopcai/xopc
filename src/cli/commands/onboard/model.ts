@@ -46,6 +46,8 @@ import {
   getXopcCloudCatalogCoordinator,
   type XopcCloudCatalogCoordinator,
 } from '../../../providers/xopc-cloud-catalog-coordinator.js';
+import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
+import { AgentCatalogService } from '../../../agent-catalog/service.js';
 import { getOAuthProvider } from '../../utils/oauth-providers.js';
 import { runCliOAuthLogin } from '../../utils/oauth-login.js';
 import type { CLIContext } from '../../registry.js';
@@ -54,34 +56,30 @@ import { colors } from '../../utils/colors.js';
 type ModelChoice = { value: string; name: string; description?: string };
 type CustomApiKind = 'openai-completions' | 'openai-responses' | 'anthropic-messages';
 
-export function setPrimaryModel(
+export async function setPrimaryModel(
   config: Config,
   workspacePath: string,
   modelRef: string,
-): Config {
-  const id = config.agents.default ?? config.agents.list[0]?.id ?? 'main';
-  const index = config.agents.list.findIndex((entry) => entry.id === id);
-  let nextConfig = config;
-  if (index >= 0) {
-    const agent = config.agents.list[index]!;
-    const nextList = [...config.agents.list];
-    nextList[index] = {
-      ...agent,
-      workspace: workspacePath,
-    };
-    nextConfig = { ...config, agents: { ...config.agents, list: nextList } };
-  }
-  const currentModels = nextConfig.agents.defaults.models;
-  const prep = prepareUpdateGlobalDefaults(nextConfig, {
+): Promise<Config> {
+  const repository = new AgentCatalogRepository();
+  const catalog = repository.snapshot();
+  const currentModels = catalog.defaults.models;
+  const prep = prepareUpdateGlobalDefaults({
     defaults: {
-      ...nextConfig.agents.defaults,
+      ...catalog.defaults,
       models: { ...currentModels, chat: { primary: modelRef, fallbacks: [] } },
     },
   });
   if (prep.ok === false) {
     throw new Error(prep.error);
   }
-  return prep.data.nextConfig;
+  const service = new AgentCatalogService(repository);
+  if (prep.data.changed) service.updateDefaults(prep.data.defaults);
+  const agent = repository.get(catalog.defaultAgentId);
+  if (agent && agent.workspace !== workspacePath) {
+    await service.update(catalog.defaultAgentId, { workspace: workspacePath });
+  }
+  return config;
 }
 
 function formatRecommended(provider: string): string | undefined {
@@ -529,7 +527,7 @@ export async function setupModel(existingConfig: Config | null, ctx: CLIContext)
   console.log('\n🤖 Step: AI Model\n');
 
   const config = existingConfig || ({} as Config);
-  const currentModel = getAgentDefaultModelRef(config);
+  const currentModel = getAgentDefaultModelRef();
 
   if (currentModel) {
     console.log('Current model:', currentModel);

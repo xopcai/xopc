@@ -787,7 +787,10 @@
         "use": { "running": "正在使用{{object}}…", "completed": "使用了{{object}}" }
       },
       "objects": {
-        "proactiveWork": "主动工作",
+        "context": "上下文",
+        "scene": "场景",
+        "chatPreview": "对话预览",
+        "productItem": "产品对象",
         "project": "项目",
         "milestone": "里程碑",
         "projectUpdate": "项目进展",

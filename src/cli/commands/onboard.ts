@@ -4,6 +4,7 @@ import { saveConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import type { CLIContext } from '../registry.js';
 import type { Config } from '../../config/schema.js';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { setupModel as runModelSetup } from './onboard/model.js';
 import { colors } from '../utils/colors.js';
 import { setupChannels as runChannelOnboard, getChannelConfigurators } from './onboard/channels/index.js';
@@ -24,7 +25,7 @@ function printGitHubStarHint(): void {
 
 async function setupNonInteractive(_configPath: string, existingConfig: Config): Promise<Config> {
   console.log('\n🤖 AI Model Configuration (Non-Interactive Mode)\n');
-  console.log('Current agent overrides:', JSON.stringify(existingConfig.agents?.list ?? [], null, 2));
+  console.log('Current Agent overrides:', JSON.stringify(new AgentCatalogRepository().snapshot().agents, null, 2));
   console.log('\n💡 To configure in interactive mode, run: xopc onboard');
   console.log('💡 Or set up manually in:', _configPath);
   return existingConfig;

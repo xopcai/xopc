@@ -28,7 +28,7 @@ function parsePreferences(value: unknown): Partial<NotificationPreferences> | nu
   const result: Partial<NotificationPreferences> = {};
   for (const key of [
     'chatCompleted', 'chatFailed', 'taskNeedsInput', 'taskBlocked', 'taskFailed',
-    'taskCompleted', 'automationCompleted', 'automationFailed', 'proactiveInsight',
+    'taskCompleted', 'automationCompleted', 'automationFailed', 'homeOpportunity',
   ] as const) {
     if (source[key] === undefined) continue;
     if (typeof source[key] !== 'boolean') return null;

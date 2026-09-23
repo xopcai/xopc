@@ -13,16 +13,16 @@ export function resolveProjectAgentId(input: {
   explicitAgentId?: string | null;
   projectId?: string | null;
 }): string {
-  const fallback = getDefaultAgentId(input.config);
+  const fallback = getDefaultAgentId();
   const explicitAgentId = normalizeAgentId(input.explicitAgentId);
   if (explicitAgentId) {
-    if (!agentExists(explicitAgentId, input.config)) throw new Error(`Agent not found: ${explicitAgentId}`);
+    if (!agentExists(explicitAgentId)) throw new Error(`Agent not found: ${explicitAgentId}`);
     return explicitAgentId;
   }
 
   const projectId = input.projectId?.trim();
   const projectAgentId = projectId ? normalizeAgentId(input.projects.get(projectId)?.defaultAgentId) : undefined;
-  if (projectAgentId && agentExists(projectAgentId, input.config)) {
+  if (projectAgentId && agentExists(projectAgentId)) {
     return projectAgentId;
   }
   return fallback;
@@ -30,7 +30,7 @@ export function resolveProjectAgentId(input: {
 
 export function isValidProjectAgentId(config: Config, agentId: string | null | undefined): boolean {
   const normalized = normalizeAgentId(agentId);
-  return !normalized || agentExists(normalized, config);
+  return !normalized || agentExists(normalized);
 }
 
 export function normalizeProjectAgentId(agentId: string | null | undefined): string | undefined {

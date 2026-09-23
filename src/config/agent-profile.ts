@@ -3,10 +3,10 @@ import {
   type EffectiveAgentConfig,
   type ResolveEffectiveAgentConfigResult,
 } from '../agent-config/index.js';
+import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { normalizeAgentId, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import { agentExists, getDefaultAgentId } from '../routing/resolve-route.js';
 import { getConversationRouting } from '../routing/session-key.js';
-import type { Config } from './schema.js';
 
 export { resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 
@@ -28,42 +28,38 @@ export interface EffectiveAgentProfile {
   params: Record<string, unknown>;
 }
 
-function findAgent(config: Config, agentId: string) {
-  const id = normalizeAgentId(agentId);
-  return config.agents.list.find((agent) => agent.enabled !== false && normalizeAgentId(agent.id) === id);
-}
-
-export function extractProfileAgentId(conversationId: string | undefined | null, config: Config): string {
-  if (!conversationId) return getDefaultAgentId(config);
+export function extractProfileAgentId(conversationId: string | undefined | null): string {
+  if (!conversationId) return getDefaultAgentId();
   const routing = getConversationRouting(conversationId);
-  if (!routing || !agentExists(routing.agentId, config)) {
+  if (!routing || !agentExists(routing.agentId)) {
     throw new Error(`Conversation agent is unavailable: ${conversationId}`);
   }
   return routing.agentId;
 }
 
 export function resolveEffectiveAgentConfigForAgent(
-  config: Config,
   agentId: string,
 ): ResolveEffectiveAgentConfigResult {
-  const agent = findAgent(config, agentId);
+  const catalog = new AgentCatalogRepository().snapshot();
+  const agent = catalog.agents.find(
+    (entry) => entry.enabled !== false && normalizeAgentId(entry.id) === normalizeAgentId(agentId),
+  );
   if (!agent) throw new Error(`No enabled agent found for "${agentId}"`);
   return resolveEffectiveAgentConfig({
     agent,
-    defaults: config.agents.defaults,
-    defaultWorkspace: (id) => resolveAgentWorkspaceDir(config, id),
+    defaults: catalog.defaults,
+    defaultWorkspace: (id) => resolveAgentWorkspaceDir(id),
   });
 }
 
 export function resolveEffectiveAgentConfigForSession(
-  config: Config,
   conversationId: string | undefined | null,
 ): ResolveEffectiveAgentConfigResult {
-  return resolveEffectiveAgentConfigForAgent(config, extractProfileAgentId(conversationId, config));
+  return resolveEffectiveAgentConfigForAgent(extractProfileAgentId(conversationId));
 }
 
-export function resolveEffectiveAgentProfile(config: Config, agentId: string): EffectiveAgentProfile {
-  const resolved = resolveEffectiveAgentConfigForAgent(config, agentId);
+export function resolveEffectiveAgentProfile(agentId: string): EffectiveAgentProfile {
+  const resolved = resolveEffectiveAgentConfigForAgent(agentId);
   const effective = resolved.config;
   const deniedTools = Object.entries(effective.tools)
     .filter(([, policy]) => policy.mode === 'deny')
@@ -75,7 +71,7 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
     agentId: effective.id,
     config: effective,
     sources: resolved.sources,
-    resolvedWorkspacePath: resolveAgentWorkspaceDir(config, effective.id),
+    resolvedWorkspacePath: resolveAgentWorkspaceDir(effective.id),
     primaryModelRef: effective.models.chat.primary,
     fallbacks: [...effective.models.chat.fallbacks],
     customInstructions: effective.profile?.instructions,
@@ -87,8 +83,7 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
 }
 
 export function resolveEffectiveAgentProfileForSession(
-  config: Config,
   conversationId: string | undefined | null,
 ): EffectiveAgentProfile {
-  return resolveEffectiveAgentProfile(config, extractProfileAgentId(conversationId, config));
+  return resolveEffectiveAgentProfile(extractProfileAgentId(conversationId));
 }

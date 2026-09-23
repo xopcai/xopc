@@ -4,7 +4,7 @@ import type { Config } from '../../config/schema.js';
 import { resolveAgentHomeDir } from '../../config/paths.js';
 
 export function resolveWorkflowRootDir(config: Config, agentId: string): string {
-  return join(resolveAgentHomeDir(config, agentId), 'workflows');
+  return join(resolveAgentHomeDir(agentId), 'workflows');
 }
 
 export function resolveWorkflowRunsDir(config: Config, agentId: string): string {

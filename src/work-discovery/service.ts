@@ -100,7 +100,7 @@ const MAX_UNDERSTANDING_TOTAL_CHARS = 300_000;
 export type ModelProcessingPolicy = 'local_only' | 'remote_allowed';
 
 function modelProcessingTarget(config: Config): { provider: string; remoteModel: boolean } {
-  const modelRef = getAgentDefaultModelRef(config);
+  const modelRef = getAgentDefaultModelRef();
   if (!modelRef) throw new Error('No default model configured');
   const model = resolveModel(modelRef);
   return { provider: model.provider, remoteModel: !isLocalModelBaseUrl(model.baseUrl) };
@@ -329,8 +329,8 @@ export class WorkDiscoveryService {
     const existing = getProjectUnderstandingRun(projectId);
     if (existing && (this.abortControllers.has(existing.id) || ['queued', 'probing', 'analyzing'].includes(existing.status))) return existing;
     const config = this.options.getConfig();
-    const agentId = project.defaultAgentId ?? getDefaultAgentId(config);
-    const rootPath = project.workspaceRoot ?? resolveEffectiveAgentProfile(config, agentId).resolvedWorkspacePath;
+    const agentId = project.defaultAgentId ?? getDefaultAgentId();
+    const rootPath = project.workspaceRoot ?? resolveEffectiveAgentProfile(agentId).resolvedWorkspacePath;
     const id = randomUUID();
     const peerId = `project-understanding-${id}`;
     const conversationId = resolveConversationId({ agentId, source: 'webchat', accountId: 'default', peerKind: 'direct', peerId });
@@ -341,7 +341,7 @@ export class WorkDiscoveryService {
     const run = createWorkDiscoveryRun({
       id, idempotencyKey: id, source: 'manual_selected_directory', mode: 'background',
       status: 'queued', rootPath, projectId, conversationId, agentId,
-      modelRef: getAgentDefaultModelRef(config) ?? '',
+      modelRef: getAgentDefaultModelRef() ?? '',
       scanPolicyVersion: WORK_DISCOVERY_SCAN_POLICY_VERSION, createdAt: Date.now(),
     });
     afterSqliteCommit(() => this.scheduleProjectUnderstanding(run));
@@ -543,7 +543,7 @@ export class WorkDiscoveryService {
     assertRefreshAuthorized();
     if (!items.length) throw new Error('No readable understanding source items were provided');
     const target = this.getModelProcessingTarget();
-    const agentId = getDefaultAgentId(this.options.getConfig());
+    const agentId = getDefaultAgentId();
     const effectiveProcessingPolicy = target.remoteModel ? processingPolicy : 'local_only';
 
     const checkpoints = new Map<string, { fingerprint: string; collectedAt: number }>();
@@ -845,7 +845,7 @@ export class WorkDiscoveryService {
     const existing = getWorkDiscoveryRunByIdempotencyKey(input.idempotencyKey);
     if (existing) return existing;
     const config = this.options.getConfig();
-    const modelRef = getAgentDefaultModelRef(config);
+    const modelRef = getAgentDefaultModelRef();
     if (!modelRef) throw new Error('No default model configured');
 
     const preview = await previewWorkDiscoveryRoot(input.rootPath);
@@ -857,7 +857,7 @@ export class WorkDiscoveryService {
     if (target.remoteModel && approvedSource.processingPolicy !== 'remote_allowed') {
       throw new Error('Remote model analysis requires explicit processing permission for this folder');
     }
-    const agentId = getDefaultAgentId(config);
+    const agentId = getDefaultAgentId();
     const match = this.options.projects.resolveOrCreateForWorkspacePath({
       workspacePath: rootPath,
       defaultAgentId: agentId,

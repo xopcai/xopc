@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 
-import { setTuiDefaultAgentConfig } from '../../commands/agents.config.js';
-import { loadConfig, saveConfig } from '../../config/loader.js';
+import { AgentCatalogService } from '../../agent-catalog/service.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { prepareTuiStartup, runTuiFromCliOptions, type TuiCliOptions } from './tui-runner.js';
 
@@ -38,14 +37,13 @@ function createTuiCommand(ctx: CLIContext): Command {
     .action(async (options: TuiCliOptions) => {
       prepareTuiStartup(ctx.configPath);
       if (typeof options.setDefaultAgent === 'string') {
-        const cfg = loadConfig(ctx.configPath);
-        const result = setTuiDefaultAgentConfig(cfg, options.setDefaultAgent);
-        if (result.ok === false) {
-          console.error(`Error: ${result.message}`);
+        try {
+          new AgentCatalogService().setSurfaceDefault('tui', options.setDefaultAgent);
+        } catch (error) {
+          console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
           process.exit(1);
         }
-        await saveConfig(result.config, ctx.configPath);
-        console.log(`TUI default agent set to "${result.agentId}".`);
+        console.log(`TUI default Agent set to "${options.setDefaultAgent.trim().toLowerCase()}".`);
         return;
       }
       await runTuiFromCliOptions(options);

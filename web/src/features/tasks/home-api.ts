@@ -1,9 +1,14 @@
 import {
   TaskCreateResponseSchema,
+  HomeOpportunityActionResponseSchema,
   parseHomeResponse,
   type HomeAttention,
   type HomeDecision,
   type HomeResponse,
+  type HomeOpportunity,
+  type HomeOpportunityActionRequest,
+  type HomeOpportunityActionResponse,
+  type HomeOpportunityFeedbackRequest,
   type TaskCommand,
   type TaskCreateRequest,
   type TaskCreateResponse,
@@ -138,6 +143,40 @@ export function fetchHome(locale?: 'en' | 'zh'): Promise<HomeResponse> {
   return fetchJson<unknown>(apiUrl(`/api/home${suffix}`)).then(parseHomeResponse);
 }
 
+export function refreshHomeAdvisor(locale?: 'en' | 'zh'): Promise<{ ok: true; generationId: string }> {
+  return fetchJson(apiUrl('/api/home/advisor/refresh'), {
+    method: 'POST',
+    body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), locale }),
+  });
+}
+
+export async function actOnHomeOpportunity(
+  opportunity: Pick<HomeOpportunity, 'id' | 'revision'>,
+  mode: HomeOpportunityActionRequest['mode'],
+): Promise<HomeOpportunityActionResponse> {
+  return HomeOpportunityActionResponseSchema.parse(await fetchJson<unknown>(
+    apiUrl(`/api/home/opportunities/${encodeURIComponent(opportunity.id)}/action`),
+    {
+      method: 'POST',
+      body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), expectedRevision: opportunity.revision, mode }),
+    },
+  ));
+}
+
+export function submitHomeOpportunityFeedback(
+  opportunity: Pick<HomeOpportunity, 'id' | 'revision'>,
+  input: Omit<HomeOpportunityFeedbackRequest, 'idempotencyKey' | 'expectedRevision'>,
+): Promise<{ ok: true }> {
+  return fetchJson(apiUrl(`/api/home/opportunities/${encodeURIComponent(opportunity.id)}/feedback`), {
+    method: 'POST',
+    body: JSON.stringify({
+      ...input,
+      idempotencyKey: crypto.randomUUID(),
+      expectedRevision: opportunity.revision,
+    }),
+  });
+}
+
 export function respondToWorkDecision(
   response: NonNullable<HomeDecision['response']>,
   decision: 'approve' | 'deny',
@@ -154,36 +193,6 @@ export function acknowledgeWorkAttention(
   return fetchJson(apiUrl('/api/home/attention/acknowledge'), {
     method: 'POST',
     body: JSON.stringify(item),
-  });
-}
-
-export function decideAgentJudgment(itemId: string, choice: string): Promise<{ ok: true }> {
-  return fetchJson(apiUrl(`/api/inbox/judgments/${encodeURIComponent(itemId)}/decisions`), {
-    method: 'POST',
-    body: JSON.stringify({ choice }),
-  });
-}
-
-export function transitionAgentJudgment(itemId: string, status: 'read' | 'snoozed' | 'resolved'): Promise<{ ok: true }> {
-  return fetchJson(apiUrl(`/api/inbox/judgments/${encodeURIComponent(itemId)}/transition`), {
-    method: 'POST',
-    body: JSON.stringify(status === 'snoozed'
-      ? { status, snoozedUntil: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() }
-      : status === 'resolved' ? { status, resolution: 'dismissed' } : { status }),
-  });
-}
-
-export function instructAgentJudgment(itemId: string, instruction: string): Promise<{ ok: true; revisionId: string }> {
-  return fetchJson(apiUrl(`/api/inbox/judgments/${encodeURIComponent(itemId)}/instructions`), {
-    method: 'POST',
-    body: JSON.stringify({ instruction }),
-  });
-}
-
-export function feedbackAgentJudgment(itemId: string, rating: 'useful' | 'not_useful'): Promise<{ ok: true }> {
-  return fetchJson(apiUrl(`/api/inbox/judgments/${encodeURIComponent(itemId)}/feedback`), {
-    method: 'POST',
-    body: JSON.stringify({ rating }),
   });
 }
 

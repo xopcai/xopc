@@ -1,5 +1,5 @@
 export interface XopcHomeAction {
-  type: string; label: string; href?: string; itemId?: string; approvalId?: string;
+  type: string; label: string; href?: string; approvalId?: string;
   decision?: string; subjectKind?: string; runId?: string;
 }
 export interface XopcHomeItem {

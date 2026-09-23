@@ -63,7 +63,7 @@ describe('/agent-edit', () => {
   it('shows the requested profile file preview for the current session agent', async () => {
     seedConversationFixtures();
     const config = createConfig();
-    const profileDir = resolveAgentProfileDir(config, 'coder');
+    const profileDir = resolveAgentProfileDir('coder');
     await mkdir(profileDir, { recursive: true });
     await writeFile(join(profileDir, 'SOUL.md'), '# SOUL\n\nWarm coding partner.', 'utf-8');
 

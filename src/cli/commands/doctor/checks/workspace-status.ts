@@ -30,9 +30,9 @@ export async function checkWorkspaceStatus(ctx: DoctorContext): Promise<CheckRes
     };
   }
 
-  const agentId = resolveDefaultAgentId(config);
-  const root = resolveAgentWorkspaceDir(config, agentId);
-  const profileRoot = resolveAgentProfileDir(config, agentId);
+  const agentId = resolveDefaultAgentId();
+  const root = resolveAgentWorkspaceDir(agentId);
+  const profileRoot = resolveAgentProfileDir(agentId);
   const hints: string[] = [];
 
   const hasProfileFile = (name: string): boolean => existsSync(join(profileRoot, name));
