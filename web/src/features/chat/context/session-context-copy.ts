@@ -5,7 +5,7 @@ export function sessionContextCopy(language: string) {
     session: '会话来源', task: '任务关联', draft: '待发送', untitled: '未命名 Note',
     unavailable: '不可用或无权访问', failed: '部分信息暂不可用，请刷新重试', refresh: '刷新',
     more: '仅显示前 20 项，更多资料请打开任务查看', local: 'Local · 本地目录', worktree: 'Local · Worktree',
-    detached: '游离 HEAD', unavailableEnvironment: '目录不存在或环境尚未就绪',
+    detached: '游离 HEAD', unavailableEnvironment: '目录不存在或环境尚未就绪', copyEnvironmentPath: '复制环境路径', copied: '已复制',
     hint: '关联资料不代表模型已读取；待发送资料仅用于下一条消息。',
   } : {
     title: 'Session context', work: 'Current work', sources: 'Sources', environment: 'Environment',
@@ -13,7 +13,7 @@ export function sessionContextCopy(language: string) {
     session: 'Session source', task: 'Task reference', draft: 'Pending send', untitled: 'Untitled Note',
     unavailable: 'Unavailable or restricted', failed: 'Some details are unavailable. Refresh to retry.', refresh: 'Refresh',
     more: 'Showing the first 20 sources. Open the task for more.', local: 'Local · Directory', worktree: 'Local · Worktree',
-    detached: 'Detached HEAD', unavailableEnvironment: 'Directory missing or environment not ready',
+    detached: 'Detached HEAD', unavailableEnvironment: 'Directory missing or environment not ready', copyEnvironmentPath: 'Copy environment path', copied: 'Copied',
     hint: 'Linked sources do not mean the model has read them. Pending sources apply to the next message.',
   };
 }

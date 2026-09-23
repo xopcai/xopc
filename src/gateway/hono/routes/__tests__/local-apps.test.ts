@@ -6,7 +6,8 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { GatewayService } from '../../../service.js';
-import { registerPublicLocalAppPreviewRoutes } from '../local-apps.js';
+import type { AuthenticatedRouteDeps } from '../deps.js';
+import { registerLocalAppsRoutes, registerPublicLocalAppPreviewRoutes } from '../local-apps.js';
 
 describe('local app preview routes', () => {
   const roots: string[] = [];
@@ -75,5 +76,67 @@ describe('local app preview routes', () => {
     const response = await app.request('/api/local-apps/preview/unknown/ui/index.html');
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe('local app workflow routes', () => {
+  it('validates diagnostics before returning server-owned fix guidance', async () => {
+    const service = {
+      localApps: {
+        getFixGuidance: (id: string, input: { diagnostics: Array<{ message: string }> }) => ({
+          appId: id,
+          owner: 'generated_code',
+          action: 'fix_code',
+          diagnostics: input.diagnostics,
+          prompt: 'server prompt',
+        }),
+      },
+    } as unknown as GatewayService;
+    const middleware = async (_c: unknown, next: () => Promise<void>) => next();
+    const app = new Hono();
+    registerLocalAppsRoutes(app, {
+      service,
+      strictRateLimitMiddleware: middleware,
+      chatRateLimitMiddleware: middleware,
+      xopcCloudPollRateLimitMiddleware: middleware,
+    } as unknown as AuthenticatedRouteDeps);
+
+    const response = await app.request('/api/local-apps/app-1/fix-guidance', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        locale: 'en',
+        diagnostics: [{ phase: 'runtime', message: ' Crashed\nnow ' }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      guidance: {
+        appId: 'app-1',
+        diagnostics: [{ phase: 'runtime', message: 'Crashed now' }],
+        prompt: 'server prompt',
+      },
+    });
+  });
+
+  it('rejects malformed fix diagnostics', async () => {
+    const service = { localApps: {} } as unknown as GatewayService;
+    const middleware = async (_c: unknown, next: () => Promise<void>) => next();
+    const app = new Hono();
+    registerLocalAppsRoutes(app, {
+      service,
+      strictRateLimitMiddleware: middleware,
+      chatRateLimitMiddleware: middleware,
+      xopcCloudPollRateLimitMiddleware: middleware,
+    } as unknown as AuthenticatedRouteDeps);
+
+    const response = await app.request('/api/local-apps/app-1/fix-guidance', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ diagnostics: [{ phase: 'unknown', message: 'bad' }] }),
+    });
+
+    expect(response.status).toBe(400);
   });
 });

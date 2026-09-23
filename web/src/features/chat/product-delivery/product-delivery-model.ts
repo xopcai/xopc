@@ -20,16 +20,34 @@ export function productDeliveryQueryState(deliveries: ProductDeliveryEntry[]) {
   };
 }
 
-export function productDeliveryReferences(deliveries: ProductDeliveryEntry[]) {
+export function productDeliveryInlineApps(deliveries: ProductDeliveryEntry[]) {
+  const inlineApps = deliveries.flatMap(({ key, delivery }) => (
+    delivery.presentation?.kind === 'inline_app'
+      ? [{ key, delivery, presentation: delivery.presentation }]
+      : []
+  ));
+  return [...new Map(inlineApps.map((item) => (
+    [`${item.presentation.reference.kind}:${item.presentation.reference.id}`, item] as const
+  ))).values()];
+}
+
+export function productDeliveryReferences(
+  deliveries: ProductDeliveryEntry[],
+  excludedReferenceKeys?: ReadonlySet<string>,
+) {
   const references = deliveries.flatMap(({ key, delivery }) => {
     const candidates = delivery.presentation?.kind === 'table'
       ? delivery.presentation.items
       : delivery.presentation
         ? []
         : [delivery.primary, ...(delivery.related ?? [])];
-    return candidates.flatMap((reference, index) => (
-      reference ? [{ key: `${key}:${index}:${reference.kind}:${reference.id}`, delivery, reference }] : []
-    ));
+    return candidates.flatMap((reference, index) => {
+      if (!reference) return [];
+      const referenceKey = `${reference.kind}:${reference.id}`;
+      return excludedReferenceKeys?.has(referenceKey)
+        ? []
+        : [{ key: `${key}:${index}:${referenceKey}`, delivery, reference }];
+    });
   });
   return [...new Map(references.map((item) => (
     [`${item.reference.kind}:${item.reference.id}`, item] as const

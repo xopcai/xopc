@@ -67,6 +67,7 @@ describe('session context panel', () => {
     expect(document.body.textContent).toContain('Detached HEAD 12345678');
     expect(document.body.textContent).toContain('Linked sources do not mean');
     expect(document.querySelector('a[href*="projects/one"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="Copy environment path"]')).not.toBeNull();
   });
 
   it('closes on session switch and never shows the previous session while loading', async () => {
