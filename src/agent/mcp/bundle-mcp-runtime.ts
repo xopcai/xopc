@@ -20,6 +20,8 @@ import { loadEmbeddedMcpConfig } from "./embedded-mcp.js";
 import { resolveConnectorSecretReferences } from "../../connectors/secret-store.js";
 import { isMcpConfigRecord } from "./mcp-config-shared.js";
 import { resolveMcpTransport } from "./mcp-transport.js";
+import { isMcpAuthorizationError } from './oauth/mcp-oauth-errors.js';
+import { recordPluginMcpHealth } from '../../extensions/agent-plugins/health.js';
 import { sanitizeServerName } from "./bundle-mcp-names.js";
 import type {
   McpCatalogTool,
@@ -278,8 +280,16 @@ export function createSessionMcpRuntime(params: {
       try {
         for (const [serverName, rawServer] of Object.entries(loaded.mcpServers)) {
           failIfDisposed();
-          const resolvedServer = await resolveConnectorSecretReferences(rawServer);
-          const resolved = await resolveMcpTransport(serverName, resolvedServer, params.cfg);
+          let resolved;
+          try {
+            const resolvedServer = await resolveConnectorSecretReferences(rawServer);
+            resolved = await resolveMcpTransport(serverName, resolvedServer, params.cfg);
+          } catch (error) {
+            recordPluginMcpHealth(rawServer, 'error');
+            servers[serverName] = { serverName, launchSummary: '', toolCount: 0, resourceCount: 0, promptCount: 0,
+              error: { code: 'MCP_CONNECTION_FAILED', message: redactErrorUrls(error) } };
+            continue;
+          }
           if (!resolved) {
             continue;
           }
@@ -319,6 +329,7 @@ export function createSessionMcpRuntime(params: {
             await connectWithTimeout(client, resolved.transport, resolved.connectionTimeoutMs);
             failIfDisposed();
             const listedTools = await listAllTools(client);
+            recordPluginMcpHealth(rawServer, 'ready');
             const listedResources = await listOptionalMcpCapability({
               serverName,
               capability: "resources",
@@ -383,6 +394,12 @@ export function createSessionMcpRuntime(params: {
               });
             }
           } catch (error) {
+            servers[serverName] = {
+              serverName, launchSummary: resolved.description, toolCount: 0, resourceCount: 0, promptCount: 0,
+              error: { code: isMcpAuthorizationError(error) || (error as { code?: number })?.code === 401
+                ? 'MCP_AUTHORIZATION_REQUIRED' : 'MCP_CONNECTION_FAILED', message: redactErrorUrls(error) },
+            };
+            recordPluginMcpHealth(rawServer, servers[serverName].error?.code === 'MCP_AUTHORIZATION_REQUIRED' ? 'authorization_required' : 'error');
             if (!disposed) {
               log.warn(
                 `bundle-mcp: failed to start server "${serverName}" (${resolved.description}): ${redactErrorUrls(error)}`,

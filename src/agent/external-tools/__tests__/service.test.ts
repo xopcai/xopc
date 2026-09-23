@@ -68,6 +68,7 @@ describe('ExternalToolService', () => {
         title: descriptor.title,
         summary: descriptor.summary,
       }],
+      connectionCandidates: [],
       unavailableSources: ['mcp'],
       sourceErrors: [{ source: 'mcp', phase: 'search' }],
     });

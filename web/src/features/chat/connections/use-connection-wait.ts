@@ -5,7 +5,7 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { closeOAuthAuthorizationWindow, openOAuthAuthorizationUrl, reserveOAuthAuthorizationWindow } from '@/features/settings/oauth-authorization-window';
 
-export type ConnectionActionName = 'connect' | 'check' | 'continue' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source';
+export type ConnectionActionName = 'connect' | 'check' | 'continue' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source' | 'submit_callback';
 export function useConnectionWait(conversationId: string) {
   const path = `/api/sessions/${encodeURIComponent(conversationId)}/connection-wait`;
   const { data, mutate, isLoading } = useSWR(path, async path => {
@@ -17,7 +17,7 @@ export function useConnectionWait(conversationId: string) {
   const locked = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const act = useCallback(async (action: ConnectionActionName, needKey?: string, accountId?: string, candidateRef?: string) => {
+  const act = useCallback(async (action: ConnectionActionName, needKey?: string, accountId?: string, candidateRef?: string, callbackUrl?: string) => {
     const snapshot = current.current;
     const wait = snapshot?.wait;
     if (!wait || locked.current) return;
@@ -27,7 +27,7 @@ export function useConnectionWait(conversationId: string) {
     const popup = action === 'connect' ? reserveOAuthAuthorizationWindow() : null;
     try {
       const response = await fetchJson<{ payload: { snapshot: ConnectionWaitSnapshot; authorizationUrl?: string } }>(apiUrl(`${path}/actions`), {
-        method: 'POST', body: JSON.stringify({ action, needKey, accountId, candidateRef, waitId: wait.id,
+        method: 'POST', body: JSON.stringify({ action, needKey, accountId, candidateRef, callbackUrl, waitId: wait.id,
           expectedTranscriptId: snapshot.transcriptId, expectedVersion: wait.version, idempotencyKey: crypto.randomUUID() }),
       });
       const next = response.payload.snapshot;

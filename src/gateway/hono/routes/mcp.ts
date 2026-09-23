@@ -11,6 +11,8 @@ import { canonicalizeConfiguredMcpServer, normalizeConfiguredMcpServers } from '
 import { getWorkspacePath } from '../../../config/workspace-path-helpers.js';
 import { isManagedConnectorServer } from '../../../connectors/materialize.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { AgentPluginStore } from '../../../extensions/agent-plugins/store.js';
+import { savePluginAuthBinding } from '../../../extensions/agent-plugins/auth.js';
 
 export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const resolveServer = (id: string) => {
@@ -27,12 +29,12 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       cfg,
     });
     const configured = normalizeConfiguredMcpServers(cfg.mcp?.servers);
-    const oauthManager = getMcpOAuthManager();
-    const servers = await Promise.all(Object.entries(configured).map(async ([id, server]) => ({
+    const servers = await Promise.all(Object.entries(merged.config.mcpServers).map(async ([id, server]) => ({
       id,
+      plugin: server.xopcPlugin,
       managed: isManagedConnectorServer(server),
       connectorId: isManagedConnectorServer(server) ? server.xopcConnector.connectorId : undefined,
-      oauth: await oauthManager.status(id, server),
+      oauth: await getMcpOAuthManager(server).status(id, server),
     })));
     return c.json({
       ok: true,
@@ -67,7 +69,17 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const id = c.req.param('id');
     const server = resolveServer(id);
     if (!server) return c.json({ ok: false, error: `Unknown MCP server: ${id}` }, 404);
-    return c.json({ ok: true, payload: await getMcpOAuthManager().status(id, server) });
+    return c.json({ ok: true, payload: await getMcpOAuthManager(server).status(id, server) });
+  });
+
+  authenticated.post('/api/mcp/servers/:id/oauth/callback', deps.strictRateLimitMiddleware, async c => {
+    const id = c.req.param('id'); const server = resolveServer(id);
+    if (!server) return c.json({ ok: false, error: 'Unknown MCP server' }, 404);
+    try {
+      const body = await c.req.json();
+      if (typeof body.callbackUrl !== 'string' || body.callbackUrl.length > 16384) throw new Error('Expected callbackUrl');
+      return c.json({ ok: true, payload: await getMcpOAuthManager(server).submitCallback(id, server, body.callbackUrl) });
+    } catch { return c.json({ ok: false, error: 'OAuth callback rejected; verify the URL and active authorization session' }, 400); }
   });
 
   authenticated.post(
@@ -78,9 +90,12 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       const server = resolveServer(id);
       if (!server) return c.json({ ok: false, error: `Unknown MCP server: ${id}` }, 404);
       try {
-        const payload = await getMcpOAuthManager().start({
+        const origin = server.xopcPlugin as { id: string; serverName: string } | undefined;
+        if (origin) await savePluginAuthBinding(new AgentPluginStore(), origin.id, origin.serverName, { mode: 'oauth' });
+        const oauthServer = origin ? resolveServer(id)! : server;
+        const payload = await getMcpOAuthManager(oauthServer).start({
           serverId: id,
-          rawServer: server,
+          rawServer: oauthServer,
           cfg: deps.service.currentConfig,
         });
         return c.json({ ok: true, payload });
@@ -101,7 +116,7 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       const server = resolveServer(id);
       if (!server) return c.json({ ok: false, error: `Unknown MCP server: ${id}` }, 404);
       try {
-        const payload = await getMcpOAuthManager().disconnect(id, server);
+        const payload = await getMcpOAuthManager(server).disconnect(id, server);
         return c.json({ ok: true, payload });
       } catch (err) {
         return c.json(
@@ -159,20 +174,19 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       body && typeof body === 'object' && !Array.isArray(body) && body.server && typeof body.server === 'object'
         ? (body.server as Record<string, unknown>)
         : undefined;
-    const servers = normalizeConfiguredMcpServers(cfg.mcp?.servers);
+    if (inlineServer && id.startsWith('plugin/')) return c.json({ ok: false, error: 'Plugin servers must use their installed configuration' }, 400);
     const mergedServers = loadMergedBundleMcpConfig({ workspaceDir, cfg }).config.mcpServers;
     const knownServer =
       inlineServer ??
-      (servers[id] as Record<string, unknown> | undefined) ??
       (mergedServers[id] as Record<string, unknown> | undefined);
     if (!knownServer) {
       return c.json({ ok: false, error: `Unknown MCP server: ${id}` }, 404);
     }
     try {
-      const oauth = await getMcpOAuthManager().status(id, knownServer);
-      if (oauth.configured && oauth.status !== 'connected') {
+      const oauth = await getMcpOAuthManager(knownServer).status(id, knownServer);
+      if (oauth.configured && knownServer.xopcAutoAuth !== true && oauth.status !== 'connected') {
         return c.json(
-          { ok: false, error: oauth.session?.error ?? 'MCP server authorization is required' },
+          { ok: false, code: 'MCP_AUTHORIZATION_REQUIRED', serverId: id, error: oauth.session?.error ?? 'MCP server authorization is required' },
           409,
         );
       }
@@ -192,6 +206,7 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         cfg: testCfg,
         serverId: id,
       });
+      if (capabilities.error) return c.json({ ok: false, code: capabilities.error.code, serverId: id, error: capabilities.error.message }, capabilities.error.code === 'MCP_AUTHORIZATION_REQUIRED' ? 409 : 502);
       return c.json({
         ok: true,
         payload: {
@@ -205,10 +220,5 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         500,
       );
     }
-  });
-
-  authenticated.post('/api/mcp/approvals/respond', async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    return c.json({ ok: true, payload: { acknowledged: true, body } });
   });
 }

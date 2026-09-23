@@ -17,6 +17,8 @@ import { XopcStdioClientTransport } from "./mcp-stdio-transport.js";
 import { resolveMcpTransportConfig } from "./mcp-transport-config.js";
 import { XopcMcpOAuthClientProvider } from "./oauth/mcp-oauth-provider.js";
 import { McpOAuthStore } from "./oauth/mcp-oauth-store.js";
+import { createPluginHttpFetch } from './plugin-http-fetch.js';
+import { pluginOAuthScope } from '../../extensions/agent-plugins/auth.js';
 
 export type ResolvedMcpTransport = {
   transport: Transport;
@@ -112,6 +114,8 @@ export async function resolveMcpTransport(
   if (!resolved) {
     return null;
   }
+  const plugin = rawServer && typeof rawServer === 'object'
+    ? (rawServer as { xopcPlugin?: { dataDir: string } }).xopcPlugin : undefined;
   if (resolved.kind === "stdio") {
     const command = config
       ? await resolveRuntimeCommand({
@@ -134,6 +138,7 @@ export async function resolveMcpTransport(
       env,
       cwd: resolved.cwd,
       stderr: "pipe",
+      pluginDataDir: plugin?.dataDir,
     });
     return {
       transport,
@@ -151,7 +156,7 @@ export async function resolveMcpTransport(
     const oauthEnabled = Boolean(resolved.auth);
     let oauthProvider = options.oauthProvider;
     if (resolved.auth && !oauthProvider) {
-      const store = options.oauthStore ?? new McpOAuthStore();
+      const store = options.oauthStore ?? new McpOAuthStore(pluginOAuthScope(rawServer));
       const record = await store.load(serverUrl);
       if (record?.tokens) {
         oauthProvider = new XopcMcpOAuthClientProvider({
@@ -164,8 +169,8 @@ export async function resolveMcpTransport(
     return {
       transport: new StreamableHTTPClientTransport(serverUrl, {
         authProvider: oauthProvider,
-        requestInit: !oauthEnabled && resolved.headers ? { headers: resolved.headers } : undefined,
-        fetch: oauthEnabled
+        requestInit: !plugin && !oauthEnabled && resolved.headers ? { headers: resolved.headers } : undefined,
+        fetch: plugin ? createPluginHttpFetch(serverUrl, resolved.headers ?? {}) : oauthEnabled
           ? buildScopedHttpFetch(serverUrl, resolved.headers ?? {})
           : fetchWithUndici,
       }),
@@ -181,9 +186,9 @@ export async function resolveMcpTransport(
   const hasHeaders = Object.keys(headers).length > 0;
   return {
     transport: new SSEClientTransport(new URL(resolved.url), {
-      requestInit: hasHeaders ? { headers } : undefined,
-      fetch: fetchWithUndici,
-      eventSourceInit: { fetch: buildSseEventSourceFetch(headers) },
+      requestInit: !plugin && hasHeaders ? { headers } : undefined,
+      fetch: plugin ? createPluginHttpFetch(new URL(resolved.url), headers) : fetchWithUndici,
+      eventSourceInit: { fetch: plugin ? createPluginHttpFetch(new URL(resolved.url), headers) as SseEventSourceFetch : buildSseEventSourceFetch(headers) },
     }),
     description: resolved.description,
     transportType: "sse",

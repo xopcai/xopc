@@ -11,11 +11,13 @@ const copy = {
     ready: '连接已就绪', continue: '继续', check: '我已完成授权', authorizing: '等待完成授权', queued: '已排队，准备继续',
     scope: '确认后继续', scopeHint: '这个目标已等待了一段时间。请确认仍要按下方原始要求继续；如需修改时间范围，请先在聊天中说明。未读等条件将以实际执行时为准。',
     account: '选择账号', all: '查看全部连接器', close: '关闭', intro: '完成连接后，将继续当前目标。你也可以继续发送消息。',
+    callbackHint: '远程 Gateway 无法接收本地回调时，粘贴浏览器地址栏中的完整回调 URL。', callbackPlaceholder: '完整回调 URL', callbackSubmit: '完成连接',
     replace: '更换应用', confirmReplace: '确认改用', apps: '个应用需要连接', preserved: '目标已保留', retry: '重试检查', toolsUnavailable: '应用工具暂不可用', toolsHint: '账号已连接，当前无法使用任务所需工具。可以重试检查，无需重新授权。' },
   en: { waiting: 'Waiting for connection', connect: 'Connect and continue', reconnect: 'Reconnect', details: 'Details', skip: 'Skip connection', cancel: 'Cancel this objective',
     ready: 'Connection ready', continue: 'Continue', check: 'Check authorization', authorizing: 'Waiting for authorization', queued: 'Queued to continue',
     scope: 'Confirm and continue', scopeHint: 'This objective has been waiting for a while. Confirm the original request below, or send a message to change the time range first. Conditions such as unread status are evaluated at execution time.',
     account: 'Choose an account', all: 'View all connectors', close: 'Close', intro: 'The current objective will continue after connecting. You can keep sending messages.',
+    callbackHint: 'If a remote Gateway cannot receive the local callback, paste the complete callback URL from the browser address bar.', callbackPlaceholder: 'Complete callback URL', callbackSubmit: 'Complete connection',
     replace: 'Change app', confirmReplace: 'Confirm switch to', apps: 'apps need connecting', preserved: 'Objective preserved', retry: 'Retry check', toolsUnavailable: 'App tools unavailable', toolsHint: 'The account is connected, but the tools needed for this task are unavailable. Retry the check without reconnecting.' },
 };
 const secondary = 'rounded-lg border border-edge px-3 py-1.5 text-sm text-fg hover:bg-surface-hover disabled:opacity-50';
@@ -25,6 +27,7 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
   const { wait, isLoading, busy, error, act } = useConnectionWait(conversationId);
   const [open, setOpen] = useState(false);
   const [replacement, setReplacement] = useState<{ needKey: string; candidateRef: string; label: string }>();
+  const [callbackUrls, setCallbackUrls] = useState<Record<string, string>>({});
   const language = useLocaleStore(state => state.language);
   const t = copy[language];
   if (isLoading) return <Skeleton className="mb-2 h-10 w-full rounded-xl" />;
@@ -88,6 +91,17 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
               </div> : null}
               {need.reason && <p className="text-xs text-fg-muted">{need.reason}</p>}
               {need.phase === 'authorizing' && <div className="flex items-center justify-between text-xs text-fg-muted"><span>{t.authorizing}</span><button type="button" disabled={busy} className="text-accent" onClick={() => void act('connect', need.key)}>{t.reconnect}</button></div>}
+              {need.phase === 'authorizing' && need.target.type === 'plugin-mcp' ? <div className="space-y-2 border-t border-edge pt-2">
+                <p className="text-xs text-fg-muted">{t.callbackHint}</p>
+                <input type="password" autoComplete="off" value={callbackUrls[need.key] ?? ''} placeholder={t.callbackPlaceholder}
+                  className="w-full rounded-lg border border-edge bg-surface-inset px-3 py-2 text-sm text-fg"
+                  onChange={event => setCallbackUrls(current => ({ ...current, [need.key]: event.target.value }))} />
+                <button type="button" className={secondary} disabled={busy || !(callbackUrls[need.key]?.trim())} onClick={() => {
+                  const callbackUrl = callbackUrls[need.key].trim();
+                  setCallbackUrls(current => ({ ...current, [need.key]: '' }));
+                  void act('submit_callback', need.key, undefined, undefined, callbackUrl);
+                }}>{t.callbackSubmit}</button>
+              </div> : null}
             </div>)}
             <a href="#/connectors" className="text-sm text-accent" onClick={() => setOpen(false)}>{t.all}</a>
           </div>

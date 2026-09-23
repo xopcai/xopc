@@ -350,7 +350,8 @@ export class ComposioToolProvider implements ExternalToolProvider {
     const requestedAccount = typeof executionArgs[CONNECTION_ARGUMENT] === 'string'
       ? executionArgs[CONNECTION_ARGUMENT]
       : boundConnection ? getConnectorConnection(boundConnection)?.accountId : undefined;
-    const bindings = available.context ? connectionBindings(available.context.conversationId).filter(need => need.connectorId === resolved.installation.connectorId) : [];
+    const bindings = available.context ? connectionBindings(available.context.conversationId)
+      .filter(need => need.target.type === 'connector' && need.target.connectorId === resolved.installation.connectorId) : [];
     if (bindings.length > 1 && !requestedAccount) return textResult({ status: 'account_selection_required',
       accounts: bindings, instruction: 'Choose the account for this operation using xopcAccountId.' });
     if (bindings.length && requestedAccount && !bindings.some(need => need.accountId === requestedAccount)) {
@@ -364,7 +365,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
       const result = requireSessionConnection({
         conversationId: available.context.conversationId, principalId: available.principalId,
         agentId: available.agentId ?? 'main', summary: `Continue ${action.actionId} using ${toolkit}`,
-        needs: [{ key: `${resolved.installation.connectorId}:default`, connectorId: resolved.installation.connectorId,
+        needs: [{ key: `${resolved.installation.connectorId}:default`, target: { type: 'connector', connectorId: resolved.installation.connectorId },
           accountId: requestedAccount,
           label: getConnectorDefinition(resolved.installation.connectorId)?.displayName ?? toolkit,
           capabilities: [action.actionId] }],
@@ -479,7 +480,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
       const wait = available.context && getSessionInputState(available.context.conversationId).activeInputId
         ? requireSessionConnection({ conversationId: available.context.conversationId, principalId: available.principalId,
           agentId: available.agentId ?? 'main', summary: `Confirm ${action.actionId}`,
-          needs: [{ key: `${resolved.installation.connectorId}:${connection.accountId}`, connectorId: resolved.installation.connectorId,
+          needs: [{ key: `${resolved.installation.connectorId}:${connection.accountId}`, target: { type: 'connector', connectorId: resolved.installation.connectorId },
             accountId: connection.accountId, connectionId: connection.id, label: toolkit, capabilities: [action.actionId] }] }) : undefined;
       const approval = createConnectorApproval({
         waitId: wait?.waitId,

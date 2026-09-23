@@ -5,6 +5,7 @@
  */
 
 import { createSkillLoader } from './index.js';
+import { AgentPluginStore } from '../../extensions/agent-plugins/store.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSkillConfigManager, isSkillEnabled } from './config.js';
@@ -36,6 +37,7 @@ export class SkillManager {
   private workspace: string;
   private bundledSkillsDir: string;
   private version = 0;
+  private pluginRevision = '';
   private loadedAt = 0;
   private reloadInProgress = false;
   private reloadPending = false;
@@ -93,6 +95,7 @@ export class SkillManager {
       try {
         const result = load();
         this.applyLoadResult(result);
+        this.pluginRevision = new AgentPluginStore().revisionKey();
         this.lastReloadOk = true;
         this.lastReloadError = undefined;
         log.info({ count: result.skills.length, version: this.version }, 'Skills reloaded');
@@ -129,6 +132,7 @@ export class SkillManager {
    * Get the skill prompt to append to system prompt
    */
   getPrompt(): string {
+    this.refreshPlugins();
     return this.skillPrompt;
   }
 
@@ -163,7 +167,12 @@ export class SkillManager {
    * Get all loaded skills
    */
   getSkills(): Skill[] {
+    this.refreshPlugins();
     return [...this.skills];
+  }
+
+  private refreshPlugins(): void {
+    if (!this.reloadInProgress && this.pluginRevision !== new AgentPluginStore().revisionKey()) this.reload();
   }
 
   getDiagnostics(): SkillDiagnostic[] {

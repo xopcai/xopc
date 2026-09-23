@@ -174,7 +174,6 @@ Requires gateway auth (Bearer token or configured password).
 | `/api/mcp/servers` | GET | List configured + extension-merged servers |
 | `/api/mcp/servers/:id/tools` | GET | Tool catalog for a server (uses saved config) |
 | `/api/mcp/servers/:id/test` | POST | Connect with optional body override + list tools |
-| `/api/mcp/approvals/respond` | POST | Channel bridge approval stub |
 
 Config CRUD for MCP uses the general config API: `GET /api/config` and `PATCH /api/config` (see [Gateway](./gateway.md)).
 
