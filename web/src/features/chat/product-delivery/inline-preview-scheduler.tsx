@@ -87,6 +87,7 @@ export function InlinePreviewSchedulerProvider({ children }: { children: ReactNo
   }, [schedule]);
 
   useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
     observer.current = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         const candidate = [...candidates.current.values()].find((item) => item.element === entry.target);
