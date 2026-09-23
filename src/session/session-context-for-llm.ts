@@ -27,6 +27,17 @@ export interface XopcTranscriptContextEntry {
   createdAt?: string;
 }
 
+/** Immutable hidden context captured when an ephemeral side chat becomes a session. */
+export interface XopcTranscriptSideChatOriginEntry {
+  type: 'side_chat_origin';
+  version: 1;
+  parentConversationId: string;
+  parentTranscriptId: string;
+  createdAt: string;
+  contentHash: string;
+  contextMessages: AgentMessage[];
+}
+
 /** Persisted-only row for replaying local shell executions in clients. */
 export interface XopcTranscriptBashExecutionEntry {
   role: 'bashExecution';
@@ -143,6 +154,7 @@ export interface XopcTranscriptSessionInfoEntry {
 export type TranscriptStoredRow =
   | AgentMessage
   | XopcTranscriptContextEntry
+  | XopcTranscriptSideChatOriginEntry
   | XopcTranscriptBashExecutionEntry
   | XopcTranscriptCustomMessageEntry
   | XopcTranscriptCustomMessageFileEntry
@@ -158,6 +170,19 @@ export type TranscriptStoredRow =
 export function isTranscriptContextEntry(x: unknown): x is XopcTranscriptContextEntry {
   if (!x || typeof x !== 'object') return false;
   return (x as Record<string, unknown>).kind === 'context';
+}
+
+export function isTranscriptSideChatOriginEntry(x: unknown): x is XopcTranscriptSideChatOriginEntry {
+  if (!x || typeof x !== 'object') return false;
+  const row = x as Record<string, unknown>;
+  return row.type === 'side_chat_origin'
+    && row.version === 1
+    && typeof row.parentConversationId === 'string'
+    && typeof row.parentTranscriptId === 'string'
+    && typeof row.createdAt === 'string'
+    && typeof row.contentHash === 'string'
+    && Array.isArray(row.contextMessages)
+    && row.contextMessages.every(isLikelyAgentMessage);
 }
 
 export function isTranscriptBashExecutionEntry(x: unknown): x is XopcTranscriptBashExecutionEntry {
@@ -471,6 +496,10 @@ function sanitizeToolPairs(messages: AgentMessage[]): AgentMessage[] {
 export function transcriptRowsFromJsonArray(arr: unknown[]): TranscriptStoredRow[] {
   const out: TranscriptStoredRow[] = [];
   for (const x of arr) {
+    if (isTranscriptSideChatOriginEntry(x)) {
+      out.push(x);
+      continue;
+    }
     if (isTranscriptContextEntry(x)) {
       out.push(x);
       continue;
@@ -514,6 +543,11 @@ export function transcriptRowsFromJsonArray(arr: unknown[]): TranscriptStoredRow
 export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMessage[] {
   const out: AgentMessage[] = [];
   for (const r of rows) {
+    if (isTranscriptSideChatOriginEntry(r)) {
+      out.length = 0;
+      out.push(...r.contextMessages);
+      continue;
+    }
     if (isTranscriptCompactionEntry(r)) {
       out.length = 0;
       out.push(...r.messages);
@@ -577,6 +611,7 @@ export function mergeLlmMessagesPreservingContextRows(
   for (const r of prevRows) {
     if (
       isTranscriptContextEntry(r) ||
+      isTranscriptSideChatOriginEntry(r) ||
       isTranscriptBashExecutionEntry(r) ||
       isTranscriptCustomMessageEntry(r) ||
       isTranscriptCustomStateEntry(r) ||

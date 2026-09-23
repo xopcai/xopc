@@ -67,6 +67,7 @@ type SideChatPaneState = StoredState & {
   setDraftAttachments: (id: string, attachments: Attachment[]) => void;
   rememberMessages: (id: string, messages: Message[]) => void;
   markEnded: (id: string, reason: NonNullable<SideChatTab['ended']>) => void;
+  markPromoted: (id: string, conversationId: string) => void;
   replaceTab: (oldId: string, tab: SideChatTab) => void;
   reset: () => void;
   pendingCreate: PendingCreate | null;
@@ -125,6 +126,11 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
       set({ readings });
     },
     markEnded: (id, ended) => commit({ tabs: get().tabs.map((tab) => tab.id === id ? { ...tab, ended, runId: undefined } : tab) }),
+    markPromoted: (id, conversationId) => commit({
+      tabs: get().tabs.map((tab) => tab.id === id
+        ? { ...tab, ended: 'promoted', promotedConversationId: conversationId, runId: undefined }
+        : tab),
+    }),
     replaceTab: (oldId, tab) => {
       const state = get();
       if (!state.tabs.some((existing) => existing.id === oldId)) return;

@@ -42,6 +42,9 @@ export class SideChatRunService {
       throw new SideChatError('content or attachments are required', 'INVALID_REQUEST');
     }
     const sideChat = this.options.manager.get(sideChatId, clientInstanceId);
+    if (sideChat.status !== 'idle') {
+      throw new SideChatError('A side chat run is already active', 'CONFLICT');
+    }
     if (this.activeBySideChat.has(sideChatId)) {
       throw new SideChatError('A side chat run is already active', 'CONFLICT');
     }

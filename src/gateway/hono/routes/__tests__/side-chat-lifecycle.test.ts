@@ -69,4 +69,26 @@ describe('side chat lifecycle routes', () => {
     expect(submit).toHaveBeenCalledWith(chat.id, 'owner', { content: '', attachments: [attachment] });
     await manager.disposeAll();
   });
+
+  it('promotes a side chat with client ownership and preserves idempotent status', async () => {
+    const promote = vi.fn(async () => ({
+      conversationId: 'side-1',
+      created: true,
+      session: { key: 'side-1' },
+    }));
+    const app = new Hono();
+    registerSideChatRoutes(app, {
+      service: { sideChatPromotions: { promote } },
+      chatRateLimitMiddleware: async (_c, next) => { await next(); },
+    } as unknown as AuthenticatedRouteDeps);
+
+    const response = await app.request('/api/side-chats/side-1/promote', {
+      method: 'POST',
+      headers: { 'x-xopc-client-instance-id': 'owner' },
+    });
+
+    expect(response.status).toBe(201);
+    expect(promote).toHaveBeenCalledWith('side-1', 'owner');
+    expect(await response.json()).toMatchObject({ ok: true, conversationId: 'side-1', created: true });
+  });
 });

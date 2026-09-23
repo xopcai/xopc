@@ -2,6 +2,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai/compat';
 
 import type { Config } from '../config/schema.js';
+import type { SessionAgentConfig } from './config-types.js';
 import { resolveStateDir } from '../config/paths-state.js';
 import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
 import { readPostCompactionContext } from '../agent/reply/post-compaction-context.js';
@@ -121,6 +122,14 @@ export interface ForkSessionResult {
   conversationId: string;
   rowCount: number;
   lastTurnId?: string;
+}
+
+export interface CreateSessionFromRowsOptions {
+  targetKey: string;
+  cwd: string;
+  metadata: SessionMetadataSeed & { agentId: string };
+  rows: TranscriptStoredRow[];
+  config?: SessionAgentConfig;
 }
 
 function isTranscriptMessageRole(row: TranscriptStoredRow | undefined, role: string): boolean {
@@ -1049,6 +1058,25 @@ export class SessionStore {
     targetKey: string,
   ): Promise<{ conversationId: string; rowCount: number }> {
     return this.forkSessionRows(sourceKey, targetKey);
+  }
+
+  async createSessionFromRows(
+    options: CreateSessionFromRowsOptions,
+  ): Promise<{ conversationId: string; rowCount: number }> {
+    return this.runStoreMutation(async () => {
+      requireXopcDatabase();
+      if (!options.targetKey.trim()) throw new Error('Target session key is required');
+      if (options.rows.length === 0) throw new Error('Session transcript cannot be empty');
+      return runSqliteWriteTransaction(() => {
+        if (getSessionMetadata(options.targetKey)) {
+          throw new Error(`Target session already exists: ${options.targetKey}`);
+        }
+        ensureSessionRecord(options.targetKey, options.cwd, options.metadata);
+        replaceTranscriptRows(options.targetKey, options.rows);
+        if (options.config) setSessionConfig(options.targetKey, options.config, options.cwd);
+        return { conversationId: options.targetKey, rowCount: options.rows.length };
+      });
+    });
   }
 
   async forkSessionRows(

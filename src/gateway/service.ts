@@ -51,7 +51,7 @@ import { ExtensionLoader, areExtensionsGloballyDisabled, buildExtensionMetadataS
 import type { ManifestRegistryEntry } from '../extensions/manifest-registry.js';
 import type { ResolvedExtensionConfig } from '../extensions/types/index.js';
 import { SessionIndex } from '../session/index.js';
-import { EphemeralSideChatManager, SideChatRunService } from './side-chat/index.js';
+import { EphemeralSideChatManager, SideChatPromotionService, SideChatRunService } from './side-chat/index.js';
 import { onSessionTranscriptUpdate } from '../session/transcript-events.js';
 import type { Config } from '../config/schema.js';
 import { getAgentDefaultModelRef } from '../config/schema.js';
@@ -302,6 +302,7 @@ export class GatewayService {
   /** Process-local, non-persistent side conversations forked from durable sessions. */
   readonly sideChats: EphemeralSideChatManager;
   readonly sideChatRuns: SideChatRunService;
+  readonly sideChatPromotions: SideChatPromotionService;
 
   /**
    * Session CRUD / search / compaction / tag-archive-pin / stats — the gateway
@@ -588,6 +589,7 @@ export class GatewayService {
     let sideChatRuns: SideChatRunService | undefined;
     this.sideChats = new EphemeralSideChatManager({
       getParentMetadata: (conversationId) => this.sessionIndex.getSessionMetadata(conversationId),
+      getParentConfig: async (conversationId) => getSessionConfig(conversationId),
       loadParentMessages: (conversationId) => this.sessionIndex.getStore().load(conversationId),
       getDefaultModelRef: (conversationId) => this.ensureAgentService().getModelForSession(conversationId),
       getDefaultThinkingLevel: (conversationId) => this.ensureAgentService().getThinkingLevelForSession(conversationId),
@@ -608,6 +610,11 @@ export class GatewayService {
       agentRunner: this.agentRunner,
       publishRealtime: (topic, event, data) => this.realtime.broker.publish(topic, event, data),
       completeRealtimeTopic: (topic) => this.realtime.completeTopic(topic),
+    });
+    this.sideChatPromotions = new SideChatPromotionService({
+      manager: this.sideChats,
+      sessionIndex: this.sessionIndex,
+      getAgentService: () => this.ensureAgentService(),
     });
 
     this.sessions = new GatewaySessionsApi({

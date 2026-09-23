@@ -6,6 +6,7 @@ import {
   isTranscriptCustomMessageEntry,
   isTranscriptLabelEntry,
   isTranscriptMetadataEntry,
+  isTranscriptSideChatOriginEntry,
   isTranscriptSummaryMessageEntry,
   type TranscriptStoredRow,
 } from './session-context-for-llm.js';
@@ -284,6 +285,9 @@ function messageLabel(row: AgentMessage): string {
 }
 
 function rowPreview(row: TranscriptStoredRow): string {
+  if (isTranscriptSideChatOriginEntry(row)) {
+    return 'Side chat parent context';
+  }
   if (isTranscriptContextEntry(row)) {
     return truncateText(row.text ?? JSON.stringify(row.data ?? {}));
   }
@@ -335,6 +339,9 @@ function rowPreview(row: TranscriptStoredRow): string {
 }
 
 function rowContentText(row: TranscriptStoredRow): string | undefined {
+  if (isTranscriptSideChatOriginEntry(row)) {
+    return 'Side chat parent context';
+  }
   if (isTranscriptContextEntry(row)) {
     return row.text;
   }
@@ -409,6 +416,7 @@ function titleForEntry(params: {
 }
 
 function isDisplayMessageRow(row: TranscriptStoredRow): boolean {
+  if (isTranscriptSideChatOriginEntry(row)) return false;
   if (isTranscriptContextEntry(row)) return false;
   if (isTranscriptLabelEntry(row)) return false;
   if (isTranscriptMetadataEntry(row)) return false;
@@ -459,7 +467,7 @@ function classifyRow(params: {
 }): { kind: SessionTimelineItemKind; files: string[]; toolName?: string } {
   const { row, label, role, toolCall } = params;
   const record = asRecord(row);
-  if (isTranscriptContextEntry(row) || isTranscriptLabelEntry(row) || isTranscriptMetadataEntry(row)) {
+  if (isTranscriptSideChatOriginEntry(row) || isTranscriptContextEntry(row) || isTranscriptLabelEntry(row) || isTranscriptMetadataEntry(row)) {
     return { kind: 'context', files: [] };
   }
   if (isTranscriptBashExecutionEntry(row)) {
@@ -501,7 +509,11 @@ export function buildTranscriptOutline(rows: TranscriptStoredRow[]): TranscriptO
     let toolCallPreview: string | undefined;
     let toolCall: ToolCallDisplay | undefined;
 
-    if (isTranscriptContextEntry(row)) {
+    if (isTranscriptSideChatOriginEntry(row)) {
+      label = 'side-chat-origin';
+      parentId = currentTurnId;
+      depth = currentTurnId ? 1 : 0;
+    } else if (isTranscriptContextEntry(row)) {
       label = 'context';
       parentId = currentTurnId;
       depth = currentTurnId ? 1 : 0;

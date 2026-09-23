@@ -1,6 +1,6 @@
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
-export type SideChatStatus = 'idle' | 'running' | 'waiting-approval' | 'waiting-input' | 'closing';
+export type SideChatStatus = 'idle' | 'running' | 'waiting-approval' | 'waiting-input' | 'promoting' | 'closing';
 
 export type SideChatSelection =
   | {

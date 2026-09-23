@@ -11,6 +11,7 @@ export type {
   SessionStoreOptions,
   ForkSessionAtTurnOptions,
   ForkSessionResult,
+  CreateSessionFromRowsOptions,
 } from './store.js';
 export { SessionConfigStore, resolveThinkingLevel, resolveReasoningLevel, resolveVerboseLevel } from './config-store.js';
 export {
