@@ -234,7 +234,7 @@ export type SearchProviderEntry = z.infer<typeof SearchProviderEntrySchema>;
 
 export const WebSearchConfigSchema = z.object({
   maxResults: z.number().default(5),
-  /** Ordered API providers; empty → HTML fallback only */
+  /** Ordered manual providers; when none are usable, try XOPC Cloud then HTML fallback. */
   providers: z.array(SearchProviderEntrySchema).default([]),
 });
 

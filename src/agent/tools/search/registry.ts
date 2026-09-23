@@ -29,8 +29,14 @@ export class SearchProviderRegistry {
     cloudProvider?: SearchProvider,
   ): SearchProvider[] {
     const list: SearchProvider[] = [];
+    const hasUsableManualProvider = config.providers.some((provider) => {
+      if (provider.disabled) return false;
+      return provider.type === 'searxng'
+        ? Boolean(provider.url?.trim())
+        : Boolean(provider.apiKey?.trim());
+    });
 
-    if (config.providers.length === 0) {
+    if (!hasUsableManualProvider) {
       list.push(cloudProvider ?? new XopcCloudSearchProvider({ region: config.region }));
     }
 
