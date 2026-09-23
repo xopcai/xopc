@@ -128,6 +128,23 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
   }, [connect]);
 
   useEffect(() => {
+    const onProfileChanged = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== 'local' || !changes['xopc.browser.profile']) return;
+      const next = changes['xopc.browser.profile'].newValue as BrowserGatewayProfile | undefined;
+      if (next?.gatewayId && next.gatewayUrl && next.refreshToken) {
+        setProfile(next);
+        setError('');
+        setState('online');
+      } else {
+        setProfile(undefined);
+        setState('unpaired');
+      }
+    };
+    chrome.storage.onChanged.addListener(onProfileChanged);
+    return () => chrome.storage.onChanged.removeListener(onProfileChanged);
+  }, []);
+
+  useEffect(() => {
     function closeSettings(event: MouseEvent) {
       const target = event.target as Node;
       if (!settingsMenu.current?.contains(target) && !settingsTrigger.current?.contains(target)) {
@@ -284,7 +301,7 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
             </div>
           </div>
         ) : null}
-      </section> : <ChatPanel key={profile!.gatewayId} gatewayId={profile!.gatewayId} />}
+      </section> : <ChatPanel key={`${profile!.gatewayId}:${profile!.gatewayUrl}`} gatewayId={profile!.gatewayId} />}
     </main>
   );
 }

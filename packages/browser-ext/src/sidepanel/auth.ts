@@ -13,12 +13,15 @@ import { clearBrowserChatState } from './chat-state';
 
 const PROFILE_KEY = 'xopc.browser.profile';
 const PAIRING_JOURNAL_KEY = 'xopc.browser.pairing';
+const REFRESH_JOURNAL_KEY = 'xopc.browser.auth-refresh';
 const AUTO_CONNECT_KEY = 'xopc.browser.auto-connect';
 const KEY_DATABASE = 'xopc-browser-identity';
 const KEY_STORE = 'identity';
 const KEY_NAME = 'device-key';
 const NATIVE_HOST_NAME = 'ai.xopc.browser';
 const GATEWAY_REQUEST_TIMEOUT_MS = 8_000;
+const ACCESS_TOKEN_EXPIRY_MARGIN_MS = 30_000;
+const REFRESH_LOCK_NAME = 'xopc.browser.auth-refresh';
 let refreshTask: Promise<BrowserGatewayProfile> | undefined;
 
 export type BrowserGatewayProfile = {
@@ -45,6 +48,13 @@ type BrowserPairingJournal = {
   completed?: { deviceId: string; gatewayName: string };
   refresh?: { requestId: string; nextRefreshToken: string };
   nextOrigin?: string;
+};
+
+type BrowserRefreshJournal = {
+  gatewayId: string;
+  refreshToken: string;
+  requestId: string;
+  nextRefreshToken: string;
 };
 
 export type PendingBrowserPairing = { invitation: string; nextOrigin?: string };
@@ -253,8 +263,8 @@ async function hasGatewayOriginPermission(origin: string): Promise<boolean> {
 }
 
 class GatewayHttpError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
+  constructor(readonly code: string, readonly status: number, readonly serverMessage?: string) {
+    super(code);
     this.name = 'GatewayHttpError';
   }
 }
@@ -281,6 +291,7 @@ async function post(origin: string, path: string, body: unknown): Promise<Record
     throw new GatewayHttpError(
       json.error?.code ?? json.error?.message ?? t('errorGatewayStatus', String(response.status)),
       response.status,
+      json.error?.message,
     );
   }
   return json as Record<string, unknown>;
@@ -563,26 +574,109 @@ export async function readProfile(): Promise<BrowserGatewayProfile | undefined> 
   const stored = await chrome.storage.local.get([PROFILE_KEY, PAIRING_JOURNAL_KEY]);
   const profile = stored[PROFILE_KEY] as BrowserGatewayProfile | undefined;
   if (!profile?.gatewayId || !profile.gatewayUrl || !profile.refreshToken) return undefined;
-  if (stored[PAIRING_JOURNAL_KEY]) await chrome.storage.local.remove(PAIRING_JOURNAL_KEY);
+  const pairing = stored[PAIRING_JOURNAL_KEY] as BrowserPairingJournal | undefined;
+  if (pairing?.payload?.gatewayId === profile.gatewayId && pairing.completed?.deviceId === profile.deviceId) {
+    await chrome.storage.local.remove(PAIRING_JOURNAL_KEY);
+  }
   return profile;
 }
 
-export async function getAccessProfile(): Promise<BrowserGatewayProfile> {
+function withRefreshLock<T>(operation: () => Promise<T>): Promise<T> {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) return operation();
+  // The side panel and MV3 service worker are separate realms; a module-level
+  // promise alone cannot prevent both from rotating the same credential.
+  return new Promise<T>((resolve, reject) => {
+    void locks.request(REFRESH_LOCK_NAME, () => operation().then(resolve, reject)).catch(reject);
+  });
+}
+
+function isRefreshDenied(cause: unknown): boolean {
+  return cause instanceof GatewayHttpError && cause.status === 401 && cause.code === 'REFRESH_DENIED';
+}
+
+async function refreshJournalFor(profile: BrowserGatewayProfile): Promise<BrowserRefreshJournal> {
+  const stored = await chrome.storage.local.get(REFRESH_JOURNAL_KEY);
+  const journal = stored[REFRESH_JOURNAL_KEY] as BrowserRefreshJournal | undefined;
+  if (journal?.gatewayId === profile.gatewayId && journal.refreshToken === profile.refreshToken) return journal;
+  // Persist before the request so a worker suspension can replay the exact
+  // rotation instead of presenting the old credential as a reuse attempt.
+  const next = {
+    gatewayId: profile.gatewayId,
+    refreshToken: profile.refreshToken,
+    requestId: crypto.randomUUID(),
+    nextRefreshToken: createRefreshToken(),
+  };
+  await chrome.storage.local.set({ [REFRESH_JOURNAL_KEY]: next });
+  return next;
+}
+
+async function recoverLocalProfile(gatewayId: string): Promise<BrowserGatewayProfile | undefined> {
+  const local = await discoverLocalGateway();
+  if (!local) return undefined;
+  try {
+    if (parseBrowserPairingInvitation(local.invitation).gatewayId !== gatewayId) return undefined;
+    return await pairGateway(local.invitation, () => undefined, new URL(local.gatewayUrl).origin);
+  } catch {
+    return undefined;
+  }
+}
+
+async function refreshStoredProfile(options?: { rejectedAccessToken?: string }): Promise<BrowserGatewayProfile> {
+  return withRefreshLock(async () => {
+    const profile = await readProfile();
+    if (!profile) throw new Error(t('errorBrowserNotPaired'));
+    if (options?.rejectedAccessToken && profile.accessToken !== options.rejectedAccessToken
+      && profile.accessTokenExpiresAt > Date.now() + ACCESS_TOKEN_EXPIRY_MARGIN_MS) return profile;
+    if (!options?.rejectedAccessToken
+      && profile.accessTokenExpiresAt > Date.now() + ACCESS_TOKEN_EXPIRY_MARGIN_MS) return profile;
+
+    const gatewayUrls = profile.gatewayUrls?.length ? profile.gatewayUrls : [profile.gatewayUrl];
+    const journal = await refreshJournalFor(profile);
+    try {
+      const tokens = await refreshAccessToken(
+        gatewayUrls,
+        profile.refreshToken,
+        await getOrCreateKeyPair(),
+        profile,
+        journal,
+      );
+      const current = await readProfile();
+      if (current && current.gatewayId === profile.gatewayId && current.refreshToken !== profile.refreshToken) {
+        return current;
+      }
+      const next = {
+        ...profile,
+        ...tokens,
+        gatewayUrls: [tokens.gatewayUrl, ...gatewayUrls.filter(candidate => candidate !== tokens.gatewayUrl)],
+      };
+      await chrome.storage.local.set({ [PROFILE_KEY]: next });
+      await chrome.storage.local.remove(REFRESH_JOURNAL_KEY);
+      return next;
+    } catch (cause) {
+      const current = await readProfile();
+      if (current && current.gatewayId === profile.gatewayId && current.refreshToken !== profile.refreshToken
+        && current.accessTokenExpiresAt > Date.now()) return current;
+      if (!isRefreshDenied(cause)) throw cause;
+
+      const recovered = await recoverLocalProfile(profile.gatewayId);
+      if (recovered) {
+        await chrome.storage.local.remove(REFRESH_JOURNAL_KEY);
+        return recovered;
+      }
+      await chrome.storage.local.remove([PROFILE_KEY, REFRESH_JOURNAL_KEY]);
+      throw new Error(t('errorBrowserNotPaired'), { cause });
+    }
+  });
+}
+
+export async function getAccessProfile(options?: { rejectedAccessToken?: string }): Promise<BrowserGatewayProfile> {
   const profile = await readProfile();
   if (!profile) throw new Error(t('errorBrowserNotPaired'));
-  if (profile.accessTokenExpiresAt > Date.now() + 30_000) return profile;
+  if (!options?.rejectedAccessToken
+    && profile.accessTokenExpiresAt > Date.now() + ACCESS_TOKEN_EXPIRY_MARGIN_MS) return profile;
   if (refreshTask) return refreshTask;
-  refreshTask = (async () => {
-    const gatewayUrls = profile.gatewayUrls?.length ? profile.gatewayUrls : [profile.gatewayUrl];
-    const tokens = await refreshAccessToken(gatewayUrls, profile.refreshToken, await getOrCreateKeyPair(), profile);
-    const next = {
-      ...profile,
-      ...tokens,
-      gatewayUrls: [tokens.gatewayUrl, ...gatewayUrls.filter(candidate => candidate !== tokens.gatewayUrl)],
-    };
-    await chrome.storage.local.set({ [PROFILE_KEY]: next });
-    return next;
-  })();
+  refreshTask = refreshStoredProfile(options);
   try {
     return await refreshTask;
   } finally {
@@ -599,9 +693,7 @@ export async function gatewayFetch(path: string, init: RequestInit = {}): Promis
   };
   let response = await request();
   if (response.status !== 401) return response;
-  profile = { ...profile, accessTokenExpiresAt: 0 };
-  await chrome.storage.local.set({ [PROFILE_KEY]: profile });
-  profile = await getAccessProfile();
+  profile = await getAccessProfile({ rejectedAccessToken: profile.accessToken });
   response = await request();
   return response;
 }
@@ -650,7 +742,7 @@ export async function createBrowserEndpointHello(
 }
 
 export async function forgetProfile(): Promise<void> {
-  await chrome.storage.local.remove([PROFILE_KEY, PAIRING_JOURNAL_KEY]);
+  await chrome.storage.local.remove([PROFILE_KEY, PAIRING_JOURNAL_KEY, REFRESH_JOURNAL_KEY]);
 }
 
 export async function revokeAndForgetProfile(): Promise<void> {
