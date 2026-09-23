@@ -6,6 +6,7 @@ export function notificationRoute(json: string, gatewayId: string): XopcNotifica
     const route = JSON.parse(json) as XopcNotificationRoute;
     if (!route || route.gatewayId !== gatewayId || typeof route.eventId !== 'string' || route.eventId.length > 160 || !route.target) return undefined;
     const target = route.target;
+    if (target.kind === 'home') return route;
     const id = target.kind === 'chat' || target.kind === 'work_discovery' ? target.conversationId
       : target.kind === 'task' ? target.taskId : target.kind === 'automation_run' ? target.automationId : undefined;
     if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(id)) return undefined;

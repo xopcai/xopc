@@ -243,8 +243,8 @@ export class AgentService {
     if (!appCfgForPaths) {
       throw new Error('AgentService requires config.config for session paths');
     }
-    const defaultAid = resolveDefaultAgentId(appCfgForPaths);
-    const defaultAgentHome = resolveAgentHomeDir(appCfgForPaths, defaultAid);
+    const defaultAid = resolveDefaultAgentId();
+    const defaultAgentHome = resolveAgentHomeDir(defaultAid);
     this.sessionConfigStore = new SessionConfigStore(defaultAgentHome);
 
     this.hookRunner = this.createHookRunner();
@@ -366,7 +366,7 @@ export class AgentService {
       getWorkspaceRootForSession: (conversationId: string) =>
         this.agentManager.getResolvedWorkspaceForSession(conversationId),
       getAgentInternalStorageRootForSession: (conversationId: string) =>
-        resolveAgentHomeDir(this.config.config!, extractProfileAgentId(conversationId, this.config.config!)),
+        resolveAgentHomeDir(extractProfileAgentId(conversationId)),
       enqueueAutoTitle: (conversationId: string) => this.enqueueMaybeAutoTitleAfterPersist(conversationId),
       onEmbeddedStreamEvent: (conversationId, event) => {
         const ctx = this.sessionContextManager.getContext();
@@ -602,13 +602,13 @@ export class AgentService {
   /**
    * Apply config after save or hot reload so the default model updates without restarting the gateway.
    */
-  applyAgentDefaultsFromConfig(config: Config): void {
+  applyRuntimeConfiguration(config: Config): void {
     this.config.config = config;
     this.sessionStore.updateConfig(config);
-    const ref = getAgentDefaultModelRef(config);
+    const ref = getAgentDefaultModelRef();
     this.config.model = ref;
     this.modelManager.updateFromConfig(config);
-    this.agentManager.updateAgentDefaults(config);
+    this.agentManager.updateRuntimeConfiguration(config);
     this.commandHandler.updateAgentConfig(config);
   }
 
@@ -895,7 +895,7 @@ export class AgentService {
     void (async () => {
       try {
         let modelRef =
-          getAgentDefaultModelRef(this.config.config ?? ({} as Config)) ?? this.config.model;
+          getAgentDefaultModelRef() ?? this.config.model;
         if (!modelRef?.trim()) {
           try {
             modelRef = this.modelManager.getModelForSession(conversationId);

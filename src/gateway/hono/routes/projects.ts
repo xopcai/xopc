@@ -75,7 +75,7 @@ function resolveEffectiveWorkspaceRoot(
     projects: service.projects,
     projectId: project.id,
   });
-  return resolveEffectiveAgentProfile(service.currentConfig, agentId).resolvedWorkspacePath;
+  return resolveEffectiveAgentProfile(agentId).resolvedWorkspacePath;
 }
 
 function enrichProjectWorkspace<T extends Project>(

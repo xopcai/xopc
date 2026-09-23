@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo } from 'react';
 
 import { PageTabs } from '@/components/ui/page-tabs';
+import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { SkillsPageHeaderEnd } from '@/features/skills/skills-page-header-end';
 import { SkillsPageCatalogContent } from '@/features/skills/skills-page-catalog-content';
@@ -44,6 +45,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     setResultTab,
     aggregatedTabCounts,
     aggregatedProviderStatus,
+    recoveryReturnPath,
   } = vm;
   const visibleSkillDiagnostics = displayableSkillDiagnostics(skillDiagnostics);
 
@@ -86,6 +88,17 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
       <SkillsPageHeaderRegistration vm={vm} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+        {recoveryReturnPath ? (
+          <div className="flex flex-col gap-3 rounded-xl border border-accent/25 bg-accent-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-fg">{sk.recoveryTitle}</p>
+              <p className="mt-1 text-xs leading-5 text-fg-muted">{sk.recoveryHint}</p>
+            </div>
+            <Button type="button" variant="secondary" className="min-h-11 shrink-0" onClick={vm.onRecoveryDone}>
+              {sk.recoveryDone}
+            </Button>
+          </div>
+        ) : null}
         {actionFeedback ? (
           <div
             role="status"

@@ -15,5 +15,5 @@ import type { Config } from './schema.js';
  * (`resolveAgentWorkspaceDir` for the default agent id).
  */
 export function getWorkspacePath(config: Config): string {
-  return getDefaultWorkspacePath(config);
+  return getDefaultWorkspacePath();
 }

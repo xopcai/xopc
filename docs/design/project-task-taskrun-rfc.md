@@ -75,7 +75,7 @@ Current implementation anchors for the cutover are:
 - Make every execution attempt idempotent, leased, auditable, and recoverable.
 - Make receipts and evidence durable even if sessions are deleted.
 - Make Automation issue typed commands rather than mutate task tables directly.
-- Give Project a coherent operating policy for proactive behavior.
+- Give Project a coherent operating policy for assistant-initiated behavior.
 - Remove legacy runtime models, old API schemas, dual reads, dual writes, and status aliases.
 
 ## 4. Non-goals
@@ -122,7 +122,7 @@ Project owns:
 - owner, target date, health, and lifecycle;
 - milestones;
 - shared context collection;
-- proactive operating policy;
+- assistant-initiated operating policy;
 - project updates and decision history.
 
 Project progress and health are projections over tasks, milestones, updates, and risks. Project health is not automatically equal to percentage of completed tasks.
@@ -690,7 +690,7 @@ domain_outbox
   attempts
 ```
 
-Domain writes and outbox insertion occur in the same SQLite transaction. Automation and proactive consumers never depend on an in-memory event emitted before commit.
+Domain writes and outbox insertion occur in the same SQLite transaction. Automation and Scene consumers never depend on an in-memory event emitted before commit.
 
 ## 10. API cutover
 
@@ -877,9 +877,9 @@ project.health_changed.v1
 project.update_published.v1
 ```
 
-Event envelopes use the existing activity/proactive correlation vocabulary: actor, source, subject, project scope, correlation id, causation id, dedupe key, and occurred time.
+Event envelopes use the shared activity correlation vocabulary: actor, source, subject, project scope, correlation id, causation id, dedupe key, and occurred time.
 
-Existing proactive scenario subscriptions are replaced in the migration. No old event is emitted in parallel.
+Legacy scenario subscriptions are replaced in the migration. No old event is emitted in parallel.
 
 ## 12. Execution flow
 
@@ -940,7 +940,7 @@ Automatic retry requires:
 - executor-specific recoverability;
 - no repeated no-progress judgment.
 
-## 13. Proactive operating policy
+## 13. Assistant-initiated operating policy
 
 Project monitoring and Task continuation policy are unified as `ProjectOperatingPolicy`.
 
@@ -966,7 +966,7 @@ interface ProjectOperatingPolicy {
 - `assist` may prepare contracts, context, drafts, and proposed commands, but asks before execution mutations.
 - `autopilot` may issue allow-listed, scoped, reversible commands within budgets.
 
-Policy evaluation returns a decision with reasons and a policy snapshot. It is used by Task start, retry, Automation, and proactive scenarios. The current separate monitoring disposition and same-task continuation guard are removed.
+Policy evaluation returns a decision with reasons and a policy snapshot. It is used by Task start, retry, Automation, and Scenes. The current separate monitoring disposition and same-task continuation guard are removed.
 
 ## 14. One-way database migration
 
@@ -988,7 +988,7 @@ This is data preservation, not runtime compatibility. After commit, only the new
 10. Convert task links, attachments, sessions, and context snapshots.
 11. Convert approved boundaries into task authority grants.
 12. Update WorkflowRuns to reference TaskRuns where a matching task execution exists.
-13. Replace proactive scenario subscriptions and remove old task status events.
+13. Replace legacy scenario subscriptions and remove old task status events.
 14. Validate counts, foreign keys, phase/resolution constraints, run/receipt identity, and active-root uniqueness.
 15. Drop legacy tables.
 16. Rename `_next` tables atomically.
@@ -1061,7 +1061,7 @@ Quiet hours, confidence threshold, scenario subscriptions, and allow-listed acti
 
 Existing Project status maps without aliases: `active -> active`, `paused -> paused`, and `archived -> archived`. New outcome, success criteria, health, owner, and target fields default to empty or `unknown`; the migration does not invent business commitments.
 
-Built-in proactive scenarios are deleted and reseeded with the new event contracts. User Automations using `task.status_changed` cannot be mapped safely because one old status can represent phase, run state, or wait state. Those Automations are preserved but disabled with `requires_migration_review`, and the migration report includes their ids and old trigger configuration. The runtime does not emulate the old event.
+Built-in legacy scenarios are deleted and reseeded with the new event contracts. User Automations using `task.status_changed` cannot be mapped safely because one old status can represent phase, run state, or wait state. Those Automations are preserved but disabled with `requires_migration_review`, and the migration report includes their ids and old trigger configuration. The runtime does not emulate the old event.
 
 Agent, standalone Workflow, and Browser Automation actions retain their meaning under the Automation action union. Automation actions do not write Task status directly.
 
@@ -1141,7 +1141,7 @@ TaskExecutorRegistry         agent/workflow/human/external adapters
 TaskReadModelProjector       operational state, attention, boards, Home
 TaskContextService           mutable links and immutable snapshots
 TaskVerificationService      receipt construction and acceptance evaluation
-ProjectOperatingPolicy      one proactive authorization decision point
+ProjectOperatingPolicy      one assistant-initiated authorization decision point
 DomainOutboxPublisher        reliable event publication
 ```
 
@@ -1199,7 +1199,7 @@ Deliverables:
 - typed Automation task actions;
 - Signal/resume support for waits;
 - retry/replan behavior using new TaskRuns;
-- replacement proactive scenario subscriptions.
+- replacement Scene subscriptions.
 
 Exit criteria:
 

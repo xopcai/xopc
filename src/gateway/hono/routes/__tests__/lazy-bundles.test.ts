@@ -6,6 +6,16 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps every home intelligence route without capturing neighboring paths', () => {
+    for (const path of [
+      '/api/home',
+      '/api/home/advisor/refresh',
+      '/api/home/advisor/metrics',
+      '/api/home/opportunities/id/action',
+      '/api/home/opportunities/id/feedback',
+    ]) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('home');
+    expect(findAuthenticatedLazyRouteBundle('/api/home-other')).toBeUndefined();
+  });
   it('maps Agent Plugin lifecycle before the native extension bundle', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers/plugin%2Fdemo%2Fmain/oauth/callback')?.id).toBe('mcp');
     expect(findAuthenticatedLazyRouteBundle('/api/extensions/agent-plugins/demo/rollback')?.id).toBe('agent-plugins');

@@ -1,4 +1,7 @@
 import type { Config } from '../config/schema.js';
+import type { AgentDefaults } from '../agent-config/index.js';
+import { AgentCatalogRepository } from '../agent-catalog/repository.js';
+import { AgentCatalogService } from '../agent-catalog/service.js';
 import type { CatalogModel, CatalogSource } from '../providers/model-catalog-store.js';
 import { getModelCatalogStore } from '../providers/model-catalog-store.js';
 import { compareCatalogModels } from '../providers/model-catalog-ranking.js';
@@ -16,7 +19,7 @@ export interface XopcCloudCapabilitySelection {
 }
 
 export type PrepareXopcCloudCapabilitySetupResult =
-  | { ok: true; config: Config; selection: XopcCloudCapabilitySelection }
+  | { ok: true; config: Config; defaults: AgentDefaults; selection: XopcCloudCapabilitySelection }
   | { ok: false; error: string; missing: CloudCapability[] };
 
 export type ApplyXopcCloudCapabilitySetupResult =
@@ -100,10 +103,11 @@ export function prepareXopcCloudCapabilitySetup(
   }
 
   const selection = selected.selection;
-  const currentModels = config.agents.defaults.models;
-  const defaultsUpdate = prepareUpdateGlobalDefaults(config, {
+  const currentDefaults = new AgentCatalogRepository().getSettings().defaults;
+  const currentModels = currentDefaults.models;
+  const defaultsUpdate = prepareUpdateGlobalDefaults({
     defaults: {
-      ...config.agents.defaults,
+      ...currentDefaults,
       models: {
         ...currentModels,
         chat: { primary: `xopc-cloud/${selection.chat}`, fallbacks: [] },
@@ -124,18 +128,18 @@ export function prepareXopcCloudCapabilitySetup(
     return { ok: false, error: defaultsUpdate.error, missing: [] };
   }
 
-  const withDefaults = defaultsUpdate.data.nextConfig;
-  const currentStt = withDefaults.tools?.media?.audio;
-  const currentTts = withDefaults.messages?.tts;
+  const currentStt = config.tools?.media?.audio;
+  const currentTts = config.messages?.tts;
   return {
     ok: true,
     selection,
+    defaults: defaultsUpdate.data.defaults,
     config: {
-      ...withDefaults,
+      ...config,
       tools: {
-        ...withDefaults.tools,
+        ...config.tools,
         media: {
-          ...withDefaults.tools?.media,
+          ...config.tools?.media,
           audio: {
             ...currentStt,
             enabled: true,
@@ -152,7 +156,7 @@ export function prepareXopcCloudCapabilitySetup(
         },
       },
       messages: {
-        ...withDefaults.messages,
+        ...config.messages,
         tts: {
           ...currentTts,
           enabled: true,
@@ -190,5 +194,6 @@ export async function applyXopcCloudCapabilitySetup(service: {
   if (!saved.saved) {
     return { configured: false, error: saved.error ?? 'Failed to save XOPC Cloud capability configuration' };
   }
+  new AgentCatalogService().updateDefaults(prepared.defaults);
   return { configured: true, selection: prepared.selection };
 }

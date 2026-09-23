@@ -219,7 +219,7 @@ export class SessionStore {
     const existing = getSessionMetadata(conversationId);
     const agentId = existing?.agentId ?? seed?.agentId ?? seed?.routing?.agentId;
     if (!agentId) throw new Error(`Conversation not found: ${conversationId}`);
-    return resolveEffectiveAgentProfile(this.options.config, agentId).resolvedWorkspacePath;
+    return resolveEffectiveAgentProfile(agentId).resolvedWorkspacePath;
   }
 
   private async runStoreMutation<T>(fn: () => Promise<T>): Promise<T> {

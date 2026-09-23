@@ -7,7 +7,6 @@ import { enumerateLanGatewayCandidates } from '../../host.js';
 import { buildSafeWebConfigPayload } from '../lib/config-payload.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import {
-  applyAgentsPatch,
   applyChannelsPatch,
   applyGatewayPatch,
   applyMiscPatch,
@@ -52,7 +51,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     const config: Config = service.currentConfig as Config;
     const previousSttProvider = config.tools?.media?.audio?.provider;
 
-    applyAgentsPatch(config, body);
     applyChannelsPatch(config, body);
 
     const gatewayResult = applyGatewayPatch(config, body);

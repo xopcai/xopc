@@ -45,7 +45,7 @@ export function effectiveWorkspacePathForSession(
   sessionAgentConfig: SessionAgentConfig | null | undefined,
   project?: Pick<Project, 'workspaceRoot'> | null,
 ): string {
-  const base = resolveEffectiveAgentProfileForSession(cfg, conversationId).resolvedWorkspacePath;
+  const base = resolveEffectiveAgentProfileForSession(conversationId).resolvedWorkspacePath;
   const environment = getExecutionEnvironmentForSession(conversationId);
   if (environment) return environment.rootPath;
   const projectWorkspace = projectWorkspacePath(project);

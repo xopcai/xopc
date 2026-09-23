@@ -1,4 +1,10 @@
 import type { Hono } from 'hono';
+import {
+  HomeAdvisorRefreshRequestSchema,
+  HomeAdviceMetricsSchema,
+  HomeOpportunityActionRequestSchema,
+  HomeOpportunityFeedbackRequestSchema,
+} from '@xopcai/gateway-contract';
 import { resumeApprovedConnectorAction } from '../../../connectors/approval-resume.js';
 
 import { listGatewayAgents } from '../../agents-admin.js';
@@ -8,15 +14,70 @@ import {
 } from '../../../storage/sqlite/index.js';
 import { HomeQueryService } from '../../../tasks/home-query-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import {
+  HomeOpportunityActionError,
+  HomeOpportunityNotFoundError,
+} from '../../../home-intelligence/application-service.js';
 
 export { buildHomeWorkbench, decisionFromTask } from '../../../tasks/home-query-service.js';
 
 /** Register the unified work-home read model and its decision actions. */
 export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
-  const home = new HomeQueryService(service);
+  const home = new HomeQueryService(service, () => service.homeIntelligence.getAdvisor());
 
-  authenticated.get('/api/home', async (c) => c.json(await home.getSnapshot(c.req.query('locale'))));
+  authenticated.get('/api/home', async (c) => {
+    const locale = c.req.query('locale');
+    service.homeIntelligence.requestRefresh('home_opened', undefined, locale);
+    return c.json(await home.getSnapshot(locale));
+  });
+
+  authenticated.get('/api/home/advisor/metrics', (c) => {
+    const rawSince = c.req.query('since');
+    const since = rawSince === undefined ? undefined : Number(rawSince);
+    if (since !== undefined && (!Number.isSafeInteger(since) || since < 0)) {
+      return c.json({ ok: false, error: 'since must be a non-negative integer timestamp' }, 400);
+    }
+    return c.json(HomeAdviceMetricsSchema.parse(service.homeIntelligence.getMetrics(since)));
+  });
+
+  authenticated.post('/api/home/advisor/refresh', deps.strictRateLimitMiddleware, async (c) => {
+    const parsed = HomeAdvisorRefreshRequestSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid refresh request' }, 400);
+    const generationId = service.homeIntelligence.requestRefresh(
+      'manual_refresh', parsed.data.idempotencyKey, parsed.data.locale,
+    );
+    return c.json({ ok: true, generationId }, 202);
+  });
+
+  authenticated.post('/api/home/opportunities/:id/action', deps.strictRateLimitMiddleware, async (c) => {
+    const parsed = HomeOpportunityActionRequestSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid opportunity action' }, 400);
+    try {
+      return c.json(service.homeIntelligence.act(c.req.param('id'), parsed.data));
+    } catch (error) {
+      if (error instanceof HomeOpportunityNotFoundError) return c.json({ ok: false, error: error.message }, 404);
+      if (error instanceof HomeOpportunityActionError || (error instanceof Error && error.message.includes('stale'))) {
+        return c.json({ ok: false, error: error.message }, 409);
+      }
+      throw error;
+    }
+  });
+
+  authenticated.post('/api/home/opportunities/:id/feedback', deps.strictRateLimitMiddleware, async (c) => {
+    const parsed = HomeOpportunityFeedbackRequestSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid opportunity feedback' }, 400);
+    try {
+      service.homeIntelligence.feedback(c.req.param('id'), parsed.data);
+      return c.json({ ok: true });
+    } catch (error) {
+      if (error instanceof HomeOpportunityNotFoundError) return c.json({ ok: false, error: error.message }, 404);
+      if (error instanceof Error && (error.message.includes('stale') || error.message.includes('snoozedUntil'))) {
+        return c.json({ ok: false, error: error.message }, 409);
+      }
+      throw error;
+    }
+  });
 
   authenticated.post('/api/home/decisions/respond', deps.strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
@@ -59,7 +120,7 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       }
     }
 
-    const agents = await listGatewayAgents(service.currentConfig);
+    const agents = await listGatewayAgents();
     const result = await service.createWorkflowRunService().retryWorkflowRun({ agentId: agents.defaultId, runId });
     if (result.ok === false) return c.json({ ok: false, error: result.message, code: result.code }, result.httpStatus);
     acknowledgeHomeAttention(kind, runId);

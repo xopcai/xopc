@@ -83,7 +83,7 @@ export class ModelTaskContractPlanner implements TaskContractPlanner {
     const fallback = defineTaskContract(input.objective);
     try {
       const config = this.getConfig();
-      const model = resolveModel(getAgentDefaultModelRef(config));
+      const model = resolveModel(getAgentDefaultModelRef());
       const prompt = [
         'Define the smallest complete, verifiable contract for the user task.',
         'Preserve the user intent. Do not invent requirements or ask for optional preferences.',

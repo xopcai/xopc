@@ -246,7 +246,7 @@ export async function analyzeWorkContext(input: {
   projectOverviewOnly?: boolean;
   signal?: AbortSignal;
 }): Promise<{ modelRef: string; result: WorkDiscoveryResult }> {
-  const modelRef = getAgentDefaultModelRef(input.config);
+  const modelRef = getAgentDefaultModelRef();
   if (!modelRef) throw new Error('No default model configured');
   if (input.snapshot.documents.length === 0 && !input.snapshot.git?.changedPaths.length) {
     return { modelRef, result: lowConfidenceResult(input.snapshot) };
@@ -427,7 +427,7 @@ async function analyzeUnderstandingBatch(input: {
   workContext?: Pick<WorkDiscoveryResult, 'projectSummary' | 'currentState' | 'uncertainties' | 'workThreads'>;
   signal?: AbortSignal;
 }): Promise<UnderstandingBatchAnalysis> {
-  const modelRef = getAgentDefaultModelRef(input.config);
+  const modelRef = getAgentDefaultModelRef();
   if (!modelRef) throw new Error('No default model configured');
   const prompt = [
     'Analyze one bounded batch from a source the user explicitly chose to connect.',
@@ -540,7 +540,7 @@ export async function analyzeUnderstandingSources(input: {
   workThreadCandidates: WorkUnderstandingThreadCandidate[];
   sourceStatuses: UnderstandingSourceAnalysisStatus[];
 }> {
-  const modelRef = getAgentDefaultModelRef(input.config);
+  const modelRef = getAgentDefaultModelRef();
   if (!modelRef) throw new Error('No default model configured');
   const remainingBySource = new Map<string, number>();
   const items: BoundedUnderstandingSourceItem[] = input.items

@@ -95,7 +95,7 @@ export function resolveDraftModelRef(config: Config, agentId: string): string {
   try {
     return resolveModelSelector(config, agentId, 'reasoning');
   } catch {
-    return getAgentDefaultModelRef(config) ?? getDefaultModelSync(config);
+    return getAgentDefaultModelRef() ?? getDefaultModelSync(config);
   }
 }
 

@@ -17,7 +17,7 @@ export function resolveProjectWorkspacePath(
   if (projectWorkspace) {
     return projectWorkspace;
   }
-  return resolveEffectiveAgentProfileForSession(config, conversationId).resolvedWorkspacePath;
+  return resolveEffectiveAgentProfileForSession(conversationId).resolvedWorkspacePath;
 }
 
 export function getProjectForSession(conversationId: string): Project | null {

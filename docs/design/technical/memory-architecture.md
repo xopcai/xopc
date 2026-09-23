@@ -57,7 +57,7 @@ Current values are resolved from lifecycle eligibility, valid-time containment, 
 
 ### Collaboration rules
 
-`collaboration_rules` and `collaboration_rule_revisions` store explicit communication, execution, boundary, routine, and proactive rules. Conditions may set enforcement to `prompt`, `planner`, or `tool_gate`. Only active, scope-visible rules are selected.
+`collaboration_rules` and `collaboration_rule_revisions` store explicit communication, execution, boundary, routine, and initiative rules. Conditions may set enforcement to `prompt`, `planner`, or `tool_gate`. Only active, scope-visible rules are selected.
 
 ### Knowledge
 
@@ -197,7 +197,7 @@ src/gateway/hono/routes/         user-model and knowledge API
 web/src/features/user-model/     management UI
 ```
 
-Routes, tools, connectors, compaction, projects, proactive context, voice context, and workflows call these domains. They do not read the removed tables.
+Routes, tools, connectors, compaction, projects, scene context, voice context, and workflows call these domains. They do not read the removed tables.
 
 ## One-way migration
 

@@ -1,5 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { HomeAction, HomeWorkbenchItem } from '@xopcai/gateway-contract';
+import type {
+  HomeAction,
+  HomeCapabilityPreflight,
+  HomeOpportunity,
+  HomeOpportunityActionRequest,
+  HomeOpportunityFeedbackRequest,
+  HomeWorkbenchItem,
+} from '@xopcai/gateway-contract';
 import { CalendarClock, ChevronRight, CircleAlert, Plus, X } from 'lucide-react';
 import {
   type ClipboardEvent,
@@ -26,12 +33,16 @@ import { useRealtimeVoice } from '@/features/voice/realtime/use-realtime-voice';
 import { newChatAutoSendHref } from '@/features/chat/session/composer-handoff-params';
 import {
   acknowledgeWorkAttention,
+  actOnHomeOpportunity,
   fetchHome,
+  refreshHomeAdvisor,
   respondToWorkDecision,
   retryWorkAttention,
+  submitHomeOpportunityFeedback,
   type HomeResponse,
 } from '@/features/tasks/home-api';
 import { HomeQuickComposer } from '@/features/tasks/home-quick-composer';
+import { HomeAdvisorCard } from '@/features/tasks/home-advisor-card';
 import { taskCopy } from '@/features/tasks/task-copy';
 import {
   type VoiceInputShortcutTarget,
@@ -171,6 +182,11 @@ export function HomePage() {
   const [conversationOpen, setConversationOpen] = useState(false);
   const [intent, setIntent] = useState('');
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
+  const [advisorBusy, setAdvisorBusy] = useState(false);
+  const [advisorPreflight, setAdvisorPreflight] = useState<{
+    opportunityId: string;
+    value: HomeCapabilityPreflight;
+  }>();
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const attachments = useComposerAttachments({ chat: msg.chat });
   const intentInputRef = useRef<HTMLTextAreaElement>(null);
@@ -196,7 +212,7 @@ export function HomePage() {
     setLoadError(null);
     try {
       const snapshot = await fetchHome(language);
-      setHome({ ...snapshot, needsUser: snapshot.needsUser.filter(item => item.primaryAction?.type !== 'review_judgment' && item.openAction?.type !== 'review_judgment'), background: snapshot.background.filter(item => item.primaryAction?.type !== 'review_judgment' && item.openAction?.type !== 'review_judgment') });
+      setHome(snapshot);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -219,7 +235,7 @@ export function HomePage() {
     };
     const refreshSoon = () => scheduleRefresh(100);
     const refreshAfterSessionSettles = () => scheduleRefresh(750);
-    const immediateEvents = ['session-created', 'agent-run-started', 'agent-run-ended', 'automation-run-completed', 'workflow-run-updated', 'workflow-run-error'];
+    const immediateEvents = ['session-created', 'agent-run-started', 'agent-run-ended', 'automation-run-completed', 'workflow-run-updated', 'workflow-run-error', 'home-advisor-updated'];
     const noisySessionEvents = ['session-updated', 'session-transcript-updated'];
     immediateEvents.forEach((name) => window.addEventListener(name, refreshSoon));
     noisySessionEvents.forEach((name) => window.addEventListener(name, refreshAfterSessionSettles));
@@ -358,10 +374,6 @@ export function HomePage() {
       navigate(action.href);
       return;
     }
-    if (action.type === 'review_judgment') {
-      navigate(`/assistant-work?item=${encodeURIComponent(action.itemId)}`);
-      return;
-    }
     setBusyItemId(itemId);
     setLoadError(null);
     void (async () => {
@@ -382,6 +394,50 @@ export function HomePage() {
     })();
   }, [load, navigate]);
 
+  const refreshAdvisor = useCallback(() => {
+    setAdvisorBusy(true);
+    setAdvisorPreflight(undefined);
+    setLoadError(null);
+    void refreshHomeAdvisor(language)
+      .then(() => load())
+      .catch((error) => setLoadError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setAdvisorBusy(false));
+  }, [language, load]);
+
+  const actOnAdvisor = useCallback((opportunity: HomeOpportunity, mode: HomeOpportunityActionRequest['mode']) => {
+    setAdvisorBusy(true);
+    setLoadError(null);
+    void actOnHomeOpportunity(opportunity, mode)
+      .then((result) => {
+        if (result.outcome === 'needs_setup') {
+          setAdvisorPreflight({ opportunityId: opportunity.id, value: result.preflight });
+          return;
+        }
+        setAdvisorPreflight(undefined);
+        navigate(result.href);
+      })
+      .catch((error) => setLoadError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setAdvisorBusy(false));
+  }, [navigate]);
+
+  const sendAdvisorFeedback = useCallback((
+    opportunity: HomeOpportunity,
+    kind: HomeOpportunityFeedbackRequest['kind'],
+  ) => {
+    setAdvisorBusy(true);
+    setAdvisorPreflight(undefined);
+    setLoadError(null);
+    const snoozedUntil = kind === 'too_early' ? Date.now() + 3 * 24 * 60 * 60_000 : undefined;
+    void submitHomeOpportunityFeedback(opportunity, { kind, snoozedUntil })
+      .then(() => load())
+      .catch((error) => setLoadError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setAdvisorBusy(false));
+  }, [load]);
+
+  const discussClarification = useCallback((question: string, answer: string) => {
+    navigate(`/chat/new?${new URLSearchParams({ draft: `${question}\n\n${answer}` }).toString()}`);
+  }, [navigate]);
+
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: null,
@@ -394,9 +450,13 @@ export function HomePage() {
 
   const needsUserCount = home?.needsUser.length ?? 0;
   const backgroundCount = home?.backgroundCount ?? 0;
-  const headline = needsUserCount > 0 ? interpolate(t.home.attentionTitle, { count: needsUserCount })
+  const advisorProminent = home?.advisor.state === 'ready' && home.advisor.placement === 'primary'
+    || home?.advisor.state === 'clarification';
+  const headline = advisorProminent ? t.home.advisorHeadline
+    : needsUserCount > 0 ? interpolate(t.home.attentionTitle, { count: needsUserCount })
     : backgroundCount > 0 ? t.home.clearTitle : t.home.idleTitle;
-  const intro = needsUserCount > 0
+  const intro = advisorProminent ? t.home.advisorIntro
+    : needsUserCount > 0
     ? backgroundCount > 0 ? interpolate(t.home.attentionIntroWithBackground, { count: backgroundCount }) : t.home.attentionIntro
     : backgroundCount > 0 ? interpolate(t.home.clearIntro, { count: backgroundCount }) : t.home.idleIntro;
 
@@ -477,30 +537,67 @@ export function HomePage() {
               : 'mt-3 max-w-2xl text-sm leading-6 text-fg-muted sm:text-base sm:leading-7'}>
               {intro}
             </p>
-            {isIdle ? (
-              <HomeQuickComposer
-                variant="inline"
-                inputId="idle-conversation-intent"
-                inputRef={intentInputRef}
-                intent={intent}
-                labels={quickComposerLabels}
-                attachments={attachments.attachments}
-                isDragging={attachments.isDragging}
-                attachmentBusy={attachmentBusy}
-                attachmentsFull={attachmentsFull}
-                voice={voice}
-                chat={msg.chat}
-                onIntentChange={setIntent}
-                onPickFiles={() => attachments.fileInputRef.current?.click()}
-                onRemoveAttachment={attachments.removeAttachment}
-                onPaste={(event) => void handleAttachmentPaste(event)}
-                onDragOver={handleAttachmentDragOver}
-                onDragLeave={handleAttachmentDragLeave}
-                onDrop={(event) => void handleAttachmentDrop(event)}
-                onSubmit={startConversation}
-              />
-            ) : null}
           </section>
+
+          <HomeAdvisorCard
+            advisor={home.advisor}
+            busy={advisorBusy}
+            copy={{
+              aiLabel: t.home.advisorAiLabel,
+              why: t.home.advisorWhy,
+              evidence: t.home.advisorEvidence,
+              needsSetup: t.home.advisorNeedsSetup,
+              start: t.home.advisorStart,
+              discuss: t.home.advisorDiscuss,
+              refresh: t.home.advisorRefresh,
+              refreshing: t.home.advisorRefreshing,
+              alternatives: t.home.advisorAlternatives,
+              feedback: t.home.advisorFeedback,
+              alreadyDone: t.home.advisorAlreadyDone,
+              irrelevant: t.home.advisorIrrelevant,
+              later: t.home.advisorLater,
+              lessLikeThis: t.home.advisorLessLikeThis,
+              sourceIncorrect: t.home.advisorSourceIncorrect,
+              minutes: t.home.advisorMinutes,
+              setupTitle: t.home.advisorSetupTitle,
+              setupHint: t.home.advisorSetupHint,
+              configure: t.home.advisorConfigure,
+              degradedStart: t.home.advisorDegradedStart,
+              sceneHint: t.home.advisorSceneHint,
+              sceneAction: t.home.advisorSceneAction,
+              automationHint: t.home.advisorAutomationHint,
+              automationAction: t.home.advisorAutomationAction,
+            }}
+            onRefresh={refreshAdvisor}
+            onAction={actOnAdvisor}
+            onFeedback={sendAdvisorFeedback}
+            onClarification={discussClarification}
+            preflight={advisorPreflight}
+          />
+
+          {isIdle ? (
+            <HomeQuickComposer
+              variant="inline"
+              inputId="idle-conversation-intent"
+              inputRef={intentInputRef}
+              intent={intent}
+              labels={quickComposerLabels}
+              attachments={attachments.attachments}
+              isDragging={attachments.isDragging}
+              attachmentBusy={attachmentBusy}
+              attachmentsFull={attachmentsFull}
+              voice={voice}
+              chat={msg.chat}
+              onIntentChange={setIntent}
+              onPickFiles={() => attachments.fileInputRef.current?.click()}
+              onRemoveAttachment={attachments.removeAttachment}
+              onPaste={(event) => void handleAttachmentPaste(event)}
+              onDragOver={handleAttachmentDragOver}
+              onDragLeave={handleAttachmentDragLeave}
+              onDrop={(event) => void handleAttachmentDrop(event)}
+              onSubmit={startConversation}
+            />
+          ) : null}
 
           {home.needsUser.length > 0 ? (
             <section className="mt-10" aria-labelledby="home-needs-user-title">

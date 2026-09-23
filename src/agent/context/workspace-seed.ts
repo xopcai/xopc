@@ -149,10 +149,10 @@ function ensureGitRepo(markdownWorkspaceDir: string, isBrandNew: boolean): void 
  * Ensure default (`main`) agent has reference profile Markdown templates (missing files only).
  */
 export function seedMainAgentProfileMarkdown(cfg: Config): void {
-  const agentId = resolveDefaultAgentId(cfg);
+  const agentId = resolveDefaultAgentId();
   seedAgentProfileMarkdownFiles(
-    resolveAgentProfileDir(cfg, agentId),
-    resolveAgentWorkspaceDir(cfg, agentId),
+    resolveAgentProfileDir(agentId),
+    resolveAgentWorkspaceDir(agentId),
     { displayName: agentId },
   );
 }

@@ -1,17 +1,17 @@
 import { z } from 'zod';
+
 import semver from 'semver';
 import { ComputerConfigSchema } from '../computer/config.js';
 
 import {
   AgentModelsOverrideSchema,
-  AgentsConfigSchema as UnifiedAgentsConfigSchema,
-  DEFAULT_SKILL_POLICY,
   ImageGenerationRouteSchema,
   ModelRouteSchema,
+  resolveEffectiveAgentConfig,
   type AgentModelsOverride,
 } from '../agent-config/index.js';
+import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { DEFAULT_CONTEXT_COMPACTION_POLICY, UserContextConfigSchema } from '../user-context/config.js';
-import { DEFAULT_MODEL_REF } from './default-model.js';
 import { validatePublicUrl } from './public-url.js';
 import { PlatformConfigSchema } from '../platform/contracts.js';
 
@@ -38,20 +38,6 @@ export type AgentImageGenerationModelConfig = z.infer<typeof AgentImageGeneratio
 
 export const AgentModelsSchema = AgentModelsOverrideSchema;
 export type AgentModelsConfig = AgentModelsOverride;
-export const AgentsConfigSchema = UnifiedAgentsConfigSchema.default({
-  default: 'main',
-  defaults: {
-    models: {
-      chat: { primary: DEFAULT_MODEL_REF, fallbacks: [] },
-      intents: {},
-    },
-    skills: DEFAULT_SKILL_POLICY,
-    tools: {},
-    workflows: {},
-    runtime: {},
-  },
-  list: [{ id: 'main', enabled: true }],
-});
 
 const BrowserDriverSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -146,25 +132,6 @@ export type { WeixinConfig } from '../../extensions/weixin/src/config-schema.js'
 // Session Routing Configuration
 // ============================================
 
-export const BindingMatchSchema = z.object({
-  channel: z.string(),
-  accountId: z.string().optional(),
-  peerKind: z.string().optional(),
-  peerId: z.string().optional(),
-  guildId: z.string().optional(),
-  teamId: z.string().optional(),
-  memberRoleIds: z.array(z.string()).optional(),
-});
-
-export const BindingRuleSchema = z.object({
-  id: z.string().optional(),
-  agentId: z.string(),
-  priority: z.number().default(100),
-  match: BindingMatchSchema,
-  enabled: z.boolean().default(true),
-});
-
-export const BindingsConfigSchema = z.array(BindingRuleSchema).default([]);
 
 export const SessionDmScopeSchema = z.enum([
   'main',
@@ -1092,16 +1059,6 @@ export const CommandsConfigSchema = z
 
 export type CommandsConfig = z.infer<typeof CommandsConfigSchema>;
 
-export const TuiConfigSchema = z
-  .object({
-    /** Default agent id for fresh TUI sessions. Leaves global routing (`agents.default`) untouched. */
-    defaultAgent: z.string().min(1).optional(),
-  })
-  .strict()
-  .default({});
-
-export type TuiConfig = z.infer<typeof TuiConfigSchema>;
-
 // ============================================
 // MCP (Model Context Protocol)
 // ============================================
@@ -1226,8 +1183,6 @@ export type ExperimentalConfig = z.infer<typeof ExperimentalConfigSchema>;
 
 export const ConfigSchema = z.object({
   userContext: UserContextConfigSchema,
-  agents: AgentsConfigSchema,
-  bindings: BindingsConfigSchema,
   session: SessionConfigSchema,
   channels: ChannelsConfigSchema,
   gateway: GatewayConfigSchema,
@@ -1252,7 +1207,6 @@ export const ConfigSchema = z.object({
   voice: VoiceConfigSchema,
   update: UpdateConfigSchema,
   commands: CommandsConfigSchema,
-  tui: TuiConfigSchema,
 }).strict().default({
   userContext: {
     enabled: true,
@@ -1296,21 +1250,6 @@ export const ConfigSchema = z.object({
       compaction: DEFAULT_CONTEXT_COMPACTION_POLICY,
     },
   },
-  agents: {
-    default: 'main',
-    defaults: {
-      models: {
-        chat: { primary: DEFAULT_MODEL_REF, fallbacks: [] },
-        intents: {},
-      },
-      skills: DEFAULT_SKILL_POLICY,
-      tools: {},
-      workflows: {},
-      runtime: {},
-    },
-    list: [{ id: 'main', enabled: true }],
-  },
-  bindings: [],
   session: {
     scope: 'per-sender' as const,
     mainKey: 'main',
@@ -1401,7 +1340,6 @@ export const ConfigSchema = z.object({
     refreshOnStartup: true,
     intervalHours: 6,
   },
-  tui: {},
   // messages.tts / tools.media.audio start undefined; the factory layer fills
   // in provider-level defaults (model/voice) on demand. Fresh configs don't
   // ship with enabled providers so they never make surprise STT/TTS calls.
@@ -1428,35 +1366,26 @@ export interface ParsedModelRef {
   model: string;
 }
 
-export function getAgentDefaultModelRef(config: Config): string | undefined {
-  const agent = config.agents.list.find(
-    (entry) => entry.enabled !== false && entry.id === config.agents.default,
-  );
-  return agent?.models?.chat?.primary ?? config.agents.defaults.models.chat.primary;
+export function getAgentDefaultModelRef(): string | undefined {
+  return getAgentDefaultModelsConfig()?.chat.primary;
 }
 
-function getAgentDefaultModelsConfig(config: Config, requestedAgentId?: string): AgentModelsConfig | undefined {
-  const id = requestedAgentId?.trim() || config.agents.default;
-  return config.agents.list.find((entry) => entry.enabled !== false && entry.id === id)?.models;
+function getAgentDefaultModelsConfig(requestedAgentId?: string): ReturnType<typeof resolveEffectiveAgentConfig>['config']['models'] | undefined {
+  const catalog = new AgentCatalogRepository().snapshot();
+  const id = requestedAgentId?.trim() || catalog.defaultAgentId;
+  const agent = catalog.agents.find((entry) => entry.enabled !== false && entry.id === id);
+  if (!agent) return undefined;
+  return resolveEffectiveAgentConfig({ agent, defaults: catalog.defaults }).config.models;
 }
 
-export function getAgentDefaultImageModelConfig(config: Config): AgentModelConfig | undefined {
-  const models = getAgentDefaultModelsConfig(config);
-  if (models && Object.hasOwn(models, 'imageUnderstanding')) {
-    return models.imageUnderstanding ?? undefined;
-  }
-  return config.agents.defaults.models.imageUnderstanding;
+export function getAgentDefaultImageModelConfig(): AgentModelConfig | undefined {
+  return getAgentDefaultModelsConfig()?.imageUnderstanding;
 }
 
 export function getAgentDefaultImageGenerationModelConfig(
-  config: Config,
   agentId: string,
 ): AgentImageGenerationModelConfig | undefined {
-  const models = getAgentDefaultModelsConfig(config, agentId);
-  if (models && Object.hasOwn(models, 'imageGeneration')) {
-    return models.imageGeneration ?? undefined;
-  }
-  return config.agents.defaults.models.imageGeneration;
+  return getAgentDefaultModelsConfig(agentId)?.imageGeneration;
 }
 
 /** `provider/model` or null when invalid. */

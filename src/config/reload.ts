@@ -28,7 +28,6 @@ export type ReloadCallback = (newConfig: Config) => void | Promise<void>;
 
 export interface ReloadCallbacks {
   onModelsReload?: ReloadCallback;
-  onAgentDefaultsReload?: ReloadCallback;
   onChannelsReload?: ReloadCallback;
   onCronReload?: ReloadCallback;
   onHeartbeatReload?: ReloadCallback;
@@ -239,13 +238,6 @@ export class ConfigHotReloader {
     if (path.startsWith('models.')) {
       if (this.callbacks.onModelsReload) {
         await Promise.resolve(this.callbacks.onModelsReload(newConfig));
-      }
-      return;
-    }
-
-    if (path.startsWith('agents.list') || path.startsWith('agents.defaults')) {
-      if (this.callbacks.onAgentDefaultsReload) {
-        await Promise.resolve(this.callbacks.onAgentDefaultsReload(newConfig));
       }
       return;
     }

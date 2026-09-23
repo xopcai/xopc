@@ -1,11 +1,10 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { Config } from '../config/schema.js';
+import type { AgentEntry } from '../agent-config/index.js';
+import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { WORKSPACE_FILES } from '../config/paths.js';
-import { applyAgentConfig, listAgentEntries } from '../commands/agents.config.js';
 import {
-  normalizeAgentId,
   resolveAgentProfileDir,
   resolveAgentWorkspaceDir,
 } from './agent-scope.js';
@@ -18,11 +17,11 @@ type StarterAgent = {
   description: string;
   role: string;
   emoji: string;
-  tools?: NonNullable<Config['agents']['list']>[number]['tools'];
+  tools?: AgentEntry['tools'];
   profileFiles: Record<string, string>;
 };
 
-function denyTools(names: string[]): NonNullable<Config['agents']['list']>[number]['tools'] {
+function denyTools(names: string[]): AgentEntry['tools'] {
   return Object.fromEntries(names.map((name) => [name, { mode: 'deny' as const }]));
 }
 
@@ -159,21 +158,16 @@ function renderStarterProfileFile(starter: StarterAgent, name: string, content: 
     .replace(`# TOOLS.md - ${legacyName} Tool Policy`, `# TOOLS.md - ${starter.displayName} Tool Policy`);
 }
 
-function hasAgentEntry(cfg: Config, agentId: string): boolean {
-  const id = normalizeAgentId(agentId);
-  return listAgentEntries(cfg).some((entry) => normalizeAgentId(entry.id) === id);
-}
-
 function writeFileIfMissing(path: string, content: string): void {
   if (!existsSync(path)) {
     writeFileSync(path, content, 'utf-8');
   }
 }
 
-export function materializeStarterAgentFiles(cfg: Config): void {
+export function materializeStarterAgentFiles(): void {
   for (const starter of STARTER_AGENTS) {
-    const profileDir = resolveAgentProfileDir(cfg, starter.id);
-    const workspaceDir = resolveAgentWorkspaceDir(cfg, starter.id);
+    const profileDir = resolveAgentProfileDir(starter.id);
+    const workspaceDir = resolveAgentWorkspaceDir(starter.id);
     mkdirSync(profileDir, { recursive: true });
     mkdirSync(workspaceDir, { recursive: true });
     for (const [name, content] of Object.entries(starter.profileFiles)) {
@@ -182,16 +176,22 @@ export function materializeStarterAgentFiles(cfg: Config): void {
   }
 }
 
-export function ensureStarterAgentsInitialized(cfg: Config): { config: Config; changed: boolean } {
-  let next = cfg;
+export function ensureStarterAgentsInitialized(): { changed: boolean } {
+  const repository = new AgentCatalogRepository();
+  let changed = false;
+  materializeStarterAgentFiles();
   for (const starter of STARTER_AGENTS) {
-    if (hasAgentEntry(next, starter.id)) continue;
-    next = applyAgentConfig(next, {
-      agentId: starter.id,
+    const existing = repository.get(starter.id);
+    if (existing) {
+      if (existing.provisioningState !== 'ready') repository.markProvisioned(starter.id);
+      continue;
+    }
+    repository.create({
+      id: starter.id,
+      enabled: true,
       ...(starter.tools ? { tools: starter.tools } : {}),
-    });
+    }, { ready: true });
+    changed = true;
   }
-
-  materializeStarterAgentFiles(next);
-  return { config: next, changed: next !== cfg };
+  return { changed };
 }

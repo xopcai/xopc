@@ -1,4 +1,5 @@
 import { isComputerModel, isDedicatedComputerProfile } from '../../computer/model-policy.js';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import type { Config } from '../../config/schema.js';
 import {
   getAgentDefaultImageGenerationModelConfig,
@@ -41,14 +42,15 @@ export function buildCapabilityPlansForConfig(
   const cloud = catalog.sources['xopc-cloud'];
   const providerReady = options.providerReady ?? defaultProviderReady;
   const cloudReady = providerReady('xopc-cloud');
-  const agentId = config.agents.default ?? config.agents.list[0]?.id ?? 'main';
+  const agentCatalog = new AgentCatalogRepository().snapshot();
+  const agentId = agentCatalog.defaultAgentId;
   const stt = config.tools?.media?.audio;
   const tts = config.messages?.tts;
   const policies: Record<CapabilityId, CapabilityPolicy> = {
-    vision: { explicit: refs(getAgentDefaultImageModelConfig(config)) },
-    'computer-use': { explicit: refs(config.agents.defaults.models.computerUse) },
+    vision: { explicit: refs(getAgentDefaultImageModelConfig()) },
+    'computer-use': { explicit: refs(agentCatalog.defaults.models.computerUse) },
     'image-generation': {
-      explicit: refs(getAgentDefaultImageGenerationModelConfig(config, agentId)),
+      explicit: refs(getAgentDefaultImageGenerationModelConfig(agentId)),
     },
     stt: {
       disabled: stt?.enabled === false,

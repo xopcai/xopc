@@ -2,7 +2,6 @@ import { XopcSection, XopcWorkspaceItem, XopcAutomationRun } from '../model/work
 import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
 import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
-import { XopcJudgmentsView } from './JudgmentsView';
 import { XopcShareResult } from '../model/share';
 import { shareService } from '../service/shareService';
 import { XopcShareResultView } from './ShareResultView';
@@ -13,7 +12,6 @@ export struct XopcWorkspaceView {
   @Param heading: ResourceStr = '';
   @Param initialId: string = '';
   @Param noteStatus: string = '';
-  @Param judgmentId: string = '';
   @Event onExit: () => void = (): void => {};
   @Local model: XopcWorkspaceViewModel = new XopcWorkspaceViewModel();
   @Local search: string = '';
@@ -98,7 +96,6 @@ export struct XopcWorkspaceView {
       Button($r('app.string.refresh')).enabled(!this.model.busy).onClick((): void => { this.model.list(this.search); })
     }.padding(12)
     List({ space: 8 }) {
-      if (this.noteStatus === 'inbox') { ListItem() { XopcJudgmentsView({ highlightedId: this.judgmentId }) } }
       ForEach(this.model.items, (item: XopcWorkspaceItem) => {
         ListItem() {
           XopcHubRow({ heading: item.title || $r('app.string.untitled'), summary: item.body || item.status,

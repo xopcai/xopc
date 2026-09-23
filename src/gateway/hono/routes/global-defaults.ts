@@ -1,10 +1,9 @@
 import type { Hono } from 'hono';
 
 import { AgentDefaultsSchema } from '../../../agent-config/index.js';
-import type { Config } from '../../../config/schema.js';
 import {
   listGlobalDefaults,
-  prepareUpdateGlobalDefaults,
+  updateGlobalDefaults,
   type UpdateGlobalDefaultsBody,
 } from '../../global-defaults-admin.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -33,7 +32,7 @@ export function registerGlobalDefaultsRoutes(authenticated: Hono, deps: Authenti
   const { service, strictRateLimitMiddleware } = deps;
 
   authenticated.get('/api/global-defaults', async (c) => {
-    return c.json({ ok: true, payload: await listGlobalDefaults(service.currentConfig as Config) });
+    return c.json({ ok: true, payload: listGlobalDefaults() });
   });
 
   authenticated.patch('/api/global-defaults', strictRateLimitMiddleware, async (c) => {
@@ -47,17 +46,11 @@ export function registerGlobalDefaultsRoutes(authenticated: Hono, deps: Authenti
     if (isParseError(body)) {
       return c.json({ ok: false, error: { message: body.error } }, 400);
     }
-    const prep = prepareUpdateGlobalDefaults(service.currentConfig as Config, body);
-    if (prep.ok === false) {
-      return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
+    const result = updateGlobalDefaults(body);
+    if (result.ok === false) {
+      return c.json({ ok: false, error: { message: result.error } }, result.status ?? 400);
     }
-    if (!prep.data.changed) {
-      return c.json({ ok: true, payload: await listGlobalDefaults(service.currentConfig as Config) });
-    }
-    const save = await service.saveConfig(prep.data.nextConfig);
-    if (!save.saved) {
-      return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
-    }
-    return c.json({ ok: true, payload: await listGlobalDefaults(service.currentConfig as Config) });
+    if (result.data.changed) service.refreshAgentCatalog();
+    return c.json({ ok: true, payload: listGlobalDefaults() });
   });
 }

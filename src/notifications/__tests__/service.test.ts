@@ -199,4 +199,28 @@ describe('NotificationService', () => {
       }),
     ]);
   });
+
+  it('requires an explicit mobile preference before delivering home opportunities', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: { status: 'ok', id: 'ticket-home' },
+    }), { status: 200 }));
+    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock });
+    const event = (notificationKey: string) => ({
+      notificationKey,
+      opportunityId: `opportunity-${notificationKey}`,
+      title: 'Prepare the launch review',
+    });
+
+    service.handleGatewayEvent('home.opportunity.ready', event('default-off'));
+    await service.drain();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    registerNotificationDevice({
+      deviceId: 'device-1', platform: 'ios', pushToken: 'ExponentPushToken[token]',
+      permissions: 'granted', locale: 'en', preferences: { homeOpportunity: true },
+    });
+    service.handleGatewayEvent('home.opportunity.ready', event('explicit-on'));
+    await vi.waitFor(() => expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1 }));
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });

@@ -30,7 +30,6 @@ export * from './model-selection.js';
 export * from './connection-waits.js';
 export * from './clarifications.js';
 
-export * from './proactive.js';
 
 export * from './discussions.js';
 export * from './capabilities.js';

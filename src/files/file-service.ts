@@ -288,8 +288,8 @@ export class FileSpaceService {
     if (this.cache && Date.now() - this.cache.at < 5_000) return this.cache.spaces;
     const config = this.getConfig();
     const spaces: ResolvedFileSpace[] = [];
-    for (const agent of listAgentEntries(config)) {
-      const space = await this.createSpace(resolveAgentWorkspaceDir(config, agent.id), agent.id, [{ kind: 'agent', id: agent.id }]);
+    for (const agent of listAgentEntries()) {
+      const space = await this.createSpace(resolveAgentWorkspaceDir(agent.id), agent.id, [{ kind: 'agent', id: agent.id }]);
       if (space) spaces.push(space);
     }
     let offset = 0;
@@ -297,7 +297,7 @@ export class FileSpaceService {
       const page = this.projects.list({ limit: 500, offset });
       for (const project of page.items) {
         const agentId = resolveProjectAgentId({ config, projects: this.projects, projectId: project.id });
-        const root = project.workspaceRoot ?? resolveAgentWorkspaceDir(config, agentId);
+        const root = project.workspaceRoot ?? resolveAgentWorkspaceDir(agentId);
         const space = await this.createSpace(root, project.name, [{ kind: 'project', id: project.id }]);
         if (space) spaces.push(space);
       }
@@ -322,13 +322,13 @@ export class FileSpaceService {
   async forContext(kind: 'agent' | 'project' | 'session', id: string): Promise<ResolvedFileSpace> {
     let root: string | undefined;
     let title = id;
-    if (kind === 'agent') root = resolveAgentWorkspaceDir(this.getConfig(), id);
+    if (kind === 'agent') root = resolveAgentWorkspaceDir(id);
     if (kind === 'project') {
       const project = this.projects.get(id);
       if (project) {
         const config = this.getConfig();
         const agentId = resolveProjectAgentId({ config, projects: this.projects, projectId: id });
-        root = project.workspaceRoot ?? resolveAgentWorkspaceDir(config, agentId);
+        root = project.workspaceRoot ?? resolveAgentWorkspaceDir(agentId);
       }
       title = project?.name ?? id;
     }
@@ -342,7 +342,7 @@ export class FileSpaceService {
   }
 
   defaultSpace(): Promise<ResolvedFileSpace> {
-    return this.forContext('agent', resolveDefaultAgentId(this.getConfig()));
+    return this.forContext('agent', resolveDefaultAgentId());
   }
 
   async get(id: string): Promise<ResolvedFileSpace> {

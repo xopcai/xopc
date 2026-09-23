@@ -19,7 +19,7 @@ import type { Model, Api } from '@earendil-works/pi-ai';
 import type { AgentInstanceGateway } from './agent-instance-gateway.js';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
-import { resolveAgentProfileDir } from './agent-scope.js';
+import { listAgentEntries, resolveAgentProfileDir } from './agent-scope.js';
 import {
   type EffectiveAgentProfile,
   resolveEffectiveAgentProfile,
@@ -371,7 +371,7 @@ export class AgentManager implements AgentInstanceGateway {
     if (!cfg) {
       return expandWorkspacePathString(this.config.workspace);
     }
-    return resolveEffectiveAgentProfileForSession(cfg, null).resolvedWorkspacePath;
+    return resolveEffectiveAgentProfileForSession(null).resolvedWorkspacePath;
   }
 
   /**
@@ -384,11 +384,11 @@ export class AgentManager implements AgentInstanceGateway {
     if (fromMap !== undefined) {
       return fromMap;
     }
-    return resolveEffectiveAgentProfileForSession(cfg, conversationId).resolvedWorkspacePath;
+    return resolveEffectiveAgentProfileForSession(conversationId).resolvedWorkspacePath;
   }
 
   private getWorkspaceRuntimeForSession(conversationId: string | undefined): WorkspaceRuntime {
-    const profile = resolveEffectiveAgentProfileForSession(this.config.config!, conversationId);
+    const profile = resolveEffectiveAgentProfileForSession(conversationId);
     const resolvedPath = conversationId
       ? this.getResolvedWorkspaceForSession(conversationId)
       : this.baseWorkspacePath;
@@ -413,7 +413,7 @@ export class AgentManager implements AgentInstanceGateway {
 
   private pickDefaultModelRef(): string {
     const cfg = this.mergedConfig();
-    const ref = getAgentDefaultModelRef(cfg);
+    const ref = getAgentDefaultModelRef();
     return ref?.trim() || getDefaultModelSync(cfg);
   }
 
@@ -428,7 +428,7 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   /**
-   * Keep defaults in sync when config is hot-reloaded or saved from the UI.
+   * Refresh config-backed services and SQLite-backed Agent defaults after a settings change.
    *
    * The previous implementation rebuilt the entire `AgentToolsFactory` (80+ lines
    * of dependency wiring) on every reload. The factory's deps are now built from
@@ -437,9 +437,9 @@ export class AgentManager implements AgentInstanceGateway {
    * reconstruction. The browser is still shut down because its cached settings
    * (headless mode, backend choice) come from the config snapshot at connect time.
    */
-  updateAgentDefaults(config: Config): void {
+  updateRuntimeConfiguration(config: Config): void {
     this.config.config = config;
-    const ref = getAgentDefaultModelRef(config);
+    const ref = getAgentDefaultModelRef();
     this.config.model = ref;
     this.defaultModel = ref || getDefaultModelSync(config);
     this.baseWorkspacePath = this.computeBaseWorkspacePath();
@@ -464,7 +464,7 @@ export class AgentManager implements AgentInstanceGateway {
         resolveTimeoutMs: (toolName) => {
           const config = this.mergedConfig();
           const conversationId = this.config.getCurrentContext?.()?.conversationId;
-          return resolveEffectiveAgentProfileForSession(config, conversationId)
+          return resolveEffectiveAgentProfileForSession(conversationId)
             .config.tools[toolName]?.timeoutMs;
         },
       },
@@ -532,11 +532,11 @@ export class AgentManager implements AgentInstanceGateway {
     const cfg = this.config.config;
     if (!cfg || !isMemorySubsystemEnabled(cfg)) return;
     const resolvedPath = this.getResolvedWorkspaceForSession(conversationId);
-    const profile = resolveEffectiveAgentProfileForSession(cfg, conversationId);
+    const profile = resolveEffectiveAgentProfileForSession(conversationId);
     const runtime = this.workspaceRuntimes.getOrCreate(resolvedPath, profile.agentId);
     await runtime.memoryManager.initializeAll(conversationId, {
       workspace: resolvedPath,
-      agentWorkspace: resolveAgentProfileDir(cfg, profile.agentId),
+      agentWorkspace: resolveAgentProfileDir(profile.agentId),
       agentId: profile.agentId,
       sessionId: conversationId,
     });
@@ -713,7 +713,7 @@ export class AgentManager implements AgentInstanceGateway {
     return rt.systemPromptBuilder.build(contextFiles, {
       externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.conversationId, rt),
       workspaceOverride: resolvedWorkspacePath,
-      profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
+      profileMarkdownPathRoot: resolveAgentProfileDir(instance.effectiveProfile.agentId),
       customInstructions: instance.effectiveProfile.customInstructions,
       skillAllowlist: instance.effectiveProfile.skillsAllowlist,
       registeredToolNames,
@@ -772,7 +772,7 @@ export class AgentManager implements AgentInstanceGateway {
     excludeHeartbeat?: boolean,
   ): EmbeddedContextFile[] {
     const cfg = this.config.config!;
-    const profileDir = resolveAgentProfileDir(cfg, profile.agentId);
+    const profileDir = resolveAgentProfileDir(profile.agentId);
     const heartbeatEnabled = cfg.gateway?.heartbeat?.includeSystemPromptSection ?? false;
     const contextInjection = 'always';
     const { contextFiles } = resolveBootstrapContextSync({
@@ -864,16 +864,16 @@ export class AgentManager implements AgentInstanceGateway {
     const cfg = this.config.config!;
     const rt = this.workspaceRuntimes.getOrCreate(workspaceDir, unresolvedProfile.agentId);
     const profile = this.materializeSkillAllowlist(unresolvedProfile, rt);
-    const entry = Array.isArray(cfg.agents?.list)
-      ? cfg.agents.list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === profile.agentId.toLowerCase())
-      : undefined;
+    const entry = listAgentEntries().find(
+      (agent) => agent.enabled !== false && agent.id.toLowerCase() === profile.agentId.toLowerCase(),
+    );
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
     const workspaceLock = loadSkillsLock(resolveWorkspaceSkillsLockPath(workspaceDir));
     const allow = profile.skillsAllowlist === undefined ? undefined : new Set(profile.skillsAllowlist.map((s) => s.toLowerCase()));
     const tools = registeredToolNames ?? this.toolsFactory.createAllTools({
       workspace: workspaceDir,
-      profileMarkdownRoot: resolveAgentProfileDir(cfg, profile.agentId),
+      profileMarkdownRoot: resolveAgentProfileDir(profile.agentId),
       agentId: profile.agentId,
       disabledTools: profile.tools.denied,
       getMemoryManager: () => rt.memoryManager,
@@ -941,12 +941,12 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
-    const profile = resolveEffectiveAgentProfile(this.config.config!, agentId);
+    const profile = resolveEffectiveAgentProfile(agentId);
     return this.buildAgentSkillAvailability(profile, profile.resolvedWorkspacePath);
   }
 
   getSessionSkillAvailability(conversationId: string): AgentSkillAvailabilityPayload {
-    const profile = resolveEffectiveAgentProfileForSession(this.config.config!, conversationId);
+    const profile = resolveEffectiveAgentProfileForSession(conversationId);
     return this.buildAgentSkillAvailability(
       profile,
       this.getResolvedWorkspaceForSession(conversationId),
@@ -1005,7 +1005,7 @@ export class AgentManager implements AgentInstanceGateway {
       const newPrompt = rt.systemPromptBuilder.build(contextFiles, {
         externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.conversationId, rt),
         workspaceOverride: resolvedWorkspacePath,
-        profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
+        profileMarkdownPathRoot: resolveAgentProfileDir(instance.effectiveProfile.agentId),
         customInstructions: instance.effectiveProfile.customInstructions,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
@@ -1112,7 +1112,7 @@ export class AgentManager implements AgentInstanceGateway {
       const newPrompt = rt.systemPromptBuilder.rebuild(contextFiles, {
         externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.conversationId, rt),
         workspaceOverride: resolvedWorkspacePath,
-        profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
+        profileMarkdownPathRoot: resolveAgentProfileDir(instance.effectiveProfile.agentId),
         customInstructions: instance.effectiveProfile.customInstructions,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
@@ -1145,7 +1145,7 @@ export class AgentManager implements AgentInstanceGateway {
       }
     }
 
-    let profile = resolveEffectiveAgentProfileForSession(cfg, conversationId);
+    let profile = resolveEffectiveAgentProfileForSession(conversationId);
     const resolvedPath = targetPath;
     const rt = this.workspaceRuntimes.getOrCreate(resolvedPath, profile.agentId);
     profile = this.materializeSkillAllowlist(profile, rt);
@@ -1196,7 +1196,7 @@ export class AgentManager implements AgentInstanceGateway {
 
   createAgentTurnPolicy(conversationId: string): AgentTurnPolicy {
     const profile = this.agents.get(conversationId)?.effectiveProfile
-      ?? resolveEffectiveAgentProfileForSession(this.config.config!, conversationId);
+      ?? resolveEffectiveAgentProfileForSession(conversationId);
     return this.buildAgentTurnPolicy(conversationId, profile);
   }
 
@@ -1275,7 +1275,7 @@ export class AgentManager implements AgentInstanceGateway {
     replaceAgentSystemPrompt(instance.agent, rt.systemPromptBuilder.build(contextFiles, {
       externalMemoryInstructions: this.buildExternalMemoryInstructions(conversationId, rt),
       workspaceOverride: resolvedWorkspacePath,
-      profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
+      profileMarkdownPathRoot: resolveAgentProfileDir(instance.effectiveProfile.agentId),
       customInstructions: instance.effectiveProfile.customInstructions,
       skillAllowlist: instance.effectiveProfile.skillsAllowlist,
       registeredToolNames: instance.registeredToolNames,
@@ -1407,7 +1407,7 @@ export class AgentManager implements AgentInstanceGateway {
     const contextFiles = this.resolveContextFilesForSession(conversationId, profile);
     const tools = this.toolsFactory.createAllTools({
       workspace: resolvedWorkspacePath,
-      profileMarkdownRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),
+      profileMarkdownRoot: resolveAgentProfileDir(profile.agentId),
       agentId: profile.agentId,
       conversationId,
       disabledTools: profile.tools.denied,
@@ -1427,7 +1427,7 @@ export class AgentManager implements AgentInstanceGateway {
         systemPrompt: rt.systemPromptBuilder.build(contextFiles, {
           externalMemoryInstructions: this.buildExternalMemoryInstructions(conversationId, rt),
           workspaceOverride: resolvedWorkspacePath,
-          profileMarkdownPathRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),
+          profileMarkdownPathRoot: resolveAgentProfileDir(profile.agentId),
           customInstructions: profile.customInstructions,
           skillAllowlist: profile.skillsAllowlist,
           registeredToolNames,
@@ -1459,7 +1459,7 @@ export class AgentManager implements AgentInstanceGateway {
     conversationId: string,
     profile: EffectiveAgentProfile,
   ): AgentTurnPolicy {
-    const currentProfile = () => resolveEffectiveAgentProfileForSession(this.config.config!, conversationId);
+    const currentProfile = () => resolveEffectiveAgentProfileForSession(conversationId);
     return buildAgentTurnPolicy({
       maxTurns: profile.config.runtime.maxTurns,
       maxToolFailures: profile.config.runtime.maxToolFailuresPerTurn,
@@ -1615,7 +1615,7 @@ export class AgentManager implements AgentInstanceGateway {
     replaceAgentSystemPrompt(instance.agent, rt.systemPromptBuilder.build(contextFiles, {
       externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.conversationId, rt),
       workspaceOverride: resolvedWorkspacePath,
-      profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
+      profileMarkdownPathRoot: resolveAgentProfileDir(instance.effectiveProfile.agentId),
       customInstructions: instance.effectiveProfile.customInstructions,
       skillAllowlist: instance.effectiveProfile.skillsAllowlist,
       registeredToolNames: instance.registeredToolNames,
@@ -1668,7 +1668,7 @@ export class AgentManager implements AgentInstanceGateway {
       replaceAgentSystemPrompt(instance.agent, rt.systemPromptBuilder.build(contextFiles, {
         externalMemoryInstructions: this.buildExternalMemoryInstructions(conversationId, rt),
         workspaceOverride: resolvedWorkspacePath,
-        profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
+        profileMarkdownPathRoot: resolveAgentProfileDir(instance.effectiveProfile.agentId),
         customInstructions: instance.effectiveProfile.customInstructions,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,

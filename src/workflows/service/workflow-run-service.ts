@@ -92,7 +92,7 @@ export class WorkflowRunService {
       const workflowId = typeof run.executorRef.workflowId === 'string' ? run.executorRef.workflowId : '';
       const result = workflowId
         ? await this.startWorkflowRun({
-            agentId: getDefaultAgentId(this.options.service.currentConfig),
+            agentId: getDefaultAgentId(),
             definitionId: workflowId,
             taskRunId: run.id,
             input: run.executorRef.input,
@@ -119,10 +119,7 @@ export class WorkflowRunService {
   }
 
   async startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult> {
-    const config = this.options.service.currentConfig;
-    const workflowPolicy = config.agents?.list
-      ? resolveEffectiveAgentProfile(config, params.agentId).config.workflows
-      : undefined;
+    const workflowPolicy = resolveEffectiveAgentProfile(params.agentId).config.workflows;
     if (workflowPolicy?.allowed && !workflowPolicy.allowed.includes(params.definitionId)) {
       return {
         ok: false,
@@ -626,13 +623,10 @@ export class WorkflowRunService {
     contextInstructions?: string;
   }): WorkflowEngine {
     const gatewayService = this.options.service;
-    const profileAgentId = extractProfileAgentId(params.conversationId, gatewayService.currentConfig);
-    const agentWorkspace = gatewayService.currentConfig.agents?.list
-      ? resolveEffectiveAgentProfileForSession(
-          gatewayService.currentConfig,
-          params.conversationId,
-        ).resolvedWorkspacePath
-      : gatewayService.currentWorkspacePath;
+    const profileAgentId = extractProfileAgentId(params.conversationId);
+    const agentWorkspace = resolveEffectiveAgentProfileForSession(
+      params.conversationId,
+    ).resolvedWorkspacePath;
     const workspace = getProjectWorkspacePathForSession(params.conversationId)
       ?? agentWorkspace;
     const runner = new DelegateSubagentRunner({

@@ -141,16 +141,16 @@ export function matchesBinding(input: RouteInput, match: BindingMatch): boolean 
 }
 
 /**
- * Parse binding rules from config JSON.
+ * Parse binding rules from a catalog payload.
  */
-export function parseBindingRules(config: any): BindingRule[] {
+export function parseBindingRules(payload: { bindings?: unknown }): BindingRule[] {
   const rules: BindingRule[] = [];
   
-  if (!config?.bindings || !Array.isArray(config.bindings)) {
+  if (!Array.isArray(payload.bindings)) {
     return rules;
   }
   
-  for (const [index, raw] of Object.entries(config.bindings)) {
+  for (const [index, raw] of Object.entries(payload.bindings)) {
     const rule = parseBindingRule(raw, Number(index));
     if (rule) {
       rules.push(rule);

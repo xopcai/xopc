@@ -54,5 +54,4 @@ export const queryKeys = {
   tasks: ['tasks'] as const,
   workflowRuns: ['workflows', 'runs'] as const,
   workflowRun: (id: string, agentId?: string) => ['workflows', 'runs', id, agentId ?? ''] as const,
-  judgments: ['inbox', 'judgments'] as const,
 };

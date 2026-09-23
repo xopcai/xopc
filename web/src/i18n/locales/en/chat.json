@@ -787,7 +787,10 @@
         "use": { "running": "Using {{object}}…", "completed": "Used {{object}}" }
       },
       "objects": {
-        "proactiveWork": "proactive work",
+        "context": "context",
+        "scene": "scene",
+        "chatPreview": "chat preview",
+        "productItem": "product item",
         "project": "project",
         "milestone": "milestone",
         "projectUpdate": "project update",

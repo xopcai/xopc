@@ -92,8 +92,8 @@ describe('Layout alignment: state root and workspace paths', () => {
 
   it('#3: non-default agent workspace is ~/.xopc/workspace-<id>', () => {
     const cfg = makeMultiAgentConfig();
-    expect(resolveAgentWorkspaceDir(cfg, 'helper')).toBe(join(STATE_DIR, 'workspace-helper'));
-    expect(resolveAgentWorkspaceDir(cfg, 'research')).toBe(join(STATE_DIR, 'workspace-research'));
+    expect(resolveAgentWorkspaceDir('helper')).toBe(join(STATE_DIR, 'workspace-helper'));
+    expect(resolveAgentWorkspaceDir('research')).toBe(join(STATE_DIR, 'workspace-research'));
   });
 
   it('#4: profile workspace is ~/.xopc/workspace-<profile>', () => {
@@ -110,7 +110,7 @@ describe('Layout alignment: state root and workspace paths', () => {
 
   it('default agent (main) workspace matches resolveDefaultAgentWorkspaceDir', () => {
     const cfg = makeMultiAgentConfig();
-    const fromScope = resolveAgentWorkspaceDir(cfg, 'main');
+    const fromScope = resolveAgentWorkspaceDir('main');
     const fromDefault = resolveDefaultAgentWorkspaceDir(process.env);
     expect(fromScope).toBe(fromDefault);
   });
@@ -157,31 +157,31 @@ describe('Layout alignment: state root and workspace paths', () => {
 describe('Layout alignment: agent internal paths', () => {
   it('#5: resolveAgentProfileDir is agents/<id>/profile/', () => {
     const cfg = makeMultiAgentConfig();
-    expect(resolveAgentProfileDir(cfg, 'main')).toBe(join(STATE_DIR, 'agents', 'main', 'profile'));
-    expect(resolveAgentProfileDir(cfg, 'helper')).toBe(join(STATE_DIR, 'agents', 'helper', 'profile'));
+    expect(resolveAgentProfileDir('main')).toBe(join(STATE_DIR, 'agents', 'main', 'profile'));
+    expect(resolveAgentProfileDir('helper')).toBe(join(STATE_DIR, 'agents', 'helper', 'profile'));
   });
 
   it('#5: resolveAgentProfileMarkdownPath matches paths.ts wrappers', () => {
     const cfg = makeMultiAgentConfig();
-    expect(resolveAgentProfileMarkdownPath(cfg, 'main', 'SOUL.md')).toBe(
+    expect(resolveAgentProfileMarkdownPath('main', 'SOUL.md')).toBe(
       join(STATE_DIR, 'agents', 'main', 'profile', 'SOUL.md'),
     );
     expect(resolveAgentProfileMarkdownPathFromPaths(cfg, 'helper', 'IDENTITY.md')).toBe(
-      resolveAgentProfileMarkdownPath(cfg, 'helper', 'IDENTITY.md'),
+      resolveAgentProfileMarkdownPath('helper', 'IDENTITY.md'),
     );
-    expect(resolveAgentProfileDirFromPaths(cfg, 'research')).toBe(resolveAgentProfileDir(cfg, 'research'));
+    expect(resolveAgentProfileDirFromPaths(cfg, 'research')).toBe(resolveAgentProfileDir('research'));
   });
 
   it('resolveAgentDir returns agents/<id>/agent/', () => {
     const cfg = makeMultiAgentConfig();
-    expect(resolveAgentDir(cfg, 'main')).toBe(join(STATE_DIR, 'agents', 'main', 'agent'));
-    expect(resolveAgentDir(cfg, 'helper')).toBe(join(STATE_DIR, 'agents', 'helper', 'agent'));
+    expect(resolveAgentDir('main')).toBe(join(STATE_DIR, 'agents', 'main', 'agent'));
+    expect(resolveAgentDir('helper')).toBe(join(STATE_DIR, 'agents', 'helper', 'agent'));
   });
 
   it('resolveAgentHomeDir returns agents/<id>/', () => {
     const cfg = makeMultiAgentConfig();
-    expect(resolveAgentHomeDir(cfg, 'main')).toBe(join(STATE_DIR, 'agents', 'main'));
-    expect(resolveAgentHomeDir(cfg, 'helper')).toBe(join(STATE_DIR, 'agents', 'helper'));
+    expect(resolveAgentHomeDir('main')).toBe(join(STATE_DIR, 'agents', 'main'));
+    expect(resolveAgentHomeDir('helper')).toBe(join(STATE_DIR, 'agents', 'helper'));
   });
 
   it('resolveXopcDatabasePath returns ~/.xopc/xopc.db', () => {
@@ -192,40 +192,40 @@ describe('Layout alignment: agent internal paths', () => {
 describe('Layout alignment: workspace state and auth profiles', () => {
   it('#6: workspace state dir is <workspace>/.xopc/', () => {
     const cfg = makeMultiAgentConfig();
-    const wsDir = resolveAgentWorkspaceDir(cfg, 'main');
-    expect(resolveWorkspaceStateDir(cfg, 'main')).toBe(join(wsDir, '.xopc'));
+    const wsDir = resolveAgentWorkspaceDir('main');
+    expect(resolveWorkspaceStateDir('main')).toBe(join(wsDir, '.xopc'));
   });
 
   it('#6: workspace state path is <workspace>/.xopc/workspace.json', () => {
     const cfg = makeMultiAgentConfig();
-    const wsDir = resolveAgentWorkspaceDir(cfg, 'main');
-    expect(resolveWorkspaceStatePath(cfg, 'main')).toBe(join(wsDir, '.xopc', FILENAMES.WORKSPACE_STATE));
+    const wsDir = resolveAgentWorkspaceDir('main');
+    expect(resolveWorkspaceStatePath('main')).toBe(join(wsDir, '.xopc', FILENAMES.WORKSPACE_STATE));
   });
 
   it('#7: auth profiles at agents/<id>/agent/auth-profiles.json (no credentials/ subdir)', () => {
     const cfg = makeMultiAgentConfig();
     const expected = join(STATE_DIR, 'agents', 'main', 'agent', 'auth-profiles.json');
-    expect(resolveAgentAuthProfilesPath(cfg, 'main')).toBe(expected);
+    expect(resolveAgentAuthProfilesPath('main')).toBe(expected);
     // Verify no "credentials" in path
-    expect(resolveAgentAuthProfilesPath(cfg, 'main')).not.toContain('credentials');
+    expect(resolveAgentAuthProfilesPath('main')).not.toContain('credentials');
   });
 
   it('#7: non-default agent auth profiles path', () => {
     const cfg = makeMultiAgentConfig();
     const expected = join(STATE_DIR, 'agents', 'helper', 'agent', 'auth-profiles.json');
-    expect(resolveAgentAuthProfilesPath(cfg, 'helper')).toBe(expected);
+    expect(resolveAgentAuthProfilesPath('helper')).toBe(expected);
   });
 });
 
 describe('Layout alignment: Agent ID resolution', () => {
   it('resolveDefaultAgentId returns "main" with empty config', () => {
     const cfg = makeConfig();
-    expect(resolveDefaultAgentId(cfg)).toBe('main');
+    expect(resolveDefaultAgentId()).toBe('main');
   });
 
   it('resolveDefaultAgentId respects agents.default', () => {
     const cfg = makeConfig({ agents: { default: 'helper', list: [{ id: 'helper' }] } });
-    expect(resolveDefaultAgentId(cfg)).toBe('helper');
+    expect(resolveDefaultAgentId()).toBe('helper');
   });
 
   it('resolveDefaultAgentId picks first default:true entry', () => {
@@ -237,13 +237,13 @@ describe('Layout alignment: Agent ID resolution', () => {
         ],
       },
     });
-    expect(resolveDefaultAgentId(cfg)).toBe('beta');
+    expect(resolveDefaultAgentId()).toBe('beta');
   });
 
   it('resolveDefaultAgentId picks first entry when no default flag', () => {
     const cfg = makeConfig({
       agents: { list: [{ id: 'alpha' }, { id: 'beta' }] },
     });
-    expect(resolveDefaultAgentId(cfg)).toBe('alpha');
+    expect(resolveDefaultAgentId()).toBe('alpha');
   });
 });

@@ -29,9 +29,8 @@ export struct XopcProgressView {
     return value;
   }
   private async runAction(action: XopcHomeAction): Promise<void> {
-    if (action.type === 'open' || action.type === 'review_judgment') {
-      const route: XopcMobileRoute | undefined = action.type === 'review_judgment'
-        ? { page: 'inbox', itemId: action.itemId ?? '' } : mobileRoute(action.href ?? '');
+    if (action.type === 'open') {
+      const route: XopcMobileRoute | undefined = mobileRoute(action.href ?? '');
       if (route) this.onNavigate(route);
       else this.model.actionError = this.getUIContext().getHostContext()?.resourceManager.getStringSync($r('app.string.unsupported_route').id) ?? '';
       return;

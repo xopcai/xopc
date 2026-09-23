@@ -316,9 +316,8 @@ export struct XopcChatView {
   aboutToDisappear(): void { this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setDrawer(false); this.setPanel(false); this.prompt.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voice.cancel(); this.reader.disableContinuous(); this.attachments = []; }
 
   private async attentionAction(action: XopcHomeAction): Promise<void> {
-    if (action.type === 'open' || action.type === 'review_judgment') {
-      const route: XopcMobileRoute | undefined = action.type === 'review_judgment' && action.itemId
-        ? { page: 'inbox', itemId: action.itemId } : mobileRoute(action.href ?? '');
+    if (action.type === 'open') {
+      const route: XopcMobileRoute | undefined = mobileRoute(action.href ?? '');
       if (route) { this.sheetOpen = false; this.onNavigate(route); }
       else this.attention.error = this.getUIContext().getHostContext()?.resourceManager.getStringSync($r('app.string.unsupported_route').id) ?? '';
       return;

@@ -99,7 +99,7 @@ const GOAL_STATUSES = new Set<UserGoalStatus>(['proposed', 'active', 'paused', '
 const KNOWLEDGE_REVIEW_ACTIONS = new Set(['approve', 'edit_and_approve', 'reject', 'archive']);
 const KNOWLEDGE_STATUSES = new Set(['candidate', 'active', 'needs_review', 'stale', 'archived', 'rejected']);
 const RULE_CATEGORIES = new Set<CollaborationRule['category']>([
-  'communication', 'execution', 'boundary', 'routine', 'proactive',
+  'communication', 'execution', 'boundary', 'routine', 'initiative',
 ]);
 const RULE_STATUSES = new Set<CollaborationRule['status']>(['active', 'disabled', 'archived']);
 

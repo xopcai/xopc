@@ -66,6 +66,10 @@ export function useSkillsPage() {
   const hasToken = Boolean(token);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const recoveryReturnPath = (() => {
+    const value = searchParams.get('returnTo');
+    return value?.startsWith('/') && !value.startsWith('//') ? value : null;
+  })();
 
   const mprovRaw = searchParams.get(MARKETPLACE_PROVIDER_PARAM);
   // Accept any non-empty provider id from URL — validity checked by the backend registry.
@@ -1211,6 +1215,8 @@ export function useSkillsPage() {
     setCatalogStatusFilter,
     resolveSkillEnabled,
     inSettingsShell,
+    recoveryReturnPath,
+    onRecoveryDone: () => recoveryReturnPath && navigate(recoveryReturnPath),
     categoryLabel,
     onReloadClick,
     openSkillDetail,

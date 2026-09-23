@@ -3,7 +3,6 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { existsSync, readdirSync, statSync } from 'fs';
 
-import type { Config } from './schema.js';
 import {
   resolveAgentDir as resolveAgentDirScoped,
   resolveAgentHomeDir as resolveAgentHomeScoped,
@@ -24,8 +23,6 @@ export {
 export { resolveDefaultAgentWorkspaceDir } from './workspace-defaults.js';
 export {
   resolveAgentWorkspaceDir,
-  resolveAgentDir as resolveAgentDirFromConfig,
-  resolveAgentHomeDir as resolveAgentHomeDirFromConfig,
 } from '../agent/agent-scope.js';
 
 // ============================================
@@ -102,94 +99,93 @@ export function resolveMcpOAuthPath(serverKey: string): string {
  * Internal agent state dir: `stateDir/agents/<id>/agent/`
  * (credentials, inbox IPC, pid, agent.json — not the Markdown workspace).
  */
-export function resolveAgentDir(config: Config, agentId: string): string {
-  return resolveAgentDirScoped(config, agentId);
+export function resolveAgentDir(agentId: string): string {
+  return resolveAgentDirScoped(agentId);
 }
 
 /**
  * Per-agent home: `stateDir/agents/<id>/` (sessions + `agent/`).
  */
-export function resolveAgentHomeDir(config: Config, agentId: string): string {
-  return resolveAgentHomeScoped(config, agentId);
+export function resolveAgentHomeDir(agentId: string): string {
+  return resolveAgentHomeScoped(agentId);
 }
 
 /** Agent profile Markdown root: `stateDir/agents/<id>/profile/`. */
-export function resolveAgentProfileDir(config: Config, agentId: string): string {
-  return resolveAgentProfileDirScoped(config, agentId);
+export function resolveAgentProfileDir(agentId: string): string {
+  return resolveAgentProfileDirScoped(agentId);
 }
 
 /** Single file under {@link resolveAgentProfileDir} (basename only). */
-export function resolveAgentProfileMarkdownPath(config: Config, agentId: string, filename: string): string {
-  return resolveAgentProfileMarkdownPathScoped(config, agentId, filename);
+export function resolveAgentProfileMarkdownPath(agentId: string, filename: string): string {
+  return resolveAgentProfileMarkdownPathScoped(agentId, filename);
 }
 
 /**
  * Resolve a profile system Markdown path (SOUL.md, …) under the agent `profile/` directory.
  */
-export function resolveWorkspaceFile(config: Config, filename: string, agentId: string): string {
-  return join(resolveAgentProfileDirScoped(config, agentId), filename);
+export function resolveWorkspaceFile(filename: string, agentId: string): string {
+  return join(resolveAgentProfileDirScoped(agentId), filename);
 }
 
 /**
  * OpenClaw-aligned: per-agent auth-profiles.json directly under agent dir (no credentials subdirectory).
  */
-export function resolveAgentAuthProfilesPath(config: Config, agentId: string): string {
-  return join(resolveAgentDir(config, agentId), FILENAMES.CREDENTIALS_PROFILES);
+export function resolveAgentAuthProfilesPath(agentId: string): string {
+  return join(resolveAgentDir(agentId), FILENAMES.CREDENTIALS_PROFILES);
 }
 
 /**
  * Resolve the inbox directory for an agent
  */
-export function resolveInboxDir(config: Config, agentId: string): string {
-  return join(resolveAgentDir(config, agentId), 'inbox');
+export function resolveInboxDir(agentId: string): string {
+  return join(resolveAgentDir(agentId), 'inbox');
 }
 
 /**
  * Resolve the pending inbox directory
  */
-export function resolveInboxPendingDir(config: Config, agentId: string): string {
-  return join(resolveInboxDir(config, agentId), 'pending');
+export function resolveInboxPendingDir(agentId: string): string {
+  return join(resolveInboxDir(agentId), 'pending');
 }
 
 /**
  * Resolve the processed inbox directory
  */
-export function resolveInboxProcessedDir(config: Config, agentId: string): string {
-  return join(resolveInboxDir(config, agentId), 'processed');
+export function resolveInboxProcessedDir(agentId: string): string {
+  return join(resolveInboxDir(agentId), 'processed');
 }
 
 /**
  * Resolve a specific inbox message path
  */
 export function resolveInboxMessagePath(
-  config: Config,
   messageId: string,
   pending: boolean,
   agentId: string,
 ): string {
-  const dir = pending ? resolveInboxPendingDir(config, agentId) : resolveInboxProcessedDir(config, agentId);
+  const dir = pending ? resolveInboxPendingDir(agentId) : resolveInboxProcessedDir(agentId);
   return join(dir, `${messageId}.json`);
 }
 
 /**
  * Resolve the pid file path
  */
-export function resolvePidPath(config: Config, agentId: string): string {
-  return join(resolveAgentDir(config, agentId), FILENAMES.PID);
+export function resolvePidPath(agentId: string): string {
+  return join(resolveAgentDir(agentId), FILENAMES.PID);
 }
 
 /**
  * Resolve the status.json path
  */
-export function resolveStatusPath(config: Config, agentId: string): string {
-  return join(resolveAgentDir(config, agentId), FILENAMES.STATUS);
+export function resolveStatusPath(agentId: string): string {
+  return join(resolveAgentDir(agentId), FILENAMES.STATUS);
 }
 
 /**
  * Resolve the Unix socket path
  */
-export function resolveSocketPath(config: Config, agentId: string): string {
-  return join(resolveAgentDir(config, agentId), FILENAMES.SOCKET);
+export function resolveSocketPath(agentId: string): string {
+  return join(resolveAgentDir(agentId), FILENAMES.SOCKET);
 }
 
 /**
@@ -211,8 +207,8 @@ export function resolveExtensionsLockPath(): string {
  * legacy or manually placed copies. CLI, web store, and `extensions dev` symlink installs use
  * {@link resolveExtensionsDir} (`~/.xopc/extensions`) only.
  */
-export function resolveWorkspaceExtensionsDir(config: Config, agentId: string): string {
-  return join(resolveAgentDir(config, agentId), 'extensions');
+export function resolveWorkspaceExtensionsDir(agentId: string): string {
+  return join(resolveAgentDir(agentId), 'extensions');
 }
 
 /**
@@ -309,22 +305,22 @@ export function resolveModelsJsonPath(): string {
 /**
  * OpenClaw-aligned: workspace setup state directory (`<workspace>/.xopc/`).
  */
-export function resolveWorkspaceStateDir(config: Config, agentId: string): string {
-  return join(resolveAgentWorkspaceDir(config, agentId), '.xopc');
+export function resolveWorkspaceStateDir(agentId: string): string {
+  return join(resolveAgentWorkspaceDir(agentId), '.xopc');
 }
 
 /**
  * OpenClaw-aligned: workspace setup state file (`<workspace>/.xopc/workspace.json`).
  */
-export function resolveWorkspaceStatePath(config: Config, agentId: string): string {
-  return join(resolveWorkspaceStateDir(config, agentId), FILENAMES.WORKSPACE_STATE);
+export function resolveWorkspaceStatePath(agentId: string): string {
+  return join(resolveWorkspaceStateDir(agentId), FILENAMES.WORKSPACE_STATE);
 }
 
 /**
  * Resolve the skills cache file path (internal agent state, under agent dir).
  */
-export function resolveSkillsCachePath(config: Config, agentId: string): string {
-  return join(resolveAgentDir(config, agentId), 'state', FILENAMES.SKILLS_CACHE);
+export function resolveSkillsCachePath(agentId: string): string {
+  return join(resolveAgentDir(agentId), 'state', FILENAMES.SKILLS_CACHE);
 }
 
 /**

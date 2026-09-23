@@ -1,6 +1,7 @@
 import type {
   HomeAction,
   HomeAttention,
+  HomeAdvisor,
   HomeDecision,
   HomeResponse,
   HomeWorkbenchItem,
@@ -17,7 +18,6 @@ import type { Config } from '../config/schema.js';
 import type { ProjectService } from '../projects/project-service.js';
 import {
   isHomeAttentionAcknowledged,
-  getRelationshipSettings,
   listConnectorApprovals,
   type HomeAttentionSubjectKind,
 } from '../storage/sqlite/index.js';
@@ -239,7 +239,6 @@ function formatScheduleDistance(value: string, nowMs: number, locale?: string): 
 }
 
 function decisionRecommendation(decision: HomeDecision, copy: ReturnType<typeof homeActionCopy>): string {
-  if (decision.judgment?.recommendation) return decision.judgment.recommendation;
   if (decision.reason === 'needs_input' || decision.reason === 'user_input') return copy.inputRecommendation;
   if (decision.reason === 'approval_required' || decision.reason === 'user_approval') return copy.approvalRecommendation;
   if (decision.reason === 'retry') return copy.retryRecommendation;
@@ -257,9 +256,7 @@ export function buildHomeWorkbench(input: {
 }): Pick<HomeResponse, 'needsUser' | 'background' | 'backgroundCount'> {
   const copy = homeActionCopy(input.locale);
   const decisions = input.decisions.map((decision): HomeWorkbenchItem => {
-    const openAction: HomeAction = decision.kind === 'agent_judgment' && decision.judgment
-      ? { type: 'review_judgment', label: copy.review, itemId: decision.judgment.inboxItemId }
-      : { type: 'open', label: copy.review, href: decision.href };
+    const openAction: HomeAction = { type: 'open', label: copy.review, href: decision.href };
     const connectorActions = decision.response?.kind === 'connector_approval'
       ? {
           primaryAction: {
@@ -377,10 +374,13 @@ export class HomeQueryService {
   readonly #projector = new TaskReadModelProjector();
   readonly #attentionGovernor = new AttentionGovernor();
 
-  constructor(private readonly service: HomeGatewayPort) {}
+  constructor(
+    private readonly service: HomeGatewayPort,
+    private readonly getAdvisor: () => HomeAdvisor = () => ({ state: 'quiet', reason: 'no_change' }),
+  ) {}
 
   async getSnapshot(locale?: string): Promise<HomeResponse> {
-    const agents = await listGatewayAgents(this.service.currentConfig);
+    const agents = await listGatewayAgents();
     const defaultAgent = agents.agents.find((agent) => agent.id === agents.defaultId) ?? agents.agents[0];
     const workflowRunStore = this.service.createWorkflowRunService()
       .createRunStore(defaultAgent?.id ?? agents.defaultId);
@@ -492,16 +492,9 @@ export class HomeQueryService {
     const governed = this.#attentionGovernor.project({
       decisions: decisionCandidates,
       attention: attentionCandidates,
-      proactiveEnabled: getRelationshipSettings().proactiveEnabled,
     });
     const decisions = governed.decisions;
     const attention = governed.attention;
-    const interactiveDecisions = decisions.filter(
-      (item) => item.kind !== 'agent_judgment' || item.judgment?.attentionKind === 'decision',
-    );
-    const proactiveInformation = decisions.filter(
-      (item) => item.kind === 'agent_judgment' && item.judgment?.attentionKind !== 'decision',
-    );
 
     const runningTasks = tasks.filter((task) => {
       const state = this.#projector.project(task).operationalState;
@@ -509,37 +502,18 @@ export class HomeQueryService {
     });
     const workbench = buildHomeWorkbench({
       locale,
-      decisions: interactiveDecisions,
+      decisions,
       attention,
       activeWorkflowRuns,
       runningTasks,
       scheduled: upcomingAutomations,
       nowMs,
     });
-    const informationItems: HomeWorkbenchItem[] = proactiveInformation.map((item) => ({
-      id: item.id,
-      kind: 'insight',
-      title: item.title,
-      summary: item.detail ?? item.judgment!.recommendation,
-      recommendation: item.judgment!.recommendation,
-      updatedAt: item.updatedAt,
-      openAction: {
-        type: 'review_judgment',
-        label: locale?.startsWith('zh') ? '查看' : 'Review',
-        itemId: item.judgment!.inboxItemId,
-      },
-      secondaryActions: [],
-    }));
-    const background = [...informationItems, ...workbench.background]
-      .sort((left, right) => right.updatedAt - left.updatedAt)
-      .slice(0, 3);
-
     return {
       ...workbench,
-      background,
-      backgroundCount: workbench.backgroundCount + informationItems.length,
       runningConversations,
       decisions,
+      advisor: this.getAdvisor(),
       attentionPolicy: governed.policy,
     };
   }
