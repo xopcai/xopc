@@ -193,7 +193,7 @@ async function reviewModelRef(ctx: CommandContext): Promise<string | undefined> 
   if (sessionOverride) return sessionOverride;
 
   try {
-    const profile = resolveEffectiveAgentProfileForSession(ctx.config, ctx.conversationId);
+    const profile = resolveEffectiveAgentProfileForSession(ctx.conversationId);
     return profile.config.models.intents.review?.primary || profile.primaryModelRef;
   } catch {
     return undefined;

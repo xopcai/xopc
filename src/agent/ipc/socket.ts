@@ -20,7 +20,7 @@ export class AgentSocketServer {
   private messageHandler?: (msg: AgentIPCMessage, reply: (response: AgentIPCMessage) => void) => Promise<void>;
 
   constructor(config: Config, agentId: string) {
-    this.socketPath = resolveSocketPath(config, agentId);
+    this.socketPath = resolveSocketPath(agentId);
   }
 
   /**
@@ -183,7 +183,7 @@ export class AgentSocketClient {
   > = new Map();
 
   constructor(config: Config, targetAgentId: string) {
-    this.socketPath = resolveSocketPath(config, targetAgentId);
+    this.socketPath = resolveSocketPath(targetAgentId);
   }
 
   /**
@@ -325,7 +325,7 @@ export class AgentSocketClient {
 // ============================================
 
 export async function isSocketAvailable(config: Config, agentId: string): Promise<boolean> {
-  const socketPath = resolveSocketPath(config, agentId);
+  const socketPath = resolveSocketPath(agentId);
 
   return new Promise((resolve) => {
     const socket = new Socket();

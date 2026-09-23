@@ -316,9 +316,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const isLocalMode = opts.local === true;
   const loadedConfig = loadConfig();
-  const config = isLocalMode ? ensureStarterAgentsInitialized(loadedConfig).config : loadedConfig;
+  if (isLocalMode) ensureStarterAgentsInitialized();
+  const config = loadedConfig;
   const startup = resolveTuiStartupConversationId({
-    cfg: config,
     sessionOption: opts.session,
     agentOption: opts.agentId,
     cwd: process.cwd(),
@@ -788,7 +788,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     getAllProviders().filter((provider) => isProviderConfiguredSync(provider)).length;
 
   const getExtensionSystemPrompt = () =>
-    resolveEffectiveAgentProfileForSession(config, state.currentConversationId).customInstructions ?? '';
+    resolveEffectiveAgentProfileForSession(state.currentConversationId).customInstructions ?? '';
 
   const waitForTuiIdle = async () => {
     while (

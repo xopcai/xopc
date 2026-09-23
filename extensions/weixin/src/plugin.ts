@@ -347,16 +347,8 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
 
   async onConfigUpdated(cfg: Config): Promise<void> {
     const routingConfigChanged = !isDeepStrictEqual(
-      {
-        agents: this.cfg.agents,
-        bindings: this.cfg.bindings,
-        session: this.cfg.session,
-      },
-      {
-        agents: cfg.agents,
-        bindings: cfg.bindings,
-        session: cfg.session,
-      },
+      this.cfg.session,
+      cfg.session,
     );
     const prevWx = this.cfg.channels?.weixin as unknown;
     const nextWx = cfg.channels?.weixin as { enabled?: boolean } | undefined;

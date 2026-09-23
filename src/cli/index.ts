@@ -5,6 +5,8 @@ import { ROOT_COMMAND_DESCRIPTION } from './command-manifest.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { resolveCommandName, tryLoadCommand, loadAllCommands } from './command-loaders.js';
 import { isHelpOrVersionInvocation } from './argv.js';
+import { bootstrapApplicationStateSync } from '../bootstrap/application-state.js';
+import type { CLIContext } from './registry.js';
 
 // Lazy logger flush so that pure parameter-parsing paths (--help, --version,
 // `<unknown>`) never load the logger barrel. Imports `logger/shutdown.js`
@@ -38,7 +40,7 @@ function isExtensionsDevCommand(command: Command): boolean {
   return command.name() === 'dev' && command.parent?.name() === 'extensions';
 }
 
-function buildProgram(): Command {
+function buildProgram(ctx: CLIContext): Command {
   const program = new Command()
     .name('xopc')
     .description(ROOT_COMMAND_DESCRIPTION)
@@ -56,6 +58,7 @@ function buildProgram(): Command {
       delete (parsedOpts as Record<string, unknown>)[k];
     }
     Object.assign(parsedOpts, next);
+    bootstrapApplicationStateSync(ctx.configPath);
   });
 
   // Hook to ensure process exits after command completion.
@@ -83,8 +86,8 @@ function buildProgram(): Command {
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {
-  const program = buildProgram();
   const ctx = getContextWithOpts(argv);
+  const program = buildProgram(ctx);
 
   // Filter out standalone '--' separator (passed by pnpm run -- <cmd>).
   // npm removes it automatically, pnpm passes it through. Keep '--' if it's a

@@ -190,7 +190,7 @@ export { parseImageDataUrl };
 
 export function resolveImageGenerationModelConfigForTool(params: { cfg?: Config; agentId: string }): ToolModelConfig | null {
   const explicit = params.cfg
-    ? getAgentDefaultImageGenerationModelConfig(params.cfg, params.agentId)
+    ? getAgentDefaultImageGenerationModelConfig(params.agentId)
     : undefined;
   if (explicit?.primary?.trim()) {
     const plan = buildCapabilityPlansForConfig(params.cfg!)['image-generation'];

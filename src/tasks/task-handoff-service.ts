@@ -59,7 +59,7 @@ export class TaskHandoffService {
   }): Promise<TaskHandoffResult> {
     const config = this.deps.getConfig();
     const toAgentId = normalizeAgentId(input.toAgentId);
-    const agent = listAgentEntries(config).find(
+    const agent = listAgentEntries().find(
       (entry) => entry.enabled !== false && normalizeAgentId(entry.id) === toAgentId,
     );
     if (!agent) throw new Error(`Agent not found: ${toAgentId}`);

@@ -9,8 +9,8 @@ export function createDelegationParentPolicy(options: { getConfig: () => Config 
   const policies = (name: string, args: unknown) => {
     const config = options.getConfig();
     if (!config) return [];
-    const resolved = options.conversationId ? resolveEffectiveAgentConfigForSession(config, options.conversationId)
-      : options.agentId ? resolveEffectiveAgentConfigForAgent(config, options.agentId) : resolveEffectiveAgentConfigForSession(config, undefined);
+    const resolved = options.conversationId ? resolveEffectiveAgentConfigForSession(options.conversationId)
+      : options.agentId ? resolveEffectiveAgentConfigForAgent(options.agentId) : resolveEffectiveAgentConfigForSession(undefined);
     const names = [name];
     if (name === 'xopc_tool_execute') {
       const parsed = parseExternalToolRef(String((args as { toolRef?: unknown })?.toolRef ?? ''), 'mcp');

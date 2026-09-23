@@ -149,7 +149,6 @@ describe('connector learning coordinator', () => {
     const config = ConfigSchema.parse({});
     expect(upsertConnectorSyncPolicy({
       accountId: 'account:gmail-work',
-      proactiveEnabled: true,
       defaultIntervalMinutes: 15,
     }).intervalMinutes).toBe(15);
     upsertConnectorSyncPolicy({

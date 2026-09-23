@@ -173,7 +173,7 @@ async function runWorkflowFromCommand(ctx: CommandContext, args: string) {
     return { content: `error: ${message}`, success: false };
   }
 
-  const agentId = extractProfileAgentId(ctx.conversationId, ctx.config);
+  const agentId = extractProfileAgentId(ctx.conversationId);
   const source =
     ctx.source === 'webui' || ctx.channelId === 'webchat'
       ? ({ kind: 'webui' as const, conversationId: ctx.conversationId })

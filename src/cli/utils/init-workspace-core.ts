@@ -6,7 +6,9 @@ import type { Config } from '../../config/schema.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { assertConfigRewriteSafeForRunningGateway, saveConfig } from '../../config/loader.js';
 import { ensureStarterAgentsInitialized } from '../../agent/starter-agents.js';
-import { runBootstrapMigrationsSync } from '../../migrations/runner.js';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
+import { AgentCatalogService } from '../../agent-catalog/service.js';
+import { bootstrapApplicationStateSync } from '../../bootstrap/application-state.js';
 
 export interface InitWorkspaceCoreOptions {
   configPath: string;
@@ -67,9 +69,7 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
   mkdirSync(dirname(configPath), { recursive: true });
 
   const configExisted = existsSync(configPath);
-  if (configExisted) {
-    runBootstrapMigrationsSync(configPath, { stateDir: dirname(configPath) });
-  }
+  bootstrapApplicationStateSync(configPath);
   const workspaceExisted = existsSync(workspacePath);
 
   let config: Config;
@@ -98,20 +98,17 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
       ? gatewayPortDefaulted
       : (config.gateway?.port ?? 18790);
 
-  const defaultAgentId = config.agents.default ?? config.agents.list[0]?.id ?? 'main';
-  const agentsList =
-    persistedWorkspaceRoot === undefined
-      ? config.agents.list
-      : config.agents.list.map((agent) =>
-          agent.id === defaultAgentId ? { ...agent, workspace: persistedWorkspaceRoot } : agent,
-        );
+  if (persistedWorkspaceRoot !== undefined) {
+    const repository = new AgentCatalogRepository();
+    const defaultAgentId = repository.getSettings().defaultAgentId;
+    const agent = repository.get(defaultAgentId);
+    if (agent && agent.workspace !== persistedWorkspaceRoot) {
+      await new AgentCatalogService(repository).update(defaultAgentId, { workspace: persistedWorkspaceRoot });
+    }
+  }
 
   const nextConfig: Config = {
     ...config,
-    agents: {
-      ...config.agents,
-      list: agentsList,
-    },
     gateway: {
       ...config.gateway,
       port,
@@ -123,11 +120,11 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
     },
   };
 
-  const starterResult = ensureStarterAgentsInitialized(ConfigSchema.parse(nextConfig));
-  const nextFinal = ConfigSchema.parse(starterResult.config);
+  ensureStarterAgentsInitialized();
+  const nextFinal = ConfigSchema.parse(nextConfig);
   await assertChannelPluginsIfNeeded(nextFinal, assertChannelPlugins);
 
-  let needsWrite = configCreated || starterResult.changed;
+  let needsWrite = configCreated;
   if (!needsWrite) {
     const disk = await readDiskConfig(configPath, assertChannelPlugins);
     needsWrite =

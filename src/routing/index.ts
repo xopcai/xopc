@@ -60,7 +60,6 @@ export {
   resolveRouteFromConversationId,
   type IdentityLinks,
   type SessionConfig,
-  type AgentConfig,
   type RoutingConfig,
   type ResolveRouteInput,
   type ResolveRouteResult,

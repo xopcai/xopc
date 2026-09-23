@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'fs/promises';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync } from 'fs';
 import { join } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import {
@@ -48,22 +48,20 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
 
   const configPath = resolveConfigPath();
   const configExists = existsSync(configPath);
-  const diskTui = readDiskTuiDefaultState(configPath);
-  const starterResult = ensureStarterAgentsInitialized(loadConfig(configPath));
-  const cfg = starterResult.config;
+  ensureStarterAgentsInitialized();
+  const cfg = loadConfig(configPath);
 
   // Agent directory structure
-  await mkdir(resolveAgentHomeDir(cfg, agentId), { recursive: true });
-  await mkdir(resolveAgentProfileDir(cfg, agentId), { recursive: true });
-  await mkdir(resolveAgentDir(cfg, agentId), { recursive: true });
-  const wsRoot = resolveAgentWorkspaceDir(cfg, agentId);
+  await mkdir(resolveAgentHomeDir(agentId), { recursive: true });
+  await mkdir(resolveAgentProfileDir(agentId), { recursive: true });
+  await mkdir(resolveAgentDir(agentId), { recursive: true });
+  const wsRoot = resolveAgentWorkspaceDir(agentId);
   await mkdir(wsRoot, { recursive: true });
 
   // Config file
   if (
     !configExists ||
-    options.force ||
-    (diskTui.readable && (starterResult.changed || !diskTui.hasDefaultAgent))
+    options.force
   ) {
     await saveConfig(cfg, configPath);
     log.info({ configPath }, 'Saved configuration');
@@ -79,29 +77,12 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   log.info({ stateDir, agentId }, 'xopc Agent OS initialized successfully');
 }
 
-function readDiskTuiDefaultState(configPath: string): { readable: boolean; hasDefaultAgent: boolean } {
-  if (!existsSync(configPath)) {
-    return { readable: true, hasDefaultAgent: false };
-  }
-  try {
-    const parsed = JSON.parse(readFileSync(configPath, 'utf-8')) as {
-      tui?: { defaultAgent?: unknown };
-    };
-    return {
-      readable: true,
-      hasDefaultAgent: typeof parsed.tui?.defaultAgent === 'string',
-    };
-  } catch {
-    return { readable: false, hasDefaultAgent: false };
-  }
-}
-
 /**
  * Create default workspace files for an agent
  */
 async function createWorkspaceFiles(cfg: Config, agentId: string): Promise<void> {
-  const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
-  const profileDir = resolveAgentProfileDir(cfg, agentId);
+  const workspaceDir = resolveAgentWorkspaceDir(agentId);
+  const profileDir = resolveAgentProfileDir(agentId);
   await mkdir(workspaceDir, { recursive: true });
   await mkdir(profileDir, { recursive: true });
 

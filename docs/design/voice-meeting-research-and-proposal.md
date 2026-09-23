@@ -57,7 +57,7 @@ xopc 已有语音通话、讨论录音、近实时转写、结构化整理、项
 - [分析器](../../src/discussions/analyzer.ts)、[讨论数据类型](../../src/discussions/types.ts)、[STT 契约](../../src/voice/stt/types.ts)。
 - [讨论阅读界面](../../web/src/features/discussions/discussion-note-sections.tsx)。
 - [旧行动转换表删除](../../src/storage/sqlite/migrations/082_one_click_live_discussions.sql)。
-- [完成事件](../../src/gateway/service.ts)、[主动服务场景](../../src/proactive/experience.ts)。
+- [完成事件](../../src/gateway/service.ts)、[场景系统](../../src/scenes/index.ts)。
 - [现有语音说明](../voice.md)、[实时语音交付与真机验收边界](./voice-experience-delivery.md)。
 
 ## 4. 竞品产品设计对比
@@ -194,7 +194,7 @@ xopc 已有语音通话、讨论录音、近实时转写、结构化整理、项
 
 ### 8.1 复用现有领域
 
-保留 `discussionId` 为会议记录主标识，`noteId` 为笔记归属；不再引入第二套独立会议主记录。Chat 用于与助手交流，Task 用于执行，Project 用于组织，Proactive 用于委托后的跟进。
+保留 `discussionId` 为会议记录主标识，`noteId` 为笔记归属；不再引入第二套独立会议主记录。Chat 用于与助手交流，Task 用于执行，Project 用于组织，Scene 用于委托后的跟进。
 
 ```mermaid
 flowchart LR
@@ -259,7 +259,7 @@ flowchart LR
 - 管线与事实：`src/discussions/`；提供明确模块边界，避免继续扩成单一 service。
 - 音频契约：`src/voice/stt/`、`src/media-understanding/`、扩展 speech contracts。
 - 持久化：现有 SQLite 迁移与附件设施，建立新修订和转换关联；真实用户数据使用向前迁移，不沿用旧开发期删表方式。
-- 任务与跟进：复用既有 Task、ObjectLink、Proactive 服务，防止产生第二套待办状态。
+- 任务与跟进：复用既有 Task、ObjectLink、Scene 服务，防止产生第二套待办状态。
 - API：优先扩展现有 discussion 资源，新增或修改鉴权路由时同步 lazy-bundle matcher、映射测试及真实鉴权 Gateway 验证。
 
 ## 9. 分阶段交付

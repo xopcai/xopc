@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { resolveDefaultAgentId } from '../../agent/agent-scope.js';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { removeCommandContainer } from '../../agent/commands/command-isolation.js';
 import type { Config } from '../../config/schema.js';
 import { inspectGitRepository } from '../../execution-environments/git.js';
@@ -65,7 +66,7 @@ export class TaskFollowUpService {
     this.scenes = new SceneRepository(db);
     this.branches = new TaskBranchInventory(db);
     this.scenes.installTemplate(taskFollowUpTemplate);
-    this.executor = deps.executor ?? new FollowUpAgentExecutor(() => resolveModel(resolveModelSelector(deps.config(), resolveDefaultAgentId(deps.config()), '@reasoning')), deps.config);
+    this.executor = deps.executor ?? new FollowUpAgentExecutor(() => resolveModel(resolveModelSelector(deps.config(), resolveDefaultAgentId(), '@reasoning')), deps.config);
     this.sources = deps.sources;
     this.resources = new TaskResources({ stateDir: deps.stateDir, worktrees: deps.worktrees });
     // v190 records keep their original authority and remain paused after migration.
@@ -91,7 +92,7 @@ export class TaskFollowUpService {
   }
 
   private image(): string | undefined {
-    const isolation = this.deps.config().agents.defaults.runtime.commandIsolation;
+    const isolation = new AgentCatalogRepository().getSettings().defaults.runtime.commandIsolation;
     return isolation?.mode === 'docker' ? isolation.image : undefined;
   }
 
@@ -130,7 +131,7 @@ export class TaskFollowUpService {
       }
     }
     if (!this.deps.executor) {
-      try { if (!isProviderConfiguredSync(resolveModel(resolveModelSelector(this.deps.config(), resolveDefaultAgentId(this.deps.config()), '@reasoning')).provider)) missing.push('model_credentials'); }
+      try { if (!isProviderConfiguredSync(resolveModel(resolveModelSelector(this.deps.config(), resolveDefaultAgentId(), '@reasoning')).provider)) missing.push('model_credentials'); }
       catch { missing.push('model_configuration'); }
     }
     return { ready: missing.length === 0, missing };
@@ -313,7 +314,7 @@ export class TaskFollowUpService {
     const count = Number(this.db.prepare('SELECT count(*) AS n FROM task_runs WHERE task_id = ? AND queued_at > ?').get(task.id, Date.now() - 86400000)?.n);
     if (count >= 10) return;
     this.application.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: `scene:${id}:run:${row.observed_revision}:${task.version}`,
-      command: { type: 'start', executor: { kind: 'agent', agentId: resolveDefaultAgentId(this.deps.config()) } }, actor: { kind: 'system', id: 'scene-task-follow-up' } });
+      command: { type: 'start', executor: { kind: 'agent', agentId: resolveDefaultAgentId() } }, actor: { kind: 'system', id: 'scene-task-follow-up' } });
   }
 
   tick(): Promise<void> {

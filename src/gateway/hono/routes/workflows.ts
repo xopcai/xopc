@@ -677,7 +677,7 @@ function getAgentId(rawAgentId: string | undefined, config: AuthenticatedRouteDe
   if (trimmed) {
     return trimmed;
   }
-  return resolveDefaultAgentId(config);
+  return resolveDefaultAgentId();
 }
 
 function buildWorkflowStats(runs: WorkflowRunSummary[]): {

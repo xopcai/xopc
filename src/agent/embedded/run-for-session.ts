@@ -156,7 +156,7 @@ export async function runEmbeddedTurnForSession(
     const workspaceDir = agentManager.getResolvedWorkspaceForSession(conversationId);
     const promptCachePolicy = resolvePromptCachePolicy(
       config
-        ? resolveEffectiveAgentProfileForSession(config, conversationId).config.runtime.promptCache
+        ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.promptCache
         : undefined,
     );
     let userMessageForTurn = userMessage;
@@ -249,7 +249,7 @@ export async function runEmbeddedTurnForSession(
           conversationId,
           () => runXopcEmbeddedTurn({
             conversationId,
-            verifyChanges: config ? resolveEffectiveAgentProfileForSession(config, conversationId).agentId === 'coder' : false,
+            verifyChanges: config ? resolveEffectiveAgentProfileForSession(conversationId).agentId === 'coder' : false,
             runId,
             userMessage: userMessageForTurn,
             images: params.llmImages,

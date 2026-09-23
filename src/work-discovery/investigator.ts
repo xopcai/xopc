@@ -149,7 +149,7 @@ async function chooseAction(input: {
   contentCharsRemaining: number;
   signal?: AbortSignal;
 }): Promise<InvestigationDecision | null> {
-  const modelRef = getAgentDefaultModelRef(input.config);
+  const modelRef = getAgentDefaultModelRef();
   if (!modelRef) throw new Error('No default model configured');
   const evidence = input.runtimeEvidence.slice(-16).map((item) => ({
     evidenceId: item.record.id,

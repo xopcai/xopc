@@ -33,7 +33,6 @@ import { ConfigHotReloader } from '../../config/reload.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../../config/index.js';
 import { sanitizeTunnelConfig } from '../../tunnel/tunnel-config.js';
 import { getModelRegistry } from '../../providers/index.js';
-import { validateComputerModelChanges } from '../../computer/model-config.js';
 import { disposeAllSessionMcpRuntimes } from '../../agent/mcp/bundle-mcp-tools.js';
 import { reloadImageGenerationProviders } from '../../agent/image/generation/provider-registry.js';
 import { computeBundledExtensionExtensionsPatch } from '../../extensions/bundled-extension-activation.js';
@@ -80,7 +79,6 @@ export class GatewayConfigCoordinator {
       this.opts.getConfig(),
       {
         onModelsReload: (newConfig) => this.handleModelsReload(newConfig),
-        onAgentDefaultsReload: (newConfig) => this.handleAgentDefaultsReload(newConfig),
         onChannelsReload: (newConfig) => this.handleChannelsReload(newConfig),
         onCronReload: (newConfig) => this.handleAutomationReload(newConfig),
         onToolsReload: (newConfig) => this.handleToolsReload(newConfig),
@@ -126,7 +124,6 @@ export class GatewayConfigCoordinator {
 
   async saveConfig(config: Config): Promise<{ saved: boolean; error?: string }> {
     try {
-      validateComputerModelChanges(config, this.opts.getConfig());
       await this.writeConfigAndReloadFromDisk(config);
       this.scheduleChannelPluginsAfterPersist();
       return { saved: true };
@@ -142,7 +139,6 @@ export class GatewayConfigCoordinator {
     try {
       log.debug('Updating configuration...');
       const merged = { ...this.opts.getConfig(), ...updates };
-      validateComputerModelChanges(merged, this.opts.getConfig());
       this.opts.setConfig(merged);
       await this.writeConfigAndReloadFromDisk(merged);
       this.scheduleChannelPluginsAfterPersist();
@@ -208,7 +204,7 @@ export class GatewayConfigCoordinator {
   async afterWeixinCredentialsPersisted(): Promise<void> {
     const next = loadConfig(this.opts.configPath);
     this.opts.setConfig(next);
-    this.opts.getAgentService().applyAgentDefaultsFromConfig(next);
+    this.opts.getAgentService().applyRuntimeConfiguration(next);
     this.configReloader?.syncCurrentConfig(next);
     await this.handleChannelsReload(next);
     const { weixinPlugin } = await import('../../channels/weixin/index.js');
@@ -219,7 +215,7 @@ export class GatewayConfigCoordinator {
   async afterFeishuCredentialsPersisted(): Promise<void> {
     const next = loadConfig(this.opts.configPath);
     this.opts.setConfig(next);
-    this.opts.getAgentService().applyAgentDefaultsFromConfig(next);
+    this.opts.getAgentService().applyRuntimeConfiguration(next);
     this.configReloader?.syncCurrentConfig(next);
     await this.handleChannelsReload(next);
     log.info('Feishu config applied after QR setup');
@@ -250,18 +246,6 @@ export class GatewayConfigCoordinator {
     reloadImageGenerationProviders();
     this.opts.emit('config.reload', { section: 'models' });
     log.debug('Models config reloaded');
-  }
-
-  private handleAgentDefaultsReload(newConfig: Config): void {
-    log.debug('Reloading agent defaults...');
-    this.opts.setConfig(newConfig);
-    this.opts.getAgentService().applyAgentDefaultsFromConfig(newConfig);
-    void this.opts.reconcileMemoryMaintenanceAutomations().catch((err) => {
-      const em = err instanceof Error ? err.message : String(err);
-      log.warn({ err, errorMessage: em }, `Memory maintenance automation refresh failed: ${em}`);
-    });
-    this.opts.emit('config.reload', { section: 'agents' });
-    log.debug('Agent defaults reloaded');
   }
 
   /**
@@ -397,7 +381,7 @@ export class GatewayConfigCoordinator {
     if (sanitizeTunnelConfig(reloaded)) {
       await writeConfigToDisk(reloaded, this.opts.configPath);
     }
-    this.opts.getAgentService().applyAgentDefaultsFromConfig(reloaded);
+    this.opts.getAgentService().applyRuntimeConfiguration(reloaded);
     await this.opts.reconcileMemoryMaintenanceAutomations().catch((err) => {
       const em = err instanceof Error ? err.message : String(err);
       log.warn({ err, errorMessage: em }, `Memory maintenance automation refresh after save failed: ${em}`);

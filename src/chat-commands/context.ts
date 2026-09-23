@@ -273,7 +273,7 @@ export class CommandContextImpl implements CommandContext {
       return this.deps.getCurrentModel();
     }
     
-    return getAgentDefaultModelRef(this.config);
+    return getAgentDefaultModelRef();
   }
 
   async listModels(): Promise<ModelInfo[]> {

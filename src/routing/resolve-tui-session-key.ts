@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { validateConversationId } from '@xopcai/gateway-contract';
 
-import type { Config } from '../config/schema.js';
+import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import {
   listAgentEntries,
   resolveAgentIdByWorkspacePath,
@@ -11,19 +11,19 @@ import {
   normalizeAgentId,
 } from './agent-session-key.js';
 
-function agentExists(cfg: Config, agentId: string): boolean {
+function agentExists(agentId: string): boolean {
   const id = normalizeAgentId(agentId);
-  return listAgentEntries(cfg).some(
+  return listAgentEntries().some(
     (entry) => entry.enabled !== false && normalizeAgentId(entry.id) === id,
   );
 }
 
-export function resolveDefaultTuiAgentId(cfg: Config): string {
-  const configured = cfg.tui?.defaultAgent?.trim();
-  if (configured && agentExists(cfg, configured)) {
+export function resolveDefaultTuiAgentId(): string {
+  const configured = new AgentCatalogRepository().snapshot().surfaceDefaults.tui?.trim();
+  if (configured && agentExists(configured)) {
     return normalizeAgentId(configured);
   }
-  return resolveDefaultAgentId(cfg);
+  return resolveDefaultAgentId();
 }
 
 export function resolveTuiConversationId(params: {
@@ -33,7 +33,6 @@ export function resolveTuiConversationId(params: {
 }
 
 export function resolveInitialTuiAgentId(params: {
-  cfg: Config;
   fallbackAgentId: string;
   explicitAgentId?: string;
   cwd?: string;
@@ -43,7 +42,6 @@ export function resolveInitialTuiAgentId(params: {
   }
 
   const inferredFromWorkspace = resolveAgentIdByWorkspacePath(
-    params.cfg,
     params.cwd ?? process.cwd(),
   );
   if (inferredFromWorkspace) {
@@ -55,7 +53,6 @@ export function resolveInitialTuiAgentId(params: {
 
 /** Resolve TUI startup conversation identity and initial agent from CLI options and config. */
 export function resolveTuiStartupConversationId(params: {
-  cfg: Config;
   sessionOption?: string;
   agentOption?: string;
   cwd?: string;
@@ -63,8 +60,7 @@ export function resolveTuiStartupConversationId(params: {
 }): { conversationId: string; agentId: string } {
   const sessionOption = (params.sessionOption ?? '').trim();
   const agentId = resolveInitialTuiAgentId({
-    cfg: params.cfg,
-    fallbackAgentId: resolveDefaultTuiAgentId(params.cfg),
+    fallbackAgentId: resolveDefaultTuiAgentId(),
     explicitAgentId: params.agentOption,
     cwd: params.cwd ?? process.cwd(),
   });

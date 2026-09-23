@@ -9,7 +9,7 @@ export function getWorkspacePath(customPath?: string): string {
     return customPath.replace(/^~/, homedir());
   }
   const cfg = loadConfig();
-  return resolveAgentWorkspaceDir(cfg, resolveDefaultAgentId(cfg));
+  return resolveAgentWorkspaceDir(resolveDefaultAgentId());
 }
 
 export function createPathResolver(extensionDir: string, workspaceDir: string) {

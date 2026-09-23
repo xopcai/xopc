@@ -160,6 +160,30 @@ function workDiscoveryPlan(
   };
 }
 
+function homeOpportunityPlan(payload: unknown): NotificationPlan | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const event = payload as {
+    notificationKey?: unknown;
+    opportunityId?: unknown;
+    title?: unknown;
+  };
+  if (typeof event.notificationKey !== 'string' || !event.notificationKey
+    || typeof event.opportunityId !== 'string' || !event.opportunityId
+    || typeof event.title !== 'string' || !event.title.trim()) return null;
+  const body = event.title.trim().slice(0, 180);
+  return {
+    dedupeKey: `home.opportunity:${event.notificationKey}`,
+    notification: {
+      type: 'home.opportunity',
+      target: { kind: 'home' },
+      priority: 'high',
+      title: { en: 'A timely next step is ready', zh: '有一项值得现在推进的事情' },
+      body: { en: body, zh: body },
+      payload: { opportunityId: event.opportunityId },
+    },
+  };
+}
+
 export function notificationPlanFromGatewayEvent(type: string, payload: unknown): NotificationPlan | null {
   if (type === 'agent.run.ended') return chatPlan(payload);
   if (type === 'task.attention_required.v2' || type === 'task.phase_changed.v2') return taskPlan(payload);
@@ -167,5 +191,6 @@ export function notificationPlanFromGatewayEvent(type: string, payload: unknown)
   if (type === 'work-discovery.completed' || type === 'work-discovery.failed') {
     return workDiscoveryPlan(type, payload);
   }
+  if (type === 'home.opportunity.ready') return homeOpportunityPlan(payload);
   return null;
 }

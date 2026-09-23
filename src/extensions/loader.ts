@@ -168,10 +168,10 @@ export class ExtensionLoader {
     this.registry = new ExtensionRegistryImpl();
     this.options = options || (() => {
       const c = loadConfig();
-      const aid = resolveDefaultAgentId(c);
+      const aid = resolveDefaultAgentId();
       return {
-        workspaceDir: resolveAgentWorkspaceDir(c, aid),
-        extensionsDir: resolveWorkspaceExtensionsDir(c, aid),
+        workspaceDir: resolveAgentWorkspaceDir(aid),
+        extensionsDir: resolveWorkspaceExtensionsDir(aid),
       };
     })();
 
@@ -929,9 +929,9 @@ export class ExtensionLoader {
 
 export function resolveExtensionPath(id: string, _options: ExtensionLoaderOptions): string | null {
   const c = loadConfig();
-  const aid = resolveDefaultAgentId(c);
+  const aid = resolveDefaultAgentId();
   // Priority 1: Workspace
-  const workspacePath = join(resolveWorkspaceExtensionsDir(c, aid), id);
+  const workspacePath = join(resolveWorkspaceExtensionsDir(aid), id);
   if (existsSync(workspacePath)) return workspacePath;
 
   // Priority 2: Global

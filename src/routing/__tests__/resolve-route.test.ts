@@ -1,5 +1,8 @@
 import { getConversationRouting } from '../session-key.js';
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect } from 'vitest';
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
+import type { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import {
   applyIdentityLinks,
   getDefaultAgentId,
@@ -12,6 +15,22 @@ import {
 } from '../resolve-route.js';
 
 describe('resolve-route', () => {
+  let catalog: AgentCatalogRepository;
+
+  beforeEach(() => {
+    catalog = initializeTestAgentCatalog({
+      agents: [
+        { id: 'main', enabled: true },
+        { id: 'agent-1', enabled: true },
+        { id: 'agent-2', enabled: false },
+        { id: 'fallback', enabled: true },
+        { id: 'work-agent', enabled: true },
+      ],
+    });
+  });
+
+  afterEach(() => closeXopcDatabase());
+
   describe('applyIdentityLinks', () => {
     const identityLinks: Record<string, string[]> = {
       'john-doe': ['telegram:123456', 'discord:789012', 'john@example.com'],
@@ -47,75 +66,61 @@ describe('resolve-route', () => {
 
   describe('getDefaultAgentId', () => {
     it('should return configured default', () => {
-      const config: RoutingConfig = { agents: { default: 'custom-agent' } };
-      expect(getDefaultAgentId(config)).toBe('custom-agent');
+      catalog.create({ id: 'custom-agent', enabled: true }, { ready: true });
+      catalog.setDefault('custom-agent', catalog.getSettings().revision);
+      expect(getDefaultAgentId()).toBe('custom-agent');
     });
 
     it('should return "main" when no default configured', () => {
-      expect(getDefaultAgentId({})).toBe('main');
-      expect(getDefaultAgentId({ agents: {} })).toBe('main');
+      expect(getDefaultAgentId()).toBe('main');
+      expect(getDefaultAgentId()).toBe('main');
     });
   });
 
   describe('agentExists', () => {
-    const config: RoutingConfig = {
-      agents: {
-        list: [
-          { id: 'main', enabled: true },
-          { id: 'agent-1', enabled: true },
-          { id: 'agent-2', enabled: false },
-        ],
-      },
-    };
-
     it('should return true for existing enabled agent', () => {
-      expect(agentExists('main', config)).toBe(true);
-      expect(agentExists('agent-1', config)).toBe(true);
+      expect(agentExists('main')).toBe(true);
+      expect(agentExists('agent-1')).toBe(true);
     });
 
     it('should return false for disabled agent', () => {
-      expect(agentExists('agent-2', config)).toBe(false);
+      expect(agentExists('agent-2')).toBe(false);
     });
 
     it('should return false for non-existent agent', () => {
-      expect(agentExists('unknown', config)).toBe(false);
+      expect(agentExists('unknown')).toBe(false);
     });
 
-    it('should return true when no list configured', () => {
-      expect(agentExists('any-agent', {})).toBe(true);
+    it('should return false when the Agent is absent', () => {
+      expect(agentExists('any-agent')).toBe(false);
     });
 
     it('should be case insensitive', () => {
-      expect(agentExists('MAIN', config)).toBe(true);
-      expect(agentExists('Agent-1', config)).toBe(true);
+      expect(agentExists('MAIN')).toBe(true);
+      expect(agentExists('Agent-1')).toBe(true);
     });
   });
 
   describe('pickFirstExistingAgentId', () => {
-    const config: RoutingConfig = {
-      agents: {
-        default: 'fallback',
-        list: [
-          { id: 'main', enabled: true },
-          { id: 'disabled', enabled: false },
-        ],
-      },
-    };
+    beforeEach(() => {
+      catalog.create({ id: 'disabled', enabled: false }, { ready: true });
+      catalog.setDefault('fallback', catalog.getSettings().revision);
+    });
 
     it('should return agentId if it exists', () => {
-      expect(pickFirstExistingAgentId('main', config)).toBe('main');
+      expect(pickFirstExistingAgentId('main')).toBe('main');
     });
 
     it('should return default if agent does not exist', () => {
-      expect(pickFirstExistingAgentId('unknown', config)).toBe('fallback');
+      expect(pickFirstExistingAgentId('unknown')).toBe('fallback');
     });
 
     it('should return default if agent is disabled', () => {
-      expect(pickFirstExistingAgentId('disabled', config)).toBe('fallback');
+      expect(pickFirstExistingAgentId('disabled')).toBe('fallback');
     });
 
     it('should return default for empty input', () => {
-      expect(pickFirstExistingAgentId('', config)).toBe('fallback');
+      expect(pickFirstExistingAgentId('')).toBe('fallback');
     });
   });
 
@@ -140,11 +145,10 @@ describe('resolve-route', () => {
   });
 
   describe('resolveRoute', () => {
-    const baseConfig: RoutingConfig = {
-      agents: {
-        default: 'main',
-      },
-      bindings: [
+    const baseConfig: RoutingConfig = {};
+
+    beforeEach(() => {
+      catalog.replaceBindings([
         {
           id: 'work-rule',
           agentId: 'work-agent',
@@ -162,8 +166,8 @@ describe('resolve-route', () => {
             channel: 'telegram',
           },
         },
-      ],
-    };
+      ]);
+    });
 
     it('should resolve route with binding match', () => {
       const result = resolveRoute({
@@ -278,12 +282,11 @@ describe('resolve-route', () => {
 
     it('should normalize values to lowercase', () => {
       const config: RoutingConfig = {
-        agents: { default: 'main' },
-        bindings: [], // No bindings to interfere
         session: {
           dmScope: 'per-peer',
         },
       };
+      catalog.replaceBindings([]);
 
       const result = resolveRoute({
         config,

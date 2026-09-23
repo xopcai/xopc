@@ -1,22 +1,20 @@
-import { requireXopcDatabase as openFixtureDatabase } from '../../storage/sqlite/connection.js';
 import { ensureSessionRecord as ensureFixtureConversation } from '../../storage/sqlite/session-repository.js';
-function seedConversationFixtures(): void {
-  openFixtureDatabase();
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+function seedConversationFixture(): void {
   ensureFixtureConversation("06457abd-5401-40e9-8812-7511ee1ffd70", '', {"agentId":"coder","sourceChannel":"telegram","sourceChatId":"123","sessionType":"chat","routing":{"agentId":"coder","source":"telegram","accountId":"acc_default","peerKind":"direct","peerId":"123"}});
 }
-import { describe, expect, it } from 'vitest';
-
-import { ConfigSchema } from '../schema.js';
 import {
   resolveEffectiveAgentConfigForAgent,
   resolveEffectiveAgentProfile,
   resolveEffectiveAgentProfileForSession,
 } from '../agent-profile.js';
 
-function config() {
-  return ConfigSchema.parse({
-    agents: {
-      default: 'main',
+describe('agent profile', () => {
+  beforeEach(() => {
+    initializeTestAgentCatalog({
       defaults: {
         models: {
           chat: { primary: 'openai/gpt-5', fallbacks: ['anthropic/claude-sonnet-4-5'] },
@@ -27,7 +25,7 @@ function config() {
         workflows: {},
         runtime: { maxTurns: 8 },
       },
-      list: [
+      agents: [
         { id: 'main', enabled: true },
         {
           id: 'coder',
@@ -38,14 +36,14 @@ function config() {
           tools: { exec_command: { mode: 'allow' } },
         },
       ],
-    },
+    });
+    seedConversationFixture();
   });
-}
 
-describe('agent profile', () => {
+  afterEach(() => closeXopcDatabase());
+
   it('resolves global defaults and atomic agent overrides', () => {
-    seedConversationFixtures();
-    const profile = resolveEffectiveAgentProfile(config(), 'coder');
+    const profile = resolveEffectiveAgentProfile('coder');
     expect(profile.primaryModelRef).toBe('anthropic/claude-opus-4-1');
     expect(profile.fallbacks).toEqual([]);
     expect(profile.config.models.intents.review?.primary).toBe('openai/gpt-5.1');
@@ -55,19 +53,17 @@ describe('agent profile', () => {
   });
 
   it('returns provenance for the effective view', () => {
-    seedConversationFixtures();
-    const resolved = resolveEffectiveAgentConfigForAgent(config(), 'coder');
+    const resolved = resolveEffectiveAgentConfigForAgent('coder');
     expect(resolved.sources['models.chat.primary']).toBe('agent');
     expect(resolved.sources['models.intents.review.primary']).toBe('global');
     expect(resolved.sources['tools.exec_command.mode']).toBe('agent');
   });
 
   it('selects the session agent and falls back to the configured default', () => {
-    seedConversationFixtures();
     expect(
-      resolveEffectiveAgentProfileForSession(config(), "06457abd-5401-40e9-8812-7511ee1ffd70").agentId,
+      resolveEffectiveAgentProfileForSession("06457abd-5401-40e9-8812-7511ee1ffd70").agentId,
     ).toBe('coder');
-    expect(() => resolveEffectiveAgentProfileForSession(config(), 'invalid')).toThrow();
-    expect(resolveEffectiveAgentProfileForSession(config(), undefined).agentId).toBe('main');
+    expect(() => resolveEffectiveAgentProfileForSession('invalid')).toThrow();
+    expect(resolveEffectiveAgentProfileForSession(undefined).agentId).toBe('main');
   });
 });

@@ -1,6 +1,7 @@
 import type { Hono } from 'hono';
 
 import { commandRegistry } from '../../../chat-commands/index.js';
+import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import { isRegisteredProvider } from '../../../agent/skills/skills-marketplace.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { effectiveWorkspacePathForSession } from '../../../session/session-workspace.js';
@@ -107,7 +108,7 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
 
   authenticated.get('/api/chat/skills', async (c) => {
     const conversationId = c.req.query('conversationId')?.trim();
-    const agentId = c.req.query('agentId')?.trim() || service.getConfig().agents?.default || 'main';
+    const agentId = c.req.query('agentId')?.trim() || resolveDefaultAgentId();
     const payload = conversationId
       ? await service.marketplace.getSessionSkillsApi(conversationId)
       : service.marketplace.getAgentSkillsApi(agentId);

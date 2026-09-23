@@ -4,5 +4,5 @@ import type { Config } from '../config/schema.js';
 
 /** Scene reasoning follows the existing agent model policy and falls back to chat. */
 export function resolveSceneModelRef(config: Config): string {
-  return resolveModelSelector(config, resolveDefaultAgentId(config), '@reasoning');
+  return resolveModelSelector(config, resolveDefaultAgentId(), '@reasoning');
 }

@@ -212,7 +212,7 @@ export class McpToolProvider implements ExternalToolProvider {
     const cfg = this.deps.getConfig();
     const conversationId = this.deps.getConversationId();
     const profile = cfg && conversationId
-      ? resolveEffectiveAgentProfileForSession(cfg, conversationId)
+      ? resolveEffectiveAgentProfileForSession(conversationId)
       : undefined;
     const policyName = policyToolId(tool);
     return !profile?.tools.denied.has(policyName);
@@ -222,7 +222,7 @@ export class McpToolProvider implements ExternalToolProvider {
     const cfg = this.deps.getConfig();
     const conversationId = this.deps.getConversationId();
     const profile = cfg && conversationId
-      ? resolveEffectiveAgentProfileForSession(cfg, conversationId)
+      ? resolveEffectiveAgentProfileForSession(conversationId)
       : undefined;
     const timeoutMs = profile?.config.tools[policyToolId(tool)]?.timeoutMs;
     if (!timeoutMs) return signal;

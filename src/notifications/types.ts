@@ -11,7 +11,7 @@ export type NotificationPreferences = {
   taskCompleted: boolean;
   automationCompleted: boolean;
   automationFailed: boolean;
-  proactiveInsight: boolean;
+  homeOpportunity: boolean;
 };
 
 export type NotificationDevice = {
@@ -38,5 +38,5 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   taskCompleted: false,
   automationCompleted: false,
   automationFailed: true,
-  proactiveInsight: true,
+  homeOpportunity: false,
 };
