@@ -17,6 +17,15 @@ export type WebSearchSettingsState = {
   blocklistDomains: string[];
 };
 
+export function hasUsableManualSearchProvider(providers: SearchProviderRow[]): boolean {
+  return providers.some((provider) => {
+    if (provider.disabled) return false;
+    return provider.type === 'searxng'
+      ? provider.url.trim().length > 0
+      : provider.apiKey.trim().length > 0;
+  });
+}
+
 export function normalizeWebSearchSettingsFromConfig(cfg: unknown): WebSearchSettingsState {
   const tools = cfg && typeof cfg === 'object' && 'tools' in cfg ? (cfg as { tools?: unknown }).tools : undefined;
   const web = tools && typeof tools === 'object' && 'web' in tools ? (tools as { web?: unknown }).web : undefined;
