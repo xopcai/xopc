@@ -44,6 +44,7 @@ export type McpGatewayCapabilitySummary = {
   tools: McpGatewayToolEntry[];
   resources: McpGatewayResourceEntry[];
   prompts: McpGatewayPromptEntry[];
+  error?: import('./bundle-mcp-types.js').McpServerCatalog['error'];
 };
 
 function mapTools(tools: McpCatalogTool[], serverId: string): McpGatewayToolEntry[] {
@@ -150,6 +151,7 @@ export async function listBundleMcpServerCapabilitiesForGateway(params: {
   const prompts = mapPrompts(catalog.prompts, params.serverId);
   return {
     serverId: params.serverId,
+    error: catalog.servers[params.serverId]?.error,
     toolCount: tools.length,
     resourceCount: resources.length,
     promptCount: prompts.length,

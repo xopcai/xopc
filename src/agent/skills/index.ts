@@ -212,7 +212,13 @@ function discoverAndMergeSkills(
   const diagnostics = [...initialDiagnostics];
 
   for (const source of sources) {
-    const discovered = discoverSkills(
+    const discovered = source.skillFiles ? {
+      skills: source.skillFiles.slice(0, limits.maxSkillsLoadedPerSource).flatMap(path => {
+        const result = loadSkillFromFile(path, source, source.rootDir, maxSkillFileBytes);
+        if (result.diagnostic) diagnostics.push(result.diagnostic);
+        return result.skill ? [result.skill] : [];
+      }), diagnostics: [],
+    } : discoverSkills(
       source,
       maxSkillFileBytes,
       limits.maxSkillsLoadedPerSource,

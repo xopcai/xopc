@@ -116,6 +116,7 @@ export interface SkillsLoadConfig {
 }
 
 export type SkillOriginId =
+  | `plugin:${string}`
   | 'extra'
   | 'bundled'
   | 'agents-global'
@@ -131,6 +132,8 @@ export interface SkillSourceDescriptor {
   scope: 'builtin' | 'workspace' | 'global' | 'extra';
   managed: boolean;
   writable: boolean;
+  /** Validated portable plugin files; bypass recursive discovery. */
+  skillFiles?: string[];
 }
 
 export type SkillOrigin = SkillSourceDescriptor;

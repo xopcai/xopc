@@ -116,6 +116,49 @@ describe('external tool providers', () => {
     expect(callTool).toHaveBeenCalledWith('demo server', 'lookup', { id: '42' }, undefined);
   });
 
+  it('turns a plugin MCP tool authorization challenge into a connection request', async () => {
+    const runtime = {
+      markUsed: vi.fn(),
+      acquireLease: vi.fn(() => vi.fn()),
+      getCatalog: vi.fn(async () => ({
+        version: 1,
+        generatedAt: 1,
+        servers: {},
+        resources: [],
+        prompts: [],
+        tools: [{
+          serverName: 'plugin/oauth-demo/local-oauth',
+          safeServerName: 'plugin-oauth-demo-local-oauth',
+          toolName: 'whoami',
+          description: 'Read the connected Demo identity.',
+          inputSchema: { type: 'object', properties: {} },
+          fallbackDescription: 'whoami',
+        }],
+      })),
+      callTool: vi.fn(async () => ({
+        content: [{ type: 'text' as const, text: 'Authorization required.' }],
+        isError: true,
+        _meta: { 'mcp/www_authenticate': ['Bearer error="invalid_token"'] },
+      })),
+    } as unknown as SessionMcpRuntime;
+    const provider = new McpToolProvider({
+      workspace: '/tmp/workspace',
+      getConfig: () => ({}) as Config,
+      getConversationId: () => undefined,
+      getRuntime: vi.fn(async () => runtime),
+    });
+
+    await expect(provider.execute(
+      'mcp:plugin-oauth-demo-local-oauth:whoami',
+      {},
+      undefined,
+      { toolCallId: 'call-mcp' },
+    )).resolves.toMatchObject({
+      content: [{ text: expect.stringContaining('requires an account connection') }],
+      details: { status: 'connection_required' },
+    });
+  });
+
   it('enforces flat MCP tool and timeout policies', async () => {
     seedConversationFixtures();
     const callTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'ok' }] }));

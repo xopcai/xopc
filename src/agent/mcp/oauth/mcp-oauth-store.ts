@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile, rm } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 import { resolveMcpOAuthPath } from '../../../config/paths.js';
 import { writeTextAtomic } from '../../../infra/write-file-atomic.js';
@@ -48,8 +49,17 @@ async function serializeWrite<T>(key: string, operation: () => Promise<T>): Prom
 }
 
 export class McpOAuthStore {
+  constructor(private readonly identityScope?: string) {}
   pathFor(serverUrl: string | URL): string {
-    return resolveMcpOAuthPath(mcpOAuthServerKey(serverUrl));
+    const endpoint = mcpOAuthServerKey(serverUrl);
+    return this.identityScope
+      ? join(dirname(resolveMcpOAuthPath(endpoint)), createHash('sha256').update(this.identityScope).digest('hex'), `${endpoint}.json`)
+      : resolveMcpOAuthPath(endpoint);
+  }
+
+  async deleteScope(): Promise<void> {
+    if (!this.identityScope) throw new Error('Cannot remove unscoped MCP credentials');
+    await rm(dirname(this.pathFor('https://scope.invalid')), { recursive: true, force: true });
   }
 
   async load(serverUrlInput: string | URL): Promise<McpOAuthRecord | undefined> {

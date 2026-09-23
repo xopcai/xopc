@@ -95,7 +95,7 @@ export class CliToolProvider implements ExternalToolProvider {
     if (decision.decision === 'denied') throw new Error(decision.reason);
     if (decision.decision === 'confirmation_required') {
       const wait = conversationId && getSessionInputState(conversationId).activeInputId ? requireSessionConnection({ conversationId, principalId: item.principal.principalId,
-        agentId: item.agentId ?? 'main', summary: `Confirm ${action.id}`, needs: [{ key: `${item.instance.connectorId}:${connection.accountId}`, connectorId: item.instance.connectorId, accountId: connection.accountId, connectionId: connection.id, label: item.instance.displayName, capabilities: [action.id] }] }) : undefined;
+        agentId: item.agentId ?? 'main', summary: `Confirm ${action.id}`, needs: [{ key: `${item.instance.connectorId}:${connection.accountId}`, target: { type: 'connector', connectorId: item.instance.connectorId }, accountId: connection.accountId, connectionId: connection.id, label: item.instance.displayName, capabilities: [action.id] }] }) : undefined;
       const approval = createConnectorApproval({ principalId: item.principal.principalId, connectorId: item.instance.connectorId, connectionId: connection.id, agentId: item.agentId, conversationId,
         waitId: wait?.waitId, actionId: action.id, scope: action.scope, argumentsHash: argumentsHash(),
         argumentsPreview: { account: { id: connection.accountId, identity: connection.identity }, arguments: connectorArgumentsPreview(input) }, expiresAt: new Date(Date.now() + 600_000).toISOString() });

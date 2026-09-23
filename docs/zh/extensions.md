@@ -2,6 +2,32 @@
 
 扩展可以为 xopc 添加消息通道、工具、服务商、后台服务或 Gateway 页面。扩展会在本地 xopc 环境中运行，因此只安装你信任的扩展。
 
+## Agent Plugin
+
+同一个「扩展」入口现在也管理 [Agent Plugins 1.0](https://agent-plugins.org/specification)：以 `plugin.json` 声明的安装包，可包含 `skills/*/SKILL.md` 和 `mcp.json`。只发现 skills 的直接子目录；不会把安装包当成原生 JavaScript 扩展导入。存在原生 `xopc.extension.json` 时按原生扩展处理，不做格式降级兼容。
+
+```bash
+xopc extensions inspect ./my-plugin
+xopc extensions install ./my-plugin --yes
+xopc extensions enable plugin:my-plugin
+xopc extensions connect plugin:my-plugin --mcp main
+xopc extensions verify plugin:my-plugin
+xopc extensions update plugin:my-plugin
+xopc extensions rollback plugin:my-plugin
+xopc extensions disable plugin:my-plugin
+xopc extensions remove plugin:my-plugin
+```
+
+支持 Gateway 主机上的目录、ZIP、HTTPS ZIP 直链，以及 `store:包名[@版本]`。界面中的路径是 **Gateway 本地路径**，不是上传浏览器所在电脑的目录。HTTPS 下载不接受重定向。首次安装需要确认能力且**默认停用**；非交互 CLI 必须传 `--yes`。更新新增或改变程序执行、网络访问能力时需要再次确认。检查安装包不会启动服务或执行安装脚本。
+
+启用后，在插件详情或「连接器」点击「测试连接」。公开 HTTP MCP 无需登录；需要授权时，OAuth 使用「连接账号」，API Key 使用「设置密钥」（HTTP header 或 stdio 环境变量）。聊天需要尚未连接的插件 MCP 时，xopc 会保留当前目标，并显示与「连接器」一致的连接操作区。OAuth 只在用户点击「连接账号」后发起；xopc 验证返回的工具后会自动继续原任务，无需重新发送提示。远程 Gateway 的 loopback 回调无法从浏览器访问时，可把浏览器地址栏中的完整回调 URL 粘贴到连接操作区。
+
+凭据保存在现有宿主凭据存储中，按 owner、插件、服务及端点隔离，不写入安装包或 `xopc.json`。更新改变端点时不继承旧凭据绑定。支持标准 streamable HTTP OAuth；SSE 使用公开访问或显式 header，stdio 使用环境变量。要求预注册专用 OAuth client 或厂商特有登录流程的服务，可能需要额外宿主集成。
+
+插件启停由安装记录管理，不使用原生扩展的 `extensions.disabled`。MCP 使用保留命名空间 `plugin/<包名>/<服务名>`。更新、回滚通过原子切换版本完成，保留 `PLUGIN_DATA`；修改已安装文件会阻止激活，需重新安装修复。本地 stdio MCP 是受信任程序，**没有进程沙箱**，启用前必须检查命令。HTTP 阻止非 loopback 私网地址及重定向，允许显式配置的 loopback 服务。
+
+卸载删除该包所有已安装版本，默认保留数据和本地凭据。可通过 `--remove-data`、`--remove-credentials` 或界面复选框明确删除；删除本地凭据不等于撤销服务商侧授权。历史版本保留至卸载，支持回滚上一版本。当前是单 owner 连接模型，不按聊天用户分别授权。市场 SHA 校验、安装包完整性检查不代表发布者签名认证。
+
 ## 浏览与检查
 
 ```bash

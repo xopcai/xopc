@@ -7,6 +7,7 @@ import { searchFailureDetails } from './search-error.js';
 
 import type {
   ExternalToolExecutionContext,
+  ExternalConnectionCandidate,
   ExternalToolProvider,
   ExternalToolSearchHit,
   ExternalToolSource,
@@ -71,21 +72,27 @@ export class ExternalToolService {
     query: string;
     sources?: ExternalToolSource[];
     limit?: number;
-  }): Promise<{ tools: ExternalToolSearchHit[]; unavailableSources: ExternalToolSource[]; sourceErrors?: Array<ReturnType<typeof searchFailureDetails> & { source: ExternalToolSource }> }> {
+  }): Promise<{ tools: ExternalToolSearchHit[]; connectionCandidates: ExternalConnectionCandidate[]; unavailableSources: ExternalToolSource[]; sourceErrors?: Array<ReturnType<typeof searchFailureDetails> & { source: ExternalToolSource }> }> {
     const selected: ExternalToolProvider[] = params.sources?.length
       ? params.sources
           .map((source) => this.providerBySource.get(source))
           .filter((provider): provider is ExternalToolProvider => provider !== undefined)
       : [...this.providerBySource.values()];
     const settled = await Promise.allSettled(
-      selected.map(async (provider) => ({ provider, hits: await provider!.search(params.query) })),
+      selected.map(async (provider) => ({
+        provider,
+        hits: await provider!.search(params.query),
+        candidates: await provider!.connectionCandidates?.(params.query) ?? [],
+      })),
     );
     const unavailableSources: ExternalToolSource[] = [];
     const sourceErrors: Array<ReturnType<typeof searchFailureDetails> & { source: ExternalToolSource }> = [];
     const hits: ExternalToolSearchHit[] = [];
+    const connectionCandidates: ExternalConnectionCandidate[] = [];
     for (const [index, result] of settled.entries()) {
       if (result.status === 'fulfilled') {
         hits.push(...result.value.hits);
+        connectionCandidates.push(...result.value.candidates);
       } else {
         const provider = selected[index];
         if (provider) {
@@ -111,7 +118,14 @@ export class ExternalToolService {
         title: hit.title,
         summary: hit.summary.slice(0, 300),
       }));
-    return { tools, unavailableSources, ...(sourceErrors.length ? { sourceErrors } : {}) };
+    return {
+      tools,
+      connectionCandidates: connectionCandidates
+        .filter((candidate, index, all) => all.findIndex(item => item.candidateRef === candidate.candidateRef) === index)
+        .slice(0, limit),
+      unavailableSources,
+      ...(sourceErrors.length ? { sourceErrors } : {}),
+    };
   }
 
   async describe(toolRefs: string[]): Promise<{
