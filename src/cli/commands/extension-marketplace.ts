@@ -36,6 +36,9 @@ import * as marketplace from '../../extensions/marketplace.js';
 import { colors } from '../utils/colors.js';
 import { getContextWithOpts } from '../context.js';
 import { validateExtensionPackageDirectory } from './extension-pack.js';
+import { installAgentPluginFromCli, isAgentPluginSource } from './extension-agent-plugin.js';
+import { AgentPluginStore } from '../../extensions/agent-plugins/store.js';
+import { isAgentPluginArchive } from '../../extensions/agent-plugins/sources.js';
 
 const MANIFEST = 'xopc.extension.json';
 
@@ -202,6 +205,11 @@ async function installExtensionFromStoreWithLock(params: {
     );
     const buf = await downloadExtensionStoreZipBuffer(params.storeBase, downloadUrl);
     verifyStoreArtifactSha256(buf, sha256);
+    if (isAgentPluginArchive(buf)) {
+      const installed = await installAgentPluginFromCli(`store:${params.packageName}${params.version ? `@${params.version}` : ''}`, { yes: params.yes, force: params.force, expectedId: params.expectedExtensionId });
+      if (!installed) return { ok: false, error: 'Install cancelled' };
+      return { ok: true, extensionId: `plugin:${installed.id}`, version: installed.manifest.version ?? version };
+    }
     const actualIntegrity = sha256Integrity(buf);
     const manifest = peekExtensionManifestFromStoreZip(buf);
     const accepted = await confirmInstall({
@@ -276,11 +284,11 @@ async function installExtensionFromStoreWithLock(params: {
 export function createExtensionInstallCommand(): Command {
   return new Command('install')
     .description(
-      'Install extension from xopc-store (store.xopc.ai), npm, or a local directory into ~/.xopc/extensions',
+      'Install a native extension or portable Agent Plugin from an explicit source',
     )
     .argument(
       '<target>',
-      'Explicit source spec: store:<id>, npm:<package>, or a local extension directory',
+      'store:<id>, npm:<package>, local directory, or Agent Plugin ZIP / HTTPS ZIP URL',
     )
     .option(
       '-f, --force',
@@ -293,6 +301,10 @@ export function createExtensionInstallCommand(): Command {
         target: string,
         opts: { force: boolean; yes: boolean },
       ) => {
+        if (isAgentPluginSource(target)) {
+          await installAgentPluginFromCli(target, opts);
+          return;
+        }
         const ctx = getContextWithOpts();
         const cfg = loadConfig(ctx.configPath);
         const targetDir = resolveExtensionsDir();
@@ -488,9 +500,17 @@ export function createExtensionPublishCommand(): Command {
 
 export function createExtensionUpdateCommand(): Command {
   return new Command('update')
-    .description('Re-install extension(s) from the lockfile (npm or xopc-store) under ~/.xopc/extensions')
-    .argument('[extensionId]', 'Specific extension id (default: all in lockfile)')
-    .action(async (extensionId: string | undefined) => {
+    .description('Update installed extensions and Agent Plugins from their recorded sources')
+    .argument('[extensionId]', 'Specific extension or plugin:<name> (default: all installed)')
+    .option('-y, --yes', 'Accept changed plugin capabilities')
+    .action(async (extensionId: string | undefined, options: { yes?: boolean }) => {
+      if (extensionId?.startsWith('plugin:')) {
+        const id = extensionId.slice(7);
+        const receipt = new AgentPluginStore().receipt(id);
+        if (!receipt) throw new Error('Plugin not installed');
+        await installAgentPluginFromCli(receipt.source, { yes: options.yes, force: true, expectedId: id });
+        return;
+      }
       const ctx = getContextWithOpts();
       const cfg = loadConfig(ctx.configPath);
       const targetDir = resolveExtensionsDir();
@@ -502,7 +522,11 @@ export function createExtensionUpdateCommand(): Command {
         ? [extensionId.trim()]
         : Object.keys(data.extensions);
 
-      if (ids.length === 0) {
+      const plugins = extensionId ? [] : new AgentPluginStore().list();
+      for (const plugin of plugins) {
+        await installAgentPluginFromCli(plugin.receipt.source, { yes: options.yes, force: true, expectedId: plugin.id });
+      }
+      if (ids.length === 0 && plugins.length === 0) {
         console.log('No extensions in lockfile.');
         return;
       }

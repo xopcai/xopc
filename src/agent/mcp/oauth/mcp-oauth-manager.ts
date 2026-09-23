@@ -14,6 +14,8 @@ import { XopcMcpOAuthClientProvider } from './mcp-oauth-provider.js';
 import { McpOAuthSession } from './mcp-oauth-session.js';
 import { canonicalMcpServerUrl, McpOAuthStore } from './mcp-oauth-store.js';
 import type { McpOAuthSessionSnapshot } from './mcp-oauth-types.js';
+import { pluginOAuthScope } from '../../../extensions/agent-plugins/auth.js';
+import { recordPluginMcpHealth } from '../../../extensions/agent-plugins/health.js';
 
 const log = createLogger('Mcp:OAuth');
 const MCP_OAUTH_MANAGER_KEY = Symbol.for('xopc.mcpOAuthManager');
@@ -73,6 +75,8 @@ function isAuthorizing(snapshot: McpOAuthSessionSnapshot): boolean {
 export class McpOAuthManager {
   private readonly store: McpOAuthStore;
   private readonly sessionsByServerUrl = new Map<string, McpOAuthSession>();
+  private readonly pending = new Set<Promise<unknown>>();
+  private cancelling = false;
 
   constructor(store = new McpOAuthStore()) {
     this.store = store;
@@ -96,7 +100,24 @@ export class McpOAuthManager {
   }
 
   async start(params: StartMcpOAuthParams): Promise<McpOAuthStatus> {
+    if (this.cancelling) throw new Error('OAuth connections are being cleared');
+    const task = this.startSession(params);
+    this.pending.add(task);
+    try { return await task; } finally { this.pending.delete(task); }
+  }
+
+  async cancelPending(): Promise<void> {
+    this.cancelling = true;
+    try {
+      await Promise.all([...this.sessionsByServerUrl.values()].map(session => session.close()));
+      await Promise.allSettled([...this.pending]);
+      this.sessionsByServerUrl.clear();
+    } finally { this.cancelling = false; }
+  }
+
+  private async startSession(params: StartMcpOAuthParams): Promise<McpOAuthStatus> {
     const rawServer = await resolveConnectorSecretReferences(params.rawServer);
+    if (this.cancelling) throw new Error('OAuth connections are being cleared');
     const resolvedConfig = resolveMcpTransportConfig(params.serverId, rawServer);
     if (!resolvedConfig || resolvedConfig.kind !== 'http' || !resolvedConfig.auth) {
       throw new Error(`MCP server "${params.serverId}" is not configured for OAuth`);
@@ -160,15 +181,26 @@ export class McpOAuthManager {
     const client = createClient();
     try {
       await connectClient(client, resolved);
+      if (session.snapshot().status === 'cancelled') {
+        await this.store.delete(serverUrl);
+        await closeConnection(client, resolved);
+        return { configured: true, status: 'disconnected' };
+      }
       session.complete();
+      recordPluginMcpHealth(rawServer, 'ready');
       await closeConnection(client, resolved);
       await disposeAllSessionMcpRuntimes();
     } catch (error) {
-      if (!isMcpAuthorizationError(error) || !session.snapshot().authorizationUrl) {
+      if (session.snapshot().status === 'cancelled') {
+        await this.store.delete(serverUrl);
+        await closeConnection(client, resolved);
+      } else if (!isMcpAuthorizationError(error) || !session.snapshot().authorizationUrl) {
         session.fail(error);
         await closeConnection(client, resolved);
       } else {
-        void this.finishAuthorization({ session, provider, client, resolved, params: { ...params, rawServer } });
+        const task = this.finishAuthorization({ session, provider, client, resolved, params: { ...params, rawServer } });
+        this.pending.add(task);
+        void task.finally(() => this.pending.delete(task));
       }
     }
     return this.status(params.serverId, params.rawServer);
@@ -184,8 +216,18 @@ export class McpOAuthManager {
     this.sessionsByServerUrl.delete(conversationId);
     if (session) await session.close();
     await this.store.delete(resolved.url);
+    recordPluginMcpHealth(rawServer, 'authorization_required');
     await disposeAllSessionMcpRuntimes();
     return { configured: true, status: 'disconnected' };
+  }
+
+  async submitCallback(serverId: string, rawServer: unknown, callbackUrl: string): Promise<McpOAuthStatus> {
+    const resolved = resolveMcpTransportConfig(serverId, rawServer);
+    if (!resolved || resolved.kind !== 'http') throw new Error('Unknown OAuth server');
+    const session = this.sessionsByServerUrl.get(canonicalMcpServerUrl(resolved.url));
+    if (!session) throw new Error('OAuth session not found');
+    session.submitCallback(callbackUrl);
+    return this.status(serverId, rawServer);
   }
 
   private async finishAuthorization(context: {
@@ -219,7 +261,12 @@ export class McpOAuthManager {
       } finally {
         await closeConnection(authenticatedClient, authenticated);
       }
+      if (session.snapshot().status === 'cancelled') {
+        await this.store.delete(session.serverUrl);
+        return;
+      }
       session.complete();
+      recordPluginMcpHealth(params.rawServer, 'ready');
       await disposeAllSessionMcpRuntimes();
     } catch (error) {
       if (session.snapshot().status === 'cancelled') {
@@ -237,6 +284,8 @@ export class McpOAuthManager {
   }
 }
 
-export function getMcpOAuthManager(): McpOAuthManager {
-  return resolveGlobalSingleton(MCP_OAUTH_MANAGER_KEY, () => new McpOAuthManager());
+export function getMcpOAuthManager(rawServer?: unknown): McpOAuthManager {
+  const scope = pluginOAuthScope(rawServer);
+  return resolveGlobalSingleton(scope ? Symbol.for(`xopc.mcpOAuthManager:${scope}`) : MCP_OAUTH_MANAGER_KEY,
+    () => new McpOAuthManager(new McpOAuthStore(scope)));
 }

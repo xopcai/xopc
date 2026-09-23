@@ -14,7 +14,8 @@ export function selectConnectorAccount(input: {
   const { installation } = input;
   const candidates = currentAccountConnections(listConnectorConnections({ principalId: installation.principalId, connectorId: installation.connectorId })
     .filter(connection => connection.status === 'active' && canAccessConnectorAccount(connection, installation, input.agentId) && (!input.accept || input.accept(connection))));
-  const bindings = input.conversationId ? connectionBindings(input.conversationId).filter(binding => binding.connectorId === installation.connectorId) : [];
+  const bindings = input.conversationId ? connectionBindings(input.conversationId)
+    .filter(binding => binding.target.type === 'connector' && binding.target.connectorId === installation.connectorId) : [];
   const requested = input.requestedAccountId ?? (bindings.length === 1 ? bindings[0]?.accountId : undefined);
   if (requested && bindings.length && !bindings.some(binding => binding.accountId === requested)) throw new Error('This account is not selected for the current objective.');
   const connection = requested ? candidates.find(candidate => candidate.accountId === requested)

@@ -14,6 +14,7 @@ import { createOAuthAsyncHandler } from '../oauth-async.js';
 import { extensionAssetMimeType } from '../lib/extension-assets.js';
 import { loadExtensionStore, saveExtensionStore } from '../lib/extension-store.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { listAgentPluginInventory } from '../../../extensions/agent-plugins/inventory.js';
 
 const EXTENSION_ASSET_CSP =
   "default-src 'self'; " +
@@ -224,7 +225,7 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
   authenticated.get('/api/extensions', async (c) => {
     const loader = service.getExtensionLoader();
     if (!loader) {
-      return c.json({ extensions: [] });
+      return c.json({ extensions: listAgentPluginInventory() });
     }
 
     const registry = loader.getRegistry();
@@ -246,6 +247,7 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     }
 
     const extensions = discovered.map((ext) => ({
+      format: 'native-extension' as const,
       id: ext.manifest.id,
       name: ext.manifest.name,
       description: ext.manifest.description,
@@ -264,7 +266,7 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
           }
         : undefined,
     }));
-    return c.json({ extensions });
+    return c.json({ extensions: [...extensions, ...listAgentPluginInventory()] });
   });
 
   /**

@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import { resolveSkillsDir } from '../../config/paths.js';
+import { AgentPluginStore } from '../../extensions/agent-plugins/store.js';
 import { resolveWorkspaceSkillsDir } from './workspace-skills-dir.js';
 import type {
   SkillDiagnostic,
@@ -91,6 +92,18 @@ export function resolveSkillSources(
   const extraDirs = [...configuredExtraDirs, ...optionExtraDirs];
   const sources: SkillSourceDescriptor[] = [];
   const diagnostics: SkillDiagnostic[] = [];
+
+  for (const plugin of new AgentPluginStore().active()) {
+    sources.push({
+      id: `plugin:${plugin.id}`, rootDir: join(plugin.rootDir, 'skills'), priority: 150,
+      scope: 'global', managed: false, writable: false,
+      skillFiles: plugin.skills.map(skill => skill.filePath),
+    });
+    diagnostics.push(...plugin.diagnostics.map(diagnostic => ({
+      type: 'warning' as const, path: plugin.rootDir,
+      message: `${plugin.id}/${diagnostic.component}: ${diagnostic.message}`,
+    })));
+  }
 
   for (const rootDir of extraDirs) {
     sources.push(descriptor({

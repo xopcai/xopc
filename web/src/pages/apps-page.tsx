@@ -16,6 +16,7 @@ import {
   extensionShellUiReachable,
 } from '@/features/extensions/extension-ui-guards';
 import { ExtensionMarketplacePanel } from '@/features/extensions/extension-marketplace';
+import { AgentPluginDialog } from '@/features/extensions/agent-plugin-dialog';
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import { postBundledExtensionActivation } from '@/features/extensions/extension-marketplace-api';
 import { extensionPagePath } from '@/features/extensions/extension-paths';
@@ -42,6 +43,7 @@ export function ExtensionsPage() {
   const [mainTab, setMainTab] = useState<AppsMainTab>(initialTab);
   const [search, setSearch] = useState(initialQ);
   const [detail, setDetail] = useState<ExtensionApiRow | null>(null);
+  const [installPlugin, setInstallPlugin] = useState(false);
 
   // Sync URL → local state during render so the URL→state→URL effect chain doesn't add a render.
   const searchParamsKey = searchParams.toString();
@@ -106,7 +108,7 @@ export function ExtensionsPage() {
       if (!next) return null;
       const eligPrev = activationEligibleFor(prev);
       const eligNext = activationEligibleFor(next);
-      if (eligPrev === eligNext && prev.active === next.active) return prev;
+      if (eligPrev === eligNext && prev.active === next.active && JSON.stringify(prev) === JSON.stringify(next)) return prev;
       return next;
     });
   }, [extensions]);
@@ -121,6 +123,7 @@ export function ExtensionsPage() {
       ),
       end: (
         <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => setInstallPlugin(true)}>{language.startsWith('zh') ? '安装插件' : 'Install plugin'}</Button>
           <Button asChild variant="secondary" className="h-9">
             <Link to="/local-apps" aria-label={m.extensionsPage.openLocalApps} title={m.extensionsPage.openLocalApps}>
               <Box className="size-4" />
@@ -134,7 +137,7 @@ export function ExtensionsPage() {
       ),
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, m.extensionsPage.createLocalApp, m.extensionsPage.openLocalApps, m.extensionsPage.title, setPageHeader]);
+  }, [clearPageHeader, language, m.extensionsPage.createLocalApp, m.extensionsPage.openLocalApps, m.extensionsPage.title, setPageHeader]);
 
   if (loading && mainTab !== 'marketplace') {
     return <ExtensionsPageSkeleton />;
@@ -204,8 +207,9 @@ export function ExtensionsPage() {
       </div>
 
       {detail ? (
-        <ExtensionDetailDialog key={detail.id} extension={detail} copy={m.extensionsPage} onClose={() => setDetail(null)} />
+        detail.format === 'agent-plugin' ? <AgentPluginDialog key={detail.id} extension={detail} onClose={() => setDetail(null)} /> : <ExtensionDetailDialog key={detail.id} extension={detail} copy={m.extensionsPage} onClose={() => setDetail(null)} />
       ) : null}
+      {installPlugin ? <AgentPluginDialog onClose={() => setInstallPlugin(false)} /> : null}
     </div>
   );
 }
@@ -297,7 +301,7 @@ function ExtensionAppCard({
               title={uiTitle}
               className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-muted"
             >
-              {ext.hasUi ? copy.badgeKindUi : copy.badgeKindBackend}
+              {ext.format === 'agent-plugin' ? 'Agent Plugin' : ext.hasUi ? copy.badgeKindUi : copy.badgeKindBackend}
             </span>
             {ext.source === 'bundled' ? (
               <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-muted">

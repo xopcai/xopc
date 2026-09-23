@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox';
 
 import { listConnectorConnections } from '../../storage/sqlite/connector-repository.js';
 import { connectionCandidates, resolveConnectionCandidate } from '../../connectors/connection-candidates.js';
+import { parsePluginMcpCandidateRef, resolvePluginMcpConnectionCandidate } from '../../extensions/agent-plugins/connection.js';
 import { connectorPrincipalForSession } from '../../connectors/principal.js';
 import { connectionBindings, getActiveConnectionWait, requireSessionConnection, publishConnectionWait, reviseCurrentConnectionObjective } from '../../storage/sqlite/connection-wait-repository.js';
 import type { ExternalToolTurnContext } from './types.js';
@@ -59,12 +60,15 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
     async execute(_toolCallId, params) {
       const selectedSources = new Set<string>(params.sources ?? []);
       const excludedSources = selectedSources.size ? EXTERNAL_TOOL_SOURCES.filter(source => !selectedSources.has(source)) : [];
-      return textResult({ ...await service.search(params),
+      const result = await service.search(params);
+      const candidates = [...result.connectionCandidates, ...connectionCandidates(params.query)]
+        .filter((candidate, index, all) => all.findIndex(item => item.candidateRef === candidate.candidateRef) === index);
+      return textResult({ ...result, connectionCandidates: candidates,
         ...(excludedSources.length ? { searchScope: {
           excludedSources,
           instruction: 'This search excluded these sources. Results from other apps do not establish that the requested app is unavailable. Retry without sources before declaring a capability unavailable or requesting authorization. Feishu/Lark, WeCom and WPS 365 connectors use cli.',
         } } : {}),
-        connectionCandidates: connectionCandidates(params.query), selectedConnections: getContext?.()?.conversationId ? connectionBindings(getContext()!.conversationId) : [], waitingObjective: getContext?.()?.conversationId ? getActiveConnectionWait(getContext()!.conversationId)?.summary : undefined });
+        selectedConnections: getContext?.()?.conversationId ? connectionBindings(getContext()!.conversationId) : [], waitingObjective: getContext?.()?.conversationId ? getActiveConnectionWait(getContext()!.conversationId)?.summary : undefined });
     },
   };
   const describeTool: AgentTool<typeof ToolDescribeSchema, Record<string, unknown>> = {
@@ -122,21 +126,28 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
       const principal = connectorPrincipalForSession(context.conversationId);
       if (!principal.isLocalOwner) throw new Error('Connection recovery is available in the owner chat.');
       const selected = connectionBindings(context.conversationId);
-      if (params.requirements.every(item => selected.some(need => need.connectorId === item.candidateRef
-        && need.connectionId && (!item.accountId || item.accountId === need.accountId)
-        && (!item.accountSelector || item.accountSelector === need.accountSelector)
-        && listConnectorConnections({ principalId: principal.principalId, connectorId: need.connectorId })
-          .some(connection => connection.id === need.connectionId && connection.status === 'active')))) {
+      if (params.requirements.every(item => {
+        const pluginTarget = parsePluginMcpCandidateRef(item.candidateRef);
+        return selected.some(need => need.target.type === 'connector' ? need.target.connectorId === item.candidateRef
+          && Boolean(need.connectionId) && (!item.accountId || item.accountId === need.accountId)
+          && (!item.accountSelector || item.accountSelector === need.accountSelector)
+          && listConnectorConnections({ principalId: principal.principalId, connectorId: need.target.connectorId })
+            .some(connection => connection.id === need.connectionId && connection.status === 'active')
+          : Boolean(pluginTarget && need.target.pluginId === pluginTarget.pluginId
+            && need.target.serverName === pluginTarget.serverName && need.connectionId === need.target.serverId));
+      })) {
         return textResult({ status: 'already_connected', selectedConnections: selected,
           instruction: 'These accounts were already checked for this objective. Missing tool contracts are a tool availability problem. Do not request authorization again or invent a revision. Explain the unavailable capability and stop retrying the same tools.' });
       }
       const result = requireSessionConnection({ conversationId: context.conversationId,
         principalId: principal.principalId, agentId: principal.agentId ?? 'main', summary: params.purpose, checkpoint: params.checkpoint,
         needs: params.requirements.map(item => {
-          const need = resolveConnectionCandidate(item.candidateRef);
-          if (item.accountId && !listConnectorConnections({ principalId: principal.principalId, connectorId: need.connectorId }).some(connection => connection.accountId === item.accountId)) throw new Error('Unknown account for this app.');
+          const need = resolvePluginMcpConnectionCandidate(item.candidateRef) ?? resolveConnectionCandidate(item.candidateRef);
+          if (item.accountId && need.target.type !== 'connector') throw new Error('Plugin MCP connections do not support account selection.');
+          if (item.accountId && need.target.type === 'connector'
+            && !listConnectorConnections({ principalId: principal.principalId, connectorId: need.target.connectorId }).some(connection => connection.accountId === item.accountId)) throw new Error('Unknown account for this app.');
           return { ...need, accountId: item.accountId, accountSelector: item.accountSelector,
-            key: `${need.connectorId}:${item.accountId ?? item.accountSelector ?? 'default'}` };
+            key: need.target.type === 'connector' ? `${need.target.connectorId}:${item.accountId ?? item.accountSelector ?? 'default'}` : need.key };
         }),
       });
       publishConnectionWait(context.conversationId);

@@ -2,6 +2,7 @@ import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 export type ExtensionMarketplacePackageDetail = {
+  format?: 'native-extension' | 'agent-plugin';
   id: string;
   name: string;
   type: string;
