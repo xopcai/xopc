@@ -1,4 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import { serializeUserTurnDocument } from '@xopcai/gateway-contract';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -760,9 +761,12 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     if (!message.turnId) return;
     setEditingUserTurn({ turnId: message.turnId });
     dispatchFillChatComposer(
-      extractUserMessagePlainText(message.content),
+      message.userTurnDocument
+        ? serializeUserTurnDocument(message.userTurnDocument)
+        : extractUserMessagePlainText(message.content),
       messageAttachmentsToWire(message.attachments),
       message.contextRefs?.map((ref) => ({
+        refId: ref.refId,
         kind: ref.kind,
         sourceId: ref.sourceId,
         expectedVersion: ref.version,
@@ -1391,6 +1395,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 sending={stream.sending}
                 streaming={stream.streaming}
                 conversationId={session.conversationId}
+                prepareContextSession={session.projectPreparation ? projectComposer.prepareSession : undefined}
                 welcomeDraftSeed={welcomeDraftSeed}
                 welcomeSuggestion={!skillDiscovery && compactWelcomeLayout ? primaryWelcomeSelection : null}
                 onAcceptWelcomeSuggestion={onPickWelcomePrompt}

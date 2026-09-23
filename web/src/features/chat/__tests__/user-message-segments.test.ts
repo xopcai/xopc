@@ -17,27 +17,9 @@ const cmdFixtures: CommandEntry[] = [
 ];
 
 describe('parseMessageSegments', () => {
-  it('parses @file: tokens', () => {
+  it('treats path-shaped text as plain text because references are structured', () => {
     expect(parseMessageSegments('x @file:src/a.ts y')).toEqual([
-      { kind: 'text', text: 'x ' },
-      { kind: 'file', path: 'src/a.ts' },
-      { kind: 'text', text: ' y' },
-    ]);
-  });
-
-  it('parses @file: with CJK filename as one segment', () => {
-    expect(parseMessageSegments('x @file:demo-file/月度预算.xlsx y')).toEqual([
-      { kind: 'text', text: 'x ' },
-      { kind: 'file', path: 'demo-file/月度预算.xlsx' },
-      { kind: 'text', text: ' y' },
-    ]);
-  });
-
-  it('parses quoted @file: paths with spaces', () => {
-    expect(parseMessageSegments('x @file:"Meeting Notes.docx" y')).toEqual([
-      { kind: 'text', text: 'x ' },
-      { kind: 'file', path: 'Meeting Notes.docx' },
-      { kind: 'text', text: ' y' },
+      { kind: 'text', text: 'x @file:src/a.ts y' },
     ]);
   });
 

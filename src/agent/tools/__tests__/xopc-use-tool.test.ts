@@ -22,6 +22,7 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
 import type { LocalAppService } from '../../../local-apps/index.js';
+import { ChatPreviewService } from '../../../chat-previews/index.js';
 import { createXopcUseTool } from '../xopc-use-tool.js';
 import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
 
@@ -104,7 +105,7 @@ describe('xopc_use tool', () => {
       args: { projectId: created.project.id },
     });
     expect(createdResult.details.delivery).toMatchObject({
-      version: 1,
+      version: 2,
       operation: 'opened',
       primary: {
         kind: 'project',
@@ -787,7 +788,7 @@ describe('xopc_use tool', () => {
       create: () => app,
       list: () => [app],
       get: (id: string) => id === app.id ? app : null,
-      validate: () => ({ status: 'healthy', sourceHash: 'hash-1' }),
+      materializeSnapshot: () => ({ sourceHash: 'a'.repeat(64), status: 'ready' }),
     } as unknown as LocalAppService;
     const tool = createXopcUseTool({
       getLocalAppService: () => localApps,
@@ -806,14 +807,48 @@ describe('xopc_use tool', () => {
         kind: 'local_app',
         id: app.id,
         projectId: app.projectId,
-        revision: 'hash-1',
+        revision: 'a'.repeat(64),
       },
       presentation: {
         kind: 'inline_app',
         preferredHeight: 480,
         reference: { kind: 'local_app', id: app.id },
+        snapshot: { sourceHash: 'a'.repeat(64) },
       },
     });
+  });
+
+  it('creates a lightweight chat preview without creating a project', async () => {
+    seedConversationFixtures();
+    const previews = new ChatPreviewService();
+    const tool = createXopcUseTool({
+      getChatPreviewService: () => previews,
+      getCurrentConversationId: () => CONVERSATION_ID,
+    });
+
+    const result = await tool.execute('call-chat-preview', {
+      mode: 'chat_preview',
+      command: 'create',
+      args: {
+        title: 'Login page',
+        markup: '<main>Sign in</main>',
+        styles: 'main { padding: 24px; }',
+        script: '',
+        preferredHeight: 420,
+      },
+    });
+
+    expect(result.details.delivery).toMatchObject({
+      version: 2,
+      operation: 'created',
+      primary: { kind: 'chat_preview', title: 'Login page' },
+      presentation: {
+        kind: 'inline_preview',
+        preferredHeight: 420,
+        reference: { kind: 'chat_preview' },
+      },
+    });
+    expect(projects.list().items).toHaveLength(0);
   });
 
   it('returns an exact settings jump target without changing config', async () => {

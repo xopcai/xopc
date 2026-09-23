@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, type MutableRefObject, type RefObject } from 'react';
+import { contextRefWireToken } from '@xopcai/gateway-contract';
 
 import {
   applyPaletteItem,
@@ -39,8 +40,9 @@ export interface UseComposerPickersOptions {
   onChatAgentChange?: (agentId: string) => void;
   /** Active session agent id; used to resolve skill availability in `/` palette. */
   currentAgentId?: string;
+  prepareSession?: () => Promise<string | null>;
   contextRefs: ComposerContextRef[];
-  onAddContextRef: (ref: ComposerContextRef) => void;
+  onAddContextRef: (ref: ComposerContextRef) => ComposerContextRef | null;
   onUnavailableSkill?: (item: SkillPaletteItem) => void;
   onReviewLauncher?: () => void;
   /** When runBusy and command is `acceptsArgs=false` non-abort: queue the command. */
@@ -66,18 +68,20 @@ export interface UseComposerPickersReturn {
   /** Externally invoked when user clicks a row in the slash palette. */
   applyPalette: (item: PaletteItem) => void;
   /** Externally invoked when user clicks a row in the @-mention picker. */
-  applyAtMention: (item: AtMentionItem, opts?: { stayOpen?: boolean }) => void;
+  applyAtMention: (item: AtMentionItem) => void;
 }
 
 export function contextRefFromAtMentionItem(item: AtMentionItem): ComposerContextRef | null {
   if (item.kind === 'note') {
     return {
+      refId: crypto.randomUUID(),
       kind: 'note', sourceId: item.noteRef.sourceId,
       expectedVersion: item.noteRef.expectedVersion, title: item.name,
     };
   }
   if (item.kind === 'file' && !item.isBrowseUp && item.fileRef) {
     return {
+      refId: crypto.randomUUID(),
       kind: 'file', sourceId: item.fileRef.sourceId,
       expectedVersion: item.fileRef.expectedVersion, title: item.name,
       fileKind: item.isDirectory ? 'directory' : 'file',
@@ -85,18 +89,21 @@ export function contextRefFromAtMentionItem(item: AtMentionItem): ComposerContex
   }
   if (item.kind === 'session') {
     return {
+      refId: crypto.randomUUID(),
       kind: 'session', sourceId: item.sessionRef.sourceId,
       expectedVersion: item.sessionRef.expectedVersion, title: item.name,
     };
   }
   if (item.kind === 'browser_tab') {
     return {
+      refId: crypto.randomUUID(),
       kind: 'browser_tab', sourceId: item.tabRef.sourceId,
       expectedVersion: item.tabRef.expectedVersion, title: item.name,
     };
   }
   if (item.kind === 'mcp_resource') {
     return {
+      refId: crypto.randomUUID(),
       kind: 'mcp_resource', sourceId: item.resourceRef.sourceId,
       expectedVersion: item.resourceRef.expectedVersion, title: item.name,
     };
@@ -125,6 +132,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     onUserTextCommitted,
     onChatAgentChange,
     currentAgentId,
+    prepareSession,
     contextRefs,
     onAddContextRef,
     onUnavailableSkill,
@@ -154,6 +162,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     isComposing,
     precomputedAtRange: atRangeRaw,
     selectedContextKeys: new Set(contextRefs.map((ref) => `${ref.kind}:${ref.sourceId}`)),
+    prepareSession,
   });
 
   const shouldSyncSelection = palette.open || atPicker.open || atRangeRaw != null;
@@ -209,19 +218,20 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
   );
 
   const applyAtMention = useCallback(
-    (item: AtMentionItem, applyOpts?: { stayOpen?: boolean }) => {
+    (item: AtMentionItem) => {
       const range = atPicker.atRange;
       if (!range) return;
       const contextRef = contextRefFromAtMentionItem(item);
       if (contextRef) {
-        const insert = applyOpts?.stayOpen ? '@' : '';
+        const selectedRef = onAddContextRef(contextRef);
+        if (!selectedRef?.refId) return;
+        const insert = `${contextRefWireToken(selectedRef.refId)} `;
         const next = replaceRange(valueRef.current, range.start, range.end, insert);
         resetEditor({
           nextText: next,
           caretOffset: range.start + insert.length,
           focus: true,
         });
-        onAddContextRef(contextRef);
         if (conversationId && item.kind === 'file') {
           recordRecentAtPath(conversationId, item.relativePath);
         }
@@ -350,7 +360,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
         if (e.key === 'Enter' || e.key === 'Tab') {
           e.preventDefault();
           const item = ap.items[ap.selectedIndex];
-          if (item) applyAtMentionRef.current(item, { stayOpen: e.shiftKey });
+          if (item) applyAtMentionRef.current(item);
           return true;
         }
         return false;

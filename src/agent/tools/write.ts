@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import {
   appendProductDeliveryText,
+  PRODUCT_DELIVERY_VERSION,
   type ProductDeliveryEnvelope,
 } from '@xopcai/gateway-contract';
 import { realpath } from 'fs/promises';
@@ -76,7 +77,7 @@ export function createWriteFileTool(
         const delivery: ProductDeliveryEnvelope | undefined = writesProfileFile
           ? undefined
           : await Promise.all([realpath(workspace), realpath(target)]).then(([root, canonicalTarget]) => ({
-              version: 1,
+              version: PRODUCT_DELIVERY_VERSION,
               operation: 'updated',
               primary: {
                 kind: 'file',

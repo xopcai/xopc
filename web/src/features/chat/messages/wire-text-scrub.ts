@@ -85,7 +85,7 @@ export function collapseExpandedSkillBlockForDisplay(text: string): string {
 /**
  * Remove `<file path="…">…</file>` blocks prepended by `expandAtFileMentionsInPlainText`
  * when the server persists the expanded @file: content into the session transcript.
- * The original `@file:` wire tokens are kept so `UserMessageSegments` can render pills.
+ * The authored `@file:` text remains readable; explicit web references use structured documents.
  */
 export function stripExpandedAtFileBlocks(text: string): string {
   if (!text.includes('<file path=')) return text;

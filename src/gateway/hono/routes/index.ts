@@ -18,6 +18,7 @@ import { registerEndpointToolRoutes } from './endpoint-tools.js';
 import { registerRealtimeRoutes } from './realtime.js';
 import { registerDeviceRoutes } from './devices.js';
 import { registerLocalAppsRoutes } from './local-apps.js';
+import { registerChatPreviewRoutes } from './chat-previews.js';
 import { registerWorkDiscoveryRoutes } from './work-discovery.js';
 import { registerContextSourceRoutes } from './context-sources.js';
 import { registerTaskRoutes } from './tasks.js';
@@ -43,6 +44,7 @@ export function registerCoreAuthenticatedRoutes(
   registerProjectsRoutes(authenticated, deps);
   registerProjectSkillRoutes(authenticated, deps);
   registerLocalAppsRoutes(authenticated, deps);
+  registerChatPreviewRoutes(authenticated, deps);
   registerWorkDiscoveryRoutes(authenticated, deps);
   registerContextSourceRoutes(authenticated, deps);
   registerTaskRoutes(authenticated, deps);

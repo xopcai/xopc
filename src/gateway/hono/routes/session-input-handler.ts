@@ -1,4 +1,9 @@
-import { browserPageContextsInputSchema, type ModelThinkingValue } from '@xopcai/gateway-contract';
+import {
+  browserPageContextsInputSchema,
+  parseUserTurnDocument,
+  userTurnDocumentRefIds,
+  type ModelThinkingValue,
+} from '@xopcai/gateway-contract';
 import { endpointTurnClaimSchema } from '@xopcai/endpoint-tools-protocol';
 import type { Context } from 'hono';
 
@@ -20,6 +25,14 @@ import { createLogger } from '../../../utils/logger.js';
 const MAX_TURN_CONTEXTS = 5;
 const log = createLogger('Gateway:SessionInput');
 
+function contextDocumentIsValid(content: string, refs: ReturnType<typeof parseTurnContextRefs>): boolean {
+  if (!refs) return false;
+  const document = parseUserTurnDocument(content);
+  if (!document) return true;
+  const available = new Set(refs.flatMap(ref => ref.refId ? [ref.refId] : []));
+  return userTurnDocumentRefIds(document).every(refId => available.has(refId));
+}
+
 export async function submitSessionInput(
   c: Context,
   deps: AuthenticatedRouteDeps,
@@ -40,6 +53,9 @@ export async function submitSessionInput(
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid browser page context' } }, 400);
   }
   const content = typeof body.content === 'string' ? body.content : '';
+  if (!contextDocumentIsValid(content, contextRefs)) {
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Input contains an unknown context reference' } }, 400);
+  }
   if (options?.taskConversation && isTaskDestructiveCommand(content)) {
     return c.json({
       ok: false,
@@ -154,6 +170,9 @@ export async function replaceLatestSessionTurn(
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid source references` } }, 400);
   }
   const content = typeof body.content === 'string' ? body.content : '';
+  if (!contextDocumentIsValid(content, contextRefs)) {
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Input contains an unknown context reference' } }, 400);
+  }
   const contentError = validateWebchatContent(content);
   if (contentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: contentError } }, 400);
   const attachmentError = validateWebchatAttachments(attachments);

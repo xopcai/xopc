@@ -47,7 +47,7 @@ describe('AssistantResultTail product deliveries', () => {
   });
 
   it('renders query results as a compact tail without table metadata', () => {
-    act(() => root.render(<MemoryRouter>{renderDelivery({ version: 1, operation: 'opened', presentation: {
+    act(() => root.render(<MemoryRouter>{renderDelivery({ version: 2, operation: 'opened', presentation: {
       kind: 'table', truncated: true, items: [{ kind: 'task', id: 'task/one', title: '<img src=x>', status: 'ready', capabilities: ['open', 'run'] }],
     } })}</MemoryRouter>));
     expect(container.querySelector('table')).toBeNull();
@@ -61,7 +61,7 @@ describe('AssistantResultTail product deliveries', () => {
   });
 
   it('does not render an empty query as a turn result', () => {
-    act(() => root.render(<MemoryRouter>{renderDelivery({ version: 1, operation: 'opened', presentation: {
+    act(() => root.render(<MemoryRouter>{renderDelivery({ version: 2, operation: 'opened', presentation: {
       kind: 'table', truncated: false, items: [],
     } })}</MemoryRouter>));
 
@@ -78,8 +78,8 @@ describe('AssistantResultTail product deliveries', () => {
       lifecycle: { state: 'completed' },
       outcome: undefined,
       deliveries: [
-        { key: 'empty', delivery: { version: 1, operation: 'opened', presentation: { kind: 'table', truncated: false, items: [] } } },
-        { key: 'result', delivery: { version: 1, operation: 'opened', presentation: { kind: 'table', truncated: false,
+        { key: 'empty', delivery: { version: 2, operation: 'opened', presentation: { kind: 'table', truncated: false, items: [] } } },
+        { key: 'result', delivery: { version: 2, operation: 'opened', presentation: { kind: 'table', truncated: false,
           items: [{ kind: 'note', id: 'note-1', title: 'Research note', capabilities: ['open'] }] } } },
       ],
       sources: [],
@@ -92,7 +92,7 @@ describe('AssistantResultTail product deliveries', () => {
   });
 
   it('renders proposed replacements without applying them or rendering HTML', () => {
-    act(() => root.render(<MemoryRouter>{renderDelivery({ version: 1, operation: 'opened', presentation: {
+    act(() => root.render(<MemoryRouter>{renderDelivery({ version: 2, operation: 'opened', presentation: {
       kind: 'diff', title: 'Preview', truncated: false, edits: [{ from: 0, to: 5, text: '<script>unsafe()</script>' }],
     } })}</MemoryRouter>));
     expect(container.textContent).toContain('尚未应用');
@@ -105,7 +105,7 @@ describe('AssistantResultTail product deliveries', () => {
 
   it('uses the borderless Note result row itself as the only action', () => {
     const delivery: ProductDeliveryEnvelope = {
-      version: 1,
+      version: 2,
       operation: 'updated',
       primary: {
         kind: 'note',
@@ -148,7 +148,7 @@ describe('AssistantResultTail product deliveries', () => {
 
   it('presents an automation as a localized result row with a secondary continue action', () => {
     const delivery: ProductDeliveryEnvelope = {
-      version: 1,
+      version: 2,
       operation: 'opened',
       primary: {
         kind: 'automation',
@@ -181,7 +181,7 @@ describe('AssistantResultTail product deliveries', () => {
 
   it('keeps a visible boundary for failed deliveries', () => {
     const delivery: ProductDeliveryEnvelope = {
-      version: 1,
+      version: 2,
       operation: 'failed',
       primary: {
         kind: 'automation',
@@ -206,12 +206,12 @@ describe('AssistantResultTail product deliveries', () => {
 
   it('groups multiple resources under one tail with separated rows', () => {
     const first: ProductDeliveryEnvelope = {
-      version: 1,
+      version: 2,
       operation: 'created',
       primary: { kind: 'task', id: 'task-1', title: '准备发布', capabilities: ['open'] },
     };
     const second: ProductDeliveryEnvelope = {
-      version: 1,
+      version: 2,
       operation: 'created',
       primary: { kind: 'note', id: 'note-1', title: '发布说明', capabilities: ['open'] },
     };
@@ -240,9 +240,9 @@ describe('AssistantResultTail product deliveries', () => {
 
   it('collapses multiple operated files behind a clickable file count', () => {
     const files: ProductDeliveryEnvelope[] = [
-      { version: 1, operation: 'updated', primary: { kind: 'file', id: 'one', title: '.scrub_tmp.py', summary: '3512 bytes written', capabilities: [] } },
-      { version: 1, operation: 'updated', primary: { kind: 'file', id: 'two', title: '.scan2_tmp.py', summary: '1392 bytes written', capabilities: [] } },
-      { version: 1, operation: 'updated', primary: { kind: 'file', id: 'three', title: '.fts_tmp.py', summary: '2415 bytes written', capabilities: [] } },
+      { version: 2, operation: 'updated', primary: { kind: 'file', id: 'one', title: '.scrub_tmp.py', summary: '3512 bytes written', capabilities: [] } },
+      { version: 2, operation: 'updated', primary: { kind: 'file', id: 'two', title: '.scan2_tmp.py', summary: '1392 bytes written', capabilities: [] } },
+      { version: 2, operation: 'updated', primary: { kind: 'file', id: 'three', title: '.fts_tmp.py', summary: '2415 bytes written', capabilities: [] } },
     ];
 
     act(() => root.render(
@@ -270,8 +270,8 @@ describe('AssistantResultTail product deliveries', () => {
 
   it('shows outcome attachments once when they supersede matching file deliveries', () => {
     const files: ProductDeliveryEnvelope[] = [
-      { version: 1, operation: 'updated', primary: { kind: 'file', id: 'file-one', title: 'index.html', capabilities: ['preview'] } },
-      { version: 1, operation: 'updated', primary: { kind: 'file', id: 'file-two', title: 'app.js', capabilities: ['preview'] } },
+      { version: 2, operation: 'updated', primary: { kind: 'file', id: 'file-one', title: 'index.html', capabilities: ['preview'] } },
+      { version: 2, operation: 'updated', primary: { kind: 'file', id: 'file-two', title: 'app.js', capabilities: ['preview'] } },
     ];
     const view: AssistantTurnViewModel = {
       answerContent: [],
@@ -306,7 +306,7 @@ describe('AssistantResultTail product deliveries', () => {
 
   it('combines product objects, outcome artifacts, and generated files in one tail', () => {
     const delivery: ProductDeliveryEnvelope = {
-      version: 1,
+      version: 2,
       operation: 'created',
       primary: { kind: 'task', id: 'task-1', title: '发布任务', capabilities: ['open'] },
     };

@@ -49,12 +49,15 @@ function contextRefsMatchFrozenSnapshot(
   requested: readonly TurnContextRef[],
   frozen: SessionInputState['inputs'][number]['contextRefs'],
 ): boolean {
-  const editable = frozen?.filter(ref => ref.kind === 'note' || ref.kind === 'task') ?? [];
+  const editable = frozen?.filter(ref => ref.kind === 'note' || ref.kind === 'task'
+    || ref.kind === 'file' || ref.kind === 'session' || ref.kind === 'browser_tab'
+    || ref.kind === 'mcp_resource') ?? [];
   if (requested.length !== editable.length) return false;
   return requested.every((ref, index) => {
     const snapshot = editable[index];
     return snapshot?.kind === ref.kind
       && snapshot.sourceId === ref.sourceId
+      && snapshot.refId === ref.refId
       && ref.expectedVersion === snapshot.version;
   });
 }
@@ -354,7 +357,9 @@ export class SessionInputCoordinator {
       if (!contextRefsMatchFrozenSnapshot(body.contextRefs, existing?.contextRefs)) {
         try {
           const resolved = await this.deps.prepareContexts(conversationId, body.contextRefs) ?? [];
-          const captured = existing?.contextSnapshots?.filter(source => source.kind !== 'note' && source.kind !== 'task') ?? [];
+          const captured = existing?.contextSnapshots?.filter(
+            source => source.kind === 'app_context' || source.kind === 'browser_page',
+          ) ?? [];
           sourceContexts = fitSourceContextsToBudget([...captured, ...resolved]);
         } catch (err) {
           log.warn({ err, conversationId, inputId: id }, 'Queued input context preparation failed');

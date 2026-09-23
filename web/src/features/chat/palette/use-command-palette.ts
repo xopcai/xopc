@@ -17,12 +17,8 @@ import type {
   PaletteSection,
   SlashRange,
 } from '@/features/chat/palette/command-palette.types';
-import { FILE_WIRE_TAIL_BODY } from '@/features/chat/palette/file-wire-pattern';
 import { paletteDefaultTiebreak } from '@/features/chat/palette/palette-default-order';
 import { useAsyncResource } from '@/lib/use-async-resource';
-
-/** Same boundary as `@file:` wire tokens (quoted or unquoted); path `/` is not slash-palette. */
-const AT_FILE_TOKEN_AT_INDEX = new RegExp(`^@file:${FILE_WIRE_TAIL_BODY}`, 'u');
 
 function isAbortClassCommand(item: PaletteItem): boolean {
   if (item.kind !== 'command') return false;
@@ -70,26 +66,6 @@ export function commandRowWillQueue(
   return ctx.pendingFollowUpsCount < ctx.maxPendingFollowUps;
 }
 
-function atFileTokenSpanContainingIndex(text: string, index: number): { start: number; end: number } | null {
-  let from = 0;
-  while (from < text.length) {
-    const at = text.indexOf('@file:', from);
-    if (at === -1) return null;
-    const slice = text.slice(at);
-    const m = slice.match(AT_FILE_TOKEN_AT_INDEX);
-    if (!m) {
-      from = at + 1;
-      continue;
-    }
-    const end = at + m[0].length;
-    if (index >= at && index < end) {
-      return { start: at, end };
-    }
-    from = end;
-  }
-  return null;
-}
-
 /** Slash token body after the leading `/` looks like a filesystem path, not a skill name. */
 function looksLikePathQuery(query: string): boolean {
   if (query.includes('/')) return true;
@@ -119,10 +95,6 @@ export function detectSlashRange(text: string, cursor: number): SlashRange | nul
   const before = text.slice(0, c);
   const match = before.match(/\/[^\s]*$/);
   if (!match || match.index === undefined) return null;
-  // Path segments in `@file:dir/name` contain `/`; do not treat them as `/skill`-style slash palette input.
-  if (atFileTokenSpanContainingIndex(text, match.index)) {
-    return null;
-  }
   const slashStart = match.index;
   if (isEmbeddedPathOrUrlSlash(text, slashStart)) {
     return null;
