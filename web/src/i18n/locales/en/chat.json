@@ -1396,8 +1396,7 @@
       "mcpResources": "MCP resources",
       "folders": "Folders",
       "recentFiles": "Recent",
-      "recentBadge": "Recent",
-      "shiftHint": "Shift+Enter or Shift+click: add another @ mention."
+      "recentBadge": "Recent"
     },
     "contextReferencesMore": "{{count}} more",
     "contextReferencesLess": "Show fewer",

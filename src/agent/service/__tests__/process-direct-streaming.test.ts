@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { contextRefWireToken } from '@xopcai/gateway-contract';
 
 const mocks = vi.hoisted(() => ({
   resume: vi.fn(),
@@ -97,6 +98,47 @@ describe('direct stream input visibility', () => {
     expect(title).toHaveBeenCalledWith('agent:main:main', 'Check Gmail');
     expect(mocks.pending).toHaveBeenCalledOnce();
     expect(mocks.clearPending).toHaveBeenCalledOnce();
+  });
+
+  it('projects inline context placeholders before model input and persists their authored order', async () => {
+    const { deps, buildTranscriptUserMessage } = setup();
+    const source = {
+      refId: 'folder_ref', kind: 'file' as const, sourceId: 'folder-1', version: '7',
+      title: 'evals', text: 'a.ts\nb.ts', fileKind: 'directory' as const,
+    };
+    const events = [];
+    for await (const event of runProcessDirectStreaming(deps, {
+      content: `Review ${contextRefWireToken('folder_ref')} now`,
+      conversationId: 'agent:main:main',
+      runId: 'context-run',
+      origin: { type: 'system', source: 'internal' },
+      sourceContexts: [source],
+    })) events.push(event);
+
+    expect(buildTranscriptUserMessage).toHaveBeenCalledWith(
+      'Review @evals now',
+      undefined,
+      'agent:main:main',
+      expect.anything(),
+    );
+    expect(events[0]).toEqual(expect.objectContaining({
+      type: 'user_message',
+      metadata: expect.objectContaining({
+        userTurnDocument: {
+          version: 1,
+          parts: [
+            { type: 'text', text: 'Review ' },
+            { type: 'context_ref', refId: 'folder_ref' },
+            { type: 'text', text: ' now' },
+          ],
+        },
+        sourceContexts: [expect.objectContaining({ refId: 'folder_ref', title: 'evals' })],
+      }),
+    }));
+    expect(mocks.pending).toHaveBeenCalledWith(
+      'agent:main:main',
+      expect.objectContaining({ metadata: expect.objectContaining({ userTurnDocument: expect.any(Object) }) }),
+    );
   });
 
   it('suppresses read_media prompts for successfully transcribed voice while retaining its media', async () => {

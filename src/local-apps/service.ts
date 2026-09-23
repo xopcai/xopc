@@ -11,8 +11,12 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, join, relative, resolve, sep } from 'node:path';
-import { ExtensionCapabilityBindingsSchema, extensionCapabilityPermissions } from '@xopcai/gateway-contract';
+import { join, resolve, sep } from 'node:path';
+import {
+  ExtensionCapabilityBindingsSchema,
+  extensionCapabilityPermissions,
+  type LocalAppPreviewSnapshot,
+} from '@xopcai/gateway-contract';
 import { CapabilityError } from '../capabilities/runtime/errors.js';
 import { validateLocalAppCapabilityContracts } from './capabilities/contracts.js';
 import { buildLocalAppFixGuidance } from './fix-guidance.js';
@@ -28,11 +32,17 @@ import { currentOperationId } from '../infra/operation-context.js';
 import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
 import { readLocalAppAcceptanceConfig } from './acceptance.js';
 import {
+  hashLocalAppDirectory,
+  localAppFileHashes,
+  shouldCopyLocalAppPath,
+} from './artifact-files.js';
+import {
   LOCAL_APP_RUNTIME_ENTRY,
   LOCAL_APP_RUNTIME_SOURCE,
 } from './runtime-entry.js';
 import { readLocalAppPermissions, scaffoldLocalApp } from './scaffold.js';
 import { LocalAppStore } from './store.js';
+import { LocalAppSnapshotStore } from './snapshot-store.js';
 import { withLocalAppReleaseLock } from './release-lock.js';
 import type {
   CreateLocalAppInput,
@@ -49,7 +59,6 @@ import type {
 } from './types.js';
 
 const log = createLogger('LocalApps');
-const RELEASE_COPY_EXCLUDED_NAMES = new Set(['.git', 'node_modules']);
 const UI_ONLY_PERMISSIONS = new Set(['theme', 'storage', 'notification']);
 
 function cleanupReleaseStaging(path: string): void {
@@ -114,47 +123,6 @@ function removeExtensionActivation(config: Config, extensionId: string): Config 
   } as Config;
 }
 
-function shouldCopyReleasePath(source: string): boolean {
-  return !RELEASE_COPY_EXCLUDED_NAMES.has(basename(source));
-}
-
-function hashDirectory(root: string): string {
-  const hash = createHash('sha256');
-  const visit = (dir: string): void => {
-    const entries = readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => !RELEASE_COPY_EXCLUDED_NAMES.has(entry.name))
-      .toSorted((a, b) => a.name.localeCompare(b.name));
-    for (const entry of entries) {
-      const path = join(dir, entry.name);
-      const rel = relative(root, path);
-      hash.update(rel);
-      if (entry.isDirectory()) visit(path);
-      else if (entry.isFile()) hash.update(readFileSync(path));
-      else throw new Error(`Unsupported release entry: ${rel}`);
-    }
-  };
-  visit(root);
-  return hash.digest('hex');
-}
-
-function fileHashes(root: string): Map<string, string> {
-  const hashes = new Map<string, string>();
-  const visit = (dir: string): void => {
-    const entries = readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => !RELEASE_COPY_EXCLUDED_NAMES.has(entry.name))
-      .toSorted((a, b) => a.name.localeCompare(b.name));
-    for (const entry of entries) {
-      const path = join(dir, entry.name);
-      const rel = relative(root, path);
-      if (entry.isDirectory()) visit(path);
-      else if (entry.isFile()) hashes.set(rel, createHash('sha256').update(readFileSync(path)).digest('hex'));
-      else throw new Error(`Unsupported release entry: ${rel}`);
-    }
-  };
-  visit(root);
-  return hashes;
-}
-
 function changedFiles(current: Map<string, string>, active: Map<string, string>): LocalAppChangedFile[] {
   const paths = new Set([...current.keys(), ...active.keys()]);
   const changes: LocalAppChangedFile[] = [];
@@ -183,6 +151,7 @@ function permissionsFromManifestJson(manifestJson: string | undefined): string[]
 
 function validateLocalAppPackage(root: string, extensionId: string): {
   manifestJson: string;
+  entryPath: string;
   acceptanceScenarios: Array<{ id: string; name: string; stepCount: number }>;
 } {
   const manifestPath = join(root, 'xopc.extension.json');
@@ -227,6 +196,7 @@ function validateLocalAppPackage(root: string, extensionId: string): {
   const acceptance = readLocalAppAcceptanceConfig(root);
   return {
     manifestJson,
+    entryPath: manifest.ui.main,
     acceptanceScenarios: acceptance.scenarios.map((scenario) => ({
       id: scenario.id,
       name: scenario.name,
@@ -239,6 +209,7 @@ export class LocalAppService {
   constructor(
     private readonly options: LocalAppServiceOptions,
     private readonly store = new LocalAppStore(),
+    private readonly snapshots = new LocalAppSnapshotStore(),
   ) {}
 
   private recoveryRoot(): string {
@@ -271,11 +242,11 @@ export class LocalAppService {
           throw new Error(`Local app recovery release is unavailable: ${id}`);
         }
         validateLocalAppPackage(release.artifactPath, app.extensionId);
-        if (hashDirectory(release.artifactPath) !== release.sourceHash) throw new Error(`Local app recovery integrity check failed: ${id}`);
+        if (hashLocalAppDirectory(release.artifactPath) !== release.sourceHash) throw new Error(`Local app recovery integrity check failed: ${id}`);
         const staging = mkdtempSync(join(extensionsDir, '.local-app-recover-'));
         try {
           const replacement = join(staging, app.extensionId);
-          cpSync(release.artifactPath, replacement, { recursive: true, filter: shouldCopyReleasePath });
+          cpSync(release.artifactPath, replacement, { recursive: true, filter: shouldCopyLocalAppPath });
           rmSync(target, { recursive: true, force: true });
           renameSync(replacement, target);
         } finally {
@@ -324,7 +295,7 @@ export class LocalAppService {
     if (!app || !token) return null;
     return {
       ...app,
-      previewUrl: `/api/local-apps/preview/${token}/ui/index.html`,
+      draftPreviewUrl: `/api/local-apps/preview/${token}/draft/ui/index.html`,
       permissions: readLocalAppPermissions(app.workspaceRoot),
       releases: this.store.listReleases(id).map(({ artifactPath: _artifactPath, manifestJson: _manifestJson, ...release }) => release),
       acceptanceRuns: this.store.listAcceptanceRuns(id),
@@ -390,6 +361,25 @@ export class LocalAppService {
   }
 
   create(input: CreateLocalAppInput): LocalAppDetail {
+    return this.createInternal(input);
+  }
+
+  createFromPreview(input: CreateLocalAppInput & {
+    markup: string;
+    styles: string;
+    script: string;
+  }): LocalAppDetail {
+    return this.createInternal(input, {
+      markup: input.markup,
+      styles: input.styles,
+      script: input.script,
+    });
+  }
+
+  private createInternal(
+    input: CreateLocalAppInput,
+    uiSource?: { markup: string; styles: string; script: string },
+  ): LocalAppDetail {
     const name = requireText(input.name, 'App name');
     const idea = requireText(input.idea, 'App idea');
     const suffix = randomBytes(4).toString('hex');
@@ -399,13 +389,20 @@ export class LocalAppService {
     const previewToken = randomBytes(24).toString('base64url');
 
     mkdirSync(workspaceRoot, { recursive: true });
-    scaffoldLocalApp({
-      workspaceRoot,
-      extensionId,
-      name,
-      idea,
-      description: input.description?.trim() || undefined,
-    });
+    try {
+      scaffoldLocalApp({
+        workspaceRoot,
+        extensionId,
+        name,
+        idea,
+        description: input.description?.trim() || undefined,
+        uiSource,
+      });
+      validateLocalAppPackage(workspaceRoot, extensionId);
+    } catch (error) {
+      rmSync(workspaceRoot, { recursive: true, force: true });
+      throw error;
+    }
     const project = this.options.projects.create({
       name,
       slug: extensionId,
@@ -429,29 +426,39 @@ export class LocalAppService {
     return this.get(app.id)!;
   }
 
-  resolvePreview(previewToken: string): LocalAppPreviewTarget | null {
+  resolveDraftPreview(previewToken: string): LocalAppPreviewTarget | null {
     const app = this.store.findByPreviewToken(previewToken);
     if (!app) return null;
     return { app, previewToken, uiRoot: app.workspaceRoot };
   }
 
-  validate(id: string): LocalAppValidationResult {
-    const app = this.store.get(id);
-    if (!app) throw new Error('Local app not found');
+  resolveSnapshotPreview(previewToken: string, sourceHash: string): LocalAppPreviewTarget | null {
+    const app = this.store.findByPreviewToken(previewToken);
+    if (!app) return null;
+    const uiRoot = this.snapshots.packageRoot(app.id, sourceHash);
+    return uiRoot ? { app, previewToken, uiRoot } : null;
+  }
+
+  private validateRoot(
+    app: LocalApp,
+    root: string,
+    knownSourceHash?: string,
+    checkedAt = Date.now(),
+  ): LocalAppValidationResult {
     const issues: LocalAppValidationResult['issues'] = [];
     let manifestJson: string | undefined;
     let acceptanceScenarios: LocalAppValidationResult['acceptanceScenarios'] = [];
-    let sourceHash: string | undefined;
+    let sourceHash = knownSourceHash;
     let currentFiles = new Map<string, string>();
     try {
-      ({ manifestJson, acceptanceScenarios } = validateLocalAppPackage(app.workspaceRoot, app.extensionId));
-      currentFiles = fileHashes(app.workspaceRoot);
-      sourceHash = hashDirectory(app.workspaceRoot);
+      currentFiles = localAppFileHashes(root);
+      sourceHash ??= hashLocalAppDirectory(root);
+      ({ manifestJson, acceptanceScenarios } = validateLocalAppPackage(root, app.extensionId));
     } catch (error) {
       issues.push({
         code: 'package_validation_failed',
         severity: 'error',
-        message: error instanceof Error ? error.message : String(error),
+        message: (error instanceof Error ? error.message : String(error)).slice(0, 500),
       });
     }
 
@@ -461,12 +468,12 @@ export class LocalAppService {
     let files: LocalAppChangedFile[] = [];
     if (activeRelease?.artifactPath && existsSync(activeRelease.artifactPath) && currentFiles.size) {
       try {
-        files = changedFiles(currentFiles, fileHashes(activeRelease.artifactPath));
+        files = changedFiles(currentFiles, localAppFileHashes(activeRelease.artifactPath));
       } catch (error) {
         issues.push({
           code: 'release_comparison_failed',
           severity: 'warning',
-          message: error instanceof Error ? error.message : String(error),
+          message: (error instanceof Error ? error.message : String(error)).slice(0, 500),
         });
       }
     } else if (!activeRelease && currentFiles.size) {
@@ -477,7 +484,7 @@ export class LocalAppService {
     const activePermissions = permissionsFromManifestJson(activeRelease?.manifestJson);
     return {
       status: issues.some((issue) => issue.severity === 'error') ? 'failed' : 'healthy',
-      checkedAt: Date.now(),
+      checkedAt,
       sourceHash,
       hasDraftChanges: activeRelease ? sourceHash !== activeRelease.sourceHash : true,
       changedFiles: files.slice(0, 50),
@@ -490,6 +497,50 @@ export class LocalAppService {
       acceptanceScenarioCount: acceptanceScenarios.length,
       acceptanceScenarios,
       issues,
+    };
+  }
+
+  validate(id: string): LocalAppValidationResult {
+    const app = this.store.get(id);
+    if (!app) throw new Error('Local app not found');
+    return this.validateRoot(app, app.workspaceRoot);
+  }
+
+  materializeSnapshot(id: string): LocalAppPreviewSnapshot {
+    const app = this.store.get(id);
+    const token = app ? this.store.getPreviewToken(id) : null;
+    if (!app || !token) throw new Error('Local app not found');
+    const stored = this.snapshots.materialize(app.id, app.workspaceRoot, (packageRoot, sourceHash, createdAt) => {
+      const validation = this.validateRoot(app, packageRoot, sourceHash, createdAt);
+      const packageResult = validation.status === 'healthy'
+        ? validateLocalAppPackage(packageRoot, app.extensionId)
+        : null;
+      return {
+        appId: app.id,
+        sourceHash,
+        status: packageResult ? 'ready' : 'invalid',
+        createdAt,
+        ...(packageResult ? { entryPath: packageResult.entryPath } : {}),
+        validation,
+      };
+    });
+    return this.withSnapshotPreviewUrl(stored, token);
+  }
+
+  getSnapshot(id: string, sourceHash: string): LocalAppPreviewSnapshot | null {
+    const app = this.store.get(id);
+    const token = app ? this.store.getPreviewToken(id) : null;
+    if (!app || !token) return null;
+    const snapshot = this.snapshots.get(app.id, sourceHash);
+    return snapshot ? this.withSnapshotPreviewUrl(snapshot, token) : null;
+  }
+
+  private withSnapshotPreviewUrl(snapshot: LocalAppPreviewSnapshot, token: string): LocalAppPreviewSnapshot {
+    if (snapshot.status !== 'ready' || !snapshot.entryPath) return snapshot;
+    const entryPath = snapshot.entryPath.split('/').map(encodeURIComponent).join('/');
+    return {
+      ...snapshot,
+      previewUrl: `/api/local-apps/preview/${token}/snapshots/${snapshot.sourceHash}/${entryPath}`,
     };
   }
 
@@ -602,7 +653,7 @@ export class LocalAppService {
     let canCleanup = false;
     let configSaved = false;
     try {
-      cpSync(input.artifactPath, staged, { recursive: true, filter: shouldCopyReleasePath });
+      cpSync(input.artifactPath, staged, { recursive: true, filter: shouldCopyLocalAppPath });
       if (existsSync(target)) {
         renameSync(target, backup);
         hadPrevious = true;
@@ -649,9 +700,9 @@ export class LocalAppService {
     const stagedArtifact = join(stagingRoot, 'package');
     let artifactCreated = false;
     try {
-      cpSync(app.workspaceRoot, stagedArtifact, { recursive: true, filter: shouldCopyReleasePath });
+      cpSync(app.workspaceRoot, stagedArtifact, { recursive: true, filter: shouldCopyLocalAppPath });
       const { manifestJson } = validateLocalAppPackage(stagedArtifact, app.extensionId);
-      const sourceHash = hashDirectory(stagedArtifact);
+      const sourceHash = hashLocalAppDirectory(stagedArtifact);
       const acceptance = this.store.getLatestAcceptanceForSource(app.id, sourceHash);
       if (acceptance?.status !== 'passed') {
         throw new Error('The current draft has not passed automatic acceptance');
@@ -702,7 +753,7 @@ export class LocalAppService {
       throw new Error('Local app release artifact is unavailable');
     }
     validateLocalAppPackage(release.artifactPath, app.extensionId);
-    if (hashDirectory(release.artifactPath) !== release.sourceHash) {
+    if (hashLocalAppDirectory(release.artifactPath) !== release.sourceHash) {
       throw new Error('Release artifact integrity check failed; rollback was not applied');
     }
     await this.activateArtifact({

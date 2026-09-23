@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp, FileIcon, GripVertical, NotebookPen, Sparkles, X } from 'lucide-react';
 import { memo, useCallback } from 'react';
+import { parseUserTurnDocument, renderUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
 
 import { MAX_PENDING_FOLLOW_UPS, type PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import { messages } from '@/i18n/messages';
@@ -74,7 +75,13 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
         const canSteer = removable && !item.attachments?.length && !item.contextRefs?.length && item.text.trim().length > 0;
         const isSteering = steeringBusyId === item.id;
         const statusText = item.status === 'interrupted' ? m.chat.followUpStatusInterrupted : null;
-        let preview = item.text.trim();
+        const document = parseUserTurnDocument(item.text);
+        const refsById = new Map(item.contextRefs?.flatMap(ref => ref.refId ? [[ref.refId, ref.title] as const] : []) ?? []);
+        const inlineRefIds = new Set(document ? userTurnDocumentRefIds(document) : []);
+        const detachedRefs = item.contextRefs?.filter(ref => !ref.refId || !inlineRefIds.has(ref.refId));
+        let preview = (document
+          ? renderUserTurnDocument(document, refId => refsById.get(refId))
+          : item.text).trim();
         if (!preview && item.attachments?.length) {
           const n0 = item.attachments[0]?.name?.trim();
           preview = n0 || m.chat.followUpQueueAttachmentOnly;
@@ -129,13 +136,13 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                 <span className="block truncate">{preview}</span>
               )}
             </button>
-            {item.contextRefs?.length ? (
+            {detachedRefs?.length ? (
               <span
                 className="inline-flex shrink-0 items-center gap-0.5 rounded bg-accent-soft px-1.5 py-0.5 text-[0.625rem] text-accent-fg"
-                title={item.contextRefs.map((ref) => ref.title).join(', ')}
+                title={detachedRefs.map((ref) => ref.title).join(', ')}
               >
                 <NotebookPen className="size-3" aria-hidden />
-                {item.contextRefs.length}
+                {detachedRefs.length}
               </span>
             ) : null}
             {statusText ? (

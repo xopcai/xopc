@@ -1396,8 +1396,7 @@
       "mcpResources": "MCP 资源",
       "folders": "文件夹",
       "recentFiles": "最近",
-      "recentBadge": "最近",
-      "shiftHint": "Shift+Enter 或 Shift+点击：继续添加 @ 引用。"
+      "recentBadge": "最近"
     },
     "contextReferencesMore": "另外 {{count}} 个",
     "contextReferencesLess": "收起",

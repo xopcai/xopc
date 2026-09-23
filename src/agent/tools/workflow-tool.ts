@@ -6,6 +6,7 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import {
   appendProductDeliveryText,
+  PRODUCT_DELIVERY_VERSION,
   type ProductDeliveryEnvelope,
 } from '@xopcai/gateway-contract';
 
@@ -143,7 +144,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
           ? `Started workflow \`${definitionId}\` (run ${result.runId}). Open chat session to track progress and continue.`
           : `Started workflow \`${definitionId}\` (run ${result.runId}). Open the workflow chat session to track progress.`;
         const delivery: ProductDeliveryEnvelope = {
-          version: 1,
+          version: PRODUCT_DELIVERY_VERSION,
           operation: 'started',
           primary: {
             kind: 'workflow_run',

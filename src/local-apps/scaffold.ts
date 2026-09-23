@@ -24,8 +24,9 @@ export function scaffoldLocalApp(input: {
   name: string;
   idea: string;
   description?: string;
+  uiSource?: { markup: string; styles: string; script: string };
 }): void {
-  const { workspaceRoot, extensionId, name, idea, description } = input;
+  const { workspaceRoot, extensionId, name, idea, description, uiSource } = input;
   const manifest = {
     id: extensionId,
     name,
@@ -67,7 +68,7 @@ export function scaffoldLocalApp(input: {
   }, null, 2)}\n`);
   writeText(workspaceRoot, '.xopc/acceptance.json', `${JSON.stringify({
     schemaVersion: 1,
-    scenarios: [{
+    scenarios: uiSource ? [] : [{
       id: 'start-app',
       name: 'Start the app',
       steps: [
@@ -76,7 +77,20 @@ export function scaffoldLocalApp(input: {
       ],
     }],
   }, null, 2)}\n`);
-  writeText(workspaceRoot, 'ui/index.html', `<!doctype html>
+  writeText(workspaceRoot, 'ui/index.html', uiSource ? `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${htmlEscape(name)}</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+${uiSource.markup}
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
+` : `<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -97,7 +111,7 @@ export function scaffoldLocalApp(input: {
 </body>
 </html>
 `);
-  writeText(workspaceRoot, 'ui/styles.css', `:root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+  writeText(workspaceRoot, 'ui/styles.css', uiSource?.styles ?? `:root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; background: #f8fafc; color: #0f172a; }
 .app-shell { min-height: 100vh; display: grid; place-items: center; padding: 32px; }
@@ -108,7 +122,7 @@ button { margin-top: 18px; border: 0; border-radius: 10px; padding: 11px 18px; b
 .feedback { min-height: 24px; font-size: 14px; }
 @media (prefers-color-scheme: dark) { body { background: #0f172a; color: #f8fafc; } .hero { background: #111827; border-color: #334155; } p { color: #cbd5e1; } }
 `);
-  writeText(workspaceRoot, 'ui/app.js', `const button = document.querySelector('#primary-action');
+  writeText(workspaceRoot, 'ui/app.js', uiSource?.script ?? `const button = document.querySelector('#primary-action');
 const feedback = document.querySelector('#feedback');
 button?.addEventListener('click', () => {
   feedback.textContent = '应用已就绪。接下来可以在 Project 中继续告诉 Coder 你的想法。';

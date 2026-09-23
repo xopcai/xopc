@@ -151,6 +151,7 @@ export interface ToolFactoryDeps {
   getProjectService?: () => ProjectService | undefined;
   getWorkDiscovery?: () => import('../../work-discovery/service.js').WorkDiscoveryService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
+  getChatPreviewService?: () => import('../../chat-previews/index.js').ChatPreviewService | undefined;
   /** Gateway: publishes durable Task change notifications. */
   dispatchTaskEvents?: () => void;
   /** Gateway: queues Task execution for xopc_use task start/resume/verify actions. */
@@ -595,6 +596,7 @@ export class AgentToolsFactory {
         || this.deps.getProjectService
         || this.deps.getNotesService
         || this.deps.getLocalAppService
+        || this.deps.getChatPreviewService
         || this.deps.dispatchTaskEvents
         || this.deps.dispatchTaskRuns
         ? [
@@ -609,6 +611,7 @@ export class AgentToolsFactory {
               getProjectService: this.deps.getProjectService,
               getWorkDiscovery: this.deps.getWorkDiscovery,
               getLocalAppService: this.deps.getLocalAppService,
+              getChatPreviewService: this.deps.getChatPreviewService,
               dispatchTaskEvents: this.deps.dispatchTaskEvents,
               dispatchTaskRuns: this.deps.dispatchTaskRuns,
             }),

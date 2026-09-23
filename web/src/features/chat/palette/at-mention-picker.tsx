@@ -102,7 +102,6 @@ export const AtMentionPicker = memo(function AtMentionPicker({
   sectionLabels,
   ariaLabel,
   onSelectItem,
-  shiftHint,
 }: {
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
@@ -115,8 +114,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
   recentLabel: string;
   sectionLabels: Record<AtMentionItemKind, string>;
   ariaLabel: string;
-  onSelectItem: (item: AtMentionItem, meta?: { shiftKey?: boolean }) => void;
-  shiftHint?: string;
+  onSelectItem: (item: AtMentionItem) => void;
 }) {
   const [layout, dispatchLayout] = useReducer(pickerLayoutReducer, {
     box: null,
@@ -270,7 +268,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
                     onPointerDown={(e) => {
                       if (e.pointerType === 'mouse' && e.button !== 0) return;
                       e.preventDefault();
-                      onSelectItem(item, { shiftKey: e.shiftKey });
+                      onSelectItem(item);
                     }}
                     onPointerEnter={(e) => schedulePreview(item, e.clientX, e.clientY)}
                     onPointerLeave={() => {
@@ -330,7 +328,6 @@ export const AtMentionPicker = memo(function AtMentionPicker({
           </>
         )}
       </div>
-      {shiftHint ? <div className="border-t border-edge-subtle px-3 py-1.5 text-[0.65rem] text-fg-muted">{shiftHint}</div> : null}
       {hoverPreview ? (
         <div
           className="pointer-events-none fixed z-[200] max-h-48 max-w-sm overflow-auto rounded-md border border-edge bg-surface-overlay p-2 font-mono text-[0.7rem] text-fg shadow-lg"

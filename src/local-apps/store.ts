@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
+import type { LocalAppAcceptanceCheck } from '@xopcai/gateway-contract';
+
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/index.js';
 import type {
   LocalApp,
-  LocalAppAcceptanceCheck,
   LocalAppAcceptanceRun,
   LocalAppRelease,
   LocalAppStatus,

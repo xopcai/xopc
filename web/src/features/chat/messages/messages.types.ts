@@ -1,4 +1,4 @@
-import type { AppContextEnvelope, ToolActivity, TurnOutcome } from '@xopcai/gateway-contract';
+import type { AppContextEnvelope, ToolActivity, TurnOutcome, UserTurnDocument } from '@xopcai/gateway-contract';
 
 /** Canonical chat message model for the web UI (gateway chat + embedded agent chat). */
 
@@ -110,6 +110,7 @@ export type MessageAttachment = {
 export type Attachment = MessageAttachment;
 
 export interface MessageContextRef {
+  refId?: string;
   kind: 'note' | 'file' | 'session' | 'browser_tab' | 'mcp_resource';
   sourceId: string;
   version: string;
@@ -138,6 +139,8 @@ export interface Message {
   /** Structured completion result for this run. */
   outcome?: TurnOutcome;
   contextRefs?: MessageContextRef[];
+  /** Authored ordering of explicit @ references within the user message. */
+  userTurnDocument?: UserTurnDocument;
   usage?: {
     inputTokens?: number;
     outputTokens?: number;

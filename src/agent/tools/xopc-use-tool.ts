@@ -10,6 +10,9 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import {
   appendProductDeliveryText,
+  ChatPreviewCreateInputSchema,
+  ChatPreviewReviseInputSchema,
+  PRODUCT_DELIVERY_VERSION,
   AutomationMutationOutputSchema,
   AutomationRunMutationOutputSchema,
   AutomationCancelOutputSchema,
@@ -45,6 +48,7 @@ import {
   type ProjectService,
 } from '../../projects/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
+import type { ChatPreviewService } from '../../chat-previews/index.js';
 import { getDefaultAgentId } from '../../routing/resolve-route.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
 import {
@@ -64,6 +68,7 @@ const XopcUseToolSchema = Type.Object({
     Type.Literal('task'),
     Type.Literal('task_run'),
     Type.Literal('local_app'),
+    Type.Literal('chat_preview'),
     Type.Literal('settings'),
   ]),
   command: Type.String({
@@ -73,7 +78,7 @@ const XopcUseToolSchema = Type.Object({
       'Project milestone writes support idempotencyKey; update_milestone/delete_milestone require original expectedRevision for stable retries, and create_update requires original expectedVersion. TaskRun cancel accepts idempotencyKey and expectedVersion, and does not confirm external execution stopped. ' +
       'Automation diagnostics: get_run/run_events {runId}, metrics {}, product_events {eventType, source?, payloadKey?, payloadValue?, limit?}; payload filters require both key and value. ' +
       'Automation also supports cancel/read {runId, idempotencyKey?} and read_all {projectId?, idempotencyKey?}; omitted projectId means all projects. Cancel acceptance is not confirmation of stopping. ' +
-      'Object command. Scene commands: templates, list, get {id}, mail_accounts, mail_search {accountId, query}, mail_sources, read_notes {id}, preflight/start {templateKey, templateVersion, goal, scope, permissions}, configure {id, expectedRevision, goal, scope, permissions}, transition {id, expectedRevision, status: paused|active|completed|archived}, check {id}, notes {id, expectedRevision, content, validUntil?}, work_item {id, subjectId, accountId, dueAt}, update_work_item {workItemId, expectedRevision, dueAt?, status?}, schedule {id, triggerKey, expectedRevision, schedule}, results {id?}, feedback {presentationId, expectedRevision, rating}, mark_read {presentationId, read}, diagnostics, get_preferences, set_preferences {expectedRevision, ...preferences}. Start and check accept a stable requestId for retries. Scenes prepare read-only suggestions and drafts; never send mail. Only create a scene for work explicitly delegated by the user; inspect existing scenes first. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/rerun/pause/resume/history (rerun takes runId; run/rerun accept idempotencyKey), note list/get/project_summaries/history {noteId}/snapshot {noteId, timestamp}/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, local_app list/get/create/validate, and settings open.',
+      'Object command. Scene commands: templates, list, get {id}, mail_accounts, mail_search {accountId, query}, mail_sources, read_notes {id}, preflight/start {templateKey, templateVersion, goal, scope, permissions}, configure {id, expectedRevision, goal, scope, permissions}, transition {id, expectedRevision, status: paused|active|completed|archived}, check {id}, notes {id, expectedRevision, content, validUntil?}, work_item {id, subjectId, accountId, dueAt}, update_work_item {workItemId, expectedRevision, dueAt?, status?}, schedule {id, triggerKey, expectedRevision, schedule}, results {id?}, feedback {presentationId, expectedRevision, rating}, mark_read {presentationId, read}, diagnostics, get_preferences, set_preferences {expectedRevision, ...preferences}. Start and check accept a stable requestId for retries. Scenes prepare read-only suggestions and drafts; never send mail. Only create a scene for work explicitly delegated by the user; inspect existing scenes first. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/rerun/pause/resume/history (rerun takes runId; run/rerun accept idempotencyKey), note list/get/project_summaries/history {noteId}/snapshot {noteId, timestamp}/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, chat_preview create/revise/get, local_app list/get/create/validate, and settings open.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -81,7 +86,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'context' | 'scene' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'local_app' | 'settings';
+export type XopcUseMode = 'context' | 'scene' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'settings';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -102,6 +107,7 @@ export interface XopcUseToolDeps {
   getProjectService?: () => ProjectService | undefined;
   getWorkDiscovery?: () => import('../../work-discovery/service.js').WorkDiscoveryService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
+  getChatPreviewService?: () => ChatPreviewService | undefined;
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
 }
@@ -209,7 +215,7 @@ function deliveryForXopcResult(
       const reference = deliveryForXopcResult(mode, 'get', { [field]: row }, false)?.primary;
       return reference ? [{ ...reference, capabilities: ['open' as const] }] : [];
     });
-    return { version: 1, operation: 'opened', presentation: { kind: 'table', items,
+    return { version: PRODUCT_DELIVERY_VERSION, operation: 'opened', presentation: { kind: 'table', items,
       truncated: rows.length > 50 || Boolean(resultRecord.nextCursor) || (typeof resultRecord.total === 'number' && resultRecord.total > items.length) } };
   }
   if (mode === 'note' && command === 'preview_edit') {
@@ -226,7 +232,7 @@ function deliveryForXopcResult(
       remaining -= text.length;
       return [{ from: edit.from as number, to: edit.to as number, text }];
     });
-    return { version: 1, operation: 'opened', presentation: { kind: 'diff',
+    return { version: PRODUCT_DELIVERY_VERSION, operation: 'opened', presentation: { kind: 'diff',
       title: String(patch.summary ?? '').slice(0, 2000), edits, truncated } };
   }
 
@@ -327,7 +333,7 @@ function deliveryForXopcResult(
     }
   } else if (mode === 'local_app') {
     source = record(resultRecord.app);
-    const validation = record(resultRecord.validation);
+    const snapshot = record(resultRecord.snapshot);
     const id = deliveryText(source?.id);
     if (id) {
       primary = {
@@ -336,9 +342,24 @@ function deliveryForXopcResult(
         title: deliveryText(source?.name) ?? 'Local app',
         summary: deliverySummary(source?.description, source?.idea),
         status: deliveryText(source?.installationState) ?? deliveryText(source?.status),
-        revision: deliveryText(validation?.sourceHash) ?? deliveryRevision(source?.updatedAt),
+        revision: deliveryText(snapshot?.sourceHash),
         projectId: deliveryText(source?.projectId),
         capabilities: ['open', 'preview', 'edit', 'continue_in_chat', 'fix', 'run'],
+      };
+    }
+  } else if (mode === 'chat_preview') {
+    source = record(resultRecord.preview);
+    const revision = record(resultRecord.revision);
+    const id = deliveryText(source?.id);
+    const sourceHash = deliveryText(revision?.sourceHash) ?? deliveryText(source?.latestRevision);
+    if (id && sourceHash) {
+      primary = {
+        kind: 'chat_preview',
+        id,
+        title: deliveryText(source?.title) ?? 'Preview',
+        status: 'preview_ready',
+        revision: sourceHash,
+        capabilities: ['preview', 'edit', 'continue_in_chat', 'fix'],
       };
     }
   } else if (mode === 'settings') {
@@ -356,8 +377,16 @@ function deliveryForXopcResult(
   }
 
   if (!primary) return undefined;
+  const localAppSnapshotHash = mode === 'local_app'
+    ? deliveryText(record(resultRecord.snapshot)?.sourceHash)
+    : undefined;
+  if (mode === 'local_app' && !localAppSnapshotHash) return undefined;
+  const chatPreviewSourceHash = mode === 'chat_preview'
+    ? deliveryText(record(resultRecord.revision)?.sourceHash) ?? deliveryText(record(resultRecord.preview)?.latestRevision)
+    : undefined;
+  if (mode === 'chat_preview' && !chatPreviewSourceHash) return undefined;
   return {
-    version: 1,
+    version: PRODUCT_DELIVERY_VERSION,
     operation: (mode === 'task' && deliveryText(resultRecord.runId))
       || (mode === 'automation' && (command === 'run' || command === 'rerun'))
       || (mode === 'scene' && command === 'check')
@@ -371,7 +400,20 @@ function deliveryForXopcResult(
         : 'updated',
     primary,
     ...(mode === 'local_app' ? {
-      presentation: { kind: 'inline_app' as const, reference: primary, preferredHeight: 480 },
+      presentation: {
+        kind: 'inline_app' as const,
+        reference: primary,
+        snapshot: { sourceHash: localAppSnapshotHash! },
+        preferredHeight: 480,
+      },
+    } : {}),
+    ...(mode === 'chat_preview' ? {
+      presentation: {
+        kind: 'inline_preview' as const,
+        reference: primary,
+        sourceHash: chatPreviewSourceHash!,
+        preferredHeight: Number(source?.preferredHeight) || 480,
+      },
     } : {}),
   };
 }
@@ -1022,6 +1064,39 @@ async function handleLocalApp(
   return { ok: false, error: `Unsupported local_app command: ${command}` };
 }
 
+async function handleChatPreview(
+  command: string,
+  args: Record<string, unknown>,
+  deps: XopcUseToolDeps,
+  dryRun: boolean,
+): Promise<unknown> {
+  const previews = deps.getChatPreviewService?.();
+  if (!previews) return { ok: false, error: 'Chat preview service is unavailable' };
+  const id = trimString(args.previewId) ?? trimString(args.id);
+
+  if (command === 'create') {
+    const conversationId = deps.getCurrentConversationId?.();
+    if (!conversationId) return { ok: false, error: 'A current conversation is required' };
+    const input = ChatPreviewCreateInputSchema.parse(args);
+    if (dryRun) return { ok: true, dryRun: true, action: 'create_chat_preview', input };
+    return { ok: true, ...previews.create(conversationId, input) };
+  }
+
+  if (!id) return { ok: false, error: 'previewId is required' };
+  if (command === 'get') {
+    const preview = previews.get(id);
+    const revision = previews.getRevision(id, trimString(args.sourceHash) ?? preview.latestRevision);
+    return { ok: true, preview, revision };
+  }
+  if (command === 'revise') {
+    const { previewId: _previewId, id: _id, ...rawInput } = args;
+    const input = ChatPreviewReviseInputSchema.parse(rawInput);
+    if (dryRun) return { ok: true, dryRun: true, action: 'revise_chat_preview', previewId: id, input };
+    return { ok: true, ...previews.revise(id, input) };
+  }
+  return { ok: false, error: `Unsupported chat_preview command: ${command}` };
+}
+
 export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcUseToolSchema, XopcUseDetails> {
   const capabilities = createProductDispatcher(deps.getNotesService, {
     getConfig: deps.getConfig, getProjects: deps.getProjectService,
@@ -1035,7 +1110,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Operate first-class xopc objects through one safe entry point. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for scenes, projects, automations, notes, tasks, TaskRuns, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Operate first-class xopc objects through one safe entry point. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for scenes, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -1117,9 +1192,11 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
         const id = args.localAppId ?? args.id;
         const result = await capabilities.call(`xopc.local_apps.${command}`, command === 'list' ? {} : { id }, caller) as Record<string, unknown>;
         if (command === 'validate') Object.assign(result, await capabilities.call('xopc.local_apps.get', { id }, caller));
-        const deliveryResult = command === 'get'
-          ? { ...result, ...await capabilities.call('xopc.local_apps.validate', { id }, caller) as object }
-          : result;
+        const appId = deliveryText(record(result.app)?.id);
+        const snapshot = appId && command !== 'list'
+          ? deps.getLocalAppService?.()?.materializeSnapshot(appId)
+          : undefined;
+        const deliveryResult = snapshot ? { ...result, snapshot } : result;
         return okText({ ...details, result: { ok: true, ...result }, delivery: deliveryForXopcResult(mode, command, deliveryResult, dryRun) });
       }
       if (mode === 'task' && command === 'metrics') {
@@ -1242,13 +1319,15 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
                     ? await handleTaskRun(command, args, dryRun, deps, capabilities)
                   : mode === 'local_app'
                     ? await handleLocalApp(command, args, deps, dryRun)
+                  : mode === 'chat_preview'
+                    ? await handleChatPreview(command, args, deps, dryRun)
                       : { ok: false, error: `Unsupported mode: ${String(mode)}` },
         );
         const resultRecord = record(result);
         const createdApp = mode === 'local_app' && command === 'create' ? record(resultRecord.app) : undefined;
         const createdAppId = deliveryText(createdApp?.id);
         const deliveryResult = createdAppId
-          ? { ...resultRecord, validation: deps.getLocalAppService?.()?.validate(createdAppId) }
+          ? { ...resultRecord, snapshot: deps.getLocalAppService?.()?.materializeSnapshot(createdAppId) }
           : result;
         return okText({
           ...details,

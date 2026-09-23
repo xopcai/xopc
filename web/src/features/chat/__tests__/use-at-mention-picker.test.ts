@@ -41,12 +41,13 @@ describe('@ mention context references', () => {
       name: 'Launch plan',
       description: 'Plan snapshot',
       noteRef: { sourceId: 'note-1', expectedVersion: '42' },
-    })).toEqual({
+    })).toEqual(expect.objectContaining({
+      refId: expect.any(String),
       kind: 'note',
       sourceId: 'note-1',
       expectedVersion: '42',
       title: 'Launch plan',
-    });
+    }));
   });
 
   it('maps a file item to a frozen composer context reference', () => {
@@ -58,13 +59,14 @@ describe('@ mention context references', () => {
       relativePath: 'README.md',
       isDirectory: false,
       fileRef: { sourceId: 'file-1', expectedVersion: '7' },
-    })).toEqual({
+    })).toEqual(expect.objectContaining({
+      refId: expect.any(String),
       kind: 'file',
       sourceId: 'file-1',
       expectedVersion: '7',
       title: 'README.md',
       fileKind: 'file',
-    });
+    }));
   });
 
   it('turns a selected directory into a frozen context reference', () => {
@@ -76,13 +78,14 @@ describe('@ mention context references', () => {
       relativePath: 'src',
       isDirectory: true,
       fileRef: { sourceId: 'dir-1', expectedVersion: '7' },
-    })).toEqual({
+    })).toEqual(expect.objectContaining({
+      refId: expect.any(String),
       kind: 'file',
       sourceId: 'dir-1',
       expectedVersion: '7',
       title: 'src',
       fileKind: 'directory',
-    });
+    }));
   });
 
   it('keeps the synthetic browse-up row as navigation only', () => {
@@ -102,15 +105,17 @@ describe('@ mention context references', () => {
       id: 'browser-tab:binding-1', kind: 'browser_tab', name: 'Example',
       description: 'https://example.com', url: 'https://example.com',
       tabRef: { sourceId: 'binding-1', expectedVersion: 'doc-1' },
-    })).toEqual({
+    })).toEqual(expect.objectContaining({
+      refId: expect.any(String),
       kind: 'browser_tab', sourceId: 'binding-1', expectedVersion: 'doc-1', title: 'Example',
-    });
+    }));
     expect(contextRefFromAtMentionItem({
       id: 'mcp-resource:resource-1', kind: 'mcp_resource', name: 'Launch brief',
       description: 'docs', serverId: 'docs', uri: 'file:///launch.md',
       resourceRef: { sourceId: 'resource-1', expectedVersion: 'rev-1' },
-    })).toEqual({
+    })).toEqual(expect.objectContaining({
+      refId: expect.any(String),
       kind: 'mcp_resource', sourceId: 'resource-1', expectedVersion: 'rev-1', title: 'Launch brief',
-    });
+    }));
   });
 });

@@ -10,6 +10,7 @@ import {
   AutomationReadAllOutputSchema,
   AutomationDeleteOutputSchema,
   ProductReadContracts,
+  PRODUCT_DELIVERY_VERSION,
   type Automation as AutomationDto,
   type ProductDeliveryEnvelope,
 } from '@xopcai/gateway-contract';
@@ -102,7 +103,7 @@ function automationDelivery(
   operation: 'created' | 'updated' | 'started',
 ): ProductDeliveryEnvelope {
   return {
-    version: 1,
+    version: PRODUCT_DELIVERY_VERSION,
     operation,
     primary: {
       kind: 'automation',

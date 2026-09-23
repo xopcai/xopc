@@ -1,88 +1,26 @@
+import type {
+  LocalAppAcceptanceResult,
+  LocalAppAcceptanceRun,
+  LocalAppDetail,
+  LocalAppFixGuidance,
+  LocalAppFixGuidanceInput,
+  LocalAppPreviewSnapshot,
+  LocalAppRecord,
+  LocalAppValidationResult,
+} from '@xopcai/gateway-contract';
+
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import type {
-  LocalAppAcceptanceCheck,
-  LocalAppAcceptanceResult,
-} from '@/features/local-apps/runtime-health';
 
-export type LocalAppStatus = 'preview_ready' | 'installed' | 'degraded';
-export type LocalAppInstallationState = 'not_installed' | 'installed';
-
-export type LocalAppRelease = {
-  id: string;
-  appId: string;
-  version: number;
-  sourceHash: string;
-  healthStatus: 'healthy' | 'failed';
-  createdAt: number;
-  activatedAt?: number;
-  isActive: boolean;
-};
-
-export type LocalAppAcceptanceRun = {
-  id: string;
-  appId: string;
-  sourceHash: string;
-  status: 'passed' | 'failed';
-  checks: LocalAppAcceptanceCheck[];
-  interactiveCount: number;
-  createdAt: number;
-};
-
-export type LocalApp = {
-  id: string;
-  extensionId: string;
-  projectId: string;
-  name: string;
-  description?: string;
-  idea: string;
-  status: LocalAppStatus;
-  workspaceRoot: string;
-  draftVersion: number;
-  activeVersion?: number;
-  activeReleaseId?: string;
-  installationState: LocalAppInstallationState;
-  enabled: boolean;
-  createdAt: number;
-  updatedAt: number;
-  installedAt?: number;
-};
-
-export type LocalAppDetail = LocalApp & {
-  previewUrl: string;
-  permissions: string[];
-  releases: LocalAppRelease[];
-  acceptanceRuns: LocalAppAcceptanceRun[];
-};
-
-export type LocalAppValidationResult = {
-  status: 'healthy' | 'failed';
-  checkedAt: number;
-  sourceHash?: string;
-  hasDraftChanges: boolean;
-  changedFiles: Array<{ path: string; status: 'added' | 'modified' | 'deleted' }>;
-  changedFileCount: number;
-  permissions: string[];
-  permissionDelta: { added: string[]; removed: string[] };
-  acceptanceScenarioCount: number;
-  acceptanceScenarios: Array<{ id: string; name: string; stepCount: number }>;
-  issues: Array<{ code: string; severity: 'error' | 'warning'; message: string }>;
-};
-
-export type LocalAppDiagnostic = {
-  phase: 'build' | 'boot' | 'runtime' | 'acceptance' | 'runner' | 'capability';
-  message: string;
-  code?: string;
-};
-
-export type LocalAppFixGuidance = {
-  appId: string;
-  sourceHash?: string;
-  owner: 'generated_code' | 'platform' | 'configuration';
-  action: 'fix_code' | 'retry' | 'fix_config';
-  diagnostics: LocalAppDiagnostic[];
-  prompt: string;
-};
+export type {
+  LocalAppAcceptanceRun,
+  LocalAppDetail,
+  LocalAppDiagnostic,
+  LocalAppFixGuidance,
+  LocalAppPreviewSnapshot,
+  LocalAppValidationResult,
+} from '@xopcai/gateway-contract';
+export type LocalApp = LocalAppRecord;
 
 export async function listLocalApps(): Promise<LocalApp[]> {
   return (await fetchJson<{ apps: LocalApp[] }>(apiUrl('/api/local-apps'))).apps;
@@ -99,9 +37,15 @@ export async function validateLocalApp(id: string): Promise<LocalAppValidationRe
   )).validation;
 }
 
+export async function getLocalAppSnapshot(id: string, sourceHash: string): Promise<LocalAppPreviewSnapshot> {
+  return (await fetchJson<{ snapshot: LocalAppPreviewSnapshot }>(
+    apiUrl(`/api/local-apps/${encodeURIComponent(id)}/snapshots/${encodeURIComponent(sourceHash)}`),
+  )).snapshot;
+}
+
 export async function getLocalAppFixGuidance(
   id: string,
-  input: { sourceHash?: string; locale: 'en' | 'zh'; diagnostics: LocalAppDiagnostic[] },
+  input: LocalAppFixGuidanceInput,
 ): Promise<LocalAppFixGuidance> {
   return (await fetchJson<{ guidance: LocalAppFixGuidance }>(
     apiUrl(`/api/local-apps/${encodeURIComponent(id)}/fix-guidance`),

@@ -4,6 +4,7 @@
 // clears the walk so subsequent arrow presses start fresh.
 
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react';
+import { parseUserTurnDocument } from '@xopcai/gateway-contract';
 
 import { getWireCaretOffset } from '@/features/chat/composer/composer-editor-wire';
 import {
@@ -61,7 +62,7 @@ export function useComposerInputHistoryWalk(opts: {
 
   const onUserTextCommitted = useCallback(
     (text: string) => {
-      recordComposerInputHistory(text);
+      if (!parseUserTurnDocument(text)) recordComposerInputHistory(text);
       clearWalk();
     },
     [clearWalk],

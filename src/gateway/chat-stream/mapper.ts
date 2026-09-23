@@ -1,5 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import { parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
+import { isUserTurnDocument, parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
 
 import type { EmbeddedStreamEvent } from '../../agent/embedded/types.js';
 import { createPetFeedback } from './pet-feedback.js';
@@ -503,8 +503,12 @@ function userMessageFromEvent(event: { [key: string]: unknown }, turnId: string)
 }
 
 function userMessageDisplayMetadata(value: unknown): unknown {
-  const rows = asRecord(value)?.sourceContexts;
-  if (!Array.isArray(rows)) return undefined;
+  const metadata = asRecord(value);
+  const rows = metadata?.sourceContexts;
+  const userTurnDocument = isUserTurnDocument(metadata?.userTurnDocument)
+    ? metadata.userTurnDocument
+    : undefined;
+  if (!Array.isArray(rows)) return userTurnDocument ? { userTurnDocument } : undefined;
   const sourceContexts = rows.flatMap((value) => {
     const row = asRecord(value);
     if (
@@ -515,6 +519,7 @@ function userMessageDisplayMetadata(value: unknown): unknown {
       || typeof row.title !== 'string'
     ) return [];
     return [{
+      ...(typeof row.refId === 'string' ? { refId: row.refId } : {}),
       kind: row.kind,
       sourceId: row.sourceId,
       version: row.version,
@@ -526,7 +531,9 @@ function userMessageDisplayMetadata(value: unknown): unknown {
         : {}),
     }];
   });
-  return sourceContexts.length > 0 ? { sourceContexts } : undefined;
+  return sourceContexts.length > 0 || userTurnDocument
+    ? { ...(sourceContexts.length > 0 ? { sourceContexts } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
+    : undefined;
 }
 
 function extractTextFromMessage(message: AgentMessage): string {

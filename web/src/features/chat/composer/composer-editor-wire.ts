@@ -1,14 +1,7 @@
-/** Wire format: `/skill:name`, `@file:path`, `/${slashCommand}`. DOM shows pills. */
+/** Internal editor wire. Context-reference placeholders never reach transcripts or the model. */
 
-import {
-  FILE_COMPOSER_HEAD_RE,
-  FILE_WIRE_TRAILING_EOW_WS_RE,
-  FILE_WIRE_TRAILING_PLAIN_RE,
-  fileWireTokenRe,
-  formatFilePathForWire,
-  pathFromFileWireMatch,
-  wireTextEndsWithCompleteFileToken,
-} from '@/features/chat/palette/file-wire-pattern';
+import { contextRefWireToken, contextRefWireTokenRe } from '@xopcai/gateway-contract';
+
 import {
   collectSlashCommandWireRanges,
   partStartsWithCompleteSlashCommand,
@@ -33,23 +26,34 @@ function isSkillPill(el: HTMLElement): boolean {
   return Boolean(el.dataset.skill);
 }
 
-function isFilePill(el: HTMLElement): boolean {
-  return Boolean(el.dataset.file);
+function isContextRefPill(el: HTMLElement): boolean {
+  return Boolean(el.dataset.contextRefId);
 }
 
 function isSlashCommandPill(el: HTMLElement): boolean {
   return el.dataset.slashCommand != null && el.dataset.slashCommand !== '';
 }
 
-function filePillLabel(relativePath: string): string {
-  const trimmed = relativePath.replace(/\/$/, '');
-  const base = trimmed.split('/').pop() ?? trimmed;
-  return `@${base}`;
+export interface ComposerContextRefPresentation {
+  title: string;
+  kind: 'note' | 'file' | 'session' | 'browser_tab' | 'mcp_resource';
+  fileKind?: 'file' | 'directory';
+}
+
+export type ComposerContextRefResolver = (refId: string) => ComposerContextRefPresentation | undefined;
+const contextRefResolvers = new WeakMap<HTMLElement, ComposerContextRefResolver>();
+
+function wireTextEndsWithContextRefToken(text: string): boolean {
+  const re = contextRefWireTokenRe();
+  let match: RegExpExecArray | null;
+  let end = -1;
+  while ((match = re.exec(text)) !== null) end = match.index + match[0].length;
+  return end === text.length;
 }
 
 /**
  * ZWSP between pill and following text is stripped per-node; without a separator, wire becomes
- * `@file:path析` and parses as one path. Insert a space when gluing would merge a wire token with
+ * an internal token and adjacent text could merge. Insert a space when gluing a token to
  * adjacent non-whitespace (pill → text, text → pill, pill → pill).
  */
 function joinComposerWireParts(parts: string[]): string {
@@ -61,11 +65,11 @@ function joinComposerWireParts(parts: string[]): string {
       const first = part[0];
       if (!/\s/.test(last) && !/\s/.test(first)) {
         const endsWithWire =
-          wireTextEndsWithCompleteFileToken(out) ||
+          wireTextEndsWithContextRefToken(out) ||
           /\/skill:\S+$/.test(out) ||
           wireEndsWithCompleteSlashCommandToken(out);
         const startsWithWire =
-          part.startsWith('@file:') ||
+          part.startsWith('@xopc-ref:') ||
           part.startsWith('/skill:') ||
           partStartsWithCompleteSlashCommand(part);
         if (endsWithWire || startsWithWire) {
@@ -92,9 +96,9 @@ function serializeWalk(node: Node, out: string[]): void {
     if (isSkillPill(el)) {
       const name = el.dataset.skill ?? '';
       if (name) out.push(`/skill:${name}`);
-    } else if (isFilePill(el)) {
-      const filePath = el.dataset.file ?? '';
-      if (filePath) out.push(`@file:${formatFilePathForWire(filePath)}`);
+    } else if (isContextRefPill(el)) {
+      const refId = el.dataset.contextRefId ?? '';
+      if (refId) out.push(contextRefWireToken(refId));
     } else if (isSlashCommandPill(el)) {
       const k = el.dataset.slashCommand ?? '';
       if (k) out.push(`/${k}`);
@@ -199,6 +203,17 @@ export function updateComposerSkillLabels(root: HTMLElement, resolve: SkillLabel
   }
 }
 
+export function updateComposerContextRefLabels(root: HTMLElement, resolve: ComposerContextRefResolver): void {
+  contextRefResolvers.set(root, resolve);
+  for (const pill of root.querySelectorAll<HTMLElement>('[data-context-ref-id]')) {
+    const presentation = resolve(pill.dataset.contextRefId ?? '');
+    pill.textContent = presentation ? `@${presentation.title}` : '@reference';
+    pill.title = presentation?.title ?? '';
+    pill.dataset.refKind = presentation?.kind ?? '';
+    pill.dataset.fileKind = presentation?.fileKind ?? '';
+  }
+}
+
 function appendSkillPill(root: HTMLElement, name: string): void {
   const span = document.createElement('span');
   span.contentEditable = 'false';
@@ -210,12 +225,16 @@ function appendSkillPill(root: HTMLElement, name: string): void {
   root.appendChild(document.createTextNode(ZWSP));
 }
 
-function appendFilePill(root: HTMLElement, relativePath: string): void {
+function appendContextRefPill(root: HTMLElement, refId: string): void {
+  const presentation = contextRefResolvers.get(root)?.(refId);
   const span = document.createElement('span');
   span.contentEditable = 'false';
-  span.dataset.file = relativePath;
-  span.className = 'chat-file-pill';
-  span.textContent = filePillLabel(relativePath);
+  span.dataset.contextRefId = refId;
+  span.dataset.refKind = presentation?.kind ?? '';
+  span.dataset.fileKind = presentation?.fileKind ?? '';
+  span.className = 'chat-context-ref-pill';
+  span.textContent = presentation ? `@${presentation.title}` : '@reference';
+  span.title = presentation?.title ?? '';
   root.appendChild(span);
   root.appendChild(document.createTextNode(ZWSP));
 }
@@ -240,7 +259,7 @@ function collectWireTokenRanges(wire: string): Array<{ start: number; end: numbe
     }
   };
   pushAll(skillWireTokenRe());
-  pushAll(fileWireTokenRe());
+  pushAll(contextRefWireTokenRe());
   for (const r of collectSlashCommandWireRanges(wire)) {
     ranges.push(r);
   }
@@ -273,7 +292,7 @@ export function removeTrailingSkillTokenBeforeCaret(wire: string, caret: number)
     return null;
   };
 
-  const plainMatchers = [SKILL_WIRE_TRAILING_PLAIN_RE, FILE_WIRE_TRAILING_PLAIN_RE];
+  const plainMatchers = [SKILL_WIRE_TRAILING_PLAIN_RE];
   for (const re of plainMatchers) {
     const hit = tryPlain(re);
     if (hit) return hit;
@@ -286,7 +305,7 @@ export function removeTrailingSkillTokenBeforeCaret(wire: string, caret: number)
   }
 
   if (caret === wire.length) {
-    const eowMatchers = [SKILL_WIRE_TRAILING_EOW_WS_RE, FILE_WIRE_TRAILING_EOW_WS_RE];
+    const eowMatchers = [SKILL_WIRE_TRAILING_EOW_WS_RE];
     for (const re of eowMatchers) {
       const m = head.match(re);
       if (m?.[1]) {
@@ -339,7 +358,8 @@ export function handleComposerBackspace(root: HTMLElement): boolean {
 function wireTokenMayStartAt(w: string, j: number): boolean {
   const tail = w.slice(j);
   if (SKILL_HEAD_RE.test(tail)) return true;
-  if (FILE_COMPOSER_HEAD_RE.test(tail)) return true;
+  const refRe = contextRefWireTokenRe();
+  if (refRe.exec(tail)?.index === 0) return true;
   return trySlashCommandTokenAt(w, j) != null;
 }
 
@@ -355,11 +375,12 @@ function consumeNextToken(root: HTMLElement, w: string, i: number): number {
       apply: () => appendSkillPill(root, skillM[1] ?? ''),
     });
   }
-  const fileM = rest.match(FILE_COMPOSER_HEAD_RE);
-  if (fileM?.[0]) {
+  const refRe = contextRefWireTokenRe();
+  const refM = refRe.exec(rest);
+  if (refM?.index === 0 && refM[0]) {
     cands.push({
-      len: fileM[0].length,
-      apply: () => appendFilePill(root, pathFromFileWireMatch(fileM)),
+      len: refM[0].length,
+      apply: () => appendContextRefPill(root, refM[1] ?? ''),
     });
   }
   const cmdHit = trySlashCommandTokenAt(w, i);

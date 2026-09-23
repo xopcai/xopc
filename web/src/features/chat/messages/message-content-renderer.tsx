@@ -9,11 +9,13 @@ import {
   type ReactNode,
 } from 'react';
 import { AlertCircle, Copy, ExternalLink, File, FolderOpen, Loader2, Settings, X } from 'lucide-react';
+import type { UserTurnDocument } from '@xopcai/gateway-contract';
 
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import type { WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
 import type {
   ImageContent,
+  MessageContextRef,
   MessageContent,
   ReviewContent,
 } from '@/features/chat/messages/messages.types';
@@ -404,13 +406,20 @@ function renderTextOrImageBlock(
   projectId?: string | null,
   animateInitialContent?: boolean,
   onProgressiveRenderComplete?: () => void,
+  userTurnDocument?: UserTurnDocument,
+  contextRefs?: MessageContextRef[],
 ) {
   if (block.type === 'text') {
     if (isUser) {
       const displayText = stripUserMessageForDisplay(block.text ?? '');
       return (
         <div key={key} className="min-w-0">
-          <UserMessageSegments text={displayText} conversationId={conversationId} />
+          <UserMessageSegments
+            text={displayText}
+            conversationId={conversationId}
+            document={userTurnDocument}
+            contextRefs={contextRefs}
+          />
         </div>
       );
     }
@@ -490,6 +499,8 @@ export function ChunkedContent({
   projectId,
   progressiveRender = false,
   onProgressiveRenderComplete,
+  userTurnDocument,
+  contextRefs,
 }: {
   content: MessageContent[];
   isUser: boolean;
@@ -501,6 +512,8 @@ export function ChunkedContent({
   projectId?: string | null;
   progressiveRender?: boolean;
   onProgressiveRenderComplete?: () => void;
+  userTurnDocument?: UserTurnDocument;
+  contextRefs?: MessageContextRef[];
 }) {
   const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
   const pendingTextIndex = renderContent.findLastIndex(
@@ -542,6 +555,8 @@ export function ChunkedContent({
         projectId,
         progressiveRender,
         onProgressiveRenderComplete,
+        isUser && i === 0 ? userTurnDocument : undefined,
+        isUser && i === 0 ? contextRefs : undefined,
       );
       if (el) nodes.push(el);
       i++;

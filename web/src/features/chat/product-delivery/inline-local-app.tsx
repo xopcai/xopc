@@ -1,4 +1,4 @@
-import type { ProductReference } from '@xopcai/gateway-contract';
+import { productReferenceOpenRoute, type ProductReference } from '@xopcai/gateway-contract';
 import { AlertTriangle, ExternalLink, RefreshCw, Wrench } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -7,13 +7,12 @@ import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
+import { useInlinePreviewLease } from '@/features/chat/product-delivery/inline-preview-scheduler';
 import {
-  getLocalApp,
   getLocalAppFixGuidance,
+  getLocalAppSnapshot,
   type LocalAppDiagnostic,
-  validateLocalApp,
 } from '@/features/local-apps/api';
-import { localAppOpenRoute } from '@/features/local-apps/open-route';
 import { attachLocalAppPreviewChannel } from '@/features/local-apps/preview-channel';
 import {
   formatLocalAppRuntimeIssue,
@@ -26,24 +25,16 @@ import { apiUrl } from '@/lib/url';
 
 type RuntimeHealth = 'booting' | 'healthy' | 'failed' | 'timeout';
 
-function InlineLocalAppSkeleton({ height }: { height: number }) {
-  return (
-    <section className="mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" aria-label="Loading app preview">
-      <div className="flex items-center justify-between gap-3 border-b border-edge-subtle px-4 py-3">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="h-9 w-24" />
-      </div>
-      <Skeleton className="m-3 w-[calc(100%-1.5rem)]" style={{ height }} />
-    </section>
-  );
-}
-
 export function InlineLocalApp({
+  previewId,
   reference,
+  sourceHash,
   preferredHeight,
   language,
 }: {
+  previewId: string;
   reference: ProductReference;
+  sourceHash: string;
   preferredHeight: number;
   language: 'en' | 'zh';
 }) {
@@ -57,19 +48,16 @@ export function InlineLocalApp({
   const [fixBusy, setFixBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const height = Math.min(720, Math.max(240, preferredHeight));
-  const appQuery = useSWR(['inline-local-app', reference.id], () => getLocalApp(reference.id), {
-    revalidateOnFocus: false,
-    shouldRetryOnError: false,
-  });
-  const validationQuery = useSWR(
-    appQuery.data ? ['inline-local-app-validation', reference.id, previewKey] : null,
-    () => validateLocalApp(reference.id),
+  const lease = useInlinePreviewLease(previewId);
+  const snapshotQuery = useSWR(
+    lease.active ? ['inline-local-app-snapshot', reference.id, sourceHash] : null,
+    () => getLocalAppSnapshot(reference.id, sourceHash),
     { revalidateOnFocus: false, shouldRetryOnError: false },
   );
 
   useEffect(() => {
     const iframe = iframeRef.current;
-    if (!iframe || !appQuery.data) return;
+    if (!iframe || !snapshotQuery.data?.previewUrl) return;
     setRuntimeHealth('booting');
     setRuntimeIssue(null);
     setRuntimeDiagnostics([]);
@@ -124,40 +112,75 @@ export function InlineLocalApp({
       window.clearTimeout(timeout);
       detach();
     };
-  }, [appQuery.data, previewKey]);
+  }, [previewKey, snapshotQuery.data?.previewUrl]);
 
-  if (appQuery.isLoading) return <InlineLocalAppSkeleton height={height} />;
+  const open = () => {
+    const route = productReferenceOpenRoute(reference);
+    if (route) navigate(withDetailReturnTo(route, `${location.pathname}${location.search}`));
+  };
 
-  const app = appQuery.data;
-  if (!app) {
-    const message = appQuery.error instanceof Error ? appQuery.error.message : (language === 'zh' ? '无法加载应用预览' : 'Unable to load app preview');
+  if (!lease.active) {
     return (
-      <section className="mt-3 rounded-2xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger" role="alert">
+      <section ref={lease.containerRef} className="mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" data-inline-local-app={reference.id}>
+        <header className="flex min-w-0 flex-wrap items-center gap-3 border-b border-edge-subtle px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-sm font-semibold text-fg" title={reference.title}>{reference.title}</h3>
+            <p className="mt-0.5 text-xs text-fg-muted">
+              {lease.state === 'queued'
+                ? (language === 'zh' ? '正在等待预览资源' : 'Waiting for a preview slot')
+                : (language === 'zh' ? '预览尚未加载' : 'Preview not loaded')}
+            </p>
+          </div>
+          <Button variant="ghost" className="min-h-9 px-2.5 text-xs" onClick={open}>
+            <ExternalLink className="size-4" />
+            {language === 'zh' ? '打开' : 'Open'}
+          </Button>
+        </header>
+        <div className="grid place-items-center bg-surface-base" style={{ height }}>
+          <Button variant="secondary" onClick={lease.activate}>
+            {language === 'zh' ? '加载交互预览' : 'Load interactive preview'}
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
+  if (snapshotQuery.isLoading) {
+    return (
+      <section ref={lease.containerRef} className="mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" aria-label="Loading app preview">
+        <div className="flex items-center justify-between gap-3 border-b border-edge-subtle px-4 py-3">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-9 w-24" />
+        </div>
+        <Skeleton className="m-3 w-[calc(100%-1.5rem)]" style={{ height }} />
+      </section>
+    );
+  }
+
+  const snapshot = snapshotQuery.data;
+  if (!snapshot) {
+    const cause = snapshotQuery.error;
+    const message = cause instanceof Error ? cause.message : (language === 'zh' ? '无法加载应用预览' : 'Unable to load app preview');
+    return (
+      <section ref={lease.containerRef} className="mt-3 rounded-2xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger" role="alert">
         <div className="flex items-center gap-2"><AlertTriangle className="size-4" />{message}</div>
       </section>
     );
   }
 
-  const staticDiagnostics: LocalAppDiagnostic[] = validationQuery.data?.issues.map((issue) => ({
+  const staticDiagnostics: LocalAppDiagnostic[] = snapshot.validation.issues.map((issue) => ({
     phase: 'build', code: issue.code, message: issue.message,
   })) ?? [];
   const timeoutDiagnostics: LocalAppDiagnostic[] = runtimeHealth === 'timeout'
     ? [{ phase: 'boot', code: 'boot_timeout', message: 'Preview did not report ready within 7 seconds.' }]
     : [];
   const diagnostics = [...staticDiagnostics, ...runtimeDiagnostics, ...timeoutDiagnostics];
-  const validationFailed = validationQuery.data?.status === 'failed';
+  const validationFailed = snapshot.status === 'invalid' || snapshot.validation.status === 'failed';
   const hasFailure = validationFailed || runtimeHealth === 'failed' || runtimeHealth === 'timeout';
-  const revisionChanged = Boolean(
-    reference.revision
-    && validationQuery.data?.sourceHash
-    && reference.revision !== validationQuery.data.sourceHash,
-  );
   const statusLabel = validationFailed
     ? (language === 'zh' ? '校验失败' : 'Validation failed')
     : runtimeHealth === 'healthy'
-      ? revisionChanged
-        ? (language === 'zh' ? '草稿已更新，当前显示最新版本' : 'Draft changed; showing the latest version')
-        : (language === 'zh' ? '运行正常' : 'Running')
+      ? (language === 'zh' ? '运行正常' : 'Running')
       : runtimeHealth === 'booting'
         ? (language === 'zh' ? '正在启动' : 'Starting')
         : runtimeHealth === 'timeout'
@@ -167,7 +190,6 @@ export function InlineLocalApp({
   const retry = () => {
     setActionError(null);
     setPreviewKey((current) => current + 1);
-    void appQuery.mutate();
   };
 
   const askToFix = async () => {
@@ -175,8 +197,8 @@ export function InlineLocalApp({
     setFixBusy(true);
     setActionError(null);
     try {
-      const guidance = await getLocalAppFixGuidance(app.id, {
-        sourceHash: validationQuery.data?.sourceHash,
+      const guidance = await getLocalAppFixGuidance(reference.id, {
+        sourceHash: snapshot.sourceHash,
         locale: language,
         diagnostics,
       });
@@ -188,16 +210,11 @@ export function InlineLocalApp({
     }
   };
 
-  const open = () => {
-    const route = localAppOpenRoute(app);
-    navigate(withDetailReturnTo(route, `${location.pathname}${location.search}`));
-  };
-
   return (
-    <section className="mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" data-inline-local-app={app.id}>
+    <section ref={lease.containerRef} className="mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" data-inline-local-app={reference.id}>
       <header className="flex min-w-0 flex-wrap items-center gap-3 border-b border-edge-subtle px-4 py-3">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold text-fg" title={app.name}>{app.name}</h3>
+          <h3 className="truncate text-sm font-semibold text-fg" title={reference.title}>{reference.title}</h3>
           <p className={cn('mt-0.5 text-xs', hasFailure ? 'text-danger' : 'text-fg-muted')} aria-live="polite">
             {statusLabel}
           </p>
@@ -212,15 +229,17 @@ export function InlineLocalApp({
         </Button>
       </header>
       <div className="relative bg-surface-base" style={{ height }}>
-        <iframe
-          key={previewKey}
-          ref={iframeRef}
-          title={language === 'zh' ? `${app.name} 交互预览` : `${app.name} interactive preview`}
-          src={apiUrl(app.previewUrl)}
-          sandbox="allow-scripts allow-forms"
-          className="h-full w-full border-0 bg-white"
-        />
-        {runtimeHealth === 'booting' ? (
+        {snapshot.previewUrl ? (
+          <iframe
+            key={previewKey}
+            ref={iframeRef}
+            title={language === 'zh' ? `${reference.title} 交互预览` : `${reference.title} interactive preview`}
+            src={apiUrl(snapshot.previewUrl)}
+            sandbox="allow-scripts allow-forms"
+            className="h-full w-full border-0 bg-white"
+          />
+        ) : null}
+        {snapshot.previewUrl && runtimeHealth === 'booting' ? (
           <div className="pointer-events-none absolute inset-0 grid place-items-center bg-surface-base/75">
             <Skeleton className="h-10 w-40" />
           </div>

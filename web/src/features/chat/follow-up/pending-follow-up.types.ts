@@ -52,6 +52,7 @@ export function projectPendingFollowUps(inputs: readonly unknown[]): PendingFoll
             || typeof ref.title !== 'string'
           ) return [];
           return [{
+            ...(typeof ref.refId === 'string' ? { refId: ref.refId } : {}),
             kind: ref.kind,
             sourceId: ref.sourceId,
             expectedVersion: ref.version,

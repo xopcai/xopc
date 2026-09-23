@@ -27,7 +27,18 @@ export function productDeliveryInlineApps(deliveries: ProductDeliveryEntry[]) {
       : []
   ));
   return [...new Map(inlineApps.map((item) => (
-    [`${item.presentation.reference.kind}:${item.presentation.reference.id}`, item] as const
+    [`${item.presentation.reference.id}:${item.presentation.snapshot.sourceHash}`, item] as const
+  ))).values()];
+}
+
+export function productDeliveryInlinePreviews(deliveries: ProductDeliveryEntry[]) {
+  const previews = deliveries.flatMap(({ key, delivery }) => (
+    delivery.presentation?.kind === 'inline_preview'
+      ? [{ key, delivery, presentation: delivery.presentation }]
+      : []
+  ));
+  return [...new Map(previews.map((item) => (
+    [`${item.presentation.reference.id}:${item.presentation.sourceHash}`, item] as const
   ))).values()];
 }
 

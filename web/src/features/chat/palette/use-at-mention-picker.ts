@@ -113,6 +113,7 @@ export function useAtMentionPicker(
     slashPaletteOpen: boolean;
     isComposing?: boolean;
     selectedContextKeys?: ReadonlySet<string>;
+    prepareSession?: () => Promise<string | null>;
     /** When provided, skips internal `detectAtRange` computation. */
     precomputedAtRange?: AtRange | null;
   },
@@ -138,8 +139,17 @@ export function useAtMentionPicker(
 
   useEffect(() => {
     const generation = ++requestGeneration.current;
-    if (!pickerActive || !conversationId) {
+    if (!pickerActive) {
       setProviderState(emptyProviderState(false));
+      return;
+    }
+    if (!conversationId) {
+      setProviderState(emptyProviderState(Boolean(options.prepareSession)));
+      if (options.prepareSession) {
+        void options.prepareSession().catch(() => {
+          if (requestGeneration.current === generation) setProviderState(emptyProviderState(false));
+        });
+      }
       return;
     }
 
@@ -239,6 +249,7 @@ export function useAtMentionPicker(
     debouncedQuery,
     language,
     options.currentAgentId,
+    options.prepareSession,
     selectedContextKeysKey,
   ]);
 

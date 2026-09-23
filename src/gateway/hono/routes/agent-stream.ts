@@ -1,4 +1,5 @@
 import type { Hono } from 'hono';
+import { parseUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
 
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
@@ -52,6 +53,13 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
       ? undefined
       : parseTurnContextRefs(body.contextRefs);
     if (contextRefs === null) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid source context references' } }, 400);
+    if (typeof body.content === 'string') {
+      const document = parseUserTurnDocument(body.content);
+      const refIds = new Set((contextRefs ?? []).flatMap(ref => ref.refId ? [ref.refId] : []));
+      if (document && !userTurnDocumentRefIds(document).every(refId => refIds.has(refId))) {
+        return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Input contains an unknown context reference' } }, 400);
+      }
+    }
     if (body.content !== undefined) {
       const contentError = validateWebchatContent(body.content);
       if (contentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: contentError } }, 400);

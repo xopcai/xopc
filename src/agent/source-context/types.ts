@@ -15,12 +15,14 @@ export interface SessionSourceBinding {
 }
 
 export interface TurnContextRef {
+  refId?: string;
   kind: 'note' | 'task' | 'file' | 'session' | 'browser_tab' | 'mcp_resource';
   sourceId: string;
   expectedVersion?: string;
 }
 
 export interface SourceContextRefSummary {
+  refId?: string;
   kind: AgentSourceContext['kind'];
   sourceId: string;
   version: string;
@@ -34,6 +36,7 @@ export interface SourceContextRefSummary {
 }
 
 export interface AgentSourceContext {
+  refId?: string;
   kind: SessionSourceBinding['kind'] | 'task' | 'file' | 'session' | 'mcp_resource' | 'browser_tab' | 'browser_page' | 'app_context';
   sourceId: string;
   version: string;
@@ -52,6 +55,7 @@ export interface AgentSourceContext {
 
 export function summarizeSourceContext(context: AgentSourceContext): SourceContextRefSummary {
   return {
+    refId: context.refId,
     kind: context.kind,
     sourceId: context.sourceId,
     version: context.version,
@@ -72,17 +76,23 @@ export function isTurnContextRef(value: unknown): value is TurnContextRef {
     || row.kind === 'browser_tab' || row.kind === 'mcp_resource')
     && typeof row.sourceId === 'string'
     && row.sourceId.trim().length > 0
+    && (row.refId === undefined || typeof row.refId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(row.refId))
     && (row.expectedVersion === undefined || typeof row.expectedVersion === 'string');
 }
 
 export function parseTurnContextRefs(value: unknown, max = 5): TurnContextRef[] | null {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > max || !value.every(isTurnContextRef)) return null;
-  return value.map((ref) => ({
+  const refs = value.map((ref) => ({
+    ...(ref.refId ? { refId: ref.refId } : {}),
     kind: ref.kind,
     sourceId: ref.sourceId.trim(),
     ...(ref.expectedVersion ? { expectedVersion: ref.expectedVersion } : {}),
   }));
+  const refIds = refs.flatMap(ref => ref.refId ? [ref.refId] : []);
+  const sources = refs.map(ref => `${ref.kind}:${ref.sourceId}`);
+  if (new Set(refIds).size !== refIds.length || new Set(sources).size !== sources.length) return null;
+  return refs;
 }
 
 export type AgentSourceContextResolver = (

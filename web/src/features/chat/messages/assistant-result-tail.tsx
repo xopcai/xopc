@@ -22,12 +22,14 @@ import type { MessageAttachment } from '@/features/chat/messages/messages.types'
 import {
   productDeliveryDiffPresentations,
   productDeliveryInlineApps,
+  productDeliveryInlinePreviews,
   productDeliveryQueryState,
   productDeliveryReferences,
 } from '@/features/chat/product-delivery/product-delivery-model';
 import { ProductDeliveryRows } from '@/features/chat/product-delivery/product-delivery-tail';
 import { ProductDeliveryDiffPreview } from '@/features/chat/product-delivery/product-delivery-diff-preview';
 import { InlineLocalApp } from '@/features/chat/product-delivery/inline-local-app';
+import { InlineChatPreview } from '@/features/chat/product-delivery/inline-chat-preview';
 import { TurnTail } from '@/features/chat/product-delivery/turn-tail';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -291,6 +293,7 @@ export function AssistantResultTail({
   const preview = useAttachmentPreview({ layout: 'assistant', conversationId, projectId });
   const diffPresentations = productDeliveryDiffPresentations(view.deliveries);
   const inlineApps = productDeliveryInlineApps(view.deliveries);
+  const inlinePreviews = productDeliveryInlinePreviews(view.deliveries);
   const queryState = productDeliveryQueryState(view.deliveries);
   const supersededFileReferences = outcomeFileReferenceKeys(view.outcome);
   const productCount = productDeliveryReferences(view.deliveries, supersededFileReferences).length;
@@ -300,7 +303,7 @@ export function AssistantResultTail({
   ];
   const hasTail = productCount > 0 || attachments.length > 0;
 
-  if (diffPresentations.length === 0 && inlineApps.length === 0 && !hasTail) return null;
+  if (diffPresentations.length === 0 && inlineApps.length === 0 && inlinePreviews.length === 0 && !hasTail) return null;
 
   return (
     <>
@@ -310,7 +313,19 @@ export function AssistantResultTail({
       {inlineApps.map(({ key, presentation }) => (
         <InlineLocalApp
           key={key}
+          previewId={`${key}:${presentation.reference.id}:${presentation.snapshot.sourceHash}`}
           reference={presentation.reference}
+          sourceHash={presentation.snapshot.sourceHash}
+          preferredHeight={presentation.preferredHeight}
+          language={language}
+        />
+      ))}
+      {inlinePreviews.map(({ key, presentation }) => (
+        <InlineChatPreview
+          key={key}
+          leaseId={`${key}:${presentation.reference.id}:${presentation.sourceHash}`}
+          reference={presentation.reference}
+          sourceHash={presentation.sourceHash}
           preferredHeight={presentation.preferredHeight}
           language={language}
         />

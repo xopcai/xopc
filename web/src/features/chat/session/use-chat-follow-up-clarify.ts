@@ -264,7 +264,7 @@ export function useChatFollowUpClarify(options: {
       contextRefs?: ComposerContextRef[],
     ) => {
       const trimmed = content.trim();
-      if (!trimmed && !attachments?.length) return;
+      if (!trimmed && !attachments?.length && !contextRefs?.length) return;
       if (pendingFollowUpsRef.current.length >= MAX_PENDING_FOLLOW_UPS) {
         throw new Error(`At most ${MAX_PENDING_FOLLOW_UPS} pending messages are allowed`);
       }
@@ -279,7 +279,7 @@ export function useChatFollowUpClarify(options: {
           configVersion: useChatSessionStore.getState().sessions[key]?.configVersion,
           clientMessageId: crypto.randomUUID(), delivery: 'next', content: trimmed || content,
           attachments: attachments?.length ? attachments : undefined, thinking: effectiveThinking,
-          contextRefs: contextRefs?.map(({ kind, sourceId, expectedVersion }) => ({ kind, sourceId, expectedVersion })),
+          contextRefs: contextRefs?.map(({ refId, kind, sourceId, expectedVersion }) => ({ refId, kind, sourceId, expectedVersion })),
         origin,
         }),
       });
@@ -320,7 +320,7 @@ export function useChatFollowUpClarify(options: {
         setEditingFollowUpId(null);
         return;
       }
-      if (!trimmed && !attachments?.length) {
+      if (!trimmed && !attachments?.length && !contextRefs?.length) {
         const key = conversationIdRef.current;
         if (key) void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}?version=${prev[i].version}`), { method: 'DELETE' })
           .then(async (res) => applyState((await res.json().catch(() => null) as { payload?: unknown } | null)?.payload))
@@ -336,7 +336,7 @@ export function useChatFollowUpClarify(options: {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ version: prev[i].version, content: trimmed || content,
           attachments: attachments?.length ? attachments : undefined, thinking: effThinking,
-          contextRefs: (contextRefs ?? []).map(({ kind, sourceId, expectedVersion }) => ({ kind, sourceId, expectedVersion })),
+          contextRefs: (contextRefs ?? []).map(({ refId, kind, sourceId, expectedVersion }) => ({ refId, kind, sourceId, expectedVersion })),
         }),
       }).then(async (res) => {
         const json = await res.json().catch(() => null) as { payload?: unknown } | null;
