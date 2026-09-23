@@ -102,6 +102,29 @@ export interface LocalAppValidationResult {
   issues: LocalAppValidationIssue[];
 }
 
+export type LocalAppDiagnosticPhase = 'build' | 'boot' | 'runtime' | 'acceptance' | 'runner' | 'capability';
+
+export interface LocalAppDiagnostic {
+  phase: LocalAppDiagnosticPhase;
+  message: string;
+  code?: string;
+}
+
+export interface LocalAppFixGuidanceInput {
+  sourceHash?: string;
+  locale?: 'en' | 'zh';
+  diagnostics: LocalAppDiagnostic[];
+}
+
+export interface LocalAppFixGuidance {
+  appId: string;
+  sourceHash?: string;
+  owner: 'generated_code' | 'platform' | 'configuration';
+  action: 'fix_code' | 'retry' | 'fix_config';
+  diagnostics: LocalAppDiagnostic[];
+  prompt: string;
+}
+
 export interface CreateLocalAppInput {
   name: string;
   idea: string;

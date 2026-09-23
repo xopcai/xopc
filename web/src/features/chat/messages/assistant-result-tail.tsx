@@ -21,11 +21,13 @@ import { useAttachmentPreview } from '@/features/chat/attachments/use-attachment
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import {
   productDeliveryDiffPresentations,
+  productDeliveryInlineApps,
   productDeliveryQueryState,
   productDeliveryReferences,
 } from '@/features/chat/product-delivery/product-delivery-model';
 import { ProductDeliveryRows } from '@/features/chat/product-delivery/product-delivery-tail';
 import { ProductDeliveryDiffPreview } from '@/features/chat/product-delivery/product-delivery-diff-preview';
+import { InlineLocalApp } from '@/features/chat/product-delivery/inline-local-app';
 import { TurnTail } from '@/features/chat/product-delivery/turn-tail';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -262,6 +264,17 @@ function standaloneAttachments(
   }));
 }
 
+function outcomeFileReferenceKeys(outcome: TurnOutcome | undefined): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const deliverable of outcome?.deliverables ?? []) {
+    for (const id of [deliverable.artifactId, deliverable.sourceFileId, deliverable.workspaceRelativePath]) {
+      const value = id?.trim();
+      if (value) keys.add(`file:${value}`);
+    }
+  }
+  return keys;
+}
+
 export function AssistantResultTail({
   view,
   authToken,
@@ -277,25 +290,39 @@ export function AssistantResultTail({
   const language = localeLanguage === 'zh' ? 'zh' : 'en';
   const preview = useAttachmentPreview({ layout: 'assistant', conversationId, projectId });
   const diffPresentations = productDeliveryDiffPresentations(view.deliveries);
+  const inlineApps = productDeliveryInlineApps(view.deliveries);
   const queryState = productDeliveryQueryState(view.deliveries);
-  const productCount = productDeliveryReferences(view.deliveries).length;
+  const supersededFileReferences = outcomeFileReferenceKeys(view.outcome);
+  const productCount = productDeliveryReferences(view.deliveries, supersededFileReferences).length;
   const attachments = [
     ...outcomeAttachments(view.outcome, language),
     ...standaloneAttachments(view.attachments, language),
   ];
   const hasTail = productCount > 0 || attachments.length > 0;
 
-  if (diffPresentations.length === 0 && !hasTail) return null;
+  if (diffPresentations.length === 0 && inlineApps.length === 0 && !hasTail) return null;
 
   return (
     <>
       {diffPresentations.map(({ key, presentation }) => (
         <ProductDeliveryDiffPreview key={key} presentation={presentation} />
       ))}
+      {inlineApps.map(({ key, presentation }) => (
+        <InlineLocalApp
+          key={key}
+          reference={presentation.reference}
+          preferredHeight={presentation.preferredHeight}
+          language={language}
+        />
+      ))}
       {hasTail ? (
         <TurnTail label={language === 'zh' ? '本轮交付结果' : 'Turn deliverables'}>
           <ul className="m-0 list-none divide-y divide-edge-subtle p-0">
-            <ProductDeliveryRows deliveries={view.deliveries} language={language} />
+            <ProductDeliveryRows
+              deliveries={view.deliveries}
+              language={language}
+              excludedReferenceKeys={supersededFileReferences}
+            />
             {attachments.length > 1 ? (
               <ResultAttachmentGroup
                 attachments={attachments}

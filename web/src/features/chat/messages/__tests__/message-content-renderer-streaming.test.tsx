@@ -199,13 +199,23 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent).toContain('Permission denied');
   });
 
-  it('keeps file delivery cards visible when normal activity is hidden', () => {
-    render([], false, false, {
-      items: [{ type: 'tool_use', id: 'w', name: 'write_file', status: 'done', input: { path: 'proposal.md', content: 'Proposal' } }],
-      active: false, status: 'completed', expandedByDefault: false, compact: true,
-    });
-    expect(container.textContent).toContain('proposal.md');
-    expect(container.querySelector('button[aria-expanded]')).toBeNull();
+  it('keeps completed file paths hidden until the work log is explicitly expanded', () => {
+    const tool = {
+      type: 'tool_use', id: 'w', name: 'write_file', status: 'done',
+      input: { path: '/Users/example/.xopc/workspace/main/proposal.md', content: 'Proposal' },
+    } as const;
+    const workLog: AssistantTurnWorkLogPresentation = {
+      items: [tool], active: false, status: 'completed', expandedByDefault: false, compact: false,
+    };
+
+    render([], false, false, workLog);
+
+    expect(container.textContent).not.toContain('/Users/example');
+    const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
+    expect(disclosure).not.toBeNull();
+
+    act(() => disclosure?.click());
+    expect(container.textContent).toContain('/Users/example/.xopc/workspace/main/proposal.md');
   });
 
   it('opens Sidechat workspace links against the parent conversation', () => {

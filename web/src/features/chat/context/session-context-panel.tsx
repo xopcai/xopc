@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover';
-import { FileText, FolderKanban, GitBranch, ListTodo, Monitor, RefreshCw, Target } from 'lucide-react';
+import { Check, Copy, FileText, FolderKanban, GitBranch, ListTodo, Monitor, RefreshCw, Target } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { withDetailReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -32,6 +33,7 @@ const actionClass = 'rounded-lg p-2 text-xs text-fg-muted transition-colors hove
 /** Mounted with the session key by the header, so another session never inherits an open panel. */
 export function SessionContextPanel({ conversationId, draftRefs = [], project, ...props }: SessionContextPanelProps) {
   const [open, setOpen] = useState(false);
+  const [environmentPathCopied, setEnvironmentPathCopied] = useState(false);
   const language = useLocaleStore((state) => state.language);
   const copy = sessionContextCopy(language);
   const location = useLocation();
@@ -46,6 +48,14 @@ export function SessionContextPanel({ conversationId, draftRefs = [], project, .
     environment?.kind === 'managed_worktree' ? 'Worktree' : null].filter(Boolean).join(' · ') || copy.title;
   const close = () => setOpen(false);
   const sourceNoteAvailable = sources.some((source) => !source.unavailable && source.origins.some((origin) => origin.kind === 'session'));
+  const copyEnvironmentPath = () => {
+    if (!environment?.rootPath) return;
+    void copyTextToClipboard(environment.rootPath).then((ok) => {
+      if (!ok) return;
+      setEnvironmentPathCopied(true);
+      window.setTimeout(() => setEnvironmentPathCopied(false), 1200);
+    });
+  };
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -75,7 +85,18 @@ export function SessionContextPanel({ conversationId, draftRefs = [], project, .
                       <Monitor className="mt-0.5 size-4 shrink-0 text-fg" strokeWidth={1.75} aria-hidden />
                       <div className="min-w-0">
                         <p className="text-sm text-fg">{environment.kind === 'managed_worktree' ? copy.worktree : copy.local}</p>
-                        <p className="mt-1 break-all text-xs leading-5 text-fg-muted">{environment.rootPath}</p>
+                        <div className="mt-1 flex min-w-0 items-start gap-1">
+                          <p className="min-w-0 flex-1 break-all text-xs leading-5 text-fg-muted">{environment.rootPath}</p>
+                          <button
+                            type="button"
+                            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                            aria-label={environmentPathCopied ? copy.copied : copy.copyEnvironmentPath}
+                            title={environmentPathCopied ? copy.copied : copy.copyEnvironmentPath}
+                            onClick={copyEnvironmentPath}
+                          >
+                            {environmentPathCopied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
+                          </button>
+                        </div>
                         {!environment.available ? <p className="mt-2 text-xs text-fg-muted">{copy.unavailableEnvironment}</p> : null}
                       </div>
                     </div>

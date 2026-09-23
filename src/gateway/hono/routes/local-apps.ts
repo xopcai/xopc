@@ -15,6 +15,7 @@ import {
 } from '../../../local-apps/preview-runtime-bridge.js';
 import { readLocalAppAcceptanceConfig } from '../../../local-apps/acceptance.js';
 import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
+import { parseLocalAppFixGuidanceInput } from '../../../local-apps/fix-guidance.js';
 
 const LOCAL_APP_PREVIEW_CSP =
   "default-src 'self'; " +
@@ -101,6 +102,21 @@ export function registerLocalAppsRoutes(app: Hono, deps: AuthenticatedRouteDeps)
   app.post('/api/local-apps/:id/validate', async (c) => {
     try { return c.json(await capabilities.call('xopc.local_apps.validate', { id: c.req.param('id') }, capabilityHttpContext(c))); }
     catch (error) { return capabilityHttpError(c, error); }
+  });
+
+  app.post('/api/local-apps/:id/fix-guidance', async (c) => {
+    try {
+      const body = await c.req.json().catch(() => {
+        throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body');
+      });
+      const guidance = deps.service.localApps.getFixGuidance(
+        c.req.param('id'),
+        parseLocalAppFixGuidanceInput(body),
+      );
+      return c.json({ guidance });
+    } catch (error) {
+      return capabilityHttpError(c, error);
+    }
   });
 
   app.post('/api/local-apps/:id/acceptance-runs', async (c) => {

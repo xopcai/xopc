@@ -268,6 +268,42 @@ describe('AssistantResultTail product deliveries', () => {
     expect(fileGroup?.open).toBe(true);
   });
 
+  it('shows outcome attachments once when they supersede matching file deliveries', () => {
+    const files: ProductDeliveryEnvelope[] = [
+      { version: 1, operation: 'updated', primary: { kind: 'file', id: 'file-one', title: 'index.html', capabilities: ['preview'] } },
+      { version: 1, operation: 'updated', primary: { kind: 'file', id: 'file-two', title: 'app.js', capabilities: ['preview'] } },
+    ];
+    const view: AssistantTurnViewModel = {
+      answerContent: [],
+      workLog: { items: [], active: false, status: 'completed', expandedByDefault: false, compact: false },
+      answer: { started: true, showStreamingCursor: false },
+      lifecycle: { state: 'completed' },
+      deliveries: files.map((delivery, index) => ({ key: `file-${index}`, delivery })),
+      outcome: {
+        version: 1,
+        outcomeId: 'outcome-1',
+        runId: 'run-1',
+        turnId: 'turn-1',
+        status: 'succeeded',
+        deliverables: [
+          { artifactId: 'snapshot-one', sourceFileId: 'file-one', title: 'index.html', kind: 'site', availability: 'available', location: 'workspace', capabilities: ['preview'], uri: 'xopc-file:file-one' },
+          { artifactId: 'file-two', title: 'app.js', kind: 'file', availability: 'available', location: 'workspace', capabilities: ['preview'], uri: 'xopc-file:file-two' },
+        ],
+        evidence: [],
+        createdAt: '2026-09-23T00:00:00Z',
+      },
+      sources: [],
+    };
+
+    act(() => root.render(<MemoryRouter><AssistantResultTail view={view} /></MemoryRouter>));
+
+    expect(container.querySelectorAll('[data-product-file-group]')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-result-attachment-group]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-result-attachment]')).toHaveLength(2);
+    expect(container.querySelectorAll('summary')).toHaveLength(1);
+    expect(container.querySelector('summary')?.textContent).toContain('2 个文件');
+  });
+
   it('combines product objects, outcome artifacts, and generated files in one tail', () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 1,
