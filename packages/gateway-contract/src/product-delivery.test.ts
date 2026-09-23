@@ -33,6 +33,15 @@ describe('product delivery contract', () => {
     expect(parseProductDeliveryEnvelope({ version: 1, operation: 'opened', presentation: {
       kind: 'diff', title: 'Proposal', truncated: false, edits: [{ from: 0, to: 1, text: 'x'.repeat(16001) }],
     } })).toBeNull();
+    const inline = parseProductDeliveryEnvelope({ version: 1, operation: 'opened', presentation: {
+      kind: 'inline_app', preferredHeight: 520,
+      reference: { kind: 'local_app', id: 'app-1', title: 'Dashboard', capabilities: ['open', 'fix'] },
+    } });
+    expect(inline?.presentation).toMatchObject({ kind: 'inline_app', preferredHeight: 520 });
+    expect(parseProductDeliveryEnvelope({ version: 1, operation: 'opened', presentation: {
+      kind: 'inline_app', preferredHeight: 520,
+      reference: { kind: 'note', id: 'note-1', title: 'No', capabilities: [] },
+    } })).toBeNull();
   });
   it('accepts session keys without changing canonical id links or other kinds', () => {
     const key = 'agent:coder:webchat:default:direct:chat_801605448ec548c9b90d1c4eb5024727';

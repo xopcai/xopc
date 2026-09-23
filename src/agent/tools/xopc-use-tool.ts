@@ -327,6 +327,7 @@ function deliveryForXopcResult(
     }
   } else if (mode === 'local_app') {
     source = record(resultRecord.app);
+    const validation = record(resultRecord.validation);
     const id = deliveryText(source?.id);
     if (id) {
       primary = {
@@ -335,9 +336,9 @@ function deliveryForXopcResult(
         title: deliveryText(source?.name) ?? 'Local app',
         summary: deliverySummary(source?.description, source?.idea),
         status: deliveryText(source?.installationState) ?? deliveryText(source?.status),
-        revision: deliveryRevision(source?.updatedAt),
+        revision: deliveryText(validation?.sourceHash) ?? deliveryRevision(source?.updatedAt),
         projectId: deliveryText(source?.projectId),
-        capabilities: ['open', 'preview', 'edit', 'continue_in_chat', 'run'],
+        capabilities: ['open', 'preview', 'edit', 'continue_in_chat', 'fix', 'run'],
       };
     }
   } else if (mode === 'settings') {
@@ -369,6 +370,9 @@ function deliveryForXopcResult(
           ? 'completed'
         : 'updated',
     primary,
+    ...(mode === 'local_app' ? {
+      presentation: { kind: 'inline_app' as const, reference: primary, preferredHeight: 480 },
+    } : {}),
   };
 }
 
@@ -1110,9 +1114,13 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
       if (mode === 'local_app' && (command === 'get' || command === 'list' || command === 'validate')) {
         const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
           surface: 'agent', scopes: ['gateway.admin'], authorize: deps.authorizeCapability ?? (() => true), signal };
-        const result = await capabilities.call(`xopc.local_apps.${command}`, command === 'list' ? {} : { id: args.localAppId ?? args.id }, caller) as Record<string, unknown>;
-        if (command === 'validate') Object.assign(result, await capabilities.call('xopc.local_apps.get', { id: args.localAppId ?? args.id }, caller));
-        return okText({ ...details, result: { ok: true, ...result }, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+        const id = args.localAppId ?? args.id;
+        const result = await capabilities.call(`xopc.local_apps.${command}`, command === 'list' ? {} : { id }, caller) as Record<string, unknown>;
+        if (command === 'validate') Object.assign(result, await capabilities.call('xopc.local_apps.get', { id }, caller));
+        const deliveryResult = command === 'get'
+          ? { ...result, ...await capabilities.call('xopc.local_apps.validate', { id }, caller) as object }
+          : result;
+        return okText({ ...details, result: { ok: true, ...result }, delivery: deliveryForXopcResult(mode, command, deliveryResult, dryRun) });
       }
       if (mode === 'task' && command === 'metrics') {
         const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
@@ -1236,10 +1244,16 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
                     ? await handleLocalApp(command, args, deps, dryRun)
                       : { ok: false, error: `Unsupported mode: ${String(mode)}` },
         );
+        const resultRecord = record(result);
+        const createdApp = mode === 'local_app' && command === 'create' ? record(resultRecord.app) : undefined;
+        const createdAppId = deliveryText(createdApp?.id);
+        const deliveryResult = createdAppId
+          ? { ...resultRecord, validation: deps.getLocalAppService?.()?.validate(createdAppId) }
+          : result;
         return okText({
           ...details,
           result,
-          delivery: deliveryForXopcResult(mode, command, result, dryRun),
+          delivery: deliveryForXopcResult(mode, command, deliveryResult, dryRun),
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

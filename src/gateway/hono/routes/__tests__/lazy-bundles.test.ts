@@ -23,8 +23,10 @@ describe('lazy route bundles', () => {
       expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
     }
   });
-  it('does not intercept eagerly registered local app acceptance routes', () => {
-    expect(findAuthenticatedLazyRouteBundle('/api/local-apps/app/acceptance-runs')).toBeUndefined();
+  it('does not intercept eagerly registered local app workflow routes', () => {
+    for (const path of ['/api/local-apps/app/acceptance-runs', '/api/local-apps/app/fix-guidance']) {
+      expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
+    }
     expect(findAuthenticatedLazyRouteBundle('/api/local-apps-other/app/acceptance-runs')).toBeUndefined();
   });
   it('does not intercept eagerly registered project pin adapters', () => {

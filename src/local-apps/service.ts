@@ -15,6 +15,7 @@ import { basename, join, relative, resolve, sep } from 'node:path';
 import { ExtensionCapabilityBindingsSchema, extensionCapabilityPermissions } from '@xopcai/gateway-contract';
 import { CapabilityError } from '../capabilities/runtime/errors.js';
 import { validateLocalAppCapabilityContracts } from './capabilities/contracts.js';
+import { buildLocalAppFixGuidance } from './fix-guidance.js';
 
 import { resolveExtensionsDir, resolveStateDir } from '../config/paths.js';
 import type { Config } from '../config/schema.js';
@@ -39,6 +40,8 @@ import type {
   LocalApp,
   LocalAppAcceptanceRun,
   LocalAppDetail,
+  LocalAppFixGuidance,
+  LocalAppFixGuidanceInput,
   LocalAppPreviewTarget,
   LocalAppValidationResult,
   LocalAppUiGrant,
@@ -488,6 +491,12 @@ export class LocalAppService {
       acceptanceScenarios,
       issues,
     };
+  }
+
+  getFixGuidance(id: string, input: LocalAppFixGuidanceInput): LocalAppFixGuidance {
+    const app = this.store.get(id);
+    if (!app) throw new CapabilityError('NOT_FOUND', 'Local app not found');
+    return buildLocalAppFixGuidance(app, this.validate(id), input);
   }
 
   recordAcceptance(id: string, input: RecordLocalAppAcceptanceInput): LocalAppAcceptanceRun {

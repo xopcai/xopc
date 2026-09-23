@@ -649,7 +649,6 @@ function StepRow({
 
   if (surfaceOnly) {
     return <>
-      {!isStreaming && !isError && (kind === 'writeFile' || kind === 'editFile') ? card : null}
       {!isStreaming && !isError ? <ToolUseWidgetSlot toolName={block.name} toolResult={block.result} /> : null}
       {!isStreaming && browserApproval ? <BrowserApprovalCard key={browserApproval.id} approval={browserApproval} conversationId={conversationId} /> : null}
     </>;
@@ -666,7 +665,7 @@ function StepRow({
             {title}
           </span>
         </div>
-        {(kind !== 'writeFile' && kind !== 'editFile') || isStreaming || isError ? card : null}
+        {card}
         {memoryActivity ? (
           <div className="space-y-1 text-xs text-fg-muted">
             <p>{memoryActivity.purpose}</p>

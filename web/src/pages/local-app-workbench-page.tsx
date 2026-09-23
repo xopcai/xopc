@@ -31,6 +31,7 @@ import { suggestionFromExample } from '@/components/ui/tab-completion-input.util
 import {
   createLocalApp,
   getLocalApp,
+  getLocalAppFixGuidance,
   installLocalApp,
   recordLocalAppAcceptance,
   rollbackLocalApp,
@@ -39,6 +40,7 @@ import {
   validateLocalApp,
   type LocalAppDetail,
   type LocalAppAcceptanceRun,
+  type LocalAppDiagnostic,
   type LocalAppValidationResult,
 } from '@/features/local-apps/api';
 import {
@@ -461,26 +463,40 @@ export function LocalAppWorkbenchPage() {
     if (ok) setUninstallOpen(false);
   }
 
+  async function continueWithFixGuidance(diagnostics: LocalAppDiagnostic[]) {
+    if (!app || !diagnostics.length) return;
+    setActionError(null);
+    try {
+      const guidance = await getLocalAppFixGuidance(app.id, {
+        sourceHash: validation?.sourceHash,
+        locale: zh ? 'zh' : 'en',
+        diagnostics,
+      });
+      await onContinueDevelopment(guidance.prompt);
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   function onAskCoderToFix() {
-    const diagnostics = Array.from(new Set([
-      ...(validation?.issues.map((issue) => issue.message) ?? []),
-      ...(runtimeIssue ? [formatLocalAppRuntimeIssue(runtimeIssue)] : []),
+    const diagnostics: LocalAppDiagnostic[] = [
+      ...(validation?.issues.map((issue) => ({ phase: 'build' as const, code: issue.code, message: issue.message })) ?? []),
+      ...(runtimeIssue ? [{ phase: 'runtime' as const, code: runtimeIssue.kind, message: formatLocalAppRuntimeIssue(runtimeIssue) }] : []),
       ...(acceptanceResult?.checks
         .filter((check) => check.status === 'failed' && check.id !== 'criteria')
-        .map((check) => check.message) ?? []),
+        .map((check) => ({ phase: 'acceptance' as const, code: check.id, message: check.message })) ?? []),
       ...Object.values(criteriaResults)
         .filter((result) => result.status === 'failed')
-        .map((result) => `${result.name}: ${result.failureKind === 'runner' ? '[验收执行器] ' : ''}${result.message}`),
+        .map((result) => ({
+          phase: result.failureKind === 'runner' ? 'runner' as const : 'acceptance' as const,
+          code: result.id,
+          message: `${result.name}: ${result.message}`,
+        })),
       ...(runtimeHealth === 'timeout'
-        ? [zh ? '预览在 7 秒内未完成启动，可能存在白屏或阻塞。' : 'The preview did not finish booting within 7 seconds and may be blank or blocked.']
+        ? [{ phase: 'boot' as const, code: 'boot_timeout', message: 'Preview did not report ready within 7 seconds.' }]
         : []),
-    ]));
-    if (!diagnostics.length) return;
-    const issueList = diagnostics.map((message) => `- ${message}`).join('\n');
-    const prompt = zh
-      ? `请修复当前本地应用草稿的校验问题，保持扩展 ID 和已安装版本不变。先复现并判断问题来自应用行为还是验收执行器，不要通过弱化断言绕过问题。修复后运行完整校验。\n\n${issueList}`
-      : `Fix the current local-app draft validation issues without changing the extension id or installed release. Reproduce first and determine whether each issue comes from app behavior or the acceptance runner; do not weaken assertions to bypass it. Run the full validation afterward.\n\n${issueList}`;
-    void onContinueDevelopment(prompt);
+    ];
+    void continueWithFixGuidance(diagnostics);
   }
 
   function onRunAllScenarios() {
@@ -499,13 +515,11 @@ export function LocalAppWorkbenchPage() {
     scenario: LocalAppAcceptanceScenarioSummary,
     result: LocalAppCriteriaScenarioResult,
   ) {
-    const source = result.failureKind === 'runner'
-      ? (zh ? '验收执行器' : 'acceptance runner')
-      : (zh ? '产品场景' : 'product scenario');
-    const prompt = zh
-      ? `请修复本地应用的${source}问题“${scenario.name}”。当前失败信息：${result.message}\n\n保持扩展 ID 和场景原意不变；先复现并判断问题来自应用行为还是验收执行器，不要通过弱化断言绕过问题。修复后运行完整校验。`
-      : `Fix the local-app ${source} issue "${scenario.name}". Current failure: ${result.message}\n\nPreserve the extension id and scenario intent. Reproduce first and determine whether the issue comes from app behavior or the runner; do not weaken assertions to bypass it. Run the full validation afterward.`;
-    void onContinueDevelopment(prompt);
+    void continueWithFixGuidance([{
+      phase: result.failureKind === 'runner' ? 'runner' : 'acceptance',
+      code: scenario.id,
+      message: `${scenario.name}: ${result.message}`,
+    }]);
   }
 
   const currentAcceptanceIndex = acceptanceHistory.findIndex((run) => (

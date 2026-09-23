@@ -241,11 +241,13 @@ function FileDeliveryGroup({
 export function ProductDeliveryRows({
   deliveries,
   language,
+  excludedReferenceKeys,
 }: {
   deliveries: ProductDeliveryEntry[];
   language: 'en' | 'zh';
+  excludedReferenceKeys?: ReadonlySet<string>;
 }) {
-  const references = productDeliveryReferences(deliveries);
+  const references = productDeliveryReferences(deliveries, excludedReferenceKeys);
   const fileReferences = references.filter(({ reference }) => reference.kind === 'file');
   const firstFileIndex = references.findIndex(({ reference }) => reference.kind === 'file');
 
