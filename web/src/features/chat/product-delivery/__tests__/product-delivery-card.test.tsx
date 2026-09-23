@@ -238,6 +238,36 @@ describe('AssistantResultTail product deliveries', () => {
     expect(container.querySelectorAll('[data-turn-tail-tip]')).toHaveLength(0);
   });
 
+  it('collapses multiple operated files behind a clickable file count', () => {
+    const files: ProductDeliveryEnvelope[] = [
+      { version: 1, operation: 'updated', primary: { kind: 'file', id: 'one', title: '.scrub_tmp.py', summary: '3512 bytes written', capabilities: [] } },
+      { version: 1, operation: 'updated', primary: { kind: 'file', id: 'two', title: '.scan2_tmp.py', summary: '1392 bytes written', capabilities: [] } },
+      { version: 1, operation: 'updated', primary: { kind: 'file', id: 'three', title: '.fts_tmp.py', summary: '2415 bytes written', capabilities: [] } },
+    ];
+
+    act(() => root.render(
+      <MemoryRouter>
+        <AssistantResultTail view={{
+          answerContent: [],
+          workLog: { items: [], active: false, status: 'completed', expandedByDefault: false, compact: false },
+          answer: { started: true, showStreamingCursor: false },
+          lifecycle: { state: 'completed' },
+          outcome: undefined,
+          deliveries: files.map((delivery, index) => ({ key: `file-${index}`, delivery })),
+          sources: [],
+        }} />
+      </MemoryRouter>,
+    ));
+
+    const fileGroup = container.querySelector<HTMLDetailsElement>('[data-product-file-group] details');
+    expect(fileGroup?.open).toBe(false);
+    expect(fileGroup?.querySelector('summary')?.textContent).toContain('3 个文件');
+    expect(fileGroup?.querySelectorAll('[data-product-delivery="file"]')).toHaveLength(3);
+
+    act(() => fileGroup?.querySelector('summary')?.click());
+    expect(fileGroup?.open).toBe(true);
+  });
+
   it('combines product objects, outcome artifacts, and generated files in one tail', () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 1,
@@ -275,9 +305,15 @@ describe('AssistantResultTail product deliveries', () => {
     act(() => root.render(<MemoryRouter><AssistantResultTail view={view} /></MemoryRouter>));
 
     expect(container.querySelectorAll('[data-turn-tail]')).toHaveLength(1);
-    expect(container.querySelectorAll('li')).toHaveLength(3);
+    expect(container.querySelectorAll('[data-result-attachment]')).toHaveLength(2);
+    const attachmentGroup = container.querySelector<HTMLDetailsElement>('[data-result-attachment-group] details');
+    expect(attachmentGroup?.open).toBe(false);
+    expect(attachmentGroup?.querySelector('summary')?.textContent).toContain('2 个文件');
     expect(container.textContent).toContain('发布任务');
     expect(container.textContent).toContain('report.pdf');
     expect(container.textContent).toContain('cover.png');
+
+    act(() => attachmentGroup?.querySelector('summary')?.click());
+    expect(attachmentGroup?.open).toBe(true);
   });
 });

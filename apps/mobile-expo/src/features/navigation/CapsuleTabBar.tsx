@@ -27,7 +27,6 @@ function DockBackground() {
 
 /** One layout owner for keyboard and accessory-panel transitions. */
 export function CapsuleTabBar({ embedded = false, ...props }: BottomTabBarProps & { embedded?: boolean }) {
-  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const keyboard = useReanimatedKeyboardAnimation();
   const panelOpen = useChatChromeStore(state => state.actionPanelOpen);
@@ -74,8 +73,7 @@ export function CapsuleTabBar({ embedded = false, ...props }: BottomTabBarProps 
         marginHorizontal: 0,
         marginBottom: 0,
         borderRadius: 0,
-        borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: colors.border.subtle,
+        borderTopWidth: 0,
         height: dockHeight,
         paddingBottom: TAB_DOCK_INSET + Math.max(insets.bottom, spacing.sm),
       }] } : {}),

@@ -143,8 +143,7 @@ export struct XopcHomeView {
     if (this.tab === 0 && this.layout.isMainDockVisible(0)) {
       Column() {
         this.dockItems()
-      }.id('main-tab-dock').width('100%')
-        .border({ width: { top: 0.5 }, color: $r('app.color.border_subtle') })
+      }.id('main-tab-dock').width('100%').backgroundColor($r('app.color.panel'))
     }
   }
 

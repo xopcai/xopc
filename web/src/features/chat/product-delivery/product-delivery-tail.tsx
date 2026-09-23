@@ -10,6 +10,7 @@ import {
   ChevronRight,
   CircleDotDashed,
   FileText,
+  Files,
   FolderKanban,
   MessageSquareText,
   NotebookPen,
@@ -21,6 +22,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
+import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { withDetailReturnTo } from '@/lib/navigation-return';
@@ -132,7 +134,7 @@ function DeliveryRow({
   };
 
   return (
-    <li className="flex min-w-0 items-stretch">
+    <li className="flex min-w-0 items-stretch" data-product-delivery={reference.kind}>
       <button
         type="button"
         onClick={canOpen ? open : undefined}
@@ -185,6 +187,57 @@ function DeliveryRow({
   );
 }
 
+type DeliveryReferenceEntry = ReturnType<typeof productDeliveryReferences>[number];
+
+function FileDeliveryGroup({
+  entries,
+  language,
+}: {
+  entries: DeliveryReferenceEntry[];
+  language: 'en' | 'zh';
+}) {
+  const label = messages(language).chat.turnOutcome.fileCount
+    .replace('{{count}}', String(entries.length));
+
+  return (
+    <li data-product-file-group>
+      <details className="group">
+        <summary
+          className={cn(
+            'flex min-h-14 cursor-pointer list-none items-center gap-3 px-3 py-2 text-left',
+            'hover:bg-surface-hover/65 active:bg-surface-active/70',
+            interaction.transition,
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+          )}
+        >
+          <span
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft/70 text-accent-fg"
+            aria-hidden
+          >
+            <Files className="size-4" strokeWidth={1.75} />
+          </span>
+          <span className="min-w-0 flex-1 text-sm font-medium text-fg">{label}</span>
+          <ChevronRight
+            className="size-4 shrink-0 text-fg-subtle transition-transform duration-150 ease-out group-open:rotate-90 motion-reduce:transition-none"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        </summary>
+        <ul className="m-0 list-none divide-y divide-edge-subtle border-t border-edge-subtle p-0">
+          {entries.map(({ key, delivery, reference }) => (
+            <DeliveryRow
+              key={key}
+              delivery={delivery}
+              reference={reference}
+              language={language}
+            />
+          ))}
+        </ul>
+      </details>
+    </li>
+  );
+}
+
 export function ProductDeliveryRows({
   deliveries,
   language,
@@ -193,19 +246,33 @@ export function ProductDeliveryRows({
   language: 'en' | 'zh';
 }) {
   const references = productDeliveryReferences(deliveries);
+  const fileReferences = references.filter(({ reference }) => reference.kind === 'file');
+  const firstFileIndex = references.findIndex(({ reference }) => reference.kind === 'file');
 
   if (references.length === 0) return null;
 
   return (
     <>
-      {references.map(({ key, delivery, reference }) => (
-        <DeliveryRow
-          key={key}
-          delivery={delivery}
-          reference={reference}
-          language={language}
-        />
-      ))}
+      {references.map(({ key, delivery, reference }, index) => {
+        if (reference.kind !== 'file' || fileReferences.length === 1) {
+          return (
+            <DeliveryRow
+              key={key}
+              delivery={delivery}
+              reference={reference}
+              language={language}
+            />
+          );
+        }
+        if (index !== firstFileIndex) return null;
+        return (
+          <FileDeliveryGroup
+            key="file-delivery-group"
+            entries={fileReferences}
+            language={language}
+          />
+        );
+      })}
     </>
   );
 }

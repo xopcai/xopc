@@ -83,7 +83,7 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
         const uri = thumbnailUri(att);
         const audio = isAudioAttachment(att);
         return (
-          <View key={att.id} style={[styles.chip, { borderColor: border, backgroundColor: chipBg }]}>
+          <View key={att.id} style={[styles.chip, { backgroundColor: chipBg }]}>
             <Pressable style={styles.open}
               onPress={() => {
                 if (audio && !att.workspaceRelativePath) {
@@ -139,7 +139,7 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
 });
 
 const styles = StyleSheet.create({
-  chip: { minHeight: 44, maxWidth: 240, flexShrink: 0, flexDirection: 'row', alignItems: 'center', borderRadius: radii.full, borderWidth: StyleSheet.hairlineWidth, paddingLeft: spacing.sm },
+  chip: { minHeight: 44, maxWidth: 240, flexShrink: 0, flexDirection: 'row', alignItems: 'center', borderRadius: radii.full, paddingLeft: spacing.sm },
   open: { minHeight: 44, flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   thumbnail: { width: spacing.xxl, height: spacing.xxl, borderRadius: radii.sm },
   label: { ...typography.caption, flexShrink: 1 },

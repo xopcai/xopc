@@ -464,19 +464,20 @@ export struct XopcChatView {
 
   @Builder
   composerScope() {
-    Row({ space: 4 }) {
-      Button(this.context.summary?.work.project?.title || $r('app.string.chat_project')).height(30).constraintSize({ maxWidth: '55%' })
-        .fontSize(12).fontColor($r('app.color.accent')).backgroundColor($r('app.color.accent_soft'))
+    Row({ space: 2 }) {
+      Button(this.context.summary?.work.project?.title || $r('app.string.chat_project')).height(26).constraintSize({ maxWidth: '55%' })
+        .fontSize(11).fontColor($r('app.color.accent')).backgroundColor($r('app.color.accent_soft'))
         .enabled(!!this.context.summary && !this.chat.loading).onClick((): void => { this.openSheet('project'); })
       if (this.context.summary?.environment) {
-        Button(this.context.summary.environment.kind === 'managed_worktree' ? 'Worktree' : 'Local').height(30)
-          .fontSize(12).fontColor($r('app.color.secondary')).backgroundColor(Color.Transparent)
+        Button(this.context.summary.environment.kind === 'managed_worktree' ? 'Worktree' : 'Local').height(26)
+          .fontSize(11).fontColor($r('app.color.secondary')).backgroundColor($r('app.color.input'))
           .onClick((): void => { this.openSheet(this.context.summary?.work.project ? 'environment' : 'directory'); })
       }
-      Button('···').height(36).width(36).padding(0).fontColor($r('app.color.secondary')).backgroundColor(Color.Transparent)
+      Button('···').height(32).width(32).padding(0).fontColor($r('app.color.secondary')).backgroundColor($r('app.color.input'))
+        .responseRegion({ x: -6, y: -6, width: 44, height: 44 })
         .accessibilityText($r('app.string.chat_context')).onClick((): void => { this.openSheet('context'); })
-    }.id('chat-composer-scope').width('100%').height(36).padding({ left: 8, right: 8 })
-      .border({ width: { bottom: 0.5 }, color: $r('app.color.border_subtle') })
+    }.id('chat-composer-scope').width('100%').height(32).padding({ left: 6, right: 6 })
+      .backgroundColor(Color.Transparent)
   }
 
   @Builder
@@ -773,11 +774,11 @@ export struct XopcChatView {
         }.width('100%').padding({ left: 8, right: 8, bottom: 8 })
       }
     }.id('chat-composer-shell').width('calc(100% - 16vp)').backgroundColor($r('app.color.panel'))
-      .border({ width: 0.5, color: $r('app.color.border_subtle'), radius: 14 }).clip(true).margin({ bottom: 8, top: 8 })
+      .borderRadius(18).clip(true).margin({ bottom: 8, top: 8 })
     if (this.panelOpen) { this.actionPanel() }
     this.bottomDock()
     }.id('chat-bottom-region').width('calc(100% - 24vp)').backgroundColor($r('app.color.panel'))
-      .border({ width: 0.5, color: $r('app.color.border_subtle'), radius: 20 }).clip(true)
+      .borderRadius(20).clip(true)
       .margin({ top: 4, bottom: this.layout.keyboardVisible ? 0 : 8 })
   }
 
@@ -838,6 +839,7 @@ export struct XopcChatView {
         }.width('100%')
       }.width('100%').padding({ left: 8, right: 8, bottom: 12 })
     }.id('chat-action-panel').width('100%').height(312).scrollBar(BarState.Auto)
+      .backgroundColor($r('app.color.panel')).borderRadius(18).clip(true).margin({ bottom: 8 })
   }
 
   build() {

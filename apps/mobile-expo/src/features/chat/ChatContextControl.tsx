@@ -120,8 +120,7 @@ export const ChatContextControl = memo(function ChatContextControl({
             setOpen(true);
           }}
           style={({ pressed }) => [styles.chip, {
-            backgroundColor: chip.primary ? colors.accent.soft : colors.surface.panel,
-            borderColor: chip.primary ? colors.accent.soft : colors.border.subtle,
+            backgroundColor: chip.primary ? colors.accent.soft : colors.surface.input,
             opacity: pressed ? 0.7 : 1,
           }]}
         >
@@ -166,7 +165,7 @@ export const ChatContextControl = memo(function ChatContextControl({
           setOpen(true);
         }}
         style={({ pressed }) => [styles.detailButton, {
-          backgroundColor: pressed ? colors.surface.pressed : 'transparent',
+          backgroundColor: pressed ? colors.surface.pressed : colors.surface.input,
         }]}
       >
         <Icon source="dots-horizontal" size={18} color={colors.text.tertiary} />
@@ -284,7 +283,7 @@ export const ChatContextControl = memo(function ChatContextControl({
 
 const styles = StyleSheet.create({
   strip: { minHeight: 32, backgroundColor: 'transparent', flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  chip: { minHeight: 30, maxWidth: 180, flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.full, paddingHorizontal: spacing.sm },
+  chip: { minHeight: 26, maxWidth: 180, flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: radii.full, paddingHorizontal: spacing.sm },
   chipText: { ...typography.micro, flexShrink: 1 },
   detailButton: { width: 30, height: 30, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: radii.full },
   sectionTitle: { ...typography.caption, marginTop: spacing.sm, marginBottom: spacing.xs, paddingHorizontal: spacing.sm },

@@ -29,6 +29,7 @@ export struct XopcHubRow {
   @Param summary: ResourceStr = '';
   @Param symbol: Resource = $r('sys.symbol.doc');
   @Param navigable: boolean = true;
+  @Param showChevron: boolean = true;
   @Param compact: boolean = false;
   @Event onOpen: () => void = (): void => {};
 
@@ -44,7 +45,7 @@ export struct XopcHubRow {
               .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        if (this.navigable) { SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([$r('app.color.tertiary')]) }
+        if (this.navigable && this.showChevron) { SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([$r('app.color.tertiary')]) }
       }.width('100%').constraintSize({ minHeight: this.compact ? 52 : 64 })
         .padding({ top: this.compact ? 6 : 12, bottom: this.compact ? 6 : 12 })
     }.width('100%').padding(0).backgroundColor(Color.Transparent)
