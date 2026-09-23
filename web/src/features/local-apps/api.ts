@@ -69,6 +69,21 @@ export type LocalAppValidationResult = {
   issues: Array<{ code: string; severity: 'error' | 'warning'; message: string }>;
 };
 
+export type LocalAppDiagnostic = {
+  phase: 'build' | 'boot' | 'runtime' | 'acceptance' | 'runner' | 'capability';
+  message: string;
+  code?: string;
+};
+
+export type LocalAppFixGuidance = {
+  appId: string;
+  sourceHash?: string;
+  owner: 'generated_code' | 'platform' | 'configuration';
+  action: 'fix_code' | 'retry' | 'fix_config';
+  diagnostics: LocalAppDiagnostic[];
+  prompt: string;
+};
+
 export async function listLocalApps(): Promise<LocalApp[]> {
   return (await fetchJson<{ apps: LocalApp[] }>(apiUrl('/api/local-apps'))).apps;
 }
@@ -82,6 +97,16 @@ export async function validateLocalApp(id: string): Promise<LocalAppValidationRe
     apiUrl(`/api/local-apps/${encodeURIComponent(id)}/validate`),
     { method: 'POST' },
   )).validation;
+}
+
+export async function getLocalAppFixGuidance(
+  id: string,
+  input: { sourceHash?: string; locale: 'en' | 'zh'; diagnostics: LocalAppDiagnostic[] },
+): Promise<LocalAppFixGuidance> {
+  return (await fetchJson<{ guidance: LocalAppFixGuidance }>(
+    apiUrl(`/api/local-apps/${encodeURIComponent(id)}/fix-guidance`),
+    { method: 'POST', body: JSON.stringify(input) },
+  )).guidance;
 }
 
 export async function recordLocalAppAcceptance(

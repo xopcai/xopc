@@ -23,6 +23,7 @@ export const ProductCapabilitySchema = z.enum([
   'preview',
   'edit',
   'continue_in_chat',
+  'fix',
   'run',
   'pause',
   'resume',
@@ -65,6 +66,11 @@ export const ProductDeliveryPresentationSchema = z.discriminatedUnion('kind', [
     edits: z.array(z.object({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative(),
       text: z.string().max(16000) }).refine(edit => edit.to >= edit.from, 'Invalid replacement range')).max(20)
       .refine(edits => edits.reduce((total, edit) => total + edit.text.length, 0) <= 16000, 'Replacement text exceeds preview limit') }),
+  z.object({
+    kind: z.literal('inline_app'),
+    reference: ProductReferenceSchema.refine(reference => reference.kind === 'local_app', 'Inline app must reference a local app'),
+    preferredHeight: z.number().int().min(240).max(720).default(480),
+  }),
 ]);
 
 export const ProductDeliveryEnvelopeSchema = z.object({

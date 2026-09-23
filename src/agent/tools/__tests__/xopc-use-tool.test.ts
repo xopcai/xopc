@@ -787,7 +787,7 @@ describe('xopc_use tool', () => {
       create: () => app,
       list: () => [app],
       get: (id: string) => id === app.id ? app : null,
-      validate: () => ({ status: 'healthy' }),
+      validate: () => ({ status: 'healthy', sourceHash: 'hash-1' }),
     } as unknown as LocalAppService;
     const tool = createXopcUseTool({
       getLocalAppService: () => localApps,
@@ -806,6 +806,12 @@ describe('xopc_use tool', () => {
         kind: 'local_app',
         id: app.id,
         projectId: app.projectId,
+        revision: 'hash-1',
+      },
+      presentation: {
+        kind: 'inline_app',
+        preferredHeight: 480,
+        reference: { kind: 'local_app', id: app.id },
       },
     });
   });
