@@ -11,6 +11,7 @@ import {
   isTranscriptCustomStateEntry,
   isTranscriptLabelEntry,
   isTranscriptMetadataEntry,
+  isTranscriptSideChatOriginEntry,
   isTranscriptSummaryMessageEntry,
   mergeLlmMessagesPreservingContextRows,
   transcriptRowsFromJsonArray,
@@ -223,6 +224,24 @@ describe('session-context-for-llm', () => {
       },
       newer,
     ])).toEqual([summary, kept, newer]);
+  });
+
+  it('hydrates hidden side-chat origin context without displaying it', () => {
+    const parent = { role: 'user', content: 'parent context' } as AgentMessage;
+    const sideChatUser = { role: 'user', content: 'follow-up' } as AgentMessage;
+    const origin = {
+      type: 'side_chat_origin',
+      version: 1,
+      parentConversationId: 'parent',
+      parentTranscriptId: 'parent-transcript',
+      createdAt: '2026-09-23T00:00:00.000Z',
+      contentHash: 'hash',
+      contextMessages: [parent],
+    } as const;
+
+    expect(isTranscriptSideChatOriginEntry(origin)).toBe(true);
+    expect(buildSessionContextForLlm([origin, sideChatUser])).toEqual([parent, sideChatUser]);
+    expect(buildSessionDisplayMessages([origin, sideChatUser])).toEqual([sideChatUser]);
   });
 
   it('buildSessionContextForLlm replaces an earlier compaction boundary on repeated compaction', () => {

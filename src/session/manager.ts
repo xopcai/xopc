@@ -269,6 +269,15 @@ export class SessionIndex extends EventEmitter {
     return result;
   }
 
+  async createSessionFromRows(
+    options: import('./store.js').CreateSessionFromRowsOptions,
+  ): Promise<{ conversationId: string; rowCount: number }> {
+    const result = await this.store.createSessionFromRows(options);
+    const metadata = await this.store.getMetadata(result.conversationId);
+    if (metadata) this.emit('sessionCreated', metadata);
+    return result;
+  }
+
   async forkSessionRows(
     sourceKey: string,
     targetKey: string,

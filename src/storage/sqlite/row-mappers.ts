@@ -3,6 +3,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { SessionAgentConfig } from '../../session/config-types.js';
 import {
   isTranscriptContextEntry,
+  isTranscriptSideChatOriginEntry,
   type TranscriptStoredRow,
   type XopcTranscriptContextEntry,
 } from '../../session/session-context-for-llm.js';
@@ -237,6 +238,9 @@ export function classifyStoredRow(row: TranscriptStoredRow): {
   if (isTranscriptContextEntry(row)) {
     return { entryKind: 'context', role: null };
   }
+  if (isTranscriptSideChatOriginEntry(row)) {
+    return { entryKind: 'context', role: null };
+  }
   const record = row as AgentMessage & { type?: string };
   if (record.type === 'compaction' || (row as { kind?: string }).kind === 'compaction') {
     return { entryKind: 'compaction', role: null };
@@ -248,6 +252,9 @@ export function extractFtsContent(row: TranscriptStoredRow): string {
   if (isTranscriptContextEntry(row)) {
     const ctx = row as XopcTranscriptContextEntry;
     return [ctx.text, ctx.id].filter(Boolean).join(' ');
+  }
+  if (isTranscriptSideChatOriginEntry(row)) {
+    return '';
   }
   const msg = row as AgentMessage;
   return extractTextFromMessageContent((msg as { content?: unknown }).content);

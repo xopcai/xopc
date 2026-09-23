@@ -114,6 +114,18 @@ export class InMemoryTranscriptRuntime implements EmbeddedTranscriptRuntime {
       .flatMap((entry) => entry.type === 'message' ? [entry.message] : []);
   }
 
+  loadBaselineMessages(): AgentMessage[] {
+    return buildSessionContextForLlm(
+      this.sourceEntries().slice(0, this.baselineEntryCount).map((entry) => entry.row),
+    );
+  }
+
+  loadConversationRows(): TranscriptSourceEntry['row'][] {
+    return structuredClone(
+      this.sourceEntries().slice(this.baselineEntryCount).map((entry) => entry.row),
+    );
+  }
+
   private sourceEntries(): TranscriptSourceEntry[] {
     const branch = this.sessionManager.getBranch();
     return branch.flatMap((entry, index): TranscriptSourceEntry[] => {

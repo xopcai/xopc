@@ -16,6 +16,7 @@ import {
   isTranscriptContextEntry,
   isTranscriptCustomMessageEntry,
   isTranscriptCustomStateEntry,
+  isTranscriptSideChatOriginEntry,
   type TranscriptStoredRow,
   type XopcTranscriptContextEntry,
   type XopcTranscriptCustomMessageEntry,
@@ -146,6 +147,15 @@ export function storedRowsToFileEntries(params: {
 
   let parentId: string | null = null;
   for (const row of params.rows) {
+    if (isTranscriptSideChatOriginEntry(row)) {
+      for (const message of row.contextMessages) {
+        const entry = agentMessageToEntry(message, parentId, byId);
+        byId.add(entry.id);
+        entries.push(entry);
+        parentId = entry.id;
+      }
+      continue;
+    }
     if (isTranscriptContextEntry(row)) {
       const entry = contextRowToCustomEntry(row, parentId, byId);
       byId.add(entry.id);
