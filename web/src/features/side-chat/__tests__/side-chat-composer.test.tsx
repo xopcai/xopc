@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createSideChat, deleteSideChat, getSideChatMessages, realtime, sendSideChatInput, sideChatSelections, updateSideChatConfig } = vi.hoisted(() => ({
+const { createSideChat, deleteSideChat, getSideChatMessages, promoteSideChat, realtime, sendSideChatInput, sideChatSelections, updateSideChatConfig } = vi.hoisted(() => ({
   createSideChat: vi.fn(async (parentConversationId: string, selections: unknown[]) => ({
     id: 'side-2',
     parentConversationId,
@@ -13,6 +13,7 @@ const { createSideChat, deleteSideChat, getSideChatMessages, realtime, sendSideC
   })),
   getSideChatMessages: vi.fn(async () => [] as unknown[]),
   deleteSideChat: vi.fn(async () => undefined),
+  promoteSideChat: vi.fn(async () => ({ conversationId: 'side-1', created: true })),
   realtime: {
     onEvent: null as null | ((event: { event: string; data?: unknown }) => void),
     onGap: null as null | (() => void),
@@ -29,7 +30,7 @@ const { createSideChat, deleteSideChat, getSideChatMessages, realtime, sendSideC
     expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
     messageCount: 0,
     context: {
-      parentConversationId: 'parent', parentSessionId: 'parent-id', parentMessageCount: 0,
+      parentConversationId: 'parent', parentTranscriptId: 'parent-id', parentMessageCount: 0,
       createdAt: new Date(0).toISOString(), selections: [], contentHash: 'hash',
     },
     config: { modelRef: config.modelRef ?? 'openai/test', thinkingLevel: config.thinkingLevel ?? 'medium' },
@@ -53,7 +54,7 @@ vi.mock('@/features/side-chat/side-chat-api', () => ({
     messageCount: 0,
     context: {
       parentConversationId: 'parent',
-      parentSessionId: 'parent-id',
+      parentTranscriptId: 'parent-id',
       parentMessageCount: 0,
       createdAt: new Date(0).toISOString(),
       selections: sideChatSelections.current,
@@ -63,6 +64,7 @@ vi.mock('@/features/side-chat/side-chat-api', () => ({
   })),
   getSideChatMessages,
   heartbeatSideChat: vi.fn(),
+  promoteSideChat,
   extendSideChat: vi.fn(),
   getSideChatClientInstanceId: () => 'tab-1',
   sendSideChatInput,
@@ -127,6 +129,7 @@ describe('SideChatConversation composer', () => {
     sendSideChatInput.mockClear();
     createSideChat.mockClear();
     deleteSideChat.mockClear();
+    promoteSideChat.mockClear();
     updateSideChatConfig.mockClear();
     localStorage.removeItem('xopc:side-chat-close-confirm-disabled:v1');
     sideChatSelections.current = [];
@@ -203,6 +206,49 @@ describe('SideChatConversation composer', () => {
     const thread = container.querySelector<HTMLElement>('[data-testid="message-thread"]');
     expect(thread?.dataset.conversationId).toBe('side-1');
     expect(thread?.dataset.workspaceConversationId).toBe('parent');
+  });
+
+  it('promotes completed messages and keeps an explicit link to the saved chat', async () => {
+    getSideChatMessages.mockResolvedValue([
+      { role: 'user', content: [{ type: 'text', text: 'keep this' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'saved answer' }] },
+    ]);
+    const navigate = vi.fn();
+    window.addEventListener('navigate-to-chat', navigate);
+    await renderConversation();
+
+    const save = container.querySelector<HTMLButtonElement>('button[aria-label="Save as chat"]');
+    expect(save?.disabled).toBe(false);
+    await act(async () => { save?.click(); });
+
+    expect(promoteSideChat).toHaveBeenCalledWith('side-1');
+    expect(container.textContent).toContain('Saved as a chat');
+    expect(container.querySelector('[data-side-chat-composer]')).toBeNull();
+    await act(async () => {
+      [...container.querySelectorAll('button')].find((button) => button.textContent === 'Open chat')?.click();
+    });
+    expect(navigate).toHaveBeenCalledOnce();
+    window.removeEventListener('navigate-to-chat', navigate);
+  });
+
+  it('warns that an unsent draft is excluded before promotion', async () => {
+    getSideChatMessages.mockResolvedValue([
+      { role: 'user', content: [{ type: 'text', text: 'sent message' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'answer' }] },
+    ]);
+    await renderConversation();
+    await typeDraft('not sent yet');
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Save as chat"]')?.click();
+    });
+    expect(promoteSideChat).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('The current unsent draft will not be saved.');
+
+    await act(async () => {
+      [...document.body.querySelectorAll('button')].find((button) => button.textContent === 'Save anyway')?.click();
+    });
+    expect(promoteSideChat).toHaveBeenCalledWith('side-1');
   });
 
   it('clears the editor immediately when the send button submits the draft', async () => {

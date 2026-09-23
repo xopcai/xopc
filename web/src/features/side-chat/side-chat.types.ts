@@ -11,7 +11,7 @@ export type SideChatView = {
   id: string;
   parentConversationId: string;
   clientInstanceId: string;
-  status: 'idle' | 'running' | 'waiting-approval' | 'waiting-input' | 'closing';
+  status: 'idle' | 'running' | 'waiting-approval' | 'waiting-input' | 'promoting' | 'closing';
   createdAt: string;
   lastActiveAt: string;
   expiresAt: string | null;
@@ -27,7 +27,7 @@ export type SideChatView = {
   messageCount: number;
   context: {
     parentConversationId: string;
-    parentSessionId: string;
+    parentTranscriptId: string;
     parentMessageCount: number;
     createdAt: string;
     selections: SideChatSelection[];
@@ -41,7 +41,8 @@ export type SideChatTab = {
   parentConversationId: string;
   title: string;
   runId?: string;
-  ended?: 'idle' | 'waiting' | 'unavailable';
+  ended?: 'idle' | 'waiting' | 'unavailable' | 'promoted';
+  promotedConversationId?: string;
   fresh?: boolean;
 };
 

@@ -1,4 +1,4 @@
-import { ChevronRight, MessageSquarePlus, MessageSquareText, Plus, X } from 'lucide-react';
+import { ChevronRight, MessageSquarePlus, MessageSquareText, Plus, Save, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,7 @@ import {
   getSideChat,
   getSideChatMessages,
   heartbeatSideChat,
+  promoteSideChat,
   extendSideChat,
   getSideChatClientInstanceId,
   sendSideChatInput,
@@ -180,8 +181,9 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
   }, [addTab, claimPendingCreate, m, parentConversationId, pendingCreate]);
 
   const closeTab = useCallback((id: string) => {
+    const promoted = useSideChatStore.getState().tabs.find((tab) => tab.id === id)?.promotedConversationId;
     removeTab(id);
-    void deleteSideChat(id).catch(() => {});
+    if (!promoted) void deleteSideChat(id).catch(() => {});
   }, [removeTab]);
 
   const requestCloseTab = useCallback((id: string) => {
@@ -189,6 +191,10 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
     const tab = state.tabs.find((candidate) => candidate.id === id);
     const reading = state.readings[id];
     const sideDraft = state.drafts[id];
+    if (tab?.promotedConversationId) {
+      closeTab(id);
+      return;
+    }
     const empty = reading && !reading.messages.length && !reading.truncated
       && !sideDraft?.text.trim() && !sideDraft?.attachments.length && !tab?.runId;
     if (empty || isSideChatCloseConfirmDisabled()) {
@@ -246,7 +252,7 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
       <div data-side-chat-header className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto px-2">
         {tabs.map((tab) => (
           <div key={tab.id} className={cn('flex h-8 shrink-0 items-center rounded-lg pl-3 text-sm', tab.id === activeId ? 'bg-surface-hover text-fg' : 'text-fg-muted')}>
-            <button type="button" className="max-w-40 truncate" onClick={() => setActive(tab.id)}>{tab.title === 'Side chat' ? m.title : tab.title}{tab.ended ? ` · ${m.endedLabel}` : ''}</button>
+            <button type="button" className="max-w-40 truncate" onClick={() => setActive(tab.id)}>{tab.title === 'Side chat' ? m.title : tab.title}{tab.ended ? ` · ${tab.ended === 'promoted' ? m.savedLabel : m.endedLabel}` : ''}</button>
             <button type="button" className="flex size-8 items-center justify-center rounded-md hover:bg-surface-active" aria-label={m.closeAria} onClick={() => requestCloseTab(tab.id)}>
               <X className="size-3.5" />
             </button>
@@ -345,6 +351,11 @@ export function SideChatConversation({
   const [connectionLost, setConnectionLost] = useState(false);
   const [extending, setExtending] = useState(false);
   const [recreating, setRecreating] = useState(false);
+  const [promoting, setPromoting] = useState(false);
+  const [promotionConfirmOpen, setPromotionConfirmOpen] = useState(false);
+  const [promotedConversationId, setPromotedConversationId] = useState(() => (
+    useSideChatStore.getState().tabs.find((tab) => tab.id === sideChatId)?.promotedConversationId
+  ));
   const [parentMissing, setParentMissing] = useState(false);
   const [notice, setNotice] = useState('');
   const [now, setNow] = useState(Date.now);
@@ -368,6 +379,7 @@ export function SideChatConversation({
   const messageRevisionRef = useRef(0);
   const lastViewAt = useRef(0);
   const submittingRef = useRef(false);
+  const promotingRef = useRef(false);
   const pendingUserMessagesRef = useRef(new Map<string, Message>());
   const language = useLocaleStore((state) => state.language);
   const m = getMessages(language);
@@ -425,6 +437,7 @@ export function SideChatConversation({
 
   const handleFailure = useCallback((cause: unknown) => {
     if (!isCurrent()) return;
+    if (promotingRef.current) return;
     const failure = cause as { status?: number; body?: { code?: string; reason?: string } };
     if (failure.body?.code === 'EXPIRED' || failure.status === 410) {
       finish(failure.body?.reason === 'waiting' ? 'waiting' : 'idle');
@@ -694,6 +707,44 @@ export function SideChatConversation({
     }
   }, [m.chat.messageSavedToNote, m.notes.quickCaptureFailed]);
 
+  const saveAsChat = useCallback(async () => {
+    if (promotingRef.current || running || endedRef.current || messages.length === 0) return;
+    promotingRef.current = true;
+    setPromoting(true);
+    setPromotionConfirmOpen(false);
+    setError(null);
+    try {
+      const result = await promoteSideChat(sideChatId);
+      if (!sameGateway()) return;
+      endedRef.current = 'promoted';
+      setEnded('promoted');
+      setPromotedConversationId(result.conversationId);
+      setRunning(false);
+      setRunId(undefined);
+      setClarify(null);
+      setView(null);
+      onRunIdChange(sideChatId, undefined);
+      useSideChatStore.getState().markPromoted(sideChatId, result.conversationId);
+      showComposerNotification('success', sideChatMessages.savedTitle, undefined, {
+        href: `/chat/${encodeURIComponent(result.conversationId)}`,
+      });
+    } catch (cause) {
+      if (!isCurrent()) return;
+      setError(sideChatErrorMessage(cause, sideChatMessages) || sideChatMessages.saveFailed);
+    } finally {
+      promotingRef.current = false;
+      if (isCurrent()) setPromoting(false);
+    }
+  }, [isCurrent, messages.length, onRunIdChange, running, sameGateway, sideChatId, sideChatMessages]);
+
+  const requestSaveAsChat = useCallback(() => {
+    if (draftText.trim() || draftAttachments.length) {
+      setPromotionConfirmOpen(true);
+      return;
+    }
+    void saveAsChat();
+  }, [draftAttachments.length, draftText, saveAsChat]);
+
   const saveModelConfig = useCallback(async (patch: { modelRef?: string; thinkingLevel?: string }) => {
     const next = await updateSideChatConfig(sideChatId, patch);
     if (isCurrent() && !endedRef.current) setView(next);
@@ -781,7 +832,17 @@ export function SideChatConversation({
         </div>
       ) : null}
       {error ? <p className="border-t border-edge px-4 py-2 text-xs text-red-600 dark:text-red-400">{error}</p> : null}
-      {ended ? (
+      {ended === 'promoted' && promotedConversationId ? (
+        <div className="shrink-0 border-t border-edge p-3">
+          <div className="rounded-xl border border-edge bg-surface-panel p-4">
+            <h2 className="text-base font-semibold" aria-live="polite">{sideChatMessages.savedTitle}</h2>
+            <p className="mt-2 text-sm text-fg-muted">{sideChatMessages.savedDescription}</p>
+            <Button type="button" variant="primary" className="mt-4" onClick={() => {
+              window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { conversationId: promotedConversationId } }));
+            }}>{sideChatMessages.openSavedChat}</Button>
+          </div>
+        </div>
+      ) : ended ? (
         <div className="shrink-0 border-t border-edge p-3">
           <div className="rounded-xl border border-edge bg-surface-panel p-4">
             <h2 className="text-base font-semibold" aria-live="polite">{ended === 'unavailable' ? sideChatMessages.unavailableTitle : sideChatMessages.expiredTitle}</h2>
@@ -870,6 +931,18 @@ export function SideChatConversation({
               chat={m.chat}
               onPickFiles={() => attachments.fileInputRef.current?.click()}
             />
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-8 shrink-0 px-2 text-xs"
+              aria-label={sideChatMessages.saveAsChat}
+              title={running ? sideChatMessages.saveBusy : sideChatMessages.saveAsChat}
+              disabled={promoting || running || connectionLost || messages.length === 0}
+              onClick={requestSaveAsChat}
+            >
+              <Save className="size-3.5" />
+              <span className="max-sm:hidden">{promoting ? sideChatMessages.savingChat : sideChatMessages.saveAsChat}</span>
+            </Button>
             <div className="ml-auto min-w-0">
               {view ? (
                 <ComposerModelConfigControl
@@ -896,6 +969,15 @@ export function SideChatConversation({
           </ComposerToolbarRow>
         </ComposerFrame>
       </form>}
+      <ConfirmDialog
+        open={promotionConfirmOpen}
+        title={sideChatMessages.saveDraftTitle}
+        description={sideChatMessages.saveDraftDescription}
+        confirmLabel={sideChatMessages.saveDraftAction}
+        cancelLabel={sideChatMessages.closeConfirmCancel}
+        onConfirm={() => void saveAsChat()}
+        onCancel={() => setPromotionConfirmOpen(false)}
+      />
     </div>
   );
 }

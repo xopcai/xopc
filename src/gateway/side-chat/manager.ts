@@ -4,6 +4,8 @@ import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core'
 
 import { InMemoryTranscriptRuntime } from '../../agent/embedded/transcript-runtime.js';
 import { evictEmbeddedSessionRunner } from '../../agent/embedded/session-runner.js';
+import type { SessionAgentConfig } from '../../session/config-types.js';
+import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 import type { SessionMetadata } from '../../session/types.js';
 import { createLogger } from '../../utils/logger.js';
 import {
@@ -21,6 +23,18 @@ const log = createLogger('Gateway:SideChat');
 
 interface SideChatEntry extends SideChatView {
   runtime: InMemoryTranscriptRuntime;
+  parentMetadata: SessionMetadata;
+  parentConfig: SessionAgentConfig | null;
+}
+
+export interface SideChatPromotionSnapshot {
+  id: string;
+  parentMetadata: SessionMetadata;
+  parentConfig: SessionAgentConfig | null;
+  context: SideChatView['context'];
+  config: SideChatConfig;
+  contextMessages: AgentMessage[];
+  conversationRows: TranscriptStoredRow[];
 }
 
 export class SideChatError extends Error {
@@ -35,6 +49,7 @@ export class SideChatError extends Error {
 
 export interface EphemeralSideChatManagerOptions {
   getParentMetadata: (conversationId: string) => Promise<SessionMetadata | null>;
+  getParentConfig?: (conversationId: string) => Promise<SessionAgentConfig | null>;
   loadParentMessages: (conversationId: string) => Promise<AgentMessage[]>;
   getDefaultModelRef: (conversationId: string) => string;
   getDefaultThinkingLevel?: (conversationId: string) => ThinkingLevel;
@@ -105,6 +120,7 @@ export class EphemeralSideChatManager {
     const metadata = await this.options.getParentMetadata(parentConversationId);
     if (!metadata || !metadata.transcriptId) throw new SideChatError('Parent session not found', 'PARENT_NOT_FOUND');
     const parentMessages = await this.options.loadParentMessages(parentConversationId);
+    const parentConfig = await this.options.getParentConfig?.(parentConversationId) ?? null;
     if (this.stopped) throw new SideChatError('Gateway is stopping', 'CAPACITY_REACHED');
     let selections;
     try {
@@ -154,6 +170,8 @@ export class EphemeralSideChatManager {
       }),
       config,
       runtime,
+      parentMetadata: structuredClone(metadata),
+      parentConfig: structuredClone(parentConfig),
     };
     this.entries.set(id, entry);
     return this.toView(entry);
@@ -172,6 +190,33 @@ export class EphemeralSideChatManager {
     const messages = entry.runtime.loadConversationMessages();
     entry.messageCount = messages.length;
     return structuredClone(messages);
+  }
+
+  beginPromotion(id: string, clientInstanceId: string): SideChatPromotionSnapshot {
+    const entry = this.requireEntry(id, clientInstanceId);
+    if (entry.status !== 'idle') throw new SideChatError('Side chat is busy', 'CONFLICT');
+    const conversationRows = entry.runtime.loadConversationRows();
+    if (entry.runtime.loadConversationMessages().length === 0) {
+      throw new SideChatError('Side chat has no messages to save', 'INVALID_REQUEST');
+    }
+    entry.status = 'promoting';
+    entry.expiresAt = null;
+    return structuredClone({
+      id: entry.id,
+      parentMetadata: entry.parentMetadata,
+      parentConfig: entry.parentConfig,
+      context: entry.context,
+      config: entry.config,
+      contextMessages: entry.runtime.loadBaselineMessages(),
+      conversationRows,
+    });
+  }
+
+  cancelPromotion(id: string, clientInstanceId: string): void {
+    const entry = this.requireEntry(id, clientInstanceId);
+    if (entry.status !== 'promoting') return;
+    entry.status = 'idle';
+    this.touchEntry(entry);
   }
 
   updateConfig(id: string, clientInstanceId: string, patch: Partial<SideChatConfig>): SideChatView {
@@ -215,6 +260,18 @@ export class EphemeralSideChatManager {
 
   async dispose(id: string, clientInstanceId: string): Promise<boolean> {
     const entry = this.entries.get(id);
+    if (entry?.clientInstanceId === clientInstanceId && entry.status === 'promoting') {
+      throw new SideChatError('Side chat is being saved', 'CONFLICT');
+    }
+    return this.disposeEntry(id, clientInstanceId);
+  }
+
+  disposePromoted(id: string, clientInstanceId: string): Promise<boolean> {
+    return this.disposeEntry(id, clientInstanceId);
+  }
+
+  private async disposeEntry(id: string, clientInstanceId: string): Promise<boolean> {
+    const entry = this.entries.get(id);
     if (!entry) {
       const pending = this.disposals.get(id);
       return pending?.clientInstanceId === clientInstanceId ? pending.promise : false;
@@ -238,9 +295,9 @@ export class EphemeralSideChatManager {
 
   async disposeClient(clientInstanceId: string): Promise<number> {
     const ids = [...this.entries.values()]
-      .filter((entry) => entry.clientInstanceId === clientInstanceId)
+      .filter((entry) => entry.clientInstanceId === clientInstanceId && entry.status !== 'promoting')
       .map((entry) => entry.id);
-    await Promise.all(ids.map((id) => this.dispose(id, clientInstanceId)));
+    await Promise.all(ids.map((id) => this.disposeEntry(id, clientInstanceId)));
     return ids.length;
   }
 
@@ -255,7 +312,7 @@ export class EphemeralSideChatManager {
     if (this.sweepTimer) clearInterval(this.sweepTimer);
     this.stopped = true;
     const entries = [...this.entries.values()];
-    await Promise.all(entries.map((entry) => this.dispose(entry.id, entry.clientInstanceId)));
+    await Promise.all(entries.map((entry) => this.disposeEntry(entry.id, entry.clientInstanceId)));
     await Promise.all([...this.disposals.values()].map((entry) => entry.promise));
     this.expired.clear();
   }
@@ -280,7 +337,7 @@ export class EphemeralSideChatManager {
     const reason = entry.status.startsWith('waiting-') ? 'waiting' : 'idle';
     this.expired.set(entry.id, { clientInstanceId: entry.clientInstanceId, reason, removeAt: this.now() + DEFAULT_IDLE_TTL_MS });
     this.pruneExpiredRecords(this.now());
-    const cleanup = this.dispose(entry.id, entry.clientInstanceId);
+    const cleanup = this.disposeEntry(entry.id, entry.clientInstanceId);
     try {
       this.options.onExpired?.(entry.id, entry.clientInstanceId, reason);
     } catch (err) {
@@ -295,7 +352,7 @@ export class EphemeralSideChatManager {
   }
 
   private toView(entry: SideChatEntry): SideChatView {
-    const { runtime: _runtime, ...view } = entry;
+    const { runtime: _runtime, parentMetadata: _parentMetadata, parentConfig: _parentConfig, ...view } = entry;
     return structuredClone({ ...view, serverNow: new Date(this.now()).toISOString() });
   }
 

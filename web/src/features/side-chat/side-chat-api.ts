@@ -90,6 +90,13 @@ export async function extendSideChat(id: string): Promise<SideChatView> {
   return response.sideChat;
 }
 
+export async function promoteSideChat(id: string): Promise<{ conversationId: string; created: boolean }> {
+  return fetchJson<{ conversationId: string; created: boolean }>(apiUrl(`/api/side-chats/${id}/promote`), {
+    method: 'POST',
+    headers: headers(),
+  });
+}
+
 export function disposeSideChatClient(): void {
   const clientId = getSideChatClientInstanceId();
   void apiFetch(apiUrl(`/api/side-chats?clientInstanceId=${encodeURIComponent(clientId)}`), {

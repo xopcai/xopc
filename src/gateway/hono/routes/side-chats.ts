@@ -171,6 +171,18 @@ export function registerSideChatRoutes(authenticated: Hono, deps: AuthenticatedR
     }
   });
 
+  authenticated.post('/api/side-chats/:sideChatId/promote', deps.chatRateLimitMiddleware, async (c) => {
+    try {
+      const result = await service.sideChatPromotions.promote(
+        c.req.param('sideChatId'),
+        readClientInstanceId(c),
+      );
+      return c.json({ ok: true, ...result }, result.created ? 201 : 200);
+    } catch (error) {
+      return respondSideChatError(c, error);
+    }
+  });
+
   authenticated.delete('/api/side-chats/:sideChatId', async (c) => {
     try {
       const removed = await service.sideChatRuns.dispose(c.req.param('sideChatId'), readClientInstanceId(c));

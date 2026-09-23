@@ -102,6 +102,35 @@ describe('EphemeralSideChatManager', () => {
     );
   });
 
+  it('freezes an idle conversation into a promotion snapshot and can roll back', async () => {
+    const manager = createManager({ options: { getParentConfig: async () => ({ responseLanguage: 'zh' }) } });
+    const sideChat = await manager.create({ parentConversationId: metadata().key, clientInstanceId: 'tab-1' });
+    manager.getRuntime(sideChat.id, 'tab-1').openSessionManager('/tmp').appendMessage({
+      role: 'user', content: 'persist me', timestamp: 2,
+    } as AgentMessage);
+
+    const snapshot = manager.beginPromotion(sideChat.id, 'tab-1');
+
+    expect(snapshot.parentConfig).toEqual({ responseLanguage: 'zh' });
+    expect(snapshot.contextMessages).toContainEqual(expect.objectContaining({ content: 'parent message' }));
+    expect(snapshot.conversationRows).toEqual([expect.objectContaining({ content: 'persist me' })]);
+    expect(manager.get(sideChat.id, 'tab-1').status).toBe('promoting');
+    expect(() => manager.beginPromotion(sideChat.id, 'tab-1')).toThrow(expect.objectContaining({ code: 'CONFLICT' }));
+    await expect(manager.dispose(sideChat.id, 'tab-1')).rejects.toMatchObject({ code: 'CONFLICT' });
+    manager.cancelPromotion(sideChat.id, 'tab-1');
+    expect(manager.get(sideChat.id, 'tab-1').status).toBe('idle');
+    await manager.disposeAll();
+  });
+
+  it('rejects promotion of an empty side chat', async () => {
+    const manager = createManager();
+    const sideChat = await manager.create({ parentConversationId: metadata().key, clientInstanceId: 'tab-1' });
+
+    expect(() => manager.beginPromotion(sideChat.id, 'tab-1'))
+      .toThrow(expect.objectContaining({ code: 'INVALID_REQUEST' }));
+    await manager.disposeAll();
+  });
+
   it('extends only on explicit activity and removes expired side chats', async () => {
     let now = 1_000;
     const manager = createManager({ now: () => now });
