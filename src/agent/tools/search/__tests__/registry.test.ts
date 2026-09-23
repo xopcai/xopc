@@ -64,4 +64,24 @@ describe('SearchProviderRegistry', () => {
     await explicit.search('query', 3);
     expect(cloud.search).toHaveBeenCalledOnce();
   });
+
+  it('does not let incomplete or disabled manual rows suppress cloud search', async () => {
+    const cloud: SearchProvider = {
+      name: 'xopc-cloud',
+      isAvailable: () => true,
+      search: vi.fn(async () => [{ title: 'Cloud', url: 'https://xopc.ai', description: 'Result' }]),
+    };
+    const registry = new SearchProviderRegistry({
+      region: 'global',
+      maxResults: 5,
+      providers: [
+        { type: 'brave', apiKey: '' },
+        { type: 'searxng', url: '  ' },
+        { type: 'tavily', apiKey: 'configured-but-disabled', disabled: true },
+      ],
+    }, { cloudProvider: cloud });
+
+    await expect(registry.search('query', 3)).resolves.toMatchObject({ provider: 'xopc-cloud' });
+    expect(cloud.search).toHaveBeenCalledOnce();
+  });
 });
