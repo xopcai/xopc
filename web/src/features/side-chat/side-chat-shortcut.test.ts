@@ -9,36 +9,36 @@ import {
 
 function keyboardEvent(overrides: Partial<KeyboardEvent> = {}): KeyboardEvent {
   return {
-    altKey: true,
+    altKey: false,
     ctrlKey: false,
     key: 'b',
     metaKey: false,
     repeat: false,
-    shiftKey: false,
+    shiftKey: true,
     ...overrides,
   } as KeyboardEvent;
 }
 
 describe('side chat shortcut', () => {
-  it('uses Option+Command+B on macOS', () => {
-    expect(sideChatShortcutLabel('darwin')).toBe('⌥⌘B');
-    expect(sideChatShortcutKeys('darwin')).toEqual(['⌥', '⌘', 'B']);
-    expect(sideChatAriaKeyShortcut('darwin')).toBe('Alt+Meta+B');
+  it('uses Command+Shift+B on macOS', () => {
+    expect(sideChatShortcutLabel('darwin')).toBe('⌘⇧B');
+    expect(sideChatShortcutKeys('darwin')).toEqual(['⌘', 'Shift', 'B']);
+    expect(sideChatAriaKeyShortcut('darwin')).toBe('Meta+Shift+B');
     expect(matchesSideChatShortcut(keyboardEvent({ metaKey: true }), 'darwin')).toBe(true);
     expect(matchesSideChatShortcut(keyboardEvent({ ctrlKey: true }), 'darwin')).toBe(false);
   });
 
-  it.each(['win32', 'linux'])('uses Ctrl+Alt+B on %s', (platform) => {
-    expect(sideChatShortcutLabel(platform)).toBe('Ctrl+Alt+B');
-    expect(sideChatShortcutKeys(platform)).toEqual(['Ctrl', 'Alt', 'B']);
-    expect(sideChatAriaKeyShortcut(platform)).toBe('Control+Alt+B');
+  it.each(['win32', 'linux'])('uses Ctrl+Shift+B on %s', (platform) => {
+    expect(sideChatShortcutLabel(platform)).toBe('Ctrl+Shift+B');
+    expect(sideChatShortcutKeys(platform)).toEqual(['Ctrl', 'Shift', 'B']);
+    expect(sideChatAriaKeyShortcut(platform)).toBe('Control+Shift+B');
     expect(matchesSideChatShortcut(keyboardEvent({ ctrlKey: true }), platform)).toBe(true);
     expect(matchesSideChatShortcut(keyboardEvent({ metaKey: true }), platform)).toBe(false);
   });
 
-  it('rejects partial, shifted, and repeated shortcuts', () => {
-    expect(matchesSideChatShortcut(keyboardEvent({ altKey: false, ctrlKey: true }), 'linux')).toBe(false);
-    expect(matchesSideChatShortcut(keyboardEvent({ ctrlKey: true, shiftKey: true }), 'linux')).toBe(false);
+  it('rejects partial, alternate, and repeated shortcuts', () => {
+    expect(matchesSideChatShortcut(keyboardEvent({ ctrlKey: true, shiftKey: false }), 'linux')).toBe(false);
+    expect(matchesSideChatShortcut(keyboardEvent({ altKey: true, ctrlKey: true }), 'linux')).toBe(false);
     expect(matchesSideChatShortcut(keyboardEvent({ ctrlKey: true, repeat: true }), 'linux')).toBe(false);
   });
 });
