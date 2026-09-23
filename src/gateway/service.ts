@@ -710,6 +710,7 @@ export class GatewayService {
       getChatPreviewService: () => this.chatPreviews,
       dispatchTaskEvents: () => this.dispatchTaskEvents(),
       dispatchTaskRuns: () => this.dispatchTaskRuns(),
+      onAgentCatalogMutate: () => this.refreshAgentCatalog(),
       getWorkflowRunService: () => this.createWorkflowRunService(),
       sourceContextResolver: async (binding) => {
         if (binding.kind === 'note') {

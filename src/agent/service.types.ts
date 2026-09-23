@@ -43,6 +43,8 @@ export interface AgentServiceConfig {
   getChatPreviewService?: () => ChatPreviewService | undefined;
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
+  /** Gateway: refresh runtime state and notify clients after a conversational Agent mutation. */
+  onAgentCatalogMutate?: () => void;
   /**
    * Gateway: reuse the gateway `SessionManager` store so web API and agent share one index + files.
    * When omitted, `AgentService` creates its own `SessionStore` (CLI / embedded).

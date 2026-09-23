@@ -23,4 +23,31 @@ it('shares wait/stdin/cancel ownership and recovers durable terminal receipts', 
     await expect(registry.start({ owner: 'a', command: 'echo forbidden', cwd: root, env: {}, timeoutMs: 1000, signal: controller.signal })).rejects.toThrow();
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+it('redacts secrets before streaming or persisting command output', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'commands-redaction-'));
+  const registry = new CommandRegistry(root);
+  const secret = 'gateway-token-12345678901234567890';
+  const deltas: string[] = [];
+  try {
+    const script = `process.stdout.write(JSON.stringify({ token: ${JSON.stringify(secret)} }))`;
+    const started = await registry.start({
+      owner: 'redaction',
+      command: `${JSON.stringify(process.execPath)} -e ${JSON.stringify(script)}`,
+      cwd: root,
+      env: process.env,
+      timeoutMs: 5000,
+      onOutput: (_stream, delta) => deltas.push(delta),
+    });
+    const done = await registry.wait('redaction', started.id, 5000);
+    const persistedLog = await readFile(done!.logPath, 'utf8');
+    expect(done?.command).not.toContain(secret);
+    expect(done?.stdout).toContain('[REDACTED]');
+    expect(done?.stdout).not.toContain(secret);
+    expect(deltas.join('')).not.toContain(secret);
+    expect(persistedLog).not.toContain(secret);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 useTestDatabase();

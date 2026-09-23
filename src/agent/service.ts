@@ -299,6 +299,7 @@ export class AgentService {
       getChatPreviewService: config.getChatPreviewService,
       dispatchTaskEvents: config.dispatchTaskEvents,
       dispatchTaskRuns: config.dispatchTaskRuns,
+      onAgentCatalogMutate: config.onAgentCatalogMutate,
       getWorkflowRunService: config.getWorkflowRunService,
       onSkillsUpdated: config.onSkillsUpdated,
       installSkillFromSource: (opts) => this.installSkillFromSource(opts),

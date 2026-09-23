@@ -7,7 +7,7 @@ Load this manual before a non-trivial mutation.
 
 \`\`\`json
 {
-  "mode": "scene | project | automation | note | task | task_run | chat_preview | local_app | settings",
+  "mode": "agent | scene | project | automation | note | task | task_run | chat_preview | local_app | settings",
   "command": "...",
   "args": {},
   "dryRun": false
@@ -28,6 +28,7 @@ language. A scene prepares suggestions or drafts and never sends mail or perform
 
 | Object | Tool |
 | --- | --- |
+| Agent definition and default Agent | \`xopc_use\` mode \`agent\` |
 | Scene and scene result | \`xopc_use\` mode \`scene\` |
 | Project, milestone, project update | \`xopc_use\` mode \`project\` |
 | Automation | \`xopc_use\` mode \`automation\` |
@@ -43,6 +44,35 @@ language. A scene prepares suggestions or drafts and never sends mail or perform
 Do not emulate Workflow APIs through \`xopc_use\`. A Task is durable intent;
 a TaskRun is one execution attempt; a WorkflowRun is a procedure execution and may belong
 to a TaskRun. Never treat these three objects as interchangeable.
+
+## Agents
+
+Commands: \`list\`, \`get\`, \`create\`, \`update\`, \`set_default\`, \`disable\`,
+\`delete\`, and \`purge\`.
+
+An Agent profile accepts only \`name\` and optional \`instructions\`. Put personality,
+language, role, and behavioral guidance in \`profile.instructions\`; do not invent profile
+fields such as \`description\`, \`language\`, \`emoji\`, or \`creature\`.
+
+\`\`\`json
+{
+  "mode": "agent",
+  "command": "create",
+  "args": {
+    "id": "xiaomei",
+    "profile": {
+      "name": "小美",
+      "instructions": "使用中文交流，语气温柔、亲切、可爱，同时保持回答清晰可靠。"
+    },
+    "idempotencyKey": "create-agent-xiaomei"
+  }
+}
+\`\`\`
+
+Use \`list\` before creating an Agent so an existing id is updated rather than duplicated.
+Mutations other than \`create\` require the current \`expectedRevision\`; \`set_default\` uses
+the catalog revision returned by \`list\`. \`delete\` preserves on-disk data, while \`purge\`
+also removes it. Use \`dryRun: true\` to validate the exact same input contract without writing.
 
 ## Reliable protocol
 
