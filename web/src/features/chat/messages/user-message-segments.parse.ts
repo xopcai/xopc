@@ -1,16 +1,14 @@
-import { fileWireTokenRe, formatFilePathForWire, pathFromFileWireMatch } from '@/features/chat/palette/file-wire-pattern';
 import { collectSlashCommandWireRanges } from '@/features/chat/palette/slash-command-wire';
 import { skillWireTokenRe } from '@/features/chat/palette/skill-wire-pattern';
 
 export type MessageSegment =
   | { kind: 'text'; text: string }
   | { kind: 'skill'; name: string }
-  | { kind: 'file'; path: string }
   | { kind: 'command'; name: string };
 
 export type SkillWireSegment = { kind: 'text'; text: string } | { kind: 'skill'; name: string };
 
-/** Parse `/skill:`, `@file:`, and registered `/slashCommand` wire tokens. */
+/** Parse skill and command tokens. Source references use structured user-turn documents. */
 export function parseMessageSegments(text: string): MessageSegment[] {
   type Hit = { start: number; end: number; seg: MessageSegment };
   const hits: Hit[] = [];
@@ -22,7 +20,6 @@ export function parseMessageSegments(text: string): MessageSegment[] {
     }
   };
   add(skillWireTokenRe(), (m) => ({ kind: 'skill', name: m[1] ?? '' }));
-  add(fileWireTokenRe(), (m) => ({ kind: 'file', path: pathFromFileWireMatch(m) }));
   for (const r of collectSlashCommandWireRanges(text)) {
     hits.push({
       start: r.start,
@@ -63,11 +60,6 @@ export function parseSkillWireSegments(text: string): SkillWireSegment[] {
       else merged.push(p);
     } else if (p.kind === 'command') {
       const chunk = `/${p.name}`;
-      const prev = merged[merged.length - 1];
-      if (prev?.kind === 'text') prev.text += chunk;
-      else merged.push({ kind: 'text', text: chunk });
-    } else {
-      const chunk = `@file:${formatFilePathForWire(p.path)}`;
       const prev = merged[merged.length - 1];
       if (prev?.kind === 'text') prev.text += chunk;
       else merged.push({ kind: 'text', text: chunk });

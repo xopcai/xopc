@@ -2,6 +2,7 @@ import { memo, type ReactNode } from 'react';
 
 import { ChatWelcomeSpotlight } from '@/features/chat/chat-welcome-spotlight';
 import { MessageBubble } from '@/features/chat/messages/message-bubble';
+import { InlinePreviewSchedulerProvider } from '@/features/chat/product-delivery/inline-preview-scheduler';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages/messages.types';
 import { isLastUserMessageInThread } from '@/features/chat/messages/user-message-plain-text';
 import { messageRowKey } from '@/features/chat/messages/thinking-blocks';
@@ -118,8 +119,9 @@ export const MessageList = memo(function MessageList({
   const now = Date.now();
 
   return (
-    <div ref={registerListContentRef} className="flex w-full min-w-0 flex-col gap-8 pb-8">
-      {list.map((msg, index) => {
+    <InlinePreviewSchedulerProvider>
+      <div ref={registerListContentRef} className="flex w-full min-w-0 flex-col gap-8 pb-8">
+        {list.map((msg, index) => {
         const isLast = index === list.length - 1;
         const isStreamRow = Boolean(streaming && isLast && msg.role === 'assistant');
         const isLastUserRow = isLastUserMessageInThread(list, index);
@@ -182,8 +184,9 @@ export const MessageList = memo(function MessageList({
             />
           </div>
         );
-      })}
-      {trailingContent}
-    </div>
+        })}
+        {trailingContent}
+      </div>
+    </InlinePreviewSchedulerProvider>
   );
 });

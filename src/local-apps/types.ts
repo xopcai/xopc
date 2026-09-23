@@ -1,43 +1,41 @@
-export type LocalAppStatus = 'preview_ready' | 'installed' | 'degraded';
-export type LocalAppInstallationState = 'not_installed' | 'installed';
-export type LocalAppReleaseHealth = 'healthy' | 'failed';
+import type {
+  LocalAppAcceptanceInput,
+  LocalAppAcceptanceRun,
+  LocalAppAcceptanceScenarioSummary,
+  LocalAppChangedFile,
+  LocalAppDetail,
+  LocalAppDiagnostic,
+  LocalAppDiagnosticPhase,
+  LocalAppFixGuidance,
+  LocalAppFixGuidanceInput,
+  LocalAppInstallationState,
+  LocalAppRecord,
+  LocalAppRelease,
+  LocalAppReleaseHealth,
+  LocalAppStatus,
+  LocalAppValidationIssue,
+  LocalAppValidationResult,
+} from '@xopcai/gateway-contract';
 
-export interface LocalAppRelease {
-  id: string;
-  appId: string;
-  version: number;
-  sourceHash: string;
-  healthStatus: LocalAppReleaseHealth;
-  createdAt: number;
-  activatedAt?: number;
-  isActive: boolean;
-}
+export type LocalApp = LocalAppRecord;
+export type RecordLocalAppAcceptanceInput = LocalAppAcceptanceInput;
 
-export interface LocalApp {
-  id: string;
-  extensionId: string;
-  projectId: string;
-  name: string;
-  description?: string;
-  idea: string;
-  status: LocalAppStatus;
-  workspaceRoot: string;
-  draftVersion: number;
-  activeVersion?: number;
-  activeReleaseId?: string;
-  installationState: LocalAppInstallationState;
-  enabled: boolean;
-  createdAt: number;
-  updatedAt: number;
-  installedAt?: number;
-}
-
-export interface LocalAppDetail extends LocalApp {
-  previewUrl: string;
-  permissions: string[];
-  releases: LocalAppRelease[];
-  acceptanceRuns: LocalAppAcceptanceRun[];
-}
+export type {
+  LocalAppAcceptanceRun,
+  LocalAppAcceptanceScenarioSummary,
+  LocalAppChangedFile,
+  LocalAppDetail,
+  LocalAppDiagnostic,
+  LocalAppDiagnosticPhase,
+  LocalAppFixGuidance,
+  LocalAppFixGuidanceInput,
+  LocalAppInstallationState,
+  LocalAppRelease,
+  LocalAppReleaseHealth,
+  LocalAppStatus,
+  LocalAppValidationIssue,
+  LocalAppValidationResult,
+};
 
 export interface LocalAppUiGrant {
   granted: boolean;
@@ -46,83 +44,6 @@ export interface LocalAppUiGrant {
   manifestDigest?: string;
   permissions: string[];
   grantedAt?: number;
-}
-
-export interface LocalAppAcceptanceCheck {
-  id: 'document' | 'content' | 'interaction' | 'criteria';
-  status: 'passed' | 'failed' | 'skipped';
-  message: string;
-}
-
-export interface LocalAppAcceptanceRun {
-  id: string;
-  appId: string;
-  sourceHash: string;
-  status: 'passed' | 'failed';
-  checks: LocalAppAcceptanceCheck[];
-  interactiveCount: number;
-  createdAt: number;
-}
-
-export interface RecordLocalAppAcceptanceInput {
-  sourceHash: string;
-  status: 'passed' | 'failed';
-  checks: LocalAppAcceptanceCheck[];
-  interactiveCount: number;
-}
-
-export interface LocalAppValidationIssue {
-  code: string;
-  severity: 'error' | 'warning';
-  message: string;
-}
-
-export interface LocalAppChangedFile {
-  path: string;
-  status: 'added' | 'modified' | 'deleted';
-}
-
-export interface LocalAppAcceptanceScenarioSummary {
-  id: string;
-  name: string;
-  stepCount: number;
-}
-
-export interface LocalAppValidationResult {
-  status: 'healthy' | 'failed';
-  checkedAt: number;
-  sourceHash?: string;
-  hasDraftChanges: boolean;
-  changedFiles: LocalAppChangedFile[];
-  changedFileCount: number;
-  permissions: string[];
-  permissionDelta: { added: string[]; removed: string[] };
-  acceptanceScenarioCount: number;
-  acceptanceScenarios: LocalAppAcceptanceScenarioSummary[];
-  issues: LocalAppValidationIssue[];
-}
-
-export type LocalAppDiagnosticPhase = 'build' | 'boot' | 'runtime' | 'acceptance' | 'runner' | 'capability';
-
-export interface LocalAppDiagnostic {
-  phase: LocalAppDiagnosticPhase;
-  message: string;
-  code?: string;
-}
-
-export interface LocalAppFixGuidanceInput {
-  sourceHash?: string;
-  locale?: 'en' | 'zh';
-  diagnostics: LocalAppDiagnostic[];
-}
-
-export interface LocalAppFixGuidance {
-  appId: string;
-  sourceHash?: string;
-  owner: 'generated_code' | 'platform' | 'configuration';
-  action: 'fix_code' | 'retry' | 'fix_config';
-  diagnostics: LocalAppDiagnostic[];
-  prompt: string;
 }
 
 export interface CreateLocalAppInput {

@@ -199,6 +199,7 @@ export interface AgentManagerConfig {
   getProjectService?: () => ProjectService | undefined;
   getWorkDiscovery?: () => import('../work-discovery/service.js').WorkDiscoveryService | undefined;
   getLocalAppService?: () => import('../local-apps/index.js').LocalAppService | undefined;
+  getChatPreviewService?: () => import('../chat-previews/index.js').ChatPreviewService | undefined;
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
@@ -481,6 +482,7 @@ export class AgentManager implements AgentInstanceGateway {
       getProjectService: this.config.getProjectService,
       getWorkDiscovery: this.config.getWorkDiscovery,
       getLocalAppService: this.config.getLocalAppService,
+      getChatPreviewService: this.config.getChatPreviewService,
       dispatchTaskEvents: this.config.dispatchTaskEvents,
       dispatchTaskRuns: this.config.dispatchTaskRuns,
       getWorkflowRunService: this.config.getWorkflowRunService,

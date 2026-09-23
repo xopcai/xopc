@@ -613,13 +613,13 @@ export function LocalAppWorkbenchPage() {
 
       <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface">
         <div className="flex h-11 shrink-0 items-center justify-between border-b border-edge-subtle px-3"><div className="flex items-center gap-2 text-xs font-medium text-fg-muted"><span className={`size-2 rounded-full ${validation?.status === 'failed' || runtimeHealth === 'failed' || runtimeHealth === 'timeout' || acceptanceResult?.status === 'failed' ? 'bg-danger' : validation?.status === 'healthy' && runtimeHealth === 'healthy' && acceptanceResult?.status === 'passed' && currentAcceptanceRun?.sourceHash === validation.sourceHash && !savingAcceptance ? 'bg-success' : 'bg-fg-subtle'}`} />{runtimeHealth === 'failed' || runtimeHealth === 'timeout' ? (zh ? '预览运行异常' : 'Preview runtime issue') : validation?.status === 'failed' || acceptanceResult?.status === 'failed' ? (zh ? '自动验收未通过' : 'Acceptance needs attention') : runtimeHealth === 'booting' || !acceptanceResult ? (zh ? '自动验收中' : 'Running acceptance') : savingAcceptance || currentAcceptanceRun?.sourceHash !== validation?.sourceHash ? (zh ? '正在保存验收快照' : 'Saving acceptance snapshot') : (zh ? '草稿已通过验收' : 'Draft accepted')}</div><Button variant="ghost" className="h-8 px-2" onClick={() => void runDraftChecks(true)} disabled={checkingDraft}>{checkingDraft ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}{zh ? '重新验收' : 'Run again'}</Button></div>
-        <iframe ref={iframeRef} key={previewKey} title={`${app.name} preview`} src={apiUrl(app.previewUrl)} sandbox={LOCAL_APP_PREVIEW_SANDBOX} className="min-h-0 w-full flex-1 bg-white" onError={() => { setRuntimeIssue({ kind: 'script_error', message: 'Preview document failed to load' }); setRuntimeHealth('failed'); }} />
+        <iframe ref={iframeRef} key={previewKey} title={`${app.name} preview`} src={apiUrl(app.draftPreviewUrl)} sandbox={LOCAL_APP_PREVIEW_SANDBOX} className="min-h-0 w-full flex-1 bg-white" onError={() => { setRuntimeIssue({ kind: 'script_error', message: 'Preview document failed to load' }); setRuntimeHealth('failed'); }} />
         {validation?.status === 'healthy' && validation.acceptanceScenarioCount > 0 ? (
           <iframe
             ref={criteriaIframeRef}
             key={`criteria-${previewKey}-${criteriaRunKey}-${criteriaScenarioIndex}`}
             title={`${app.name} acceptance runner`}
-            src={`${apiUrl(app.previewUrl)}?xopcAcceptance=1&xopcScenario=${encodeURIComponent(
+            src={`${apiUrl(app.draftPreviewUrl)}?xopcAcceptance=1&xopcScenario=${encodeURIComponent(
               criteriaRunTarget === 'all'
                 ? acceptanceScenarios[criteriaScenarioIndex]?.id ?? ''
                 : criteriaRunTarget,

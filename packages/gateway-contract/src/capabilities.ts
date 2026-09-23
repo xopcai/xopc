@@ -8,6 +8,17 @@ import { TaskValueMetricsSchema } from './home.js';
 import { sceneTemplateSchema, SceneActivationSchema, scenePreferencesSchema, activationInputSchema, SceneConfigureSchema,
   SceneWorkItemCreateSchema, SceneWorkItemUpdateSchema, SceneWorkItemSchema, sceneNotesSchema,
   ScenePreferencePatchSchema, SceneFeedbackSchema, SceneTransitionSchema, sceneScheduleSchema } from './scenes.js';
+import {
+  LocalAppDetailSchema,
+  LocalAppRecordSchema,
+  LocalAppValidationSchema,
+} from './local-apps.js';
+
+export {
+  LocalAppDetailSchema,
+  LocalAppRecordSchema,
+  LocalAppValidationSchema,
+} from './local-apps.js';
 
 export const CapabilitySurfaceSchema = z.enum(['http', 'agent', 'cli', 'automation', 'mcp', 'extension']);
 export type CapabilitySurface = z.infer<typeof CapabilitySurfaceSchema>;
@@ -53,15 +64,6 @@ export interface CapabilityDescriptor {
 }
 
 export const CapabilityResourceInputSchema = z.strictObject({ id: z.string().trim().min(1).max(512) });
-export const LocalAppAcceptanceInputSchema = z.strictObject({
-  sourceHash: z.string().regex(/^[a-f0-9]{64}$/), status: z.enum(['passed', 'failed']),
-  interactiveCount: z.number().int().min(0).max(10000),
-  checks: z.array(z.strictObject({ id: z.enum(['document', 'content', 'interaction', 'criteria']),
-    status: z.enum(['passed', 'failed', 'skipped']), message: z.string().trim().min(1).max(500) })).min(3).max(4),
-});
-export const LocalAppAcceptanceOutputSchema = LocalAppAcceptanceInputSchema.extend({
-  id: z.string(), appId: z.string(), createdAt: z.number().int().nonnegative(),
-});
 export const ScenePageInputSchema = z.strictObject({ limit: z.number().int().min(1).max(100).default(50), afterId: z.string().max(200).default('') });
 export const SceneWriteContracts = {
   'xopc.scenes.start': { input: activationInputSchema, output: z.object({ activation: SceneActivationSchema }) },
@@ -237,30 +239,8 @@ export const ProjectListInputSchema = z.strictObject({
   sortBy: z.enum(['updatedAt', 'createdAt', 'name']).optional(), sortOrder: z.enum(['asc', 'desc']).optional(),
   limit: z.number().int().min(1).max(500).default(50), offset: z.number().int().nonnegative().default(0),
 });
-export const LocalAppRecordSchema = z.looseObject({
-  id: z.string(), extensionId: z.string(), projectId: z.string(), name: z.string(), idea: z.string(),
-  status: z.enum(['preview_ready', 'installed', 'degraded']), workspaceRoot: z.string(),
-  draftVersion: z.number().int(), installationState: z.enum(['not_installed', 'installed']), enabled: z.boolean(),
-  createdAt: z.number(), updatedAt: z.number(),
-});
-export const LocalAppDetailSchema = LocalAppRecordSchema.extend({
-  previewUrl: z.string(), permissions: z.array(z.string()),
-  releases: z.array(z.looseObject({ id: z.string(), appId: z.string(), version: z.number().int(), sourceHash: z.string(),
-    healthStatus: z.enum(['healthy', 'failed']), createdAt: z.number(), isActive: z.boolean() })),
-  acceptanceRuns: z.array(z.looseObject({ id: z.string(), appId: z.string(), sourceHash: z.string(),
-    status: z.enum(['passed', 'failed']), createdAt: z.number(), interactiveCount: z.number().int().nonnegative(),
-    checks: z.array(z.object({ id: z.enum(['document', 'content', 'interaction', 'criteria']), status: z.enum(['passed', 'failed', 'skipped']), message: z.string() })),
-  })),
-});
 export const ProjectMilestoneSchema = z.looseObject({ id: z.string(), projectId: z.string(), title: z.string(),
   status: z.enum(['planned', 'active', 'completed', 'cancelled']), sortOrder: z.number(), createdAt: z.number(), updatedAt: z.number() });
-export const LocalAppValidationSchema = z.object({
-  status: z.enum(['healthy', 'failed']), checkedAt: z.number(), sourceHash: z.string().optional(), hasDraftChanges: z.boolean(),
-  changedFiles: z.array(z.object({ path: z.string(), status: z.enum(['added', 'modified', 'deleted']) })), changedFileCount: z.number().int().nonnegative(),
-  permissions: z.array(z.string()), permissionDelta: z.object({ added: z.array(z.string()), removed: z.array(z.string()) }),
-  acceptanceScenarioCount: z.number().int().nonnegative(), acceptanceScenarios: z.array(z.object({ id: z.string(), name: z.string(), stepCount: z.number().int().nonnegative() })),
-  issues: z.array(z.object({ code: z.string(), severity: z.enum(['error', 'warning']), message: z.string() })),
-});
 export const ProjectUpdateSchema = z.looseObject({ id: z.string(), projectId: z.string(), summary: z.string(),
   health: ProjectRecordSchema.shape.health, createdAt: z.number() });
 const MilestoneFields = {

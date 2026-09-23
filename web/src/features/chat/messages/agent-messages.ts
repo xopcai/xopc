@@ -1,4 +1,4 @@
-import { parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
+import { isUserTurnDocument, parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
 
 import type {
   Message,
@@ -321,6 +321,7 @@ function buildUserMessage(m: WireMessage): Message {
     content: blocks,
     attachments: wireAttachmentsFromMessage(m),
     contextRefs: normalizeMessageContextRefs(m.metadata),
+    userTurnDocument: normalizeUserTurnDocument(m.metadata),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     usage: m.usage as Message['usage'],
   };
@@ -340,6 +341,7 @@ function normalizeMessageContextRefs(metadata: unknown): Message['contextRefs'] 
       || typeof row.title !== 'string'
     ) return [];
     return [{
+      ...(typeof row.refId === 'string' ? { refId: row.refId } : {}),
       kind: row.kind,
       sourceId: row.sourceId,
       version: row.version,
@@ -352,6 +354,11 @@ function normalizeMessageContextRefs(metadata: unknown): Message['contextRefs'] 
     }];
   });
   return refs.length > 0 ? refs : undefined;
+}
+
+function normalizeUserTurnDocument(metadata: unknown): Message['userTurnDocument'] {
+  const document = asRecord(metadata)?.userTurnDocument;
+  return isUserTurnDocument(document) ? document : undefined;
 }
 
 function buildAssistantMessage(m: WireMessage): Message {

@@ -13,7 +13,6 @@ export type {
 export type {
   CreateLocalAppInput,
   LocalApp,
-  LocalAppAcceptanceCheck,
   LocalAppAcceptanceScenarioSummary,
   LocalAppAcceptanceRun,
   LocalAppDetail,
@@ -28,3 +27,4 @@ export type {
   LocalAppUiGrant,
   RecordLocalAppAcceptanceInput,
 } from './types.js';
+export type { LocalAppAcceptanceCheck } from '@xopcai/gateway-contract';

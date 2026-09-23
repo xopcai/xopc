@@ -1,8 +1,9 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { relative, resolve } from 'node:path';
 
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
+import { LocalAppSourceHashSchema } from '@xopcai/gateway-contract';
 import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
 import { capabilityHttpContext, capabilityHttpError } from '../../../capabilities/adapters/http.js';
 
@@ -16,6 +17,7 @@ import {
 import { readLocalAppAcceptanceConfig } from '../../../local-apps/acceptance.js';
 import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
 import { parseLocalAppFixGuidanceInput } from '../../../local-apps/fix-guidance.js';
+import type { LocalAppPreviewTarget } from '../../../local-apps/types.js';
 
 const LOCAL_APP_PREVIEW_CSP =
   "default-src 'self'; " +
@@ -29,48 +31,71 @@ const LOCAL_APP_PREVIEW_CSP =
   "object-src 'none'; " +
   "form-action 'none'";
 
-export function registerPublicLocalAppPreviewRoutes(app: Hono, service: GatewayService): void {
-  app.get('/api/local-apps/preview/:token/*', (c) => {
-    const origin = c.req.header('origin');
-    const cors = { 'Access-Control-Allow-Origin': origin === 'null' ? 'null' : origin || '*' } as const;
-    const preview = service.localApps.resolvePreview(c.req.param('token'));
-    if (!preview) return c.json({ error: 'Preview not found' }, 404, cors);
-    const prefix = `/api/local-apps/preview/${preview.previewToken}/`;
-    let assetPath = c.req.path.startsWith(prefix) ? c.req.path.slice(prefix.length) : '';
+function servePreviewAsset(
+  c: Context,
+  preview: LocalAppPreviewTarget,
+  prefix: string,
+  cacheControl: string,
+): Response {
+  const origin = c.req.header('origin');
+  const cors = { 'Access-Control-Allow-Origin': origin === 'null' ? 'null' : origin || '*' } as const;
+  let assetPath = c.req.path.startsWith(prefix) ? c.req.path.slice(prefix.length) : '';
+  try {
+    assetPath = decodeURIComponent(assetPath);
+  } catch {
+    return c.json({ error: 'Invalid asset path' }, 400, cors);
+  }
+  if (!assetPath || assetPath.includes('..')) return c.json({ error: 'Invalid asset path' }, 400, cors);
+  if (!existsSync(preview.uiRoot)) return c.json({ error: 'Not found' }, 404, cors);
+  const root = realpathSync(resolve(preview.uiRoot));
+  const unresolvedPath = resolve(root, assetPath);
+  const fullPath = existsSync(unresolvedPath) ? realpathSync(unresolvedPath) : unresolvedPath;
+  const rel = relative(root, fullPath);
+  if (rel.startsWith('..') || rel === '') return c.json({ error: 'Path traversal denied' }, 403, cors);
+  if (!existsSync(fullPath) || !statSync(fullPath).isFile()) return c.json({ error: 'Not found' }, 404, cors);
+  const mimeType = extensionAssetMimeType(assetPath);
+  const content = readFileSync(fullPath);
+  let textContent: string | null = null;
+  if (mimeType.startsWith('text/html')) {
+    let acceptance;
     try {
-      assetPath = decodeURIComponent(assetPath);
+      acceptance = readLocalAppAcceptanceConfig(preview.uiRoot);
     } catch {
-      return c.json({ error: 'Invalid asset path' }, 400, cors);
+      acceptance = { schemaVersion: 1 as const, scenarios: [] };
     }
-    if (!assetPath || assetPath.includes('..')) return c.json({ error: 'Invalid asset path' }, 400, cors);
-    const root = resolve(preview.uiRoot);
-    const fullPath = resolve(root, assetPath);
-    const rel = relative(root, fullPath);
-    if (rel.startsWith('..') || rel === '') return c.json({ error: 'Path traversal denied' }, 403, cors);
-    if (!existsSync(fullPath) || !statSync(fullPath).isFile()) return c.json({ error: 'Not found' }, 404, cors);
-    const mimeType = extensionAssetMimeType(assetPath);
-    const content = readFileSync(fullPath);
-    let textContent: string | null = null;
-    if (mimeType.startsWith('text/html')) {
-      let acceptance;
-      try {
-        acceptance = readLocalAppAcceptanceConfig(preview.uiRoot);
-      } catch {
-        acceptance = { schemaVersion: 1 as const, scenarios: [] };
-      }
-      textContent = injectLocalAppRuntimeBridge(content.toString('utf8'), acceptance);
-    } else if (mimeType.startsWith('text/')) {
-      textContent = content.toString('utf8');
-    }
-    return new Response(textContent ?? new Uint8Array(content), {
-      headers: {
-        'Content-Type': mimeType,
-        'Content-Security-Policy': LOCAL_APP_PREVIEW_CSP,
-        'Cache-Control': 'no-store',
-        'X-Content-Type-Options': 'nosniff',
-        ...cors,
-      },
-    });
+    textContent = injectLocalAppRuntimeBridge(content.toString('utf8'), acceptance);
+  } else if (mimeType.startsWith('text/')) {
+    textContent = content.toString('utf8');
+  }
+  return new Response(textContent ?? new Uint8Array(content), {
+    headers: {
+      'Content-Type': mimeType,
+      'Content-Security-Policy': LOCAL_APP_PREVIEW_CSP,
+      'Cache-Control': cacheControl,
+      'X-Content-Type-Options': 'nosniff',
+      ...cors,
+    },
+  });
+}
+
+export function registerPublicLocalAppPreviewRoutes(app: Hono, service: GatewayService): void {
+  app.get('/api/local-apps/preview/:token/draft/*', (c) => {
+    const preview = service.localApps.resolveDraftPreview(c.req.param('token'));
+    if (!preview) return c.json({ error: 'Preview not found' }, 404);
+    return servePreviewAsset(c, preview, `/api/local-apps/preview/${preview.previewToken}/draft/`, 'no-store');
+  });
+
+  app.get('/api/local-apps/preview/:token/snapshots/:sourceHash/*', (c) => {
+    const sourceHash = LocalAppSourceHashSchema.safeParse(c.req.param('sourceHash'));
+    if (!sourceHash.success) return c.json({ error: 'Invalid snapshot hash' }, 400);
+    const preview = service.localApps.resolveSnapshotPreview(c.req.param('token'), sourceHash.data);
+    if (!preview) return c.json({ error: 'Preview not found' }, 404);
+    return servePreviewAsset(
+      c,
+      preview,
+      `/api/local-apps/preview/${preview.previewToken}/snapshots/${sourceHash.data}/`,
+      'private, max-age=31536000, immutable',
+    );
   });
 }
 
@@ -97,6 +122,13 @@ export function registerLocalAppsRoutes(app: Hono, deps: AuthenticatedRouteDeps)
   app.get('/api/local-apps/:id', async (c) => {
     try { return c.json(await capabilities.call('xopc.local_apps.get', { id: c.req.param('id') }, capabilityHttpContext(c))); }
     catch (error) { return capabilityHttpError(c, error); }
+  });
+
+  app.get('/api/local-apps/:id/snapshots/:sourceHash', (c) => {
+    const sourceHash = LocalAppSourceHashSchema.safeParse(c.req.param('sourceHash'));
+    if (!sourceHash.success) return c.json({ error: 'Invalid snapshot hash' }, 400);
+    const snapshot = deps.service.localApps.getSnapshot(c.req.param('id'), sourceHash.data);
+    return snapshot ? c.json({ snapshot }) : c.json({ error: 'Snapshot not found' }, 404);
   });
 
   app.post('/api/local-apps/:id/validate', async (c) => {

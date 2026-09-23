@@ -86,6 +86,7 @@ import { PACKAGE_VERSION } from '../package-version.js';
 import { NotificationService } from '../notifications/service.js';
 import { ProjectService, resolveProjectAgentId } from '../projects/index.js';
 import { LocalAppService } from '../local-apps/index.js';
+import { ChatPreviewService } from '../chat-previews/index.js';
 import {
   TaskRepository,
   TaskApplicationService,
@@ -334,6 +335,8 @@ export class GatewayService {
 
   /** Local user-created apps, their coder projects, previews, and installs. */
   readonly localApps: LocalAppService;
+  /** Immutable, conversation-scoped UI previews that do not create projects. */
+  readonly chatPreviews: ChatPreviewService;
 
   get sceneAccess(): SceneAccess | undefined {
     return this.sceneHost ? { services: this.sceneHost.http,
@@ -506,6 +509,7 @@ export class GatewayService {
       getExtensionLoader: () => this.extensionLoader,
       emit: (type, payload) => this.emit(type, payload),
     });
+    this.chatPreviews = new ChatPreviewService({ localApps: this.localApps });
 
     this.agentRunner = new GatewayAgentRunner({
       validateConnectionResume: async input => {
@@ -684,6 +688,7 @@ export class GatewayService {
       getProjectService: () => this.projects,
       getWorkDiscovery: () => this._workDiscovery ?? undefined,
       getLocalAppService: () => this.localApps,
+      getChatPreviewService: () => this.chatPreviews,
       dispatchTaskEvents: () => this.dispatchTaskEvents(),
       dispatchTaskRuns: () => this.dispatchTaskRuns(),
       getWorkflowRunService: () => this.createWorkflowRunService(),

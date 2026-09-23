@@ -127,7 +127,10 @@ export class GatewayAgentRunner {
           throw new Error(`A message can reference at most ${MAX_TURN_CONTEXTS} sources`);
         }
         const contexts = await Promise.all(
-          [...unique.values()].map((ref) => opts.resolveTurnContext(ref, conversationId)),
+          [...unique.values()].map(async (ref) => {
+            const context = await opts.resolveTurnContext(ref, conversationId);
+            return context && ref.refId ? { ...context, refId: ref.refId } : context;
+          }),
         );
         if (contexts.some((context) => context === null)) {
           throw new Error('A referenced source is unavailable or has changed; select it again');

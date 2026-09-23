@@ -179,8 +179,10 @@ function preserveLocalUserDisplayPayload(existing: Message, incoming: Message): 
   if (!userMessagesEquivalent(existing, incoming)) return incoming;
   const attachments = incoming.attachments?.length ? incoming.attachments : existing.attachments;
   const contextRefs = incoming.contextRefs?.length ? incoming.contextRefs : existing.contextRefs;
-  if (attachments === incoming.attachments && contextRefs === incoming.contextRefs) return incoming;
-  return { ...incoming, attachments, contextRefs };
+  const userTurnDocument = incoming.userTurnDocument ?? existing.userTurnDocument;
+  if (attachments === incoming.attachments && contextRefs === incoming.contextRefs
+    && userTurnDocument === incoming.userTurnDocument) return incoming;
+  return { ...incoming, attachments, contextRefs, userTurnDocument };
 }
 
 /** Keep row identities stable when a background history refresh returns unchanged data. */
@@ -679,9 +681,15 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
         }
         const last = current.messages[current.messages.length - 1];
         if (last && shouldReplaceOptimisticUserRow(last, message)) {
-          const replacement = message.contextRefs?.length || !last.contextRefs?.length
-            ? message
-            : { ...message, contextRefs: last.contextRefs };
+          const replacement = {
+            ...message,
+            ...(!message.contextRefs?.length && last.contextRefs?.length
+              ? { contextRefs: last.contextRefs }
+              : {}),
+            ...(!message.userTurnDocument && last.userTurnDocument
+              ? { userTurnDocument: last.userTurnDocument }
+              : {}),
+          };
           return {
             sessions: {
               ...state.sessions,

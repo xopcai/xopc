@@ -1,8 +1,9 @@
-import { useMediaQuery } from '@/lib/use-media-query';
-import { ConnectionActionBar } from '../connections/connection-action-bar';
+import { parseUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { useMediaQuery } from '@/lib/use-media-query';
+import { ConnectionActionBar } from '../connections/connection-action-bar';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
 import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -124,6 +125,7 @@ export const ChatComposer = memo(function ChatComposer({
   voiceAgentName,
   voiceTaskId,
   prepareVoiceSession,
+  prepareContextSession,
   editingUserTurnId,
   onCancelUserMessageEdit,
 }: {
@@ -173,6 +175,7 @@ export const ChatComposer = memo(function ChatComposer({
   voiceAgentName?: string;
   voiceTaskId?: string;
   prepareVoiceSession?: () => Promise<string>;
+  prepareContextSession?: () => Promise<string | null>;
   editingUserTurnId?: string | null;
   onCancelUserMessageEdit?: () => void;
 }) {
@@ -236,8 +239,18 @@ export const ChatComposer = memo(function ChatComposer({
   }, [m.chat.commandPalette, conversationId, workspaceTrustSaving]);
 
   const att = useComposerAttachments({ chat: m.chat });
+  const contextRefsRef = useRef(contextRefs);
+  contextRefsRef.current = contextRefs;
+  const resolveContextRef = useCallback((refId: string) => {
+    const ref = contextRefs.find((candidate) => candidate.refId === refId);
+    return ref
+      ? { title: ref.title, kind: ref.kind, fileKind: ref.fileKind }
+      : undefined;
+  }, [contextRefs]);
   const onExternalTextReplace = useCallback((detail?: FillChatComposerDetail) => {
-    setContextRefs(detail?.contextRefs ?? []);
+    const nextRefs = detail?.contextRefs ?? [];
+    contextRefsRef.current = nextRefs;
+    setContextRefs(nextRefs);
     if (detail?.attachments) {
       att.setAttachments(detail.attachments.map(composerAttachmentFromWire));
       return;
@@ -245,17 +258,27 @@ export const ChatComposer = memo(function ChatComposer({
     att.clearAttachments();
   }, [att.clearAttachments, att.setAttachments, setContextRefs]);
 
-  const addContextRef = useCallback((ref: ComposerContextRef) => {
-    setContextRefs((current) => {
-      if (current.some((item) => item.sourceId === ref.sourceId)) return current;
-      if (current.length >= MAX_COMPOSER_CONTEXT_REFS) {
-        showComposerNotification('warning', m.chat.commandPalette.contextLimitReached, {
-          max: MAX_COMPOSER_CONTEXT_REFS,
-        });
-        return current;
-      }
-      return [...current, ref];
-    });
+  const addContextRef = useCallback((ref: ComposerContextRef): ComposerContextRef | null => {
+    const current = contextRefsRef.current;
+    const existing = current.find((item) => item.kind === ref.kind && item.sourceId === ref.sourceId);
+    if (existing) {
+      if (existing.refId) return existing;
+      const upgraded = { ...existing, refId: ref.refId };
+      const next = current.map(item => item === existing ? upgraded : item);
+      contextRefsRef.current = next;
+      setContextRefs(next);
+      return upgraded;
+    }
+    if (current.length >= MAX_COMPOSER_CONTEXT_REFS) {
+      showComposerNotification('warning', m.chat.commandPalette.contextLimitReached, {
+        max: MAX_COMPOSER_CONTEXT_REFS,
+      });
+      return null;
+    }
+    const next = [...current, ref];
+    contextRefsRef.current = next;
+    setContextRefs(next);
+    return ref;
   }, [m.chat.commandPalette.contextLimitReached, setContextRefs]);
 
   const onUnavailableSkill = useCallback(
@@ -287,6 +310,7 @@ export const ChatComposer = memo(function ChatComposer({
     welcomeDraftSeed,
     onExternalTextReplace,
     shouldSyncSelectionRef,
+    resolveContextRef,
   });
 
   const attachmentHandoffId = searchParams.get('attachmentHandoff');
@@ -313,6 +337,17 @@ export const ChatComposer = memo(function ChatComposer({
       resetEditor: editor.resetEditor,
       onWireInput: editor.onWireInput,
     });
+  const onComposerWireInput = useCallback((wire: string, caret: number) => {
+    onWireInputClearWalk(wire, caret);
+    const document = parseUserTurnDocument(wire);
+    const inlineIds = new Set(document ? userTurnDocumentRefIds(document) : []);
+    const current = contextRefsRef.current;
+    const next = current.filter(ref => !ref.refId || inlineIds.has(ref.refId));
+    if (next.length !== current.length) {
+      contextRefsRef.current = next;
+      setContextRefs(next);
+    }
+  }, [onWireInputClearWalk, setContextRefs]);
 
   const runBusy = sending || streaming;
   busyRef.current = runBusy;
@@ -347,6 +382,7 @@ export const ChatComposer = memo(function ChatComposer({
     onUserTextCommitted,
     onChatAgentChange,
     currentAgentId,
+    prepareSession: prepareContextSession,
     contextRefs,
     onAddContextRef: addContextRef,
     onUnavailableSkill,
@@ -654,7 +690,7 @@ export const ChatComposer = memo(function ChatComposer({
       />
 
       <ComposerContextChips
-        refs={contextRefs}
+        refs={contextRefs.filter(ref => !ref.refId)}
         label={m.chat.commandPalette.contextLabel}
         onRemove={(sourceId) => setContextRefs((current) => current.filter((ref) => ref.sourceId !== sourceId))}
       />
@@ -698,8 +734,7 @@ export const ChatComposer = memo(function ChatComposer({
               mcp_resource: m.chat.atMention.mcpResources,
             }}
             ariaLabel={m.chat.atMention.placeholder}
-            shiftHint={m.chat.atMention.shiftHint}
-            onSelectItem={(it, meta) => pickers.applyAtMention(it, { stayOpen: meta?.shiftKey === true })}
+            onSelectItem={pickers.applyAtMention}
           />
           <CommandPalette
             open={pickers.palette.open}
@@ -762,7 +797,7 @@ export const ChatComposer = memo(function ChatComposer({
                   : m.chat.inputPlaceholderSteering
                 : m.chat.inputPlaceholder)
             }
-            onWireInput={onWireInputClearWalk}
+            onWireInput={onComposerWireInput}
             adjustHeight={editor.adjustHeight}
             processFiles={att.processFiles}
             processPastedText={att.processPastedText}

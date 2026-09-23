@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, it, expect } from 'vitest';
+import { contextRefWireToken } from '@xopcai/gateway-contract';
 import type { CommandEntry } from '@/features/chat/palette/command-palette.types';
-import { formatFilePathForWire } from '@/features/chat/palette/file-wire-pattern';
 import {
   applyWireToEditor,
   getWireCaretOffset,
   handleComposerBackspace,
   updateComposerSkillLabels,
+  updateComposerContextRefLabels,
   listSkillNamesInWire,
   normalizeOrphanComposerDom,
   removeSkillTokenAtOrBeforeCaret,
@@ -91,19 +92,26 @@ describe('slash command pills', () => {
 });
 
 describe('serializeEditorToWire', () => {
-  it('inserts space between file pill and following text so wire does not merge path with typed CJK', () => {
+  it('round-trips an inline context reference and keeps following CJK text separate', () => {
     const root = document.createElement('div');
-    applyWireToEditor(root, '@file:您的重要创意.pptx');
+    updateComposerContextRefLabels(root, () => ({
+      title: '您的重要创意.pptx', kind: 'file', fileKind: 'file',
+    }));
+    const token = contextRefWireToken('ref_1');
+    applyWireToEditor(root, token);
     const afterPill = root.childNodes[root.childNodes.length - 1];
     expect(afterPill?.nodeType).toBe(Node.TEXT_NODE);
     afterPill.textContent = (afterPill.textContent ?? '') + '分析';
-    expect(serializeEditorToWire(root)).toBe('@file:您的重要创意.pptx 分析');
+    expect(root.querySelector('.chat-context-ref-pill')?.textContent).toBe('@您的重要创意.pptx');
+    expect(serializeEditorToWire(root)).toBe(`${token} 分析`);
   });
 
-  it('serializes file paths with spaces as quoted @file wire', () => {
+  it('keeps context identity out of the visible label', () => {
     const root = document.createElement('div');
-    applyWireToEditor(root, `@file:${formatFilePathForWire('Meeting Notes.docx')}`);
-    expect(serializeEditorToWire(root)).toBe('@file:"Meeting Notes.docx"');
+    updateComposerContextRefLabels(root, () => ({ title: 'Meeting Notes.docx', kind: 'file' }));
+    applyWireToEditor(root, contextRefWireToken('meeting_notes'));
+    expect(root.textContent).toContain('@Meeting Notes.docx');
+    expect(serializeEditorToWire(root)).toBe(contextRefWireToken('meeting_notes'));
   });
 });
 

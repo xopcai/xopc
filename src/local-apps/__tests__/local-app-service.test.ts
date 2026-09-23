@@ -36,6 +36,8 @@ import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { createProductDispatcher } from '../../capabilities/runtime/product.js';
 import type { CapabilityContext } from '../../capabilities/runtime/dispatcher.js';
 import { createXopcUseTool } from '../../agent/tools/xopc-use-tool.js';
+import { ChatPreviewService } from '../../chat-previews/index.js';
+import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 
 describe('LocalAppService', () => {
   let config: Config;
@@ -97,6 +99,28 @@ describe('LocalAppService', () => {
     writeFileSync(join(root, appId), '');
     return join(root, appId);
   }
+
+  it('promotes preview source into exactly one local app project', () => {
+    const conversationId = createConversation({ agentId: 'main', sourceChannel: 'webchat' }).key;
+    const previews = new ChatPreviewService({ localApps: service });
+    const preview = previews.create(conversationId, {
+      title: 'Login preview',
+      markup: '<main><button id="sign-in">Sign in</button></main>',
+      styles: 'main { padding: 24px; }',
+      script: "document.querySelector('#sign-in')?.addEventListener('click', () => undefined);",
+      preferredHeight: 480,
+    });
+    const before = (getSqliteDatabase().prepare('SELECT count(*) AS count FROM projects').get() as { count: number }).count;
+    const app = previews.promote(preview.preview.id, preview.revision.sourceHash);
+    expect(previews.promote(preview.preview.id, preview.revision.sourceHash).id).toBe(app.id);
+    const after = (getSqliteDatabase().prepare('SELECT count(*) AS count FROM projects').get() as { count: number }).count;
+
+    expect(after - before).toBe(1);
+    expect(readFileSync(join(app.workspaceRoot, 'ui/index.html'), 'utf8')).toContain('id="sign-in"');
+    expect(readFileSync(join(app.workspaceRoot, 'ui/styles.css'), 'utf8')).toBe('main { padding: 24px; }');
+    expect(readFileSync(join(app.workspaceRoot, 'ui/app.js'), 'utf8')).toContain("querySelector('#sign-in')");
+    expect(service.validate(app.id).status).toBe('healthy');
+  });
 
   it('recovers interrupted upgrade files and config from the committed release, idempotently', async () => {
     const app = service.create({ name: 'Recovery fixture', idea: 'Recover interrupted upgrade' });
@@ -326,7 +350,7 @@ describe('LocalAppService', () => {
     expect(app.installationState).toBe('not_installed');
     expect(app.enabled).toBe(false);
     expect(app.releases).toEqual([]);
-    expect(app.previewUrl).toMatch(/^\/api\/local-apps\/preview\/[A-Za-z0-9_-]+\/ui\/index\.html$/);
+    expect(app.draftPreviewUrl).toMatch(/^\/api\/local-apps\/preview\/[A-Za-z0-9_-]+\/draft\/ui\/index\.html$/);
     expect(app.permissions).toEqual(['theme', 'storage']);
     expect(project).toMatchObject({ defaultAgentId: 'coder', workspaceRoot: app.workspaceRoot });
     expect(readFileSync(join(app.workspaceRoot, '.xopc', 'app.json'), 'utf8')).toContain(app.extensionId);
@@ -335,6 +359,32 @@ describe('LocalAppService', () => {
       .toBe('export default Object.freeze({});\n');
     expect(existsSync(join(app.workspaceRoot, 'ui', 'index.html'))).toBe(true);
     expect(events).toContain('local_app.created');
+  });
+
+  it('materializes content-addressed previews that do not change with the draft', () => {
+    const app = service.create({ name: 'Snapshot Board', idea: 'Preserve historical previews' });
+    const scriptPath = join(app.workspaceRoot, 'ui', 'app.js');
+    const firstSource = readFileSync(scriptPath, 'utf8');
+
+    const first = service.materializeSnapshot(app.id);
+    writeFileSync(scriptPath, 'document.body.dataset.version = "two";');
+    const second = service.materializeSnapshot(app.id);
+
+    expect(first.status).toBe('ready');
+    expect(first.sourceHash).not.toBe(second.sourceHash);
+    expect(first.previewUrl).toContain(`/snapshots/${first.sourceHash}/ui/index.html`);
+    expect(service.getSnapshot(app.id, first.sourceHash)).toEqual(first);
+    expect(readFileSync(join(
+      paths.root,
+      'local-apps',
+      'snapshots',
+      app.id,
+      first.sourceHash,
+      'package',
+      'ui',
+      'app.js',
+    ), 'utf8')).toBe(firstSource);
+    expect(service.materializeSnapshot(app.id).sourceHash).toBe(second.sourceHash);
   });
 
   it('installs the current draft, enables it, and preserves its stable id', async () => {

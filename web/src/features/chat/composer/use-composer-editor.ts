@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from 'react';
 
-import { applyWireToEditor, getWireCaretOffset, updateComposerSkillLabels } from '@/features/chat/composer/composer-editor-wire';
+import {
+  applyWireToEditor,
+  getWireCaretOffset,
+  updateComposerContextRefLabels,
+  updateComposerSkillLabels,
+  type ComposerContextRefResolver,
+} from '@/features/chat/composer/composer-editor-wire';
 import type { ResetEditorOptions } from '@/features/chat/composer/composer.types';
 import { FILL_CHAT_COMPOSER_EVENT, type FillChatComposerDetail } from '@/features/chat/composer/fill-composer-dispatch';
 
@@ -31,6 +37,7 @@ export interface UseComposerEditorOptions {
    * so selection-driven cursor state stays in sync when pickers are open.
    */
   shouldSyncSelectionRef: MutableRefObject<boolean>;
+  resolveContextRef?: ComposerContextRefResolver;
 }
 
 export interface UseComposerEditorReturn {
@@ -57,6 +64,7 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     welcomeDraftSeed,
     onExternalTextReplace,
     shouldSyncSelectionRef,
+    resolveContextRef,
   } = options;
 
   const resolveSkillLabel = useSkillLabel(options.agentId, options.conversationId);
@@ -90,18 +98,20 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     const el = editorRef.current;
     if (!el || isComposing) return;
     updateComposerSkillLabels(el, resolveSkillLabel);
+    if (resolveContextRef) updateComposerContextRefLabels(el, resolveContextRef);
     adjustHeight();
-  }, [resolveSkillLabel, isComposing, adjustHeight]);
+  }, [resolveSkillLabel, resolveContextRef, isComposing, adjustHeight]);
 
   useLayoutEffect(() => {
     if (initializedEditorRef.current) return;
     const el = editorRef.current;
     if (!el) return;
     initializedEditorRef.current = true;
+    if (resolveContextRef) updateComposerContextRefLabels(el, resolveContextRef);
     applyWireToEditor(el, initialValue, initialValue.length);
     syncComposerPlaceholderClass(el, initialValue);
     adjustHeight();
-  }, [adjustHeight, initialValue]);
+  }, [adjustHeight, initialValue, resolveContextRef]);
 
   const focusForExternalPaste = useCallback(() => {
     const el = editorRef.current;

@@ -1,18 +1,15 @@
+import { LOCAL_APP_MAX_DIAGNOSTICS, LocalAppFixGuidanceInputSchema } from '@xopcai/gateway-contract';
+
 import { CapabilityError } from '../capabilities/runtime/errors.js';
 
 import type {
   LocalApp,
   LocalAppDiagnostic,
-  LocalAppDiagnosticPhase,
   LocalAppFixGuidance,
   LocalAppFixGuidanceInput,
   LocalAppValidationResult,
 } from './types.js';
 
-const PHASES = new Set<LocalAppDiagnosticPhase>([
-  'build', 'boot', 'runtime', 'acceptance', 'runner', 'capability',
-]);
-const MAX_DIAGNOSTICS = 20;
 const MAX_MESSAGE_LENGTH = 500;
 const MAX_CODE_LENGTH = 80;
 
@@ -23,31 +20,15 @@ function cleanText(value: unknown, maxLength: number): string | undefined {
 }
 
 export function parseLocalAppFixGuidanceInput(value: unknown): LocalAppFixGuidanceInput {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new CapabilityError('INVALID_INPUT', 'Fix guidance requires a JSON object');
-  }
-  const input = value as Record<string, unknown>;
-  if (!Array.isArray(input.diagnostics) || input.diagnostics.length > MAX_DIAGNOSTICS) {
-    throw new CapabilityError('INVALID_INPUT', `diagnostics must contain at most ${MAX_DIAGNOSTICS} items`);
-  }
-  const diagnostics = input.diagnostics.map((item): LocalAppDiagnostic => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      throw new CapabilityError('INVALID_INPUT', 'Each diagnostic must be an object');
-    }
-    const diagnostic = item as Record<string, unknown>;
-    if (!PHASES.has(diagnostic.phase as LocalAppDiagnosticPhase)) {
-      throw new CapabilityError('INVALID_INPUT', 'Invalid diagnostic phase');
-    }
-    const message = cleanText(diagnostic.message, MAX_MESSAGE_LENGTH);
-    if (!message) throw new CapabilityError('INVALID_INPUT', 'Diagnostic message is required');
-    const code = cleanText(diagnostic.code, MAX_CODE_LENGTH);
-    return { phase: diagnostic.phase as LocalAppDiagnosticPhase, message, ...(code ? { code } : {}) };
-  });
-  const sourceHash = cleanText(input.sourceHash, 128);
+  const parsed = LocalAppFixGuidanceInputSchema.safeParse(value);
+  if (!parsed.success) throw new CapabilityError('INVALID_INPUT', 'Invalid fix guidance input');
   return {
-    diagnostics,
-    ...(sourceHash ? { sourceHash } : {}),
-    locale: input.locale === 'zh' ? 'zh' : 'en',
+    ...parsed.data,
+    diagnostics: parsed.data.diagnostics.map((diagnostic): LocalAppDiagnostic => ({
+      phase: diagnostic.phase,
+      message: cleanText(diagnostic.message, MAX_MESSAGE_LENGTH)!,
+      ...(diagnostic.code ? { code: cleanText(diagnostic.code, MAX_CODE_LENGTH) } : {}),
+    })),
   };
 }
 
@@ -69,7 +50,7 @@ function uniqueDiagnostics(
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, MAX_DIAGNOSTICS);
+  }).slice(0, LOCAL_APP_MAX_DIAGNOSTICS);
 }
 
 function classify(diagnostics: LocalAppDiagnostic[]): Pick<LocalAppFixGuidance, 'owner' | 'action'> {

@@ -2,6 +2,7 @@ import { resolveAgentMainConversationId } from '../../routing/agent-session-key.
 import { resolveDefaultAgentId } from '../agent-scope.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
+import { parseUserTurnDocument, renderUserTurnDocument } from '@xopcai/gateway-contract';
 
 import { getConnectionResumeInput } from '../../storage/sqlite/connection-wait-repository.js';
 import { getClarificationResumeInput } from '../../storage/sqlite/clarification-wait-repository.js';
@@ -408,6 +409,30 @@ export async function* runProcessDirectStreaming(
         signal.addEventListener('abort', armAbort, { once: true });
       }
 
+      const turnSourceContexts = input.sourceContexts ?? [];
+      const sourceContexts = [...turnSourceContexts];
+      if (deps.sourceContextResolver) {
+        const metadata = await deps.sessionStore.getMetadata(conversationId).catch(() => null);
+        const sourceBinding = metadata?.customData && typeof metadata.customData === 'object'
+          ? (metadata.customData as Record<string, unknown>).sourceBinding
+          : undefined;
+        if (isSessionSourceBinding(sourceBinding)) {
+          const sourceContext = await deps.sourceContextResolver(sourceBinding, conversationId);
+          if (sourceContext && !sourceContexts.some(
+            (context) => context.kind === sourceContext.kind && context.sourceId === sourceContext.sourceId,
+          )) {
+            sourceContexts.push(sourceContext);
+          }
+        }
+      }
+      const userTurnDocument = parseUserTurnDocument(mergedUserText);
+      const authoredText = userTurnDocument
+        ? renderUserTurnDocument(
+            userTurnDocument,
+            refId => sourceContexts.find(context => context.refId === refId)?.title ?? null,
+          )
+        : mergedUserText;
+
       const slash = await tryRunSlashCommand(
         deps,
         {
@@ -418,7 +443,7 @@ export async function* runProcessDirectStreaming(
           isGroup: context.isGroup,
           inboundMetadata: context.metadata,
         },
-        mergedUserText,
+        authoredText,
         {
           skipResetCommands: resetTriggeredAtInit,
           emitEvent: (event) => {
@@ -457,30 +482,23 @@ export async function* runProcessDirectStreaming(
         return;
       }
 
-      const skillTurn = deps.agentManager.prepareSkillTurn(conversationId, mergedUserText);
+      const skillTurn = deps.agentManager.prepareSkillTurn(conversationId, authoredText);
       const textForAgent = skillTurn.text;
-      const userMessage = await deps.buildTranscriptUserMessage(
+      const builtUserMessage = await deps.buildTranscriptUserMessage(
         textForAgent,
         prepared,
         conversationId,
         { suppressMediaPromptUris },
       );
-      const turnSourceContexts = input.sourceContexts ?? [];
-      const sourceContexts = [...turnSourceContexts];
-      if (deps.sourceContextResolver) {
-        const metadata = await deps.sessionStore.getMetadata(conversationId).catch(() => null);
-        const sourceBinding = metadata?.customData && typeof metadata.customData === 'object'
-          ? (metadata.customData as Record<string, unknown>).sourceBinding
-          : undefined;
-        if (isSessionSourceBinding(sourceBinding)) {
-          const sourceContext = await deps.sourceContextResolver(sourceBinding, conversationId);
-          if (sourceContext && !sourceContexts.some(
-            (context) => context.kind === sourceContext.kind && context.sourceId === sourceContext.sourceId,
-          )) {
-            sourceContexts.push(sourceContext);
-          }
-        }
-      }
+      const userMessage: TranscriptUserMessage = userTurnDocument
+        ? {
+            ...builtUserMessage,
+            metadata: {
+              ...((builtUserMessage as { metadata?: Record<string, unknown> }).metadata ?? {}),
+              userTurnDocument,
+            },
+          } as unknown as TranscriptUserMessage
+        : builtUserMessage;
 
       if (channel === 'webchat' && !isInternalResume) {
         pushVisible({
@@ -488,8 +506,13 @@ export async function* runProcessDirectStreaming(
           timestamp: userMessage.timestamp ?? Date.now(),
           content: readAgentMessageContent(userMessage),
           media: userMessage.media,
-          metadata: sourceContexts.length > 0
-            ? { sourceContexts: sourceContexts.map(summarizeSourceContext) }
+          metadata: sourceContexts.length > 0 || userTurnDocument
+            ? {
+                ...(sourceContexts.length > 0
+                  ? { sourceContexts: sourceContexts.map(summarizeSourceContext) }
+                  : {}),
+                ...(userTurnDocument ? { userTurnDocument } : {}),
+              }
             : undefined,
         });
         if (textForAgent.trim()) {

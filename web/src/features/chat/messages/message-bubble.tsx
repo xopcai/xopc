@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import * as Popover from '@radix-ui/react-popover';
 import { AlertCircle, Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, GitFork, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { renderUserTurnDocument } from '@xopcai/gateway-contract';
 
 import type {
   ImageContent,
@@ -283,6 +284,12 @@ export const MessageBubble = memo(function MessageBubble({
     if (assistantTurnView) return assistantTurnView.attachments;
     return message.attachments;
   }, [assistantTurnView, message.attachments]);
+  const detachedContextRefs = useMemo(() => {
+    const inlineIds = new Set(message.userTurnDocument?.parts.flatMap(
+      part => part.type === 'context_ref' ? [part.refId] : [],
+    ) ?? []);
+    return message.contextRefs?.filter(ref => !ref.refId || !inlineIds.has(ref.refId));
+  }, [message.contextRefs, message.userTurnDocument]);
 
   const hasAssistantActivity = Boolean(assistantTurnView?.workLog.items.length);
   const progressForMeta =
@@ -327,8 +334,12 @@ export const MessageBubble = memo(function MessageBubble({
   }), [copyMarkdown.length, language, m.chat.messageReadAloudTitle, message.timestamp, messageIndex, conversationId, speakableText]);
   const userCopyText = useMemo(() => {
     if (!isUser) return '';
+    if (message.userTurnDocument) {
+      const refs = new Map(message.contextRefs?.flatMap(ref => ref.refId ? [[ref.refId, ref.title] as const] : []) ?? []);
+      return renderUserTurnDocument(message.userTurnDocument, refId => refs.get(refId));
+    }
     return extractUserMessagePlainText(message.content);
-  }, [isUser, message.content]);
+  }, [isUser, message.content, message.contextRefs, message.userTurnDocument]);
   const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | 'user' | null>(null);
   const [assistantActionFeedback, setAssistantActionFeedback] = useState<'create-note' | 'save-source-note' | 'extract-task' | null>(null);
   const [assistantActionBusy, setAssistantActionBusy] = useState<'create-note' | 'save-source-note' | 'extract-task' | null>(null);
@@ -568,7 +579,7 @@ export const MessageBubble = memo(function MessageBubble({
         ) : null}
 
         <div
-          dir={isUser ? 'ltr' : undefined}
+          dir={isUser ? 'auto' : undefined}
           className={cn(
             'min-w-0 text-fg',
             isUser && 'chat-user-message',
@@ -616,6 +627,8 @@ export const MessageBubble = memo(function MessageBubble({
                     projectId={projectId}
                     progressiveRender={Boolean(message.progressiveRender)}
                     onProgressiveRenderComplete={completeProgressiveRender}
+                    userTurnDocument={message.userTurnDocument}
+                    contextRefs={message.contextRefs}
                   />
                 </div>
                 {isUser && userMessageCanExpand ? (
@@ -654,9 +667,9 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : null}
 
-            {isUser && message.contextRefs?.length ? (
+            {isUser && detachedContextRefs?.length ? (
               <MessageContextAttachments
-                refs={message.contextRefs}
+                refs={detachedContextRefs}
                 groupLabel={m.chat.commandPalette.contextLabel}
                 noteLabel={m.chat.commandPalette.notesSection}
                 fileLabel={m.chat.atMention.files}

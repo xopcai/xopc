@@ -1,4 +1,4 @@
-import { parseTurnOutcome, type TurnOutcome } from '@xopcai/gateway-contract';
+import { isUserTurnDocument, parseTurnOutcome, type TurnOutcome, type UserTurnDocument } from '@xopcai/gateway-contract';
 
 import type { Message } from './types.js';
 import { stripRuntimeContextFromUserMessage } from './user-message-display.js';
@@ -19,6 +19,7 @@ export interface ClientHistoryMessage {
   /** Whitelisted display metadata; never includes source snapshot text. */
   metadata?: {
     sourceContexts?: Array<{
+      refId?: string;
       kind: 'note' | 'task' | 'file' | 'session' | 'browser_tab' | 'browser_page' | 'mcp_resource';
       sourceId: string;
       version: string;
@@ -30,6 +31,7 @@ export interface ClientHistoryMessage {
       documentId?: string;
       fileKind?: 'file' | 'directory';
     }>;
+    userTurnDocument?: UserTurnDocument;
     turnOutcome?: TurnOutcome;
   };
   kind?: 'message' | 'compaction' | 'context' | 'bash' | 'custom' | 'branch';
@@ -66,8 +68,12 @@ export interface ClientHistoryMessage {
 
 function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['metadata'] {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
-  const rows = (metadata as Record<string, unknown>).sourceContexts;
-  if (!Array.isArray(rows)) return undefined;
+  const record = metadata as Record<string, unknown>;
+  const rows = record.sourceContexts;
+  const userTurnDocument = isUserTurnDocument(record.userTurnDocument)
+    ? record.userTurnDocument
+    : undefined;
+  if (!Array.isArray(rows)) return userTurnDocument ? { userTurnDocument } : undefined;
   const sourceContexts = rows.flatMap((value): NonNullable<NonNullable<ClientHistoryMessage['metadata']>['sourceContexts']>[number][] => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
     const row = value as Record<string, unknown>;
@@ -80,6 +86,7 @@ function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['
       || typeof row.title !== 'string'
     ) return [];
     return [{
+      ...(typeof row.refId === 'string' ? { refId: row.refId } : {}),
       kind: row.kind,
       sourceId: row.sourceId,
       version: row.version,
@@ -94,7 +101,9 @@ function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['
         : {}),
     }];
   });
-  return sourceContexts.length ? { sourceContexts } : undefined;
+  return sourceContexts.length || userTurnDocument
+    ? { ...(sourceContexts.length ? { sourceContexts } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
+    : undefined;
 }
 
 export function flattenMessageContent(content: string | unknown[]): string {

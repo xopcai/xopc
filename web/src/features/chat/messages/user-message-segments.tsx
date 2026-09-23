@@ -1,4 +1,6 @@
 import { memo, useMemo } from 'react';
+import type { UserTurnDocument } from '@xopcai/gateway-contract';
+import { AppWindow, Database, FileText, Folder, MessagesSquare, NotebookPen } from 'lucide-react';
 
 import { useSkillLabel } from '@/features/chat/palette/use-skill-label';
 
@@ -7,22 +9,62 @@ import {
   parseMessageSegments,
   type MessageSegment,
 } from '@/features/chat/messages/user-message-segments.parse';
+import type { MessageContextRef } from '@/features/chat/messages/messages.types';
+import { cn } from '@/lib/cn';
 
-function fileBubbleLabel(path: string): string {
-  const trimmed = path.replace(/\/$/, '');
-  const base = trimmed.split('/').pop() ?? trimmed;
-  return `@${base}`;
-}
+type RenderableSegment = MessageSegment | { kind: 'context_ref'; refId: string; ref?: MessageContextRef };
 
-function segmentSignature(p: MessageSegment): string {
+function segmentSignature(p: RenderableSegment): string {
   if (p.kind === 'text') return `t:${p.text}`;
   if (p.kind === 'skill') return `s:${p.name}`;
-  if (p.kind === 'file') return `f:${p.path}`;
+  if (p.kind === 'context_ref') return `r:${p.refId}`;
   return `c:${p.name}`;
 }
 
-export const UserMessageSegments = memo(function UserMessageSegments({ text, conversationId }: { text: string; conversationId?: string | null }) {
-  const parts = useMemo(() => parseMessageSegments(text), [text]);
+function contextRefSpacing(parts: RenderableSegment[], index: number): string {
+  const previous = parts[index - 1];
+  const beforePrevious = parts[index - 2];
+  const next = parts[index + 1];
+  const previousIsSharedWhitespace = previous?.kind === 'text'
+    && previous.text.trim() === ''
+    && beforePrevious !== undefined
+    && beforePrevious.kind !== 'text';
+  return cn(
+    previous?.kind === 'text' && /\s$/u.test(previous.text) && !previousIsSharedWhitespace && 'ms-1',
+    next?.kind === 'text' && /^\s/u.test(next.text) && 'me-1',
+  );
+}
+
+function ContextRefIcon({ contextRef }: { contextRef?: MessageContextRef }) {
+  const className = 'size-3.5 shrink-0';
+  if (contextRef?.kind === 'file' && contextRef.fileKind === 'directory') {
+    return <Folder className={className} aria-hidden />;
+  }
+  if (contextRef?.kind === 'file') return <FileText className={className} aria-hidden />;
+  if (contextRef?.kind === 'session') return <MessagesSquare className={className} aria-hidden />;
+  if (contextRef?.kind === 'browser_tab') return <AppWindow className={className} aria-hidden />;
+  if (contextRef?.kind === 'mcp_resource') return <Database className={className} aria-hidden />;
+  return <NotebookPen className={className} aria-hidden />;
+}
+
+export const UserMessageSegments = memo(function UserMessageSegments({
+  text,
+  conversationId,
+  document,
+  contextRefs,
+}: {
+  text: string;
+  conversationId?: string | null;
+  document?: UserTurnDocument;
+  contextRefs?: MessageContextRef[];
+}) {
+  const parts = useMemo<RenderableSegment[]>(() => {
+    if (!document) return parseMessageSegments(text);
+    const refs = new Map(contextRefs?.flatMap(ref => ref.refId ? [[ref.refId, ref] as const] : []) ?? []);
+    return document.parts.flatMap((part): RenderableSegment[] => part.type === 'text'
+      ? parseMessageSegments(part.text)
+      : [{ kind: 'context_ref', refId: part.refId, ref: refs.get(part.refId) }]);
+  }, [contextRefs, document, text]);
   const partsWithKeys = useMemo(() => {
     // Disambiguate identical segments (e.g. same skill referenced twice) with a running counter,
     // captured here in a closure so the JSX map can read keys without using the .map index.
@@ -46,8 +88,8 @@ export const UserMessageSegments = memo(function UserMessageSegments({ text, con
   }
 
   return (
-    <span className="inline-flex max-w-full flex-wrap items-baseline gap-x-1.5 gap-y-1 [text-align:inherit]">
-      {partsWithKeys.map(({ part: p, key }) =>
+    <span className="inline-flex max-w-full flex-wrap items-baseline gap-x-0 gap-y-1 [text-align:inherit]">
+      {partsWithKeys.map(({ part: p, key }, index) =>
         p.kind === 'skill' ? (
           <span key={key} className="chat-skill-pill max-w-full shrink-0" data-skill={p.name} title={`/${p.name}`}>
             /{skillLabel(p.name)}
@@ -60,9 +102,21 @@ export const UserMessageSegments = memo(function UserMessageSegments({ text, con
           >
             /{p.name}
           </span>
-        ) : p.kind === 'file' ? (
-          <span key={key} className="chat-file-pill max-w-full shrink-0" data-file={p.path}>
-            {fileBubbleLabel(p.path)}
+        ) : p.kind === 'context_ref' ? (
+          <span
+            key={key}
+            className={cn(
+              'chat-context-ref-pill chat-context-ref-pill-message max-w-full shrink-0',
+              contextRefSpacing(parts, index),
+            )}
+            data-context-ref-id={p.refId}
+            data-ref-kind={p.ref?.kind ?? ''}
+            data-file-kind={p.ref?.fileKind ?? ''}
+            title={p.ref?.title}
+            aria-label={p.ref?.title ?? 'reference'}
+          >
+            <ContextRefIcon contextRef={p.ref} />
+            <span className="min-w-0 truncate">{p.ref?.title ?? 'reference'}</span>
           </span>
         ) : p.text ? (
           <div

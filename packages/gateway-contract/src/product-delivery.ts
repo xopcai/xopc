@@ -1,6 +1,8 @@
 import { z } from 'zod';
+import { ChatPreviewSourceHashSchema } from './chat-previews.js';
+import { LocalAppSourceHashSchema } from './local-apps.js';
 
-export const PRODUCT_DELIVERY_VERSION = 1 as const;
+export const PRODUCT_DELIVERY_VERSION = 2 as const;
 
 export const ProductReferenceKindSchema = z.enum([
   'task',
@@ -11,6 +13,7 @@ export const ProductReferenceKindSchema = z.enum([
   'automation',
   'scene',
   'local_app',
+  'chat_preview',
   'file',
   'session',
   'settings',
@@ -69,8 +72,24 @@ export const ProductDeliveryPresentationSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('inline_app'),
     reference: ProductReferenceSchema.refine(reference => reference.kind === 'local_app', 'Inline app must reference a local app'),
+    snapshot: z.strictObject({ sourceHash: LocalAppSourceHashSchema }),
     preferredHeight: z.number().int().min(240).max(720).default(480),
-  }),
+  }).refine(
+    presentation => !presentation.reference.revision || presentation.reference.revision === presentation.snapshot.sourceHash,
+    { message: 'Inline app reference revision must match its snapshot', path: ['reference', 'revision'] },
+  ),
+  z.object({
+    kind: z.literal('inline_preview'),
+    reference: ProductReferenceSchema.refine(
+      reference => reference.kind === 'chat_preview',
+      'Inline preview must reference a chat preview',
+    ),
+    sourceHash: ChatPreviewSourceHashSchema,
+    preferredHeight: z.number().int().min(240).max(720).default(480),
+  }).refine(
+    presentation => !presentation.reference.revision || presentation.reference.revision === presentation.sourceHash,
+    { message: 'Inline preview reference revision must match its source', path: ['reference', 'revision'] },
+  ),
 ]);
 
 export const ProductDeliveryEnvelopeSchema = z.object({
@@ -95,10 +114,13 @@ export function appendProductDeliveryText(
   delivery: ProductDeliveryEnvelope | undefined,
 ): string {
   if (!delivery) return text;
-  const accessLink = delivery.primary
+  const openableItems = delivery.presentation?.kind === 'table'
+    ? delivery.presentation.items.filter(item => productReferenceRoute(item) !== null)
+    : [];
+  const accessLink = delivery.primary && productReferenceRoute(delivery.primary) !== null
     ? `\nOpen in xopc: [Open](${productReferenceDeepLink(delivery.primary)})`
-    : delivery.presentation?.kind === 'table' && delivery.presentation.items.length
-      ? `\nOpen in xopc: ${delivery.presentation.items.map((item, index) => `[${index + 1}](${productReferenceDeepLink(item)})`).join(' · ')}`
+    : openableItems.length
+      ? `\nOpen in xopc: ${openableItems.map((item, index) => `[${index + 1}](${productReferenceDeepLink(item)})`).join(' · ')}`
     : '';
   return `${text}${accessLink}\n${PRODUCT_DELIVERY_TEXT_PREFIX}${encodeURIComponent(JSON.stringify(delivery))}`;
 }
@@ -134,6 +156,8 @@ export function productReferenceRoute(reference: ProductReference): string | nul
       return `/scenes/${id}`;
     case 'local_app':
       return `/local-apps/${id}`;
+    case 'chat_preview':
+      return null;
     case 'session':
       return `/chat/${id}`;
     case 'settings': {
