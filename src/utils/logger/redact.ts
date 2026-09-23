@@ -7,7 +7,7 @@ const KEEP_PREFIX_LENGTH = 6;
 const KEEP_SUFFIX_LENGTH = 4;
 
 const DEFAULT_REDACT_PATTERNS: RegExp[] = [
-  /\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\b\s*[=:]\s*(["']?)([^\s"'\\]+)\1/gi,
+  /\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\b\s*[=:]\s*((?:\\?["'])?)([^\s"'\\]+)\1/gi,
   /"(?:apiKey|token|secret|password|passwd|accessToken|refreshToken|privateKey)"\s*:\s*"([^"]+)"/gi,
   /(?:__Host-xopc-session|xopc-local-session)=([A-Za-z0-9_-]{43})/g,
   /Authorization\s*[:=]\s*Bearer\s+([A-Za-z0-9._\-+=]+)/gi,
@@ -61,6 +61,16 @@ export function redactPemBlock(text: string): string {
 
 export function redactSensitiveInfo(text: string): string {
   if (!text || !isLogRedactionEnabled()) return text;
+  return redactSensitiveText(text, redactSecret);
+}
+
+/** Redact model-visible and persisted tool output without retaining secret fragments. */
+export function redactSensitiveOutput(text: string): string {
+  if (!text) return text;
+  return redactSensitiveText(text, () => '[REDACTED]');
+}
+
+function redactSensitiveText(text: string, replacement: (secret: string) => string): string {
 
   let redacted = redactPemBlock(text);
 
@@ -70,7 +80,7 @@ export function redactSensitiveInfo(text: string): string {
         (g) => typeof g === 'string' && g.length >= MIN_REDACT_LENGTH,
       ) as string | undefined;
       if (secret) {
-        return match.replace(secret, redactSecret(secret));
+        return match.replace(secret, replacement(secret));
       }
       return match;
     });

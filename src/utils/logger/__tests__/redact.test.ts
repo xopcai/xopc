@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   redactSecret,
   redactSensitiveInfo,
+  redactSensitiveOutput,
   redactPemBlock,
   redactObject,
   isLogRedactionEnabled,
@@ -37,6 +38,14 @@ describe('redact', () => {
     const o = redactObject({ apiKey: 'x'.repeat(30), host: 'localhost' }) as Record<string, unknown>;
     expect(o.host).toBe('localhost');
     expect(String(o.apiKey)).toContain('…');
+  });
+
+  it('fully redacts sensitive tool output even when log redaction is disabled', () => {
+    process.env.XOPC_LOG_REDACTION = 'false';
+    const secret = 'gateway-token-12345678901234567890';
+    const output = redactSensitiveOutput(`{"token":"${secret}"}`);
+    expect(output).toBe('{"token":"[REDACTED]"}');
+    expect(output).not.toContain(secret);
   });
 
   it('respects XOPC_LOG_REDACTION=false', () => {
