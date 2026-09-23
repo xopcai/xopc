@@ -1210,6 +1210,7 @@ export function useSkillsPage() {
     categoryFilteredCatalog,
     catalogDisplayRows,
     skillPresentation,
+    marketplacePresentation: (row: MarketplacePackageItem) => resolveSkillPresentation(row, language),
     catalogDisabledCount,
     catalogStatusFilter,
     setCatalogStatusFilter,

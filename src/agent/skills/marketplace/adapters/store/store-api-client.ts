@@ -21,6 +21,11 @@ const DEFAULT_STORE_BASE = 'https://store.xopc.ai';
  */
 export type SkillsMarketplaceProvider = string;
 
+export type MarketplaceSkillLocalizations = Partial<Record<
+  'en' | 'zh-CN',
+  { displayName: string; description: string }
+>>;
+
 export interface SkillsStoreListParams {
   q?: string;
   page?: number;
@@ -42,6 +47,7 @@ export interface SkillsStorePackageListItem {
   name: string;
   type: string;
   description: string;
+  localizations?: MarketplaceSkillLocalizations;
   downloads: number;
   author: { username: string; avatarUrl: string | null };
   latestVersion?: string;

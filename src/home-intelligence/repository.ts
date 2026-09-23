@@ -158,14 +158,15 @@ export class HomeIntelligenceRepository {
 
       const generationId = randomUUID();
       this.db.prepare(`INSERT INTO home_advice_generations (
-        generation_id, owner_id, workspace_id, idempotency_key, status, reasons_json, requested_at
-      ) VALUES (?, ?, ?, ?, 'queued', ?, ?)`).run(
+        generation_id, owner_id, workspace_id, idempotency_key, status, reasons_json, requested_at, strategy_version
+      ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)`).run(
         generationId,
         principal.ownerId,
         principal.workspaceId,
         input.idempotencyKey,
         JSON.stringify(uniqueReasons(input.reasons)),
         input.requestedAt,
+        HOME_ADVICE_STRATEGY_VERSION,
       );
       return { generationId, created: true };
     });
@@ -386,14 +387,14 @@ export class HomeIntelligenceRepository {
   getMetrics(principal: HomePrincipal, since: number, until: number): HomeAdviceMetrics {
     const generation = this.db.prepare(`SELECT
         COUNT(*) AS total,
-        SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS ready,
+        SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded,
         SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) AS quiet,
         SUM(CASE WHEN status IN ('failed', 'cancelled') THEN 1 ELSE 0 END) AS failed,
         COALESCE(SUM(estimated_cost_usd), 0) AS estimated_cost_usd
       FROM home_advice_generations
       WHERE owner_id = ? AND workspace_id = ? AND requested_at BETWEEN ? AND ?`).get(
       principal.ownerId, principal.workspaceId, since, until,
-    ) as { total: number; ready: number; quiet: number; failed: number; estimated_cost_usd: number };
+    ) as { total: number; succeeded: number; quiet: number; failed: number; estimated_cost_usd: number };
     const outcome = this.db.prepare(`SELECT
         COUNT(*) AS opportunities,
         SUM(CASE WHEN state = 'accepted' THEN 1 ELSE 0 END) AS started,
@@ -441,7 +442,7 @@ export class HomeIntelligenceRepository {
       window: { since, until },
       currentStrategyVersion: HOME_ADVICE_STRATEGY_VERSION,
       generations: {
-        total: Number(generation.total), ready: Number(generation.ready), quiet: Number(generation.quiet),
+        total: Number(generation.total), succeeded: Number(generation.succeeded), quiet: Number(generation.quiet),
         failed: Number(generation.failed), estimatedCostUsd: Number(generation.estimated_cost_usd),
       },
       outcomes: {
