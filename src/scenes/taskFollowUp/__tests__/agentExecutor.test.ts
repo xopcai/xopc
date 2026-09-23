@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { FollowUpAgentExecutor } from '../agentExecutor.js';
 import { verifyTaskWorkspace } from '../../../agent/commands/approved-verification.js';
 import { ConfigSchema } from '../../../config/schema.js';
@@ -41,6 +42,7 @@ describe('shared embedded task harness', () => {
     directory = mkdtempSync(join(tmpdir(), 'xopc-development-agent-'));
     writeFileSync(join(directory, 'app.js'), 'export const value = 1;\n');
     resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(directory, 'state.db') });
+    seedTestAgentCatalog({ agents: [{ id: 'main', enabled: true, workspace: directory }] });
     conversationId = createConversation({ agentId: 'main', sourceChannel: 'webchat', sourceChatId: 'fixture' }).key;
     const store = new SessionStore({ config });
     persisted = [];

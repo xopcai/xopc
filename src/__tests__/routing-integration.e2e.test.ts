@@ -12,21 +12,27 @@ import { requireConversation } from '../storage/sqlite/conversation-repository.j
  * 7. Response routing back to channel
  */
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import type { Config } from '../config/schema.js';
+import type { AgentEntry } from '../agent-config/index.js';
+import { initializeTestAgentCatalog } from '../agent-catalog/test-support.js';
+import { closeXopcDatabase } from '../storage/sqlite/index.js';
 import { getConversationRouting, type BindingRule } from '../routing/index.js';
 import { generateConversationIdWithRouting } from '../channels/telegram/index.js';
 describe('Complete Routing E2E Flow', () => {
+  const configureCatalog = (agents: AgentEntry[] = [{ id: 'main', enabled: true }], bindings: BindingRule[] = []) =>
+    initializeTestAgentCatalog({ agents, bindings });
+
+  afterEach(() => closeXopcDatabase());
 
   describe('Scenario 1: Simple DM Message Flow', () => {
     it('should route DM message from start to finish', () => {
       const config: Config = {
-        agents: { default: 'main' },
-        bindings: [],
         session: {
           dmScope: 'per-account-channel-peer',
         },
-      };
+      } as Config;
+      configureCatalog();
 
       // Simulate inbound Telegram message
       const inboundMessage = {
@@ -61,15 +67,15 @@ describe('Complete Routing E2E Flow', () => {
   describe('Scenario 2: Group Message with Binding Routing', () => {
     it('should route group message to specialized agent', () => {
       const config: Config = {
-        agents: {
-          default: 'main',
-          list: [
-            { id: 'main' },
-            { id: 'coder' },
-            { id: 'researcher' },
-          ],
+        session: {
+          dmScope: 'per-account-channel-peer',
         },
-        bindings: [
+      } as Config;
+      configureCatalog([
+        { id: 'main', enabled: true },
+        { id: 'coder', enabled: true },
+        { id: 'researcher', enabled: true },
+      ], [
           {
             agentId: 'coder',
             match: {
@@ -86,11 +92,7 @@ describe('Complete Routing E2E Flow', () => {
             },
             priority: 100,
           } as BindingRule,
-        ],
-        session: {
-          dmScope: 'per-account-channel-peer',
-        },
-      };
+      ]);
 
       // Message to programming group
       const programmingGroupMsg = {
@@ -163,8 +165,6 @@ describe('Complete Routing E2E Flow', () => {
   describe('Scenario 3: Cross-Platform User Identity Merging', () => {
     it('should merge same user across platforms', () => {
       const config: Config = {
-        agents: { default: 'main' },
-        bindings: [],
         session: {
           dmScope: 'per-peer',
           identityLinks: {
@@ -179,7 +179,8 @@ describe('Complete Routing E2E Flow', () => {
             ],
           },
         },
-      };
+      } as Config;
+      configureCatalog();
 
       // Alice sends message on Telegram
       const aliceTgKey = generateConversationIdWithRouting(
@@ -238,10 +239,14 @@ describe('Complete Routing E2E Flow', () => {
   describe('Scenario 4: Multi-Account Isolation', () => {
     it('should isolate messages from different accounts', () => {
       const config: Config = {
-        agents: {
-          default: 'main',
+        session: {
+          dmScope: 'per-account-channel-peer',
         },
-        bindings: [
+      } as Config;
+      configureCatalog([
+        { id: 'main', enabled: true },
+        { id: 'work-assistant', enabled: true },
+      ], [
           {
             agentId: 'work-assistant',
             match: {
@@ -250,11 +255,7 @@ describe('Complete Routing E2E Flow', () => {
             },
             priority: 100,
           } as BindingRule,
-        ],
-        session: {
-          dmScope: 'per-account-channel-peer',
-        },
-      };
+      ]);
 
       // Same user, different accounts
       const personalMsg = {
@@ -294,12 +295,11 @@ describe('Complete Routing E2E Flow', () => {
   describe('Scenario 5: Thread/Topic Messages', () => {
     it('should handle threaded messages correctly', () => {
       const config: Config = {
-        agents: { default: 'main' },
-        bindings: [],
         session: {
           dmScope: 'per-account-channel-peer',
         },
-      };
+      } as Config;
+      configureCatalog();
 
       // Telegram topic message
       const topicMsg = {
@@ -345,16 +345,14 @@ describe('Complete Routing E2E Flow', () => {
   describe('Scenario 7: Priority-Based Routing', () => {
     it('should respect binding priority', () => {
       const config: Config = {
-        agents: {
-          default: 'main',
-          list: [
-            { id: 'main' },
-            { id: 'specialist' },
-            { id: 'generalist' },
-            { id: 'expert' },
-          ],
-        },
-        bindings: [
+        session: { dmScope: 'per-peer' },
+      } as Config;
+      configureCatalog([
+        { id: 'main', enabled: true },
+        { id: 'specialist', enabled: true },
+        { id: 'generalist', enabled: true },
+        { id: 'expert', enabled: true },
+      ], [
           {
             agentId: 'expert',
             match: { channel: 'telegram', peerId: '-1009999999' },
@@ -370,9 +368,7 @@ describe('Complete Routing E2E Flow', () => {
             match: { channel: 'telegram' },
             priority: 10,
           } as BindingRule,
-        ],
-        session: { dmScope: 'per-peer' },
-      };
+      ]);
 
       // Should match expert (highest priority, exact peer match)
       const expertKey = generateConversationIdWithRouting(
@@ -415,16 +411,22 @@ describe('Complete Routing E2E Flow', () => {
   describe('Scenario 8: Complex Real-World Setup', () => {
     it('should handle complex multi-channel, multi-agent setup', () => {
       const config: Config = {
-        agents: {
-          default: 'main',
-          list: [
-            { id: 'main' },
-            { id: 'coder' },
-            { id: 'support' },
-            { id: 'admin' },
-          ],
+        session: {
+          dmScope: 'per-account-channel-peer',
+          identityLinks: {
+            'admin-user': [
+              'telegram:admin123',
+              'discord:admin456',
+            ],
+          },
         },
-        bindings: [
+      } as Config;
+      configureCatalog([
+        { id: 'main', enabled: true },
+        { id: 'coder', enabled: true },
+        { id: 'support', enabled: true },
+        { id: 'admin', enabled: true },
+      ], [
           // Discord admin channel
           {
             agentId: 'admin',
@@ -464,17 +466,7 @@ describe('Complete Routing E2E Flow', () => {
             },
             priority: 50,
           } as BindingRule,
-        ],
-        session: {
-          dmScope: 'per-account-channel-peer',
-          identityLinks: {
-            'admin-user': [
-              'telegram:admin123',
-              'discord:admin456',
-            ],
-          },
-        },
-      };
+      ]);
 
       // Test various scenarios
       const scenarios = [

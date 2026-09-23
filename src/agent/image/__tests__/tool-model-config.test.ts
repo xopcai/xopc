@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import type { Config } from '../../../config/schema.js';
 import type { AgentModelsDefaults } from '../../../agent-config/index.js';
 
@@ -30,19 +31,17 @@ function addModel(provider: string, id: string, input: Array<'text' | 'image'> =
 }
 
 function baseConfig(models: AgentModelsDefaults): Config {
-  return {
-    agents: {
-      default: 'main',
-      defaults: {
-        models,
-        skills: { mode: 'all-enabled', exclude: [] },
-        tools: {},
-        workflows: {},
-        runtime: {},
-      },
-      list: [{ id: 'main', enabled: true, workspace: '/tmp' }],
+  initializeTestAgentCatalog({
+    defaults: {
+      models,
+      skills: { mode: 'all-enabled', exclude: [] },
+      tools: {},
+      workflows: {},
+      runtime: {},
     },
-  } as Config;
+    agents: [{ id: 'main', enabled: true, workspace: '/tmp' }],
+  });
+  return {} as Config;
 }
 
 describe('resolveEffectiveImageModelConfig', () => {

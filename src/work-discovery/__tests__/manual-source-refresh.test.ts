@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { ProjectService } from '../../projects/project-service.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
@@ -21,6 +22,7 @@ describe('manual source reanalysis', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' });
+    seedTestAgentCatalog();
     service = new WorkDiscoveryService({ projects: new ProjectService(), sessions: {} as never,
       getConfig: () => ConfigSchema.parse({}), emit: vi.fn() });
     vi.spyOn(service, 'getModelProcessingTarget').mockReturnValue({ provider: 'local', remoteModel: false });

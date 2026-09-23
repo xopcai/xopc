@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { openXopcDatabase, closeXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 
 import * as bundleMcpGateway from '../../agent/mcp/bundle-mcp-gateway.js';
@@ -21,7 +22,11 @@ import {
   setComposioToolkitScope,
 } from '../composio.js';
 
-beforeEach(() => { resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' }); });
+beforeEach(() => {
+  resetXopcDatabaseSingletonForTest();
+  openXopcDatabase({ path: ':memory:' });
+  seedTestAgentCatalog();
+});
 afterEach(() => {
   closeXopcDatabase(); resetXopcDatabaseSingletonForTest();
   vi.useRealTimers();

@@ -15,6 +15,11 @@ export type TestAgentCatalogSeed = {
 export function initializeTestAgentCatalog(seed: TestAgentCatalogSeed = {}): AgentCatalogRepository {
   closeXopcDatabase();
   openXopcDatabase({ path: ':memory:' });
+  return seedTestAgentCatalog(seed);
+}
+
+/** Seed the currently open test database with a ready Agent catalog. */
+export function seedTestAgentCatalog(seed: TestAgentCatalogSeed = {}): AgentCatalogRepository {
   const repository = new AgentCatalogRepository();
   repository.ensureInitialized(seed.defaults);
 

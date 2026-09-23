@@ -48,7 +48,6 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   const conversations = new TaskConversationRepository();
   const conversationQuery = new TaskConversationQueryService(deps.service.sessions);
   const handoffs = new TaskHandoffService({
-    getConfig: () => deps.service.currentConfig,
     sessionIndex: deps.service.sessionIndexInstance,
     getActiveRunId: (conversationId) => deps.service.getActiveWebchatRunId(conversationId),
     abortRun: (runId) => deps.service.abortAgentRun(runId),

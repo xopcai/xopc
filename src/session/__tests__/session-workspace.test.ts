@@ -9,6 +9,7 @@ import {
   effectiveWorkspacePathForSession,
 } from '../session-workspace.js';
 import { ConfigSchema } from '../../config/schema.js';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 
 describe('normalizeWorkingDirectoryInput', () => {
   it('rejects empty string', () => {
@@ -31,19 +32,12 @@ describe('normalizeWorkingDirectoryInput', () => {
 });
 
 describe('effectiveWorkspacePathForSession', () => {
-  beforeEach(() => { requireXopcDatabase(); ensureSessionRecord('92a88e8a-bb9a-4473-84b7-73e9f649763e', '', { agentId: 'main' }); });
-  const minimalCfg = ConfigSchema.parse({
-    agents: {
-      default: 'main',
-      list: [
-        {
-          id: 'main',
-          profile: { name: 'Main' },
-          workspace: '~/default-ws',
-        },
-      ],
-    },
+  beforeEach(() => {
+    requireXopcDatabase();
+    seedTestAgentCatalog({ agents: [{ id: 'main', profile: { name: 'Main' }, workspace: '~/default-ws' }] });
+    ensureSessionRecord('92a88e8a-bb9a-4473-84b7-73e9f649763e', '', { agentId: 'main' });
   });
+  const minimalCfg = ConfigSchema.parse({});
 
   it('uses profile default when no override', () => {
     const p = effectiveWorkspacePathForSession(minimalCfg, "92a88e8a-bb9a-4473-84b7-73e9f649763e", null);

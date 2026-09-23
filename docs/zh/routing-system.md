@@ -29,7 +29,7 @@ Agent 是为某类工作配置的具名助手。每个 Agent 可以有独立的�
 ## 在终端创建 Agent
 
 ```bash
-xopc agents add research
+xopc agents add research --workspace ~/.xopc/workspace-research
 xopc agents list
 ```
 
@@ -46,8 +46,7 @@ xopc agents delete research
 没有明确指定 Agent 的新 Session 会使用默认值：
 
 ```bash
-xopc config set agents.default research
-xopc config validate
+xopc agents default research
 ```
 
 已有 Session 仍属于原 Agent。要使用其它 Agent，请新建对话并明确选择。

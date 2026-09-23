@@ -51,7 +51,7 @@ export function registerAgentsCli(program: Command): void {
     .command('add')
     .description('Create an Agent and its workspace / state directories')
     .argument('<name>', 'Agent display name / id seed')
-    .requiredOption('--workspace <dir>', 'Workspace directory for this agent')
+    .option('--workspace <dir>', 'Workspace directory for this agent')
     .option('--model <id>', 'Model id (e.g. anthropic/claude-sonnet-4-5)')
     .option('--json', 'Output JSON summary')
     .action(
@@ -66,11 +66,11 @@ export function registerAgentsCli(program: Command): void {
         }
         const agentId = idRes.agentId;
 
-        const workspace = opts.workspace!.trim();
+        const workspace = opts.workspace?.trim();
         await new AgentCatalogService().create({
           id: agentId,
           enabled: true,
-          workspace,
+          ...(workspace ? { workspace } : {}),
           profile: { name: name.trim() },
           ...(opts.model?.trim()
             ? { models: { chat: { primary: opts.model.trim(), fallbacks: [] } } }
@@ -92,8 +92,24 @@ export function registerAgentsCli(program: Command): void {
     );
 
   agents
+    .command('default')
+    .description('Show or set the default Agent for new Sessions')
+    .argument('[id]', 'Agent id')
+    .option('--json', 'Output JSON')
+    .action((id: string | undefined, opts: { json?: boolean }) => {
+      const defaultAgentId = id
+        ? new AgentCatalogService().setDefault(id).defaultAgentId
+        : resolveDefaultAgentId();
+      if (opts.json) {
+        console.log(JSON.stringify({ defaultAgentId }, null, 2));
+      } else {
+        console.log(colors.green('✓'), `Default Agent: ${defaultAgentId}`);
+      }
+    });
+
+  agents
     .command('delete')
-    .description('Remove an agent from config (optional on-disk cleanup)')
+    .description('Remove an Agent from the catalog (optional on-disk cleanup)')
     .argument('<id>', 'Agent id')
     .option('--purge', 'Also delete workspace and ~/.xopc/agents/<id> data', false)
     .option('--json', 'Output JSON summary')

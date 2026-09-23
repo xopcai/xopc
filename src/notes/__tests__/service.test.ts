@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 
 vi.mock('../../providers/model-call.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../providers/model-call.js')>();
@@ -16,21 +18,13 @@ import { ConfigSchema, type Config } from '../../config/schema.js';
 import { onAutomationProductEvent } from '../../automations/product-events.js';
 
 function configWithGlobalModel(model = 'anthropic/claude-sonnet-4-5'): Config {
-  return ConfigSchema.parse({
-    agents: {
-      default: 'main',
-      defaults: {
-        models: { chat: { primary: model, fallbacks: [] }, intents: {} },
-      },
-      list: [
-        {
-          id: 'main',
-          profile: { name: 'Main' },
-          workspace: '~/.xopc/workspace/main',
-        },
-      ],
-    },
-  });
+  const repository = new AgentCatalogRepository();
+  const settings = repository.getSettings();
+  repository.updateDefaults({
+    ...settings.defaults,
+    models: { ...settings.defaults.models, chat: { primary: model, fallbacks: [] } },
+  }, settings.revision);
+  return ConfigSchema.parse({});
 }
 
 class MemoryNotesStore {
@@ -103,6 +97,7 @@ describe('NotesService markdown sync and AI edit', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-notes-service-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    seedTestAgentCatalog({ agents: [{ id: 'main', enabled: true, profile: { name: 'Main' }, workspace: '~/.xopc/workspace/main' }] });
     vi.mocked(completeWithResolvedCredentials).mockReset();
     store = new MemoryNotesStore();
     service = new NotesService(store as never);

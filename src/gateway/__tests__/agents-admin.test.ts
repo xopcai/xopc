@@ -1,17 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ConfigSchema } from '../../config/schema.js';
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import {
+  createGatewayAgent,
   getGatewayAgentEffectiveConfig,
   listGatewayAgents,
-  prepareCreateAgent,
-  prepareUpdateAgent,
+  updateGatewayAgent,
 } from '../agents-admin.js';
 
-function config() {
-  return ConfigSchema.parse({
-    agents: {
-      default: 'main',
+const originalStateDir = process.env.XOPC_STATE_DIR;
+let stateDir = '';
+
+describe('agents admin', () => {
+  beforeEach(() => {
+    stateDir = mkdtempSync(join(tmpdir(), 'xopc-agents-admin-'));
+    process.env.XOPC_STATE_DIR = stateDir;
+    initializeTestAgentCatalog({
       defaults: {
         models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
         skills: { mode: 'all-enabled', exclude: [] },
@@ -19,17 +28,22 @@ function config() {
         workflows: {},
         runtime: {},
       },
-      list: [{ id: 'main', enabled: true, profile: { name: 'Main' } }],
-    },
+      agents: [{ id: 'main', enabled: true, profile: { name: 'Main' } }],
+    });
   });
-}
 
-describe('agents admin', () => {
-  it('creates a minimal agent that inherits every global capability', () => {
-    const result = prepareCreateAgent(config(), { profile: { name: 'Code Helper' } });
+  afterEach(() => {
+    closeXopcDatabase();
+    if (originalStateDir === undefined) delete process.env.XOPC_STATE_DIR;
+    else process.env.XOPC_STATE_DIR = originalStateDir;
+    rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it('creates a minimal agent that inherits every global capability', async () => {
+    const result = await createGatewayAgent({ profile: { name: 'Code Helper' } });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const created = result.data.nextConfig.agents.list.find((agent) => agent.id === 'code-helper');
+    const created = new AgentCatalogRepository().get('code-helper');
     expect(created).toMatchObject({ id: 'code-helper', profile: { name: 'Code Helper' } });
     expect(created?.models).toBeUndefined();
     expect(created?.skills).toBeUndefined();
@@ -37,22 +51,21 @@ describe('agents admin', () => {
     expect(created?.workspace).toBeUndefined();
   });
 
-  it('creates an agent from a display name with no ASCII characters', () => {
-    const first = prepareCreateAgent(config(), { profile: { name: '数据分析师' } });
-    const second = prepareCreateAgent(config(), { profile: { name: '数据分析师' } });
+  it('creates an agent from a display name with no ASCII characters', async () => {
+    const first = await createGatewayAgent({ profile: { name: '数据分析师' } });
+    const second = await createGatewayAgent({ profile: { name: '数据分析师' } });
 
     expect(first.ok).toBe(true);
-    expect(second.ok).toBe(true);
-    if (!first.ok || !second.ok) return;
+    expect(second.ok).toBe(false);
+    if (!first.ok) return;
     expect(first.data.agentId).toMatch(/^agent-[a-z0-9]{7}$/);
-    expect(second.data.agentId).toBe(first.data.agentId);
-    expect(first.data.nextConfig.agents.list.at(-1)?.profile?.name).toBe('数据分析师');
+    expect(new AgentCatalogRepository().get(first.data.agentId)?.profile?.name).toBe('数据分析师');
   });
 
-  it('updates only explicit agent overrides and can reset them', () => {
-    const created = prepareCreateAgent(config(), { profile: { name: 'Coder' } });
+  it('updates only explicit agent overrides and can reset them', async () => {
+    const created = await createGatewayAgent({ profile: { name: 'Coder' } });
     if (!created.ok) throw new Error(created.error);
-    const updated = prepareUpdateAgent(created.data.nextConfig, 'coder', {
+    const updated = await updateGatewayAgent('coder', {
       workspace: '/tmp/coder',
       models: { chat: { primary: 'anthropic/claude-opus-4-1', fallbacks: [] } },
       tools: { exec_command: { mode: 'allow' } },
@@ -61,25 +74,27 @@ describe('agents admin', () => {
     });
     expect(updated.ok).toBe(true);
     if (!updated.ok) return;
-    expect(updated.data.nextConfig.agents.list[1]?.models?.chat?.primary).toBe('anthropic/claude-opus-4-1');
-    expect(updated.data.nextConfig.agents.defaults.models.chat.primary).toBe('openai/gpt-5');
-    expect(updated.data.nextConfig.agents.list[1]?.workflows?.default).toBe('code-review');
-    expect(updated.data.nextConfig.agents.list[1]?.runtime?.maxTurns).toBe(12);
-    const reset = prepareUpdateAgent(updated.data.nextConfig, 'coder', {
+    const stored = new AgentCatalogRepository().get('coder');
+    expect(stored?.models?.chat?.primary).toBe('anthropic/claude-opus-4-1');
+    expect(new AgentCatalogRepository().getSettings().defaults.models.chat.primary).toBe('openai/gpt-5');
+    expect(stored?.workflows?.default).toBe('code-review');
+    expect(stored?.runtime?.maxTurns).toBe(12);
+    const reset = await updateGatewayAgent('coder', {
       workspace: null,
       models: null,
       tools: null,
       workflows: null,
       runtime: null,
     });
-    expect(reset.ok && reset.data.nextConfig.agents.list[1]?.models).toBeUndefined();
-    expect(reset.ok && reset.data.nextConfig.agents.list[1]?.workspace).toBeUndefined();
-    expect(reset.ok && reset.data.nextConfig.agents.list[1]?.workflows).toBeUndefined();
-    expect(reset.ok && reset.data.nextConfig.agents.list[1]?.runtime).toBeUndefined();
+    const resetStored = new AgentCatalogRepository().get('coder');
+    expect(reset.ok && resetStored?.models).toBeUndefined();
+    expect(reset.ok && resetStored?.workspace).toBeUndefined();
+    expect(reset.ok && resetStored?.workflows).toBeUndefined();
+    expect(reset.ok && resetStored?.runtime).toBeUndefined();
   });
 
   it('returns effective values and their source', () => {
-    const result = getGatewayAgentEffectiveConfig(config(), 'main');
+    const result = getGatewayAgentEffectiveConfig('main');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.config.models.chat.primary).toBe('openai/gpt-5');
@@ -87,7 +102,7 @@ describe('agents admin', () => {
   });
 
   it('lists override and effective config separately', async () => {
-    const result = await listGatewayAgents(config());
+    const result = await listGatewayAgents();
     expect(result.agents[0]?.override.models).toBeUndefined();
     expect(result.agents[0]?.effective.models.chat.primary).toBe('openai/gpt-5');
   });

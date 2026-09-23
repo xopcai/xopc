@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ProjectService } from '../../projects/project-service.js';
@@ -78,6 +79,7 @@ describe('WorkflowRunService helpers', () => {
     stateDir = await mkdtemp(join(tmpdir(), 'xopc-workflow-service-'));
     process.env.XOPC_STATE_DIR = stateDir;
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    seedTestAgentCatalog();
   });
 
   afterEach(async () => {

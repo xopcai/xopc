@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import {
   DEFAULT_AGENT_TURN_TIMEOUT_MS,
@@ -12,17 +13,14 @@ import {
 
 describe('resolveAgentTurnTimeoutMs', () => {
   it('reads and clamps the effective agent runtime timeout', () => {
-    const base = ConfigSchema.parse({});
-    const withTimeout = (timeoutMs: number) => ConfigSchema.parse({
-      ...base,
-      agents: {
-        ...base.agents,
-        list: base.agents.list.map((agent) => ({ ...agent, runtime: { timeoutMs } })),
-      },
-    });
+    const withTimeout = (timeoutMs: number) => {
+      initializeTestAgentCatalog({ agents: [{ id: 'main', enabled: true, runtime: { timeoutMs } }] });
+      return ConfigSchema.parse({});
+    };
 
     expect(DEFAULT_AGENT_TURN_TIMEOUT_MS).toBe(4 * 60 * 60 * 1000);
     expect(MAX_AGENT_TURN_TIMEOUT_MS).toBe(24 * 60 * 60 * 1000);
+    initializeTestAgentCatalog();
     expect(resolveAgentTurnTimeoutMs()).toBe(DEFAULT_AGENT_TURN_TIMEOUT_MS);
     expect(resolveAgentTurnTimeoutMs(withTimeout(90_000))).toBe(90_000);
     expect(resolveAgentTurnTimeoutMs(withTimeout(1_000))).toBe(MIN_AGENT_TURN_TIMEOUT_MS);

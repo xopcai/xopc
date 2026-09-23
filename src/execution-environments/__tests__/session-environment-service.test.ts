@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ConfigSchema } from '../../config/schema.js';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ProjectService } from '../../projects/project-service.js';
 import { effectiveWorkspacePathForSession } from '../../session/session-workspace.js';
 import {
@@ -25,12 +26,7 @@ import { ExecutionEnvironmentStore } from '../store.js';
 
 const CONVERSATION_ID = "93f3b84c-0412-4376-8038-5f50e2da49d8";
 
-const config = ConfigSchema.parse({
-  agents: {
-    default: 'main',
-    list: [{ id: 'main', workspace: '/tmp/xopc-default-workspace' }],
-  },
-});
+const config = ConfigSchema.parse({});
 
 function git(cwd: string, args: string[]): void {
   execFileSync('git', args, { cwd, stdio: 'ignore' });
@@ -54,6 +50,7 @@ describe('SessionEnvironmentService', () => {
 
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    seedTestAgentCatalog({ agents: [{ id: 'main', workspace: '/tmp/xopc-default-workspace' }] });
     const store = new ExecutionEnvironmentStore();
     service = new SessionEnvironmentService({
       store,

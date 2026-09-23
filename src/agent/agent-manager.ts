@@ -379,7 +379,6 @@ export class AgentManager implements AgentInstanceGateway {
    * Uses in-memory session workspace overrides when the session has a persisted `workingDirectoryOverride`.
    */
   getResolvedWorkspaceForSession(conversationId: string): string {
-    const cfg = this.config.config!;
     const fromMap = this.sessionWorkspaceOverrides.get(conversationId);
     if (fromMap !== undefined) {
       return fromMap;
@@ -462,7 +461,6 @@ export class AgentManager implements AgentInstanceGateway {
       bus: this.config.bus,
       toolExecutorConfig: {
         resolveTimeoutMs: (toolName) => {
-          const config = this.mergedConfig();
           const conversationId = this.config.getCurrentContext?.()?.conversationId;
           return resolveEffectiveAgentProfileForSession(conversationId)
             .config.tools[toolName]?.timeoutMs;
@@ -698,7 +696,6 @@ export class AgentManager implements AgentInstanceGateway {
     registeredToolNames: string[] = instance.registeredToolNames,
     activeCapabilityNames: readonly string[] = this.activeCapabilityNames(instance),
   ): string {
-    const cfg = this.config.config!;
     const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.conversationId);
     const rt = this.workspaceRuntimes.getOrCreate(
       resolvedWorkspacePath,
@@ -861,7 +858,6 @@ export class AgentManager implements AgentInstanceGateway {
     workspaceDir: string,
     registeredToolNames?: string[],
   ): AgentSkillAvailabilityPayload {
-    const cfg = this.config.config!;
     const rt = this.workspaceRuntimes.getOrCreate(workspaceDir, unresolvedProfile.agentId);
     const profile = this.materializeSkillAllowlist(unresolvedProfile, rt);
     const entry = listAgentEntries().find(
@@ -986,7 +982,6 @@ export class AgentManager implements AgentInstanceGateway {
    * After ~/.xopc/skills.json changes (enable/disable), refresh `<available_skills>` on active agents.
    */
   refreshSkillsAfterSkillConfigChange(): void {
-    const cfg = this.config.config!;
     for (const rt of this.workspaceRuntimes.values()) {
       rt.skillManager.refreshPromptFromConfig();
     }
@@ -1089,7 +1084,6 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   private applySkillsAfterDiskChange(reason: 'disk' | 'trust' = 'disk'): void {
-    const cfg = this.config.config!;
     // Reload every workspace SkillManager first. When there are no active agent sessions
     // (e.g. gateway UI only), the loop below runs zero times — without this, `getSkillCatalog()`
     // and delete flows still see stale in-memory skills after ~/.xopc/skills changes.
@@ -1131,7 +1125,6 @@ export class AgentManager implements AgentInstanceGateway {
    * Get or create an Agent instance for a session
    */
   getOrCreateAgent(conversationId: string): Agent {
-    const cfg = this.config.config!;
     const targetPath = this.getResolvedWorkspaceForSession(conversationId);
     const existing = this.agents.get(conversationId);
     if (existing) {
@@ -1259,7 +1252,6 @@ export class AgentManager implements AgentInstanceGateway {
     const instance = this.agents.get(conversationId);
     if (!instance) return;
 
-    const cfg = this.config.config!;
     const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(conversationId);
     const rt = this.workspaceRuntimes.getOrCreate(
       resolvedWorkspacePath,
@@ -1600,7 +1592,6 @@ export class AgentManager implements AgentInstanceGateway {
       && userContextAccessVersion === instance.userContextAccessVersion) {
       return;
     }
-    const cfg = this.config.config!;
     const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.conversationId);
     const rt = this.workspaceRuntimes.getOrCreate(
       resolvedWorkspacePath,
@@ -1648,7 +1639,6 @@ export class AgentManager implements AgentInstanceGateway {
       const model = resolveModel(modelId);
       instance.agent.state.model = model;
 
-      const cfg = this.config.config!;
       const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(conversationId);
       const rt = this.workspaceRuntimes.getOrCreate(
         resolvedWorkspacePath,

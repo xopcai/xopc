@@ -17,8 +17,8 @@ The default file is `~/.xopc/xopc.json`. A profile, command-line option, or envi
 Use dot paths with the CLI:
 
 ```bash
-xopc config get agents.default
-xopc config set agents.default main
+xopc config get gateway.port
+xopc config set gateway.port 18790
 xopc config unset gateway.remote.url
 xopc config validate
 ```
@@ -50,19 +50,12 @@ The Gateway reloads many settings automatically, but credentials, extensions, ch
 
 ## Editing JSON directly
 
-Back up the file first, keep the JSON syntax valid, and change one section at a time. A minimal shape is:
+Back up the file first, keep the JSON syntax valid, and change one section at a time. Agent definitions, defaults, bindings, and client-specific Agent choices are not JSON settings; manage them in **Agents**, through conversation, or with `xopc agents`.
+
+A minimal JSON shape is:
 
 ```json
 {
-  "agents": {
-    "default": "main",
-    "list": [
-      {
-        "id": "main",
-        "enabled": true
-      }
-    ]
-  },
   "gateway": {
     "port": 18790
   }
@@ -70,6 +63,8 @@ Back up the file first, keep the JSON syntax valid, and change one section at a 
 ```
 
 Do not copy this over an existing configuration; it intentionally omits most settings. Use [Configuration reference](./reference/configuration.md) to find the relevant section.
+
+Agent data is stored transactionally in `~/.xopc/xopc.db`. On the first upgraded start, xopc imports old Agent JSON fields, writes backups, removes those fields from `xopc.json`, and then uses SQLite exclusively.
 
 ## Secrets
 

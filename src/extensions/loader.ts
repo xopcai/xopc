@@ -12,7 +12,6 @@ import { join, dirname, isAbsolute } from 'path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createJiti } from 'jiti';
 import { resolveDefaultAgentId } from '../agent/agent-scope.js';
-import { loadConfig } from '../config/loader.js';
 import {
   resolveAgentWorkspaceDir,
   resolveExtensionsDir,
@@ -167,7 +166,6 @@ export class ExtensionLoader {
   constructor(options?: ExtensionLoaderOptions) {
     this.registry = new ExtensionRegistryImpl();
     this.options = options || (() => {
-      const c = loadConfig();
       const aid = resolveDefaultAgentId();
       return {
         workspaceDir: resolveAgentWorkspaceDir(aid),
@@ -928,7 +926,6 @@ export class ExtensionLoader {
 // ============================================================================
 
 export function resolveExtensionPath(id: string, _options: ExtensionLoaderOptions): string | null {
-  const c = loadConfig();
   const aid = resolveDefaultAgentId();
   // Priority 1: Workspace
   const workspacePath = join(resolveWorkspaceExtensionsDir(aid), id);

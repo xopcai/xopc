@@ -672,7 +672,7 @@ function buildWorkflowRunComparison(sourceView: WorkflowRunView, replayView: Wor
   };
 }
 
-function getAgentId(rawAgentId: string | undefined, config: AuthenticatedRouteDeps['service']['currentConfig']): string {
+function getAgentId(rawAgentId: string | undefined, _config: AuthenticatedRouteDeps['service']['currentConfig']): string {
   const trimmed = rawAgentId?.trim();
   if (trimmed) {
     return trimmed;

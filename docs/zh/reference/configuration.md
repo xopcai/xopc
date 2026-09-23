@@ -21,7 +21,6 @@ xopc config validate
 
 | 区域 | 控制内容 |
 | --- | --- |
-| `agents` | 一份全局继承配置（`agents.defaults`），以及 Agent 个性和显式覆盖（`agents.list`） |
 | `userContext` | 用户拥有的共享上下文、隐私和召回行为 |
 | `providers` | 模型服务商配置和凭据引用 |
 | `channels` | Telegram、微信、飞书和扩展通道设置 |
@@ -35,6 +34,8 @@ xopc config validate
 | `platform` | 独立或平台连接模式、平台 URL、可选工作区和已校验的 Discovery 快照 |
 
 Workflow 和 Automation 通常在对应 Gateway 页面管理，不直接写入 `xopc.json`。
+
+Agent 定义、继承默认、路由绑定和界面默认值保存在 `~/.xopc/xopc.db`。请通过 **Agent** 页面、`xopc agents` 或 Agent 对话管理；这些数据不会出现在 `xopc.json` 中。
 
 ## 常用路径覆盖
 

@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
+import { closeXopcDatabase } from '../../../../storage/sqlite/index.js';
 import {
   buildSafeBrowserConfigForWeb,
   buildSafeMcpConfigForWeb,
@@ -37,6 +39,7 @@ describe('buildSafeBrowserConfigForWeb', () => {
 });
 
 describe('buildSafeWebConfigPayload', () => {
+  afterEach(() => closeXopcDatabase());
   it('includes the Web UI activity detail default', async () => {
     const payload = await buildSafeWebConfigPayload({
       currentConfig: {
@@ -63,28 +66,25 @@ describe('buildSafeWebConfigPayload', () => {
   });
 
   it('includes global model intents and agent overrides for config round trips', async () => {
+    initializeTestAgentCatalog({
+      defaults: {
+        models: {
+          chat: { primary: 'openai/gpt-4.1', fallbacks: [] },
+          intents: { fast: { primary: 'ollama/AutoGLM-Phone-9B:latest', fallbacks: [] } },
+        },
+      },
+      agents: [{
+        id: 'main',
+        enabled: true,
+        profile: { name: 'Main' },
+        workspace: '/tmp/main',
+        models: {
+          intents: { review: { primary: 'anthropic/claude-sonnet-4', fallbacks: [] } },
+        },
+      }],
+    });
     const payload = await buildSafeWebConfigPayload({
       currentConfig: {
-        agents: {
-          default: 'main',
-          defaults: {
-            models: {
-              chat: { primary: 'openai/gpt-4.1', fallbacks: [] },
-              intents: { fast: { primary: 'ollama/AutoGLM-Phone-9B:latest', fallbacks: [] } },
-            },
-          },
-          list: [
-            {
-              id: 'main',
-              enabled: true,
-              profile: { name: 'Main' },
-              workspace: '/tmp/main',
-              models: {
-                intents: { review: { primary: 'anthropic/claude-sonnet-4', fallbacks: [] } },
-              },
-            },
-          ],
-        },
         channels: {},
       },
     } as never);

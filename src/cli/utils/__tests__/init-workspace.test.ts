@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 import { loadConfig } from '../../../config/loader.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import { initWorkspace } from '../init-workspace.js';
@@ -47,8 +48,8 @@ describe('initWorkspace', () => {
       expect(result.token.length).toBeGreaterThan(10);
       expect(result.configCreated).toBe(true);
       expect(readFileSync(configPath, 'utf8')).toContain(result.token);
-      expect(result.config.tui.defaultAgent).toBeUndefined();
-      expect(result.config.agents.list.some((agent) => agent.id === 'coder')).toBe(true);
+      expect(readFileSync(configPath, 'utf8')).not.toContain('"agents"');
+      expect(new AgentCatalogRepository().get('coder')).not.toBeNull();
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -75,14 +76,13 @@ describe('initWorkspace', () => {
     try {
       const configPath = join(root, 'xopc.json');
       const workspacePath = join(root, 'workspace', 'main');
-      const result = await initWorkspace({
+      await initWorkspace({
         configPath,
         workspacePath,
         persistWorkspacePath: true,
         skipChannelPluginValidation: true,
       });
-      const main = result.config.agents?.list.find((agent) => agent.id === 'main');
-      expect(main?.workspace).toBe(workspacePath);
+      expect(new AgentCatalogRepository().get('main')?.workspace).toBe(workspacePath);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

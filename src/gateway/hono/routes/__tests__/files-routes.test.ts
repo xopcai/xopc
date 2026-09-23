@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ConfigSchema } from '../../../../config/schema.js';
+import { seedTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
 import { fileResourceId, fileSpaceId } from '../../../../files/file-service.js';
 import { effectiveWorkspacePathForSession } from '../../../../session/session-workspace.js';
 import { getSessionConfig, setSessionConfig } from '../../../../storage/sqlite/config-repository.js';
@@ -30,6 +31,7 @@ describe('files routes', () => {
     process.env.XOPC_STATE_DIR = stateDir;
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    seedTestAgentCatalog();
   });
 
   afterEach(() => {
@@ -40,7 +42,9 @@ describe('files routes', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  function appFor(workspaceRoot: string, config = ConfigSchema.parse({ agents: { list: [{ id: 'main', workspace: workspaceRoot }] } })) {
+  function appFor(workspaceRoot: string, agents = [{ id: 'main', workspace: workspaceRoot }]) {
+    seedTestAgentCatalog({ agents });
+    const config = ConfigSchema.parse({});
     const projects = new ProjectService();
     const project = projects.create({ name: 'Files', workspaceRoot });
     const service = {
@@ -104,9 +108,9 @@ describe('files routes', () => {
     mkdirSync(alternate);
     utimesSync(main, 1000, 1000);
     utimesSync(alternate, 2000, 2000);
-    const { app } = appFor(main, ConfigSchema.parse({ agents: { default: 'main', list: [
+    const { app } = appFor(main, [
       { id: 'alternate', workspace: alternate }, { id: 'main', workspace: main },
-    ] } }));
+    ]);
     const response = await app.request('/api/files/default-space');
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ space: { id: fileSpaceId(realpathSync(main)) } });

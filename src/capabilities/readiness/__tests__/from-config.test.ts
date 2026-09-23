@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import type { ModelCatalogSnapshot } from '../../../providers/model-catalog-store.js';
 import { buildCapabilityPlansForConfig } from '../from-config.js';
@@ -31,7 +32,12 @@ describe('buildCapabilityPlansForConfig', () => {
     const options = { catalog: snapshot, providerReady: () => true, localSttReady: false };
     expect(buildCapabilityPlansForConfig(config, options)['computer-use'].primary).toBeUndefined();
     expect(buildCapabilityPlansForConfig(config, options).vision.primary).toBeUndefined();
-    config.agents.defaults.models.computerUse = { primary: 'xopc-cloud/gui', fallbacks: [] };
+    const repository = new AgentCatalogRepository();
+    const settings = repository.getSettings();
+    repository.updateDefaults({
+      ...settings.defaults,
+      models: { ...settings.defaults.models, computerUse: { primary: 'xopc-cloud/gui', fallbacks: [] } },
+    }, settings.revision);
     expect(buildCapabilityPlansForConfig(config, options)['computer-use']).toMatchObject({ status: 'ready', fallbacks: [], primary: { model: 'gui' } });
     cloud.models[0].availability = 'unavailable';
     expect(buildCapabilityPlansForConfig(config, options)['computer-use']).toMatchObject({ status: 'unavailable', fallbacks: [] });

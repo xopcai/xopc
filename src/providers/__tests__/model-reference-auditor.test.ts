@@ -1,31 +1,37 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import type { Config } from '../../config/schema.js';
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import { auditModelReferences } from '../model-reference-auditor.js';
 import type { ModelRegistry } from '../model-registry.js';
 
 describe('auditModelReferences', () => {
+  afterEach(() => closeXopcDatabase());
+
   it('audits GUI bindings without suggesting ordinary chat models', () => {
-    const config = { agents: { defaults: { models: { computerUse: { primary: 'cloud/gui', fallbacks: [] } } }, list: [] } } as unknown as Config;
+    const repository = initializeTestAgentCatalog();
+    const settings = repository.getSettings();
+    repository.updateDefaults({
+      ...settings.defaults,
+      models: { ...settings.defaults.models, computerUse: { primary: 'cloud/gui', fallbacks: [] } },
+    }, settings.revision);
     const registry = { resolve: () => ({ api: 'openai-completions', input: ['text', 'image'] }) } as unknown as ModelRegistry;
     const report = auditModelReferences(new Map(), { registry, catalog: { sources: {} } });
-    expect(report).toEqual([{ ref: 'cloud/gui', availability: 'unavailable', locations: ['agents.defaults.models.computerUse.primary'] }]);
+    expect(report).toEqual(expect.arrayContaining([
+      { ref: 'cloud/gui', availability: 'unavailable', locations: ['agentCatalog.defaults.models.computerUse.primary'] },
+    ]));
+    expect(report.find((entry) => entry.ref === 'cloud/gui')).not.toHaveProperty('suggestedRef');
   });
   it('reports unavailable references with their locations and replacement', () => {
-    const config = {
-      agents: {
-        defaults: {
-          models: {
-            chat: {
-              primary: 'cloud/removed',
-              fallbacks: ['cloud/active'],
-            },
-            intents: {},
-          },
-        },
-        list: [],
+    const repository = initializeTestAgentCatalog();
+    const settings = repository.getSettings();
+    repository.updateDefaults({
+      ...settings.defaults,
+      models: {
+        ...settings.defaults.models,
+        chat: { primary: 'cloud/removed', fallbacks: ['cloud/active'] },
       },
-    } as unknown as Config;
+    }, settings.revision);
     const registry = {
       resolve: (ref: string) => ref === 'cloud/active' ? { id: 'active' } : undefined,
     } as ModelRegistry;
@@ -50,32 +56,30 @@ describe('auditModelReferences', () => {
       {
         ref: 'cloud/active',
         availability: 'available',
-        locations: ['agents.defaults.models.chat.fallbacks[0]'],
+        locations: ['agentCatalog.defaults.models.chat.fallbacks[0]'],
       },
       {
         ref: 'cloud/removed',
         availability: 'unavailable',
-        locations: ['agents.defaults.models.chat.primary'],
+        locations: ['agentCatalog.defaults.models.chat.primary'],
         suggestedRef: 'cloud/active',
       },
     ]);
   });
 
   it('checks image-generation references against the image provider registry', () => {
-    const config = {
-      agents: {
-        defaults: {
-          models: {
-            intents: {},
-            imageGeneration: {
-              primary: 'minimax/image-01',
-              fallbacks: ['missing/image-model'],
-            },
-          },
+    const repository = initializeTestAgentCatalog();
+    const settings = repository.getSettings();
+    repository.updateDefaults({
+      ...settings.defaults,
+      models: {
+        ...settings.defaults.models,
+        imageGeneration: {
+          primary: 'minimax/image-01',
+          fallbacks: ['missing/image-model'],
         },
-        list: [],
       },
-    } as unknown as Config;
+    }, settings.revision);
     const registry = {
       resolve: () => undefined,
     } as unknown as ModelRegistry;
@@ -85,17 +89,17 @@ describe('auditModelReferences', () => {
       registry,
       catalog,
       resolveImageGenerationModel: (ref) => ref === 'minimax/image-01',
-    })).toEqual([
+    })).toEqual(expect.arrayContaining([
       {
         ref: 'minimax/image-01',
         availability: 'available',
-        locations: ['agents.defaults.models.imageGeneration.primary'],
+        locations: ['agentCatalog.defaults.models.imageGeneration.primary'],
       },
       {
         ref: 'missing/image-model',
         availability: 'unavailable',
-        locations: ['agents.defaults.models.imageGeneration.fallbacks[0]'],
+        locations: ['agentCatalog.defaults.models.imageGeneration.fallbacks[0]'],
       },
-    ]);
+    ]));
   });
 });

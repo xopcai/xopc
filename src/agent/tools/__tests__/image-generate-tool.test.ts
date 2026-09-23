@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
 import { ConfigSchema } from '../../../config/schema.js';
 
@@ -73,6 +74,25 @@ function makeTool(config?: any, agentId = 'studio') {
 
 describe('image_generate tool — Step 2 input wiring', () => {
   it('uses explicitly configured image-generation model settings before auto provider defaults', async () => {
+    initializeTestAgentCatalog({
+      defaults: {
+        models: {
+          chat: { primary: 'openai/gpt-4.1', fallbacks: [] },
+          intents: {},
+          imageGeneration: {
+            primary: 'openai/gpt-image-2',
+            fallbacks: ['google/gemini-3.1-flash-image'],
+            timeoutMs: 120_000,
+            autoProviderFallback: true,
+          },
+        },
+        skills: { mode: 'all-enabled', exclude: [] },
+        tools: {},
+        workflows: {},
+        runtime: {},
+      },
+      agents: [{ id: 'main', enabled: true }, { id: 'studio', enabled: true }],
+    });
     generateImageMock.mockResolvedValueOnce({
       images: [{ buffer: PNG_HEADER, mimeType: 'image/png' }],
       provider: 'openai',
@@ -80,24 +100,7 @@ describe('image_generate tool — Step 2 input wiring', () => {
       attempts: [],
       ignoredOverrides: [],
     });
-    const tool = makeTool(ConfigSchema.parse({
-      agents: {
-        default: 'main',
-        defaults: {
-          models: {
-            chat: { primary: 'openai/gpt-4.1', fallbacks: [] },
-            intents: {},
-            imageGeneration: {
-              primary: 'openai/gpt-image-2',
-              fallbacks: ['google/gemini-3.1-flash-image'],
-              timeoutMs: 120_000,
-              autoProviderFallback: true,
-            },
-          },
-        },
-        list: [{ id: 'main', enabled: true }],
-      },
-    }));
+    const tool = makeTool(ConfigSchema.parse({}));
 
     await tool.execute('tc-explicit', { prompt: 'sunset' } as any, {} as any, () => {});
 

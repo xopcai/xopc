@@ -4,7 +4,7 @@ function seedConversationFixtures(): void {
   openFixtureDatabase();
   ensureFixtureConversation("d2727fdb-ecad-4efa-86e1-46af39a71a2c", '', {"agentId":"main","sourceChannel":"tui","sourceChatId":"xopc-use","sessionType":"chat","routing":{"agentId":"main","source":"tui","accountId":"default","peerKind":"direct","peerId":"xopc-use"}});
 }
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -25,11 +25,13 @@ import type { LocalAppService } from '../../../local-apps/index.js';
 import { ChatPreviewService } from '../../../chat-previews/index.js';
 import { createXopcUseTool } from '../xopc-use-tool.js';
 import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
+import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 
 const CONVERSATION_ID = "d2727fdb-ecad-4efa-86e1-46af39a71a2c";
 
 function parseToolJson(result: Awaited<ReturnType<ReturnType<typeof createXopcUseTool>['execute']>>) {
   const text = result.content[0]?.type === 'text' ? result.content[0].text : '{}';
+  if (text.startsWith('Error: ')) throw new Error(text);
   return JSON.parse(text.split('\nOpen in xopc:')[0].split('\nxopc-product-delivery:')[0]) as Record<string, any>;
 }
 
@@ -39,11 +41,17 @@ describe('xopc_use tool', () => {
   let automations: AutomationService;
   let notes: NotesService;
   let activity: ActivityService;
+  let previousStateDir: string | undefined;
 
   beforeEach(async () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-use-tool-'));
+    previousStateDir = process.env.XOPC_STATE_DIR;
+    process.env.XOPC_STATE_DIR = stateDir;
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    const catalog = new AgentCatalogRepository();
+    catalog.ensureInitialized();
+    catalog.markProvisioned('main');
     ensureSessionRecord(CONVERSATION_ID, stateDir, { agentId: "main" });
     projects = new ProjectService();
     automations = new AutomationService();
@@ -53,11 +61,100 @@ describe('xopc_use tool', () => {
     activity = new ActivityService();
   });
 
+  it('creates and updates an Agent through durable capabilities', async () => {
+    const tool = createXopcUseTool({ getCurrentAgentId: () => 'main' });
+    const workspace = join(stateDir, 'coder-workspace');
+    const createInput = {
+      mode: 'agent' as const,
+      command: 'create',
+      args: {
+        id: 'coder',
+        profile: { name: 'Coder', instructions: 'Keep changes focused.' },
+        workspace,
+        tools: { exec_command: { mode: 'ask' } },
+        idempotencyKey: 'create-coder',
+      },
+    };
+
+    const created = parseToolJson(await tool.execute('agent-create', createInput));
+    const replayed = parseToolJson(await tool.execute('agent-create-retry', createInput));
+    expect(created).toEqual(replayed);
+    expect(created).toMatchObject({
+      ok: true,
+      agent: { id: 'coder', revision: 1 },
+      effective: { id: 'coder', workspace, tools: { exec_command: { mode: 'ask' } } },
+    });
+
+    const listed = parseToolJson(await tool.execute('agent-list', {
+      mode: 'agent', command: 'list', args: {},
+    }));
+    const coder = listed.agents.find((item: { agent: { id: string } }) => item.agent.id === 'coder');
+    expect(coder.agent.provisioningState).toBe('ready');
+
+    const updated = parseToolJson(await tool.execute('agent-update', {
+      mode: 'agent',
+      command: 'update',
+      args: {
+        id: 'coder',
+        expectedRevision: coder.agent.revision,
+        patch: { profile: { name: 'Code Reviewer' } },
+        idempotencyKey: 'update-coder',
+      },
+    }));
+    expect(updated).toMatchObject({ ok: true, agent: { profile: { name: 'Code Reviewer' } } });
+  });
+
+  it('persists and completes an Agent purge through the capability receipt', async () => {
+    const tool = createXopcUseTool({ getCurrentAgentId: () => 'main' });
+    const workspace = join(stateDir, 'workspace-disposable');
+    await tool.execute('agent-create', {
+      mode: 'agent', command: 'create',
+      args: { id: 'disposable', profile: { name: 'Disposable' }, workspace, idempotencyKey: 'create-disposable' },
+    });
+    const listed = parseToolJson(await tool.execute('agent-list', { mode: 'agent', command: 'list', args: {} }));
+    const disposable = listed.agents.find((item: { agent: { id: string } }) => item.agent.id === 'disposable');
+    expect(existsSync(workspace)).toBe(true);
+
+    const purged = parseToolJson(await tool.execute('agent-purge', {
+      mode: 'agent', command: 'purge',
+      args: { id: 'disposable', expectedRevision: disposable.agent.revision, idempotencyKey: 'purge-disposable' },
+    }));
+
+    expect(purged).toMatchObject({ ok: true, deleted: true, agent: { id: 'disposable' } });
+    expect(existsSync(workspace)).toBe(false);
+    expect(new AgentCatalogRepository().get('disposable', { includeDeleted: true })).toBeNull();
+  });
+
+  it('refuses to purge a workspace shared by another Agent', async () => {
+    const tool = createXopcUseTool({ getCurrentAgentId: () => 'main' });
+    const workspace = join(stateDir, 'workspace-shared');
+    for (const id of ['first', 'second']) {
+      await tool.execute(`agent-create-${id}`, {
+        mode: 'agent', command: 'create',
+        args: { id, workspace, idempotencyKey: `create-${id}` },
+      });
+    }
+    const first = new AgentCatalogRepository().get('first')!;
+
+    const result = await tool.execute('agent-purge-shared', {
+      mode: 'agent', command: 'purge',
+      args: { id: 'first', expectedRevision: first.revision, idempotencyKey: 'purge-first' },
+    });
+
+    expect(result.content[0]).toMatchObject({
+      type: 'text', text: expect.stringContaining('workspace used by Agent "second"'),
+    });
+    expect(existsSync(workspace)).toBe(true);
+    expect(new AgentCatalogRepository().get('first')).not.toBeNull();
+  });
+
   afterEach(async () => {
     await automations.stop();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+    if (previousStateDir === undefined) delete process.env.XOPC_STATE_DIR;
+    else process.env.XOPC_STATE_DIR = previousStateDir;
   });
 
   it('executes a granted Local App write through the Agent boundary with stable replay and revocation', async () => {

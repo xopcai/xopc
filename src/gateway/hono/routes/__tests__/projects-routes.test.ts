@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityService } from '../../../../activity/index.js';
+import { seedTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../../../config/schema.js';
 import { ExecutionEnvironmentStore } from '../../../../execution-environments/store.js';
 import { ProjectService } from '../../../../projects/index.js';
@@ -64,6 +65,7 @@ describe('project association routes', () => {
     process.env.XOPC_STATE_DIR = stateDir;
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    seedTestAgentCatalog({ agents: [{ id: 'main' }, { id: 'coder' }] });
   });
 
   afterEach(() => {
@@ -88,7 +90,7 @@ describe('project association routes', () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Code', workspaceRoot: repo, executionMode: 'local_checkout' });
     const app = registerSessionRouteApp({
-      currentConfig: ConfigSchema.parse({ agents: { list: [{ id: 'main', enabled: true }] } }), projects,
+      currentConfig: ConfigSchema.parse({}), projects,
       sessions: { getSession: vi.fn(async (key: string) => ({ key, projectId: project.id })) } as unknown as GatewayService['sessions'],
       sessionIndexInstance: { saveMessages: vi.fn(async (key: string) => { ensureSessionRecord(key, stateDir, { agentId: "main" }); }) } as unknown as GatewayService['sessionIndexInstance'],
     });
@@ -116,7 +118,7 @@ describe('project association routes', () => {
     const saveMessages = vi.fn(async (key: string) => { ensureSessionRecord(key, stateDir, { agentId: "main" }); });
     const deleteSession = vi.fn(async () => ({ ok: true }));
     const app = registerSessionRouteApp({
-      currentConfig: ConfigSchema.parse({ agents: { list: [{ id: 'main', enabled: true }] } }),
+      currentConfig: ConfigSchema.parse({}),
       projects,
       sessions: {
         initializeChatModel: vi.fn(async () => success ? { ok: true } : { ok: false, error: 'Invalid model' }),
@@ -541,12 +543,7 @@ describe('project association routes', () => {
     const project = projects.create({ name: 'Agent Project', defaultAgentId: 'coder' });
     const listSessions = vi.fn(async () => ({ items: [] }));
     const app = registerSessionRouteApp({
-      currentConfig: {
-        agents: {
-          default: 'main',
-          list: [{ id: 'main', enabled: true }, { id: 'coder', enabled: true }],
-        },
-      },
+      currentConfig: ConfigSchema.parse({}),
       projects,
       sessions: {
         listSessions,
@@ -635,12 +632,7 @@ describe('project association routes', () => {
       customData: { genericNewChatShell: true },
     };
     const app = registerSessionRouteApp({
-      currentConfig: {
-        agents: {
-          default: 'main',
-          list: [{ id: 'main', enabled: true }, { id: 'coder', enabled: true }],
-        },
-      },
+      currentConfig: ConfigSchema.parse({}),
       projects,
       sessions: {
         listSessions: vi.fn(async () => ({ items: [existingSession] })),
@@ -709,12 +701,7 @@ describe('project association routes', () => {
       ensureSessionRecord(conversationId, process.cwd(), { agentId: "main" });
     });
     const app = registerSessionRouteApp({
-      currentConfig: {
-        agents: {
-          default: 'main',
-          list: [{ id: 'main', enabled: true }],
-        },
-      },
+      currentConfig: ConfigSchema.parse({}),
       projects: {
         get: vi.fn(() => null),
       } as unknown as GatewayService['projects'],
@@ -800,12 +787,7 @@ describe('project association routes', () => {
     });
     capture('Ship the digest flow');
     const app = registerProjectRouteApp({
-      currentConfig: {
-        agents: {
-          default: 'main',
-          list: [{ id: 'main', enabled: true }],
-        },
-      },
+      currentConfig: ConfigSchema.parse({}),
       projects,
       sessions: {
         getSession: vi.fn(),

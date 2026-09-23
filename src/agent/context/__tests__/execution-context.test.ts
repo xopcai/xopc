@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { seedTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 
 import { writeKnowledgeItem } from '../../../knowledge-memory/index.js';
 import {
@@ -61,6 +62,7 @@ describe('execution context', () => {
   beforeEach(() => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: ':memory:' });
+    seedTestAgentCatalog();
   });
 
   afterEach(() => {

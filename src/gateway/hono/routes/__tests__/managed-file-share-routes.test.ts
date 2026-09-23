@@ -26,6 +26,7 @@ vi.mock('../../../../share/hosted-static-site-publish.js', () => ({
 
 import { saveMediaBuffer } from '../../../../media/store.js';
 import { ConfigSchema } from '../../../../config/schema.js';
+import { seedTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
 import { fileResourceId } from '../../../../files/file-service.js';
 import { getShareStore, resetShareStoreForTests } from '../../../../share/share-store.js';
 import { getSiteShareStore, resetSiteShareStoreForTests } from '../../../../share/site-share-store.js';
@@ -57,11 +58,10 @@ describe('managed file sharing', () => {
       mkdirSync(root);
       writeFileSync(join(root, 'brief.txt'), `${kind} content`);
     }
+    seedTestAgentCatalog({ agents: [{ id: 'main', workspace: roots.agent }] });
     const project = { id: 'project-1', name: 'Project', workspaceRoot: roots.project };
     const service = {
-      currentConfig: ConfigSchema.parse({
-        agents: { default: 'main', list: [{ id: 'main', workspace: roots.agent }] },
-      }),
+      currentConfig: ConfigSchema.parse({}),
       projects: {
         list: () => ({ items: [project], hasMore: false }),
         get: (id: string) => id === project.id ? project : null,

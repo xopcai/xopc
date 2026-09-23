@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { EndpointToolPolicy } from '../../endpoint-tools/policy.js';
 import { resolveEffectiveAgentConfig } from '../../agent-config/resolver.js';
-import { ConfigSchema } from '../../config/schema.js';
 import { ChatCompletionsComputerAdapter, readComputerJson } from '../model-adapter.js';
 
 describe('computer configuration and protocol boundaries', () => {
@@ -13,7 +13,7 @@ describe('computer configuration and protocol boundaries', () => {
     expect(() => policy.validateDescriptor('desktop', { ...structuredClone(COMPUTER_DESCRIPTOR), confirmation: 'always' } as any)).toThrow();
   });
   it('inherits the specialized model and treats a null override as global inheritance', () => {
-    const defaults = ConfigSchema.parse({}).agents.defaults;
+    const defaults = new AgentCatalogRepository().snapshot().defaults;
     defaults.models.computerUse = { primary: 'dashscope-cn/gui-plus-2026-02-26', fallbacks: [] };
     const inherited = resolveEffectiveAgentConfig({ defaults, agent: { id: 'main', enabled: true } });
     expect(inherited.config.models.computerUse?.primary).toBe('dashscope-cn/gui-plus-2026-02-26');

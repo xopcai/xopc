@@ -11,6 +11,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { commandRegistry } from '../registry.js';
 import { registerReviewCommand } from '../builtins/review.js';
@@ -26,6 +27,22 @@ function createContext(
   btwQuery: CommandContext['btwQuery'],
   emitEvent?: CommandContext['emitEvent'],
 ): CommandContext {
+  const repository = new AgentCatalogRepository();
+  const settings = repository.getSettings();
+  repository.updateDefaults({
+    ...settings.defaults,
+    models: {
+      ...settings.defaults.models,
+      chat: { primary: 'openai/gpt-4.1', fallbacks: [] },
+      intents: { ...settings.defaults.models.intents, review: { primary: 'openai/gpt-4.1', fallbacks: [] } },
+    },
+  }, settings.revision);
+  const main = repository.get('main')!;
+  repository.update('main', main.revision, {
+    id: 'main', enabled: true,
+    profile: { name: 'Main', instructions: 'Review code' },
+    workspace: root,
+  });
   return {
     conversationId: "dd1b1777-d20d-4b57-8115-3e9d1def4dfa",
     source: 'webui',
@@ -33,26 +50,7 @@ function createContext(
     chatId: 'review-test',
     senderId: 'local-user',
     isGroup: false,
-    config: ConfigSchema.parse({
-      agents: {
-        default: 'main',
-        defaults: {
-          models: {
-            chat: { primary: 'openai/gpt-4.1', fallbacks: [] },
-            intents: { review: { primary: 'openai/gpt-4.1', fallbacks: [] } },
-          },
-        },
-        list: [
-          {
-            id: 'main',
-            enabled: true,
-            profile: { name: 'Main', instructions: 'Review code' },
-            workspace: root,
-          },
-        ],
-      },
-      workspace: { root },
-    }),
+    config: ConfigSchema.parse({ workspace: { root } }),
     setTyping: vi.fn(async () => undefined),
     supports: () => false,
     btwQuery,
@@ -132,9 +130,6 @@ describe('/review command', () => {
       }),
     }));
     const context = createContext(repo, btwQuery);
-    context.config.agents.list[0]!.models = {
-      intents: { review: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: [] } },
-    };
     context.getSessionConfigStore = () => ({
       get: vi.fn(async () => ({ modelOverride: 'openai/gpt-5.3-codex' })),
     }) as never;
@@ -185,9 +180,14 @@ describe('/review command', () => {
       }),
     }));
     const context = createContext(repo, btwQuery);
-    context.config.agents.list[0]!.models = {
-      intents: { review: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: [] } },
-    };
+    const repository = new AgentCatalogRepository();
+    const main = repository.get('main')!;
+    repository.update('main', main.revision, {
+      id: 'main', enabled: true,
+      profile: main.profile,
+      workspace: main.workspace,
+      models: { intents: { review: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: [] } } },
+    });
 
     await commandRegistry.execute('review', context, '');
 

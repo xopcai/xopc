@@ -9,6 +9,7 @@ import {
   listAgentEntries,
   normalizeAgentId,
   resolveAgentProfileDir,
+  resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
   resolveUserPath,
   validateAgentIdForNewAgent,
@@ -180,15 +181,15 @@ export async function createGatewayAgent(
     return { ok: false, error: `agent "${agentId}" already exists`, status: 409 };
   }
 
-  const wsAbs = resolveUserPath(body.workspace?.trim() || `~/.xopc/workspace/${agentId}`);
+  const workspace = body.workspace?.trim() ? resolveUserPath(body.workspace) : undefined;
   try {
     await new AgentCatalogService().create({
       id: agentId,
       enabled: true,
-      workspace: wsAbs,
+      ...(workspace ? { workspace } : {}),
       profile: structuredClone(body.profile),
     });
-    return { ok: true, data: { agentId, workspace: wsAbs } };
+    return { ok: true, data: { agentId, workspace: resolveAgentWorkspaceDir(agentId) } };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error), status: 400 };
   }

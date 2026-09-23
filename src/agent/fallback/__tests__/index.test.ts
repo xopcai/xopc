@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   classifyFailoverReason,
   isRateLimitErrorMessage,
@@ -9,20 +9,14 @@ import {
 } from '../reason.js';
 import { resolveFallbackCandidates } from '../candidates.js';
 import { ConfigSchema } from '../../../config/schema.js';
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 
-const fallbackConfig = ConfigSchema.parse({
-  agents: {
-    defaults: {
-      models: {
-        chat: {
-          primary: 'anthropic/claude-sonnet-4-5',
-          fallbacks: [],
-        },
-        intents: {},
-      },
-    },
-  },
-});
+const fallbackConfig = ConfigSchema.parse({});
+
+beforeEach(() => initializeTestAgentCatalog({ defaults: {
+  models: { chat: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: [] }, intents: {} },
+  skills: { mode: 'selected', include: [] }, tools: {}, workflows: {}, runtime: {},
+} }));
 
 describe('Failover Reason Classification', () => {
   it('classifies rate limit errors', () => {

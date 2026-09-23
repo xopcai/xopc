@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
 import {
   closeXopcDatabase,
@@ -54,6 +55,7 @@ describe('connector learning coordinator', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-learning-coordinator-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    seedTestAgentCatalog();
     upsertConnectorInstallation({
       id: 'composio-gmail-local-owner',
       connectorId: 'composio-gmail',

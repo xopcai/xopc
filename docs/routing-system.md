@@ -28,7 +28,7 @@ Test a read-only request before allowing tools that write files, run commands, s
 ## Create an Agent in the terminal
 
 ```bash
-xopc agents add research
+xopc agents add research --workspace ~/.xopc/workspace-research
 xopc agents list
 ```
 
@@ -45,8 +45,7 @@ Read the confirmation carefully if on-disk cleanup is offered; deleting files is
 The default is used for new Sessions that do not name an Agent:
 
 ```bash
-xopc config set agents.default research
-xopc config validate
+xopc agents default research
 ```
 
 Existing Sessions remain assigned to their current Agent. To use another Agent, start a new chat and select it explicitly.

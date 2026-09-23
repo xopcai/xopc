@@ -14,6 +14,6 @@ import type { Config } from './schema.js';
  * Default agent's resolved Markdown workspace root
  * (`resolveAgentWorkspaceDir` for the default agent id).
  */
-export function getWorkspacePath(config: Config): string {
+export function getWorkspacePath(_config: Config): string {
   return getDefaultWorkspacePath();
 }
