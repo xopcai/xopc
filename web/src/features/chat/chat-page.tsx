@@ -1094,7 +1094,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
         onFindOpen={chatFind.show}
       /> : null}
 
-      <div className={cn('relative mx-auto flex min-h-0 w-full flex-1 flex-col', embedded ? 'max-w-none' : 'max-w-[calc(var(--max-width-chat-frame)+8rem)]')}>
+      <div className="relative flex min-h-0 w-full flex-1 flex-col">
         {!embedded && sessionMetadata?.parentConversationId ? (
           <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-2 text-xs text-fg-muted sm:px-5 xl:px-6">
             <Link
@@ -1146,7 +1146,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
             </div>
           </div>
         ) : null}
-        <div className={cn('relative flex min-h-0 min-w-0 flex-1', embedded ? 'px-3' : 'px-3 sm:px-5 xl:px-6')}>
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <ChatFindBar
             open={chatFind.open}
             query={chatFind.query}
@@ -1162,24 +1162,33 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
             onNext={chatFind.next}
             onClose={chatFind.close}
           />
-          {!embedded ? <div className="absolute inset-y-0 right-0 hidden xl:block">
-            <ChatTimelineRail
-              items={timeline.items}
-              activeMessageIndex={activeMessageIndex + timelineDisplayOffset}
-              labels={timelineLabels}
-              onSelectMessage={handleTimelineSelect}
-            />
-          </div> : null}
-          <div className={cn('mx-auto flex min-h-0 min-w-0 flex-1 flex-col', !embedded && 'xl:max-w-[var(--max-width-chat-frame)]')}>
-            <div
-              ref={scrollRef}
-              className={cn(
-                'chat-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]',
-                compactWelcomeLayout ? 'chat-messages--compact-welcome pt-5 pb-2' : 'py-4',
-              )}
-              onScroll={handleChatScroll}
-              data-chat-find-open={chatFind.open ? '' : undefined}
-            >
+          {!embedded ? (
+            <div className="pointer-events-none absolute inset-y-0 left-1/2 z-20 hidden w-full max-w-[calc(var(--max-width-chat-frame)+8rem)] -translate-x-1/2 xl:block">
+              <div className="pointer-events-auto absolute inset-y-0 right-0">
+                <ChatTimelineRail
+                  items={timeline.items}
+                  activeMessageIndex={activeMessageIndex + timelineDisplayOffset}
+                  labels={timelineLabels}
+                  onSelectMessage={handleTimelineSelect}
+                />
+              </div>
+            </div>
+          ) : null}
+          <div
+            ref={scrollRef}
+            data-chat-scroll-viewport
+            className={cn(
+              'chat-messages chat-messages--wide-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]',
+              compactWelcomeLayout ? 'chat-messages--compact-welcome pt-5 pb-2' : 'py-4',
+            )}
+            onScroll={handleChatScroll}
+            data-chat-find-open={chatFind.open ? '' : undefined}
+          >
+            <div className={embedded ? 'px-3' : 'px-3 sm:px-5 xl:px-6'}>
+              <div
+                data-chat-message-frame
+                className={cn('mx-auto w-full min-w-0', !embedded && 'xl:max-w-[var(--max-width-chat-frame)]')}
+              >
               {isLoadingHistory ? (
                 <div className="flex min-h-[min(40vh,20rem)] w-full flex-col gap-10 py-8" aria-busy="true">
                   <div className="flex justify-end">
@@ -1291,14 +1300,20 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                   />
                 </>
               )}
+              </div>
             </div>
+          </div>
 
-            <div
-              className={cn(
-                'sticky bottom-0 z-10 shrink-0 bg-surface-panel',
-                compactWelcomeLayout ? 'py-2.5' : 'py-2 sm:py-4',
-              )}
-            >
+          <div className="sticky bottom-0 z-10 shrink-0 bg-surface-panel">
+            <div className={embedded ? 'px-3' : 'px-3 sm:px-5 xl:px-6'}>
+              <div
+                data-chat-composer-frame
+                className={cn(
+                  'relative mx-auto w-full min-w-0',
+                  !embedded && 'xl:max-w-[var(--max-width-chat-frame)]',
+                  compactWelcomeLayout ? 'py-2.5' : 'py-2 sm:py-4',
+                )}
+              >
               <ScrollToBottomDock
                 visible={!session.showSessionLoading && !atBottom}
                 onClick={() => scrollToBottom(true)}
@@ -1414,6 +1429,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 voiceTaskId={taskId ?? undefined}
                 prepareVoiceSession={session.projectPreparation ? () => session.projectPreparation!.create(projectComposer.mode) : undefined}
               />
+              </div>
             </div>
           </div>
         </div>

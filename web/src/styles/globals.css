@@ -1600,6 +1600,12 @@ html.dark[data-color-scheme="porcelain"] {
   padding-inline-end: 0.5rem;
 }
 
+/* Main chat owns the full workspace width, so its scrollbar no longer overlaps
+ * the centered reading column. Side chat keeps the compact end inset above. */
+.chat-messages--wide-viewport {
+  padding-inline-end: 0;
+}
+
 @keyframes xopc-chat-user-message-enter {
   from {
     opacity: 0;
