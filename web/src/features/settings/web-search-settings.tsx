@@ -1,4 +1,4 @@
-import { Plus, Plug, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Cloud, Plus, Plug, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useRef, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import {
   normalizeWebSearchSettingsFromConfig,
   patchWebSearchSettings,
   revealWebSearchApiKey,
+  hasUsableManualSearchProvider,
   type SearchProviderRow,
   type WebSearchSettingsState,
 } from '@/features/settings/web-search-config-api';
@@ -152,6 +153,8 @@ export function WebSearchSettingsPanel() {
     );
   }
 
+  const hasManualProvider = hasUsableManualSearchProvider(form.providers);
+
   return (
     <div className="flex flex-col gap-5" onBlurCapture={autosave.onBlurCapture}>
       {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
@@ -164,6 +167,25 @@ export function WebSearchSettingsPanel() {
           trailing={<AutosaveStatus status={autosave.status} error={autosave.error} />}
         />
         <div className="flex max-w-2xl flex-col gap-3">
+          <div className="flex items-start gap-3 rounded-lg border border-edge bg-surface-base/55 px-4 py-3">
+            <Cloud className="mt-0.5 size-5 shrink-0 text-accent" />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-fg">{w.cloudProvider}</span>
+                <span className={cn(
+                  'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                  hasManualProvider
+                    ? 'bg-surface-panel text-fg-muted'
+                    : 'bg-accent-soft text-accent',
+                )}>
+                  {hasManualProvider ? w.cloudOverridden : w.cloudAutomatic}
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-fg-subtle">
+                {hasManualProvider ? w.cloudOverriddenHint : w.cloudAutomaticHint}
+              </p>
+            </div>
+          </div>
           <div className="text-xs font-medium text-fg-muted">{w.providersTitle}</div>
           {form.providers.map((row, index) => (
             <ProviderRowEditor
