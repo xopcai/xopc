@@ -14,6 +14,7 @@ import {
   uninstallExtensionFromDisk,
 } from '@/features/extensions/extension-marketplace-api';
 import { useExtensions } from '@/features/extensions/extension-provider';
+import { AgentPluginDialog } from './agent-plugin-dialog';
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import type { ExtensionApiRow } from '@/features/extensions/types';
 import { messages, type MessageBundle } from '@/i18n/messages';
@@ -358,6 +359,10 @@ function ExtensionMarketplaceDetailDialog({
   const readmeMd =
     data?.readme?.trim() ||
     (data?.description?.trim() ? `### ${data.name}\n\n${data.description}` : `*${copy.marketplaceNoReadme}*`);
+
+  if (data?.format === 'agent-plugin') return <AgentPluginDialog
+    extension={extensions.find(extension => extension.pluginId === data.manifest?.name)}
+    initialSource={`store:${packageName}`} onClose={onClose} />;
 
   return (
     <Dialog.Root defaultOpen onOpenChange={(o) => !o && onClose()}>

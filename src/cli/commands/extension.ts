@@ -2,6 +2,9 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { Command } from 'commander';
+import { AgentPluginStore } from '../../extensions/agent-plugins/store.js';
+import { withAgentPluginSource } from '../../extensions/agent-plugins/sources.js';
+import { addAgentPluginLifecycleCommands, isAgentPluginSource } from './extension-agent-plugin.js';
 
 import { loadConfig, saveConfig } from '../../config/loader.js';
 import { resolveExtensionsDir } from '../../config/paths.js';
@@ -43,7 +46,11 @@ export function createExtensionListCommand(): Command {
     .action(async (options) => {
       try {
         const lockfileManager = getExtensionLockfileManager();
-        const extensions = await lockfileManager.list();
+        const extensions = [
+          ...(await lockfileManager.list()).map(ext => ({ ...ext, format: 'native-extension' })),
+          ...new AgentPluginStore().list().map(p => ({ name: `plugin:${p.id}`, version: p.manifest.version ?? '', format: p.format,
+            source: 'local' as const, resolved: p.receipt.source, installedAt: p.receipt.installedAt, readiness: p.readiness, enabled: p.receipt.enabled })),
+        ];
 
         if (options.json) {
           console.log(JSON.stringify(extensions, null, 2));
@@ -96,6 +103,14 @@ export function createExtensionInspectCommand(): Command {
     .option('--runtime', 'Load the extension and include runtime registrations')
     .action(async (extensionId: string, options: { json?: boolean; runtime?: boolean }) => {
       try {
+        if (extensionId.startsWith('plugin:') || extensionId.startsWith('store:') || isAgentPluginSource(extensionId)) {
+          const store = new AgentPluginStore();
+          const result = extensionId.startsWith('plugin:') ? store.get(extensionId.slice(7))
+            : await withAgentPluginSource(extensionId, loadConfig(getContextWithOpts().configPath), source => store.inspect(source));
+          if (!result) throw new Error('Plugin not installed');
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
         const lockfileManager = getExtensionLockfileManager();
         const lockEntry = await lockfileManager.get(extensionId);
         const extensionDir = join(resolveExtensionsDir(), extensionId);
@@ -269,7 +284,11 @@ export function createExtensionVerifyCommand(): Command {
       try {
         const lockfileManager = getExtensionLockfileManager();
 
-        if (extensionId) {
+        if (extensionId?.startsWith('plugin:')) {
+          const plugin = new AgentPluginStore().get(extensionId.slice(7));
+          if (!plugin || plugin.readiness === 'blocked') throw new Error('Plugin integrity verification failed');
+          console.log(`Verified ${extensionId}`);
+        } else if (extensionId) {
           const result = await lockfileManager.verify(extensionId);
 
           if (result.valid) {
@@ -281,6 +300,11 @@ export function createExtensionVerifyCommand(): Command {
         } else {
           const results = await lockfileManager.verifyAll();
           let hasErrors = false;
+          for (const plugin of new AgentPluginStore().list()) {
+            const valid = plugin.readiness !== 'blocked';
+            console.log(valid ? colors.green('✓') : colors.red('✗'), `plugin:${plugin.id}`);
+            if (!valid) hasErrors = true;
+          }
 
           for (const result of results) {
             if (result.valid) {
@@ -603,4 +627,5 @@ export function registerExtensionCommands(program: Command): void {
     .addCommand(createExtensionUpdateCommand());
 
   program.addCommand(extensions);
+  addAgentPluginLifecycleCommands(extensions);
 }

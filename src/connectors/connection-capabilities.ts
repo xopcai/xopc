@@ -22,12 +22,14 @@ export function isToolInputSchema(value: unknown): value is Record<string, unkno
     && (value as Record<string, unknown>).type === 'object');
 }
 
-export function capabilityActions(need: Pick<ConnectionNeed, 'connectorId' | 'capabilities'>): string[][] {
+export function capabilityActions(need: ConnectionNeed): string[][] {
+  if (need.target.type !== 'connector') return [];
+  const connectorId = need.target.connectorId;
   return need.capabilities.map(capability => /^[A-Z]+_/.test(capability)
-    ? [capability] : CAPABILITY_ACTIONS[need.connectorId]?.[capability] ?? []);
+    ? [capability] : CAPABILITY_ACTIONS[connectorId]?.[capability] ?? []);
 }
 
-export function missingConnectionCapabilities(need: Pick<ConnectionNeed, 'connectorId' | 'capabilities'>, actions: Set<string>): string[] {
+export function missingConnectionCapabilities(need: ConnectionNeed, actions: Set<string>): string[] {
   return capabilityActions(need).flatMap((alternatives, index) => alternatives.some(action => actions.has(action))
     ? [] : [need.capabilities[index]!]);
 }

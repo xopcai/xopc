@@ -187,7 +187,7 @@ export function connectionBindings(conversationId: string): ConnectionNeed[] {
     return Object.entries(workflowAccounts).flatMap(([connectorId, ids]) => Array.isArray(ids) ? ids.flatMap(id => {
       if (typeof id !== 'string') return [];
       const account = getConnectorAccount(id);
-      return [{ key: `${connectorId}:${id}`, connectorId, accountId: id, connectionId: account?.currentConnectionId,
+      return [{ key: `${connectorId}:${id}`, target: { type: 'connector' as const, connectorId }, accountId: id, connectionId: account?.currentConnectionId,
         label: account?.label ?? connectorId, capabilities: [] }];
     }) : []);
   }
@@ -200,7 +200,7 @@ export function connectionBindings(conversationId: string): ConnectionNeed[] {
     conversationId, readCurrentTranscriptId(getSqliteDatabase(), conversationId) ?? '', wait?.objectiveId ?? input.id,
   ) as Array<{ connector_id: string; account_id: string }>;
   const needs: ConnectionNeed[] = wait?.needs ?? stored.map(row => ({
-    key: `${row.connector_id}:${row.account_id}`, connectorId: row.connector_id,
+    key: `${row.connector_id}:${row.account_id}`, target: { type: 'connector' as const, connectorId: row.connector_id },
     accountId: row.account_id, label: getConnectorAccount(row.account_id)?.label ?? row.connector_id, capabilities: [],
   }));
   return needs.map(need => {
@@ -232,7 +232,7 @@ export function bindObjectiveAccount(conversationId: string, connectorId: string
   );
 }
 export function connectionBinding(conversationId: string, connectorId: string): string | undefined {
-  const matches = connectionBindings(conversationId).filter(need => need.connectorId === connectorId);
+  const matches = connectionBindings(conversationId).filter(need => need.target.type === 'connector' && need.target.connectorId === connectorId);
   return matches.length === 1 ? matches[0].connectionId : undefined;
 }
 

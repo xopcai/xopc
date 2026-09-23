@@ -18,9 +18,11 @@ import { resumeApprovedConnectorAction } from '../approval-resume.js';
 import { ConnectionRecoveryService, type ConnectionAction } from '../connection-recovery-service.js';
 import { resolveConnectionCandidate } from '../connection-candidates.js';
 import type { ComposioSessionsAdapter } from '../composio-sessions.js';
+import type { PluginMcpRecovery } from '../plugin-mcp-recovery.js';
 
 const conversationId = "f04efcc8-b008-406b-8c54-760428488f0a";
 const need = resolveConnectionCandidate('composio-gmail');
+const connectorId = need.target.connectorId;
 const origin = { type: 'endpoint' as const, endpointId: 'test' };
 
 describe('durable connection recovery', () => {
@@ -60,14 +62,14 @@ describe('durable connection recovery', () => {
     return getActiveConnectionWait(conversationId)!;
   }
   function activeConnection(id = 'connection-1') {
-    return upsertConnectorConnection({ id, connectorId: need.connectorId, provider: 'composio', principalId: 'local-owner',
+    return upsertConnectorConnection({ id, connectorId, provider: 'composio', principalId: 'local-owner',
       providerConnectionId: id === 'connection-1' ? 'provider-1' : id, identity: { email: `${id}@example.test` }, status: 'active', isDefault: false, metadata: {} });
   }
 
   it('binds approval to the account and resumes the same objective without accepting changed arguments', async () => {
     const account = activeConnection();
     upsertConnectorInstallation({ ...getConnectorInstallation('composio-gmail-local-owner')!, maxScope: 'write' });
-    upsertConnectorActionMetadata({ connectorId: need.connectorId, actionId: 'GMAIL_SEND_EMAIL', toolkit: 'gmail', scope: 'write', curated: true,
+    upsertConnectorActionMetadata({ connectorId, actionId: 'GMAIL_SEND_EMAIL', toolkit: 'gmail', scope: 'write', curated: true,
       inputSchema: { type: 'object', properties: { body: { type: 'string' } } }, cachedAt: new Date().toISOString() });
     searchCapabilities.mockResolvedValue({ toolSchemas: { GMAIL_SEND_EMAIL: { inputSchema: { type: 'object' } } } });
     const execute = vi.fn(async (input: { confirmed?: boolean; beforeExecute?: () => void }) => {
@@ -99,7 +101,7 @@ describe('durable connection recovery', () => {
   it('does not expose restricted identities to agent descriptors or let explicit IDs bypass account policy', async () => {
     const a = activeConnection(); const b = activeConnection('secret-account');
     updateConnectorAccount(b.accountId!, { allowedAgentIds: [] });
-    upsertConnectorActionMetadata({ connectorId: need.connectorId, actionId: 'GMAIL_FETCH_EMAILS', toolkit: 'gmail', scope: 'read', curated: true,
+    upsertConnectorActionMetadata({ connectorId, actionId: 'GMAIL_FETCH_EMAILS', toolkit: 'gmail', scope: 'read', curated: true,
       inputSchema: { type: 'object' }, cachedAt: new Date().toISOString() });
     const execute = vi.fn();
     const provider = new ComposioToolProvider({ getConfig: () => config, getCurrentContext: () => ({ conversationId, channel: 'webchat', chatId: conversationId }),
@@ -116,7 +118,7 @@ describe('durable connection recovery', () => {
   function writeFixture(execute: (input: { beforeExecute?: () => void }) => Promise<unknown>, confirmationPolicy: 'never' | 'writes' = 'never') {
     const connection = activeConnection();
     upsertConnectorInstallation({ ...getConnectorInstallation('composio-gmail-local-owner')!, maxScope: 'write', confirmationPolicy });
-    const action = { connectorId: need.connectorId, actionId: 'GMAIL_SEND_EMAIL', toolkit: 'gmail', scope: 'write' as const,
+    const action = { connectorId, actionId: 'GMAIL_SEND_EMAIL', toolkit: 'gmail', scope: 'write' as const,
       curated: true, inputSchema: { type: 'object', properties: { body: { type: 'string' } } }, cachedAt: new Date().toISOString() };
     upsertConnectorActionMetadata(action);
     const provider = new ComposioToolProvider({ getConfig: () => config,
@@ -346,6 +348,34 @@ describe('durable connection recovery', () => {
     expect(first.summary).toContain('last week');
     expect(JSON.stringify(first)).not.toContain('https:');
   });
+  it('connects a plugin MCP account and resumes the preserved objective', async () => {
+    const target = { type: 'plugin-mcp' as const, pluginId: 'oauth-demo', serverId: 'plugin/oauth-demo/local-oauth', serverName: 'local-oauth' };
+    const status = vi.fn(async () => ({ configured: true, status: 'connected' as const }));
+    const pluginMcp: PluginMcpRecovery = {
+      availability: () => ({ available: true }),
+      status,
+      start: vi.fn(async () => ({ configured: true, status: 'authorizing' as const,
+        session: { id: 'oauth-attempt', serverId: target.serverId, serverUrl: 'http://127.0.0.1/mcp', status: 'waiting_browser' as const,
+          authorizationUrl: 'https://example.test/authorize', createdAt: Date.now(), expiresAt: Date.now() + 60_000 } })),
+      verify: vi.fn(async () => ({ ready: true })),
+      submitCallback: vi.fn(),
+    };
+    recovery = new ConnectionRecoveryService({ getConfig: () => config, saveConfig: vi.fn(async () => ({ saved: true })), drain,
+      adapter: { syncConnections: vi.fn(async () => []) } as unknown as ComposioSessionsAdapter, pluginMcp });
+    requireSessionConnection({ conversationId, principalId: 'local-owner', agentId: 'main', summary: 'Verify my Demo identity',
+      needs: [{ key: target.serverId, target, label: 'oauth-demo', capabilities: [`mcp.tools:${target.serverId}`] }] });
+    expect(recovery.snapshot(conversationId).wait?.needs[0].phase).toBe('connect');
+    const connected = await recovery.act(conversationId, action('connect', { needKey: target.serverId }));
+    expect(connected.authorizationUrl).toBe('https://example.test/authorize');
+    expect(connected.snapshot.wait?.needs[0].phase).toBe('authorizing');
+    const callbackUrl = 'http://127.0.0.1/callback?code=demo&state=oauth-attempt';
+    const checked = await recovery.act(conversationId, action('submit_callback', { needKey: target.serverId, callbackUrl }));
+    expect(checked.snapshot.wait?.phase).toBe('queued');
+    expect(pluginMcp.submitCallback).toHaveBeenCalledWith(target, callbackUrl);
+    expect(status).toHaveBeenCalled();
+    expect(pluginMcp.verify).toHaveBeenCalled();
+    expect(drain).toHaveBeenCalledOnce();
+  });
   it('preserves the wait through a gateway restart', () => {
     const wait = requireWait();
     finishSessionInputRun(conversationId, 'run-original', 'suspended');
@@ -556,7 +586,7 @@ describe('durable connection recovery', () => {
   it('requires a deliberate source change and leaves unrelated apps unable to satisfy Gmail', async () => {
     requireWait();
     await recovery.act(conversationId, action('replace_source', { needKey: need.key, candidateRef: 'composio-outlook' }));
-    expect(getActiveConnectionWait(conversationId)?.needs[0].connectorId).toBe('composio-outlook');
+    expect(getActiveConnectionWait(conversationId)?.needs[0].target).toEqual({ type: 'connector', connectorId: 'composio-outlook' });
     expect(getActiveConnectionWait(conversationId)?.summary).toContain('as confirmed by the user');
     expect(drain).not.toHaveBeenCalled();
   });

@@ -1,4 +1,5 @@
 import { normalizeLowercaseStringOrEmpty } from '../../utils/string-coerce.js';
+import { createHash } from 'node:crypto';
 
 const TOOL_NAME_SAFE_RE = /[^A-Za-z0-9_-]/g;
 const TOOL_NAME_MAX_PREFIX = 30;
@@ -13,7 +14,9 @@ function sanitizeToolFragment(raw: string, fallback: string, maxChars?: number):
 }
 
 export function sanitizeServerName(raw: string, usedNames: Set<string>): string {
-  const base = sanitizeToolFragment(raw, "mcp", TOOL_NAME_MAX_PREFIX);
+  const base = raw.startsWith('plugin/')
+    ? `plugin-${createHash('sha256').update(raw).digest('hex').slice(0, 20)}`
+    : sanitizeToolFragment(raw, "mcp", TOOL_NAME_MAX_PREFIX);
   let candidate = base;
   let n = 2;
   while (usedNames.has(normalizeLowercaseStringOrEmpty(candidate))) {

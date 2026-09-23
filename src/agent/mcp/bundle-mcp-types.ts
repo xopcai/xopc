@@ -8,6 +8,7 @@ export type McpServerCatalog = {
   toolCount: number;
   resourceCount: number;
   promptCount: number;
+  error?: { code: 'MCP_AUTHORIZATION_REQUIRED' | 'MCP_CONNECTION_FAILED'; message: string };
 };
 
 export type McpCatalogTool = {

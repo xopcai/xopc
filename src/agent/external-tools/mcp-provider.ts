@@ -2,14 +2,19 @@ import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
+import { connectorPrincipalForSession } from '../../connectors/principal.js';
 import type { Config } from '../../config/schema.js';
 import type { ExtensionHookRunner } from '../../extensions/index.js';
+import { publishConnectionWait, requireSessionConnection } from '../../storage/sqlite/connection-wait-repository.js';
 import { mcpToolPolicyId } from '../mcp/bundle-mcp-policy.js';
 import { getOrCreateSessionMcpRuntime } from '../mcp/bundle-mcp-runtime.js';
+import { isMcpAuthorizationError } from '../mcp/oauth/mcp-oauth-errors.js';
+import { pluginMcpCandidateRef } from '../../extensions/agent-plugins/connection.js';
 import type { McpCatalogTool, SessionMcpRuntime } from '../mcp/bundle-mcp-types.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
 import type {
   ExternalToolDescriptor,
+  ExternalConnectionCandidate,
   ExternalToolExecutionContext,
   ExternalToolProvider,
   ExternalToolSearchHit,
@@ -68,6 +73,11 @@ function toAgentToolResult(params: {
   };
 }
 
+function hasAuthorizationChallenge(result: CallToolResult): boolean {
+  const challenge = result._meta?.['mcp/www_authenticate'];
+  return typeof challenge === 'string' || Array.isArray(challenge) && challenge.some(value => typeof value === 'string');
+}
+
 export class McpToolProvider implements ExternalToolProvider {
   readonly source = 'mcp' as const;
 
@@ -83,6 +93,31 @@ export class McpToolProvider implements ExternalToolProvider {
         title: tool.title || tool.toolName,
         summary: tool.description || tool.fallbackDescription,
       }));
+    });
+  }
+
+  async connectionCandidates(query: string): Promise<ExternalConnectionCandidate[]> {
+    return this.withRuntime(async (runtime) => {
+      const catalog = await runtime.getCatalog();
+      const normalizedQuery = query.toLocaleLowerCase();
+      return Object.values(catalog.servers).flatMap(server => {
+        if (!server.serverName.startsWith('plugin/') || server.error?.code !== 'MCP_AUTHORIZATION_REQUIRED') return [];
+        const [, encodedPluginId, encodedServerName] = server.serverName.split('/');
+        if (!encodedPluginId || !encodedServerName) return [];
+        const pluginId = decodeURIComponent(encodedPluginId);
+        const serverName = decodeURIComponent(encodedServerName);
+        const searchable = `${pluginId} ${serverName}`.toLocaleLowerCase();
+        const tokens = normalizedQuery.split(/[^\p{L}\p{N}_-]+/u).filter(token => token.length > 1);
+        if (tokens.length && !tokens.some(token => searchable.includes(token))) return [];
+        return [{
+          candidateRef: pluginMcpCandidateRef(pluginId, serverName),
+          source: this.source,
+          label: pluginId,
+          summary: `Connect ${pluginId}/${serverName}`,
+          capabilities: [`mcp.tools:${server.serverName}`],
+          reason: 'not_connected' as const,
+        }];
+      });
     });
   }
 
@@ -126,14 +161,41 @@ export class McpToolProvider implements ExternalToolProvider {
         if (!hook.allowed) throw new Error(hook.reason ?? 'MCP tool call blocked by policy hook.');
         executionArgs = hook.params ?? args;
       }
-      const result = await runtime.callTool(
-        tool.serverName,
-        tool.toolName,
-        executionArgs,
-        this.executionSignal(tool, context.signal),
-      );
-      return toAgentToolResult({ serverName: tool.serverName, toolName: tool.toolName, result });
+      try {
+        const result = await runtime.callTool(tool.serverName, tool.toolName, executionArgs, this.executionSignal(tool, context.signal));
+        if (tool.serverName.startsWith('plugin/') && hasAuthorizationChallenge(result)) {
+          return this.requestConnection(tool.serverName, tool.toolName);
+        }
+        return toAgentToolResult({ serverName: tool.serverName, toolName: tool.toolName, result });
+      } catch (error) {
+        if (tool.serverName.startsWith('plugin/') && (isMcpAuthorizationError(error) || (error as { code?: number })?.code === 401)) {
+          return this.requestConnection(tool.serverName, tool.toolName);
+        }
+        throw error;
+      }
     });
+  }
+
+  private requestConnection(serverId: string, toolName: string): AgentToolResult<Record<string, unknown>> {
+    const [, encodedPluginId, encodedServerName] = serverId.split('/');
+    const conversationId = this.deps.getConversationId();
+    if (!encodedPluginId || !encodedServerName || !conversationId) {
+      return { content: [{ type: 'text', text: 'This MCP tool requires an account connection in xopc.' }],
+        details: { status: 'connection_required' } };
+    }
+    const pluginId = decodeURIComponent(encodedPluginId);
+    const serverName = decodeURIComponent(encodedServerName);
+    const principal = connectorPrincipalForSession(conversationId);
+    if (!principal.isLocalOwner) {
+      return { content: [{ type: 'text', text: 'This MCP connection must be completed by the xopc owner.' }],
+        details: { status: 'connection_required' } };
+    }
+    const result = requireSessionConnection({ conversationId, principalId: principal.principalId,
+      agentId: principal.agentId ?? this.deps.agentId ?? 'main', summary: `Continue ${toolName} using ${pluginId}`,
+      needs: [{ key: serverId, target: { type: 'plugin-mcp', pluginId, serverId, serverName }, label: pluginId,
+        capabilities: [`mcp.tool:${serverId}:${toolName}`] }] });
+    publishConnectionWait(conversationId);
+    return { content: [{ type: 'text', text: 'Account connection required. The objective is preserved in xopc.' }], details: result };
   }
 
   private async resolve(runtime: SessionMcpRuntime, toolRef: string): Promise<McpCatalogTool | undefined> {

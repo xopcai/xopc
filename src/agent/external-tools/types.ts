@@ -16,6 +16,15 @@ export interface ExternalToolSearchHit {
   summary: string;
 }
 
+export interface ExternalConnectionCandidate {
+  candidateRef: string;
+  source: ExternalToolSource;
+  label: string;
+  summary: string;
+  capabilities: string[];
+  reason: 'not_connected' | 'reauthorize';
+}
+
 export interface ExternalToolDescriptor extends ExternalToolSearchHit {
   description: string;
   inputSchema: Record<string, unknown>;
@@ -43,6 +52,7 @@ export interface ExternalToolTurnContext {
 export interface ExternalToolProvider {
   readonly source: ExternalToolSource;
   search(query: string): Promise<ExternalToolSearchHit[]>;
+  connectionCandidates?(query: string): Promise<ExternalConnectionCandidate[]>;
   describe(toolRef: string): Promise<ExternalToolDescriptor | undefined>;
   execute(
     toolRef: string,

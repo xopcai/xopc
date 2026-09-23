@@ -20,7 +20,8 @@ import { createLogger } from '../utils/logger.js';
 import { getConfiguredComposioAuthConfigs, scopeForComposioAction, isComposioActionAllowedByCatalog } from './composio.js';
 import { ComposioSessionsAdapter } from './composio-sessions.js';
 import { connectorPrincipalForSession } from './principal.js';
-import type { ConnectionNeedView, ConnectionWait, ConnectionWaitSnapshot, ConnectionWaitView } from '@xopcai/gateway-contract';
+import { HostPluginMcpRecovery, type PluginMcpRecovery } from './plugin-mcp-recovery.js';
+import type { ConnectionNeed, ConnectionNeedView, ConnectionWait, ConnectionWaitSnapshot, ConnectionWaitView } from '@xopcai/gateway-contract';
 
 const log = createLogger('Connectors:Recovery');
 const SCOPE_ORDER = { read: 1, write: 2, admin: 3 };
@@ -28,9 +29,18 @@ const INTENT_TTL = 30 * 60_000;
 const ATTEMPT_TTL = 10 * 60_000;
 export type ConnectionAction = {
   waitId: string; expectedTranscriptId: string; expectedVersion: number; idempotencyKey: string;
-  action: 'connect' | 'check' | 'continue' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source';
-  needKey?: string; accountId?: string; candidateRef?: string;
+  action: 'connect' | 'check' | 'continue' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source' | 'submit_callback';
+  needKey?: string; accountId?: string; candidateRef?: string; callbackUrl?: string;
 };
+
+function connectorId(need: ConnectionNeed): string {
+  if (need.target.type !== 'connector') throw new Error('Expected a connector connection.');
+  return need.target.connectorId;
+}
+
+function isConnectorNeed(need: ConnectionNeed): need is ConnectionNeed & { target: { type: 'connector'; connectorId: string } } {
+  return need.target.type === 'connector';
+}
 
 /** Authorization lives at click time. Chat history contains only immutable explanations. */
 export class ConnectionRecoveryService {
@@ -61,8 +71,10 @@ export class ConnectionRecoveryService {
     saveConfig: (config: Config) => Promise<{ saved: boolean; error?: string }>;
     drain: (conversationId: string) => void;
     adapter?: ComposioSessionsAdapter;
+    pluginMcp?: PluginMcpRecovery;
   }) {}
   private get adapter() { return this.deps.adapter ?? new ComposioSessionsAdapter(); }
+  private get pluginMcp() { return this.deps.pluginMcp ?? new HostPluginMcpRecovery(this.deps.getConfig); }
 
   snapshot(conversationId: string): ConnectionWaitSnapshot {
     if (!connectorPrincipalForSession(conversationId).isLocalOwner) throw new Error('This connection belongs to another principal.');
@@ -74,12 +86,22 @@ export class ConnectionRecoveryService {
 
   private view(wait: ConnectionWait, verifiedIds?: Set<string>): ConnectionWaitView {
     const needs: ConnectionNeedView[] = wait.needs.map(need => {
-      const instance = listConnectorInstances(this.deps.getConfig()).find(instance => instance.connectorId === need.connectorId);
-      const installation = getConnectorInstallation(`${need.connectorId}-${wait.principalId}`);
+      if (need.target.type === 'plugin-mcp') {
+        const availability = this.pluginMcp.availability(need.target);
+        const phase = !availability.available || (need.connectionId && need.capabilityError) ? 'blocked'
+          : need.connectionId === need.target.serverId ? 'ready'
+            : need.attempt && need.attempt.expiresAt > Date.now() ? 'authorizing'
+              : need.unavailable ? 'reconnect' : 'connect';
+        return { ...need, phase, accounts: [], alternatives: [],
+          ...((availability.reason || need.capabilityError) ? { reason: availability.reason ?? need.capabilityError } : {}) };
+      }
+      const id = need.target.connectorId;
+      const instance = listConnectorInstances(this.deps.getConfig()).find(instance => instance.connectorId === id);
+      const installation = getConnectorInstallation(`${id}-${wait.principalId}`);
       const cli = instance?.materialized.type === 'cli' ? getCliAdapter(instance.materialized.adapterId) : undefined;
       const requiredScope = Math.max(1, ...need.capabilities.filter(capability => cli || /^[A-Z]+_/.test(capability)).map(capability => SCOPE_ORDER[cli ? cli.curatedActions[capability] ?? 'read' : scopeForComposioAction(capability).scope]));
       const scopeBlocked = requiredScope > SCOPE_ORDER[installation?.maxScope ?? 'read'];
-      const all = listConnectorConnections({ principalId: wait.principalId, connectorId: need.connectorId });
+      const all = listConnectorConnections({ principalId: wait.principalId, connectorId: id });
       const requested = need.accountId ? all.find(connection => connection.accountId === need.accountId) : undefined;
       const blocked = scopeBlocked || instance?.enabled === false || installation?.enabled === false
         || installation?.selectedAccountIds?.length === 0
@@ -109,8 +131,8 @@ export class ConnectionRecoveryService {
         : active.length > 1 || (need.accountSelector && active.length > 0 && !need.connectionId) ? 'choose_account'
           : need.attempt && need.attempt.expiresAt > Date.now() ? 'authorizing'
             : need.unavailable || all.some(connection => ['expired', 'revoked', 'failed'].includes(connection.status)) ? 'reconnect' : 'connect';
-      const alternatives = ['composio-gmail', 'composio-outlook'].includes(need.connectorId)
-        ? ['composio-gmail', 'composio-outlook'].filter(id => id !== need.connectorId).map(id => ({ candidateRef: id, label: getConnectorDefinition(id)?.displayName ?? id })) : [];
+      const alternatives = ['composio-gmail', 'composio-outlook'].includes(id)
+        ? ['composio-gmail', 'composio-outlook'].filter(candidate => candidate !== id).map(candidate => ({ candidateRef: candidate, label: getConnectorDefinition(candidate)?.displayName ?? candidate })) : [];
       return { ...need, alternatives, accountId: selected?.accountId ?? need.accountId, connectionId: selected?.id ?? need.connectionId, phase,
         accounts: active.map(connection => ({ id: connection.accountId!,
           label: [getConnectorAccount(connection.accountId!)?.label, connection.identity.email ?? connection.identity.name ?? connection.accountId].filter(Boolean).join(' · ') })),
@@ -144,11 +166,13 @@ export class ConnectionRecoveryService {
   private async checkCapabilities(wait: ConnectionWait, verified: Set<string>): Promise<ConnectionWait['needs']> {
     const views = this.view({ ...wait, needs: wait.needs.map(need => ({ ...need, capabilityError: undefined })) }, verified).needs;
     return Promise.all(wait.needs.map(async need => {
+      if (need.target.type === 'plugin-mcp') return need;
       if (views.find(view => view.key === need.key)?.phase !== 'ready') return { ...need, capabilityError: undefined };
       try {
-        const instance = listConnectorInstances(this.deps.getConfig()).find(instance => instance.connectorId === need.connectorId && instance.enabled);
+        const id = need.target.connectorId;
+        const instance = listConnectorInstances(this.deps.getConfig()).find(instance => instance.connectorId === id && instance.enabled);
         if (!instance) throw new Error('Connector setup is unavailable');
-        const definition = getInstalledConnectorDefinition(this.deps.getConfig(), instance.instanceId) ?? getConnectorDefinition(need.connectorId);
+        const definition = getInstalledConnectorDefinition(this.deps.getConfig(), instance.instanceId) ?? getConnectorDefinition(id);
         if (definition?.runtime.type === 'cli') {
           const selected = views.find(view => view.key === need.key);
           const connection = selected?.connectionId ? getConnectorConnection(selected.connectionId) : undefined;
@@ -171,11 +195,11 @@ export class ConnectionRecoveryService {
           .filter(([action, value]) => value && typeof value === 'object' && isToolInputSchema((value as Record<string, unknown>).inputSchema)
             && isComposioActionAllowedByCatalog(action)).map(([action]) => action));
         const missing = missingConnectionCapabilities(need, actions);
-        if (missing.length) log.warn({ conversationId: wait.conversationId, connectorId: need.connectorId, missingCapabilities: missing }, 'Connected app lacks required tool contracts');
+        if (missing.length) log.warn({ conversationId: wait.conversationId, connectorId: id, missingCapabilities: missing }, 'Connected app lacks required tool contracts');
         return { ...need, capabilityError: missing.length
           ? `${need.label} is connected, but the required tools are unavailable. Retry the tool check; reconnecting will not fix this.` : undefined };
       } catch (err) {
-        log.warn({ err, conversationId: wait.conversationId, connectorId: need.connectorId }, 'Connected app capability check failed');
+        log.warn({ err, conversationId: wait.conversationId, connectorId: need.target.connectorId }, 'Connected app capability check failed');
         return { ...need, capabilityError: `${need.label} is connected, but its tools could not be checked. Retry the tool check.` };
       }
     }));
@@ -185,10 +209,11 @@ export class ConnectionRecoveryService {
     const config = this.deps.getConfig();
     const instances = listConnectorInstances(config);
     const cliIds = new Set(instances.filter(item => item.materialized.type === 'cli').map(item => item.connectorId));
-    const fresh = wait.needs.some(need => !cliIds.has(need.connectorId))
+    const connectorNeeds = wait.needs.filter(isConnectorNeed);
+    const fresh = connectorNeeds.some(need => !cliIds.has(need.target.connectorId))
       ? await this.adapter.syncConnections({ principalId: wait.principalId }) : [];
     for (const connection of currentAccountConnections(listConnectorConnections({ principalId: wait.principalId }))) {
-      if (connection.provider !== 'cli' || !wait.needs.some(need => need.connectorId === connection.connectorId)) continue;
+      if (connection.provider !== 'cli' || !connectorNeeds.some(need => need.target.connectorId === connection.connectorId)) continue;
       const policy = getConnectorInstallation(`${connection.connectorId}-${wait.principalId}`);
       if (!policy || !canAccessConnectorAccount(connection, policy, wait.agentId)) continue;
       const instanceId = connection.metadata.runtimeInstanceId;
@@ -197,6 +222,24 @@ export class ConnectionRecoveryService {
       fresh.push(connection);
     }
     return fresh;
+  }
+
+  private async syncPluginMcpNeeds(wait: ConnectionWait): Promise<ConnectionWait['needs']> {
+    return Promise.all(wait.needs.map(async need => {
+      if (need.target.type !== 'plugin-mcp') return need;
+      const status = await this.pluginMcp.status(need.target);
+      if (status.status === 'connected') {
+        const verified = await this.pluginMcp.verify(need.target);
+        return { ...need, connectionId: need.target.serverId, unavailable: false, attempt: undefined,
+          capabilityError: verified.ready ? undefined : verified.error ?? 'The connected MCP tools are unavailable.' };
+      }
+      if (status.status === 'authorizing') {
+        return { ...need, connectionId: undefined, unavailable: false,
+          attempt: { id: status.session?.id ?? need.attempt?.id ?? randomUUID(), expiresAt: status.session?.expiresAt ?? Date.now() + ATTEMPT_TTL } };
+      }
+      return { ...need, connectionId: undefined, unavailable: true, attempt: undefined,
+        capabilityError: status.status === 'error' ? status.session?.error : undefined };
+    }));
   }
 
   async preflight(input: SessionInput): Promise<boolean> {
@@ -208,10 +251,12 @@ export class ConnectionRecoveryService {
     try {
       const fresh = await this.syncConnections(wait);
       const verified = new Set(fresh.filter(item => item.status === 'active').map(item => item.id));
+      wait.needs = await this.syncPluginMcpNeeds(wait);
+      wait.needs = wait.needs.map(need => need.target.type === 'plugin-mcp' ? need
+        : { ...need, unavailable: !fresh.some(item => item.id === need.connectionId && item.status === 'active') });
       wait.needs = await this.checkCapabilities(wait, verified);
       const checkedNeeds = this.view(wait, verified).needs;
       const ready = checkedNeeds.every(need => need.phase === 'ready');
-      wait.needs = wait.needs.map(need => ({ ...need, unavailable: !fresh.some(item => item.id === need.connectionId && item.status === 'active') }));
       const latest = getConnectionWait(wait.id);
       if (latest?.version !== wait.version) return false;
       if (ready && wait.intent && wait.intent.validUntil > Date.now() && wait.intent.objectiveRevision === wait.objectiveRevision) return true;
@@ -255,12 +300,38 @@ export class ConnectionRecoveryService {
         const need = wait.needs.find(need => need.key === action.needKey);
         if (!need) throw new Error('Unknown connection requirement.');
         if (this.view(wait).needs.find(item => item.key === need.key)?.phase === 'blocked') throw new Error('Connector policy blocks this connection.');
-        const instance = listConnectorInstances(this.deps.getConfig()).find(item => item.connectorId === need.connectorId);
-        const definition = (instance ? getInstalledConnectorDefinition(this.deps.getConfig(), instance.instanceId) : undefined) ?? getConnectorDefinition(need.connectorId);
+        if (need.target.type === 'plugin-mcp') {
+          const serverId = need.target.serverId;
+          const attemptId = randomUUID();
+          wait = updateConnectionWait({ ...wait,
+            intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL },
+            needs: wait.needs.map(item => item.key === need.key ? { ...item, unavailable: false,
+              capabilityError: undefined, attempt: { id: attemptId, expiresAt: Date.now() + ATTEMPT_TTL } } : item),
+          }, wait.version);
+          publishConnectionWait(conversationId);
+          const auth = await this.pluginMcp.start(need.target);
+          const latest = getConnectionWait(wait.id);
+          if (!latest || latest.version !== wait.version || latest.status !== 'open') throw new Error('WAIT_CHANGED');
+          wait = updateConnectionWait({ ...wait, needs: wait.needs.map(item => item.key === need.key ? {
+            ...item,
+            attempt: auth.status === 'authorizing' ? {
+              id: auth.session?.id ?? attemptId,
+              expiresAt: auth.session?.expiresAt ?? Date.now() + ATTEMPT_TTL,
+            } : undefined,
+            connectionId: auth.status === 'connected' ? serverId : undefined,
+            unavailable: auth.status === 'error',
+            capabilityError: auth.status === 'error' ? auth.session?.error : undefined,
+          } : item) }, wait.version);
+          publishConnectionWait(conversationId);
+          return { snapshot: this.snapshot(conversationId), authorizationUrl: auth.session?.authorizationUrl };
+        }
+        const id = need.target.connectorId;
+        const instance = listConnectorInstances(this.deps.getConfig()).find(item => item.connectorId === id);
+        const definition = (instance ? getInstalledConnectorDefinition(this.deps.getConfig(), instance.instanceId) : undefined) ?? getConnectorDefinition(id);
         if (definition?.runtime.type === 'cli') {
           updateConnectionWait({ ...wait, intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } }, wait.version);
           publishConnectionWait(conversationId);
-          return { snapshot: this.snapshot(conversationId), authorizationUrl: `/#/connectors?connector=${encodeURIComponent(need.connectorId)}` };
+          return { snapshot: this.snapshot(conversationId), authorizationUrl: `/#/connectors?connector=${encodeURIComponent(id)}` };
         }
         if (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') throw new Error('Unsupported connector.');
         // Commit the attempt before leaving the process; late results cannot change a newer wait.
@@ -271,8 +342,8 @@ export class ConnectionRecoveryService {
         }, wait.version);
         publishConnectionWait(conversationId);
         const config = this.deps.getConfig();
-        await this.ensureInstallation(wait, need.connectorId);
-        const installationId = `${need.connectorId}-${wait.principalId}`;
+        await this.ensureInstallation(wait, id);
+        const installationId = `${id}-${wait.principalId}`;
         const auth = await this.adapter.authorize({ principalId: wait.principalId, toolkit: definition.runtime.toolkit,
           expectedAccountId: need.accountId,
           backendId: need.accountId ? getConnectorAccount(need.accountId)?.backendId : undefined,
@@ -286,27 +357,38 @@ export class ConnectionRecoveryService {
         log.info({ conversationId, waitId: wait.id, objectiveRevision: wait.objectiveRevision, phase: 'authorization_started' }, 'Connection authorization started');
         return { snapshot: this.snapshot(conversationId), authorizationUrl: auth.connectUrl };
       } else {
+        if (action.action === 'submit_callback') {
+          const need = wait.needs.find(need => need.key === action.needKey);
+          if (!need || need.target.type !== 'plugin-mcp') throw new Error('OAuth callback is unavailable.');
+          if (!action.callbackUrl || action.callbackUrl.length > 16_384) throw new Error('Expected the complete OAuth callback URL.');
+          await this.pluginMcp.submitCallback(need.target, action.callbackUrl);
+        }
         // Remote errors remain errors. A failed network check is not a revoked authorization.
         const fresh = await this.syncConnections(wait);
         const verified = new Set(fresh.filter(item => item.status === 'active').map(item => item.id));
         const latest = getConnectionWait(wait.id);
         if (!latest || latest.version !== wait.version || latest.status !== 'open') throw new Error('WAIT_CHANGED');
         let needs: ConnectionWait['needs'] = wait.needs.map(need => {
+          if (need.target.type === 'plugin-mcp') return need;
+          const id = need.target.connectorId;
           const authorized = fresh.find(item => item.providerConnectionId === need.attempt?.connectionId && item.status === 'active'
-            && item.connectorId === need.connectorId && (!need.accountId || item.accountId === need.accountId));
+            && item.connectorId === id && (!need.accountId || item.accountId === need.accountId));
           return authorized ? { ...need, unavailable: false, ...(need.accountSelector && !need.accountId ? {} : { connectionId: authorized.id, accountId: authorized.accountId }), attempt: undefined }
-            : { ...need, unavailable: !fresh.some(item => item.connectorId === need.connectorId && item.status === 'active'
+            : { ...need, unavailable: !fresh.some(item => item.connectorId === id && item.status === 'active'
               && (!need.connectionId || item.id === need.connectionId) && (!need.accountId || item.accountId === need.accountId)) };
         });
+        needs = await this.syncPluginMcpNeeds({ ...wait, needs });
         if (action.action === 'select_account') {
           const need = needs.find(item => item.key === action.needKey);
-          const connection = currentAccountConnections(fresh).find(item => item.accountId === action.accountId && item.connectorId === need?.connectorId);
-          if (!need || !connection || !this.view(wait, verified).needs.find(item => item.key === need.key)?.accounts.some(item => item.id === connection.accountId)) throw new Error('Account is unavailable.');
+          if (!need || need.target.type !== 'connector') throw new Error('Account selection is unavailable.');
+          const id = need.target.connectorId;
+          const connection = currentAccountConnections(fresh).find(item => item.accountId === action.accountId && item.connectorId === id);
+          if (!connection || !this.view(wait, verified).needs.find(item => item.key === need.key)?.accounts.some(item => item.id === connection.accountId)) throw new Error('Account is unavailable.');
           needs = needs.map(item => item.key === need.key ? { ...item, connectionId: connection.id, accountId: connection.accountId, unavailable: false, attempt: undefined } : item);
         }
         for (const selected of this.view({ ...wait, needs }, verified).needs) {
-          if (selected.phase === 'ready' || (selected.capabilityError && selected.connectionId)) {
-            await this.ensureInstallation(wait, selected.connectorId);
+          if (selected.target.type === 'connector' && (selected.phase === 'ready' || (selected.capabilityError && selected.connectionId))) {
+            await this.ensureInstallation(wait, selected.target.connectorId);
           }
         }
         needs = await this.checkCapabilities({ ...wait, needs }, verified);

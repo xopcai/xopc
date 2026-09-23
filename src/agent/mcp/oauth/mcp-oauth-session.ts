@@ -121,6 +121,19 @@ export class McpOAuthSession {
     this.statusValue = 'waiting_browser';
   }
 
+  /** Remote Gateway users can submit the browser's loopback callback URL over the authenticated API. */
+  submitCallback(url: string): void {
+    const callback = new URL(url);
+    if (callback.origin !== this.redirectUrl.origin || callback.pathname !== CALLBACK_PATH || callback.searchParams.get('state') !== this.state) throw new Error('MCP OAuth callback mismatch');
+    if (this.statusValue !== 'waiting_browser' || this.callbackConsumed || Date.now() >= this.expiresAt) throw new Error('MCP OAuth session is not waiting for a callback');
+    const code = callback.searchParams.get('code');
+    if (!code || callback.searchParams.has('error')) throw new Error('MCP OAuth authorization code is missing or denied');
+    this.callbackConsumed = true;
+    this.statusValue = 'exchanging_code';
+    this.settleCode?.({ code });
+    this.settleCode = undefined;
+  }
+
   async waitForCode(): Promise<string> {
     const result = await this.codePromise;
     if (result.error) throw result.error;

@@ -6,6 +6,15 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps Agent Plugin lifecycle before the native extension bundle', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers/plugin%2Fdemo%2Fmain/oauth/callback')?.id).toBe('mcp');
+    expect(findAuthenticatedLazyRouteBundle('/api/extensions/agent-plugins/demo/rollback')?.id).toBe('agent-plugins');
+    for (const path of ['/api/extensions/inspect', '/api/extensions/install', '/api/extensions/agent-plugins/demo', '/api/extensions/agent-plugins/demo/activation', '/api/extensions/agent-plugins/demo/update', '/api/extensions/agent-plugins/demo/mcp/main/auth']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('agent-plugins');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/extensions/native/config')?.id).toBe('auth-registry-extensions');
+    expect(findAuthenticatedLazyRouteBundle('/api/extensions/agent-plugins-other')?.id).not.toBe('agent-plugins');
+  });
   it('maps local app capability endpoints without intercepting management routes', () => {
     for (const path of ['/api/local-app-capabilities/ext', '/api/local-app-capabilities/ext/xopc.notes.get/invocations']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('local-app-capabilities');

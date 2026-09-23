@@ -1,6 +1,20 @@
+export type ConnectorConnectionTarget = {
+  type: 'connector';
+  connectorId: string;
+};
+
+export type PluginMcpConnectionTarget = {
+  type: 'plugin-mcp';
+  pluginId: string;
+  serverId: string;
+  serverName: string;
+};
+
+export type ConnectionTarget = ConnectorConnectionTarget | PluginMcpConnectionTarget;
+
 export type ConnectionNeed = {
   key: string;
-  connectorId: string;
+  target: ConnectionTarget;
   label: string;
   capabilities: string[];
   accountId?: string;

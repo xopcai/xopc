@@ -1,0 +1,68 @@
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import AdmZip from 'adm-zip';
+import { afterEach, expect, it, vi } from 'vitest';
+import { AgentPluginStore } from '../store.js';
+import { PLUGIN_SCHEMA, MCP_SCHEMA } from '../validation.js';
+import { isAgentPluginArchive } from '../sources.js';
+import { SkillManager } from '../../../agent/skills/skill-manager.js';
+
+const roots: string[] = [];
+const temp = () => { const root = mkdtempSync(join(tmpdir(), 'xopc-plugin-store-')); roots.push(root); return root; };
+afterEach(() => { vi.unstubAllEnvs(); roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })); });
+it('requires review, installs disabled, blocks tampering, and preserves data on update/removal', () => {
+  const root = temp(); const store = new AgentPluginStore(temp());
+  writeFileSync(join(root, 'plugin.json'), JSON.stringify({ $schema: PLUGIN_SCHEMA, name: 'sample' }));
+  expect(() => store.install(root)).toThrow('review');
+  const installed = store.install(root, { reviewHash: store.inspect(root).reviewHash });
+  expect(installed.receipt.enabled).toBe(false);
+  expect(store.setEnabled('sample', true).receipt.enabled).toBe(true);
+  mkdirSync(store.dataDir('sample'), { recursive: true });
+  writeFileSync(join(store.dataDir('sample'), 'state'), 'persistent');
+  writeFileSync(join(root, 'mcp.json'), JSON.stringify({ $schema: MCP_SCHEMA, mcpServers: { main: { type: 'stdio', command: 'node' } } }));
+  expect(() => store.install(root, { replace: true })).toThrow('review');
+  const updated = store.install(root, { replace: true, reviewHash: store.inspect(root).reviewHash });
+  expect(updated.receipt.enabled).toBe(true);
+  expect(store.rollback('sample').rootDir).toBe(installed.rootDir);
+  expect(store.rollback('sample').rootDir).toBe(updated.rootDir);
+  writeFileSync(join(updated.rootDir, 'tampered'), 'bad');
+  expect(store.get('sample')?.readiness).toBe('blocked');
+  expect(store.active()).toHaveLength(0);
+  store.remove('sample');
+  expect(readFileSync(join(store.dataDir('sample'), 'state'), 'utf8')).toBe('persistent');
+});
+it('installs an archive with one wrapper directory and rejects stale reviews', () => {
+  const source = join(temp(), 'plugin.zip'); const store = new AgentPluginStore(temp());
+  const zip = new AdmZip();
+  zip.addFile('wrapper/plugin.json', Buffer.from(JSON.stringify({ $schema: PLUGIN_SCHEMA, name: 'archive' })));
+  zip.writeZip(source);
+  const plan = store.inspect(source);
+  zip.addFile('wrapper/extra.txt', Buffer.from('changed')); zip.writeZip(source);
+  expect(() => store.install(source, { reviewHash: plan.reviewHash })).toThrow();
+  expect(store.install(source, { reviewHash: store.inspect(source).reviewHash }).id).toBe('archive');
+});
+it('prioritizes native metadata over the portable manifest', () => {
+  const zip = new AdmZip();
+  zip.addFile('wrapper/plugin.json', Buffer.from(JSON.stringify({ $schema: PLUGIN_SCHEMA, name: 'mixed' })));
+  expect(isAgentPluginArchive(zip.toBuffer())).toBe(true);
+  zip.addFile('wrapper/package.json', Buffer.from(JSON.stringify({ xopc: { extension: './index.js' } })));
+  expect(isAgentPluginArchive(zip.toBuffer())).toBe(false);
+});
+it('refreshes validated plugin Skills on activation without recursive discovery or symlink installation', () => {
+  const source = temp(); const state = temp(); vi.stubEnv('XOPC_STATE_DIR', state);
+  writeFileSync(join(source, 'plugin.json'), JSON.stringify({ $schema: PLUGIN_SCHEMA, name: 'skills-fixture' }));
+  mkdirSync(join(source, 'skills/plugin-fixture-skill'), { recursive: true });
+  mkdirSync(join(source, 'skills/nested/hidden-fixture-skill'), { recursive: true });
+  writeFileSync(join(source, 'skills/plugin-fixture-skill/SKILL.md'), '---\nname: plugin-fixture-skill\ndescription: Visible skill\n---\nUseful instructions');
+  writeFileSync(join(source, 'skills/nested/hidden-fixture-skill/SKILL.md'), '---\nname: hidden-fixture-skill\ndescription: Hidden skill\n---\nNot discovered');
+  const store = new AgentPluginStore(state);
+  store.install(source, { reviewHash: store.inspect(source).reviewHash });
+  const manager = new SkillManager(temp(), temp());
+  expect(manager.getSkills().some(skill => skill.name === 'plugin-fixture-skill')).toBe(false);
+  store.setEnabled('skills-fixture', true);
+  expect(manager.getSkills().some(skill => skill.name === 'plugin-fixture-skill')).toBe(true);
+  expect(manager.getSkills().some(skill => skill.name === 'hidden-fixture-skill')).toBe(false);
+  store.setEnabled('skills-fixture', false);
+  expect(manager.getSkills().some(skill => skill.name === 'plugin-fixture-skill')).toBe(false);
+});

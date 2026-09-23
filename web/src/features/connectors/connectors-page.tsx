@@ -13,6 +13,8 @@ import { ConnectorDetailDialog } from '@/features/connectors/components/connecto
 import { ConnectorRuntimeSettingsDialog } from '@/features/connectors/components/connector-runtime-settings-dialog';
 import { ConnectorSearchField, ConnectorsPageHeaderEnd } from '@/features/connectors/components/connectors-page-header-end';
 import { CustomMcpServerRow } from '@/features/connectors/components/custom-mcp-server-row';
+import { useExtensions } from '@/features/extensions/extension-provider';
+import { PluginMcpConnection } from '@/features/extensions/agent-plugin-dialog';
 import { InstalledConnectorDetailDialog } from '@/features/connectors/components/installed-connector-detail-dialog';
 import { InstalledConnectorRow } from '@/features/connectors/components/installed-connector-row';
 import { InstallConnectorDialog } from '@/features/connectors/components/install-connector-dialog';
@@ -128,6 +130,7 @@ function safeReturnPath(value: string | null): string {
 }
 
 export function ConnectorsPage() {
+  const pluginExtensions = useExtensions().filter(extension => extension.format === 'agent-plugin');
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
   const cs = m.connectorsSettings;
@@ -180,7 +183,7 @@ export function ConnectorsPage() {
     [config],
   );
   const customServers = mcpSettings?.servers ?? [];
-  const installedCount = state.instances.length + customServers.length;
+  const installedCount = state.instances.length + customServers.length + pluginExtensions.reduce((n, extension) => n + (extension.components?.mcp.length ?? 0), 0);
 
   useEffect(() => {
     if (mcpSettings) setSessionIdleTtlMinutes(mcpSettings.sessionIdleTtlMinutes);
@@ -468,7 +471,13 @@ export function ConnectorsPage() {
     () => customServers.filter((row) => customServerMatchesQuery(row, connectedSearchQuery)),
     [connectedSearchQuery, customServers],
   );
-  const visibleInstalledCount = visibleInstances.length + visibleCustomServers.length;
+  const visiblePluginServers = useMemo(() => {
+    const query = connectedSearchQuery.trim().toLowerCase();
+    return pluginExtensions.flatMap(extension => (extension.components?.mcp ?? [])
+      .filter(server => `${extension.name} ${server.name}`.toLowerCase().includes(query))
+      .map(server => ({ extension, server })));
+  }, [connectedSearchQuery, pluginExtensions]);
+  const visibleInstalledCount = visibleInstances.length + visibleCustomServers.length + visiblePluginServers.length;
 
   const builtinCatalog = useMemo(
     () => state.catalog.filter((connector) => (
@@ -627,6 +636,9 @@ export function ConnectorsPage() {
                     </section>
                   ) : null}
 
+                  {visiblePluginServers.map(({ extension, server }) => (
+                    <PluginMcpConnection key={server.id} pluginId={extension.pluginId!} server={server} enabled={extension.active} />
+                  ))}
                   {visibleCustomServers.length || !connectedSearchQuery.trim() ? (
                     <details className="rounded-xl border border-edge bg-surface-base">
                       <summary className="cursor-pointer px-4 py-3">

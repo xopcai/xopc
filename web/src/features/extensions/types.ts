@@ -49,6 +49,12 @@ export type ExtensionUiContributions = {
 
 /** Serialized extension list row from `GET /api/extensions`. */
 export type ExtensionApiRow = {
+  format?: 'native-extension' | 'agent-plugin';
+  pluginId?: string;
+  canRollback?: boolean;
+  readiness?: 'ready' | 'setup_required' | 'degraded' | 'blocked';
+  components?: { skills: Array<{ name: string }>; mcp: Array<{ name: string; id: string; type: string }> };
+  diagnostics?: Array<{ component: string; message: string }>;
   id: string;
   name: string;
   description?: string;

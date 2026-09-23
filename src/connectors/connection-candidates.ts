@@ -22,11 +22,11 @@ export function connectionCandidates(query: string) {
 }
 export function resolveConnectionCandidate(ref: string) {
   const cli = getConnectorDefinition(ref);
-  if (cli?.runtime.type === 'cli') return { key: `${ref}:default`, connectorId: ref, label: cli.displayName,
+  if (cli?.runtime.type === 'cli') return { key: `${ref}:default`, target: { type: 'connector' as const, connectorId: ref }, label: cli.displayName,
     capabilities: Object.entries(getCliAdapter(cli.runtime.adapterId).curatedActions).filter(([, scope]) => scope === 'read').map(([id]) => id) };
 
   const item = CANDIDATES.find(item => `composio-${item.toolkit}` === ref);
   const definition = item ? getConnectorDefinition(ref) : undefined;
   if (!item || !definition) throw new Error('Unknown connection candidate. Search for a supported app first.');
-  return { key: `${ref}:default`, connectorId: ref, label: definition.displayName, capabilities: item.capabilities };
+  return { key: `${ref}:default`, target: { type: 'connector' as const, connectorId: ref }, label: definition.displayName, capabilities: item.capabilities };
 }

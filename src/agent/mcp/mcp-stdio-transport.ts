@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import process from "node:process";
+import { mkdir } from 'node:fs/promises';
+import { containedPath } from '../../extensions/agent-plugins/validation.js';
 import { PassThrough } from "node:stream";
 import { getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { ReadBuffer, serializeMessage } from "@modelcontextprotocol/sdk/shared/stdio.js";
@@ -13,6 +15,7 @@ export type XopcStdioServerParameters = {
   env?: Record<string, string>;
   cwd?: string;
   stderr?: "pipe" | "overlapped" | "inherit" | "ignore";
+  pluginDataDir?: string;
 };
 
 const CLOSE_TIMEOUT_MS = 2000;
@@ -45,6 +48,14 @@ export class XopcStdioClientTransport implements Transport {
       );
     }
 
+    if (this.serverParams.pluginDataDir) {
+      const data = this.serverParams.pluginDataDir;
+      await mkdir(data, { recursive: true, mode: 0o700 });
+      if (this.serverParams.cwd) containedPath(
+        this.serverParams.cwd.startsWith(data) ? data : this.serverParams.env?.PLUGIN_ROOT ?? data,
+        this.serverParams.cwd,
+      );
+    }
     await new Promise<void>((resolve, reject) => {
       const baseEnv = {
         ...getDefaultEnvironment(),

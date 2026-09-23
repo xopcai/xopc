@@ -58,6 +58,8 @@ import {
 import { getExtensionLockfileManager } from '../../extensions/lockfile.js';
 import { resolveExtensionsDir, resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
+import { AgentPluginStore } from '../../extensions/agent-plugins/store.js';
+import { isAgentPluginArchive, withAgentPluginArchive } from '../../extensions/agent-plugins/sources.js';
 
 const log = createLogger('Gateway:Marketplace');
 
@@ -106,6 +108,7 @@ export interface SkillSourceInstallResultPayload extends SkillInstallResultPaylo
 }
 
 export interface ExtensionMarketplacePackageDetailPayload extends MarketplacePackageDetail {
+  format?: 'native-extension' | 'agent-plugin';
   installability: {
     available: boolean;
     reason?: string;
@@ -380,6 +383,11 @@ export class GatewayMarketplaceService {
       const resolved = await resolveExtensionZipDownloadUrl(base, packageName.trim());
       const buffer = await downloadExtensionStoreZipBuffer(base, resolved.downloadUrl);
       verifyStoreArtifactSha256(buffer, resolved.sha256);
+      if (isAgentPluginArchive(buffer)) {
+        const plan = withAgentPluginArchive(buffer, path => new AgentPluginStore().inspect(path));
+        return { ...detail, format: 'agent-plugin', manifest: plan.manifest,
+          installability: { available: true, sha256: resolved.sha256 } };
+      }
       const {
         peekExtensionManifestFromStoreZip,
         peekExtensionPackageJsonFromStoreZip,

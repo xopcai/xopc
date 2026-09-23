@@ -85,11 +85,18 @@ describe('bundle-mcp-config', () => {
     expect(merged.config.mcpServers.custom).toMatchObject({ command: 'custom-server' });
   });
 
-  it('uses only configured MCP servers and never Extension-owned raw MCP config', () => {
+  it('does not import native Extension-owned raw MCP config', () => {
     const merged = loadMergedBundleMcpConfig({
       workspaceDir: '/tmp/xopc-test-workspace',
       cfg: { mcp: { servers: { configured: { command: 'configured' } } } } as Config,
     });
     expect(merged.config.mcpServers).toEqual({ configured: { command: 'configured' } });
+  });
+
+  it('reserves plugin identities even when the corresponding package is disabled or missing', () => {
+    const merged = loadMergedBundleMcpConfig({ workspaceDir: '/tmp/xopc-test-workspace',
+      cfg: { mcp: { servers: { 'plugin/disabled/main': { command: 'unexpected' } } } } as Config });
+    expect(merged.config.mcpServers['plugin/disabled/main']).toBeUndefined();
+    expect(merged.diagnostics).toContainEqual(expect.objectContaining({ connectorId: 'plugin/disabled/main' }));
   });
 });
