@@ -3,21 +3,28 @@ import { requireConversation } from '@xopcai/xopc/storage/sqlite/conversation-re
  * Telegram Routing Integration Tests
  */
 
-import { describe, it, expect } from 'vitest';
-import type { Config } from '@xopcai/xopc/config/schema.js';
+import { beforeEach, describe, it, expect } from 'vitest';
+import { ConfigSchema, type Config } from '@xopcai/xopc/config/schema.js';
+import { AgentCatalogRepository } from '../../../../src/agent-catalog/repository.js';
+import { initializeTestAgentCatalog } from '../../../../src/agent-catalog/test-support.js';
 import { generateConversationIdWithRouting, extractMemberRoleIds } from '../routing-integration.js';
 
 describe('TelegramRouting', () => {
-  const baseConfig: Config = {
-    agents: {
-      default: 'main',
-    },
-    bindings: [],
+  const baseConfig: Config = ConfigSchema.parse({
     session: {
       dmScope: 'per-account-channel-peer',
       identityLinks: {},
     },
-  };
+  });
+
+  beforeEach(() => initializeTestAgentCatalog({
+    agents: [
+      { id: 'main', enabled: true },
+      { id: 'custom-agent', enabled: true },
+      { id: 'coder', enabled: true },
+      { id: 'researcher', enabled: true },
+    ],
+  }));
 
   describe('generateConversationIdWithRouting', () => {
     it('should generate basic DM session key', () => {
@@ -49,12 +56,8 @@ describe('TelegramRouting', () => {
     });
 
     it('should use configured default agent', () => {
-      const config: Config = {
-        ...baseConfig,
-        agents: {
-          default: 'custom-agent',
-        },
-      };
+      const repository = new AgentCatalogRepository();
+      repository.setDefault('custom-agent', repository.getSettings().revision);
 
       const conversationId = generateConversationIdWithRouting(
         {
@@ -63,26 +66,19 @@ describe('TelegramRouting', () => {
           senderId: '789012',
           isGroup: false,
         },
-        config
+        baseConfig
       );
 
       expect(requireConversation(conversationId)).toMatchObject({ agentId: 'custom-agent' });
     });
 
     it('should route to specific agent based on binding', () => {
-      const config: Config = {
-        ...baseConfig,
-        bindings: [
-          {
-            agentId: 'coder',
-            match: {
-              channel: 'telegram',
-              peerId: '-1001234567',
-            },
-            priority: 100,
-          },
-        ],
-      };
+      new AgentCatalogRepository().replaceBindings([{
+        agentId: 'coder',
+        match: { channel: 'telegram', peerId: '-1001234567' },
+        priority: 100,
+        enabled: true,
+      }]);
 
       const conversationId = generateConversationIdWithRouting(
         {
@@ -91,7 +87,7 @@ describe('TelegramRouting', () => {
           senderId: '789012',
           isGroup: true,
         },
-        config
+        baseConfig
       );
 
       expect(requireConversation(conversationId)).toMatchObject({ agentId: 'coder' });
@@ -138,26 +134,10 @@ describe('TelegramRouting', () => {
     });
 
     it('should handle multiple bindings with priority', () => {
-      const config: Config = {
-        ...baseConfig,
-        bindings: [
-          {
-            agentId: 'researcher',
-            match: {
-              channel: 'telegram',
-            },
-            priority: 50,
-          },
-          {
-            agentId: 'coder',
-            match: {
-              channel: 'telegram',
-              peerId: '-1001234567',
-            },
-            priority: 100,
-          },
-        ],
-      };
+      new AgentCatalogRepository().replaceBindings([
+        { agentId: 'researcher', match: { channel: 'telegram' }, priority: 50, enabled: true },
+        { agentId: 'coder', match: { channel: 'telegram', peerId: '-1001234567' }, priority: 100, enabled: true },
+      ]);
 
       // Should match coder (higher priority)
       const conversationId1 = generateConversationIdWithRouting(
@@ -167,7 +147,7 @@ describe('TelegramRouting', () => {
           senderId: '789012',
           isGroup: true,
         },
-        config
+        baseConfig
       );
       expect(requireConversation(conversationId1).agentId).toBe('coder');
 
@@ -179,7 +159,7 @@ describe('TelegramRouting', () => {
           senderId: '789012',
           isGroup: true,
         },
-        config
+        baseConfig
       );
       expect(requireConversation(conversationId2).agentId).toBe('researcher');
     });

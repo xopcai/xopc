@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '@hono/node-server';
 import { expect, it, vi } from 'vitest';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { PLUGIN_SCHEMA, MCP_SCHEMA } from '../../extensions/agent-plugins/validation.js';
@@ -15,6 +16,7 @@ it('installs, activates, updates and removes through real authenticated HTTP and
   const source = mkdtempSync(join(tmpdir(), 'xopc-plugin-source-'));
   vi.stubEnv('XOPC_STATE_DIR', state);
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(state, 'xopc.db') });
+  seedTestAgentCatalog();
   const token = 'agent-plugin-http-token';
   const refresh = vi.fn();
   const app = createHonoApp({ service: {

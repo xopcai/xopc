@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigSchema } from '../../config/schema.js';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ProjectService } from '../../projects/project-service.js';
 import { SessionStore } from '../../session/store.js';
 import {
@@ -16,18 +17,7 @@ import {
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { WorkflowSessionBridge } from '../service/workflow-session-bridge.js';
 
-const minimalConfig = ConfigSchema.parse({
-  agents: {
-    default: 'main',
-    list: [
-      {
-        id: 'main',
-        profile: { name: 'Main' },
-        workspace: '~/default-ws',
-      },
-    ],
-  },
-});
+const minimalConfig = ConfigSchema.parse({});
 
 describe('WorkflowSessionBridge project association', () => {
   let stateDir: string;
@@ -38,6 +28,7 @@ describe('WorkflowSessionBridge project association', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-workflow-project-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    seedTestAgentCatalog({ agents: [{ id: 'main', profile: { name: 'Main' }, workspace: '~/default-ws' }] });
     store = new SessionStore({ config: minimalConfig });
     bridge = new WorkflowSessionBridge({
       currentConfig: minimalConfig,

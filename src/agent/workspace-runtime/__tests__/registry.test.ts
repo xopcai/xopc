@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import type { AgentEntry } from '../../../agent-config/index.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import { WorkspaceRuntimeRegistry } from '../registry.js';
@@ -15,15 +16,10 @@ function agent(id: string): AgentEntry {
 
 describe('WorkspaceRuntimeRegistry', () => {
   it('shares one user context runtime when agents share a workspace', async () => {
-    const config = ConfigSchema.parse({
-      agents: {
-        default: 'main',
-        list: [
-          agent('main'),
-          agent('research'),
-        ],
-      },
+    initializeTestAgentCatalog({
+      agents: [agent('main'), agent('research')],
     });
+    const config = ConfigSchema.parse({});
     const registry = new WorkspaceRuntimeRegistry({
       getConfig: () => config,
       bundledSkillsDir: '/tmp/xopc-test-bundled-skills',

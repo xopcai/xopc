@@ -51,7 +51,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'connectors', description: 'Browse and install verified connector capabilities from xopc-store' },
   { name: 'tailscale', description: 'Tailscale status for gateway remote access' },
   { name: 'browser', description: 'Browser Control v2 diagnostics and extension setup' },
-  { name: 'agents', description: 'Manage agents (config + workspace)' },
+  { name: 'agents', description: 'Manage agents' },
   { name: 'extensions', description: 'Manage extensions' },
   { name: 'help [command]', description: 'display help for command' },
 ];

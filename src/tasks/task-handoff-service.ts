@@ -1,5 +1,4 @@
 import { listAgentEntries, normalizeAgentId } from '../agent/agent-scope.js';
-import type { Config } from '../config/schema.js';
 import { resolveConversationId, sanitizeSegment } from '../routing/session-key.js';
 import type { SessionIndex } from '../session/index.js';
 import { createLogger } from '../utils/logger.js';
@@ -29,7 +28,6 @@ export class TaskHandoffService {
   readonly #inflight = new Map<string, Promise<TaskHandoffResult>>();
 
   constructor(private readonly deps: {
-    getConfig: () => Config;
     sessionIndex: SessionIndex;
     getActiveRunId: (conversationId: string) => string | undefined;
     abortRun: (runId: string) => Promise<unknown>;
@@ -57,7 +55,6 @@ export class TaskHandoffService {
     expectedVersion: number;
     idempotencyKey: string;
   }): Promise<TaskHandoffResult> {
-    const config = this.deps.getConfig();
     const toAgentId = normalizeAgentId(input.toAgentId);
     const agent = listAgentEntries().find(
       (entry) => entry.enabled !== false && normalizeAgentId(entry.id) === toAgentId,

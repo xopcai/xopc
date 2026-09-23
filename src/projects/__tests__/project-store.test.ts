@@ -10,6 +10,7 @@ import {
   patchSessionMetadata,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { TaskApplicationService, TaskRepository } from '../../tasks/index.js';
 import { inferSuggestedProjectDefaultAgentId } from '../project-agent-suggestion.js';
 import { inferProjectKind } from '../project-kind.js';
@@ -26,6 +27,7 @@ describe('ProjectService', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-projects-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    seedTestAgentCatalog({ agents: [{ id: 'main', enabled: true }, { id: 'coder', enabled: true }] });
     projects = new ProjectService();
   });
 
@@ -246,15 +248,7 @@ describe('ProjectService', () => {
   });
 
   it('suggests coder for coding projects when the agent exists', () => {
-    const config = {
-      agents: {
-        default: 'main',
-        list: [
-          { id: 'main', enabled: true },
-          { id: 'coder', enabled: true },
-        ],
-      },
-    };
+    const config = {};
 
     expect(inferSuggestedProjectDefaultAgentId({ config: config as never, projectKind: 'coding' })).toBe('coder');
     expect(inferSuggestedProjectDefaultAgentId({ config: config as never, projectKind: 'general' })).toBeUndefined();

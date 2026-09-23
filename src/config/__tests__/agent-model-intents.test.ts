@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../schema.js';
 import {
   resolveEffectiveModelIntents,
@@ -7,9 +8,11 @@ import {
   resolveModelSelector,
 } from '../agent-model-intents.js';
 
-const config = ConfigSchema.parse({
-  agents: {
-    default: 'research',
+const config = ConfigSchema.parse({});
+
+describe('agent model intents', () => {
+  beforeEach(() => initializeTestAgentCatalog({
+    defaultAgentId: 'research',
     defaults: {
       models: {
         chat: { primary: 'openai/gpt-4.1', fallbacks: [] },
@@ -18,17 +21,15 @@ const config = ConfigSchema.parse({
           reasoning: { primary: 'anthropic/claude-sonnet-4', fallbacks: ['openai/gpt-4.1'] },
         },
       },
+      skills: { mode: 'selected', include: [] }, tools: {}, workflows: {}, runtime: {},
     },
-    list: [{
+    agents: [{
       id: 'research',
       models: {
         intents: { fast: { primary: 'google/gemini-2.5-flash', fallbacks: [] } },
       },
     }],
-  },
-});
-
-describe('agent model intents', () => {
+  }));
   it('resolves global intents with agent overrides', () => {
     const intents = resolveEffectiveModelIntents(config, 'research');
     expect(intents.get('fast')?.model).toBe('google/gemini-2.5-flash');

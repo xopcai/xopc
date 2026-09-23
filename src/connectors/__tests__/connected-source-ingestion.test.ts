@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import type { Config } from '../../config/schema.js';
 import { getKnowledgeItem } from '../../knowledge-memory/index.js';
 import {
@@ -29,6 +30,7 @@ describe('connected source ingestion', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-connector-memory-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    seedTestAgentCatalog();
     upsertConnectorInstallation({
       id: 'composio-gmail-local-owner',
       connectorId: 'composio-gmail',

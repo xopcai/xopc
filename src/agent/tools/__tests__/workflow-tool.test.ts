@@ -8,6 +8,7 @@ function seedConversationFixtures(): void {
 }
 import { describe, expect, it, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { createWorkflowTool } from '../workflow-tool.js';
 
 describe('workflow tool async run start', () => {
@@ -66,6 +67,15 @@ describe('workflow tool async run start', () => {
   });
 
   it('uses an explicit workflow and otherwise uses the default', async () => {
+    initializeTestAgentCatalog({
+      defaults: {
+        models: { chat: { primary: 'openai/gpt-4.1', fallbacks: [] }, intents: {} },
+        skills: { mode: 'all-enabled', exclude: [] },
+        tools: {},
+        workflows: { default: 'general', allowed: ['general', 'review-code'] },
+        runtime: {},
+      },
+    });
     seedConversationFixtures();
     const startWorkflowRun = vi.fn(async () => ({
       ok: true as const,
@@ -73,21 +83,7 @@ describe('workflow tool async run start', () => {
       conversationId: "6e2dd79d-484c-4566-8ee5-3ab23daa50a0",
     }));
     const catalog = { load: vi.fn() };
-    const config = {
-      agents: {
-        default: 'main',
-        defaults: {
-          models: { chat: { primary: 'openai/gpt-4.1', fallbacks: [] }, intents: {} },
-          workflows: { default: 'general', allowed: ['general', 'review-code'] },
-        },
-        list: [{
-          id: 'main',
-          enabled: true,
-          profile: { name: 'Main' },
-          workspace: '/tmp/main',
-        }],
-      },
-    };
+    const config = {};
     const tool = createWorkflowTool({
       catalog: catalog as never,
       getConfig: () => config as never,

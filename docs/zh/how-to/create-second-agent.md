@@ -25,8 +25,7 @@ xopc agents list
 ## 设为默认 Agent
 
 ```bash
-xopc config set agents.default coder
-xopc config validate
+xopc agents default coder
 ```
 
 只影响新 Session，已有 Session 仍属于原 Agent。

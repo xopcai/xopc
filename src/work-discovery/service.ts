@@ -99,7 +99,7 @@ const MAX_UNDERSTANDING_TOTAL_CHARS = 300_000;
 
 export type ModelProcessingPolicy = 'local_only' | 'remote_allowed';
 
-function modelProcessingTarget(config: Config): { provider: string; remoteModel: boolean } {
+function modelProcessingTarget(_config: Config): { provider: string; remoteModel: boolean } {
   const modelRef = getAgentDefaultModelRef();
   if (!modelRef) throw new Error('No default model configured');
   const model = resolveModel(modelRef);
@@ -328,7 +328,6 @@ export class WorkDiscoveryService {
     if (!project) throw new Error('Project not found');
     const existing = getProjectUnderstandingRun(projectId);
     if (existing && (this.abortControllers.has(existing.id) || ['queued', 'probing', 'analyzing'].includes(existing.status))) return existing;
-    const config = this.options.getConfig();
     const agentId = project.defaultAgentId ?? getDefaultAgentId();
     const rootPath = project.workspaceRoot ?? resolveEffectiveAgentProfile(agentId).resolvedWorkspacePath;
     const id = randomUUID();

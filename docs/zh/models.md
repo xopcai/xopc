@@ -60,7 +60,7 @@ xopc 在 Docker 中运行时，`127.0.0.1` 指向容器本身，不是宿主机�
 
 ## 全局模型与固定意图
 
-所有 Agent 默认继承 `agents.defaults.models.chat`：
+所有 Agent 默认继承 **设置 → Agent 默认能力** 中的 Chat 模型：
 
 ```bash
 xopc models set <provider>/<model>
