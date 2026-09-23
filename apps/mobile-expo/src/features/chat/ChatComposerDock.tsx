@@ -33,7 +33,7 @@ export function ChatComposerDock({ root, panelOpen, bottomInset, children }: {
     <Animated.View testID={root ? 'chat-bottom-region' : undefined} style={[
       root && styles.rootSurface,
       root && elevation.raised,
-      root && { backgroundColor: colors.surface.elevated, borderColor: colors.border.subtle },
+      root && { backgroundColor: colors.surface.elevated },
       style,
     ]}>
       {children}
@@ -46,6 +46,6 @@ const styles = StyleSheet.create({
   rootSurface: {
     marginHorizontal: spacing.md,
     borderRadius: radii.xl,
-    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
   },
 });

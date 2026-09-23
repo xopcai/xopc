@@ -13,8 +13,42 @@ export struct XopcChatDrawer {
   @Event onSearch: () => void = (): void => {};
   @Event onNewChat: () => void = (): void => {};
   @Local drawer: XopcChatDrawerViewModel = new XopcChatDrawerViewModel();
+  @Local actionItem?: XopcSessionItem;
   aboutToAppear(): void { this.drawer.open(); }
   aboutToDisappear(): void { this.drawer.dispose(); }
+
+  private text(resource: Resource): string {
+    return this.getUIContext().getHostContext()?.resourceManager.getStringSync(resource.id) ?? '';
+  }
+
+  private async performAction(item: XopcSessionItem, action: string): Promise<void> {
+    if (!await this.drawer.action(item, action)) return;
+    if (item.key === this.currentId && (action === 'archive' || action === 'delete')) {
+      this.onClose(); this.onNewChat();
+    }
+  }
+
+  private confirmDelete(item: XopcSessionItem): void {
+    this.getUIContext().showAlertDialog({
+      title: $r('app.string.delete'), message: $r('app.string.sessions_delete_confirm', 1),
+      primaryButton: { value: $r('app.string.cancel'), action: (): void => {} },
+      secondaryButton: { value: $r('app.string.delete'), fontColor: $r('app.color.danger'),
+        action: (): void => { this.performAction(item, 'delete'); } }
+    });
+  }
+
+  private menu(item: XopcSessionItem): void {
+    if (this.drawer.busy) return;
+    this.actionItem = item;
+  }
+
+  private closeMenu(): void { this.actionItem = undefined; }
+
+  private chooseAction(item: XopcSessionItem, action: string): void {
+    this.closeMenu();
+    if (action === 'delete') this.confirmDelete(item);
+    else this.performAction(item, action);
+  }
 
   private groupLabel(value: string): ResourceStr {
     switch (value) {
@@ -56,6 +90,10 @@ export struct XopcChatDrawer {
           Blank().layoutWeight(1)
           Text(this.drawer.total.toString()).fontSize(12).fontColor($r('app.color.tertiary'))
         }.width('100%').padding({ left: 32, right: 32, top: 12, bottom: 4 })
+        if (this.drawer.actionError) {
+          Text(this.drawer.actionError).fontSize(12).fontColor($r('app.color.danger')).maxLines(2)
+            .width('100%').padding({ left: 32, right: 32, bottom: 4 })
+        }
         List() {
           if (this.drawer.loading && !this.drawer.items.length) { ListItem() { XopcListSkeleton() } }
           ForEach(this.drawer.groups, (group: XopcSessionGroup) => {
@@ -66,12 +104,19 @@ export struct XopcChatDrawer {
                     Row({ space: 8 }) {
                       Text(item.displayName || item.name || item.title || $r('app.string.untitled'))
                         .fontSize(14).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground')).layoutWeight(1).maxLines(1)
-                      if (item.key === this.currentId) { Column().width(6).height(6).borderRadius(3).backgroundColor($r('app.color.accent')) }
-                    }.width('100%').constraintSize({ minHeight: 50 }).padding({ left: 16, right: 16 })
-                  }.id('drawer-session-' + item.key).width('100%').padding(0).borderRadius(12)
-                    .backgroundColor(item.key === this.currentId ? $r('app.color.grouped') : Color.Transparent)
-                    .accessibilitySelected(item.key === this.currentId)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis })
+                      if (item.status === 'pinned') {
+                        SymbolGlyph($r('sys.symbol.pin')).fontSize(13).fontColor([$r('app.color.accent')])
+                      }
+                      if (item.key === this.currentId) {
+                        Column().width(6).height(6).borderRadius(3).backgroundColor($r('app.color.accent'))
+                      }
+                    }.width('100%').height(50).padding({ left: 14, right: 14 })
+                  }.id('drawer-session-' + item.key).width('100%').height(50).padding(0).borderRadius(12)
+                    .backgroundColor(item.key === this.currentId ? $r('app.color.accent_soft') : Color.Transparent)
+                    .accessibilitySelected(item.key === this.currentId).enabled(!this.drawer.busy)
                     .onClick((): void => { this.onClose(); if (item.key !== this.currentId) this.onSession(item.key); })
+                    .gesture(LongPressGesture({ duration: 350, repeat: false }).onAction((): void => { this.menu(item); }))
                 }.padding({ top: 2, bottom: 2 })
               }, (item: XopcSessionItem): string => item.key)
             }
@@ -86,10 +131,13 @@ export struct XopcChatDrawer {
           } else if (!this.drawer.loading && !this.drawer.items.length) {
             ListItem() { Text($r('app.string.no_conversations')).fontColor($r('app.color.tertiary')).padding(24) }
           }
-          if (this.drawer.hasMore) {
-            ListItem() { Button($r('app.string.load_more')).enabled(!this.drawer.loading).onClick((): void => { this.drawer.load(undefined, true); }) }
+          if (this.drawer.loading && this.drawer.items.length) {
+            ListItem() {
+              Row() { LoadingProgress().width(20).height(20).color($r('app.color.secondary')) }
+                .width('100%').height(44).justifyContent(FlexAlign.Center)
+            }
           }
-        }.id('chat-drawer-history').layoutWeight(1).width('100%').padding({ left: 24, right: 24, bottom: 16 })
+        }.id('chat-drawer-history').layoutWeight(1).width('100%').padding({ left: 16, right: 16, bottom: 16 })
           .onReachEnd((): void => { this.drawer.load(undefined, true); })
         Row() {
           Button($r('app.string.new_chat')).id('chat-drawer-new').height(44).padding({ left: 24, right: 24 })
@@ -102,7 +150,45 @@ export struct XopcChatDrawer {
         .transition(TransitionEffect.move(TransitionEdge.START).animation({ duration: layoutState.reduceMotion ? 0 : 220, curve: Curve.EaseOut }))
         .parallelGesture(PanGesture({ direction: PanDirection.Horizontal, distance: 16 })
           .onActionEnd((event: GestureEvent): void => { if (event.offsetX < -40) this.onClose(); }))
+      if (this.actionItem) { this.actionMenu(this.actionItem) }
     }.width('100%').height('100%')
+  }
+
+  @Builder
+  actionMenu(item: XopcSessionItem) {
+    Stack({ alignContent: Alignment.Bottom }) {
+      Button({ type: ButtonType.Normal }) {}.width('100%').height('100%').padding(0).backgroundColor('#52000000')
+        .accessibilityText($r('app.string.cancel')).onClick((): void => { this.closeMenu(); })
+      Column({ space: 12 }) {
+        Column().width(40).height(5).borderRadius(3).backgroundColor($r('app.color.border_subtle'))
+        Text(item.displayName || item.name || item.title || $r('app.string.untitled')).fontSize(17)
+          .fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground')).maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%').textAlign(TextAlign.Start)
+        Column({ space: 4 }) {
+          this.actionRow(item, item.status === 'pinned' ? 'unpin' : 'pin',
+            item.status === 'pinned' ? $r('app.string.unpin') : $r('app.string.pin'), $r('sys.symbol.pin'), false)
+          this.actionRow(item, item.status === 'archived' ? 'unarchive' : 'archive',
+            item.status === 'archived' ? $r('app.string.unarchive') : $r('app.string.archive'), $r('sys.symbol.archivebox'), false)
+        }.width('100%').padding(4).borderRadius(16).backgroundColor($r('app.color.grouped'))
+        this.actionRow(item, 'delete', $r('app.string.delete'), $r('sys.symbol.trash'), true)
+        Button($r('app.string.cancel')).width('100%').height(48).fontColor($r('app.color.foreground'))
+          .backgroundColor($r('app.color.grouped')).onClick((): void => { this.closeMenu(); })
+      }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 20 })
+        .borderRadius({ topLeft: 24, topRight: 24 }).backgroundColor($r('app.color.panel'))
+    }.width('100%').height('100%').zIndex(100)
+  }
+
+  @Builder
+  actionRow(item: XopcSessionItem, action: string, label: Resource, symbol: Resource, destructive: boolean) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 12 }) {
+        Row() { SymbolGlyph(symbol).fontSize(20).fontColor([destructive ? $r('app.color.danger') : $r('app.color.secondary')]) }
+          .width(36).height(36).justifyContent(FlexAlign.Center).borderRadius(12).backgroundColor($r('app.color.panel'))
+        Text(label).fontSize(15).fontWeight(FontWeight.Medium)
+          .fontColor(destructive ? $r('app.color.danger') : $r('app.color.foreground')).layoutWeight(1).textAlign(TextAlign.Start)
+      }.width('100%').height(52).padding({ left: 8, right: 12 })
+    }.width('100%').height(52).padding(0).borderRadius(14).backgroundColor($r('app.color.grouped'))
+      .enabled(!this.drawer.busy).onClick((): void => { this.chooseAction(item, action); })
   }
 
   @Builder
