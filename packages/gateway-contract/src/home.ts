@@ -264,7 +264,7 @@ export const HomeAdviceMetricsSchema = z.strictObject({
   currentStrategyVersion: z.string().trim().min(1).max(100),
   generations: z.strictObject({
     total: z.number().int().nonnegative(),
-    ready: z.number().int().nonnegative(),
+    succeeded: z.number().int().nonnegative(),
     quiet: z.number().int().nonnegative(),
     failed: z.number().int().nonnegative(),
     estimatedCostUsd: z.number().nonnegative(),

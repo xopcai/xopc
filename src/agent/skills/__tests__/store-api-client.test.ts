@@ -89,6 +89,10 @@ describe('store-api-client (XOPC Store HTTP)', () => {
             type: 'skill',
             category: 'office-documents',
             description: 'Create documents',
+            localizations: {
+              en: { displayName: 'Document Authoring', description: 'Create documents' },
+              'zh-CN': { displayName: '专业文档制作', description: '创建并验证专业文档。' },
+            },
             downloads: 0,
             author: { username: 'xopc', avatarUrl: null },
             latestVersion: '0.5.0',
@@ -107,6 +111,10 @@ describe('store-api-client (XOPC Store HTTP)', () => {
       expect(packages.items[0]).toMatchObject({
         category: 'office-documents',
         categories: ['office-documents'],
+        localizations: {
+          en: { displayName: 'Document Authoring', description: 'Create documents' },
+          'zh-CN': { displayName: '专业文档制作', description: '创建并验证专业文档。' },
+        },
       });
       expect(fetchMock).toHaveBeenCalledWith(
         'https://store.xopc.ai/api/v1/packages/categories?type=skill&locale=zh',

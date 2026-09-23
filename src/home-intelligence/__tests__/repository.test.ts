@@ -209,7 +209,7 @@ describe('HomeIntelligenceRepository', () => {
     expect(repository.getMetrics(principal, 900, 2_000)).toEqual({
       window: { since: 900, until: 2_000 },
       currentStrategyVersion: 'home-v1',
-      generations: { total: 2, ready: 1, quiet: 1, failed: 0, estimatedCostUsd: 0.25 },
+      generations: { total: 2, succeeded: 1, quiet: 1, failed: 0, estimatedCostUsd: 0.25 },
       outcomes: { opportunities: 1, started: 1, discussed: 0, completed: 0, corrected: 0, expired: 0 },
       rates: { start: 1, completionFromStarted: 0, correction: 0 },
       feedback: { alreadyDone: 0, irrelevant: 0, tooEarly: 0, sourceIncorrect: 0, lessLikeThis: 0 },

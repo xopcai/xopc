@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import { Archive, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, GitBranch, LockKeyhole, Plus, Search, ShieldCheck, Store, Trash2, Upload, X, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { resolveSkillPresentation } from '@xopcai/composer-core/skill-localization';
 
 import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
@@ -12,6 +13,7 @@ import { SkillCardIcon } from '@/features/skills/skill-card-icon';
 import type { SkillsMarketplacePayload } from '@/features/skills/skill.types';
 import { marketplacePackageRequestName } from '@/features/skills/skills-page.utils';
 import { cn } from '@/lib/cn';
+import { useLocaleStore } from '@/stores/locale-store';
 import { fetchProjectSessions, type ProjectSession } from './api';
 import {
   deleteProjectSkill,
@@ -79,6 +81,7 @@ type Copy = {
 };
 
 export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; copy: Copy }) {
+  const language = useLocaleStore((state) => state.language);
   const [items, setItems] = useState<ProjectSkill[]>([]);
   const [inheritedItems, setInheritedItems] = useState<ProjectSkill[]>([]);
   const [sources, setSources] = useState<ProjectSkillSource[]>([]);
@@ -367,6 +370,7 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
                 ) : marketplacePayload?.items.length ? (
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {marketplacePayload.items.map((row) => {
+                      const presentation = resolveSkillPresentation(row, language);
                       const provider = row.providerId ?? marketplacePayload.provider;
                       const packageName = marketplacePackageRequestName(row, provider);
                       const installed = items.some((item) => item.origin === 'xopc-workspace' && (
@@ -377,8 +381,8 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
                         <article key={`${provider ?? 'default'}:${row.id}`} className="group flex min-h-32 gap-3 rounded-lg border border-edge bg-surface-base p-3">
                           <SkillCardIcon name={row.name} className="size-10" />
                           <div className="flex min-w-0 flex-1 flex-col">
-                            <h4 className="truncate text-sm font-semibold text-fg">{row.name}</h4>
-                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{row.description || '—'}</p>
+                            <h4 className="truncate text-sm font-semibold text-fg">{presentation.displayName}</h4>
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{presentation.description || '—'}</p>
                             <div className="mt-auto flex items-end justify-between gap-2 pt-2">
                               <span className="inline-flex items-center gap-1 text-xs text-fg-subtle"><Download className="size-3.5" aria-hidden />{copy.marketplaceDownloads} {row.downloads}</span>
                               <Button
