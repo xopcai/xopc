@@ -7,7 +7,7 @@ Load this manual before a non-trivial mutation.
 
 \`\`\`json
 {
-  "mode": "scene | project | automation | note | task | task_run | local_app | settings",
+  "mode": "scene | project | automation | note | task | task_run | chat_preview | local_app | settings",
   "command": "...",
   "args": {},
   "dryRun": false
@@ -34,6 +34,7 @@ language. A scene prepares suggestions or drafts and never sends mail or perform
 | Task intent and lifecycle | \`xopc_use\` mode \`task\` |
 | Task execution attempt, receipt, events and waits | \`xopc_use\` mode \`task_run\` |
 | Note | \`xopc_use\` mode \`note\` |
+| Lightweight UI preview | \`xopc_use\` mode \`chat_preview\` |
 | Local app | \`xopc_use\` mode \`local_app\` |
 | Settings jump target | \`xopc_use\` mode \`settings\` |
 | Workflow run | dedicated \`workflow\` tool; pass \`taskId\` to link it to a Task |
@@ -408,7 +409,16 @@ user's intent is ambiguous.
 { "mode": "note", "command": "delete", "args": { "noteId": "note_id" }, "dryRun": true }
 \`\`\`
 
-## Local apps and settings
+## Chat previews, local apps, and settings
+
+Use \`chat_preview\` by default when the user asks to design, mock up, or quickly show a UI in
+the current conversation. It creates no Project and no Local App. Commands are \`create\`,
+\`get\`, and \`revise\`. Source consists of \`markup\`, \`styles\`, and optional \`script\`;
+do not include a full HTML document or remote dependencies. Revision requires the exact
+\`baseRevision\` returned by the prior call.
+
+Use \`local_app\` only when the user explicitly asks for a durable, installable app or chooses
+“Save as app” on a chat preview. Do not create a Local App merely to render a UI draft.
 
 Local app commands are \`list\`, \`get\`, \`create\`, and \`validate\`. Installation,
 activation, rollback, and uninstall remain product runtime operations.

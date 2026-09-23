@@ -1,5 +1,11 @@
 import { useCallback, type RefObject } from 'react';
-import type { AgentStreamRunStatus, AppContextEnvelope } from '@xopcai/gateway-contract';
+import {
+  parseUserTurnDocument,
+  renderUserTurnDocument,
+  serializeUserTurnDocument,
+  type AgentStreamRunStatus,
+  type AppContextEnvelope,
+} from '@xopcai/gateway-contract';
 
 import { trackInputAcceptance } from '../messages/input-acceptance';
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
@@ -261,7 +267,7 @@ export function useChatSessionStreaming(deps: {
 
   const interruptAndSend = useCallback(
     async (content: string, attachments?: WireAttachment[], levelOverride?: string, contextRefs?: ComposerContextRef[]) => {
-      if (!content.trim() && !attachments?.length) return;
+      if (!content.trim() && !attachments?.length && !contextRefs?.length) return;
       const key = conversationIdRef.current;
       if (!key) return;
       if (!sendingRef.current && !streamingRef.current && !chatRunManager.isStreamingFor(key)) return;
@@ -313,7 +319,7 @@ export function useChatSessionStreaming(deps: {
       if (!conversationId) return false;
       if (!shouldApplyStreamUpdate(conversationId)) return false;
       if (
-        (!content.trim() && !attachments?.length) ||
+        (!content.trim() && !attachments?.length && !contextRefs?.length) ||
         (sendingRef.current || streamingRef.current || chatRunManager.isStreamingFor(conversationId))
       ) {
         return false;
@@ -351,16 +357,23 @@ export function useChatSessionStreaming(deps: {
       const baseMessages = replaceIndex >= 0
         ? currentMessages.slice(0, replaceIndex)
         : currentMessages;
+      const userTurnDocument = parseUserTurnDocument(content) ?? undefined;
+      const contextTitles = new Map(contextRefs?.flatMap(ref => ref.refId ? [[ref.refId, ref.title] as const] : []) ?? []);
+      const displayContent = userTurnDocument
+        ? renderUserTurnDocument(userTurnDocument, refId => contextTitles.get(refId))
+        : content;
       const nextMessages = [
         ...baseMessages,
         {
           role: 'user',
-          content: content ? [{ type: 'text', text: content }] : [],
+          content: displayContent ? [{ type: 'text', text: displayContent }] : [],
+          userTurnDocument,
           deliveryStatus: 'sending',
           clientSubmissionId,
           pendingAppContext: appContext === undefined ? undefined : structuredClone(appContext),
           attachments,
           contextRefs: contextRefs?.map((ref) => ({
+            refId: ref.refId,
             kind: ref.kind,
             sourceId: ref.sourceId,
             version: ref.expectedVersion,
@@ -393,8 +406,8 @@ export function useChatSessionStreaming(deps: {
       });
       markChatRunRunning(chatId);
 
-      if (!existing?.name?.trim() && trimmed) {
-        const provisional = provisionalTitleFromUserText(trimmed);
+      if (!existing?.name?.trim() && displayContent.trim()) {
+        const provisional = provisionalTitleFromUserText(displayContent.trim());
         if (provisional) {
           store().patchSessionMeta(chatId, { name: provisional });
           dispatchSessionTitleUpdated(chatId, provisional);
@@ -565,11 +578,14 @@ export function useChatSessionStreaming(deps: {
         if (nextMsg && isUiUserMessage(nextMsg.role)) return;
       }
 
-      const text = extractUserMessagePlainText(msg.content);
+      const text = msg.userTurnDocument
+        ? serializeUserTurnDocument(msg.userTurnDocument)
+        : extractUserMessagePlainText(msg.content);
       const wireAtt = messageAttachmentsToWire(msg.attachments);
       if (!text.trim() && !wireAtt?.length && !msg.contextRefs?.length) return;
 
       const contextRefs = msg.contextRefs?.map((ref) => ({
+        refId: ref.refId,
         kind: ref.kind,
         sourceId: ref.sourceId,
         expectedVersion: ref.version,

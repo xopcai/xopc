@@ -7,17 +7,15 @@ import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  getLocalApp: vi.fn(),
   getLocalAppFixGuidance: vi.fn(),
-  validateLocalApp: vi.fn(),
+  getLocalAppSnapshot: vi.fn(),
   attach: vi.fn(),
   fill: vi.fn(),
 }));
 
 vi.mock('@/features/local-apps/api', () => ({
-  getLocalApp: mocks.getLocalApp,
   getLocalAppFixGuidance: mocks.getLocalAppFixGuidance,
-  validateLocalApp: mocks.validateLocalApp,
+  getLocalAppSnapshot: mocks.getLocalAppSnapshot,
 }));
 vi.mock('@/features/local-apps/preview-channel', () => ({
   attachLocalAppPreviewChannel: mocks.attach,
@@ -27,6 +25,7 @@ vi.mock('@/features/chat/composer/fill-composer-dispatch', () => ({
 }));
 
 import { InlineLocalApp } from '@/features/chat/product-delivery/inline-local-app';
+import { InlinePreviewSchedulerProvider } from '@/features/chat/product-delivery/inline-preview-scheduler';
 
 describe('InlineLocalApp', () => {
   let container: HTMLDivElement;
@@ -38,16 +37,14 @@ describe('InlineLocalApp', () => {
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
-    mocks.getLocalApp.mockResolvedValue({
-      id: 'app-1', extensionId: 'local-app-1', projectId: 'project-1', name: 'Status board', idea: 'Board',
-      status: 'preview_ready', workspaceRoot: '/tmp/app', draftVersion: 1, installationState: 'not_installed',
-      enabled: false, createdAt: 1, updatedAt: 1, previewUrl: '/api/local-apps/preview/token/ui/index.html',
-      permissions: [], releases: [], acceptanceRuns: [],
-    });
-    mocks.validateLocalApp.mockResolvedValue({
-      status: 'healthy', checkedAt: 1, sourceHash: 'hash-1', hasDraftChanges: true,
-      changedFiles: [], changedFileCount: 0, permissions: [], permissionDelta: { added: [], removed: [] },
-      acceptanceScenarioCount: 0, acceptanceScenarios: [], issues: [],
+    mocks.getLocalAppSnapshot.mockResolvedValue({
+      appId: 'app-1', sourceHash: 'a'.repeat(64), status: 'ready', createdAt: 1,
+      entryPath: 'ui/index.html', previewUrl: `/api/local-apps/preview/token/snapshots/${'a'.repeat(64)}/ui/index.html`,
+      validation: {
+        status: 'healthy', checkedAt: 1, sourceHash: 'a'.repeat(64), hasDraftChanges: true,
+        changedFiles: [], changedFileCount: 0, permissions: [], permissionDelta: { added: [], removed: [] },
+        acceptanceScenarioCount: 0, acceptanceScenarios: [], issues: [],
+      },
     });
     mocks.getLocalAppFixGuidance.mockResolvedValue({ prompt: 'Fix safely', diagnostics: [] });
     mocks.attach.mockImplementation((_iframe: HTMLIFrameElement, onMessage: (value: unknown) => void) => {
@@ -60,6 +57,7 @@ describe('InlineLocalApp', () => {
     act(() => root.unmount());
     container.remove();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   async function render() {
@@ -68,7 +66,9 @@ describe('InlineLocalApp', () => {
         <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
           <MemoryRouter>
             <InlineLocalApp
+              previewId="delivery-1"
               reference={{ kind: 'local_app', id: 'app-1', title: 'Status board', capabilities: ['open', 'fix'] }}
+              sourceHash={'a'.repeat(64)}
               preferredHeight={480}
               language="en"
             />
@@ -84,7 +84,7 @@ describe('InlineLocalApp', () => {
     await render();
     const iframe = container.querySelector('iframe');
     expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-forms');
-    expect(iframe?.getAttribute('src')).toContain('/api/local-apps/preview/token/ui/index.html');
+    expect(iframe?.getAttribute('src')).toContain(`/api/local-apps/preview/token/snapshots/${'a'.repeat(64)}/ui/index.html`);
 
     act(() => onRuntimeMessage({ source: 'xopc-local-app-preview', version: 1, type: 'ready', detail: {} }));
     expect(container.textContent).toContain('Running');
@@ -107,9 +107,53 @@ describe('InlineLocalApp', () => {
     });
 
     expect(mocks.getLocalAppFixGuidance).toHaveBeenCalledWith('app-1', expect.objectContaining({
-      sourceHash: 'hash-1',
+      sourceHash: 'a'.repeat(64),
       diagnostics: [expect.objectContaining({ phase: 'runtime', code: 'script_error' })],
     }));
     expect(mocks.fill).toHaveBeenCalledWith('Fix safely');
+  });
+
+  it('does not request or mount a preview until the scheduler grants a lease', async () => {
+    class IdleIntersectionObserver {
+      readonly root = null;
+      readonly rootMargin = '';
+      readonly thresholds = [0];
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() { return []; }
+    }
+    vi.stubGlobal('IntersectionObserver', IdleIntersectionObserver);
+    await act(async () => {
+      root.render(
+        <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+          <MemoryRouter>
+            <InlinePreviewSchedulerProvider>
+              <InlineLocalApp
+                previewId="scheduled-delivery"
+                reference={{ kind: 'local_app', id: 'app-1', title: 'Status board', capabilities: ['open'] }}
+                sourceHash={'a'.repeat(64)}
+                preferredHeight={480}
+                language="en"
+              />
+            </InlinePreviewSchedulerProvider>
+          </MemoryRouter>
+        </SWRConfig>,
+      );
+      await Promise.resolve();
+    });
+
+    expect(mocks.getLocalAppSnapshot).not.toHaveBeenCalled();
+    expect(container.querySelector('iframe')).toBeNull();
+
+    await act(async () => {
+      const button = [...container.querySelectorAll('button')].find((item) => item.textContent?.includes('Load interactive'));
+      button?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.getLocalAppSnapshot).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('iframe')).not.toBeNull();
   });
 });

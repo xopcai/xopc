@@ -23,6 +23,8 @@ export interface WireAttachment {
 }
 
 export interface ComposerContextRef {
+  /** Stable identity for an explicit inline occurrence; absent for detached context. */
+  refId?: string;
   kind: 'note' | 'file' | 'session' | 'browser_tab' | 'mcp_resource';
   sourceId: string;
   expectedVersion: string;
@@ -30,7 +32,7 @@ export interface ComposerContextRef {
   fileKind?: 'file' | 'directory';
 }
 
-export type WireContextRef = Pick<ComposerContextRef, 'kind' | 'sourceId' | 'expectedVersion'>;
+export type WireContextRef = Pick<ComposerContextRef, 'refId' | 'kind' | 'sourceId' | 'expectedVersion'>;
 
 export interface ComposerDispatchReceipt {
   clientSubmissionId: string;

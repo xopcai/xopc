@@ -34,8 +34,13 @@ export function injectSourceContextsIntoUserMessage(
   message: AgentMessage,
   sourceContexts: readonly AgentSourceContext[],
 ): AgentMessage {
+  if (sourceContexts.length === 0) return message;
   const usable = sourceContexts.filter((context) => context.text.trim());
-  if (usable.length === 0) return message;
+  const metadata = {
+    ...((message as { metadata?: Record<string, unknown> }).metadata ?? {}),
+    sourceContexts: sourceContexts.map(summarizeSourceContext),
+  };
+  if (usable.length === 0) return { ...message, metadata } as unknown as AgentMessage;
 
   const userText = readTextContent(message);
   const injected = [
@@ -57,9 +62,6 @@ export function injectSourceContextsIntoUserMessage(
   return {
     ...message,
     content: [{ type: 'text', text: injected }],
-    metadata: {
-      ...((message as { metadata?: Record<string, unknown> }).metadata ?? {}),
-      sourceContexts: usable.map(summarizeSourceContext),
-    },
+    metadata,
   } as unknown as AgentMessage;
 }

@@ -12,7 +12,7 @@ import {
 } from './product-delivery.js';
 
 const delivery: ProductDeliveryEnvelope = {
-  version: 1,
+  version: 2,
   operation: 'created',
   primary: {
     kind: 'note',
@@ -24,23 +24,41 @@ const delivery: ProductDeliveryEnvelope = {
 
 describe('product delivery contract', () => {
   it('validates bounded read-only table and proposed edit presentations', () => {
-    const table: ProductDeliveryEnvelope = { version: 1, operation: 'opened', presentation: { kind: 'table', items: [delivery.primary!], truncated: false } };
+    const table: ProductDeliveryEnvelope = { version: 2, operation: 'opened', presentation: { kind: 'table', items: [delivery.primary!], truncated: false } };
     expect(parseProductDeliveryText(appendProductDeliveryText('Rows', table))).toEqual(table);
     expect(parseProductDeliveryEnvelope({ ...table, presentation: { ...table.presentation, items: Array(51).fill(delivery.primary) } })).toBeNull();
-    expect(parseProductDeliveryEnvelope({ version: 1, operation: 'opened', presentation: {
+    expect(parseProductDeliveryEnvelope({ version: 2, operation: 'opened', presentation: {
       kind: 'diff', title: 'Proposal', truncated: false, edits: [{ from: 5, to: 1, text: 'bad range' }],
     } })).toBeNull();
-    expect(parseProductDeliveryEnvelope({ version: 1, operation: 'opened', presentation: {
+    expect(parseProductDeliveryEnvelope({ version: 2, operation: 'opened', presentation: {
       kind: 'diff', title: 'Proposal', truncated: false, edits: [{ from: 0, to: 1, text: 'x'.repeat(16001) }],
     } })).toBeNull();
-    const inline = parseProductDeliveryEnvelope({ version: 1, operation: 'opened', presentation: {
+    const inline = parseProductDeliveryEnvelope({ version: 2, operation: 'opened', presentation: {
       kind: 'inline_app', preferredHeight: 520,
-      reference: { kind: 'local_app', id: 'app-1', title: 'Dashboard', capabilities: ['open', 'fix'] },
+      reference: { kind: 'local_app', id: 'app-1', title: 'Dashboard', revision: 'a'.repeat(64), capabilities: ['open', 'fix'] },
+      snapshot: { sourceHash: 'a'.repeat(64) },
     } });
     expect(inline?.presentation).toMatchObject({ kind: 'inline_app', preferredHeight: 520 });
-    expect(parseProductDeliveryEnvelope({ version: 1, operation: 'opened', presentation: {
+    expect(parseProductDeliveryEnvelope({ version: 2, operation: 'opened', presentation: {
       kind: 'inline_app', preferredHeight: 520,
       reference: { kind: 'note', id: 'note-1', title: 'No', capabilities: [] },
+      snapshot: { sourceHash: 'a'.repeat(64) },
+    } })).toBeNull();
+    expect(parseProductDeliveryEnvelope({ version: 2, operation: 'opened', presentation: {
+      kind: 'inline_app', preferredHeight: 520,
+      reference: { kind: 'local_app', id: 'app-1', title: 'Dashboard', revision: 'b'.repeat(64), capabilities: [] },
+      snapshot: { sourceHash: 'a'.repeat(64) },
+    } })).toBeNull();
+    const preview = parseProductDeliveryEnvelope({ version: 2, operation: 'created', presentation: {
+      kind: 'inline_preview', preferredHeight: 480,
+      reference: { kind: 'chat_preview', id: crypto.randomUUID(), title: 'Login', revision: 'c'.repeat(64), capabilities: ['preview', 'fix'] },
+      sourceHash: 'c'.repeat(64),
+    } });
+    expect(preview?.presentation).toMatchObject({ kind: 'inline_preview', sourceHash: 'c'.repeat(64) });
+    expect(parseProductDeliveryEnvelope({ version: 2, operation: 'created', presentation: {
+      kind: 'inline_preview', preferredHeight: 480,
+      reference: { kind: 'chat_preview', id: crypto.randomUUID(), title: 'Login', revision: 'd'.repeat(64), capabilities: [] },
+      sourceHash: 'c'.repeat(64),
     } })).toBeNull();
   });
   it('accepts session keys without changing canonical id links or other kinds', () => {
@@ -58,7 +76,7 @@ describe('product delivery contract', () => {
 
     expect(parseProductDeliveryText(text)).toEqual(delivery);
     expect(text).toContain('[Open](xopc://open?kind=note&id=note%2Fwith+spaces)');
-    expect(parseProductDeliveryEnvelope({ version: 2 })).toBeNull();
+    expect(parseProductDeliveryEnvelope({ version: 1 })).toBeNull();
   });
 
   it('builds encoded product routes and portable deep links', () => {

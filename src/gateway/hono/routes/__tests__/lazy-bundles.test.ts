@@ -29,6 +29,15 @@ describe('lazy route bundles', () => {
     }
     expect(findAuthenticatedLazyRouteBundle('/api/local-apps-other/app/acceptance-runs')).toBeUndefined();
   });
+  it('does not intercept eagerly registered chat preview routes', () => {
+    for (const path of [
+      '/api/chat-previews/id/revisions/hash',
+      '/api/chat-previews/id/fix-guidance',
+      '/api/chat-previews/id/promote',
+    ]) {
+      expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
+    }
+  });
   it('does not intercept eagerly registered project pin adapters', () => {
     for (const path of ['/api/projects/id/pin', '/api/projects/id/unpin']) {
       expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
