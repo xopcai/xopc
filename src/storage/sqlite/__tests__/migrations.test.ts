@@ -47,6 +47,28 @@ describe('SQLite migrations', () => {
     rmSync(migrationsDir, { recursive: true, force: true });
   });
 
+  it('adds home intelligence queues, projections, and append-only feedback', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db);
+      const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'
+        AND name IN ('home_advice_generations', 'home_opportunity_feedback', 'home_opportunity_projections')
+        ORDER BY name`).all().map((row) => row.name);
+      expect(tables).toEqual([
+        'home_advice_generations',
+        'home_opportunity_feedback',
+        'home_opportunity_projections',
+      ]);
+      expect(db.prepare(`SELECT name, "notnull", dflt_value FROM pragma_table_info('home_advice_generations')
+        WHERE name = 'strategy_version'`).get()).toEqual({
+        name: 'strategy_version', notnull: 1, dflt_value: "'home-v1'",
+      });
+      expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally { db.close(); }
+  });
+
   it('migrates connected work threads to the global work-memory kind', () => {
     const db = openEmptyDb();
     try {
@@ -315,6 +337,36 @@ describe('SQLite migrations', () => {
       expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
       expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
       expect(db.prepare("SELECT name FROM sqlite_master WHERE name GLOB 'proactive_*'").all()).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('removes retired proactive contracts while preserving user rules', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 202 });
+      db.exec(`BEGIN;
+        INSERT INTO collaboration_rules (
+          rule_id, principal_id, category, status, priority, scope_type, scope_id,
+          conditions_json, current_revision_id, created_at, updated_at
+        ) VALUES ('rule', 'local-owner', 'proactive', 'active', 10, 'global', NULL, '{}', 'revision', 1, 1);
+        INSERT INTO collaboration_rule_revisions (
+          revision_id, rule_id, statement, created_by, created_at
+        ) VALUES ('revision', 'rule', 'Offer suggestions when useful.', 'user', 1);
+        COMMIT;
+        INSERT INTO context_snapshots (
+          snapshot_id, trace_id, owner_kind, owner_id, query, created_at
+        ) VALUES ('snapshot', 'trace', 'proactive_run', 'run', 'legacy', 1);`);
+
+      applyPendingMigrations(db);
+
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'relationship_settings'").get()).toBeUndefined();
+      expect(db.prepare("SELECT category FROM collaboration_rules WHERE rule_id = 'rule'").get())
+        .toEqual({ category: 'initiative' });
+      expect(db.prepare("SELECT snapshot_id FROM context_snapshots WHERE snapshot_id = 'snapshot'").get()).toBeUndefined();
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {
       db.close();
     }

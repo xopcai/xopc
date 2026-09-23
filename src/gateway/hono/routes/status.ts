@@ -29,7 +29,7 @@ export function buildEvalRuntimeIdentity(
 ): { ok: true; payload: Record<string, unknown> } | { ok: false; error: string; status: number } {
   const config = service.currentConfig as Config | undefined;
   if (!config) return { ok: false, error: 'Gateway configuration is unavailable', status: 503 };
-  const effective = getGatewayAgentEffectiveConfig(config, agentId);
+  const effective = getGatewayAgentEffectiveConfig(agentId);
   if ('error' in effective) {
     return {
       ok: false,

@@ -5,7 +5,7 @@ import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 export interface CollaborationRule {
   id: string;
-  category: 'communication' | 'execution' | 'boundary' | 'routine' | 'proactive';
+  category: 'communication' | 'execution' | 'boundary' | 'routine' | 'initiative';
   status: 'active' | 'disabled' | 'archived';
   priority: number;
   scope: UserModelScope;

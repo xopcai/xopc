@@ -78,7 +78,7 @@ export class ExecutionContextCoordinator {
     await this.options.ensureMemoryReady(conversationId);
 
     const task = assembleTaskContext(conversationId, extractAgentUserPlainText(userMessage));
-    const agentId = extractProfileAgentId(conversationId, config);
+    const agentId = extractProfileAgentId(conversationId);
     const workspaceId = this.options.getWorkspaceIdForSession(conversationId);
     const projectId = this.options.getProjectIdForSession(conversationId);
     const maxKnowledge = Math.min(config.userContext.contextPlanning.maxKnowledge, task.allocation.maxResults);

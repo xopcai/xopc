@@ -11,6 +11,7 @@ import { isProviderConfigured } from '../voice/tts/factory.js';
 import { mergeTtsConfigFromAppConfig } from '../voice/tts/merge-config.js';
 import { isProviderConfiguredSync } from '../providers/index.js';
 import { PROVIDER_ENV_MAP } from '../providers/env-keys.js';
+import { getAgentDefaultModelRef } from '../config/schema.js';
 import type { ActivationContext } from './activation-planner.js';
 
 function isRecord(x: unknown): x is Record<string, unknown> {
@@ -146,25 +147,6 @@ export function collectConfiguredProviderIds(config: unknown): string[] | undefi
   return ids.size > 0 ? [...ids] : undefined;
 }
 
-function defaultModelId(config: unknown): string | undefined {
-  const root = config as Record<string, unknown> | undefined;
-  const agents = root?.agents;
-  if (!isRecord(agents)) return undefined;
-  const list = agents.list;
-  if (!Array.isArray(list)) return undefined;
-  const defaultId = typeof agents.default === 'string' ? agents.default : undefined;
-  const entry =
-    list.find((candidate) => isRecord(candidate) && candidate.id === defaultId) ??
-    list.find((candidate) => isRecord(candidate) && candidate.enabled !== false);
-  const overrideModels = isRecord(entry) && isRecord(entry.models) ? entry.models : undefined;
-  const overrideChat = overrideModels && isRecord(overrideModels.chat) ? overrideModels.chat : undefined;
-  if (typeof overrideChat?.primary === 'string' && overrideChat.primary.trim()) return overrideChat.primary;
-  const defaults = isRecord(agents.defaults) ? agents.defaults : undefined;
-  const models = defaults && isRecord(defaults.models) ? defaults.models : undefined;
-  const chat = models && isRecord(models.chat) ? models.chat : undefined;
-  return typeof chat?.primary === 'string' && chat.primary.trim() ? chat.primary : undefined;
-}
-
 /**
  * Merge partial activation context over values inferred from loaded app config.
  */
@@ -183,7 +165,7 @@ export function mergeActivationContext(
     disabledIds: Array.isArray(ext?.disabled)
       ? ext!.disabled.filter((x): x is string => typeof x === 'string')
       : undefined,
-    requestedModelId: defaultModelId(appConfig),
+    requestedModelId: getAgentDefaultModelRef(),
     configuredProviderIds: collectConfiguredProviderIds(appConfig),
     configuredChannelIds: collectConfiguredChannelIds(appConfig),
     env: process.env,

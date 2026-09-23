@@ -72,7 +72,10 @@ export type ToolExecutionLabels = {
     ToolExecutionLabel
   >;
   objects: Record<
-    | 'proactiveWork'
+    | 'context'
+    | 'scene'
+    | 'chatPreview'
+    | 'productItem'
     | 'project'
     | 'milestone'
     | 'projectUpdate'
@@ -196,7 +199,10 @@ function xopcObject(
   if (mode === 'task_run') return 'taskRun';
   if (mode === 'local_app') return 'localApp';
   if (mode === 'settings') return 'settings';
-  return 'proactiveWork';
+  if (mode === 'context') return 'context';
+  if (mode === 'scene') return 'scene';
+  if (mode === 'chat_preview') return 'chatPreview';
+  return 'productItem';
 }
 
 function humanizeToolName(name: string): string {

@@ -13,7 +13,7 @@ export function resolveEffectiveModelIntents(
   agentId: string,
 ): Map<ModelIntent, ResolvedModelIntent> {
   const intents = new Map<ModelIntent, ResolvedModelIntent>();
-  const effective = resolveEffectiveAgentConfigForAgent(config, agentId).config;
+  const effective = resolveEffectiveAgentConfigForAgent(agentId).config;
   for (const [intent, route] of Object.entries(effective.models.intents)) {
     const parsedIntent = ModelIntentSchema.safeParse(intent);
     if (parsedIntent.success && route) {
@@ -50,5 +50,5 @@ export function resolveModelSelector(config: Config, agentId: string, selector: 
   }
   const resolved = resolveModelIntentRef(config, agentId, intent.data);
   if (resolved) return resolved;
-  return resolveEffectiveAgentConfigForAgent(config, agentId).config.models.chat.primary;
+  return resolveEffectiveAgentConfigForAgent(agentId).config.models.chat.primary;
 }

@@ -1,12 +1,30 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { Config } from '../../config/schema.js';
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import type { AgentCatalogRepository } from '../../agent-catalog/repository.js';
+import { ConfigSchema } from '../../config/schema.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import {
   resolveDefaultTuiAgentId,
   resolveInitialTuiAgentId,
   resolveTuiConversationId,
   resolveTuiStartupConversationId,
 } from '../../routing/resolve-tui-session-key.js';
+
+let catalog: AgentCatalogRepository;
+
+beforeEach(() => {
+  catalog = initializeTestAgentCatalog({
+    agents: [
+      { id: 'main', enabled: true, workspace: '/tmp/xopc' },
+      { id: 'coder', enabled: true, workspace: '/tmp/xopc-coder' },
+      { id: 'ops', enabled: true, workspace: '/tmp/xopc/projects/ops' },
+    ],
+    surfaceDefaults: { tui: 'coder' },
+  });
+});
+
+afterEach(() => closeXopcDatabase());
 
 describe('resolveTuiConversationId', () => {
   const base = {};
@@ -22,17 +40,9 @@ describe('resolveTuiConversationId', () => {
 });
 
 describe('resolveTuiStartupConversationId', () => {
-  const cfg = {
-    agents: {
-      default: 'main',
-      list: [
-        { id: 'main', workspace: '/tmp/xopc' },
-        { id: 'coder', workspace: '/tmp/xopc-coder' },
-      ],
-    },
-    tui: { defaultAgent: 'coder' },
+  const cfg = ConfigSchema.parse({
     session: { scope: 'per-sender', mainKey: 'main' },
-  } as Config;
+  });
 
   it('defaults to a fresh TUI session when session option is omitted', () => {
     expect(
@@ -87,12 +97,10 @@ describe('resolveTuiStartupConversationId', () => {
   });
 
   it('uses agents.default when tui.defaultAgent is not configured', () => {
+    catalog.clearSurfaceDefault('tui');
     expect(
       resolveTuiStartupConversationId({
-        cfg: {
-          ...cfg,
-          tui: {},
-        },
+        cfg,
         cwd: '/var/tmp/unrelated',
         createId: () => 'eb04e730-5bda-41a4-8d12-acdeb5a7a4da',
       }),
@@ -119,27 +127,15 @@ describe('resolveTuiStartupConversationId', () => {
 
 describe('resolveDefaultTuiAgentId', () => {
   it('falls back to agents.default when tui.defaultAgent is missing from agents.list', () => {
+    catalog.clearSurfaceDefault('tui');
     expect(
-      resolveDefaultTuiAgentId({
-        agents: {
-          default: 'main',
-          list: [{ id: 'main', workspace: '/tmp/xopc' }],
-        },
-        tui: { defaultAgent: 'coder' },
-      } as Config),
+      resolveDefaultTuiAgentId(),
     ).toBe('main');
   });
 });
 
 describe('resolveInitialTuiAgentId', () => {
-  const cfg = {
-    agents: {
-      list: [
-        { id: 'main', workspace: '/tmp/xopc' },
-        { id: 'ops', workspace: '/tmp/xopc/projects/ops' },
-      ],
-    },
-  } as Config;
+  const cfg = ConfigSchema.parse({});
 
   it('infers agent from cwd when session is not agent-prefixed', () => {
     expect(

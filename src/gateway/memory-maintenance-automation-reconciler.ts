@@ -26,8 +26,8 @@ export async function reconcileMemoryMaintenanceAutomations(input: {
   const result = { created: 0, updated: 0, disabled: 0 };
   const schedules = resolveMemoryMaintenanceSchedules(input.config);
   const enabledIds = new Set(schedules.map((item) => item.automationId));
-  const agentId = normalizeAgentId(resolveDefaultAgentId(input.config));
-  const workingDirectory = resolveAgentWorkspaceDir(input.config, agentId);
+  const agentId = normalizeAgentId(resolveDefaultAgentId());
+  const workingDirectory = resolveAgentWorkspaceDir(agentId);
 
   for (const id of AUTOMATION_IDS) {
     if (enabledIds.has(id)) continue;

@@ -2,9 +2,11 @@ import { input } from '@inquirer/prompts';
 import { Command } from 'commander';
 
 import { CredentialResolver } from '../../auth/credentials.js';
-import { loadConfig, saveConfig } from '../../config/index.js';
+import { loadConfig } from '../../config/index.js';
 import { getAgentDefaultModelRef, type Config } from '../../config/schema.js';
 import { prepareUpdateGlobalDefaults } from '../../gateway/global-defaults-admin.js';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
+import { AgentCatalogService } from '../../agent-catalog/service.js';
 import {
   getAllModels,
   getAvailableModels,
@@ -70,20 +72,21 @@ type ModelsAuthLoginOptions = {
 };
 
 function currentModelRef(config: Config): string | undefined {
-  return getAgentDefaultModelRef(config);
+  return getAgentDefaultModelRef();
 }
 
-function setDefaultModel(config: Config, modelRef: string): Config {
-  const prep = prepareUpdateGlobalDefaults(config, {
+function setDefaultModel(modelRef: string): void {
+  const defaults = new AgentCatalogRepository().getSettings().defaults;
+  const prep = prepareUpdateGlobalDefaults({
     defaults: {
-      ...config.agents.defaults,
-      models: { ...config.agents.defaults.models, chat: { primary: modelRef, fallbacks: [] } },
+      ...defaults,
+      models: { ...defaults.models, chat: { primary: modelRef, fallbacks: [] } },
     },
   });
   if (prep.ok === false) {
     throw new Error(prep.error);
   }
-  return prep.data.nextConfig;
+  if (prep.data.changed) new AgentCatalogService().updateDefaults(prep.data.defaults);
 }
 
 function modelRef(provider: string, id: string): string {
@@ -181,10 +184,9 @@ async function runModelsStatus(options: { json?: boolean }): Promise<void> {
 
 async function runModelsSet(model: string): Promise<void> {
   const ctx = getContextWithOpts();
-  const config = loadConfig(ctx.configPath);
   const resolved = resolveModel(model);
   const ref = modelRef(resolved.provider, resolved.id);
-  await saveConfig(setDefaultModel(config, ref), ctx.configPath);
+  setDefaultModel(ref);
   console.log(`✅ Default model set: ${ref}`);
 }
 

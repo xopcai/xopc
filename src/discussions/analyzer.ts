@@ -113,7 +113,7 @@ export async function analyzeDiscussion(input: {
   config: Config; discussionId: string; transcript: string; segments: DiscussionTranscriptSegment[]; template?: DiscussionTemplate;
   languageHint?: string; projects?: Array<{ id: string; name: string }>; signal?: AbortSignal;
 }): Promise<{ organization: DiscussionOrganization; modelRef: string }> {
-  const modelRef = getAgentDefaultModelRef(input.config);
+  const modelRef = getAgentDefaultModelRef();
   if (!modelRef) throw new Error('No model configured for discussion organization');
   const batches = partitionDiscussionSegments(input.segments);
   if (!batches.length) throw new Error('Discussion transcript is empty');
@@ -195,7 +195,7 @@ export async function enrichLiveDiscussion(input: {
   projects: Array<{ id: string; name: string }>;
   signal?: AbortSignal;
 }): Promise<z.infer<typeof LiveEnrichmentSchema> & { modelRef: string }> {
-  const modelRef = getAgentDefaultModelRef(input.config);
+  const modelRef = getAgentDefaultModelRef();
   if (!modelRef) throw new Error('No default model configured for discussion enrichment');
   const transcript = input.transcript.trim().slice(0, 12_000);
   if (!transcript) throw new Error('Discussion transcript is empty');

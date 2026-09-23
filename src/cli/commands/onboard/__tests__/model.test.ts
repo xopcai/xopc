@@ -56,7 +56,7 @@ describe('XOPC Cloud onboard defaults', () => {
     const config = ConfigSchema.parse({});
     const updated = setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model');
 
-    expect(getAgentDefaultModelRef(updated)).toBe('xopc-cloud/chat-model');
+    expect(getAgentDefaultModelRef()).toBe('xopc-cloud/chat-model');
     expect(updated.agents.defaults.models.imageUnderstanding).toBeUndefined();
     expect(updated.agents.defaults.models.imageGeneration).toBeUndefined();
     expect(updated.tools.media?.audio).toBeUndefined();

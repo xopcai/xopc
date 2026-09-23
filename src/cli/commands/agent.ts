@@ -54,7 +54,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
         return;
       }
 
-      const modelFromConfig = getAgentDefaultModelRef(config);
+      const modelFromConfig = getAgentDefaultModelRef();
       const modelId = (options.model?.trim() || modelFromConfig) as string | undefined;
       if (modelId?.startsWith('xopc-cloud/')) {
         const readiness = await getXopcCloudCatalogCoordinator().ensure({
@@ -73,7 +73,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
       }
 
       // Validate session key if provided
-      let conversationId = options.session || resolveAgentMainConversationId({ agentId: resolveDefaultAgentId(config) });
+      let conversationId = options.session || resolveAgentMainConversationId({ agentId: resolveDefaultAgentId() });
       if (options.session) {
         const { getSessionIndex } = await import('../utils/session.js');
         const manager = await getSessionIndex();

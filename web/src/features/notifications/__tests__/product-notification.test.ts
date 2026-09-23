@@ -59,4 +59,18 @@ describe('product notification presentation', () => {
       route: '/user-model?workDiscovery=review&run=run-1',
     });
   });
+
+  it('routes a home opportunity back to the home workspace', () => {
+    expect(presentProductNotification({
+      ...event,
+      id: 'notification-home',
+      type: 'home.opportunity',
+      target: { kind: 'home' },
+      title: { en: 'A timely next step is ready', zh: '有一项值得现在推进的事情' },
+    }, 'zh')).toMatchObject({
+      status: 'success',
+      source: 'home',
+      route: '/',
+    });
+  });
 });

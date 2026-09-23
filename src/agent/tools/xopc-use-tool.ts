@@ -855,7 +855,7 @@ async function handleTask(
     const explicitAgentId = trimString(args.agentId);
     const agentId = config && projectService
       ? resolveProjectAgentId({ config, projects: projectService, explicitAgentId, projectId })
-      : explicitAgentId ?? (config ? getDefaultAgentId(config) : deps.getCurrentAgentId?.() ?? 'main');
+      : explicitAgentId ?? (config ? getDefaultAgentId() : deps.getCurrentAgentId?.() ?? 'main');
     const input = {
       idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID(),
       title: trimString(args.title) ?? objective,

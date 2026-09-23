@@ -8,7 +8,7 @@ export function taskCopy(language: 'en' | 'zh') {
     intentSuggestion: '整理这周的会议记录，提炼待办并给出下周优先级',
     submit: '进入对话并开始',
     projectLabel: '归属项目',
-    monitoringLabel: '主动跟进',
+    monitoringLabel: '跟进策略',
     monitoringModes: {
       observe: '仅观察',
       ask_before_action: '行动前询问',
@@ -206,7 +206,7 @@ export function taskCopy(language: 'en' | 'zh') {
     intentSuggestion: 'Summarize this week’s meeting notes and suggest next week’s priorities',
     submit: 'Open conversation and start',
     projectLabel: 'Project',
-    monitoringLabel: 'Proactive follow-up',
+    monitoringLabel: 'Follow-up policy',
     monitoringModes: {
       observe: 'Observe only',
       ask_before_action: 'Ask before acting',

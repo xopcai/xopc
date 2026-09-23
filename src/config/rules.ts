@@ -32,10 +32,6 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'models.providers', kind: 'hot', description: 'Model provider API keys, base URLs' },
   { prefix: 'models.mode', kind: 'hot', description: 'Model merge mode' },
   
-  { prefix: 'agents.list', kind: 'hot', description: 'Agent overrides' },
-  { prefix: 'agents.defaults', kind: 'hot', description: 'Global agent defaults' },
-  { prefix: 'agents.default', kind: 'hot', description: 'Default agent id' },
-  
   // Gateway - restart required
   { prefix: 'gateway.bind', kind: 'restart', description: 'Gateway bind mode' },
   { prefix: 'gateway.customBindHost', kind: 'restart', description: 'Gateway custom bind host' },

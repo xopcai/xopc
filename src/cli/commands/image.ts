@@ -18,8 +18,8 @@ function createImageCommand(_ctx: CLIContext): Command {
     .command('status')
     .description('Show image runtime status')
     .action(() => {
-      console.log('Image understanding and generation inherit from agents.defaults.models.');
-      console.log('An agent may override either route in agents.list[].models.');
+      console.log('Image understanding and generation inherit from the global Agent defaults.');
+      console.log('An Agent may override either route in its capability settings.');
     });
 
   cmd

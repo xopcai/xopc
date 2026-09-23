@@ -31,7 +31,7 @@ export interface ParsedGoalCandidate {
 }
 
 export interface ParsedCollaborationRuleCandidate {
-  category: 'communication' | 'execution' | 'boundary' | 'routine' | 'proactive';
+  category: 'communication' | 'execution' | 'boundary' | 'routine' | 'initiative';
   priority: number;
   scope: AssertionCandidate['scope'];
   conditions: Record<string, unknown>;
@@ -107,7 +107,7 @@ const GoalSchema = z.object({
 }).merge(GroundingSchema).strict();
 
 const CollaborationRuleSchema = z.object({
-  category: z.enum(['communication', 'execution', 'boundary', 'routine', 'proactive']),
+  category: z.enum(['communication', 'execution', 'boundary', 'routine', 'initiative']),
   priority: z.number().int().min(0).max(100),
   scope: ScopeSchema,
   conditions: z.record(z.string(), z.unknown()).default({}),

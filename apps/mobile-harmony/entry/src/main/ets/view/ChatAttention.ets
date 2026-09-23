@@ -8,7 +8,7 @@ export struct XopcChatAttentionRow {
   @Local expanded: boolean = false;
   @Computed get actions(): XopcHomeAction[] {
     const actions = this.item.primaryAction ? [this.item.primaryAction].concat(this.item.secondaryActions) : this.item.secondaryActions;
-    return actions.filter((action: XopcHomeAction): boolean => action.type !== 'open' && action.type !== 'review_judgment');
+    return actions.filter((action: XopcHomeAction): boolean => action.type !== 'open');
   }
   @Computed get reviewRequired(): boolean { return this.actions.some((action: XopcHomeAction): boolean => action.type === 'connector_decision'); }
   build() {
@@ -25,7 +25,7 @@ export struct XopcChatAttentionRow {
         .onClick((): void => {
           if (this.reviewRequired) this.expanded = !this.expanded;
           else if (this.item.openAction) this.onAction(this.item.openAction);
-          else if (this.item.primaryAction?.type === 'open' || this.item.primaryAction?.type === 'review_judgment') this.onAction(this.item.primaryAction);
+          else if (this.item.primaryAction?.type === 'open') this.onAction(this.item.primaryAction);
         })
       if (this.reviewRequired && !this.expanded) {
         Button($r('app.string.chat_review_details')).height(44).fontColor($r('app.color.accent')).backgroundColor(Color.Transparent)

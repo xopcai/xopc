@@ -193,14 +193,6 @@ export {
   type SessionTaskPlanItemStatus,
 } from './session-task-plan-repository.js';
 export {
-  buildRelationshipPrompt,
-  getRelationshipSettings,
-  isProactiveSupportAllowed,
-  updateRelationshipSettings,
-  type RelationshipSettings,
-  type SupportMode,
-} from './relationship-settings-repository.js';
-export {
   buildDefaultSessionMetadata,
   type SessionMetadataSeed,
 } from './session-metadata.js';

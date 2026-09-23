@@ -44,7 +44,7 @@ export class AgentBus {
 
   constructor(appConfig: Config, _stateDir: string, agentId?: string) {
     this.appConfig = appConfig;
-    this.agentId = agentId ?? resolveDefaultAgentId(appConfig);
+    this.agentId = agentId ?? resolveDefaultAgentId();
     this.inbox = AgentInbox.forAgent(appConfig, this.agentId);
   }
 

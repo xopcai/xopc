@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 
 import { CredentialResolver } from '../../../../auth/credentials.js';
+import { AgentCatalogRepository } from '../../../../agent-catalog/repository.js';
 import { getModelOAuthProviderIds } from '../../../../auth/oauth/registry.js';
 import { getDefaultAgentId } from '../../../../routing/resolve-route.js';
 import { loadConfig } from '../../../../config/loader.js';
@@ -9,7 +10,7 @@ import { parseModelRef, getAgentDefaultModelRef } from '../../../../config/schem
 import { PROVIDER_ENV_MAP } from '../../../../providers/env-keys.js';
 import type { CheckResult, DoctorContext } from '../types.js';
 
-function collectProviderIdsFromConfig(cfg: Config): Set<string> {
+function collectProviderIdsFromConfig(): Set<string> {
   const ids = new Set<string>();
 
   const addRef = (ref: string | undefined) => {
@@ -18,7 +19,7 @@ function collectProviderIdsFromConfig(cfg: Config): Set<string> {
     if (parsed) ids.add(parsed.provider.toLowerCase());
   };
 
-  addRef(getAgentDefaultModelRef(cfg));
+  addRef(getAgentDefaultModelRef());
 
   const addRoutes = (routes: Record<string, { primary?: string } | undefined> | undefined) => {
     for (const route of Object.values(routes ?? {})) {
@@ -26,12 +27,13 @@ function collectProviderIdsFromConfig(cfg: Config): Set<string> {
     }
   };
 
-  addRef(cfg.agents.defaults.models.chat.primary);
-  addRoutes(cfg.agents.defaults.models.intents);
-  addRef(cfg.agents.defaults.models.imageUnderstanding?.primary);
-  addRef(cfg.agents.defaults.models.imageGeneration?.primary);
+  const catalog = new AgentCatalogRepository().snapshot();
+  addRef(catalog.defaults.models.chat.primary);
+  addRoutes(catalog.defaults.models.intents);
+  addRef(catalog.defaults.models.imageUnderstanding?.primary);
+  addRef(catalog.defaults.models.imageGeneration?.primary);
 
-  const list = cfg.agents?.list;
+  const list = catalog.agents;
   if (Array.isArray(list)) {
     for (const e of list) {
       addRef(e?.models?.chat?.primary);
@@ -70,12 +72,12 @@ export async function checkProviderAuth(ctx: DoctorContext): Promise<CheckResult
 
   const credentials = new CredentialResolver({
     stateDir: ctx.stateDir,
-    agentId: getDefaultAgentId(cfg),
+    agentId: getDefaultAgentId(),
     appConfig: cfg,
   });
   const profiles = await credentials.listProfiles();
   const checkIds = new Set([
-    ...collectProviderIdsFromConfig(cfg),
+    ...collectProviderIdsFromConfig(),
     ...Object.keys(PROVIDER_ENV_MAP),
     ...getModelOAuthProviderIds(),
     ...profiles.map((profile) => profile.provider),

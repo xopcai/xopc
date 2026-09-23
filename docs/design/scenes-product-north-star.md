@@ -6,12 +6,7 @@
 
 本文定义 xopc「场景」的长期用户价值、产品承诺、能力轮廓、指标和领域边界；不要求一次实现长期轮廓。当前交付范围以 [Slack 开发事项产品与技术方案](/Users/micjoyce/develop/github/xopc/docs/design/ai-native-scenes-product-technical-design.md)及[推进计划](/Users/micjoyce/develop/github/xopc/docs/design/scenes-launch-plan.md)为准。第 12、13、15 节保留早期探索／迁移背景，不再作为本轮排期或重新清理数据的依据。
 
-本文取代下列文档中的长期产品命名和方向性决定，但不否定其中已经实现的能力、调研和技术细节：
-
-- [场景优先产品方案](./proactive-scenario-product.md)；
-- [主动服务平台：产品、市场与技术方案](./proactive-platform-product-and-architecture.md)。
-
-Proactive／助理 Heartbeat 属于历史迁移基线，当前沿用 Scene、Automation、Workflow、Skill、TaskRun、成果和通知基础。本文长期轮廓不表示全部已实现，具体状态以交付记录和代码为准。
+旧主动服务实验已下线，当前沿用 Scene、Automation、Workflow、Skill、TaskRun、成果和通知基础。本文长期轮廓不表示全部已实现，具体状态以交付记录和代码为准。
 
 通用可靠性依据见 [场景系统技术设计与实施方案](./scenes-technical-design.md)。旧 Proactive／助理 Heartbeat 的直接切换已有实施记录；本轮是在现有 Scene 上增量交付，不重复清理旧实验或现有用户数据。
 

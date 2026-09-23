@@ -7,22 +7,20 @@ import {
   SkillOverrideSchema,
   ToolPoliciesSchema,
   WorkflowPolicySchema,
+  type AgentEntry,
 } from '../../../agent-config/index.js';
-import type { Config } from '../../../config/schema.js';
 import { getVoiceModelsConfig } from '../../../config/voice.js';
 import { normalizeAgentId } from '../../../agent/agent-scope.js';
 import {
+  createGatewayAgent,
+  deleteGatewayAgent,
   deleteAgentAvatarFile,
-  finalizeCreateAgentDirs,
   getGatewayAgentEffectiveConfig,
   listAgentProfileFiles,
   listGatewayAgents,
-  prepareCreateAgent,
-  prepareDeleteAgent,
-  prepareUpdateAgent,
   readAgentAvatarFile,
   readAgentProfileFile,
-  runAfterDeletePurge,
+  updateGatewayAgent,
   writeAgentAvatarFromBase64,
   writeAgentProfileFile,
   type CreateAgentBody,
@@ -77,9 +75,8 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
   const { service, strictRateLimitMiddleware } = deps;
 
   authenticated.get('/api/agents', async (c) => {
-    const cfg = service.currentConfig as Config;
     const locale = c.req.query('locale') || c.req.header('Accept-Language')?.split(',')[0]?.trim();
-    const payload = await listGatewayAgents(cfg, { locale });
+    const payload = await listGatewayAgents({ locale });
     return c.json({ ok: true, payload });
   });
 
@@ -94,21 +91,14 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if ('error' in parsed) {
       return c.json({ ok: false, error: { message: parsed.error } }, 400);
     }
-    const prep = prepareCreateAgent(service.currentConfig as Config, parsed);
+    const prep = await createGatewayAgent(parsed);
     if (prep.ok === false) {
       return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
     }
-    const { nextConfig, agentId } = prep.data;
-    const save = await service.saveConfig(nextConfig);
-    if (!save.saved) {
-      return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
-    }
-    const finalized = await finalizeCreateAgentDirs(service.currentConfig as Config, agentId);
-    if (finalized.ok === false) {
-      return c.json({ ok: false, error: { message: finalized.error } }, finalized.status ?? 400);
-    }
+    const { agentId } = prep.data;
+    service.refreshAgentCatalog();
     const locale = c.req.query('locale') || c.req.header('Accept-Language')?.split(',')[0]?.trim();
-    const agentsPayload = await listGatewayAgents(service.currentConfig as Config, { locale });
+    const agentsPayload = await listGatewayAgents({ locale });
     return c.json({
       ok: true,
       payload: {
@@ -120,7 +110,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.get('/api/agents/:id/effective-config', async (c) => {
     const id = normalizeAgentId(c.req.param('id') ?? '');
-    const res = getGatewayAgentEffectiveConfig(service.currentConfig as Config, id);
+    const res = getGatewayAgentEffectiveConfig(id);
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }
@@ -153,7 +143,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (skillsPatch && skillsPatch !== null && !skillsPatch.success) {
       return c.json({ ok: false, error: { message: `skills ${skillsPatch.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
     }
-    let toolsPatch: Config['agents']['list'][number]['tools'] | null | undefined;
+    let toolsPatch: AgentEntry['tools'] | null | undefined;
     if (Object.hasOwn(body, 'tools')) {
       if (body.tools === null) {
         toolsPatch = null;
@@ -206,7 +196,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
     }
 
-    const prep = prepareUpdateAgent(service.currentConfig as Config, id, {
+    const prep = await updateGatewayAgent(id, {
       ...(workspacePatch !== undefined ? { workspace: workspacePatch } : {}),
       ...(profilePatch !== undefined ? { profile: profilePatch === null ? null : profilePatch.data } : {}),
       ...(modelsPatch !== undefined ? { models: modelsPatch } : {}),
@@ -219,32 +209,23 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (prep.ok === false) {
       return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
     }
-    const save = await service.saveConfig(prep.data.nextConfig);
-    if (!save.saved) {
-      return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
-    }
+    service.refreshAgentCatalog();
     const locale = c.req.query('locale') || c.req.header('Accept-Language')?.split(',')[0]?.trim();
-    const agentsPayload = await listGatewayAgents(service.currentConfig as Config, { locale });
+    const agentsPayload = await listGatewayAgents({ locale });
     return c.json({ ok: true, payload: agentsPayload });
   });
 
   authenticated.delete('/api/agents/:id', strictRateLimitMiddleware, async (c) => {
     const id = normalizeAgentId(c.req.param('id') ?? '');
     const purge = c.req.query('purge') === '1' || c.req.query('purge') === 'true';
-    const prep = prepareDeleteAgent(service.currentConfig as Config, id);
+    const prep = await deleteGatewayAgent(id, { purge });
     if (prep.ok === false) {
       return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
     }
-    const { nextConfig, agentId } = prep.data;
-    const save = await service.saveConfig(nextConfig);
-    if (!save.saved) {
-      return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
-    }
-    if (purge) {
-      await runAfterDeletePurge(service.currentConfig as Config, agentId);
-    }
+    const { agentId } = prep.data;
+    service.refreshAgentCatalog();
     const locale = c.req.query('locale') || c.req.header('Accept-Language')?.split(',')[0]?.trim();
-    const agentsPayload = await listGatewayAgents(service.currentConfig as Config, { locale });
+    const agentsPayload = await listGatewayAgents({ locale });
     return c.json({
       ok: true,
       payload: { agentId, purged: purge, agents: agentsPayload },
@@ -253,7 +234,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.get('/api/agents/:id/avatar', async (c) => {
     const id = normalizeAgentId(c.req.param('id') ?? '');
-    const res = await readAgentAvatarFile(service.currentConfig as Config, id);
+    const res = await readAgentAvatarFile(id);
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }
@@ -276,7 +257,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
     const base64 = typeof body.base64 === 'string' ? body.base64 : '';
     const mimeType = typeof body.mimeType === 'string' ? body.mimeType : '';
-    const res = await writeAgentAvatarFromBase64(service.currentConfig as Config, id, base64, mimeType);
+    const res = await writeAgentAvatarFromBase64(id, base64, mimeType);
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }
@@ -285,7 +266,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.delete('/api/agents/:id/avatar', strictRateLimitMiddleware, async (c) => {
     const id = normalizeAgentId(c.req.param('id') ?? '');
-    const res = await deleteAgentAvatarFile(service.currentConfig as Config, id);
+    const res = await deleteAgentAvatarFile(id);
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }
@@ -294,7 +275,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.get('/api/agents/:id/files', async (c) => {
     const id = normalizeAgentId(c.req.param('id') ?? '');
-    const res = await listAgentProfileFiles(service.currentConfig as Config, id);
+    const res = await listAgentProfileFiles(id);
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }
@@ -304,7 +285,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
   authenticated.get('/api/agents/:id/files/:name', async (c) => {
     const id = normalizeAgentId(c.req.param('id') ?? '');
     const name = decodeURIComponent(c.req.param('name') ?? '');
-    const res = await readAgentProfileFile(service.currentConfig as Config, id, name);
+    const res = await readAgentProfileFile(id, name);
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }
@@ -321,7 +302,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     } catch {
       return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
     }
-    const res = await writeAgentProfileFile(service.currentConfig as Config, id, name, content);
+    const res = await writeAgentProfileFile(id, name, content);
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }

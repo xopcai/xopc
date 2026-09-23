@@ -107,7 +107,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
 
       const config = deps.getConfig();
       const parentConversationId = deps.getCurrentConversationId?.()?.trim();
-      const agentId = extractProfileAgentId(parentConversationId, config);
+      const agentId = extractProfileAgentId(parentConversationId);
 
       const goal = params.goal?.trim() || '';
       const taskRunId = params.taskRunId?.trim();
@@ -213,7 +213,7 @@ function resolveDefinitionId(
   }
   const configuredDefault = config
     ? (() => {
-        const policy = resolveEffectiveAgentProfileForSession(config, conversationId).config.workflows;
+        const policy = resolveEffectiveAgentProfileForSession(conversationId).config.workflows;
         return policy.default;
       })()
     : undefined;

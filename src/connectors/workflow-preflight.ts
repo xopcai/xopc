@@ -30,6 +30,13 @@ export type ConnectorPreflightResult = {
   optionalIssues: ConnectorPreflightIssue[];
 };
 
+export type ConnectorRequirementPreflightInput = {
+  requirements: readonly WorkflowConnectorRequirement[];
+  config: Config;
+  agentId: string;
+  principalId?: string;
+};
+
 const SCOPE_ORDER: Record<ConnectorScope, number> = { read: 1, write: 2, admin: 3 };
 
 function issue(requirement: WorkflowConnectorRequirement, code: ConnectorPreflightIssueCode, message: string): ConnectorPreflightIssue {
@@ -41,12 +48,7 @@ function issue(requirement: WorkflowConnectorRequirement, code: ConnectorPreflig
   };
 }
 
-export function preflightWorkflowConnectors(input: {
-  definition: WorkflowDefinition;
-  config: Config;
-  agentId: string;
-  principalId?: string;
-}): ConnectorPreflightResult {
+export function preflightConnectorRequirements(input: ConnectorRequirementPreflightInput): ConnectorPreflightResult {
   const principalId = input.principalId ?? 'local-owner';
   const instances = listConnectorInstances(input.config);
   const issues: ConnectorPreflightIssue[] = [];
@@ -56,7 +58,7 @@ export function preflightWorkflowConnectors(input: {
     (requirement.optional ? optionalIssues : issues).push(value);
   };
 
-  for (const requirement of input.definition.connectors ?? []) {
+  for (const requirement of input.requirements) {
     const instance = instances.find((candidate) => candidate.connectorId === requirement.connectorId);
     if (!instance) {
       add(requirement, issue(requirement, 'not_installed', `${requirement.connectorId} is not installed.`));
@@ -113,4 +115,18 @@ export function preflightWorkflowConnectors(input: {
     ));
   }
   return { ok: issues.length === 0, accounts, issues, optionalIssues };
+}
+
+export function preflightWorkflowConnectors(input: {
+  definition: WorkflowDefinition;
+  config: Config;
+  agentId: string;
+  principalId?: string;
+}): ConnectorPreflightResult {
+  return preflightConnectorRequirements({
+    requirements: input.definition.connectors ?? [],
+    config: input.config,
+    agentId: input.agentId,
+    ...(input.principalId ? { principalId: input.principalId } : {}),
+  });
 }

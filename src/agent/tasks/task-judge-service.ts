@@ -117,10 +117,10 @@ function resolveJudgeModel(
   runtimeModel?: string,
 ): string | undefined {
   if (config) {
-    const profile = resolveEffectiveAgentProfileForSession(config, conversationId);
+    const profile = resolveEffectiveAgentProfileForSession(conversationId);
     if (profile.primaryModelRef?.trim()) return profile.primaryModelRef.trim();
   }
-  return runtimeModel?.trim() || (config ? getAgentDefaultModelRef(config) : undefined);
+  return runtimeModel?.trim() || (config ? getAgentDefaultModelRef() : undefined);
 }
 
 export class TaskJudgeService {

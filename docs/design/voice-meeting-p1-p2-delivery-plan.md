@@ -89,7 +89,7 @@ P1-C 的平台实验可以提前做，但正式接入只接受 P1-A 的统一契
 
 ### P2-B：可靠事件与承诺跟进
 
-**工程落点：** 当前 `src/tasks/task-outbox-dispatcher.ts` 泛化并移至公共域事件职责位置；`src/automations/product-events.ts`、`src/proactive/events/` 和现有订阅/任务应用服务。
+**工程落点：** 当前 `src/tasks/task-outbox-dispatcher.ts` 泛化并移至公共域事件职责位置；复用 `src/automations/product-events.ts`、Scene 与现有任务应用服务。
 
 交付：会议状态与 outbox 同事务、正确的事件 source、稳定 eventId、持久消费者确认；复用现有 Task 和主动订阅实现准备触发、等待与提醒。
 

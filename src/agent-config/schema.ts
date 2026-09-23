@@ -13,7 +13,7 @@ export const DEFAULT_SKILL_POLICY = {
   include: [...DEFAULT_CORE_SKILLS],
 };
 
-const AgentIdSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
+export const AgentIdSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
 
 export const ModelRefSchema = z.string().trim().min(1).refine((value) => {
   const separator = value.indexOf('/');
@@ -151,40 +151,6 @@ export const AgentEntrySchema = z.object({
   runtime: RuntimePolicySchema.optional(),
 }).strict();
 
-export const AgentsConfigSchema = z.object({
-  default: AgentIdSchema.default('main'),
-  defaults: AgentDefaultsSchema.default({
-    models: {
-      chat: { primary: DEFAULT_AGENT_MODEL_REF, fallbacks: [] },
-      intents: {},
-    },
-    skills: DEFAULT_SKILL_POLICY,
-    tools: {},
-    workflows: {},
-    runtime: {},
-  }),
-  list: z.array(AgentEntrySchema).default([{ id: 'main', enabled: true }]),
-}).strict().superRefine((value, context) => {
-  const seen = new Set<string>();
-  value.list.forEach((agent, index) => {
-    if (seen.has(agent.id)) {
-      context.addIssue({
-        code: 'custom',
-        path: ['list', index, 'id'],
-        message: `duplicate agent id "${agent.id}"`,
-      });
-    }
-    seen.add(agent.id);
-  });
-  if (!value.list.some((agent) => agent.id === value.default && agent.enabled)) {
-    context.addIssue({
-      code: 'custom',
-      path: ['default'],
-      message: `default agent "${value.default}" must reference an enabled entry`,
-    });
-  }
-});
-
 export const EffectiveAgentConfigSchema = z.object({
   id: AgentIdSchema,
   enabled: z.boolean(),
@@ -205,7 +171,6 @@ export type AgentModelsOverride = z.infer<typeof AgentModelsOverrideSchema>;
 export type ModelIntent = z.infer<typeof ModelIntentSchema>;
 export type AgentDefaults = z.infer<typeof AgentDefaultsSchema>;
 export type AgentEntry = z.infer<typeof AgentEntrySchema>;
-export type AgentsConfig = z.infer<typeof AgentsConfigSchema>;
 export type EffectiveAgentConfig = z.infer<typeof EffectiveAgentConfigSchema>;
 export type SkillDefaults = z.infer<typeof SkillDefaultsSchema>;
 export type SkillOverride = z.infer<typeof SkillOverrideSchema>;

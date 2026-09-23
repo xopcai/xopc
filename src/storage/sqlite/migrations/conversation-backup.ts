@@ -75,11 +75,15 @@ export function assertDatabaseOffline(databasePath: string): void {
   if (otherOwners.length) throw new Error(`Stop other xopc database processes before upgrading: ${otherOwners.join(', ')}`);
 }
 
-/** The old release does not participate in an application lock, so check open handles. */
-export function backupBeforeConversationCutover(db: DatabaseSync, databasePath: string): string {
+/** Create and verify an offline SQLite backup before a cross-version cutover. */
+export function backupDatabaseBeforeCutover(
+  db: DatabaseSync,
+  databasePath: string,
+  label: string,
+): string {
   assertDatabaseOffline(databasePath);
 
-  const backupPath = `${databasePath}.pre-v178-${Date.now()}.bak`;
+  const backupPath = `${databasePath}.pre-${label}-${Date.now()}.bak`;
   db.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`);
   chmodSync(backupPath, 0o600);
   const { DatabaseSync: SqliteDatabase } = requireNodeSqlite();
@@ -92,4 +96,9 @@ export function backupBeforeConversationCutover(db: DatabaseSync, databasePath: 
   }
   flushBackupFile(backupPath);
   return backupPath;
+}
+
+/** The old release does not participate in an application lock, so check open handles. */
+export function backupBeforeConversationCutover(db: DatabaseSync, databasePath: string): string {
+  return backupDatabaseBeforeCutover(db, databasePath, 'v178');
 }

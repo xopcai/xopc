@@ -15,7 +15,6 @@ function decisionScore(item: HomeDecision): number {
   if (item.reason === 'approval_required') return 100;
   if (item.reason === 'needs_input' || item.reason === 'user_input' || item.reason === 'user_approval') return 95;
   if (item.reason === 'blocked' || item.reason === 'dependency' || item.reason === 'external') return 85;
-  if (item.kind === 'agent_judgment') return Math.round((item.judgment?.valueScore ?? 0) * 70) + (item.urgency === 'now' ? 20 : 0);
   if (item.reason === 'overdue') return 70;
   return 50;
 }
@@ -27,18 +26,10 @@ function decisionKey(item: HomeDecision): string {
     : `${item.projectId ?? 'global'}:${title}:${item.reason === 'approval_required' ? item.id : ''}`;
 }
 
-function keepDecision(item: HomeDecision, proactiveEnabled: boolean): boolean {
-  if (item.kind !== 'agent_judgment') return true;
-  if (!proactiveEnabled) return false;
-  return (item.judgment?.confidence ?? 0) >= 0.65
-    && (item.judgment?.valueScore ?? 0) >= 0.6;
-}
-
 export class AttentionGovernor {
   project(input: {
     decisions: HomeDecision[];
     attention: HomeAttention[];
-    proactiveEnabled: boolean;
     maxDecisions?: number;
     maxAttention?: number;
   }): AttentionProjection {
@@ -46,7 +37,6 @@ export class AttentionGovernor {
     const maxAttention = Math.max(1, Math.min(10, input.maxAttention ?? 5));
     const seen = new Set<string>();
     const eligible = [...input.decisions]
-      .filter((item) => keepDecision(item, input.proactiveEnabled))
       .sort((left, right) => decisionScore(right) - decisionScore(left) || right.updatedAt - left.updatedAt)
       .filter((item) => {
         const key = decisionKey(item);

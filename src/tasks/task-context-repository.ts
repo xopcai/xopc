@@ -67,7 +67,7 @@ function grantFromRow(row: AuthorityGrantRow): TaskAuthorityGrant {
 
 export class TaskContextRepository {
   captureSnapshot(input: {
-    ownerKind: 'task_run' | 'task' | 'session' | 'proactive_run';
+    ownerKind: 'task_run' | 'task' | 'session';
     ownerId: string;
     query: string;
     selectedItems?: unknown[];

@@ -96,7 +96,7 @@ export class ComputerRuntime {
     }
     if (input.op === 'open' && !s) {
       const endpoint = this.resolveEndpoint(owner);
-      const effective = resolveEffectiveAgentConfigForSession(config, owner).config;
+      const effective = resolveEffectiveAgentConfigForSession(owner).config;
       const ref = effective.models.computerUse?.primary;
       if (!ref) throw new Error('COMPUTER_MODEL_REQUIRED');
       const model = resolveModel(ref);

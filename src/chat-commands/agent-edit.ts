@@ -108,7 +108,7 @@ const agentEditCommand: CommandDefinition = {
     }
 
     const agentId = normalizeAgentId(resolveAgentIdFromConversationId(ctx.conversationId));
-    const profileDir = resolveAgentProfileDir(ctx.config, agentId);
+    const profileDir = resolveAgentProfileDir(agentId);
     const namesToShow = fileName ? [fileName] : [WORKSPACE_FILES.SOUL, WORKSPACE_FILES.IDENTITY];
 
     const sections: string[] = [];

@@ -382,7 +382,7 @@ The final original audio remains authoritative. On finish:
 3. Generate the final title and project inference.
 4. Replace the provisional projection with final managed Markdown.
 5. Mark the note processed and discussion completed.
-6. Emit the bounded `discussion.completed.v1` proactive event.
+6. Emit the bounded `discussion.completed.v1` scene event.
 
 Completion is automatic. Users correct results directly in the normal note
 editor; there is no discussion-specific review page or review status.
@@ -484,7 +484,7 @@ Every phase has the same exit gate before the next phase starts:
 
 - Reconcile against authoritative full-audio STT.
 - Write final title and managed Markdown once.
-- Complete automatically and trigger proactive follow-up.
+- Complete automatically and trigger Scene follow-up.
 - Delete the dedicated review state/page; preserve corrections through Note.
 
 ### Phase E — Rollout hardening

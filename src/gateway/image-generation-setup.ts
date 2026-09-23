@@ -2,6 +2,9 @@ import {
   getImageGenerationProvider,
   listImageGenerationProvidersSummary,
 } from '../agent/image/generation/provider-registry.js';
+import type { AgentModelsDefaults } from '../agent-config/index.js';
+import { AgentCatalogRepository } from '../agent-catalog/repository.js';
+import { AgentCatalogService } from '../agent-catalog/service.js';
 import { normalizeAgentId } from '../agent/agent-scope.js';
 import { resolveEffectiveAgentConfigForAgent } from '../config/agent-profile.js';
 import { ConfigSchema, type Config, type ProviderAuthConfig } from '../config/schema.js';
@@ -60,29 +63,41 @@ function parseProviderConfig(
   return { ok: true, value };
 }
 
-export function getAgentImageGenerationConfig(config: Config, agentIdRaw: string) {
+export function getAgentImageGenerationConfig(agentIdRaw: string) {
   const agentId = normalizeAgentId(agentIdRaw);
-  if (!config.agents.list.some((entry) => entry.enabled !== false && normalizeAgentId(entry.id) === agentId)) {
+  if (!new AgentCatalogRepository().get(agentId)) {
     throw new Error(`Agent not found: ${agentId}`);
   }
-  const effective = resolveEffectiveAgentConfigForAgent(config, agentId).config;
+  const effective = resolveEffectiveAgentConfigForAgent(agentId).config;
   return {
     agentId,
     model: effective.models.imageGeneration ?? null,
   };
 }
 
-export function getDefaultImageGenerationConfig(config: Config) {
+export function getDefaultImageGenerationConfig() {
   return {
-    model: config.agents.defaults.models.imageGeneration ?? null,
+    model: new AgentCatalogRepository().getSettings().defaults.models.imageGeneration ?? null,
   };
 }
+
+type ImageGenerationModel = NonNullable<AgentModelsDefaults['imageGeneration']>;
+export type ImageGenerationCatalogUpdate =
+  | { target: 'defaults'; model: ImageGenerationModel }
+  | { target: 'agent'; agentId: string; model: ImageGenerationModel };
+
+type PreparedImageGenerationSetup = {
+  ok: true;
+  config: Config;
+  providerId: string;
+  modelId: string;
+  catalogUpdate: ImageGenerationCatalogUpdate;
+};
 
 function prepareImageGenerationConfig(
   config: Config,
   input: ImageGenerationSetupInput,
-  applyModel: (next: Config, model: NonNullable<Config['agents']['defaults']['models']['imageGeneration']>) => void,
-): { ok: true; config: Config; providerId: string; modelId: string } | { ok: false; error: string } {
+): { ok: true; config: Config; providerId: string; modelId: string; model: ImageGenerationModel } | { ok: false; error: string } {
   const providerId = input.providerId.trim();
   const provider = getImageGenerationProvider(providerId);
   if (!provider) return { ok: false, error: `Unknown image provider: ${providerId}` };
@@ -104,43 +119,59 @@ function prepareImageGenerationConfig(
       ...parsedProviderConfig.value,
     },
   };
-  applyModel(next, {
+  const model: ImageGenerationModel = {
     primary: `${providerId}/${modelId}`,
     fallbacks: [],
     autoProviderFallback: false,
-  });
+  };
 
   const parsed = ConfigSchema.safeParse(next);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues.map((issue) => issue.message).join('; ') };
   }
-  return { ok: true, config: next, providerId, modelId };
+  return { ok: true, config: next, providerId, modelId, model };
 }
 
 export function prepareDefaultImageGenerationSetup(
   config: Config,
   input: ImageGenerationSetupInput,
-): { ok: true; config: Config; providerId: string; modelId: string } | { ok: false; error: string } {
-  return prepareImageGenerationConfig(config, input, (next, model) => {
-    next.agents.defaults.models.imageGeneration = model;
-  });
+): PreparedImageGenerationSetup | { ok: false; error: string } {
+  const prepared = prepareImageGenerationConfig(config, input);
+  if (prepared.ok === false) return prepared;
+  const { model, ...rest } = prepared;
+  return { ...rest, catalogUpdate: { target: 'defaults', model } };
 }
 
 export function prepareImageGenerationSetup(
   config: Config,
   agentIdRaw: string,
   input: ImageGenerationSetupInput,
-): { ok: true; config: Config; providerId: string; modelId: string } | { ok: false; error: string } {
+): PreparedImageGenerationSetup | { ok: false; error: string } {
   const agentId = normalizeAgentId(agentIdRaw);
-  if (!config.agents.list.some((entry) => entry.enabled !== false && normalizeAgentId(entry.id) === agentId)) {
+  if (!new AgentCatalogRepository().get(agentId)) {
     return { ok: false, error: `Agent not found: ${agentId}` };
   }
-  return prepareImageGenerationConfig(config, input, (next, model) => {
-    const index = next.agents.list.findIndex(
-      (entry) => entry.enabled !== false && normalizeAgentId(entry.id) === agentId,
-    );
-    const entry = next.agents.list[index]!;
-    entry.models = { ...(entry.models ?? {}), imageGeneration: model };
+  const prepared = prepareImageGenerationConfig(config, input);
+  if (prepared.ok === false) return prepared;
+  const { model, ...rest } = prepared;
+  return { ...rest, catalogUpdate: { target: 'agent', agentId, model } };
+}
+
+export async function applyImageGenerationCatalogUpdate(update: ImageGenerationCatalogUpdate): Promise<void> {
+  const repository = new AgentCatalogRepository();
+  const service = new AgentCatalogService(repository);
+  if (update.target === 'defaults') {
+    const defaults = repository.getSettings().defaults;
+    service.updateDefaults({
+      ...defaults,
+      models: { ...defaults.models, imageGeneration: update.model },
+    });
+    return;
+  }
+  const agent = repository.get(update.agentId);
+  if (!agent) throw new Error(`Agent not found: ${update.agentId}`);
+  await service.update(update.agentId, {
+    models: { ...(agent.models ?? {}), imageGeneration: update.model },
   });
 }
 

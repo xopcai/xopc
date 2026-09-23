@@ -8,7 +8,7 @@ import { useMessages } from '../../i18n/messages';
 import type { HomeAction, HomeFocusItem } from '../../query/home';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
-type RemoteAttentionAction = Exclude<HomeAction, { type: 'open' | 'review_judgment' }>;
+type RemoteAttentionAction = Exclude<HomeAction, { type: 'open' }>;
 
 export const AttentionItemRow = memo(function AttentionItemRow({
   item,
@@ -26,7 +26,7 @@ export const AttentionItemRow = memo(function AttentionItemRow({
   const reviewRequired = [item.primaryAction, ...item.secondaryActions].some(action => action?.type === 'connector_decision');
   const actions = [item.primaryAction, ...item.secondaryActions]
     .filter((action): action is RemoteAttentionAction => Boolean(
-      action && action.type !== 'open' && action.type !== 'review_judgment',
+      action && action.type !== 'open',
     ));
   const icon = item.kind === 'failure' ? 'alert-circle-outline' : 'shield-check-outline';
   const signal = item.kind === 'failure' ? colors.semantic.error : colors.semantic.warning;

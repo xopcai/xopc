@@ -56,12 +56,12 @@ export function registerSiteShareRoutes(authenticated: Hono, deps: Authenticated
     );
     if (agentId) {
       const normalized = normalizeAgentId(agentId);
-      return resolveAgentWorkspaceDir(cfg, normalized);
+      return resolveAgentWorkspaceDir(normalized);
     }
     const root = getWorkspacePath(cfg);
     if (root) return root;
-    const defaultId = resolveDefaultAgentId(cfg);
-    return resolveAgentWorkspaceDir(cfg, defaultId);
+    const defaultId = resolveDefaultAgentId();
+    return resolveAgentWorkspaceDir(defaultId);
   }
 
   authenticated.post('/api/site-shares', async (c) => {

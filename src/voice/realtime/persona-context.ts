@@ -105,12 +105,12 @@ function fileSignature(profileDir: string): string {
 }
 
 function profileVersion(config: Config, conversationId: string): string {
-  const profile = resolveEffectiveAgentProfileForSession(config, conversationId);
+  const profile = resolveEffectiveAgentProfileForSession(conversationId);
   return JSON.stringify({
     agentId: profile.agentId,
     name: profile.config.profile?.name,
     customInstructions: profile.customInstructions,
-    profileDir: resolveAgentProfileDir(config, profile.agentId),
+    profileDir: resolveAgentProfileDir(profile.agentId),
   });
 }
 
@@ -120,8 +120,8 @@ export function buildVoicePersonaContext(input: {
   maxChars?: number;
 }): VoicePersonaSnapshot {
   const config = input.getConfig();
-  const profile = resolveEffectiveAgentProfileForSession(config, input.conversationId);
-  const profileDir = resolveAgentProfileDir(config, profile.agentId);
+  const profile = resolveEffectiveAgentProfileForSession(input.conversationId);
+  const profileDir = resolveAgentProfileDir(profile.agentId);
   const files = loadProfileBootstrapFiles(profileDir);
   const identity = files.find((file) => file.name === DEFAULT_IDENTITY_FILENAME && !file.missing)?.content;
   const soul = files.find((file) => file.name === DEFAULT_SOUL_FILENAME && !file.missing)?.content;
@@ -140,8 +140,8 @@ export function buildVoicePersonaContext(input: {
     isCurrent: () => {
       try {
         const currentConfig = input.getConfig();
-        const currentProfile = resolveEffectiveAgentProfileForSession(currentConfig, input.conversationId);
-        const currentDir = resolveAgentProfileDir(currentConfig, currentProfile.agentId);
+        const currentProfile = resolveEffectiveAgentProfileForSession(input.conversationId);
+        const currentDir = resolveAgentProfileDir(currentProfile.agentId);
         return profileVersion(currentConfig, input.conversationId) === version
           && currentDir === profileDir
           && fileSignature(currentDir) === signature;

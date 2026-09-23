@@ -88,10 +88,9 @@ const configCommand: CommandDefinition = {
   acceptsArgs: true,
   examples: [
     '/config show',
-    '/config show agents.list',
-    '/config set agents.default=main',
-    '/config show agents.defaults',
-    '/config unset tts',
+    '/config show gateway.port',
+    '/config set commands.restart=false',
+    '/config unset tunnel',
   ],
   handler: async (ctx: CommandContext, args: string) => {
     const parts = args.trim().split(/\s+/);
@@ -226,10 +225,9 @@ const configCommand: CommandDefinition = {
         '`/config set path=value` — update a config value\n' +
         '`/config unset path` — remove a config key\n\n' +
         'Examples:\n' +
-        '`/config show agents.list`\n' +
-        '`/config set agents.default=main`\n' +
-        '`/config show agents.defaults`\n' +
-        '`/config unset tts`',
+        '`/config show gateway.port`\n' +
+        '`/config set commands.restart=false`\n' +
+        '`/config unset tunnel`',
     };
   },
 };

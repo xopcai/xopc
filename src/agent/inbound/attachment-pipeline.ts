@@ -179,7 +179,7 @@ export async function buildTranscriptUserMessage(opts: {
 
   if (imageRefs.length > 0 && strategy !== 'native') {
     const images = await Promise.all(imageRefs.map((ref) => readImageBase64FromRef(ref)));
-    const agentId = opts.config ? extractProfileAgentId(opts.conversationId, opts.config) : undefined;
+    const agentId = opts.config ? extractProfileAgentId(opts.conversationId) : undefined;
     const parts = await resolveInboundImageContentParts({
       modelRef: opts.modelRef,
       cfg: opts.config,

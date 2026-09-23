@@ -8,7 +8,7 @@ describe('auditModelReferences', () => {
   it('audits GUI bindings without suggesting ordinary chat models', () => {
     const config = { agents: { defaults: { models: { computerUse: { primary: 'cloud/gui', fallbacks: [] } } }, list: [] } } as unknown as Config;
     const registry = { resolve: () => ({ api: 'openai-completions', input: ['text', 'image'] }) } as unknown as ModelRegistry;
-    const report = auditModelReferences(config, new Map(), { registry, catalog: { sources: {} } });
+    const report = auditModelReferences(new Map(), { registry, catalog: { sources: {} } });
     expect(report).toEqual([{ ref: 'cloud/gui', availability: 'unavailable', locations: ['agents.defaults.models.computerUse.primary'] }]);
   });
   it('reports unavailable references with their locations and replacement', () => {
@@ -46,7 +46,7 @@ describe('auditModelReferences', () => {
       },
     };
 
-    expect(auditModelReferences(config, new Map(), { registry, catalog })).toEqual([
+    expect(auditModelReferences(new Map(), { registry, catalog })).toEqual([
       {
         ref: 'cloud/active',
         availability: 'available',
@@ -81,7 +81,7 @@ describe('auditModelReferences', () => {
     } as unknown as ModelRegistry;
     const catalog = { sources: {} };
 
-    expect(auditModelReferences(config, new Map(), {
+    expect(auditModelReferences(new Map(), {
       registry,
       catalog,
       resolveImageGenerationModel: (ref) => ref === 'minimax/image-01',

@@ -25,8 +25,8 @@ export function collectTuiStartupResources(
   conversationId?: string,
   options: { isWorkspaceTrusted?: (workspaceDir: string) => boolean } = {},
 ): TuiStartupResources {
-  const profile = resolveEffectiveAgentProfileForSession(config, conversationId);
-  const profileDir = resolveAgentProfileDir(config, profile.agentId);
+  const profile = resolveEffectiveAgentProfileForSession(conversationId);
+  const profileDir = resolveAgentProfileDir(profile.agentId);
   const workspaceDir = profile.resolvedWorkspacePath || getWorkspacePath(config);
 
   const context = uniqueSorted(

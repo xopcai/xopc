@@ -97,7 +97,7 @@ export class SessionInspector {
     const cfg = this.opts.getConfig();
     if (!cfg) return;
 
-    const profile = resolveEffectiveAgentProfileForSession(cfg, conversationId);
+    const profile = resolveEffectiveAgentProfileForSession(conversationId);
     const profileModelRef = profile.primaryModelRef?.trim();
     if (profileModelRef) {
       this.opts.modelManager.setSessionProfileDefault(conversationId, profileModelRef, profile.fallbacks);
@@ -150,7 +150,7 @@ export class SessionInspector {
     options?: BtwQueryOptions,
   ): Promise<{ text: string; error?: string }> {
     const config = this.opts.getConfig();
-    const profile = config ? resolveEffectiveAgentProfileForSession(config, conversationId) : undefined;
+    const profile = config ? resolveEffectiveAgentProfileForSession(conversationId) : undefined;
     return runBtwQuery({
       conversationId,
       question,
@@ -204,7 +204,7 @@ export class SessionInspector {
     const project = getProjectForSession(conversationId);
     const workspace = effectiveWorkspacePathForSession(cfg, conversationId, sc, project);
     const estTokens = await this.opts.sessionStore.estimateTokenUsage(conversationId, messages);
-    const profile = resolveEffectiveAgentProfileForSession(cfg, conversationId);
+    const profile = resolveEffectiveAgentProfileForSession(conversationId);
     const deniedTools = [...profile.tools.denied].sort((a, b) => a.localeCompare(b));
     const toolsSummary = deniedTools.length > 0 ? `denied: ${deniedTools.join(', ')}` : '(no denied tools)';
 

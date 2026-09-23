@@ -141,6 +141,7 @@ export function ConnectorsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const understandingIntent = searchParams.get('understanding') === '1';
   const understandingReturnPath = safeReturnPath(searchParams.get('returnTo'));
+  const recoveryIntent = Boolean(searchParams.get('returnTo')) && !understandingIntent;
   const requestedTab = searchParams.get('tab');
   const [tab, setTab] = useState<TabId>(
     !understandingIntent && requestedTab === 'connected' ? 'connected' : 'discover',
@@ -159,7 +160,7 @@ export function ConnectorsPage() {
   const [registryTotalPages, setRegistryTotalPages] = useState<number | undefined>(undefined);
   const [connectedSearchQuery, setConnectedSearchQuery] = useState('');
   const [discoverSearchQuery, setDiscoverSearchQuery] = useState(
-    understandingIntent ? searchParams.get('connector') ?? '' : '',
+    understandingIntent || recoveryIntent ? searchParams.get('connector') ?? '' : '',
   );
   const [discoverSource, setDiscoverSource] = useState<string>(
     connectorDiscoverySourceForEntry(understandingIntent ? 'understanding' : 'default'),
@@ -547,6 +548,17 @@ export function ConnectorsPage() {
               onClick={() => navigate(understandingReturnPath)}
             >
               {cs.understandingSetupDone}
+            </Button>
+          </div>
+        ) : null}
+        {recoveryIntent ? (
+          <div className="flex flex-col gap-3 rounded-xl border border-accent/25 bg-accent-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-fg">{cs.recoverySetupTitle}</p>
+              <p className="mt-1 text-xs leading-5 text-fg-muted">{cs.recoverySetupHint}</p>
+            </div>
+            <Button type="button" variant="secondary" className="min-h-11 shrink-0" onClick={() => navigate(understandingReturnPath)}>
+              {cs.recoverySetupDone}
             </Button>
           </div>
         ) : null}

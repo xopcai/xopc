@@ -18,44 +18,11 @@ function decision(overrides: Partial<HomeDecision>): HomeDecision {
 }
 
 describe('AttentionGovernor', () => {
-  it('keeps high-value judgment and authorization, while deduplicating internal models', () => {
+  it('prioritizes approvals, deduplicates decisions, and caps visible items', () => {
     const decisions = [
-      decision({
-        id: 'low-judgment',
-        kind: 'agent_judgment',
-        title: 'Low-value observation',
-        reason: 'decision_needed',
-        judgment: {
-          inboxItemId: 'low',
-          whyNow: 'Maybe useful',
-          impact: 'Small',
-          workDone: 'Observed',
-          recommendation: 'Review',
-          confidence: 0.9,
-          valueScore: 0.3,
-          evidenceIds: [],
-          attentionKind: 'information',
-        },
-      }),
-      decision({
-        id: 'high-judgment',
-        kind: 'agent_judgment',
-        title: 'Protect the launch date',
-        reason: 'decision_needed',
-        judgment: {
-          inboxItemId: 'high',
-          whyNow: 'A dependency changed',
-          impact: 'Launch risk',
-          workDone: 'Compared the options',
-          recommendation: 'Move the dependency',
-          confidence: 0.92,
-          valueScore: 0.88,
-          evidenceIds: [],
-          attentionKind: 'decision',
-        },
-      }),
       decision({ id: 'work', projectId: 'project-1' }),
       decision({ id: 'task', kind: 'task', projectId: 'project-1', updatedAt: 90 }),
+      decision({ id: 'overdue', title: 'Submit review', reason: 'overdue', updatedAt: 80 }),
       decision({
         id: 'approval',
         kind: 'connector_approval',
@@ -78,42 +45,18 @@ describe('AttentionGovernor', () => {
     const result = new AttentionGovernor().project({
       decisions,
       attention,
-      proactiveEnabled: true,
       maxDecisions: 3,
       maxAttention: 2,
     });
 
-    expect(result.decisions.map((item) => item.id)).toEqual(['approval', 'work', 'high-judgment']);
+    expect(result.decisions.map((item) => item.id)).toEqual(['approval', 'work', 'overdue']);
     expect(result.attention.map((item) => item.id)).toEqual(['attention-3', 'attention-2']);
     expect(result.policy).toEqual({
       visibleDecisionCount: 3,
-      suppressedDecisionCount: 2,
+      suppressedDecisionCount: 1,
       visibleAttentionCount: 2,
       suppressedAttentionCount: 2,
     });
   });
 
-  it('does not interrupt with proactive judgments when proactive support is disabled', () => {
-    const result = new AttentionGovernor().project({
-      decisions: [decision({
-        kind: 'agent_judgment',
-        reason: 'decision_needed',
-        judgment: {
-          inboxItemId: 'judgment',
-          whyNow: 'Now',
-          impact: 'High',
-          workDone: 'Analyzed',
-          recommendation: 'Act',
-          confidence: 1,
-          valueScore: 1,
-          evidenceIds: [],
-          attentionKind: 'decision',
-        },
-      })],
-      attention: [],
-      proactiveEnabled: false,
-    });
-    expect(result.decisions).toHaveLength(0);
-    expect(result.policy.suppressedDecisionCount).toBe(1);
-  });
 });

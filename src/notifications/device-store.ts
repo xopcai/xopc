@@ -47,7 +47,7 @@ function normalizePreferences(input?: Partial<NotificationPreferences>): Notific
     taskCompleted: input?.taskCompleted ?? DEFAULT_NOTIFICATION_PREFERENCES.taskCompleted,
     automationCompleted: input?.automationCompleted ?? DEFAULT_NOTIFICATION_PREFERENCES.automationCompleted,
     automationFailed: input?.automationFailed ?? DEFAULT_NOTIFICATION_PREFERENCES.automationFailed,
-    proactiveInsight: input?.proactiveInsight ?? DEFAULT_NOTIFICATION_PREFERENCES.proactiveInsight,
+    homeOpportunity: input?.homeOpportunity ?? DEFAULT_NOTIFICATION_PREFERENCES.homeOpportunity,
   };
 }
 

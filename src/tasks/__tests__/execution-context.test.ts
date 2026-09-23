@@ -47,12 +47,12 @@ describe('resolveExecutionContext', () => {
     expect(context.taskId).toBeUndefined();
   });
 
-  it('derives automation and proactive origins from the session type', () => {
+  it('derives automation and heartbeat origins from the session type', () => {
     expect(resolveExecutionContext({
       runId: 'run-1', conversationId: 'session-1', channel: 'webchat', metadata: metadata({ sessionType: 'cron' }),
     })).toMatchObject({ origin: 'automation', triggerKind: 'schedule' });
     expect(resolveExecutionContext({
       runId: 'run-2', conversationId: 'session-2', channel: 'webchat', metadata: metadata({ sessionType: 'heartbeat' }),
-    })).toMatchObject({ origin: 'proactive', triggerKind: 'proactive' });
+    })).toMatchObject({ origin: 'heartbeat', triggerKind: 'heartbeat' });
   });
 });

@@ -15,7 +15,7 @@ describe('default model config', () => {
 
     expect(config.agents.defaults.models.chat).toEqual({ primary: DEFAULT_MODEL_REF, fallbacks: [] });
     expect(config.agents.defaults.skills).toEqual({ mode: 'selected', include: [...DEFAULT_CORE_SKILLS] });
-    expect(getAgentDefaultModelRef(config)).toBe(DEFAULT_MODEL_REF);
+    expect(getAgentDefaultModelRef()).toBe(DEFAULT_MODEL_REF);
   });
 
   it('resolves default image model settings from global defaults', () => {
@@ -34,11 +34,11 @@ describe('default model config', () => {
       },
     };
 
-    expect(getAgentDefaultImageModelConfig(config)).toEqual({
+    expect(getAgentDefaultImageModelConfig()).toEqual({
       primary: 'openai/gpt-4.1-mini',
       fallbacks: ['google/gemini-2.5-flash'],
     });
-    expect(getAgentDefaultImageGenerationModelConfig(config, 'main')).toEqual({
+    expect(getAgentDefaultImageGenerationModelConfig('main')).toEqual({
       primary: 'openai/gpt-image-2',
       fallbacks: ['google/gemini-3.1-flash-image'],
       timeoutMs: 120_000,
@@ -68,7 +68,7 @@ describe('default model config', () => {
       },
     });
 
-    expect(getAgentDefaultImageModelConfig(config)).toBeUndefined();
-    expect(getAgentDefaultImageGenerationModelConfig(config, 'main')).toBeUndefined();
+    expect(getAgentDefaultImageModelConfig()).toBeUndefined();
+    expect(getAgentDefaultImageGenerationModelConfig('main')).toBeUndefined();
   });
 });
