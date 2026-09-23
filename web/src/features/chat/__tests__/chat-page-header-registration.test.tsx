@@ -335,14 +335,14 @@ describe('ChatPageHeaderRegistration', () => {
     const openButton = container.querySelector<HTMLButtonElement>('[aria-label="Open side chat"]');
     expect(openButton).not.toBeNull();
     expect(openButton?.getAttribute('aria-expanded')).toBe('false');
-    expect(openButton?.getAttribute('aria-keyshortcuts')).toBe('Control+Alt+B');
-    expect(openButton?.title).toContain('Ctrl+Alt+B');
+    expect(openButton?.getAttribute('aria-keyshortcuts')).toBe('Control+Shift+B');
+    expect(openButton?.title).toContain('Ctrl+Shift+B');
     expect(openButton?.parentElement?.lastElementChild).toBe(openButton);
 
     act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
-      altKey: true,
       ctrlKey: true,
       key: 'b',
+      shiftKey: true,
       bubbles: true,
       cancelable: true,
     })));
