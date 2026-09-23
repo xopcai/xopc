@@ -74,6 +74,9 @@ auditConfig:
     - GHSA-5p2g-fcmc-qvqq
 
 patchedDependencies:
+  # FlashList v2's absolute row container must survive Android Fabric view flattening.
+  # Remove once https://github.com/Shopify/flash-list/pull/2400 is released.
+  '@shopify/flash-list@2.3.2': patches/@shopify__flash-list@2.3.2.patch
   # macOS 26 validates the temporary keychain password used by set-key-partition-list.
   # Remove once electron-builder ships https://github.com/electron-userland/electron-builder/pull/10067.
   app-builder-lib@26.15.3: patches/app-builder-lib@26.15.3.patch

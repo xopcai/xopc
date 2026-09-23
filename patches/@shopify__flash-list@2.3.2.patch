@@ -1,0 +1,26 @@
+diff --git a/dist/recyclerview/ViewHolderCollection.js b/dist/recyclerview/ViewHolderCollection.js
+index b47f7f7..aa9d226 100644
+--- a/dist/recyclerview/ViewHolderCollection.js
++++ b/dist/recyclerview/ViewHolderCollection.js
+@@ -72,7 +72,7 @@ export const ViewHolderCollection = (props) => {
+     //     return `${index} => ${reactKey}`;
+     //   })
+     // );
+-    return (React.createElement(CompatView, { style: hasData && containerStyle }, containerLayout &&
++    return (React.createElement(CompatView, { style: hasData && containerStyle, collapsable: false }, containerLayout &&
+         hasData &&
+         Array.from(renderStack.entries(), ([reactKey, { index }]) => {
+             const item = data[index];
+diff --git a/src/recyclerview/ViewHolderCollection.tsx b/src/recyclerview/ViewHolderCollection.tsx
+index 3312e04..5ef0bbc 100644
+--- a/src/recyclerview/ViewHolderCollection.tsx
++++ b/src/recyclerview/ViewHolderCollection.tsx
+@@ -172,7 +172,7 @@ export const ViewHolderCollection = <TItem,>(
+   // );
+ 
+   return (
+-    <CompatView style={hasData && containerStyle}>
++    <CompatView style={hasData && containerStyle} collapsable={false}>
+       {containerLayout &&
+         hasData &&
+         Array.from(renderStack.entries(), ([reactKey, { index }]) => {
