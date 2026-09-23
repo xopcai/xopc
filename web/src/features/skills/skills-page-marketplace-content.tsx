@@ -40,6 +40,7 @@ type Props = Pick<
   | 'searchQuery'
   | 'setSearchQuery'
   | 'registeredProviders'
+  | 'marketplacePresentation'
   | 'marketBrowseProvider'
   | 'setMarketBrowseProvider'
 >;
@@ -68,6 +69,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
     searchQuery,
     setSearchQuery,
     registeredProviders,
+    marketplacePresentation,
     marketBrowseProvider,
     setMarketBrowseProvider,
   } = p;
@@ -182,6 +184,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
               )}
             >
               {mpPayload.items.map((row) => {
+                const presentation = marketplacePresentation(row);
                 const provider = row.providerId ?? marketBrowseProvider;
                 const packageName = marketplacePackageRequestName(row, provider);
                 const installed = isSkillInstalledByName(packageName);
@@ -210,7 +213,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
                           id={`mp-skill-title-${row.id}`}
                           className="truncate text-[15px] font-semibold leading-snug tracking-tight text-fg"
                         >
-                          {row.name}
+                          {presentation.displayName}
                         </h3>
                       </button>
                       {!installed ? (
@@ -249,9 +252,9 @@ export function SkillsPageMarketplaceContent(p: Props) {
                         <div className="flex min-w-0 flex-1 flex-col gap-2">
                           <p
                             className="line-clamp-2 text-sm leading-relaxed text-fg-muted"
-                            title={row.description ? row.description : undefined}
+                            title={presentation.description || undefined}
                           >
-                            {row.description || '—'}
+                            {presentation.description || '—'}
                           </p>
                           {categoryLabel ? (
                             <span className="w-fit max-w-full truncate rounded-full bg-surface-inset px-2 py-0.5 text-[10px] font-medium text-fg-muted">

@@ -36,6 +36,7 @@ export interface SkillInstallSpecApi {
 export interface SkillMetadataApi {
   name: string;
   description: string;
+  localizations?: SkillLocalizations;
   emoji?: string;
   homepage?: string;
   os?: SkillOsId[];
