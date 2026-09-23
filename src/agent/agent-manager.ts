@@ -202,6 +202,7 @@ export interface AgentManagerConfig {
   getChatPreviewService?: () => import('../chat-previews/index.js').ChatPreviewService | undefined;
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
+  onAgentCatalogMutate?: () => void;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
   getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike | undefined;
   /** Runtime notification for UI/CLI shells that cache skill catalogs. */
@@ -483,6 +484,7 @@ export class AgentManager implements AgentInstanceGateway {
       getChatPreviewService: this.config.getChatPreviewService,
       dispatchTaskEvents: this.config.dispatchTaskEvents,
       dispatchTaskRuns: this.config.dispatchTaskRuns,
+      onAgentCatalogMutate: this.config.onAgentCatalogMutate,
       getWorkflowRunService: this.config.getWorkflowRunService,
       getSkillIndexingContext: () => {
         const ctx = this.config.getCurrentContext?.();

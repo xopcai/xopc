@@ -104,6 +104,46 @@ describe('xopc_use tool', () => {
     expect(updated).toMatchObject({ ok: true, agent: { profile: { name: 'Code Reviewer' } } });
   });
 
+  it('validates Agent dry runs with the real capability contract without mutating', async () => {
+    const onAgentCatalogMutate = vi.fn();
+    const tool = createXopcUseTool({ getCurrentAgentId: () => 'main', onAgentCatalogMutate });
+    const invalid = await tool.execute('agent-dry-run-invalid', {
+      mode: 'agent',
+      command: 'create',
+      args: { id: 'xiaomei', profile: { name: '小美', emoji: '🌸' } },
+      dryRun: true,
+    });
+    expect(invalid.content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('Unrecognized key'),
+    });
+
+    const valid = parseToolJson(await tool.execute('agent-dry-run-valid', {
+      mode: 'agent',
+      command: 'create',
+      args: { id: 'xiaomei', profile: { name: '小美', instructions: '温柔、可爱。' } },
+      dryRun: true,
+    }));
+    expect(valid).toMatchObject({
+      ok: true,
+      dryRun: true,
+      input: { id: 'xiaomei', profile: { name: '小美', instructions: '温柔、可爱。' } },
+    });
+    expect(new AgentCatalogRepository().get('xiaomei')).toBeNull();
+    expect(onAgentCatalogMutate).not.toHaveBeenCalled();
+
+    await tool.execute('agent-create-xiaomei', {
+      mode: 'agent',
+      command: 'create',
+      args: {
+        id: 'xiaomei',
+        profile: { name: '小美', instructions: '温柔、可爱。' },
+        idempotencyKey: 'create-xiaomei',
+      },
+    });
+    expect(onAgentCatalogMutate).toHaveBeenCalledOnce();
+  });
+
   it('persists and completes an Agent purge through the capability receipt', async () => {
     const tool = createXopcUseTool({ getCurrentAgentId: () => 'main' });
     const workspace = join(stateDir, 'workspace-disposable');

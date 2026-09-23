@@ -13,6 +13,22 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 
+const AGENT_CATALOG_CACHE_KEYS = new Set([
+  'automation-chat-agents',
+  'channel-routing-agents',
+  'gateway-chat-agents',
+  'picker-agents-list',
+  'settings-gateway-agents',
+  'setup-checklist-agents',
+  'workflow-agents',
+  'workflow-route-agents',
+]);
+
+export function isAgentCatalogCacheKey(key: unknown): boolean {
+  const root = Array.isArray(key) ? key[0] : key;
+  return typeof root === 'string' && AGENT_CATALOG_CACHE_KEYS.has(root);
+}
+
 export function GatewayRealtimeBridge() {
   useGatewayRealtime();
   const { mutate } = useSWRConfig();
@@ -60,6 +76,10 @@ export function GatewayRealtimeBridge() {
     };
   }, [mutate, identity]);
   useEffect(() => {
+    const onAgentCatalog = () => {
+      clearChatSkillsCache();
+      void mutate(isAgentCatalogCacheKey);
+    };
     const onConfigReload = (event: Event) => {
       clearConnectorPaletteCache();
       const section = configReloadSection((event as CustomEvent<unknown>).detail);
@@ -70,9 +90,11 @@ export function GatewayRealtimeBridge() {
       const topic = (event as CustomEvent<{ topic?: string }>).detail?.topic;
       if (topic === 'gateway' || topic === 'sessions') void mutate(() => true);
     };
+    window.addEventListener('agent-catalog', onAgentCatalog);
     window.addEventListener('config-reload', onConfigReload);
     window.addEventListener('realtime-gap', onGap);
     return () => {
+      window.removeEventListener('agent-catalog', onAgentCatalog);
       window.removeEventListener('config-reload', onConfigReload);
       window.removeEventListener('realtime-gap', onGap);
     };

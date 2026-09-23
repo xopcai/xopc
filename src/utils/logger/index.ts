@@ -258,6 +258,7 @@ export {
 
 export {
   redactSensitiveInfo,
+  redactSensitiveOutput,
   redactObject,
   redactPemBlock,
   redactSecret,

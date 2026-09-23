@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { DurableState } from '../../storage/sqlite/durable-state.js';
 import { resolveStateDir } from '../../config/paths.js';
 import { resolveGlobalSingleton } from '../../utils/global-singleton.js';
+import { redactSensitiveOutput } from '../../utils/logger.js';
 import { spawnProcess } from '../../process/run-process.js';
 import { isolatedCommand, removeCommandContainer, type CommandIsolation } from './command-isolation.js';
 import { readWorkspaceRevision } from '../coding/workspace-revision.js';
@@ -80,7 +81,7 @@ export class CommandRegistry {
     const result: CommandResult = {
       isolation: input.isolation?.mode ?? 'host',
       ...(launch.containerName ? { containerName: launch.containerName } : {}),
-      id, command: input.command, cwd: input.cwd, status: 'running', exitCode: null,
+      id, command: redactSensitiveOutput(input.command), cwd: input.cwd, status: 'running', exitCode: null,
       createdAtMs: Date.now(), durationMs: 0, timedOut: false, stdout: '', stderr: '', aggregatedOutput: '',
       totalOutputBytes: 0, captureTruncated: false, logPath: join(directory, `${id}.log`), logTruncated: false,
       ...(startRevision ? { startRevision } : {}),
@@ -92,8 +93,9 @@ export class CommandRegistry {
     let closed = false;
     let containerCleanup: Promise<void> | undefined;
     const append = (stream: 'stdout' | 'stderr', chunk: Buffer | string) => {
-      const value = String(chunk);
-      result.totalOutputBytes += Buffer.byteLength(value);
+      const raw = String(chunk);
+      const value = redactSensitiveOutput(raw);
+      result.totalOutputBytes += Buffer.byteLength(raw);
       result.captureTruncated ||= result[stream].length + value.length > limit || result.aggregatedOutput.length + value.length > limit;
       result[stream] = (result[stream] + value).slice(-limit);
       result.aggregatedOutput = (result.aggregatedOutput + value).slice(-limit);
