@@ -772,6 +772,38 @@ describe('SessionStore', () => {
       expect(targetMeta?.customData?.forkedAt).toEqual(expect.any(String));
     });
 
+    it('createSessionFromRows atomically stores hidden origin context, visible messages, and config', async () => {
+      const target = '128565a4-35a8-4a20-b3bd-0b53d8851595';
+      const parent = { role: 'user', content: 'parent context' } as const;
+      const sideUser = { role: 'user', content: 'side question' } as const;
+      const sideAssistant = { role: 'assistant', content: 'side answer' } as const;
+
+      const result = await store.createSessionFromRows({
+        targetKey: target,
+        cwd: tempDir,
+        metadata: {
+          ...directMetadata('main', 'webchat', 'promoted-side-chat'),
+          agentId: 'main',
+          parentConversationId: '3384531d-0277-47d1-99ea-52da74f0a9ca',
+        },
+        rows: [{
+          type: 'side_chat_origin',
+          version: 1,
+          parentConversationId: '3384531d-0277-47d1-99ea-52da74f0a9ca',
+          parentTranscriptId: 'parent-transcript',
+          createdAt: '2026-09-23T00:00:00.000Z',
+          contentHash: 'hash',
+          contextMessages: [parent],
+        }, sideUser, sideAssistant],
+        config: { modelOverride: 'test/model', thinkingLevel: 'high' },
+      });
+
+      expect(result).toEqual({ conversationId: target, rowCount: 3 });
+      expect(await store.loadMessages(target)).toEqual([parent, sideUser, sideAssistant]);
+      expect((await store.get(target))?.messages).toEqual([sideUser, sideAssistant]);
+      expect(getSessionConfig(target)).toMatchObject({ modelOverride: 'test/model', thinkingLevel: 'high' });
+    });
+
     it('forkSessionRows clones transcript rows through the selected row', async () => {
       const source = "ebb80a63-9bcd-494c-83dc-df198a0c48c2";
       const target = "856a74d8-261e-4005-865d-0d3c718c8da6";
