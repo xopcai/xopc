@@ -39,7 +39,7 @@ export struct XopcChatOptions {
           ForEach(this.model.models.filter((item: XopcChatModel): boolean => (item.name + ' ' + item.id).toLowerCase().includes(this.query.toLowerCase())), (item: XopcChatModel) => {
             ListItem() {
               XopcHubRow({ heading: (item.id === this.model.modelId ? '✓ ' : '') + (item.displayNames?.[appSettings.effectiveLanguage().startsWith('zh') ? 'zh-CN' : 'en'] || item.name || item.id),
-                summary: item.id, navigable: false, onOpen: async (): Promise<void> => { if (await this.model.selectModel(item.id)) this.onClose(); } })
+                summary: item.id, showChevron: false, onOpen: async (): Promise<void> => { if (await this.model.selectModel(item.id)) this.onClose(); } })
             }.enabled(!this.model.saving)
           }, (item: XopcChatModel): string => item.id)
         } else if (this.mode === 'agent') {

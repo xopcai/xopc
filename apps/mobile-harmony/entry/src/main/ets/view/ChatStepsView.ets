@@ -1,5 +1,5 @@
 import { XopcChatRow, XopcChatBlock, XopcChatTool, XopcPlanStep } from '../model/chat';
-import { chatActivities, chatAnswerStarted, chatToolDisplayKind, chatToolFailed, chatToolReadGroupKey } from '../common/chatRichContent';
+import { chatActivities, chatAnswerStarted, chatToolDisplayKind, chatToolReadGroupKey } from '../common/chatRichContent';
 import { XopcChatToolGroupView, XopcChatToolView } from './ChatToolView';
 import { XopcMarkdownView } from './MarkdownView';
 import { XopcChatDisclosure } from '../common/chatDisclosure';
@@ -14,7 +14,6 @@ export struct XopcChatStepsView {
   @Computed get visibleSteps(): XopcChatBlock[] { return this.steps.filter((step: XopcChatBlock): boolean => step.kind !== 'thinking'); }
   @Computed get expanded(): boolean { return this.disclosure.get(this.scope + ':steps:' + this.row.id) ?? (this.reasoning === 'stream' && !!this.row.live && !chatAnswerStarted(this.row)); }
   @Computed get active(): boolean { return !!this.row.live && this.steps.some((step: XopcChatBlock): boolean => !!step.active || step.call?.status === 'running'); }
-  @Computed get failed(): boolean { return this.steps.some((step: XopcChatBlock): boolean => !!step.call && chatToolFailed(step.call)); }
   @Computed get activeTool(): XopcChatTool | undefined {
     return this.steps.slice().reverse().find((step: XopcChatBlock): boolean => step.call?.status === 'running')?.call;
   }
@@ -56,8 +55,8 @@ export struct XopcChatStepsView {
         Button({ type: ButtonType.Normal }) {
           Row({ space: 6 }) {
             if (this.active) { Text('●').fontSize(8).fontColor($r('app.color.accent')) }
-            Text(this.active ? this.runningTitle() : this.failed ? $r('app.string.chat_steps_failed') : $r('app.string.chat_steps')).fontSize(13)
-              .fontColor(this.failed ? $r('app.color.danger') : $r('app.color.secondary')).maxLines(2)
+            Text(this.active ? this.runningTitle() : $r('app.string.chat_steps')).fontSize(13)
+              .fontColor($r('app.color.secondary')).maxLines(2)
             SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(12).fontColor([$r('app.color.tertiary')])
           }
         }.id('chat-steps-' + this.row.id).constraintSize({ minHeight: 36, maxWidth: '100%' }).padding({ left: 2, right: 2 })

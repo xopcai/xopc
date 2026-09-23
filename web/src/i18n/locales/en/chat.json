@@ -1142,6 +1142,7 @@
       "changes": "Code changes",
       "evidence": "Checks",
       "deliverableCount": "{{count}} deliverables",
+      "fileCount": "{{count}} files",
       "changedFileCount": "{{count}} files changed",
       "passedCount": "{{count}} checks passed",
       "failedCount": "{{count}} checks failed",

@@ -20,7 +20,7 @@ export const VoiceRecordingCard = memo(function VoiceRecordingCard({
   const color = cancelled ? colors.semantic.errorBold : colors.text.secondary;
   return (
     <View style={styles.anchor}>
-      <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }, elevation.raised]}>
+      <View style={[styles.card, { backgroundColor: colors.surface.panel }, elevation.raised]}>
         {processing ? (
           <View style={styles.processingRow} accessibilityLiveRegion="polite">
             <StaticLoadingIndicator size={16} color={color} />
@@ -54,7 +54,6 @@ const styles = StyleSheet.create({
   },
   card: {
     minHeight: 82,
-    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radii.xl,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
