@@ -1,6 +1,7 @@
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import { readFile, writeFile, stat } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { app, clipboard, dialog, safeStorage, shell, systemPreferences, type BrowserWindow } from 'electron';
 import WebSocket from 'ws';
 import { EndpointToolHostController, EndpointToolRegistry } from '@xopcai/endpoint-tools-client';
@@ -28,6 +29,13 @@ export function resolveComputerDriverPath(options: { packaged: boolean; resource
     : join(options.mainDir, '..', '..', '.cache', 'computer-driver', '0.28.2', 'cua-driver');
 }
 
+export function resolveComputerDriverSdkUrl(options: { packaged: boolean; resourcesPath: string }): string | undefined {
+  if (!options.packaged) return undefined;
+  // The SDK resolves and opens its sibling dylib from import.meta.url. Loading its
+  // virtual app.asar path makes dlopen fail even though electron-builder unpacked it.
+  return pathToFileURL(join(options.resourcesPath, 'app.asar.unpacked', 'node_modules', '@trycua', 'cua-driver', 'dist', 'index.js')).href;
+}
+
 export class DesktopEndpointHost {
   readonly broker: ComputerBroker;
   private client?: RealtimeClient;
@@ -44,7 +52,9 @@ export class DesktopEndpointHost {
   constructor(private readonly options: { connection(): { port: number; token: string } | undefined; window(): BrowserWindow | null }) {
     // Dev launches out/main/index.js directly, so app.getAppPath() is not the repository root.
     const binary = resolveComputerDriverPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, mainDir: import.meta.dirname });
-    this.broker = new ComputerBroker(new CuaComputerDriver(binary, app.isPackaged ? 'ai.xopc.xopc' : 'com.github.Electron'), {
+    const sdkUrl = resolveComputerDriverSdkUrl({ packaged: app.isPackaged, resourcesPath: process.resourcesPath });
+    const loadSdk = sdkUrl ? () => import(/* @vite-ignore */ sdkUrl) : undefined;
+    this.broker = new ComputerBroker(new CuaComputerDriver(binary, app.isPackaged ? 'ai.xopc.xopc' : 'com.github.Electron', loadSdk), {
       isVisible: () => this.visible() && !this.controlPaused,
       requestApproval: (request, signal) => this.approve(request, signal),
     }, { enabled: true });
