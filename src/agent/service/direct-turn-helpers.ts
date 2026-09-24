@@ -220,7 +220,7 @@ export async function runDirectAgentTurn(
   });
 
   if (!isResume) {
-    await deps.agentManager.afterAgentTurn(input.conversationId, userPlain, turnId);
+    deps.agentManager.scheduleUserUnderstandingMaintenance(input.conversationId, userPlain, turnId);
   }
   if (!isResume && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required') {
     deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.conversationId);
