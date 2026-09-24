@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { decodeWavToMonoFloat32 } from '../../local/wav.js';
+import { decodeWavToMonoFloat32 } from '../wav.js';
 import {
   decodeAudioToMonoFloat32,
   detectAudioFormat,
