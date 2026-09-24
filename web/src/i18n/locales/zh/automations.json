@@ -41,7 +41,13 @@
       "project": "项目",
       "allProjects": "全部项目",
       "markAllRead": "全部标为已读",
-      "unread": "未读结果"
+      "unread": "未读结果",
+      "ownership": "自动化归属",
+      "userManaged": "我的自动化",
+      "executor": "执行方式",
+      "allSources": "全部方式",
+      "results": "{count} 条自动化",
+      "clear": "清除筛选"
     },
     "events": {
       "manualQueued": "手动运行已加入队列",
@@ -65,6 +71,15 @@
       "enabled": "已启用",
       "running": "运行中",
       "next": "下次"
+    },
+    "overview": {
+      "title": "运行状态"
+    },
+    "sources": {
+      "agent": "智能体",
+      "workflow": "工作流",
+      "task": "任务",
+      "browser": "浏览器"
     },
     "system": {
       "title": "系统自动化"
@@ -339,6 +354,10 @@
     "form": {
       "advanced": "高级设置",
       "advancedDescription": "安全、输出和可靠性",
+      "createFlowHint": "按“触发条件 → 执行动作 → 安全与结果”完成设置。",
+      "rulePreview": "当前规则",
+      "triggerStepDescription": "选择自动化何时开始，包括定时、事件、Webhook 或手动运行。",
+      "actionStepDescription": "选择触发后由智能体、工作流、任务或浏览器执行什么。",
       "name": "名称",
       "description": "描述",
       "project": "项目",

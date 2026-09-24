@@ -17,7 +17,7 @@ export function ConnectorServicePage() {
   const t = messages(language).connectorsSettings;
   const zh = language === 'zh';
   return <main className="mx-auto w-full max-w-2xl space-y-6 p-6">
-    <Link to="/connectors" className="text-sm text-accent-fg">{t.title}</Link>
+    <Link to="/capabilities/connectors" className="text-sm text-accent-fg">{t.title}</Link>
     <h1 className="text-xl font-semibold">{zh ? '应用连接服务' : 'App connection service'}</h1>
     <p className="text-sm text-fg-muted"><ConnectorServiceDescription /></p>
     <ConnectorServiceForm />

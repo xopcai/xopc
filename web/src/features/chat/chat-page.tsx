@@ -1378,7 +1378,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
               ) : null}
               {skillDiscovery && msgSlice.items.length > 0 ? (
                 <div className="mb-2 text-right">
-                  <Link to="/skills" className="text-xs text-accent-fg hover:underline">
+                  <Link to="/capabilities/skills" className="text-xs text-accent-fg hover:underline">
                     {m.skills.findBack}
                   </Link>
                 </div>

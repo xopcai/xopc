@@ -9,6 +9,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  getExtensionMarketplaceItems,
   getExtensionMarketplacePackageDetail,
   installExtensionFromMarketplace,
   uninstallExtensionFromDisk,
@@ -19,25 +20,8 @@ import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload'
 import type { ExtensionApiRow } from '@/features/extensions/types';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { fetchJson } from '@/lib/fetch';
-import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-
-type RegistryEntry = {
-  id: string;
-  name: string;
-  description?: string;
-  npmPackage: string;
-  version?: string;
-  categories?: string[];
-  tags?: string[];
-  verified?: boolean;
-  homepage?: string;
-  author?: string;
-};
-
-type MarketplaceResponse = { ok: boolean; extensions: RegistryEntry[] };
 
 /** Same catalog id on disk: bundled vs user/global/workspace. */
 function extensionInstallKind(
@@ -51,7 +35,6 @@ function extensionInstallKind(
 }
 
 type MarketplaceUi = {
-  q: string;
   debounced: string;
   detailPkg: string | null;
   rowBusy: string | null;
@@ -60,7 +43,6 @@ type MarketplaceUi = {
 };
 
 const initialMarketplaceUi: MarketplaceUi = {
-  q: '',
   debounced: '',
   detailPkg: null,
   rowBusy: null,
@@ -68,7 +50,15 @@ const initialMarketplaceUi: MarketplaceUi = {
   restartHint: null,
 };
 
-export function ExtensionMarketplacePanel({ className }: { className?: string }) {
+export function ExtensionMarketplacePanel({
+  className,
+  query,
+  onQueryChange,
+}: {
+  className?: string;
+  query: string;
+  onQueryChange: (query: string) => void;
+}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const copy = m.extensionsPage;
@@ -76,23 +66,17 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
   const extensions = useExtensions();
   const { mutate } = useSWRConfig();
   const [ui, dispatch] = useReducer(uiPatchReducer<MarketplaceUi>, initialMarketplaceUi);
-  const { q, debounced, detailPkg, rowBusy, actionError, restartHint } = ui;
+  const { debounced, detailPkg, rowBusy, actionError, restartHint } = ui;
   const listKey = hasToken ? `marketplace-${debounced}` : null;
 
   useEffect(() => {
-    const t = window.setTimeout(() => dispatch({ type: 'patch', patch: { debounced: q.trim() } }), 300);
+    const t = window.setTimeout(() => dispatch({ type: 'patch', patch: { debounced: query.trim() } }), 300);
     return () => window.clearTimeout(t);
-  }, [q]);
+  }, [query]);
 
   const { data, isLoading, error } = useSWR(
     listKey,
-    async () => {
-      const url =
-        debounced.length > 0
-          ? apiUrl(`/api/marketplace?q=${encodeURIComponent(debounced)}`)
-          : apiUrl('/api/marketplace');
-      return fetchJson<MarketplaceResponse>(url);
-    },
+    () => getExtensionMarketplaceItems(debounced),
     { revalidateOnFocus: false },
   );
 
@@ -145,7 +129,7 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
     [copy.marketplaceRestartHint, copy.marketplaceUninstallFailed, refetchExtensions],
   );
 
-  const extensionsList = data?.extensions ?? [];
+  const extensionsList = data ?? [];
 
   return (
     <div className={cn('flex flex-col gap-4', className)}>
@@ -157,8 +141,8 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
         />
         <input
           type="search"
-          value={q}
-          onChange={(e) => dispatch({ type: 'patch', patch: { q: e.target.value } })}
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
           placeholder={copy.marketplaceSearchPlaceholder}
           className="ui-input h-10 w-full rounded-lg border border-edge bg-surface-base pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted"
         />
@@ -517,7 +501,7 @@ function ExtensionMarketplaceDetailDialog({
                 <div className="flex w-full flex-col items-stretch gap-2">
                   <p className="text-sm leading-relaxed text-fg-muted">{copy.marketplaceBuiltinManageHint}</p>
                   <Link
-                    to="/extensions?tab=builtin"
+                    to="/capabilities/extensions?tab=builtin"
                     onClick={onClose}
                     className="inline-flex w-fit items-center justify-center rounded-lg border border-edge px-3 py-2 text-sm font-medium text-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >

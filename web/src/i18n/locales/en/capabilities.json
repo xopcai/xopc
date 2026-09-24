@@ -1,0 +1,28 @@
+{
+  "capabilitiesHub": {
+    "title": "Capabilities",
+    "navAria": "Capability sections",
+    "tabDiscover": "Discover",
+    "tabSkills": "Skills",
+    "tabConnectors": "Connections",
+    "tabExtensions": "Extensions",
+    "discoverLoading": "Loading capabilities",
+    "searchPlaceholder": "Search skills, connectors, and extensions",
+    "searchLabel": "Search capabilities",
+    "filterAria": "Filter by capability type",
+    "filterAll": "All",
+    "partialResults": "Some sources are unavailable. Showing the remaining results.",
+    "loadFailed": "Could not load the capability catalog.",
+    "emptyTitle": "No matching capabilities",
+    "emptyBody": "Try a different search or filter.",
+    "statusAvailable": "Available",
+    "statusInstalled": "Installed",
+    "statusAttention": "Needs attention",
+    "kindSkill": "Skill",
+    "kindConnector": "Connector",
+    "kindExtension": "Extension",
+    "viewAction": "View",
+    "manageAction": "Manage",
+    "noDescription": "No description"
+  }
+}
