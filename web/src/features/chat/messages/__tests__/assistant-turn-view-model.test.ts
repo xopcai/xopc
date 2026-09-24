@@ -5,7 +5,7 @@ import type { Message, ReasoningLevel } from '@/features/chat/messages/messages.
 
 describe('buildAssistantTurnViewModel', () => {
   it('keeps separate deliveries while deduplicating replayed tool calls', () => {
-    const delivery = { version: 2, operation: 'opened', presentation: { kind: 'table', items: [], truncated: false } };
+    const delivery = { version: 2, operation: 'updated', presentation: { kind: 'table', items: [], truncated: false } };
     const block = { type: 'tool_use' as const, id: 'query', name: 'xopc_use', status: 'done' as const, details: { delivery } };
     const view = buildAssistantTurnViewModel({ message: { role: 'assistant', content: [block, { ...block, id: 'other-query' }, block] },
       isStreaming: false, reasoningLevel: 'off' });
@@ -195,6 +195,39 @@ describe('buildAssistantTurnViewModel', () => {
       isStreaming: false,
       reasoningLevel: 'off',
     });
+
+    expect(view.deliveries).toEqual([]);
+  });
+
+  it('does not promote read-only delivery results', () => {
+    const openedFile = {
+      version: 2,
+      operation: 'opened',
+      primary: {
+        kind: 'file',
+        id: 'workspace.readme',
+        title: 'README.md',
+        capabilities: ['preview'],
+      },
+    } as const;
+    const openedList = {
+      version: 2,
+      operation: 'opened',
+      presentation: {
+        kind: 'table',
+        truncated: false,
+        items: [{ kind: 'task', id: 'task-1', title: 'Existing task', capabilities: ['open'] }],
+      },
+    } as const;
+    const message: Message = {
+      role: 'assistant',
+      content: [
+        { type: 'tool_use', id: 'file-open', name: 'read_file', status: 'done', details: { delivery: openedFile } },
+        { type: 'tool_use', id: 'task-list', name: 'xopc_use', status: 'done', details: { delivery: openedList } },
+      ],
+    };
+
+    const view = buildAssistantTurnViewModel({ message, isStreaming: false, reasoningLevel: 'off' });
 
     expect(view.deliveries).toEqual([]);
   });

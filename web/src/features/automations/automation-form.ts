@@ -52,6 +52,7 @@ export interface FormState {
   eventPayloadMatch: string;
   actionMode: ActionMode;
   agentId: string;
+  model: string;
   instruction: string;
   workflowId: string;
   workflowGoal: string;
@@ -84,6 +85,7 @@ export const initialForm: FormState = {
   eventPayloadMatch: '',
   actionMode: 'agent',
   agentId: '',
+  model: '',
   instruction: '',
   workflowId: '',
   workflowGoal: '',
@@ -243,6 +245,7 @@ export function buildInput(
       kind: 'agent',
       instruction: form.instruction.trim(),
       ...(form.agentId.trim() ? { agentId: form.agentId.trim() } : {}),
+      ...(form.model.trim() ? { model: form.model.trim() } : {}),
     };
   }
 
@@ -447,6 +450,7 @@ export function formFromAutomation(
     projectId: automation.projectId ?? '',
     actionMode: action.kind,
     agentId: action.kind === 'browser_automation' ? '' : (action.agentId ?? ''),
+    model: action.kind === 'agent' ? (action.model ?? '') : '',
     instruction: action.kind === 'agent' ? action.instruction : '',
     workflowId: action.kind === 'workflow' ? action.workflowId : '',
     workflowGoal: action.kind === 'workflow' ? (action.goal ?? '') : '',
@@ -506,6 +510,7 @@ export function buildAutomationEditInput(
       ...automation.action,
       ...input.action,
       agentId: input.action.agentId,
+      model: input.action.model,
     };
   } else if (
     automation.action.kind === 'workflow' &&

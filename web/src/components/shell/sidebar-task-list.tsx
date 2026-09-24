@@ -264,7 +264,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   contextLabel?: string;
   onNavigate?: () => void;
   mutate: () => void;
-  onRequestRename: (key: string) => void;
+  onRequestRename: (session: SessionMetadata) => void;
   onRequestDelete: (key: string) => void;
   sb: ReturnType<typeof messages>['sidebar'];
   sess: ReturnType<typeof messages>['sessions'];
@@ -329,7 +329,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         onDoubleClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          onRequestRename(session.key);
+          onRequestRename(session);
         }}
       >
         {showIdentityIcon ? <span className="flex size-4 shrink-0 items-center justify-center text-fg-muted" title={identityLabel}>
@@ -427,7 +427,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
                 className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
                 onClick={() => {
                   setMenuOpen(false);
-                  onRequestRename(session.key);
+                  onRequestRename(session);
                 }}
               >
                 <Pencil className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
@@ -640,7 +640,7 @@ function SidebarProjectSection({
   onRequestProjectRemove: (project: Project) => void;
   onNavigate?: () => void;
   mutate: () => void;
-  onRequestRename: (key: string) => void;
+  onRequestRename: (session: SessionMetadata) => void;
   onRequestDelete: (key: string) => void;
   sb: ReturnType<typeof messages>['sidebar'];
   sess: ReturnType<typeof messages>['sessions'];
@@ -787,7 +787,7 @@ function SidebarInboxSection({
   activeConversationId?: string;
   onNavigate?: () => void;
   mutate: () => void;
-  onRequestRename: (key: string) => void;
+  onRequestRename: (session: SessionMetadata) => void;
   onRequestDelete: (key: string) => void;
   sb: ReturnType<typeof messages>['sidebar'];
   sess: ReturnType<typeof messages>['sessions'];
@@ -900,7 +900,7 @@ function SidebarPinnedSection({
   activeConversationId?: string;
   onNavigate?: () => void;
   mutate: () => void;
-  onRequestRename: (key: string) => void;
+  onRequestRename: (session: SessionMetadata) => void;
   onRequestDelete: (key: string) => void;
   sb: ReturnType<typeof messages>['sidebar'];
   sess: ReturnType<typeof messages>['sessions'];
@@ -1113,8 +1113,6 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     [items],
   );
 
-  const operationItems = useMemo(() => [...discovery.items, ...items], [items, discovery.items]);
-
   const hasGroupedItems = projectGroups.length > 0 || inboxItems.length > 0;
 
   const pinnedSessions = useMemo(
@@ -1217,11 +1215,10 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     setIncludedConversationId((prev) => (prev === activeConversationId ? prev : activeConversationId));
   }, [activeConversationId, data, items, token]);
 
-  const openRename = useCallback((key: string) => {
-    const row = operationItems.find((s) => s.key === key);
-    setRenameKey(key);
-    setRenameDraft(row?.name?.trim() ?? '');
-  }, [operationItems]);
+  const openRename = useCallback((session: SessionMetadata) => {
+    setRenameKey(session.key);
+    setRenameDraft(sessionTitle(session, m.chat.newSession));
+  }, [m.chat.newSession]);
 
   const runRename = async () => {
     if (!renameKey) return;
@@ -1449,7 +1446,6 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     }
   }, [createProjectName, createProjectWorkspace, creatingProject, refreshSidebar, autoUnderstand]);
 
-  const renameTarget = renameKey ? operationItems.find((s) => s.key === renameKey) : undefined;
   const renameProjectTarget = renameProjectId
     ? projectGroups.find((group) => group.project.id === renameProjectId)?.project
     : undefined;
@@ -1785,7 +1781,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                 formControlBorderFocusClass,
                 'dark:border-edge',
               )}
-              placeholder={renameTarget ? sessionTitle(renameTarget, m.chat.newSession) : ''}
+              placeholder={m.chat.newSession}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
