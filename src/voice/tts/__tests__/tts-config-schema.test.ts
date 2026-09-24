@@ -14,11 +14,11 @@ describe('TTSConfigSchema', () => {
   it('accepts extension provider ids and providers map', () => {
     const parsed = TTSConfigSchema.parse({
       enabled: true,
-      provider: 'tts-local-cli',
+      provider: 'sample-speech',
       providers: {
-        'tts-local-cli': {
-          command: 'piper --text {{Text}}',
-          outputFormat: 'wav',
+        'sample-speech': {
+          endpoint: 'https://speech.example.test',
+          outputFormat: 'mp3',
         },
         openai: {
           apiKey: 'sk-test',
@@ -27,8 +27,8 @@ describe('TTSConfigSchema', () => {
       },
     });
 
-    expect(parsed.provider).toBe('tts-local-cli');
-    expect(parsed.providers?.['tts-local-cli']?.command).toBe('piper --text {{Text}}');
+    expect(parsed.provider).toBe('sample-speech');
+    expect(parsed.providers?.['sample-speech']?.endpoint).toBe('https://speech.example.test');
   });
 
   it('rejects legacy flat provider keys (must live under providers.<id>)', () => {
@@ -45,10 +45,10 @@ describe('TTSConfigSchema', () => {
     const parsed = TTSConfigSchema.parse({
       fallback: {
         enabled: true,
-        order: ['tts-local-cli', 'openai'],
+        order: ['sample-speech', 'openai'],
       },
     });
 
-    expect(parsed.fallback?.order).toEqual(['tts-local-cli', 'openai']);
+    expect(parsed.fallback?.order).toEqual(['sample-speech', 'openai']);
   });
 });

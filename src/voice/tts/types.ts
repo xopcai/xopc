@@ -3,7 +3,7 @@
  */
 
 /** Built-in provider ids shipped in core. Extensions add more at runtime. */
-export type BuiltinTTSProvider = 'openai' | 'alibaba' | 'edge' | 'minimax' | 'tts-local-cli';
+export type BuiltinTTSProvider = 'openai' | 'alibaba' | 'edge' | 'minimax';
 
 /** Any registered SpeechProviderPlugin id (built-in or extension). */
 export type TTSProvider = string;

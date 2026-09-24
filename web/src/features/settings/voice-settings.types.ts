@@ -5,7 +5,7 @@
  * `tts` (mapped from `messages.tts`). This file mirrors those keys 1:1.
  *
  * Provider id for TTS is intentionally an open `string` so extension-registered
- * SpeechProviderPlugins (e.g. `tts-local-cli`) appear in the dropdown without
+ * SpeechProviderPlugins appear in the dropdown without
  * a type bump.
  */
 

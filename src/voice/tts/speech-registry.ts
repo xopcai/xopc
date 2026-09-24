@@ -2,7 +2,7 @@
  * SpeechProviderRegistry — central lookup for SpeechProviderPlugin instances.
  *
  * Per docs/voice-rearchitecture.md §11:
- *   - Bundled providers (openai/alibaba/edge/minimax/local-cli) self-register at
+ *   - Bundled providers (openai/alibaba/edge/minimax) self-register at
  *     module load time via `registerSpeechProvider()`.
  *   - Extension-loaded providers register through `extensions/sdk/speech.ts`
  *     re-exports of the same registration call.

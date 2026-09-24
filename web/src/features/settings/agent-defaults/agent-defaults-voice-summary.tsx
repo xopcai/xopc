@@ -13,7 +13,6 @@ const PROVIDER_NAMES: Record<string, string> = {
   groq: 'Groq',
   minimax: 'MiniMax',
   openai: 'OpenAI',
-  'tts-local-cli': 'Local TTS',
 };
 
 function configuredValue(

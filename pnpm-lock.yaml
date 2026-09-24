@@ -771,8 +771,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  extensions/tts-local-cli: {}
-
   extensions/weixin:
     dependencies:
       '@xopcai/xopc':
