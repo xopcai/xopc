@@ -1,48 +1,11 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown, Plus, Search, Store, Wrench } from 'lucide-react';
-import { memo } from 'react';
+import { ChevronDown, Loader2, MoreHorizontal, Plus, RefreshCw, Settings, Store, Wrench } from 'lucide-react';
+import { memo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { RefreshButton } from '@/components/ui/refresh-button';
 import { ConnectorServiceDialog } from '../connector-service-page';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
-
-export const ConnectorSearchField = memo(function ConnectorSearchField({
-  value,
-  onChange,
-  placeholder,
-  className,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  className?: string;
-}) {
-  return (
-    <label className={cn(
-      'relative flex min-h-11 sm:min-h-9 min-w-0 flex-1 cursor-text items-center rounded-pill border border-edge bg-surface-panel py-1.5 pl-9 pr-3 focus-within:ring-2 focus-within:ring-accent',
-      className,
-    )}>
-      <Search
-        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-disabled"
-        strokeWidth={1.75}
-        aria-hidden
-      />
-      <input
-        type="search"
-        aria-label={placeholder}
-        enterKeyHint="search"
-        value={value}
-        onChange={(event) => onChange(event.currentTarget.value)}
-        placeholder={placeholder}
-        autoComplete="off"
-        spellCheck={false}
-        className="min-w-0 flex-1 appearance-none border-0 bg-transparent py-0.5 text-base sm:text-sm leading-normal text-fg caret-current placeholder:text-fg-disabled focus:border-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none"
-      />
-    </label>
-  );
-});
 
 export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
   onRefresh,
@@ -53,6 +16,8 @@ export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
   addLabel,
   browseLabel,
   customLabel,
+  serviceLabel,
+  moreActionsLabel,
 }: {
   onRefresh?: () => void;
   refreshing: boolean;
@@ -62,25 +27,42 @@ export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
   addLabel: string;
   browseLabel: string;
   customLabel: string;
+  serviceLabel: string;
+  moreActionsLabel: string;
 }) {
+  const [serviceOpen, setServiceOpen] = useState(false);
+  const menuItemClassName = cn(
+    'touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[highlighted]:bg-surface-hover',
+    interaction.transition,
+  );
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-      {onRefresh ? (
-        <RefreshButton
-          className="size-9 shrink-0 p-0"
-          loading={refreshing}
-          label={refreshLabel}
-          title={refreshLabel}
-          onClick={onRefresh}
-        />
-      ) : null}
-      <ConnectorServiceDialog />
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
-          <Button type="button" variant="primary" className="shrink-0 gap-2">
+          <Button type="button" variant="primary" className="shrink-0 gap-2" aria-label={addLabel}>
             <Plus className="size-4" strokeWidth={1.75} aria-hidden />
-            {addLabel}
+            <span className="hidden sm:inline">{addLabel}</span>
             <ChevronDown className="size-3.5" strokeWidth={1.75} aria-hidden />
+          </Button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content className="z-50 min-w-[14rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge" sideOffset={6} align="end">
+            <DropdownMenu.Item className={menuItemClassName} onSelect={onBrowseCatalog}>
+              <Store className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+              {browseLabel}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className={menuItemClassName} onSelect={onAddCustomServer}>
+              <Wrench className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+              {customLabel}
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+      <ConnectorServiceDialog open={serviceOpen} onOpenChange={setServiceOpen} hideTrigger />
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <Button type="button" variant="secondary" className="size-9 shrink-0 p-0" aria-label={moreActionsLabel} title={moreActionsLabel}>
+            <MoreHorizontal className="size-4" aria-hidden />
           </Button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
@@ -89,25 +71,15 @@ export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
             sideOffset={6}
             align="end"
           >
-            <DropdownMenu.Item
-              className={cn(
-                'touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover',
-                interaction.transition,
-              )}
-              onSelect={onBrowseCatalog}
-            >
-              <Store className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
-              {browseLabel}
-            </DropdownMenu.Item>
-            <DropdownMenu.Item
-              className={cn(
-                'touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover',
-                interaction.transition,
-              )}
-              onSelect={onAddCustomServer}
-            >
-              <Wrench className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
-              {customLabel}
+            {onRefresh ? (
+              <DropdownMenu.Item className={menuItemClassName} disabled={refreshing} onSelect={onRefresh}>
+                {refreshing ? <Loader2 className="size-4 animate-spin text-fg-muted" aria-hidden /> : <RefreshCw className="size-4 text-fg-muted" aria-hidden />}
+                {refreshLabel}
+              </DropdownMenu.Item>
+            ) : null}
+            <DropdownMenu.Item className={menuItemClassName} onSelect={() => setServiceOpen(true)}>
+              <Settings className="size-4 text-fg-muted" aria-hidden />
+              {serviceLabel}
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>

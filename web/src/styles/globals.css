@@ -9,10 +9,11 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* macOS / iOS first: SF Pro via system fonts; sensible fallbacks elsewhere */
+  /* Figtree first for the default, Emerald, and Porcelain themes; system fallbacks elsewhere. */
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-    system-ui, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC",
+    "Figtree Variable", Figtree, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto,
+    "Helvetica Neue", "PingFang SC",
     "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", 微软雅黑,
     sans-serif;
   --font-mono:

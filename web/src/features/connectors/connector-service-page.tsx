@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { X } from 'lucide-react';
+import { Settings, X } from 'lucide-react';
 import { useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
@@ -29,16 +29,25 @@ function ConnectorServiceDescription() {
   return <>{zh ? '此设置决定新账号通过哪个服务连接。已有账号继续使用其原来的连接服务。' : 'Choose the service for new accounts. Existing accounts keep their original service.'}</>;
 }
 
-export function ConnectorServiceDialog() {
+export function ConnectorServiceDialog({
+  open,
+  onOpenChange,
+  hideTrigger = false,
+}: {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+} = {}) {
   const language = useLocaleStore(state => state.language);
   const t = messages(language).connectorsSettings;
   const zh = language === 'zh';
-  return <Dialog.Root>
-    <Dialog.Trigger asChild>
-      <Button type="button" variant="secondary" className="shrink-0">
-        {zh ? '应用连接服务' : 'Connection service'}
+  return <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    {!hideTrigger ? <Dialog.Trigger asChild>
+      <Button type="button" variant="secondary" className="shrink-0" aria-label={zh ? '应用连接服务' : 'Connection service'}>
+        <Settings className="size-4" aria-hidden />
+        <span className="hidden sm:inline">{zh ? '应用连接服务' : 'Connection service'}</span>
       </Button>
-    </Dialog.Trigger>
+    </Dialog.Trigger> : null}
     <Dialog.Portal>
       <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
       <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(100dvh-2rem,42rem)] w-[min(100%-2rem,42rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-float">

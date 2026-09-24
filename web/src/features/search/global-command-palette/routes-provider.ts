@@ -2,7 +2,8 @@ import type { StoredLanguage } from '@/lib/storage';
 import { messages, tabLabel, type Tab } from '@/i18n/messages';
 import { capabilitySettingsPath, pathForTab } from '@/navigation';
 import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode, isSettingsPathVisibleOnPlatform } from '@/navigation/settings-nav-visibility';
-import { channelDetailPath } from '@/features/settings/channels/channels-routes';
+import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path';
+import { CHANNELS_HUB_PATH, channelDetailPath } from '@/features/settings/channels/channels-routes';
 import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
 export type RouteHitSeed = {
@@ -16,7 +17,7 @@ export type RouteHitSeed = {
 /**
  * Tabs for which the command palette offers a deep-link shortcut.
  *
- * Manifest-first agent management lives under `/agents`; browser automation
+ * Agent management lives in the capability center; browser automation
  * remains a standalone agent-related settings route.
  */
 const AGENT_SETTINGS_PALETTE_TABS: readonly Tab[] = ['settingsAgentBrowser', 'settingsComputerUse'];
@@ -67,7 +68,7 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       id: 'route:agents',
       title: m.nav.agents,
       subtitle: r.agentsSubtitle,
-      path: '/agents',
+      path: AGENTS_APP_LIST_PATH,
       keywords: ['agent', 'persona', 'switch'],
     },
     {
@@ -116,7 +117,7 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       id: 'route:channels',
       title: m.nav.channels,
       subtitle: r.channelsSubtitle,
-      path: '/channels',
+      path: CHANNELS_HUB_PATH,
       keywords: ['telegram', 'weixin', 'feishu', 'channel'],
     },
     {

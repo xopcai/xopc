@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { AlertTriangle, ArrowLeft, CheckCircle, Loader2, Package, Search, ShieldCheck, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle, Loader2, Package, ShieldCheck, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useReducer, useState } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
@@ -8,6 +8,7 @@ import useSWR, { useSWRConfig } from 'swr';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CapabilityIcon } from '@/features/capabilities/capability-icon';
 import {
   getExtensionMarketplaceItems,
   getExtensionMarketplacePackageDetail,
@@ -53,11 +54,9 @@ const initialMarketplaceUi: MarketplaceUi = {
 export function ExtensionMarketplacePanel({
   className,
   query,
-  onQueryChange,
 }: {
   className?: string;
   query: string;
-  onQueryChange: (query: string) => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -133,21 +132,6 @@ export function ExtensionMarketplacePanel({
 
   return (
     <div className={cn('flex flex-col gap-4', className)}>
-      <div className="relative">
-        <Search
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted"
-          strokeWidth={1.75}
-          aria-hidden
-        />
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder={copy.marketplaceSearchPlaceholder}
-          className="ui-input h-10 w-full rounded-lg border border-edge bg-surface-base pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted"
-        />
-      </div>
-
       {error ? (
         <p className="text-sm text-fg-muted">
           {error instanceof Error ? error.message : copy.marketplaceLoadFailed}
@@ -201,6 +185,7 @@ export function ExtensionMarketplacePanel({
                       'dark:hover:bg-surface-hover/25 dark:active:bg-surface-hover/35',
                     )}
                   >
+                    <CapabilityIcon iconUrl={e.branding?.iconUrl} fallback={Package} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold text-fg">{e.name}</h3>

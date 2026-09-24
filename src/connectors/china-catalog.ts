@@ -15,10 +15,11 @@ export const CHINA_CONNECTORS: readonly ConnectorDefinition[] = [
     integrationStrategy: { lane: 'native', workload: 'core', preferred: true },
   },
   {
-    id: 'wecom-workspace', version: '1.3.0', displayName: '企业微信办公',
+    id: 'wecom-workspace', version: '1.3.0', displayName: '企业微信',
     description: '扫码连接企业微信，搜索和读取文档、查询联系人和待办，并按权限创建待办。',
     category: 'docs', kind: 'cli', source: 'builtin', capabilities: ['tools'],
     benefits: ['understand', 'act'], tags: ['中国', 'WeCom', '企业微信', '文档', '联系人', '待办'],
+    branding: { logoUrl: '/connector-icons/wecom.svg', source: 'builtin' },
     verificationLevel: 'beta', auth: { mode: 'cli' }, setup: {},
     runtime: { type: 'cli', adapterId: 'wecom', adapterVersion: '1', binaryVersion: '1.3.0' },
     permissions: { localExec: true, data: ['documents', 'contacts', 'tasks'], networkDomains: ['qyapi.weixin.qq.com'] },

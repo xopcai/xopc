@@ -1,1 +1,0 @@
-export { ChannelsSettingsPanel } from './channels';

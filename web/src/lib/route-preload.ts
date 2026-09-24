@@ -11,10 +11,8 @@ export const loadCapabilitiesPage = () => import('@/features/capabilities/capabi
 export const loadUserModelPage = () => import('@/features/user-model/user-model-page');
 export const loadLogsPage = () => import('@/pages/logs-page');
 export const loadSettingsPage = () => import('@/pages/settings-page');
-export const loadAgentsSettingsPage = () => import('@/features/settings/agents');
 export const loadAgentBrowserSettingsPage = () => import('@/features/settings/browser/browser-settings-page');
 export const loadComputerSettingsPage = () => import('@/features/settings/computer/computer-settings-page');
-export const loadChannelsPage = () => import('@/features/settings/channels-settings');
 export const loadExtensionPage = () => import('@/features/extensions/extension-page');
 export const loadExtensionSettingsPage = () => import('@/features/extensions/extension-settings-page');
 export const loadExtensionDebugPage = () => import('@/features/extensions/extension-debug-page');
@@ -95,8 +93,6 @@ export function preloadRouteForPath(to: string) {
   if (path === '/notes') return preload(loadNotesPage);
   if (path.startsWith('/notes/')) return preload(loadNotesPage);
   if (path === '/workflows' || path.startsWith('/workflows/')) return preload(loadWorkflowsPage);
-  if (path === '/channels' || path.startsWith('/channels/')) return preload(loadChannelsPage);
-  if (path === '/agents' || path.startsWith('/agents/')) return preload(loadAgentsSettingsPage);
   if (path.startsWith('/extensions/')) return preload(loadExtensionPage);
   if (path === '/local-apps') return preload(loadLocalAppsPage);
   if (path.startsWith('/local-apps/')) return preload(loadLocalAppWorkbenchPage);

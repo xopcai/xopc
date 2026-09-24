@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ClipboardCopy,
   ExternalLink,
+  Folder,
   FolderOpen,
   Loader2,
   MoreHorizontal,
@@ -676,6 +677,7 @@ function SidebarProjectSection({
           title={group.project.name}
           aria-expanded={!isCollapsed}
         >
+          <Folder className="size-3.5 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden />
           <span className="min-w-0 flex-1 truncate">{group.project.name}</span>
         </button>
         <SidebarProjectMenu
