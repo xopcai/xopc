@@ -1,10 +1,11 @@
 import { type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import type { Config } from '../../config/schema.js';
-import { resolveModel } from '../../providers/index.js';
+import { resolveModelSelector } from '../../config/agent-model-intents.js';
+import { getAgentDefaultModelRef } from '../../config/schema.js';
+import { getDefaultModelSync, resolveModel } from '../../providers/index.js';
 import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import { createLogger } from '../../utils/logger.js';
-import { resolveDraftModelRef } from '../../workflows/draft/workflow-draft-service.js';
 import {
   buildAutomationDraftPrompt,
   buildAutomationDraftRepairPrompt,
@@ -39,7 +40,7 @@ export class AutomationDraftService {
     const prompt = request.prompt.trim();
     if (!prompt) throw new Error('prompt is required');
 
-    const modelRef = resolveDraftModelRef(this.options.config, request.agentId);
+    const modelRef = resolveAutomationDraftModelRef(this.options.config, request.agentId);
     const model = resolveModel(modelRef);
     const maxRepairAttempts = this.options.maxRepairAttempts ?? DEFAULT_MAX_REPAIR_ATTEMPTS;
     let messageContent = buildAutomationDraftPrompt({ prompt, language: request.language });
@@ -91,7 +92,7 @@ export class AutomationDraftService {
     request: CreateAutomationRepairDraftRequest,
     signal?: AbortSignal,
   ): Promise<AutomationRepairDraftResponse> {
-    const modelRef = resolveDraftModelRef(this.options.config, request.agentId);
+    const modelRef = resolveAutomationDraftModelRef(this.options.config, request.agentId);
     const model = resolveModel(modelRef);
     const maxRepairAttempts = this.options.maxRepairAttempts ?? DEFAULT_MAX_REPAIR_ATTEMPTS;
     let messageContent = buildAutomationRunRepairPrompt({
@@ -140,6 +141,14 @@ export class AutomationDraftService {
     const message = `Unable to generate a valid automation repair draft after ${maxRepairAttempts + 1} attempts`;
     log.warn({ modelRef, issues: lastIssues, preview: lastText.slice(0, 500) }, message);
     throw new Error(message);
+  }
+}
+
+function resolveAutomationDraftModelRef(config: Config, agentId: string): string {
+  try {
+    return resolveModelSelector(config, agentId, 'reasoning');
+  } catch {
+    return getAgentDefaultModelRef() ?? getDefaultModelSync(config);
   }
 }
 

@@ -69,9 +69,10 @@ export const AGENT_CAPABILITY_DEFINITIONS = [
   {
     id: 'workflow-authoring',
     label: 'Workflow authoring',
-    description: 'Design, validate, and run xopc workflows.',
+    description: 'Create, revise, validate, publish, and run xopc workflows in conversation.',
     category: 'authoring',
-    tools: ['workflow'],
+    tools: ['workflow_manage', 'workflow'],
+    requiredSkills: ['workflow-authoring'],
     activation: { mode: 'explicit', ttl: 'until-complete' },
     permissions: { writesFiles: true, runsCode: true, requiresConfirm: true },
   },

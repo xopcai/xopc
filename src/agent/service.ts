@@ -660,6 +660,10 @@ export class AgentService {
     return this.agentManager.getSkillMarkdownSource(skillName);
   }
 
+  getWorkflowSkillInstructions(agentId: string, names: readonly string[]): string | undefined {
+    return this.agentManager.getWorkflowSkillInstructions(agentId, names);
+  }
+
   refreshSkillsAfterDiskChange(): void {
     this.agentManager.refreshSkillsAfterDiskChange();
   }

@@ -5,6 +5,7 @@ import type { SessionStore } from '../session/store.js';
 
 export interface GatewayWorkflowAgentSurface {
   getModelForSession(conversationId: string): string;
+  getWorkflowSkillInstructions(agentId: string, names: readonly string[]): string | undefined;
 }
 
 /** Minimal gateway surface for workflow run + session bridge (breaks circular imports). */
