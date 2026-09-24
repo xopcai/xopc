@@ -23,6 +23,7 @@ import {
   productDeliveryDiffPresentations,
   productDeliveryInlineApps,
   productDeliveryInlinePreviews,
+  isProductDeliveryVisibleResult,
   productDeliveryQueryState,
   productDeliveryReferences,
 } from '@/features/chat/product-delivery/product-delivery-model';
@@ -291,12 +292,13 @@ export function AssistantResultTail({
   const localeLanguage = useLocaleStore((state) => state.language);
   const language = localeLanguage === 'zh' ? 'zh' : 'en';
   const preview = useAttachmentPreview({ layout: 'assistant', conversationId, projectId });
-  const diffPresentations = productDeliveryDiffPresentations(view.deliveries);
-  const inlineApps = productDeliveryInlineApps(view.deliveries);
-  const inlinePreviews = productDeliveryInlinePreviews(view.deliveries);
-  const queryState = productDeliveryQueryState(view.deliveries);
+  const visibleDeliveries = view.deliveries.filter(({ delivery }) => isProductDeliveryVisibleResult(delivery));
+  const diffPresentations = productDeliveryDiffPresentations(visibleDeliveries);
+  const inlineApps = productDeliveryInlineApps(visibleDeliveries);
+  const inlinePreviews = productDeliveryInlinePreviews(visibleDeliveries);
+  const queryState = productDeliveryQueryState(visibleDeliveries);
   const supersededFileReferences = outcomeFileReferenceKeys(view.outcome);
-  const productCount = productDeliveryReferences(view.deliveries, supersededFileReferences).length;
+  const productCount = productDeliveryReferences(visibleDeliveries, supersededFileReferences).length;
   const attachments = [
     ...outcomeAttachments(view.outcome, language),
     ...standaloneAttachments(view.attachments, language),
@@ -334,7 +336,7 @@ export function AssistantResultTail({
         <TurnTail label={language === 'zh' ? '本轮交付结果' : 'Turn deliverables'}>
           <ul className="m-0 list-none divide-y divide-edge-subtle p-0">
             <ProductDeliveryRows
-              deliveries={view.deliveries}
+              deliveries={visibleDeliveries}
               language={language}
               excludedReferenceKeys={supersededFileReferences}
             />

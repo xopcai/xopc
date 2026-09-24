@@ -22,6 +22,7 @@ import {
   type SearchSource,
 } from '@/features/chat/tool-results/search-source-utils';
 import { extractProductDelivery } from '@/features/chat/product-delivery/product-delivery';
+import { isProductDeliveryVisibleResult } from '@/features/chat/product-delivery/product-delivery-model';
 import type { ProductDeliveryEnvelope } from '@xopcai/gateway-contract';
 
 export type AssistantTurnLifecycleState =
@@ -62,6 +63,7 @@ export interface AssistantTurnWorkLogPresentation {
 }
 
 function isTurnResultDelivery(delivery: ProductDeliveryEnvelope): boolean {
+  if (!isProductDeliveryVisibleResult(delivery)) return false;
   if (delivery.presentation || delivery.related?.length) return true;
   if (!delivery.primary) return false;
   return delivery.primary.kind !== 'note'
