@@ -8,6 +8,7 @@ import {
 } from '../automation-form';
 import type { Automation, AutomationInput } from '../automation-api';
 import type { WorkflowDefinition } from '@/features/workflows/workflow-api';
+import { isSystemManagedAutomation } from '../automations-workspace';
 
 const workflow: WorkflowDefinition = {
   id: 'wf-report',
@@ -36,6 +37,25 @@ const workflow: WorkflowDefinition = {
 };
 
 describe('automation buildInput', () => {
+  it('classifies built-in and explicitly managed automations as system-owned', () => {
+    const base: Automation = {
+      id: 'user-daily-brief',
+      name: 'Daily brief',
+      enabled: true,
+      trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'Brief me.' },
+      conversationMode: 'new_session',
+      notificationPolicy: 'attention',
+      state: {},
+      createdAtMs: 1,
+      updatedAtMs: 1,
+    };
+
+    expect(isSystemManagedAutomation(base)).toBe(false);
+    expect(isSystemManagedAutomation({ ...base, id: 'system-memory-daily-reconciliation' })).toBe(true);
+    expect(isSystemManagedAutomation({ ...base, description: '[managed-by=extension:calendar]' })).toBe(true);
+  });
+
   it('round-trips an AI-generated weekly schedule through the editable form', () => {
     const automation: AutomationInput = {
       name: 'Weekly report',

@@ -1,4 +1,4 @@
-import { Box, Cable, CircleDotDashed, FolderKanban, GitBranch, Home, Layers, MonitorPlay, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
+import { Box, CircleDotDashed, FolderKanban, GitBranch, Home, Layers, MonitorPlay, Plug, StickyNote, Users, Zap } from 'lucide-react';
 
 import type { LucideIcon } from '@/features/extensions/extension-nav-icon';
 
@@ -18,8 +18,7 @@ export type NavItem = {
 
 export type BuiltinNavId =
   | 'builtin:agents'
-  | 'builtin:skills'
-  | 'builtin:connectors'
+  | 'builtin:capabilities'
   | 'builtin:localApps'
   | 'builtin:scenes'
   | 'builtin:home'
@@ -28,8 +27,7 @@ export type BuiltinNavId =
   | 'builtin:browserAutomations'
   | 'builtin:notes'
   | 'builtin:workflows'
-  | 'builtin:channels'
-  | 'builtin:extensions';
+  | 'builtin:channels';
 
 export type BuiltinNavDef = {
   id: BuiltinNavId;
@@ -43,8 +41,7 @@ export type BuiltinNavDef = {
  */
 export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:home', to: '/', Icon: Home },
-  { id: 'builtin:skills', to: '/skills', Icon: Layers },
-  { id: 'builtin:connectors', to: '/connectors', Icon: Cable },
+  { id: 'builtin:capabilities', to: '/capabilities/discover', Icon: Layers },
   { id: 'builtin:automations', to: '/automations', Icon: Zap },
   { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
   { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
@@ -53,7 +50,6 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
   { id: 'builtin:browserAutomations', to: '/browser-automations', Icon: MonitorPlay },
   { id: 'builtin:localApps', to: '/local-apps', Icon: Box },
-  { id: 'builtin:extensions', to: '/extensions', Icon: Puzzle },
   { id: 'builtin:scenes', to: '/scenes', Icon: CircleDotDashed },
 ] as const;
 
@@ -66,10 +62,10 @@ export function builtinNavDefsForFeatures(scenesEnabled: boolean): readonly Buil
 /** Product-level destinations shown by default; advanced capabilities live under More. */
 export const PRIMARY_NAV_IDS = [
   'builtin:home',
-  'builtin:skills',
-  'builtin:connectors',
+  'builtin:capabilities',
   'builtin:automations',
   'builtin:projects',
+  'builtin:notes',
 ] as const satisfies readonly BuiltinNavId[];
 
 /** Adjustable shortcut-row bounds, excluding "New chat" and "More". */

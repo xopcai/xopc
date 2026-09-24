@@ -58,7 +58,7 @@ export function buildAutomationActionHits(
       keywords: ['skills', 'skill', 'catalog'],
       run: () => {
         closePalette();
-        navigate('/skills');
+        navigate('/capabilities/skills');
       },
     },
     {

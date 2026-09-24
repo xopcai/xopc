@@ -1,5 +1,5 @@
 import { Loader2, Settings2, SlidersHorizontal } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -129,7 +129,7 @@ function safeReturnPath(value: string | null): string {
   return value?.startsWith('/') && !value.startsWith('//') ? value : '/user-model';
 }
 
-export function ConnectorsPage() {
+export function ConnectorsPage({ embedded = false, onHeaderEndChange }: { embedded?: boolean; onHeaderEndChange?: (node: ReactNode | null) => void }) {
   const pluginExtensions = useExtensions().filter(extension => extension.format === 'agent-plugin');
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
@@ -434,6 +434,10 @@ export function ConnectorsPage() {
   ), [cs, hasToken, load, openAddCustomServer, selectTab, state.loading, tab]);
 
   useLayoutEffect(() => {
+    if (embedded) {
+      onHeaderEndChange?.(headerEnd);
+      return () => onHeaderEndChange?.(null);
+    }
     setPageHeader({
       startExtra: null,
       main: (
@@ -444,7 +448,7 @@ export function ConnectorsPage() {
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, cs.title, headerEnd, setPageHeader]);
+  }, [clearPageHeader, cs.title, embedded, headerEnd, onHeaderEndChange, setPageHeader]);
 
   const connectedValue = useMemo(() => state.instances.map((instance) => ({
     instance,

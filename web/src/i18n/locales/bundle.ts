@@ -6,6 +6,7 @@ import enAgents from './en/agents.json' with { type: 'json' };
 import enAutomations from './en/automations.json' with { type: 'json' };
 import enApps from './en/apps.json' with { type: 'json' };
 import enChannels from './en/channels.json' with { type: 'json' };
+import enCapabilities from './en/capabilities.json' with { type: 'json' };
 import enChat from './en/chat.json' with { type: 'json' };
 import enCron from './en/cron.json' with { type: 'json' };
 import enLogs from './en/logs.json' with { type: 'json' };
@@ -28,6 +29,7 @@ import zhAgents from './zh/agents.json' with { type: 'json' };
 import zhAutomations from './zh/automations.json' with { type: 'json' };
 import zhApps from './zh/apps.json' with { type: 'json' };
 import zhChannels from './zh/channels.json' with { type: 'json' };
+import zhCapabilities from './zh/capabilities.json' with { type: 'json' };
 import zhChat from './zh/chat.json' with { type: 'json' };
 import zhCron from './zh/cron.json' with { type: 'json' };
 import zhLogs from './zh/logs.json' with { type: 'json' };
@@ -53,6 +55,7 @@ export const en = {
   ...enAgents,
   ...enAutomations,
   ...enApps,
+  ...enCapabilities,
   ...enChannels,
   ...enChat,
   ...enCron,
@@ -80,6 +83,7 @@ export const zh = {
   ...zhAgents,
   ...zhAutomations,
   ...zhApps,
+  ...zhCapabilities,
   ...zhChannels,
   ...zhChat,
   ...zhCron,

@@ -29,7 +29,7 @@ export function SceneDiagnostics({ activationId, zh }: { activationId: string; z
     <p>{zh ? '下次定时检查' : 'Next scheduled check'}: {row.status !== 'active' || diagnostics.data?.checksPaused ? (zh ? '当前不会自动检查' : 'Automatic checks inactive') : nextCheck.length ? `${Math.min(...nextCheck) <= Date.now() ? (zh ? '等待执行，原定 ' : 'Pending, scheduled for ') : ''}${format(Math.min(...nextCheck))}` : (zh ? '暂无待执行检查' : 'No check scheduled')}</p>
     {row.deadline_at != null && <p>{zh ? '邮件跟进截止时间' : 'Mail follow-up deadline'}: {format(row.deadline_at)}</p>}
     {row.source_reason && row.source_attempt_at != null && <p>{zh ? '最近尝试读取邮件' : 'Last mail read attempt'}: {format(row.source_attempt_at)} · {zh ? '连续失败' : 'Consecutive failures'}: {row.source_failures}</p>}
-    {row.source_reason && <Link to="/connectors" className="inline-block text-accent underline">{zh ? '检查连接器授权' : 'Check connector access'}</Link>}
+    {row.source_reason && <Link to="/capabilities/connectors" className="inline-block text-accent underline">{zh ? '检查连接器授权' : 'Check connector access'}</Link>}
     {row.source_success_at != null && <p>{zh ? '最近成功读取邮件' : 'Last successful mail read'}: {format(row.source_success_at)}</p>}
     {reason && reasons[reason] && <p role="status">{reasons[reason][zh ? 0 : 1]}</p>}
     <p>{zh ? '当前场景模型' : 'Current scene model'}: {diagnostics.data!.currentModel ?? (zh ? '配置不可用' : 'Configuration unavailable')}</p>

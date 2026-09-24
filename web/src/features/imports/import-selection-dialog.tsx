@@ -161,7 +161,7 @@ function ConnectionGroup({ inventoryId, items }: { inventoryId: string; items: I
     </div>
     {open && <div className="space-y-2 border-t border-edge bg-surface-overlay p-3 sm:p-4">
       {items.map(item => <ConnectionRow key={item.id} inventoryId={inventoryId} item={item} />)}
-      <Button asChild variant="secondary"><Link to="/connectors">{t.connectionsAction}</Link></Button>
+      <Button asChild variant="secondary"><Link to="/capabilities/connectors">{t.connectionsAction}</Link></Button>
     </div>}
   </section>;
 }

@@ -103,7 +103,7 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
                 }}>{t.callbackSubmit}</button>
               </div> : null}
             </div>)}
-            <a href="#/connectors" className="text-sm text-accent" onClick={() => setOpen(false)}>{t.all}</a>
+            <a href="#/capabilities/connectors" className="text-sm text-accent" onClick={() => setOpen(false)}>{t.all}</a>
           </div>
           <div className="flex shrink-0 items-center justify-between gap-2 border-t border-edge p-4">
             <button type="button" disabled={busy || queued} className="text-sm text-fg-muted" onClick={() => void act('cancel')}>{t.cancel}</button>

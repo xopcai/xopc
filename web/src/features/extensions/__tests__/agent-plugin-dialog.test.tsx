@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), fetch: vi.fn(), mutate: vi.fn(), status: vi.fn(), start: vi.fn(), reserve: vi.fn(), open: vi.fn(), close: vi.fn() }));
@@ -14,13 +15,14 @@ import { AgentPluginDialog, PluginMcpConnection } from '../agent-plugin-dialog';
 
 let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
+const previousElectronApi = window.electronAPI;
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   vi.clearAllMocks(); mocks.status.mockResolvedValue({ configured: true, status: 'disconnected' });
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
 });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
-const render = async (node: ReactNode) => { await act(async () => root.render(node)); };
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); window.electronAPI = previousElectronApi; });
+const render = async (node: ReactNode) => { await act(async () => root.render(<MemoryRouter>{node}</MemoryRouter>)); };
 const click = async (text: string) => {
   const button = [...document.querySelectorAll('button')].find(button => button.textContent === text);
   expect(button).toBeDefined(); await act(async () => button!.click());
@@ -50,6 +52,7 @@ it('keeps the dialog open after install and offers immediate activation', async 
   expect(mocks.request).toHaveBeenNthCalledWith(2, '/api/extensions/install', { method: 'POST', body: JSON.stringify({ source: '/tmp/plugin', reviewHash: 'reviewed-hash' }) });
   expect(onClose).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain('Plugin installed. It is not enabled yet.');
+  expect(document.querySelector('a[href="/capabilities/skills?source=extra"]')).not.toBeNull();
   await click('Enable plugin');
   expect(mocks.request).toHaveBeenLastCalledWith('/api/extensions/agent-plugins/sample/activation', { method: 'POST', body: JSON.stringify({ enabled: true }) });
   expect(document.body.textContent).toContain('Disable');
@@ -61,6 +64,24 @@ it('invalidates a reviewed plan when the source changes', async () => {
   await click('Inspect package');
   await input(document.querySelector('input')!, '/tmp/two');
   expect(document.body.textContent).not.toContain('Accept capabilities and install');
+});
+it('supports native package picking and dropped plugin paths in the desktop app', async () => {
+  const openDirectory = vi.fn().mockResolvedValue('/tmp/chosen-plugin');
+  const getPathForFile = vi.fn().mockReturnValue('/tmp/dropped-plugin.zip');
+  window.electronAPI = { file: { openDirectory, getPathForFile } } as unknown as Window['electronAPI'];
+  await render(<AgentPluginDialog onClose={() => {}} />);
+
+  await click('Choose directory');
+  await act(async () => {});
+  expect(openDirectory).toHaveBeenCalled();
+  expect((document.querySelector('input[placeholder="/plugin/folder/or/plugin.zip"]') as HTMLInputElement).value).toBe('/tmp/chosen-plugin');
+
+  const drop = new Event('drop', { bubbles: true, cancelable: true });
+  const file = new File(['plugin'], 'plugin.zip', { type: 'application/zip' });
+  Object.defineProperty(drop, 'dataTransfer', { value: { types: ['Files'], files: [file], getData: () => '' } });
+  await act(async () => document.querySelector('[data-testid="plugin-source-dropzone"]')!.dispatchEvent(drop));
+  expect(getPathForFile).toHaveBeenCalledWith(file);
+  expect((document.querySelector('input[placeholder="/plugin/folder/or/plugin.zip"]') as HTMLInputElement).value).toBe('/tmp/dropped-plugin.zip');
 });
 it('does not start OAuth on render and clears a secret after host-managed storage', async () => {
   mocks.request.mockResolvedValue({ ok: true });

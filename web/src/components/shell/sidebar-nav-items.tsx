@@ -36,12 +36,10 @@ const OVERFLOW_GROUP_BY_BUILTIN: Record<BuiltinNavId, OverflowGroupId> = {
   'builtin:automations': 'work',
   'builtin:workflows': 'work',
   'builtin:browserAutomations': 'work',
-  'builtin:skills': 'capabilities',
-  'builtin:connectors': 'capabilities',
+  'builtin:capabilities': 'capabilities',
   'builtin:agents': 'capabilities',
   'builtin:channels': 'capabilities',
   'builtin:localApps': 'build',
-  'builtin:extensions': 'build',
 };
 
 function overflowGroupId(item: NavItem): OverflowGroupId {
@@ -169,7 +167,7 @@ export function SidebarNavItems({
 
   const available = useMemo<NavItem[]>(() => {
     const builtins: NavItem[] = builtinNavDefsForFeatures(scenesEnabled).map((def) => {
-      const labelKey = def.id.slice('builtin:'.length) as 'agents' | 'scenes' | 'home' | 'projects' | 'localApps' | 'skills' | 'connectors' | 'automations' | 'browserAutomations' | 'notes' | 'workflows' | 'channels' | 'extensions';
+      const labelKey = def.id.slice('builtin:'.length) as 'agents' | 'scenes' | 'home' | 'projects' | 'localApps' | 'capabilities' | 'automations' | 'browserAutomations' | 'notes' | 'workflows' | 'channels';
       return {
         id: def.id,
         kind: 'builtin',

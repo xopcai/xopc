@@ -1,8 +1,13 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useEffect, useState } from 'react';
+import { FileArchive, FolderOpen, Upload } from 'lucide-react';
+import { useEffect, useId, useState, type DragEvent as ReactDragEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
+import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -111,7 +116,9 @@ export function PluginMcpConnection({ pluginId, server, enabled }: { pluginId: s
 }
 
 export function AgentPluginDialog({ extension, onClose, initialSource = '' }: { extension?: ExtensionApiRow; onClose: () => void; initialSource?: string }) {
-  const zh = useLocaleStore(s => s.language).startsWith('zh');
+  const language = useLocaleStore(s => s.language);
+  const zh = language.startsWith('zh');
+  const sourceInputId = useId();
   const { mutate } = useSWRConfig();
   const [currentExtension, setCurrentExtension] = useState(extension);
   const [source, setSource] = useState(initialSource);
@@ -121,9 +128,58 @@ export function AgentPluginDialog({ extension, onClose, initialSource = '' }: { 
   const [removeData, setRemoveData] = useState(false);
   const [removeCredentials, setRemoveCredentials] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const base = `/api/extensions/agent-plugins/${encodeURIComponent(currentExtension?.pluginId ?? '')}`;
   const refresh = () => mutate('gateway-extensions-list');
   async function run(fn: () => Promise<void>) { setBusy(true); setError(''); try { await fn(); } catch (error) { setError(error instanceof Error ? error.message : String(error)); } finally { setBusy(false); } }
+  function updateSource(next: string) {
+    setSource(next);
+    setPlan(null);
+    setError('');
+  }
+  const desktopFileApi = typeof window !== 'undefined' ? window.electronAPI?.file : undefined;
+  const localDefaultPath = /^(?:\/|[A-Za-z]:[\\/])/.test(source.trim()) ? source.trim() : undefined;
+  async function pickDirectory() {
+    if (!desktopFileApi?.openDirectory) {
+      setSourcePickerOpen(true);
+      return;
+    }
+    const picked = await desktopFileApi.openDirectory(localDefaultPath ? { defaultPath: localDefaultPath } : undefined);
+    if (picked) updateSource(picked);
+  }
+  async function pickZip() {
+    if (!desktopFileApi?.openFile) {
+      setSourcePickerOpen(true);
+      return;
+    }
+    const picked = await desktopFileApi.openFile({ ...(localDefaultPath ? { defaultPath: localDefaultPath } : {}), extensions: ['zip'] });
+    if (picked) updateSource(picked);
+  }
+  function isSupportedDrag(event: ReactDragEvent) {
+    return [...event.dataTransfer.types].some(type => type === 'Files' || type === 'text/plain' || type === 'text/uri-list');
+  }
+  function onSourceDrop(event: ReactDragEvent<HTMLDivElement>) {
+    if (!isSupportedDrag(event)) return;
+    event.preventDefault();
+    setDragActive(false);
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length) {
+      if (files.length > 1) {
+        setError(zh ? '一次只能选择一个插件目录或 ZIP。' : 'Choose one plugin directory or ZIP at a time.');
+        return;
+      }
+      const path = desktopFileApi?.getPathForFile?.(files[0]);
+      if (path) {
+        updateSource(path);
+      } else {
+        setError(zh ? '浏览器无法读取本机文件路径，请使用“选择文件或目录”选择安装包。' : 'The browser cannot read local file paths. Use Choose file or folder to select the package.');
+      }
+      return;
+    }
+    const text = event.dataTransfer.getData('text/uri-list') || event.dataTransfer.getData('text/plain');
+    if (text.trim()) updateSource(text.trim().split(/\r?\n/)[0]);
+  }
   async function setActivation(enabled: boolean) {
     const next = await request<ExtensionApiRow>(`${base}/activation`, 'POST', { enabled });
     setCurrentExtension(next);
@@ -132,9 +188,10 @@ export function AgentPluginDialog({ extension, onClose, initialSource = '' }: { 
   useEffect(() => {
     if (extension) setCurrentExtension(extension);
   }, [extension]);
+  const components = currentExtension?.components;
   return <Dialog.Root defaultOpen onOpenChange={open => !open && onClose()}><Dialog.Portal>
     <Dialog.Overlay className="fixed inset-0 z-[130] bg-scrim" />
-    <Dialog.Content className="fixed left-1/2 top-1/2 z-[131] flex h-[min(85vh,44rem)] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay">
+    <Dialog.Content className="fixed left-1/2 top-1/2 z-[131] flex h-[min(76vh,30rem)] w-[min(34rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover">
       <div className="flex shrink-0 items-center justify-between border-b border-edge p-4"><Dialog.Title className="font-semibold">{currentExtension?.name ?? (zh ? '安装 Agent Plugin' : 'Install Agent Plugin')}</Dialog.Title><Button variant="ghost" onClick={onClose}>{zh ? '关闭' : 'Close'}</Button></div>
       <Dialog.Description className="sr-only">{zh ? '安装、组件、账号连接和权限' : 'Installation, components, connections and permissions'}</Dialog.Description>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
@@ -147,12 +204,77 @@ export function AgentPluginDialog({ extension, onClose, initialSource = '' }: { 
           <p className="text-sm">{currentExtension.description}</p>
           {currentExtension.activationEligible ? <Button disabled={busy} variant="secondary" onClick={() => void run(() => setActivation(false))}>{zh ? '停用' : 'Disable'}</Button> : null}
           {currentExtension.canRollback ? <Button disabled={busy} variant="secondary" onClick={() => void run(async () => { setCurrentExtension(await request<ExtensionApiRow>(`${base}/rollback`, 'POST')); await refresh(); })}>{zh ? '回滚上一版本' : 'Roll back'}</Button> : null}
-          {currentExtension.components?.skills.length ? <p className="text-sm">Skills: {currentExtension.components.skills.map(s => s.name).join(', ')}</p> : null}
+          {components?.skills.length || components?.mcp.length ? <div className="space-y-3 rounded-lg border border-edge p-3">
+            <div>
+              <p className="text-sm font-medium">{zh ? '此插件提供的能力' : 'Capabilities from this plugin'}</p>
+              {components.skills.length ? <p className="mt-1 text-sm text-fg-muted">Skills: {components.skills.map(s => s.name).join(', ')}</p> : null}
+              {components.mcp.length ? <p className="mt-1 text-sm text-fg-muted">MCP: {components.mcp.map(server => server.name).join(', ')}</p> : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {components.skills.length ? <Button asChild variant="secondary"><Link to="/capabilities/skills?source=extra">{zh ? '管理技能' : 'Manage skills'}</Link></Button> : null}
+              {components.mcp.length ? <Button asChild variant="secondary"><Link to="/capabilities/connectors?tab=connected">{zh ? '管理连接' : 'Manage connections'}</Link></Button> : null}
+            </div>
+          </div> : null}
           {currentExtension.components?.mcp.map(server => <PluginMcpConnection key={server.id} pluginId={currentExtension.pluginId!} server={server} enabled={currentExtension.active} />)}
           {currentExtension.diagnostics?.map((d, i) => <p key={i} className="text-sm text-fg-muted">{d.component}: {d.message}</p>)}
         </> : null}
-        <form className="space-y-3 border-t border-edge pt-4" onSubmit={event => { event.preventDefault(); void run(async () => { setPlan(await request<Plan>('/api/extensions/inspect', 'POST', { source })); }); }}>
-          <label className="block text-sm">{currentExtension ? (zh ? '更新包来源' : 'Update package source') : (zh ? 'Gateway 本地路径、HTTPS ZIP 或 store:包名' : 'Gateway local path, HTTPS ZIP or store:package')}<input className={`${fieldClass} mt-1`} value={source} onChange={e => { setSource(e.target.value); setPlan(null); }} required /></label>
+        <form className={cn('space-y-3', currentExtension && 'border-t border-edge pt-4')} onSubmit={event => { event.preventDefault(); void run(async () => { setPlan(await request<Plan>('/api/extensions/inspect', 'POST', { source })); }); }}>
+          <div
+            data-testid="plugin-source-dropzone"
+            className={cn(
+              'rounded-xl border border-dashed p-3 transition-colors',
+              dragActive ? 'border-accent bg-accent-soft' : 'border-edge bg-surface-inset/40',
+            )}
+            onDragEnter={event => {
+              if (!isSupportedDrag(event)) return;
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragOver={event => {
+              if (!isSupportedDrag(event)) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'copy';
+              setDragActive(true);
+            }}
+            onDragLeave={event => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false);
+            }}
+            onDrop={onSourceDrop}
+          >
+            <div className="mb-2 flex items-start gap-2">
+              <Upload className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />
+              <div>
+                <label htmlFor={sourceInputId} className="block text-sm font-medium">
+                  {currentExtension ? (zh ? '更新包来源' : 'Update package source') : (zh ? '安装包来源' : 'Package source')}
+                </label>
+                <p className="mt-0.5 text-xs text-fg-muted">
+                  {zh ? '拖入插件目录或 ZIP，也可输入 HTTPS ZIP 或 store:包名' : 'Drop a plugin directory or ZIP, or enter an HTTPS ZIP or store:package'}
+                </p>
+              </div>
+            </div>
+            <input
+              id={sourceInputId}
+              className={fieldClass}
+              value={source}
+              onChange={event => updateSource(event.target.value)}
+              placeholder={zh ? '/插件目录/或/插件.zip' : '/plugin/folder/or/plugin.zip'}
+              autoComplete="off"
+              spellCheck={false}
+              required
+            />
+            <div className="mt-2 flex flex-wrap gap-2">
+              {desktopFileApi ? <>
+                <Button type="button" variant="secondary" disabled={busy} onClick={() => void run(pickDirectory)}>
+                  <FolderOpen className="size-4" aria-hidden />{zh ? '选择目录' : 'Choose directory'}
+                </Button>
+                <Button type="button" variant="secondary" disabled={busy} onClick={() => void run(pickZip)}>
+                  <FileArchive className="size-4" aria-hidden />{zh ? '选择 ZIP' : 'Choose ZIP'}
+                </Button>
+              </> : <Button type="button" variant="secondary" disabled={busy} onClick={() => setSourcePickerOpen(true)}>
+                <FolderOpen className="size-4" aria-hidden />{zh ? '选择文件或目录' : 'Choose file or folder'}
+              </Button>}
+            </div>
+          </div>
           <Button type="submit" variant="secondary" disabled={busy || !source}>{zh ? '检查安装包' : 'Inspect package'}</Button>
         </form>
         {plan ? <div className="space-y-3 rounded-lg border border-edge p-3 text-sm">
@@ -177,5 +299,18 @@ export function AgentPluginDialog({ extension, onClose, initialSource = '' }: { 
         {error ? <p role="alert" className="break-words text-sm text-fg-muted">{error}</p> : null}
       </div>
     </Dialog.Content>
+    {!desktopFileApi ? <WorkingDirectoryPickerModal
+      open={sourcePickerOpen}
+      onOpenChange={setSourcePickerOpen}
+      initialAbsolutePath={localDefaultPath}
+      onConfirm={async path => updateSource(path)}
+      wd={messages(language).chat.workingDirectory}
+      selectKind="file-or-directory"
+      fileExtensions={['zip']}
+      title={zh ? '选择插件安装包' : 'Choose plugin package'}
+      description={zh ? '选择插件目录或 ZIP 文件。' : 'Choose a plugin directory or ZIP file.'}
+      confirmLabel={zh ? '使用此来源' : 'Use this source'}
+      nested
+    /> : null}
   </Dialog.Portal></Dialog.Root>;
 }
