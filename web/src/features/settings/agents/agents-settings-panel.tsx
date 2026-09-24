@@ -28,10 +28,11 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const capabilityPagePadding = 'px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4';
+const capabilityPageWidth = 'max-w-7xl';
 
 function AgentsSkeleton() {
   return (
-    <SettingsPageFrame gap="gap-5" padding={capabilityPagePadding}>
+    <SettingsPageFrame gap="gap-5" padding={capabilityPagePadding} className={capabilityPageWidth}>
       <div className="flex items-center justify-between gap-4">
         <div className="space-y-2"><Skeleton className="h-7 w-28" /><Skeleton className="h-4 w-80 max-w-full" /></div>
         <Skeleton className="h-9 w-28" />
@@ -195,17 +196,17 @@ export function AgentsSettingsPanel({
   }, []);
 
   if (!token) {
-    return <SettingsPageFrame padding={capabilityPagePadding}><p className="text-sm text-fg-muted">{zh ? '需要本机服务令牌。' : 'Local service token required.'}</p></SettingsPageFrame>;
+    return <SettingsPageFrame className={capabilityPageWidth} padding={capabilityPagePadding}><p className="text-sm text-fg-muted">{zh ? '需要本机服务令牌。' : 'Local service token required.'}</p></SettingsPageFrame>;
   }
   if (error && !data) {
-    return <SettingsPageFrame padding={capabilityPagePadding}><p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{String(error)}</p><Button onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></SettingsPageFrame>;
+    return <SettingsPageFrame className={capabilityPageWidth} padding={capabilityPagePadding}><p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{String(error)}</p><Button onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></SettingsPageFrame>;
   }
   if (isLoading || !data) return <AgentsSkeleton />;
 
   return (
     <SettingsPageFrame
       gap="gap-5"
-      className="max-w-6xl"
+      className={capabilityPageWidth}
       padding={capabilityPagePadding}
     >
       {(error || actionError) && !selected ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{actionError ?? String(error)}</p> : null}

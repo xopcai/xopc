@@ -280,7 +280,7 @@ export function ProjectsPage() {
     .replace('{{count}}', String(visibleProjects.length));
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
       <Dialog.Root
         open={createOpen}
         onOpenChange={(open) => {
