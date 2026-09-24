@@ -1,12 +1,7 @@
 {
   "capabilitiesHub": {
-    "title": "Capabilities",
-    "navAria": "Capability sections",
-    "tabDiscover": "Discover",
-    "tabAgents": "Agents",
     "tabSkills": "Skills",
     "tabConnectors": "Connections",
-    "tabChannels": "Channels",
     "tabExtensions": "Extensions",
     "moreActions": "More actions",
     "discoverLoading": "Loading capabilities",

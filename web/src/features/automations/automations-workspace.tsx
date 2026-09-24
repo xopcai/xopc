@@ -298,6 +298,7 @@ export function AutomationsWorkspace({
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const [searchParams, setSearchParams] = useSearchParams();
+  const activityView = !embedded && searchParams.get('view') === 'activity';
   const runParam = searchParams.get('run')?.trim() ?? '';
   const automationParam = searchParams.get('automation')?.trim() ?? '';
   const draftParam = searchParams.get('draft')?.trim() ?? '';
@@ -1037,6 +1038,21 @@ export function AutomationsWorkspace({
           </div>
         ) : null}
 
+        {activityView ? (
+          initialLoading ? <AutomationsPageSkeleton /> : (
+            <AutomationActivityView
+              runs={ownershipRuns}
+              ownership={ownership}
+              labels={labels}
+              language={language}
+              unreadCount={ownership === 'user' ? unreadRuns.length : 0}
+              loading={scopeLoading || refreshBusy}
+              onOwnershipChange={setOwnership}
+              onRefresh={refreshNow}
+              onSelectRun={selectRun}
+            />
+          )
+        ) : <>
         {!initialLoading ? (
           <section aria-labelledby="automation-overview-title">
             <h2 id="automation-overview-title" className="sr-only">{labels.overview.title}</h2>
@@ -1271,6 +1287,7 @@ export function AutomationsWorkspace({
           </section>
         )}
         {!initialLoading && userAutomations.length > 0 ? <div><Button variant="ghost" onClick={() => openCreate('draft')}><Plus className="size-4" aria-hidden />{labels.experience.discover}</Button></div> : null}
+        </>}
       </div>
 
       <Dialog.Root
@@ -1687,6 +1704,100 @@ function OverviewMetric({
   return onClick
     ? <button type="button" className={className} onClick={onClick} aria-label={accessibleLabel} aria-pressed={active}>{content}</button>
     : <div className={className} aria-label={accessibleLabel}>{content}</div>;
+}
+
+function AutomationActivityView({
+  runs,
+  ownership,
+  labels,
+  language,
+  unreadCount,
+  loading,
+  onOwnershipChange,
+  onRefresh,
+  onSelectRun,
+}: {
+  runs: AutomationRun[];
+  ownership: AutomationOwnership;
+  labels: AutomationsMessages;
+  language: StoredLanguage;
+  unreadCount: number;
+  loading: boolean;
+  onOwnershipChange: (ownership: AutomationOwnership) => void;
+  onRefresh: () => void;
+  onSelectRun: (runId: string) => void;
+}) {
+  const runningCount = runs.filter(isActiveRun).length;
+  const attentionCount = runs.filter(needsAttention).length;
+  return (
+    <section className="overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface" aria-labelledby="automation-activity-title">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3 sm:px-5">
+        <div className="min-w-0">
+          <h2 id="automation-activity-title" className="text-sm font-semibold text-fg">{labels.dashboard.activity}</h2>
+          <p className="mt-1 text-sm leading-6 text-fg-muted">{labels.dashboard.activityDescription}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg bg-surface-panel p-0.5" role="group" aria-label={labels.filters.ownership}>
+            <button
+              type="button"
+              className={cn('rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:text-fg', ownership === 'user' && 'bg-surface-base text-fg shadow-sm')}
+              onClick={() => onOwnershipChange('user')}
+              aria-pressed={ownership === 'user'}
+            >
+              {labels.filters.userManaged}
+            </button>
+            <button
+              type="button"
+              className={cn('rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:text-fg', ownership === 'system' && 'bg-surface-base text-fg shadow-sm')}
+              onClick={() => onOwnershipChange('system')}
+              aria-pressed={ownership === 'system'}
+            >
+              {labels.system.title}
+            </button>
+          </div>
+          <RefreshButton className="size-9 shrink-0 p-0" loading={loading} label={labels.refresh} onClick={onRefresh} />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-px border-b border-edge-subtle bg-edge-subtle lg:grid-cols-4">
+        <OverviewMetric icon={<Activity className="size-4" aria-hidden />} label={labels.metrics.total} value={String(runs.length)} />
+        <OverviewMetric icon={<Play className="size-4" aria-hidden />} label={labels.metrics.running} value={String(runningCount)} />
+        <OverviewMetric icon={<CircleAlert className="size-4" aria-hidden />} label={labels.dashboard.needsAttention} value={String(attentionCount)} tone={attentionCount > 0 ? 'danger' : 'default'} />
+        <OverviewMetric icon={<CheckCircle2 className="size-4" aria-hidden />} label={labels.filters.unread} value={String(unreadCount)} />
+      </div>
+      {runs.length === 0 ? (
+        <EmptyState className="min-h-64 rounded-none border-0 shadow-none" icon={<Activity className="size-5" />} title={labels.empty.runs} />
+      ) : (
+        <div className="divide-y divide-edge-subtle">
+          {runs.map((run) => (
+            <button
+              key={run.id}
+              type="button"
+              className="flex w-full min-w-0 items-start gap-3 px-4 py-3 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:px-5"
+              onClick={() => onSelectRun(run.id)}
+            >
+              <span className={cn(
+                'mt-1.5 size-2 shrink-0 rounded-full',
+                isActiveRun(run) ? 'bg-blue-500' : needsAttention(run) ? 'bg-red-500' : 'bg-emerald-500',
+              )} aria-hidden />
+              <span className="min-w-0 flex-1">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-sm font-medium text-fg">{run.automationName}</span>
+                  {run.readAtMs == null && !isActiveRun(run) ? <span className="size-2 shrink-0 rounded-full bg-blue-500"><span className="sr-only">{labels.filters.unread}</span></span> : null}
+                </span>
+                <span className={cn('mt-1 line-clamp-2 block text-sm text-fg-muted', run.error && 'text-red-700 dark:text-red-300')}>
+                  {run.error || run.summary || labels.status[run.status]}
+                </span>
+                <span className="mt-1 block text-xs text-fg-subtle">{formatDate(run.createdAtMs, labels, language)}</span>
+              </span>
+              <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs', statusClass(run.status))}>
+                {labels.status[run.status]}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function AutomationList({

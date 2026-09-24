@@ -18,7 +18,7 @@ import {
   SETTINGS_SHELL_NAV_GROUPS,
 } from '@/navigation';
 import type { SettingsShellNavGroup } from '@/navigation';
-import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode, isSettingsPathVisibleOnPlatform, isSettingsTabVisibleOnPlatform } from '@/navigation/settings-nav-visibility';
+import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode } from '@/navigation/settings-nav-visibility';
 import { isElectron } from '@/lib/electron-env';
 import { preloadRouteForPath } from '@/lib/route-preload';
 import { SETTINGS_SHEET_PORTAL_BODY_MQ } from '@/lib/settings-shell-dialog-layer';
@@ -29,7 +29,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { useSettingsModeStore } from '@/stores/settings-mode-store';
 import { clampSettingsRailWidthPx, useSettingsRailStore } from '@/stores/settings-rail-store';
 
-/** Aligned with `SidebarNav` secondary links (§4.3 — same rail rhythm as main app sidebar). */
+/** Keep the settings rail rhythm aligned with the main app sidebar. */
 function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
   return cn(
     'touch-target flex w-full shrink-0 items-center gap-2.5 rounded-xl px-4 py-2 text-sm font-medium leading-6 transition-colors duration-200 ease-out',
@@ -57,7 +57,7 @@ const mobileToolbarButtonClass = cn(
 
 function visibleSettingsNavTabs(group: SettingsShellNavGroup, settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode']) {
   return group.tabs.filter((tab) => {
-    if (!isSettingsTabVisibleInMode(tab, settingsMode) || !isSettingsTabVisibleOnPlatform(tab)) {
+    if (!isSettingsTabVisibleInMode(tab, settingsMode)) {
       return false;
     }
     return !ELECTRON_ONLY_SETTINGS_TABS.has(tab) || isElectron();
@@ -215,8 +215,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
     [location, railNavGroups, settingsMode],
   );
 
-  const settingsPathBlocked = !isSettingsPathVisibleInMode(location.pathname, settingsMode)
-    || !isSettingsPathVisibleOnPlatform(location.pathname);
+  const settingsPathBlocked = !isSettingsPathVisibleInMode(location.pathname, settingsMode);
 
   const activeTitle = activeSettingsTab ? tabLabel(language, activeSettingsTab) : m.nav.settings;
 

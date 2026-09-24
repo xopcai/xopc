@@ -12,14 +12,6 @@ const SIMPLE_MODE_HIDDEN_SETTINGS_PATH_PREFIXES = [
   '/settings/ext/',
 ] as const;
 
-export function isSettingsTabVisibleOnPlatform(tab: Tab): boolean {
-  return Boolean(tab);
-}
-
-export function isSettingsPathVisibleOnPlatform(pathname: string): boolean {
-  return Boolean(pathname);
-}
-
 export function isSettingsTabVisibleInMode(tab: Tab, mode: SettingsMode): boolean {
   if (mode === 'advanced') {
     return true;
