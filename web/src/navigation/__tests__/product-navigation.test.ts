@@ -17,6 +17,16 @@ describe('product navigation', () => {
     ]);
   });
 
+  it('orders automation sections by activity, tasks, scenarios, and execution type', () => {
+    expect(PRODUCT_DOMAINS.find((domain) => domain.id === 'automation')?.sections.map((section) => section.id)).toEqual([
+      'automation-activity',
+      'automation-triggers',
+      'automation-scenes',
+      'automation-workflows',
+      'automation-browser',
+    ]);
+  });
+
   it.each([
     ['/', 'work'],
     ['/chat/abc', 'work'],
@@ -28,7 +38,7 @@ describe('product navigation', () => {
     ['/workflows/example/edit', 'automation'],
     ['/browser-automations', 'automation'],
     ['/capabilities/connectors', 'capabilities'],
-    ['/extensions/example/page', 'capabilities'],
+    ['/extensions/example/page', null],
     ['/local-apps/example', 'apps'],
     ['/open', 'apps'],
     ['/settings/overview', null],
@@ -46,12 +56,18 @@ describe('product navigation', () => {
     expect(productSectionAtLocation('/projects/project-1/settings')).toBe('work-projects');
     expect(productSectionAtLocation('/notes/note-1')).toBe('work-notes');
     expect(productSectionAtLocation('/workflows/example/edit')).toBe('automation-workflows');
-    expect(productSectionAtLocation('/extensions/example/settings')).toBe('capabilities-extensions');
+    expect(productSectionAtLocation('/extensions/example/settings')).toBeNull();
+    expect(productSectionAtLocation('/capabilities/extensions')).toBe('capabilities-extensions');
   });
 
   it('preserves conversation chrome while keeping work active in the primary navigation', () => {
     expect(productDomainAtPath('/chat/abc')).toBe('work');
     expect(showsProductSectionHeader('/chat/abc')).toBe(false);
     expect(showsProductSectionHeader('/projects/project-1')).toBe(true);
+  });
+
+  it('keeps extension app pages outside the capability-center header', () => {
+    expect(productDomainAtPath('/extensions/example/dashboard')).toBeNull();
+    expect(showsProductSectionHeader('/extensions/example/dashboard')).toBe(false);
   });
 });

@@ -435,6 +435,15 @@ html.dark {
   background-size: 100vw 100vh;
 }
 
+/* Match the rail's themed background while keeping sticky content opaque over scrolling rows. */
+.app-sidebar-sticky-surface {
+  background-image: var(--app-chrome-sidebar-bg);
+  background-attachment: fixed;
+  background-position: left top;
+  background-repeat: no-repeat;
+  background-size: 100vw 100vh;
+}
+
 /* The in-flow desktop rail can reuse the shell background. On mobile the sidebar
  * becomes a fixed drawer above the page, so it must keep its own opaque chrome. */
 @media (min-width: 768px) {
