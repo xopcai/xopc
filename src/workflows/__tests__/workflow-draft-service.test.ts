@@ -82,4 +82,60 @@ describe('WorkflowDraftService', () => {
       .rejects.toThrow('Unable to generate a valid workflow draft after 2 attempts');
     expect(completeSimple).toHaveBeenCalledTimes(2);
   });
+
+  it('accepts a structured draft returned in a thinking block', async () => {
+    vi.mocked(completeSimple).mockResolvedValue({
+      role: 'assistant',
+      content: [{ type: 'thinking', thinking: draftJson(validGraph) }],
+    } as never);
+
+    const service = new WorkflowDraftService({ config: {} as never, maxProviderAttempts: 1 });
+    const response = await service.createDraft({
+      prompt: 'Create a planning workflow',
+      agentId: 'main',
+    });
+
+    expect(response.validation.valid).toBe(true);
+    expect(response.repairAttempts).toBe(0);
+    expect(completeSimple).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces provider failures without retrying them as invalid JSON', async () => {
+    vi.mocked(completeSimple).mockResolvedValue({
+      role: 'assistant',
+      content: [],
+      stopReason: 'error',
+      errorMessage: 'upstream unavailable',
+    } as never);
+
+    const service = new WorkflowDraftService({ config: {} as never });
+
+    await expect(service.createDraft({ prompt: 'Create a planning workflow', agentId: 'main' }))
+      .rejects.toThrow('upstream unavailable');
+    expect(completeSimple).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries transient provider failures before generating the draft', async () => {
+    vi.mocked(completeSimple)
+      .mockResolvedValueOnce({
+        role: 'assistant',
+        content: [],
+        stopReason: 'error',
+        errorMessage: '502: {"code":"provider_error"}',
+      } as never)
+      .mockResolvedValueOnce({
+        role: 'assistant',
+        content: [{ type: 'text', text: draftJson(validGraph) }],
+      } as never);
+
+    const service = new WorkflowDraftService({
+      config: {} as never,
+      maxProviderAttempts: 2,
+      providerRetryBaseDelayMs: 0,
+    });
+    const response = await service.createDraft({ prompt: 'Create a planning workflow', agentId: 'main' });
+
+    expect(response.validation.valid).toBe(true);
+    expect(completeSimple).toHaveBeenCalledTimes(2);
+  });
 });

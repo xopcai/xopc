@@ -108,6 +108,12 @@ export async function openPlatformTts(request: {
     pull(value) { if ((value.desiredSize ?? 0) > 0) connection.resume(); },
     cancel() { ended = true; clearTimeout(timer); connection.close(); },
   }, { highWaterMark: MAX_BUFFERED_BYTES, size: chunk => chunk.byteLength });
+  const finishAudio = () => {
+    if (ended) return;
+    ended = true;
+    clearTimeout(timer);
+    controller.close();
+  };
   const connection = connect(request.baseUrl, request.apiKey, request.signal, event => {
     if (event.type === 'session.updated' && !ready) {
       if (event.session?.output_sample_rate !== 24000) throw new Error('Unsupported TTS audio format');
@@ -117,19 +123,23 @@ export async function openPlatformTts(request: {
       connection.send({ type: 'input_text_buffer.commit' });
     } else if ((event.type === 'response.done' || event.type === 'text.flushed') && !finishSent) {
       finishSent = true; connection.send({ type: 'session.finish' });
+    } else if (event.type === 'response.audio.done') {
+      if (!finishSent) { finishSent = true; connection.send({ type: 'session.finish' }); }
+      finishAudio();
     } else if (event.type === 'response.audio.delta') {
       if (!ready || typeof event.delta !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(event.delta)) throw new Error('Invalid platform audio');
       const bytes = Buffer.from(event.delta, 'base64');
+      if (!bytes.length) return;
       if (bytes.length % 2 || bytes.length > MAX_BUFFERED_BYTES) throw new Error('Invalid platform audio');
       controller.enqueue(bytes);
       if ((controller.desiredSize ?? 0) <= 0) connection.pause();
     } else if (event.type === 'session.finished') {
-      ended = true; clearTimeout(timer); controller.close(); connection.close();
+      finishAudio(); connection.close();
     }
   }, error => { rejectReady(error); if (!ended) { ended = true; controller.error(error); } clearTimeout(timer); });
   const timer = setTimeout(() => connection.fail(new Error('Platform TTS timed out')), request.timeoutMs);
   connection.socket.once('open', () => connection.send({ type: 'session.update', session: { voice: request.voice, ...(request.instructions ? { instructions: request.instructions } : {}) } }));
   await readyPromise;
   return { audioStream: stream, outputFormat: 'pcm', fileExtension: 'pcm', voiceCompatible: false,
-    release: async () => { clearTimeout(timer); connection.close(); if (!ended) { ended = true; controller.close(); } } };
+    release: async () => { clearTimeout(timer); connection.close(); finishAudio(); } };
 }

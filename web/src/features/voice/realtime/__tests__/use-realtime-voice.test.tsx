@@ -265,6 +265,7 @@ describe('useRealtimeVoice', () => {
     expect(mocks.playerStart).toHaveBeenCalledOnce();
     act(() => onEvent({ type: 'response.created', payload: { responseId: 'r1' } }));
     act(() => onEvent({ type: 'response.text.delta', payload: { responseId: 'r1', delta: '你好' } }));
+    expect(voice.responsePhase).toBe('speaking');
     act(() => onAudio(new ArrayBuffer(4), 'r1'));
     expect(voice.responseText).toBe('你好');
     expect(mocks.playerEnqueue).toHaveBeenCalledOnce();

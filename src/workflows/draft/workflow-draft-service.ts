@@ -5,6 +5,11 @@ import { getAgentDefaultModelRef } from '../../config/schema.js';
 import type { Config } from '../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../providers/index.js';
 import { completeWithResolvedCredentials } from '../../providers/model-call.js';
+import {
+  extractAssistantText,
+  getAssistantMessageErrorReason,
+  isTransientProviderErrorMessage,
+} from '../../providers/model-response.js';
 import { createLogger } from '../../utils/logger.js';
 
 import {
@@ -17,10 +22,23 @@ import { buildWorkflowDraftResponse, parseGeneratedWorkflowDraft } from './workf
 
 const log = createLogger('WorkflowDraft');
 const DEFAULT_MAX_REPAIR_ATTEMPTS = 2;
+const DEFAULT_MAX_PROVIDER_ATTEMPTS = 3;
+const DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS = 300;
 
 export interface WorkflowDraftServiceOptions {
   config: Config;
   maxRepairAttempts?: number;
+  maxProviderAttempts?: number;
+  providerRetryBaseDelayMs?: number;
+}
+
+export class WorkflowDraftProviderError extends Error {
+  readonly code = 'provider_error';
+
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'WorkflowDraftProviderError';
+  }
 }
 
 export class WorkflowDraftService {
@@ -32,6 +50,8 @@ export class WorkflowDraftService {
     const modelRef = resolveDraftModelRef(this.options.config, request.agentId);
     const model = resolveModel(modelRef);
     const maxRepairAttempts = this.options.maxRepairAttempts ?? DEFAULT_MAX_REPAIR_ATTEMPTS;
+    const maxProviderAttempts = Math.max(1, this.options.maxProviderAttempts ?? DEFAULT_MAX_PROVIDER_ATTEMPTS);
+    const providerRetryBaseDelayMs = Math.max(0, this.options.providerRetryBaseDelayMs ?? DEFAULT_PROVIDER_RETRY_BASE_DELAY_MS);
     let messageContent = buildWorkflowDraftPrompt({
       prompt,
       language: request.language,
@@ -48,12 +68,44 @@ export class WorkflowDraftService {
         content: messageContent,
         timestamp: Date.now(),
       };
-      const result = await completeWithResolvedCredentials(
-        model,
-        { messages: [userMsg] },
-        { maxTokens: 4096, temperature: attempt === 0 ? 0.25 : 0.1, signal: signal as AbortSignal },
-      );
-      lastText = extractText(result);
+      let result: Awaited<ReturnType<typeof completeWithResolvedCredentials>> | undefined;
+      for (let providerAttempt = 1; providerAttempt <= maxProviderAttempts; providerAttempt += 1) {
+        let providerError: unknown;
+        try {
+          result = await completeWithResolvedCredentials(
+            model,
+            { messages: [userMsg] },
+            { maxTokens: 4096, temperature: attempt === 0 ? 0.25 : 0.1, signal: signal as AbortSignal },
+          );
+          providerError = getAssistantMessageErrorReason(result);
+        } catch (err) {
+          providerError = err;
+        }
+
+        if (!providerError) break;
+        if (signal?.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError');
+        const message = providerError instanceof Error ? providerError.message : String(providerError);
+        const retrying = providerAttempt < maxProviderAttempts && isTransientProviderErrorMessage(message);
+        log.warn(
+          {
+            ...(providerError instanceof Error ? { err: providerError } : {}),
+            modelRef,
+            draftAttempt: attempt + 1,
+            providerAttempt,
+            maxProviderAttempts,
+            retrying,
+            phase: result ? 'provider_response' : 'provider_request',
+          },
+          retrying
+            ? `Workflow draft provider failed; retrying: ${message}`
+            : `Workflow draft provider failed: ${message}`,
+        );
+        if (!retrying) throw new WorkflowDraftProviderError(message, { cause: providerError });
+        result = undefined;
+        await waitForProviderRetry(providerRetryBaseDelayMs * (2 ** (providerAttempt - 1)), signal);
+      }
+      if (!result) throw new WorkflowDraftProviderError('Provider request failed');
+      lastText = extractAssistantText(result.content);
       try {
         const draft = parseGeneratedWorkflowDraft(lastText);
         const response = buildWorkflowDraftResponse(draft, request.constraints);
@@ -91,26 +143,28 @@ export class WorkflowDraftService {
   }
 }
 
+async function waitForProviderRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  if (delayMs <= 0) return;
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException('Aborted', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 export function resolveDraftModelRef(config: Config, agentId: string): string {
   try {
     return resolveModelSelector(config, agentId, 'reasoning');
   } catch {
     return getAgentDefaultModelRef() ?? getDefaultModelSync(config);
   }
-}
-
-function extractText(result: unknown): string {
-  const content = (result as { content?: unknown }).content;
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content.map((item) => {
-      if (item && typeof item === 'object' && (item as { type?: string }).type === 'text') {
-        return String((item as { text?: string }).text ?? '');
-      }
-      return '';
-    }).join('');
-  }
-  return '';
 }
 
 function getBlockingDraftIssues(response: WorkflowDraftResponse): WorkflowDraftRepairIssue[] {

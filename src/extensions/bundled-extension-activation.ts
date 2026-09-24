@@ -55,7 +55,7 @@ export function isExtensionActivationEligible(
   return planner.getActivatedIds(mergeActivationContext(surface)).includes(extensionId);
 }
 
-export function computeBundledExtensionExtensionsPatch(
+export function computeExtensionActivationPatch(
   loader: ExtensionLoader,
   config: SchemaConfig,
   extensionId: string,
@@ -66,14 +66,6 @@ export function computeBundledExtensionExtensionsPatch(
   if (!hit) {
     return { ok: false, error: 'Extension not found' };
   }
-  if (hit.source !== 'bundled') {
-    return {
-      ok: false,
-      error:
-        'Only bundled extensions can be toggled here (workspace or global installs override the same id — use CLI to manage those).',
-    };
-  }
-
   const base = (config.extensions as Record<string, unknown> | undefined) ?? {};
   let enabled = optionalEnabledIds(base.enabled);
   let disabled = filterStringIds(base.disabled);
@@ -123,3 +115,6 @@ export function computeBundledExtensionExtensionsPatch(
   const candidate = buildExtensionsRecord(base, enabled, disabled);
   return { ok: true, extensions: candidate };
 }
+
+/** @deprecated Use {@link computeExtensionActivationPatch}. */
+export const computeBundledExtensionExtensionsPatch = computeExtensionActivationPatch;

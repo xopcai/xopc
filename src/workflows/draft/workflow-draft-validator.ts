@@ -50,13 +50,43 @@ export function lintWorkflowDraft(draft: GeneratedWorkflowDraft, constraints?: W
 
 function extractJsonObject(raw: string): string {
   const trimmed = raw.trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) return trimmed;
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
-  if (fenced?.startsWith('{')) return fenced;
-  const start = trimmed.indexOf('{');
-  const end = trimmed.lastIndexOf('}');
-  if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
+  const extracted = firstBalancedJsonObject(fenced ?? trimmed);
+  if (extracted) return extracted;
   throw new Error('Model did not return a JSON object.');
+}
+
+function firstBalancedJsonObject(raw: string): string | null {
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < raw.length; index += 1) {
+    const char = raw[index];
+    if (start < 0) {
+      if (char === '{') {
+        start = index;
+        depth = 1;
+      }
+      continue;
+    }
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return raw.slice(start, index + 1);
+    }
+  }
+  return null;
 }
 
 function normalizeGraph(value: unknown): WorkflowGraph {

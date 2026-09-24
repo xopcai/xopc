@@ -113,15 +113,15 @@ export async function installExtensionFromMarketplace(opts: {
   return data.payload;
 }
 
-/** Persist `extensions.enabled` / `extensions.disabled` for a bundled extension (gateway may need restart to load code). */
-export async function postBundledExtensionActivation(opts: {
+/** Persist `extensions.enabled` / `extensions.disabled` for a discovered native extension. */
+export async function postExtensionActivation(opts: {
   extensionId: string;
   enabled: boolean;
 }): Promise<{ requiresGatewayRestart: boolean }> {
-  const res = await apiFetch(apiUrl('/api/extensions/bundled/activation'), {
+  const res = await apiFetch(apiUrl(`/api/extensions/${encodeURIComponent(opts.extensionId.trim())}/activation`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ extensionId: opts.extensionId.trim(), enabled: opts.enabled }),
+    body: JSON.stringify({ enabled: opts.enabled }),
   });
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));

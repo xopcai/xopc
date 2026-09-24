@@ -24,8 +24,11 @@ describe('lazy route bundles', () => {
     for (const path of ['/api/extensions/inspect', '/api/extensions/install', '/api/extensions/agent-plugins/demo', '/api/extensions/agent-plugins/demo/activation', '/api/extensions/agent-plugins/demo/update', '/api/extensions/agent-plugins/demo/mcp/main/auth']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('agent-plugins');
     }
-    expect(findAuthenticatedLazyRouteBundle('/api/extensions/native/config')?.id).toBe('auth-registry-extensions');
+    for (const path of ['/api/extensions/native/config', '/api/extensions/native/activation']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('auth-registry-extensions');
+    }
     expect(findAuthenticatedLazyRouteBundle('/api/extensions/agent-plugins-other')?.id).not.toBe('agent-plugins');
+    expect(findAuthenticatedLazyRouteBundle('/api/extensions-other/native/activation')).toBeUndefined();
   });
   it('maps local app capability endpoints without intercepting management routes', () => {
     for (const path of ['/api/local-app-capabilities/ext', '/api/local-app-capabilities/ext/xopc.notes.get/invocations']) {

@@ -1,4 +1,5 @@
 import { ChevronDown, Pause, Play, RotateCcw, X } from 'lucide-react';
+import type { MouseEvent } from 'react';
 import { useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -32,6 +33,12 @@ export function GlobalReadAloudPlayer() {
   const status = preparing ? (zh ? '正在准备语音' : 'Preparing audio')
     : failed ? (zh ? '朗读失败，请重试' : 'Unable to play. Try again')
       : ended ? (zh ? '播放完毕' : 'Finished') : playing ? (zh ? '正在朗读' : 'Reading aloud') : (zh ? '已暂停' : 'Paused');
+  const returnToSource = (event: MouseEvent<HTMLAnchorElement>) => {
+    const target = state.source?.targetId ? document.getElementById(state.source.targetId) : null;
+    if (!target) return;
+    event.preventDefault();
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
   const player = visible ? (
     <section aria-label={zh ? '语音播报' : 'Read aloud'} className={cn('shrink-0', dock ? 'pb-2' : 'px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2')}>
       <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-xl border border-edge bg-surface-panel">
@@ -51,11 +58,11 @@ export function GlobalReadAloudPlayer() {
           </button>
           <button type="button" onClick={state.stop} className={controlClass} aria-label={zh ? '停止朗读' : 'Stop reading'}><X className="size-5" aria-hidden /></button>
         </div>
-        {state.durationComplete ? <div className="h-0.5 bg-surface-active" aria-hidden><div className="h-full bg-accent" style={{ width: `${Math.min(100, state.currentTime / state.duration * 100)}%` }} /></div> : null}
+        {state.durationComplete && !expanded ? <div className="h-0.5 bg-surface-active" aria-hidden><div className="h-full bg-accent" style={{ width: `${Math.min(100, state.currentTime / state.duration * 100)}%` }} /></div> : null}
         {expanded ? <div id={detailsId} className="space-y-3 border-t border-edge-subtle p-4">
           {state.durationComplete ? <ReadAloudProgress key={`${state.source?.type}:${state.source?.id}`} duration={state.duration} currentTime={state.currentTime} disabled={preparing} onSeek={state.seek} label={zh ? '播放进度' : 'Playback position'} /> : null}
           {state.currentText ? <p className="max-h-28 overflow-y-auto overscroll-contain whitespace-pre-wrap break-words text-sm text-fg-muted">{state.currentText}</p> : null}
-          {state.source?.href ? <a href={state.source.href} className="inline-flex min-h-11 items-center rounded-lg text-sm text-accent-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '返回来源' : 'Return to source'}</a> : null}
+          {state.source?.href ? <a href={state.source.href} onClick={returnToSource} className="inline-flex min-h-11 items-center rounded-lg text-sm text-accent-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '返回来源' : 'Return to source'}</a> : null}
           {failed ? <p role="alert" className="break-words text-sm text-fg-muted">{state.error}</p> : null}
           <PopoverSelect contentClassName="[&_button]:min-h-11" value={String(state.rate)} allowEmpty={false} placeholder="1×" ariaLabel={zh ? '播放速度' : 'Playback speed'}
             options={[0.75, 1, 1.25, 1.5, 2].map((rate) => ({ value: String(rate), label: `${rate}×` }))}

@@ -13,6 +13,7 @@ import type { VoiceEngine, VoiceEventSink } from './engine.js';
 const log = createLogger('Voice:Agent');
 const AGENT_TTS_MAX_SEGMENT_CHARACTERS = 180;
 const AGENT_TTS_MIN_SEGMENT_CHARACTERS = 24;
+const PLAYBACK_ECHO_TAIL_MS = 3_000;
 
 type SpeechOpening = Promise<{ result: SpeakStreamResult } | { error: unknown }>;
 
@@ -69,6 +70,7 @@ export function createAgentVoiceEngine(options: {
   let bufferedBytes = 0;
   let finalCount = 0;
   let committing = false;
+  let recentPlayback: { responseId: string; text: string; expiresAt: number } | undefined;
   const finalizedUtterances = new Set<string>();
   let pendingTurn: { turnId: string; text: string; cancelled: boolean } | undefined;
   const turn = new TurnCoordinator(claim.silenceDurationMs, (text, decision, turnId) => {
@@ -142,6 +144,11 @@ export function createAgentVoiceEngine(options: {
         if (!phraseMarkedAudible && item.value.byteLength > 0) {
           phraseMarkedAudible = true;
           response.audibleText = `${response.audibleText} ${phrase}`.trim().slice(-8_000);
+          recentPlayback = {
+            responseId: response.id,
+            text: response.audibleText,
+            expiresAt: Date.now() + PLAYBACK_ECHO_TAIL_MS,
+          };
         }
         if (!response.audioStarted) {
           response.audioStarted = true;
@@ -336,6 +343,13 @@ export function createAgentVoiceEngine(options: {
       }
       await response.playback.drain(response.abortController.signal);
       if (activeResponse !== response || response.abortController.signal.aborted) return;
+      if (response.audioStarted && response.audibleText) {
+        recentPlayback = {
+          responseId: response.id,
+          text: response.audibleText,
+          expiresAt: Date.now() + PLAYBACK_ECHO_TAIL_MS,
+        };
+      }
       if (response.audioStarted) send('response.audio.done', { responseId: response.id });
       send('response.done', {
         responseId: response.id,
@@ -432,15 +446,20 @@ export function createAgentVoiceEngine(options: {
       }
       finalizedUtterances.add(event.utteranceId);
       finalCount += 1;
+      const playback = activeResponse?.audioStarted
+        ? { responseId: activeResponse.id, text: activeResponse.audibleText }
+        : recentPlayback && recentPlayback.expiresAt >= Date.now()
+          ? recentPlayback
+          : undefined;
       if (claim.request.purpose === 'conversation'
-        && activeResponse?.audioStarted
-        && isLikelyPlaybackEcho(text, activeResponse.audibleText)) {
+        && playback
+        && isLikelyPlaybackEcho(text, playback.text)) {
         bufferFinal(event.utteranceId, '');
         log.debug({
           sessionId: claim.sessionId,
-          responseId: activeResponse.id,
+          responseId: playback.responseId,
           transcriptCharacters: text.length,
-        }, 'Ignored finalized transcription matching active voice playback');
+        }, 'Ignored finalized transcription matching recent voice playback');
         return;
       }
       send('input.transcript.final', {
