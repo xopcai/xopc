@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { access, readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { assertComputerReleaseEvidence } from '../src/computer/release-gate.js';
 
@@ -17,6 +18,12 @@ for (const reference of Object.values(report.evidence) as string[]) {
 }
 const driver = join(app, 'Contents', 'Resources', 'bin', 'cua-driver');
 await access(driver);
+const sdkEntry = join(app, 'Contents', 'Resources', 'app.asar.unpacked', 'node_modules', '@trycua', 'cua-driver', 'dist', 'index.js');
+await access(sdkEntry);
+const executable = join(app, 'Contents', 'MacOS', 'xopc');
+await exec(executable, ['--input-type=module', '-e',
+  `import(${JSON.stringify(pathToFileURL(sdkEntry).href)}).then(module => { if (!module.EmbeddedCuaDriverHost || !module.CuaDriver) process.exit(1); })`],
+{ env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } });
 await exec('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app]);
 await exec('codesign', ['--verify', '--strict', '--verbose=2', driver]);
 await exec('spctl', ['--assess', '--verbose=2', '--type', 'execute', app]);
