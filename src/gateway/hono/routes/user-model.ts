@@ -13,6 +13,7 @@ import {
 } from '../../../knowledge-memory/index.js';
 import { listMemoryMaintenanceRuns } from '../../../memory-maintenance/index.js';
 import { listUnderstandingSourceGrants } from '../../../user-context/sources/repository.js';
+import { getActiveUnderstandingConsent } from '../../../user-context/sources/consent-repository.js';
 import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
 import {
   createCollaborationRule,
@@ -31,8 +32,11 @@ import {
   deleteUserAssertion,
   canUseAssertion,
   listPriorityWindows,
+  listActionRuleSuggestions,
+  listUserAssertionEdges,
   listUserAssertionSources,
   listUserAssertions,
+  listUserModelObservations,
   listUserGoals,
   reconcileAssertion,
   getUserProfileSnapshot,
@@ -115,7 +119,10 @@ function assertionView(
     subject: slot.subject,
     scope: slot.scope,
     sources,
-    usable: canUseAssertion(assertion),
+    usable: canUseAssertion(assertion, Date.now(), {
+      use: 'answer',
+      ...(assertion.allowedAgentIds?.[0] ? { agentId: assertion.allowedAgentIds[0] } : {}),
+    }),
   };
 }
 
@@ -144,12 +151,16 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       category: source.category,
       displayName: source.displayName,
       ...(source.lastCollectedAt ? { lastCollectedAt: source.lastCollectedAt } : {}),
+      consent: getActiveUnderstandingConsent(source.id),
     }));
     return c.json({
       assertions,
+      assertionEdges: listUserAssertionEdges(assertions.map((item) => item.id)),
+      observations: listUserModelObservations({ limit: 500 }),
       goals,
       priorities,
       rules: listCollaborationRules(),
+      ruleSuggestions: listActionRuleSuggestions(),
       knowledge,
       maintenance: { lastRun: listMemoryMaintenanceRuns(1)[0] ?? null },
       profile,
@@ -306,9 +317,17 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
         volatility: current.volatility,
         sensitivity: current.sensitivity,
         disclosurePolicy: current.disclosurePolicy,
+        domain: current.domain,
+        layer: current.layer,
+        sensitivityCategories: current.sensitivityCategories,
+        purposeIds: current.purposeIds,
+        allowedUses: current.allowedUses,
+        allowedAgentIds: current.allowedAgentIds,
+        deleteAfter: current.deleteAfter,
         applicability: current.applicability,
         ...(current.validFrom === undefined ? {} : { validFrom: current.validFrom }),
         ...(current.validTo === undefined ? {} : { validTo: current.validTo }),
+        ...(current.reviewAt === undefined ? {} : { reviewAt: current.reviewAt }),
         observedAt: Date.now(),
         createdBy: 'user',
         correctionOfAssertionId: current.id,

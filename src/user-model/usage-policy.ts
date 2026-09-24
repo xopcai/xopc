@@ -1,4 +1,4 @@
-import type { UserAssertion } from './domain.js';
+import type { AssertionAllowedUse, UserAssertion } from './domain.js';
 
 /** Automatic personalization never grants execution authority. */
 export function isWorkingAssumption(assertion: UserAssertion): boolean {
@@ -10,10 +10,17 @@ export function isWorkingAssumption(assertion: UserAssertion): boolean {
     && assertion.disclosurePolicy !== 'ask_before_reference';
 }
 
-export function canUseAssertion(assertion: UserAssertion, asOf = Date.now()): boolean {
+export function canUseAssertion(
+  assertion: UserAssertion,
+  asOf = Date.now(),
+  context: { use?: AssertionAllowedUse; agentId?: string } = {},
+): boolean {
   return (assertion.validFrom === undefined || assertion.validFrom <= asOf)
     && (assertion.validTo === undefined || assertion.validTo >= asOf)
+    && (assertion.deleteAfter === undefined || assertion.deleteAfter > asOf)
     && (assertion.reviewAt === undefined || assertion.reviewAt > asOf)
+    && (!context.use || !assertion.allowedUses || assertion.allowedUses.includes(context.use))
+    && (!assertion.allowedAgentIds || Boolean(context.agentId && assertion.allowedAgentIds.includes(context.agentId)))
     && assertion.sensitivity !== 'secret'
     && assertion.sensitivity !== 'regulated'
     && assertion.disclosurePolicy !== 'ask_before_reference'
