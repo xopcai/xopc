@@ -50,8 +50,14 @@ describe('HomeOpportunityApplicationService', () => {
     const service = new HomeOpportunityApplicationService(db, principal);
     const first = service.start({ opportunityId: 'opportunity-1', expectedRevision: 1, idempotencyKey: 'start:1', now: 10 });
     const second = service.start({ opportunityId: 'opportunity-1', expectedRevision: 1, idempotencyKey: 'start:1', now: 11 });
+    if (first.outcome !== 'task') throw new Error('Expected a task outcome');
     expect(second).toEqual(first);
     expect(new TaskRepository().list()).toHaveLength(1);
+    expect(repository.listHistory(principal)).toMatchObject([{
+      status: 'started',
+      feedbackKind: 'started',
+      href: first.href,
+    }]);
     expect(repository.getAdvisor(principal, 12)).toEqual({ state: 'quiet', reason: 'no_change' });
   });
 

@@ -190,7 +190,16 @@ export const HomeClarificationSchema = z.strictObject({
 
 export const HomeAdvisorSchema = z.discriminatedUnion('state', [
   z.strictObject({ state: z.literal('disabled') }),
-  z.strictObject({ state: z.literal('quiet'), reason: z.enum(['no_change', 'insufficient_value', 'model_unavailable']) }),
+  z.strictObject({
+    state: z.literal('quiet'),
+    reason: z.enum([
+      'no_change',
+      'insufficient_value',
+      'model_unavailable',
+      'generation_failed',
+      'budget_exhausted',
+    ]),
+  }),
   z.strictObject({
     state: z.literal('refreshing'),
     previous: HomeOpportunitySchema.optional(),
@@ -225,6 +234,41 @@ export const HomeOpportunityFeedbackRequestSchema = z.strictObject({
   reasonCode: z.string().trim().min(1).max(100).optional(),
   note: z.string().trim().min(1).max(1_000).optional(),
   snoozedUntil: z.number().int().nonnegative().optional(),
+});
+
+export const HomeOpportunityFeedbackUndoRequestSchema = z.strictObject({
+  idempotencyKey: z.string().trim().min(1).max(200),
+});
+
+export const HomeOpportunityHistoryItemSchema = z.strictObject({
+  opportunity: HomeOpportunitySchema,
+  status: z.enum([
+    'available',
+    'started',
+    'discussing',
+    'completed',
+    'snoozed',
+    'dismissed',
+    'expired',
+    'superseded',
+  ]),
+  feedbackKind: z.enum([
+    'started',
+    'discussed',
+    'already_done',
+    'irrelevant',
+    'too_early',
+    'source_incorrect',
+    'less_like_this',
+    'snoozed',
+  ]).optional(),
+  updatedAt: z.number().int().nonnegative(),
+  snoozedUntil: z.number().int().nonnegative().optional(),
+  href: z.string().trim().min(1).max(2_000).optional(),
+});
+
+export const HomeOpportunityHistoryResponseSchema = z.strictObject({
+  items: z.array(HomeOpportunityHistoryItemSchema).max(100),
 });
 
 export const HomeOpportunityActionRequestSchema = z.strictObject({
@@ -331,6 +375,9 @@ export type HomeClarification = z.infer<typeof HomeClarificationSchema>;
 export type HomeAdvisor = z.infer<typeof HomeAdvisorSchema>;
 export type HomeAdvisorRefreshRequest = z.infer<typeof HomeAdvisorRefreshRequestSchema>;
 export type HomeOpportunityFeedbackRequest = z.infer<typeof HomeOpportunityFeedbackRequestSchema>;
+export type HomeOpportunityFeedbackUndoRequest = z.infer<typeof HomeOpportunityFeedbackUndoRequestSchema>;
+export type HomeOpportunityHistoryItem = z.infer<typeof HomeOpportunityHistoryItemSchema>;
+export type HomeOpportunityHistoryResponse = z.infer<typeof HomeOpportunityHistoryResponseSchema>;
 export type HomeOpportunityActionRequest = z.infer<typeof HomeOpportunityActionRequestSchema>;
 export type HomeOpportunityActionResponse = z.infer<typeof HomeOpportunityActionResponseSchema>;
 export type HomeResponse = z.infer<typeof HomeResponseSchema>;

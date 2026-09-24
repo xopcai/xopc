@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   HomeAdvisorSchema,
+  HomeOpportunityHistoryResponseSchema,
   HomeOpportunitySchema,
   HomeOpportunityActionResponseSchema,
   HomeResponseSchema,
@@ -20,6 +21,8 @@ describe('home contract', () => {
       advisor: { state: 'quiet', reason: 'no_change' },
     });
     expect(parsed.advisor).toEqual({ state: 'quiet', reason: 'no_change' });
+    expect(HomeAdvisorSchema.parse({ state: 'quiet', reason: 'generation_failed' }))
+      .toEqual({ state: 'quiet', reason: 'generation_failed' });
   });
 
   it('rejects an ungrounded ready recommendation', () => {
@@ -78,5 +81,24 @@ describe('home contract', () => {
     expect(parsed.continuation).toEqual({
       kind: 'automation', reason: 'repeated_success', href: '/automations?draft=review', successCount: 2,
     });
+  });
+
+  it('validates suggestion history as a user-facing lifecycle', () => {
+    const item = HomeOpportunitySchema.parse({
+      id: 'history-1', revision: 2, kind: 'project_next_step', projectId: 'atlas',
+      title: 'Prepare release checklist', outcome: 'A reviewed release checklist.',
+      rationale: 'The release is approaching.',
+      evidence: [{
+        id: 'project:atlas:1', sourceType: 'project', sourceRef: 'atlas', revision: '1',
+        observation: 'Atlas is preparing a release.', observedAt: 1, freshUntil: 2,
+      }],
+      confidence: 'high', urgency: 'this_week', risk: 'analysis', proposedSteps: ['Review scope'],
+      capabilities: [], verification: ['Draft is reviewable'], actionPrompt: 'Prepare the checklist.',
+      actions: { canStart: true, canDiscuss: true, degradedStartAvailable: false },
+      generatedAt: 1, expiresAt: 2,
+    });
+    expect(HomeOpportunityHistoryResponseSchema.parse({
+      items: [{ opportunity: item, status: 'dismissed', feedbackKind: 'irrelevant', updatedAt: 2 }],
+    }).items[0]).toMatchObject({ status: 'dismissed', feedbackKind: 'irrelevant' });
   });
 });

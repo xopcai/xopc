@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
-import type { HomeAdviceMetrics, HomeAdvisor } from '@xopcai/gateway-contract';
+import type { HomeAdviceMetrics, HomeAdvisor, HomeOpportunityHistoryItem } from '@xopcai/gateway-contract';
 import type { HomeOpportunityActionRequest, HomeOpportunityActionResponse, HomeOpportunityFeedbackRequest } from '@xopcai/gateway-contract';
 
 import { createLogger } from '../utils/logger.js';
@@ -26,6 +26,7 @@ const log = createLogger('HomeIntelligence');
 const POLL_INTERVAL_MS = 5_000;
 const REFRESH_INTERVAL_MS = 30 * 60_000;
 const GENERATION_LEASE_MS = 5 * 60_000;
+const DAILY_MODEL_GENERATION_BUDGET = 12;
 
 function generationFingerprint(snapshotHash: string, capabilities: HomeCapabilityInventory): string {
   return createHash('sha256').update(JSON.stringify({
@@ -95,6 +96,11 @@ export class HomeIntelligenceHost {
 
   getMetrics(since = Math.max(0, this.now() - 30 * 24 * 60 * 60_000)): HomeAdviceMetrics {
     return this.repository.getMetrics(this.deps.principal, since, this.now());
+  }
+
+  getHistory(): HomeOpportunityHistoryItem[] {
+    if (this.deps.enabled?.() === false) return [];
+    return this.repository.listHistory(this.deps.principal);
   }
 
   requestRefresh(reason: HomeGenerationReason, idempotencyKey?: string, locale?: string): string {
@@ -171,6 +177,11 @@ export class HomeIntelligenceHost {
     this.deps.publish('home.advisor.updated', { state: 'feedback', opportunityId, kind: input.kind });
   }
 
+  undoFeedback(opportunityId: string, idempotencyKey: string): void {
+    this.repository.undoFeedback(this.deps.principal, opportunityId, idempotencyKey, this.now());
+    this.deps.publish('home.advisor.updated', { state: 'feedback_undone', opportunityId });
+  }
+
   async tick(): Promise<void> {
     if (this.running || this.stopped || this.deps.enabled?.() === false) return;
     this.running = true;
@@ -207,11 +218,17 @@ export class HomeIntelligenceHost {
       let generation: HomeModelGeneration | undefined;
       const startOfDay = new Date(startedAt);
       startOfDay.setHours(0, 0, 0, 0);
-      const dailyBudgetExhausted = this.repository.countGenerationAttemptsSince(this.deps.principal, startOfDay.getTime()) > 12;
-      const forceRefresh = claim.reasons.includes('manual_refresh') || claim.reasons.includes('scheduled_refresh');
-      const result = (previousHash === currentFingerprint && !forceRefresh) || dailyBudgetExhausted
-        ? { state: 'quiet' as const, reason: 'no_change' as const }
-        : await (async () => {
+      const modelGenerationAttempts = this.repository.countModelGenerationAttemptsSince(
+        this.deps.principal,
+        startOfDay.getTime(),
+        claim.generationId,
+      );
+      const manualRefresh = claim.reasons.includes('manual_refresh');
+      const result = modelGenerationAttempts >= DAILY_MODEL_GENERATION_BUDGET && !manualRefresh
+        ? { state: 'quiet' as const, reason: 'budget_exhausted' as const }
+        : previousHash === currentFingerprint && !manualRefresh
+          ? { state: 'quiet' as const, reason: 'no_change' as const }
+          : await (async () => {
             generation = await this.deps.generator.generate(snapshot, capabilities, this.abortController.signal);
             return new HomeAdvicePolicy(
               (requirements, options) => this.resolveCapabilityRequirements(
