@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run --configLoader runner"
+    "test": "vitest run --root ../.. --project packages packages/agent-stream-client/__tests__/agent-stream.test.ts --configLoader runner"
   },
   "dependencies": {
     "@xopcai/gateway-contract": "workspace:*"

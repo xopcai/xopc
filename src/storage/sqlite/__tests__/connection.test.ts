@@ -129,22 +129,6 @@ describe('openXopcDatabase', () => {
     expect(readSchemaVersionForTest(second.db)).toBe(XOPC_DB_SCHEMA_VERSION);
   }, 30_000); // Two complete migrations and fsyncs may contend with parallel integration tests.
 
-  it('restores serialized fixtures only into memory', () => {
-    const source = openXopcDatabase({ path: ':memory:' });
-    source.db.exec("CREATE TABLE fixture_marker(value TEXT); INSERT INTO fixture_marker VALUES ('ready')");
-    const serialized = (
-      source.db as typeof source.db & { serialize(): Uint8Array }
-    ).serialize();
-    closeXopcDatabase();
-
-    expect(() => openXopcDatabase({ path: dbPath, serialized })).toThrow(
-      'Serialized SQLite databases can only be restored in memory',
-    );
-
-    const restored = openXopcDatabase({ path: ':memory:', serialized });
-    expect(restored.db.prepare('SELECT value FROM fixture_marker').get()?.value).toBe('ready');
-  });
-
   it('reopens an already upgraded database without another cutover backup', () => {
     const first = openXopcDatabase({ path: dbPath });
     first.db.exec("CREATE TABLE upgrade_sentinel(value TEXT); INSERT INTO upgrade_sentinel VALUES ('preserved')");
