@@ -5,7 +5,8 @@ export class PcmFrameBuffer {
   private remainder = new Uint8Array();
 
   push(bytes: Uint8Array): Uint8Array[] {
-    if (!bytes.byteLength || bytes.byteLength % 2) throw new Error('PCM16 audio must contain complete samples');
+    if (!bytes.byteLength) return [];
+    if (bytes.byteLength % 2) throw new Error('PCM16 audio must contain complete samples');
     const pending = new Uint8Array(this.remainder.byteLength + bytes.byteLength);
     pending.set(this.remainder);
     pending.set(bytes, this.remainder.byteLength);

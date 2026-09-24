@@ -116,6 +116,30 @@ describe('Agent voice interruption cleanup', () => {
     expect(runAgent).toHaveBeenCalledOnce();
   });
 
+  it('ignores imperfect speaker echo finalized just after playback completes', async () => {
+    const runAgent = vi.fn(async function* () {
+      yield { type: 'assistant_delta' as const, payload: { delta: '今天天气怎么样？答案是晴天。' } };
+    });
+    const test = await setup(runAgent);
+    mocks.speak.mockImplementation(async () => ({
+      outputFormat: 'pcm', release: test.release,
+      audioStream: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1, 0])); controller.close(); } }),
+    }));
+    test.final('first');
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
+    const responseId = test.sendAudio.mock.calls[0]![0];
+    const sentBytes = test.sendAudio.mock.calls.reduce((total, [, bytes]) => total + bytes.byteLength, 0);
+    engine.acknowledge(responseId, sentBytes / 48);
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.anything()));
+
+    test.emit({ type: 'speech_started', utteranceId: 'late-echo' });
+    test.emit({ type: 'transcript_final', utteranceId: 'late-echo', revision: 1, text: '今天天汽怎么样答案晴天' });
+
+    expect(test.send.mock.calls.filter(([type, payload]) => type === 'input.transcript.final' && payload.utteranceId === 'late-echo')).toEqual([]);
+    expect(test.send.mock.calls.filter(([type]) => type === 'response.cancelled')).toEqual([]);
+    expect(runAgent).toHaveBeenCalledOnce();
+  });
+
   it('flushes an unpunctuated acknowledgement as soon as a tool starts', async () => {
     let releaseTool!: () => void;
     const toolRunning = new Promise<void>((resolve) => { releaseTool = resolve; });

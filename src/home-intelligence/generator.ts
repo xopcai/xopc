@@ -5,6 +5,7 @@ import type { Config } from '../config/schema.js';
 import { resolveDefaultAgentId } from '../agent/agent-scope.js';
 import { resolveModelSelector } from '../config/agent-model-intents.js';
 import { completeWithResolvedCredentials, isLocalModelBaseUrl } from '../providers/model-call.js';
+import { extractAssistantText, getAssistantMessageErrorReason } from '../providers/model-response.js';
 import { resolveModel } from '../providers/index.js';
 import type { HomeContextSnapshot } from './snapshot.js';
 import type { HomeCapabilityInventory } from './types.js';
@@ -83,10 +84,10 @@ function buildSystemPrompt(locale: HomeContextSnapshot['locale']): string {
   ].join('\n');
 }
 
-function extractText(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content.map((part) => part && typeof part === 'object' && 'text' in part && typeof part.text === 'string' ? part.text : '').join('');
+function extractHomeResponseText(response: { content?: unknown }): string {
+  const modelError = getAssistantMessageErrorReason(response);
+  if (modelError) throw new Error(`Home intelligence provider request failed: ${modelError}`);
+  return extractAssistantText(response.content);
 }
 
 function parseJson(raw: string): unknown {
@@ -171,7 +172,7 @@ export class HomeAdviceGenerator {
       systemPrompt,
       messages: [message],
     }, { maxTokens: 3_000, temperature: 0.1, signal: requestSignal });
-    const raw = extractText(response.content);
+    const raw = extractHomeResponseText(response);
     let result: HomeModelResult;
     try {
       result = HomeModelResultSchema.parse(parseJson(raw));
@@ -192,7 +193,7 @@ export class HomeAdviceGenerator {
         messages: [message, correction],
       }, { maxTokens: 3_000, temperature: 0, signal: requestSignal });
       try {
-        result = HomeModelResultSchema.parse(parseJson(extractText(corrected.content)));
+        result = HomeModelResultSchema.parse(parseJson(extractHomeResponseText(corrected)));
       } catch (correctionError) {
         throw new Error(`Home intelligence model returned invalid structured JSON after correction: ${validationSummary(correctionError)}`);
       }

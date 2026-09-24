@@ -39,11 +39,18 @@ describe('ProductSectionHeader', () => {
     expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Projects');
   });
 
-  it('distinguishes activity and automation management in the automation header', () => {
+  it('keeps automation management first and run history selected when requested', () => {
     renderAt('/automations?view=activity');
 
-    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Activity');
-    expect(container.textContent).toContain('Automations');
+    const tabs = [...container.querySelectorAll('[role="tab"]')];
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      'Automations',
+      'Scenes',
+      'Workflows',
+      'Browser automation',
+      'Run history',
+    ]);
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Run history');
   });
 
   it('preserves dedicated conversation chrome', () => {

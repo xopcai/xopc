@@ -15,6 +15,7 @@ export type ReadAloudSource = {
   id: string;
   title: string;
   href?: string;
+  targetId?: string;
 };
 
 export type ReadAloudInput = {

@@ -1707,11 +1707,11 @@ export class GatewayService {
     return { applied: changed, language, mode };
   }
 
-  setBundledExtensionActivationTarget(
+  setExtensionActivationTarget(
     extensionId: string,
     wanted: boolean,
   ): Promise<{ ok: boolean; error?: string; requiresGatewayRestart: boolean }> {
-    return this.configCoordinator.setBundledExtensionActivationTarget(extensionId, wanted);
+    return this.configCoordinator.setExtensionActivationTarget(extensionId, wanted);
   }
 
   updateConfig(updates: Partial<Config>): Promise<{ updated: boolean; error?: string }> {

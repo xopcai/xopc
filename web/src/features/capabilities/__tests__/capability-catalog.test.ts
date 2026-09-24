@@ -15,7 +15,6 @@ import type { SkillCatalogEntry } from '@/features/skills/skill.types';
 describe('capability catalog', () => {
   it('owns agent and channel management routes', () => {
     expect(CAPABILITY_SECTIONS).toEqual([
-      'discover',
       'skills',
       'connectors',
       'agents',

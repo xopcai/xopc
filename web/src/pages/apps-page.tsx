@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ArrowLeft, Box, Check, ExternalLink, Loader2, MoreHorizontal, Plus, Settings, X } from 'lucide-react';
+import { ArrowLeft, Box, Check, ExternalLink, Loader2, MoreHorizontal, Plus, Settings, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
@@ -24,7 +24,7 @@ import {
 import { ExtensionMarketplacePanel } from '@/features/extensions/extension-marketplace';
 import { AgentPluginDialog } from '@/features/extensions/agent-plugin-dialog';
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
-import { postBundledExtensionActivation } from '@/features/extensions/extension-marketplace-api';
+import { postExtensionActivation, uninstallExtensionFromDisk } from '@/features/extensions/extension-marketplace-api';
 import { extensionPagePath } from '@/features/extensions/extension-paths';
 import type { ExtensionApiRow, PageContribution } from '@/features/extensions/types';
 import { messages } from '@/i18n/messages';
@@ -364,35 +364,50 @@ function ExtensionDetailDialog({
   onClose: () => void;
 }) {
   const { mutate } = useSWRConfig();
-  const [bundledToggleBusy, setBundledToggleBusy] = useState(false);
-  const [bundledToggleErr, setBundledToggleErr] = useState<string | null>(null);
-  const [bundledRestartHint, setBundledRestartHint] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState<'toggle' | 'uninstall' | null>(null);
+  const [lifecycleErr, setLifecycleErr] = useState<string | null>(null);
+  const [restartHint, setRestartHint] = useState(false);
 
   // Reflect *user intent* — the persisted enabled/disabled config — rather than
   // whether the gateway has actually loaded the process yet. Without this,
   // disabling a still-running extension leaves the button labelled "停用",
   // making the toggle look like it did nothing on subsequent clicks.
-  const bundledConfiguredOn = ext.activationEligible === true;
+  const configuredOn = ext.activationEligible === true;
 
-  const onBundledActivationToggle = useCallback(async () => {
-    if (ext.source !== 'bundled') return;
-    setBundledToggleErr(null);
-    setBundledRestartHint(false);
-    setBundledToggleBusy(true);
+  const onActivationToggle = useCallback(async () => {
+    setLifecycleErr(null);
+    setRestartHint(false);
+    setLifecycleBusy('toggle');
     try {
-      const { requiresGatewayRestart } = await postBundledExtensionActivation({
+      const { requiresGatewayRestart } = await postExtensionActivation({
         extensionId: ext.id,
-        enabled: !bundledConfiguredOn,
+        enabled: !configuredOn,
       });
       await mutate('gateway-extensions-list');
       dispatchConfigReload();
-      setBundledRestartHint(requiresGatewayRestart);
+      setRestartHint(requiresGatewayRestart);
     } catch (e) {
-      setBundledToggleErr(e instanceof Error ? e.message : copy.builtinToggleFailed);
+      setLifecycleErr(e instanceof Error ? e.message : copy.extensionToggleFailed);
     } finally {
-      setBundledToggleBusy(false);
+      setLifecycleBusy(null);
     }
-  }, [bundledConfiguredOn, copy.builtinToggleFailed, ext.id, ext.source, mutate]);
+  }, [configuredOn, copy.extensionToggleFailed, ext.id, mutate]);
+
+  const onUninstall = useCallback(async () => {
+    if (ext.source === 'bundled' || !window.confirm(copy.extensionUninstallConfirm)) return;
+    setLifecycleErr(null);
+    setRestartHint(false);
+    setLifecycleBusy('uninstall');
+    try {
+      await uninstallExtensionFromDisk(ext.id);
+      await mutate('gateway-extensions-list');
+      dispatchConfigReload();
+      onClose();
+    } catch (e) {
+      setLifecycleErr(e instanceof Error ? e.message : copy.marketplaceUninstallFailed);
+      setLifecycleBusy(null);
+    }
+  }, [copy.extensionUninstallConfirm, copy.marketplaceUninstallFailed, ext.id, ext.source, mutate, onClose]);
 
   const pages = ext.ui?.contributions?.pages ?? [];
   const settingsPanels = ext.ui?.contributions?.settingsPanels ?? [];
@@ -469,45 +484,58 @@ function ExtensionDetailDialog({
             <p className="mt-2 text-xs text-fg-muted">{bundledRunCaption(ext, copy)}</p>
 
             {ext.source === 'bundled' ? (
-              <>
-                <p className="mt-4 rounded-lg bg-surface-hover/40 px-3 py-2 text-xs text-fg-muted shadow-surface dark:bg-surface-hover/20">
-                  {copy.builtinConfigHint}
-                </p>
-                <div className="mt-3 rounded-lg bg-surface-hover/40 p-3 shadow-surface dark:bg-surface-hover/20">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-fg">{copy.builtinRuntimeToggle}</span>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={bundledToggleBusy}
-                      onClick={() => void onBundledActivationToggle()}
-                      className="shrink-0 py-1.5 text-xs"
-                    >
-                      {bundledToggleBusy ? (
-                        <>
-                          <Loader2 className="mr-1.5 size-3.5 shrink-0 animate-spin" aria-hidden />
-                          {copy.builtinToggleBusy}
-                        </>
-                      ) : bundledConfiguredOn ? (
-                        copy.builtinToggleDisable
-                      ) : (
-                        copy.builtinToggleEnable
-                      )}
-                    </Button>
-                  </div>
-                  {bundledToggleErr ? (
-                    <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{bundledToggleErr}</p>
-                  ) : null}
-                  {bundledRestartHint ? (
-                    <p className="mt-2 text-xs text-fg-muted">{copy.builtinToggleRestartHint}</p>
-                  ) : null}
-                </div>
-              </>
-            ) : (
               <p className="mt-4 rounded-lg bg-surface-hover/40 px-3 py-2 text-xs text-fg-muted shadow-surface dark:bg-surface-hover/20">
-                {copy.cliManageHint}
+                {copy.builtinConfigHint}
               </p>
-            )}
+            ) : null}
+
+            <div className="mt-3 rounded-lg bg-surface-hover/40 p-3 shadow-surface dark:bg-surface-hover/20">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-medium text-fg">{copy.builtinRuntimeToggle}</span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={lifecycleBusy !== null}
+                  onClick={() => void onActivationToggle()}
+                  className="shrink-0 py-1.5 text-xs"
+                >
+                  {lifecycleBusy === 'toggle' ? (
+                    <>
+                      <Loader2 className="mr-1.5 size-3.5 shrink-0 animate-spin" aria-hidden />
+                      {copy.builtinToggleBusy}
+                    </>
+                  ) : configuredOn ? (
+                    copy.builtinToggleDisable
+                  ) : (
+                    copy.builtinToggleEnable
+                  )}
+                </Button>
+              </div>
+              {lifecycleErr ? (
+                <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{lifecycleErr}</p>
+              ) : null}
+              {restartHint ? (
+                <p className="mt-2 text-xs text-fg-muted">{copy.builtinToggleRestartHint}</p>
+              ) : null}
+              {ext.source !== 'bundled' ? (
+                <div className="mt-3 flex justify-end border-t border-edge-subtle pt-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={lifecycleBusy !== null}
+                    onClick={() => void onUninstall()}
+                    className="text-danger hover:bg-danger-soft hover:text-danger"
+                  >
+                    {lifecycleBusy === 'uninstall' ? (
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                    ) : (
+                      <Trash2 className="size-3.5" aria-hidden />
+                    )}
+                    {copy.marketplaceUninstall}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
 
             {ext.hasUi && (pages.length > 0 || settingsPanels.length > 0 || chatWidgets.length > 0) ? (
               <section className="mt-8">

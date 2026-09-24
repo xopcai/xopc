@@ -119,6 +119,9 @@ describe('LocalAppService', () => {
     expect(readFileSync(join(app.workspaceRoot, 'ui/index.html'), 'utf8')).toContain('id="sign-in"');
     expect(readFileSync(join(app.workspaceRoot, 'ui/styles.css'), 'utf8')).toBe('main { padding: 24px; }');
     expect(readFileSync(join(app.workspaceRoot, 'ui/app.js'), 'utf8')).toContain("querySelector('#sign-in')");
+    expect(app.idea).toBe('Login preview');
+    expect(JSON.parse(readFileSync(join(app.workspaceRoot, 'xopc.extension.json'), 'utf8')).description)
+      .toBe('Login preview');
     expect(service.validate(app.id).status).toBe('healthy');
   });
 

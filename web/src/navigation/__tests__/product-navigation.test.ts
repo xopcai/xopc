@@ -17,14 +17,26 @@ describe('product navigation', () => {
     ]);
   });
 
-  it('orders automation sections by activity, tasks, scenarios, and execution type', () => {
+  it('puts automation management first and run history last', () => {
     expect(PRODUCT_DOMAINS.find((domain) => domain.id === 'automation')?.sections.map((section) => section.id)).toEqual([
-      'automation-activity',
       'automation-triggers',
       'automation-scenes',
       'automation-workflows',
       'automation-browser',
+      'automation-activity',
     ]);
+  });
+
+  it('removes capability discovery and falls back to skills', () => {
+    expect(PRODUCT_DOMAINS.find((domain) => domain.id === 'capabilities')?.sections.map((section) => section.id)).toEqual([
+      'capabilities-skills',
+      'capabilities-connectors',
+      'capabilities-agents',
+      'capabilities-channels',
+      'capabilities-extensions',
+    ]);
+    expect(productSectionAtLocation('/capabilities')).toBe('capabilities-skills');
+    expect(productSectionAtLocation('/capabilities/discover')).toBe('capabilities-skills');
   });
 
   it.each([

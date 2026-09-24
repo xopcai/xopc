@@ -9,7 +9,6 @@ export type ProductSectionId =
   | 'automation-triggers'
   | 'automation-workflows'
   | 'automation-browser'
-  | 'capabilities-discover'
   | 'capabilities-agents'
   | 'capabilities-skills'
   | 'capabilities-connectors'
@@ -36,14 +35,14 @@ const workSections = [
 ] as const satisfies readonly ProductSectionDefinition[];
 
 const automationSections = [
-  { id: 'automation-activity', domain: 'automation', path: '/automations?view=activity' },
   { id: 'automation-triggers', domain: 'automation', path: '/automations' },
   { id: 'automation-scenes', domain: 'automation', path: '/scenes' },
   { id: 'automation-workflows', domain: 'automation', path: '/workflows' },
   { id: 'automation-browser', domain: 'automation', path: '/browser-automations' },
+  { id: 'automation-activity', domain: 'automation', path: '/automations?view=activity' },
 ] as const satisfies readonly ProductSectionDefinition[];
 
-export const CAPABILITY_SECTIONS = ['discover', 'skills', 'connectors', 'agents', 'channels', 'extensions'] as const;
+export const CAPABILITY_SECTIONS = ['skills', 'connectors', 'agents', 'channels', 'extensions'] as const;
 export type CapabilitySection = typeof CAPABILITY_SECTIONS[number];
 
 const capabilitySections = CAPABILITY_SECTIONS.map((section) => ({
@@ -62,8 +61,8 @@ const appSections = [
 
 export const PRODUCT_DOMAINS = [
   { id: 'work', path: '/', sections: workSections },
-  { id: 'automation', path: '/automations?view=activity', sections: automationSections },
-  { id: 'capabilities', path: '/capabilities/discover', sections: capabilitySections },
+  { id: 'automation', path: '/automations', sections: automationSections },
+  { id: 'capabilities', path: '/capabilities/skills', sections: capabilitySections },
   { id: 'apps', path: '/local-apps', sections: appSections },
 ] as const satisfies readonly ProductDomainDefinition[];
 
@@ -102,10 +101,10 @@ export function productSectionAtLocation(pathname: string, search = ''): Product
   if (isPath(pathname, '/local-apps') || isPath(pathname, '/open')) return 'apps-library';
   if (isPath(pathname, '/capabilities')) {
     const section = pathname.split('/')[2];
-    const candidate = `capabilities-${section || 'discover'}` as ProductSectionId;
+    const candidate = `capabilities-${section || 'skills'}` as ProductSectionId;
     return capabilitySections.some((item) => item.id === candidate)
       ? candidate
-      : 'capabilities-discover';
+      : 'capabilities-skills';
   }
   return null;
 }

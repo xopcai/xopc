@@ -175,7 +175,6 @@ export function ChatAgentSelector({
                         setQuery('');
                       }}
                     >
-                      <Check className={cn('size-4 shrink-0', isSel ? 'opacity-100' : 'opacity-0')} aria-hidden />
                       <AgentAvatarDisplay agentId={a.id} avatar={a.avatar} size={32} className="shrink-0" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium leading-tight" title={name}>
@@ -190,6 +189,10 @@ export function ChatAgentSelector({
                           </span>
                         ) : null}
                       </span>
+                      <Check
+                        className={cn('size-4 shrink-0', isSel ? 'opacity-100' : 'opacity-0')}
+                        aria-hidden
+                      />
                     </button>
                   </li>
                 );

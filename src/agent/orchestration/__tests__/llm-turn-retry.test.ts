@@ -14,11 +14,14 @@ describe('llm-turn-retry', () => {
   it('detects transient provider errors', () => {
     expect(isTransientLlmErrorMessage('TypeError: fetch failed')).toBe(true);
     expect(isTransientLlmErrorMessage('ECONNRESET')).toBe(true);
+    expect(isTransientLlmErrorMessage('502: {"code":"provider_error"}')).toBe(true);
+    expect(isTransientLlmErrorMessage('503 Service Unavailable')).toBe(true);
     expect(isTransientLlmErrorMessage('Invalid API key')).toBe(false);
   });
 
   it('classifies retry and recovery decisions', () => {
     expect(classifyLlmFailure('TypeError: fetch failed')).toBe('transient_network');
+    expect(classifyLlmFailure('502: {"code":"provider_error"}')).toBe('transient_network');
     expect(classifyLlmFailure('maximum context length exceeded')).toBe('context_overflow');
     expect(classifyLlmFailure(
       'Codex error: Your input exceeds the context window of this model. Please adjust your input and try again.',

@@ -34,6 +34,22 @@ describe('workflow draft validator', () => {
     expect(draft.assumptions).toEqual(['repo exists']);
   });
 
+  it('ignores prose or another object appended after the first complete JSON object', () => {
+    const first = JSON.stringify({
+      name: 'research_topic',
+      graph,
+      manifest: { title: 'Research {Topic}' },
+      explanation: 'Keep braces such as {example} inside strings.',
+      assumptions: [],
+      risks: [],
+    });
+    const draft = parseGeneratedWorkflowDraft(`${first}\n已完成。\n{"extra":true}`);
+
+    expect(draft.name).toBe('research_topic');
+    expect(draft.manifest.title).toBe('Research {Topic}');
+    expect(draft.explanation).toContain('{example}');
+  });
+
   it('builds a validated draft response', () => {
     const response = buildWorkflowDraftResponse({
       name: 'weekly_audit',
