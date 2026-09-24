@@ -31,7 +31,7 @@ export function SidebarFooter({
     void import('@/pages/sessions-page');
     void import('@/pages/logs-page');
     void import('@/pages/automations-page');
-    void import('@/pages/skills-page');
+    void import('@/features/capabilities/capabilities-page');
   }, []);
 
   return (

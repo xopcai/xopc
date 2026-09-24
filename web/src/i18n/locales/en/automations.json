@@ -41,7 +41,13 @@
       "project": "Project",
       "allProjects": "All projects",
       "markAllRead": "Mark all as read",
-      "unread": "Unread results"
+      "unread": "Unread results",
+      "ownership": "Ownership",
+      "userManaged": "My automations",
+      "executor": "Executor",
+      "allSources": "All executors",
+      "results": "{count} automations",
+      "clear": "Clear filters"
     },
     "events": {
       "manualQueued": "Manual run queued",
@@ -65,6 +71,15 @@
       "enabled": "Enabled",
       "running": "Running",
       "next": "Next"
+    },
+    "overview": {
+      "title": "Run status"
+    },
+    "sources": {
+      "agent": "Agent",
+      "workflow": "Workflow",
+      "task": "Task",
+      "browser": "Browser"
     },
     "system": {
       "title": "System automations"
@@ -339,6 +354,10 @@
     "form": {
       "advanced": "Advanced settings",
       "advancedDescription": "Safety, delivery, and reliability",
+      "createFlowHint": "Complete the rule in three steps: trigger, action, then safety and results.",
+      "rulePreview": "Current rule",
+      "triggerStepDescription": "Choose when this automation starts: on a schedule, event, webhook, or manually.",
+      "actionStepDescription": "Choose what an agent, workflow, task, or browser automation does after the trigger.",
       "name": "Name",
       "description": "Description",
       "project": "Project",

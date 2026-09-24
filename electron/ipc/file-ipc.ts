@@ -688,6 +688,23 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
     return res.canceled ? null : res.filePaths[0] ?? null;
   });
 
+  ipcMain.handle('file:open-file-dialog', async (event, options?: { defaultPath?: string; extensions?: string[] }) => {
+    assertTrustedRenderer(event);
+    const defaultPath =
+      typeof options?.defaultPath === 'string' && options.defaultPath.trim()
+        ? options.defaultPath.trim()
+        : undefined;
+    const extensions = Array.isArray(options?.extensions)
+      ? options.extensions.filter(extension => /^[a-z0-9]+$/i.test(extension)).slice(0, 20)
+      : [];
+    const res = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      ...(defaultPath ? { defaultPath } : {}),
+      ...(extensions.length ? { filters: [{ name: 'Supported files', extensions }] } : {}),
+    });
+    return res.canceled ? null : res.filePaths[0] ?? null;
+  });
+
   ipcMain.handle('file:pick-endpoint-file', async (event): Promise<EndpointPickedFile | null> => {
     assertTrustedRenderer(event);
     const res = await dialog.showOpenDialog({

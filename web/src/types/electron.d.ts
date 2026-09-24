@@ -9,6 +9,8 @@ export interface ElectronFileAPI {
     dirPath: string,
   ): Promise<Array<{ name: string; path: string; isDirectory: boolean }>>;
   openDirectory(options?: ElectronOpenDirectoryOptions): Promise<string | null>;
+  openFile(options?: { defaultPath?: string; extensions?: string[] }): Promise<string | null>;
+  getPathForFile(file: File): string;
   pickEndpointFile(): Promise<{
     name: string;
     mimeType: string;

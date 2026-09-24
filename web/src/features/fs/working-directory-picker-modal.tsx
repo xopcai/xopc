@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ChevronUp, FolderInput, FolderPlus, Loader2 } from 'lucide-react';
+import { ChevronUp, FileArchive, FolderInput, FolderPlus, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useReducer } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
@@ -46,6 +46,13 @@ type Props = {
   initialAbsolutePath?: string;
   onConfirm: (absolutePath: string) => void | Promise<void>;
   wd: MessageBundle['chat']['workingDirectory'];
+  /** Allow selecting a regular file as well as the current directory. */
+  selectKind?: 'directory' | 'file-or-directory';
+  fileExtensions?: string[];
+  title?: string;
+  description?: string;
+  confirmLabel?: string;
+  nested?: boolean;
 };
 
 type PickerUi = {
@@ -58,6 +65,7 @@ type PickerUi = {
   createFolderName: string;
   createFolderLoading: boolean;
   createFolderError: string | null;
+  selectedFilePath: string;
 };
 
 const initialPickerUi: PickerUi = {
@@ -70,6 +78,7 @@ const initialPickerUi: PickerUi = {
   createFolderName: '',
   createFolderLoading: false,
   createFolderError: null,
+  selectedFilePath: '',
 };
 
 export function WorkingDirectoryPickerModal({
@@ -78,6 +87,12 @@ export function WorkingDirectoryPickerModal({
   initialAbsolutePath,
   onConfirm,
   wd,
+  selectKind = 'directory',
+  fileExtensions,
+  title,
+  description,
+  confirmLabel,
+  nested = false,
 }: Props) {
   const manualId = useId();
   const createFolderId = useId();
@@ -92,10 +107,11 @@ export function WorkingDirectoryPickerModal({
     createFolderName,
     createFolderLoading,
     createFolderError,
+    selectedFilePath,
   } = ui;
 
   const refreshFromPath = useCallback(async (pathArg?: string) => {
-    dispatch({ type: 'patch', patch: { listLoading: true, listError: null } });
+    dispatch({ type: 'patch', patch: { listLoading: true, listError: null, selectedFilePath: '' } });
     try {
       const payload = await listHostFs(pathArg);
       dispatch({ type: 'patch', patch: { listState: payload } });
@@ -134,6 +150,7 @@ export function WorkingDirectoryPickerModal({
         createFolderName: '',
         createFolderLoading: false,
         createFolderError: null,
+        selectedFilePath: '',
       },
     });
     let cancelled = false;
@@ -168,6 +185,7 @@ export function WorkingDirectoryPickerModal({
 
   const enterDir = (entry: HostFsEntry) => {
     if (!entry.isDirectory) return;
+    dispatch({ type: 'patch', patch: { selectedFilePath: '' } });
     void refreshFromPath(entry.absolutePath);
   };
 
@@ -189,6 +207,14 @@ export function WorkingDirectoryPickerModal({
 
   const canUseCurrentFolder =
     Boolean(listState) && listState!.currentPath !== '' && !listLoading && !listError;
+
+  const normalizedFileExtensions = fileExtensions?.map(extension => extension.replace(/^\./, '').toLocaleLowerCase());
+  const canSelectFile = (entry: HostFsEntry) => {
+    if (selectKind !== 'file-or-directory' || entry.isDirectory) return false;
+    if (!normalizedFileExtensions?.length) return true;
+    const extension = entry.name.includes('.') ? entry.name.split('.').pop()?.toLocaleLowerCase() : '';
+    return Boolean(extension && normalizedFileExtensions.includes(extension));
+  };
 
   const canCreateFolder = canUseCurrentFolder && !createFolderLoading;
 
@@ -226,9 +252,10 @@ export function WorkingDirectoryPickerModal({
   };
 
   const onUseFolder = async () => {
-    if (!listState || listState.currentPath === '') return;
+    const selectedPath = selectedFilePath || listState?.currentPath;
+    if (!selectedPath) return;
     try {
-      await onConfirm(listState.currentPath);
+      await onConfirm(selectedPath);
       onOpenChange(false);
     } catch {
       /* onConfirm failed; stay open */
@@ -251,17 +278,18 @@ export function WorkingDirectoryPickerModal({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[100] bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim backdrop-blur-[2px]', nested ? 'z-[139]' : 'z-[100]')} />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 z-[101] flex h-[min(90vh,32rem)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay p-4 shadow-popover',
+            'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(90vh,32rem)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay p-4 shadow-popover',
+            nested ? 'z-[140]' : 'z-[101]',
             'dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <Dialog.Title className="text-base font-semibold text-fg">{wd.pathModalTitle}</Dialog.Title>
+          <Dialog.Title className="text-base font-semibold text-fg">{title ?? wd.pathModalTitle}</Dialog.Title>
           <Dialog.Description className="mt-1 text-sm leading-relaxed text-fg-muted">
-            {wd.pathModalDescription}
+            {description ?? wd.pathModalDescription}
           </Dialog.Description>
           {metaHostname ? (
             <p className="mt-2 text-xs text-fg-muted">{wd.pickerHostHint.replace('{{hostname}}', metaHostname)}</p>
@@ -363,7 +391,7 @@ export function WorkingDirectoryPickerModal({
                 interaction.focusRingPanel,
               )}
               role="listbox"
-              aria-label={wd.pathModalTitle}
+              aria-label={title ?? wd.pathModalTitle}
             >
               {showLoadingOverlay ? (
                 <div
@@ -385,25 +413,34 @@ export function WorkingDirectoryPickerModal({
               {!listLoading && listState && !listError && listState.entries.length === 0 ? (
                 <p className="px-2 py-8 text-center text-sm text-fg-muted">{wd.pickerEmptyFolder}</p>
               ) : null}
-              {listState?.entries.map((e) => (
-                <button
-                  key={e.absolutePath}
-                  type="button"
-                  role="option"
-                  aria-selected={false}
-                  disabled={!e.isDirectory}
-                  className={cn(
-                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
-                    e.isDirectory
-                      ? 'cursor-pointer text-fg hover:bg-surface-hover'
-                      : 'cursor-default text-fg-muted opacity-60',
-                  )}
-                  onClick={() => enterDir(e)}
-                >
-                  <FolderInput className="size-4 shrink-0 text-fg-muted" aria-hidden />
-                  <span className="min-w-0 truncate">{e.name}</span>
-                </button>
-              ))}
+              {listState?.entries.map((e) => {
+                const selectableFile = canSelectFile(e);
+                const selected = selectedFilePath === e.absolutePath;
+                return (
+                  <button
+                    key={e.absolutePath}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    disabled={!e.isDirectory && !selectableFile}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
+                      e.isDirectory || selectableFile
+                        ? 'cursor-pointer text-fg hover:bg-surface-hover'
+                        : 'cursor-default text-fg-muted opacity-60',
+                      selected && 'bg-accent-soft text-accent-fg ring-1 ring-inset ring-accent',
+                    )}
+                    onClick={() => e.isDirectory
+                      ? enterDir(e)
+                      : selectableFile && dispatch({ type: 'patch', patch: { selectedFilePath: e.absolutePath } })}
+                  >
+                    {e.isDirectory
+                      ? <FolderInput className="size-4 shrink-0 text-fg-muted" aria-hidden />
+                      : <FileArchive className="size-4 shrink-0 text-fg-muted" aria-hidden />}
+                    <span className="min-w-0 truncate">{e.name}</span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="space-y-1.5">
@@ -441,8 +478,8 @@ export function WorkingDirectoryPickerModal({
             >
               {wd.pickerApplyManual}
             </Button>
-            <Button type="button" disabled={!canUseCurrentFolder} onClick={() => void onUseFolder()}>
-              {wd.pickerUseThisFolder}
+            <Button type="button" disabled={!selectedFilePath && !canUseCurrentFolder} onClick={() => void onUseFolder()}>
+              {confirmLabel ?? wd.pickerUseThisFolder}
             </Button>
           </div>
         </Dialog.Content>

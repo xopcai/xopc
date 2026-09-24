@@ -81,7 +81,7 @@ export function buildConnectorHits(args: {
       ],
       run: () => {
         args.close();
-        args.navigate(`/connectors?instance=${encodeURIComponent(instance.instanceId)}&tab=connected`);
+        args.navigate(`/capabilities/connectors?instance=${encodeURIComponent(instance.instanceId)}&tab=connected`);
       },
     };
   });
@@ -103,7 +103,7 @@ export function buildConnectorHits(args: {
       keywords: definitionKeywords(definition),
       run: () => {
         args.close();
-        args.navigate(`/connectors?connector=${encodeURIComponent(definition.id)}&tab=discover`);
+        args.navigate(`/capabilities/connectors?connector=${encodeURIComponent(definition.id)}&tab=discover`);
       },
     }];
   });

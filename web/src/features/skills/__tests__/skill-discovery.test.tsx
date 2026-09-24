@@ -53,9 +53,9 @@ describe('skill discovery', () => {
   });
   async function renderPage() {
     await act(async () => root.render(
-      <MemoryRouter initialEntries={['/skills?q=meeting%20%26%20notes']}>
+      <MemoryRouter initialEntries={['/capabilities/skills?q=meeting%20%26%20notes']}>
         <Routes>
-          <Route path="/skills" element={<SkillsHarness />} />
+          <Route path="/capabilities/skills" element={<SkillsHarness />} />
           <Route path="/chat/new" element={<Destination />} />
         </Routes>
       </MemoryRouter>,
@@ -97,6 +97,6 @@ describe('skill discovery', () => {
     expect(onPick).not.toHaveBeenCalled();
     act(() => container.querySelector('button')!.click());
     expect(onPick).toHaveBeenCalledExactlyOnceWith(sk.findExamples[0]);
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('/skills');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('/capabilities/skills');
   });
 });

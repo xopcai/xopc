@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 import type { StartupProgressDetail } from './startup-progress.js';
 
@@ -156,6 +156,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("file:open-dir-dialog", options) as Promise<
         string | null
       >,
+    openFile: (options?: { defaultPath?: string; extensions?: string[] }) =>
+      ipcRenderer.invoke("file:open-file-dialog", options) as Promise<
+        string | null
+      >,
+    getPathForFile: (file: File) => webUtils.getPathForFile(file),
     pickEndpointFile: () =>
       ipcRenderer.invoke("file:pick-endpoint-file") as Promise<{
         name: string;

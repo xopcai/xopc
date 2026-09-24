@@ -89,7 +89,7 @@ export function CreateTaskFollowUp() {
       <label className="grid gap-2 text-sm text-fg">{text('来源', 'Source')}<Select aria-label={text('来源', 'Source')} value={providerId} onChange={e => { setProvider(e.target.value); setAccount(''); }} required>
         {providers.data.providers.map(item => <SelectOption key={item.id} value={item.id}>{item.label}</SelectOption>)}
       </Select></label>
-      {!accounts.data?.accounts.length && <p className="text-sm text-fg-muted">{text('请先连接可读取的账号。', 'Connect an account with read access first.')} <Link className="text-accent-fg" to="/connectors">{text('连接器', 'Connectors')}</Link></p>}
+      {!accounts.data?.accounts.length && <p className="text-sm text-fg-muted">{text('请先连接可读取的账号。', 'Connect an account with read access first.')} <Link className="text-accent-fg" to="/capabilities/connectors">{text('连接器', 'Connectors')}</Link></p>}
       <label className="grid gap-2 text-sm text-fg">{text('账号', 'Account')}<Select aria-label={text('账号', 'Account')} value={accountId} onChange={e => setAccount(e.target.value)} required>
         <SelectOption value="">{text('选择账号', 'Choose an account')}</SelectOption>{accounts.data?.accounts.map(item => <SelectOption key={item.id} value={item.id}>{item.label}</SelectOption>)}
       </Select></label>

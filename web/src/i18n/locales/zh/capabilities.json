@@ -1,0 +1,28 @@
+{
+  "capabilitiesHub": {
+    "title": "能力中心",
+    "navAria": "能力中心分区",
+    "tabDiscover": "发现",
+    "tabSkills": "技能",
+    "tabConnectors": "连接",
+    "tabExtensions": "扩展",
+    "discoverLoading": "正在加载能力",
+    "searchPlaceholder": "搜索技能、连接器和扩展",
+    "searchLabel": "搜索能力",
+    "filterAria": "按能力类型筛选",
+    "filterAll": "全部",
+    "partialResults": "部分来源暂时不可用，已展示其余结果。",
+    "loadFailed": "无法加载能力目录。",
+    "emptyTitle": "没有找到匹配的能力",
+    "emptyBody": "尝试调整搜索词或筛选条件。",
+    "statusAvailable": "可用",
+    "statusInstalled": "已安装",
+    "statusAttention": "需处理",
+    "kindSkill": "技能",
+    "kindConnector": "连接器",
+    "kindExtension": "扩展",
+    "viewAction": "查看",
+    "manageAction": "管理",
+    "noDescription": "暂无说明"
+  }
+}

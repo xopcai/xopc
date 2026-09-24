@@ -102,14 +102,14 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       id: 'route:skills',
       title: m.nav.skills,
       subtitle: r.skillsSubtitle,
-      path: '/skills',
+      path: '/capabilities/skills',
       keywords: ['tools', 'catalog'],
     },
     {
       id: 'route:connectors',
       title: m.nav.connectors,
       subtitle: r.connectorsSubtitle,
-      path: '/connectors',
+      path: '/capabilities/connectors',
       keywords: ['connector', 'mcp', 'registry', 'integration', 'tools'],
     },
     {

@@ -39,7 +39,7 @@ export function MailSourcePicker({ value, disabled, zh, onChange }: { value: str
     <Button type="button" disabled={disabled || busy || !accountId || !query.trim()} onClick={() => void search()}>{busy ? (zh ? '正在搜索…' : 'Searching…') : (zh ? '搜索邮件' : 'Search mail')}</Button>
     <PopoverSelect value={value} disabled={disabled || busy} ariaLabel={zh ? '要跟进的邮件' : 'Mail to follow'} placeholder={zh ? '选择邮件线程' : 'Choose a thread'} allowEmpty={false} options={sources.map(source => ({ value: source.id, label: label(source) }))}
       onChange={id => { const source = sources.find(entry => entry.id === id); if (source) onChange(source); }} />
-    {!accounts.data.accounts.length && <p className="text-sm text-fg-muted">{zh ? '请连接 Gmail，并允许读取及后台检查；要求每次确认或仅限指定 Agent 的账号暂不支持。' : 'Connect Gmail and allow background reads. Accounts requiring confirmation for every read or restricted to specific agents are not supported yet.'} <Link className="text-accent underline" to="/connectors">{zh ? '管理连接' : 'Manage connections'}</Link></p>}
+    {!accounts.data.accounts.length && <p className="text-sm text-fg-muted">{zh ? '请连接 Gmail，并允许读取及后台检查；要求每次确认或仅限指定 Agent 的账号暂不支持。' : 'Connect Gmail and allow background reads. Accounts requiring confirmation for every read or restricted to specific agents are not supported yet.'} <Link className="text-accent underline" to="/capabilities/connectors">{zh ? '管理连接' : 'Manage connections'}</Link></p>}
     {searched && !busy && !error && !sources.length && <p role="status" className="text-sm text-fg-muted">{zh ? '没有找到匹配线程，请调整搜索条件。' : 'No matching threads. Try a different query.'}</p>}
     {error != null && <p role="alert" className="text-danger">{sceneErrorText(error, zh)}</p>}
   </div>;

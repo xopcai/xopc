@@ -10,7 +10,7 @@ vi.mock('@/pages/settings-page', () => ({}));
 vi.mock('@/pages/sessions-page', () => ({}));
 vi.mock('@/pages/logs-page', () => ({}));
 vi.mock('@/pages/automations-page', () => ({}));
-vi.mock('@/pages/skills-page', () => ({}));
+vi.mock('@/features/capabilities/capabilities-page', () => ({}));
 
 import { SidebarFooter } from '@/components/shell/sidebar-footer';
 

@@ -112,7 +112,7 @@ export function ImportsPage() {
         </article>)}
       </div> : <div className="rounded-xl bg-surface-hover/20 p-6 text-sm text-fg-muted"><p>{t.empty}</p><Button variant="ghost" className="mt-3" onClick={() => setReload(v => v + 1)}>{t.refresh}</Button></div>}
       <p className="text-xs leading-relaxed text-fg-muted">{t.footnote}</p>
-      {detected?.some(s => s.lastImport) && <div className="flex gap-4 text-sm"><Link className="text-accent" to="/skills">{t.openSkills}</Link><Link className="text-accent" to="/projects">{t.openProjects}</Link><Link className="text-accent" to="/connectors">{t.connections}</Link></div>}
+      {detected?.some(s => s.lastImport) && <div className="flex gap-4 text-sm"><Link className="text-accent" to="/capabilities/skills">{t.openSkills}</Link><Link className="text-accent" to="/projects">{t.openProjects}</Link><Link className="text-accent" to="/capabilities/connectors">{t.connections}</Link></div>}
     </section>}
     <ImportSelectionDialog open={open} sourceName={sources?.find(s => s.id === source)?.name ?? ''} inventory={inventory} selected={selected} onSelected={setSelected}
       busy={busy} locked={busy || !!pending} error={dialogError} onClose={() => { scanAbort.current?.abort(); setOpen(false); }}

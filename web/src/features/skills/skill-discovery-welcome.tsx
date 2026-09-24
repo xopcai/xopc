@@ -21,7 +21,7 @@ export function SkillDiscoveryWelcome({ sk, onPick, disabled }: {
           <Button key={text} disabled={disabled} onClick={() => onPick(text)}>{text}</Button>
         ))}
       </div>
-      <Link to="/skills" className="text-sm text-accent-fg hover:underline">{sk.findBack}</Link>
+      <Link to="/capabilities/skills" className="text-sm text-accent-fg hover:underline">{sk.findBack}</Link>
     </section>
   );
 }

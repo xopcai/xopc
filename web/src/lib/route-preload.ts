@@ -7,16 +7,14 @@ export const loadProjectsPage = () => import('@/pages/projects-page');
 export const loadProjectDetailPage = () => import('@/pages/project-detail-page');
 export const loadNotesPage = () => import('@/pages/notes-page');
 export const loadWorkflowsPage = () => import('@/pages/workflows-page');
-export const loadSkillsPage = () => import('@/pages/skills-page');
+export const loadCapabilitiesPage = () => import('@/features/capabilities/capabilities-page');
 export const loadUserModelPage = () => import('@/features/user-model/user-model-page');
-export const loadConnectorsPage = () => import('@/pages/connectors-page');
 export const loadLogsPage = () => import('@/pages/logs-page');
 export const loadSettingsPage = () => import('@/pages/settings-page');
 export const loadAgentsSettingsPage = () => import('@/features/settings/agents');
 export const loadAgentBrowserSettingsPage = () => import('@/features/settings/browser/browser-settings-page');
 export const loadComputerSettingsPage = () => import('@/features/settings/computer/computer-settings-page');
 export const loadChannelsPage = () => import('@/features/settings/channels-settings');
-export const loadExtensionsPage = () => import('@/pages/apps-page');
 export const loadExtensionPage = () => import('@/features/extensions/extension-page');
 export const loadExtensionSettingsPage = () => import('@/features/extensions/extension-settings-page');
 export const loadExtensionDebugPage = () => import('@/features/extensions/extension-debug-page');
@@ -86,9 +84,8 @@ export function preloadRouteForPath(to: string) {
 
   const path = pathWithoutSearch(to);
 
-  if (path === '/skills') return preload(loadSkillsPage);
+  if (path === '/capabilities' || path.startsWith('/capabilities/')) return preload(loadCapabilitiesPage);
   if (path === '/user-model') return preload(loadUserModelPage);
-  if (path === '/connectors') return preload(loadConnectorsPage);
   if (path === '/automations') return preload(loadAutomationsPage);
   if (path === '/browser-automations') return preload(loadBrowserAutomationsPage);
   if (path === '/') return preload(loadHomePage);
@@ -100,7 +97,6 @@ export function preloadRouteForPath(to: string) {
   if (path === '/workflows' || path.startsWith('/workflows/')) return preload(loadWorkflowsPage);
   if (path === '/channels' || path.startsWith('/channels/')) return preload(loadChannelsPage);
   if (path === '/agents' || path.startsWith('/agents/')) return preload(loadAgentsSettingsPage);
-  if (path === '/extensions') return preload(loadExtensionsPage);
   if (path.startsWith('/extensions/')) return preload(loadExtensionPage);
   if (path === '/local-apps') return preload(loadLocalAppsPage);
   if (path.startsWith('/local-apps/')) return preload(loadLocalAppWorkbenchPage);

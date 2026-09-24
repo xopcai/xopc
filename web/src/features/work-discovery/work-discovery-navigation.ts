@@ -1,5 +1,5 @@
 export const WORK_DISCOVERY_OVERLAY_PARAM = 'workDiscovery';
-export const WORK_SERVICE_CONNECT_PATH = '/connectors?understanding=1&returnTo=%2Fonboarding%2Fworkspace';
+export const WORK_SERVICE_CONNECT_PATH = '/capabilities/connectors?understanding=1&returnTo=%2Fonboarding%2Fworkspace';
 
 export function openWorkServiceConnection(
   navigate: (path: string) => unknown,

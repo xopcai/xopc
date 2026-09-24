@@ -16,13 +16,11 @@ import {
   loadAgentsSettingsPage,
   loadAgentBrowserSettingsPage,
   loadComputerSettingsPage,
-  loadExtensionsPage,
   loadAutomationsPage,
   loadBrowserAutomationsPage,
   loadHomePage,
   loadTaskDetailPage,
   loadChannelsPage,
-  loadConnectorsPage,
   loadProjectDetailPage,
   loadProjectsPage,
   loadExtensionDebugPage,
@@ -33,7 +31,6 @@ import {
   loadSettingsPage,
   loadSharePreviewPage,
   loadSessionsPage,
-  loadSkillsPage,
   loadUserModelPage,
   loadWorkflowsPage,
   loadLocalAppsPage,
@@ -61,9 +58,8 @@ const WorkflowDetailPage = lazy(() => loadWorkflowsPage().then((m) => ({ default
 const WorkflowEditorPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowEditorPage })));
 const WorkflowRunPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowRunPage })));
 const ImportsPage = lazy(() => import('@/features/imports/imports-page').then(m => ({ default: m.ImportsPage })));
-const SkillsPage = lazy(() => loadSkillsPage().then((m) => ({ default: m.SkillsPage })));
+const CapabilitiesPage = lazy(() => import('@/features/capabilities/capabilities-page').then((m) => ({ default: m.CapabilitiesPage })));
 const UserModelPage = lazy(() => loadUserModelPage().then((m) => ({ default: m.UserModelPage })));
-const ConnectorsPage = lazy(() => loadConnectorsPage().then((m) => ({ default: m.ConnectorsPage })));
 const ConnectorServicePage = lazy(() => import('./features/connectors/connector-service-page').then(m => ({ default: m.ConnectorServicePage })));
 const LogsPage = lazy(() => loadLogsPage().then((m) => ({ default: m.LogsPage })));
 const SettingsPage = lazy(() => loadSettingsPage().then((m) => ({ default: m.SettingsPage })));
@@ -78,7 +74,6 @@ const AgentBrowserSettingsPage = lazy(() =>
 );
 const ComputerSettingsPage = lazy(() => loadComputerSettingsPage().then(m => ({ default: m.ComputerSettingsPage })));
 const ChannelsPage = lazy(() => loadChannelsPage().then((m) => ({ default: m.ChannelsSettingsPanel })));
-const ExtensionsPage = lazy(() => loadExtensionsPage().then((m) => ({ default: m.ExtensionsPage })));
 const ExtensionPage = lazy(() => loadExtensionPage().then((m) => ({ default: m.ExtensionPage })));
 const ExtensionSettingsPage = lazy(() =>
   loadExtensionSettingsPage().then((m) => ({ default: m.ExtensionSettingsPage })),
@@ -334,18 +329,10 @@ const router = createHashRouter([
         ],
       },
       {
-        path: 'skills',
+        path: 'capabilities/:section?',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
-            <SkillsPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'connectors',
-        element: (
-          <Suspense fallback={<SecondaryRouteFallback />}>
-            <ConnectorsPage />
+            <CapabilitiesPage />
           </Suspense>
         ),
       },
@@ -387,14 +374,6 @@ const router = createHashRouter([
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
             <AgentsSettingsDetailPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'extensions',
-        element: (
-          <Suspense fallback={<SecondaryRouteFallback />}>
-            <ExtensionsPage />
           </Suspense>
         ),
       },
