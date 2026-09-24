@@ -187,6 +187,22 @@ describe('turn outcome projector', () => {
     expect(outcome.deliverables.every((item) => item.uri === undefined)).toBe(true);
   });
 
+  it('does not project read-only file deliveries as output artifacts', () => {
+    const outcome = projectTurnOutcome({
+      turnId: 'turn-1',
+      rows: [toolResult('turn-1', {
+        delivery: {
+          version: 2,
+          operation: 'opened',
+          primary: { kind: 'file', id: sourceFileId, title: 'report.html', capabilities: ['preview'] },
+        },
+      })],
+    });
+
+    expect(outcome.deliverables).toEqual([]);
+    expect(outcome.status).toBe('succeeded');
+  });
+
   it('marks opaque historical file references as missing instead of inventing a URI', () => {
     const outcome = projectTurnOutcome({
       turnId: 'turn-1',

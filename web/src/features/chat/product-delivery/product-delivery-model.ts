@@ -5,6 +5,13 @@ export type ProductDeliveryEntry = {
   delivery: ProductDeliveryEnvelope;
 };
 
+export function isProductDeliveryVisibleResult(delivery: ProductDeliveryEnvelope): boolean {
+  if (delivery.operation !== 'opened') return true;
+  return delivery.presentation?.kind === 'diff'
+    || delivery.presentation?.kind === 'inline_app'
+    || delivery.presentation?.kind === 'inline_preview';
+}
+
 export function productDeliveryDiffPresentations(deliveries: ProductDeliveryEntry[]) {
   return deliveries.flatMap(({ key, delivery }) => (
     delivery.presentation?.kind === 'diff' ? [{ key, presentation: delivery.presentation }] : []

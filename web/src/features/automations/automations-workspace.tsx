@@ -34,6 +34,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TimePicker } from '@/components/ui/time-picker';
 import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
+import { ModelSelector } from '@/features/chat/model/model-selector';
 import { fetchProjects, type Project } from '@/features/projects/api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { messages, type MessageBundle } from '@/i18n/messages';
@@ -2408,26 +2409,45 @@ function AutomationForm({
           </Select>
         </Field> : null}
         {form.actionMode === 'agent' ? (
-          <Field label={labels.form.instruction}>
-            <div className="flex justify-end">
-              <AiTextAssistButton
-                value={form.instruction}
-                onApply={(instruction) => update({ instruction })}
-                fieldId="automation.instruction"
-                fieldLabel={labels.form.instruction}
-                scenario="automation.instruction"
-                locale={language}
-                context={{
-                  automationName: form.name,
-                  automationDescription: form.description,
-                  triggerMode: form.triggerMode,
-                  agentId: form.agentId,
-                }}
-                showLabel={false}
+          <>
+            <Field label={labels.form.model}>
+              <ModelSelector
+                value={form.model}
+                onChange={(model) => update({ model })}
+                placeholder={labels.form.defaultModel}
+                emptyLabel={labels.form.defaultModel}
+                searchPlaceholder={labels.form.searchModels}
+                noMatches={labels.form.noModels}
+                allowEmpty
+                showProviderSettingsFooter
+                contentAlign="start"
+                className="w-full"
+                ariaLabel={labels.form.model}
               />
-            </div>
-            <textarea className={cn(inputClass, 'min-h-32 resize-y')} value={form.instruction} onChange={(e) => update({ instruction: e.target.value })} />
-          </Field>
+              <span className="text-xs text-fg-subtle">{labels.form.modelHint}</span>
+            </Field>
+            <Field label={labels.form.instruction}>
+              <div className="flex justify-end">
+                <AiTextAssistButton
+                  value={form.instruction}
+                  onApply={(instruction) => update({ instruction })}
+                  fieldId="automation.instruction"
+                  fieldLabel={labels.form.instruction}
+                  scenario="automation.instruction"
+                  locale={language}
+                  context={{
+                    automationName: form.name,
+                    automationDescription: form.description,
+                    triggerMode: form.triggerMode,
+                    agentId: form.agentId,
+                    model: form.model,
+                  }}
+                  showLabel={false}
+                />
+              </div>
+              <textarea className={cn(inputClass, 'min-h-32 resize-y')} value={form.instruction} onChange={(e) => update({ instruction: e.target.value })} />
+            </Field>
+          </>
         ) : form.actionMode === 'workflow' ? (
           <>
             <Field label={labels.form.workflow}>
