@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ensureXopcDatabaseSchema } from '../../storage/sqlite/schema.js';
 import type { HomeCapabilityRequirement, HomeCapabilityResolution } from '../capability-preflight.js';
 import { HomeIntelligenceHost } from '../host.js';
+import { HomeIntelligenceRepository } from '../repository.js';
 import { HomeSnapshotBuilder } from '../snapshot.js';
 
 function database(): DatabaseSync {
@@ -23,6 +24,20 @@ function resolveReady(requirements: readonly HomeCapabilityRequirement[]): HomeC
     })),
     preflight: { state: 'ready' },
   };
+}
+
+function seedDailyModelBudget(db: DatabaseSync, count: number): void {
+  const repository = new HomeIntelligenceRepository(db);
+  for (let index = 0; index < count; index += 1) {
+    repository.enqueue({ ownerId: 'owner', workspaceId: 'workspace' }, {
+      idempotencyKey: `seed:${index}`, reasons: ['scheduled_refresh'], requestedAt: index + 1,
+    });
+    const claim = repository.claimNext({ ownerId: 'owner', workspaceId: 'workspace' }, 'seed-worker', index + 1)!;
+    repository.complete(claim, {
+      result: { state: 'quiet', reason: 'insufficient_value' },
+      snapshotHash: `seed-${index}`, evidenceIds: [], modelRef: 'test/reasoning', completedAt: index + 1,
+    });
+  }
 }
 
 describe('HomeIntelligenceHost', () => {
@@ -122,6 +137,35 @@ describe('HomeIntelligenceHost', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await host.tick();
     await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(2));
+    host.stop();
+    db.close();
+  });
+
+  it('reports an exhausted automatic budget but lets a manual refresh retry', async () => {
+    const db = database();
+    seedDailyModelBudget(db, 12);
+    let now = 20_000;
+    const generate = vi.fn(async () => ({
+      modelRef: 'test/reasoning', usage: {},
+      result: { state: 'quiet' as const, reason: 'insufficient_value' as const },
+    }));
+    const host = new HomeIntelligenceHost(db, {
+      principal: { ownerId: 'owner', workspaceId: 'workspace' },
+      snapshot: new HomeSnapshotBuilder({ projects: () => [], tasks: () => [], knowledge: () => [] }),
+      generator: { generate },
+      capabilities: () => ({ agentId: 'main', connectors: new Set(), skills: new Set() }),
+      resolveCapabilities: resolveReady,
+      notifyOpportunity: vi.fn(), publish: vi.fn(), locale: () => 'en', now: () => now,
+    });
+
+    host.requestRefresh('home_opened', 'open:budget');
+    await vi.waitFor(() => expect(host.getAdvisor()).toEqual({ state: 'quiet', reason: 'budget_exhausted' }));
+    expect(generate).not.toHaveBeenCalled();
+
+    now += 1;
+    host.requestRefresh('manual_refresh', 'manual:budget');
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(host.getAdvisor()).toEqual({ state: 'quiet', reason: 'insufficient_value' }));
     host.stop();
     db.close();
   });

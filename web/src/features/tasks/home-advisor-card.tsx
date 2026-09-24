@@ -5,7 +5,7 @@ import type {
   HomeOpportunityActionRequest,
   HomeOpportunityFeedbackRequest,
 } from '@xopcai/gateway-contract';
-import { ChevronDown, Clock3, MessageCircle, RefreshCw, Settings2, Sparkles } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Clock3, History, MessageCircle, RefreshCw, Settings2, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,8 @@ interface HomeAdvisorCopy {
   discuss: string;
   refresh: string;
   refreshing: string;
+  history: string;
+  viewProgress: string;
   alternatives: string;
   feedback: string;
   alreadyDone: string;
@@ -39,15 +41,44 @@ interface HomeAdvisorCopy {
   automationAction: string;
 }
 
-function OpportunityBody({ opportunity, copy }: { opportunity: HomeOpportunity; copy: HomeAdvisorCopy }) {
+export interface HomeAdvisorReceipt {
+  title: string;
+  detail: string;
+  href: string;
+}
+
+function HistoryButton({ label, onClick }: { label: string; onClick(): void }) {
+  return (
+    <button
+      type="button"
+      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-fg-muted transition-colors duration-150 hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      onClick={onClick}
+    >
+      <History className="size-3.5" aria-hidden />{label}
+    </button>
+  );
+}
+
+function OpportunityBody({
+  opportunity,
+  copy,
+  onOpenHistory,
+}: {
+  opportunity: HomeOpportunity;
+  copy: HomeAdvisorCopy;
+  onOpenHistory(): void;
+}) {
   const missing = opportunity.capabilities.filter((item) => item.readiness !== 'ready');
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
-        <span>{copy.aiLabel}</span>
-        {opportunity.estimatedMinutes ? (
-          <span className="inline-flex items-center gap-1"><Clock3 className="size-3.5" aria-hidden />{opportunity.estimatedMinutes} {copy.minutes}</span>
-        ) : null}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
+          <span>{copy.aiLabel}</span>
+          {opportunity.estimatedMinutes ? (
+            <span className="inline-flex items-center gap-1"><Clock3 className="size-3.5" aria-hidden />{opportunity.estimatedMinutes} {copy.minutes}</span>
+          ) : null}
+        </div>
+        <HistoryButton label={copy.history} onClick={onOpenHistory} />
       </div>
       <h3 className="mt-3 text-xl font-semibold leading-7 tracking-tight text-fg">{opportunity.title}</h3>
       <p className="mt-2 text-sm leading-6 text-fg-muted">{opportunity.outcome}</p>
@@ -96,7 +127,9 @@ export function HomeAdvisorCard({
   onAction,
   onFeedback,
   onClarification,
+  onOpenHistory,
   preflight,
+  receipt,
 }: {
   advisor: HomeAdvisor;
   copy: HomeAdvisorCopy;
@@ -105,26 +138,48 @@ export function HomeAdvisorCard({
   onAction(opportunity: HomeOpportunity, mode: HomeOpportunityActionRequest['mode']): void;
   onFeedback(opportunity: HomeOpportunity, kind: FeedbackKind): void;
   onClarification(question: string, answer: string): void;
+  onOpenHistory(): void;
   preflight?: { opportunityId: string; value: HomeCapabilityPreflight };
+  receipt?: HomeAdvisorReceipt;
 }) {
   const [selectedId, setSelectedId] = useState<string>();
   const opportunities = advisor.state === 'ready' ? [advisor.primary, ...advisor.alternatives] : [];
   const selected = opportunities.find((item) => item.id === selectedId) ?? opportunities[0];
   useEffect(() => setSelectedId(opportunities[0]?.id), [advisor.state, opportunities[0]?.id]);
 
-  if (advisor.state === 'disabled' || advisor.state === 'quiet') return null;
-  if (advisor.state === 'refreshing') {
+  if (advisor.state === 'disabled') return null;
+  if (receipt) {
     return (
-      <section className="mt-7 rounded-2xl border border-accent/20 bg-accent-soft/40 px-5 py-5" aria-live="polite" aria-busy>
-        <div className="flex items-center gap-2 text-sm font-medium text-accent"><Sparkles className="size-4" aria-hidden />{copy.refreshing}</div>
-        {advisor.previous ? <p className="mt-2 text-sm text-fg-muted">{advisor.previous.title}</p> : null}
+      <section className="mt-7 rounded-2xl border border-success/25 bg-success-soft px-5 py-4" role="status">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <CheckCircle2 className="size-5 shrink-0 text-success" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-fg">{receipt.title}</p>
+            <p className="mt-1 text-xs leading-5 text-fg-muted">{receipt.detail}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <HistoryButton label={copy.history} onClick={onOpenHistory} />
+            <Button asChild variant="secondary" className="min-h-10 text-xs">
+              <a href={`#${receipt.href}`}>{copy.viewProgress}</a>
+            </Button>
+          </div>
+        </div>
       </section>
     );
+  }
+  if (advisor.state === 'quiet') {
+    return null;
+  }
+  if (advisor.state === 'refreshing') {
+    return null;
   }
   if (advisor.state === 'clarification') {
     return (
       <section className="mt-7 rounded-2xl border border-accent/25 bg-surface-base px-5 py-5" aria-labelledby="home-advisor-question">
-        <div className="flex items-center gap-2 text-xs font-medium text-accent"><Sparkles className="size-4" aria-hidden />{copy.aiLabel}</div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-medium text-accent"><Sparkles className="size-4" aria-hidden />{copy.aiLabel}</div>
+          <HistoryButton label={copy.history} onClick={onOpenHistory} />
+        </div>
         <h3 id="home-advisor-question" className="mt-3 text-lg font-semibold text-fg">{advisor.question.question}</h3>
         <div className="mt-4 flex flex-wrap gap-2">
           {advisor.question.options.map((option) => (
@@ -140,7 +195,7 @@ export function HomeAdvisorCard({
     <section className="mt-7 rounded-2xl border border-accent/25 bg-surface-base" aria-label={copy.aiLabel}>
       <div className="px-5 py-5 sm:px-6">
         {advisor.stale ? <p className="mb-3 inline-flex items-center gap-2 text-xs text-accent"><RefreshCw className="size-3.5 animate-spin" aria-hidden />{copy.refreshing}</p> : null}
-        <OpportunityBody opportunity={selected} copy={copy} />
+        <OpportunityBody opportunity={selected} copy={copy} onOpenHistory={onOpenHistory} />
         {selectedPreflight?.state === 'needs_setup' ? (
           <div className="mt-5 rounded-xl border border-accent/25 bg-accent-soft/40 p-4" role="alert" aria-live="polite">
             <div className="flex gap-3">
