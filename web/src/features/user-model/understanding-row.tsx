@@ -109,6 +109,9 @@ export function UnderstandingRow({
                   <p>{item.usable ? (zh ? '按需用于当前协作' : 'Used when relevant') : (zh ? '暂不使用，后台继续复核' : 'Not in use; reviewed automatically')}</p>
                   <p>{timeHorizon(item, language)} · {scopeLabel(item.scope, language)}{confidence ? ` · ${confidence}` : ''}</p>
                   <p>{zh ? '最近观察：' : 'Last observed: '}{formatUnderstandingDate(item.observedAt, language)}</p>
+                  <p>{zh ? '模型层：' : 'Model layer: '}{zh
+                    ? ({ fact: '事实', pattern: '模式', interpretation: '解释' } as const)[item.layer]
+                    : item.layer} · {zh ? `${item.independentSourceCount} 个独立来源` : `${item.independentSourceCount} independent sources`}</p>
                   {sourceLabels.length ? sourceLabels.map((label) => <p className="break-words" key={label}>{label}</p>) : <p>{zh ? '暂无更详细的来源记录' : 'No further source details available'}</p>}
                   <Button variant="ghost" className="-ml-2 px-2" disabled={busy} onClick={onEdit}>{editLabel}</Button>
                 </div>

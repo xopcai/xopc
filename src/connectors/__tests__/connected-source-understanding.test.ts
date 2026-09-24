@@ -20,7 +20,8 @@ import {
   createUnderstandingSourceRun,
   upsertUnderstandingSourceGrant,
 } from '../../user-context/sources/repository.js';
-import { listUserAssertions, listUserAssertionSources } from '../../user-model/index.js';
+import { grantUnderstandingConsent } from '../../user-context/sources/consent-repository.js';
+import { listUserAssertions, listUserAssertionSources, listUserModelObservations } from '../../user-model/index.js';
 import {
   connectedItemsForUnderstanding,
   deriveConnectedSourceUnderstanding,
@@ -65,6 +66,24 @@ describe('connected source understanding', () => {
     expect(values[0]).toMatchObject({ ownerAttribution: 'user', evidenceRef: 'knowledge-source://content' });
   });
 
+  it('sends only consented fields to semantic analysis', async () => {
+    const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('gmail', ['title', 'owner_activity']);
+    const sourceItemIds = upsertKnowledgeSourceItems([{
+      ...sourceRow(sourceInstanceId, 1, true),
+      normalizedText: JSON.stringify({ title: 'Planning', content: 'private body', token: 'never-send' }),
+    }]).changedItemIds;
+    const analyze = vi.fn(async ({ items }) => {
+      expect(items[0]).toMatchObject({ title: 'Planning', ownerAttribution: 'user' });
+      expect(JSON.parse(items[0]!.text ?? '{}')).toEqual({ title: 'Planning' });
+      return { modelRef: 'test/model', profileCandidates: [], workThreadCandidates: [], sourceStatuses: [] };
+    });
+    await deriveConnectedSourceUnderstanding({
+      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId,
+      sourceItemIds, sourceRunId, processingPolicy, analyze,
+    });
+    expect(analyze).toHaveBeenCalledOnce();
+  });
+
   it('keeps current responsibilities in knowledge instead of the durable user model', async () => {
     const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('gmail');
     const sourceItemIds = upsertKnowledgeSourceItems([sourceRow(sourceInstanceId, 1, false)]).changedItemIds;
@@ -89,9 +108,10 @@ describe('connected source understanding', () => {
       content: 'Atlas launch: Review in progress.',
     })]);
     const [extraction] = listContextExtractionRuns({ sourceRef: `understanding-source-run:${sourceRunId}` });
-    expect(listContextExtractionOutputs(extraction!.id)).toEqual([
+    expect(listContextExtractionOutputs(extraction!.id)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ candidateKey: 'connected-profile:responsibility:atlas', outcome: 'rejected' }),
       expect.objectContaining({ objectType: 'knowledge', objectId: listKnowledgeItems()[0]!.id, outcome: 'created' }),
-    ]);
+    ]));
   });
 
   it('creates only repeated owner-backed durable assertions with separate evidence', async () => {
@@ -133,6 +153,60 @@ describe('connected source understanding', () => {
     ]);
   });
 
+  it('extracts demonstrated capabilities and current goals from owner activity', async () => {
+    const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('github');
+    const sourceItemIds = upsertKnowledgeSourceItems(
+      [1, 2].map((index) => {
+        const row = sourceRow(sourceInstanceId, index, true);
+        return { ...row, metadata: { ...row.metadata, toolkit: 'github' } };
+      }),
+    ).changedItemIds;
+    const result = await deriveConnectedSourceUnderstanding({
+      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId, sourceItemIds, sourceRunId, processingPolicy,
+      analyze: vi.fn(async ({ items }) => ({
+        modelRef: 'test/model',
+        profileCandidates: [{
+          id: 'capability', category: 'capability', factKey: 'typescript-review',
+          statement: 'Regularly reviews TypeScript changes.', confidence: 'high', evidence: ['repeated reviews'],
+          evidenceRefs: items.map((value) => value.evidenceRef), status: 'pending',
+        }],
+        workThreadCandidates: [{
+          topicKey: 'atlas-launch', title: 'Atlas launch', summary: 'Preparing the release review.',
+          horizon: 'current', status: 'active', confidence: 'high',
+          evidenceRefs: items.map((value) => value.evidenceRef),
+        }],
+        sourceStatuses: [{ sourceId: 'connected-work', status: 'completed' }],
+      })),
+    });
+    expect(result).toEqual({ created: 2, knowledgeCount: 1, status: 'completed' });
+    expect(listUserAssertions()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ domain: 'capabilities', kind: 'capability', layer: 'pattern' }),
+      expect.objectContaining({ domain: 'goals', kind: 'current_state', layer: 'fact', allowedUses: expect.arrayContaining(['remind']) }),
+    ]));
+    expect(listUserModelObservations({ domain: 'capabilities' })).toEqual([
+      expect.objectContaining({ type: 'authored_code_activity', value: expect.not.objectContaining({ content: expect.anything() }) }),
+      expect.objectContaining({ type: 'authored_code_activity', value: expect.not.objectContaining({ content: expect.anything() }) }),
+    ]);
+  });
+
+  it('rejects sensitive inferences in Chinese even when the model labels them as capability', async () => {
+    const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('github');
+    const sourceItemIds = upsertKnowledgeSourceItems(
+      [1, 2].map((index) => sourceRow(sourceInstanceId, index, true)),
+    ).changedItemIds;
+    const result = await deriveConnectedSourceUnderstanding({
+      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId, sourceItemIds, sourceRunId, processingPolicy,
+      analyze: vi.fn(async ({ items }) => ({
+        modelRef: 'test/model', profileCandidates: [{
+          id: 'unsafe', category: 'capability', factKey: 'payroll', statement: '经常处理员工工资和银行账户。',
+          confidence: 'high', evidence: ['repeated'], evidenceRefs: items.map((value) => value.evidenceRef), status: 'pending',
+        }], workThreadCandidates: [], sourceStatuses: [{ sourceId: 'connected-work', status: 'completed' }],
+      })),
+    });
+    expect(result).toEqual({ created: 0, knowledgeCount: 0, status: 'completed' });
+    expect(listUserAssertions()).toEqual([]);
+  });
+
   it('does not send local-only source content to semantic analysis', async () => {
     const analyze = vi.fn();
     const sourceItemIds = upsertKnowledgeSourceItems([sourceRow('local:notes', 1, true)]).changedItemIds;
@@ -156,7 +230,7 @@ describe('connected source understanding', () => {
   });
 
   it('uses evidence identity to update a work thread when model wording changes', async () => {
-    const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('gmail');
+    const { sourceInstanceId, sourceRunId, processingPolicy, grantId } = sourceContext('gmail');
     const firstIds = upsertKnowledgeSourceItems([sourceRow(sourceInstanceId, 1, false)]).changedItemIds;
     const analysis = (title: string, topicKey: string) => vi.fn(async (
       { items }: { items: ReturnType<typeof connectedItemsForUnderstanding> },
@@ -177,9 +251,10 @@ describe('connected source understanding', () => {
       contentHash: 'changed-hash',
       normalizedText: JSON.stringify({ title: 'Renamed launch review' }),
     }]).changedItemIds;
+    const nextRun = createUnderstandingSourceRun({ grantId, kind: 'incremental' });
     await deriveConnectedSourceUnderstanding({
       config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId,
-      sourceItemIds: changedIds, sourceRunId: `${sourceRunId}-next`, processingPolicy,
+      sourceItemIds: changedIds, sourceRunId: nextRun.id, processingPolicy,
       analyze: analysis('Renamed launch review', 'different-model-key'),
     });
 
@@ -191,7 +266,7 @@ describe('connected source understanding', () => {
   });
 });
 
-function sourceContext(kind: string) {
+function sourceContext(kind: string, allowedFields = ['title', 'content', 'timestamps', 'owner_activity', 'status']) {
   const sourceInstanceId = `composio:${kind}:account-1`;
   const grant = upsertUnderstandingSourceGrant({
     sourceKey: `connector-account:${kind}`, adapterId: `connector:${kind}`, category: 'files',
@@ -199,7 +274,14 @@ function sourceContext(kind: string) {
     processingPolicy: 'remote_allowed', config: { sourceInstanceId },
   });
   const run = createUnderstandingSourceRun({ grantId: grant.id, kind: 'bootstrap' });
-  return { sourceInstanceId, sourceRunId: run.id, processingPolicy: grant.processingPolicy };
+  grantUnderstandingConsent({
+    grantId: grant.id, purposes: ['personalization', 'work_assistance'],
+    allowedDomains: ['identity', 'goals', 'capabilities', 'preferences', 'behavior'], deniedDomains: ['health'],
+    allowedFields, accessMode: 'continuous', lookbackDays: 90,
+    rawRetentionDays: 7, processingPolicy: 'remote_allowed', allowedAgentIds: ['main'],
+    disclosureVersion: 'test-v1',
+  });
+  return { sourceInstanceId, sourceRunId: run.id, grantId: grant.id, processingPolicy: grant.processingPolicy };
 }
 
 function sourceRow(sourceInstanceId: string, index: number, owner: boolean) {

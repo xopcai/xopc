@@ -7,7 +7,13 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
-import { getUserAssertion, reconcileAssertion, type AssertionCandidate } from '../../user-model/index.js';
+import {
+  getUserAssertion,
+  listUserModelObservations,
+  reconcileAssertion,
+  recordUserModelObservation,
+  type AssertionCandidate,
+} from '../../user-model/index.js';
 import { getKnowledgeItem, writeKnowledgeItem } from '../../knowledge-memory/index.js';
 import { runMemoryMaintenance } from '../service.js';
 
@@ -57,6 +63,29 @@ describe('memory maintenance', () => {
       .get(assertion.id)).toMatchObject({ status: 'stale' });
     expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS count FROM memory_maintenance_decisions')
       .get()).toMatchObject({ count: 1 });
+  });
+
+  it('deletes observations when their consent retention window ends', () => {
+    const observation = recordUserModelObservation({
+      domain: 'behavior',
+      type: 'activity_count',
+      subject: { type: 'user', id: 'self' },
+      value: { count: 3 },
+      context: {},
+      sensitivityCategories: [],
+      ownerAttribution: 'user',
+      observedAt: 100,
+      deleteAfter: 200,
+      nowMs: 100,
+    });
+
+    const result = runMemoryMaintenance({ jobType: 'temporal_sweep', now: 300 });
+
+    expect(result.metrics.expiredObservations).toBe(1);
+    expect(listUserModelObservations()).toEqual([]);
+    expect(getSqliteDatabase().prepare(`SELECT action, reason FROM memory_maintenance_decisions
+      WHERE object_type = 'evidence' AND object_id = ?`).get(observation.id))
+      .toMatchObject({ action: 'deleted', reason: 'observation_retention_expired' });
   });
 
   it('uses the assertion evidence relation as the sole contradiction source', () => {

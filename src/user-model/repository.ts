@@ -3,8 +3,11 @@ import { basename } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { clearMemoryAudit, isMemorySuppressed, memoryFingerprint, restoreMemory, suppressMemory } from '../user-context/memory-suppression.js';
 import {
   USER_MODEL_PRINCIPAL_ID,
+  defaultAssertionDomain,
+  defaultAssertionLayer,
   validateCandidate,
   validateScope,
   type AssertionCandidate,
@@ -13,7 +16,6 @@ import {
   type ReconciliationResult,
   type UserAssertion,
 } from './domain.js';
-import { memoryFingerprint, isMemorySuppressed, suppressMemory, restoreMemory, clearMemoryAudit } from '../user-context/memory-suppression.js';
 import { defaultReviewAt, requiresBoundedValidity } from './temporal.js';
 
 type SlotRow = {
@@ -45,6 +47,17 @@ type AssertionRow = {
   volatility: UserAssertion['volatility'];
   sensitivity: UserAssertion['sensitivity'];
   disclosure_policy: UserAssertion['disclosurePolicy'];
+  domain: UserAssertion['domain'];
+  model_layer: UserAssertion['layer'];
+  sensitivity_categories_json: string;
+  purpose_ids_json: string;
+  allowed_uses_json: string;
+  allowed_agent_ids_json: string | null;
+  consent_receipt_id: string | null;
+  support_count: number;
+  independent_source_count: number;
+  last_supported_at: number | null;
+  delete_after: number | null;
   applicability_json: string;
   valid_from: number | null;
   valid_to: number | null;
@@ -107,6 +120,17 @@ function assertionFromRow(row: AssertionRow): UserAssertion {
     volatility: row.volatility,
     sensitivity: row.sensitivity,
     disclosurePolicy: row.disclosure_policy,
+    domain: row.domain,
+    layer: row.model_layer,
+    sensitivityCategories: JSON.parse(row.sensitivity_categories_json),
+    purposeIds: JSON.parse(row.purpose_ids_json),
+    allowedUses: JSON.parse(row.allowed_uses_json),
+    ...(row.allowed_agent_ids_json === null ? {} : { allowedAgentIds: JSON.parse(row.allowed_agent_ids_json) }),
+    ...(row.consent_receipt_id === null ? {} : { consentReceiptId: row.consent_receipt_id }),
+    supportCount: row.support_count,
+    independentSourceCount: row.independent_source_count,
+    ...(row.last_supported_at === null ? {} : { lastSupportedAt: row.last_supported_at }),
+    ...(row.delete_after === null ? {} : { deleteAfter: row.delete_after }),
     applicability: JSON.parse(row.applicability_json),
     ...(row.valid_from === null ? {} : { validFrom: row.valid_from }),
     ...(row.valid_to === null ? {} : { validTo: row.valid_to }),
@@ -173,6 +197,38 @@ function initialStatus(candidate: AssertionCandidate): AssertionStatus {
   return candidate.authority === 'user_explicit' ? 'active' : 'candidate';
 }
 
+function assertConsentAllowsCandidate(
+  db: DatabaseSync,
+  candidate: AssertionCandidate,
+  domain: UserAssertion['domain'],
+): void {
+  if (!candidate.consentReceiptId) return;
+  const row = db.prepare(`SELECT purposes_json, allowed_domains_json, denied_domains_json,
+      allowed_agent_ids_json, revoked_at
+    FROM understanding_consent_receipts WHERE receipt_id = ?`).get(candidate.consentReceiptId) as {
+      purposes_json: string; allowed_domains_json: string; denied_domains_json: string;
+      allowed_agent_ids_json: string | null; revoked_at: number | null;
+    } | undefined;
+  if (!row || row.revoked_at !== null) throw new Error('Assertion consent receipt is unavailable or revoked.');
+  const purposes = JSON.parse(row.purposes_json) as string[];
+  const allowedDomains = JSON.parse(row.allowed_domains_json) as string[];
+  const deniedDomains = JSON.parse(row.denied_domains_json) as string[];
+  const requestedPurposes = candidate.purposeIds ?? ['personalization'];
+  if (!allowedDomains.includes(domain) || deniedDomains.includes(domain)) {
+    throw new Error(`Consent does not allow the ${domain} domain.`);
+  }
+  if (requestedPurposes.some((purpose) => !purposes.includes(purpose))) {
+    throw new Error('Consent does not allow every requested purpose.');
+  }
+  if (row.allowed_agent_ids_json) {
+    const allowedAgents = JSON.parse(row.allowed_agent_ids_json) as string[];
+    if (!candidate.allowedAgentIds
+      || candidate.allowedAgentIds.some((agentId) => !allowedAgents.includes(agentId))) {
+      throw new Error('Consent does not allow every requested agent.');
+    }
+  }
+}
+
 function insertAssertion(
   db: DatabaseSync,
   slotId: string,
@@ -185,19 +241,28 @@ function insertAssertion(
   const reviewAt = candidate.reviewAt
     ?? defaultReviewAt(candidate.volatility, candidate.observedAt)
     ?? null;
+  const domain = candidate.domain ?? defaultAssertionDomain(candidate.kind);
+  const layer = candidate.layer ?? defaultAssertionLayer(candidate);
   db.prepare(`INSERT INTO user_assertions (
     assertion_id, slot_id, kind, value_json, normalized_value, statement, authority, status,
     confidence, declared_importance, inferred_importance, consequence, actionability,
     volatility, sensitivity, disclosure_policy, applicability_json, valid_from, valid_to,
-    observed_at, recorded_at, review_at, supersedes_assertion_id, created_by, created_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    observed_at, recorded_at, review_at, supersedes_assertion_id, created_by, created_at,
+    domain, model_layer, sensitivity_categories_json, purpose_ids_json, allowed_uses_json,
+    allowed_agent_ids_json, consent_receipt_id, delete_after
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, slotId, candidate.kind, JSON.stringify(candidate.value), candidate.normalizedValue.trim(),
       candidate.statement.trim(), candidate.authority, status, candidate.confidence,
       candidate.declaredImportance ?? null, candidate.inferredImportance, candidate.consequence,
       candidate.actionability, candidate.volatility, candidate.sensitivity, candidate.disclosurePolicy,
       JSON.stringify(candidate.applicability ?? {}),
       candidate.validFrom ?? null, candidate.validTo ?? null, candidate.observedAt, now, reviewAt,
-      supersedesAssertionId ?? null, candidate.createdBy, now);
+      supersedesAssertionId ?? null, candidate.createdBy, now,
+      domain, layer, JSON.stringify(candidate.sensitivityCategories ?? []),
+      JSON.stringify(candidate.purposeIds ?? ['personalization']),
+      JSON.stringify(candidate.allowedUses ?? ['answer', 'rank', 'recommend']),
+      candidate.allowedAgentIds ? JSON.stringify(candidate.allowedAgentIds) : null,
+      candidate.consentReceiptId ?? null, candidate.deleteAfter ?? null);
   db.prepare(`INSERT INTO user_assertions_fts(statement, assertion_id, slot_id) VALUES (?, ?, ?)`)
     .run(candidate.statement.trim(), id, slotId);
   recordStatusEvent(db, id, null, status, candidate.createdBy === 'connector' ? 'runtime' : candidate.createdBy,
@@ -208,6 +273,7 @@ function insertAssertion(
     ) VALUES (?, ?, 'supports', ?, ?)
     ON CONFLICT(assertion_id, evidence_id, relation) DO UPDATE SET confidence = excluded.confidence`)
       .run(id, candidate.evidenceId, candidate.evidenceConfidence ?? candidate.confidence, now);
+    refreshEvidenceStats(db, id);
   }
   return assertionFromRow(db.prepare('SELECT * FROM user_assertions WHERE assertion_id = ?').get(id) as AssertionRow);
 }
@@ -234,6 +300,28 @@ function attachEvidence(db: DatabaseSync, assertionId: string, candidate: Assert
   ) VALUES (?, ?, 'supports', ?, ?)
   ON CONFLICT(assertion_id, evidence_id, relation) DO UPDATE SET confidence = excluded.confidence`)
     .run(assertionId, candidate.evidenceId, candidate.evidenceConfidence ?? candidate.confidence, now);
+  refreshEvidenceStats(db, assertionId);
+}
+
+function refreshEvidenceStats(db: DatabaseSync, assertionId: string): void {
+  db.prepare(`UPDATE user_assertions SET
+    support_count = (
+      SELECT COUNT(*) FROM user_assertion_evidence evidence
+      WHERE evidence.assertion_id = user_assertions.assertion_id AND evidence.relation = 'supports'
+    ),
+    independent_source_count = (
+      SELECT COUNT(DISTINCT COALESCE(context.source_instance_id, context.source_type || ':' || context.source_ref))
+      FROM user_assertion_evidence evidence
+      JOIN context_evidence context ON context.evidence_id = evidence.evidence_id
+      WHERE evidence.assertion_id = user_assertions.assertion_id AND evidence.relation = 'supports'
+    ),
+    last_supported_at = (
+      SELECT MAX(context.observed_at)
+      FROM user_assertion_evidence evidence
+      JOIN context_evidence context ON context.evidence_id = evidence.evidence_id
+      WHERE evidence.assertion_id = user_assertions.assertion_id AND evidence.relation = 'supports'
+    )
+    WHERE assertion_id = ?`).run(assertionId);
 }
 
 function closeValidity(db: DatabaseSync, assertion: UserAssertion, boundary: number, now: number): void {
@@ -263,12 +351,20 @@ function authorityRank(authority: UserAssertion['authority']): number {
   return ({ external_untrusted: 0, system_inferred: 1, user_observed: 2, user_explicit: 3 })[authority];
 }
 
+function requiresExplicitSensitiveConsent(candidate: AssertionCandidate): boolean {
+  const domain = candidate.domain ?? defaultAssertionDomain(candidate.kind);
+  return candidate.sensitivity !== 'normal'
+    || Boolean(candidate.sensitivityCategories?.length)
+    || domain === 'health';
+}
+
 export function reconcileAssertion(candidate: AssertionCandidate, now = Date.now(), options: { restoreDeleted?: boolean } = {}): ReconciliationResult {
   validateCandidate(candidate);
   return runSqliteWriteTransaction((db) => {
-    if (candidate.authority !== 'user_explicit' && candidate.sensitivity !== 'normal') {
+    if (candidate.authority !== 'user_explicit' && requiresExplicitSensitiveConsent(candidate)) {
       return { action: 'suppressed' };
     }
+    assertConsentAllowsCandidate(db, candidate, candidate.domain ?? defaultAssertionDomain(candidate.kind));
     const keys = assertionFingerprints(candidate);
     if (options.restoreDeleted && candidate.authority === 'user_explicit') restoreMemory(db, keys);
     if (isMemorySuppressed(db, keys)) return { action: 'suppressed' };
@@ -324,6 +420,14 @@ export function reconcileAssertion(candidate: AssertionCandidate, now = Date.now
       && authorityRank(candidate.authority) > authorityRank(current.authority)) {
       const assertion = insertAssertion(db, slot.id, candidate, status, now, current.id);
       closeValidity(db, current, candidate.validFrom ?? candidate.observedAt, now);
+      return { action: 'superseded', assertion, previousAssertion: getUserAssertion(current.id)! };
+    }
+    if ((candidate.volatility === 'dynamic' || candidate.volatility === 'event')
+      && candidate.observedAt > current.observedAt
+      && authorityRank(candidate.authority) >= authorityRank(current.authority)) {
+      const assertion = insertAssertion(db, slot.id, candidate, status, now, current.id);
+      closeValidity(db, current, candidate.validFrom ?? candidate.observedAt, now);
+      updateStatus(db, current, 'archived', 'Replaced by a newer time-varying observation.', now);
       return { action: 'superseded', assertion, previousAssertion: getUserAssertion(current.id)! };
     }
 
@@ -510,11 +614,14 @@ export function linkAssertionEvidence(
   if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
     throw new Error('Evidence confidence must be between 0 and 1.');
   }
-  getSqliteDatabase().prepare(`INSERT INTO user_assertion_evidence (
-    assertion_id, evidence_id, relation, confidence, created_at
-  ) VALUES (?, ?, ?, ?, ?)
-  ON CONFLICT(assertion_id, evidence_id, relation) DO UPDATE SET confidence = excluded.confidence`)
-    .run(assertionId, evidenceId, relation, confidence, now);
+  runSqliteWriteTransaction((db) => {
+    db.prepare(`INSERT INTO user_assertion_evidence (
+      assertion_id, evidence_id, relation, confidence, created_at
+    ) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(assertion_id, evidence_id, relation) DO UPDATE SET confidence = excluded.confidence`)
+      .run(assertionId, evidenceId, relation, confidence, now);
+    refreshEvidenceStats(db, assertionId);
+  });
 }
 
 export function mergeAssertionObservation(input: {
@@ -537,9 +644,14 @@ export function mergeAssertionObservation(input: {
       || (slot.scope.id ?? '') !== (input.candidate.scope.id?.trim() ?? '')) {
       throw new Error('Merge target does not match the candidate subject and scope.');
     }
-    if (input.candidate.authority !== 'user_explicit' && input.candidate.sensitivity !== 'normal') {
+    if (input.candidate.authority !== 'user_explicit' && requiresExplicitSensitiveConsent(input.candidate)) {
       throw new Error('Sensitive inferred understanding cannot be merged automatically.');
     }
+    assertConsentAllowsCandidate(
+      db,
+      input.candidate,
+      input.candidate.domain ?? defaultAssertionDomain(input.candidate.kind),
+    );
     const observedAt = Math.max(current.observedAt, input.candidate.observedAt);
     const reviewAt = input.candidate.reviewAt
       ?? defaultReviewAt(current.volatility, observedAt)
@@ -566,6 +678,7 @@ export function mergeAssertionObservation(input: {
     for (const evidenceId of new Set(input.evidenceIds)) {
       insertEvidence.run(current.id, evidenceId, input.candidate.confidence, now);
     }
+    refreshEvidenceStats(db, current.id);
     if (status !== current.status) {
       recordStatusEvent(db, current.id, current.status, status, 'runtime',
         'Fresh evidence merged into this understanding.', now);
