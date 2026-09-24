@@ -63,7 +63,7 @@ import {
 
 type Language = 'en' | 'zh';
 type View = 'overview' | 'understanding' | 'knowledge';
-type UnderstandingFilter = 'all' | 'explicit' | 'learned' | 'pending';
+type UnderstandingFilter = 'all' | 'explicit' | 'learned';
 type KnowledgeKindFilter = 'all' | KnowledgeItem['kind'];
 type RefreshFeedback = 'idle' | 'refreshing' | 'success' | 'error';
 
@@ -101,10 +101,8 @@ const copy = {
     explicitHint: 'Facts and preferences you stated directly',
     learned: 'Learned together',
     learnedHint: 'Patterns formed from our work',
-    pending: 'Not in use',
-    pendingHint: 'Reviewed automatically as evidence changes',
     allUnderstanding: 'All understanding',
-    understandingFilterHint: 'Filter this view by how each item was formed or whether it is currently in use.',
+    understandingFilterHint: 'Filter this view by how each item was formed.',
     importantNow: 'What matters now',
     prioritySourceGoal: 'From a goal you confirmed',
     prioritySourceWork: 'From your current work',
@@ -138,7 +136,7 @@ const copy = {
     refreshComplete: 'Refreshed',
     refreshFailed: 'Refresh failed',
     aboutYouTitle: 'A view you can correct',
-    aboutYouHint: 'This is working context, not a fixed profile. Every item can be corrected or retired.',
+    aboutYouHint: 'xopc quietly maintains this working context from collaboration. You can edit or retire any item.',
     identity: 'Who you are',
     preferences: 'Preferences and working rhythm',
     relationships: 'People and relationships',
@@ -193,10 +191,8 @@ const copy = {
     explicitHint: '你明确表达的事实与偏好',
     learned: '协作中学到的',
     learnedHint: '从实际协作中形成的认识',
-    pending: '暂不使用',
-    pendingHint: '随新证据自动复核',
     allUnderstanding: '全部理解',
-    understandingFilterHint: '按内容来源和当前是否使用筛选这份理解。',
+    understandingFilterHint: '按内容来源筛选这份理解。',
     importantNow: '此刻重要',
     prioritySourceGoal: '来自你确认的当前目标',
     prioritySourceWork: '来自当前工作上下文',
@@ -230,7 +226,7 @@ const copy = {
     refreshComplete: '已刷新',
     refreshFailed: '刷新失败',
     aboutYouTitle: '一份可以共同修正的理解',
-    aboutYouHint: '它是协作中的工作认知，不是给你定型的档案。每一条都能修正或停止使用。',
+    aboutYouHint: 'xopc 会在协作中安静地维护这份工作认知。你仍可随时修改或停止使用任何一条。',
     identity: '关于你是谁',
     preferences: '偏好与工作节奏',
     relationships: '重要的人与关系',
@@ -965,24 +961,20 @@ export function UserModelPage() {
     );
   }
 
-  const allAssertions = [...data.assertions].sort((a, b) => {
+  const assertions = data.assertions.filter((item) => (
+    item.usable && item.scope.type === 'global' && !profilePredicates.has(item.predicate)
+  )).sort((a, b) => {
     const importanceA = a.declaredImportance ?? a.inferredImportance;
     const importanceB = b.declaredImportance ?? b.inferredImportance;
     return importanceB - importanceA || b.recordedAt - a.recordedAt;
   });
-  const assertions = allAssertions.filter((item) => (
-    item.scope.type === 'global' && !profilePredicates.has(item.predicate)
-  ));
   const profile = profileFromResponse(data);
   const displayName = profile.callName || (language === 'zh' ? '你' : 'You');
-  const inactiveAssertions = assertions.filter((item) => !item.usable);
-  const activeAssertions = assertions.filter((item) => item.usable);
-  const explicitCount = activeAssertions.filter((item) => item.authority === 'user_explicit').length;
-  const learnedCount = activeAssertions.length - explicitCount;
+  const explicitCount = assertions.filter((item) => item.authority === 'user_explicit').length;
+  const learnedCount = assertions.length - explicitCount;
   const filteredAssertions = assertions.filter((item) => {
-    if (understandingFilter === 'explicit') return item.usable && item.authority === 'user_explicit';
-    if (understandingFilter === 'learned') return item.usable && item.authority !== 'user_explicit';
-    if (understandingFilter === 'pending') return !item.usable;
+    if (understandingFilter === 'explicit') return item.authority === 'user_explicit';
+    if (understandingFilter === 'learned') return item.authority !== 'user_explicit';
     return true;
   });
   const activePriorities = data.priorities.filter((item) => item.status === 'active' && item.validTo > Date.now());
@@ -1034,7 +1026,6 @@ export function UserModelPage() {
     { id: 'all', label: t.allUnderstanding, count: assertions.length },
     { id: 'explicit', label: t.explicit, count: explicitCount },
     { id: 'learned', label: t.learned, count: learnedCount },
-    { id: 'pending', label: t.pending, count: inactiveAssertions.length },
   ];
 
   const openUnderstanding = (filter: UnderstandingFilter) => {
@@ -1174,17 +1165,16 @@ export function UserModelPage() {
             </aside>
           </section>
 
-          <section aria-label={t.understanding} className="grid gap-2 sm:grid-cols-3">
+          <section aria-label={t.understanding} className="grid gap-2 sm:grid-cols-2">
             {[
-              { icon: MessageCircle, label: t.explicit, hint: t.explicitHint, count: explicitCount },
-              { icon: Brain, label: t.learned, hint: t.learnedHint, count: learnedCount },
-              { icon: Check, label: t.pending, hint: t.pendingHint, count: inactiveAssertions.length },
-            ].map(({ icon: Icon, label, hint, count }, index) => (
+              { filter: 'explicit' as const, icon: MessageCircle, label: t.explicit, hint: t.explicitHint, count: explicitCount },
+              { filter: 'learned' as const, icon: Brain, label: t.learned, hint: t.learnedHint, count: learnedCount },
+            ].map(({ filter, icon: Icon, label, hint, count }) => (
                 <button
                   key={label}
                   type="button"
                   className="group flex min-h-24 w-full cursor-pointer items-start gap-3 rounded-2xl px-4 py-4 text-left transition-colors hover:bg-surface-panel focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:px-5"
-                  onClick={() => openUnderstanding(index === 0 ? 'explicit' : index === 1 ? 'learned' : 'pending')}
+                  onClick={() => openUnderstanding(filter)}
                   aria-label={`${label}: ${count}`}
                 >
                   <Icon className="mt-0.5 size-4 shrink-0 text-fg-subtle" aria-hidden="true" />

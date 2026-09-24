@@ -13,7 +13,8 @@ function response(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     intent: 'user_assertion',
     targetAssertionIds: [],
-    candidates: [{
+    assertions: [{
+      action: 'create',
       subject: { type: 'user', id: 'self' },
       predicate: 'preference.response.detail',
       cardinality: 'single',
@@ -44,7 +45,8 @@ function response(overrides: Record<string, unknown> = {}): string {
 describe('user model semantic capture', () => {
   it('grounds evidence and keeps importance separate from confidence', () => {
     const parsed = parseUserModelInterpretation(response(), evidence);
-    expect(parsed?.candidates[0]).toMatchObject({
+    expect(parsed?.assertions[0]).toMatchObject({
+      action: 'create',
       authority: 'user_explicit',
       confidence: 0.95,
       declaredImportance: 0.8,
@@ -66,7 +68,7 @@ describe('user model semantic capture', () => {
       validTo: '2026-09-13T23:59:59+08:00',
       evidence: [{ ref: 'entry-1', quote: 'This week I am focused on launch quality.' }],
     }), evidence);
-    expect(parsed?.candidates[0]).toMatchObject({
+    expect(parsed?.assertions[0]).toMatchObject({
       validFrom: Date.parse('2026-09-07T00:00:00+08:00'),
       validTo: Date.parse('2026-09-13T23:59:59+08:00'),
       temporalResolution: 'relative_resolved',
@@ -76,7 +78,7 @@ describe('user model semantic capture', () => {
   it('rejects ungrounded quotes and incomplete scoped candidates', () => {
     expect(parseUserModelInterpretation(response({
       evidence: [{ ref: 'entry-1', quote: 'I prefer long answers.' }],
-    }), evidence)?.candidates).toEqual([]);
+    }), evidence)?.assertions).toEqual([]);
     expect(parseUserModelInterpretation(response({ scope: { type: 'project' } }), evidence)).toBeNull();
   });
 
@@ -84,7 +86,7 @@ describe('user model semantic capture', () => {
     const parsed = parseUserModelInterpretation(JSON.stringify({
       intent: 'user_assertion',
       targetAssertionIds: [],
-      candidates: [],
+      assertions: [],
       goals: [{
         title: 'Improve launch quality',
         desiredOutcome: 'The launch passes the quality bar.',
@@ -109,5 +111,18 @@ describe('user model semantic capture', () => {
     expect(parsed?.collaborationRules).toEqual([
       expect.objectContaining({ statement: 'Keep answers concise.' }),
     ]);
+  });
+
+  it('accepts only grounded maintenance targets supplied by the runtime', () => {
+    const merged = parseUserModelInterpretation(response({
+      action: 'merge',
+      targetAssertionId: 'known',
+    }), evidence, ['known']);
+    expect(merged?.assertions[0]).toMatchObject({ action: 'merge', targetAssertionId: 'known' });
+
+    expect(parseUserModelInterpretation(response({
+      action: 'merge',
+      targetAssertionId: 'unknown',
+    }), evidence, ['known'])?.assertions).toEqual([]);
   });
 });

@@ -517,6 +517,63 @@ export function linkAssertionEvidence(
     .run(assertionId, evidenceId, relation, confidence, now);
 }
 
+export function mergeAssertionObservation(input: {
+  assertionId: string;
+  candidate: AssertionCandidate;
+  evidenceIds: string[];
+}, now = Date.now()): UserAssertion {
+  validateCandidate(input.candidate);
+  return runSqliteWriteTransaction((db) => {
+    const current = getUserAssertion(input.assertionId);
+    if (!current || current.status === 'archived' || current.status === 'rejected') {
+      throw new Error(`User assertion is not available for merge: ${input.assertionId}`);
+    }
+    const slot = getAssertionSlot(current.slotId);
+    const principalId = input.candidate.principalId ?? USER_MODEL_PRINCIPAL_ID;
+    if (!slot || slot.principalId !== principalId
+      || slot.subject.type !== input.candidate.subject.type
+      || slot.subject.id !== input.candidate.subject.id.trim()
+      || slot.scope.type !== input.candidate.scope.type
+      || (slot.scope.id ?? '') !== (input.candidate.scope.id?.trim() ?? '')) {
+      throw new Error('Merge target does not match the candidate subject and scope.');
+    }
+    if (input.candidate.authority !== 'user_explicit' && input.candidate.sensitivity !== 'normal') {
+      throw new Error('Sensitive inferred understanding cannot be merged automatically.');
+    }
+    const observedAt = Math.max(current.observedAt, input.candidate.observedAt);
+    const reviewAt = input.candidate.reviewAt
+      ?? defaultReviewAt(current.volatility, observedAt)
+      ?? null;
+    let status: AssertionStatus = current.status;
+    let authority = current.authority;
+    let confidence = current.confidence;
+    if (input.candidate.authority === 'user_explicit') {
+      authority = 'user_explicit';
+      confidence = input.candidate.confidence;
+      status = initialStatus(input.candidate);
+    } else if (current.status === 'stale'
+      && (current.validTo === undefined || current.validTo >= now)) {
+      status = 'candidate';
+    }
+    db.prepare(`UPDATE user_assertions
+      SET authority = ?, status = ?, confidence = ?, observed_at = ?, review_at = ?
+      WHERE assertion_id = ?`)
+      .run(authority, status, confidence, observedAt, reviewAt, current.id);
+    const insertEvidence = db.prepare(`INSERT INTO user_assertion_evidence (
+      assertion_id, evidence_id, relation, confidence, created_at
+    ) VALUES (?, ?, 'supports', ?, ?)
+    ON CONFLICT(assertion_id, evidence_id, relation) DO UPDATE SET confidence = excluded.confidence`);
+    for (const evidenceId of new Set(input.evidenceIds)) {
+      insertEvidence.run(current.id, evidenceId, input.candidate.confidence, now);
+    }
+    if (status !== current.status) {
+      recordStatusEvent(db, current.id, current.status, status, 'runtime',
+        'Fresh evidence merged into this understanding.', now);
+    }
+    return getUserAssertion(current.id)!;
+  });
+}
+
 export function setAssertionStatus(
   assertionId: string,
   status: AssertionStatus,
