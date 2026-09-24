@@ -15,6 +15,31 @@ const temporary: string[] = [];
 afterEach(() => { for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true }); });
 
 describe('SQLite assets in distribution layouts', () => {
+  it('loads SQL from an explicit packaged asset root', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'xopc-sql-assets-root-')); temporary.push(directory);
+    const bundleDirectory = join(directory, 'bundle');
+    const assetDirectory = join(directory, 'unpacked/out/server');
+    mkdirSync(assetDirectory, { recursive: true });
+    writeFileSync(join(assetDirectory, 'probe.sql'), 'SELECT 203;');
+    const outfile = join(bundleDirectory, 'index.mjs');
+    await build({
+      stdin: {
+        resolveDir: source,
+        contents: `import { readSqliteAsset } from './sql-assets.ts';
+          console.log(readSqliteAsset('probe.sql'));`,
+      },
+      outfile, bundle: true, minify: true, platform: 'node', format: 'esm', target: 'node22',
+    });
+
+    const result = spawnSync(process.execPath, [outfile], {
+      encoding: 'utf8',
+      env: { ...process.env, XOPC_SQLITE_ASSET_ROOT: assetDirectory },
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout.trim()).toBe('SELECT 203;');
+  });
+
   it('loads baseline and scene SQL beside a minified single-file gateway bundle', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'xopc-sql-assets-')); temporary.push(directory);
     const outfile = join(directory, 'index.mjs');
