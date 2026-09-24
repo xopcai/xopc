@@ -1,9 +1,10 @@
 import type { StoredLanguage } from '@/lib/storage';
 import { messages, tabLabel, type Tab } from '@/i18n/messages';
 import { capabilitySettingsPath, pathForTab } from '@/navigation';
-import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode, isSettingsPathVisibleOnPlatform } from '@/navigation/settings-nav-visibility';
+import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode } from '@/navigation/settings-nav-visibility';
 import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path';
 import { CHANNELS_HUB_PATH, channelDetailPath } from '@/features/settings/channels/channels-routes';
+import { capabilityPath } from '@/navigation/product-navigation';
 import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
 export type RouteHitSeed = {
@@ -45,7 +46,7 @@ function filterRouteSeedsBySettingsMode(
 ): RouteHitSeed[] {
   return seeds.filter((seed) => {
     const pathname = seed.path.split('?')[0] ?? seed.path;
-    return isSettingsPathVisibleInMode(pathname, settingsMode) && isSettingsPathVisibleOnPlatform(pathname);
+    return isSettingsPathVisibleInMode(pathname, settingsMode);
   });
 }
 
@@ -75,7 +76,7 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       id: 'route:extensions',
       title: m.nav.extensions,
       subtitle: r.extensionsSubtitle,
-      path: '/extensions',
+      path: capabilityPath('extensions'),
       keywords: ['extension', 'plugin', 'addon'],
     },
     {
@@ -103,14 +104,14 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       id: 'route:skills',
       title: m.nav.skills,
       subtitle: r.skillsSubtitle,
-      path: '/capabilities/skills',
+      path: capabilityPath('skills'),
       keywords: ['tools', 'catalog'],
     },
     {
       id: 'route:connectors',
       title: m.nav.connectors,
       subtitle: r.connectorsSubtitle,
-      path: '/capabilities/connectors',
+      path: capabilityPath('connectors'),
       keywords: ['connector', 'mcp', 'registry', 'integration', 'tools'],
     },
     {
