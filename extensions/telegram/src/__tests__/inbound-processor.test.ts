@@ -1,10 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect, vi, beforeEach } from 'vitest';
+import { initializeTestAgentCatalog } from '@xopcai/xopc/agent-catalog/test-support.js';
 import { createInboundProcessor, type InboundProcessorDeps } from '../inbound-processor.js';
 import { TelegramAccountManager } from '../account-manager.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import type { Bot, Context } from 'grammy';
 import type { Message } from '@grammyjs/types';
+import { closeXopcDatabase } from '@xopcai/xopc/storage/sqlite/index.js';
 
 // Mock dedupe module
 vi.mock('../dedupe.js', () => ({
@@ -24,6 +26,9 @@ vi.mock('../../../utils/logger.js', () => ({
 }));
 
 describe('inbound-processor', () => {
+  beforeAll(() => initializeTestAgentCatalog());
+  afterAll(() => closeXopcDatabase());
+
   let accountManager: TelegramAccountManager;
   let mockBus: MessageBus;
   let mockConfig: Config;

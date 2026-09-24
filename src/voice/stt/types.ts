@@ -78,16 +78,15 @@ export interface STTResultWithTracking extends STTResult {
 }
 
 export const DEFAULT_STT_CONFIG: STTConfig = {
-  enabled: true,
-  provider: 'xopc-local',
+  enabled: false,
+  provider: 'openai',
   providers: {
-    'xopc-local': { model: 'sensevoice-small' },
     alibaba: { model: 'qwen-audio-3.0-asr-flash' },
     openai: { model: 'gpt-4o-mini-transcribe' },
   },
   fallback: {
     enabled: false,
-    order: ['xopc-local'],
+    order: [],
   },
   timeoutMs: 60_000,
 };

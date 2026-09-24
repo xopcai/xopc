@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateHeaderName } from 'node:http';
 import { z } from 'zod';
@@ -7,9 +7,8 @@ import { CredentialResolver } from '../../auth/credentials.js';
 import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import { isDangerousHostEnvVarName } from '../../infra/host-env-security.js';
 import { resolveStateDir } from '../../config/paths-state.js';
-import { McpOAuthStore } from '../../agent/mcp/oauth/mcp-oauth-store.js';
 import { AgentPluginStore } from './store.js';
-import { pluginName, pluginServerId, type PluginServer } from './validation.js';
+import { pluginName, type PluginServer } from './validation.js';
 import { clearPluginMcpHealth } from './health.js';
 
 const bindingSchema = z.strictObject({
@@ -20,7 +19,8 @@ const bindingSchema = z.strictObject({
 });
 export type PluginAuthBinding = z.infer<typeof bindingSchema>;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
-const providerPrefix = (id: string) => `plugin-${hash(id).slice(0, 16)}-`;
+export const pluginCredentialProviderPrefix = (id: string) => `plugin-${hash(id).slice(0, 16)}-`;
+export const parsePluginAuthBinding = (value: unknown): PluginAuthBinding => bindingSchema.parse(value);
 export function pluginEndpointFingerprint(server: PluginServer): string {
   return hash(server.type === 'stdio' ? JSON.stringify(server) : new URL(server.url).toString());
 }
@@ -56,7 +56,7 @@ export async function savePluginAuthBinding(store: AgentPluginStore, id: string,
     const normalizedKey = field.target === 'headers' || process.platform === 'win32' ? field.key.toLowerCase() : field.key;
     if (seen.has(normalizedKey)) throw new Error('Duplicate credential field');
     seen.add(normalizedKey);
-    const provider = `${providerPrefix(id)}${hash(JSON.stringify(['owner', id, name, endpointFingerprint, field.target, normalizedKey]))}`;
+    const provider = `${pluginCredentialProviderPrefix(id)}${hash(JSON.stringify(['owner', id, name, endpointFingerprint, field.target, normalizedKey]))}`;
     fields.push({ target: field.target, key: field.key, provider, prefix: field.prefix ?? '' });
   }
   for (let i = 0; i < fields.length; i++) await resolver.saveApiKey(fields[i].provider, input.secrets![i].value);
@@ -82,33 +82,4 @@ export function applyPluginAuthBinding(raw: Record<string, unknown>, binding: Pl
   }
   result.xopcAuthRevision = hash(JSON.stringify(binding));
   return result;
-}
-export function pluginOAuthScope(raw: unknown): string | undefined {
-  const plugin = (raw as { xopcPlugin?: { id: string; serverName: string } } | undefined)?.xopcPlugin;
-  return plugin ? `owner:${pluginServerId(plugin.id, plugin.serverName)}` : undefined;
-}
-
-export async function removePluginCredentials(store: AgentPluginStore, id: string): Promise<void> {
-  pluginName.parse(id);
-  const plugin = store.get(id);
-  const serverNames = new Set(Object.keys(plugin?.servers ?? {}));
-  const dir = join(store.stateDir, 'plugin-auth', id);
-  if (existsSync(dir)) for (const file of readdirSync(dir)) {
-    if (!/^[a-f0-9]{64}\.json$/.test(file)) throw new Error('Unexpected plugin auth store entry');
-    const binding = bindingSchema.parse(JSON.parse(readFileSync(join(dir, file), 'utf8')));
-    serverNames.add(binding.serverName);
-  }
-  const { getMcpOAuthManager } = await import('../../agent/mcp/oauth/mcp-oauth-manager.js');
-  for (const name of serverNames) {
-    await getMcpOAuthManager({ xopcPlugin: { id, serverName: name } }).cancelPending();
-    await new McpOAuthStore(`owner:${pluginServerId(id, name)}`).deleteScope();
-  }
-  const resolver = new CredentialResolver(store.stateDir === resolveStateDir() ? {} : { stateDir: store.stateDir });
-  for (const profile of await resolver.listProfiles()) {
-    if (profile.provider.startsWith(providerPrefix(id))) await resolver.deleteProviderCredential(profile.provider);
-  }
-  if (existsSync(dir)) {
-    // Only this package's host-managed bindings are removed; provider-side grants remain.
-    rmSync(dir, { recursive: true, force: true });
-  }
 }

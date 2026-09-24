@@ -1,6 +1,6 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const child = vi.hoisted(() => ({ options: undefined as any }));
 vi.mock('../../../execution-environments/session-environment-service.js', () => ({ SessionEnvironmentService: class { get() { return { projectId: 'project' }; } } }));
@@ -19,13 +19,18 @@ import { createDelegationParentPolicy } from '../delegation-parent-policy.js';
 import { AgentToolsFactory } from '../factory.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import type { MessageBus } from '../../../infra/bus/index.js';
+import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
 
 const fakeTool = (name: string): AgentTool<any, any> => ({ name, label: name, description: name, parameters: Type.Object({}),
   execute: vi.fn(async () => ({ content: [{ type: 'text', text: name }], details: {} })) });
 const model = { provider: 'openai', id: 'test', input: ['text'] } as never;
 
 describe('delegated capabilities', () => {
+  beforeAll(() => initializeTestAgentCatalog());
+  afterAll(() => closeXopcDatabase());
+
   it('inherits available research tools and reports precise narrowing failures', () => {
     const parent = ['read_file', 'web_search', 'web_fetch', 'web_extract', 'knowledge_get', 'skill_view', 'xopc_tool_execute', 'write_file', 'delegate_task', 'unclassified'];
     expect(resolveDelegationTools(parent, 'research').granted).toEqual(parent.slice(0, 7));

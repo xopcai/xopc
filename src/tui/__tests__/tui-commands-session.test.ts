@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import { ChatLog } from '../components/chat-log.js';
 import {
   createTuiCommandHandler,
@@ -43,6 +45,9 @@ function makeHandler(overrides: Partial<Parameters<typeof createTuiCommandHandle
 }
 
 describe('TUI session slash commands', () => {
+  beforeAll(() => initializeTestAgentCatalog());
+  afterAll(() => closeXopcDatabase());
+
   it('/new switches session without forwarding to agent', async () => {
     const { handler, sendMessage, setSession } = makeHandler();
     handler('/new');

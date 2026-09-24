@@ -14,10 +14,6 @@ import {
 import { isProviderConfiguredSync } from '../../providers/index.js';
 import { resolveModel } from '../../providers/index.js';
 import { compareCatalogModels } from '../../providers/model-catalog-ranking.js';
-import {
-  DEFAULT_LOCAL_VOICE_MODEL_ID,
-  hasInstalledLocalVoiceModel,
-} from '../../voice/local/models.js';
 import { planCapabilities } from './planner.js';
 import type {
   CandidateSource,
@@ -31,7 +27,6 @@ import type {
 interface BuildPlansOptions {
   catalog?: ModelCatalogSnapshot;
   providerReady?: (providerId: string) => boolean;
-  localSttReady?: boolean;
 }
 
 export function buildCapabilityPlansForConfig(
@@ -53,7 +48,7 @@ export function buildCapabilityPlansForConfig(
       explicit: refs(getAgentDefaultImageGenerationModelConfig(agentId)),
     },
     stt: {
-      disabled: stt?.enabled === false,
+      disabled: stt?.enabled !== true,
       explicit: stt ? sttRefs(stt) : undefined,
     },
     tts: {
@@ -67,17 +62,7 @@ export function buildCapabilityPlansForConfig(
   const automatic: CapabilityPlannerInput['automatic'] = {
     vision: cloudCandidates('vision', cloud?.models ?? [], cloudReady, 0, cloud?.recommended?.vision),
     'image-generation': cloudCandidates('image-generation', cloud?.models ?? [], cloudReady, 0, cloud?.recommended?.['image-generation']),
-    stt: [
-      candidate(
-        'stt',
-        'xopc-local',
-        DEFAULT_LOCAL_VOICE_MODEL_ID,
-        'installed-local',
-        options.localSttReady ?? hasInstalledLocalVoiceModel(),
-        0,
-      ),
-      ...cloudCandidates('stt', cloud?.models ?? [], cloudReady, 100, cloud?.recommended?.stt),
-    ],
+    stt: cloudCandidates('stt', cloud?.models ?? [], cloudReady, 0, cloud?.recommended?.stt),
     tts: [
       ...cloudCandidates('tts', cloud?.models ?? [], cloudReady, 0, cloud?.recommended?.tts),
       candidate('tts', 'edge', 'edge', 'credentialless-fallback', true, 1_000),
@@ -89,7 +74,6 @@ export function buildCapabilityPlansForConfig(
 
 function defaultProviderReady(providerId: string): boolean {
   if (providerId === 'edge') return true;
-  if (providerId === 'xopc-local') return hasInstalledLocalVoiceModel();
   return isProviderConfiguredSync(providerId);
 }
 

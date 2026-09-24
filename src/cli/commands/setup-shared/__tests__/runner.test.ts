@@ -1,9 +1,11 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
 import type { Config } from '../../../../config/schema.js';
+import { closeXopcDatabase } from '../../../../storage/sqlite/index.js';
 import { runSetup, SetupValidationError } from '../runner.js';
 
 function makeTempConfig(initial: object = {}): string {
@@ -15,6 +17,9 @@ function makeTempConfig(initial: object = {}): string {
 
 describe('runSetup pipeline', () => {
   const cleanup: string[] = [];
+
+  beforeAll(() => initializeTestAgentCatalog());
+  afterAll(() => closeXopcDatabase());
 
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => {});

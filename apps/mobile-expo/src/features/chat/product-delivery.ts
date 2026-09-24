@@ -47,6 +47,7 @@ export function mobileProductRoute(reference: ProductReferenceLocator & { projec
     case 'workflow_definition':
     case 'scene':
     case 'local_app':
+    case 'chat_preview':
       return null;
   }
 }

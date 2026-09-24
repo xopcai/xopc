@@ -1,7 +1,8 @@
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import type { MessageBus } from '../../../infra/bus/index.js';
 import { ExtensionRegistryImpl } from '../../../extensions/extension-registry-impl.js';
@@ -12,9 +13,13 @@ import {
   resolveAgentCapabilityCatalog,
 } from '../../capabilities/index.js';
 import { runWithEmbeddedExecutionSession } from '../../embedded/execution-context.js';
+import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
 import { AgentToolsFactory } from '../factory.js';
 
 describe('AgentToolsFactory', () => {
+  beforeAll(() => initializeTestAgentCatalog());
+  afterAll(() => closeXopcDatabase());
+
   it('offers batching to ordinary agents while preserving individual tool denials', async () => {
     const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null });
     expect(factory.createCoreTools().map(tool => tool.name)).toContain('data_batch');

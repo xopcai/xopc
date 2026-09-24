@@ -5,6 +5,8 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import {
   createBrowserNativeBootstrap,
   decodeNativeMessage,
@@ -18,6 +20,7 @@ describe('browser native messaging framing', () => {
   const originalStateDir = process.env.XOPC_STATE_DIR;
 
   afterEach(() => {
+    closeXopcDatabase();
     if (originalStateDir === undefined) delete process.env.XOPC_STATE_DIR;
     else process.env.XOPC_STATE_DIR = originalStateDir;
     temporaryDirectories.splice(0).forEach((directory) => rmSync(directory, { recursive: true, force: true }));
@@ -36,6 +39,7 @@ describe('browser native messaging framing', () => {
   });
 
   it('creates a short-lived non-navigable invitation for the configured loopback Gateway', () => {
+    initializeTestAgentCatalog();
     const directory = mkdtempSync(join(tmpdir(), 'xopc-browser-native-'));
     temporaryDirectories.push(directory);
     const configPath = join(directory, 'xopc.json');

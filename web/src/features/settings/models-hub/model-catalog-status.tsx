@@ -65,7 +65,7 @@ function capabilityAction(capability: CapabilityId, zh: boolean) {
     case 'stt':
       return {
         href: capabilitySettingsPath('voice'),
-        guidance: zh ? '选择语音识别服务，或安装本地语音模型' : 'Choose a speech-to-text service or install a local voice model',
+        guidance: zh ? '选择语音识别服务，或安装自管 STT 扩展' : 'Choose a speech-to-text service or install a self-managed STT extension',
         action: zh ? '去配置语音识别' : 'Configure speech-to-text',
       };
     case 'tts':

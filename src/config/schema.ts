@@ -743,7 +743,7 @@ export const STTProviderConfigSchema = z
 
 export const STTFallbackConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  order: z.array(z.string().min(1)).default(['xopc-local']),
+  order: z.array(z.string().min(1)).default([]),
 });
 
 export const MediaUnderstandingCapabilitiesSchema = z
@@ -767,10 +767,10 @@ export const MediaUnderstandingModelSchema = z
 
 export const STTConfigSchema = z
   .object({
-    enabled: z.boolean().default(true),
+    enabled: z.boolean().default(false),
     /** Primary provider id — any registered MediaUnderstandingProvider id. */
-    provider: z.string().min(1).default('xopc-local'),
-    fallback: STTFallbackConfigSchema.default({ enabled: false, order: ['xopc-local'] }),
+    provider: z.string().min(1).default('openai'),
+    fallback: STTFallbackConfigSchema.default({ enabled: false, order: [] }),
     timeoutMs: z.number().int().min(1000).max(180000).optional(),
     /** Ordered model entries for this capability (OpenClaw `tools.media.audio.models`). */
     models: z.array(MediaUnderstandingModelSchema).optional(),

@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { STTConfigSchema } from '../../../config/schema.js';
 
 describe('STTConfigSchema', () => {
-  it('defaults to local transcription without an implicit cloud fallback', () => {
+  it('defaults voice transcription to disabled without an implicit fallback', () => {
     const parsed = STTConfigSchema.parse({});
 
-    expect(parsed.enabled).toBe(true);
-    expect(parsed.provider).toBe('xopc-local');
-    expect(parsed.fallback).toEqual({ enabled: false, order: ['xopc-local'] });
+    expect(parsed.enabled).toBe(false);
+    expect(parsed.provider).toBe('openai');
+    expect(parsed.fallback).toEqual({ enabled: false, order: [] });
   });
 
   it('accepts open provider ids and providers map', () => {

@@ -12,7 +12,7 @@ import {
 } from '../product-delivery';
 
 const delivery: ProductDeliveryEnvelope = {
-  version: 1,
+  version: 2,
   operation: 'updated',
   primary: {
     kind: 'task',

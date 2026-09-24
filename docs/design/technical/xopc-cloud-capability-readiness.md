@@ -241,11 +241,10 @@ XOPC Cloud contributes every available model supporting `images.generate`, not o
 
 When `tools.media.audio` is absent:
 
-1. installed xopc-local model;
-2. XOPC Cloud STT models;
-3. other configured STT providers.
+1. STT remains disabled;
+2. the user explicitly selects XOPC Cloud, another configured provider, or an installed extension.
 
-When configuration exists, preserve its primary/model entries and fallback semantics. An explicit `enabled: false` disables STT.
+When configuration exists, preserve its primary/model entries and fallback semantics. `enabled: true` is required to activate STT.
 
 Replace lightweight metadata-only availability checks with planner readiness for Gateway and webchat. Keep a dependency-light wrapper if extension loading requires it, but it must consume a precomputed readiness snapshot rather than assume every no-key provider is usable.
 
@@ -505,7 +504,7 @@ Metrics:
 Run vision, image generation, STT, and explicit TTS for:
 
 - fresh user with only XOPC Cloud OAuth;
-- existing local STT user;
+- existing user-managed STT extension;
 - existing explicit third-party image/TTS user;
 - stale catalog and temporary network failure;
 - model rotation between two catalog versions;
