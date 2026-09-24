@@ -71,6 +71,7 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
       portLabel: 'Local service port',
       dbPathLabel: 'Database path',
       configPathLabel: 'Config path',
+      updateGuidance: 'Install the latest xopc version before retrying. A newer release may already include a fix for this startup issue.',
       safetyNote: incompatible ? 'Do not delete your data, reset device identity, or change model keys. For a packaged install, stop the separately running Gateway so xopc can start its bundled service.' : schemaTooNew
         ? 'Your data has not been downgraded or modified. Update xopc, then retry opening it.'
         : migrationGap
@@ -78,7 +79,7 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
           : portInUse
             ? 'Your data is safe. Free the port or choose another local port, then retry.'
             : 'Your data is safe. Use the diagnostic details if the issue keeps happening.',
-      checkUpdate: failure.isPackaged ? 'Check for updates' : 'Check for packaged updates',
+      checkUpdate: failure.isPackaged ? 'Check and download update' : 'Check for packaged updates',
       installUpdate: 'Restart and install',
       retry: 'Retry startup',
       openDataDir: 'Open data folder',
@@ -130,6 +131,7 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
     portLabel: '本地服务端口',
     dbPathLabel: '数据库路径',
     configPathLabel: '配置路径',
+    updateGuidance: '请先安装最新版本的 xopc 再重试，新版本可能已经修复了此次启动问题。',
     safetyNote: incompatible ? '无需删除数据、重置设备身份或更换模型 Key。正式安装时，可先停止独立运行的 Gateway，再重试，让 xopc 启动随应用附带的服务。' : schemaTooNew
       ? '你的数据没有被降级或修改。升级 xopc 后重试即可继续打开。'
       : migrationGap
@@ -137,7 +139,7 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
         : portInUse
           ? '你的数据是安全的。释放端口或选择其他本地端口后重试。'
           : '你的数据是安全的。如果问题持续发生，请使用诊断信息排查。',
-    checkUpdate: failure.isPackaged ? '检查更新' : '检查正式版更新',
+    checkUpdate: failure.isPackaged ? '检查并下载最新版' : '检查正式版更新',
     installUpdate: '重启并安装',
     retry: '重新启动',
     openDataDir: '打开数据目录',
@@ -170,9 +172,7 @@ export function getStartupRecoveryPageDataUrl(
   const htmlLang = isEn ? 'en' : 'zh-CN';
   const copy = recoveryCopy(lang, failure);
   const diagnostic = JSON.stringify(failure, null, 2);
-  const databaseVersionFailure =
-    failure.kind === 'database_schema_too_new' || failure.kind === 'database_migration_gap';
-  const showUpdatePrimary = Boolean(failure.isPackaged && databaseVersionFailure);
+  const showUpdatePrimary = Boolean(failure.isPackaged);
   const devCommand = [
     'pnpm install',
     'pnpm run build',
@@ -199,6 +199,7 @@ export function getStartupRecoveryPageDataUrl(
       font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
       background: #f8fafc;
       color: #0f172a;
+      -webkit-app-region: drag;
     }
     main {
       width: min(48rem, 100%);
@@ -207,6 +208,7 @@ export function getStartupRecoveryPageDataUrl(
       background: #ffffff;
       padding: 1.5rem;
       box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
+      -webkit-app-region: no-drag;
     }
     .eyebrow {
       margin: 0 0 0.5rem;
@@ -330,6 +332,7 @@ export function getStartupRecoveryPageDataUrl(
     <p class="eyebrow">${escapeHtml(copy.eyebrow)}</p>
     <h1>${escapeHtml(copy.title)}</h1>
     <p>${escapeHtml(copy.body)}</p>
+    ${failure.isPackaged ? `<div class="notice update-guidance">${escapeHtml(copy.updateGuidance)}</div>` : ''}
     <div class="notice">${escapeHtml(copy.safetyNote)}</div>
     <dl>
       ${detailRow(copy.kindLabel, failure.kind)}
