@@ -96,6 +96,21 @@ describe('buildSystemPrompt prompt modes', () => {
     expect(prompt).toContain('keep this moving');
   });
 
+  it('persists explicit conversational edits to the current agent profile', () => {
+    const prompt = buildSystemPrompt('/ws', {
+      toolNames: ['read_file', 'write_file', 'xopc_use'],
+    });
+    expect(prompt).toContain("explicitly asks to change or customize the current agent's name");
+    expect(prompt).toContain('Target only the current runtime agent');
+    expect(prompt).toContain('verify the saved result');
+  });
+
+  it('creates agents without inheriting project context unless requested', () => {
+    const prompt = buildSystemPrompt('/ws', { toolNames: ['xopc_use'] });
+    expect(prompt).toContain('list first, create the Agent without a Project or custom workspace');
+    expect(prompt).toContain("open its own conversation");
+  });
+
   it('places the action trust boundary in the stable safety prefix', () => {
     const prompt = buildSystemPrompt('/workspace/main', {
       toolNames: BASE_TOOLS,
