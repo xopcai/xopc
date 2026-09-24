@@ -144,6 +144,7 @@ export function buildToolingSection(params: {
   const hasExec = availableTools.has('exec_command');
   const hasPlan = availableTools.has('update_plan');
   const hasPublishArtifacts = availableTools.has('publish_artifacts');
+  const hasXopcUse = availableTools.has('xopc_use');
 
   const orchestrationLines: string[] = [];
   if (hasDelegate) {
@@ -174,6 +175,12 @@ export function buildToolingSection(params: {
       : '',
     hasWrite
       ? `Use \`${writeToolName}\` only for new files or intentional complete rewrites.`
+      : '',
+    hasXopcUse && hasRead && hasWrite
+      ? `When the user explicitly asks to change or customize the current agent's name, identity, personality, instructions, working style, tools, workspace, or heartbeat, persist the change instead of only drafting advice. Inspect the current state first; use \`${readToolName}\` and \`${writeToolName}\` for the current agent's profile Markdown, and use \`xopc_use\` mode \`agent\` for structured settings. Target only the current runtime agent unless the user names another one, verify the saved result, and ask before consequential capability or scope expansion when intent is ambiguous.`
+      : '',
+    hasXopcUse
+      ? 'When the user explicitly asks to create an Agent, use `xopc_use` mode `agent`: list first, create the Agent without a Project or custom workspace unless the user requests one, verify the result, and clearly identify the created Agent so the user can open its own conversation for further customization.'
       : '',
     hasGrep || hasFind
       ? `Use ${[

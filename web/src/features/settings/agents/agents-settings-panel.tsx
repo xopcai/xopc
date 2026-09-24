@@ -1,4 +1,5 @@
-import { Plus } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { MoreHorizontal, Plus, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -10,7 +11,7 @@ import { AgentEditor } from '@/features/settings/agents/agent-editor';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { AgentsEditorModal } from '@/features/settings/agents/agents-editor-modal';
 import { AgentsListGrid } from '@/features/settings/agents/agents-list-grid';
-import { CreateAgentDialog } from '@/features/settings/agents/create-agent-dialog';
+import { CreateAgentDialog, type ManualAgentDraft } from '@/features/settings/agents/create-agent-dialog';
 import { SettingsPageFrame } from '@/features/settings/settings-page-layout';
 import {
   createGatewayAgent,
@@ -22,6 +23,8 @@ import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 
 function AgentsSkeleton() {
   return (
@@ -41,26 +44,95 @@ export function AgentsSettingsPanel() {
   const token = useGatewayStore((state) => state.conversationId);
   const language = useLocaleStore((state) => state.language);
   const zh = language === 'zh';
-  const agentsMessages = messages(language).agentsSettings;
+  const messageBundle = messages(language);
+  const agentsMessages = messageBundle.agentsSettings;
   const navigate = useNavigate();
   const { agentId } = useParams();
   const { data, error, isLoading, mutate } = useSWR(token ? 'settings-gateway-agents' : null, fetchGatewayAgents);
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
-  const [createDraft, setCreateDraft] = useState({ open: false, name: '', instructions: '' });
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [manualError, setManualError] = useState<string | null>(null);
+  const [manualDraft, setManualDraft] = useState<ManualAgentDraft>({
+    open: false,
+    name: '',
+    instructions: '',
+    workspace: '',
+  });
   const editorDirtyRef = useRef(false);
 
   const selected = data?.agents.find((agent) => agent.id === agentId);
+  const startAgentCreation = useCallback(() => {
+    if (!data) return;
+    setActionError(null);
+    rememberSelectedAgent(data.defaultId);
+    const search = new URLSearchParams({
+      agentSetup: '1',
+      projectScope: 'none',
+      draft: agentsMessages.setupDraftPrefix,
+    });
+    navigate(`/chat/new?${search.toString()}`, {
+      state: { forceNewChat: true, agentId: data.defaultId },
+    });
+  }, [agentsMessages.setupDraftPrefix, data, navigate]);
+
+  const createAgentManually = useCallback(async () => {
+    if (busy || !manualDraft.name.trim()) return;
+    setBusy(true);
+    setManualError(null);
+    try {
+      const next = await createGatewayAgent({
+        profile: {
+          name: manualDraft.name.trim(),
+          ...(manualDraft.instructions.trim() ? { instructions: manualDraft.instructions.trim() } : {}),
+        },
+        ...(manualDraft.workspace.trim() ? { workspace: manualDraft.workspace.trim() } : {}),
+      });
+      setManualDraft({ open: false, name: '', instructions: '', workspace: '' });
+      rememberSelectedAgent(next.createdAgentId);
+      navigate('/chat/new?projectScope=none', {
+        state: { forceNewChat: true, agentId: next.createdAgentId },
+      });
+    } catch (cause) {
+      setManualError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, manualDraft, navigate]);
+
   const headerEnd = useMemo(() => (
     <div className="flex items-center gap-2">
       <Button onClick={() => navigate('/settings/agent-defaults')}>{zh ? '全局默认配置' : 'Global defaults'}</Button>
-      <Button variant="primary" onClick={() => { setActionError(null); setCreateDraft((current) => ({ ...current, open: true })); }}>
-        <Plus className="size-4" />{zh ? '新建智能体' : 'New agent'}
+      <Button variant="primary" onClick={startAgentCreation}>
+        <Plus className="size-4" />{agentsMessages.listNewAgentCard}
       </Button>
+      <DropdownMenu.Root modal={false}>
+        <DropdownMenu.Trigger asChild>
+          <Button variant="ghost" className="size-11 shrink-0 p-0" aria-label={agentsMessages.manualCreateMoreAria}>
+            <MoreHorizontal className="size-4" aria-hidden />
+          </Button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content align="end" sideOffset={6} className="z-50 min-w-44 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover">
+            <DropdownMenu.Item
+              className={cn(
+                'touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover',
+                interaction.transition,
+              )}
+              onSelect={() => {
+                setManualError(null);
+                setManualDraft((current) => ({ ...current, open: true }));
+              }}
+            >
+              <SlidersHorizontal className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+              {agentsMessages.manualCreateMenu}
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
     </div>
-  ), [navigate, zh]);
+  ), [agentsMessages.listNewAgentCard, agentsMessages.manualCreateMenu, agentsMessages.manualCreateMoreAria, navigate, startAgentCreation, zh]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -70,25 +142,6 @@ export function AgentsSettingsPanel() {
     });
     return () => clearPageHeader();
   }, [clearPageHeader, headerEnd, setPageHeader, zh]);
-
-  const createAgent = async () => {
-    setBusy(true);
-    setActionError(null);
-    try {
-      const next = await createGatewayAgent({
-        profile: {
-          name: createDraft.name.trim(),
-          ...(createDraft.instructions.trim() ? { instructions: createDraft.instructions.trim() } : {}),
-        },
-      });
-      setCreateDraft({ open: false, name: '', instructions: '' });
-      navigate(`/agents/${next.createdAgentId}`);
-    } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const deleteAgent = async (agent: GatewayAgentRow) => {
     const displayName = agentListDisplayName(agent, agentsMessages);
@@ -177,21 +230,20 @@ export function AgentsSettingsPanel() {
       ) : null}
 
       <CreateAgentDialog
-        open={createDraft.open}
+        draft={manualDraft}
         busy={busy}
-        error={actionError}
-        name={createDraft.name}
-        instructions={createDraft.instructions}
-        zh={zh}
-        onNameChange={(name) => setCreateDraft((current) => ({ ...current, name }))}
-        onInstructionsChange={(instructions) => setCreateDraft((current) => ({ ...current, instructions }))}
-        onCreate={() => void createAgent()}
+        error={manualError}
+        messages={agentsMessages}
+        workingDirectoryMessages={messageBundle.chat.workingDirectory}
+        onChange={(patch) => setManualDraft((current) => ({ ...current, ...patch }))}
+        onCreate={() => void createAgentManually()}
         onOpenChange={(open) => {
           if (busy) return;
-          setCreateDraft((current) => ({ ...current, open }));
-          if (!open) setActionError(null);
+          setManualDraft((current) => ({ ...current, open }));
+          if (!open) setManualError(null);
         }}
       />
+
     </SettingsPageFrame>
   );
 }

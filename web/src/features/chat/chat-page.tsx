@@ -72,6 +72,7 @@ import { withDetailReturnTo } from '@/lib/navigation-return';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
+import { AgentSetupWelcome } from '@/features/chat/agent-setup-welcome';
 import { parseAgentRunError } from '@/features/chat/messages/agent-run-error-parser';
 import { BrowserSetupRequiredCard } from '@/features/chat/tool-results/browser-setup-required-card';
 import {
@@ -156,6 +157,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   });
 
   const skillDiscovery = !embedded && !taskId && searchParams.get('scene') === 'find-skills';
+  const agentSetup = !embedded && !taskId && searchParams.get('agentSetup') === '1';
   const skillQuery = searchParams.get('skill')?.trim() ?? '';
   const slashQuery = searchParams.get('slash')?.trim() ?? '';
   const draftQuery = searchParams.get('draft') ?? '';
@@ -615,6 +617,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     enabled:
       auth.hasToken &&
       Boolean(chatConversationId) &&
+      !agentSetup &&
       msgSlice.items.length === 0 &&
       !session.showSessionLoading &&
       !session.sessionRoutePending,
@@ -1078,7 +1081,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       {!embedded ? <ChatPageHeaderRegistration
         chatHeadline={skillDiscovery && msgSlice.items.length === 0 ? m.skills.findTitle : chatHeadline}
         chatAgents={agents.chatAgents?.items ?? []}
-        showChatAgentSelector={agents.showChatAgentSelector}
+        showChatAgentSelector={!agentSetup && agents.showChatAgentSelector}
         chatAgentId={agents.displayAgentId}
         onChatAgentChange={agents.onChatAgentChange}
         chatAgentDisabled={projectComposer.busy || updatingContext || (isSessionTransitioning && !session.projectPreparation)}
@@ -1095,6 +1098,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
         terminalDisabled={Boolean(session.projectPreparation && (
           projectComposer.busy || !projectComposer.allowed || projectComposer.checking
         ))}
+        showContextControls={!agentSetup}
         onFindOpen={chatFind.show}
       /> : null}
 
@@ -1263,7 +1267,17 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                     onPickWelcomePrompt={onPickWelcomePrompt}
                     welcomeSpotlight={activeWelcomeSpotlight}
                     welcomeOverlay={
-                      skillDiscovery ? (
+                      agentSetup ? (
+                        <AgentSetupWelcome
+                          agentName={welcomeAgent.name?.trim() || agents.displayAgentId}
+                          messages={m.agentsSettings}
+                          disabled={session.sessionRoutePending || session.showSessionLoading}
+                          onPick={(text) => {
+                            welcomeDraftSeq.current += 1;
+                            setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text });
+                          }}
+                        />
+                      ) : skillDiscovery ? (
                         <SkillDiscoveryWelcome sk={m.skills}
                           disabled={session.sessionRoutePending || session.showSessionLoading}
                           onPick={(text) => {
@@ -1371,8 +1385,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
               ) : null}
               <ReadAloudDock />
               <ChatComposer
-                placeholder={skillDiscovery ? m.skills.findPlaceholder : undefined}
-                composerContext={!embedded && !taskId && !editingUserTurn && !showConversationLoading && msgSlice.items.length === 0 ? {
+                placeholder={agentSetup ? m.agentsSettings.setupComposerPlaceholder : skillDiscovery ? m.skills.findPlaceholder : undefined}
+                composerContext={!agentSetup && !embedded && !taskId && !editingUserTurn && !showConversationLoading && msgSlice.items.length === 0 ? {
                   project: scopedProject,
                   disabled: updatingContext || projectComposer.busy || (isSessionTransitioning && !session.projectPreparation),
                   environmentPicker: session.projectPreparation ? (
@@ -1427,7 +1441,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                   (isSessionTransitioning && !session.projectPreparation) || projectComposer.busy || stream.streaming || stream.sending || session.modelConfigSaving
                 }
                 onChatAgentChange={
-                  !taskId && agents.showChatAgentSelector ? agents.onChatAgentChange : undefined
+                  !agentSetup && !taskId && agents.showChatAgentSelector ? agents.onChatAgentChange : undefined
                 }
                 currentAgentId={agents.displayAgentId}
                 voiceAgentName={welcomeAgent.name}
