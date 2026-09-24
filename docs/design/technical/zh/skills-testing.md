@@ -389,8 +389,8 @@ set -e
 
 echo "Running local skill regression tests..."
 
-# Run unit tests
-pnpm test
+# 在仓库根目录运行完整测试
+pnpm run test:all
 
 # Run integration tests
 xopc skills test --verbose

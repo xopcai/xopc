@@ -121,15 +121,16 @@ npm install -g @xopcai/xopc
 
 也可用 pnpm：`pnpm add -g @xopcai/xopc` · 国内：`npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
 
-大体积的可选运行时只在启用对应功能时安装：
+大体积的可选集成只在启用对应功能时安装：
 
 ```bash
-npm install -g @huggingface/transformers@3.8.1 sherpa-onnx-node@1.13.4
 npm install -g @composio/core@0.18.1
 npm install -g @larksuiteoapi/node-sdk@1.66.0 playwright-core@1.60.0
 ```
 
 如果 xopc 是项目依赖，请使用不带 `-g` 的相同命令。
+
+语音转文字（STT）默认关闭。xopc 不再内置本地 STT 引擎；你可以连接云服务商，或安装扩展来接入自己的本地/OpenAI 兼容转写服务。
 
 ### 更多命令
 
@@ -285,7 +286,7 @@ xopc 会接触个人上下文，也可能获得执行工具，因此能力边界
 ```bash
 pnpm install && pnpm run dev
 pnpm run dev:gateway            # 开发 gateway 使用 ~/.xopc-dev + info 日志
-pnpm run build && pnpm test && pnpm run lint
+pnpm run build && pnpm run test:all && pnpm run lint
 ```
 
 **[AGENTS.md](./AGENTS.md)** · **[CONTRIBUTING.md](./CONTRIBUTING.md)**（英文）

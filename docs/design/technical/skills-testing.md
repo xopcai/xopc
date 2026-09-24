@@ -389,8 +389,8 @@ set -e
 
 echo "Running local skill regression tests..."
 
-# Run unit tests (full suite from repo root)
-pnpm test
+# Run the full suite from the repository root
+pnpm run test:all
 
 # Run integration tests
 xopc skills test --verbose

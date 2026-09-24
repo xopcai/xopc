@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../../../../config/schema.js';
 import { resolveOAuthPath } from '../../../../../config/paths.js';
 import { PROVIDER_ENV_MAP } from '../../../../../providers/env-keys.js';
@@ -18,6 +19,7 @@ let stateDir: string;
 let context: DoctorContext;
 
 beforeEach(() => {
+  initializeTestAgentCatalog();
   stateDir = mkdtempSync(join(tmpdir(), 'xopc-doctor-auth-'));
   vi.stubEnv('XOPC_STATE_DIR', stateDir);
   for (const names of Object.values(PROVIDER_ENV_MAP)) {

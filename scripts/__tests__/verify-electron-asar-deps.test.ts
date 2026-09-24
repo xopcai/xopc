@@ -39,6 +39,6 @@ describe('verify-electron-asar-deps findDefaultAsar', () => {
 
   it('budgets for the packaged local voice and computer runtimes', async () => {
     const mod = await import('../verify-electron-asar-deps.mjs');
-    expect(mod.DEFAULT_MAX_NODE_MODULES_BYTES).toBe(224 * 1024 * 1024);
+    expect(mod.DEFAULT_MAX_NODE_MODULES_BYTES).toBe(90 * 1024 * 1024);
   });
 });

@@ -9,7 +9,8 @@ import { getMcpOAuthManager } from '../../agent/mcp/oauth/mcp-oauth-manager.js';
 import { withAgentPluginSource, isAgentPluginArchive } from '../../extensions/agent-plugins/sources.js';
 import { loadConfig } from '../../config/loader.js';
 import { getContextWithOpts } from '../context.js';
-import { removePluginCredentials, savePluginAuthBinding } from '../../extensions/agent-plugins/auth.js';
+import { savePluginAuthBinding } from '../../extensions/agent-plugins/auth.js';
+import { removePluginCredentials } from '../../extensions/agent-plugins/credentials.js';
 
 export function isAgentPluginSource(source: string): boolean {
   if (source.startsWith('https://')) return true;

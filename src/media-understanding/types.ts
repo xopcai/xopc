@@ -255,7 +255,7 @@ export interface MediaUnderstandingProvider {
    */
   requiresApiKey?: boolean;
 
-  /** Optional runtime readiness check for bundled providers such as local STT. */
+  /** Optional runtime readiness check for providers whose backing service may be unavailable. */
   isConfigured?: (options?: { model?: string }) => boolean;
 
   /** Lower number = higher priority in auto-selection. */

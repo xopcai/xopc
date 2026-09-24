@@ -18,7 +18,7 @@ import { resolveMcpTransportConfig } from "./mcp-transport-config.js";
 import { XopcMcpOAuthClientProvider } from "./oauth/mcp-oauth-provider.js";
 import { McpOAuthStore } from "./oauth/mcp-oauth-store.js";
 import { createPluginHttpFetch } from './plugin-http-fetch.js';
-import { pluginOAuthScope } from '../../extensions/agent-plugins/auth.js';
+import { pluginOAuthScope } from '../../extensions/agent-plugins/plugin-oauth-scope.js';
 
 export type ResolvedMcpTransport = {
   transport: Transport;

@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import type { GatewayService } from '../service.js';
 import { ConfigSchema } from '../../config/schema.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import {
   buildDesktopOAuthReturnUrl,
   buildOAuthCompletionReadiness,
@@ -9,6 +11,9 @@ import {
   refreshModelCatalogAfterOAuth,
   resolveOAuthLoginMethodPreference,
 } from './oauth-async.js';
+
+beforeAll(() => initializeTestAgentCatalog());
+afterAll(() => closeXopcDatabase());
 
 describe('buildDesktopOAuthReturnUrl', () => {
   it('uses a dedicated Electron callback for tunnel authorization', () => {

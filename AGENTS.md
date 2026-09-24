@@ -43,7 +43,8 @@
 pnpm install
 pnpm run dev -- <command>    # no build required for dev CLI
 pnpm run build               # Node: tsdown (`tsdown.config.ts`) + web; types: `pnpm run typecheck`
-pnpm test
+pnpm test                    # fast unit suite
+pnpm run test:all            # complete regression suite
 ```
 
 Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
@@ -279,7 +280,12 @@ Use **`xopc agents list`**, **`xopc agents add`**, **`xopc agents delete`** to m
 ## Testing
 
 ```bash
-pnpm test
+pnpm test                    # unit tests
+pnpm run test:integration
+pnpm run test:web
+pnpm run test:extensions
+pnpm run test:packages
+pnpm run test:all            # every Vitest project
 pnpm vitest run src/agent/tools/__tests__/send-media.test.ts
 pnpm vitest --watch
 pnpm vitest run --coverage

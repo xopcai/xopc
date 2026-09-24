@@ -266,14 +266,7 @@
       "refinementDesc": "转写后可选调用模型整理文本；关闭可避免额外延迟和模型用量。",
       "refinementOff": "关闭（保留原文）",
       "refinementPunctuation": "仅补标点",
-      "refinementLight": "轻度整理",
-      "localProvider": "xopc 本地语音",
-      "localModels": "本地语音模型",
-      "localModelsDesc": "只下载模型文件，识别过程完全在 xopc 内本地运行。",
-      "localRecommended": "中文推荐",
-      "localDownloading": "下载中",
-      "localInstall": "下载",
-      "localRemove": "删除"
+      "refinementLight": "轻度整理"
     },
     "tts": {
       "title": "助手语音回复（TTS）",

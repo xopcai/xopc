@@ -1,13 +1,18 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import type { Config } from '../../../config/schema.js';
 import { saveConfig } from '../../../config/loader.js';
+import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
 import { mergeTunnelConfigPatch } from '../../../tunnel/tunnel-config.js';
 
 describe('tunnel secret config', () => {
+  beforeAll(() => initializeTestAgentCatalog());
+  afterAll(() => closeXopcDatabase());
+
   it('persists registrationSecret via mergeTunnelConfigPatch', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-tunnel-secret-cli-'));
     const configPath = join(dir, 'xopc.json');

@@ -30,6 +30,7 @@ function currentGatewayHomeResponse() {
     background: [],
     backgroundCount: 0,
     decisions: [],
+    advisor: { state: 'quiet', reason: 'no_change' },
     attentionPolicy: {
       visibleDecisionCount: 0,
       suppressedDecisionCount: 0,

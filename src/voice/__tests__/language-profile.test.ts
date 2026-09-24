@@ -7,16 +7,16 @@ import {
 } from '../language-profile.js';
 
 describe('voice language profile', () => {
-  it('enables local STT with Chinese defaults without implicitly enabling TTS', () => {
+  it('keeps STT disabled by default without implicitly enabling TTS', () => {
     const config = ConfigSchema.parse({});
 
     expect(initializeVoiceDefaults(config, 'zh')).toBe(true);
 
     expect(config.tools?.media?.audio).toMatchObject({
-      enabled: true,
-      provider: 'xopc-local',
+      enabled: false,
+      provider: 'openai',
       providers: {
-        'xopc-local': { model: 'sensevoice-small', language: 'auto' },
+        openai: { model: 'gpt-4o-mini-transcribe' },
       },
     });
     expect(config.messages?.tts).toBeUndefined();
@@ -29,7 +29,7 @@ describe('voice language profile', () => {
     initializeVoiceDefaults(config, 'zh');
 
     expect(applyAutomaticVoiceLanguage(config, 'en')).toBe(true);
-    expect(config.tools?.media?.audio?.providers?.['xopc-local']?.language).toBe('en');
+    expect(config.tools?.media?.audio?.enabled).toBe(false);
     expect(config.messages?.tts?.providers?.edge?.voice).toBe('en-US-MichelleNeural');
 
     config.voice = { ...config.voice, languageMode: 'manual' };

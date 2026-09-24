@@ -1,9 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import type { Config } from '../../config/schema.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import type { ExtensionManifest } from '../types/index.js';
 import { computeBundledExtensionExtensionsPatch } from '../bundled-extension-activation.js';
 import { ExtensionLoader } from '../loader.js';
+
+beforeAll(() => initializeTestAgentCatalog());
+afterAll(() => closeXopcDatabase());
 
 describe('computeBundledExtensionExtensionsPatch', () => {
   it('returns error for unknown extension id', () => {

@@ -18,7 +18,7 @@ import { transcribe } from '../transcribe-core.js';
 describe('STT transcription outcomes', () => {
   beforeEach(() => {
     mocks.resolveSTTProviderChain.mockReset().mockReturnValue([
-      { id: 'xopc-local', model: 'sensevoice-small' },
+      { id: 'custom-stt', model: 'local-model' },
     ]);
     mocks.runAudioTranscription.mockReset();
   });
@@ -31,7 +31,7 @@ describe('STT transcription outcomes', () => {
         attachments: [{
           attachmentIndex: 0,
           attempts: [{
-            provider: 'xopc-local',
+            provider: 'custom-stt',
             type: 'provider',
             task: 'failed',
             reason: 'empty transcription/description text',
@@ -44,10 +44,10 @@ describe('STT transcription outcomes', () => {
 
     await expect(transcribe(Buffer.from('audio'), {
       enabled: true,
-      provider: 'xopc-local',
+      provider: 'custom-stt',
     })).resolves.toMatchObject({
       text: '',
-      provider: 'xopc-local',
+      provider: 'custom-stt',
       attempts: [{ reasonCode: 'no_speech' }],
     });
   });

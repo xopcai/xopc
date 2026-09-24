@@ -1,18 +1,23 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { BROWSER_CONTROL_ENDPOINT_DESCRIPTOR } from '@xopcai/browser-control-contract';
 
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import type { EndpointToolRuntime } from '../../../endpoint-tools/index.js';
 import type { MessageBus } from '../../../infra/bus/index.js';
 import { buildWorkflowChildTools } from '../workflow-child-tools.js';
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
+import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
 
 vi.mock('../../../storage/sqlite/browser-tab-binding-repository.js', () => ({
   getBrowserTabBinding: () => undefined,
 }));
 
 describe('workflow child browser tools', () => {
+  beforeAll(() => initializeTestAgentCatalog());
+  afterAll(() => closeXopcDatabase());
+
   it('uses the parent Session Chrome endpoint through the injected runtime', async () => {
     const parentConversationId = createConversation({ agentId: 'main', sourceChannel: 'webchat' }).key;
     const endpoint = {

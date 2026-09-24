@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { ConfigSchema } from '../../../src/config/schema.ts';
-import { assertSafeArtifacts, gatewayConfig, scrub, settingsFromEnv, waitForGateway } from '../scripts/run-github-eval.mjs';
+import { AgentDefaultsSchema, AgentEntrySchema } from '../../../src/agent-config/schema.ts';
+import { assertSafeArtifacts, evalAgentCatalogSeed, gatewayConfig, scrub, settingsFromEnv, waitForGateway } from '../scripts/run-github-eval.mjs';
 
 const input = { CODER_EVAL_MODEL: 'deepseek/deepseek-v4-flash', CODER_EVAL_API_KEY: 'private-test-key' };
 
@@ -22,9 +23,13 @@ describe('manual live evaluation', () => {
 
   it('uses the real config schema and disables background model work', () => {
     const config = ConfigSchema.parse(gatewayConfig(input.CODER_EVAL_MODEL, '/tmp/eval', 18790, 'local-token'));
-    expect(config.agents.default).toBe('coder');
-    expect(config.agents.defaults.models.chat).toEqual({ primary: input.CODER_EVAL_MODEL, fallbacks: [] });
-    expect(config.agents.defaults.runtime).toMatchObject({ maxTurns: 40, timeoutMs: 300000 });
+    const catalog = evalAgentCatalogSeed(input.CODER_EVAL_MODEL, '/tmp/eval');
+    const defaults = AgentDefaultsSchema.parse(catalog.defaults);
+    const agent = AgentEntrySchema.parse(catalog.agent);
+    expect(catalog.defaultAgentId).toBe('coder');
+    expect(agent).toMatchObject({ id: 'coder', workspace: '/tmp/eval' });
+    expect(defaults.models.chat).toEqual({ primary: input.CODER_EVAL_MODEL, fallbacks: [] });
+    expect(defaults.runtime).toMatchObject({ maxTurns: 40, timeoutMs: 300000 });
     expect(config.gateway.auth).toMatchObject({ mode: 'token', token: 'local-token' });
     expect(config.gateway.heartbeat).toBeUndefined();
     expect(config.userContext.enabled).toBe(false);

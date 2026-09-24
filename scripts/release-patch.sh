@@ -68,7 +68,7 @@ fi
 
 run_release_step "pnpm run build" pnpm run build
 run_release_step "pnpm run release:check-package" pnpm run release:check-package
-run_release_step "pnpm test" pnpm test
+run_release_step "pnpm run test:all" pnpm run test:all
 run_release_step "pnpm run lint" pnpm run lint
 run_release_step "pnpm -C web run react-doctor" pnpm -C web run react-doctor
 
