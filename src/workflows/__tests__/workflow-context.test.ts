@@ -29,7 +29,12 @@ describe('workflow context', () => {
 
   it('captures stable project context and keeps project instructions authoritative', async () => {
     const projects = new ProjectService();
-    const project = projects.create({ name: 'Release', instructions: 'Use the release checklist.' });
+    const project = projects.create({
+      name: 'Release',
+      description: 'Ship the desktop app.',
+      instructions: 'Use the release checklist.',
+      scope: { repository: 'xopc', branch: 'main' },
+    });
     const first = await resolveWorkflowContext({
       runId: 'run-1',
       projectId: project.id,
@@ -38,6 +43,10 @@ describe('workflow context', () => {
     });
     expect(first?.instructions).toContain('Authoritative project context');
     expect(first?.instructions).toContain('Use the release checklist.');
+    expect(first?.instructions).toContain('Brief: Ship the desktop app.');
+    expect(first?.instructions).toContain('Status: active');
+    expect(first?.instructions).toContain('repository');
+    expect(first?.instructions).toContain('xopc');
     expect(first?.instructions).not.toContain('<workflow_context');
 
     projects.update(project.id, { instructions: 'Use a changed checklist.' });

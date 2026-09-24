@@ -112,15 +112,27 @@ export function buildTaskExecutionDirective(conversationId: string): string {
     ? JSON.stringify(handoff.payload).slice(0, 12_000)
     : '';
   const contract = task.contract!;
+  const contextEdges = new TaskContextRepository().list(task.id);
+  const contextReferences = contextEdges
+    .filter((edge) => typeof edge.metadata.userAnswer !== 'string')
+    .slice(0, 40)
+    .map((edge) => {
+      const title = edge.title?.trim() ? ` (${edge.title.trim()})` : '';
+      return `- [${edge.role}] ${edge.targetKind}: ${edge.targetId.slice(0, 4_000)}${title}`;
+    });
   return [
     '<xopc_task_execution>',
     'This conversation is executing a durable task.',
     `Task: ${contract.objective}`,
+    task.body?.trim() ? `Task details: ${task.body.trim().slice(0, 12_000)}` : '',
     `Expected outputs: ${contract.expectedOutputs.join('; ')}`,
     `Remaining acceptance criteria: ${remainingCriteria.join('; ')}`,
     contract.constraints.length ? `Constraints: ${contract.constraints.join('; ')}` : '',
+    contract.assumptions.length ? `Assumptions: ${contract.assumptions.join('; ')}` : '',
+    contract.risks.length ? `Risks: ${contract.risks.join('; ')}` : '',
     contract.approvalRequired.length ? `Authority required: ${contract.approvalRequired.join('; ')}` : '',
-    ...new TaskContextRepository().list(task.id).filter((edge) => typeof edge.metadata.userAnswer === 'string')
+    contextReferences.length ? `Attached task context:\n${contextReferences.join('\n')}` : '',
+    ...contextEdges.filter((edge) => typeof edge.metadata.userAnswer === 'string')
       .slice(-20).map((edge) => `User response to ${edge.title ?? 'question'}: ${JSON.stringify(edge.metadata.userAnswer)}`),
     handoffPayload ? `Handoff snapshot: ${handoffPayload}` : '',
     'Take safe in-scope steps and produce inspectable evidence. Do not claim completion without verification.',

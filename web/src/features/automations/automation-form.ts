@@ -33,7 +33,7 @@ export type TriggerMode =
   | 'sessionUpdated'
   | 'event';
 
-export type ActionMode = 'agent' | 'workflow' | 'browser_automation';
+export type ActionMode = 'agent' | 'workflow' | 'browser_automation' | 'task_command';
 
 export interface FormState {
   name: string;
@@ -54,6 +54,7 @@ export interface FormState {
   agentId: string;
   model: string;
   instruction: string;
+  taskId: string;
   workflowId: string;
   workflowGoal: string;
   workflowInput: WorkflowRunSetupValue;
@@ -87,6 +88,7 @@ export const initialForm: FormState = {
   agentId: '',
   model: '',
   instruction: '',
+  taskId: '',
   workflowId: '',
   workflowGoal: '',
   workflowInput: {
@@ -208,7 +210,9 @@ export function buildInput(
     form.workflowInput,
   );
   const workflowGoal = form.workflowInput.goal.trim() || form.workflowGoal.trim();
-  const safetyMode = form.actionMode === 'browser_automation' ? 'auto_apply' : form.safetyMode;
+  const safetyMode = form.actionMode === 'browser_automation' || form.actionMode === 'task_command'
+    ? 'auto_apply'
+    : form.safetyMode;
   let action: AutomationAction;
   if (form.actionMode === 'workflow') {
     action = {
@@ -239,6 +243,15 @@ export function buildInput(
       kind: 'browser_automation',
       automationId: form.browserAutomationId.trim(),
       inputs: form.browserAutomationInputs,
+    };
+  } else if (form.actionMode === 'task_command') {
+    action = {
+      kind: 'task_command',
+      taskId: form.taskId.trim(),
+      command: {
+        type: 'start',
+        executor: { kind: 'agent', agentId: form.agentId.trim() },
+      },
     };
   } else {
     action = {
@@ -438,7 +451,7 @@ export function formFromAutomation(
     action.kind === 'workflow' ? workflowInputRecord(action.input) : {};
   const timeoutSeconds =
     automation.reliability?.executionTimeoutSeconds
-    ?? action.timeoutSeconds
+    ?? ('timeoutSeconds' in action ? action.timeoutSeconds : undefined)
     ?? automation.reliability?.timeoutSeconds
     ?? (action.kind === 'browser_automation' ? 600 : 1800);
 
@@ -449,9 +462,14 @@ export function formFromAutomation(
     description: automation.description ?? '',
     projectId: automation.projectId ?? '',
     actionMode: action.kind,
-    agentId: action.kind === 'browser_automation' ? '' : (action.agentId ?? ''),
+    agentId: action.kind === 'agent' || action.kind === 'workflow'
+      ? (action.agentId ?? '')
+      : action.kind === 'task_command' && action.command.type === 'start' && action.command.executor.kind === 'agent'
+        ? action.command.executor.agentId
+        : '',
     model: action.kind === 'agent' ? (action.model ?? '') : '',
     instruction: action.kind === 'agent' ? action.instruction : '',
+    taskId: action.kind === 'task_command' ? action.taskId : '',
     workflowId: action.kind === 'workflow' ? action.workflowId : '',
     workflowGoal: action.kind === 'workflow' ? (action.goal ?? '') : '',
     browserAutomationId: action.kind === 'browser_automation' ? action.automationId : '',
@@ -530,6 +548,11 @@ export function buildAutomationEditInput(
     input.action.kind === 'browser_automation'
   ) {
     action = { ...automation.action, ...input.action };
+  } else if (
+    automation.action.kind === 'task_command' &&
+    input.action.kind === 'task_command'
+  ) {
+    action = input.action;
   }
   return {
     ...input,
