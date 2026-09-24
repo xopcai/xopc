@@ -94,7 +94,7 @@ export function PageTabs<T extends string>({
             title={title}
             className={cn(
               'touch-target relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
               interaction.press,
               selected ? selectedClassName : unselectedClassName,
               onReorder && 'cursor-grab active:cursor-grabbing',
