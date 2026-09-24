@@ -71,6 +71,33 @@ describe('automation buildInput', () => {
     expect(formFromAutomation(input).model).toBe('anthropic/claude-sonnet-4');
   });
 
+  it('builds and restores a scheduled task action with its executor', () => {
+    const input = buildInput({
+      ...initialForm,
+      name: 'Run release task every morning',
+      triggerMode: 'daily',
+      taskId: 'task-release',
+      actionMode: 'task_command',
+      agentId: 'release-agent',
+      safetyMode: 'suggest_only',
+    }, null);
+
+    expect(input.action).toEqual({
+      kind: 'task_command',
+      taskId: 'task-release',
+      command: {
+        type: 'start',
+        executor: { kind: 'agent', agentId: 'release-agent' },
+      },
+    });
+    expect(input.safety).toEqual({ mode: 'auto_apply' });
+    expect(formFromAutomation(input)).toMatchObject({
+      actionMode: 'task_command',
+      taskId: 'task-release',
+      agentId: 'release-agent',
+    });
+  });
+
   it('preserves hidden advanced fields when editing an existing automation', () => {
     const automation: Automation = {
       id: 'automation-1',

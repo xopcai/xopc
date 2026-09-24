@@ -40,9 +40,15 @@ function projectText(id: string): { title: string; version: string; projectId: s
     projectId: project.id,
     text: [
       `# Project: ${project.name}`,
-      project.brief ? `Brief: ${project.brief}` : '',
+      `Status: ${project.status}`,
+      `Health: ${project.health}`,
+      project.effectiveWorkspaceRoot || project.workspaceRoot
+        ? `Workspace root: ${project.effectiveWorkspaceRoot ?? project.workspaceRoot}`
+        : '',
+      project.brief || project.description ? `Brief: ${project.brief ?? project.description}` : '',
       project.instructions ? `Instructions: ${project.instructions}` : '',
       project.outcome ? `Outcome: ${project.outcome}` : '',
+      Object.keys(project.scope).length ? `Scope:\n${JSON.stringify(project.scope)}` : '',
       project.successCriteria.length ? `Success criteria:\n${project.successCriteria.map((item) => `- ${item}`).join('\n')}` : '',
       project.nonGoals.length ? `Non-goals:\n${project.nonGoals.map((item) => `- ${item}`).join('\n')}` : '',
     ].filter(Boolean).join('\n\n'),

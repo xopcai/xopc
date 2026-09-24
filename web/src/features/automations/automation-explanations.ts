@@ -96,6 +96,7 @@ function actionExplanation(action: AutomationAction, labels: AutomationsMessages
     return formatAutomationMessage(labels.explain.actionWorkflow, { workflowId: action.workflowId });
   }
   if (action.kind === 'browser_automation') return `Runs browser automation ${action.automationId}.`;
+  if (action.kind === 'task_command') return `Starts task ${action.taskId}.`;
   return labels.explain.actionAgent;
 }
 

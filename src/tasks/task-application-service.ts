@@ -176,6 +176,7 @@ export class TaskApplicationService {
     expectedVersion: number;
     command: TaskCommand;
     actor?: ActorRef;
+    triggerContext?: Record<string, unknown>;
   }): TaskApplicationResult {
     const actor = input.actor ?? { kind: 'user' };
     const task = this.#tasks.get(input.taskId);
@@ -208,6 +209,7 @@ export class TaskApplicationService {
             scheduleAt: input.command.scheduleAt,
             actor,
             correlationId: input.idempotencyKey,
+            triggerContext: input.triggerContext,
           });
           break;
         case 'request_review':
@@ -475,6 +477,7 @@ export class TaskApplicationService {
       scheduleAt?: number;
       actor: ActorRef;
       correlationId: string;
+      triggerContext?: Record<string, unknown>;
     },
   ): TaskApplicationResult {
     const task = this.#tasks.get(taskId);
@@ -532,6 +535,7 @@ export class TaskApplicationService {
             ? 'signal'
             : options.actor.kind,
         actor: options.actor,
+        ...(options.triggerContext ? { context: options.triggerContext } : {}),
       },
       correlationId: options.correlationId,
       idempotencyKey: options.idempotencyKey,
