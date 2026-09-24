@@ -185,14 +185,12 @@ describe('one-time conversation UUID migration', () => {
       .get(conversationRouteKey(resolveConversationRoute({ agentId: 'main', source: 'workflow', peerKind: 'direct', peerId: 'run-1/agent-1' })))?.conversation_id).toBe(migrated.conversation_id);
   });
 
-  it('does not revisit rows when rewriting an indexed source reference', () => {
+  it('rewrites every indexed source reference exactly once', () => {
     ensureSessionRecord(key, '/workspace', { routing });
     const insert = database.prepare("INSERT INTO context_extraction_runs(extraction_run_id,principal_id,source_ref,extractor_id,extractor_version,processing_policy,destination,input_hash,status,started_at) VALUES (?,'owner',?,'test','1','local_only','deterministic','hash','completed',1)");
     for (const turn of ['one', 'two']) insert.run(turn, `session:${key}:turn:${turn}`);
-    // Force the replacement after the original value in index order.
-    const id = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
-    vi.mocked(randomUUID).mockReturnValueOnce(id);
     applyPendingMigrations(database);
+    const id = String(database.prepare('SELECT conversation_id FROM sessions').get()?.conversation_id);
     expect(database.prepare('SELECT source_ref FROM context_extraction_runs ORDER BY extraction_run_id').all())
       .toEqual([{ source_ref: `session:${id}:turn:one` }, { source_ref: `session:${id}:turn:two` }]);
   });

@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -6,16 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { windowsDatabaseOwners } from '../migrations/conversation-windows-owners.js';
 
-vi.mock('node:child_process', async (importOriginal) => ({
-  ...await importOriginal<typeof import('node:child_process')>(),
-  execFileSync: vi.fn(),
-}));
-
 describe('windowsDatabaseOwners', () => {
   const directories: string[] = [];
 
   afterEach(() => {
-    vi.mocked(execFileSync).mockReset();
     for (const directory of directories.splice(0)) {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -26,11 +19,11 @@ describe('windowsDatabaseOwners', () => {
     directories.push(directory);
     const databasePath = join(directory, '会话.db');
     writeFileSync(databasePath, '');
-    vi.mocked(execFileSync).mockReturnValue(`41\n${process.pid}\n73\n`);
+    const execute = vi.fn(() => `41\n${process.pid}\n73\n`);
 
-    expect(windowsDatabaseOwners(databasePath)).toEqual(['41', '73']);
+    expect(windowsDatabaseOwners(databasePath, execute)).toEqual(['41', '73']);
 
-    const [executable, args, options] = vi.mocked(execFileSync).mock.calls[0]!;
+    const [executable, args, options] = execute.mock.calls[0]!;
     expect(executable).toBe('powershell.exe');
     expect(args).toEqual(expect.arrayContaining(['-NoProfile', '-NonInteractive', '-Command']));
     const script = String(args?.at(-1));

@@ -63,9 +63,18 @@ public static class XopcDatabaseOwners {
 [XopcDatabaseOwners]::Read([string[]](ConvertFrom-Json $env:XOPC_CUTOVER_DATABASE_FILES)) | ForEach-Object { $_ }
 `;
 
-export function windowsDatabaseOwners(databasePath: string): string[] {
+export function windowsDatabaseOwners(
+  databasePath: string,
+  execute: (file: string, args: string[], options: {
+    encoding: 'utf8';
+    timeout: number;
+    windowsHide: boolean;
+    env: NodeJS.ProcessEnv;
+    stdio: ['ignore', 'pipe', 'pipe'];
+  }) => string = execFileSync,
+): string[] {
   const paths = [databasePath, `${databasePath}-wal`, `${databasePath}-shm`].filter(existsSync).map(path => resolve(path));
-  const output = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+  const output = execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
     encoding: 'utf8', timeout: 30_000, windowsHide: true,
     env: { ...process.env, XOPC_CUTOVER_DATABASE_FILES: JSON.stringify(paths) },
     stdio: ['ignore', 'pipe', 'pipe'],
