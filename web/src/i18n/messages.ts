@@ -3,13 +3,7 @@ import type { StoredLanguage } from '@/lib/storage';
 import { en, zh } from './locales/bundle';
 
 export type Tab =
-  | 'chat'
   | 'sessions'
-  | 'automations'
-  | 'skills'
-  | 'connectors'
-  | 'channels'
-  | 'agents'
   | 'logs'
   | 'settingsImports'
   | 'settingsOverview'
@@ -49,8 +43,7 @@ export type SettingsSectionId =
   | 'keyboard-shortcuts'
   | 'system'
   | 'desktop-pet'
-  | 'desktop-app'
-  | 'skills';
+  | 'desktop-app';
 
 export type MessageBundle = typeof en;
 

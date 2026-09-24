@@ -63,7 +63,6 @@ import {
 import { createProjectSession, fetchProjectSessions } from '@/features/projects/api';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
-import { useNavOrderStore } from '@/stores/nav-order-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { PageContextCaptureButton } from '@/features/chat/context/page-context-capture-button';
 import { formatShortMonthDateTime } from '@/lib/date-formatters';
@@ -94,7 +93,6 @@ export function LocalAppWorkbenchPage() {
   const language = useLocaleStore((state) => state.language);
   const navigate = useNavigate();
   const { mutate } = useSWRConfig();
-  const moveToFront = useNavOrderStore((state) => state.moveToFront);
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const { data: app, isLoading, error, mutate: mutateApp } = useSWR(!isNew && appId ? ['local-app', appId] : null, () => getLocalApp(appId!));
@@ -420,7 +418,6 @@ export function LocalAppWorkbenchPage() {
       await mutateApp(installed, { revalidate: false });
       await mutateValidation();
       await Promise.all([mutate('local-apps-list'), mutate('gateway-extensions-list')]);
-      moveToFront(`ext:${installed.extensionId}:app`);
       setReviewOpen(false);
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : String(cause));
@@ -429,7 +426,7 @@ export function LocalAppWorkbenchPage() {
     }
   }
 
-  async function applyLifecycleAction(action: () => Promise<LocalAppDetail>, pin = false) {
+  async function applyLifecycleAction(action: () => Promise<LocalAppDetail>) {
     setBusy(true);
     setActionError(null);
     try {
@@ -437,7 +434,6 @@ export function LocalAppWorkbenchPage() {
       await mutateApp(next, { revalidate: false });
       await mutateValidation();
       await Promise.all([mutate('local-apps-list'), mutate('gateway-extensions-list')]);
-      if (pin) moveToFront(`ext:${next.extensionId}:app`);
       return true;
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : String(cause));
@@ -449,12 +445,12 @@ export function LocalAppWorkbenchPage() {
 
   async function onSetEnabled(enabled: boolean) {
     if (!app) return;
-    await applyLifecycleAction(() => setLocalAppEnabled(app.id, enabled), enabled);
+    await applyLifecycleAction(() => setLocalAppEnabled(app.id, enabled));
   }
 
   async function onRollback(releaseId: string) {
     if (!app) return;
-    await applyLifecycleAction(() => rollbackLocalApp(app.id, releaseId), true);
+    await applyLifecycleAction(() => rollbackLocalApp(app.id, releaseId));
   }
 
   async function onUninstall() {

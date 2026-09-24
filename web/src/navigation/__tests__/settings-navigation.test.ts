@@ -43,8 +43,6 @@ describe('settings navigation information architecture', () => {
     expect(pathForTab('settingsModels')).toBe('/settings/capabilities/models');
     expect(pathForTab('settingsVoice')).toBe('/settings/capabilities/voice');
     expect(pathForTab('settingsSearch')).toBe('/settings/capabilities/search');
-    expect(pathForTab('agents')).toBe('/capabilities/agents');
-    expect(pathForTab('channels')).toBe('/capabilities/channels');
     expect(pathForTab('settingsComputerUse')).toBe('/settings/computer-use');
     expect(isSettingsTabActiveAtPath('settingsComputerUse', '/settings/computer-use')).toBe(true);
     expect(isSettingsTabActiveAtPath('settingsAgentBrowser', '/settings/computer-use')).toBe(false);

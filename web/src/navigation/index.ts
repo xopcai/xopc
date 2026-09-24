@@ -18,8 +18,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsDevices'
   | 'settingsHeartbeat'
   | 'settingsTunnel'
-  | 'settingsShares'
-  | 'skills',
+  | 'settingsShares',
   SettingsSectionId
 > = {
   settingsImports: 'imports',
@@ -36,7 +35,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsHeartbeat: 'heartbeat',
   settingsTunnel: 'remote-access',
   settingsShares: 'shares',
-  skills: 'skills',
 };
 
 function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
@@ -146,13 +144,7 @@ export function browserDocsUrl(language: StoredLanguage): string {
 
 /** Path for React Router `to` prop (hash router, no `#`). */
 export function pathForTab(tab: Tab): string {
-  if (tab === 'chat') return '/chat';
-  if (tab === 'agents') return '/capabilities/agents';
-  if (tab === 'automations') return '/automations';
   if (tab === 'settingsKeyboardShortcuts') return '/settings/keyboard-shortcuts';
-  if (tab === 'skills') return '/capabilities/skills';
-  if (tab === 'connectors') return '/capabilities/connectors';
-  if (tab === 'channels') return '/capabilities/channels';
   if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
   if (tab === 'settingsComputerUse') return '/settings/computer-use';
   if (tab === 'settingsModels') return capabilitySettingsPath('models');

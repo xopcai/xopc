@@ -1,5 +1,6 @@
 export const loadSessionsPage = () => import('@/pages/sessions-page');
 export const loadAutomationsPage = () => import('@/pages/automations-page');
+export const loadScenesPage = () => import('@/features/scenes/scenes-page');
 export const loadBrowserAutomationsPage = () => import('@/pages/browser-automations-page');
 export const loadHomePage = () => import('@/pages/home-page');
 export const loadTaskDetailPage = () => import('@/pages/task-detail-page');
@@ -85,6 +86,7 @@ export function preloadRouteForPath(to: string) {
   if (path === '/capabilities' || path.startsWith('/capabilities/')) return preload(loadCapabilitiesPage);
   if (path === '/user-model') return preload(loadUserModelPage);
   if (path === '/automations') return preload(loadAutomationsPage);
+  if (path === '/scenes' || path.startsWith('/scenes/')) return preload(loadScenesPage);
   if (path === '/browser-automations') return preload(loadBrowserAutomationsPage);
   if (path === '/') return preload(loadHomePage);
   if (path.startsWith('/tasks/')) return preload(loadTaskDetailPage);

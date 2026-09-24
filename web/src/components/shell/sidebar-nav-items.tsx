@@ -1,407 +1,58 @@
-import * as Popover from '@radix-ui/react-popover';
-import { AudioLines, MoreHorizontal } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
-import type { DragEvent, ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Boxes, BriefcaseBusiness, Layers3, Zap } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 
-import { openDiscussionCapture } from '@/features/discussions/discussion-events';
-import { useUiExtensions } from '@/features/extensions/extension-provider';
-import { extensionPagePath } from '@/features/extensions/extension-paths';
-import { resolveLucideIcon } from '@/features/extensions/extension-nav-icon';
-import type { ExtensionUiInfo } from '@/features/extensions/types';
-import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { preloadRouteForPath } from '@/lib/route-preload';
 import {
-  builtinNavDefsForFeatures,
-  reconcileNavOrder,
-  type BuiltinNavId,
-  type NavItem,
-} from '@/navigation/sidebar-nav-items';
-import { useGatewayStore } from '@/stores/gateway-store';
+  PRODUCT_DOMAINS,
+  productDomainAtPath,
+  type ProductDomainId,
+} from '@/navigation/product-navigation';
 import { useLocaleStore } from '@/stores/locale-store';
-import { useNavOrderStore } from '@/stores/nav-order-store';
 
-const DRAG_MIME = 'text/plain';
-const DT_PREFIX = 'xopc-nav:';
-
-type OverflowGroupId = 'work' | 'capabilities' | 'build';
-
-const OVERFLOW_GROUP_BY_BUILTIN: Record<BuiltinNavId, OverflowGroupId> = {
-  'builtin:home': 'work',
-  'builtin:scenes': 'work',
-  'builtin:projects': 'work',
-  'builtin:notes': 'work',
-  'builtin:automations': 'work',
-  'builtin:workflows': 'work',
-  'builtin:browserAutomations': 'work',
-  'builtin:capabilities': 'capabilities',
-  'builtin:localApps': 'build',
-};
-
-function overflowGroupId(item: NavItem): OverflowGroupId {
-  if (item.kind === 'extension') return 'build';
-  return OVERFLOW_GROUP_BY_BUILTIN[item.id as BuiltinNavId] ?? 'build';
-}
-
-function dragPayload(id: string): string {
-  return `${DT_PREFIX}${id}`;
-}
-
-function parseDragPayload(raw: string): string | null {
-  if (!raw.startsWith(DT_PREFIX)) return null;
-  return raw.slice(DT_PREFIX.length);
-}
-
-/** Insert before/after based on cursor Y relative to the row midpoint. */
-function dropPosition(event: DragEvent<HTMLElement>): 'before' | 'after' {
-  const rect = event.currentTarget.getBoundingClientRect();
-  return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
-}
-
-function navRowClass(
-  { isActive }: { isActive: boolean },
-  collapsed: boolean,
-  dragging: boolean,
-  dropHint: 'before' | 'after' | null,
-) {
-  return cn(
-    'group relative flex w-full items-center text-sm font-medium leading-6 transition-colors duration-200 ease-out',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-    collapsed ? 'justify-center rounded-xl p-2.5' : 'gap-2 rounded-lg px-3 py-2 text-left',
-    isActive ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-    dragging && 'opacity-40',
-    dropHint === 'before' && 'shadow-[inset_0_2px_0_0_var(--color-accent)]',
-    dropHint === 'after' && 'shadow-[inset_0_-2px_0_0_var(--color-accent)]',
-  );
-}
-
-function popoverRowClass(
-  { isActive }: { isActive: boolean },
-  dragging: boolean,
-  dropHint: 'before' | 'after' | null,
-) {
-  return cn(
-    'group relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium leading-5 transition-colors',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-    isActive ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-    dragging && 'opacity-40',
-    dropHint === 'before' && 'shadow-[inset_0_2px_0_0_var(--color-accent)]',
-    dropHint === 'after' && 'shadow-[inset_0_-2px_0_0_var(--color-accent)]',
-  );
-}
-
-function NavIcon({ item, collapsed }: { item: NavItem; collapsed?: boolean }) {
-  const { Icon, letter } = item;
-  const size = collapsed ? 'size-4' : 'size-4';
-  if (Icon) {
-    return <Icon className={cn(size, 'shrink-0 opacity-90')} strokeWidth={1.75} aria-hidden />;
-  }
-  return (
-    <span
-      className={cn(size, 'flex shrink-0 items-center justify-center text-[10px] font-bold opacity-70')}
-      aria-hidden
-    >
-      {(letter ?? item.label.charAt(0)).toUpperCase()}
-    </span>
-  );
-}
-
-function collectExtensionNavItems(extensions: readonly ExtensionUiInfo[]): NavItem[] {
-  const out: NavItem[] = [];
-  for (const extension of extensions) {
-    // Hide nav entries the user has explicitly turned off, even while the
-    // gateway process keeps the extension loaded pending a restart. See
-    // `extensionUiUnlocked()` in extension-provider.tsx: it intentionally
-    // keeps `active && !activationEligible` extensions visible to other
-    // surfaces (command palette, /extensions), so we narrow the rule here.
-    if (extension.activationEligible === false) continue;
-    const pages = extension.ui?.contributions?.pages;
-    if (!pages) continue;
-    for (const page of pages) {
-      if (!page.showInNav) continue;
-      const Icon = page.navIcon ? resolveLucideIcon(page.navIcon) : undefined;
-      out.push({
-        id: `ext:${extension.id}:${page.id}`,
-        kind: 'extension',
-        label: page.title,
-        to: extensionPagePath(extension.id, page),
-        Icon,
-        letter: page.title.charAt(0),
-        title: page.title,
-      });
-    }
-  }
-  return out;
-}
+const DOMAIN_ICONS = {
+  work: BriefcaseBusiness,
+  automation: Zap,
+  capabilities: Layers3,
+  apps: Boxes,
+} as const satisfies Record<ProductDomainId, typeof BriefcaseBusiness>;
 
 export function SidebarNavItems({
   collapsed = false,
   onNavigate,
-  visibleLimit,
-  afterVisible,
 }: {
   collapsed?: boolean;
   onNavigate?: () => void;
-  visibleLimit?: number;
-  afterVisible?: ReactNode;
 }) {
-  const language = useLocaleStore((s) => s.language);
-  const m = messages(language);
+  const { pathname } = useLocation();
+  const language = useLocaleStore((state) => state.language);
+  const copy = messages(language).productNavigation;
+  const activeDomain = productDomainAtPath(pathname);
 
-  const uiExtensions = useUiExtensions();
-  const gatewaySession = useGatewayStore((state) => state.conversationId);
-  const gatewayConfig = useGatewayConfigSwr(Boolean(gatewaySession));
-  const scenesEnabled = (gatewayConfig.data?.payload?.config as { gateway?: { scenes?: { enabled?: boolean } } } | undefined)
-    ?.gateway?.scenes?.enabled === true;
-  const order = useNavOrderStore((s) => s.order);
-  const setOrder = useNavOrderStore((s) => s.setOrder);
-
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [hoverTarget, setHoverTarget] = useState<{ id: string; position: 'before' | 'after' } | null>(null);
-  const [moreHover, setMoreHover] = useState(false);
-  const [popoverOpen, setPopoverOpen] = useState(false);
-
-  const available = useMemo<NavItem[]>(() => {
-    const builtins: NavItem[] = builtinNavDefsForFeatures(scenesEnabled).map((def) => {
-      const labelKey = def.id.slice('builtin:'.length) as 'scenes' | 'home' | 'projects' | 'localApps' | 'capabilities' | 'automations' | 'browserAutomations' | 'notes' | 'workflows';
-      return {
-        id: def.id,
-        kind: 'builtin',
-        label: m.nav[labelKey],
-        to: def.to,
-        Icon: def.Icon,
-      };
-    });
-    const ext = collectExtensionNavItems(uiExtensions);
-    return [...builtins, ...ext];
-  }, [m, scenesEnabled, uiExtensions]);
-
-  const reconciled = useMemo(
-    () => reconcileNavOrder(available, order, visibleLimit),
-    [available, order, visibleLimit],
-  );
-  const orderedIds = useMemo(
-    () => [...reconciled.visible, ...reconciled.overflow].map((item) => item.id),
-    [reconciled],
-  );
-  const overflowGroups = useMemo(() => {
-    const grouped: Record<OverflowGroupId, NavItem[]> = {
-      work: [],
-      capabilities: [],
-      build: [],
-    };
-    for (const item of reconciled.overflow) grouped[overflowGroupId(item)].push(item);
-    return grouped;
-  }, [reconciled.overflow]);
-
-  const onDragStart = useCallback((id: string) => (e: DragEvent<HTMLElement>) => {
-    e.dataTransfer.setData(DRAG_MIME, dragPayload(id));
-    e.dataTransfer.effectAllowed = 'move';
-    setDraggingId(id);
-  }, []);
-
-  const onDragEnd = useCallback(() => {
-    setDraggingId(null);
-    setHoverTarget(null);
-    setMoreHover(false);
-  }, []);
-
-  const onRowDragOver = useCallback((id: string) => (e: DragEvent<HTMLElement>) => {
-    if (!draggingId) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    const position = dropPosition(e);
-    if (hoverTarget?.id === id && hoverTarget.position === position) return;
-    setHoverTarget({ id, position });
-  }, [draggingId, hoverTarget]);
-
-  const onRowDrop = useCallback((id: string) => (e: DragEvent<HTMLElement>) => {
-    e.preventDefault();
-    const raw = e.dataTransfer.getData(DRAG_MIME);
-    const dragged = parseDragPayload(raw);
-    if (!dragged || dragged === id) {
-      onDragEnd();
-      return;
-    }
-    const withoutDragged = orderedIds.filter((itemId) => itemId !== dragged);
-    const targetIndex = withoutDragged.indexOf(id);
-    if (targetIndex === -1) {
-      onDragEnd();
-      return;
-    }
-    const insertIndex = dropPosition(e) === 'before' ? targetIndex : targetIndex + 1;
-    setOrder([
-      ...withoutDragged.slice(0, insertIndex),
-      dragged,
-      ...withoutDragged.slice(insertIndex),
-    ]);
-    onDragEnd();
-  }, [onDragEnd, orderedIds, setOrder]);
-
-  const onMoreDragOver = useCallback((e: DragEvent<HTMLElement>) => {
-    if (!draggingId) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setMoreHover(true);
-  }, [draggingId]);
-
-  const onMoreDragLeave = useCallback(() => setMoreHover(false), []);
-
-  const onMoreDrop = useCallback((e: DragEvent<HTMLElement>) => {
-    e.preventDefault();
-    const raw = e.dataTransfer.getData(DRAG_MIME);
-    const dragged = parseDragPayload(raw);
-    if (dragged) setOrder([...orderedIds.filter((id) => id !== dragged), dragged]);
-    onDragEnd();
-  }, [onDragEnd, orderedIds, setOrder]);
-
-  const onNavIntent = useCallback((to: string) => {
-    preloadRouteForPath(to);
-  }, []);
-
-  function renderRailRow(item: NavItem): ReactNode {
-    const dragging = draggingId === item.id;
-    const dropHint = hoverTarget?.id === item.id ? hoverTarget.position : null;
+  return PRODUCT_DOMAINS.map((domain) => {
+    const Icon = DOMAIN_ICONS[domain.id];
+    const label = copy.domains[domain.id];
+    const active = activeDomain === domain.id;
     return (
-      <NavLink
-        key={item.id}
-        to={item.to}
-        end={item.to === '/'}
-        draggable
-        onDragStart={onDragStart(item.id)}
-        onDragEnd={onDragEnd}
-        onDragOver={onRowDragOver(item.id)}
-        onDrop={onRowDrop(item.id)}
-        className={(props) => navRowClass(props, collapsed, dragging, dropHint)}
-        title={item.title ?? item.label}
-        onMouseEnter={() => onNavIntent(item.to)}
-        onFocus={() => onNavIntent(item.to)}
-        onClick={() => onNavigate?.()}
+      <Link
+        key={domain.id}
+        to={domain.path}
+        aria-current={active ? 'page' : undefined}
+        className={cn(
+          'flex w-full items-center text-sm font-medium leading-6 transition-colors duration-200 ease-out',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+          collapsed ? 'justify-center rounded-xl p-2.5' : 'gap-2 rounded-lg px-3 py-2 text-left',
+          active ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+        )}
+        title={label}
+        onMouseEnter={() => preloadRouteForPath(domain.path)}
+        onFocus={() => preloadRouteForPath(domain.path)}
+        onClick={onNavigate}
       >
-        <NavIcon item={item} collapsed={collapsed} />
-        {!collapsed ? <span className="truncate">{item.label}</span> : null}
-      </NavLink>
+        <Icon className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+        {!collapsed ? <span className="truncate">{label}</span> : null}
+      </Link>
     );
-  }
-
-  function renderMoreButton(): ReactNode {
-    const groupLabels: Record<OverflowGroupId, string> = {
-      work: m.sidebar.moreGroupWork,
-      capabilities: m.sidebar.moreGroupCapabilities,
-      build: m.sidebar.moreGroupBuild,
-    };
-    const groups: OverflowGroupId[] = ['capabilities', 'work', 'build'];
-
-    return (
-      <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
-        <Popover.Trigger asChild>
-          <button
-            type="button"
-            onDragOver={onMoreDragOver}
-            onDragLeave={onMoreDragLeave}
-            onDrop={onMoreDrop}
-            className={cn(
-              'flex w-full items-center text-sm font-medium leading-6 transition-colors duration-200 ease-out',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-              collapsed ? 'justify-center rounded-xl p-2.5' : 'gap-2 rounded-lg px-3 py-2 text-left',
-              popoverOpen
-                ? 'bg-surface-hover text-fg'
-                : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-              moreHover && 'ring-2 ring-accent ring-offset-2 ring-offset-surface-base',
-            )}
-            aria-label={m.sidebar.moreAppsAria}
-            title={m.sidebar.moreApps}
-          >
-            <MoreHorizontal className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-            {!collapsed ? <span className="truncate">{m.sidebar.moreApps}</span> : null}
-          </button>
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            side="right"
-            align="start"
-            sideOffset={8}
-            collisionPadding={8}
-            className={cn(
-              'z-50 min-w-[14rem] max-w-[20rem] rounded-lg border border-edge bg-surface-panel p-1 shadow-md',
-            )}
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
-            <nav className="flex flex-col gap-1" aria-label={m.sidebar.moreAppsAria}>
-              {groups.map((groupId) => {
-                const items = overflowGroups[groupId];
-                if (items.length === 0 && groupId !== 'work') return null;
-                return (
-                  <section key={groupId} aria-labelledby={`sidebar-more-${groupId}`}>
-                    <h3
-                      id={`sidebar-more-${groupId}`}
-                      className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-subtle"
-                    >
-                      {groupLabels[groupId]}
-                    </h3>
-                    <ul className="flex flex-col gap-0.5" role="list">
-                      {groupId === 'work' ? (
-                        <li className="contents">
-                          <button
-                            type="button"
-                            className={popoverRowClass({ isActive: false }, false, null)}
-                            onClick={() => {
-                              setPopoverOpen(false);
-                              openDiscussionCapture();
-                              onNavigate?.();
-                            }}
-                          >
-                            <AudioLines className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-                            <span className="truncate">{m.notes.discussionCapture.title}</span>
-                          </button>
-                        </li>
-                      ) : null}
-                      {items.map((item) => {
-                        const dragging = draggingId === item.id;
-                        const dropHint = hoverTarget?.id === item.id ? hoverTarget.position : null;
-                        return (
-                          <li key={item.id} className="contents">
-                            <NavLink
-                              to={item.to}
-                              end={item.to === '/'}
-                              draggable
-                              onDragStart={onDragStart(item.id)}
-                              onDragEnd={onDragEnd}
-                              onDragOver={onRowDragOver(item.id)}
-                              onDrop={onRowDrop(item.id)}
-                              className={(props) => popoverRowClass(props, dragging, dropHint)}
-                              title={item.title ?? item.label}
-                              onMouseEnter={() => onNavIntent(item.to)}
-                              onFocus={() => onNavIntent(item.to)}
-                              onClick={() => {
-                                setPopoverOpen(false);
-                                onNavigate?.();
-                              }}
-                            >
-                              <NavIcon item={item} />
-                              <span className="truncate">{item.label}</span>
-                            </NavLink>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </section>
-                );
-              })}
-            </nav>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
-    );
-  }
-
-  return (
-    <>
-      {reconciled.visible.map(renderRailRow)}
-      {afterVisible}
-      {reconciled.hasOverflow ? renderMoreButton() : null}
-    </>
-  );
+  });
 }
