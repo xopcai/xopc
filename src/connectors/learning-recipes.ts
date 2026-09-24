@@ -34,9 +34,13 @@ export function buildConnectorLearningArguments(
   }
   if (plan.toolkit === 'gmail') {
     const after = cursor?.checkpoint ? Math.floor(Date.parse(cursor.checkpoint) / 1_000) : Number.NaN;
+    const baseQuery = typeof stream.arguments.query === 'string' ? stream.arguments.query.trim() : '';
+    const incrementalQuery = Number.isFinite(after) ? `after:${after}` : '';
     return {
       ...stream.arguments,
-      ...(Number.isFinite(after) ? { query: `after:${after} -in:spam -in:trash` } : {}),
+      ...((baseQuery || incrementalQuery)
+        ? { query: [baseQuery, incrementalQuery, '-in:spam', '-in:trash'].filter(Boolean).join(' ') }
+        : {}),
       ...(cursor?.pageToken ? { page_token: cursor.pageToken } : {}),
     };
   }
@@ -65,15 +69,16 @@ const PLANS: Record<string, ConnectorLearningPlan> = {
   gmail: {
     toolkit: 'gmail',
     identityProbe: { actionId: 'GMAIL_GET_PROFILE' },
-    streams: [{
-      scope: 'messages', actionId: 'GMAIL_FETCH_EMAILS', kind: 'activity',
-      arguments: {
-        max_results: 30,
-        include_payload: true,
-        verbose: false,
-        query: 'newer_than:30d -in:spam -in:trash',
+    streams: [
+      {
+        scope: 'sent-messages', actionId: 'GMAIL_FETCH_EMAILS', kind: 'activity',
+        arguments: { max_results: 30, include_payload: true, verbose: false, query: 'in:sent newer_than:30d' },
       },
-    }],
+      {
+        scope: 'messages', actionId: 'GMAIL_FETCH_EMAILS', kind: 'activity',
+        arguments: { max_results: 30, include_payload: true, verbose: false, query: 'newer_than:30d -in:sent' },
+      },
+    ],
     bootstrapWindowDays: 30,
     intervalMinutes: 15,
   },

@@ -16,6 +16,7 @@ export interface MemoryMaintenanceMetrics {
   needsReview: number;
   activated: number;
   expiredPriorities: number;
+  expiredObservations: number;
   archived: number;
   repairedIndexes: number;
 }
@@ -47,6 +48,7 @@ function emptyMetrics(): MemoryMaintenanceMetrics {
     needsReview: 0,
     activated: 0,
     expiredPriorities: 0,
+    expiredObservations: 0,
     archived: 0,
     repairedIndexes: 0,
   };
@@ -82,6 +84,27 @@ function addDecision(
     .run(randomUUID(), runId, objectType, objectId, action, reason,
       before === undefined ? null : JSON.stringify(before),
       after === undefined ? null : JSON.stringify(after), now);
+}
+
+function purgeExpiredObservations(
+  db: DatabaseSync,
+  runId: string,
+  principalId: string,
+  now: number,
+  limit: number,
+  metrics: MemoryMaintenanceMetrics,
+): void {
+  const rows = db.prepare(`SELECT observation_id, delete_after FROM user_model_observations
+    WHERE principal_id = ? AND delete_after IS NOT NULL AND delete_after <= ?
+    ORDER BY delete_after, observation_id LIMIT ?`)
+    .all(principalId, now, limit) as Array<{ observation_id: string; delete_after: number }>;
+  metrics.scanned += rows.length;
+  for (const row of rows) {
+    db.prepare('DELETE FROM user_model_observations WHERE observation_id = ?').run(row.observation_id);
+    addDecision(db, runId, 'evidence', row.observation_id, 'deleted', 'observation_retention_expired', row,
+      undefined, now);
+    metrics.expiredObservations += 1;
+  }
 }
 
 function transitionAssertions(
@@ -358,6 +381,7 @@ export function runMemoryMaintenance(input: RunMemoryMaintenanceInput): MemoryMa
       transitionAssertions(db, runId, principalId, now, limit, metrics);
       transitionPriorities(db, runId, principalId, now, limit, metrics);
       transitionKnowledge(db, runId, principalId, now, limit, metrics);
+      purgeExpiredObservations(db, runId, principalId, now, limit, metrics);
       if (input.jobType === 'daily_reconciliation' || input.jobType === 'manual_repair') {
         reconcileEvidence(db, runId, principalId, now, limit, evidenceThreshold, metrics);
         activateKnowledge(db, runId, principalId, now, limit, metrics);

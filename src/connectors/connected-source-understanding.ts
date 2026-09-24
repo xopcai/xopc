@@ -11,11 +11,14 @@ import {
 import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
 import { reconcileAssertion } from '../user-model/index.js';
 import { claimRegisteredExtraction } from '../user-context/extraction/registry.js';
-import type { UnderstandingSourceItem } from '../user-context/sources/types.js';
+import { getActiveUnderstandingConsent } from '../user-context/sources/consent-repository.js';
+import { getUnderstandingSourceRun } from '../user-context/sources/repository.js';
+import type { UnderstandingConsentReceipt, UnderstandingSourceItem } from '../user-context/sources/types.js';
 import { allowsRemoteSourceProcessing } from '../user-context/sources/processing-policy.js';
 import { analyzeUnderstandingSources } from '../work-discovery/analyzer.js';
 import type { WorkDiscoveryProfileCandidate } from '../work-discovery/types.js';
 import { createLogger } from '../utils/logger.js';
+import { recordConnectedSourceObservations } from './connected-source-observations.js';
 
 const MAX_CONNECTED_ITEMS = 150;
 const log = createLogger('ConnectedSourceUnderstanding');
@@ -55,6 +58,55 @@ function timestamp(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+const CONSENT_FIELD_KEYS: Record<string, Set<string>> = {
+  title: new Set(['title', 'subject', 'name', 'fullName', 'repository']),
+  content: new Set(['content', 'body', 'text', 'snippet', 'description', 'summary']),
+  participants: new Set(['from', 'to', 'cc', 'bcc', 'sender', 'author', 'organizer', 'attendees', 'participants', 'assignee', 'owners']),
+  status: new Set(['status', 'state', 'labels']),
+  timestamps: new Set(['createdAt', 'updatedAt', 'modifiedAt', 'start', 'end', 'created_at', 'updated_at', 'modified_at']),
+  owner_activity: new Set(['user', 'username', 'owner']),
+};
+
+function consentFilteredText(textValue: string | undefined, allowedFields: Set<string>): string | undefined {
+  if (!textValue) return undefined;
+  try {
+    const parsed = JSON.parse(textValue) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+    const allowedKeys = new Set([...allowedFields].flatMap((field) => [...(CONSENT_FIELD_KEYS[field] ?? [])]));
+    const filtered = Object.fromEntries(Object.entries(parsed as Record<string, unknown>)
+      .filter(([key]) => allowedKeys.has(key)));
+    return Object.keys(filtered).length ? JSON.stringify(filtered) : undefined;
+  } catch {
+    return allowedFields.has('content') ? textValue.slice(0, 24_000) : undefined;
+  }
+}
+
+function itemsAllowedByConsent(
+  items: UnderstandingSourceItem[],
+  consent: UnderstandingConsentReceipt | undefined,
+): UnderstandingSourceItem[] {
+  if (!consent) return [];
+  const allowed = new Set(consent.allowedFields);
+  return items.map((item) => {
+    const filteredText = consentFilteredText(item.text, allowed);
+    return ({
+    id: item.id,
+    sourceId: item.sourceId,
+    type: item.type,
+    title: allowed.has('title') ? item.title : item.type,
+    ...(filteredText ? { text: filteredText } : {}),
+    ...(allowed.has('owner_activity') ? { ownerAttribution: item.ownerAttribution } : { ownerAttribution: 'unknown' }),
+    ...(allowed.has('timestamps') && item.occurredAt !== undefined ? { occurredAt: item.occurredAt } : {}),
+    ...(allowed.has('timestamps') && item.modifiedAt !== undefined ? { modifiedAt: item.modifiedAt } : {}),
+    ...(allowed.has('timestamps') && item.startsAt !== undefined ? { startsAt: item.startsAt } : {}),
+    ...(allowed.has('timestamps') && item.endsAt !== undefined ? { endsAt: item.endsAt } : {}),
+    ...(allowed.has('status') && item.group ? { group: item.group } : {}),
+    evidenceRef: item.evidenceRef,
+    sensitivity: item.sensitivity,
+    });
+  });
+}
+
 export function connectedItemsForUnderstanding(items: KnowledgeSourceItem[]): UnderstandingSourceItem[] {
   return [...items]
     .sort((left, right) => Number(right.itemType === 'connected_content') - Number(left.itemType === 'connected_content'))
@@ -80,10 +132,15 @@ export function connectedItemsForUnderstanding(items: KnowledgeSourceItem[]): Un
     });
 }
 
-type PortraitCandidate = WorkDiscoveryProfileCandidate & { category: 'preference' | 'routine' | 'communication' };
+type PortraitCandidate = WorkDiscoveryProfileCandidate & {
+  category: 'role' | 'responsibility' | 'capability' | 'preference' | 'routine' | 'communication';
+};
 
 function isPortraitCandidate(candidate: WorkDiscoveryProfileCandidate): candidate is PortraitCandidate {
-  return candidate.category === 'preference'
+  return candidate.category === 'role'
+    || candidate.category === 'responsibility'
+    || candidate.category === 'capability'
+    || candidate.category === 'preference'
     || candidate.category === 'routine'
     || candidate.category === 'communication';
 }
@@ -96,6 +153,34 @@ function durableEvidence(candidate: PortraitCandidate, items: Map<string, Unders
     .map((value) => new Date(value).toISOString().slice(0, 10)));
   return candidate.confidence === 'high' && evidence.every((item) => item.ownerAttribution === 'user')
     && evidence.length >= required && dates.size >= required ? evidence : [];
+}
+
+function candidatePolicy(candidate: PortraitCandidate): {
+  domain: 'identity' | 'goals' | 'capabilities' | 'preferences' | 'behavior';
+  sensitivity: 'normal' | 'personal' | 'regulated';
+  sensitivityCategories: Array<'health' | 'financial' | 'political' | 'religious' | 'sexuality' | 'trauma' | 'credential'>;
+} {
+  const statement = candidate.statement.toLocaleLowerCase();
+  const categories = [
+    ['health', /\b(health|medical|diagnos|medication|therapy|disability)\b|健康|疾病|诊断|用药|治疗|残疾/i],
+    ['financial', /\b(salary|income|debt|bank|account balance|credit card)\b|工资|收入|债务|银行|余额|信用卡/i],
+    ['political', /\b(political|party|election|vote[dr]?)\b|政治|政党|选举|投票/i],
+    ['religious', /\b(religio|church|mosque|temple|faith)\b|宗教|教会|清真寺|寺庙|信仰/i],
+    ['sexuality', /\b(sexual|orientation|gender identity)\b|性取向|性别认同/i],
+    ['trauma', /\b(trauma|abuse|assault)\b|创伤|虐待|侵害/i],
+    ['credential', /\b(password|secret key|api key|token)\b|密码|密钥|令牌/i],
+  ] as const;
+  const sensitivityCategories = categories.filter(([, pattern]) => pattern.test(statement)).map(([name]) => name);
+  return {
+    domain: candidate.category === 'role' ? 'identity'
+      : candidate.category === 'responsibility' ? 'goals'
+        : candidate.category === 'capability' ? 'capabilities'
+          : candidate.category === 'routine' ? 'behavior' : 'preferences',
+    sensitivity: sensitivityCategories.length
+      ? sensitivityCategories.includes('health') || sensitivityCategories.includes('financial') ? 'regulated' : 'personal'
+      : 'normal',
+    sensitivityCategories,
+  };
 }
 
 export async function deriveConnectedSourceUnderstanding(input: {
@@ -127,26 +212,41 @@ export async function deriveConnectedSourceUnderstanding(input: {
     }, 'Connected source semantic analysis skipped');
     return { created: 0, knowledgeCount: 0, status: 'completed' };
   }
+  const sourceRun = getUnderstandingSourceRun(input.sourceRunId);
+  const consentReceipt = sourceRun
+    ? getActiveUnderstandingConsent(sourceRun.grantId) ?? undefined
+    : undefined;
+  const modelItems = itemsAllowedByConsent(items, consentReceipt);
+  recordConnectedSourceObservations({
+    items: sourceItems, consent: consentReceipt, sourceGrantId: sourceRun?.grantId,
+  });
+  const effectiveProcessingPolicy = input.processingPolicy === 'remote_allowed'
+    && consentReceipt?.processingPolicy === 'remote_allowed'
+    ? 'remote_allowed' as const
+    : 'local_only' as const;
   const extraction = claimRegisteredExtraction({
     extractorId: 'connector-semantic',
     sourceRef: `understanding-source-run:${input.sourceRunId}`,
     contentForHash: sourceItems.map((item) => `${item.id}:${item.contentHash}`).join('\n'),
-    processingPolicy: input.processingPolicy,
+    processingPolicy: effectiveProcessingPolicy,
     destination: 'remote_model',
   });
-  if (!allowsRemoteSourceProcessing([input.processingPolicy]) || !extraction.shouldExecute) {
+  if (!allowsRemoteSourceProcessing([effectiveProcessingPolicy]) || !extraction.shouldExecute) {
     return { created: 0, knowledgeCount: 0, status: 'completed' };
   }
   try {
-    const analysis = await (input.analyze ?? analyzeUnderstandingSources)({ config: input.config, items });
+    const analysis = await (input.analyze ?? analyzeUnderstandingSources)({ config: input.config, items: modelItems });
     input.assertAuthorized?.();
-    const byRef = new Map(items.map((item) => [item.evidenceRef, item]));
+    const byRef = new Map(modelItems.map((item) => [item.evidenceRef, item]));
     const outputs: ExtractionOutput[] = [];
     let created = 0;
     for (const candidate of analysis.profileCandidates.filter(isPortraitCandidate)) {
+      const policy = candidatePolicy(candidate);
       const evidenceItems = durableEvidence(candidate, byRef);
       const candidateKey = `connected-profile:${candidate.category}:${candidate.factKey}`;
-      if (!evidenceItems.length) {
+      if (!evidenceItems.length || !consentReceipt
+        || !consentReceipt.allowedDomains.includes(policy.domain)
+        || consentReceipt.deniedDomains.includes(policy.domain)) {
         outputs.push({ candidateKey, outcome: 'rejected' });
         continue;
       }
@@ -166,7 +266,9 @@ export async function deriveConnectedSourceUnderstanding(input: {
           predicate: `${candidate.category}.connected.${candidate.factKey}`,
           cardinality: 'single',
           scope: { type: 'global' },
-          kind: candidate.category === 'communication' ? 'preference' : candidate.category,
+          kind: candidate.category === 'role' ? 'identity'
+            : candidate.category === 'responsibility' ? 'derived_insight'
+              : candidate.category === 'communication' ? 'preference' : candidate.category,
           value: candidate.statement,
           normalizedValue: candidate.statement.toLocaleLowerCase(),
           statement: candidate.statement,
@@ -176,7 +278,14 @@ export async function deriveConnectedSourceUnderstanding(input: {
           consequence: 'medium',
           actionability: 0.6,
           volatility: candidate.category === 'routine' || candidate.category === 'communication' ? 'slow' : 'stable',
-          sensitivity: 'normal',
+          sensitivity: policy.sensitivity,
+          domain: policy.domain,
+          layer: 'pattern',
+          sensitivityCategories: policy.sensitivityCategories,
+          purposeIds: ['personalization', 'work_assistance'],
+          allowedUses: ['answer', 'rank', 'recommend'],
+          allowedAgentIds: consentReceipt.allowedAgentIds,
+          consentReceiptId: consentReceipt.id,
           disclosurePolicy: 'referenceable',
           observedAt: evidenceItem.occurredAt ?? evidenceItem.modifiedAt ?? Date.now(),
           createdBy: 'connector',
@@ -200,6 +309,45 @@ export async function deriveConnectedSourceUnderstanding(input: {
       if (!evidenceRefs.length) {
         outputs.push({ candidateKey, outcome: 'rejected' });
         continue;
+      }
+      const goalEvidence = evidenceRefs.flatMap((ref) => {
+        const item = byRef.get(ref);
+        return item?.ownerAttribution === 'user' ? [item] : [];
+      });
+      if (consentReceipt?.allowedDomains.includes('goals')
+        && !consentReceipt.deniedDomains.includes('goals')
+        && thread.confidence !== 'low' && goalEvidence.length) {
+        const observedAt = Math.max(...goalEvidence.map((item) => item.occurredAt ?? item.modifiedAt ?? Date.now()));
+        const validityDays = thread.horizon === 'current' ? 30 : thread.horizon === 'ongoing' ? 90 : 365;
+        let goalCreated = false;
+        for (const evidenceItem of goalEvidence) {
+          const evidence = createContextEvidence({
+            sourceType: 'connector', sourceInstanceId: input.sourceInstanceId,
+            sourceRef: evidenceItem.evidenceRef, redactedExcerpt: evidenceItem.title.slice(0, 600),
+            trustLevel: 'owner', observedAt: evidenceItem.occurredAt ?? evidenceItem.modifiedAt ?? observedAt,
+          });
+          const result = reconcileAssertion({
+            subject: { type: 'goal', id: thread.topicKey },
+            predicate: 'goal.connected.current_state', cardinality: 'single', scope: { type: 'global' },
+            kind: 'current_state', value: { title: thread.title, summary: thread.summary, status: thread.status },
+            normalizedValue: `${thread.status}:${thread.title}:${thread.summary}`.toLocaleLowerCase(),
+            statement: `${thread.title}: ${thread.summary}`,
+            authority: 'user_observed', confidence: thread.confidence === 'high' ? 0.9 : 0.72,
+            inferredImportance: thread.horizon === 'current' ? 0.8 : 0.65,
+            consequence: 'medium', actionability: 0.85, volatility: 'event', sensitivity: 'normal',
+            domain: 'goals', layer: 'fact', sensitivityCategories: [],
+            purposeIds: ['personalization', 'work_assistance'],
+            allowedUses: ['answer', 'rank', 'recommend', 'remind'],
+            allowedAgentIds: consentReceipt.allowedAgentIds, consentReceiptId: consentReceipt.id,
+            disclosurePolicy: 'referenceable', observedAt, validFrom: observedAt,
+            validTo: observedAt + validityDays * 86_400_000,
+            reviewAt: observedAt + Math.min(validityDays, 14) * 86_400_000,
+            createdBy: 'connector', evidenceId: evidence.id,
+            evidenceConfidence: thread.confidence === 'high' ? 0.9 : 0.72,
+          });
+          goalCreated ||= result.action === 'created' || result.action === 'superseded';
+        }
+        if (goalCreated) created += 1;
       }
       const result = writeKnowledgeItem({
         kind: 'work_thread',

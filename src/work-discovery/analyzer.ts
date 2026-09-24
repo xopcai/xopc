@@ -131,6 +131,7 @@ function validateProfileCandidate(value: unknown, allowedRefs?: Set<string>): Wo
   const item = value as Record<string, unknown>;
   const category = item.category === 'role'
     || item.category === 'responsibility'
+    || item.category === 'capability'
     || item.category === 'preference'
     || item.category === 'routine'
     || item.category === 'communication'
@@ -264,9 +265,9 @@ export async function analyzeWorkContext(input: {
       'Use projectSummary to describe the documented purpose and structure, and currentState for startup/test commands, project conventions, and constraints. Cite the supporting relative file paths inline.',
       'Keep the overview concise. Distinguish documented facts from interpretations. Put missing goals and uncertain assumptions in uncertainties; never treat inferred goals as user-confirmed.',
     ] : [
-      'profileCandidates contains only durable user-specific role, responsibility, preference, routine, communication, boundary, or relationship facts that are directly supported and would remain useful outside this repository snapshot.',
+      'profileCandidates contains only durable user-specific role, responsibility, capability, preference, routine, communication, boundary, or relationship facts that are directly supported and would remain useful outside this repository snapshot.',
       'Do not put the project stack, packages, architecture, deployment setup, repository conventions, or current task in profileCandidates. Put project facts in projectSummary/currentState and current work in workThreads.',
-      'Each profile candidate has category (role, responsibility, preference, routine, communication, boundary, or relationship), factKey, statement, confidence, and evidence.',
+      'Each profile candidate has category (role, responsibility, capability, preference, routine, communication, boundary, or relationship), factKey, statement, confidence, and evidence.',
       'Put current or desired outcomes in workThreads, not profileCandidates. Emit boundary or relationship only when directly stated in user-authored evidence; never infer private relationship labels or expanded permissions.',
       'factKey is a stable language-neutral lowercase identifier such as workflow:code-review:github; equivalent facts in different languages must use the same factKey.',
       'Do not infer sensitive traits, identity, health, finances, political views, or anything not directly supported by the work evidence.',
@@ -433,8 +434,9 @@ async function analyzeUnderstandingBatch(input: {
     'Analyze one bounded batch from a source the user explicitly chose to connect.',
     'Return only one JSON object with profileCandidates and workThreads.',
     'Return at most 8 profileCandidates and at most 8 workThreads. Prefer the strongest distinct findings.',
-    'profileCandidates contains only durable user-specific role, responsibility, preference, routine, communication, boundary, or relationship facts with direct support. Current or desired outcomes belong in workThreads; project technologies, packages, architecture, and repository conventions are not user facts.',
-    'Each profile candidate has category (role, responsibility, preference, routine, communication, boundary, or relationship), factKey, statement, confidence, evidence, and evidenceRefs.',
+    'profileCandidates contains only durable user-specific role, responsibility, capability, preference, routine, communication, boundary, or relationship facts with direct support. Current or desired outcomes belong in workThreads; project technologies, packages, architecture, and repository conventions are not user facts.',
+    'A capability must be supported by repeated completed work, not merely a technology mention or self-description.',
+    'Each profile candidate has category (role, responsibility, capability, preference, routine, communication, boundary, or relationship), factKey, statement, confidence, evidence, and evidenceRefs.',
     'Emit boundary or relationship only from direct user-authored evidence. Never infer private relationship labels or permission grants.',
     'factKey is a stable language-neutral lowercase identifier such as workflow:code-review:github; equivalent facts in different languages must use the same factKey.',
     USER_FACING_UNDERSTANDING_WRITING_GUIDANCE,

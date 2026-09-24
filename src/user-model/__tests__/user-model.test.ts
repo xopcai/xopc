@@ -13,6 +13,10 @@ import {
   setAssertionStatus,
   getAssertionSlot,
   listSlotAssertions,
+  listUserModelObservations,
+  linkAssertionEvidence,
+  linkUserAssertions,
+  recordUserModelObservation,
   reconcileAssertion,
   resolveCurrentAssertion,
   type AssertionCandidate,
@@ -171,6 +175,14 @@ describe('user model foundation', () => {
     expect(reconcileAssertion(candidate({ authority: 'system_inferred' }), 3_000).action).toBe('suppressed');
   });
 
+  it('does not admit inferred high-risk domains even when mislabeled normal', () => {
+    expect(reconcileAssertion(candidate({
+      kind: 'derived_insight', domain: 'health', authority: 'system_inferred', createdBy: 'runtime',
+      predicate: 'health.inferred', statement: 'Possible health pattern.',
+      value: 'pattern', normalizedValue: 'pattern',
+    })).action).toBe('suppressed');
+  });
+
   it('does not recreate an old value after a correction in a multiple-value slot', () => {
     const old = candidate({ cardinality: 'multiple', authority: 'system_inferred' });
     const item = reconcileAssertion(old, 2_000).assertion;
@@ -184,6 +196,63 @@ describe('user model foundation', () => {
     deleteUserAssertion(first.id);
     expect(reconcileAssertion(candidate({ scope: { type: 'project', id: 'one' } })).action).toBe('suppressed');
     expect(reconcileAssertion(candidate({ scope: { type: 'project', id: 'two' } })).action).toBe('created');
+  });
+
+  it('supersedes newer event state without creating a permanent conflict', () => {
+    const first = reconcileAssertion(candidate({
+      subject: { type: 'goal', id: 'launch' }, predicate: 'goal.current_state',
+      kind: 'current_state', authority: 'user_observed', createdBy: 'connector',
+      volatility: 'event', value: 'planning', normalizedValue: 'planning',
+      statement: 'Launch is being planned.', validFrom: 1_000, validTo: 9_000,
+    }), 1_100).assertion;
+    const next = reconcileAssertion(candidate({
+      subject: { type: 'goal', id: 'launch' }, predicate: 'goal.current_state',
+      kind: 'current_state', authority: 'user_observed', createdBy: 'connector',
+      volatility: 'event', value: 'review', normalizedValue: 'review',
+      statement: 'Launch is in review.', observedAt: 2_000, validFrom: 2_000, validTo: 10_000,
+    }), 2_100);
+    expect(next.action).toBe('superseded');
+    expect(next.assertion.supersedesAssertionId).toBe(first.id);
+    expect(next.previousAssertion).toMatchObject({ status: 'archived', validTo: 1_999 });
+  });
+
+  it('tracks evidence strength, observations, and assertion relationships', () => {
+    const db = getSqliteDatabase();
+    db.prepare(`INSERT INTO context_evidence (
+      evidence_id, principal_id, source_type, source_instance_id, source_ref,
+      trust_level, observed_at, created_at
+    ) VALUES (?, 'local-owner', 'connector', ?, ?, 'owner', ?, ?)`)
+      .run('evidence-1', 'mail-one', 'mail://one', 1_500, 1_500);
+    const first = reconcileAssertion(candidate({
+      authority: 'user_observed', createdBy: 'connector', evidenceId: 'evidence-1',
+    }), 2_000).assertion;
+    expect(first).toMatchObject({
+      domain: 'preferences', layer: 'pattern', supportCount: 1, independentSourceCount: 1,
+      lastSupportedAt: 1_500,
+    });
+    db.prepare(`INSERT INTO context_evidence (
+      evidence_id, principal_id, source_type, source_instance_id, source_ref,
+      trust_level, observed_at, created_at
+    ) VALUES (?, 'local-owner', 'connector', ?, ?, 'owner', ?, ?)`)
+      .run('evidence-2', 'calendar-one', 'calendar://one', 1_700, 1_700);
+    linkAssertionEvidence(first.id, 'evidence-2', 'supports', 0.8, 2_100);
+    expect(getUserAssertion(first.id)).toMatchObject({ supportCount: 2, independentSourceCount: 2, lastSupportedAt: 1_700 });
+
+    const second = reconcileAssertion(candidate({
+      predicate: 'routine.focus.morning', cardinality: 'multiple', kind: 'routine',
+      normalizedValue: 'morning', value: 'morning', statement: 'Focused work often happens in the morning.',
+    }), 2_200).assertion;
+    linkUserAssertions({ fromAssertionId: first.id, toAssertionId: second.id, relation: 'supports', confidence: 0.7 });
+    expect(db.prepare('SELECT relation FROM user_assertion_edges').get()).toEqual({ relation: 'supports' });
+
+    const observation = recordUserModelObservation({
+      domain: 'behavior', type: 'focus_window', subject: { type: 'user', id: 'self' },
+      value: { period: 'morning' }, context: { source: 'calendar' }, sensitivityCategories: [],
+      ownerAttribution: 'user', observedAt: 1_700, sourceItemId: 'event-1',
+    });
+    expect(listUserModelObservations({ domain: 'behavior' })).toEqual([observation]);
+    expect(deleteUserAssertion(first.id)).toBe(true);
+    expect(db.prepare('SELECT COUNT(*) AS count FROM user_assertion_edges').get()).toEqual({ count: 0 });
   });
 
 });

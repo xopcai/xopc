@@ -70,7 +70,7 @@ function personEntities(record: Record<string, unknown> | null): PersonEntitySig
       ? [{ role, name: name || undefined, email: email || undefined, username: username || undefined }]
       : [];
   };
-  const entities = ['email', 'from', 'sender', 'author', 'user', 'username', 'owner', 'owners', 'assignee', 'attendees', 'participants']
+  const entities = ['email', 'from', 'sender', 'author', 'user', 'username', 'owner', 'owners', 'organizer', 'assignee', 'attendees', 'participants']
     .flatMap((key) => {
       const value = record[key];
       return Array.isArray(value)
@@ -109,8 +109,10 @@ function hasOwnerAttribution(
   const attributableRoles = toolkit === 'gmail'
     ? new Set(['sender', 'from'])
     : toolkit === 'googlecalendar'
-      ? new Set(['organizer'])
-      : new Set(['author', 'user', 'username', 'owner', 'owners']);
+      ? new Set(['organizer', 'attendees'])
+      : toolkit === 'linear'
+        ? new Set(['author', 'user', 'assignee'])
+        : new Set(['author', 'user', 'username', 'owner', 'owners']);
   return people
     .filter((person) => attributableRoles.has(person.role))
     .flatMap((person) => [person.email, person.username, person.name])

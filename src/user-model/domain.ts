@@ -30,6 +30,26 @@ export type AssertionVolatility = 'stable' | 'slow' | 'dynamic' | 'event';
 export type AssertionCreator = 'user' | 'runtime' | 'connector' | 'maintenance' | 'migration';
 export type AssertionSensitivity = 'normal' | 'personal' | 'secret' | 'regulated';
 export type AssertionDisclosurePolicy = 'silent' | 'referenceable' | 'ask_before_reference';
+export const PERSONAL_DOMAINS = [
+  'identity', 'life_history', 'health', 'emotion', 'personality', 'cognition',
+  'values', 'motivation', 'goals', 'capabilities', 'behavior', 'preferences',
+  'relationships', 'resources_constraints', 'environment', 'digital_life',
+] as const;
+export type PersonalDomain = typeof PERSONAL_DOMAINS[number];
+export type PersonalModelLayer = 'fact' | 'pattern' | 'interpretation';
+export type AssertionAllowedUse = 'answer' | 'rank' | 'recommend' | 'remind';
+export type AssertionSensitivityCategory =
+  | 'health'
+  | 'financial'
+  | 'political'
+  | 'religious'
+  | 'sexuality'
+  | 'biometric'
+  | 'precise_location'
+  | 'minor'
+  | 'trauma'
+  | 'third_party'
+  | 'credential';
 
 export interface UserModelScope {
   type: UserModelScopeType;
@@ -68,6 +88,17 @@ export interface UserAssertion {
   volatility: AssertionVolatility;
   sensitivity: AssertionSensitivity;
   disclosurePolicy: AssertionDisclosurePolicy;
+  domain: PersonalDomain;
+  layer: PersonalModelLayer;
+  sensitivityCategories: AssertionSensitivityCategory[];
+  purposeIds: string[];
+  allowedUses: AssertionAllowedUse[];
+  allowedAgentIds?: string[];
+  consentReceiptId?: string;
+  supportCount: number;
+  independentSourceCount: number;
+  lastSupportedAt?: number;
+  deleteAfter?: number;
   applicability: Record<string, unknown>;
   validFrom?: number;
   validTo?: number;
@@ -98,6 +129,14 @@ export interface AssertionCandidate {
   volatility: AssertionVolatility;
   sensitivity: AssertionSensitivity;
   disclosurePolicy: AssertionDisclosurePolicy;
+  domain?: PersonalDomain;
+  layer?: PersonalModelLayer;
+  sensitivityCategories?: AssertionSensitivityCategory[];
+  purposeIds?: string[];
+  allowedUses?: AssertionAllowedUse[];
+  allowedAgentIds?: string[];
+  consentReceiptId?: string;
+  deleteAfter?: number;
   applicability?: Record<string, unknown>;
   validFrom?: number;
   validTo?: number;
@@ -107,6 +146,26 @@ export interface AssertionCandidate {
   evidenceId?: string;
   evidenceConfidence?: number;
   correctionOfAssertionId?: string;
+}
+
+const KIND_DOMAIN: Record<AssertionKind, PersonalDomain> = {
+  identity: 'identity',
+  preference: 'preferences',
+  value: 'values',
+  routine: 'behavior',
+  capability: 'capabilities',
+  relationship: 'relationships',
+  current_state: 'environment',
+  derived_insight: 'cognition',
+};
+
+export function defaultAssertionDomain(kind: AssertionKind): PersonalDomain {
+  return KIND_DOMAIN[kind];
+}
+
+export function defaultAssertionLayer(candidate: Pick<AssertionCandidate, 'authority' | 'kind'>): PersonalModelLayer {
+  if (candidate.authority === 'user_explicit' || candidate.kind === 'current_state') return 'fact';
+  return candidate.kind === 'derived_insight' ? 'interpretation' : 'pattern';
 }
 
 export type ReconciliationAction = 'created' | 'deduplicated' | 'superseded' | 'conflicted';
@@ -133,6 +192,15 @@ export function validateCandidate(candidate: AssertionCandidate): void {
   if (!candidate.normalizedValue.trim()) throw new Error('Assertion normalized value is required.');
   if (!candidate.statement.trim()) throw new Error('Assertion statement is required.');
   if (!Number.isFinite(candidate.observedAt)) throw new Error('Assertion observedAt must be finite.');
+  if (candidate.domain !== undefined && !PERSONAL_DOMAINS.includes(candidate.domain)) {
+    throw new Error('Assertion domain is invalid.');
+  }
+  if (candidate.purposeIds?.some((purpose) => !purpose.trim())) {
+    throw new Error('Assertion purpose ids must not be empty.');
+  }
+  if (candidate.allowedAgentIds?.some((agentId) => !agentId.trim())) {
+    throw new Error('Assertion allowed agent ids must not be empty.');
+  }
   for (const [field, value] of [
     ['validFrom', candidate.validFrom],
     ['validTo', candidate.validTo],

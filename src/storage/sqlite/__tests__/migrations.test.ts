@@ -69,6 +69,25 @@ describe('SQLite migrations', () => {
     } finally { db.close(); }
   });
 
+  it('adds the consent-aware personal-model contract', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db);
+      expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'
+        AND name IN ('understanding_consent_receipts', 'user_model_observations', 'user_assertion_edges')
+        ORDER BY name`).all().map((row) => row.name)).toEqual([
+        'understanding_consent_receipts', 'user_assertion_edges', 'user_model_observations',
+      ]);
+      expect(db.prepare(`SELECT name FROM pragma_table_info('user_assertions')
+        WHERE name IN ('domain', 'model_layer', 'purpose_ids_json', 'allowed_uses_json', 'support_count')
+        ORDER BY name`).all().map((row) => row.name)).toEqual([
+        'allowed_uses_json', 'domain', 'model_layer', 'purpose_ids_json', 'support_count',
+      ]);
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally { db.close(); }
+  });
+
   it('migrates connected work threads to the global work-memory kind', () => {
     const db = openEmptyDb();
     try {

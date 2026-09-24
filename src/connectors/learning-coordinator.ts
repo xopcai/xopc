@@ -1,5 +1,4 @@
 import type { Config } from '../config/schema.js';
-import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import {
   claimNextConnectorLearningJob,
   enqueueConnectorLearningJob,
@@ -10,13 +9,17 @@ import {
   getConnectorSyncPolicyForConnection,
   recoverStaleConnectorLearningJobs,
   reconcileConnectorAccount,
+  pruneBoundedKnowledgeSourceItems,
   setConnectorLearningPaused,
   updateConnectorLearningJob,
   upsertConnectorConnection,
   type ConnectorLearningJob,
 } from '../storage/sqlite/index.js';
-import { ConnectedKnowledgePipeline } from '../knowledge/index.js';
 import { createLogger } from '../utils/logger.js';
+import {
+  getActiveUnderstandingConsent,
+  grantUnderstandingConsent,
+} from '../user-context/sources/consent-repository.js';
 import {
   getConnectorUnderstandingSourceRun,
   getOrCreateConnectorUnderstandingSourceRun,
@@ -60,6 +63,7 @@ function ensureUnderstandingSourceRun(
   job: ConnectorLearningJob,
   toolkit: string,
   displayName: string,
+  config: Config,
 ): UnderstandingSourceRun {
   const existing = listUnderstandingSourceGrants({ includeRevoked: true })
     .find((grant) => grant.sourceKey === `connector-account:${job.accountId}`);
@@ -71,10 +75,27 @@ function ensureUnderstandingSourceRun(
     platform: 'all',
     displayName,
     accessMode: 'continuous',
-    retentionPolicy: 'bounded_raw',
-    processingPolicy: 'remote_allowed',
+    retentionPolicy: config.userContext.userModel.processingPolicy === 'remote_allowed'
+      ? 'derived_only'
+      : 'bounded_raw',
+    processingPolicy: config.userContext.userModel.processingPolicy,
     config: { connectorId: job.connectorId, accountId: job.accountId, readOnly: true },
   });
+  if (!getActiveUnderstandingConsent(grant.id)) {
+    grantUnderstandingConsent({
+      grantId: grant.id,
+      purposes: ['personalization', 'work_assistance'],
+      allowedDomains: ['identity', 'goals', 'capabilities', 'behavior', 'preferences', 'relationships', 'environment', 'digital_life'],
+      deniedDomains: ['health', 'emotion', 'life_history', 'resources_constraints'],
+      allowedFields: ['title', 'content', 'timestamps', 'participants', 'owner_activity', 'status'],
+      accessMode: grant.accessMode,
+      lookbackDays: getConnectorLearningPlan(toolkit)?.bootstrapWindowDays ?? 30,
+      rawRetentionDays: grant.retentionPolicy === 'bounded_raw' ? 7 : 0,
+      processingPolicy: grant.processingPolicy,
+      allowedAgentIds: [job.agentId],
+      disclosureVersion: 'connector-understanding-v1',
+    });
+  }
   return getOrCreateConnectorUnderstandingSourceRun({
     grantId: grant.id,
     connectorLearningJobId: job.id,
@@ -166,7 +187,7 @@ export function startConnectorLearningCoordinator(options: {
           : `incremental:${connection.accountId}:${request.reason ?? 'manual'}:${bucket}`),
       nextRunAt: request.nextRunAt,
     });
-    ensureUnderstandingSourceRun(job, definition.runtime.toolkit, definition.displayName);
+    ensureUnderstandingSourceRun(job, definition.runtime.toolkit, definition.displayName, options.getConfig());
     publish(job);
     queueMicrotask(() => void runNow());
     return job;
@@ -193,7 +214,7 @@ export function startConnectorLearningCoordinator(options: {
     }
     const plan = getConnectorLearningPlan(definition.runtime.toolkit);
     if (!plan) throw new Error(`Connector learning has no plan for ${definition.runtime.toolkit}.`);
-    const sourceRun = ensureUnderstandingSourceRun(job, plan.toolkit, definition.displayName);
+    const sourceRun = ensureUnderstandingSourceRun(job, plan.toolkit, definition.displayName, options.getConfig());
     updateUnderstandingSourceRun(sourceRun.id, { status: 'running' });
     let connection = listConnectorConnections().find((candidate) => candidate.id === job.connectionId);
     if (!connection) throw new Error('Connector account no longer exists.');
@@ -336,13 +357,18 @@ export function startConnectorLearningCoordinator(options: {
       lastCollectedAt: Date.now(),
     });
     publish(completed);
-    const retention = new ConnectedKnowledgePipeline({
-      agentId: job.agentId,
-      workspaceId: getWorkspacePath(options.getConfig()),
-    }).pruneBoundedRetention(
-      job.sourceInstanceId,
-      Date.now() - plan.bootstrapWindowDays * 24 * 60 * 60_000,
-    );
+    const sourceGrant = getUnderstandingSourceGrant(sourceRun.grantId);
+    const activeConsent = getActiveUnderstandingConsent(sourceRun.grantId);
+    const rawRetentionDays = sourceGrant?.retentionPolicy === 'bounded_raw'
+      ? activeConsent?.rawRetentionDays ?? 7
+      : 0;
+    const retention = {
+      rawDeleted: pruneBoundedKnowledgeSourceItems(
+        job.sourceInstanceId,
+        rawRetentionDays === 0 ? Date.now() + 1 : Date.now() - rawRetentionDays * 86_400_000,
+      ),
+      derivedDeleted: 0,
+    };
     if (retention.rawDeleted || retention.derivedDeleted) {
       log.info({ jobId: job.id, sourceInstanceId: job.sourceInstanceId, ...retention }, 'Connected source retention pruned');
     }

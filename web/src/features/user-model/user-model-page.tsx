@@ -43,6 +43,7 @@ import { UnderstandingRow } from './understanding-row';
 import { groupUnderstandingByDate } from './understanding-row.utils';
 import {
   correctAssertion,
+  createRuleFromSuggestion,
   createPriority,
   deleteAssertion,
   deleteKnowledge,
@@ -53,6 +54,7 @@ import {
   updateUserProfile,
   updatePriority,
   type CollaborationRule,
+  type ActionRuleSuggestion,
   type KnowledgeItem,
   type PriorityWindow,
   type UserAssertion,
@@ -691,6 +693,29 @@ function RuleRow({
   );
 }
 
+function RuleSuggestionRow({
+  suggestion, language, busy, onConfirm,
+}: {
+  suggestion: ActionRuleSuggestion;
+  language: Language;
+  busy: boolean;
+  onConfirm: () => void;
+}) {
+  const zh = language === 'zh';
+  return (
+    <div className="flex items-start gap-3 border-t border-edge-subtle px-5 py-3 first:border-t-0">
+      <Sparkles className="mt-0.5 size-4 shrink-0 text-accent-fg" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm leading-6 text-fg">{suggestion.statement}</p>
+        <p className="mt-0.5 text-xs text-fg-subtle">{zh ? '根据你已确认的模式生成；确认前不会生效' : 'Suggested from a pattern you confirmed; inactive until you approve'}</p>
+      </div>
+      <Button variant="secondary" className="h-8 shrink-0" disabled={busy} onClick={onConfirm}>
+        {busy ? (zh ? '启用中…' : 'Enabling…') : (zh ? '确认启用' : 'Approve')}
+      </Button>
+    </div>
+  );
+}
+
 function KnowledgeRow({
   item,
   language,
@@ -986,6 +1011,7 @@ export function UserModelPage() {
   const activeGoals = data.goals.filter((goal) => goal.status === 'active' || goal.status === 'paused');
   const otherGoals = activeGoals.filter((goal) => primaryPriority?.targetType !== 'goal' || goal.id !== primaryPriority.targetId);
   const collaborationRules = data.rules.filter((rule) => rule.status !== 'archived');
+  const ruleSuggestions = data.ruleSuggestions ?? [];
   const recentAssertions = [...assertions].sort((a, b) => b.recordedAt - a.recordedAt);
   const visibleKnowledge = data.knowledge.filter((item) => item.status !== 'archived' && item.status !== 'rejected');
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -1201,7 +1227,8 @@ export function UserModelPage() {
             </Section>
 
             <Section title={t.howWeWork} hint={t.howWeWorkHint}>
-              {collaborationRules.length ? collaborationRules.slice(0, 3).map((rule) => (
+              {collaborationRules.length || ruleSuggestions.length ? <>
+                {collaborationRules.slice(0, 3).map((rule) => (
                 <RuleRow
                   key={rule.id}
                   rule={rule}
@@ -1209,7 +1236,17 @@ export function UserModelPage() {
                   busy={busy === rule.id}
                   onToggle={() => void act(rule.id, () => setRuleStatus(rule.id, rule.status === 'active' ? 'disabled' : 'active'))}
                 />
-              )) : <Empty icon={<Handshake className="size-5" />}>{t.noRules}</Empty>}
+                ))}
+                {ruleSuggestions.slice(0, 2).map((suggestion) => (
+                  <RuleSuggestionRow
+                    key={suggestion.id}
+                    suggestion={suggestion}
+                    language={language}
+                    busy={busy === suggestion.id}
+                    onConfirm={() => void act(suggestion.id, () => createRuleFromSuggestion(suggestion))}
+                  />
+                ))}
+              </> : <Empty icon={<Handshake className="size-5" />}>{t.noRules}</Empty>}
             </Section>
           </div>
 

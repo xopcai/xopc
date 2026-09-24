@@ -6,6 +6,7 @@ import type {
   UnderstandingSourceGrant,
   UnderstandingSourceRun,
 } from './types.js';
+import { getActiveUnderstandingConsent, grantUnderstandingConsent } from './consent-repository.js';
 
 type GrantRow = {
   grant_id: string; source_key: string; adapter_id: string; category: string; platform: string;
@@ -124,6 +125,7 @@ export function updateUnderstandingSourceGrantPolicies(id: string, patch: {
   notifyUserContextChange({ kind: 'policy' });
   const current = getUnderstandingSourceGrant(id);
   if (!current) return null;
+  const consent = getActiveUnderstandingConsent(id);
   runSqliteWriteTransaction((db) => db.prepare(`
     UPDATE understanding_source_grants
     SET access_mode = ?, retention_policy = ?, processing_policy = ?, updated_at = ?
@@ -135,14 +137,96 @@ export function updateUnderstandingSourceGrantPolicies(id: string, patch: {
     patch.nowMs ?? Date.now(),
     id,
   ));
+  const updated = getUnderstandingSourceGrant(id);
+  if (consent && updated && (
+    updated.accessMode !== consent.accessMode
+    || updated.processingPolicy !== consent.processingPolicy
+    || (updated.retentionPolicy === 'bounded_raw' ? Math.max(1, consent.rawRetentionDays) : 0) !== consent.rawRetentionDays
+  )) {
+    grantUnderstandingConsent({
+      grantId: id, purposes: consent.purposes, allowedDomains: consent.allowedDomains,
+      deniedDomains: consent.deniedDomains, allowedFields: consent.allowedFields,
+      accessMode: updated.accessMode, lookbackDays: consent.lookbackDays,
+      rawRetentionDays: updated.retentionPolicy === 'bounded_raw' ? Math.max(1, consent.rawRetentionDays) : 0,
+      processingPolicy: updated.processingPolicy, allowedAgentIds: consent.allowedAgentIds,
+      disclosureVersion: consent.disclosureVersion, nowMs: patch.nowMs,
+    });
+  }
   return getUnderstandingSourceGrant(id);
 }
 
 export function revokeUnderstandingSourceGrant(id: string, nowMs = Date.now()): UnderstandingSourceGrant | null {
   notifyUserContextChange({ kind: 'policy' });
-  runSqliteWriteTransaction((db) => db.prepare(
-    "UPDATE understanding_source_grants SET status = 'revoked', updated_at = ? WHERE grant_id = ?",
-  ).run(nowMs, id));
+  const current = getUnderstandingSourceGrant(id);
+  if (!current) return null;
+  const configuredInstance = typeof current.config.sourceInstanceId === 'string'
+    ? current.config.sourceInstanceId
+    : undefined;
+  const connectorId = typeof current.config.connectorId === 'string' ? current.config.connectorId : undefined;
+  const accountId = typeof current.config.accountId === 'string' ? current.config.accountId : undefined;
+  const sourceInstanceId = configuredInstance ?? (connectorId && accountId
+    ? `composio:${connectorId}:${accountId}`
+    : undefined);
+  runSqliteWriteTransaction((db) => {
+    db.prepare("UPDATE understanding_source_grants SET status = 'revoked', updated_at = ? WHERE grant_id = ?")
+      .run(nowMs, id);
+    db.prepare(`UPDATE understanding_consent_receipts SET revoked_at = ?
+      WHERE grant_id = ? AND revoked_at IS NULL`).run(nowMs, id);
+    db.prepare('DELETE FROM user_model_observations WHERE source_grant_id = ?').run(id);
+    if (sourceInstanceId) {
+      const affected = db.prepare(`SELECT DISTINCT assertion_id FROM user_assertion_evidence
+        WHERE evidence_id IN (SELECT evidence_id FROM context_evidence WHERE source_instance_id = ?)`)
+        .all(sourceInstanceId) as Array<{ assertion_id: string }>;
+      db.prepare(`DELETE FROM user_assertion_evidence
+        WHERE evidence_id IN (SELECT evidence_id FROM context_evidence WHERE source_instance_id = ?)`)
+        .run(sourceInstanceId);
+      db.prepare('UPDATE context_evidence SET redacted_excerpt = NULL WHERE source_instance_id = ?')
+        .run(sourceInstanceId);
+      for (const { assertion_id: assertionId } of affected) {
+        db.prepare(`UPDATE user_assertions SET
+          support_count = (SELECT COUNT(*) FROM user_assertion_evidence WHERE assertion_id = ? AND relation = 'supports'),
+          independent_source_count = (SELECT COUNT(DISTINCT COALESCE(e.source_instance_id, e.source_type || ':' || e.source_ref))
+            FROM user_assertion_evidence ae JOIN context_evidence e ON e.evidence_id = ae.evidence_id
+            WHERE ae.assertion_id = ? AND ae.relation = 'supports'),
+          last_supported_at = (SELECT MAX(e.observed_at) FROM user_assertion_evidence ae
+            JOIN context_evidence e ON e.evidence_id = ae.evidence_id
+            WHERE ae.assertion_id = ? AND ae.relation = 'supports')
+          WHERE assertion_id = ?`).run(assertionId, assertionId, assertionId, assertionId);
+        const assertion = db.prepare(`SELECT status, authority, support_count FROM user_assertions
+          WHERE assertion_id = ?`).get(assertionId) as {
+            status: string; authority: string; support_count: number;
+          } | undefined;
+        const fallbackConsent = db.prepare(`SELECT receipt.receipt_id
+          FROM user_assertion_evidence ae
+          JOIN context_evidence evidence ON evidence.evidence_id = ae.evidence_id
+          JOIN understanding_source_grants grant_record ON grant_record.status = 'active'
+            AND evidence.source_instance_id = COALESCE(
+              json_extract(grant_record.config_json, '$.sourceInstanceId'),
+              CASE WHEN json_extract(grant_record.config_json, '$.connectorId') IS NOT NULL
+                AND json_extract(grant_record.config_json, '$.accountId') IS NOT NULL
+                THEN 'composio:' || json_extract(grant_record.config_json, '$.connectorId')
+                  || ':' || json_extract(grant_record.config_json, '$.accountId') END)
+          JOIN understanding_consent_receipts receipt
+            ON receipt.grant_id = grant_record.grant_id AND receipt.revoked_at IS NULL
+          JOIN user_assertions assertion_record ON assertion_record.assertion_id = ae.assertion_id
+          WHERE ae.assertion_id = ? AND ae.relation = 'supports'
+            AND EXISTS (SELECT 1 FROM json_each(receipt.allowed_domains_json)
+              WHERE value = assertion_record.domain)
+          LIMIT 1`).get(assertionId) as { receipt_id: string } | undefined;
+        db.prepare('UPDATE user_assertions SET consent_receipt_id = ? WHERE assertion_id = ?')
+          .run(fallbackConsent?.receipt_id ?? null, assertionId);
+        if (assertion && assertion.authority !== 'user_explicit'
+          && (!fallbackConsent || assertion.support_count < 2)
+          && (assertion.status === 'active' || assertion.status === 'candidate')) {
+          db.prepare("UPDATE user_assertions SET status = 'needs_review' WHERE assertion_id = ?").run(assertionId);
+          db.prepare(`INSERT INTO user_assertion_status_events (
+            event_id, assertion_id, from_status, to_status, actor_type, reason, created_at
+          ) VALUES (?, ?, ?, 'needs_review', 'runtime', 'Supporting context source was revoked.', ?)`)
+            .run(randomUUID(), assertionId, assertion.status, nowMs);
+        }
+      }
+    }
+  });
   return getUnderstandingSourceGrant(id);
 }
 

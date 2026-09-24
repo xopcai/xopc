@@ -19,6 +19,11 @@ export type UserAssertion = {
   actionability: number;
   volatility: 'stable' | 'slow' | 'dynamic' | 'event';
   sensitivity: 'normal' | 'personal' | 'secret' | 'regulated';
+  domain: 'identity' | 'life_history' | 'health' | 'emotion' | 'personality' | 'cognition' | 'values' | 'motivation' | 'goals' | 'capabilities' | 'behavior' | 'preferences' | 'relationships' | 'resources_constraints' | 'environment' | 'digital_life';
+  layer: 'fact' | 'pattern' | 'interpretation';
+  supportCount: number;
+  independentSourceCount: number;
+  lastSupportedAt?: number;
   validFrom?: number;
   validTo?: number;
   reviewAt?: number;
@@ -67,6 +72,15 @@ export type CollaborationRule = {
   scope: Scope;
 };
 
+export type ActionRuleSuggestion = {
+  id: string;
+  sourceAssertionId: string;
+  category: 'communication' | 'execution' | 'boundary' | 'routine' | 'initiative';
+  statement: string;
+  scope: Scope;
+  conditions: Record<string, unknown>;
+};
+
 export type KnowledgeItem = {
   id: string;
   content: string;
@@ -92,6 +106,7 @@ export type UserModelResponse = {
   goals: UserGoal[];
   priorities: PriorityWindow[];
   rules: CollaborationRule[];
+  ruleSuggestions?: ActionRuleSuggestion[];
   knowledge: KnowledgeItem[];
   sources?: Array<{
     id: string;
@@ -221,6 +236,19 @@ export function createPriority(input: { title: string; validTo: number }): Promi
 export function setRuleStatus(id: string, status: CollaborationRule['status']): Promise<unknown> {
   return fetchJson(apiUrl(`/api/user-model/rules/${encodeURIComponent(id)}/status`), {
     method: 'PATCH', body: JSON.stringify({ status }),
+  });
+}
+
+export function createRuleFromSuggestion(suggestion: ActionRuleSuggestion): Promise<unknown> {
+  return fetchJson(apiUrl('/api/user-model/rules'), {
+    method: 'POST',
+    body: JSON.stringify({
+      category: suggestion.category,
+      statement: suggestion.statement,
+      priority: 50,
+      scope: suggestion.scope,
+      conditions: { ...suggestion.conditions, requiresConfirmation: false },
+    }),
   });
 }
 

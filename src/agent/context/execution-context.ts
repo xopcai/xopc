@@ -178,7 +178,7 @@ export function buildExecutionContext(request: ExecutionContextRequest): Executi
   const rankedAssertions = includeUserModel ? listUserAssertions({ statuses: ['active', 'candidate'], limit: 1_000 })
     .filter((item) => scopeVisible(getAssertionScope(item.slotId), request))
     .filter((item) => applicabilityVisible(item.applicability, request))
-    .filter((item) => canUseAssertion(item, asOf))
+    .filter((item) => canUseAssertion(item, asOf, { use: 'answer', agentId: request.agentId }))
     .map((item) => rankAssertion(
       item,
       request.query,

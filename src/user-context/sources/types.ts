@@ -14,6 +14,23 @@ export type UnderstandingSourceAccessMode = 'once' | 'continuous';
 export type UnderstandingSourceRetentionPolicy = 'metadata_only' | 'derived_only' | 'bounded_raw';
 export type UnderstandingSourceProcessingPolicy = 'local_only' | 'remote_allowed';
 
+export interface UnderstandingConsentReceipt {
+  id: string;
+  grantId: string;
+  purposes: string[];
+  allowedDomains: string[];
+  deniedDomains: string[];
+  allowedFields: string[];
+  accessMode: UnderstandingSourceAccessMode;
+  lookbackDays: number;
+  rawRetentionDays: number;
+  processingPolicy: UnderstandingSourceProcessingPolicy;
+  allowedAgentIds?: string[];
+  disclosureVersion: string;
+  grantedAt: number;
+  revokedAt?: number;
+}
+
 export interface UnderstandingSourceDefinition {
   id: string;
   category: UnderstandingSourceCategory;
