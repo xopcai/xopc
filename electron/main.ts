@@ -521,6 +521,89 @@ async function collectStartupSupportReport(): Promise<string> {
   return report.markdown;
 }
 
+function registerStartupRecoveryIpc(): void {
+  ipcMain.handle('startup:get-diagnostic', (event) => {
+    assertStartupRecoveryRenderer(event);
+    return currentStartupFailure;
+  });
+
+  ipcMain.handle('startup:copy-diagnostic', async (event) => {
+    assertStartupRecoveryRenderer(event);
+    try {
+      clipboard.writeText(await collectStartupSupportReport());
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle('startup:open-data-dir', async (event) => {
+    assertStartupRecoveryRenderer(event);
+    const target = currentStartupFailure?.stateDir ?? getElectronUserPaths().stateDir;
+    const message = await shell.openPath(target);
+    return message ? { ok: false, message } : { ok: true };
+  });
+
+  ipcMain.handle('startup:get-update-status', (event) => {
+    assertStartupRecoveryRenderer(event);
+    return getUpdateStatus();
+  });
+
+  ipcMain.handle('startup:check-update', (event) => {
+    assertStartupRecoveryRenderer(event);
+    if (!app.isPackaged) {
+      return {
+        ok: false,
+        message: 'Auto-update is only available in packaged desktop builds. Rebuild this development checkout, then retry.',
+      };
+    }
+    checkForUpdates(true);
+    return { ok: true };
+  });
+
+  ipcMain.handle('startup:quit-and-install', (event) => {
+    assertStartupRecoveryRenderer(event);
+    quitAndInstall();
+    return { ok: true };
+  });
+
+  ipcMain.handle('startup:retry-gateway', async (event) => {
+    assertStartupRecoveryRenderer(event);
+    if (!shouldEmbedGateway()) {
+      return { ok: false, message: 'Embedded gateway is not active in this session.' };
+    }
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) {
+      return { ok: false, message: 'Recovery window is no longer available.' };
+    }
+    try {
+      const load = await resolveWindowLoad();
+      if (load.kind !== 'url') {
+        return { ok: false, message: 'Embedded gateway did not return a gateway URL.' };
+      }
+      currentStartupFailure = null;
+      appendElectronStartupLog(`startup recovery retry succeeded url=${redactUrlForLog(load.href)}`);
+      if (isEmbeddedGatewayLoopbackUrl(load.href)) {
+        lastGatewayConsoleHref = load.href;
+      }
+      await loadMainWindowUrl(win, load.href);
+      attachExternalUrlHandlers(win);
+      markMainWindowNavigationReady(win);
+      return { ok: true };
+    } catch (err) {
+      const failure = startupFailureFromError(err);
+      await loadStartupRecoveryPage(win, failure);
+      return { ok: false, message: failure.message };
+    }
+  });
+}
+
+if (gotTheLock) {
+  // Recovery pages can be created by deep-link or second-instance events before
+  // the async ready callback has completed normal application initialization.
+  registerStartupRecoveryIpc();
+}
+
 export function proxyUrlFromElectronSpec(spec: string): string | undefined {
   for (const entry of spec.split(';')) {
     const match = entry.trim().match(/^(?:PROXY|HTTPS?)\s+(.+)$/i);
@@ -1187,81 +1270,6 @@ app.whenReady().then(async () => {
   ipcMain.handle('gateway:get-credential', (event) => {
     assertTrustedRenderer(event);
     return getGatewayCredential();
-  });
-
-  ipcMain.handle('startup:get-diagnostic', (event) => {
-    assertStartupRecoveryRenderer(event);
-    return currentStartupFailure;
-  });
-
-  ipcMain.handle('startup:copy-diagnostic', async (event) => {
-    assertStartupRecoveryRenderer(event);
-    try {
-      clipboard.writeText(await collectStartupSupportReport());
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, message: error instanceof Error ? error.message : String(error) };
-    }
-  });
-
-  ipcMain.handle('startup:open-data-dir', async (event) => {
-    assertStartupRecoveryRenderer(event);
-    const target = currentStartupFailure?.stateDir ?? getElectronUserPaths().stateDir;
-    const message = await shell.openPath(target);
-    return message ? { ok: false, message } : { ok: true };
-  });
-
-  ipcMain.handle('startup:get-update-status', (event) => {
-    assertStartupRecoveryRenderer(event);
-    return getUpdateStatus();
-  });
-
-  ipcMain.handle('startup:check-update', (event) => {
-    assertStartupRecoveryRenderer(event);
-    if (!app.isPackaged) {
-      return {
-        ok: false,
-        message: 'Auto-update is only available in packaged desktop builds. Rebuild this development checkout, then retry.',
-      };
-    }
-    checkForUpdates(true);
-    return { ok: true };
-  });
-
-  ipcMain.handle('startup:quit-and-install', (event) => {
-    assertStartupRecoveryRenderer(event);
-    quitAndInstall();
-    return { ok: true };
-  });
-
-  ipcMain.handle('startup:retry-gateway', async (event) => {
-    assertStartupRecoveryRenderer(event);
-    if (!shouldEmbedGateway()) {
-      return { ok: false, message: 'Embedded gateway is not active in this session.' };
-    }
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (!win || win.isDestroyed()) {
-      return { ok: false, message: 'Recovery window is no longer available.' };
-    }
-    try {
-      const load = await resolveWindowLoad();
-      if (load.kind !== 'url') {
-        return { ok: false, message: 'Embedded gateway did not return a gateway URL.' };
-      }
-      currentStartupFailure = null;
-      appendElectronStartupLog(`startup recovery retry succeeded url=${redactUrlForLog(load.href)}`);
-      if (isEmbeddedGatewayLoopbackUrl(load.href)) {
-        lastGatewayConsoleHref = load.href;
-      }
-      await loadMainWindowUrl(win, load.href);
-      attachExternalUrlHandlers(win);
-      markMainWindowNavigationReady(win);
-      return { ok: true };
-    } catch (err) {
-      const failure = startupFailureFromError(err);
-      await loadStartupRecoveryPage(win, failure);
-      return { ok: false, message: failure.message };
-    }
   });
 
   registerTunnelPowerMonitor();
