@@ -93,7 +93,7 @@ import { resolveUserContextSessionAccess } from '../user-context/access-policy.j
 import { evaluateToolGate } from './context/execution-context.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
 import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
-import { runTurnUserModelCapture } from './background-review/run-background-review.js';
+import { createTurnUserModelMaintenanceTask } from './background-review/run-background-review.js';
 import { getConversationRouting } from '../routing/session-key.js';
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
 import { mcpToolPolicyId } from './mcp/bundle-mcp-policy.js';
@@ -304,6 +304,7 @@ export class AgentManager implements AgentInstanceGateway {
   private workspaceRuntimes: WorkspaceRuntimeRegistry;
   private executionContext: ExecutionContextCoordinator;
   private backgroundReview: BackgroundReviewCoordinator;
+  private userUnderstandingMaintenance = new Map<string, Promise<void>>();
   private skillFilesystemWatcher: SkillFilesystemWatcher;
   private skillDiskRefreshInProgress = false;
   private skillDiskRefreshPending = false;
@@ -560,21 +561,28 @@ export class AgentManager implements AgentInstanceGateway {
     return this.executionContext.prepare(userMessage, conversationId, turnId);
   }
 
-  /** Capture durable structured user context after a completed turn. */
-  async afterAgentTurn(conversationId: string, userPlainText: string, turnId: string): Promise<import('../user-model/capture/index.js').UserModelCaptureResult | undefined> {
-    if (!this.isUserContextEnabledForSession(conversationId)) return undefined;
+  /** Maintain durable user understanding without delaying the user-visible turn. */
+  scheduleUserUnderstandingMaintenance(conversationId: string, userPlainText: string, turnId: string): void {
+    if (!this.isUserContextEnabledForSession(conversationId)) return;
     const parsed = getConversationRouting(conversationId);
-    if (parsed && parsed.peerKind !== 'direct') return undefined;
+    if (parsed && parsed.peerKind !== 'direct') return;
     const instance = this.agents.get(conversationId);
-    if (!instance) return undefined;
-    return runTurnUserModelCapture({
-      conversationId,
-      turnId,
-      userText: userPlainText,
-      mainAgent: instance.agent,
-      workspaceId: this.getResolvedWorkspaceForSession(conversationId),
-      getConfig: () => this.mergedConfig(),
-    });
+    if (!instance) return;
+    let task: () => Promise<unknown>;
+    try {
+      task = createTurnUserModelMaintenanceTask({
+        conversationId,
+        turnId,
+        userText: userPlainText,
+        mainAgent: instance.agent,
+        workspaceId: this.getResolvedWorkspaceForSession(conversationId),
+        getConfig: () => this.mergedConfig(),
+      });
+    } catch (err) {
+      log.warn({ err, conversationId, turnId }, 'User-understanding maintenance could not be scheduled');
+      return;
+    }
+    this.enqueueUserUnderstandingMaintenance(conversationId, 'turn', task);
   }
 
   /**
@@ -591,12 +599,40 @@ export class AgentManager implements AgentInstanceGateway {
   scheduleBackgroundReviewAfterUserTurn(conversationId: string): void {
     const inst = this.agents.get(conversationId);
     if (!inst || !this.isUserContextEnabledForSession(conversationId)) return;
-    this.backgroundReview.scheduleAfterUserTurn({
-      conversationId,
-      agent: inst.agent,
-      lastAssistantText: this.getLastAssistantContent(conversationId),
-      workspaceId: this.getResolvedWorkspaceForSession(conversationId),
-    });
+    let task: (() => Promise<void>) | undefined;
+    try {
+      task = this.backgroundReview.createReviewTaskAfterUserTurn({
+        conversationId,
+        agent: inst.agent,
+        lastAssistantText: this.getLastAssistantContent(conversationId),
+        workspaceId: this.getResolvedWorkspaceForSession(conversationId),
+      });
+    } catch (err) {
+      log.warn({ err, conversationId }, 'Background user-understanding review could not be scheduled');
+      return;
+    }
+    if (task) this.enqueueUserUnderstandingMaintenance(conversationId, 'review', task);
+  }
+
+  private enqueueUserUnderstandingMaintenance(
+    conversationId: string,
+    phase: 'turn' | 'review',
+    task: () => Promise<unknown>,
+  ): void {
+    const previous = this.userUnderstandingMaintenance.get(conversationId) ?? Promise.resolve();
+    let current: Promise<void>;
+    current = previous
+      .catch(() => {})
+      .then(async () => { await task(); })
+      .catch((err) => {
+        log.warn({ err, conversationId, phase }, 'User-understanding maintenance failed');
+      })
+      .finally(() => {
+        if (this.userUnderstandingMaintenance.get(conversationId) === current) {
+          this.userUnderstandingMaintenance.delete(conversationId);
+        }
+      });
+    this.userUnderstandingMaintenance.set(conversationId, current);
   }
 
   /**
@@ -1304,6 +1340,7 @@ export class AgentManager implements AgentInstanceGateway {
     void disposeAllSessionMcpRuntimes().catch(() => {});
     evictAllEmbeddedSessionRunners('agent_manager_dispose');
     this.backgroundReview.clear();
+    this.userUnderstandingMaintenance.clear();
     for (const instance of this.agents.values()) {
       instance.agent.abort();
     }

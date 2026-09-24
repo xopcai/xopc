@@ -20,7 +20,7 @@ import {
   type UserModelCaptureResult,
   type UserModelInterpretation,
 } from '../../user-model/capture/index.js';
-import { listUserAssertions } from '../../user-model/repository.js';
+import { getAssertionSlot, listUserAssertions } from '../../user-model/repository.js';
 import { createExtensionAwareStreamFn } from '../../providers/extension-stream-bridge.js';
 import { createLogger } from '../../utils/logger.js';
 
@@ -30,9 +30,13 @@ import { runAgentTurnWithTimeout, resolveAgentTurnTimeoutMs } from '../orchestra
 import { isAssistantTurnAborted, isAssistantTurnFailed } from '../orchestration/llm-turn-retry.js';
 
 import type { BackgroundReviewSettings } from './settings.js';
-import { buildUserModelInterpreterPrompt, USER_MODEL_INTERPRETER_SYSTEM_PROMPT } from './prompts.js';
+import {
+  buildUserModelInterpreterPrompt,
+  USER_MODEL_MAINTAINER_SYSTEM_PROMPT,
+  type AvailableUserAssertion,
+} from './prompts.js';
 
-const log = createLogger('UserModelInterpreter');
+const log = createLogger('UserUnderstandingMaintainer');
 
 type EvidenceMessage = CaptureEvidence & { message: AgentMessage };
 
@@ -44,7 +48,7 @@ export interface RunUserModelReviewParams {
   getConfig: () => Config | undefined;
 }
 
-export interface RunTurnUserModelCaptureParams extends Omit<RunUserModelReviewParams, 'settings'> {
+export interface RunTurnUserModelMaintenanceParams extends Omit<RunUserModelReviewParams, 'settings'> {
   turnId: string;
   userText: string;
   maxHistoryMessages?: number;
@@ -150,13 +154,13 @@ async function interpret(params: {
   getConfig: () => Config | undefined;
   evidence: EvidenceMessage[];
   mode: 'turn' | 'transcript';
-  availableTargets: Array<{ id: string; statement: string }>;
+  availableAssertions: AvailableUserAssertion[];
   timeoutMs: number;
   model: Model<Api>;
 }): Promise<UserModelInterpretation | null> {
   const reviewAgent = new Agent({
     initialState: {
-      systemPrompt: USER_MODEL_INTERPRETER_SYSTEM_PROMPT,
+      systemPrompt: USER_MODEL_MAINTAINER_SYSTEM_PROMPT,
       model: params.model,
       thinkingLevel: 'off' as ThinkingLevel,
       tools: [],
@@ -175,7 +179,7 @@ async function interpret(params: {
         role: 'user',
         content: buildUserModelInterpreterPrompt({
           mode: params.mode,
-          availableTargets: params.availableTargets,
+          availableAssertions: params.availableAssertions,
           evidenceTimestamp: new Date(params.evidence.at(-1)?.createdAt ?? Date.now()).toISOString(),
           timezone,
         }),
@@ -193,7 +197,7 @@ async function interpret(params: {
   return parseUserModelInterpretation(
     lastAssistantText(reviewAgent),
     params.evidence,
-    params.availableTargets.map((item) => item.id),
+    params.availableAssertions.map((item) => item.id),
   );
 }
 
@@ -207,7 +211,7 @@ async function executeReview(params: {
   extractorId: ExtractorId;
   sourceRef: string;
   contentForHash: string;
-  availableTargets: Array<{ id: string; statement: string }>;
+  availableAssertions: AvailableUserAssertion[];
   timeoutMs: number;
   turnId?: string;
 }): Promise<UserModelCaptureResult> {
@@ -266,45 +270,63 @@ async function executeReview(params: {
   }
 }
 
-export async function runTurnUserModelCapture(params: RunTurnUserModelCaptureParams): Promise<UserModelCaptureResult> {
+export function createTurnUserModelMaintenanceTask(
+  params: RunTurnUserModelMaintenanceParams,
+): () => Promise<UserModelCaptureResult> {
   const evidence = loadEvidenceMessages(params.conversationId, params.maxHistoryMessages ?? 12);
-  if (!evidence.length) return emptyUserModelCaptureResult();
-  const availableTargets = listUserAssertions({ limit: 200 }).map((item) => ({
-    id: item.id,
-    statement: item.statement,
-  }));
-  return executeReview({
-    conversationId: params.conversationId,
-    mainAgent: params.mainAgent,
-    workspaceId: params.workspaceId,
-    getConfig: params.getConfig,
-    evidence,
-    mode: 'turn',
-    extractorId: 'turn-semantics',
-    sourceRef: `session:${params.conversationId}:turn:${params.turnId}`,
-    contentForHash: params.userText,
-    availableTargets,
-    timeoutMs: 30_000,
-    turnId: params.turnId,
-  });
+  return async () => {
+    if (!evidence.length) return emptyUserModelCaptureResult();
+    return executeReview({
+      conversationId: params.conversationId,
+      mainAgent: params.mainAgent,
+      workspaceId: params.workspaceId,
+      getConfig: params.getConfig,
+      evidence,
+      mode: 'turn',
+      extractorId: 'turn-semantics',
+      sourceRef: `session:${params.conversationId}:turn:${params.turnId}`,
+      contentForHash: params.userText,
+      availableAssertions: listAvailableAssertions(),
+      timeoutMs: 30_000,
+      turnId: params.turnId,
+    });
+  };
 }
 
-export async function runBackgroundUserModelReview(params: RunUserModelReviewParams): Promise<void> {
+export function createBackgroundUserModelReviewTask(params: RunUserModelReviewParams): () => Promise<void> {
   const evidence = loadEvidenceMessages(params.conversationId, params.settings.maxHistoryMessages);
-  if (!evidence.length) return;
-  const first = evidence[0]!;
-  const last = evidence[evidence.length - 1]!;
-  await executeReview({
-    conversationId: params.conversationId,
-    mainAgent: params.mainAgent,
-    workspaceId: params.workspaceId,
-    getConfig: params.getConfig,
-    evidence,
-    mode: 'transcript',
-    extractorId: 'transcript-synthesis',
-    sourceRef: `session:${params.conversationId}:window:${first.ref}:${last.ref}`,
-    contentForHash: evidence.map((entry) => entry.ref).join('\n'),
-    availableTargets: [],
-    timeoutMs: params.settings.maxDurationMs,
+  return async () => {
+    if (!evidence.length) return;
+    const first = evidence[0]!;
+    const last = evidence[evidence.length - 1]!;
+    await executeReview({
+      conversationId: params.conversationId,
+      mainAgent: params.mainAgent,
+      workspaceId: params.workspaceId,
+      getConfig: params.getConfig,
+      evidence,
+      mode: 'transcript',
+      extractorId: 'transcript-synthesis',
+      sourceRef: `session:${params.conversationId}:window:${first.ref}:${last.ref}`,
+      contentForHash: evidence.map((entry) => entry.ref).join('\n'),
+      availableAssertions: listAvailableAssertions(),
+      timeoutMs: params.settings.maxDurationMs,
+    });
+  };
+}
+
+function listAvailableAssertions(): AvailableUserAssertion[] {
+  return listUserAssertions({ limit: 80 }).flatMap((item) => {
+    const slot = getAssertionSlot(item.slotId);
+    return slot ? [{
+      id: item.id,
+      predicate: slot.predicate,
+      normalizedValue: item.normalizedValue,
+      statement: item.statement,
+      authority: item.authority,
+      status: item.status,
+      subject: slot.subject,
+      scope: slot.scope,
+    }] : [];
   });
 }

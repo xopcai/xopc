@@ -15,7 +15,11 @@ export interface CaptureEvidence {
   createdAt: number;
 }
 
-export interface ParsedAssertionCandidate extends AssertionCandidate {
+export type AssertionMaintenanceAction = 'create' | 'merge' | 'replace';
+
+export interface ParsedAssertionOperation extends AssertionCandidate {
+  action: AssertionMaintenanceAction;
+  targetAssertionId?: string;
   evidenceRefs: string[];
   temporalResolution: 'exact' | 'relative_resolved' | 'unresolved';
   originalTimePhrase?: string;
@@ -41,7 +45,7 @@ export interface ParsedCollaborationRuleCandidate {
 
 export interface UserModelInterpretation {
   intent: UserModelCaptureIntent;
-  candidates: ParsedAssertionCandidate[];
+  assertions: ParsedAssertionOperation[];
   goals?: ParsedGoalCandidate[];
   collaborationRules?: ParsedCollaborationRuleCandidate[];
   targetAssertionIds: string[];
@@ -56,7 +60,9 @@ const ScopeSchema = z.object({
   if (scope.type !== 'global' && !scope.id) ctx.addIssue({ code: 'custom', message: `${scope.type} scope needs an id.` });
 });
 
-const CandidateSchema = z.object({
+const AssertionOperationSchema = z.object({
+  action: z.enum(['create', 'merge', 'replace']),
+  targetAssertionId: z.string().min(1).optional(),
   subject: z.object({
     type: z.enum(['user', 'person', 'goal', 'project', 'topic']),
     id: z.string().min(1).max(160),
@@ -86,11 +92,17 @@ const CandidateSchema = z.object({
   reviewAt: z.string().datetime({ offset: true }).optional(),
   temporalResolution: z.enum(['exact', 'relative_resolved', 'unresolved']),
   originalTimePhrase: z.string().max(200).optional(),
-  correctionOfAssertionId: z.string().min(1).optional(),
   evidence: z.array(z.object({ ref: z.string().min(1), quote: z.string().min(1) }).strict()).min(1).max(8),
   selfContained: z.boolean(),
   unresolvedReferences: z.array(z.string()).max(8),
-}).strict();
+}).strict().superRefine((operation, ctx) => {
+  if (operation.action === 'create' && operation.targetAssertionId) {
+    ctx.addIssue({ code: 'custom', message: 'Create must not target an existing assertion.' });
+  }
+  if (operation.action !== 'create' && !operation.targetAssertionId) {
+    ctx.addIssue({ code: 'custom', message: `${operation.action} requires targetAssertionId.` });
+  }
+});
 
 const GroundingSchema = z.object({
   evidence: z.array(z.object({ ref: z.string().min(1), quote: z.string().min(1) }).strict()).min(1).max(8),
@@ -116,7 +128,7 @@ const CollaborationRuleSchema = z.object({
 
 const InterpretationSchema = z.object({
   intent: z.enum(USER_MODEL_CAPTURE_INTENTS),
-  candidates: z.array(CandidateSchema).max(8),
+  assertions: z.array(AssertionOperationSchema).max(8),
   goals: z.array(GoalSchema).max(4).default([]),
   collaborationRules: z.array(CollaborationRuleSchema).max(4).default([]),
   targetAssertionIds: z.array(z.string().min(1)).max(8),
@@ -169,14 +181,18 @@ export function parseUserModelInterpretation(
     return null;
   }
   const evidenceByRef = new Map(evidence.map((item) => [item.ref, item]));
-  const candidateIntents = new Set<UserModelCaptureIntent>(['remember', 'correct', 'confirm', 'user_assertion']);
-  const candidates: ParsedAssertionCandidate[] = [];
-  if (candidateIntents.has(parsed.intent)) {
-    for (const item of parsed.candidates) {
+  const assertionIntents = new Set<UserModelCaptureIntent>(['remember', 'correct', 'confirm', 'user_assertion']);
+  const allowed = new Set(allowedTargetIds);
+  const assertions: ParsedAssertionOperation[] = [];
+  if (assertionIntents.has(parsed.intent)) {
+    for (const item of parsed.assertions) {
       const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
       if (!evidenceRefs) continue;
+      if (item.action !== 'create' && (!item.targetAssertionId || !allowed.has(item.targetAssertionId))) continue;
       const observedAt = Math.max(...item.evidence.map((claim) => evidenceByRef.get(claim.ref)!.createdAt));
-      candidates.push({
+      assertions.push({
+        action: item.action,
+        ...(item.targetAssertionId ? { targetAssertionId: item.targetAssertionId } : {}),
         subject: item.subject,
         predicate: item.predicate,
         cardinality: item.cardinality,
@@ -202,9 +218,6 @@ export function parseUserModelInterpretation(
         }),
         temporalResolution: item.temporalResolution,
         ...(item.originalTimePhrase ? { originalTimePhrase: item.originalTimePhrase } : {}),
-        ...(item.correctionOfAssertionId && allowedTargetIds.includes(item.correctionOfAssertionId)
-          ? { correctionOfAssertionId: item.correctionOfAssertionId }
-          : {}),
         observedAt,
         createdBy: 'runtime',
         evidenceRefs,
@@ -238,10 +251,9 @@ export function parseUserModelInterpretation(
         }];
       })
     : [];
-  const allowed = new Set(allowedTargetIds);
   return {
     intent: parsed.intent,
-    candidates,
+    assertions,
     goals,
     collaborationRules,
     targetAssertionIds: [...new Set(parsed.targetAssertionIds.filter((id) => allowed.has(id)))],
