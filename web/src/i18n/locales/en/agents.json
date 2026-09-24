@@ -352,7 +352,6 @@
     "listEmpty": "No agents match your search.",
     "listNoAgentsYet": "No agents yet. Create one to get started.",
     "listNewAgentCard": "New agent",
-    "manualCreateMoreAria": "More agent creation options",
     "manualCreateMenu": "Create manually",
     "manualCreateTitle": "Create agent manually",
     "manualCreateDescription": "Create a usable agent with only the essentials. You can refine everything else in its conversation.",

@@ -1,5 +1,4 @@
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { MoreHorizontal, Plus, SlidersHorizontal } from 'lucide-react';
+import { Plus, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -23,8 +22,6 @@ import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
-import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
 
 function AgentsSkeleton() {
   return (
@@ -104,35 +101,20 @@ export function AgentsSettingsPanel() {
   const headerEnd = useMemo(() => (
     <div className="flex items-center gap-2">
       <Button onClick={() => navigate('/settings/agent-defaults')}>{zh ? '全局默认配置' : 'Global defaults'}</Button>
+      <Button
+        onClick={() => {
+          setManualError(null);
+          setManualDraft((current) => ({ ...current, open: true }));
+        }}
+      >
+        <SlidersHorizontal className="size-4" strokeWidth={1.75} aria-hidden />
+        {agentsMessages.manualCreateMenu}
+      </Button>
       <Button variant="primary" onClick={startAgentCreation}>
         <Plus className="size-4" />{agentsMessages.listNewAgentCard}
       </Button>
-      <DropdownMenu.Root modal={false}>
-        <DropdownMenu.Trigger asChild>
-          <Button variant="ghost" className="size-11 shrink-0 p-0" aria-label={agentsMessages.manualCreateMoreAria}>
-            <MoreHorizontal className="size-4" aria-hidden />
-          </Button>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
-          <DropdownMenu.Content align="end" sideOffset={6} className="z-50 min-w-44 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover">
-            <DropdownMenu.Item
-              className={cn(
-                'touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover',
-                interaction.transition,
-              )}
-              onSelect={() => {
-                setManualError(null);
-                setManualDraft((current) => ({ ...current, open: true }));
-              }}
-            >
-              <SlidersHorizontal className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
-              {agentsMessages.manualCreateMenu}
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Portal>
-      </DropdownMenu.Root>
     </div>
-  ), [agentsMessages.listNewAgentCard, agentsMessages.manualCreateMenu, agentsMessages.manualCreateMoreAria, navigate, startAgentCreation, zh]);
+  ), [agentsMessages.listNewAgentCard, agentsMessages.manualCreateMenu, navigate, startAgentCreation, zh]);
 
   useLayoutEffect(() => {
     setPageHeader({
