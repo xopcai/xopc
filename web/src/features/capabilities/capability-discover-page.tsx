@@ -1,5 +1,5 @@
-import { AlertCircle, Cable, Layers, Package, Search } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { AlertCircle, Cable, Layers, Package } from 'lucide-react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -14,12 +14,16 @@ import {
   type CapabilityCatalogItem,
   type CapabilityKind,
 } from '@/features/capabilities/capability-catalog';
+import { CapabilityIcon } from '@/features/capabilities/capability-icon';
+import {
+  CapabilityHeaderSearch,
+  type CapabilityHeaderActionChange,
+} from '@/features/capabilities/capability-header-actions';
 import {
   fetchConnectorCatalog,
   fetchConnectorInstances,
   fetchStoreConnectorCatalog,
 } from '@/features/connectors/connectors-api';
-import { ConnectorLogo } from '@/features/connectors/components/connector-logo';
 import { getExtensionMarketplaceItems } from '@/features/extensions/extension-marketplace-api';
 import { useExtensions } from '@/features/extensions/extension-provider';
 import { getMarketplaceSkills, getSkills } from '@/features/skills/skill-api';
@@ -63,7 +67,7 @@ async function loadCapabilityCatalog(query: string, installedExtensionIds: Set<s
 
 const KIND_ICON = { skill: Layers, connector: Cable, extension: Package } as const;
 
-export function CapabilityDiscoverPage({ onHeaderEndChange }: { onHeaderEndChange?: (node: ReactNode | null) => void }) {
+export function CapabilityDiscoverPage({ onHeaderActionChange }: { onHeaderActionChange?: CapabilityHeaderActionChange }) {
   const language = useLocaleStore(state => state.language);
   const copy = messages(language).capabilitiesHub;
   const hasToken = useGatewayStore(state => Boolean(state.conversationId));
@@ -97,56 +101,38 @@ export function CapabilityDiscoverPage({ onHeaderEndChange }: { onHeaderEndChang
     { id: 'connector', label: copy.tabConnectors },
     { id: 'extension', label: copy.tabExtensions },
   ], [copy.filterAll, copy.tabConnectors, copy.tabExtensions, copy.tabSkills]);
-  const headerEnd = useMemo(() => (
-    <div className="flex items-center gap-2">
-      <div className="relative w-44 sm:w-56">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />
-        <input
-          type="search"
-          value={query}
-          onChange={event => setQuery(event.target.value)}
-          placeholder={copy.searchPlaceholder}
-          aria-label={copy.searchLabel}
-          className="ui-input h-9 w-full rounded-xl border border-edge bg-surface-base pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted"
-        />
-      </div>
-      <div className="hidden items-center gap-1 lg:flex" aria-label={copy.filterAria}>
-        {filters.map(option => (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => setFilter(option.id)}
-            className={cn(
-              'rounded-lg px-2.5 py-1.5 text-sm transition-colors',
-              filter === option.id ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-            )}
-            aria-pressed={filter === option.id}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+  const headerContribution = useMemo(() => ({
+    searchLabel: copy.searchLabel,
+    search: (
+      <CapabilityHeaderSearch
+        value={query}
+        onChange={setQuery}
+        placeholder={copy.searchPlaceholder}
+        ariaLabel={copy.searchLabel}
+      />
+    ),
+    secondary: (
       <PopoverSelect
         value={filter}
         options={filters.map(option => ({ value: option.id, label: option.label }))}
         placeholder={copy.filterAll}
         allowEmpty={false}
         ariaLabel={copy.filterAria}
-        triggerClassName="h-9 w-auto lg:hidden"
+        triggerClassName="h-9 w-auto min-w-[6.5rem] bg-surface-panel"
         align="end"
         onChange={value => setFilter(value as Filter)}
       />
-    </div>
-  ), [copy.filterAria, copy.searchLabel, copy.searchPlaceholder, filter, filters, query]);
+    ),
+  }), [copy.filterAria, copy.searchLabel, copy.searchPlaceholder, filter, filters, query]);
 
   useLayoutEffect(() => {
-    onHeaderEndChange?.(headerEnd);
-    return () => onHeaderEndChange?.(null);
-  }, [headerEnd, onHeaderEndChange]);
+    onHeaderActionChange?.(headerContribution);
+    return () => onHeaderActionChange?.(null);
+  }, [headerContribution, onHeaderActionChange]);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4">
         {data?.failedSources ? (
           <div className="flex items-center gap-2 rounded-xl border border-edge bg-surface-panel px-3 py-2 text-sm text-fg-muted" role="status">
             <AlertCircle className="size-4 shrink-0" aria-hidden />
@@ -181,16 +167,10 @@ function CapabilityCard({ item, copy }: { item: CapabilityCatalogItem; copy: Ret
       : copy.statusAvailable;
   const kindLabel = item.kind === 'skill' ? copy.kindSkill : item.kind === 'connector' ? copy.kindConnector : copy.kindExtension;
   return (
-    <li className="flex min-h-52 flex-col rounded-2xl border border-edge bg-surface-panel p-5 shadow-surface">
+    <li className="flex min-h-52 min-w-0 flex-col rounded-2xl border border-edge bg-surface-panel p-5 shadow-surface">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          {item.kind === 'connector' ? (
-            <ConnectorLogo connector={{ displayName: item.name, branding: item.iconUrl ? { logoUrl: item.iconUrl } : undefined }} />
-          ) : (
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-hover text-fg-muted">
-              <Icon className="size-5" aria-hidden />
-            </span>
-          )}
+          <CapabilityIcon iconUrl={item.iconUrl} fallback={Icon} />
           <div className="min-w-0">
             <h2 className="truncate font-semibold text-fg">{item.name}</h2>
             <p className="truncate text-xs text-fg-muted">{item.source}</p>

@@ -1,79 +1,65 @@
-import { Link } from 'react-router-dom';
-import { messages } from '@/i18n/messages';
-import { useLocaleStore } from '@/stores/locale-store';
-import { Plus, Search } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Download, Loader2, MoreHorizontal, Plus, RefreshCw } from 'lucide-react';
 import { memo } from 'react';
+import { Link } from 'react-router-dom';
 
-import { FindSkillsButton } from '@/features/skills/find-skills-button';
 import { Button } from '@/components/ui/button';
-import { RefreshButton } from '@/components/ui/refresh-button';
-import type { MainTab } from '@/features/skills/skills-page.constants';
 import type { SkillsCopy } from '@/features/skills/skill-catalog-structured-preview';
+import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
+import { useLocaleStore } from '@/stores/locale-store';
 
-export const SkillsPageHeaderEnd = memo(function SkillsPageHeaderEnd({
-  findingSkills,
-  onFindSkills,
+export const SkillsHeaderOverflow = memo(function SkillsHeaderOverflow({
   loading,
   onReloadClick,
-  searchQuery,
-  setSearchQuery,
-  mainTab,
   sk,
   setPendingFile,
   setInstallOpen,
 }: {
-  findingSkills: boolean;
-  onFindSkills: () => Promise<void>;
   loading: boolean;
   onReloadClick: () => void;
-  searchQuery: string;
-  setSearchQuery: (v: string) => void;
-  mainTab: MainTab;
   sk: SkillsCopy;
-  setPendingFile: (f: File | null) => void;
-  setInstallOpen: (v: boolean) => void;
+  setPendingFile: (file: File | null) => void;
+  setInstallOpen: (value: boolean) => void;
 }) {
-  const importTitle = messages(useLocaleStore(s => s.language)).imports.title;
+  const messageBundle = messages(useLocaleStore(state => state.language));
+  const itemClassName = cn(
+    'touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[highlighted]:bg-surface-hover',
+    interaction.transition,
+  );
+
   return (
-    <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-      <Link to="/settings/imports" className="text-sm text-accent hover:underline">{importTitle}</Link>
-      <RefreshButton
-        className="size-9 shrink-0 p-0"
-        loading={loading}
-        label={sk.reloadDiskAria}
-        title={sk.reloadRuntime}
-        onClick={onReloadClick}
-      />
-      <label className="relative flex min-h-9 min-w-0 max-w-sm cursor-text items-center rounded-pill border border-edge bg-surface-base py-1.5 pl-9 pr-3 shadow-surface dark:bg-surface-hover/40 sm:max-w-md">
-        <Search
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-disabled"
-          strokeWidth={1.75}
-          aria-hidden
-        />
-        <input
-          type="search"
-          enterKeyHint="search"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={mainTab === 'marketplace' ? sk.marketplaceSearchPackages : sk.searchPlaceholder}
-          autoComplete="off"
-          spellCheck={false}
-          className="min-w-0 flex-1 appearance-none border-0 bg-transparent py-0.5 text-sm leading-normal text-fg caret-current placeholder:text-fg-disabled focus:border-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none"
-        />
-      </label>
-      <Button
-        type="button"
-        variant="secondary"
-        className="shrink-0 gap-2"
-        onClick={() => {
-          setPendingFile(null);
-          setInstallOpen(true);
-        }}
-      >
-        <Plus className="size-4" strokeWidth={1.75} aria-hidden />
-        {sk.installCta}
-      </Button>
-      <FindSkillsButton sk={sk} findingSkills={findingSkills} onFindSkills={onFindSkills} />
-    </div>
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <Button type="button" variant="secondary" className="size-9 shrink-0 p-0" aria-label={messageBundle.capabilitiesHub.moreActions} title={messageBundle.capabilitiesHub.moreActions}>
+          <MoreHorizontal className="size-4" aria-hidden />
+        </Button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="end" sideOffset={6} className="z-50 min-w-52 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover">
+          <DropdownMenu.Item asChild>
+            <Link to="/settings/imports" className={itemClassName}>
+              <Download className="size-4 text-fg-muted" aria-hidden />
+              {messageBundle.imports.title}
+            </Link>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className={itemClassName} disabled={loading} onSelect={onReloadClick}>
+            {loading ? <Loader2 className="size-4 animate-spin text-fg-muted" aria-hidden /> : <RefreshCw className="size-4 text-fg-muted" aria-hidden />}
+            {sk.reloadRuntime}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            className={itemClassName}
+            onSelect={() => {
+              setPendingFile(null);
+              setInstallOpen(true);
+            }}
+          >
+            <Plus className="size-4 text-fg-muted" aria-hidden />
+            {sk.installCta}
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 });

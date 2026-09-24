@@ -13,14 +13,12 @@ import { TaskChatPage } from '@/features/chat/task/task-chat-page';
 import { DesktopPetEventBridge } from '@/features/desktop-pet/desktop-pet-event-bridge';
 import { ExtensionProvider } from '@/features/extensions/extension-provider';
 import {
-  loadAgentsSettingsPage,
   loadAgentBrowserSettingsPage,
   loadComputerSettingsPage,
   loadAutomationsPage,
   loadBrowserAutomationsPage,
   loadHomePage,
   loadTaskDetailPage,
-  loadChannelsPage,
   loadProjectDetailPage,
   loadProjectsPage,
   loadExtensionDebugPage,
@@ -66,14 +64,10 @@ const SettingsPage = lazy(() => loadSettingsPage().then((m) => ({ default: m.Set
 const CapabilitiesSettingsPanel = lazy(() =>
   loadCapabilitiesSettingsPanel().then((m) => ({ default: m.CapabilitiesSettingsPanel })),
 );
-const AgentsSettingsDetailPage = lazy(() =>
-  loadAgentsSettingsPage().then((m) => ({ default: m.AgentsSettingsPanel })),
-);
 const AgentBrowserSettingsPage = lazy(() =>
   loadAgentBrowserSettingsPage().then((m) => ({ default: m.AgentBrowserSettingsPage })),
 );
 const ComputerSettingsPage = lazy(() => loadComputerSettingsPage().then(m => ({ default: m.ComputerSettingsPage })));
-const ChannelsPage = lazy(() => loadChannelsPage().then((m) => ({ default: m.ChannelsSettingsPanel })));
 const ExtensionPage = lazy(() => loadExtensionPage().then((m) => ({ default: m.ExtensionPage })));
 const ExtensionSettingsPage = lazy(() =>
   loadExtensionSettingsPage().then((m) => ({ default: m.ExtensionSettingsPage })),
@@ -329,7 +323,7 @@ const router = createHashRouter([
         ],
       },
       {
-        path: 'capabilities/:section?',
+        path: 'capabilities/:section?/:detailId?',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
             <CapabilitiesPage />
@@ -339,43 +333,6 @@ const router = createHashRouter([
       {
         path: 'settings/connector-service',
         element: <Suspense fallback={<SecondaryRouteFallback />}><ConnectorServicePage /></Suspense>,
-      },
-      {
-        path: 'channels',
-        children: [
-          {
-            index: true,
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <ChannelsPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: ':channelId',
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <ChannelsPage />
-              </Suspense>
-            ),
-          },
-        ],
-      },
-      {
-        path: 'agents',
-        element: (
-          <Suspense fallback={<SecondaryRouteFallback />}>
-            <AgentsSettingsDetailPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'agents/:agentId',
-        element: (
-          <Suspense fallback={<SecondaryRouteFallback />}>
-            <AgentsSettingsDetailPage />
-          </Suspense>
-        ),
       },
       {
         path: 'local-apps',

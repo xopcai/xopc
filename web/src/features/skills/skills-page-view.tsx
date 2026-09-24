@@ -1,9 +1,16 @@
-import { useLayoutEffect, useMemo, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo } from 'react';
 
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
-import { SkillsPageHeaderEnd } from '@/features/skills/skills-page-header-end';
+import {
+  CapabilityHeaderActions,
+  CapabilityHeaderSearch,
+  type CapabilityHeaderActionChange,
+  type CapabilityHeaderContribution,
+} from '@/features/capabilities/capability-header-actions';
+import { FindSkillsButton } from '@/features/skills/find-skills-button';
+import { SkillsHeaderOverflow } from '@/features/skills/skills-page-header-end';
 import { SkillsPageCatalogContent } from '@/features/skills/skills-page-catalog-content';
 import { SkillsPageConfirmDialog } from '@/features/skills/skills-page-confirm-dialog';
 import { SkillsPageDetailDialog } from '@/features/skills/skills-page-detail-dialog';
@@ -18,7 +25,7 @@ import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-export function SkillsPageView({ vm, embedded = false, onHeaderEndChange }: { vm: SkillsPageVm; embedded?: boolean; onHeaderEndChange?: (node: ReactNode | null) => void }) {
+export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: { vm: SkillsPageVm; embedded?: boolean; onHeaderActionChange?: CapabilityHeaderActionChange }) {
   const {
     sk,
     hasToken,
@@ -39,7 +46,6 @@ export function SkillsPageView({ vm, embedded = false, onHeaderEndChange }: { vm
     marketBrowseProvider,
     setMarketBrowseProvider,
     registeredProviders,
-    inSettingsShell,
     searchInputActive,
     resultTab,
     setResultTab,
@@ -52,7 +58,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderEndChange }: { vm
   if (!hasToken) {
     return (
       <>
-        <SkillsPageHeaderRegistration vm={vm} embedded={embedded} onHeaderEndChange={onHeaderEndChange} />
+        <SkillsPageHeaderRegistration vm={vm} embedded={embedded} onHeaderActionChange={onHeaderActionChange} />
         <div className="w-full px-3 py-16 text-center text-sm text-fg-muted sm:px-5 xl:px-6">
           {sk.needToken}
         </div>
@@ -85,9 +91,12 @@ export function SkillsPageView({ vm, embedded = false, onHeaderEndChange }: { vm
 
   return (
     <>
-      <SkillsPageHeaderRegistration vm={vm} embedded={embedded} onHeaderEndChange={onHeaderEndChange} />
+      <SkillsPageHeaderRegistration vm={vm} embedded={embedded} onHeaderActionChange={onHeaderActionChange} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+      <div className={cn(
+        'mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:px-8',
+        embedded ? 'pb-7 pt-3 lg:pb-9 lg:pt-4' : 'py-7 lg:py-9',
+      )}>
         {recoveryReturnPath ? (
           <div className="flex flex-col gap-3 rounded-xl border border-accent/25 bg-accent-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -137,23 +146,6 @@ export function SkillsPageView({ vm, embedded = false, onHeaderEndChange }: { vm
             </ul>
           </div>
         ) : null}
-        {inSettingsShell ? (
-          <div className="flex flex-col gap-3 border-b border-edge-subtle pb-4 dark:border-edge-subtle sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-            <SkillsPageHeaderEnd
-              findingSkills={vm.findingSkills}
-              onFindSkills={vm.onFindSkills}
-              loading={vm.loading}
-              onReloadClick={vm.onReloadClick}
-              searchQuery={vm.searchQuery}
-              setSearchQuery={vm.setSearchQuery}
-              mainTab={vm.mainTab}
-              sk={vm.sk}
-              setPendingFile={vm.setPendingFile}
-              setInstallOpen={vm.setInstallOpen}
-            />
-          </div>
-        ) : null}
-
         <section className="flex flex-col gap-5">
           <div className="flex flex-col gap-3 border-b border-edge-subtle pb-3 dark:border-edge-subtle sm:flex-row sm:items-center sm:justify-between">
             <PageTabs
@@ -269,7 +261,15 @@ export function SkillsPageView({ vm, embedded = false, onHeaderEndChange }: { vm
   );
 }
 
-function SkillsPageHeaderRegistration({ vm, embedded = false, onHeaderEndChange }: { vm: SkillsPageVm; embedded?: boolean; onHeaderEndChange?: (node: ReactNode | null) => void }) {
+function SkillsPageHeaderRegistration({
+  vm,
+  embedded = false,
+  onHeaderActionChange,
+}: {
+  vm: SkillsPageVm;
+  embedded?: boolean;
+  onHeaderActionChange?: CapabilityHeaderActionChange;
+}) {
   const {
     sk,
     hasToken,
@@ -286,28 +286,41 @@ function SkillsPageHeaderRegistration({ vm, embedded = false, onHeaderEndChange 
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
 
-  const skillsHeaderEnd = useMemo(
-    () => (
-      <SkillsPageHeaderEnd
-        findingSkills={vm.findingSkills}
-        onFindSkills={vm.onFindSkills}
+  const headerContribution = useMemo<CapabilityHeaderContribution | null>(
+    () => hasToken ? ({
+      searchLabel: mainTab === 'marketplace' ? sk.marketplaceSearchPackages : sk.searchPlaceholder,
+      search: (
+        <CapabilityHeaderSearch
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder={mainTab === 'marketplace' ? sk.marketplaceSearchPackages : sk.searchPlaceholder}
+        />
+      ),
+      primary: (
+        <FindSkillsButton
+          sk={sk}
+          findingSkills={vm.findingSkills}
+          onFindSkills={vm.onFindSkills}
+          compactOnMobile
+        />
+      ),
+      overflow: (
+        <SkillsHeaderOverflow
         loading={loading}
         onReloadClick={onReloadClick}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        mainTab={mainTab}
         sk={sk}
         setPendingFile={setPendingFile}
         setInstallOpen={setInstallOpen}
-      />
-    ),
-    [vm.findingSkills, vm.onFindSkills, loading, onReloadClick, searchQuery, setSearchQuery, mainTab, sk, setPendingFile, setInstallOpen],
+        />
+      ),
+    }) : null,
+    [hasToken, loading, mainTab, onReloadClick, searchQuery, setInstallOpen, setPendingFile, setSearchQuery, sk, vm.findingSkills, vm.onFindSkills],
   );
 
   useLayoutEffect(() => {
     if (embedded) {
-      onHeaderEndChange?.(skillsHeaderEnd);
-      return () => onHeaderEndChange?.(null);
+      onHeaderActionChange?.(headerContribution);
+      return () => onHeaderActionChange?.(null);
     }
     if (!hasToken || inSettingsShell) {
       clearPageHeader();
@@ -320,10 +333,10 @@ function SkillsPageHeaderRegistration({ vm, embedded = false, onHeaderEndChange 
           <h1 className="truncate text-base font-semibold tracking-tight text-fg">{sk.title}</h1>
         </div>
       ),
-      end: skillsHeaderEnd,
+      end: <CapabilityHeaderActions contribution={headerContribution} />,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, embedded, hasToken, inSettingsShell, onHeaderEndChange, setPageHeader, skillsHeaderEnd, sk.title]);
+  }, [clearPageHeader, embedded, hasToken, headerContribution, inSettingsShell, onHeaderActionChange, setPageHeader, sk.title]);
 
   return null;
 }

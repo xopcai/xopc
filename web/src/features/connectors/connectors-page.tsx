@@ -1,17 +1,22 @@
 import { Loader2, Settings2, SlidersHorizontal } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { PopoverSelect } from '@/components/ui/popover-select';
+import {
+  CapabilityHeaderActions,
+  CapabilityHeaderSearch,
+  type CapabilityHeaderActionChange,
+} from '@/features/capabilities/capability-header-actions';
 import { ConnectorCard } from '@/features/connectors/components/connector-card';
 import { connectorIsInstalled, CONNECTOR_SKELETON_KEYS } from '@/features/connectors/components/connector-card-data';
 import { ConnectorCardSkeleton } from '@/features/connectors/components/connector-card-skeletons';
 import { InstalledConnectorRowSkeleton } from '@/features/connectors/components/installed-connector-row-skeleton';
 import { ConnectorDetailDialog } from '@/features/connectors/components/connector-detail-dialog';
 import { ConnectorRuntimeSettingsDialog } from '@/features/connectors/components/connector-runtime-settings-dialog';
-import { ConnectorSearchField, ConnectorsPageHeaderEnd } from '@/features/connectors/components/connectors-page-header-end';
+import { ConnectorsPageHeaderEnd } from '@/features/connectors/components/connectors-page-header-end';
 import { CustomMcpServerRow } from '@/features/connectors/components/custom-mcp-server-row';
 import { useExtensions } from '@/features/extensions/extension-provider';
 import { PluginMcpConnection } from '@/features/extensions/agent-plugin-dialog';
@@ -107,6 +112,9 @@ function connectorFromStoreItem(item: StoreConnectorCatalogItem): ConnectorDefin
     category,
     kind: 'mcp',
     source: 'store',
+    ...(item.branding?.iconUrl
+      ? { branding: { logoUrl: item.branding.iconUrl, source: 'registry' as const } }
+      : {}),
     capabilities: Array.isArray(record.capabilities)
       ? record.capabilities.filter((value): value is ConnectorDefinition['capabilities'][number] => typeof value === 'string')
       : [],
@@ -129,7 +137,7 @@ function safeReturnPath(value: string | null): string {
   return value?.startsWith('/') && !value.startsWith('//') ? value : '/user-model';
 }
 
-export function ConnectorsPage({ embedded = false, onHeaderEndChange }: { embedded?: boolean; onHeaderEndChange?: (node: ReactNode | null) => void }) {
+export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { embedded?: boolean; onHeaderActionChange?: CapabilityHeaderActionChange }) {
   const pluginExtensions = useExtensions().filter(extension => extension.format === 'agent-plugin');
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
@@ -420,23 +428,35 @@ export function ConnectorsPage({ embedded = false, onHeaderEndChange }: { embedd
 
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
-  const headerEnd = useMemo(() => (
-    <ConnectorsPageHeaderEnd
-      onRefresh={tab === 'connected' && hasToken ? load : undefined}
-      refreshing={state.loading}
-      refreshLabel={cs.refreshConnections}
-      onBrowseCatalog={() => selectTab('discover')}
-      onAddCustomServer={openAddCustomServer}
-      addLabel={cs.addConnection}
-      browseLabel={cs.addFromCatalog}
-      customLabel={cs.addCustomServerAdvanced}
-    />
-  ), [cs, hasToken, load, openAddCustomServer, selectTab, state.loading, tab]);
+  const headerContribution = useMemo(() => ({
+    searchLabel: tab === 'connected' ? cs.connectedSearchPlaceholder : cs.discoverSearchPlaceholder,
+    search: (
+      <CapabilityHeaderSearch
+        value={tab === 'connected' ? connectedSearchQuery : discoverSearchQuery}
+        onChange={tab === 'connected' ? setConnectedSearchQuery : setDiscoverSearchQuery}
+        placeholder={tab === 'connected' ? cs.connectedSearchPlaceholder : cs.discoverSearchPlaceholder}
+      />
+    ),
+    secondary: (
+      <ConnectorsPageHeaderEnd
+        onRefresh={tab === 'connected' && hasToken ? load : undefined}
+        refreshing={state.loading}
+        refreshLabel={cs.refreshConnections}
+        onBrowseCatalog={() => selectTab('discover')}
+        onAddCustomServer={openAddCustomServer}
+        addLabel={cs.addConnection}
+        browseLabel={cs.addFromCatalog}
+        customLabel={cs.addCustomServerAdvanced}
+        serviceLabel={language.startsWith('zh') ? '应用连接服务' : 'Connection service'}
+        moreActionsLabel={m.capabilitiesHub.moreActions}
+      />
+    ),
+  }), [connectedSearchQuery, cs, discoverSearchQuery, hasToken, language, load, m.capabilitiesHub.moreActions, openAddCustomServer, selectTab, state.loading, tab]);
 
   useLayoutEffect(() => {
     if (embedded) {
-      onHeaderEndChange?.(headerEnd);
-      return () => onHeaderEndChange?.(null);
+      onHeaderActionChange?.(headerContribution);
+      return () => onHeaderActionChange?.(null);
     }
     setPageHeader({
       startExtra: null,
@@ -445,10 +465,10 @@ export function ConnectorsPage({ embedded = false, onHeaderEndChange }: { embedd
           <h1 className="truncate text-base font-semibold tracking-tight text-fg">{cs.title}</h1>
         </div>
       ),
-      end: headerEnd,
+      end: <CapabilityHeaderActions contribution={headerContribution} />,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, cs.title, embedded, headerEnd, onHeaderEndChange, setPageHeader]);
+  }, [clearPageHeader, cs.title, embedded, headerContribution, onHeaderActionChange, setPageHeader]);
 
   const connectedValue = useMemo(() => state.instances.map((instance) => ({
     instance,
@@ -534,7 +554,10 @@ export function ConnectorsPage({ embedded = false, onHeaderEndChange }: { embedd
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+      <div className={cn(
+        'mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:px-8',
+        embedded ? 'pb-7 pt-3 lg:pb-9 lg:pt-4' : 'py-7 lg:py-9',
+      )}>
         {!hasToken ? (
           <p className="rounded-xl border border-edge bg-surface-panel px-4 py-3 text-sm text-fg-muted">{cs.tokenHint}</p>
         ) : null}
@@ -584,15 +607,6 @@ export function ConnectorsPage({ embedded = false, onHeaderEndChange }: { embedd
 
           {tab === 'connected' && hasToken ? (
             <div className="flex flex-col gap-6">
-              {installedCount > 5 || connectedSearchQuery ? (
-                <ConnectorSearchField
-                  value={connectedSearchQuery}
-                  onChange={setConnectedSearchQuery}
-                  placeholder={cs.connectedSearchPlaceholder}
-                  className="max-w-xl"
-                />
-              ) : null}
-
               {state.loading ? (
                 <div className="grid gap-3" aria-busy="true" aria-label={cs.loading}>
                   {CONNECTOR_SKELETON_KEYS.slice(0, 3).map((key) => <InstalledConnectorRowSkeleton key={key} />)}
@@ -713,14 +727,8 @@ export function ConnectorsPage({ embedded = false, onHeaderEndChange }: { embedd
                 ))}
               </div> : null}
 
-              <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-                <ConnectorSearchField
-                  value={discoverSearchQuery}
-                  onChange={setDiscoverSearchQuery}
-                  placeholder={cs.discoverSearchPlaceholder}
-                  className="max-w-xl"
-                />
-                <details className="relative shrink-0 lg:ml-auto">
+              <div className="flex justify-end">
+                <details className="relative shrink-0">
                   <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-edge bg-surface-panel px-3 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg">
                     <SlidersHorizontal className="size-3.5" aria-hidden />
                     {cs.filters}

@@ -108,6 +108,7 @@ export type StoreConnectorCatalogItem = {
   author: { username: string; avatarUrl: string | null };
   latestVersion?: string;
   updatedAt: number;
+  branding?: { iconUrl: string; iconSha256: string };
   connectorManifest?: unknown;
 };
 

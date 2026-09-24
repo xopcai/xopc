@@ -13,15 +13,13 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsDesktopApp'
   | 'settingsKeyboardShortcuts'
   | 'settingsAgentDefaults'
-  | 'settingsChannels'
   | 'settingsGateway'
   | 'settingsRuntimes'
   | 'settingsDevices'
   | 'settingsHeartbeat'
   | 'settingsTunnel'
   | 'settingsShares'
-  | 'skills'
-  | 'channels',
+  | 'skills',
   SettingsSectionId
 > = {
   settingsImports: 'imports',
@@ -32,7 +30,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsDesktopPet: 'desktop-pet',
   settingsDesktopApp: 'desktop-app',
   settingsAgentDefaults: 'agent-defaults',
-  settingsChannels: 'channels',
   settingsGateway: 'gateway',
   settingsRuntimes: 'runtimes',
   settingsDevices: 'devices',
@@ -40,7 +37,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsTunnel: 'remote-access',
   settingsShares: 'shares',
   skills: 'skills',
-  channels: 'channels',
 };
 
 function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
@@ -151,12 +147,12 @@ export function browserDocsUrl(language: StoredLanguage): string {
 /** Path for React Router `to` prop (hash router, no `#`). */
 export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
-  if (tab === 'agents') return '/agents';
+  if (tab === 'agents') return '/capabilities/agents';
   if (tab === 'automations') return '/automations';
   if (tab === 'settingsKeyboardShortcuts') return '/settings/keyboard-shortcuts';
   if (tab === 'skills') return '/capabilities/skills';
   if (tab === 'connectors') return '/capabilities/connectors';
-  if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
+  if (tab === 'channels') return '/capabilities/channels';
   if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
   if (tab === 'settingsComputerUse') return '/settings/computer-use';
   if (tab === 'settingsModels') return capabilitySettingsPath('models');

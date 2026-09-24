@@ -49,6 +49,7 @@ describe('China connector catalog', () => {
   it('uses bundled brand icons for every catalog entry', () => {
     expect(CHINA_CONNECTORS.filter(connector => connector.branding).map((connector) => connector.branding?.logoUrl)).toEqual([
       '/channel-icons/feishu.svg',
+      '/connector-icons/wecom.svg',
       '/connector-icons/dingtalk-mark.svg',
       '/connector-icons/wps-docs.svg',
       '/connector-icons/tencent-meeting-mark.svg',
@@ -99,6 +100,8 @@ describe('China connector catalog', () => {
       runtime: { type: 'cli', adapterId: 'lark', adapterVersion: '1', binaryVersion: '1.0.96' },
     });
     expect(getConnectorDefinition('wecom-workspace')).toMatchObject({
+      displayName: '企业微信',
+      branding: { logoUrl: '/connector-icons/wecom.svg', source: 'builtin' },
       runtime: { type: 'cli', adapterId: 'wecom', binaryVersion: '1.3.0' },
     });
   });

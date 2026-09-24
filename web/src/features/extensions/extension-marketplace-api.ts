@@ -12,6 +12,7 @@ export type ExtensionMarketplaceItem = {
   verified?: boolean;
   homepage?: string;
   author?: string;
+  branding?: { iconUrl: string; iconSha256: string };
 };
 
 export async function getExtensionMarketplaceItems(query = ''): Promise<ExtensionMarketplaceItem[]> {
@@ -31,6 +32,7 @@ export type ExtensionMarketplacePackageDetail = {
   name: string;
   type: string;
   description: string;
+  branding?: { iconUrl: string; iconSha256: string };
   readme: string | null;
   downloads: number;
   author: { username: string; avatarUrl: string | null };

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { CheckCircle2, Star } from 'lucide-react';
+import { CheckCircle2, Layers, Star } from 'lucide-react';
 
 import { FindSkillsButton } from '@/features/skills/find-skills-button';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import {
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import { CapabilityIcon } from '@/features/capabilities/capability-icon';
 
 type Props = Pick<
   SkillsPageVm,
@@ -199,6 +200,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
+                      <CapabilityIcon iconUrl={row.branding?.iconUrl} fallback={Layers} />
                       <button
                         type="button"
                         className={cn(

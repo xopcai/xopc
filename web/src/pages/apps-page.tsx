@@ -1,11 +1,17 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowLeft, Box, Check, ExternalLink, Loader2, Plus, Search, Settings, X } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { ArrowLeft, Box, Check, ExternalLink, Loader2, MoreHorizontal, Plus, Settings, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
+import {
+  CapabilityHeaderActions,
+  CapabilityHeaderSearch,
+  type CapabilityHeaderActionChange,
+} from '@/features/capabilities/capability-header-actions';
 import { parseAppsMainTab, type AppsMainTab } from '@/features/apps/apps-page.constants';
 import {
   useExtensions,
@@ -24,12 +30,13 @@ import type { ExtensionApiRow, PageContribution } from '@/features/extensions/ty
 import { messages } from '@/i18n/messages';
 import type { MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 type ExtensionsPageCopy = MessageBundle['extensionsPage'];
 
-export function ExtensionsPage({ embedded = false, onHeaderEndChange }: { embedded?: boolean; onHeaderEndChange?: (node: ReactNode | null) => void }) {
+export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { embedded?: boolean; onHeaderActionChange?: CapabilityHeaderActionChange }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
@@ -113,25 +120,58 @@ export function ExtensionsPage({ embedded = false, onHeaderEndChange }: { embedd
     });
   }, [extensions]);
 
-  const headerEnd = useMemo(() => (
-    <div className="flex items-center gap-2">
-      <Button variant="secondary" onClick={() => setInstallPlugin(true)}>{language.startsWith('zh') ? '安装插件' : 'Install plugin'}</Button>
-      <Button asChild variant="secondary" className="h-9">
-        <Link to="/local-apps" aria-label={m.extensionsPage.openLocalApps} title={m.extensionsPage.openLocalApps}>
-          <Box className="size-4" />
-          <span className="hidden sm:inline">{m.extensionsPage.openLocalApps}</span>
+  const headerContribution = useMemo(() => ({
+    searchLabel: mainTab === 'marketplace' ? m.extensionsPage.marketplaceSearchPlaceholder : m.extensionsPage.searchPlaceholder,
+    search: (
+      <CapabilityHeaderSearch
+        value={search}
+        onChange={setSearch}
+        placeholder={mainTab === 'marketplace' ? m.extensionsPage.marketplaceSearchPlaceholder : m.extensionsPage.searchPlaceholder}
+      />
+    ),
+    overflow: (
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <Button variant="secondary" className="size-9 shrink-0 p-0" aria-label={m.capabilitiesHub.moreActions} title={m.capabilitiesHub.moreActions}>
+            <MoreHorizontal className="size-4" aria-hidden />
+          </Button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content align="end" sideOffset={6} className="z-50 min-w-48 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover">
+            <DropdownMenu.Item
+              className={cn('touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover', interaction.transition)}
+              onSelect={() => setInstallPlugin(true)}
+            >
+              <Plus className="size-4 text-fg-muted" aria-hidden />
+              {language.startsWith('zh') ? '安装插件' : 'Install plugin'}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item asChild>
+              <Link
+                to="/local-apps"
+                className={cn('touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover', interaction.transition)}
+              >
+                <Box className="size-4 text-fg-muted" aria-hidden />
+                {m.extensionsPage.openLocalApps}
+              </Link>
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+    ),
+    primary: (
+      <Button asChild variant="primary" className="h-9 shrink-0">
+        <Link to="/local-apps/new" aria-label={m.extensionsPage.createLocalApp}>
+          <Plus className="size-4" aria-hidden />
+          <span className="hidden sm:inline">{m.extensionsPage.createLocalApp}</span>
         </Link>
       </Button>
-      <Button asChild variant="primary" className="h-9">
-        <Link to="/local-apps/new"><Plus className="size-4" />{m.extensionsPage.createLocalApp}</Link>
-      </Button>
-    </div>
-  ), [language, m.extensionsPage.createLocalApp, m.extensionsPage.openLocalApps]);
+    ),
+  }), [language, m.capabilitiesHub.moreActions, m.extensionsPage, mainTab, search]);
 
   useLayoutEffect(() => {
     if (embedded) {
-      onHeaderEndChange?.(headerEnd);
-      return () => onHeaderEndChange?.(null);
+      onHeaderActionChange?.(headerContribution);
+      return () => onHeaderActionChange?.(null);
     }
     setPageHeader({
       startExtra: null,
@@ -140,16 +180,15 @@ export function ExtensionsPage({ embedded = false, onHeaderEndChange }: { embedd
           <h1 className="truncate text-base font-semibold tracking-tight text-fg">{m.extensionsPage.title}</h1>
         </div>
       ),
-      end: headerEnd,
+      end: <CapabilityHeaderActions contribution={headerContribution} />,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, embedded, headerEnd, m.extensionsPage.title, onHeaderEndChange, setPageHeader]);
+  }, [clearPageHeader, embedded, headerContribution, m.extensionsPage.title, onHeaderActionChange, setPageHeader]);
 
   if (loading && mainTab !== 'marketplace') {
     return <ExtensionsPageSkeleton />;
   }
 
-  const showSearch = mainTab !== 'marketplace' && listForTab.length > 0;
   const tabItems = [
     { id: 'marketplace' as const, label: m.extensionsPage.tabMarketplace },
     { id: 'builtin' as const, label: m.extensionsPage.tabBuiltin, count: bundledExtensions.length },
@@ -158,8 +197,11 @@ export function ExtensionsPage({ embedded = false, onHeaderEndChange }: { embedd
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <div className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
-        <div className="mb-6 flex flex-col gap-3 border-b border-edge-subtle pb-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className={cn(
+        'mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8',
+        embedded ? 'pb-7 pt-3 lg:pb-9 lg:pt-4' : 'py-7 lg:py-9',
+      )}>
+        <div className="mb-6 border-b border-edge-subtle pb-3">
           <PageTabs
             items={tabItems}
             activeTab={mainTab}
@@ -169,26 +211,10 @@ export function ExtensionsPage({ embedded = false, onHeaderEndChange }: { embedd
             panelIdPrefix="extensions-panel"
             className="flex-wrap"
           />
-          {showSearch ? (
-            <div className="relative w-full min-w-0 sm:max-w-xs">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted"
-                aria-hidden
-              />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={m.extensionsPage.searchPlaceholder}
-                className="w-full rounded-lg border border-edge bg-surface-base py-2 pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                autoComplete="off"
-              />
-            </div>
-          ) : null}
         </div>
 
         {mainTab === 'marketplace' ? (
-          <ExtensionMarketplacePanel query={search} onQueryChange={setSearch} />
+          <ExtensionMarketplacePanel query={search} />
         ) : mainTab === 'builtin' && bundledExtensions.length === 0 ? (
           <EmptyExtensionsState message={m.extensionsPage.emptyBuiltin} />
         ) : mainTab === 'user' && userExtensions.length === 0 ? (

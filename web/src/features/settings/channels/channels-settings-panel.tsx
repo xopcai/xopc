@@ -1,9 +1,10 @@
 import { AlertTriangle, CircleAlert, CircleCheck, ExternalLink, Loader2, RotateCcw, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import type { CapabilityHeaderActionChange } from '@/features/capabilities/capability-header-actions';
 import { PopoverSelect, type PopoverSelectOption } from '@/components/ui/popover-select';
 import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
@@ -13,14 +14,13 @@ import type { GatewayConfigBinding } from '@/features/settings/agents-admin-api'
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { channelsStatusSwrKey, fetchChannelsStatusSwr } from '@/features/settings/channels-status-swr';
 import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
-import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
+import { SettingsPageFrame } from '@/features/settings/settings-page-layout';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { CHANNELS_HUB_PATH, channelDetailPath, normalizeChannelRouteId } from './channels-routes';
 import { choosePrimaryChannelAction } from './channel-primary-action';
@@ -551,13 +551,18 @@ function ChannelSetupReadinessBanner({
   );
 }
 
-export function ChannelsSettingsPanel() {
+export function ChannelsSettingsPanel({
+  channelId,
+  onHeaderActionChange,
+}: {
+  channelId?: string;
+  onHeaderActionChange?: CapabilityHeaderActionChange;
+}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const hasToken = useGatewayStore((s) => Boolean(s.conversationId));
   const navigate = useNavigate();
-  const { channelId: routeChannelId } = useParams<{ channelId?: string }>();
-  const activeChannelId = normalizeChannelRouteId(routeChannelId);
+  const activeChannelId = normalizeChannelRouteId(channelId);
 
   const catalog = useChannelCatalog(hasToken, language);
   const entries = catalog.entries;
@@ -578,8 +583,6 @@ export function ChannelsSettingsPanel() {
     fetchChatAgents,
     { revalidateOnFocus: false },
   );
-  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
-  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const activeEntry = useMemo(
     () => entries.find((entry) => entry.id === activeChannelId),
     [activeChannelId, entries],
@@ -661,30 +664,22 @@ export function ChannelsSettingsPanel() {
   }, [mutateRuntimeStatuses]);
   useChannelStatusRealtime(onChannelStatusEvent, hasToken);
 
-  const headerEnd = useMemo(
-    () => hasToken ? (
+  const headerContribution = useMemo(
+    () => hasToken ? ({ secondary: (
       <ChannelsPageHeaderActions
         ch={ch}
         refreshing={catalog.isValidating || isValidatingRuntime}
         saveOk={false}
         onRefresh={() => void refreshChannelState()}
       />
-    ) : null,
+    ) }) : null,
     [catalog.isValidating, ch, hasToken, isValidatingRuntime, refreshChannelState],
   );
 
   useLayoutEffect(() => {
-    setPageHeader({
-      startExtra: null,
-      main: (
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
-        </div>
-      ),
-      end: headerEnd,
-    });
-    return () => clearPageHeader();
-  }, [clearPageHeader, headerEnd, m.settingsSections.channels, setPageHeader]);
+    onHeaderActionChange?.(headerContribution);
+    return () => onHeaderActionChange?.(null);
+  }, [headerContribution, onHeaderActionChange]);
 
   const openChannel = useCallback((id: string) => {
     navigate(channelDetailPath(id));
@@ -804,15 +799,18 @@ export function ChannelsSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
-        <SettingsPageHeader title={m.settingsSections.channels} />
+      <SettingsPageFrame gap="gap-3" padding="px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4">
         <p className="text-sm text-fg-muted">{ch.tokenRequired}</p>
       </SettingsPageFrame>
     );
   }
 
   return (
-    <SettingsPageFrame gap="gap-4" className="max-w-6xl" padding="px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+    <SettingsPageFrame
+      gap="gap-4"
+      className="max-w-6xl"
+      padding="px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4"
+    >
       {catalog.isLoading ? (
         <SettingsPageSkeleton sections={2} />
       ) : catalog.error ? (
