@@ -220,7 +220,7 @@ describe('Source-driven task follow-up', () => {
     await service.stop();
     service = new TaskFollowUpService(getSqliteDatabase(), { config: () => ConfigSchema.parse({}),
       sources: sources(), executor: { execute }, stateDir: directory, worktrees: new LocalWorktreeManager({ stateDir: directory }) });
-    expect((await service.preflight(principal, input)).missing).toContain('verification_backend');
+    expect((await service.preflight(principal, input)).missing).toContain('verification_backend_unavailable');
     const editOnly = { ...input, capabilities: ['workspace.read', 'workspace.write'], verificationCommand: undefined };
     expect((await service.preflight(principal, editOnly)).ready).toBe(true);
     const created = await service.create(principal, editOnly);
