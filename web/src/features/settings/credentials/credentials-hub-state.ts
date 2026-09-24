@@ -104,7 +104,7 @@ function imageDomain(
 }
 
 function voiceNeedsKey(provider: string): boolean {
-  if (provider === 'edge' || provider === 'tts-local-cli') return false;
+  if (provider === 'edge') return false;
   return provider === 'openai' || provider === 'alibaba' || provider === 'minimax';
 }
 

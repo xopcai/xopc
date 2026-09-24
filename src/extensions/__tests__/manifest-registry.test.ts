@@ -31,19 +31,19 @@ describe('ManifestRegistry', () => {
   it('indexes speechProviders from manifest and contracts', () => {
     const reg = ManifestRegistry.fromDiscovered([
       {
-        id: 'tts-local-cli',
-        path: '/p/tts-local-cli',
+        id: 'sample-speech-extension',
+        path: '/p/sample-speech-extension',
         source: 'bundled',
         manifest: {
-          id: 'tts-local-cli',
-          name: 'Local CLI TTS',
-          speechProviders: ['tts-local-cli'],
-          contracts: { speechProviders: ['cli'] },
+          id: 'sample-speech-extension',
+          name: 'Sample Speech Extension',
+          speechProviders: ['sample-speech'],
+          contracts: { speechProviders: ['sample-voice'] },
         },
       },
     ]);
-    expect(reg.findBySpeechProvider('tts-local-cli')?.id).toBe('tts-local-cli');
-    expect(reg.findBySpeechProvider('cli')?.id).toBe('tts-local-cli');
+    expect(reg.findBySpeechProvider('sample-speech')?.id).toBe('sample-speech-extension');
+    expect(reg.findBySpeechProvider('sample-voice')?.id).toBe('sample-speech-extension');
   });
 
   it('indexes mediaUnderstandingProviders from manifest and contracts', () => {

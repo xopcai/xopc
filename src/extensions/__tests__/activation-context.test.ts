@@ -24,12 +24,12 @@ describe('collectConfiguredProviderIds', () => {
   it('quietly ignores saved configuration for unavailable voice extensions', () => {
     logger.warn.mockClear();
     const ids = collectConfiguredProviderIds({
-      messages: { tts: { provider: 'edge', providers: { 'tts-local-cli': { command: '' } } } },
+      messages: { tts: { provider: 'edge', providers: { 'retired-speech': { apiKey: 'unused' } } } },
       tools: { media: { audio: { provider: 'alibaba', providers: { alibaba: { apiKey: 'test' }, groq: { model: 'whisper-large-v3-turbo' } } } } },
     });
     expect(ids).toContain('alibaba');
     expect(ids).not.toContain('groq');
-    expect(ids).not.toContain('tts-local-cli');
+    expect(ids).not.toContain('retired-speech');
     expect(logger.warn).not.toHaveBeenCalled();
   });
 

@@ -67,8 +67,7 @@ export function formatTtsSetupHint(): string {
     `• *OpenAI*: \`OPENAI_API_KEY\` or \`messages.tts.providers.openai.apiKey\`\n` +
     `• *Alibaba*: \`DASHSCOPE_API_KEY\` or \`messages.tts.providers.alibaba.apiKey\`\n` +
     `• *MiniMax*: \`MINIMAX_API_KEY\` or \`messages.tts.providers.minimax.apiKey\`\n` +
-    `• *Edge* (no key): ensure \`messages.tts.providers.edge.enabled\` is not \`false\`\n` +
-    `• *Local CLI*: \`messages.tts.providers.tts-local-cli.command\`\n\n` +
+    `• *Edge* (no key): ensure \`messages.tts.providers.edge.enabled\` is not \`false\`\n\n` +
     `You can also use the gateway Web UI → Settings → Voice.`
   );
 }

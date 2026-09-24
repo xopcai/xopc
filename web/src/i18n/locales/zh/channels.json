@@ -286,7 +286,6 @@
       "provider": "语音引擎",
       "providerOpenai": "OpenAI TTS",
       "providerEdge": "Microsoft Edge（免费）",
-      "providerLocalCli": "本地 CLI（离线）",
       "voice": "音色",
       "alwaysWarning": "始终朗读会在高频聊天中打扰用户，只建议在明确以语音为主的通道中开启。",
       "statusTitle": "当前语音回复状态",
@@ -305,7 +304,6 @@
         "openai": "低延迟、音色选择多；需要 OpenAI Key。",
         "alibaba": "中文语音效果好；需要 DASHSCOPE_API_KEY。",
         "minimax": "高质量音色；异步生成可能较慢。",
-        "localCli": "通过 Piper、sherpa-onnx、mlx-audio 或自定义脚本在本地私有合成。",
         "generic": "扩展语音服务商，请在下方配置所需字段。"
       },
       "test": {
@@ -320,22 +318,7 @@
         "emptyText": "请输入要合成的文本。",
         "playFailed": "音频播放失败。"
       },
-      "edgeHint": "Microsoft Edge TTS — 无需 API Key。",
-      "localCli": {
-        "preset": "命令模板",
-        "presetPlaceholder": "选择本地引擎模板…",
-        "presetDesc": "从 Piper、sherpa-onnx 或 mlx-audio 的安全模板开始；试听前请替换路径。",
-        "command": "CLI 命令",
-        "commandDesc": "Shell 模板；占位符：{{Text}}、{{OutputPath}}、{{OutputDir}}、{{OutputBase}}。",
-        "commandPlaceholder": "mlx_audio.tts.generate --text \"{{Text}}\" --file_prefix {{OutputBase}}",
-        "cwd": "工作目录",
-        "cwdDesc": "可选；默认使用网关工作目录。",
-        "outputFormat": "输出格式",
-        "outputFormatDesc": "CLI 输出的文件扩展名（mp3、wav、opus 等）。",
-        "timeoutMs": "超时（ms）",
-        "timeoutMsDesc": "单次调用超时覆盖；留空则使用 TTS 默认值。",
-        "hint": "由内置扩展 `tts-local-cli` 提供。请先启用该扩展并将二进制加入 PATH。"
-      }
+      "edgeHint": "Microsoft Edge TTS — 无需 API Key。"
     },
     "notes": {
       "title": "说明",

@@ -92,8 +92,6 @@ function ttsProviderLabel(id: string, v: VoiceSettingsMessages): string {
       return v.stt.alibaba;
     case 'edge':
       return v.tts.providerEdge;
-    case 'tts-local-cli':
-      return v.tts.providerLocalCli;
     case 'minimax':
       return 'MiniMax';
     default:
@@ -124,8 +122,6 @@ function providerCapabilityHint(id: string, v: VoiceSettingsMessages): string {
       return v.tts.providerHints.alibaba;
     case 'minimax':
       return v.tts.providerHints.minimax;
-    case 'tts-local-cli':
-      return v.tts.providerHints.localCli;
     default:
       return v.tts.providerHints.generic;
   }
@@ -882,7 +878,7 @@ function TtsSection({
 
             <details
               className="rounded-xl bg-surface-panel/80 p-3 shadow-surface"
-              open={!providerReady || tts.provider === 'tts-local-cli'}
+              open={!providerReady}
             >
               <summary className="cursor-pointer text-sm font-medium text-fg marker:text-fg-muted">
                 {v.tts.advanced.title}
