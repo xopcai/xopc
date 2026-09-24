@@ -7,10 +7,14 @@ import {
   Sparkles,
   UserRound,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
+import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
+import {
+  AgentProfileEditor,
+  type AgentProfileEditorHandle,
+} from '@/features/settings/agents/agent-profile-editor';
 import { updateGatewayAgent } from '@/features/settings/agents-admin-api';
 import type {
   AgentModelsOverride,
@@ -20,7 +24,7 @@ import type {
   ModelRoute,
   ToolPolicy,
 } from '@/features/settings/types/agent-gateway';
-import type { AgentsSettingsMessages } from '@/i18n/messages';
+import { messages as getMessages, type AgentsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
 type AgentPanel = 'overview' | 'profile' | 'models' | 'capabilities' | 'runtime' | 'danger';
@@ -146,8 +150,12 @@ export function AgentEditor({
   const [draft, setDraft] = useState<AgentOverride>(() => structuredClone(agent.override));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [profileVisited, setProfileVisited] = useState(false);
+  const [profileFilesDirty, setProfileFilesDirty] = useState(false);
+  const profileEditorRef = useRef<AgentProfileEditorHandle>(null);
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify(agent.override);
+  const configDirty = JSON.stringify(draft) !== JSON.stringify(agent.override);
+  const dirty = configDirty || profileFilesDirty;
   const invalidModelOverride = [
     draft.models?.chat,
     ...Object.values(draft.models?.intents ?? {}),
@@ -170,10 +178,8 @@ export function AgentEditor({
   const skillSummary = agent.effective.skills.mode === 'selected'
     ? (zh ? `${agent.effective.skills.include.length} 个已选技能` : `${agent.effective.skills.include.length} selected skills`)
     : (zh ? '所有已启用技能' : 'All enabled skills');
-  const displayedDraftName = agentListDisplayName(
-    { id: agent.id, name: draft.profile?.name ?? agent.name },
-    messages,
-  );
+  const profileName = draft.profile?.name ?? agent.name ?? agent.id;
+  const workingDirectoryMessages = getMessages(zh ? 'zh' : 'en').chat.workingDirectory;
   const intentLabels: Record<ModelIntent, string> = {
     fast: messages.editorIntentFast,
     reasoning: messages.editorIntentReasoning,
@@ -193,6 +199,7 @@ export function AgentEditor({
     setSaving(true);
     setError(null);
     try {
+      await profileEditorRef.current?.save();
       const next = await updateGatewayAgent(agent.id, {
         workspace: draft.workspace ?? null,
         profile: draft.profile,
@@ -204,6 +211,7 @@ export function AgentEditor({
       });
       const saved = next.agents.find((candidate) => candidate.id === agent.id);
       if (saved) setDraft(structuredClone(saved.override));
+      setProfileFilesDirty(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -240,6 +248,10 @@ export function AgentEditor({
     setDraft({ ...draft, models: Object.keys(models).length > 0 ? models : undefined });
   };
 
+  const handleProfileFilesDirty = useCallback((nextDirty: boolean) => {
+    setProfileFilesDirty(nextDirty);
+  }, []);
+
   const navItems: Array<{ id: AgentPanel; label: string; icon: typeof Gauge }> = [
     { id: 'overview', label: zh ? '概览' : 'Overview', icon: Gauge },
     { id: 'profile', label: zh ? '个性' : 'Profile', icon: UserRound },
@@ -257,7 +269,10 @@ export function AgentEditor({
             <button
               key={id}
               type="button"
-              onClick={() => setPanel(id)}
+              onClick={() => {
+                setPanel(id);
+                if (id === 'profile') setProfileVisited(true);
+              }}
               className={cn(
                 'flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors',
                 panel === id ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
@@ -306,23 +321,43 @@ export function AgentEditor({
             </div>
           ) : null}
 
-          {panel === 'profile' ? (
-            <div className="space-y-6">
-              <SectionTitle title={zh ? '个性与工作区' : 'Profile and workspace'} description={zh ? '只设置这个智能体独有的身份、表达方式和工作目录。' : 'Keep only this agent’s identity, behavior, and workspace here.'} />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="text-xs font-medium text-fg-muted">
-                  {zh ? '名称' : 'Name'}
-                  <input className={`${inputClass} mt-1.5`} value={displayedDraftName} onChange={(event) => setDraft({ ...draft, profile: { name: event.target.value, ...(draft.profile?.instructions ? { instructions: draft.profile.instructions } : {}) } })} />
-                </label>
-                <label className="text-xs font-medium text-fg-muted">
-                  <span className="flex items-center gap-2">{zh ? '工作区' : 'Workspace'}{!draft.workspace ? <InheritedBadge>{zh ? '自动' : 'Automatic'}</InheritedBadge> : null}</span>
-                  <input className={`${inputClass} mt-1.5 font-mono`} value={draft.workspace ?? ''} placeholder={agent.effective.workspace} onChange={(event) => setDraft({ ...draft, workspace: event.target.value || undefined })} />
-                </label>
-              </div>
-              <label className="block text-xs font-medium text-fg-muted">
-                {zh ? '个性指令' : 'Personality instructions'}
-                <textarea rows={10} className={`${inputClass} mt-1.5 resize-y leading-6`} value={draft.profile?.instructions ?? ''} onChange={(event) => setDraft({ ...draft, profile: { name: draft.profile?.name || agent.name, instructions: event.target.value || undefined } })} placeholder={zh ? '描述角色、语气、判断偏好和工作方式' : 'Describe the role, tone, judgment preferences, and working style'} />
-              </label>
+          {profileVisited ? (
+            <div className={cn('space-y-6', panel !== 'profile' && 'hidden')}>
+              <SectionTitle title={zh ? '身份、个性与工作区' : 'Identity, behavior, and workspace'} description={zh ? '完整管理这个智能体的身份资料、五类角色文件和工作目录。' : 'Manage this agent’s identity, all five profile documents, and working directory.'} />
+              <AgentProfileEditor
+                ref={profileEditorRef}
+                agentId={agent.id}
+                zh={zh}
+                inputClass={inputClass}
+                name={profileName}
+                onNameChange={(name) => setDraft((current) => ({
+                  ...current,
+                  profile: { name, ...(current.profile?.instructions ? { instructions: current.profile.instructions } : {}) },
+                }))}
+                onDirtyChange={handleProfileFilesDirty}
+              />
+              <section className="rounded-2xl border border-edge bg-surface-base p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div><h4 className="text-sm font-semibold text-fg">{zh ? '工作区' : 'Workspace'}</h4><p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '选择这个智能体读写文件时使用的目录；留空则使用自动工作区。' : 'Choose where this agent reads and writes files, or leave it empty to use the automatic workspace.'}</p></div>
+                  {!draft.workspace ? <InheritedBadge>{zh ? '自动' : 'Automatic'}</InheritedBadge> : <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setDraft((current) => ({ ...current, workspace: undefined }))}><RotateCcw className="size-3.5" />{zh ? '恢复自动' : 'Use automatic'}</Button>}
+                </div>
+                <div className="mt-4">
+                  <DirectoryPickerPathField
+                    value={draft.workspace ?? ''}
+                    onChange={(workspace) => setDraft((current) => ({ ...current, workspace: workspace || undefined }))}
+                    wd={workingDirectoryMessages}
+                    placeholder={agent.effective.workspace}
+                    inputAriaLabel={zh ? '智能体工作区路径' : 'Agent workspace path'}
+                    inputClassName={`${inputClass} font-mono`}
+                    disabled={saving}
+                  />
+                </div>
+              </section>
+              <section className="rounded-2xl border border-edge bg-surface-base p-4 sm:p-5">
+                <h4 className="text-sm font-semibold text-fg">{zh ? '附加指令' : 'Additional instructions'}</h4>
+                <p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '仅用于需要高优先级补充的简短规则；完整个性与规范建议写入上方角色配置。' : 'Use this for short, high-priority additions. Keep the full personality and operating guidance in the profile documents above.'}</p>
+                <textarea rows={4} className={`${inputClass} mt-4 resize-y leading-6`} value={draft.profile?.instructions ?? ''} onChange={(event) => setDraft((current) => ({ ...current, profile: { name: current.profile?.name || agent.name || agent.id, instructions: event.target.value || undefined } }))} placeholder={zh ? '可选：补充必须始终遵循的规则' : 'Optional: add a rule that must always be followed'} />
+              </section>
             </div>
           ) : null}
 

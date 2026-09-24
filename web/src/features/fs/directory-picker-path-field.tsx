@@ -12,6 +12,7 @@ type Props = {
   disabled?: boolean;
   wd: MessageBundle['chat']['workingDirectory'];
   placeholder?: string;
+  inputAriaLabel?: string;
   inputClassName?: string;
   autoFocus?: boolean;
   /** Buttons after the folder picker (e.g. set default). */
@@ -25,6 +26,7 @@ export function DirectoryPickerPathField({
   disabled,
   wd,
   placeholder,
+  inputAriaLabel,
   inputClassName,
   autoFocus,
   trailing,
@@ -46,6 +48,7 @@ export function DirectoryPickerPathField({
           disabled={disabled || picker.picking}
           onChange={(e) => void onChange(e.target.value)}
           placeholder={placeholder ?? wd.pathInputPlaceholder}
+          aria-label={inputAriaLabel}
           autoFocus={autoFocus}
           autoComplete="off"
           spellCheck={false}
