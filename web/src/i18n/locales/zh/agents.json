@@ -352,7 +352,6 @@
     "listEmpty": "没有匹配的智能体。",
     "listNoAgentsYet": "暂无智能体，请先创建一个。",
     "listNewAgentCard": "新建智能体",
-    "manualCreateMoreAria": "更多智能体创建方式",
     "manualCreateMenu": "手动创建",
     "manualCreateTitle": "手动创建智能体",
     "manualCreateDescription": "只填写必要信息即可创建，其余设置可以在后续对话中继续完善。",
