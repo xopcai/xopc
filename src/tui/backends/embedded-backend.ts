@@ -251,6 +251,8 @@ export class EmbeddedBackend implements TuiBackend {
       messageBusInstance: this.bus,
       agentService: {
         getModelForSession: (conversationId) => this.agent!.getModelForSession(conversationId),
+        getWorkflowSkillInstructions: (agentId, names) =>
+          this.agent!.getWorkflowSkillInstructions(agentId, names),
       },
       sessionIndexInstance: this.sessionIndex,
       emit: (event, payload) => {

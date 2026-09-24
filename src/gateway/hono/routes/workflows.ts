@@ -23,11 +23,10 @@ import type {
 } from '../../../workflows/domain/index.js';
 import { validateWorkflowDefinitionInput } from '../../../workflows/domain/index.js';
 import {
-  WorkflowDraftProviderError,
-  WorkflowDraftService,
-  type CreateWorkflowDraftRequest,
-} from '../../../workflows/draft/index.js';
-import { WorkflowDraftConflictError, WorkflowDraftStore, type SaveWorkflowAuthoringDraftInput } from '../../../workflows/authoring/index.js';
+  WorkflowDraftConflictError,
+  WorkflowDraftStore,
+  type SaveWorkflowAuthoringDraftInput,
+} from '../../../workflows/authoring/index.js';
 import { resolveWorkflowRunArtifactsDir } from '../../../workflows/store/paths.js';
 import { ProjectWorkflowPresetRepository } from '../../../workflows/project-presets/project-workflow-preset-repository.js';
 import { resolveProjectAgentId } from '../../../projects/index.js';
@@ -120,10 +119,6 @@ interface SaveWorkflowDefinitionRequestBody {
   expectedRevision?: number;
 }
 
-interface CreateWorkflowDraftRequestBody extends Omit<CreateWorkflowDraftRequest, 'agentId'> {
-  agentId?: string;
-}
-
 interface SaveWorkflowAuthoringDraftRequestBody extends Omit<SaveWorkflowAuthoringDraftInput, 'id'> {
   id?: string;
 }
@@ -201,32 +196,6 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       manifest: body.manifest,
     });
     return c.json(result);
-  });
-
-  authenticated.post('/api/workflows/definitions/generate', async (c) => {
-    const body = await readJsonBody<CreateWorkflowDraftRequestBody>(c.req.raw);
-    const prompt = body.prompt?.trim();
-    if (!prompt) {
-      return c.json({ error: 'prompt is required' }, 400);
-    }
-    const agentId = getAgentId(body.agentId ?? c.req.query('agentId'), service.currentConfig);
-    const draftService = new WorkflowDraftService({ config: service.currentConfig });
-    try {
-      const draft = await draftService.createDraft({
-        prompt,
-        agentId,
-        language: body.language,
-        mode: body.mode,
-        existingGraph: body.existingGraph,
-        constraints: body.constraints,
-      }, c.req.raw.signal);
-      return c.json({ draft }, 201);
-    } catch (err) {
-      if (err instanceof WorkflowDraftProviderError) {
-        return c.json({ error: 'Provider request failed', code: err.code }, 502);
-      }
-      return c.json({ error: err instanceof Error ? err.message : 'Failed to create workflow draft' }, 400);
-    }
   });
 
   authenticated.post('/api/workflows/definitions', async (c) => {

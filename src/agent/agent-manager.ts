@@ -979,6 +979,30 @@ export class AgentManager implements AgentInstanceGateway {
     return this.buildAgentSkillAvailability(profile, profile.resolvedWorkspacePath);
   }
 
+  getWorkflowSkillInstructions(agentId: string, names: readonly string[]): string | undefined {
+    const requested = [...new Set(names.map((name) => name.trim()).filter(Boolean))];
+    if (requested.length === 0) return undefined;
+    const profile = resolveEffectiveAgentProfile(agentId);
+    const workspaceDir = profile.resolvedWorkspacePath;
+    const runtime = this.workspaceRuntimes.getOrCreate(workspaceDir, profile.agentId);
+    const materialized = this.materializeSkillAllowlist(profile, runtime);
+    const available = new Map(runtime.skillManager.getEnabledSkillsForAgentSession({
+      skillAllowlist: materialized.skillsAllowlist,
+    }).map((skill) => [skill.name.toLowerCase(), skill]));
+    const missing = requested.filter((name) => !available.has(name.toLowerCase()));
+    if (missing.length > 0) {
+      throw new Error(`Workflow requires unavailable skills: ${missing.join(', ')}`);
+    }
+    const blocks = requested.map((name) => {
+      const skill = available.get(name.toLowerCase())!;
+      return `## Workflow skill: ${skill.name}\n\n${skill.content.trim()}`;
+    });
+    return [
+      'Follow these workflow-bound skills for this run. They are part of the saved workflow contract.',
+      ...blocks,
+    ].join('\n\n');
+  }
+
   getSessionSkillAvailability(conversationId: string): AgentSkillAvailabilityPayload {
     const profile = resolveEffectiveAgentProfileForSession(conversationId);
     return this.buildAgentSkillAvailability(
