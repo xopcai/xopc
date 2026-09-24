@@ -12,15 +12,12 @@
 import type { Agent } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
-import { createLogger } from '../../utils/logger.js';
 import {
   isAssistantTurnAborted,
   isAssistantTurnFailed,
 } from '../orchestration/llm-turn-retry.js';
 import { resolveBackgroundReviewSettings } from './settings.js';
-import { runBackgroundUserModelReview } from './run-background-review.js';
-
-const log = createLogger('BackgroundReviewCoordinator');
+import { createBackgroundUserModelReviewTask } from './run-background-review.js';
 
 interface NudgeState {
   turnsSinceReview: number;
@@ -65,14 +62,23 @@ export class BackgroundReviewCoordinator {
     }
   }
 
-  /**
-   * Fire-and-forget review after the main user turn. Decides whether to run a
-   * understanding sweep based on the counter state + last assistant text,
-   * and delegates the actual review to {@link runBackgroundUserModelReview}.
-   */
-  scheduleAfterUserTurn(ctx: ScheduleReviewContext): void {
-    void this.runReviewIfNeeded(ctx).catch((err) => {
-      log.warn({ err, conversationId: ctx.conversationId }, 'Background review failed');
+  /** Reserve a due review and return the work without starting it. */
+  createReviewTaskAfterUserTurn(ctx: ScheduleReviewContext): (() => Promise<void>) | undefined {
+    const state = this.states.get(ctx.conversationId);
+    if (!state) return undefined;
+    const settings = resolveBackgroundReviewSettings(this.opts.getConfig());
+    if (!settings.enabled) return undefined;
+    if (isAssistantTurnAborted(ctx.agent) || isAssistantTurnFailed(ctx.agent)) return undefined;
+    if (!ctx.lastAssistantText?.trim()) return undefined;
+    if (!state.pendingReview) return undefined;
+
+    state.pendingReview = false;
+    return createBackgroundUserModelReviewTask({
+      conversationId: ctx.conversationId,
+      mainAgent: ctx.agent,
+      settings,
+      workspaceId: ctx.workspaceId,
+      getConfig: () => this.opts.getConfig(),
     });
   }
 
@@ -95,26 +101,5 @@ export class BackgroundReviewCoordinator {
     };
     this.states.set(conversationId, state);
     return state;
-  }
-
-  private async runReviewIfNeeded(ctx: ScheduleReviewContext): Promise<void> {
-    const state = this.states.get(ctx.conversationId);
-    if (!state) return;
-    const settings = resolveBackgroundReviewSettings(this.opts.getConfig());
-    if (!settings.enabled) return;
-    if (isAssistantTurnAborted(ctx.agent) || isAssistantTurnFailed(ctx.agent)) return;
-    if (!ctx.lastAssistantText?.trim()) return;
-
-    const shouldReview = state.pendingReview;
-    state.pendingReview = false;
-    if (!shouldReview) return;
-
-    await runBackgroundUserModelReview({
-      conversationId: ctx.conversationId,
-      mainAgent: ctx.agent,
-      settings,
-      workspaceId: ctx.workspaceId,
-      getConfig: () => this.opts.getConfig(),
-    });
   }
 }

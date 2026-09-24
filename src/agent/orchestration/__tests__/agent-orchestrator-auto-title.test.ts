@@ -46,7 +46,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
       prepareUserTurnContext: vi.fn().mockImplementation(async () => ({
         traceId: '', items: [], rejected: [], estimatedTokens: 0,
       })),
-      afterAgentTurn: vi.fn(),
+      scheduleUserUnderstandingMaintenance: vi.fn(),
       beginBackgroundReviewUserTurn: vi.fn(),
       scheduleBackgroundReviewAfterUserTurn: vi.fn(),
     };

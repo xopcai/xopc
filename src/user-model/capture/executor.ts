@@ -8,12 +8,14 @@ import {
 import { createUserGoal, listUserGoals } from '../goals.js';
 import {
   getUserAssertion,
+  getAssertionSlot,
   deleteUserAssertion,
   linkAssertionEvidence,
+  mergeAssertionObservation,
   reconcileAssertion,
   setAssertionStatus,
 } from '../repository.js';
-import type { AssertionStatus, UserModelScopeType } from '../domain.js';
+import type { AssertionCandidate, AssertionStatus, UserModelScopeType } from '../domain.js';
 import type { CaptureEvidence, UserModelInterpretation } from './semantic.js';
 
 export interface UserModelCapturePolicy {
@@ -121,7 +123,7 @@ export function executeUserModelInterpretation(input: {
     }
   }
   if (input.interpretation.intent === 'correct'
-    && targets.length && input.interpretation.candidates.length === 0) {
+    && targets.length && input.interpretation.assertions.length === 0) {
     for (const target of targets) {
       setAssertionStatus(target.id, 'needs_review', {
         actor: 'user',
@@ -132,12 +134,12 @@ export function executeUserModelInterpretation(input: {
   }
   const goals = input.interpretation.goals ?? [];
   const collaborationRules = input.interpretation.collaborationRules ?? [];
-  if (!input.interpretation.candidates.length && !goals.length && !collaborationRules.length) return result;
+  if (!input.interpretation.assertions.length && !goals.length && !collaborationRules.length) return result;
 
   const evidenceByRef = new Map(input.evidence.map((entry) => [entry.ref, entry]));
   const evidenceIds = new Map<string, string>();
   for (const ref of new Set([
-    ...input.interpretation.candidates.flatMap((item) => item.evidenceRefs),
+    ...input.interpretation.assertions.flatMap((item) => item.evidenceRefs),
     ...goals.flatMap((item) => item.evidenceRefs),
     ...collaborationRules.flatMap((item) => item.evidenceRefs),
   ])) {
@@ -165,7 +167,7 @@ export function executeUserModelInterpretation(input: {
     .sort((a, b) => b.createdAt - a.createdAt)[0]?.ref;
   const explicitCommand = input.interpretation.intent === 'remember'
     || input.interpretation.intent === 'correct';
-  for (const source of input.interpretation.candidates) {
+  for (const source of input.interpretation.assertions) {
     result.proposed += 1;
     const key = candidateKey(source.predicate, source.scope.type, source.scope.id);
     const sensitive = source.sensitivity !== 'normal';
@@ -178,14 +180,76 @@ export function executeUserModelInterpretation(input: {
     }
     const requiresConfirmation = !explicitCommand && sensitive && input.policy.sensitiveWrite === 'confirm';
     const refs = source.evidenceRefs.flatMap((ref) => evidenceIds.get(ref) ?? []);
-    const applied = reconcileAssertion({
+    const candidate: AssertionCandidate = {
       ...source,
       authority: requiresConfirmation && source.authority === 'user_explicit'
         ? 'user_observed'
         : source.authority,
-      createdBy: source.authority === 'user_explicit' ? 'user' : 'runtime',
+      createdBy: source.authority === 'user_explicit' ? 'user' as const : 'runtime' as const,
       ...(refs[0] ? { evidenceId: refs[0], evidenceConfidence: source.confidence } : {}),
-    }, Date.now(), { restoreDeleted: explicitCommand && source.evidenceRefs.includes(latestUserRef) });
+    };
+    const target = source.targetAssertionId ? getUserAssertion(source.targetAssertionId) : undefined;
+    if (source.action !== 'create' && !target) {
+      result.rejected += 1;
+      result.outputs.push({ candidateKey: key, outcome: 'rejected' });
+      continue;
+    }
+    if (source.action === 'merge') {
+      let assertion;
+      try {
+        assertion = mergeAssertionObservation({
+          assertionId: target!.id,
+          candidate,
+          evidenceIds: refs,
+        });
+      } catch {
+        result.rejected += 1;
+        result.outputs.push({ candidateKey: key, outcome: 'rejected' });
+        continue;
+      }
+      result.createdAssertions.push({
+        id: assertion.id,
+        content: assertion.statement,
+        kind: assertion.kind,
+        status: assertion.status,
+      });
+      result.outputs.push({ candidateKey: key, assertionId: assertion.id, outcome: 'deduplicated' });
+      result.deduplicated += 1;
+      continue;
+    }
+    let candidateToApply = candidate;
+    if (source.action === 'replace') {
+      if (candidate.authority !== 'user_explicit') {
+        result.rejected += 1;
+        result.outputs.push({ candidateKey: key, outcome: 'rejected' });
+        continue;
+      }
+      const targetSlot = getAssertionSlot(target!.slotId);
+      if (!targetSlot) {
+        result.rejected += 1;
+        result.outputs.push({ candidateKey: key, outcome: 'rejected' });
+        continue;
+      }
+      if (targetSlot.subject.type !== candidate.subject.type
+        || targetSlot.subject.id !== candidate.subject.id.trim()
+        || targetSlot.scope.type !== candidate.scope.type
+        || (targetSlot.scope.id ?? '') !== (candidate.scope.id?.trim() ?? '')) {
+        result.rejected += 1;
+        result.outputs.push({ candidateKey: key, outcome: 'rejected' });
+        continue;
+      }
+      candidateToApply = {
+        ...candidate,
+        subject: targetSlot.subject,
+        predicate: targetSlot.predicate,
+        cardinality: targetSlot.cardinality,
+        scope: targetSlot.scope,
+        correctionOfAssertionId: target!.id,
+      };
+    }
+    const applied = reconcileAssertion(candidateToApply, Date.now(), {
+      restoreDeleted: explicitCommand && source.evidenceRefs.includes(latestUserRef),
+    });
     if (applied.action === 'suppressed') {
       result.rejected += 1;
       result.outputs.push({ candidateKey: key, outcome: 'rejected' });

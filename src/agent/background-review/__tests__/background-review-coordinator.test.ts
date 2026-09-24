@@ -6,8 +6,9 @@ import type { UserContextConfig } from '../../../user-context/config.js';
 import { BackgroundReviewCoordinator } from '../coordinator.js';
 
 const runBackgroundUserModelReview = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const createBackgroundUserModelReviewTask = vi.hoisted(() => vi.fn(() => runBackgroundUserModelReview));
 
-vi.mock('../run-background-review.js', () => ({ runBackgroundUserModelReview }));
+vi.mock('../run-background-review.js', () => ({ createBackgroundUserModelReviewTask }));
 
 function config(userModel?: Partial<UserContextConfig['userModel']>): Config {
   const base = ConfigSchema.parse({});
@@ -36,22 +37,25 @@ describe('BackgroundReviewCoordinator', () => {
     const workspaceId = '/workspace';
 
     coordinator.beginUserTurn('main:test');
-    coordinator.scheduleAfterUserTurn({
+    const firstReview = coordinator.createReviewTaskAfterUserTurn({
       conversationId: 'main:test',
       agent,
       lastAssistantText: 'Done.',
       workspaceId,
     });
-    await Promise.resolve();
+    expect(firstReview).toBeUndefined();
     expect(runBackgroundUserModelReview).not.toHaveBeenCalled();
 
     coordinator.beginUserTurn('main:test');
-    coordinator.scheduleAfterUserTurn({
+    const secondReview = coordinator.createReviewTaskAfterUserTurn({
       conversationId: 'main:test',
       agent,
       lastAssistantText: 'Done.',
       workspaceId,
     });
-    await vi.waitFor(() => expect(runBackgroundUserModelReview).toHaveBeenCalledTimes(1));
+    expect(secondReview).toBeTypeOf('function');
+    expect(createBackgroundUserModelReviewTask).toHaveBeenCalledTimes(1);
+    await secondReview?.();
+    expect(runBackgroundUserModelReview).toHaveBeenCalledTimes(1);
   });
 });

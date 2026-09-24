@@ -186,8 +186,7 @@ export class AgentOrchestrator {
         }
       })();
 
-      const understandingReview = await this.agentManager.afterAgentTurn(conversationId, userPlainForMemory, turnId);
-      void understandingReview;
+      this.agentManager.scheduleUserUnderstandingMaintenance(conversationId, userPlainForMemory, turnId);
       this.agentManager.scheduleBackgroundReviewAfterUserTurn(conversationId);
 
       if (turnResult.ok) {
