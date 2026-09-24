@@ -8,8 +8,9 @@ import {
   getConnectorAccount,
 } from '../../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
-import { setAssertionStatus } from '../../../user-model/index.js';
+import { listUserModelObservations } from '../../../user-model/index.js';
 import { listUnderstandingSourceDefinitions } from '../../../user-context/sources/catalog.js';
+import { getActiveUnderstandingConsent } from '../../../user-context/sources/consent-repository.js';
 import {
   getUnderstandingSourceGrant,
   listUnderstandingSourceGrants,
@@ -39,16 +40,6 @@ function assertionIdsForSource(instanceId: string): string[] {
     .map((row) => row.assertion_id);
 }
 
-export function markContextSourceAssertionsForReview(grantId: string): number {
-  const grant = getUnderstandingSourceGrant(grantId);
-  const instanceId = grant ? sourceInstanceId(grant) : undefined;
-  const ids = instanceId ? assertionIdsForSource(instanceId) : [];
-  for (const id of ids) {
-    setAssertionStatus(id, 'needs_review', { actor: 'runtime', reason: 'Its context source was revoked.' });
-  }
-  return ids.length;
-}
-
 export function registerContextSourceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const service = deps.service.workDiscovery;
   const limited = deps.strictRateLimitMiddleware;
@@ -65,6 +56,7 @@ export function registerContextSourceRoutes(authenticated: Hono, deps: Authentic
     const grants = listUnderstandingSourceGrants({ includeRevoked: c.req.query('includeRevoked') === 'true' });
     return c.json({
       grants,
+      consents: Object.fromEntries(grants.map((grant) => [grant.id, getActiveUnderstandingConsent(grant.id)])),
       latestRuns: Object.fromEntries(grants.flatMap((grant) => {
         const run = listUnderstandingSourceRuns(grant.id, 1)[0];
         return run ? [[grant.id, run]] : [];
@@ -99,13 +91,16 @@ export function registerContextSourceRoutes(authenticated: Hono, deps: Authentic
     const current = getUnderstandingSourceGrant(c.req.param('grantId'));
     if (!current) return c.json({ error: 'Context source not found' }, 404);
     const instanceId = sourceInstanceId(current);
-    const affectedAssertions = markContextSourceAssertionsForReview(current.id);
+    const affectedAssertions = instanceId ? assertionIdsForSource(instanceId).length : 0;
     const deleteRaw = c.req.query('deleteRaw') === 'true';
     const rawDeleted = deleteRaw && instanceId ? deleteKnowledgeSourceItems(instanceId) : 0;
+    const observationsDeleted = listUserModelObservations({ sourceGrantId: current.id, limit: 2_000 }).length;
     const accountId = typeof current.config.accountId === 'string' ? current.config.accountId : undefined;
     const connectionId = accountId ? getConnectorAccount(accountId)?.currentConnectionId : undefined;
     if (connectionId) deps.service.setConnectorLearningPaused(connectionId, true);
-    return c.json({ grant: revokeUnderstandingSourceGrant(current.id), affectedAssertions, rawDeleted });
+    return c.json({
+      grant: revokeUnderstandingSourceGrant(current.id), affectedAssertions, rawDeleted, observationsDeleted,
+    });
   });
 
   authenticated.get('/api/context-sources/content-candidates', (c) => c.json({

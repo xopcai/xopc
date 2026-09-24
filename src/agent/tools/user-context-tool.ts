@@ -7,6 +7,7 @@ import {
   deleteUserAssertion,
   getUserAssertion,
   canUseAssertion,
+  listUserAssertionSources,
   listUserAssertions,
   reconcileAssertion,
   setAssertionStatus,
@@ -64,7 +65,7 @@ export function createUserContextSearchTool(options: UserContextToolOptions): Ag
       const input = raw as { query: string; maxResults?: number };
       const results = listUserAssertions({ statuses: ['active', 'candidate'], limit: 1_000 })
         .filter((assertion) => visible(options, assertion.slotId))
-        .filter((item) => canUseAssertion(item))
+        .filter((item) => canUseAssertion(item, Date.now(), { use: 'answer', agentId: options.agentId }))
         .map((assertion) => ({
           assertion,
           score: retrievalLexicalSimilarity(input.query, `${assertion.statement} ${assertion.normalizedValue}`),
@@ -78,6 +79,14 @@ export function createUserContextSearchTool(options: UserContextToolOptions): Ag
           statement: assertion.statement,
           status: assertion.status,
           authority: assertion.authority,
+          domain: assertion.domain,
+          layer: assertion.layer,
+          confidence: assertion.confidence,
+          evidence: {
+            supportCount: assertion.supportCount,
+            independentSourceCount: assertion.independentSourceCount,
+            lastSupportedAt: assertion.lastSupportedAt,
+          },
           score,
         }));
       return { content: [{ type: 'text', text: JSON.stringify({ results }, null, 2) }], details: { results } };
@@ -97,10 +106,15 @@ export function createUserContextGetTool(options: UserContextToolOptions): Agent
       }
       const id = (raw as { id: string }).id;
       const assertion = getUserAssertion(id);
-      if (!assertion || !visible(options, assertion.slotId) || !canUseAssertion(assertion)) {
+      if (!assertion || !visible(options, assertion.slotId)
+        || !canUseAssertion(assertion, Date.now(), { use: 'answer', agentId: options.agentId })) {
         return { content: [{ type: 'text', text: `User assertion not found: ${id}` }], details: { id } };
       }
-      const result = { assertion, slot: getAssertionSlot(assertion.slotId) };
+      const result = {
+        assertion,
+        slot: getAssertionSlot(assertion.slotId),
+        sources: listUserAssertionSources([assertion.id]).get(assertion.id) ?? [],
+      };
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], details: result };
     },
   } as AgentTool;
@@ -160,7 +174,17 @@ export function createUserContextUpdateTool(options: UserContextToolOptions): Ag
             volatility: current.volatility,
             sensitivity: current.sensitivity,
             disclosurePolicy: current.disclosurePolicy,
+            domain: current.domain,
+            layer: current.layer,
+            sensitivityCategories: current.sensitivityCategories,
+            purposeIds: current.purposeIds,
+            allowedUses: current.allowedUses,
+            allowedAgentIds: current.allowedAgentIds,
+            deleteAfter: current.deleteAfter,
             applicability: current.applicability,
+            ...(current.validFrom === undefined ? {} : { validFrom: current.validFrom }),
+            ...(current.validTo === undefined ? {} : { validTo: current.validTo }),
+            ...(current.reviewAt === undefined ? {} : { reviewAt: current.reviewAt }),
             observedAt: Date.now(),
             createdBy: 'user',
             correctionOfAssertionId: current.id,

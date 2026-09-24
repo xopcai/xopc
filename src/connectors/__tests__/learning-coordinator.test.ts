@@ -101,11 +101,11 @@ describe('connector learning coordinator', () => {
       const queued = listConnectorLearningJobs({ connectionId: 'gmail-work' })[0];
       expect(queued).toMatchObject({ mode: 'bootstrap', status: 'queued' });
       await coordinator.runNow();
-      expect(ingestComposioConnectedSource).toHaveBeenCalledOnce();
+      expect(ingestComposioConnectedSource).toHaveBeenCalledTimes(2);
       expect(getConnectorConnection('gmail-work')?.identity).toEqual({ email: 'owner@example.com' });
       const jobs = listConnectorLearningJobs({ connectionId: 'gmail-work' });
       expect(jobs).toEqual(expect.arrayContaining([
-        expect.objectContaining({ mode: 'bootstrap', status: 'completed', itemsIndexed: 6 }),
+        expect.objectContaining({ mode: 'bootstrap', status: 'completed', itemsIndexed: 12 }),
         expect.objectContaining({ mode: 'incremental', status: 'queued' }),
       ]));
     } finally {
@@ -124,7 +124,7 @@ describe('connector learning coordinator', () => {
       max_results: 30,
       include_payload: true,
       verbose: false,
-      query: `after:${Math.floor(Date.parse('2026-08-01T00:00:00.000Z') / 1_000)} -in:spam -in:trash`,
+      query: `in:sent newer_than:30d after:${Math.floor(Date.parse('2026-08-01T00:00:00.000Z') / 1_000)} -in:spam -in:trash`,
       page_token: 'gmail-page-2',
     });
   });
