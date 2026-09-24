@@ -33,3 +33,25 @@ it('moves selection and focus together, wraps arrows, and supports Home and End'
     HTMLElement.prototype.scrollIntoView = original;
   }
 });
+
+it('keeps the keyboard focus ring inside horizontally scrolling tabs', () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+
+  try {
+    act(() => root.render(
+      <PageTabs
+        items={[{ id: 'one', label: 'one' }]}
+        activeTab="one"
+        onChange={() => undefined}
+        ariaLabel="Pages"
+      />,
+    ));
+
+    expect(container.querySelector('[role="tab"]')?.classList).toContain('focus-visible:ring-inset');
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+  }
+});
