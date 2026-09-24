@@ -5,6 +5,7 @@ import type { BrowserControlResult, BrowserObservation } from '@xopcai/browser-c
 import type { BrowserRuntime } from '../../runtime/browser-runtime.js';
 import { runBrowserAutomation, resolveBrowserAutomationInputs } from '../runner.js';
 import { BrowserAutomationDefinitionSchema } from '../schema.js';
+import { mergeBrowserAutomationTriggerInputs } from '../service.js';
 import type { BrowserAutomationDefinition } from '../types.js';
 
 const definition: BrowserAutomationDefinition = {
@@ -40,6 +41,30 @@ describe('BrowserAutomationDefinitionSchema', () => {
     const provided = {};
     expect(resolveBrowserAutomationInputs(definition, provided)).toEqual({ query: 'xopc' });
     expect(provided).toEqual({});
+  });
+
+  it('maps matching trigger payload fields into declared inputs only', () => {
+    const contextual = mergeBrowserAutomationTriggerInputs(
+      {
+        ...definition,
+        inputs: {
+          query: { type: 'string', required: true },
+          eventType: { type: 'string', required: true },
+        },
+      },
+      {},
+      {
+        triggerEvent: {
+          type: 'task.attention_required.v2',
+          payload: { query: 'blocked task', undeclared: 'ignored' },
+        },
+      },
+    );
+
+    expect(contextual).toEqual({
+      query: 'blocked task',
+      eventType: 'task.attention_required.v2',
+    });
   });
 });
 

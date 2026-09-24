@@ -321,8 +321,10 @@
       "agent": "Agent",
       "agentWithId": "Agent: {id}",
       "workflowWithId": "Workflow: {id}",
+      "taskWithId": "Task: {id}",
       "runAgent": "Run Agent",
-      "runWorkflow": "Run Workflow"
+      "runWorkflow": "Run Workflow",
+      "runTask": "Run Task"
     },
     "status": {
       "queued": "queued",
@@ -371,6 +373,11 @@
       "noModels": "No matching models",
       "modelHint": "Overrides the selected agent's default model for this automation.",
       "instruction": "Instruction",
+      "task": "Task",
+      "loadingTasks": "Loading tasks...",
+      "noTasks": "No runnable tasks",
+      "taskClosed": "completed",
+      "taskContextHint": "Each run uses the task definition, constraints, acceptance criteria, and attached context.",
       "workflow": "Workflow",
       "loadingWorkflows": "Loading workflows...",
       "noWorkflows": "No workflows",

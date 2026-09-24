@@ -545,6 +545,9 @@ export class AutomationService {
     let status: AutomationRunStatus = 'failed';
     let error: string | undefined;
     let activePhase: 'action' | 'completion_hook' = 'action';
+    const triggerEvent = listAutomationRunEvents(run.id)
+      .map(readAutomationEventFromRunEvent)
+      .find((item): item is AutomationEvent => item !== null);
     try {
       const maxAttempts = Math.max(1, (automation.reliability?.retryCount ?? 0) + 1);
       let task: Awaited<ReturnType<AutomationActionExecutor['execute']>>;
@@ -569,7 +572,7 @@ export class AutomationService {
               });
             }
           },
-        });
+        }, { triggerEvent });
         // A timeout consumes the shared automation deadline, so only ordinary
         // failures can start another attempt within the same run.
         const retryable = task.status === 'failed';

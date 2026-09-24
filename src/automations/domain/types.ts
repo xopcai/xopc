@@ -230,7 +230,12 @@ export interface AutomationDeps {
   prepareAgentSession?: (input: PrepareAutomationAgentSessionInput) => Promise<void>;
   workflowRunService?: WorkflowRunServiceLike;
   browserAutomationService?: {
-    runAndWait(automationId: string, inputs: Record<string, unknown>, signal?: AbortSignal): Promise<{
+    runAndWait(
+      automationId: string,
+      inputs: Record<string, unknown>,
+      signal?: AbortSignal,
+      context?: { triggerEvent?: AutomationEvent },
+    ): Promise<{
       id: string;
       status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
       result?: unknown;
@@ -242,6 +247,7 @@ export interface AutomationDeps {
     taskId: string;
     idempotencyKey: string;
     command: TaskCommand;
+    triggerEvent?: AutomationEvent;
   }) => { ok: boolean; reason?: string; runId?: string };
 }
 
@@ -258,4 +264,8 @@ export interface AutomationActionTask {
 
 export interface AutomationActionExecutionHooks {
   onRunPatch?: (patch: Partial<AutomationRun>) => void | Promise<void>;
+}
+
+export interface AutomationActionExecutionContext {
+  triggerEvent?: AutomationEvent;
 }

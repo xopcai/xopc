@@ -1,5 +1,6 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import type { TaskCommand, TaskPhase } from '@xopcai/gateway-contract';
 
 export type AutomationSchedule =
   | { kind: 'once'; at: string }
@@ -42,7 +43,19 @@ export type AutomationAction =
       automationId: string;
       inputs?: Record<string, unknown>;
       timeoutSeconds?: number;
+    }
+  | {
+      kind: 'task_command';
+      taskId: string;
+      command: TaskCommand;
     };
+
+export interface AutomationTaskOption {
+  id: string;
+  title: string;
+  projectId?: string;
+  phase: TaskPhase;
+}
 
 export type AutomationConversationMode = 'new_session' | 'continuous';
 export type AutomationNotificationPolicy = 'attention' | 'all' | 'none';
@@ -207,6 +220,9 @@ export interface AutomationRepairDraft {
 }
 
 export const automationApi = {
+  tasks: () => fetchJson<{
+    items: Array<{ task: AutomationTaskOption }>;
+  }>(apiUrl('/api/tasks?limit=200')),
   list: (input?: { projectId?: string }) => {
     const params = new URLSearchParams();
     if (input?.projectId) params.set('projectId', input.projectId);

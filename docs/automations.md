@@ -1,6 +1,6 @@
 # Automations
 
-An Automation starts an Agent, Workflow, or saved browser task manually, on a schedule, or from a webhook. Every run keeps its status and result so you can inspect what happened.
+An Automation starts an Agent, Workflow, Task, or saved browser task manually, on a schedule, from a webhook, or in response to a product event. Every run keeps its status and result so you can inspect what happened.
 
 Automation is one stage of xopc's initiative model, not permission to act without limits. Begin with observation or a proposed action, test manually, and enable unattended execution only for an explicit, low-risk scope with understood side effects.
 
@@ -11,8 +11,12 @@ Automation is one stage of xopc's initiative model, not permission to act withou
 | Agent instruction | The request is best interpreted at run time by one Agent |
 | Workflow | The steps are already defined and should run predictably |
 | Browser automation | A tested set of website interactions should be repeated |
+| Task | An existing Task should start on a one-time or recurring schedule with its durable context |
 
 For deterministic recurring work, prefer a published Workflow or tested browser automation over a broad Agent instruction.
+When an Automation starts a Task, the Task's definition, constraints, acceptance criteria, and attached context are carried into the execution session. A Task that is already running, blocked, or closed cannot start another run.
+
+Project-bound Agent and Workflow actions inherit the selected project's scope, instructions, workspace, and other project context. Event-triggered actions also receive the triggering event: Agents and Tasks receive a bounded data block, Workflows receive it through the input context, and browser automations can map matching event payload fields (plus `eventType`, `eventSource`, and `occurredAtMs`) into explicitly declared inputs. Explicit browser inputs always win.
 
 ## Create an Automation
 

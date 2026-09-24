@@ -59,11 +59,16 @@ export class BrowserAutomationService {
     return deleteBrowserAutomation(id);
   }
 
-  startRun(automationId: string, inputs: Record<string, unknown>): BrowserAutomationRun {
+  startRun(
+    automationId: string,
+    inputs: Record<string, unknown>,
+    context?: BrowserAutomationExecutionContext,
+  ): BrowserAutomationRun {
     const automation = getBrowserAutomation(automationId);
     if (!automation) throw new Error('Browser automation not found.');
     if (automation.status !== 'enabled') throw new Error('Browser automation is disabled.');
-    const resolvedInputs = resolveBrowserAutomationInputs(automation.definition, inputs);
+    const contextualInputs = mergeBrowserAutomationTriggerInputs(automation.definition, inputs, context);
+    const resolvedInputs = resolveBrowserAutomationInputs(automation.definition, contextualInputs);
     const run: BrowserAutomationRun = { id: randomUUID(), automationId, automationRevision: automation.revision, definition: automation.definition, status: 'queued', inputs: resolvedInputs, createdAtMs: Date.now() };
     saveBrowserAutomationRun(run);
     this.addEvent(run.id, 'run.queued', { automationId });
@@ -76,8 +81,13 @@ export class BrowserAutomationService {
   cancel(runId: string): boolean { const active = this.activeRuns.get(runId); if (!active) return false; active.abort(); return true; }
   async shutdown(): Promise<void> { for (const active of this.activeRuns.values()) active.abort(); await Promise.allSettled(this.executions.values()); }
 
-  async runAndWait(automationId: string, inputs: Record<string, unknown>, signal?: AbortSignal): Promise<BrowserAutomationRun> {
-    const run = this.startRun(automationId, inputs);
+  async runAndWait(
+    automationId: string,
+    inputs: Record<string, unknown>,
+    signal?: AbortSignal,
+    context?: BrowserAutomationExecutionContext,
+  ): Promise<BrowserAutomationRun> {
+    const run = this.startRun(automationId, inputs, context);
     return new Promise((resolve) => {
       const complete = (value: BrowserAutomationRun) => { signal?.removeEventListener('abort', onAbort); resolve(value); };
       const onAbort = () => this.cancel(run.id);
@@ -116,4 +126,33 @@ export class BrowserAutomationService {
     for (const waiter of this.waiters.get(run.id) ?? []) waiter(current);
     this.waiters.delete(run.id);
   }
+}
+
+export interface BrowserAutomationExecutionContext {
+  triggerEvent?: {
+    type: string;
+    source?: string;
+    payload?: Record<string, unknown>;
+    occurredAtMs?: number;
+  };
+}
+
+export function mergeBrowserAutomationTriggerInputs(
+  definition: BrowserAutomationDefinition,
+  inputs: Record<string, unknown>,
+  context?: BrowserAutomationExecutionContext,
+): Record<string, unknown> {
+  const event = context?.triggerEvent;
+  if (!event) return inputs;
+  const candidates: Record<string, unknown> = {
+    ...(event.payload ?? {}),
+    eventType: event.type,
+    ...(event.source ? { eventSource: event.source } : {}),
+    ...(event.occurredAtMs !== undefined ? { occurredAtMs: event.occurredAtMs } : {}),
+  };
+  const merged = { ...inputs };
+  for (const name of Object.keys(definition.inputs)) {
+    if (merged[name] === undefined && candidates[name] !== undefined) merged[name] = candidates[name];
+  }
+  return merged;
 }

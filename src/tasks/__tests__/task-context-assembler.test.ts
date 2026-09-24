@@ -45,10 +45,22 @@ describe('task context assembler', () => {
       conversationId,
       agentId: 'main',
     });
+    new TaskContextRepository().add({
+      taskId: task.id,
+      targetKind: 'file',
+      targetId: '/workspace/spec.md',
+      role: 'input',
+      title: 'Product specification',
+      pinned: true,
+      createdBy: { kind: 'user' },
+    });
 
-    expect(buildTaskExecutionDirective(conversationId)).toContain(
+    const directive = buildTaskExecutionDirective(conversationId);
+    expect(directive).toContain(
       'Task: Keep the correct task context after opening chat full screen',
     );
+    expect(directive).toContain('Attached task context:');
+    expect(directive).toContain('[input] file: /workspace/spec.md (Product specification)');
   });
 
   it('does not treat a session context source as the task execution conversation', () => {

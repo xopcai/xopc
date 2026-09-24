@@ -3,7 +3,7 @@ import { verifiedTaskCriteria } from '@xopcai/gateway-contract';
 import type { TaskChangedEvent, TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ArrowLeft, Circle, CircleCheck, CircleX, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Circle, CircleCheck, CircleX, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -626,11 +626,13 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const deletePending = pendingOperations.has('delete');
   const activeRun = detail.runs.find((run) => !run.parentRunId && ['queued', 'running', 'waiting', 'verifying'].includes(run.status));
   const deleteBlocked = activeRun !== undefined;
+  const automationHref = `/automations?action=create&taskId=${encodeURIComponent(detail.task.id)}${detail.task.projectId ? `&projectId=${encodeURIComponent(detail.task.projectId)}` : ''}`;
   const taskActions = (
     <div className="flex flex-wrap gap-2">
       {canSchedule ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'mark_ready' })}><Play className="size-4" />{copy.scheduleTask}</Button> : null}
       {pausedWait && detail.allowedCommands.includes('resolve_wait') ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'resolve_wait', waitId: pausedWait.id })}><Play className="size-4" />{copy.resumeTask}</Button> : null}
       {!activeWait && canStart && conversationAgentId ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'start', executor: { kind: 'agent', agentId: conversationAgentId } })}><Play className="size-4" />{copy.runTask}</Button> : null}
+      {detail.task.phase !== 'closed' ? <Button asChild variant="secondary"><Link to={automationHref}><CalendarClock className="size-4" />{copy.scheduleRecurringTask}</Link></Button> : null}
       {canApprove ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'close', resolution: 'done' })}><CircleCheck className="size-4" />{copy.approveTask}</Button> : null}
       {canReopen ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'reopen', phase: 'ready' })}><Play className="size-4" />{copy.reopenTask}</Button> : null}
       {!pausedWait && canPause ? <Button variant="secondary" className="border-0 bg-surface-hover shadow-none" disabled={commandPending} onClick={() => void execute({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}><Pause className="size-4" />{copy.pauseTask}</Button> : null}
