@@ -175,6 +175,7 @@ export interface MarketplacePackageItem {
   tags?: string[];
   stars?: number;
   sourceLabel?: string;
+  branding?: { iconUrl: string; iconSha256: string };
   /**
    * The marketplace provider id this row originated from. Used by aggregated search to install
    * / fetch detail from the correct adapter regardless of which provider the user is browsing.
@@ -202,6 +203,7 @@ export interface MarketplacePackageDetailPayload {
   name: string;
   type: string;
   description: string;
+  branding?: { iconUrl: string; iconSha256: string };
   readme: string | null;
   /** Gateway-normalized structured meta + body. */
   skillDocPreview: SkillMarkdownPreviewPayload;

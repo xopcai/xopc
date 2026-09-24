@@ -10,6 +10,8 @@
  */
 
 import type { GlobalHit } from '@/features/search/global-command-palette/types';
+import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path';
+import { CHANNELS_HUB_PATH } from '@/features/settings/channels/channels-routes';
 import type { StoredLanguage } from '@/lib/storage';
 import type { NavigateFunction } from 'react-router-dom';
 
@@ -83,14 +85,14 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       id: 'field:agent:profile',
       title: isZh ? 'Agent 个性' : 'Agent personality',
       subtitle: isZh ? '设置名称、个性指令和可选覆盖' : 'Set the name, personality, and optional overrides',
-      path: '/agents',
+      path: AGENTS_APP_LIST_PATH,
       keywords: ['agent', 'profile', 'personality', 'instructions', 'agent 个性', '指令'],
     },
     {
       id: 'field:agent:workspace',
       title: isZh ? 'Agent 工作目录' : 'Agent workspace',
       subtitle: isZh ? '按需覆盖该 Agent 的自动工作目录' : 'Optionally override the automatic workspace',
-      path: '/agents',
+      path: AGENTS_APP_LIST_PATH,
       keywords: ['workspace', 'directory', 'folder', 'path', 'cwd', '工作目录'],
     },
 
@@ -177,14 +179,14 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       id: 'field:channels:telegram',
       title: isZh ? 'Telegram Bot Token' : 'Telegram Bot Token',
       subtitle: isZh ? '配置 Telegram 频道连接' : 'Configure Telegram channel connection',
-      path: '/channels',
+      path: CHANNELS_HUB_PATH,
       keywords: ['telegram', 'bot', 'token', 'channel', '频道'],
     },
     {
       id: 'field:channels:dmPolicy',
       title: isZh ? '私聊接入策略' : 'DM Access Policy',
       subtitle: isZh ? 'Telegram 私聊白名单/配对策略' : 'Telegram DM allowlist/pairing policy',
-      path: '/channels',
+      path: CHANNELS_HUB_PATH,
       keywords: ['dm', 'policy', 'pairing', 'allowlist', 'access', '私聊', '策略'],
     },
 

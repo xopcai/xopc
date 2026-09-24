@@ -21,15 +21,6 @@ export type CapabilityCatalogItem = {
   iconUrl?: string;
 };
 
-function storeConnectorIcon(connector: StoreConnectorCatalogItem): string | undefined {
-  const manifest = connector.connectorManifest;
-  if (!manifest || typeof manifest !== 'object') return undefined;
-  const branding = 'branding' in manifest ? manifest.branding : undefined;
-  if (!branding || typeof branding !== 'object') return undefined;
-  const logoUrl = 'logoUrl' in branding ? branding.logoUrl : undefined;
-  return typeof logoUrl === 'string' && logoUrl.trim() ? logoUrl : undefined;
-}
-
 function includesQuery(item: CapabilityCatalogItem, query: string): boolean {
   const needle = query.trim().toLocaleLowerCase();
   if (!needle) return true;
@@ -66,6 +57,7 @@ export function skillCapabilityItems(
     status: installedIds.has(skill.id) || installedIds.has(skill.name) ? 'installed' : 'available',
     tags: [skill.category, ...(skill.categories ?? []), ...(skill.tags ?? [])].filter((tag): tag is string => Boolean(tag)),
     href: `/capabilities/skills?tab=marketplace&q=${encodeURIComponent(skill.name)}`,
+    iconUrl: skill.branding?.iconUrl,
   }));
 }
 
@@ -104,7 +96,7 @@ export function connectorCapabilityItems(
       status: connectorStatus(instance),
       tags: [connector.category].filter((tag): tag is string => Boolean(tag)),
       href: `/capabilities/connectors?tab=discover&connector=${encodeURIComponent(connector.id)}`,
-      iconUrl: storeConnectorIcon(connector),
+      iconUrl: connector.branding?.iconUrl,
     });
   }
 
@@ -124,5 +116,6 @@ export function extensionCapabilityItems(
     status: installedIds.has(extension.id) ? 'installed' : 'available',
     tags: [...(extension.categories ?? []), ...(extension.tags ?? [])],
     href: `/capabilities/extensions?tab=marketplace&q=${encodeURIComponent(extension.name)}`,
+    iconUrl: extension.branding?.iconUrl,
   }));
 }

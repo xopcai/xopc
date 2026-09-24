@@ -1,12 +1,15 @@
-import { Plus, SlidersHorizontal } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { MoreHorizontal, Plus, Settings, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { CapabilityHeaderActionChange } from '@/features/capabilities/capability-header-actions';
 import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
 import { AgentEditor } from '@/features/settings/agents/agent-editor';
+import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { AgentsEditorModal } from '@/features/settings/agents/agents-editor-modal';
 import { AgentsListGrid } from '@/features/settings/agents/agents-list-grid';
@@ -19,13 +22,16 @@ import {
 } from '@/features/settings/agents-admin-api';
 import type { GatewayAgentRow } from '@/features/settings/types/agent-gateway';
 import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-import { usePageHeaderStore } from '@/stores/page-header-store';
+
+const capabilityPagePadding = 'px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4';
 
 function AgentsSkeleton() {
   return (
-    <SettingsPageFrame gap="gap-5">
+    <SettingsPageFrame gap="gap-5" padding={capabilityPagePadding}>
       <div className="flex items-center justify-between gap-4">
         <div className="space-y-2"><Skeleton className="h-7 w-28" /><Skeleton className="h-4 w-80 max-w-full" /></div>
         <Skeleton className="h-9 w-28" />
@@ -37,17 +43,20 @@ function AgentsSkeleton() {
   );
 }
 
-export function AgentsSettingsPanel() {
+export function AgentsSettingsPanel({
+  agentId,
+  onHeaderActionChange,
+}: {
+  agentId?: string;
+  onHeaderActionChange?: CapabilityHeaderActionChange;
+}) {
   const token = useGatewayStore((state) => state.conversationId);
   const language = useLocaleStore((state) => state.language);
   const zh = language === 'zh';
   const messageBundle = messages(language);
   const agentsMessages = messageBundle.agentsSettings;
   const navigate = useNavigate();
-  const { agentId } = useParams();
   const { data, error, isLoading, mutate } = useSWR(token ? 'settings-gateway-agents' : null, fetchGatewayAgents);
-  const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
-  const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
@@ -98,32 +107,49 @@ export function AgentsSettingsPanel() {
     }
   }, [busy, manualDraft, navigate]);
 
-  const headerEnd = useMemo(() => (
-    <div className="flex items-center gap-2">
-      <Button onClick={() => navigate('/settings/agent-defaults')}>{zh ? '全局默认配置' : 'Global defaults'}</Button>
-      <Button
-        onClick={() => {
-          setManualError(null);
-          setManualDraft((current) => ({ ...current, open: true }));
-        }}
-      >
-        <SlidersHorizontal className="size-4" strokeWidth={1.75} aria-hidden />
-        {agentsMessages.manualCreateMenu}
+  const headerContribution = useMemo(() => ({
+    overflow: (
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <Button variant="secondary" className="size-9 shrink-0 p-0" aria-label={messageBundle.capabilitiesHub.moreActions} title={messageBundle.capabilitiesHub.moreActions}>
+            <MoreHorizontal className="size-4" aria-hidden />
+          </Button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content align="end" sideOffset={6} className="z-50 min-w-48 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover">
+            <DropdownMenu.Item
+              className={cn('touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover', interaction.transition)}
+              onSelect={() => navigate('/settings/agent-defaults')}
+            >
+              <Settings className="size-4 text-fg-muted" aria-hidden />
+              {zh ? '全局默认配置' : 'Global defaults'}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              className={cn('touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover', interaction.transition)}
+              onSelect={() => {
+                setManualError(null);
+                setManualDraft((current) => ({ ...current, open: true }));
+              }}
+            >
+              <SlidersHorizontal className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+              {agentsMessages.manualCreateMenu}
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+    ),
+    primary: (
+      <Button variant="primary" className="shrink-0" aria-label={agentsMessages.listNewAgentCard} onClick={startAgentCreation}>
+        <Plus className="size-4" aria-hidden />
+        <span className="hidden sm:inline">{agentsMessages.listNewAgentCard}</span>
       </Button>
-      <Button variant="primary" onClick={startAgentCreation}>
-        <Plus className="size-4" />{agentsMessages.listNewAgentCard}
-      </Button>
-    </div>
-  ), [agentsMessages.listNewAgentCard, agentsMessages.manualCreateMenu, navigate, startAgentCreation, zh]);
+    ),
+  }), [agentsMessages.listNewAgentCard, agentsMessages.manualCreateMenu, messageBundle.capabilitiesHub.moreActions, navigate, startAgentCreation, zh]);
 
   useLayoutEffect(() => {
-    setPageHeader({
-      startExtra: null,
-      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{zh ? '智能体' : 'Agents'}</h1>,
-      end: headerEnd,
-    });
-    return () => clearPageHeader();
-  }, [clearPageHeader, headerEnd, setPageHeader, zh]);
+    onHeaderActionChange?.(headerContribution);
+    return () => onHeaderActionChange?.(null);
+  }, [headerContribution, onHeaderActionChange]);
 
   const deleteAgent = async (agent: GatewayAgentRow) => {
     const displayName = agentListDisplayName(agent, agentsMessages);
@@ -132,7 +158,7 @@ export function AgentsSettingsPanel() {
     setActionError(null);
     try {
       await deleteGatewayAgent(agent.id);
-      navigate('/agents');
+      navigate(AGENTS_APP_LIST_PATH);
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -149,13 +175,13 @@ export function AgentsSettingsPanel() {
     // Mount the Radix dialog after the originating card click has completed so
     // that the same pointer event cannot be interpreted as an outside click.
     editorDirtyRef.current = false;
-    window.setTimeout(() => navigate(`/agents/${id}`), 0);
+    window.setTimeout(() => navigate(agentsAppDetailPath(id)), 0);
   };
 
   const closeAgent = () => {
     if (editorDirtyRef.current && !window.confirm(zh ? '放弃未保存的更改？' : 'Discard unsaved changes?')) return;
     editorDirtyRef.current = false;
-    navigate('/agents');
+    navigate(AGENTS_APP_LIST_PATH);
   };
 
   const openDefaults = () => {
@@ -169,15 +195,19 @@ export function AgentsSettingsPanel() {
   }, []);
 
   if (!token) {
-    return <SettingsPageFrame><p className="text-sm text-fg-muted">{zh ? '需要本机服务令牌。' : 'Local service token required.'}</p></SettingsPageFrame>;
+    return <SettingsPageFrame padding={capabilityPagePadding}><p className="text-sm text-fg-muted">{zh ? '需要本机服务令牌。' : 'Local service token required.'}</p></SettingsPageFrame>;
   }
   if (error && !data) {
-    return <SettingsPageFrame><p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{String(error)}</p><Button onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></SettingsPageFrame>;
+    return <SettingsPageFrame padding={capabilityPagePadding}><p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{String(error)}</p><Button onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></SettingsPageFrame>;
   }
   if (isLoading || !data) return <AgentsSkeleton />;
 
   return (
-    <SettingsPageFrame gap="gap-5" className="max-w-6xl" padding="px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+    <SettingsPageFrame
+      gap="gap-5"
+      className="max-w-6xl"
+      padding={capabilityPagePadding}
+    >
       {(error || actionError) && !selected ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{actionError ?? String(error)}</p> : null}
 
       <AgentsListGrid

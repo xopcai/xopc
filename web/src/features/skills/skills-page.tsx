@@ -1,9 +1,8 @@
-import type { ReactNode } from 'react';
-
+import type { CapabilityHeaderActionChange } from '@/features/capabilities/capability-header-actions';
 import { SkillsPageView } from '@/features/skills/skills-page-view';
 import { useSkillsPage } from '@/features/skills/use-skills-page';
 
-export function SkillsPage({ embedded = false, onHeaderEndChange }: { embedded?: boolean; onHeaderEndChange?: (node: ReactNode | null) => void }) {
+export function SkillsPage({ embedded = false, onHeaderActionChange }: { embedded?: boolean; onHeaderActionChange?: CapabilityHeaderActionChange }) {
   const vm = useSkillsPage();
-  return <SkillsPageView vm={vm} embedded={embedded} onHeaderEndChange={onHeaderEndChange} />;
+  return <SkillsPageView vm={vm} embedded={embedded} onHeaderActionChange={onHeaderActionChange} />;
 }
