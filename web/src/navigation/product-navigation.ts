@@ -37,13 +37,13 @@ const workSections = [
 
 const automationSections = [
   { id: 'automation-activity', domain: 'automation', path: '/automations?view=activity' },
-  { id: 'automation-scenes', domain: 'automation', path: '/scenes' },
   { id: 'automation-triggers', domain: 'automation', path: '/automations' },
+  { id: 'automation-scenes', domain: 'automation', path: '/scenes' },
   { id: 'automation-workflows', domain: 'automation', path: '/workflows' },
   { id: 'automation-browser', domain: 'automation', path: '/browser-automations' },
 ] as const satisfies readonly ProductSectionDefinition[];
 
-export const CAPABILITY_SECTIONS = ['discover', 'agents', 'skills', 'connectors', 'channels', 'extensions'] as const;
+export const CAPABILITY_SECTIONS = ['discover', 'skills', 'connectors', 'agents', 'channels', 'extensions'] as const;
 export type CapabilitySection = typeof CAPABILITY_SECTIONS[number];
 
 const capabilitySections = CAPABILITY_SECTIONS.map((section) => ({
@@ -78,7 +78,7 @@ export function productDomainAtPath(pathname: string): ProductDomainId | null {
   if (isPath(pathname, '/automations') || isPath(pathname, '/scenes') || isPath(pathname, '/workflows') || isPath(pathname, '/browser-automations')) {
     return 'automation';
   }
-  if (isPath(pathname, '/capabilities') || isPath(pathname, '/extensions')) {
+  if (isPath(pathname, '/capabilities')) {
     return 'capabilities';
   }
   if (isPath(pathname, '/local-apps') || isPath(pathname, '/open')) {
@@ -99,7 +99,6 @@ export function productSectionAtLocation(pathname: string, search = ''): Product
   if (isPath(pathname, '/scenes')) return 'automation-scenes';
   if (isPath(pathname, '/workflows')) return 'automation-workflows';
   if (isPath(pathname, '/browser-automations')) return 'automation-browser';
-  if (isPath(pathname, '/extensions')) return 'capabilities-extensions';
   if (isPath(pathname, '/local-apps') || isPath(pathname, '/open')) return 'apps-library';
   if (isPath(pathname, '/capabilities')) {
     const section = pathname.split('/')[2];

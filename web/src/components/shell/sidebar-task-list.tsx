@@ -944,12 +944,26 @@ function SidebarPinnedSection({
   );
 }
 
-export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
+export function SidebarTaskList({
+  onNavigate,
+  scrollHeader,
+}: {
+  onNavigate?: () => void;
+  scrollHeader?: ReactNode;
+}) {
   const gateway = useGatewayStore((state) => state.baseUrl);
-  return <SidebarTaskListContent key={gateway} gateway={gateway} onNavigate={onNavigate} />;
+  return <SidebarTaskListContent key={gateway} gateway={gateway} onNavigate={onNavigate} scrollHeader={scrollHeader} />;
 }
 
-function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => void; gateway: string }) {
+function SidebarTaskListContent({
+  onNavigate,
+  gateway,
+  scrollHeader,
+}: {
+  onNavigate?: () => void;
+  gateway: string;
+  scrollHeader?: ReactNode;
+}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const sb = m.sidebar;
@@ -1457,7 +1471,8 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
 
   if (!token) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="app-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-2">
+        {scrollHeader}
         <div className="flex flex-col gap-1.5 px-4 pt-4">
           <div className="rounded-xl bg-surface-panel p-3">
             <p className="text-xs leading-relaxed text-fg-muted">{sb.taskListNeedToken}</p>
@@ -1483,9 +1498,10 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     <div className="flex min-h-0 flex-1 flex-col">
       <div
         ref={listScrollRef}
-        className="app-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain pt-3 pb-2"
+        className="app-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-2"
         onScroll={onScroll}
       >
+        {scrollHeader}
         <div hidden={discovery.active || loadingFirst} className="px-2">
           <SidebarPinnedSection
             sessions={pinnedSessions}
