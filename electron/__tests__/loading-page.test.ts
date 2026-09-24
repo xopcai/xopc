@@ -80,6 +80,45 @@ describe('getLoadingPageDataUrl', () => {
 });
 
 describe('getStartupRecoveryPageDataUrl', () => {
+  it('keeps the window background draggable without swallowing recovery interactions', () => {
+    const failure = {
+      kind: 'unknown' as const,
+      message: 'startup failed',
+      isPackaged: true,
+    };
+    const html = decodePage(getStartupRecoveryPageDataUrl('en', failure));
+
+    expect(html).toMatch(/body\s*\{[^}]*-webkit-app-region: drag;/s);
+    expect(html).toMatch(/main\s*\{[^}]*-webkit-app-region: no-drag;/s);
+  });
+
+  it('guides packaged users to download the latest version for every startup failure', () => {
+    const failure = {
+      kind: 'unknown' as const,
+      message: 'startup failed',
+      isPackaged: true,
+    };
+    const en = decodePage(getStartupRecoveryPageDataUrl('en', failure));
+    const zh = decodePage(getStartupRecoveryPageDataUrl('zh-CN', failure));
+
+    expect(en).toContain('A newer release may already include a fix for this startup issue.');
+    expect(en).toContain('<button id="check" class="primary">Check and download update</button>');
+    expect(en).toContain('<button id="retry" class="">Retry startup</button>');
+    expect(zh).toContain('新版本可能已经修复了此次启动问题');
+    expect(zh).toContain('<button id="check" class="primary">检查并下载最新版</button>');
+  });
+
+  it('keeps update actions out of development recovery pages', () => {
+    const html = decodePage(getStartupRecoveryPageDataUrl('en', {
+      kind: 'unknown',
+      message: 'startup failed',
+      isPackaged: false,
+    }));
+
+    expect(html).not.toContain('class="notice update-guidance"');
+    expect(html).not.toContain('id="check"');
+  });
+
   it('keeps technical gateway terminology out of visible recovery copy', () => {
     const failure = {
       kind: 'port_in_use' as const,
