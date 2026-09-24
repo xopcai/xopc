@@ -6,7 +6,7 @@ import {
   filterCapabilityCatalog,
   skillCapabilityItems,
 } from '@/features/capabilities/capability-catalog';
-import { CAPABILITY_SECTIONS, capabilityPath } from '@/features/capabilities/capabilities-page';
+import { CAPABILITY_SECTIONS, capabilityPath } from '@/navigation/product-navigation';
 import type { ConnectorDefinition, ConnectorInstance } from '@/features/connectors/connectors-api';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { channelDetailPath } from '@/features/settings/channels/channels-routes';
@@ -16,10 +16,10 @@ describe('capability catalog', () => {
   it('owns agent and channel management routes', () => {
     expect(CAPABILITY_SECTIONS).toEqual([
       'discover',
+      'agents',
       'skills',
       'connectors',
       'channels',
-      'agents',
       'extensions',
     ]);
     expect(capabilityPath('agents')).toBe('/capabilities/agents');

@@ -16,6 +16,7 @@ import {
   loadAgentBrowserSettingsPage,
   loadComputerSettingsPage,
   loadAutomationsPage,
+  loadScenesPage,
   loadBrowserAutomationsPage,
   loadHomePage,
   loadTaskDetailPage,
@@ -45,7 +46,7 @@ import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/
 const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.SessionsPage })));
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
 const BrowserAutomationsPage = lazy(() => loadBrowserAutomationsPage().then((m) => ({ default: m.BrowserAutomationsPage })));
-const ScenesPage = lazy(() => import('@/features/scenes/scenes-page').then((m) => ({ default: m.ScenesPage })));
+const ScenesPage = lazy(() => loadScenesPage().then((m) => ({ default: m.ScenesPage })));
 const HomePage = lazy(() => loadHomePage().then((m) => ({ default: m.HomePage })));
 const TaskDetailPage = lazy(() => loadTaskDetailPage().then((m) => ({ default: m.TaskDetailPage })));
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
