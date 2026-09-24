@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { XopcGatewayAdapter } from '@agent-evals/adapter-xopc';
 import { expect, it } from 'vitest';
 
-import { gatewayConfig, waitForGateway } from '../scripts/run-github-eval.mjs';
+import { gatewayConfig, prepareEvalAgentCatalog, waitForGateway } from '../scripts/run-github-eval.mjs';
 
 it('runs the evaluator through the real Gateway with a local scripted model service', async () => {
   const root = mkdtempSync(join(tmpdir(), 'gateway-adapter-contract-'));
@@ -47,6 +47,7 @@ it('runs the evaluator through the real Gateway with a local scripted model serv
   const model = 'eval-fixture/smoke';
   const token = 'gateway-integration-token';
   writeFileSync(configPath, JSON.stringify(gatewayConfig(model, workspace, port, token)));
+  await prepareEvalAgentCatalog(root, model, workspace);
   writeFileSync(modelsPath, JSON.stringify({ providers: { 'eval-fixture': {
     baseUrl: `http://127.0.0.1:${provider.address().port}/v1`, apiKey: 'test-only-key', api: 'openai-completions',
     models: [{ id: 'smoke', name: 'Smoke', reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 4096,

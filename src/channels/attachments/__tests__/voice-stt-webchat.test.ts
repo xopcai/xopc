@@ -25,7 +25,7 @@ describe('mergeVoiceTranscriptsIntoUserText', () => {
 
   beforeEach(() => {
     sttMocks.transcribe.mockReset();
-    sttMocks.transcribe.mockResolvedValue({ text: '你好', provider: 'xopc-local' });
+    sttMocks.transcribe.mockResolvedValue({ text: '你好', provider: 'custom-stt' });
   });
 
   afterEach(async () => {
@@ -44,12 +44,12 @@ describe('mergeVoiceTranscriptsIntoUserText', () => {
         data: Buffer.from('abc').toString('base64'),
       }],
       '',
-      { enabled: true, provider: 'xopc-local' },
+      { enabled: true, provider: 'custom-stt' },
     );
 
     expect(sttMocks.transcribe).toHaveBeenCalledWith(
       expect.any(Buffer),
-      expect.objectContaining({ provider: 'xopc-local' }),
+      expect.objectContaining({ provider: 'custom-stt' }),
       expect.objectContaining({
         fileName: 'voice.m4a',
         mime: 'audio/mp4',
@@ -71,7 +71,7 @@ describe('mergeVoiceTranscriptsIntoUserText', () => {
         data: Buffer.from('abc').toString('base64'),
       }],
       '',
-      { enabled: true, provider: 'xopc-local' },
+      { enabled: true, provider: 'custom-stt' },
     );
 
     expect(result.voiceTranscripts).toEqual(['[STT failed: audio decoder unavailable]']);
@@ -95,7 +95,7 @@ describe('mergeVoiceTranscriptsIntoUserText', () => {
       name: 'voice.m4a',
       size: 5,
       uri: saved.uri,
-    }], '', { enabled: true, provider: 'xopc-local' });
+    }], '', { enabled: true, provider: 'custom-stt' });
 
     expect(result.transcribedMediaUris).toEqual([saved.uri]);
   });

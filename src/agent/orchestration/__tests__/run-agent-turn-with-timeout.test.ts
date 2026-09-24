@@ -13,14 +13,16 @@ import {
 
 describe('resolveAgentTurnTimeoutMs', () => {
   it('reads and clamps the effective agent runtime timeout', () => {
+    const repository = initializeTestAgentCatalog();
+    const config = ConfigSchema.parse({});
     const withTimeout = (timeoutMs: number) => {
-      initializeTestAgentCatalog({ agents: [{ id: 'main', enabled: true, runtime: { timeoutMs } }] });
-      return ConfigSchema.parse({});
+      const main = repository.get('main')!;
+      repository.update('main', main.revision, { id: 'main', enabled: true, runtime: { timeoutMs } });
+      return config;
     };
 
     expect(DEFAULT_AGENT_TURN_TIMEOUT_MS).toBe(4 * 60 * 60 * 1000);
     expect(MAX_AGENT_TURN_TIMEOUT_MS).toBe(24 * 60 * 60 * 1000);
-    initializeTestAgentCatalog();
     expect(resolveAgentTurnTimeoutMs()).toBe(DEFAULT_AGENT_TURN_TIMEOUT_MS);
     expect(resolveAgentTurnTimeoutMs(withTimeout(90_000))).toBe(90_000);
     expect(resolveAgentTurnTimeoutMs(withTimeout(1_000))).toBe(MIN_AGENT_TURN_TIMEOUT_MS);

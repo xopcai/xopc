@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { createModelsCommand } from '../models.js';
 
 vi.mock('../../../providers/index.js', () => ({
@@ -48,6 +49,7 @@ vi.mock('../../utils/oauth-login.js', () => ({
 
 describe('Models Command', () => {
   beforeEach(() => {
+    initializeTestAgentCatalog();
     vi.clearAllMocks();
   });
 

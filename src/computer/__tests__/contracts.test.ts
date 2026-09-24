@@ -1,11 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import { EndpointToolPolicy } from '../../endpoint-tools/policy.js';
 import { resolveEffectiveAgentConfig } from '../../agent-config/resolver.js';
 import { ChatCompletionsComputerAdapter, readComputerJson } from '../model-adapter.js';
 
 describe('computer configuration and protocol boundaries', () => {
+  beforeAll(() => initializeTestAgentCatalog());
+  afterAll(() => closeXopcDatabase());
+
   it('registers the exact desktop-only private transport contract', () => {
     const policy = new EndpointToolPolicy();
     expect(() => policy.validateDescriptor('desktop', structuredClone(COMPUTER_DESCRIPTOR) as any)).not.toThrow();

@@ -20,10 +20,10 @@ describe('voice-config-api', () => {
   it('uses user-safe defaults and disables hidden transcript refinement', () => {
     const state = normalizeVoiceSettings({});
 
-    expect(state.stt.enabled).toBe(true);
+    expect(state.stt.enabled).toBe(false);
     expect(state.tts.enabled).toBe(true);
-    expect(state.stt.provider).toBe('xopc-local');
-    expect(state.stt.fallback).toEqual({ enabled: false, order: ['xopc-local'] });
+    expect(state.stt.provider).toBe('openai');
+    expect(state.stt.fallback).toEqual({ enabled: false, order: [] });
     expect(state.tts.trigger).toBe('inbound');
     expect(state.tts.timeoutMs).toBe(60_000);
     expect(state.voice.input.refinement.mode).toBe('off');

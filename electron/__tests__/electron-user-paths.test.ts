@@ -12,6 +12,7 @@ vi.mock('electron', () => ({
 }));
 
 import { ConfigSchema } from '../../src/config/schema.js';
+import { initializeTestAgentCatalog } from '../../src/agent-catalog/test-support.js';
 
 import { getElectronUserPaths, resolveElectronFileIpcRoots } from '../ensure-gateway-config.js';
 
@@ -55,17 +56,9 @@ describe('resolveElectronFileIpcRoots', () => {
       workspacePath: join(stateDir, 'workspace', 'main'),
     };
     process.env.XOPC_STATE_DIR = stateDir;
-    const config = ConfigSchema.parse({
-      agents: {
-        default: 'main',
-        list: [
-          {
-            id: 'main',
-            profile: { name: 'Main' },
-            workspace: paths.workspacePath,
-          },
-        ],
-      },
+    const config = ConfigSchema.parse({});
+    initializeTestAgentCatalog({
+      agents: [{ id: 'main', enabled: true, workspace: paths.workspacePath }],
     });
 
     expect(resolveElectronFileIpcRoots(config, paths)).toEqual([

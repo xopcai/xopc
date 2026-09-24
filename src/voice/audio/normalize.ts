@@ -7,7 +7,7 @@ import {
   decodeWavToMonoFloat32,
   type DecodedPcmAudio,
   UnsupportedWavEncodingError,
-} from '../local/wav.js';
+} from './wav.js';
 
 const TARGET_SAMPLE_RATE = 16_000;
 const MAX_DECODED_DURATION_SECONDS = 15 * 60;

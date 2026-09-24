@@ -9,8 +9,6 @@ export const ELECTRON_GATEWAY_EXTERNALS = [
   '@vscode/ripgrep',
   'silk-wasm',
   'playwright-core',
-  '@huggingface/transformers',
-  'sherpa-onnx-node',
   'fsevents',
 ];
 
@@ -19,9 +17,6 @@ export const ELECTRON_PACKAGED_DEPENDENCIES = [
   'ws',
   'sharp',
   'silk-wasm',
-  '@huggingface/transformers',
-  'onnxruntime-common',
-  'sherpa-onnx-node',
   'node-pty',
   '@trycua/cua-driver',
 ];
@@ -73,7 +68,18 @@ export function buildMinimalElectronPackageJson(rootPkg, repoRoot) {
     );
   }
 
-  const { devDependencies: _dev, ...rest } = rootPkg;
+  // Do not carry the published package's optional peers into the isolated Electron
+  // install. pnpm auto-installs them, which would duplicate the separately staged
+  // playwright-core tree and install the Lark SDK even though Electron extensions
+  // are bundled as self-contained modules.
+  const {
+    dependencies: _dependencies,
+    devDependencies: _dev,
+    optionalDependencies: _optional,
+    peerDependencies: _peers,
+    peerDependenciesMeta: _peerMeta,
+    ...rest
+  } = rootPkg;
   const devDependencies = {};
   if (typeof rootPkg.devDependencies?.electron === 'string') {
     devDependencies.electron =

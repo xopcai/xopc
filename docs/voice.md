@@ -46,7 +46,7 @@ The setup is working when the message shows an accurate transcript and the Agent
 
 ### Audio input contract
 
-Voice uploads use `POST /api/voice/transcriptions` with multipart form data. WAV, WebM/Opus, Ogg/Opus, MP3, and MP4/M4A are accepted. The local provider reads PCM WAV directly and normalizes other containers to mono 16 kHz PCM with `ffmpeg`; install `ffmpeg` on the gateway host when using compressed input with local STT. If the binary is outside `PATH`, set `XOPC_FFMPEG_PATH` to its absolute path and restart the gateway. The official Docker image includes `ffmpeg`.
+Voice uploads use `POST /api/voice/transcriptions` with multipart form data. WAV, WebM/Opus, Ogg/Opus, MP3, and MP4/M4A are accepted. Provider extensions receive the same audio input contract and can adapt it to a user-managed local or OpenAI-compatible transcription service.
 
 Discussion capture keeps the compressed original recording as recoverable evidence and sends speech-aware WAV segments for live text. Segments close on a pause after at least four seconds, are capped at fifteen seconds, and pure silence is skipped. If live text is incomplete, the original is decoded into bounded chunks and transcribed sequentially instead of loading a long recording into one STT request.
 
@@ -67,7 +67,7 @@ Discussion capture keeps the compressed original recording as recoverable eviden
 
 ## Provider choices
 
-xopc can use supported cloud speech providers and configured local speech extensions. Cloud providers process audio according to their own policies and may charge per use. A local provider keeps processing on your device but requires compatible software and models.
+xopc can use supported cloud speech providers and configured speech extensions. STT is disabled by default, and xopc does not bundle a local inference engine or model manager. To keep transcription on your device, install an extension that connects to your own local or OpenAI-compatible service. Cloud providers process audio according to their own policies and may charge per use.
 
 Use environment variables or the credential controls in the UI; do not put real keys into documentation examples. Exact configuration keys are listed in [Configuration reference](./reference/configuration.md).
 
@@ -84,7 +84,7 @@ Use environment variables or the credential controls in the UI; do not put real 
 | Problem | Check |
 | --- | --- |
 | Audio uploads but no transcript appears | STT is enabled, the file format is supported, and the provider credential is valid |
-| Local STT reports that the decoder is unavailable | Install `ffmpeg` on the gateway host, or upload PCM WAV |
+| A local STT extension rejects the audio format | Check the extension and local service format requirements |
 | A long discussion is still finalizing | Keep the gateway running; saved segments and the original recording resume from durable state |
 | Transcript uses the wrong language | Set the provider language when available or choose a more suitable model |
 | Text replies work but audio replies do not | TTS is enabled and its trigger matches the current message |

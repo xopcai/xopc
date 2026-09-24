@@ -1,14 +1,15 @@
 import { requireXopcDatabase as openFixtureDatabase } from '../../../storage/sqlite/connection.js';
 import { ensureSessionRecord as ensureFixtureConversation } from '../../../storage/sqlite/session-repository.js';
+import { initializeTestAgentCatalog, seedTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 function seedConversationFixtures(): void {
   openFixtureDatabase();
+  seedTestAgentCatalog();
   ensureFixtureConversation("be278b62-65c6-4b8d-8876-363c0a155a5a", '', {"agentId":"main","sourceChannel":"webchat","sourceChatId":"wf_run-1","sessionType":"chat","routing":{"agentId":"main","source":"webchat","accountId":"default","peerKind":"direct","peerId":"wf_run-1"}});
   ensureFixtureConversation("0beb9c69-d789-4c8d-87be-22e9abe391a5", '', {"agentId":"main","sourceChannel":"webchat","sourceChatId":"parent","sessionType":"chat","routing":{"agentId":"main","source":"webchat","accountId":"default","peerKind":"direct","peerId":"parent"}});
   ensureFixtureConversation("6e2dd79d-484c-4566-8ee5-3ab23daa50a0", '', {"agentId":"main","sourceChannel":"workflow","sourceChatId":"run-1","sessionType":"workflow-run","routing":{"agentId":"main","source":"workflow","accountId":"default","peerKind":"direct","peerId":"run-1"}});
 }
 import { describe, expect, it, vi } from 'vitest';
 
-import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { createWorkflowTool } from '../workflow-tool.js';
 
 describe('workflow tool async run start', () => {

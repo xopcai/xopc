@@ -14,6 +14,7 @@ import { resolveConfigPath, resolveStateDir } from '../src/config/paths.js';
 import type { Config, GatewayBindMode } from '../src/config/schema.js';
 import { ConfigSchema } from '../src/config/schema.js';
 import { DEFAULT_GATEWAY_PORT } from '../src/daemon/constants.js';
+import { configurePackagedSqliteAssetRoot } from './packaged-app-path.js';
 
 export type ElectronUserPaths = {
   stateDir: string;
@@ -30,12 +31,12 @@ export function getElectronUserPaths(): ElectronUserPaths {
   return { stateDir, electronUserData, configPath, workspacePath };
 }
 
-export function resolveElectronFileIpcRoots(config: Config, paths: ElectronUserPaths): string[] {
-  const defaultAgentId = resolveDefaultAgentId(config);
+export function resolveElectronFileIpcRoots(_config: Config, paths: ElectronUserPaths): string[] {
+  const defaultAgentId = resolveDefaultAgentId();
   return [
     paths.electronUserData,
-    resolveAgentWorkspaceDir(config, defaultAgentId),
-    resolveAgentProfileDir(config, defaultAgentId),
+    resolveAgentWorkspaceDir(defaultAgentId),
+    resolveAgentProfileDir(defaultAgentId),
   ];
 }
 
@@ -50,6 +51,7 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
   bindHost: string;
   fileIpcRoots: string[];
 }> {
+  configurePackagedSqliteAssetRoot();
   mkdirSync(paths.stateDir, { recursive: true });
 
   const initResult = await initWorkspaceCore({

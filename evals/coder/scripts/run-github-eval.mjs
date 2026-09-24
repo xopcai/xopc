@@ -31,15 +31,6 @@ export function settingsFromEnv(env) {
 
 export function gatewayConfig(model, workspace, port, token) {
   return {
-    agents: {
-      default: 'coder',
-      defaults: {
-        models: { chat: { primary: model, fallbacks: [] } },
-        skills: { mode: 'selected', include: [] },
-        runtime: { maxTurns: 40, timeoutMs: 300_000 },
-      },
-      list: [{ id: 'coder', enabled: true, workspace }],
-    },
     gateway: {
       mode: 'local', bind: 'loopback', port,
       auth: { mode: 'token', token },
@@ -50,6 +41,38 @@ export function gatewayConfig(model, workspace, port, token) {
     channels: {},
     update: { checkOnStart: false },
   };
+}
+
+export function evalAgentCatalogSeed(model, workspace) {
+  return {
+    defaultAgentId: 'coder',
+    defaults: {
+      models: { chat: { primary: model, fallbacks: [] }, intents: {} },
+      skills: { mode: 'selected', include: [] },
+      tools: {},
+      workflows: {},
+      runtime: { maxTurns: 40, timeoutMs: 300_000 },
+    },
+    agent: { id: 'coder', enabled: true, workspace },
+  };
+}
+
+export async function prepareEvalAgentCatalog(state, model, workspace) {
+  const [{ AgentCatalogRepository }, { closeXopcDatabase, openXopcDatabase }] = await Promise.all([
+    import('../../../src/agent-catalog/repository.ts'),
+    import('../../../src/storage/sqlite/connection.ts'),
+  ]);
+  const seed = evalAgentCatalogSeed(model, workspace);
+  openXopcDatabase({ path: join(state, 'xopc.db') });
+  try {
+    const repository = new AgentCatalogRepository();
+    repository.ensureInitialized(seed.defaults);
+    repository.markProvisioned('main');
+    repository.create(seed.agent, { ready: true });
+    repository.setDefault(seed.defaultAgentId, repository.getSettings().revision);
+  } finally {
+    closeXopcDatabase();
+  }
 }
 
 export async function waitForGateway(baseUrl, token, child, timeoutMs = 90_000) {
@@ -138,6 +161,7 @@ export async function main() {
     const { ConfigSchema } = await import('../../../src/config/schema.ts');
     const config = ConfigSchema.parse(gatewayConfig(settings.model, workspace, port, token));
     writeFileSync(configPath, JSON.stringify(config), { mode: 0o600 });
+    await prepareEvalAgentCatalog(state, settings.model, workspace);
     const runtimeEnv = {
       ...process.env,
       XOPC_CONFIG: configPath, XOPC_CONFIG_PATH: configPath, XOPC_STATE_DIR: state,

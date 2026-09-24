@@ -14,7 +14,7 @@ import { XopcMcpOAuthClientProvider } from './mcp-oauth-provider.js';
 import { McpOAuthSession } from './mcp-oauth-session.js';
 import { canonicalMcpServerUrl, McpOAuthStore } from './mcp-oauth-store.js';
 import type { McpOAuthSessionSnapshot } from './mcp-oauth-types.js';
-import { pluginOAuthScope } from '../../../extensions/agent-plugins/auth.js';
+import { pluginOAuthScope } from '../../../extensions/agent-plugins/plugin-oauth-scope.js';
 import { recordPluginMcpHealth } from '../../../extensions/agent-plugins/health.js';
 
 const log = createLogger('Mcp:OAuth');

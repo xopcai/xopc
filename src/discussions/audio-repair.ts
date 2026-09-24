@@ -1,4 +1,4 @@
-import type { DecodedPcmAudio } from '../voice/local/wav.js';
+import type { DecodedPcmAudio } from '../voice/audio/wav.js';
 
 export interface AudioRange { startedAtMs: number; endedAtMs: number }
 

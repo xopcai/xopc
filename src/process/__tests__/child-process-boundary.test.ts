@@ -45,7 +45,6 @@ const allowed = new Set([
   'src/tunnel/frpc-extract.ts',
   'src/tunnel/frpc-process.ts',
   'src/voice/audio/normalize.ts',
-  'src/voice/local/runtime-client.ts',
   'src/work-discovery/candidate-discovery.ts',
   'src/work-discovery/probe.ts',
 ]);
