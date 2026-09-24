@@ -10,6 +10,14 @@ import webPkg from './web/package.json' with { type: 'json' };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+const ELECTRON_ESM_CJS_SHIM = `
+// -- CommonJS Shims --
+import __cjs_mod__ from 'node:module';
+const __filename = import.meta.filename;
+const __dirname = import.meta.dirname;
+const require = __cjs_mod__.createRequire(import.meta.url);
+`;
+
 function tryGitSha(): string {
   try {
     return execSync('git rev-parse HEAD', { cwd: __dirname, encoding: 'utf8' }).trim();
@@ -28,9 +36,8 @@ export default defineConfig({
       // scripts/electron-runtime-externals.mjs). Main-process deps (zod, pino, dotenv, …) must
       // be bundled — electron-vite defaults to externalizeDeps=true which leaves bare imports.
       externalizeDeps: false,
-      // Rolldown 1.0.3 corrupts its generated CommonJS shim when Vite post-minifies this bundle.
-      // electron-builder still compresses the packaged artifact, so keep the main output valid.
-      minify: false,
+      // Keep post-minification; electron-builder also compresses the packaged artifact.
+      minify: 'esbuild',
       rollupOptions: {
         // IMPORTANT: In the Electron main process, `electron` is a runtime-provided module.
         // If Rollup resolves it to the npm package `electron`, the bundle will include
@@ -45,6 +52,9 @@ export default defineConfig({
           index: resolve(__dirname, 'electron/main.ts'),
           compatibility: resolve(__dirname, 'electron/gateway-compatibility.ts'),
         },
+        // electron-vite 6 beta locates the last ESM import with a regex that can overrun into
+        // bundled source. Providing the shim explicitly bypasses that unsafe insertion path.
+        output: { banner: ELECTRON_ESM_CJS_SHIM },
       },
     },
     resolve: {
