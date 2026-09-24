@@ -1,6 +1,30 @@
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+export type ExtensionMarketplaceItem = {
+  id: string;
+  name: string;
+  description?: string;
+  npmPackage: string;
+  version?: string;
+  categories?: string[];
+  tags?: string[];
+  verified?: boolean;
+  homepage?: string;
+  author?: string;
+};
+
+export async function getExtensionMarketplaceItems(query = ''): Promise<ExtensionMarketplaceItem[]> {
+  const suffix = query.trim() ? `?q=${encodeURIComponent(query.trim())}` : '';
+  const res = await apiFetch(apiUrl(`/api/marketplace${suffix}`), { cache: 'no-store' });
+  if (!res.ok) throw new Error(await readErrorMessage(res));
+  const data = (await res.json()) as { ok?: boolean; extensions?: ExtensionMarketplaceItem[]; error?: string };
+  if (!data.ok || !Array.isArray(data.extensions)) {
+    throw new Error(data.error ?? 'Invalid response');
+  }
+  return data.extensions;
+}
+
 export type ExtensionMarketplacePackageDetail = {
   format?: 'native-extension' | 'agent-plugin';
   id: string;

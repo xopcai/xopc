@@ -113,7 +113,7 @@ describe('buildConnectorHits', () => {
 
     hit.run();
     expect(close).toHaveBeenCalledOnce();
-    expect(navigate).toHaveBeenCalledWith('/connectors?instance=filesystem-work&tab=connected');
+    expect(navigate).toHaveBeenCalledWith('/capabilities/connectors?instance=filesystem-work&tab=connected');
   });
 
   it('deep-links an uninstalled built-in connector to discovery details', () => {
@@ -125,7 +125,7 @@ describe('buildConnectorHits', () => {
 
     hit.run();
     expect(close).toHaveBeenCalledOnce();
-    expect(navigate).toHaveBeenCalledWith('/connectors?connector=filesystem&tab=discover');
+    expect(navigate).toHaveBeenCalledWith('/capabilities/connectors?connector=filesystem&tab=discover');
   });
 
   it.each([

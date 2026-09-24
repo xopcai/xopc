@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowLeft, Box, Check, ExternalLink, Loader2, Plus, Search, Settings, X } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 
@@ -29,7 +29,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 type ExtensionsPageCopy = MessageBundle['extensionsPage'];
 
-export function ExtensionsPage() {
+export function ExtensionsPage({ embedded = false, onHeaderEndChange }: { embedded?: boolean; onHeaderEndChange?: (node: ReactNode | null) => void }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
@@ -113,7 +113,26 @@ export function ExtensionsPage() {
     });
   }, [extensions]);
 
+  const headerEnd = useMemo(() => (
+    <div className="flex items-center gap-2">
+      <Button variant="secondary" onClick={() => setInstallPlugin(true)}>{language.startsWith('zh') ? '安装插件' : 'Install plugin'}</Button>
+      <Button asChild variant="secondary" className="h-9">
+        <Link to="/local-apps" aria-label={m.extensionsPage.openLocalApps} title={m.extensionsPage.openLocalApps}>
+          <Box className="size-4" />
+          <span className="hidden sm:inline">{m.extensionsPage.openLocalApps}</span>
+        </Link>
+      </Button>
+      <Button asChild variant="primary" className="h-9">
+        <Link to="/local-apps/new"><Plus className="size-4" />{m.extensionsPage.createLocalApp}</Link>
+      </Button>
+    </div>
+  ), [language, m.extensionsPage.createLocalApp, m.extensionsPage.openLocalApps]);
+
   useLayoutEffect(() => {
+    if (embedded) {
+      onHeaderEndChange?.(headerEnd);
+      return () => onHeaderEndChange?.(null);
+    }
     setPageHeader({
       startExtra: null,
       main: (
@@ -121,23 +140,10 @@ export function ExtensionsPage() {
           <h1 className="truncate text-base font-semibold tracking-tight text-fg">{m.extensionsPage.title}</h1>
         </div>
       ),
-      end: (
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={() => setInstallPlugin(true)}>{language.startsWith('zh') ? '安装插件' : 'Install plugin'}</Button>
-          <Button asChild variant="secondary" className="h-9">
-            <Link to="/local-apps" aria-label={m.extensionsPage.openLocalApps} title={m.extensionsPage.openLocalApps}>
-              <Box className="size-4" />
-              <span className="hidden sm:inline">{m.extensionsPage.openLocalApps}</span>
-            </Link>
-          </Button>
-          <Button asChild variant="primary" className="h-9">
-            <Link to="/local-apps/new"><Plus className="size-4" />{m.extensionsPage.createLocalApp}</Link>
-          </Button>
-        </div>
-      ),
+      end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, language, m.extensionsPage.createLocalApp, m.extensionsPage.openLocalApps, m.extensionsPage.title, setPageHeader]);
+  }, [clearPageHeader, embedded, headerEnd, m.extensionsPage.title, onHeaderEndChange, setPageHeader]);
 
   if (loading && mainTab !== 'marketplace') {
     return <ExtensionsPageSkeleton />;
@@ -182,7 +188,7 @@ export function ExtensionsPage() {
         </div>
 
         {mainTab === 'marketplace' ? (
-          <ExtensionMarketplacePanel />
+          <ExtensionMarketplacePanel query={search} onQueryChange={setSearch} />
         ) : mainTab === 'builtin' && bundledExtensions.length === 0 ? (
           <EmptyExtensionsState message={m.extensionsPage.emptyBuiltin} />
         ) : mainTab === 'user' && userExtensions.length === 0 ? (

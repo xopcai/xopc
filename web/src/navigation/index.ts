@@ -154,8 +154,8 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'agents') return '/agents';
   if (tab === 'automations') return '/automations';
   if (tab === 'settingsKeyboardShortcuts') return '/settings/keyboard-shortcuts';
-  if (tab === 'skills') return '/skills';
-  if (tab === 'connectors') return '/connectors';
+  if (tab === 'skills') return '/capabilities/skills';
+  if (tab === 'connectors') return '/capabilities/connectors';
   if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
   if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
   if (tab === 'settingsComputerUse') return '/settings/computer-use';

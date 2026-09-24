@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo } from 'react';
+import { useLayoutEffect, useMemo, type ReactNode } from 'react';
 
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
+export function SkillsPageView({ vm, embedded = false, onHeaderEndChange }: { vm: SkillsPageVm; embedded?: boolean; onHeaderEndChange?: (node: ReactNode | null) => void }) {
   const {
     sk,
     hasToken,
@@ -52,7 +52,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
   if (!hasToken) {
     return (
       <>
-        <SkillsPageHeaderRegistration vm={vm} />
+        <SkillsPageHeaderRegistration vm={vm} embedded={embedded} onHeaderEndChange={onHeaderEndChange} />
         <div className="w-full px-3 py-16 text-center text-sm text-fg-muted sm:px-5 xl:px-6">
           {sk.needToken}
         </div>
@@ -85,7 +85,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
 
   return (
     <>
-      <SkillsPageHeaderRegistration vm={vm} />
+      <SkillsPageHeaderRegistration vm={vm} embedded={embedded} onHeaderEndChange={onHeaderEndChange} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
         {recoveryReturnPath ? (
@@ -269,7 +269,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
   );
 }
 
-function SkillsPageHeaderRegistration({ vm }: { vm: SkillsPageVm }) {
+function SkillsPageHeaderRegistration({ vm, embedded = false, onHeaderEndChange }: { vm: SkillsPageVm; embedded?: boolean; onHeaderEndChange?: (node: ReactNode | null) => void }) {
   const {
     sk,
     hasToken,
@@ -305,6 +305,10 @@ function SkillsPageHeaderRegistration({ vm }: { vm: SkillsPageVm }) {
   );
 
   useLayoutEffect(() => {
+    if (embedded) {
+      onHeaderEndChange?.(skillsHeaderEnd);
+      return () => onHeaderEndChange?.(null);
+    }
     if (!hasToken || inSettingsShell) {
       clearPageHeader();
       return () => clearPageHeader();
@@ -319,7 +323,7 @@ function SkillsPageHeaderRegistration({ vm }: { vm: SkillsPageVm }) {
       end: skillsHeaderEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, hasToken, inSettingsShell, setPageHeader, skillsHeaderEnd, sk.title]);
+  }, [clearPageHeader, embedded, hasToken, inSettingsShell, onHeaderEndChange, setPageHeader, skillsHeaderEnd, sk.title]);
 
   return null;
 }
