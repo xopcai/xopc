@@ -63,6 +63,7 @@ import {
   createBrowserAutomationTool,
   createXopcUseTool,
   createDesktopPetTool,
+  createWorkflowManageTool,
   createSkillInstallTool,
   createSkillsMarketplaceSearchTool,
   type SkillInstallToolOptions,
@@ -643,6 +644,7 @@ export class AgentToolsFactory {
         : []),
       ...(primary
         ? [
+            createWorkflowManageTool(),
             createWorkflowTool({
               catalog: createWorkflowCatalog(),
               getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,

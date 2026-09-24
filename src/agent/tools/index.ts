@@ -103,6 +103,7 @@ export {
 } from './delegate-tool.js';
 
 export { createWorkflowTool, type WorkflowToolDeps, type WorkflowToolInput } from './workflow-tool.js';
+export { createWorkflowManageTool } from './workflow-manage-tool.js';
 
 
 export { createAutomationTool, type AutomationToolDeps } from './automation-tool.js';

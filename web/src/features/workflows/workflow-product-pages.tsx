@@ -43,6 +43,7 @@ import {
   retryWorkflowRun,
   saveProjectWorkflowPreset,
   saveWorkflowDefinition,
+  startWorkflowConversation,
   startWorkflowRun,
   type WorkflowDefinition,
   type WorkflowDefinitionManifest,
@@ -471,7 +472,6 @@ export function WorkflowEditorPage() {
       {error ? <div className="border-b border-danger/30 bg-danger/5 px-4 py-2 text-sm text-danger">{error}</div> : null}
       <WorkflowEditor
         language={language}
-        ownerAgentId={ownerAgentId}
         saving={saving}
         initialDraft={initialDraft}
         initialName={initialName}
@@ -484,6 +484,16 @@ export function WorkflowEditorPage() {
           setSaveConflict(null);
           setError(null);
           void refreshDefinitions();
+        }}
+        onStartAuthoring={async (input) => {
+          const conversationId = await startWorkflowConversation({
+            prompt: input.prompt,
+            agentId: ownerAgentId,
+            projectId,
+            workflowName: input.name,
+            editing: Boolean(definitionId && definition?.metadata.source === 'user'),
+          });
+          navigate(`/chat/${encodeURIComponent(conversationId)}`);
         }}
       />
     </div>
