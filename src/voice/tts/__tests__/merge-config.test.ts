@@ -34,15 +34,15 @@ describe('mergeTtsConfigFromAppConfig', () => {
 
   it('merges providers map entries for extension providers', () => {
     const merged = mergeTtsConfigFromAppConfig({
-      provider: 'tts-local-cli',
+      provider: 'sample-speech',
       providers: {
-        'tts-local-cli': { command: 'piper --text {{Text}}', outputFormat: 'wav' },
+        'sample-speech': { endpoint: 'https://speech.example.test', outputFormat: 'mp3' },
       },
     });
-    expect(merged.provider).toBe('tts-local-cli');
-    expect(merged.providers?.['tts-local-cli']).toEqual({
-      command: 'piper --text {{Text}}',
-      outputFormat: 'wav',
+    expect(merged.provider).toBe('sample-speech');
+    expect(merged.providers?.['sample-speech']).toEqual({
+      endpoint: 'https://speech.example.test',
+      outputFormat: 'mp3',
     });
   });
 });

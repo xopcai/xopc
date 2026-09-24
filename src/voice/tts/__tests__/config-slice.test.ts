@@ -12,12 +12,12 @@ describe('collectTtsProviderConfigEntries', () => {
       provider: 'openai',
       providers: {
         openai: { model: 'tts-1-hd', voice: 'nova' },
-        'tts-local-cli': { command: 'piper --text {{Text}}' },
+        'sample-speech': { endpoint: 'https://speech.example.test' },
       },
     });
 
     expect(entries.openai).toEqual({ model: 'tts-1-hd', voice: 'nova' });
-    expect(entries['tts-local-cli']).toEqual({ command: 'piper --text {{Text}}' });
+    expect(entries['sample-speech']).toEqual({ endpoint: 'https://speech.example.test' });
   });
 
   it('returns {} when no providers map is set', () => {
@@ -32,18 +32,18 @@ describe('collectTtsProviderConfigEntries', () => {
 
 describe('buildTtsResolveRawConfig', () => {
   it('includes providers map and top-level slice for resolveConfig', () => {
-    const raw = buildTtsResolveRawConfig('tts-local-cli', {
+    const raw = buildTtsResolveRawConfig('sample-speech', {
       enabled: true,
-      provider: 'tts-local-cli',
+      provider: 'sample-speech',
       providers: {
-        'tts-local-cli': { command: 'echo {{Text}}' },
+        'sample-speech': { endpoint: 'https://speech.example.test' },
       },
     });
 
     expect(raw.providers).toEqual({
-      'tts-local-cli': { command: 'echo {{Text}}' },
+      'sample-speech': { endpoint: 'https://speech.example.test' },
     });
-    expect(raw['tts-local-cli']).toEqual({ command: 'echo {{Text}}' });
+    expect(raw['sample-speech']).toEqual({ endpoint: 'https://speech.example.test' });
   });
 });
 

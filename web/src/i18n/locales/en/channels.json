@@ -286,7 +286,6 @@
       "provider": "Voice engine",
       "providerOpenai": "OpenAI TTS",
       "providerEdge": "Microsoft Edge (free)",
-      "providerLocalCli": "Local CLI (offline)",
       "voice": "Voice",
       "alwaysWarning": "Always-on voice can be noisy in busy chats. Use it only when the channel is meant to be audio-first.",
       "statusTitle": "Current voice reply status",
@@ -305,7 +304,6 @@
         "openai": "Low latency and broad voice selection; requires an OpenAI key.",
         "alibaba": "Strong Chinese voices through DashScope; requires DASHSCOPE_API_KEY.",
         "minimax": "High quality voices; async generation can be slower.",
-        "localCli": "Private local synthesis through Piper, sherpa-onnx, mlx-audio, or your own script.",
         "generic": "Extension speech provider. Configure the required fields below."
       },
       "test": {
@@ -320,22 +318,7 @@
         "emptyText": "Enter text to synthesize.",
         "playFailed": "Audio playback failed."
       },
-      "edgeHint": "Microsoft Edge TTS — no API key required.",
-      "localCli": {
-        "preset": "Command preset",
-        "presetPlaceholder": "Choose a local engine template…",
-        "presetDesc": "Starts from a safe template for Piper, sherpa-onnx, or mlx-audio. Replace paths before testing.",
-        "command": "CLI command",
-        "commandDesc": "Shell template; placeholders: {{Text}}, {{OutputPath}}, {{OutputDir}}, {{OutputBase}}.",
-        "commandPlaceholder": "mlx_audio.tts.generate --text \"{{Text}}\" --file_prefix {{OutputBase}}",
-        "cwd": "Working directory",
-        "cwdDesc": "Optional. Defaults to the gateway working directory.",
-        "outputFormat": "Output format",
-        "outputFormatDesc": "File extension produced by the CLI (mp3, wav, opus, …).",
-        "timeoutMs": "Timeout (ms)",
-        "timeoutMsDesc": "Per-call timeout override; leave blank to inherit the TTS default.",
-        "hint": "Provided by the bundled `tts-local-cli` extension. Enable the extension and configure the binary on PATH."
-      }
+      "edgeHint": "Microsoft Edge TTS — no API key required."
     },
     "notes": {
       "title": "Note",

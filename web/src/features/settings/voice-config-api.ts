@@ -136,7 +136,7 @@ function mergeStt(raw: unknown): SttSettings {
   };
 }
 
-/** Provider id is open string — extension SpeechProviderPlugins (e.g. tts-local-cli) are allowed. */
+/** Provider id is open string so extension SpeechProviderPlugins remain supported. */
 function normalizeTtsProvider(v: unknown): string {
   return typeof v === 'string' && v.trim().length > 0 ? v.trim() : 'edge';
 }
