@@ -16,9 +16,15 @@ describe('PcmFrameBuffer', () => {
     expect(joined.slice(source.byteLength).every(byte => byte === 0)).toBe(true);
   });
 
-  it('rejects incomplete PCM16 samples and does not emit an empty tail', () => {
+  it('ignores empty provider chunks without interrupting subsequent audio', () => {
+    const framer = new PcmFrameBuffer();
+    expect(framer.push(new Uint8Array())).toEqual([]);
+    expect(framer.push(new Uint8Array(960))).toHaveLength(1);
+    expect(framer.finish()).toBeUndefined();
+  });
+
+  it('rejects incomplete PCM16 samples', () => {
     const framer = new PcmFrameBuffer();
     expect(() => framer.push(new Uint8Array(3))).toThrow('PCM16');
-    expect(framer.finish()).toBeUndefined();
   });
 });

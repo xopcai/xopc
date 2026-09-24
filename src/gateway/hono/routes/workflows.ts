@@ -22,7 +22,11 @@ import type {
   WorkflowRunView,
 } from '../../../workflows/domain/index.js';
 import { validateWorkflowDefinitionInput } from '../../../workflows/domain/index.js';
-import { WorkflowDraftService, type CreateWorkflowDraftRequest } from '../../../workflows/draft/index.js';
+import {
+  WorkflowDraftProviderError,
+  WorkflowDraftService,
+  type CreateWorkflowDraftRequest,
+} from '../../../workflows/draft/index.js';
 import { WorkflowDraftConflictError, WorkflowDraftStore, type SaveWorkflowAuthoringDraftInput } from '../../../workflows/authoring/index.js';
 import { resolveWorkflowRunArtifactsDir } from '../../../workflows/store/paths.js';
 import { ProjectWorkflowPresetRepository } from '../../../workflows/project-presets/project-workflow-preset-repository.js';
@@ -218,6 +222,9 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       }, c.req.raw.signal);
       return c.json({ draft }, 201);
     } catch (err) {
+      if (err instanceof WorkflowDraftProviderError) {
+        return c.json({ error: 'Provider request failed', code: err.code }, 502);
+      }
       return c.json({ error: err instanceof Error ? err.message : 'Failed to create workflow draft' }, 400);
     }
   });

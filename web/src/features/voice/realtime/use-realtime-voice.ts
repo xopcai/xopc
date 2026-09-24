@@ -376,6 +376,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
           if (event.type === 'task.done' && activeTaskIdRef.current === event.payload.taskId) { activeTaskIdRef.current = null; setActivities([]); }
           if (event.type === 'response.clarification' && activeResponseIdRef.current === event.payload.responseId) setClarification(event.payload);
           if (event.type === 'response.text.delta' && activeResponseIdRef.current === event.payload.responseId) {
+            setResponsePhase('speaking');
             setResponseText((current) => current + event.payload.delta);
           }
           if (event.type === 'response.audio.started' && activeResponseIdRef.current === event.payload.responseId) {

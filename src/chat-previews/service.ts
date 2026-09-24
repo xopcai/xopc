@@ -111,8 +111,7 @@ export class ChatPreviewService {
     }
     const app = this.localApps.createFromPreview({
       name: preview.title,
-      idea: `Promoted from chat preview ${preview.id} at revision ${revision.sourceHash}`,
-      description: 'Created from an immutable chat preview.',
+      idea: preview.title,
       markup: revision.markup,
       styles: revision.styles,
       script: revision.script,

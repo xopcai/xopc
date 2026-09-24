@@ -40,6 +40,8 @@
     "builtinToggleDisable": "Disable",
     "builtinToggleBusy": "Saving…",
     "builtinToggleFailed": "Could not update built-in extension.",
+    "extensionToggleFailed": "Could not update extension.",
+    "extensionUninstallConfirm": "Uninstall this extension? Its files will be removed from disk. Restart the gateway if it remains loaded.",
     "builtinToggleRestartHint": "Restart the gateway so extension code fully loads or unloads.",
     "backendOnlyHint": "This extension has no Gateway UI; tools and hooks still run when enabled.",
     "badgePages": "{{count}} page(s)",

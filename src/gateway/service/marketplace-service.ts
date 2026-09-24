@@ -609,13 +609,16 @@ export class GatewayMarketplaceService {
       prevExt && typeof prevExt === 'object' && !Array.isArray(prevExt)
         ? { ...(prevExt as Record<string, unknown>) }
         : {};
-    const enabledRaw = baseExt.enabled;
-    const enabled = Array.isArray(enabledRaw)
-      ? enabledRaw.filter((x): x is string => typeof x === 'string' && x !== id)
-      : [];
+    for (const key of ['enabled', 'disabled'] as const) {
+      const value = baseExt[key];
+      if (!Array.isArray(value)) continue;
+      const next = value.filter((x): x is string => typeof x === 'string' && x !== id);
+      if (next.length > 0) baseExt[key] = next;
+      else delete baseExt[key];
+    }
     return {
       ...currentConfig,
-      extensions: { ...baseExt, enabled },
+      extensions: baseExt,
     } as Config;
   }
 }

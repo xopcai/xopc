@@ -7,25 +7,11 @@
 
 import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
 
+import { isTransientProviderErrorMessage } from '../../providers/model-response.js';
 import { isContextOverflowError } from './context-overflow.js';
 
-const TRANSIENT_LLM_ERROR_SUBSTRINGS = [
-  'fetch failed',
-  'econnreset',
-  'econnrefused',
-  'enotfound',
-  'socket hang up',
-  'getaddrinfo',
-  'networkerror',
-  'etimedout',
-  'certificate',
-  'ssl',
-  'tls',
-];
-
 export function isTransientLlmErrorMessage(message: string): boolean {
-  const lower = message.toLowerCase();
-  return TRANSIENT_LLM_ERROR_SUBSTRINGS.some((s) => lower.includes(s));
+  return isTransientProviderErrorMessage(message);
 }
 
 export type LlmFailureKind = 'transient_network' | 'context_overflow' | 'aborted' | 'permanent';

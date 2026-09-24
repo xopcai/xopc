@@ -22,4 +22,10 @@ describe('formatApiHttpError', () => {
     expect(formatApiHttpError(429, 'Too Many Requests', 'rate_limited'))
       .toBe('Too many requests. Please try again later.');
   });
+
+  it('localizes generic upstream provider failures', () => {
+    useLocaleStore.setState({ language: 'zh' });
+    expect(formatApiHttpError(502, 'Bad Gateway', 'Provider request failed'))
+      .toBe('网关错误 (502)');
+  });
 });

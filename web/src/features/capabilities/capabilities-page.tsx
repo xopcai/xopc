@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useLayoutEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Navigate, useParams } from 'react-router-dom';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -20,10 +20,9 @@ const ConnectorsPage = lazy(() => import('@/features/connectors/connectors-page'
 const ExtensionsPage = lazy(() => import('@/pages/apps-page').then(module => ({ default: module.ExtensionsPage })));
 const AgentsPage = lazy(() => import('@/features/settings/agents').then(module => ({ default: module.AgentsSettingsPanel })));
 const ChannelsPage = lazy(() => import('@/features/settings/channels').then(module => ({ default: module.ChannelsSettingsPanel })));
-const CapabilityDiscoverPage = lazy(() => import('./capability-discover-page').then(module => ({ default: module.CapabilityDiscoverPage })));
 
-function parseCapabilitySection(value: string | undefined): CapabilitySection {
-  return CAPABILITY_SECTIONS.includes(value as CapabilitySection) ? value as CapabilitySection : 'discover';
+function parseCapabilitySection(value: string | undefined): CapabilitySection | null {
+  return CAPABILITY_SECTIONS.includes(value as CapabilitySection) ? value as CapabilitySection : null;
 }
 
 function CapabilityContentFallback({ label }: { label: string }) {
@@ -38,7 +37,8 @@ export function CapabilitiesPage() {
   const language = useLocaleStore(state => state.language);
   const copy = messages(language).capabilitiesHub;
   const { section: sectionParam, detailId } = useParams<{ section?: string; detailId?: string }>();
-  const section = parseCapabilitySection(sectionParam);
+  const parsedSection = parseCapabilitySection(sectionParam);
+  const section = parsedSection ?? 'skills';
   const setPageHeader = usePageHeaderStore(state => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore(state => state.clearPageHeader);
   const [headerContribution, setHeaderContribution] = useState<{ section: CapabilitySection; value: CapabilityHeaderContribution | null }>({ section, value: null });
@@ -56,10 +56,11 @@ export function CapabilitiesPage() {
     return () => clearPageHeader();
   }, [clearPageHeader, currentContribution, setPageHeader]);
 
+  if (!parsedSection) return <Navigate to="/capabilities/skills" replace />;
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <Suspense fallback={<CapabilityContentFallback label={copy.discoverLoading} />}>
-        {section === 'discover' ? <CapabilityDiscoverPage onHeaderActionChange={onHeaderActionChange} /> : null}
         {section === 'agents' ? <AgentsPage agentId={detailId} onHeaderActionChange={onHeaderActionChange} /> : null}
         {section === 'skills' ? <SkillsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
         {section === 'connectors' ? <ConnectorsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}

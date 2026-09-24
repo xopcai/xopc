@@ -46,6 +46,13 @@ function modelResponse(result: unknown, usage = { input: 10, output: 5, cost: { 
   } as never;
 }
 
+function thinkingModelResponse(result: unknown) {
+  return {
+    content: [{ type: 'thinking', thinking: typeof result === 'string' ? result : JSON.stringify(result) }],
+    usage: { input: 10, output: 5, cost: { total: 0.01 } },
+  } as never;
+}
+
 function readyResult() {
   return {
     state: 'ready',
@@ -112,6 +119,32 @@ describe('HomeAdviceGenerator', () => {
     expect(correction?.content).toContain('candidates.0.confidence');
     expect(correction?.content).toContain('candidates.0.verification');
     expect(correction?.content).toContain('Return the corrected JSON object only');
+  });
+
+  it('accepts structured output returned in a thinking block', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(thinkingModelResponse({
+      state: 'quiet', reason: 'no_change',
+    }));
+
+    const generation = await new HomeAdviceGenerator(() => config).generate(snapshot, {
+      agentId: 'main', connectors: new Set(), skills: new Set(),
+    });
+
+    expect(generation.result).toEqual({ state: 'quiet', reason: 'no_change' });
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces provider failures without requesting a JSON correction', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
+      content: [],
+      stopReason: 'error',
+      errorMessage: '502: provider_error',
+    } as never);
+
+    await expect(new HomeAdviceGenerator(() => config).generate(snapshot, {
+      agentId: 'main', connectors: new Set(), skills: new Set(),
+    })).rejects.toThrow('Home intelligence provider request failed: 502: provider_error');
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(1);
   });
 
   it('reports a concise error when the correction is still invalid', async () => {
