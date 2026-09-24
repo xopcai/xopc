@@ -46,18 +46,16 @@ describe('AssistantResultTail product deliveries', () => {
     container.remove();
   });
 
-  it('renders query results as a compact tail without table metadata', () => {
+  it('does not render read-only query results in the delivery tail', () => {
     act(() => root.render(<MemoryRouter>{renderDelivery({ version: 2, operation: 'opened', presentation: {
       kind: 'table', truncated: true, items: [{ kind: 'task', id: 'task/one', title: '<img src=x>', status: 'ready', capabilities: ['open', 'run'] }],
     } })}</MemoryRouter>));
     expect(container.querySelector('table')).toBeNull();
     expect(container.querySelector('img')).toBeNull();
-    expect(container.querySelector('[data-turn-tail]')).not.toBeNull();
-    expect(container.textContent).toContain('<img src=x>');
-    expect(container.textContent).toContain('任务 · 已就绪');
-    expect(container.textContent).not.toContain('task/one');
-    expect(container.querySelector('[role="status"]')).not.toBeNull();
-    expect(container.querySelectorAll('button')).toHaveLength(1);
+    expect(container.querySelector('[data-turn-tail]')).toBeNull();
+    expect(container.textContent).not.toContain('<img src=x>');
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(container.querySelectorAll('button')).toHaveLength(0);
   });
 
   it('does not render an empty query as a turn result', () => {
@@ -70,7 +68,7 @@ describe('AssistantResultTail product deliveries', () => {
     expect(container.querySelector('table')).toBeNull();
   });
 
-  it('does not mix an empty state into a turn that also has query results', () => {
+  it('does not mix read-only query results into a turn result', () => {
     const view: AssistantTurnViewModel = {
       answerContent: [],
       workLog: { items: [], active: false, status: 'completed', expandedByDefault: false, compact: false },
@@ -87,8 +85,9 @@ describe('AssistantResultTail product deliveries', () => {
 
     act(() => root.render(<MemoryRouter><AssistantResultTail view={view} /></MemoryRouter>));
 
-    expect(container.textContent).toContain('Research note');
+    expect(container.textContent).not.toContain('Research note');
     expect(container.textContent).not.toContain('没有匹配结果');
+    expect(container.querySelector('[data-turn-tail]')).toBeNull();
   });
 
   it('renders proposed replacements without applying them or rendering HTML', () => {
@@ -149,7 +148,7 @@ describe('AssistantResultTail product deliveries', () => {
   it('presents an automation as a localized result row with a secondary continue action', () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 2,
-      operation: 'opened',
+      operation: 'started',
       primary: {
         kind: 'automation',
         id: 'automation-1',
@@ -177,6 +176,31 @@ describe('AssistantResultTail product deliveries', () => {
     expect(container.textContent).not.toContain('enabled');
     expect(container.querySelectorAll('button')).toHaveLength(2);
     expect(container.querySelector('[data-turn-tail]')).not.toBeNull();
+  });
+
+  it('does not render a read-only object below the assistant message', () => {
+    const delivery: ProductDeliveryEnvelope = {
+      version: 2,
+      operation: 'opened',
+      primary: {
+        kind: 'project',
+        id: 'project-1',
+        title: 'today-cloud',
+        status: 'active',
+        capabilities: ['open', 'continue_in_chat'],
+      },
+    };
+
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          {renderDelivery(delivery)}
+        </MemoryRouter>,
+      );
+    });
+
+    expect(container.textContent).not.toContain('today-cloud');
+    expect(container.querySelector('[data-turn-tail]')).toBeNull();
   });
 
   it('keeps a visible boundary for failed deliveries', () => {

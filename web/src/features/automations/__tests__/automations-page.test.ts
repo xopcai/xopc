@@ -54,6 +54,23 @@ describe('automation buildInput', () => {
     expect(buildInput(form, null).trigger).toEqual(automation.trigger);
   });
 
+  it('stores and restores the model selected for an agent automation', () => {
+    const input = buildInput({
+      ...initialForm,
+      name: 'Model-specific report',
+      triggerMode: 'manual',
+      instruction: 'Prepare a detailed report.',
+      model: 'anthropic/claude-sonnet-4',
+    }, null);
+
+    expect(input.action).toEqual({
+      kind: 'agent',
+      instruction: 'Prepare a detailed report.',
+      model: 'anthropic/claude-sonnet-4',
+    });
+    expect(formFromAutomation(input).model).toBe('anthropic/claude-sonnet-4');
+  });
+
   it('preserves hidden advanced fields when editing an existing automation', () => {
     const automation: Automation = {
       id: 'automation-1',
@@ -101,6 +118,7 @@ describe('automation buildInput', () => {
       triggerMode: 'event',
       eventType: 'channel.message.received',
       eventSource: 'channels',
+      model: 'openai/gpt-5',
     });
     expect(edited.trigger).toEqual(automation.trigger);
     expect(edited.action).toMatchObject({
@@ -112,6 +130,28 @@ describe('automation buildInput', () => {
     expect(edited.projectId).toBe('');
     expect(edited.action.kind === 'agent' ? edited.action.agentId : undefined).toBeUndefined();
     expect(edited.reliability).toMatchObject({ retryCount: 2, maxConcurrentRuns: 4 });
+  });
+
+  it('can clear an existing automation model override', () => {
+    const automation: Automation = {
+      id: 'automation-1',
+      name: 'Daily report',
+      enabled: true,
+      trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'Prepare a report.', model: 'openai/gpt-5' },
+      conversationMode: 'new_session',
+      notificationPolicy: 'attention',
+      state: {},
+      createdAtMs: 1,
+      updatedAtMs: 1,
+    };
+
+    const edited = buildAutomationEditInput(automation, {
+      ...formFromAutomation(automation),
+      model: '',
+    }, null);
+
+    expect(edited.action.kind === 'agent' ? edited.action.model : 'not-agent').toBeUndefined();
   });
 
   it('includes the selected project and delivery preferences', () => {

@@ -137,7 +137,7 @@ export function projectTurnOutcome(params: {
     for (const item of explicit) deliverables.set(item.artifactId, item);
 
     const delivery = parseProductDeliveryEnvelope(details.delivery);
-    if (delivery) {
+    if (delivery && delivery.operation !== 'opened') {
       for (const reference of [delivery.primary, ...(delivery.related ?? [])]) {
         if (!reference) continue;
         const item = fileDeliverable(reference, delivery.operation === 'failed');
