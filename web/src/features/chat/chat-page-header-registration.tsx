@@ -45,6 +45,7 @@ type ChatPageHeaderRegistrationProps = {
   onWorkspaceChange?: (path: string) => Promise<void>;
   prepareTerminalSession?: () => Promise<string | null>;
   terminalDisabled?: boolean;
+  showContextControls?: boolean;
   onFindOpen?: () => void;
   projectId?: string | null;
   context?: Pick<SessionContextPanelProps, 'draftRefs' | 'project' | 'onLeaveProject' | 'leaveProjectLabel' | 'onDraftSourceNote' | 'draftSourceNoteLabel'>;
@@ -69,6 +70,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   onWorkspaceChange,
   prepareTerminalSession,
   terminalDisabled = false,
+  showContextControls = true,
   onFindOpen,
   projectId,
   context,
@@ -98,7 +100,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const terminalShortcut = terminalShortcutLabel(terminalPlatform);
   const sideChatShortcut = sideChatShortcutLabel(terminalPlatform);
   const sideChatAriaShortcut = sideChatAriaKeyShortcut(terminalPlatform);
-  const terminalAvailable = Boolean(window.electronAPI?.terminal && (activeConversationId || prepareTerminalSession));
+  const terminalAvailable = Boolean(showContextControls && window.electronAPI?.terminal && (activeConversationId || prepareTerminalSession));
 
   const handleTerminalToggle = useCallback(() => {
     if (!terminalAvailable || terminalDisabled || terminalPreparing) return;
@@ -249,14 +251,14 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               {terminalPreparing ? <Loader2 className="size-4 animate-spin" /> : <SquareTerminal className="size-4" />}
             </button>
           ) : null}
-          <SessionContextPanel
+          {showContextControls ? <SessionContextPanel
             key={`context:${activeConversationId ?? context?.project?.id ?? 'new'}`}
             {...context}
             agentId={chatAgentId}
             temporary={userContextMode === 'temporary'}
             conversationId={activeConversationId ?? null}
-          />
-          {(activeConversationId || projectId) && onWorkspaceChange ? (
+          /> : null}
+          {showContextControls && (activeConversationId || projectId) && onWorkspaceChange ? (
             <ChatWorkspaceControl
               key={`workspace:${activeConversationId ?? projectId}`}
               conversationId={activeConversationId}
@@ -314,6 +316,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     terminalPanelOpen,
     terminalAvailable,
     terminalDisabled,
+    showContextControls,
     terminalPreparing,
     activeConversationId,
     hasMessages,

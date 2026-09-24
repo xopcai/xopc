@@ -2,66 +2,112 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
+import type { AgentsSettingsMessages, MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 
 const inputClass = 'w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent/15';
 
+export type ManualAgentDraft = {
+  open: boolean;
+  name: string;
+  instructions: string;
+  workspace: string;
+};
+
 export function CreateAgentDialog({
-  open,
+  draft,
   busy,
   error,
-  name,
-  instructions,
-  zh,
-  onNameChange,
-  onInstructionsChange,
+  messages,
+  workingDirectoryMessages,
+  onChange,
   onCreate,
   onOpenChange,
 }: {
-  open: boolean;
+  draft: ManualAgentDraft;
   busy: boolean;
   error: string | null;
-  name: string;
-  instructions: string;
-  zh: boolean;
-  onNameChange: (value: string) => void;
-  onInstructionsChange: (value: string) => void;
+  messages: AgentsSettingsMessages;
+  workingDirectoryMessages: MessageBundle['chat']['workingDirectory'];
+  onChange: (patch: Partial<Omit<ManualAgentDraft, 'open'>>) => void;
   onCreate: () => void;
   onOpenChange: (open: boolean) => void;
 }) {
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={draft.open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)} />
         <Dialog.Content className={cn(
-          'xopc-dialog-content fixed left-1/2 top-1/2 w-[min(92vw,32rem)] -translate-x-1/2 -translate-y-1/2',
+          'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(38rem,calc(100dvh-2rem))] w-[min(92vw,36rem)] -translate-x-1/2 -translate-y-1/2 flex-col',
           'overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover',
           SETTINGS_SHELL_CONTENT_Z,
         )}>
-          <header className="flex items-start justify-between gap-4 border-b border-edge px-5 py-4">
+          <header className="flex shrink-0 items-start justify-between gap-4 border-b border-edge px-5 py-4">
             <div>
-              <Dialog.Title className="text-base font-semibold text-fg">{zh ? '新建智能体' : 'Create agent'}</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-fg-muted">
-                {zh ? '只设置身份即可开始，所有能力自动继承全局配置。' : 'Set its identity and start. Every capability inherits globally.'}
+              <Dialog.Title className="text-base font-semibold text-fg">{messages.manualCreateTitle}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">
+                {messages.manualCreateDescription}
               </Dialog.Description>
             </div>
-            <Dialog.Close asChild><button type="button" className="rounded-lg p-2 text-fg-muted hover:bg-surface-hover" aria-label="Close"><X className="size-4" /></button></Dialog.Close>
+            <Dialog.Close asChild>
+              <button type="button" className="touch-target shrink-0 rounded-lg p-2 text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={messages.manualCreateClose}>
+                <X className="size-4" aria-hidden />
+              </button>
+            </Dialog.Close>
           </header>
-          <div className="space-y-4 p-5">
-            {error ? <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
-            <label htmlFor="create-agent-name" className="block text-xs font-medium text-fg-muted">
-              {zh ? '名称' : 'Name'}
-              <input id="create-agent-name" aria-label={zh ? '智能体名称' : 'Agent name'} className={`${inputClass} mt-1.5`} value={name} onChange={(event) => onNameChange(event.target.value)} placeholder={zh ? '例如：数据分析师' : 'For example: Data analyst'} />
+
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+            {error ? <p role="alert" className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
+            <label htmlFor="manual-agent-name" className="block text-xs font-medium text-fg-muted">
+              {messages.manualCreateName}
+              <input
+                id="manual-agent-name"
+                autoFocus
+                className={`${inputClass} mt-1.5`}
+                value={draft.name}
+                onChange={(event) => onChange({ name: event.target.value })}
+                placeholder={messages.manualCreateNamePlaceholder}
+              />
             </label>
-            <label htmlFor="create-agent-instructions" className="block text-xs font-medium text-fg-muted">
-              {zh ? '个性与工作方式（可选）' : 'Personality and working style (optional)'}
-              <textarea id="create-agent-instructions" aria-label={zh ? '个性与工作方式' : 'Personality and working style'} rows={4} className={`${inputClass} mt-1.5 resize-none`} value={instructions} onChange={(event) => onInstructionsChange(event.target.value)} placeholder={zh ? '描述角色、语气和偏好的工作方式' : 'Describe its role, tone, and preferred way of working'} />
+
+            <label htmlFor="manual-agent-instructions" className="block text-xs font-medium text-fg-muted">
+              {messages.manualCreateInstructions}
+              <textarea
+                id="manual-agent-instructions"
+                rows={4}
+                className={`${inputClass} mt-1.5 resize-y leading-6`}
+                value={draft.instructions}
+                onChange={(event) => onChange({ instructions: event.target.value })}
+                placeholder={messages.manualCreateInstructionsPlaceholder}
+              />
             </label>
+
+            <div>
+              <label htmlFor="manual-agent-workspace" className="block text-xs font-medium text-fg-muted">
+                {messages.manualCreateWorkspace}
+              </label>
+              <p className="mt-1 text-xs leading-5 text-fg-subtle">{messages.manualCreateWorkspaceHint}</p>
+              <div className="mt-2">
+                <DirectoryPickerPathField
+                  value={draft.workspace}
+                  onChange={(workspace) => onChange({ workspace })}
+                  disabled={busy}
+                  wd={workingDirectoryMessages}
+                  placeholder={messages.manualCreateWorkspacePlaceholder}
+                  inputAriaLabel={messages.manualCreateWorkspace}
+                  inputClassName={`${inputClass} font-mono`}
+                />
+              </div>
+            </div>
           </div>
-          <footer className="flex justify-end gap-2 border-t border-edge px-5 py-4">
-            <Dialog.Close asChild><Button disabled={busy}>{zh ? '取消' : 'Cancel'}</Button></Dialog.Close>
-            <Button variant="primary" disabled={busy || !name.trim()} onClick={onCreate}>{busy ? (zh ? '创建中…' : 'Creating…') : (zh ? '创建智能体' : 'Create agent')}</Button>
+
+          <footer className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
+            <Dialog.Close asChild><Button disabled={busy}>{messages.manualCreateCancel}</Button></Dialog.Close>
+            <Button variant="primary" disabled={busy || !draft.name.trim()} aria-busy={busy} onClick={onCreate}>
+              {busy ? messages.manualCreating : messages.manualCreateSubmit}
+            </Button>
           </footer>
         </Dialog.Content>
       </Dialog.Portal>
