@@ -46,6 +46,13 @@ describe('composer handoff params', () => {
       .toBe('?skill=build-xopc-local-app&draft=Add+filters&autoSend=1');
   });
 
+  it('preserves the new-agent setup experience while resolving the created session', () => {
+    const source = '?agentSetup=1&projectScope=none&draft=Help+me+create+a+new+agent%3A+';
+    expect(searchParamsForComposerHandoff(source))
+      .toBe('?draft=Help+me+create+a+new+agent%3A+&agentSetup=1');
+    expect(projectIntentForNewChatHandoff(source)).toEqual({ kind: 'none' });
+  });
+
   it('preserves the attachment handoff but consumes project scope at session creation', () => {
     expect(
       searchParamsForComposerHandoff('?attachmentHandoff=file-1&projectId=project-1'),
