@@ -46,7 +46,7 @@ export struct XopcVoiceCallView {
             ForEach(this.call.clarification.choices, (choice: string): void => {
               Button(choice).height(34).fontSize(12).margin({ right: 7, bottom: 7 }).backgroundColor($r('app.color.accent_soft'))
                 .fontColor($r('app.color.accent')).onClick((): void => { this.call.submitClarification('answer', choice); })
-            })
+            }, (choice: string): string => choice)
           }.width('100%')
         }
         TextInput({ text: this.answer, placeholder: this.call.clarification.suggestedAnswer || $r('app.string.voice_call_answer') })

@@ -5,12 +5,14 @@ import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
 import { expect, it } from 'vitest';
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { GatewayService } from '../service.js';
 import { createHonoApp } from '../hono/app.js';
 import { requireConversation } from '../../storage/sqlite/conversation-repository.js';
 
 it('creates a UUID conversation through authenticated HTTP and the production route registry', async () => {
+  initializeTestAgentCatalog();
   const configPath = join(process.env.XOPC_STATE_DIR!, 'http-uuid-config.json');
   const token = 'conversation-uuid-test-token';
   const repository = new AgentCatalogRepository();

@@ -11,7 +11,7 @@ import {
   listDiscussionTranscriptSegments,
   updateDiscussionCapture,
 } from './repository.js';
-import { decodeWavToMonoFloat32 } from '../voice/local/wav.js';
+import { decodeWavToMonoFloat32 } from '../voice/audio/wav.js';
 import { replaceTranscriptSegments, saveTranscriptRevision } from './revisions.js';
 import { missingAudioRanges, slicePcmWav } from './audio-repair.js';
 import { assembleDiscussionTranscript } from './transcript.js';

@@ -121,15 +121,16 @@ npm install -g @xopcai/xopc
 
 Or with pnpm: `pnpm add -g @xopcai/xopc` · China mirror: `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
 
-Large optional runtimes are installed only when you enable the related feature:
+Large optional integrations are installed only when you enable the related feature:
 
 ```bash
-npm install -g @huggingface/transformers@3.8.1 sherpa-onnx-node@1.13.4
 npm install -g @composio/core@0.18.1
 npm install -g @larksuiteoapi/node-sdk@1.66.0 playwright-core@1.60.0
 ```
 
 Use the same command without `-g` when xopc is installed as a project dependency.
+
+Speech-to-text is disabled by default. xopc does not bundle a local STT engine; connect a cloud provider or install an extension that integrates your own local/OpenAI-compatible transcription service.
 
 ### More commands
 
@@ -285,7 +286,7 @@ See [User understanding and privacy](./docs/user-understanding.md), [channel sec
 ```bash
 pnpm install && pnpm run dev    # CLI via tsx
 pnpm run dev:gateway            # dev gateway uses ~/.xopc-dev + info logs
-pnpm run build && pnpm test && pnpm run lint
+pnpm run build && pnpm run test:all && pnpm run lint
 ```
 
 **[AGENTS.md](./AGENTS.md)** · **[CONTRIBUTING.md](./CONTRIBUTING.md)**

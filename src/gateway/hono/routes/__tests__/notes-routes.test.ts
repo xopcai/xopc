@@ -1,11 +1,18 @@
 import { Hono } from 'hono';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
 import { registerNotesRoutes } from '../notes.js';
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
-import { requireXopcDatabase } from '../../../../storage/sqlite/connection.js';
+import { closeXopcDatabase, requireXopcDatabase } from '../../../../storage/sqlite/connection.js';
 
 describe('notes routes', () => {
+  beforeAll(() => initializeTestAgentCatalog({ agents: [
+    { id: 'main', enabled: true },
+    { id: 'writer', enabled: true },
+  ] }));
+  afterAll(() => closeXopcDatabase());
+
   it('forwards home filters and returns project summaries before the note-id route', async () => {
     const app = new Hono();
     app.use('*', async (c, next) => {

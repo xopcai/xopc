@@ -3,6 +3,10 @@ import type { BindingRule } from '../routing/binding-schema.js';
 import { closeXopcDatabase, openXopcDatabase } from '../storage/sqlite/index.js';
 import { AgentCatalogRepository } from './repository.js';
 
+const testProcess = process as NodeJS.Process & {
+  __xopcCatalogDatabaseTemplate?: Uint8Array;
+};
+
 export type TestAgentCatalogSeed = {
   defaults?: AgentDefaults;
   defaultAgentId?: string;
@@ -14,7 +18,17 @@ export type TestAgentCatalogSeed = {
 /** Build an isolated, ready in-memory Agent catalog for a unit test. */
 export function initializeTestAgentCatalog(seed: TestAgentCatalogSeed = {}): AgentCatalogRepository {
   closeXopcDatabase();
-  openXopcDatabase({ path: ':memory:' });
+  if (!testProcess.__xopcCatalogDatabaseTemplate) {
+    const template = openXopcDatabase({ path: ':memory:' });
+    testProcess.__xopcCatalogDatabaseTemplate = (
+      template.db as typeof template.db & { serialize(): Uint8Array }
+    ).serialize();
+    closeXopcDatabase();
+  }
+  openXopcDatabase({
+    path: ':memory:',
+    serialized: testProcess.__xopcCatalogDatabaseTemplate,
+  });
   return seedTestAgentCatalog(seed);
 }
 

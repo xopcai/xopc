@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { decodeWavToMonoFloat32 } from '../../voice/local/wav.js';
+import { decodeWavToMonoFloat32 } from '../../voice/audio/wav.js';
 import { missingAudioRanges, slicePcmWav } from '../audio-repair.js';
 
 it('preserves corrected spans even when they cross recovery chunk boundaries', () => {

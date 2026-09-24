@@ -1,9 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import type { ModelCatalogSnapshot } from '../../../providers/model-catalog-store.js';
+import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
 import { buildCapabilityPlansForConfig } from '../from-config.js';
+
+beforeAll(() => initializeTestAgentCatalog());
+afterAll(() => closeXopcDatabase());
 
 function catalog(): ModelCatalogSnapshot {
   return {
@@ -29,7 +34,7 @@ describe('buildCapabilityPlansForConfig', () => {
     const cloud = snapshot.sources['xopc-cloud'];
     cloud.models = [{ ...cloud.models[0], id: 'gui', computerUse: { profile: 'gui-plus-2026-02-26' } }];
     const config = ConfigSchema.parse({});
-    const options = { catalog: snapshot, providerReady: () => true, localSttReady: false };
+    const options = { catalog: snapshot, providerReady: () => true };
     expect(buildCapabilityPlansForConfig(config, options)['computer-use'].primary).toBeUndefined();
     expect(buildCapabilityPlansForConfig(config, options).vision.primary).toBeUndefined();
     const repository = new AgentCatalogRepository();
@@ -47,26 +52,17 @@ describe('buildCapabilityPlansForConfig', () => {
     const config = ConfigSchema.parse({});
     const plans = buildCapabilityPlansForConfig(config, {
       catalog: catalog(), providerReady: (provider) => provider === 'xopc-cloud' || provider === 'edge',
-      localSttReady: false,
     });
 
     expect(plans.vision.primary).toMatchObject({ provider: 'xopc-cloud', model: 'vision' });
     expect(plans['image-generation'].primary).toMatchObject({ provider: 'xopc-cloud', model: 'image' });
-    expect(plans.stt.primary).toMatchObject({ provider: 'xopc-cloud', model: 'stt' });
+    expect(plans.stt.status).toBe('disabled');
     expect(plans.tts.primary).toMatchObject({ provider: 'xopc-cloud', model: 'tts', metadata: { defaultVoice: 'coral' } });
-  });
-
-  it('prefers an installed local STT model over cloud', () => {
-    const plans = buildCapabilityPlansForConfig(ConfigSchema.parse({}), {
-      catalog: catalog(), providerReady: () => true, localSttReady: true,
-    });
-    expect(plans.stt.primary).toMatchObject({ provider: 'xopc-local', source: 'installed-local' });
-    expect(plans.stt.fallbacks[0]).toMatchObject({ provider: 'xopc-cloud' });
   });
 
   it('rejects cloud candidates when OAuth is not ready but retains Edge TTS', () => {
     const plans = buildCapabilityPlansForConfig(ConfigSchema.parse({}), {
-      catalog: catalog(), providerReady: (provider) => provider === 'edge', localSttReady: false,
+      catalog: catalog(), providerReady: (provider) => provider === 'edge',
     });
     expect(plans.vision.status).toBe('unavailable');
     expect(plans.vision.rejected[0]?.reasons).toContain('oauth_not_connected');

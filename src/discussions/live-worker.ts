@@ -75,11 +75,7 @@ export class DiscussionLiveWorker {
 
   private resolveConcurrency(): number {
     if (this.deps.transcribeSegment) return this.concurrency;
-    const config = this.deps.getConfig();
-    const sttConfig = mergeSttConfigFromAppConfig(config.tools?.media?.audio, config.tools?.media);
-    return sttConfig.provider === 'xopc-local' || sttConfig.provider === 'local'
-      ? 1
-      : this.concurrency;
+    return this.concurrency;
   }
 
   private async processOne(): Promise<void> {

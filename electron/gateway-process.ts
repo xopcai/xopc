@@ -10,6 +10,7 @@ import { createProcessDiagnosticWriter } from '../src/infra/process-diagnostics.
 
 import type { GatewayBindMode } from '../src/config/schema.js';
 import { assertGatewayCompatibility, GATEWAY_PROTOCOL_INCOMPATIBLE } from './gateway-compatibility.js';
+import { resolvePackagedAppPath } from './packaged-app-path.js';
 
 import {
   GatewayStartupError,
@@ -135,13 +136,6 @@ async function checkGatewayCompatibility(connection: { port: number; token: stri
   }
 }
 
-function resolvePackagedAppPath(...segments: string[]): string {
-  const appPath = app.getAppPath();
-  const unpacked = join(dirname(appPath), 'app.asar.unpacked', ...segments);
-  if (existsSync(unpacked)) return unpacked;
-  return join(appPath, ...segments);
-}
-
 /** Static UI root for the packaged gateway subprocess. Prefer a real unpacked path on Windows. */
 function resolvePackagedStaticRoot(): string {
   return resolvePackagedAppPath('dist', 'gateway', 'static', 'root');
@@ -231,11 +225,6 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
                 process.resourcesPath,
                 'bin',
                 process.platform === 'win32' ? 'rg.exe' : 'rg',
-              ),
-              XOPC_VOICE_RUNTIME_ENTRY: resolvePackagedAppPath(
-                'out',
-                'server',
-                'voice-runtime.js',
               ),
               NODE_PATH: process.resourcesPath,
             }

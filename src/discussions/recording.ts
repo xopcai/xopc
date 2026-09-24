@@ -9,7 +9,7 @@ import { resolveNoteMediaDir } from '../notes/paths.js';
 import type { NotesService } from '../notes/service.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { forEachNormalizedAudioSegment } from '../voice/audio/normalize.js';
-import { decodeWavToMonoFloat32 } from '../voice/local/wav.js';
+import { decodeWavToMonoFloat32 } from '../voice/audio/wav.js';
 
 import { DiscussionServiceError } from './errors.js';
 import { getDiscussionCapture, updateDiscussionCapture } from './repository.js';

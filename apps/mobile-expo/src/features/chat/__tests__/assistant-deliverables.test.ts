@@ -63,7 +63,7 @@ describe('assistant deliverables', () => {
 
   it('keeps non-file product deliveries separate from turn artifacts', () => {
     const delivery: ProductDeliveryEnvelope = {
-      version: 1,
+      version: 2,
       operation: 'created',
       primary: {
         kind: 'task',
@@ -86,7 +86,7 @@ describe('assistant deliverables', () => {
 
   it('keeps only the latest delivery for the same resource', () => {
     const opened: ProductDeliveryEnvelope = {
-      version: 1,
+      version: 2,
       operation: 'opened',
       primary: {
         kind: 'note',
@@ -117,7 +117,7 @@ describe('assistant deliverables', () => {
       kind: 'note', id: 'note-1', title: 'Research note', status: 'inbox', capabilities: ['open'],
     };
     const delivery: ProductDeliveryEnvelope = {
-      version: 1,
+      version: 2,
       operation: 'opened',
       presentation: {
         kind: 'table',
@@ -134,7 +134,7 @@ describe('assistant deliverables', () => {
     };
 
     expect(collectAssistantDeliverables(messageWithTools([tool]), false).productDeliveries)
-      .toEqual([{ version: 1, operation: 'opened', primary: reference }]);
+      .toEqual([{ version: 2, operation: 'opened', primary: reference }]);
   });
 
   it('does not repeat audio already rendered in the assistant message', () => {
@@ -159,7 +159,7 @@ describe('assistant deliverables', () => {
 
   it('does not infer file artifacts from product delivery ids', () => {
     const delivery: ProductDeliveryEnvelope = {
-      version: 1,
+      version: 2,
       operation: 'created',
       primary: {
         kind: 'file',

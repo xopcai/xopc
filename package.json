@@ -61,7 +61,14 @@
     "dev:init": "sh -c 'mkdir -p \"$HOME/.xopc-dev\" && XOPC_STATE_DIR=\"$HOME/.xopc-dev\" XOPC_CONFIG_PATH=\"$HOME/.xopc-dev/xopc.json\" XOPC_CONFIG=\"$HOME/.xopc-dev/xopc.json\" XOPC_LOG_DIR=\"$HOME/.xopc-dev/logs\" XOPC_LOG_LEVEL=info tsx src/cli/bin.ts init \"$@\"' --",
     "dev:gateway": "sh -c 'mkdir -p \"$HOME/.xopc-dev\" && XOPC_STATE_DIR=\"$HOME/.xopc-dev\" XOPC_CONFIG_PATH=\"$HOME/.xopc-dev/xopc.json\" XOPC_CONFIG=\"$HOME/.xopc-dev/xopc.json\" XOPC_LOG_DIR=\"$HOME/.xopc-dev/logs\" XOPC_LOG_LEVEL=info tsx src/cli/bin.ts gateway \"$@\"' --",
     "start": "node dist/src/cli/bin.js",
-    "test": "vitest run src extensions/telegram/src extensions/feishu/src extensions/weixin/src",
+    "test": "cross-env XOPC_LOG_LEVEL=fatal vitest run --project=unit",
+    "test:all": "cross-env XOPC_LOG_LEVEL=fatal vitest run",
+    "test:changed": "cross-env XOPC_LOG_LEVEL=fatal vitest run --changed",
+    "test:component": "cross-env XOPC_LOG_LEVEL=fatal vitest run --project=component",
+    "test:integration": "cross-env XOPC_LOG_LEVEL=fatal vitest run --project=integration",
+    "test:extensions": "cross-env XOPC_LOG_LEVEL=fatal vitest run --project=extensions",
+    "test:web": "cross-env XOPC_LOG_LEVEL=fatal vitest run --project=web",
+    "test:packages": "cross-env XOPC_LOG_LEVEL=fatal vitest run --project=packages",
     "test:web:onboarding-visual": "node scripts/test-onboarding-visual.mjs",
     "test:web:onboarding-visual:update": "node scripts/test-onboarding-visual.mjs --update",
     "test:quick-understanding": "XOPC_LOG_LEVEL=fatal vitest run src/work-discovery/__tests__/evaluation.test.ts src/user-context/sources/__tests__/activity-clustering.test.ts src/knowledge/__tests__/quick-understanding.e2e.test.ts src/connectors/__tests__/content-enrichment.test.ts src/connectors/__tests__/connected-source-ingestion.test.ts",
@@ -90,7 +97,7 @@
     "growth:snapshot": "node scripts/growth-snapshot.mjs",
     "growth:github-community": "node scripts/growth-github-community.mjs",
     "release:check-package": "node scripts/check-publish-manifest.mjs",
-    "prepublishOnly": "npm test && npm run test:skills:all && npm run build && npm run release:check-package",
+    "prepublishOnly": "pnpm run test:all && pnpm run test:skills:all && pnpm run build && pnpm run release:check-package",
     "docs:dev": "vitepress dev docs",
     "docs:check": "node scripts/check-docs.mjs",
     "docs:build": "pnpm run docs:check && vitepress build docs",
@@ -199,27 +206,18 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@huggingface/transformers": "3.8.1",
     "@larksuiteoapi/node-sdk": "^1.66.0",
-    "playwright-core": "^1.60.0",
-    "sherpa-onnx-node": "1.13.4"
+    "playwright-core": "^1.60.0"
   },
   "peerDependenciesMeta": {
-    "@huggingface/transformers": {
-      "optional": true
-    },
     "@larksuiteoapi/node-sdk": {
       "optional": true
     },
     "playwright-core": {
       "optional": true
-    },
-    "sherpa-onnx-node": {
-      "optional": true
     }
   },
   "devDependencies": {
-    "@huggingface/transformers": "3.8.1",
     "@larksuiteoapi/node-sdk": "^1.66.0",
     "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.0",
@@ -250,9 +248,7 @@
     "eslint": "^10.4.0",
     "jsdom": "^29.1.1",
     "node-pty": "1.1.0",
-    "onnxruntime-common": "1.21.0",
     "playwright-core": "^1.60.0",
-    "sherpa-onnx-node": "1.13.4",
     "svgo": "4.0.2",
     "tailwindcss": "^4.3.0",
     "tsdown": "0.21.10",

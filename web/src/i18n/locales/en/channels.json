@@ -266,14 +266,7 @@
       "refinementDesc": "Optional model pass after transcription. Off avoids extra latency and model usage.",
       "refinementOff": "Off (raw transcript)",
       "refinementPunctuation": "Punctuation only",
-      "refinementLight": "Light cleanup",
-      "localProvider": "xopc Local Voice",
-      "localModels": "Local speech models",
-      "localModelsDesc": "Only model files are downloaded. Recognition runs privately inside xopc.",
-      "localRecommended": "Recommended for Chinese",
-      "localDownloading": "Downloading",
-      "localInstall": "Download",
-      "localRemove": "Remove"
+      "refinementLight": "Light cleanup"
     },
     "tts": {
       "title": "Assistant voice replies (TTS)",

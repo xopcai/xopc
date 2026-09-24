@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { ConfigSchema } from '../../../../../config/schema.js';
+import { seedTestAgentCatalog } from '../../../../../agent-catalog/test-support.js';
 import { SessionStore } from '../../../../../session/store.js';
-import { closeXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../../storage/sqlite/connection.js';
+import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../../storage/sqlite/connection.js';
 import { XOPC_DB_SCHEMA_VERSION } from '../../../../../storage/sqlite/migrations/runner.js';
 import { checkDatabaseSchema } from '../database-schema.js';
 
@@ -21,6 +22,8 @@ describe('checkDatabaseSchema', () => {
 
     try {
       await writeFile(configPath, '{}\n');
+      openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+      seedTestAgentCatalog();
       const store = new SessionStore({ config: testConfig, agentId: 'main' });
       await store.initialize();
 

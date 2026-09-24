@@ -1,5 +1,4 @@
 import type { Config } from '../config/schema.js';
-import { DEFAULT_LOCAL_VOICE_MODEL_ID } from './local/models.js';
 
 export type ProductLanguage = 'en' | 'zh';
 export type VoiceLanguageMode = 'auto' | 'manual';
@@ -57,15 +56,13 @@ export function initializeVoiceDefaults(
   const audio = config.tools.media.audio;
   config.tools.media.audio = {
     ...audio,
-    enabled: audio?.enabled ?? true,
-    provider: audio?.provider ?? 'xopc-local',
-    fallback: audio?.fallback ?? { enabled: false, order: ['xopc-local'] },
+    enabled: audio?.enabled ?? false,
+    provider: audio?.provider ?? 'openai',
+    fallback: audio?.fallback ?? { enabled: false, order: [] },
     providers: {
       ...(audio?.providers ?? {}),
-      'xopc-local': {
-        model: DEFAULT_LOCAL_VOICE_MODEL_ID,
-        ...(audio?.providers?.['xopc-local'] ?? {}),
-      },
+      alibaba: { model: 'qwen-audio-3.0-asr-flash', ...(audio?.providers?.alibaba ?? {}) },
+      openai: { model: 'gpt-4o-mini-transcribe', ...(audio?.providers?.openai ?? {}) },
     },
   };
 
@@ -82,17 +79,6 @@ export function applyAutomaticVoiceLanguage(config: Config, language: ProductLan
   const profile = resolveVoiceLanguageProfile(language);
 
   config.voice = { ...config.voice, languageMode: 'auto', language };
-  const audio = config.tools?.media?.audio;
-  if (audio?.provider === 'xopc-local') {
-    audio.providers = {
-      ...(audio.providers ?? {}),
-      'xopc-local': {
-        ...(audio.providers?.['xopc-local'] ?? {}),
-        model: DEFAULT_LOCAL_VOICE_MODEL_ID,
-        language: profile.sttLanguage,
-      },
-    };
-  }
   const tts = config.messages?.tts;
   if (tts?.provider === 'edge') {
     tts.providers = {

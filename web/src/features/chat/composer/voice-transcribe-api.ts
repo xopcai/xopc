@@ -9,7 +9,7 @@ export interface VoiceTranscribeResult {
   latencyMs?: number;
 }
 
-export type VoiceReadinessState = 'ready' | 'preparing' | 'needs_download' | 'error' | 'disabled' | 'unavailable';
+export type VoiceReadinessState = 'ready' | 'error' | 'disabled' | 'unavailable';
 
 export interface VoiceReadiness {
   state: VoiceReadinessState;
@@ -25,21 +25,6 @@ interface GatewayVoiceStatus {
   sttAvailable?: boolean;
   sttEnabled?: boolean;
   sttProvider?: string | null;
-  localModelId?: string | null;
-}
-
-interface LocalVoiceModelStatus {
-  id: string;
-  state: 'not_installed' | 'downloading' | 'ready' | 'error';
-  progress?: number;
-  downloadedBytes?: number;
-  totalBytes?: number;
-  error?: string;
-}
-
-interface LocalVoiceRuntimeStatus {
-  ready: boolean;
-  error?: string;
 }
 
 function extensionForMime(mimeType: string): string {
@@ -83,39 +68,9 @@ export async function fetchVoiceReadiness(): Promise<VoiceReadiness> {
     const voice = status.voice;
     if (voice?.sttEnabled === false) return { state: 'disabled' };
     const provider = voice?.sttProvider ?? undefined;
-    if (provider !== 'xopc-local') {
-      return voice?.sttAvailable === true
-        ? { state: 'ready', provider }
-        : { state: 'unavailable', provider };
-    }
-
-    const local = await fetchJson<{
-      payload?: { runtime?: LocalVoiceRuntimeStatus; models?: LocalVoiceModelStatus[] };
-    }>(
-      apiUrl('/api/voice/local/status'),
-    );
-    const modelId = voice?.localModelId ?? 'sensevoice-small';
-    if (local.payload?.runtime?.ready === false) {
-      return {
-        state: 'error',
-        provider,
-        modelId,
-        error: local.payload.runtime.error || 'Local voice runtime is unavailable',
-      };
-    }
-    const model = local.payload?.models?.find((entry) => entry.id === modelId);
-    if (!model) return { state: 'error', provider, modelId, error: 'Local voice model status is unavailable' };
-    if (model.state === 'ready') return { state: 'ready', provider, modelId };
-    if (model.state === 'not_installed') return { state: 'needs_download', provider, modelId };
-    return {
-      state: model.state === 'downloading' ? 'preparing' : 'error',
-      provider,
-      modelId,
-      progress: model.progress,
-      downloadedBytes: model.downloadedBytes,
-      totalBytes: model.totalBytes,
-      error: model.error,
-    };
+    return voice?.sttAvailable === true
+      ? { state: 'ready', provider }
+      : { state: 'unavailable', provider };
   } catch (cause) {
     return { state: 'error', error: cause instanceof Error ? cause.message : String(cause) };
   }

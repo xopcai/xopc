@@ -3,16 +3,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { McpOAuthStore } from '../../agent/mcp/oauth/mcp-oauth-store.js';
 import type { Config } from '../../config/schema.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import { registerMcpRoutes } from '../hono/routes/mcp.js';
 import type { GatewayService } from '../service.js';
 
 describe('MCP OAuth routes', () => {
   let tempDir: string;
   let previousCredentialsDir: string | undefined;
+
+  beforeAll(() => initializeTestAgentCatalog());
+  afterAll(() => closeXopcDatabase());
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'xopc-mcp-routes-'));

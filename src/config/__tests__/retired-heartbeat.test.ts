@@ -2,13 +2,17 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import { loadConfig, saveConfig } from '../loader.js';
 import { runBootstrapMigrationsSync } from '../../migrations/runner.js';
 import { ConfigSchema } from '../schema.js';
 
 const directories: string[] = [];
+beforeAll(() => initializeTestAgentCatalog());
+afterAll(() => closeXopcDatabase());
 afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }); });
 
 describe('retired assistant heartbeat configuration', () => {

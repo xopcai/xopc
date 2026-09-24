@@ -17,9 +17,6 @@ describe('electron-runtime-externals', () => {
       'ws',
       'sharp',
       'silk-wasm',
-      '@huggingface/transformers',
-      'onnxruntime-common',
-      'sherpa-onnx-node',
       'node-pty',
       '@trycua/cua-driver',
     ]);
@@ -40,32 +37,37 @@ describe('electron-runtime-externals', () => {
         ws: '^8.21.0',
         sharp: '0.35.4',
         'silk-wasm': '^3.7.1',
-        '@huggingface/transformers': '3.8.1',
-        'onnxruntime-common': '1.21.0',
-        'sherpa-onnx-node': '1.13.4',
         'node-pty': '1.1.0',
         '@trycua/cua-driver': '0.28.2',
       },
       devDependencies: {
         vitest: '^4.0.0',
       },
+      peerDependencies: {
+        '@larksuiteoapi/node-sdk': '^1.66.0',
+        'playwright-core': '^1.60.0',
+      },
+      peerDependenciesMeta: {
+        '@larksuiteoapi/node-sdk': { optional: true },
+        'playwright-core': { optional: true },
+      },
     });
     expect(Object.keys(minimal.dependencies)).toEqual([
       'ws',
       'sharp',
       'silk-wasm',
-      '@huggingface/transformers',
-      'onnxruntime-common',
-      'sherpa-onnx-node',
       'node-pty',
       '@trycua/cua-driver',
     ]);
     expect(minimal).not.toHaveProperty('devDependencies');
+    expect(minimal).not.toHaveProperty('peerDependencies');
+    expect(minimal).not.toHaveProperty('peerDependenciesMeta');
+    expect(minimal).not.toHaveProperty('optionalDependencies');
     expect(minimal.name).toBe('@xopcai/xopc');
     expect(ELECTRON_PACKAGED_OVERRIDES).toEqual({ 'tar@<=7.5.20': '7.5.22' });
   });
 
-  it('promotes optional runtime packages for Electron packaging', () => {
+  it('promotes development-only runtime packages for Electron packaging', () => {
     const minimal = buildMinimalElectronPackageJson({
       name: '@xopcai/xopc',
       version: '0.0.0',
@@ -75,12 +77,7 @@ describe('electron-runtime-externals', () => {
         'silk-wasm': '^3.7.1',
         '@trycua/cua-driver': '0.28.2',
       },
-      optionalDependencies: {
-        '@huggingface/transformers': '3.8.1',
-        'sherpa-onnx-node': '1.13.4',
-      },
       devDependencies: {
-        'onnxruntime-common': '1.21.0',
         'node-pty': '1.1.0',
       },
     });
@@ -88,9 +85,6 @@ describe('electron-runtime-externals', () => {
       ws: '^8.21.0',
       sharp: '0.35.4',
       'silk-wasm': '^3.7.1',
-      '@huggingface/transformers': '3.8.1',
-      'onnxruntime-common': '1.21.0',
-      'sherpa-onnx-node': '1.13.4',
       'node-pty': '1.1.0',
       '@trycua/cua-driver': '0.28.2',
     });
@@ -106,9 +100,6 @@ describe('electron-runtime-externals', () => {
           ws: '^8.21.0',
           sharp: '0.35.4',
           'silk-wasm': '^3.7.1',
-          '@huggingface/transformers': '3.8.1',
-          'onnxruntime-common': '1.21.0',
-          'sherpa-onnx-node': '1.13.4',
           'node-pty': '1.1.0',
           '@trycua/cua-driver': '0.28.2',
         },
@@ -119,9 +110,6 @@ describe('electron-runtime-externals', () => {
       ws: resolveInstalledPackageVersion(repoRoot, 'ws'),
       sharp: resolveInstalledPackageVersion(repoRoot, 'sharp'),
       'silk-wasm': resolveInstalledPackageVersion(repoRoot, 'silk-wasm'),
-      '@huggingface/transformers': resolveInstalledPackageVersion(repoRoot, '@huggingface/transformers'),
-      'onnxruntime-common': resolveInstalledPackageVersion(repoRoot, 'onnxruntime-common'),
-      'sherpa-onnx-node': resolveInstalledPackageVersion(repoRoot, 'sherpa-onnx-node'),
       'node-pty': resolveInstalledPackageVersion(repoRoot, 'node-pty'),
       '@trycua/cua-driver': resolveInstalledPackageVersion(repoRoot, '@trycua/cua-driver'),
     });
@@ -162,9 +150,6 @@ describe('electron-runtime-externals', () => {
         ws: '^8.21.0',
         sharp: '0.35.4',
         'silk-wasm': '^3.7.1',
-        '@huggingface/transformers': '3.8.1',
-        'onnxruntime-common': '1.21.0',
-        'sherpa-onnx-node': '1.13.4',
         'node-pty': '1.1.0',
         '@trycua/cua-driver': '0.28.2',
       },

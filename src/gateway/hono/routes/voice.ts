@@ -28,13 +28,6 @@ import { resolveSpeechProvider } from '../../../voice/tts/factory.js';
 import { listSttProvidersForApi } from '../../../voice/stt/list-providers.js';
 import { resolveSttProviderConfigSlice } from '../../../voice/stt/config-slice.js';
 import { resolveTtsProviderConfigSlice } from '../../../voice/tts/config-slice.js';
-import {
-  listLocalVoiceModelStatuses,
-  removeLocalVoiceModel,
-  startLocalVoiceModelInstall,
-} from '../../../voice/local/model-manager.js';
-import { getLocalVoiceRuntimeClient } from '../../../voice/local/runtime-client.js';
-import { getAudioDecoderStatus } from '../../../voice/audio/normalize.js';
 import { resolveStreamingStt, resolveStreamingTts, VoiceSessionCreationError } from '../../../voice/realtime/runtime.js';
 import { resolveOmniRoute } from '../../../voice/realtime/omniRoute.js';
 import { speakStream } from '../../../voice/tts/speak-core.js';
@@ -388,70 +381,6 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     const payload = listSttProvidersForApi(config);
     return c.json({ ok: true, payload });
   });
-
-  authenticated.get('/api/voice/local/status', async (c) => {
-    const config = service.currentConfig as Config;
-    const sttConfig = mergeSttConfigFromAppConfig(config.tools?.media?.audio, config.tools?.media);
-    const modelId = typeof sttConfig.providers?.['xopc-local']?.model === 'string'
-      ? sttConfig.providers['xopc-local'].model
-      : 'sensevoice-small';
-    const models = await listLocalVoiceModelStatuses();
-    const decoder = getAudioDecoderStatus();
-    try {
-      const runtime = await getLocalVoiceRuntimeClient().request<{
-        ok: boolean;
-        protocolVersion: number;
-        engine: string;
-        modelId?: string;
-        selectedEngine?: string;
-      }>('health', { modelId }, { timeoutMs: 10_000, stopOnTimeout: false });
-      return c.json({
-        ok: true,
-        payload: {
-          runtime: {
-            ...runtime,
-            ready: true,
-          },
-          decoder,
-          models,
-        },
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return c.json({
-        ok: true,
-        payload: { runtime: { ready: false, error: message }, decoder, models },
-      });
-    }
-  });
-
-  authenticated.post(
-    '/api/voice/local/models/:modelId/install',
-    strictRateLimitMiddleware,
-    (c) => {
-      try {
-        const status = startLocalVoiceModelInstall(c.req.param('modelId'));
-        return c.json({ ok: true, payload: { model: status } }, 202);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return c.json({ ok: false, error: { message } }, 400);
-      }
-    },
-  );
-
-  authenticated.delete(
-    '/api/voice/local/models/:modelId',
-    strictRateLimitMiddleware,
-    async (c) => {
-      try {
-        await removeLocalVoiceModel(c.req.param('modelId'));
-        return c.json({ ok: true });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return c.json({ ok: false, error: { message } }, 400);
-      }
-    },
-  );
 
   /**
    * POST /api/voice/reveal-api-key — return plaintext voice provider apiKey from config file only.

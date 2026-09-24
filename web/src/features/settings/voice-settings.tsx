@@ -13,19 +13,14 @@ import {
   fetchVoiceProviders,
   fetchVoiceSttProviders,
   fetchTtsVoices,
-  fetchLocalVoiceStatus,
-  installLocalVoiceModel,
-  LOCAL_VOICE_MODEL_INSTALL_STARTED_EVENT,
   normalizeVoiceSettings,
   patchVoiceSettings,
-  removeLocalVoiceModel,
   testTtsVoice,
   type SttProviderListEntry,
   type TtsProviderListEntry,
   type VoiceConfigFieldMetadata,
   type VoiceModelsPayload,
   type VoiceSettingsState,
-  type LocalVoiceModelStatus,
 } from '@/features/settings/voice-config-api';
 import {
   VoiceApiKeyField,
@@ -78,8 +73,6 @@ function makeAudioUrl(base64: string, mimeType: string): string {
 
 function sttProviderLabel(id: string, v: VoiceSettingsMessages): string {
   switch (id) {
-    case 'xopc-local':
-      return v.stt.localProvider;
     case 'openai':
       return v.stt.openai;
     case 'alibaba':
@@ -343,7 +336,7 @@ export function VoiceSettingsPanel() {
       type: 'update',
       updater: (f) => {
         if (!f) return null;
-        const cur = f.stt.fallback ?? { enabled: false, order: ['xopc-local'] };
+        const cur = f.stt.fallback ?? { enabled: false, order: [] };
         return {
           ...f,
           stt: {
@@ -416,13 +409,8 @@ export function VoiceSettingsPanel() {
   }, []);
 
   const save = useCallback(async (snapshot: VoiceSettingsState) => {
-    const switchedToLocal = baseline?.stt.provider !== 'xopc-local'
-      && snapshot.stt.provider === 'xopc-local';
     try {
       await patchVoiceSettings(snapshot);
-      if (switchedToLocal) {
-        window.dispatchEvent(new Event(LOCAL_VOICE_MODEL_INSTALL_STARTED_EVENT));
-      }
       dispatchForm({ type: 'saved', value: snapshot });
       dirtyRef.current = Boolean(
         formRef.current && JSON.stringify(formRef.current) !== JSON.stringify(snapshot),
@@ -430,7 +418,7 @@ export function VoiceSettingsPanel() {
     } catch (e) {
       throw new Error(e instanceof Error ? e.message : v.saveError);
     }
-  }, [baseline?.stt.provider, v.saveError]);
+  }, [v.saveError]);
 
   const autosave = useAutosave({ value: form, dirty, onSave: save });
   const updateForm = useCallback((value: VoiceSettingsState) => {
@@ -661,8 +649,6 @@ function SttSection({
               />
             </div>
 
-            {stt.provider === 'xopc-local' ? <LocalVoiceModelsPanel v={v} /> : null}
-
             <div className="flex items-center justify-between gap-2 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
               <div>
                 <div className="text-sm font-medium text-fg">{v.stt.fallback}</div>
@@ -681,118 +667,6 @@ function SttSection({
         ) : null}
       </div>
     </section>
-  );
-}
-
-function localModelSize(bytes: number): string {
-  return `${Math.round(bytes / 1024 / 1024)} MB`;
-}
-
-function LocalVoiceModelsPanel({ v }: { v: VoiceSettingsMessages }) {
-  const { data, error, mutate } = useSWR(
-    apiUrl('/api/voice/local/status'),
-    fetchLocalVoiceStatus,
-    {
-      revalidateOnFocus: false,
-      refreshInterval: (latest) =>
-        latest?.models.some((model) => model.state === 'downloading') ? 1000 : 0,
-    },
-  );
-  const [busyModel, setBusyModel] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const refresh = () => void mutate();
-    window.addEventListener(LOCAL_VOICE_MODEL_INSTALL_STARTED_EVENT, refresh);
-    return () => window.removeEventListener(LOCAL_VOICE_MODEL_INSTALL_STARTED_EVENT, refresh);
-  }, [mutate]);
-
-  const runAction = useCallback(
-    async (model: LocalVoiceModelStatus, action: 'install' | 'remove') => {
-      setBusyModel(model.id);
-      setActionError(null);
-      try {
-        if (action === 'install') await installLocalVoiceModel(model.id);
-        else await removeLocalVoiceModel(model.id);
-        await mutate();
-      } catch (cause) {
-        setActionError(cause instanceof Error ? cause.message : String(cause));
-      } finally {
-        setBusyModel(null);
-      }
-    },
-    [mutate],
-  );
-
-  return (
-    <div className="rounded-xl bg-surface-base/55 p-3">
-      <div className="text-sm font-medium text-fg">{v.stt.localModels}</div>
-      <p className="mt-1 text-xs text-fg-muted">{v.stt.localModelsDesc}</p>
-      {error ? <p className="mt-3 text-xs text-red-600 dark:text-red-400">{String(error)}</p> : null}
-      {data?.runtime.ready === false ? (
-        <p className="mt-3 text-xs text-red-600 dark:text-red-400">
-          {data.runtime.error ?? 'Local voice runtime is unavailable'}
-        </p>
-      ) : null}
-      {data?.decoder?.available === false ? (
-        <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
-          {data.decoder.error ?? 'Compressed audio decoding is unavailable'}
-        </p>
-      ) : null}
-      {actionError ? <p className="mt-3 text-xs text-red-600 dark:text-red-400">{actionError}</p> : null}
-      <div className="mt-3 grid gap-2">
-        {(data?.models ?? []).map((model) => {
-          const busy = busyModel === model.id || model.state === 'downloading';
-          return (
-            <div
-              key={model.id}
-              className={cn(
-                'flex items-center justify-between gap-3 rounded-lg bg-surface-base px-3 py-2.5',
-                model.recommended ? 'ring-1 ring-accent/40' : '',
-              )}
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-fg">
-                  {model.name}
-                  {model.recommended ? (
-                    <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
-                      {v.stt.localRecommended}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="text-xs text-fg-muted">
-                  {localModelSize(model.approximateBytes)} · {model.description}
-                </div>
-                <div className="mt-0.5 text-[11px] text-fg-subtle">
-                  {model.engine} · {model.languages.join(' / ')}
-                </div>
-                {model.state === 'downloading' ? (
-                  <div className="mt-1 text-xs text-accent">
-                    {v.stt.localDownloading} {Math.round((model.progress ?? 0) * 100)}%
-                  </div>
-                ) : model.state === 'error' ? (
-                  <div className="mt-1 text-xs text-red-600 dark:text-red-400">{model.error}</div>
-                ) : null}
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={busy}
-                onClick={() => void runAction(model, model.state === 'ready' ? 'remove' : 'install')}
-              >
-                {busy ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : model.state === 'ready' ? (
-                  v.stt.localRemove
-                ) : (
-                  v.stt.localInstall
-                )}
-              </Button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 

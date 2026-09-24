@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import { createHonoApp, isExtensionGatewayUiAssetPath } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
@@ -13,6 +15,9 @@ vi.mock('../../tunnel/tunnel-state.js', () => ({
 }));
 
 const mockLoadTunnelState = vi.mocked(loadTunnelState);
+
+beforeAll(() => initializeTestAgentCatalog());
+afterAll(() => closeXopcDatabase());
 
 // Mock GatewayService for testing
 function createMockService(config: any = {}, listenPort?: number): GatewayService {

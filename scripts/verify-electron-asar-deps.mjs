@@ -12,8 +12,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const requireRoot = createRequire(join(root, 'package.json'));
 const requireFromBuilder = createRequire(requireRoot.resolve('electron-builder/package.json'));
 const asar = requireFromBuilder('@electron/asar');
-// Includes the reviewed native CUA SDK/runtime while retaining a bounded regression guard.
-export const DEFAULT_MAX_NODE_MODULES_BYTES = 224 * 1024 * 1024;
+// Includes the reviewed native voice/CUA runtimes with headroom across target platforms.
+export const DEFAULT_MAX_NODE_MODULES_BYTES = 90 * 1024 * 1024;
 const maxNodeModulesBytes = Number(
   process.env['XOPC_ELECTRON_ASAR_NODE_MODULES_MAX_BYTES'] ?? DEFAULT_MAX_NODE_MODULES_BYTES,
 );

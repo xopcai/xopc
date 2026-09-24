@@ -225,11 +225,14 @@ export type XopcDatabase = {
 export type OpenXopcDatabaseOptions = {
   path?: string;
   env?: NodeJS.ProcessEnv;
+  /** Restore a prebuilt in-memory database, primarily for isolated test fixtures. */
+  serialized?: Uint8Array;
 };
 
 let cachedDatabase: XopcDatabase | null = null;
 
 function ensureDatabasePermissions(pathname: string): void {
+  if (pathname === ':memory:') return;
   const dir = pathname.slice(0, Math.max(pathname.lastIndexOf('/'), pathname.lastIndexOf('\\')));
   if (dir) {
     fs.mkdirSync(dir, { recursive: true });
@@ -242,8 +245,11 @@ function ensureDatabasePermissions(pathname: string): void {
   }
 }
 
-function openDatabaseAtPath(pathname: string): XopcDatabase {
+function openDatabaseAtPath(pathname: string, serialized?: Uint8Array): XopcDatabase {
   installSqliteTransientRejectionHandler();
+  if (serialized && pathname !== ':memory:') {
+    throw new Error('Serialized SQLite databases can only be restored in memory');
+  }
   if (pathname !== ':memory:' && isNetworkBackedPath(pathname)) {
     throw new Error('SQLite requires a local filesystem; run the Gateway on the NAS instead of opening a network-mounted database.');
   }
@@ -251,6 +257,9 @@ function openDatabaseAtPath(pathname: string): XopcDatabase {
 
   const { DatabaseSync } = requireNodeSqlite();
   const db = new DatabaseSync(pathname);
+  if (serialized) {
+    (db as DatabaseSync & { deserialize(data: Uint8Array): void }).deserialize(serialized);
+  }
 
   // Single call: Configure durability before exposing the connection.
   let walMaintenance: SqliteWalMaintenance | undefined;
@@ -279,7 +288,7 @@ export function openXopcDatabase(options: OpenXopcDatabaseOptions = {}): XopcDat
   const env = options.env ?? process.env;
   const pathname = options.path ?? resolveXopcDatabasePath(env);
 
-  if (cachedDatabase && cachedDatabase.path === pathname) {
+  if (cachedDatabase && cachedDatabase.path === pathname && !options.serialized) {
     return cachedDatabase;
   }
 
@@ -287,7 +296,7 @@ export function openXopcDatabase(options: OpenXopcDatabaseOptions = {}): XopcDat
     closeXopcDatabase();
   }
 
-  cachedDatabase = openDatabaseAtPath(pathname);
+  cachedDatabase = openDatabaseAtPath(pathname, options.serialized);
   return cachedDatabase;
 }
 

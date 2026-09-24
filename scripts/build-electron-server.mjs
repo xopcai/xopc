@@ -5,7 +5,7 @@
  * Run after `pnpm run build` for generated runtime assets. Invoked by electron:server:build.
  */
 import * as esbuild from 'esbuild';
-import { cpSync, existsSync, mkdirSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,8 +16,7 @@ import { ELECTRON_GATEWAY_EXTERNALS } from './electron-runtime-externals.mjs';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const entry = join(root, 'src/cli/bin.ts');
 const outfile = join(root, 'out/server/index.js');
-const voiceRuntimeEntry = join(root, 'src/voice/local/runtime-worker.ts');
-const voiceRuntimeOutfile = join(root, 'out/server/voice-runtime.js');
+const retiredVoiceRuntimeOutfile = join(root, 'out/server/voice-runtime.js');
 
 if (!existsSync(entry)) {
   console.error(
@@ -30,6 +29,10 @@ if (!existsSync(entry)) {
 // Marketplace adapters (store, skillhub, clawhub) are built-in under src/agent/skills/marketplace/.
 const external = ELECTRON_GATEWAY_EXTERNALS;
 const minify = process.env['XOPC_ELECTRON_SERVER_MINIFY'] !== '0';
+
+// Older builds emitted a separate local-STT worker. Ensure incremental builds
+// cannot accidentally carry that retired bundle into the packaged app.
+rmSync(retiredVoiceRuntimeOutfile, { force: true });
 
 const gatewayBuild = await esbuild.build({
   entryPoints: [entry],
@@ -62,29 +65,6 @@ if (!bundledOpenAiCodexOAuth) {
   console.error('[build-electron-server] OpenAI Codex OAuth flow was not bundled into the gateway.');
   process.exit(1);
 }
-
-if (!existsSync(voiceRuntimeEntry)) {
-  console.error(`[build-electron-server] Missing source entry ${voiceRuntimeEntry}. Run from a complete source checkout.`);
-  process.exit(1);
-}
-await esbuild.build({
-  entryPoints: [voiceRuntimeEntry],
-  bundle: true,
-  platform: 'node',
-  target: 'node22',
-  outfile: voiceRuntimeOutfile,
-  external: ['@huggingface/transformers', 'sherpa-onnx-node'],
-  format: 'esm',
-  banner: {
-    js: [
-      "import { createRequire as __xopcCreateRequire } from 'module';",
-      'globalThis.require = __xopcCreateRequire(import.meta.url);',
-    ].join('\n'),
-  },
-  minify,
-  sourcemap: false,
-});
-console.log(`[build-electron-server] Wrote ${voiceRuntimeOutfile}${minify ? ' (minified)' : ''}`);
 
 console.log(`[build-electron-server] Wrote ${outfile}${minify ? ' (minified)' : ''}`);
 

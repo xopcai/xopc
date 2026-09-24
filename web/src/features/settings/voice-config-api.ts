@@ -4,8 +4,6 @@ import { apiUrl } from '@/lib/url';
 
 import type { SttSettings, SttProvidersPayload, TtsSettings, VoiceModelsPayload, VoiceSettingsState, VoiceProvidersPayload } from './voice-settings.types';
 
-export const LOCAL_VOICE_MODEL_INSTALL_STARTED_EVENT = 'xopc-local-voice-model-install-started';
-
 export type { SttSettings, TtsSettings, VoiceConfigFieldMetadata, VoiceModelsPayload, VoiceSettingsState, VoiceProvidersPayload, SttProvidersPayload, TtsProviderListEntry, SttProviderListEntry } from './voice-settings.types';
 
 export interface TtsTestPayload {
@@ -63,38 +61,15 @@ export async function fetchTtsVoices(provider: string, model: string, purpose?: 
   return res.payload?.voices ?? [];
 }
 
-export interface LocalVoiceModelStatus {
-  id: string;
-  name: string;
-  description: string;
-  approximateBytes: number;
-  engine: string;
-  languages: string[];
-  recommended?: boolean;
-  state: 'not_installed' | 'downloading' | 'ready' | 'error';
-  progress?: number;
-  downloadedBytes?: number;
-  totalBytes?: number;
-  error?: string;
-}
-
-export interface LocalVoiceStatusPayload {
-  runtime: { ready: boolean; engine?: string; protocolVersion?: number; error?: string };
-  decoder?: { available: boolean; command: string; error?: string };
-  models: LocalVoiceModelStatus[];
-}
-
-
 function defaultStt(): SttSettings {
   return {
-    enabled: true,
-    provider: 'xopc-local',
+    enabled: false,
+    provider: 'openai',
     providers: {
-      'xopc-local': { model: 'sensevoice-small' },
       alibaba: { model: 'qwen-audio-3.0-asr-flash' },
       openai: { model: 'gpt-4o-mini-transcribe' },
     },
-    fallback: { enabled: false, order: ['xopc-local'] },
+    fallback: { enabled: false, order: [] },
   };
 }
 
@@ -122,14 +97,14 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 function normalizeSttProvider(v: unknown): string {
-  return typeof v === 'string' && v.trim().length > 0 ? v.trim() : 'xopc-local';
+  return typeof v === 'string' && v.trim().length > 0 ? v.trim() : 'openai';
 }
 
 function mergeStt(raw: unknown): SttSettings {
   const d = defaultStt();
   if (!isRecord(raw)) return d;
   const provider = normalizeSttProvider(raw.provider);
-  const baseFallback = d.fallback ?? { enabled: false, order: ['xopc-local'] };
+  const baseFallback = d.fallback ?? { enabled: false, order: [] };
   let fallback = baseFallback;
   if (isRecord(raw.fallback)) {
     const order = Array.isArray(raw.fallback.order)
@@ -316,27 +291,6 @@ export async function fetchVoiceSttProviders(): Promise<SttProvidersPayload> {
     throw new Error('Missing STT providers payload');
   }
   return res.payload;
-}
-
-export async function fetchLocalVoiceStatus(): Promise<LocalVoiceStatusPayload> {
-  const res = await fetchJson<{ ok?: boolean; payload?: LocalVoiceStatusPayload }>(
-    apiUrl('/api/voice/local/status'),
-  );
-  if (!res.payload) throw new Error('Missing local voice status payload');
-  return res.payload;
-}
-
-export async function installLocalVoiceModel(modelId: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/voice/local/models/${encodeURIComponent(modelId)}/install`), {
-    method: 'POST',
-    body: '{}',
-  });
-}
-
-export async function removeLocalVoiceModel(modelId: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/voice/local/models/${encodeURIComponent(modelId)}`), {
-    method: 'DELETE',
-  });
 }
 
 export type RevealVoiceApiKeyPayload = {

@@ -2,7 +2,6 @@ import type { Context, Hono } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
 import { getTunnelService } from '../../../tunnel/tunnel-service.js';
-import { prepareLocalVoiceModelAfterProviderSwitch } from '../../../voice/local/provider-switch.js';
 import { enumerateLanGatewayCandidates } from '../../host.js';
 import { buildSafeWebConfigPayload } from '../lib/config-payload.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -49,8 +48,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
   authenticated.patch('/api/config', strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json();
     const config: Config = service.currentConfig as Config;
-    const previousSttProvider = config.tools?.media?.audio?.provider;
-
     applyChannelsPatch(config, body);
 
     const gatewayResult = applyGatewayPatch(config, body);
@@ -86,12 +83,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (!result.saved) {
       return c.json({ ok: false, error: result.error }, 500);
     }
-    prepareLocalVoiceModelAfterProviderSwitch(
-      previousSttProvider,
-      service.currentConfig as Config,
-    );
-
-
     const safeConfig = await buildSafeWebConfigPayload(service, { locale: localeFromRequest(c) });
     return c.json({ ok: true, payload: { config: safeConfig } });
   });

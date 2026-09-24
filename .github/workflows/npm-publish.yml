@@ -49,7 +49,7 @@ jobs:
           ffmpeg -version
 
       - name: Run tests
-        run: pnpm test
+        run: pnpm run test:all
 
       - name: Run skills regression tests
         run: pnpm run test:skills:regression
@@ -94,7 +94,7 @@ jobs:
 
       - name: Publish to npm
         if: steps.npm-version.outputs.exists != 'true'
-        # Build, unit tests (including skills), skills regression, and manifest checks
+        # Build, full tests (including skills), skills regression, and manifest checks
         # above cover prepublishOnly; do not run the full suite and build twice.
         run: pnpm publish --ignore-scripts --no-git-checks --tag ${{ steps.npm-tag.outputs.tag }}
 

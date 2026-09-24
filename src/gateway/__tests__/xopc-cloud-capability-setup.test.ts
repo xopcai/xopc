@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import type { CatalogModel, CatalogSource } from '../../providers/model-catalog-store.js';
 import {
   prepareXopcCloudCapabilitySetup,
@@ -62,6 +64,9 @@ const completeCatalog = source([
     },
   }),
 ]);
+
+beforeAll(() => initializeTestAgentCatalog());
+afterAll(() => closeXopcDatabase());
 
 describe('XOPC Cloud capability setup', () => {
   it('selects the Cloud recommendation for every managed capability', () => {

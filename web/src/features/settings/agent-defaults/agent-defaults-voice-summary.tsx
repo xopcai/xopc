@@ -8,7 +8,6 @@ import { normalizeVoiceSettings } from '@/features/settings/voice-config-api';
 
 const PROVIDER_NAMES: Record<string, string> = {
   'xopc-cloud': 'XOPC Cloud',
-  'xopc-local': 'XOPC Local',
   alibaba: 'Alibaba Cloud',
   edge: 'Microsoft Edge',
   groq: 'Groq',

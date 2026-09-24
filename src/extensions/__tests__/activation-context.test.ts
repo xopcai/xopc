@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 
 const logger = vi.hoisted(() => ({ warn: vi.fn() }));
 vi.mock('../../utils/logger.js', async (importOriginal) => {
@@ -13,6 +16,9 @@ vi.mock('../../utils/logger.js', async (importOriginal) => {
 import { collectConfiguredProviderIds } from '../activation-context.js';
 import '../../voice/stt/providers/index.js';
 import '../../voice/tts/providers/index.js';
+
+beforeAll(() => initializeTestAgentCatalog());
+afterAll(() => closeXopcDatabase());
 
 describe('collectConfiguredProviderIds', () => {
   it('quietly ignores saved configuration for unavailable voice extensions', () => {

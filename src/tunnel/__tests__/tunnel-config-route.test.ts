@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { createHonoApp } from '../../gateway/hono/app.js';
+import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import { CURRENT_TUNNEL_CONSENT_VERSION } from '../consent.js';
 import { getTunnelService } from '../tunnel-service.js';
 
@@ -35,6 +37,9 @@ function mockService() {
 }
 
 describe('PATCH /api/config tunnel key', () => {
+  beforeAll(() => initializeTestAgentCatalog());
+  afterAll(() => closeXopcDatabase());
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

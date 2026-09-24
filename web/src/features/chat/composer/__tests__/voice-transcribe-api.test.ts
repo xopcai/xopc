@@ -45,57 +45,14 @@ describe('voice-transcribe-api', () => {
     expect(fetchJson).toHaveBeenCalledTimes(2);
   });
 
-  it('exposes local model download progress to the composer', async () => {
-    fetchJson
-      .mockResolvedValueOnce({
-        voice: {
-          sttAvailable: false,
-          sttEnabled: true,
-          sttProvider: 'xopc-local',
-          localModelId: 'sensevoice-small',
-        },
-      })
-      .mockResolvedValueOnce({
-        payload: {
-          models: [{
-            id: 'sensevoice-small',
-            state: 'downloading',
-            progress: 0.42,
-            downloadedBytes: 100,
-            totalBytes: 240,
-          }],
-        },
-      });
-
-    await expect(fetchVoiceReadiness()).resolves.toMatchObject({
-      state: 'preparing',
-      provider: 'xopc-local',
-      modelId: 'sensevoice-small',
-      progress: 0.42,
+  it('reports extension providers using the generic readiness state', async () => {
+    fetchJson.mockResolvedValueOnce({
+      voice: { sttAvailable: true, sttEnabled: true, sttProvider: 'my-local-stt' },
     });
-  });
 
-  it('checks local decoder readiness even when the model is already marked available', async () => {
-    fetchJson
-      .mockResolvedValueOnce({
-        voice: {
-          sttAvailable: true,
-          sttEnabled: true,
-          sttProvider: 'xopc-local',
-          localModelId: 'sensevoice-small',
-        },
-      })
-      .mockResolvedValueOnce({
-        payload: {
-          runtime: { ready: false, error: 'Audio decoder is unavailable; install ffmpeg' },
-          models: [{ id: 'sensevoice-small', state: 'ready' }],
-        },
-      });
-
-    await expect(fetchVoiceReadiness()).resolves.toMatchObject({
-      state: 'error',
-      provider: 'xopc-local',
-      error: 'Audio decoder is unavailable; install ffmpeg',
+    await expect(fetchVoiceReadiness()).resolves.toEqual({
+      state: 'ready',
+      provider: 'my-local-stt',
     });
   });
 });

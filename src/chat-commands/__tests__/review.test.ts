@@ -1,7 +1,9 @@
 import { requireXopcDatabase as openFixtureDatabase } from '../../storage/sqlite/connection.js';
 import { ensureSessionRecord as ensureFixtureConversation } from '../../storage/sqlite/session-repository.js';
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 function seedConversationFixtures(): void {
   openFixtureDatabase();
+  seedTestAgentCatalog();
   ensureFixtureConversation("dd1b1777-d20d-4b57-8115-3e9d1def4dfa", '', {"agentId":"main","sourceChannel":"webchat","sourceChatId":"review-test","sessionType":"chat","routing":{"agentId":"main","source":"webchat","accountId":"default","peerKind":"direct","peerId":"review-test"}});
 }
 import { execFileSync } from 'node:child_process';

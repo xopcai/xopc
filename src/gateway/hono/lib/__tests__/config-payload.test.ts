@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { initializeTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
+import { initializeTestAgentCatalog, seedTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
 import { closeXopcDatabase } from '../../../../storage/sqlite/index.js';
 import {
   buildSafeBrowserConfigForWeb,
@@ -39,6 +39,7 @@ describe('buildSafeBrowserConfigForWeb', () => {
 });
 
 describe('buildSafeWebConfigPayload', () => {
+  beforeEach(() => initializeTestAgentCatalog());
   afterEach(() => closeXopcDatabase());
   it('includes the Web UI activity detail default', async () => {
     const payload = await buildSafeWebConfigPayload({
@@ -66,7 +67,7 @@ describe('buildSafeWebConfigPayload', () => {
   });
 
   it('includes global model intents and agent overrides for config round trips', async () => {
-    initializeTestAgentCatalog({
+    seedTestAgentCatalog({
       defaults: {
         models: {
           chat: { primary: 'openai/gpt-4.1', fallbacks: [] },

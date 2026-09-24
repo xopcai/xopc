@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { initializeTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
 import {
   ConfigSchema,
   getAgentDefaultModelRef,
@@ -53,6 +54,8 @@ describe('refreshOnboardModelCatalogIfNeeded', () => {
 });
 
 describe('XOPC Cloud onboard defaults', () => {
+  beforeEach(() => initializeTestAgentCatalog());
+
   it('persists only the selected chat model', async () => {
     const config = ConfigSchema.parse({});
     const updated = await setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model');
@@ -67,11 +70,11 @@ describe('XOPC Cloud onboard defaults', () => {
 
   it('preserves existing explicit modality settings', async () => {
     const config = ConfigSchema.parse({
-      tools: { media: { audio: { enabled: true, provider: 'xopc-local' } } },
+      tools: { media: { audio: { enabled: true, provider: 'custom-stt' } } },
       messages: { tts: { enabled: true, provider: 'edge', trigger: 'inbound' } },
     });
     const updated = await setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model');
-    expect(updated.tools.media?.audio?.provider).toBe('xopc-local');
+    expect(updated.tools.media?.audio?.provider).toBe('custom-stt');
     expect(updated.messages?.tts?.provider).toBe('edge');
   });
 });
