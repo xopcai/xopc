@@ -11,8 +11,10 @@ describe('lazy route bundles', () => {
       '/api/home',
       '/api/home/advisor/refresh',
       '/api/home/advisor/metrics',
+      '/api/home/advisor/history',
       '/api/home/opportunities/id/action',
       '/api/home/opportunities/id/feedback',
+      '/api/home/opportunities/id/feedback/undo',
     ]) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('home');
     expect(findAuthenticatedLazyRouteBundle('/api/home-other')).toBeUndefined();
   });

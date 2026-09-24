@@ -2,6 +2,8 @@ import type { Hono } from 'hono';
 import {
   HomeAdvisorRefreshRequestSchema,
   HomeAdviceMetricsSchema,
+  HomeOpportunityFeedbackUndoRequestSchema,
+  HomeOpportunityHistoryResponseSchema,
   HomeOpportunityActionRequestSchema,
   HomeOpportunityFeedbackRequestSchema,
 } from '@xopcai/gateway-contract';
@@ -41,6 +43,10 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
     return c.json(HomeAdviceMetricsSchema.parse(service.homeIntelligence.getMetrics(since)));
   });
 
+  authenticated.get('/api/home/advisor/history', (c) => c.json(HomeOpportunityHistoryResponseSchema.parse({
+    items: service.homeIntelligence.getHistory(),
+  })));
+
   authenticated.post('/api/home/advisor/refresh', deps.strictRateLimitMiddleware, async (c) => {
     const parsed = HomeAdvisorRefreshRequestSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid refresh request' }, 400);
@@ -75,6 +81,18 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       if (error instanceof Error && (error.message.includes('stale') || error.message.includes('snoozedUntil'))) {
         return c.json({ ok: false, error: error.message }, 409);
       }
+      throw error;
+    }
+  });
+
+  authenticated.post('/api/home/opportunities/:id/feedback/undo', deps.strictRateLimitMiddleware, async (c) => {
+    const parsed = HomeOpportunityFeedbackUndoRequestSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid feedback undo request' }, 400);
+    try {
+      service.homeIntelligence.undoFeedback(c.req.param('id'), parsed.data.idempotencyKey);
+      return c.json({ ok: true });
+    } catch (error) {
+      if (error instanceof Error) return c.json({ ok: false, error: error.message }, 409);
       throw error;
     }
   });

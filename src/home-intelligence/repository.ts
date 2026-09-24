@@ -7,6 +7,7 @@ import {
   type HomeAdvisor,
   type HomeAdviceMetrics,
   type HomeOpportunity,
+  type HomeOpportunityHistoryItem,
 } from '@xopcai/gateway-contract';
 
 import { runSqliteSavepoint } from '../storage/sqlite/transaction.js';
@@ -100,6 +101,15 @@ interface OpportunityRow {
   state: string;
   expires_at: number;
   snoozed_until: number | null;
+}
+
+interface HistoryRow extends OpportunityRow {
+  updated_at: number;
+  feedback_kind: HomeFeedbackKind | null;
+  task_phase: string | null;
+  task_resolution: string | null;
+  resolution_kind: 'session' | 'task' | 'scene' | null;
+  resolution_ref: string | null;
 }
 
 function parseJson<T>(value: string, fallback: T): T {
@@ -307,17 +317,28 @@ export class HomeIntelligenceRepository {
   getLatestSnapshotHash(principal: HomePrincipal): string | undefined {
     const row = this.db.prepare(`SELECT snapshot_hash FROM home_advice_generations
       WHERE owner_id = ? AND workspace_id = ? AND status IN ('succeeded', 'skipped')
+        AND (model_ref IS NOT NULL OR outcome_reason IS NULL
+          OR outcome_reason NOT IN ('no_change', 'budget_exhausted'))
       ORDER BY completed_at DESC, rowid DESC LIMIT 1`).get(
       principal.ownerId, principal.workspaceId,
     ) as { snapshot_hash: string | null } | undefined;
     return row?.snapshot_hash ?? undefined;
   }
 
-  countGenerationAttemptsSince(principal: HomePrincipal, since: number): number {
-    const row = this.db.prepare(`SELECT COALESCE(SUM(attempt), 0) AS count
+  countModelGenerationAttemptsSince(
+    principal: HomePrincipal,
+    since: number,
+    currentGenerationId: string,
+  ): number {
+    const row = this.db.prepare(`SELECT COALESCE(SUM(CASE
+        WHEN generation_id = ? THEN MAX(attempt - 1, 0)
+        WHEN model_ref IS NOT NULL THEN 1
+        WHEN status IN ('failed', 'retry_wait') THEN attempt
+        ELSE 0
+      END), 0) AS count
       FROM home_advice_generations
       WHERE owner_id = ? AND workspace_id = ? AND COALESCE(started_at, requested_at) >= ?`).get(
-      principal.ownerId, principal.workspaceId, since,
+      currentGenerationId, principal.ownerId, principal.workspaceId, since,
     ) as { count: number };
     return Number(row.count);
   }
@@ -528,11 +549,12 @@ export class HomeIntelligenceRepository {
     }
     if (active) return { state: 'refreshing', requestedAt: active.requested_at };
 
-    const latest = this.db.prepare(`SELECT result_json FROM home_advice_generations
-      WHERE owner_id = ? AND workspace_id = ? AND status IN ('succeeded', 'skipped')
-      ORDER BY completed_at DESC, rowid DESC LIMIT 1`).get(
+    const latest = this.db.prepare(`SELECT status, result_json, error_code FROM home_advice_generations
+      WHERE owner_id = ? AND workspace_id = ? AND status IN ('succeeded', 'skipped', 'failed')
+      ORDER BY COALESCE(completed_at, requested_at) DESC, rowid DESC LIMIT 1`).get(
       principal.ownerId, principal.workspaceId,
-    ) as { result_json: string | null } | undefined;
+    ) as { status: string; result_json: string | null; error_code: string | null } | undefined;
+    if (latest?.status === 'failed') return { state: 'quiet', reason: 'generation_failed' };
     const result = latest?.result_json ? parseJson<unknown>(latest.result_json, null) : null;
     if (result && typeof result === 'object' && 'state' in result && (result.state === 'quiet' || result.state === 'clarification')) {
       const advisor = HomeAdvisorSchema.parse(result);
@@ -558,6 +580,52 @@ export class HomeIntelligenceRepository {
       opportunityId, principal.ownerId, principal.workspaceId,
     ) as unknown as OpportunityRow | undefined;
     return row ? parseOpportunity(row) : undefined;
+  }
+
+  listHistory(principal: HomePrincipal): HomeOpportunityHistoryItem[] {
+    const rows = this.db.prepare(`SELECT
+        p.opportunity_id, p.generation_id, p.content_json, p.revision, p.state,
+        p.expires_at, p.snoozed_until, p.updated_at, p.resolution_kind, p.resolution_ref,
+        f.kind AS feedback_kind, t.phase AS task_phase, t.resolution AS task_resolution
+      FROM home_opportunity_projections p
+      LEFT JOIN home_opportunity_feedback f ON f.feedback_id = (
+        SELECT latest.feedback_id FROM home_opportunity_feedback latest
+        WHERE latest.opportunity_id = p.opportunity_id
+        ORDER BY latest.created_at DESC, latest.rowid DESC LIMIT 1
+      )
+      LEFT JOIN tasks t ON p.resolution_kind = 'task' AND p.resolution_ref = t.task_id
+      WHERE p.owner_id = ? AND p.workspace_id = ?
+      ORDER BY p.updated_at DESC, p.opportunity_id ASC LIMIT 100`).all(
+      principal.ownerId,
+      principal.workspaceId,
+    ) as unknown as HistoryRow[];
+    return rows.map((row) => {
+      const opportunity = parseOpportunity(row);
+      const completed = row.feedback_kind === 'already_done'
+        || (row.task_phase === 'closed' && row.task_resolution === 'done');
+      const status: HomeOpportunityHistoryItem['status'] = completed
+        ? 'completed'
+        : row.state === 'accepted'
+          ? 'started'
+          : row.state === 'discussing'
+            ? 'discussing'
+            : row.state === 'active'
+              ? 'available'
+              : row.state as HomeOpportunityHistoryItem['status'];
+      const href = row.resolution_kind === 'task' && row.resolution_ref
+        ? `/tasks/${encodeURIComponent(row.resolution_ref)}`
+        : row.resolution_kind === 'session' && row.resolution_ref && row.resolution_ref !== 'draft'
+          ? `/chat/${encodeURIComponent(row.resolution_ref)}`
+          : undefined;
+      return {
+        opportunity,
+        status,
+        ...(row.feedback_kind ? { feedbackKind: row.feedback_kind } : {}),
+        updatedAt: row.updated_at,
+        ...(row.snoozed_until === null ? {} : { snoozedUntil: row.snoozed_until }),
+        ...(href ? { href } : {}),
+      };
+    });
   }
 
   isFeedbackRecorded(opportunityId: string, idempotencyKey: string): boolean {
@@ -611,6 +679,57 @@ export class HomeIntelligenceRepository {
         input.createdAt,
       );
       return this.getOpportunity(principal, opportunityId, input.createdAt);
+    });
+  }
+
+  undoFeedback(
+    principal: HomePrincipal,
+    opportunityId: string,
+    idempotencyKey: string,
+    now: number,
+  ): HomeOpportunity {
+    return runSqliteSavepoint(this.db, () => {
+      const feedback = this.db.prepare(`SELECT f.feedback_id, f.idempotency_key, f.kind,
+          p.state, p.expires_at
+        FROM home_opportunity_feedback f
+        JOIN home_opportunity_projections p ON p.opportunity_id = f.opportunity_id
+        WHERE f.opportunity_id = ? AND p.owner_id = ? AND p.workspace_id = ?
+        ORDER BY f.created_at DESC, f.rowid DESC LIMIT 1`).get(
+        opportunityId,
+        principal.ownerId,
+        principal.workspaceId,
+      ) as {
+        feedback_id: string;
+        idempotency_key: string;
+        kind: HomeFeedbackKind;
+        state: string;
+        expires_at: number;
+      } | undefined;
+      if (!feedback || feedback.idempotency_key !== idempotencyKey) {
+        throw new Error('Only the latest home opportunity feedback can be undone');
+      }
+      if (feedback.kind === 'started' || feedback.kind === 'discussed') {
+        throw new Error('Started or discussed opportunities cannot be undone here');
+      }
+      if (!['dismissed', 'snoozed'].includes(feedback.state) || feedback.expires_at <= now) {
+        throw new Error('Home opportunity feedback can no longer be undone');
+      }
+      this.db.prepare(`DELETE FROM home_opportunity_feedback WHERE feedback_id = ?`).run(feedback.feedback_id);
+      const changed = this.db.prepare(`UPDATE home_opportunity_projections SET
+        state = 'active', revision = revision + 1, updated_at = ?, snoozed_until = NULL,
+        resolution_kind = NULL, resolution_ref = NULL
+        WHERE opportunity_id = ? AND owner_id = ? AND workspace_id = ?
+          AND state IN ('dismissed', 'snoozed') AND expires_at > ?`).run(
+        now,
+        opportunityId,
+        principal.ownerId,
+        principal.workspaceId,
+        now,
+      );
+      if (Number(changed.changes) !== 1) throw new Error('Home opportunity feedback can no longer be undone');
+      const opportunity = this.getOpportunity(principal, opportunityId, now);
+      if (!opportunity) throw new Error('Home opportunity feedback can no longer be undone');
+      return opportunity;
     });
   }
 

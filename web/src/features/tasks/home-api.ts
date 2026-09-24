@@ -1,6 +1,7 @@
 import {
   TaskCreateResponseSchema,
   HomeOpportunityActionResponseSchema,
+  HomeOpportunityHistoryResponseSchema,
   parseHomeResponse,
   type HomeAttention,
   type HomeDecision,
@@ -9,6 +10,7 @@ import {
   type HomeOpportunityActionRequest,
   type HomeOpportunityActionResponse,
   type HomeOpportunityFeedbackRequest,
+  type HomeOpportunityHistoryResponse,
   type TaskCommand,
   type TaskCreateRequest,
   type TaskCreateResponse,
@@ -150,6 +152,11 @@ export function refreshHomeAdvisor(locale?: 'en' | 'zh'): Promise<{ ok: true; ge
   });
 }
 
+export function fetchHomeAdvisorHistory(): Promise<HomeOpportunityHistoryResponse> {
+  return fetchJson<unknown>(apiUrl('/api/home/advisor/history'))
+    .then((value) => HomeOpportunityHistoryResponseSchema.parse(value));
+}
+
 export async function actOnHomeOpportunity(
   opportunity: Pick<HomeOpportunity, 'id' | 'revision'>,
   mode: HomeOpportunityActionRequest['mode'],
@@ -166,14 +173,25 @@ export async function actOnHomeOpportunity(
 export function submitHomeOpportunityFeedback(
   opportunity: Pick<HomeOpportunity, 'id' | 'revision'>,
   input: Omit<HomeOpportunityFeedbackRequest, 'idempotencyKey' | 'expectedRevision'>,
-): Promise<{ ok: true }> {
-  return fetchJson(apiUrl(`/api/home/opportunities/${encodeURIComponent(opportunity.id)}/feedback`), {
+): Promise<{ ok: true; idempotencyKey: string }> {
+  const idempotencyKey = crypto.randomUUID();
+  return fetchJson<{ ok: true }>(apiUrl(`/api/home/opportunities/${encodeURIComponent(opportunity.id)}/feedback`), {
     method: 'POST',
     body: JSON.stringify({
       ...input,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey,
       expectedRevision: opportunity.revision,
     }),
+  }).then(() => ({ ok: true, idempotencyKey }));
+}
+
+export function undoHomeOpportunityFeedback(
+  opportunityId: string,
+  idempotencyKey: string,
+): Promise<{ ok: true }> {
+  return fetchJson(apiUrl(`/api/home/opportunities/${encodeURIComponent(opportunityId)}/feedback/undo`), {
+    method: 'POST',
+    body: JSON.stringify({ idempotencyKey }),
   });
 }
 
