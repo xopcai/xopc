@@ -42,4 +42,5 @@ it('persists fatal stderr after exit when pipes close, with exit code and signal
   expect(log).toContain('code: 1');
   expect(log).toContain('signal: null');
   expect(mocks.spawn.mock.calls[0]![2].env.XOPC_GATEWAY_DIAGNOSTIC_PATH).toBe(join(root, 'gateway-process.log'));
+  expect(mocks.spawn.mock.calls[0]![2].env.XOPC_SQLITE_ASSET_ROOT).toBe(join(process.cwd(), 'out', 'server'));
 });
