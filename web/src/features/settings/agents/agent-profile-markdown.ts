@@ -87,6 +87,53 @@ export function serializeIdentityMarkdown(fields: IdentityFields): string {
   return lines.join('\n');
 }
 
+/** Update the known identity fields without discarding custom sections or front matter. */
+export function updateIdentityMarkdown(content: string, fields: IdentityFields): string {
+  if (!content.trim()) return serializeIdentityMarkdown(fields);
+
+  const values: Record<keyof IdentityFields, string> = { ...fields };
+  const matched = new Set<keyof IdentityFields>();
+  const fieldMap: Record<string, keyof IdentityFields> = {
+    name: 'name',
+    description: 'description',
+    language: 'language',
+    creature: 'creature',
+    emoji: 'emoji',
+    avatar: 'avatar',
+  };
+  const lines = content.split('\n').map((line) => {
+    const match = line.match(/^([-*]\s+\*\*)(\w+)(:\*\*\s*)(.*)$/i);
+    if (!match) return line;
+    const key = fieldMap[match[2].toLowerCase()];
+    if (!key) return line;
+    matched.add(key);
+    return `${match[1]}${match[2]}${match[3]}${values[key]}`;
+  });
+
+  const missing = (Object.keys(values) as Array<keyof IdentityFields>).filter((key) => !matched.has(key));
+  if (missing.length > 0) {
+    if (lines.length > 0 && lines.at(-1)?.trim()) lines.push('');
+    for (const key of missing) {
+      const label = key.charAt(0).toUpperCase() + key.slice(1);
+      lines.push(`- **${label}:** ${values[key]}`);
+    }
+  }
+  if (lines.at(-1) !== '') lines.push('');
+  return lines.join('\n');
+}
+
+/** Keep YAML metadata outside the visual editor so a rich-text round trip cannot rewrite it. */
+export function splitProfileMarkdownFrontMatter(content: string): { frontMatter: string; body: string } {
+  const match = content.match(/^(---\r?\n[\s\S]*?\r?\n---(?:\r?\n)*)/);
+  if (!match) return { frontMatter: '', body: content };
+  return { frontMatter: match[1], body: content.slice(match[1].length) };
+}
+
+export function replaceProfileMarkdownBody(content: string, body: string): string {
+  const { frontMatter } = splitProfileMarkdownFrontMatter(content);
+  return `${frontMatter}${body}`;
+}
+
 // ---------------------------------------------------------------------------
 // SOUL.md
 // ---------------------------------------------------------------------------

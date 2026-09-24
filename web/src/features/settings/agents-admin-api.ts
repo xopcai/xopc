@@ -4,6 +4,7 @@ import { apiUrl } from '@/lib/url';
 
 import type {
   AgentOverride,
+  AgentProfileFileEntry,
   AgentModelsOverride,
   AgentProfile,
   SkillOverride,
@@ -87,6 +88,37 @@ export async function deleteGatewayAgent(agentId: string, purge = false): Promis
   if (!response.payload?.agents) throw new Error('Invalid delete agent response');
   await refresh(response.payload.agents);
   return response.payload.agents;
+}
+
+export async function fetchAgentProfileFiles(agentId: string): Promise<{
+  agentId: string;
+  profileDir: string;
+  files: AgentProfileFileEntry[];
+}> {
+  const response = await fetchJson<{
+    payload?: { agentId: string; profileDir?: string; files: AgentProfileFileEntry[] };
+  }>(apiUrl(`/api/agents/${encodeURIComponent(agentId)}/files`));
+  const payload = response.payload;
+  const profileDir = typeof payload?.profileDir === 'string' ? payload.profileDir.trim() : '';
+  if (!payload?.files || !profileDir) throw new Error('Invalid agent profile files response');
+  return { agentId: payload.agentId, profileDir, files: payload.files };
+}
+
+export async function fetchAgentProfileFileContent(agentId: string, name: string): Promise<string> {
+  const response = await fetchJson<{ payload?: { content?: string } }>(
+    apiUrl(`/api/agents/${encodeURIComponent(agentId)}/files/${encodeURIComponent(name)}`),
+  );
+  const content = response.payload?.content;
+  if (typeof content !== 'string') throw new Error('Invalid agent profile file response');
+  return content;
+}
+
+export async function saveAgentProfileFileContent(agentId: string, name: string, content: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/agents/${encodeURIComponent(agentId)}/files/${encodeURIComponent(name)}`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
 }
 
 export function agentDisplayName(agent: GatewayAgentRow): string {
