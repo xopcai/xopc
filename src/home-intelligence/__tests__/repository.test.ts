@@ -96,6 +96,67 @@ describe('HomeIntelligenceRepository', () => {
     expect(repository.getLatestSnapshotHash(principal)).toBe('snapshot-1');
   });
 
+  it('does not let cache and budget skips replace the last evaluated snapshot', () => {
+    repository.enqueue(principal, {
+      idempotencyKey: 'model:1', reasons: ['manual_refresh'], requestedAt: 1_000,
+    });
+    repository.complete(repository.claimNext(principal, 'worker', 1_001)!, {
+      result: { state: 'quiet', reason: 'no_change' },
+      snapshotHash: 'evaluated', evidenceIds: [], modelRef: 'test/reasoning',
+      outcomeReason: 'no_change', completedAt: 1_002,
+    });
+    for (const [index, reason] of (['no_change', 'budget_exhausted'] as const).entries()) {
+      repository.enqueue(principal, {
+        idempotencyKey: `skip:${index}`, reasons: ['home_opened'], requestedAt: 1_003 + index,
+      });
+      repository.complete(repository.claimNext(principal, 'worker', 1_003 + index)!, {
+        result: { state: 'quiet', reason }, snapshotHash: `skip-${index}`, evidenceIds: [],
+        outcomeReason: reason, completedAt: 1_003 + index,
+      });
+    }
+
+    expect(repository.getLatestSnapshotHash(principal)).toBe('evaluated');
+  });
+
+  it('counts only model generation attempts and excludes the current claim', () => {
+    repository.enqueue(principal, {
+      idempotencyKey: 'model:1', reasons: ['manual_refresh'], requestedAt: 1_000,
+    });
+    repository.complete(repository.claimNext(principal, 'worker', 1_001)!, {
+      result: { state: 'quiet', reason: 'insufficient_value' },
+      snapshotHash: 'model', evidenceIds: [], modelRef: 'test/reasoning', completedAt: 1_002,
+    });
+    repository.enqueue(principal, {
+      idempotencyKey: 'skip:1', reasons: ['home_opened'], requestedAt: 1_003,
+    });
+    repository.complete(repository.claimNext(principal, 'worker', 1_004)!, {
+      result: { state: 'quiet', reason: 'no_change' },
+      snapshotHash: 'skip', evidenceIds: [], completedAt: 1_005,
+    });
+    repository.enqueue(principal, {
+      idempotencyKey: 'current:1', reasons: ['home_opened'], requestedAt: 1_006,
+    });
+    const current = repository.claimNext(principal, 'worker', 1_007)!;
+
+    expect(repository.countModelGenerationAttemptsSince(principal, 0, current.generationId)).toBe(1);
+  });
+
+  it('exposes a terminal generation failure instead of silently returning no change', () => {
+    repository.enqueue(principal, {
+      idempotencyKey: 'failed:1', reasons: ['manual_refresh'], requestedAt: 1_000,
+    });
+    const first = repository.claimNext(principal, 'worker', 1_001)!;
+    repository.fail(first, 1_002, 'generation_failed', 1_003);
+    const second = repository.claimNext(principal, 'worker', 1_003)!;
+    repository.fail(second, 1_004, 'generation_failed', 1_005);
+    const third = repository.claimNext(principal, 'worker', 1_005)!;
+    repository.fail(third, 1_006, 'generation_failed', 1_007);
+
+    expect(repository.countModelGenerationAttemptsSince(principal, 0, 'not-running')).toBe(3);
+    expect(repository.getAdvisor(principal, 1_008))
+      .toEqual({ state: 'quiet', reason: 'generation_failed' });
+  });
+
   it('withdraws only opportunities backed by changed connector facts', () => {
     repository.enqueue(principal, {
       idempotencyKey: 'manual:source-change', reasons: ['manual_refresh'], requestedAt: 1_000,
@@ -158,6 +219,34 @@ describe('HomeIntelligenceRepository', () => {
     expect(repository.getAdvisor(principal, 2_001)).toMatchObject({
       state: 'ready', primary: { id: 'opportunity-1', revision: 3 },
     });
+  });
+
+  it('lists suggestion history and restores the latest reversible feedback', () => {
+    repository.enqueue(principal, {
+      idempotencyKey: 'history:generation', reasons: ['manual_refresh'], requestedAt: 1_000,
+    });
+    repository.complete(repository.claimNext(principal, 'worker', 1_001)!, {
+      result: { state: 'ready', opportunities: [opportunity('history')] },
+      snapshotHash: 'history', evidenceIds: ['project:project-1:v2'], completedAt: 1_002,
+    });
+    repository.recordFeedback(principal, 'history', {
+      idempotencyKey: 'history:feedback', kind: 'irrelevant', expectedRevision: 1, createdAt: 1_003,
+    });
+
+    expect(repository.listHistory(principal)).toMatchObject([{
+      opportunity: { id: 'history', revision: 2 },
+      status: 'dismissed',
+      feedbackKind: 'irrelevant',
+      updatedAt: 1_003,
+    }]);
+
+    expect(repository.undoFeedback(principal, 'history', 'history:feedback', 1_004))
+      .toMatchObject({ id: 'history', revision: 3 });
+    expect(repository.listHistory(principal)).toMatchObject([{
+      opportunity: { id: 'history', revision: 3 },
+      status: 'available',
+      updatedAt: 1_004,
+    }]);
   });
 
   it('derives a reversible confidence threshold from explicit recent feedback', () => {
