@@ -223,6 +223,7 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
               XOPC_UI_STATIC_ROOT: resolvePackagedStaticRoot(),
               XOPC_BUNDLED_EXTENSIONS_ROOT: resolvePackagedBundledExtensionsRoot(),
               XOPC_BUNDLED_SKILLS_ROOT: resolvePackagedBundledSkillsRoot(),
+              XOPC_SQLITE_ASSET_ROOT: resolvePackagedAppPath('out', 'server'),
               XOPC_BROWSER_EXT_BUNDLED_ROOT: join(process.resourcesPath, 'browser-ext'),
               XOPC_TEMPLATE_PATH: resolvePackagedAppPath('out', 'server', 'workspace-templates'),
               XOPC_PLAYWRIGHT_CORE_ROOT: join(process.resourcesPath, 'playwright-core'),
