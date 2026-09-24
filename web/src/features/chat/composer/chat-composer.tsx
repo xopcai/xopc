@@ -685,6 +685,7 @@ export const ChatComposer = memo(function ChatComposer({
 
       <ComposerAttachmentChips
         attachments={att.attachments}
+        conversationId={conversationId}
         topPadded={pendingFollowUps.length > 0}
         onRemove={att.removeAttachment}
       />
