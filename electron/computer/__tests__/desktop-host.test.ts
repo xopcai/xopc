@@ -38,7 +38,7 @@ vi.mock('@xopcai/realtime-client', async (importOriginal) => ({
   setEndpoint(binding: RealtimeEndpointBinding) { this.binding = binding; }
 } }));
 
-import { DesktopEndpointHost, resolveComputerDriverPath } from '../desktop-host.js';
+import { DesktopEndpointHost, resolveComputerDriverPath, resolveComputerDriverSdkUrl } from '../desktop-host.js';
 import { RealtimeConnectionError } from '@xopcai/realtime-client';
 
 describe('computer driver paths', () => {
@@ -51,6 +51,12 @@ describe('computer driver paths', () => {
     expect(resolveComputerDriverPath({ packaged: true, resourcesPath: '/Applications/xopc.app/Contents/Resources',
       mainDir: '/Applications/xopc.app/Contents/Resources/app.asar/out/main' }))
       .toBe('/Applications/xopc.app/Contents/Resources/bin/cua-driver');
+  });
+
+  it('loads the packaged SDK from its real unpacked path so its dylib can be opened', () => {
+    expect(resolveComputerDriverSdkUrl({ packaged: true, resourcesPath: '/Applications/xopc.app/Contents/Resources' }))
+      .toBe('file:///Applications/xopc.app/Contents/Resources/app.asar.unpacked/node_modules/@trycua/cua-driver/dist/index.js');
+    expect(resolveComputerDriverSdkUrl({ packaged: false, resourcesPath: '/workspace' })).toBeUndefined();
   });
 });
 
