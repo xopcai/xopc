@@ -55,6 +55,8 @@ type ChannelsSettingsConfig = {
 };
 
 const SCHEMA_FIELD_PATHS_MANAGED_OUTSIDE_FORM = ['enabled'];
+const capabilityPageClassName = 'max-w-7xl';
+const capabilityPagePadding = 'px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4';
 
 async function fetchChannelsSettingsConfig(): Promise<ChannelsSettingsConfig> {
   const data = await fetchJson<{
@@ -799,7 +801,7 @@ export function ChannelsSettingsPanel({
 
   if (!hasToken) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4">
+      <SettingsPageFrame gap="gap-3" className={capabilityPageClassName} padding={capabilityPagePadding}>
         <p className="text-sm text-fg-muted">{ch.tokenRequired}</p>
       </SettingsPageFrame>
     );
@@ -808,8 +810,8 @@ export function ChannelsSettingsPanel({
   return (
     <SettingsPageFrame
       gap="gap-4"
-      className="max-w-6xl"
-      padding="px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4"
+      className={capabilityPageClassName}
+      padding={capabilityPagePadding}
     >
       {catalog.isLoading ? (
         <SettingsPageSkeleton sections={2} />

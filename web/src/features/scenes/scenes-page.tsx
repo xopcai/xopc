@@ -96,7 +96,7 @@ function SceneContent() {
     return () => clearPageHeader();
   }, [clearPageHeader, setPageHeader, zh]);
   return <>
-    <main className="h-full overflow-y-auto bg-surface-panel p-4 sm:p-8"><div className="mx-auto max-w-3xl space-y-6">
+    <main className="h-full overflow-y-auto bg-surface-panel"><div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
       <SceneList />
     </div></main>
     {(activationId || templateKey || inbox) && <SceneDialog key={activationId ?? templateKey ?? 'inbox'}
