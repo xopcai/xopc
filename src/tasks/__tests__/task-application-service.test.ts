@@ -16,6 +16,7 @@ import { TaskRepository } from '../task-repository.js';
 import { TaskRunRepository } from '../task-run-repository.js';
 import { TaskReadModelProjector } from '../task-read-model-projector.js';
 import { TaskRunCoordinator } from '../task-run-coordinator.js';
+import { buildTaskRunMessage } from '../task-run-dispatcher.js';
 import { getTaskExecutionBrief } from '../task-context-assembler.js';
 import { decisionFromTask } from '../home-query-service.js';
 import { TaskSignalService } from '../task-signal-service.js';
@@ -68,6 +69,26 @@ describe('TaskApplicationService', () => {
     verification: { status: 'passed' as const, checks: [{ criterion: 'tests pass', status: 'passed' as const, evidenceTitles: ['Tests'] }] }, remainingWork: [],
     needsUser: false, completionVerdict: 'achieved' as const,
   };
+
+  it('persists automation trigger context and includes it in the dispatched message', () => {
+    const tasks = new TaskRepository();
+    const task = tasks.create({ title: 'Triggered task', objective: 'Handle the source event' });
+    const event = { automationTrigger: { type: 'note.created.v1', payload: { noteId: 'note-1' } } };
+    const result = new TaskApplicationService().execute({
+      taskId: task.id,
+      expectedVersion: task.version,
+      idempotencyKey: 'automation:event-run',
+      command: { type: 'start', executor: { kind: 'agent', agentId: 'main' } },
+      actor: { kind: 'system', id: 'automation' },
+      triggerContext: event,
+    });
+
+    expect(result).toMatchObject({ ok: true, runId: expect.any(String) });
+    if (!result.ok || !result.runId) return;
+    const run = new TaskRunRepository().require(result.runId);
+    expect(run.trigger).toMatchObject({ kind: 'system', context: event });
+    expect(buildTaskRunMessage('Handle the source event', run.trigger)).toContain('"noteId":"note-1"');
+  });
 
   it('grants only the reviewed capability and resumes the blocked task', () => {
     const service = new TaskApplicationService();

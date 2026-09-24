@@ -756,12 +756,13 @@ export class GatewayService {
       ),
       workflowRunService: this.createWorkflowRunService(),
       browserAutomationService: this.browserAutomations,
-      executeTaskCommand: ({ taskId, idempotencyKey, command }) => {
+      executeTaskCommand: ({ taskId, idempotencyKey, command, triggerEvent }) => {
         const task = new TaskRepository().get(taskId);
         if (!task) return { ok: false, reason: 'not_found' };
         const result = new TaskApplicationService().execute({
           taskId, idempotencyKey, expectedVersion: task.version, command,
           actor: { kind: 'system', id: 'automation' },
+          ...(triggerEvent ? { triggerContext: { automationTrigger: triggerEvent } } : {}),
         });
         if (result.ok && result.runId) this.dispatchTaskRuns();
         if (result.ok === false) return { ok: false, reason: result.reason };
@@ -1340,12 +1341,13 @@ export class GatewayService {
       ),
       workflowRunService: this.createWorkflowRunService(),
       browserAutomationService: this.browserAutomations,
-      executeTaskCommand: ({ taskId, idempotencyKey, command }) => {
+      executeTaskCommand: ({ taskId, idempotencyKey, command, triggerEvent }) => {
         const task = new TaskRepository().get(taskId);
         if (!task) return { ok: false, reason: 'not_found' };
         const result = new TaskApplicationService().execute({
           taskId, idempotencyKey, expectedVersion: task.version, command,
           actor: { kind: 'system', id: 'automation' },
+          ...(triggerEvent ? { triggerContext: { automationTrigger: triggerEvent } } : {}),
         });
         if (result.ok && result.runId) this.dispatchTaskRuns();
         if (result.ok === false) return { ok: false, reason: result.reason };
