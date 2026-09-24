@@ -60,6 +60,7 @@ export interface SkillsStorePackageListItem {
   stars?: number;
   /** Short provenance label for the row (e.g. ClawHub). */
   sourceLabel?: string;
+  branding?: { iconUrl: string; iconSha256: string };
   /** Published Connector V1 manifest, present for Store connector listings. */
   connectorManifest?: unknown;
 }
@@ -224,6 +225,7 @@ export interface MarketplacePackageDetail {
   name: string;
   type: string;
   description: string;
+  branding?: { iconUrl: string; iconSha256: string };
   readme: string | null;
   downloads: number;
   author: { username: string; avatarUrl: string | null };
@@ -239,6 +241,7 @@ export interface StoreConnectorPackageDetail {
   name: string;
   type: 'connector';
   description: string;
+  branding?: { iconUrl: string; iconSha256: string };
   latestVersion: {
     version: string;
     manifest: unknown;

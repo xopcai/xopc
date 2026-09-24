@@ -23,6 +23,7 @@ export interface RegistryEntry {
   verified?: boolean;
   homepage?: string;
   author?: string;
+  branding?: { iconUrl: string; iconSha256: string };
 }
 
 export interface ExtensionRegistryFile {
@@ -91,6 +92,7 @@ async function fetchExtensionCatalogFromStore(): Promise<RegistryEntry[] | null>
         description?: string | null;
         latestVersion?: string;
         author?: { username?: string | null };
+        branding?: { iconUrl?: string; iconSha256?: string };
       }>;
     };
     const items = Array.isArray(raw.items) ? raw.items : [];
@@ -106,6 +108,9 @@ async function fetchExtensionCatalogFromStore(): Promise<RegistryEntry[] | null>
         npmPackage: name,
         version: typeof it.latestVersion === 'string' ? it.latestVersion : undefined,
         author,
+        ...(typeof it.branding?.iconUrl === 'string' && typeof it.branding.iconSha256 === 'string'
+          ? { branding: { iconUrl: it.branding.iconUrl, iconSha256: it.branding.iconSha256 } }
+          : {}),
         verified: author === 'xopcai',
       });
     }

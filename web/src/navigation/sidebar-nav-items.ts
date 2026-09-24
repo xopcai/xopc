@@ -1,4 +1,4 @@
-import { Box, CircleDotDashed, FolderKanban, GitBranch, Home, Layers, MonitorPlay, Plug, StickyNote, Users, Zap } from 'lucide-react';
+import { Box, CircleDotDashed, FolderKanban, GitBranch, Home, Layers, MonitorPlay, StickyNote, Zap } from 'lucide-react';
 
 import type { LucideIcon } from '@/features/extensions/extension-nav-icon';
 
@@ -17,7 +17,6 @@ export type NavItem = {
 };
 
 export type BuiltinNavId =
-  | 'builtin:agents'
   | 'builtin:capabilities'
   | 'builtin:localApps'
   | 'builtin:scenes'
@@ -26,8 +25,7 @@ export type BuiltinNavId =
   | 'builtin:automations'
   | 'builtin:browserAutomations'
   | 'builtin:notes'
-  | 'builtin:workflows'
-  | 'builtin:channels';
+  | 'builtin:workflows';
 
 export type BuiltinNavDef = {
   id: BuiltinNavId;
@@ -45,8 +43,6 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:automations', to: '/automations', Icon: Zap },
   { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
   { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
-  { id: 'builtin:agents', to: '/agents', Icon: Users },
-  { id: 'builtin:channels', to: '/channels', Icon: Plug },
   { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
   { id: 'builtin:browserAutomations', to: '/browser-automations', Icon: MonitorPlay },
   { id: 'builtin:localApps', to: '/local-apps', Icon: Box },

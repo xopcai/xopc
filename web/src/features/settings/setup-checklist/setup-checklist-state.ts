@@ -159,9 +159,9 @@ function issuePath(id: string): string | undefined {
   if (id === 'tool-runtimes') return '/settings/runtimes';
   if (id === 'provider-auth') return '/settings/capabilities/models';
   if (id === 'config-health') return '/settings/gateway';
-  if (id === 'state-integrity' || id === 'workspace-status') return '/agents';
+  if (id === 'state-integrity' || id === 'workspace-status') return '/capabilities/agents';
   if (id === 'database-schema' || id === 'session-integrity') return '/settings/sessions';
-  if (id === 'channel-config' || id === 'channel-pairing-pending' || id.startsWith('channel:')) return '/channels';
+  if (id === 'channel-config' || id === 'channel-pairing-pending' || id.startsWith('channel:')) return '/capabilities/channels';
   if (id === 'security-audit') return '/settings/gateway';
   if (id === 'gateway-service' || id === 'gateway-health') return '/settings/gateway';
   if (id === 'version-check') return '/settings/desktop-app';
