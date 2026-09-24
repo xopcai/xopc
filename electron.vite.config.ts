@@ -28,9 +28,9 @@ export default defineConfig({
       // scripts/electron-runtime-externals.mjs). Main-process deps (zod, pino, dotenv, …) must
       // be bundled — electron-vite defaults to externalizeDeps=true which leaves bare imports.
       externalizeDeps: false,
-      // electron-vite leaves main/preload unminified by default (~907KB readable JS for 25k+ lines).
-      // Node-side bundles don't need a debuggable shape in production; esbuild minify halves it.
-      minify: 'esbuild',
+      // Rolldown 1.0.3 corrupts its generated CommonJS shim when Vite post-minifies this bundle.
+      // electron-builder still compresses the packaged artifact, so keep the main output valid.
+      minify: false,
       rollupOptions: {
         // IMPORTANT: In the Electron main process, `electron` is a runtime-provided module.
         // If Rollup resolves it to the npm package `electron`, the bundle will include
