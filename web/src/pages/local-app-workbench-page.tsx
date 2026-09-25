@@ -55,6 +55,7 @@ import {
   type LocalAppCriteriaScenarioResult,
   type LocalAppRuntimeIssue,
 } from '@/features/local-apps/runtime-health';
+import { displayLocalAppIdea } from '@/features/local-apps/display';
 import { attachLocalAppPreviewChannel } from '@/features/local-apps/preview-channel';
 import {
   AcceptanceScenarioList,
@@ -583,9 +584,9 @@ export function LocalAppWorkbenchPage() {
 
   return (
     <div className="grid min-h-0 flex-1 gap-3 overflow-hidden bg-surface-panel p-3 lg:grid-cols-[280px_minmax(0,1fr)_300px]">
-      <aside className="min-h-0 overflow-y-auto rounded-xl border border-edge-subtle bg-surface-base p-4 shadow-surface">
+      <aside className="min-h-0 min-w-0 overflow-y-auto rounded-xl border border-edge-subtle bg-surface-base p-4 shadow-surface">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-accent"><Sparkles className="size-4" />{zh ? '创作对话' : 'Build conversation'}</div>
-        <div className="mt-4 rounded-xl bg-surface-panel p-3 text-sm leading-6 text-fg">{app.idea}</div>
+        <div className="mt-4 min-w-0 rounded-xl bg-surface-panel p-3 text-sm leading-6 text-fg [overflow-wrap:anywhere]">{displayLocalAppIdea(app.idea, app.name)}</div>
         <div className="mt-4 rounded-xl bg-accent-soft p-3">
           <p className="flex items-center gap-2 text-sm font-medium text-accent-fg"><CircleCheck className="size-4" />{zh ? '草稿已准备好' : 'Draft is ready'}</p>
           <p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '继续迭代会进入对应 Project，由 Coder 读取应用上下文和专属 skill。' : 'Continue in the Project where Coder has the app context and dedicated skill.'}</p>

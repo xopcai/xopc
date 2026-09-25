@@ -1,5 +1,24 @@
+const TRANSIENT_PROVIDER_ERROR_SUBSTRINGS = [
+  'fetch failed',
+  'econnreset',
+  'econnrefused',
+  'enotfound',
+  'socket hang up',
+  'getaddrinfo',
+  'networkerror',
+  'etimedout',
+  'certificate',
+  'ssl',
+  'tls',
+  'provider_error',
+  'bad gateway',
+  'service unavailable',
+  'gateway timeout',
+];
+
 /** Extract visible text from a provider assistant message. */
 export function extractAssistantText(content: unknown): string {
+  if (typeof content === 'string') return content.trim();
   if (!Array.isArray(content)) return '';
   const text: string[] = [];
   const thinking: string[] = [];
@@ -13,6 +32,13 @@ export function extractAssistantText(content: unknown): string {
     }
   }
   return text.join('').trim() || thinking.join('').trim();
+}
+
+/** True when retrying a model request may recover from a transport or upstream 5xx failure. */
+export function isTransientProviderErrorMessage(message: string): boolean {
+  const lower = message.toLowerCase();
+  return TRANSIENT_PROVIDER_ERROR_SUBSTRINGS.some((value) => lower.includes(value))
+    || /(?:^|\D)(?:500|502|503|504)(?:\D|$)/.test(lower);
 }
 
 export function stripCodeFences(raw: string): string {

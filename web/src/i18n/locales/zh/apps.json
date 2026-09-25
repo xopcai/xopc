@@ -40,6 +40,8 @@
     "builtinToggleDisable": "停用",
     "builtinToggleBusy": "保存中…",
     "builtinToggleFailed": "无法更新内置扩展。",
+    "extensionToggleFailed": "无法更新扩展。",
+    "extensionUninstallConfirm": "确认卸载此扩展？扩展文件将从磁盘删除；若仍在运行，请重启网关。",
     "builtinToggleRestartHint": "请重启网关后扩展代码才会完整加载或卸载。",
     "backendOnlyHint": "该扩展无网关控制台界面；启用后工具与钩子仍会运行。",
     "badgePages": "{{count}} 个页面",

@@ -39,7 +39,9 @@ describe('platform voice protocol', () => {
       if (event.type === 'session.update') socket.send(JSON.stringify({type:'session.updated', session:{output_sample_rate:24000}}));
       if (event.type === 'input_text_buffer.commit') socket.send(JSON.stringify({type:'response.done'}));
       if (event.type === 'session.finish') {
+        socket.send(JSON.stringify({type:'response.audio.delta', delta:''}));
         socket.send(JSON.stringify({type:'response.audio.delta', delta:Buffer.alloc(960,1).toString('base64')}));
+        socket.send(JSON.stringify({type:'response.audio.delta', delta:''}));
         socket.send(JSON.stringify({type:'session.finished'}));
       }
     }));
@@ -47,6 +49,23 @@ describe('platform voice protocol', () => {
     const reader = result.audioStream.getReader();
     expect((await reader.read()).value?.length).toBe(960); expect((await reader.read()).done).toBe(true);
     expect(received).toEqual([{type:'session.update',session:{voice:'vendor-independent'}},{type:'input_text_buffer.append',text:'你好'},{type:'input_text_buffer.commit'},{type:'session.finish'}]);
+    await result.release?.();
+  });
+  it('finishes normally when the provider closes after audio done', async () => {
+    const {server:s, url} = await server();
+    s.on('connection', socket => socket.on('message', raw => {
+      const event = JSON.parse(raw.toString());
+      if (event.type === 'session.update') socket.send(JSON.stringify({type:'session.updated', session:{output_sample_rate:24000}}));
+      if (event.type === 'input_text_buffer.commit') {
+        socket.send(JSON.stringify({type:'response.audio.delta', delta:Buffer.alloc(960,2).toString('base64')}));
+        socket.send(JSON.stringify({type:'response.audio.done'}));
+        socket.close();
+      }
+    }));
+    const result = await openPlatformTts({baseUrl:url,apiKey:'test',voice:'a',text:'hello',signal:new AbortController().signal,timeoutMs:1000});
+    const reader = result.audioStream.getReader();
+    expect((await reader.read()).value?.length).toBe(960);
+    await expect(reader.read()).resolves.toEqual({done:true,value:undefined});
     await result.release?.();
   });
   it('pauses platform audio while a slow consumer drains the bounded stream', async () => {

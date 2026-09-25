@@ -5,7 +5,7 @@
  * Was 350 lines of `GatewayService` covering nine concerns:
  *   - manual `reloadConfig()` (CLI/UI trigger)
  *   - `saveConfig()` / `updateConfig()` (PATCH /api/config)
- *   - `setBundledExtensionActivationTarget` (extension store install)
+ *   - `setExtensionActivationTarget` (extension lifecycle)
  *   - `afterWeixinCredentialsPersisted` / `afterFeishuCredentialsPersisted`
  *     (QR-login follow-ups that bypass the watcher)
  *   - `ConfigHotReloader` (fs.watch → debounced per-section dispatch)
@@ -35,7 +35,7 @@ import { sanitizeTunnelConfig } from '../../tunnel/tunnel-config.js';
 import { getModelRegistry } from '../../providers/index.js';
 import { disposeAllSessionMcpRuntimes } from '../../agent/mcp/bundle-mcp-tools.js';
 import { reloadImageGenerationProviders } from '../../agent/image/generation/provider-registry.js';
-import { computeBundledExtensionExtensionsPatch } from '../../extensions/bundled-extension-activation.js';
+import { computeExtensionActivationPatch } from '../../extensions/bundled-extension-activation.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('GatewayConfigCoordinator');
@@ -152,11 +152,11 @@ export class GatewayConfigCoordinator {
   }
 
   /**
-   * App store (phase 1): persist `extensions.enabled` / `extensions.disabled`
-   * for a bundled extension. Marketplace-only extensions hot-load on enable;
+   * Persist `extensions.enabled` / `extensions.disabled` for a discovered extension.
+   * Extensions hot-load on enable;
    * disable still needs a gateway restart to unload.
    */
-  async setBundledExtensionActivationTarget(
+  async setExtensionActivationTarget(
     extensionId: string,
     wanted: boolean,
   ): Promise<{ ok: boolean; error?: string; requiresGatewayRestart: boolean }> {
@@ -168,7 +168,7 @@ export class GatewayConfigCoordinator {
     if (!id) {
       return { ok: false, error: 'Invalid extension id', requiresGatewayRestart: false };
     }
-    const patch = computeBundledExtensionExtensionsPatch(loader, this.opts.getConfig(), id, wanted);
+    const patch = computeExtensionActivationPatch(loader, this.opts.getConfig(), id, wanted);
     if (patch.ok === false) {
       return { ok: false, error: patch.error, requiresGatewayRestart: false };
     }
@@ -195,7 +195,7 @@ export class GatewayConfigCoordinator {
       }
     }
 
-    this.opts.emit('config.reload', { section: 'extensions', source: 'bundled-activation' });
+    this.opts.emit('config.reload', { section: 'extensions', source: 'extension-activation' });
     return { ok: true, requiresGatewayRestart };
   }
 

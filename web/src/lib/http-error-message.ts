@@ -18,6 +18,7 @@ function isRedundantServerMessage(message: string, status: number, statusText: s
     t === 'too many authentication attempts'
   )) return true;
   if (status === 500 && t === 'internal server error') return true;
+  if (status >= 500 && (t === 'provider request failed' || t === 'provider_error')) return true;
   return false;
 }
 

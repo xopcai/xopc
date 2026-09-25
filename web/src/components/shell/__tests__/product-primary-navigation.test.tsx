@@ -39,8 +39,8 @@ describe('product primary navigation', () => {
     const links = [...container.querySelectorAll('a')];
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/',
-      '/automations?view=activity',
-      '/capabilities/discover',
+      '/automations',
+      '/capabilities/skills',
       '/local-apps',
     ]);
     expect(links[0]?.getAttribute('aria-current')).toBe('page');
