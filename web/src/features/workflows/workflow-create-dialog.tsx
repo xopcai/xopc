@@ -22,7 +22,7 @@ import { Link, useBeforeUnload, useBlocker } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
-import { TabCompletionInput, TabCompletionTextarea } from '@/components/ui/tab-completion-input';
+import { TabCompletionInput } from '@/components/ui/tab-completion-input';
 import { suggestionFromExample } from '@/components/ui/tab-completion-input.utils';
 import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
@@ -120,7 +120,6 @@ export function WorkflowEditor({
   const [testGoal, setTestGoal] = useState('');
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
-  const [graphRevealed, setGraphRevealed] = useState(Boolean(initialDraft));
   const [validation, setValidation] = useState<ValidateWorkflowDefinitionResponse | null>(null);
   const [draftStatus, setDraftStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [currentRevision, setCurrentRevision] = useState(0);
@@ -173,7 +172,6 @@ export function WorkflowEditor({
     setSelectedNodeId(initialDraft?.graph.nodes.find((node) => node.kind === 'agent')?.id ?? 'agent-1');
     setAiPrompt(initialDraft?.repairPrompt ?? '');
     setGenerationError(null);
-    setGraphRevealed(Boolean(initialDraft));
     setTestGoal('');
     setValidation(null);
     setCurrentRevision(initialDraft?.baseRevision ?? 0);
@@ -471,26 +469,24 @@ export function WorkflowEditor({
               <h1 className="text-base font-semibold text-fg">{initialDraft?.mode === 'edit' ? copy.editTitle : copy.createTitle}</h1>
               <p className="mt-0.5 text-xs text-fg-muted">{copy.subtitle}</p>
             </div>
-            {graphRevealed ? (
-              <div className="flex rounded-lg bg-surface-base p-1" role="tablist" aria-label={language === 'zh' ? '工作流编辑视图' : 'Workflow editor view'}>
-                {(['canvas', 'source'] as const).map((view) => (
-                  <button
-                    key={view}
-                    type="button"
-                    role="tab"
-                    aria-selected={editorView === view}
-                    disabled={view === 'canvas' && Boolean(sourceError)}
-                    className={cn(
-                      'rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50',
-                      editorView === view ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg',
-                    )}
-                    onClick={() => changeEditorView(view)}
-                  >
-                    {view === 'canvas' ? (language === 'zh' ? '画布' : 'Canvas') : (language === 'zh' ? '源码' : 'Source')}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            <div className="flex rounded-lg bg-surface-base p-1" role="tablist" aria-label={language === 'zh' ? '工作流编辑视图' : 'Workflow editor view'}>
+              {(['canvas', 'source'] as const).map((view) => (
+                <button
+                  key={view}
+                  type="button"
+                  role="tab"
+                  aria-selected={editorView === view}
+                  disabled={view === 'canvas' && Boolean(sourceError)}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50',
+                    editorView === view ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg',
+                  )}
+                  onClick={() => changeEditorView(view)}
+                >
+                  {view === 'canvas' ? (language === 'zh' ? '画布' : 'Canvas') : (language === 'zh' ? '源码' : 'Source')}
+                </button>
+              ))}
+            </div>
             <span className={cn('text-xs', draftStatus === 'error' ? 'text-danger' : 'text-fg-subtle')}>
               {draftStatus === 'saving' ? copy.savingDraft : draftStatus === 'saved' ? copy.savedDraft : draftStatus === 'error' ? copy.draftError : ''}
             </span>
@@ -542,16 +538,6 @@ export function WorkflowEditor({
             </div>
           ) : null}
 
-          {!graphRevealed ? (
-            <ChatFirstStart
-              copy={copy}
-              prompt={aiPrompt}
-              generating={generating}
-              onPromptChange={setAiPrompt}
-              onGenerate={() => void generate()}
-              onManual={() => setGraphRevealed(true)}
-            />
-          ) : <>
           {editorView === 'source' ? (
             <div className="flex min-h-0 flex-1 items-start overflow-y-auto bg-surface-base p-4">
               <WorkflowSourcePanel
@@ -690,57 +676,8 @@ export function WorkflowEditor({
               </div>
             </div>
           </footer>
-          </>}
           <WorkflowSourceDiffDialog comparison={sourceComparison} language={language} onClose={() => setSourceComparison(null)} />
     </main>
-  );
-}
-
-function ChatFirstStart({
-  copy,
-  prompt,
-  generating,
-  onPromptChange,
-  onGenerate,
-  onManual,
-}: {
-  copy: ReturnType<typeof studioCopy>;
-  prompt: string;
-  generating: boolean;
-  onPromptChange: (value: string) => void;
-  onGenerate: () => void;
-  onManual: () => void;
-}) {
-  return (
-    <section className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto bg-surface-base px-5 py-10">
-      <div className="w-full max-w-2xl">
-        <div className="flex size-11 items-center justify-center rounded-2xl bg-accent-soft text-accent-fg"><Sparkles className="size-5" /></div>
-        <h2 className="mt-5 text-2xl font-semibold text-fg">{copy.introTitle}</h2>
-        <p className="mt-2 text-sm leading-6 text-fg-muted">{copy.introDescription}</p>
-        <TabCompletionTextarea
-          value={prompt}
-          onChange={(event) => onPromptChange(event.target.value)}
-          suggestion={suggestionFromExample(copy.introPlaceholder)}
-          onAcceptSuggestion={onPromptChange}
-          placeholder={copy.introPlaceholder}
-          className={`${fieldClass} mt-6 h-auto min-h-32 resize-y py-3 text-base leading-6`}
-        />
-        <div className="mt-3 flex flex-wrap gap-2">
-          {copy.examples.map((example) => (
-            <button key={example} type="button" className="rounded-full border border-edge bg-surface-panel px-3 py-1.5 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg" onClick={() => onPromptChange(example)}>
-              {example}
-            </button>
-          ))}
-        </div>
-        <div className="mt-6 flex flex-wrap items-center gap-3">
-          <Button variant="primary" disabled={!prompt.trim() || generating} onClick={onGenerate}>
-            <Sparkles className="size-4" />
-            {generating ? copy.designing : copy.designWorkflow}
-          </Button>
-          <Button variant="ghost" onClick={onManual}>{copy.manualStart}</Button>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -824,8 +761,8 @@ function nodeKindLabel(kind: WorkflowNodeKind): string { return ({ input: 'User 
 function studioCopy(language: StoredLanguage) {
   const zh = language === 'zh';
   return zh ? {
-    untitled: '未命名工作流', editTitle: '编辑工作流', createTitle: '创建工作流', subtitle: '描述目标、确认方案，然后用示例测试。无需编写代码。', close: '关闭', savingDraft: '正在保存草稿…', savedDraft: '草稿已保存', draftError: '草稿保存失败', generationError: '无法进入工作流对话', dismissError: '关闭错误提示', flowTitle: '工作流步骤图', flowAria: '可编辑的工作流步骤图', stepCount: (count: number) => `${count} 个步骤 · 点击步骤可编辑`, emptyFlow: '还没有步骤。添加一个 AI 步骤开始设计。', addAgent: '添加 AI 步骤', addDecision: '添加判断', addMerge: '合并结果', canvasHint: '拖动步骤并连接圆点', workflowName: '内部名称', humanTitle: '用户看到的名称', task: '这个工作流最终帮用户得到什么？', versions: '版本记录', currentVersion: '当前', restore: '恢复为新版本', restoring: '恢复中…', selectNode: '选择一个步骤来编辑', needsAttention: '发布前需要处理', stepSettings: '步骤设置', remove: '删除', stepName: '步骤名称', stepPurpose: '这一步的作用', instructions: '告诉 AI 要做什么', advanced: '高级设置', model: '模型（可选）', defaultModel: '使用智能默认值', valuePath: '要检查的值', condition: '判断条件', exists: '存在', equals: '等于', notEquals: '不等于', contains: '包含', compareValue: '比较值', combineAs: '合并方式', namedResults: '按步骤名称组织', listResults: '按列表组织', summaryTemplate: '结果摘要（可选）', autoSummary: '留空则自动生成', aiPlaceholder: '例如：增加一个风险评审步骤，并与方案分析并行', designing: '正在进入对话…', applyWithAi: '在对话中修改', testGoal: '用什么例子测试？', publish: '保存', publishAndRun: '保存并测试', introTitle: '你希望这个工作流持续帮你完成什么？', introDescription: '直接描述最终目标，接下来在普通对话里一起完善并确认。', introPlaceholder: '例如：每周整理项目进展，识别风险，并生成一份可以发给团队的周报。', examples: ['研究一个主题并给出可靠结论', '评审需求并生成实现计划', '分析问题、定位原因并给出修复建议'], designWorkflow: '开始对话创建', manualStart: '高级：手动搭建',
+    untitled: '未命名工作流', editTitle: '编辑工作流', createTitle: '手动创建工作流', subtitle: '高级模式：直接配置步骤、连接、输入和输出。', close: '关闭', savingDraft: '正在保存草稿…', savedDraft: '草稿已保存', draftError: '草稿保存失败', generationError: '无法进入工作流对话', dismissError: '关闭错误提示', flowTitle: '工作流步骤图', flowAria: '可编辑的工作流步骤图', stepCount: (count: number) => `${count} 个步骤 · 点击步骤可编辑`, emptyFlow: '还没有步骤。添加一个 AI 步骤开始设计。', addAgent: '添加 AI 步骤', addDecision: '添加判断', addMerge: '合并结果', canvasHint: '拖动步骤并连接圆点', workflowName: '内部名称', humanTitle: '用户看到的名称', task: '这个工作流最终帮用户得到什么？', versions: '版本记录', currentVersion: '当前', restore: '恢复为新版本', restoring: '恢复中…', selectNode: '选择一个步骤来编辑', needsAttention: '发布前需要处理', stepSettings: '步骤设置', remove: '删除', stepName: '步骤名称', stepPurpose: '这一步的作用', instructions: '告诉 AI 要做什么', advanced: '高级设置', model: '模型（可选）', defaultModel: '使用智能默认值', valuePath: '要检查的值', condition: '判断条件', exists: '存在', equals: '等于', notEquals: '不等于', contains: '包含', compareValue: '比较值', combineAs: '合并方式', namedResults: '按步骤名称组织', listResults: '按列表组织', summaryTemplate: '结果摘要（可选）', autoSummary: '留空则自动生成', aiPlaceholder: '例如：增加一个风险评审步骤，并与方案分析并行', designing: '正在进入对话…', applyWithAi: '在对话中修改', testGoal: '用什么例子测试？', publish: '保存', publishAndRun: '保存并测试',
   } : {
-    untitled: 'Untitled workflow', editTitle: 'Edit workflow', createTitle: 'Create workflow', subtitle: 'Describe the task, review the plan, then test it with an example. No code required.', close: 'Close', savingDraft: 'Saving draft…', savedDraft: 'Draft saved', draftError: 'Draft could not be saved', generationError: 'Could not open the workflow conversation', dismissError: 'Dismiss error', flowTitle: 'Workflow map', flowAria: 'Editable workflow step map', stepCount: (count: number) => `${count} steps · select a step to edit`, emptyFlow: 'No steps yet. Add an AI step to start designing.', addAgent: 'Add AI step', addDecision: 'Add decision', addMerge: 'Combine results', canvasHint: 'Drag steps and connect the dots', workflowName: 'Internal name', humanTitle: 'Name users see', task: 'What will this workflow help the user achieve?', versions: 'Version history', currentVersion: 'Current', restore: 'Restore as new', restoring: 'Restoring…', selectNode: 'Select a step to edit it', needsAttention: 'Needs attention before publishing', stepSettings: 'Step settings', remove: 'Remove', stepName: 'Step name', stepPurpose: 'Purpose of this step', instructions: 'Tell the AI what to do', advanced: 'Advanced settings', model: 'Model (optional)', defaultModel: 'Use smart default', valuePath: 'Value to check', condition: 'Condition', exists: 'Exists', equals: 'Equals', notEquals: 'Does not equal', contains: 'Contains', compareValue: 'Compare with', combineAs: 'Combine as', namedResults: 'Named results', listResults: 'List of results', summaryTemplate: 'Result summary (optional)', autoSummary: 'Leave blank to generate automatically', aiPlaceholder: 'For example: add a risk review in parallel with solution analysis', designing: 'Opening conversation…', applyWithAi: 'Edit in conversation', testGoal: 'What example should we test?', publish: 'Save', publishAndRun: 'Save & test', introTitle: 'What should this workflow keep doing for you?', introDescription: 'Describe the outcome, then refine and confirm it in a normal conversation.', introPlaceholder: 'For example: summarize project progress every week, identify risks, and produce a team-ready update.', examples: ['Research a topic and deliver a reliable conclusion', 'Review a request and produce an implementation plan', 'Analyze an issue, find the cause, and recommend a fix'], designWorkflow: 'Start creating in chat', manualStart: 'Advanced: build manually',
+    untitled: 'Untitled workflow', editTitle: 'Edit workflow', createTitle: 'Build workflow manually', subtitle: 'Advanced mode: configure steps, connections, inputs, and outputs directly.', close: 'Close', savingDraft: 'Saving draft…', savedDraft: 'Draft saved', draftError: 'Draft could not be saved', generationError: 'Could not open the workflow conversation', dismissError: 'Dismiss error', flowTitle: 'Workflow map', flowAria: 'Editable workflow step map', stepCount: (count: number) => `${count} steps · select a step to edit`, emptyFlow: 'No steps yet. Add an AI step to start designing.', addAgent: 'Add AI step', addDecision: 'Add decision', addMerge: 'Combine results', canvasHint: 'Drag steps and connect the dots', workflowName: 'Internal name', humanTitle: 'Name users see', task: 'What will this workflow help the user achieve?', versions: 'Version history', currentVersion: 'Current', restore: 'Restore as new', restoring: 'Restoring…', selectNode: 'Select a step to edit it', needsAttention: 'Needs attention before publishing', stepSettings: 'Step settings', remove: 'Remove', stepName: 'Step name', stepPurpose: 'Purpose of this step', instructions: 'Tell the AI what to do', advanced: 'Advanced settings', model: 'Model (optional)', defaultModel: 'Use smart default', valuePath: 'Value to check', condition: 'Condition', exists: 'Exists', equals: 'Equals', notEquals: 'Does not equal', contains: 'Contains', compareValue: 'Compare with', combineAs: 'Combine as', namedResults: 'Named results', listResults: 'List of results', summaryTemplate: 'Result summary (optional)', autoSummary: 'Leave blank to generate automatically', aiPlaceholder: 'For example: add a risk review in parallel with solution analysis', designing: 'Opening conversation…', applyWithAi: 'Edit in conversation', testGoal: 'What example should we test?', publish: 'Save', publishAndRun: 'Save & test',
   };
 }

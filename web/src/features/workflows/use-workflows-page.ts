@@ -33,6 +33,7 @@ import {
   type WorkflowStatusFilter,
 } from './workflow-page.constants';
 import { workflowChatHref } from './workflow-page.utils';
+import { workflowChatCreateHref } from './workflow-create-navigation';
 import { resolveRunConversationId } from './workflow-board.utils';
 
 export function useWorkflowsPage() {
@@ -133,6 +134,14 @@ export function useWorkflowsPage() {
     return params.size ? `?${params.toString()}` : '';
   }, [ownerAgentId, projectId]);
   const openDefinitionDetails = useCallback((definition: WorkflowDefinition) => navigate(`/workflows/${definition.id}${routeSearch}`), [navigate, routeSearch]);
+  const startWorkflowCreation = useCallback(() => {
+    navigate(workflowChatCreateHref(labels.createWithAssistantPrompt, projectId), {
+      state: ownerAgentId ? { agentId: ownerAgentId } : undefined,
+    });
+  }, [labels.createWithAssistantPrompt, navigate, ownerAgentId, projectId]);
+  const openManualWorkflowCreator = useCallback(() => {
+    navigate(`/workflows/new${routeSearch}`);
+  }, [navigate, routeSearch]);
   const startWorkflow = openDefinitionDetails;
   const openWorkflowEditor = useCallback((definition: WorkflowDefinition) => {
     const params = new URLSearchParams(routeSearch.slice(1));
@@ -205,6 +214,8 @@ export function useWorkflowsPage() {
     projectPresetDefinitionIds: new Set((projectPresetsSwr.data ?? []).map((preset) => preset.definitionId)),
     runs,
     openDefinitionDetails,
+    startWorkflowCreation,
+    openManualWorkflowCreator,
     startWorkflow,
     openWorkflowEditor,
     openRunDetails,
