@@ -1,5 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import * as Popover from '@radix-ui/react-popover';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
@@ -19,12 +20,13 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   X,
   Zap,
 } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -91,6 +93,7 @@ import {
 
 import { automationScenarios, type AutomationTemplate } from './automation-scenarios';
 import { AutomationQuickCreate } from './automation-quick-create';
+import { automationChatCreateHref } from './automation-create-navigation';
 import {
   automationExecutionIssueMarker,
   automationHasExecutionIssue,
@@ -297,6 +300,7 @@ export function AutomationsWorkspace({
   const cronLabels = messageBundle.cron;
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activityView = !embedded && searchParams.get('view') === 'activity';
   const runParam = searchParams.get('run')?.trim() ?? '';
@@ -564,6 +568,7 @@ export function AutomationsWorkspace({
     task_command: ownershipAutomations.filter((automation) => automation.action.kind === 'task_command').length,
     browser_automation: ownershipAutomations.filter((automation) => automation.action.kind === 'browser_automation').length,
   }), [ownershipAutomations]);
+  const appliedFilterCount = Number(filter !== 'all') + Number(sourceFilter !== 'all');
 
   const dismissExecutionIssues = useCallback(() => {
     setDismissedExecutionIssues((current) => {
@@ -649,6 +654,10 @@ export function AutomationsWorkspace({
     setDraftConversationMode('new_session');
     setDraftNotificationPolicy('attention');
   }, [projectIdParam]);
+
+  const openChatCreate = useCallback(() => {
+    navigate(automationChatCreateHref(labels.createWithAssistantPrompt, projectIdParam));
+  }, [labels.createWithAssistantPrompt, navigate, projectIdParam]);
 
   const selectTemplate = (template: AutomationTemplate) => {
     setQuickTemplate(template);
@@ -998,13 +1007,53 @@ export function AutomationsWorkspace({
     () => (
       <div className="flex items-center gap-2">
         <RefreshButton className="size-9 shrink-0 p-0" loading={refreshBusy} label={labels.refresh} onClick={refreshNow} />
-        <Button variant="primary" onClick={() => openCreate('draft')}>
-          <Plus className="size-4" />
-          {labels.new}
-        </Button>
+        <div className="inline-flex h-9 shrink-0" role="group" aria-label={labels.createOptions}>
+          <Button
+            variant="primary"
+            className="h-9 rounded-r-none pr-2.5"
+            onClick={openChatCreate}
+          >
+            <Plus className="size-4" aria-hidden />
+            {labels.create}
+          </Button>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <Button
+                variant="primary"
+                className="h-9 w-9 rounded-l-none border-l border-white/20 px-0"
+                aria-label={labels.createOptions}
+                title={labels.createOptions}
+              >
+                <ChevronDown className="size-4" aria-hidden />
+              </Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={6}
+                className="z-70 min-w-52 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover"
+              >
+                <DropdownMenu.Item
+                  className="touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover"
+                  onSelect={openChatCreate}
+                >
+                  <MessageCircle className="size-4 text-fg-muted" aria-hidden />
+                  {labels.createWithAssistant}
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  className="touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover"
+                  onSelect={() => openCreate('blank')}
+                >
+                  <Pencil className="size-4 text-fg-muted" aria-hidden />
+                  {labels.setUpManually}
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        </div>
       </div>
     ),
-    [labels.new, labels.refresh, openCreate, refreshBusy, refreshNow],
+    [labels.create, labels.createOptions, labels.createWithAssistant, labels.refresh, labels.setUpManually, openChatCreate, openCreate, refreshBusy, refreshNow],
   );
 
   useLayoutEffect(() => {
@@ -1128,16 +1177,103 @@ export function AutomationsWorkspace({
                     ))}
                   </Select>
                 ) : null}
-                <label className={cn('flex items-center gap-2 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg-muted focus-within:border-accent', !projectLocked && 'mt-2')}>
-                  <Search className="size-4 shrink-0" aria-hidden />
-                  <input
-                    className="min-w-0 flex-1 bg-transparent text-fg outline-none placeholder:text-fg-subtle"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder={labels.filters.search}
-                    aria-label={labels.filters.search}
-                  />
-                </label>
+                <div className={cn('flex items-center gap-2', !projectLocked && 'mt-2')}>
+                  <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg-muted focus-within:border-accent">
+                    <Search className="size-4 shrink-0" aria-hidden />
+                    <input
+                      className="min-w-0 flex-1 bg-transparent text-fg outline-none placeholder:text-fg-subtle"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder={labels.filters.search}
+                      aria-label={labels.filters.search}
+                    />
+                  </label>
+                  <Popover.Root>
+                    <Popover.Trigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-3 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                          appliedFilterCount > 0 && 'border-accent/40 bg-accent/8 text-accent-fg',
+                        )}
+                        aria-label={labels.filters.more}
+                      >
+                        <SlidersHorizontal className="size-4" aria-hidden />
+                        <span>{labels.filters.more}</span>
+                        {appliedFilterCount > 0 ? (
+                          <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] leading-5 text-on-accent">
+                            {appliedFilterCount}
+                          </span>
+                        ) : null}
+                      </button>
+                    </Popover.Trigger>
+                    <Popover.Portal>
+                      <Popover.Content
+                        align="end"
+                        sideOffset={6}
+                        className="z-[90] w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-overlay p-3 shadow-popover outline-none"
+                      >
+                        <div className="text-xs font-medium text-fg-muted">{labels.filters.status}</div>
+                        <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label={labels.filters.status}>
+                          {([
+                            { id: 'all' as const, label: labels.filters.all },
+                            { id: 'active' as const, label: labels.filters.active },
+                            { id: 'running' as const, label: labels.metrics.running },
+                            { id: 'paused' as const, label: labels.paused },
+                            { id: 'attention' as const, label: labels.experience.executionIssues },
+                          ]).map((item) => (
+                            <button
+                              type="button"
+                              key={item.id}
+                              className={cn(
+                                'rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg',
+                                filter === item.id && 'bg-surface-active text-fg',
+                              )}
+                              onClick={() => setFilter(item.id)}
+                              aria-pressed={filter === item.id}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="mt-3 border-t border-edge-subtle pt-3">
+                          <div className="text-xs font-medium text-fg-muted">{labels.filters.executor}</div>
+                          <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label={labels.filters.executor}>
+                            {([
+                              { id: 'all' as const, label: labels.filters.allSources, icon: Zap },
+                              { id: 'agent' as const, label: labels.sources.agent, icon: Sparkles },
+                              { id: 'workflow' as const, label: labels.sources.workflow, icon: GitBranch },
+                              { id: 'task_command' as const, label: labels.sources.task, icon: CheckCircle2 },
+                              { id: 'browser_automation' as const, label: labels.sources.browser, icon: ListTree },
+                            ]).map((item) => (
+                              <button
+                                type="button"
+                                key={item.id}
+                                className={cn(
+                                  'flex min-h-8 items-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg',
+                                  sourceFilter === item.id && 'border-edge bg-surface-active text-fg',
+                                )}
+                                onClick={() => setSourceFilter(item.id)}
+                                aria-pressed={sourceFilter === item.id}
+                              >
+                                <item.icon className="size-3.5" aria-hidden />
+                                <span>{item.label}</span>
+                                <span className="text-fg-subtle">{sourceCounts[item.id]}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {appliedFilterCount > 0 ? (
+                          <div className="mt-3 flex justify-end border-t border-edge-subtle pt-3">
+                            <button type="button" className="text-xs font-medium text-accent-fg hover:underline" onClick={clearListFilters}>
+                              {labels.filters.clear}
+                            </button>
+                          </div>
+                        ) : null}
+                      </Popover.Content>
+                    </Popover.Portal>
+                  </Popover.Root>
+                </div>
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <span className="text-xs font-medium text-fg-muted">{labels.filters.ownership}</span>
                   <div className="flex rounded-lg bg-surface-panel p-0.5" role="group" aria-label={labels.filters.ownership}>
@@ -1157,55 +1293,6 @@ export function AutomationsWorkspace({
                     >
                       {labels.system.title} · {systemAutomations.length}
                     </button>
-                  </div>
-                </div>
-                <nav className="mt-3 flex flex-wrap items-center gap-1" aria-label={labels.filters.status}>
-                  {([
-                    { id: 'all' as const, label: labels.filters.all },
-                    { id: 'active' as const, label: labels.filters.active },
-                    { id: 'running' as const, label: labels.metrics.running },
-                    { id: 'paused' as const, label: labels.paused },
-                    { id: 'attention' as const, label: labels.experience.executionIssues },
-                  ]).map((item) => (
-                    <button
-                      type="button"
-                      key={item.id}
-                      className={cn(
-                        'rounded-md px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg',
-                        filter === item.id && 'bg-surface-hover text-fg',
-                      )}
-                      onClick={() => setFilter(item.id)}
-                      aria-pressed={filter === item.id}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </nav>
-                <div className="mt-3 border-t border-edge-subtle pt-3">
-                  <div className="mb-2 text-xs font-medium text-fg-muted">{labels.filters.executor}</div>
-                  <div className="flex flex-wrap gap-1" role="group" aria-label={labels.filters.executor}>
-                    {([
-                      { id: 'all' as const, label: labels.filters.allSources, icon: Zap },
-                      { id: 'agent' as const, label: labels.sources.agent, icon: Sparkles },
-                      { id: 'workflow' as const, label: labels.sources.workflow, icon: GitBranch },
-                      { id: 'task_command' as const, label: labels.sources.task, icon: CheckCircle2 },
-                      { id: 'browser_automation' as const, label: labels.sources.browser, icon: ListTree },
-                    ]).map((item) => (
-                      <button
-                        type="button"
-                        key={item.id}
-                        className={cn(
-                          'flex min-h-8 items-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg',
-                          sourceFilter === item.id && 'border-edge bg-surface-hover text-fg',
-                        )}
-                        onClick={() => setSourceFilter(item.id)}
-                        aria-pressed={sourceFilter === item.id}
-                      >
-                        <item.icon className="size-3.5" aria-hidden />
-                        <span>{item.label}</span>
-                        <span className="text-fg-subtle">{sourceCounts[item.id]}</span>
-                      </button>
-                    ))}
                   </div>
                 </div>
                 {unreadRuns.length > 0 && ownership === 'user' ? (

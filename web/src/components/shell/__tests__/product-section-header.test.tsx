@@ -39,15 +39,22 @@ describe('ProductSectionHeader', () => {
     expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Projects');
   });
 
-  it('distinguishes activity and trigger management in the automation header', () => {
+  it('distinguishes activity and automation management in the automation header', () => {
     renderAt('/automations?view=activity');
 
     expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Activity');
-    expect(container.textContent).toContain('Schedules & triggers');
+    expect(container.textContent).toContain('Automations');
   });
 
   it('preserves dedicated conversation chrome', () => {
     renderAt('/chat/example');
+    expect(container.textContent).toBe('Page title');
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
+  });
+
+  it('preserves the extension app header instead of showing capability tabs', () => {
+    renderAt('/extensions/example/dashboard');
+
     expect(container.textContent).toBe('Page title');
     expect(container.querySelector('[role="tablist"]')).toBeNull();
   });
