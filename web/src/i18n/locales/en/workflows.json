@@ -8,6 +8,10 @@
     "needToken": "Connect to the gateway with a token to browse workflows and monitor runs.",
     "refresh": "Refresh",
     "addWorkflow": "New workflow",
+    "createOptions": "Workflow creation options",
+    "createWithAssistant": "Create in chat",
+    "createWithAssistantPrompt": "Let's create a reusable workflow together. Use the built-in workflow-authoring skill. Ask me concise questions to understand the outcome, inputs, steps, required skills or access, and expected result. Build and validate a draft, summarize it clearly, and publish it only after I explicitly confirm.",
+    "setUpManually": "Advanced: build manually",
     "agentFilterAria": "Select agent",
     "pageTabsAria": "Workflow pages",
     "pageTabs": {

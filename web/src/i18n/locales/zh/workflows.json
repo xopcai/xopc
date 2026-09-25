@@ -8,6 +8,10 @@
     "needToken": "请先使用 token 连接网关，才能浏览工作流并监控运行。",
     "refresh": "刷新",
     "addWorkflow": "新建工作流",
+    "createOptions": "工作流创建方式",
+    "createWithAssistant": "通过对话创建",
+    "createWithAssistantPrompt": "我们一起来创建一个可复用的工作流。请使用内置的 workflow-authoring 能力，通过简短提问了解目标、输入、执行步骤、需要的技能或权限以及预期结果；生成并校验草稿，用清晰的方式向我说明，并且只在我明确确认后发布。",
+    "setUpManually": "高级：手动搭建",
     "agentFilterAria": "选择 Agent",
     "pageTabsAria": "工作流页面",
     "pageTabs": {
