@@ -25,6 +25,7 @@ export function automationActionPreview(automation: Automation): string {
     case 'workflow': return automation.action.goal?.trim() || automation.action.workflowId;
     case 'browser_automation': return automation.action.automationId;
     case 'task_command': return `${automation.action.taskId} · ${automation.action.command.type}`;
+    case 'system': return automation.action.capability;
   }
 }
 

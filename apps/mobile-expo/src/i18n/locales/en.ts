@@ -1202,7 +1202,7 @@ export const en = {
     noRuns: 'No runs yet.',
     interval: 'Every {{duration}} ms',
     triggerKinds: { manual: 'Manual', webhook: 'Webhook', event: 'Event' },
-    actionKinds: { agent: 'Agent instruction', workflow: 'Workflow', browser_automation: 'Browser automation', task_command: 'Task command' },
+    actionKinds: { agent: 'Agent instruction', workflow: 'Workflow', browser_automation: 'Browser automation', task_command: 'Task command', system: 'System capability' },
     conversationModes: { new_session: 'New conversation per run', continuous: 'Continue the conversation' },
   },
 
