@@ -41,5 +41,9 @@ describe('automation presentation', () => {
       ...automation,
       action: { kind: 'browser_automation', automationId: 'collect-title' },
     })).toBe('collect-title');
+    expect(automationActionPreview({
+      ...automation,
+      action: { kind: 'system', capability: 'home.advisor.refresh' },
+    })).toBe('home.advisor.refresh');
   });
 });
