@@ -40,4 +40,57 @@ describe('computer driver download', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('Driver checksum mismatch');
   });
+
+  it('retries transient download failures', () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-driver-retry-test-'));
+    roots.push(root);
+    mkdirSync(join(root, 'scripts'));
+    const script = join(root, 'scripts/setup-computer-driver.mjs');
+    copyFileSync(new URL('../setup-computer-driver.mjs', import.meta.url), script);
+    const preload = join(root, 'mock-fetch.mjs');
+    writeFileSync(preload, `
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      globalThis.setTimeout = (callback) => { callback(); return 0; };
+      let attempts = 0;
+      globalThis.fetch = async () => {
+        attempts += 1;
+        console.log(\`Download attempt \${attempts}\`);
+        if (attempts === 1) throw new TypeError('fetch failed');
+        return { ok: true, arrayBuffer: async () => new ArrayBuffer(0) };
+      };
+    `);
+    const result = spawnSync(process.execPath, ['--import', preload, script], {
+      encoding: 'utf8',
+      env: { ...process.env, GITHUB_TOKEN: '', GH_TOKEN: '' },
+    });
+    expect(result.stdout).toContain('Download attempt 1');
+    expect(result.stdout).toContain('Download attempt 2');
+    expect(result.stderr).toContain('Driver download attempt 1/4 failed');
+    expect(result.stderr).toContain('Driver checksum mismatch');
+  });
+
+  it('does not retry permanent HTTP failures', () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-driver-http-test-'));
+    roots.push(root);
+    mkdirSync(join(root, 'scripts'));
+    const script = join(root, 'scripts/setup-computer-driver.mjs');
+    copyFileSync(new URL('../setup-computer-driver.mjs', import.meta.url), script);
+    const preload = join(root, 'mock-fetch.mjs');
+    writeFileSync(preload, `
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      let attempts = 0;
+      globalThis.fetch = async () => {
+        attempts += 1;
+        console.log(\`Download attempt \${attempts}\`);
+        return { ok: false, status: 404 };
+      };
+    `);
+    const result = spawnSync(process.execPath, ['--import', preload, script], {
+      encoding: 'utf8',
+      env: { ...process.env, GITHUB_TOKEN: '', GH_TOKEN: '' },
+    });
+    expect(result.stdout).toContain('Download attempt 1');
+    expect(result.stdout).not.toContain('Download attempt 2');
+    expect(result.stderr).toContain('Driver download failed: 404');
+  });
 });
