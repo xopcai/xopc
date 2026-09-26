@@ -26,6 +26,7 @@ import { collectMediaUrisFromValues, deleteMediaUris } from '../../media/session
 import { getDistinctSessionChatIds } from './session-chat-ids.js';
 import { performSessionReset, type SessionResetResult } from '../session-reset-service.js';
 import { resolveAgentIdFromConversationId } from '../../routing/agent-session-key.js';
+import type { ActiveExecution } from './active-execution.js';
 
 function clampWindowSpan(value: number | undefined, fallback: number): number {
   const parsed = Math.trunc(value ?? fallback);
@@ -41,6 +42,8 @@ export interface GatewaySessionsApiOptions {
   getActiveWebchatRunId: (conversationId: string) => string | undefined;
   /** Snapshot of all in-flight webchat runs for workspace briefing surfaces. */
   listActiveWebchatRuns: () => Array<{ conversationId: string; runId: string }>;
+  /** Rich in-flight execution snapshot used for shutdown impact policy. */
+  listActiveExecutions: () => ActiveExecution[];
 }
 
 export class GatewaySessionsApi {
@@ -106,6 +109,39 @@ export class GatewaySessionsApi {
 
   listActiveRuns(): Array<{ conversationId: string; runId: string }> {
     return this.opts.listActiveWebchatRuns();
+  }
+
+  async getQuitImpact(): Promise<{
+    shouldConfirm: boolean;
+    blockingCount: number;
+    blockingRuns: Array<ActiveExecution & { title?: string }>;
+    backgroundCount: number;
+    assessedAt: number;
+  }> {
+    const executions = this.opts.listActiveExecutions();
+    const enriched = await Promise.all(executions.map(async (execution) => {
+      const session = await this.getSession(execution.conversationId);
+      const title = session?.name?.trim().slice(0, 120);
+      const triggerSource = typeof session?.customData?.triggerSource === 'string'
+        ? session.customData.triggerSource
+        : undefined;
+      const backgroundSession = session?.sessionType === 'cron'
+        || session?.sessionType === 'heartbeat'
+        || triggerSource === 'automation';
+      return { execution, title, backgroundSession };
+    }));
+    const blockingRuns = enriched
+      .filter(({ execution, backgroundSession }) => (
+        execution.initiator === 'user' && execution.phase === 'running' && !backgroundSession
+      ))
+      .map(({ execution, title }) => ({ ...execution, ...(title ? { title } : {}) }));
+    return {
+      shouldConfirm: blockingRuns.length > 0,
+      blockingCount: blockingRuns.length,
+      blockingRuns,
+      backgroundCount: executions.length - blockingRuns.length,
+      assessedAt: Date.now(),
+    };
   }
 
   getMessagePage(

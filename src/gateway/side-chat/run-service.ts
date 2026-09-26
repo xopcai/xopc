@@ -134,6 +134,7 @@ export class SideChatRunService {
         run.runId,
         (event: ClarificationStreamEvent) => publishMapped(event),
         {
+          kind: 'side-chat',
           beforeClarificationResponse: () => {
             try {
               this.options.manager.setStatus(run.sideChatId, run.clientInstanceId, 'running');

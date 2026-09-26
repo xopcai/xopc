@@ -127,6 +127,36 @@ export function listActiveSessionInputRuns(): Array<{ conversationId: string; ru
   return rows.map((row) => ({ conversationId: row.conversation_id, runId: row.active_run_id }));
 }
 
+/** Durable active runs with the claimed input metadata needed by runtime policy surfaces. */
+export function listActiveSessionInputExecutions(): Array<{
+  conversationId: string;
+  runId: string;
+  origin: TurnOrigin;
+  taskRunId?: string;
+  startedAt: number;
+}> {
+  const rows = getSqliteDatabase().prepare(`SELECT runtime.conversation_id, runtime.active_run_id,
+      input.origin_json, input.task_run_id, input.updated_at_ms
+    FROM session_input_runtime runtime
+    LEFT JOIN session_inputs input ON input.id = runtime.active_input_id
+    WHERE runtime.active_run_id IS NOT NULL`).all() as Array<{
+      conversation_id: string;
+      active_run_id: string;
+      origin_json: string | null;
+      task_run_id: string | null;
+      updated_at_ms: number | null;
+    }>;
+  return rows.map((row) => ({
+    conversationId: row.conversation_id,
+    runId: row.active_run_id,
+    origin: row.origin_json
+      ? turnOriginSchema.parse(JSON.parse(row.origin_json))
+      : { type: 'system', source: 'internal' },
+    ...(row.task_run_id ? { taskRunId: row.task_run_id } : {}),
+    startedAt: row.updated_at_ms ?? Date.now(),
+  }));
+}
+
 export function findSessionInput(conversationId: string, clientMessageId: string): SessionInput | undefined {
   const row = getSqliteDatabase().prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND client_message_id = ?`)
     .get(conversationId, clientMessageId) as InputRow | undefined;

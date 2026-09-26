@@ -14,6 +14,7 @@ import {
   finishSessionInputRun,
   getSessionInputState,
   insertSessionInput,
+  listActiveSessionInputExecutions,
   listActiveSessionInputRuns,
   loadTranscriptRowsForSession,
   mutateQueuedSessionInput,
@@ -56,6 +57,9 @@ describe('session input repository', () => {
     expect(retry.id).toBe(first.id);
     expect(claimNextSessionInput(conversationId, 'run-1')?.id).toBe('server-1');
     expect(listActiveSessionInputRuns()).toEqual([{ conversationId, runId: 'run-1' }]);
+    expect(listActiveSessionInputExecutions()).toEqual([
+      expect.objectContaining({ conversationId, runId: 'run-1', origin }),
+    ]);
     expect(claimNextSessionInput(conversationId, 'run-overlap')).toBeUndefined();
     expect(finishSessionInputRun(conversationId, 'run-1', 'completed')).toBe(true);
     expect(listActiveSessionInputRuns()).toEqual([]);
