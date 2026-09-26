@@ -75,7 +75,10 @@ export struct XopcChatMessageContent {
           }
         }).key((block: XopcChatBlock): string => block.id)
         if (!this.body.length && !this.row.blocks && this.row.text) { XopcMarkdownView({ content: this.row.text, conversationId: this.conversationId }) }
-        if (this.row.live && !this.row.text && !this.row.blocks?.length) { Text(this.row.progress || $r('app.string.chat_thinking')).fontSize(13).fontColor(this.colors.secondary) }
+        if (this.row.live && !this.row.text && !this.row.blocks?.length) {
+          Text(this.row.progress || $r('app.string.chat_thinking')).fontSize(13).fontColor(this.colors.secondary)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '100%' })
+        }
       } else if (this.row.role === 'user') {
         if (this.row.text) { Text(this.row.text).fontSize(16).lineHeight(25).fontColor(this.colors.foreground).copyOption(CopyOptions.InApp) }
       } else {

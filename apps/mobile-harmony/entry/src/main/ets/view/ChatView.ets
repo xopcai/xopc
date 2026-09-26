@@ -345,6 +345,7 @@ export struct XopcChatView {
   }
 
   private assistantBubbleWidth(row: XopcChatRow): string {
+    if (row.live && !row.text && !row.blocks?.length) return this.textBubbleWidth(row.progress || '', 132, 272);
     const richBlock = (row.blocks || []).some((block: XopcChatBlock): boolean => block.kind !== 'text');
     if (richBlock || (row.media?.length || 0) > 0 || (row.refs?.length || 0) > 0
       || (row.toolCalls?.length || 0) > 0 || !!row.outcome) return '90%';
