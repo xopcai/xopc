@@ -152,7 +152,12 @@ function StandardInstallConnectorDialog({
       }
       if (selectedAuthConfigId) config.authConfigId = selectedAuthConfigId;
       const instance = draft.store
-        ? await installStoreConnector(draft.store.packageName, { secrets: draft.secrets, config }, draft.store.version)
+        ? await installStoreConnector(
+          draft.store.packageName,
+          { secrets: draft.secrets, config },
+          draft.store.version,
+          draft.store.reviewHash,
+        )
         : await installConnector(connector.id, { secrets: draft.secrets, config, definition: connector.source === 'registry' ? connector : undefined });
       let health: ConnectorHealthResult | null = null;
       try {

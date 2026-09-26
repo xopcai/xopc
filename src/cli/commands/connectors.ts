@@ -90,7 +90,7 @@ function createConnectorsCommand(ctx: CLIContext): Command {
           secrets: parsePairs(options.secret, '--secret'),
           config: parsePairs(options.configValue, '--config-value'),
         };
-        const { instance } = await installStoreConnector(config, packageName, input, options.version);
+        const { instance } = await installStoreConnector(config, packageName, input, options.version, plan.reviewHash);
         await saveConfig(config, ctx.configPath);
         console.log(`Installed ${instance.displayName} (${instance.instanceId}).`);
       } catch (error) {

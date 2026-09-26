@@ -96,6 +96,10 @@ export type ConnectorDefinition = {
     preferred: boolean;
     alternative?: { kind: 'channel' | 'connector'; id: string };
   };
+  provenance?: {
+    packageName: string;
+    sha256: string;
+  };
 };
 
 export type StoreConnectorCatalogItem = {
@@ -125,6 +129,7 @@ export type StoreConnectorInstallPlan = {
   definition: ConnectorDefinition;
   permissions: StoreConnectorPermissions;
   requiresRestart: false;
+  reviewHash: string;
 };
 
 export type ConnectorHealthStatus =
@@ -435,10 +440,11 @@ export async function installStoreConnector(
   packageName: string,
   input: Omit<ConnectorInstallInput, 'definition'>,
   version?: string,
+  reviewHash?: string,
 ): Promise<ConnectorInstance> {
   const response = await fetchJson<ApiEnvelope<{ instance: ConnectorInstance }>>(
     apiUrl(`/api/capabilities/connectors/${encodeURIComponent(packageName)}/install`),
-    { method: 'POST', body: JSON.stringify({ ...input, version }) },
+    { method: 'POST', body: JSON.stringify({ ...input, version, reviewHash }) },
   );
   void revalidateGatewayConfig();
   return requirePayload(response, 'Could not install Store connector.').instance;

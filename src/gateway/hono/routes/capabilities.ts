@@ -63,7 +63,15 @@ export function registerCapabilityRoutes(authenticated: Hono, deps: Authenticate
     try {
       const { instance, plan } = await persistConfigMutation({
         config,
-        mutate: () => installStoreConnector(config, c.req.param('name'), input, optionalVersion(body)),
+        mutate: () => installStoreConnector(
+          config,
+          c.req.param('name'),
+          input,
+          optionalVersion(body),
+          typeof (body as Record<string, unknown>).reviewHash === 'string'
+            ? (body as Record<string, unknown>).reviewHash as string
+            : undefined,
+        ),
         save: () => service.saveConfig(config),
       });
       return c.json({ ok: true, payload: { instance, plan } });

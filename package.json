@@ -159,7 +159,7 @@
     "node": ">=22.22.3"
   },
   "dependencies": {
-    "@composio/core": "0.18.1",
+    "@composio/core": "0.21.0",
     "@earendil-works/pi-agent-core": "0.87.0",
     "@earendil-works/pi-ai": "0.87.0",
     "@earendil-works/pi-coding-agent": "0.87.0",

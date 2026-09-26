@@ -1,14 +1,14 @@
 # xopc 数据库业务域、表模型与关系审计
 
-> 审计日期：2026-09-26  
-> 代码版本：数据库 schema v207（基线 v165 + 166–207 迁移）  
+> 审计日期：2026-09-26<br>
+> 代码版本：数据库 schema v216（基线 v165 + 166–216 迁移）<br>
 > 范围：`src/storage/sqlite/schema.sql`、`src/storage/sqlite/schemas/*.sql`、`src/storage/sqlite/migrations/*.sql` 以及生产代码中的 SQL 读写点。
 
 ## 1. 结论摘要
 
-- 当前最终结构包含 **202 张普通业务/支撑表**、**6 张 FTS5 虚拟表**，另有 **1 张 `schema_meta`**。SQLite 自动生成的 30 张 FTS shadow table 不属于业务模型，不在下文单独列出。
-- 数据模型已经形成 15 个主要业务域：会话、Agent、项目任务、工作流与执行环境、自动化、笔记与讨论、知识与记忆、用户理解、连接器、场景、通知与首页、设备与端点、本地应用、活动关系、工作发现。
-- 关系既有数据库外键，也有大量依赖应用层维护的隐式 ID、JSON 快照和多态引用。最终 schema 中共有 **158 条显式外键边**。
+- 当前最终结构包含 **206 张普通业务/支撑表**、**6 张 FTS5 虚拟表**，另有 **1 张 `schema_meta`**。SQLite 自动生成的 30 张 FTS shadow table 不属于业务模型，不在下文单独列出。
+- 数据模型已经形成 16 个主要业务域：会话、Agent、项目任务、工作流与执行环境、自动化、笔记与讨论、知识与记忆、用户理解、连接器、场景、通知与首页、设备与端点、本地应用、活动关系、工作发现、AI 用量账本。
+- 关系既有数据库外键，也有大量依赖应用层维护的隐式 ID、JSON 快照和多态引用。最终 schema 中共有 **160 条显式外键边**。
 - 高置信度废弃候选是旧文件记忆索引：`memory_files`、`memory_chunks`、`memory_fts`、`memory_relations`。四者在生产代码中均无读写引用；其中 `memory_relations` 还引用了不存在的 `memory_records`，属于确定的 schema 缺陷。
 - 主要设计债务不是“表太多”本身，而是：核心实体间缺少外键、时间字段格式不统一、JSON 完整性约束覆盖率低、同一事实在多处冗余、历史系统退役后仍留有 baseline 定义。
 
@@ -33,14 +33,17 @@ flowchart LR
   Project --> Workflow[工作流与执行环境]
   Workflow --> Session
   Automation[自动化] --> Session
+  Automation --> Usage[AI 用量账本]
   Connector[连接器] --> Knowledge[知识采集]
   Connector --> Scene[场景与主动工作]
   Knowledge --> Understanding[用户理解与上下文]
   Understanding --> Session
+  Session --> Usage
   Notes[笔记与讨论] --> Project
   Notes --> Task[任务执行]
   Scene --> Task
   Scene --> Notify[通知与首页]
+  Scene --> Usage
   Device[设备、端点与网关] --> Session
   Device --> Notify
   App[本地应用与扩展] --> Project
@@ -160,16 +163,20 @@ erDiagram
 
 | 表 | 职责 | 主要关系 |
 |---|---|---|
-| `automations` | 定时/事件自动化定义、动作、安全和通知策略 | project 为隐式关系 |
+| `automations` | 定时/事件自动化定义、动作、安全、管理、可靠性和结果投递策略 | project 为隐式关系；`management_json` 有 JSON 校验，`delivery_json` 尚无数据库校验 |
 | `automation_runs` | 自动化运行快照、租约、取消和结果 | automation/conversation/workflow/root run 均为隐式关系，以保留运行历史 |
 | `automation_run_events` | 自动化运行事件 | run/automation 为隐式关系 |
 | `automation_run_requests` | 启动 run 时的完整 automation 快照 | run 为隐式关系、快照语义 |
 | `automation_deleted_revisions` | 已删除自动化的最后 revision，防止旧写覆盖 | automation 为逻辑墓碑 |
+| `automation_events` | 统一业务事件信封、投影租约、重试和 dead-letter 状态 | subject 多态；correlation/causation/root event 为隐式事件链 |
+| `automation_event_deliveries` | 事件到匹配 automation 的投递、运行与重试状态 | FK → `automation_events`；automation/run 为隐式关系 |
+| `automation_results` | 自动化运行产生的规范化结果信封 | FK → `automation_runs` |
+| `automation_result_deliveries` | 结果到 gateway/webhook 等目的地的投递租约和状态 | FK → `automation_results` |
 | `browser_automations` | 浏览器专用自动化定义与 revision | 独立聚合根 |
 | `browser_automation_runs` | 浏览器自动化运行 | FK → `browser_automations` |
 | `browser_action_audit` | 浏览器动作逐步审计 | FK → `browser_automation_runs` |
 
-主要 TypeScript 模型：`src/automations/domain/types.ts`、`src/automations/storage/`、`src/browser/automations/`。
+主要 TypeScript 模型：`src/automations/domain/types.ts`、`src/automations/events/`、`src/automations/delivery/`、`src/automations/storage/`、`src/browser/automations/`。
 
 ### 4.6 笔记、附件清理与讨论采集
 
@@ -303,7 +310,6 @@ erDiagram
 | `scene_runs` | 有租约和重试的场景运行 | FK → activation、intent |
 | `scene_context_snapshots` | run/lease epoch 的证据快照 | FK → run |
 | `scene_model_reservations` | run 的模型预算预留 | FK → run、activation |
-| `scene_model_usage` | run 的 token/成本记录 | FK → run |
 | `scene_connector_usage` | account 的日请求计数 | account 为隐式关系 |
 | `scene_outcomes` | run 产出的结构化结果 | FK → run |
 | `scene_presentations` | outcome 的展示、过期、撤回和解决状态 | FK → outcome |
@@ -393,7 +399,15 @@ erDiagram
 | `work_understanding_investigations` | discovery 下的外部调查计划、预算和用量 | FK → discovery run |
 | `work_understanding_evidence` | 调查收集到的项目证据 | FK → investigation、source grant、project |
 
-### 4.16 平台可靠性、幂等与迁移
+### 4.16 AI 用量与费用账本
+
+| 表 | 职责 | 主要关系 |
+|---|---|---|
+| `ai_usage_events` | 每次真实模型供应商请求的追加式账本，记录 trace、归属、token、费用快照、状态和有界错误 | conversation/run/agent/parent event 均为隐式历史关系；不保存 prompt、完整响应或附件 |
+
+该表取代各业务域单独维护模型费用的做法，包含聊天、任务、自动化、Scene 和一次性生成。主要 TypeScript 模型：`src/usage/types.ts`、`src/storage/sqlite/ai-usage-repository.ts`；详细设计见 `docs/design/ai-usage-ledger-technical-design.md`。
+
+### 4.17 平台可靠性、幂等与迁移
 
 | 表 | 职责 | 主要关系 |
 |---|---|---|
@@ -413,10 +427,12 @@ erDiagram
 | 任务 | 会话 | `task_runs`、`task_sessions`、handoff | 多数有 FK |
 | 工作流 | 任务 | `workflow_runs.task_run_id` | FK + `ON DELETE SET NULL` |
 | 自动化 | 会话/工作流/项目 | run 和 automation 上的 ID | 隐式/快照语义 |
+| 自动化事件 | 自动化/运行 | event delivery → automation/run；result → run | event 有 FK；automation/run 部分为隐式，并由 doctor 检查孤儿 |
 | 讨论 | 笔记/项目/任务 | capture → note/project；action → task | 前两者 FK，task 为隐式 |
 | 连接器 | 知识 | learning job → source run/item | 一部分隐式，便于跨来源保留审计 |
 | 用户理解 | 证据/来源授权 | assertion/goal/observation → evidence/grant | 核心路径有 FK |
 | 场景 | 任务/环境 | `scene_task_bindings` | FK 完整，是跨域约束较好的区域 |
+| AI 用量 | 会话/Agent/各种 run | `ai_usage_events` 中的归属 ID | 有意保持为隐式历史关系，父对象删除后账本仍保留 |
 | 通知 | 设备 | `notification_deliveries.device_id` | FK → push endpoint |
 | 本地应用 | 项目/聊天预览 | app → project；preview revision → app | FK 完整 |
 
@@ -438,14 +454,15 @@ erDiagram
 
 ### 6.2 已通过迁移退役，不属于当前表
 
-以下名称仍可能出现在 baseline 或历史迁移里，但最终 v207 schema 已不存在，不应被新代码使用：
+以下名称仍可能出现在 baseline 或历史迁移里，但最终 v216 schema 已不存在，不应被新代码使用：
 
 - 旧 proactive 系统：`proactive_events`、`proactive_signal_batches`、`proactive_batch_events`、`proactive_scenarios`、`proactive_scenario_subscriptions`、`proactive_runs`、`proactive_insights`、`proactive_inbox_items` 及其 delivery/digest/push/follow-up 附属表。v188 场景迁移重置后由 `scene_*`、`notification_*`、`home_*` 取代。
 - `proactive_preview_runs`：v166 明确删除。
 - `relationship_settings`：v203 删除；协作规则中的 proactive 类别迁移为 initiative。
 - `scene_development_bindings`、`scene_development_revisions`、`scene_development_branch_links`：v191 重命名为 `scene_task_*`。
 - `duplicate_connector_source_runs`：v201 数据合并后删除。
-- `*_v199`、`*_v200`、`*_v203`、`*_next`：仅迁移过程中的临时重建表。
+- `scene_model_usage`：v216 删除，Scene 的模型用量已经统一进入 `ai_usage_events`。
+- `automation_events_v212`、`automation_event_deliveries_v212`、`automation_result_deliveries_v212` 以及其他 `*_v199`、`*_v200`、`*_v203`、`*_next`：仅迁移过程中的临时重建表。
 
 ### 6.3 不能仅凭“代码无直接表名”删除
 
@@ -469,6 +486,8 @@ erDiagram
 - `session_inputs.conversation_id` → `sessions.conversation_id`
 - `automation_runs.automation_id` → `automations.automation_id`
 - `automation_run_events.run_id` → `automation_runs.run_id`
+- `automation_event_deliveries.automation_id` → `automations.automation_id`
+- `automation_event_deliveries.run_id` → `automation_runs.run_id`
 - `discussion_action_tasks.task_id` → `tasks.task_id`
 - `workflow_events.run_id` → `workflow_runs.run_id`
 - `local_apps.active_release_id` → `local_app_releases.release_id`
@@ -491,7 +510,7 @@ erDiagram
 
 ### P1：统一时间存储规范
 
-当前时间/游标相关列中，359 个声明为 `INTEGER`，另有 27 个声明为 `TEXT`。尤其 connector 相关 `created_at`/`expires_at` 多为 TEXT，而核心域普遍使用 epoch milliseconds；`sessions.last_flushed_at` 也是 TEXT。
+当前时间/游标相关列中，373 个声明为 `INTEGER`，另有 27 个声明为 `TEXT`。尤其 connector 相关 `created_at`/`expires_at` 多为 TEXT，而核心域普遍使用 epoch milliseconds；`sessions.last_flushed_at` 也是 TEXT。
 
 建议新表统一：
 
@@ -501,10 +520,12 @@ erDiagram
 
 ### P1：提高 JSON 列的数据库级校验
 
-最终 schema 有 166 个 `*_json` 列，只有 45 个在建表 SQL 中明确使用 `json_valid(...)`，121 个依赖应用层保证合法性。优先为会进入检索、调度或权限判断的 JSON 增加校验，例如：
+最终 schema 有 172 个 `*_json` 列，只有 47 个在建表 SQL 中明确使用 `json_valid(...)`，125 个依赖应用层保证合法性。优先为会进入检索、调度或权限判断的 JSON 增加校验，例如：
 
 - `sessions.routing_json`、`sessions.custom_data_json`
-- `automations.trigger_json`、`action_json`、`safety_json`
+- `automations.trigger_json`、`action_json`、`safety_json`、`delivery_json`
+- `automation_events.payload_json`、`automation_result_deliveries.config_json`
+- `ai_usage_events.pricing_snapshot_json`
 - `connector_installations.allowed_agent_ids_json`、`selected_account_ids_json`
 - `context_snapshots.authorization_snapshot_json`
 - `user_assertions` 的用途、敏感度和允许 Agent 列表
@@ -515,6 +536,26 @@ erDiagram
 - `connector_accounts.current_connection_id` 与 `connector_connections.account_id/is_default` 都表达当前连接；应由单向关系或查询规则推导，避免双写漂移。
 - `local_apps.active_release_id` 与 `local_app_releases.activated_at` 同时表达激活状态；需要事务内唯一性约束或单一真相源。
 - `user_goals.current_revision_id`、`collaboration_rules.current_revision_id` 采用“父指当前版本 + 版本指父”的环形模型。该模型可用，但写入必须统一走延迟约束事务。
+
+### P2：为 AI 用量账本制定保留与索引策略
+
+`ai_usage_events` 已经统一承接所有模型调用，但当前没有删除、归档或聚合降采样逻辑。它会随每次物理模型请求持续增长，并长期保留 conversation/run/agent 归属及有界错误摘要。
+
+建议：
+
+- 明确默认保留期、用户可配置范围和导出后清理策略；
+- 将长期统计下沉到按日聚合表，再清理明细；
+- 根据实际查询量评估 `(provider, model, started_at)` 索引；
+- 给 `pricing_snapshot_json` 增加 `json_valid`，防止详情解析因脏数据失败；
+- 将该账本纳入隐私删除、数据库体积统计和 doctor 检查。
+
+### P2：自动化事件链的完整性仍部分依赖应用层
+
+`automation_event_deliveries.event_id`、`automation_results.run_id` 和 `automation_result_deliveries.run_id` 已有外键，但 delivery 的 `automation_id`、`run_id` 仍是隐式引用。代码已有清理事务和 `doctor` 孤儿检查，这是可接受的历史保留设计，但应在 schema 注释或 ADR 中明确：
+
+- 删除 automation 时哪些 event delivery 必须保留；
+- 删除或裁剪 run 时 result、result delivery、event delivery 的顺序；
+- dead-letter 的最长保留期与人工重放边界。
 
 ### P2：明确设备与端点模型边界
 
@@ -537,7 +578,7 @@ principal（用户/信任主体） -> device/endpoint instance（具体安装）
 
 ### P3：降低 baseline 的历史噪声
 
-`schema.sql` 仍先创建多组随后由迁移删除的实验表，新数据库启动时会做无意义的建表/删表。长期建议生成一个 v207（或下一大版本）的 compact baseline，并只保留仍需支持的升级迁移。这样可减少审计误判、启动时间和 schema 漂移风险。
+`schema.sql` 仍先创建多组随后由迁移删除的实验表，新数据库启动时会做无意义的建表/删表。长期建议生成一个 v216（或下一大版本）的 compact baseline，并只保留仍需支持的升级迁移。这样可减少审计误判、启动时间和 schema 漂移风险。
 
 ## 8. 建议实施顺序
 
@@ -546,8 +587,9 @@ principal（用户/信任主体） -> device/endpoint instance（具体安装）
 3. 新增迁移删除或迁移 legacy memory 数据，修复 `memory_relations` 悬空外键。
 4. 给 task run、connector audit、knowledge change 的高频 FK 补索引，并以查询计划验证。
 5. 明确 session config、connector current connection、active release 三组权威字段。
-6. 制定时间与 JSON 列规范；以后新增迁移必须遵循，旧表分批治理。
-7. 在下一次 baseline 重整时移除已经退役的 proactive/experimental DDL。
+6. 为 `ai_usage_events` 增加保留、清理、隐私删除和体积监控策略。
+7. 制定时间与 JSON 列规范；以后新增迁移必须遵循，旧表分批治理。
+8. 在下一次 baseline 重整时移除已经退役的 proactive/experimental DDL，并吸收 v208–v216 的最终结构。
 
 ## 9. 审计限制
 
