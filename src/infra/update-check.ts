@@ -4,6 +4,8 @@ import { access, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { Agent, fetch as undiciFetch } from 'undici';
+
 import { PACKAGE_VERSION } from '../package-version.js';
 
 import { channelToNpmTag, type UpdateChannel } from './update-channels.js';
@@ -17,6 +19,12 @@ export type NpmTagResult = {
   version: string | null;
   error?: string;
 };
+
+type RegistryResponse = Pick<Response, 'ok' | 'status' | 'json'>;
+type RegistryFetch = (
+  url: string,
+  init: { signal: AbortSignal },
+) => Promise<RegistryResponse>;
 
 export type UpdateCheckResult = {
   installKind: InstallKind;
@@ -44,36 +52,49 @@ const INITIAL_REGISTRY_RETRY_DELAY_MS = 500;
 export async function fetchNpmTagVersion(params: {
   tag: string;
   timeoutMs?: number;
+  fetchImpl?: RegistryFetch;
 }): Promise<NpmTagResult> {
   const timeoutMs = params.timeoutMs ?? REGISTRY_TIMEOUT_MS;
   const encodedName = encodeURIComponent(PACKAGE_NAME).replace('%40', '@');
   const url = `${REGISTRY_BASE}/${encodedName}/${encodeURIComponent(params.tag)}`;
+  const dispatcher = params.fetchImpl ? null : new Agent();
+  const fetchImpl =
+    params.fetchImpl ??
+    ((input, init) => undiciFetch(input, { ...init, dispatcher: dispatcher! }));
 
   let lastError: string | undefined;
 
-  for (let attempt = 0; attempt <= MAX_REGISTRY_RETRIES; attempt++) {
-    if (attempt > 0) {
-      const delayMs = INITIAL_REGISTRY_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
-      await new Promise((r) => setTimeout(r, delayMs));
-    }
-
-    try {
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (!response.ok) {
-        lastError = `HTTP ${response.status}`;
-        if (response.status >= 400 && response.status < 500) {
-          return { tag: params.tag, version: null, error: lastError };
-        }
-        continue;
+  try {
+    for (let attempt = 0; attempt <= MAX_REGISTRY_RETRIES; attempt++) {
+      if (attempt > 0) {
+        const delayMs = INITIAL_REGISTRY_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+        await new Promise((r) => setTimeout(r, delayMs));
       }
-      const json = (await response.json()) as { version?: unknown };
-      const version = typeof json?.version === 'string' ? json.version : null;
-      return { tag: params.tag, version };
-    } catch (err) {
-      lastError = String(err);
+
+      try {
+        const response = await fetchImpl(url, {
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+        if (!response.ok) {
+          lastError = `HTTP ${response.status}`;
+          if (response.status >= 400 && response.status < 500) {
+            return { tag: params.tag, version: null, error: lastError };
+          }
+          continue;
+        }
+        const json = (await response.json()) as { version?: unknown };
+        const version = typeof json?.version === 'string' ? json.version : null;
+        return {
+          tag: params.tag,
+          version,
+          ...(version ? {} : { error: 'Registry response did not include a version' }),
+        };
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+      }
     }
+  } finally {
+    await dispatcher?.close().catch(() => undefined);
   }
 
   return { tag: params.tag, version: null, error: lastError };
@@ -86,27 +107,42 @@ export async function fetchNpmTagVersion(params: {
 export async function resolveNpmChannelTag(params: {
   channel: UpdateChannel;
   timeoutMs?: number;
-}): Promise<{ tag: string; version: string | null }> {
+  fetchImpl?: RegistryFetch;
+}): Promise<NpmTagResult> {
   const channelTag = channelToNpmTag(params.channel);
-  const channelResult = await fetchNpmTagVersion({ tag: channelTag, timeoutMs: params.timeoutMs });
+  const channelResult = await fetchNpmTagVersion({
+    tag: channelTag,
+    timeoutMs: params.timeoutMs,
+    fetchImpl: params.fetchImpl,
+  });
 
   if (params.channel !== 'beta') {
-    return { tag: channelTag, version: channelResult.version };
+    return channelResult;
   }
 
   // For beta: also check latest, return whichever is newer
-  const latestResult = await fetchNpmTagVersion({ tag: 'latest', timeoutMs: params.timeoutMs });
+  const latestResult = await fetchNpmTagVersion({
+    tag: 'latest',
+    timeoutMs: params.timeoutMs,
+    fetchImpl: params.fetchImpl,
+  });
   if (!latestResult.version) {
-    return { tag: channelTag, version: channelResult.version };
+    return channelResult.version
+      ? channelResult
+      : {
+          tag: channelTag,
+          version: null,
+          error: [channelResult.error, latestResult.error].filter(Boolean).join('; ') || undefined,
+        };
   }
   if (!channelResult.version) {
-    return { tag: 'latest', version: latestResult.version };
+    return latestResult;
   }
   const comparison = compareSemver(channelResult.version, latestResult.version);
   if (comparison !== null && comparison < 0) {
-    return { tag: 'latest', version: latestResult.version };
+    return latestResult;
   }
-  return { tag: channelTag, version: channelResult.version };
+  return channelResult;
 }
 
 // --- Semver comparison ---
