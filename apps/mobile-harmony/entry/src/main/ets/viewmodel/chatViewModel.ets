@@ -191,7 +191,7 @@ export class XopcChatViewModel {
     const request = ++this.historyRequest;
     const selection = this.selection; const before = older ? this.before : '';
     try {
-      const result = await this.repository.history(this.selectedId, before);
+      const result = await this.repository.history(this.selectedId, before, older ? this.transcriptId ?? '' : '');
       if (selection !== this.selection || request !== this.historyRequest) return;
       // Validate before touching retained pages or their cursor.
       historyRows(result, before || 'latest');
