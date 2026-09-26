@@ -9,6 +9,7 @@ import {
 } from '../../session/session-context-for-llm.js';
 import { SessionStatus, type GlobalSessionStats, type SessionMetadata } from '../../session/types.js';
 import { buildDefaultSessionMetadata } from './session-metadata.js';
+import { optionalTimestampToIso, optionalTimestampToMs } from './timestamps.js';
 
 export type SessionRow = {
   conversation_id: string;
@@ -37,10 +38,8 @@ export type SessionRow = {
   message_count: number;
   estimated_tokens: number;
   compacted_count: number;
-  last_flushed_at: string | null;
+  last_flushed_at: number | null;
   flush_count: number;
-  thinking_level: string | null;
-  verbose_level: string | null;
   cwd?: string | null;
 };
 
@@ -123,7 +122,7 @@ export function sessionRowToMetadata(conversationId: string, row: SessionRow): S
     messageCount: row.message_count,
     estimatedTokens: row.estimated_tokens,
     compactedCount: row.compacted_count,
-    lastFlushedAt: row.last_flushed_at ?? undefined,
+    lastFlushedAt: optionalTimestampToIso(row.last_flushed_at),
     flushCount: row.flush_count,
     transcriptId: row.active_transcript_id,
     cwd: row.cwd ?? undefined,
@@ -139,8 +138,6 @@ export function metadataToSessionInsert(
   conversationId: string,
   transcriptId: string,
   metadata: SessionMetadata,
-  thinkingLevel?: string | null,
-  verboseLevel?: string | null,
 ): {
   conversationId: string;
   agentId: string;
@@ -168,10 +165,8 @@ export function metadataToSessionInsert(
   messageCount: number;
   estimatedTokens: number;
   compactedCount: number;
-  lastFlushedAt: string | null;
+  lastFlushedAt: number | null;
   flushCount: number;
-  thinkingLevel: string | null;
-  verboseLevel: string | null;
 } {
   const now = Date.now();
   const agentId = (metadata.agentId || metadata.routing?.agentId)?.trim().toLowerCase();
@@ -203,10 +198,8 @@ export function metadataToSessionInsert(
     messageCount: metadata.messageCount,
     estimatedTokens: metadata.estimatedTokens,
     compactedCount: metadata.compactedCount,
-    lastFlushedAt: metadata.lastFlushedAt ?? null,
+    lastFlushedAt: optionalTimestampToMs(metadata.lastFlushedAt),
     flushCount: metadata.flushCount ?? 0,
-    thinkingLevel: thinkingLevel ?? null,
-    verboseLevel: verboseLevel ?? null,
   };
 }
 

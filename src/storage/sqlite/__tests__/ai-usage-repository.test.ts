@@ -15,6 +15,7 @@ import {
   insertAiUsageEvent,
   listAiUsageEvents,
   markStaleAiUsageEventsUnknown,
+  pruneAiUsageEvents,
   summarizeAiUsage,
 } from '../ai-usage-repository.js';
 
@@ -97,5 +98,22 @@ describe('AI usage repository', () => {
       knownCostUsd: '0',
       costCompleteness: 'unknown',
     });
+  });
+
+  it('prunes completed history without deleting active calls', () => {
+    for (const [id, startedAt] of [['old', 10], ['active', 20], ['recent', 100]] as const) {
+      insertAiUsageEvent({
+        id, traceId: `trace-${id}`, category: 'other', operation: 'test', trigger: 'system',
+        reasonKey: 'usage.reason.other', provider: 'vendor', model: 'model', status: 'running',
+        startedAt, costSource: 'unknown',
+      });
+    }
+    finishAiUsageEvent('old', { status: 'succeeded', finishedAt: 11 });
+    finishAiUsageEvent('recent', { status: 'succeeded', finishedAt: 101 });
+
+    expect(pruneAiUsageEvents(50)).toBe(1);
+    expect(getAiUsageEvent('old')).toBeUndefined();
+    expect(getAiUsageEvent('active')).toMatchObject({ status: 'running' });
+    expect(getAiUsageEvent('recent')).toMatchObject({ status: 'succeeded' });
   });
 });

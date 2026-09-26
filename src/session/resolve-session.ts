@@ -10,8 +10,8 @@ import {
 import { createLogger } from '../utils/logger.js';
 import {
   findConversationIdByTranscriptId,
+  getSessionConfig,
   getSessionMetadata,
-  getSessionPersistedLevels,
   requireXopcDatabase,
 } from '../storage/sqlite/index.js';
 
@@ -118,11 +118,11 @@ export async function resolveSession(opts: {
 
   const persistedThinking =
     fresh && conversationId
-      ? normalizeThinkLevel(getSessionPersistedLevels(conversationId)?.thinkingLevel ?? undefined)
+      ? normalizeThinkLevel(getSessionConfig(conversationId)?.thinkingLevel)
       : undefined;
   const persistedVerbose =
     fresh && conversationId
-      ? normalizeVerboseLevel(getSessionPersistedLevels(conversationId)?.verboseLevel ?? undefined)
+      ? normalizeVerboseLevel(getSessionConfig(conversationId)?.verboseLevel)
       : undefined;
 
   return {

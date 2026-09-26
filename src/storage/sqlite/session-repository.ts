@@ -13,6 +13,7 @@ import {
   sessionRowToMetadata,
   type SessionRow,
 } from './row-mappers.js';
+import { optionalTimestampToMs } from './timestamps.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import { SESSION_PURPOSE_SQL, SESSION_SOURCE_SQL } from './session-identity-sql.js';
 
@@ -37,16 +38,14 @@ function insertSessionAndTranscript(
       parent_conversation_id, workflow_run_id, workflow_definition_id, workflow_agent_id, workflow_agent_label,
       project_id, routing_json, custom_data_json,
       message_count, estimated_tokens, compacted_count,
-      last_flushed_at, flush_count,
-      thinking_level, verbose_level
+      last_flushed_at, flush_count
     ) VALUES (
       ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?,
       ?, ?, ?, ?,
       ?, ?, ?, ?, ?,
       ?, ?, ?,
-      ?, ?, ?, ?, ?, ?,
-      ?, ?
+      ?, ?, ?, ?, ?, ?
     )`,
   ).run(
     row.conversationId,
@@ -77,8 +76,6 @@ function insertSessionAndTranscript(
     row.compactedCount,
     row.lastFlushedAt,
     row.flushCount,
-    row.thinkingLevel,
-    row.verboseLevel,
   );
 
   const now = Date.now();
@@ -339,9 +336,7 @@ export function patchSessionMetadata(
         estimated_tokens = ?,
         compacted_count = ?,
         last_flushed_at = ?,
-        flush_count = ?,
-        thinking_level = ?,
-        verbose_level = ?
+        flush_count = ?
       WHERE conversation_id = ?`,
     ).run(
       merged.status,
@@ -366,10 +361,8 @@ export function patchSessionMetadata(
       merged.messageCount,
       merged.estimatedTokens,
       merged.compactedCount,
-      merged.lastFlushedAt ?? null,
+      optionalTimestampToMs(merged.lastFlushedAt),
       merged.flushCount ?? 0,
-      existing.thinking_level,
-      existing.verbose_level,
       conversationId,
     );
 
@@ -484,20 +477,6 @@ export function listSessionsByAgent(agentId: string): SessionMetadata[] {
     )
     .all(agentId.toLowerCase()) as SessionRow[];
   return rows.map((row) => sessionRowToMetadata(row.conversation_id, row));
-}
-
-export function getSessionPersistedLevels(conversationId: string): {
-  thinkingLevel: string | null;
-  verboseLevel: string | null;
-} | null {
-  const db = getSqliteDatabase();
-  const row = db
-    .prepare(`SELECT thinking_level, verbose_level FROM sessions WHERE conversation_id = ?`)
-    .get(conversationId) as { thinking_level: string | null; verbose_level: string | null } | undefined;
-  if (!row) {
-    return null;
-  }
-  return { thinkingLevel: row.thinking_level, verboseLevel: row.verbose_level };
 }
 
 export function findConversationIdByTranscriptId(transcriptId: string): string | null {

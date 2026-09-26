@@ -75,7 +75,7 @@ export function commitCliIdentity(attempt: CliAuthorization, identity: CliIdenti
       metadata: { runtimeInstanceId: attempt.instance_id, contextId: attempt.context_id, scopes: identity.scopes } });
     db.prepare(`UPDATE connector_accounts SET runtime_instance_id = ?, identity_key = ?, identity_json = ?,
       enabled = 1, label = COALESCE(label, ?), current_connection_id = ?, updated_at = ? WHERE id = ?`)
-      .run(attempt.instance_id, identity.key, JSON.stringify(identity.identity), identity.label, connectionId, new Date().toISOString(), accountId);
+      .run(attempt.instance_id, identity.key, JSON.stringify(identity.identity), identity.label, connectionId, Date.now(), accountId);
     db.prepare("UPDATE connector_connections SET status = 'disabled' WHERE account_id = ? AND id <> ? AND provider = 'cli'").run(accountId, connectionId);
     updateCliAuthorization(attempt.id, { phase: 'succeeded', accountId });
     return accountId;

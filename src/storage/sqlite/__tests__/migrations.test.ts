@@ -418,6 +418,139 @@ describe('SQLite migrations', () => {
     }
   });
 
+  it('removes the retired file-memory schema', () => {
+    const db = openEmptyDb();
+    try {
+      ensureSchemaMetaTable(db);
+      db.exec(`
+        CREATE TABLE memory_files (file_id TEXT PRIMARY KEY);
+        CREATE TABLE memory_chunks (
+          chunk_id TEXT PRIMARY KEY,
+          file_id TEXT NOT NULL REFERENCES memory_files(file_id) ON DELETE CASCADE
+        );
+        CREATE TABLE memory_relations (relation_id TEXT PRIMARY KEY);
+        CREATE VIRTUAL TABLE memory_fts USING fts5(content);
+      `);
+      setSchemaVersion(db, 216);
+
+      applyPendingMigrations(db, { targetVersion: 217 });
+
+      expect(db.prepare(`SELECT name FROM sqlite_master
+        WHERE name IN ('memory_files', 'memory_chunks', 'memory_relations', 'memory_fts')`).all()).toEqual([]);
+      expect(readSchemaVersion(db)).toBe(217);
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('adds indexes for high-value relation lookups', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db);
+      const names = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'
+        AND name IN (
+          'idx_task_runs_contract',
+          'idx_task_runs_conversation',
+          'idx_connector_execution_audit_connection',
+          'idx_knowledge_source_changes_item',
+          'idx_notification_deliveries_device'
+        ) ORDER BY name`).all().map((row) => row.name);
+      expect(names).toEqual([
+        'idx_connector_execution_audit_connection',
+        'idx_knowledge_source_changes_item',
+        'idx_notification_deliveries_device',
+        'idx_task_runs_contract',
+        'idx_task_runs_conversation',
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('enforces JSON contracts at the database boundary', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 219 });
+
+      expect(() => db.prepare(`INSERT INTO automations (
+        automation_id, name, enabled, trigger_json, action_json, state_json,
+        created_at_ms, updated_at_ms, delivery_json
+      ) VALUES ('invalid', 'Invalid', 1, 'not-json', '{}', '{}', 1, 1, '{}')`).run())
+        .toThrow();
+      expect(() => db.prepare(`INSERT INTO ai_usage_events (
+        id, trace_id, category, operation, trigger_kind, reason_key, provider, model,
+        status, started_at, cost_source, pricing_snapshot_json, created_at, updated_at
+      ) VALUES ('invalid', 'trace', 'agent', 'turn', 'user', 'test', 'provider', 'model',
+        'succeeded', 1, 'unknown', 'not-json', 1, 1)`).run()).toThrow();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('normalizes remaining persisted timestamps to epoch milliseconds', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 219 });
+      db.prepare(`INSERT INTO connector_catalog_entries (
+        connector_id, provider, definition_json, fetched_at, expires_at
+      ) VALUES ('mail', 'composio', '{}', ?, ?)`)
+        .run('2026-09-26T01:02:03.456Z', '2026-09-27T01:02:03.456Z');
+      db.prepare(`INSERT INTO user_trust_policies (
+        principal_id, default_action_level, updated_at
+      ) VALUES ('owner', 'confirm', ?)`)
+        .run('2026-09-26T01:02:03.456Z');
+
+      applyPendingMigrations(db, { targetVersion: 220 });
+
+      expect(db.prepare(`SELECT fetched_at, expires_at FROM connector_catalog_entries
+        WHERE connector_id = 'mail'`).get()).toEqual({
+        fetched_at: Date.parse('2026-09-26T01:02:03.456Z'),
+        expires_at: Date.parse('2026-09-27T01:02:03.456Z'),
+      });
+      expect(db.prepare(`SELECT updated_at FROM user_trust_policies
+        WHERE principal_id = 'owner'`).get()).toEqual({
+        updated_at: Date.parse('2026-09-26T01:02:03.456Z'),
+      });
+      expect(db.prepare(`SELECT type FROM pragma_table_info('connector_connections')
+        WHERE name = 'connected_at'`).get()).toEqual({ type: 'INTEGER' });
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('makes session_config the sole authority for persisted agent levels', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 221 });
+      db.prepare(`INSERT INTO sessions (
+        conversation_id, agent_id, active_transcript_id, tags_json, created_at, updated_at,
+        last_accessed_at, source_channel, source_chat_id, hidden_from_session_list,
+        thinking_level, verbose_level
+      ) VALUES ('conversation', 'main', 'transcript', '[]', 1, 2, 2, '', '', 0, 'high', 'full')`).run();
+      db.prepare(`INSERT INTO session_config (
+        conversation_id, thinking_level, updated_at
+      ) VALUES ('conversation', 'low', 3)`).run();
+
+      applyPendingMigrations(db, { targetVersion: 222 });
+
+      expect(db.prepare(`SELECT thinking_level, verbose_level FROM session_config
+        WHERE conversation_id = 'conversation'`).get()).toEqual({
+        thinking_level: 'low',
+        verbose_level: 'full',
+      });
+      expect(db.prepare(`SELECT name FROM pragma_table_info('sessions')
+        WHERE name IN ('thinking_level', 'verbose_level')`).all()).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('removes retired proactive contracts while preserving user rules', () => {
     const db = openEmptyDb();
     try {

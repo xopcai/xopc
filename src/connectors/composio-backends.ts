@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { CredentialResolver } from '../auth/credentials.js';
+import { optionalTimestampToIso, timestampToIso } from '../storage/sqlite/timestamps.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
 export type ComposioBackend = {
@@ -14,20 +15,35 @@ export type ComposioBackend = {
   created_at: string;
 };
 
+type ComposioBackendRow = Omit<ComposioBackend, 'verified_at' | 'created_at'> & {
+  verified_at: number | null;
+  created_at: number;
+};
+
+function fromRow(row: ComposioBackendRow): ComposioBackend {
+  return {
+    ...row,
+    verified_at: optionalTimestampToIso(row.verified_at) ?? null,
+    created_at: timestampToIso(row.created_at),
+  };
+}
+
 export function listComposioBackends(): ComposioBackend[] {
-  return getSqliteDatabase().prepare('SELECT * FROM connector_backends ORDER BY created_at').all() as ComposioBackend[];
+  return (getSqliteDatabase().prepare('SELECT * FROM connector_backends ORDER BY created_at').all() as ComposioBackendRow[])
+    .map(fromRow);
 }
 
 export function getComposioBackend(id?: string): ComposioBackend | undefined {
-  return (id
+  const row = (id
     ? getSqliteDatabase().prepare('SELECT * FROM connector_backends WHERE id = ?').get(id)
-    : getSqliteDatabase().prepare('SELECT * FROM connector_backends WHERE active = 1').get()) as ComposioBackend | undefined;
+    : getSqliteDatabase().prepare('SELECT * FROM connector_backends WHERE active = 1').get()) as ComposioBackendRow | undefined;
+  return row ? fromRow(row) : undefined;
 }
 
 export function addComposioBackend(input: { id?: string; mode: 'managed' | 'byok'; label: string; credentialRef?: string; credentialSource?: 'stored' | 'environment' }): ComposioBackend {
   const id = input.id ?? randomUUID();
   getSqliteDatabase().prepare(`INSERT INTO connector_backends(id, mode, label, credential_ref, credential_source, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)`).run(id, input.mode, input.label, input.credentialRef ?? null, input.credentialSource ?? 'stored', new Date().toISOString());
+    VALUES (?, ?, ?, ?, ?, ?)`).run(id, input.mode, input.label, input.credentialRef ?? null, input.credentialSource ?? 'stored', Date.now());
   return getComposioBackend(id)!;
 }
 
@@ -77,5 +93,5 @@ export async function resolveBackendKey(backend: ComposioBackend, resolver = new
 }
 
 export function markComposioBackendVerified(id: string): void {
-  getSqliteDatabase().prepare('UPDATE connector_backends SET verified_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+  getSqliteDatabase().prepare('UPDATE connector_backends SET verified_at = ? WHERE id = ?').run(Date.now(), id);
 }
