@@ -164,6 +164,17 @@ export const ContextPlanningConfigSchema = z
     compaction: DEFAULT_CONTEXT_COMPACTION_POLICY,
   });
 
+export const HomeIntelligenceConfigSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    refreshOnContextChange: z.boolean().default(true),
+  })
+  .strict()
+  .default({
+    enabled: true,
+    refreshOnContextChange: true,
+  });
+
 export const UserContextConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
@@ -176,6 +187,7 @@ export const UserContextConfigSchema = z
     userModel: UserModelConfigSchema,
     knowledgeMemory: KnowledgeMemoryConfigSchema,
     contextPlanning: ContextPlanningConfigSchema,
+    homeIntelligence: HomeIntelligenceConfigSchema,
   })
   .strict()
   .default({
@@ -184,12 +196,14 @@ export const UserContextConfigSchema = z
     userModel: UserModelConfigSchema.parse({}),
     knowledgeMemory: KnowledgeMemoryConfigSchema.parse({}),
     contextPlanning: ContextPlanningConfigSchema.parse({}),
+    homeIntelligence: HomeIntelligenceConfigSchema.parse({}),
   });
 
 export type UserContextConfig = z.infer<typeof UserContextConfigSchema>;
 export type UserModelConfig = z.infer<typeof UserModelConfigSchema>;
 export type KnowledgeMemoryConfig = z.infer<typeof KnowledgeMemoryConfigSchema>;
 export type ContextPlanningConfig = z.infer<typeof ContextPlanningConfigSchema>;
+export type HomeIntelligenceConfig = z.infer<typeof HomeIntelligenceConfigSchema>;
 
 export function resolveKnowledgeReadPolicy(config: KnowledgeMemoryConfig): KnowledgeReadPolicy {
   return {

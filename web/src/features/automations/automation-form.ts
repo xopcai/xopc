@@ -461,7 +461,7 @@ export function formFromAutomation(
     name: automation.name,
     description: automation.description ?? '',
     projectId: automation.projectId ?? '',
-    actionMode: action.kind,
+    actionMode: action.kind === 'system' ? 'agent' : action.kind,
     agentId: action.kind === 'agent' || action.kind === 'workflow'
       ? (action.agentId ?? '')
       : action.kind === 'task_command' && action.command.type === 'start' && action.command.executor.kind === 'agent'

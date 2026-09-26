@@ -48,6 +48,10 @@ export type AutomationAction =
       kind: 'task_command';
       taskId: string;
       command: TaskCommand;
+    }
+  | {
+      kind: 'system';
+      capability: 'home.advisor.refresh' | 'memory.temporal_sweep' | 'memory.daily_reconciliation' | 'memory.weekly_knowledge';
     };
 
 export interface AutomationTaskOption {
@@ -87,6 +91,12 @@ export interface Automation {
   notificationPolicy: AutomationNotificationPolicy;
   completionWebhookUrl?: string;
   reliability?: AutomationReliability;
+  management?: {
+    owner: string;
+    editable: Array<'enabled' | 'trigger'>;
+    runnable: boolean;
+    deletable: boolean;
+  };
   state: {
     nextRunAtMs?: number;
     runningRunId?: string;

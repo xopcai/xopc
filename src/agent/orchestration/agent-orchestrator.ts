@@ -28,7 +28,6 @@ import {
   hydrateUserTurnForLlm,
   setPendingTranscriptUserMessage,
 } from '../inbound/attachment-pipeline.js';
-import { parseMaintenanceInstruction, runMemoryMaintenance } from '../../memory-maintenance/index.js';
 
 const log = createLogger('AgentOrchestrator');
 
@@ -90,32 +89,6 @@ export class AgentOrchestrator {
     log.debug({ conversationId }, 'Processing message through agent orchestrator');
 
     await this.sessionHydrator.workspace(conversationId);
-
-    // Run deterministic user-context maintenance without spending LLM tokens.
-    if (
-      typeof msg.content === 'string' &&
-      (
-        context.channel === 'cron' ||
-        context.channel === 'automation'
-      )
-    ) {
-      const maintenanceJob = parseMaintenanceInstruction(msg.content);
-      if (maintenanceJob) {
-        const cfg = this.getConfig?.();
-        if (!cfg) {
-          log.warn({ conversationId }, 'Memory maintenance skipped: config unavailable');
-          return;
-        }
-        const maintenance = cfg.userContext.userModel.maintenance;
-        runMemoryMaintenance({
-          jobType: maintenanceJob,
-          limit: maintenance.limit,
-          staleRetentionDays: maintenance.staleRetentionDays,
-          evidenceThreshold: maintenance.evidenceThreshold,
-        });
-        return;
-      }
-    }
 
     try {
       await this.sessionHydrator.model(conversationId);

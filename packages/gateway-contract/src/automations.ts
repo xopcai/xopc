@@ -47,6 +47,15 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
     timeoutSeconds: z.number().positive().optional(),
   }),
   z.object({ kind: z.literal('task_command'), taskId: z.string(), command: TaskCommandSchema }),
+  z.object({
+    kind: z.literal('system'),
+    capability: z.enum([
+      'home.advisor.refresh',
+      'memory.temporal_sweep',
+      'memory.daily_reconciliation',
+      'memory.weekly_knowledge',
+    ]),
+  }),
 ]);
 
 export const AutomationRunStatusSchema = z.enum([
@@ -77,6 +86,12 @@ export const AutomationSchema = z.object({
     retryCount: z.number().int().nonnegative().optional(),
     maxConcurrentRuns: z.number().int().positive().optional(),
     disableAfterConsecutiveFailures: z.number().int().positive().optional(),
+  }).optional(),
+  management: z.object({
+    owner: z.string(),
+    editable: z.array(z.enum(['enabled', 'trigger'])),
+    runnable: z.boolean(),
+    deletable: z.boolean(),
   }).optional(),
   state: z.object({
     nextRunAtMs: z.number().optional(),
