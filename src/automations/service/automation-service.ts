@@ -8,6 +8,7 @@ import {
 } from '../domain/schedule.js';
 import type {
   Automation,
+  AutomationArtifact,
   AutomationDeps,
   AutomationEvent,
   AutomationMetrics,
@@ -43,17 +44,25 @@ import {
   saveAutomationRun,
   saveAutomations,
   touchAutomationRunLease,
+  pruneAutomationHistory,
 } from '../storage/index.js';
 import { AutomationActionExecutor } from './action-executor.js';
 import {
   AutomationEventDispatcher,
   getAutomationEventForRun,
   getAutomationEventDeliveryRunId,
+  getAutomationEventQueueMetrics,
   ingestAutomationEvent,
   listAutomationEventRecords,
   markAutomationEventDeliveryQueued,
+  replayAutomationEvent,
 } from '../events/index.js';
-import { AutomationDeliveryRouter, listAutomationResultDeliveries } from '../delivery/index.js';
+import {
+  AutomationDeliveryRouter,
+  getAutomationResultDeliveryMetrics,
+  listAutomationResultDeliveries,
+  retryAutomationResultDelivery,
+} from '../delivery/index.js';
 
 const log = createLogger('AutomationService');
 
@@ -82,10 +91,12 @@ export class AutomationAlreadyExistsError extends Error {
 export class AutomationService {
   private readonly executor = new AutomationActionExecutor();
   private readonly eventDispatcher = new AutomationEventDispatcher(this, {
-    onEvent: (event) => this.deps.onEvent?.(event),
+    onEvent: (event, signal) => this.deps.onEvent?.(event, signal),
+    onDeadLetter: input => this.deps.onReliabilityAttention?.(input),
   });
   private readonly deliveryRouter = new AutomationDeliveryRouter({
-    deliverGatewayEvent: (run) => this.deps.onRunCompleted?.(run),
+    deliverGatewayEvent: (run, context) => this.deps.onRunCompleted?.(run, context),
+    onDeadLetter: input => this.deps.onReliabilityAttention?.(input),
   });
   private timer: TimerHandle | null = null;
   private stopped = true;
@@ -93,6 +104,7 @@ export class AutomationService {
   private deps: AutomationDeps = {};
   private maxConcurrentRuns = DEFAULT_MAX_CONCURRENT_RUNS;
   private readonly activeRuns = new Map<string, AbortController>();
+  private readonly activeRunTasks = new Map<string, Promise<void>>();
   private readonly heartbeatTimers = new Map<string, TimerHandle>();
   private readonly leaseOwner = `automation-service:${process.pid}:${randomUUID()}`;
 
@@ -106,6 +118,7 @@ export class AutomationService {
     this.maxConcurrentRuns = Math.max(1, Math.floor(options?.maxConcurrentRuns ?? DEFAULT_MAX_CONCURRENT_RUNS));
     this.stopped = false;
     await this.recoverInterruptedRuns();
+    pruneAutomationHistory();
     await this.recomputeNextRuns({ catchUp: true });
     this.armTimer();
     this.eventDispatcher.start();
@@ -115,17 +128,16 @@ export class AutomationService {
 
   async stop(): Promise<void> {
     this.stopped = true;
-    this.eventDispatcher.stop();
-    this.deliveryRouter.stop();
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
     }
+    await this.eventDispatcher.stop();
     for (const controller of this.activeRuns.values()) {
-      controller.abort();
+      controller.abort(new Error('Automation service stopped'));
     }
-    for (const timer of this.heartbeatTimers.values()) clearInterval(timer);
-    this.heartbeatTimers.clear();
+    await Promise.allSettled(this.activeRunTasks.values());
+    await this.deliveryRouter.stop();
     log.info('Automation service stopped');
   }
 
@@ -149,7 +161,10 @@ export class AutomationService {
       enabled: parsed.enabled ?? true,
       safety: parsed.safety ?? { mode: 'auto_apply' },
       conversationMode: parsed.conversationMode ?? 'new_session',
-      delivery: parsed.delivery ?? { notificationPolicy: 'attention' },
+      delivery: parsed.delivery ?? {
+        notificationPolicy: 'attention',
+        destinations: [{ key: 'gateway_event', kind: 'gateway_event' }],
+      },
       state: parsed.state ?? {},
       createdAtMs: now,
       updatedAtMs: now,
@@ -278,11 +293,28 @@ export class AutomationService {
     return this.eventDispatcher.dispatch();
   }
 
+  replayEventAtomically(eventId: string): boolean {
+    return replayAutomationEvent(eventId);
+  }
+
+  retryResultDeliveryAtomically(runId: string, destinationKey: string): boolean {
+    return retryAutomationResultDelivery(runId, destinationKey);
+  }
+
+  dispatchRecoveryWork(): void {
+    void this.eventDispatcher.dispatch();
+    void this.deliveryRouter.dispatch();
+  }
+
   listEventRecords(input?: { type?: string; source?: string; limit?: number }) {
     return listAutomationEventRecords(input);
   }
 
-  listResultDeliveries(input?: { runId?: string; status?: 'pending' | 'delivering' | 'delivered' | 'failed'; limit?: number }) {
+  listResultDeliveries(input?: {
+    runId?: string;
+    status?: 'pending' | 'delivering' | 'retrying' | 'delivered' | 'dead_letter';
+    limit?: number;
+  }) {
     return listAutomationResultDeliveries(input);
   }
 
@@ -341,9 +373,10 @@ export class AutomationService {
       return { automation, run: next };
     });
     if (!claimed) return;
-    void this.executeRun(claimed.automation, claimed.run).catch(err => {
-      log.error({ err, runId }, 'Queued automation run failed');
-    });
+    const task = this.executeRun(claimed.automation, claimed.run)
+      .catch(err => { log.error({ err, runId }, 'Queued automation run failed'); })
+      .finally(() => { this.activeRunTasks.delete(runId); });
+    this.activeRunTasks.set(runId, task);
   }
 
   availableRunSlots(): number {
@@ -429,6 +462,8 @@ export class AutomationService {
       .filter((automation) => automation.state.nextRunAtMs != null)
       .toSorted((a, b) => (a.state.nextRunAtMs ?? 0) - (b.state.nextRunAtMs ?? 0))[0];
     const oneHourAgo = Date.now() - 60 * 60_000;
+    const eventMetrics = getAutomationEventQueueMetrics();
+    const deliveryMetrics = getAutomationResultDeliveryMetrics();
     return {
       totalAutomations: automations.length,
       enabledAutomations: enabled.length,
@@ -445,6 +480,15 @@ export class AutomationService {
             runAtMs: next.state.nextRunAtMs,
           }
         : undefined,
+      pendingEvents: eventMetrics.pending,
+      oldestPendingEventAgeMs: eventMetrics.oldestPendingAgeMs,
+      projectionDeadLetters: eventMetrics.projectionDeadLetters,
+      pendingRunDeliveries: eventMetrics.pendingDeliveries,
+      runDeliveryDeadLetters: eventMetrics.deliveryDeadLetters,
+      pendingResultDeliveries: deliveryMetrics.pending,
+      resultDeliveryDeadLetters: deliveryMetrics.deadLetters,
+      activeExecutions: this.activeRuns.size,
+      activeDeliveryLeases: eventMetrics.activeLeases + deliveryMetrics.activeLeases,
     };
   }
 
@@ -594,6 +638,7 @@ export class AutomationService {
 
     let status: AutomationRunStatus = 'failed';
     let error: string | undefined;
+    let artifacts: AutomationArtifact[] | undefined;
     const triggerEvent = listAutomationRunEvents(run.id)
       .map(readAutomationEventFromRunEvent)
       .find((item): item is AutomationEvent => item !== null);
@@ -624,7 +669,8 @@ export class AutomationService {
         }, { triggerEvent });
         // A timeout consumes the shared automation deadline, so only ordinary
         // failures can start another attempt within the same run.
-        const retryable = task.status === 'failed';
+        const retryable = task.status === 'failed'
+          && this.executor.canRetry(automation.action.kind, task.error);
         if (!retryable || attempt >= maxAttempts || controller.signal.aborted) break;
         const delayMs = Math.min(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), 30_000);
         this.appendRunEvent(run, 'action.retry_scheduled', 'Automation action retry scheduled', {
@@ -637,8 +683,10 @@ export class AutomationService {
         });
         await this.waitForRetry(delayMs, controller.signal);
       }
+      this.deliveryRouter.validateArtifacts(task.artifacts ?? []);
       status = task.status;
       error = task.error;
+      artifacts = task.artifacts;
       const persistedRun = getAutomationRun(run.id);
       if (persistedRun) run = { ...run, ...persistedRun };
       this.appendRunEvent(
@@ -733,7 +781,7 @@ export class AutomationService {
         saveAutomationRun(run);
         this.appendRunEvent(run, 'run.completed', `Automation run ${status}`, { status, durationMs: run.durationMs, error });
         this.finishAutomationRun(automation.id, run.id, status, error, endedAtMs);
-        this.deliveryRouter.enqueue(run, automation);
+        this.deliveryRouter.enqueue(run, automation, artifacts);
       });
       this.refreshSchedule();
       this.eventDispatcher.runCompleted(run);

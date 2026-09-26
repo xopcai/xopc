@@ -97,10 +97,17 @@ function trimRuns(db: ReturnType<typeof getSqliteDatabase>, automationId: string
   const staleRunIds = db
     .prepare(
       `SELECT run_id FROM automation_runs WHERE automation_id = ? AND status NOT IN ('queued', 'running', 'cancelling')
+       AND NOT EXISTS (
+         SELECT 1 FROM automation_result_deliveries d
+         WHERE d.run_id = automation_runs.run_id AND d.status <> 'delivered'
+       )
        ORDER BY created_at_ms ASC LIMIT ?`,
     )
     .all(automationId, countRow.count - TRIM_TO_RUNS) as { run_id: string }[];
   for (const { run_id: runId } of staleRunIds) {
+    db.prepare('DELETE FROM automation_event_deliveries WHERE run_id = ?').run(runId);
+    db.prepare('DELETE FROM automation_result_deliveries WHERE run_id = ?').run(runId);
+    db.prepare('DELETE FROM automation_results WHERE run_id = ?').run(runId);
     db.prepare('DELETE FROM automation_run_requests WHERE run_id = ?').run(runId);
     db.prepare(`DELETE FROM automation_run_events WHERE run_id = ?`).run(runId);
     db.prepare(`DELETE FROM automation_runs WHERE run_id = ?`).run(runId);
@@ -329,9 +336,28 @@ export function listAutomationRunsForProductEvent(options: {
 
 export function deleteAutomationRunsForAutomation(automationId: string): void {
   runSqliteWriteTransaction((db) => {
+    db.prepare(`DELETE FROM automation_event_deliveries
+      WHERE run_id IN (SELECT run_id FROM automation_runs WHERE automation_id = ?)`).run(automationId);
+    db.prepare(`DELETE FROM automation_result_deliveries
+      WHERE run_id IN (SELECT run_id FROM automation_runs WHERE automation_id = ?)`).run(automationId);
+    db.prepare(`DELETE FROM automation_results
+      WHERE run_id IN (SELECT run_id FROM automation_runs WHERE automation_id = ?)`).run(automationId);
     db.prepare('DELETE FROM automation_run_requests WHERE run_id IN (SELECT run_id FROM automation_runs WHERE automation_id = ?)').run(automationId);
     db.prepare(`DELETE FROM automation_run_events WHERE automation_id = ?`).run(automationId);
     db.prepare(`DELETE FROM automation_runs WHERE automation_id = ?`).run(automationId);
+  });
+}
+
+export function pruneAutomationHistory(cutoffMs = Date.now() - 30 * 24 * 60 * 60_000): number {
+  return runSqliteWriteTransaction((db) => {
+    const result = db.prepare(`DELETE FROM automation_events
+      WHERE projection_status = 'projected' AND projected_at_ms < ?
+        AND NOT EXISTS (
+          SELECT 1 FROM automation_event_deliveries d
+          WHERE d.event_id = automation_events.event_id
+            AND d.status IN ('pending', 'retrying', 'queued', 'dead_letter')
+        )`).run(cutoffMs);
+    return Number(result.changes);
   });
 }
 

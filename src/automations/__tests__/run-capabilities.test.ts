@@ -13,6 +13,7 @@ import { AutomationService } from '../service/automation-service.js';
 import { getAutomationRunRequest, saveAutomationRun, markAutomationRunRead } from '../storage/index.js';
 import { createAutomationTool } from '../../agent/tools/automation-tool.js';
 import { createXopcUseTool } from '../../agent/tools/xopc-use-tool.js';
+import { ingestAutomationEvent } from '../events/index.js';
 
 let directory: string;
 let service: AutomationService;
@@ -33,7 +34,8 @@ afterEach(async () => {
 });
 async function fixture() {
   const automation = await service.create({ name: 'Safe fixture', trigger: { kind: 'manual' },
-    action: { kind: 'workflow', workflowId: 'not-executed' }, safety: { mode: 'suggest_only' }, delivery: { notificationPolicy: 'none' } });
+    action: { kind: 'workflow', workflowId: 'not-executed' }, safety: { mode: 'suggest_only' },
+    delivery: { notificationPolicy: 'none', destinations: [{ key: 'gateway', kind: 'gateway_event' }] } });
   const dispatcher = createProductDispatcher(undefined, { getAutomations: () => service });
   const invoke = (id: string, key: string, command = 'run', context = caller) => {
     const operation = `xopc.automations.${command}`;
@@ -103,6 +105,52 @@ describe('automation execution capabilities', () => {
     const history = await direct.execute('history', { action: 'history', automationId: automation.id });
     expect(await dispatcher.call('xopc.automations.history', { automationId: automation.id }, reader)).toMatchObject({ items: history.details.runs });
     expect(await service.getRun(run.id)).toMatchObject({ status: 'queued' });
+  });
+
+  it('recovers dead-letter event and result delivery work through idempotent capabilities and agent tools', async () => {
+    const { automation, dispatcher } = await fixture();
+    const event = ingestAutomationEvent({
+      id: 'event-recovery-1', type: 'fixture.changed', source: 'test', payload: { value: 1 },
+    }).event;
+    getSqliteDatabase().prepare(`UPDATE automation_events
+      SET projection_status = 'dead_letter', projection_error = 'fixture failure'
+      WHERE event_id = ?`).run(event.id);
+    const replayOperation = 'xopc.automations.replay_event';
+    const replayOptions = { ...dispatcher.describe(replayOperation, caller), idempotencyKey: 'replay-event-1' };
+    const replayInput = { id: event.id, reason: 'operator verified dependency recovery' };
+    const replayReceipt = await dispatcher.call(replayOperation, replayInput, caller, replayOptions);
+    expect(replayReceipt).toEqual({ ok: true, accepted: true });
+    expect(await dispatcher.call(replayOperation, replayInput, caller, replayOptions)).toEqual(replayReceipt);
+    const projection = getSqliteDatabase().prepare('SELECT projection_status FROM automation_events WHERE event_id = ?')
+      .get(event.id) as { projection_status: string };
+    expect(['retrying', 'projecting', 'projected']).toContain(projection.projection_status);
+
+    const run = service.queueRunAtomically(automation.id);
+    await service.cancelRun(run.id);
+    getSqliteDatabase().prepare(`UPDATE automation_result_deliveries
+      SET status = 'dead_letter', last_error = 'fixture delivery failure'
+      WHERE run_id = ? AND destination_key = 'gateway'`).run(run.id);
+    const direct = createAutomationTool({ getAutomationService: () => service });
+    const directResult = await direct.execute('recovery-direct', {
+      action: 'retry_delivery', runId: run.id, destinationKey: 'gateway',
+      reason: 'broker is healthy', idempotencyKey: 'retry-delivery-1',
+    });
+    expect(directResult.details).toEqual({ ok: true, accepted: true });
+    expect((await direct.execute('recovery-direct-replay', {
+      action: 'retry_delivery', runId: run.id, destinationKey: 'gateway',
+      reason: 'broker is healthy', idempotencyKey: 'retry-delivery-1',
+    })).details).toEqual(directResult.details);
+    const delivery = getSqliteDatabase().prepare(`SELECT status FROM automation_result_deliveries
+      WHERE run_id = ? AND destination_key = 'gateway'`).get(run.id) as { status: string };
+    expect(delivery.status).not.toBe('dead_letter');
+
+    getSqliteDatabase().prepare(`UPDATE automation_events SET projection_status = 'dead_letter' WHERE event_id = ?`).run(event.id);
+    const unified = createXopcUseTool({ getAutomationService: () => service });
+    const unifiedResult = await unified.execute('recovery-unified', {
+      mode: 'automation', command: 'replay_event',
+      args: { eventId: event.id, reason: 'retry projection', idempotencyKey: 'replay-event-2' },
+    });
+    expect(unifiedResult.details.result).toEqual({ ok: true, accepted: true });
   });
 
   it('signals a local running executor only after accepting cancellation', async () => {

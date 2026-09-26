@@ -21,6 +21,7 @@ import {
   AutomationReadAllInputSchema,
   CapabilityResourceInputSchema,
   AutomationDeleteOutputSchema,
+  AutomationRecoveryOutputSchema,
   NoteGetOutputSchema,
   NoteDeleteOutputSchema,
   TaskContextInputSchema,
@@ -78,7 +79,7 @@ const XopcUseToolSchema = Type.Object({
       'Agent commands: list, get {id}, create {id, profile, workspace?, models?, skills?, tools?, workflows?, runtime?, idempotencyKey?}, update {id, expectedRevision, patch, idempotencyKey?}, set_default {id, expectedRevision, idempotencyKey?}, disable/delete/purge {id, expectedRevision, idempotencyKey?}. Purge also removes on-disk data. ' +
       'Project create accepts idempotencyKey; update/pin/unpin/delete accepts {projectId, expectedVersion?, idempotencyKey?}; stable retries require the original expectedVersion. Delete preserves workspace files and does not confirm external execution stopped. ' +
       'Project milestone writes support idempotencyKey; update_milestone/delete_milestone require original expectedRevision for stable retries, and create_update requires original expectedVersion. TaskRun cancel accepts idempotencyKey and expectedVersion, and does not confirm external execution stopped. ' +
-      'Automation diagnostics: get_run/run_events {runId}, metrics {}, events {eventType?, source?, limit?}, deliveries {runId?, limit?}, product_events {eventType, source?, payloadKey?, payloadValue?, limit?}; payload filters require both key and value. ' +
+      'Automation diagnostics: get_run/run_events {runId}, metrics {}, events {eventType?, source?, limit?}, deliveries {runId?, limit?}, product_events {eventType, source?, payloadKey?, payloadValue?, limit?}; payload filters require both key and value. Recovery commands: replay_event {eventId, reason, idempotencyKey}, retry_delivery {runId, destinationKey, reason, idempotencyKey}. ' +
       'Automation also supports cancel/read {runId, idempotencyKey?} and read_all {projectId?, idempotencyKey?}; omitted projectId means all projects. Cancel acceptance is not confirmation of stopping. ' +
       'Object command. Scene commands: templates, list, get {id}, mail_accounts, mail_search {accountId, query}, mail_sources, read_notes {id}, preflight/start {templateKey, templateVersion, goal, scope, permissions}, configure {id, expectedRevision, goal, scope, permissions}, transition {id, expectedRevision, status: paused|active|completed|archived}, check {id}, notes {id, expectedRevision, content, validUntil?}, work_item {id, subjectId, accountId, dueAt}, update_work_item {workItemId, expectedRevision, dueAt?, status?}, schedule {id, triggerKey, expectedRevision, schedule}, results {id?}, feedback {presentationId, expectedRevision, rating}, mark_read {presentationId, read}, diagnostics, get_preferences, set_preferences {expectedRevision, ...preferences}. Start and check accept a stable requestId for retries. Scenes prepare read-only suggestions and drafts; never send mail. Only create a scene for work explicitly delegated by the user; inspect existing scenes first. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/rerun/pause/resume/history (rerun takes runId; run/rerun accept idempotencyKey), note list/get/project_summaries/history {noteId}/snapshot {noteId, timestamp}/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, chat_preview create/revise/get, local_app list/get/create/validate, and settings open.',
   }),
@@ -616,6 +617,7 @@ async function handleAutomation(
         : operation === 'xopc.automations.cancel' ? AutomationCancelOutputSchema
         : operation === 'xopc.automations.read' ? AutomationReadOutputSchema
         : operation === 'xopc.automations.read_all' ? AutomationReadAllOutputSchema
+        : operation === 'xopc.automations.replay_event' || operation === 'xopc.automations.retry_delivery' ? AutomationRecoveryOutputSchema
         : operation === 'xopc.automations.run' || operation === 'xopc.automations.rerun' ? AutomationRunMutationOutputSchema : AutomationMutationOutputSchema).parse(await capabilities.call(operation, input, caller,
         { ...capabilities.describe(operation, caller), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() }));
     } catch (error) {
@@ -627,6 +629,23 @@ async function handleAutomation(
   if (command === 'cancel' || command === 'read' || command === 'read_all') {
     const input = command === 'read_all' ? AutomationReadAllInputSchema.parse({ projectId: trimString(args.projectId) })
       : CapabilityResourceInputSchema.parse({ id: trimString(args.runId) ?? trimString(args.id) });
+    if (dryRun) return { ok: true, dryRun: true, action: command, input };
+    return invoke(`xopc.automations.${command}`, input);
+  }
+
+  if (command === 'replay_event' || command === 'retry_delivery') {
+    const reason = trimString(args.reason);
+    if (!reason) return { ok: false, error: 'reason is required' };
+    const input = command === 'replay_event'
+      ? { id: trimString(args.eventId) ?? trimString(args.id), reason }
+      : {
+          runId: trimString(args.runId) ?? trimString(args.id),
+          destinationKey: trimString(args.destinationKey),
+          reason,
+        };
+    if (command === 'replay_event' && !input.id) return { ok: false, error: 'eventId is required' };
+    if (command === 'retry_delivery' && !input.runId) return { ok: false, error: 'runId is required' };
+    if (command === 'retry_delivery' && !input.destinationKey) return { ok: false, error: 'destinationKey is required' };
     if (dryRun) return { ok: true, dryRun: true, action: command, input };
     return invoke(`xopc.automations.${command}`, input);
   }

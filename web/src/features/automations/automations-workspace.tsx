@@ -3216,11 +3216,12 @@ function AutomationForm({
             <SelectOption value="none">{labels.form.notifyNone}</SelectOption>
           </Select>
         </Field>
-        {form.safetyMode === 'auto_apply' ? (
-          <Field label={labels.form.completionWebhook}>
-            <input className={inputClass} value={form.completionWebhookUrl} onChange={(e) => update({ completionWebhookUrl: e.target.value })} />
-          </Field>
-        ) : null}
+        <Field label={labels.form.resultWebhookEndpoint}>
+          <div className="grid gap-2">
+            <input className={inputClass} value={form.resultWebhookEndpoint} onChange={(e) => update({ resultWebhookEndpoint: e.target.value })} />
+            <input className={inputClass} value={form.resultWebhookSecretId} onChange={(e) => update({ resultWebhookSecretId: e.target.value })} placeholder={labels.form.resultWebhookSecretId} />
+          </div>
+        </Field>
 
         <Section title={labels.form.reliability} />
         <div className="grid gap-3 sm:grid-cols-2">

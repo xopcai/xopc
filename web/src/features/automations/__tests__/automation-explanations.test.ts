@@ -21,7 +21,7 @@ function eventAutomation(
     },
     action: { kind: 'agent', instruction: 'Diagnose blocker' },
     conversationMode: 'new_session',
-    delivery: { notificationPolicy: 'attention' },
+    delivery: { notificationPolicy: 'attention', destinations: [{ key: 'gateway_event', kind: 'gateway_event' }] },
     state: {},
     createdAtMs: 1,
     updatedAtMs: 1,
