@@ -89,7 +89,7 @@
       "advisorConfigure": "Configure",
       "advisorDegradedStart": "Continue with available context",
       "advisorSceneHint": "This pattern has succeeded before. If it repeats, you can turn it into continuous help.",
-      "advisorSceneAction": "View scenes",
+      "advisorSceneAction": "View monitors",
       "advisorAutomationHint": "This work has succeeded repeatedly. Generate an Automation draft, then confirm its trigger, schedule, scope, and external actions before publishing.",
       "advisorAutomationAction": "Generate draft",
       "advisorHistory": "Suggestion history",

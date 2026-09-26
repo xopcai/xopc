@@ -33,7 +33,7 @@ export function BrowserReminders({ zh }: { zh: boolean }) {
   return <div className="space-y-2 border-t border-edge pt-3">
     <Button disabled={busy || !supported} onClick={() => void enable()}>{enabled ? (zh ? '刷新此浏览器提醒订阅' : 'Refresh this browser subscription') : (zh ? '开启页面关闭后的浏览器提醒' : 'Enable reminders when this page is closed')}</Button>
     {enabled && <p role="status">{zh ? '此浏览器已订阅。服务需持续运行；送达取决于浏览器和系统权限。' : 'Subscribed. The Gateway must remain running; delivery depends on browser and system permissions.'}</p>}
-    {(!supported || permissionDenied) && <p className="text-fg-muted">{zh ? '当前环境或通知权限不支持后台提醒。成果仍会保留在场景收件箱；可在支持推送的 HTTPS 浏览器中开启。' : 'Background reminders are unavailable here. Results remain in your scene inbox. Use a push-capable HTTPS browser and allow notifications.'}</p>}
+    {(!supported || permissionDenied) && <p className="text-fg-muted">{zh ? '当前环境或通知权限不支持后台提醒。成果仍会保留在智能关注收件箱；可在支持推送的 HTTPS 浏览器中开启。' : 'Background reminders are unavailable here. Results remain in your monitor inbox. Use a push-capable HTTPS browser and allow notifications.'}</p>}
     {error != null && <p role="alert" className="text-danger">{sceneErrorText(error, zh)}</p>}
   </div>;
 }

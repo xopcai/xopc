@@ -422,7 +422,7 @@
       "disableAfterFailures": "失败后停用次数",
       "effectivePolicy": "实际生效执行策略",
       "executionDeadline": "自动化总截止时间",
-      "downstreamTimeoutHint": "Agent turn、内置工具和 MCP 请求分别采用 Agent 与连接器的实际策略；任何时候都以最早到期的截止时间为准。"
+      "downstreamTimeoutHint": "Agent turn、内置工具和 MCP 请求分别采用 Agent 与连接的实际策略；任何时候都以最早到期的截止时间为准。"
     },
     "weekdays": {
       "monday": "周一",
@@ -434,9 +434,9 @@
       "sunday": "周日"
     },
     "experience": {
-      "scenes": "从一个场景开始",
-      "scenesDescription": "选择你希望助手完成的事，确认内容和时间即可开始。",
-      "discover": "探索场景",
+      "scenes": "从一项智能关注开始",
+      "scenesDescription": "选择希望 AI 持续关注的事项，再确认内容和时间。",
+      "discover": "探索智能关注",
       "custom": "用一句话描述",
       "settings": "任务设置",
       "executionIssues": "执行异常",

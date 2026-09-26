@@ -16,7 +16,7 @@
     "localApps": "应用工坊",
     "profile": "你",
     "skills": "技能",
-    "connectors": "连接器",
+    "connectors": "连接",
     "channels": "消息通道",
     "agents": "智能体",
     "extensions": "扩展",
@@ -49,23 +49,22 @@
       "work": "工作",
       "automation": "自动化",
       "capabilities": "能力",
-      "apps": "应用工坊"
+      "apps": "应用"
     },
     "sections": {
-      "work-overview": "总览",
+      "work-overview": "工作台",
       "work-projects": "项目",
       "work-notes": "笔记",
-      "automation-activity": "运行记录",
-      "automation-scenes": "场景",
-      "automation-triggers": "自动化任务",
+      "automation-scenes": "智能关注",
+      "automation-triggers": "自动化",
       "automation-workflows": "工作流",
       "automation-browser": "浏览器自动化",
       "capabilities-agents": "智能体",
       "capabilities-skills": "技能",
-      "capabilities-connectors": "连接器",
+      "capabilities-connectors": "连接",
       "capabilities-channels": "消息通道",
       "capabilities-extensions": "扩展",
-      "apps-library": "应用"
+      "apps-library": "应用工坊"
     }
   },
   "token": {
@@ -121,8 +120,9 @@
   },
   "sidebar": {
     "newTask": "新建对话",
+    "extensionAppsHeading": "扩展应用",
     "tasksHeading": "对话",
-    "projectsHeading": "项目",
+    "projectsHeading": "最近工作",
     "inboxHeading": "对话",
     "projectOpen": "打开项目",
     "projectNewChat": "在项目中新建对话",
@@ -168,8 +168,8 @@
     "sessionChannelsTab": "消息通道",
     "moreApps": "更多",
     "moreAppsAria": "更多导航入口",
-    "moreGroupProducts": "产品",
-    "moreGroupExtensions": "扩展",
+    "moreGroupProducts": "核心功能",
+    "moreGroupExtensions": "应用与扩展",
     "resizeApps": "调整可见导航数量",
     "resizeHandleAria": "调整左侧导航宽度",
     "timelinePinned": "置顶",
@@ -293,7 +293,7 @@
     "groups": {
       "navigate": "导航",
       "projects": "项目",
-      "connectors": "连接器",
+      "connectors": "连接",
       "quickSettings": "快捷设置",
       "extensions": "扩展",
       "sessions": "会话",
@@ -317,7 +317,7 @@
       "sessionsSubtitle": "管理与搜索会话",
       "logsSubtitle": "网关诊断日志",
       "skillsSubtitle": "管理技能",
-      "connectorsSubtitle": "连接工具与注册表",
+      "connectorsSubtitle": "管理外部服务、数据与工具连接",
       "channelsSubtitle": "消息通道设置",
       "cronSubtitle": "定时任务与调度",
       "cronSettingsSubtitle": "定时任务调度引擎全局设置",

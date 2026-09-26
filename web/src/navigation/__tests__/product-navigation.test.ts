@@ -4,7 +4,6 @@ import {
   PRODUCT_DOMAINS,
   productDomainAtPath,
   productSectionAtLocation,
-  showsProductSectionHeader,
 } from '@/navigation/product-navigation';
 
 describe('product navigation', () => {
@@ -17,13 +16,12 @@ describe('product navigation', () => {
     ]);
   });
 
-  it('puts automation management first and run history last', () => {
+  it('keeps automation destinations focused on distinct top-level tools', () => {
     expect(PRODUCT_DOMAINS.find((domain) => domain.id === 'automation')?.sections.map((section) => section.id)).toEqual([
-      'automation-triggers',
       'automation-scenes',
+      'automation-triggers',
       'automation-workflows',
       'automation-browser',
-      'automation-activity',
     ]);
   });
 
@@ -58,9 +56,9 @@ describe('product navigation', () => {
     expect(productDomainAtPath(pathname)).toBe(domain);
   });
 
-  it('distinguishes automation activity from trigger management without changing the route', () => {
-    expect(productSectionAtLocation('/automations', '?view=activity')).toBe('automation-activity');
-    expect(productSectionAtLocation('/automations', '?view=activity&status=running')).toBe('automation-activity');
+  it('treats activity as an internal view of Automations', () => {
+    expect(productSectionAtLocation('/automations', '?view=activity')).toBe('automation-triggers');
+    expect(productSectionAtLocation('/automations', '?view=activity&status=running')).toBe('automation-triggers');
     expect(productSectionAtLocation('/automations', '?status=running')).toBe('automation-triggers');
   });
 
@@ -72,14 +70,7 @@ describe('product navigation', () => {
     expect(productSectionAtLocation('/capabilities/extensions')).toBe('capabilities-extensions');
   });
 
-  it('preserves conversation chrome while keeping work active in the primary navigation', () => {
-    expect(productDomainAtPath('/chat/abc')).toBe('work');
-    expect(showsProductSectionHeader('/chat/abc')).toBe(false);
-    expect(showsProductSectionHeader('/projects/project-1')).toBe(true);
-  });
-
-  it('keeps extension app pages outside the capability-center header', () => {
+  it('keeps extension app pages outside the built-in product domains', () => {
     expect(productDomainAtPath('/extensions/example/dashboard')).toBeNull();
-    expect(showsProductSectionHeader('/extensions/example/dashboard')).toBe(false);
   });
 });

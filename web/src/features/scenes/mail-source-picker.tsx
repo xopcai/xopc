@@ -32,7 +32,7 @@ export function MailSourcePicker({ value, disabled, zh, onChange }: { value: str
   if (!accounts.data) return <Skeleton className="h-24 w-full" />;
   const label = (source: MailSource) => `${source.subject || (zh ? '无主题邮件' : 'Untitled mail')} · ${source.sender || source.accountId}`;
   return <div className="space-y-3">
-    <p className="text-sm text-fg-muted">{zh ? '搜索会读取所选 Gmail 账号的匹配邮件；开启后只持续跟进选定线程，不发送邮件，也不需要开启后台学习。' : 'Search reads matching mail in your selected Gmail account. The scene follows only the selected thread, never sends mail, and requires no background learning.'}</p>
+    <p className="text-sm text-fg-muted">{zh ? '搜索会读取所选 Gmail 账号的匹配邮件；开启后只持续跟进选定线程，不发送邮件，也不需要开启后台学习。' : 'Search reads matching mail in your selected Gmail account. The monitor follows only the selected thread, never sends mail, and requires no background learning.'}</p>
     <PopoverSelect value={accountId} disabled={disabled || busy} ariaLabel={zh ? '邮箱账号' : 'Mail account'} placeholder={zh ? '选择账号' : 'Choose account'} allowEmpty={false}
       options={accounts.data.accounts.map(item => ({ value: item.id, label: item.label }))} onChange={id => { setAccount(id); setSources([]); onChange({ id: '', accountId: '', subject: '', sender: '' }); }} />
     <label className="grid gap-2 text-sm">{zh ? '主题、发件人或 Gmail 搜索条件' : 'Subject, sender, or Gmail query'}<input value={query} maxLength={500} disabled={disabled || busy} onChange={e => setQuery(e.target.value)} className="rounded-md border border-edge bg-surface-panel px-3 py-2" placeholder={zh ? '例如 from:alice@example.com' : 'e.g. from:alice@example.com'} /></label>

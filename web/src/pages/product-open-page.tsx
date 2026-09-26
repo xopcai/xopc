@@ -40,8 +40,8 @@ export function ProductOpenPage() {
     return (
       <OpenError
         message={notFound
-          ? (zh ? '找不到这个本地应用，它可能已被删除。' : 'This local app was not found and may have been deleted.')
-          : error instanceof Error ? error.message : (zh ? '无法打开这个本地应用。' : 'Unable to open this local app.')}
+          ? (zh ? '找不到这个应用，它可能已被删除。' : 'This app was not found and may have been deleted.')
+          : error instanceof Error ? error.message : (zh ? '无法打开这个应用。' : 'Unable to open this app.')}
         zh={zh}
       />
     );
@@ -62,7 +62,7 @@ function OpenError({ message, zh }: { message: string; zh: boolean }) {
     <div className="m-6 rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger" role="alert">
       <p>{message}</p>
       <Link className="mt-3 inline-flex font-medium text-accent hover:underline" to="/local-apps">
-        {zh ? '查看本地应用' : 'View local apps'}
+        {zh ? '查看应用' : 'View apps'}
       </Link>
     </div>
   );

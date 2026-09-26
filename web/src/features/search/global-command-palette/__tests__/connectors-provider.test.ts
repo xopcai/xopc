@@ -7,7 +7,7 @@ import type {
 import { buildConnectorHits } from '@/features/search/global-command-palette/connectors-provider';
 
 const labels = {
-  group: 'Connectors',
+  group: 'Connections',
   builtin: 'Built-in',
   connected: 'Connected',
   installed: 'Installed',
