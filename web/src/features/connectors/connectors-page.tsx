@@ -382,6 +382,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
       setInstallDraft(buildInitialDraft(plan.definition, {
         packageName: plan.packageName,
         version: plan.version,
+        reviewHash: plan.reviewHash,
         permissions: plan.permissions,
       }));
     } catch (error) {

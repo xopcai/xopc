@@ -4,7 +4,11 @@ import AdmZip from 'adm-zip';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
-import { getStoreConnectorInstallPlan } from '../store-connector.js';
+import {
+  getStoreConnectorInstallPlan,
+  parseStoreConnectorCandidateRef,
+  searchStoreConnectorInstallCandidates,
+} from '../store-connector.js';
 
 const manifest = {
   contractVersion: 1,
@@ -56,6 +60,16 @@ function config(): Config {
 function mockStore(archive: Buffer, sha256 = createHash('sha256').update(archive).digest('hex'), value = manifest): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
+    if (url.startsWith('https://store.example.com/api/v1/packages?')) {
+      return new Response(JSON.stringify({
+        items: [{
+          id: 'pkg_1', name: 'demo-connector', type: 'connector', description: value.description,
+          downloads: 10, author: { username: 'xopc', avatarUrl: null }, latestVersion: '1.0.0',
+          updatedAt: new Date().toISOString(), connectorManifest: value,
+        }],
+        meta: { page: 1, pageSize: 5, total: 1, totalPages: 1 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
     if (url === 'https://store.example.com/api/v1/packages/demo-connector') {
       return new Response(JSON.stringify({
         id: 'pkg_1',
@@ -105,6 +119,20 @@ describe('store connector install plans', () => {
         runtime: { type: 'mcp', serverId: 'demo_connector' },
       },
     });
+    expect(plan.reviewHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('returns exact install candidates with semantic capabilities', async () => {
+    const searchable = { ...manifest, provides: [{ id: 'design.mobile.create' }, 'files.read'] };
+    mockStore(archiveForManifest(searchable), undefined, searchable);
+
+    const [candidate] = await searchStoreConnectorInstallCandidates(config(), 'mobile design', 5);
+
+    expect(candidate).toMatchObject({
+      source: 'store', packageName: 'demo-connector', version: '1.0.0',
+      label: 'Demo Connector', capabilities: ['design.mobile.create', 'files.read'],
+    });
+    expect(parseStoreConnectorCandidateRef(candidate!.candidateRef)).toEqual({ packageName: 'demo-connector', version: '1.0.0' });
   });
 
   it('rejects a connector whose downloaded artifact does not match the store checksum', async () => {

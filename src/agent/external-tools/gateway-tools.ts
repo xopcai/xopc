@@ -1,6 +1,12 @@
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 
+import type { Config } from '../../config/schema.js';
+import {
+  getStoreConnectorInstallPlan,
+  parseStoreConnectorCandidateRef,
+  searchStoreConnectorInstallCandidates,
+} from '../../capabilities/store-connector.js';
 import { listConnectorConnections } from '../../storage/sqlite/connector-repository.js';
 import { connectionCandidates, resolveConnectionCandidate } from '../../connectors/connection-candidates.js';
 import { parsePluginMcpCandidateRef, resolvePluginMcpConnectionCandidate } from '../../extensions/agent-plugins/connection.js';
@@ -50,12 +56,16 @@ function textResult(value: unknown, details: Record<string, unknown> = {}): Agen
   };
 }
 
-export function createExternalToolGatewayTools(providers: ExternalToolProvider[], getContext?: () => ExternalToolTurnContext | null): AgentTool[] {
+export function createExternalToolGatewayTools(
+  providers: ExternalToolProvider[],
+  getContext?: () => ExternalToolTurnContext | null,
+  getConfig?: () => Config | undefined,
+): AgentTool[] {
   const service = new ExternalToolService(providers);
   const searchTool: AgentTool<typeof ToolSearchSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.search,
     label: '🔎 External Tool Search',
-    description: `Search external tools from these sources: ${EXTERNAL_TOOL_SOURCES.join(', ')}. CLI connectors include Feishu/Lark, WeCom and WPS 365. Omit sources unless intentionally restricting the search; do not guess a source list. Use concise English capability keywords, e.g. "wecom doc.search". Returns compact references only; call xopc_tool_describe before execution. If a source-filtered search finds no relevant tools, retry without sources before concluding a capability is unavailable or requesting a connection.`,
+    description: `Search external tools from these sources: ${EXTERNAL_TOOL_SOURCES.join(', ')}. CLI connectors include Feishu/Lark, WeCom and WPS 365. Omit sources unless intentionally restricting the search; do not guess a source list. Use concise English capability keywords, e.g. "wecom doc.search". Returns executable tools, connection candidates, or reviewed Store install candidates. Call xopc_tool_describe before executing a tool. If a source-filtered search finds no relevant tools, retry without sources before concluding a capability is unavailable.`,
     parameters: ToolSearchSchema,
     async execute(_toolCallId, params) {
       const selectedSources = new Set<string>(params.sources ?? []);
@@ -63,7 +73,18 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
       const result = await service.search(params);
       const candidates = [...result.connectionCandidates, ...connectionCandidates(params.query)]
         .filter((candidate, index, all) => all.findIndex(item => item.candidateRef === candidate.candidateRef) === index);
-      return textResult({ ...result, connectionCandidates: candidates,
+      let installCandidates: Awaited<ReturnType<typeof searchStoreConnectorInstallCandidates>> = [];
+      let installCatalogError: string | undefined;
+      const config = getConfig?.();
+      if (!params.sources?.length && result.tools.length === 0 && candidates.length === 0 && config) {
+        try {
+          installCandidates = await searchStoreConnectorInstallCandidates(config, params.query, params.limit ?? 5);
+        } catch (error) {
+          installCatalogError = error instanceof Error ? error.message : String(error);
+        }
+      }
+      return textResult({ ...result, connectionCandidates: candidates, installCandidates,
+        ...(installCatalogError ? { installCatalogError } : {}),
         ...(excludedSources.length ? { searchScope: {
           excludedSources,
           instruction: 'This search excluded these sources. Results from other apps do not establish that the requested app is unavailable. Retry without sources before declaring a capability unavailable or requesting authorization. Feishu/Lark, WeCom and WPS 365 connectors use cli.',
@@ -116,7 +137,7 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
   });
   const requireTool: AgentTool<typeof requireSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.requireConnection, label: 'Connect app', parameters: requireSchema,
-    description: 'Request the connections returned as connectionCandidates by xopc_tool_search. Explain the need once before calling. This pauses the current objective and displays one action area above the input. Never return OAuth URLs or repeat a skipped request. If another objective is waiting, ask the user to continue or cancel it first.',
+    description: 'Request a connectionCandidates or installCandidates entry returned by xopc_tool_search. Explain the need once before calling. This pauses the current objective and displays one action area above the input. Never invent a candidate reference, return OAuth URLs, or repeat a skipped request. If another objective is waiting, ask the user to continue or cancel it first.',
     async execute(_id, params) {
       const context = getContext?.();
       if (!context) throw new Error('No active conversation.');
@@ -128,27 +149,57 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
       const selected = connectionBindings(context.conversationId);
       if (params.requirements.every(item => {
         const pluginTarget = parsePluginMcpCandidateRef(item.candidateRef);
-        return selected.some(need => need.target.type === 'connector' ? need.target.connectorId === item.candidateRef
-          && Boolean(need.connectionId) && (!item.accountId || item.accountId === need.accountId)
-          && (!item.accountSelector || item.accountSelector === need.accountSelector)
-          && listConnectorConnections({ principalId: principal.principalId, connectorId: need.target.connectorId })
-            .some(connection => connection.id === need.connectionId && connection.status === 'active')
-          : Boolean(pluginTarget && need.target.pluginId === pluginTarget.pluginId
-            && need.target.serverName === pluginTarget.serverName && need.connectionId === need.target.serverId));
+        return selected.some(need => {
+          if (need.target.type === 'connector') {
+            return need.target.connectorId === item.candidateRef
+              && Boolean(need.connectionId) && (!item.accountId || item.accountId === need.accountId)
+              && (!item.accountSelector || item.accountSelector === need.accountSelector)
+              && listConnectorConnections({ principalId: principal.principalId, connectorId: need.target.connectorId })
+                .some(connection => connection.id === need.connectionId && connection.status === 'active');
+          }
+          if (need.target.type === 'plugin-mcp') {
+            return Boolean(pluginTarget && need.target.pluginId === pluginTarget.pluginId
+              && need.target.serverName === pluginTarget.serverName && need.connectionId === need.target.serverId);
+          }
+          const storeTarget = parseStoreConnectorCandidateRef(item.candidateRef);
+          return Boolean(storeTarget && need.target.packageName === storeTarget.packageName
+            && need.target.version === storeTarget.version && need.connectionId);
+        });
       })) {
         return textResult({ status: 'already_connected', selectedConnections: selected,
           instruction: 'These accounts were already checked for this objective. Missing tool contracts are a tool availability problem. Do not request authorization again or invent a revision. Explain the unavailable capability and stop retrying the same tools.' });
       }
       const result = requireSessionConnection({ conversationId: context.conversationId,
         principalId: principal.principalId, agentId: principal.agentId ?? 'main', summary: params.purpose, checkpoint: params.checkpoint,
-        needs: params.requirements.map(item => {
-          const need = resolvePluginMcpConnectionCandidate(item.candidateRef) ?? resolveConnectionCandidate(item.candidateRef);
-          if (item.accountId && need.target.type !== 'connector') throw new Error('Plugin MCP connections do not support account selection.');
+        needs: await Promise.all(params.requirements.map(async item => {
+          const storeRef = parseStoreConnectorCandidateRef(item.candidateRef);
+          const config = getConfig?.();
+          const plan = storeRef && config
+            ? await getStoreConnectorInstallPlan(config, storeRef.packageName, storeRef.version)
+            : undefined;
+          if (plan && !plan.definition.provenance) {
+            throw new Error('Store Connector provenance is unavailable.');
+          }
+          const need = plan ? {
+            key: item.candidateRef,
+            target: {
+              type: 'store-connector' as const,
+              packageName: plan.packageName,
+              connectorId: plan.definition.id,
+              version: plan.version,
+              sha256: plan.definition.provenance.sha256,
+              reviewHash: plan.reviewHash,
+              description: plan.definition.description,
+            },
+            label: plan.definition.displayName,
+            capabilities: plan.definition.capabilities,
+          } : resolvePluginMcpConnectionCandidate(item.candidateRef) ?? resolveConnectionCandidate(item.candidateRef);
+          if (item.accountId && need.target.type !== 'connector') throw new Error('This install candidate does not support account selection.');
           if (item.accountId && need.target.type === 'connector'
             && !listConnectorConnections({ principalId: principal.principalId, connectorId: need.target.connectorId }).some(connection => connection.accountId === item.accountId)) throw new Error('Unknown account for this app.');
           return { ...need, accountId: item.accountId, accountSelector: item.accountSelector,
             key: need.target.type === 'connector' ? `${need.target.connectorId}:${item.accountId ?? item.accountSelector ?? 'default'}` : need.key };
-        }),
+        })),
       });
       publishConnectionWait(context.conversationId);
       return textResult(result);

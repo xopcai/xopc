@@ -5,7 +5,7 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { closeOAuthAuthorizationWindow, openOAuthAuthorizationUrl, reserveOAuthAuthorizationWindow } from '@/features/settings/oauth-authorization-window';
 
-export type ConnectionActionName = 'connect' | 'check' | 'continue' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source' | 'submit_callback';
+export type ConnectionActionName = 'install_complete' | 'connect' | 'check' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source' | 'submit_callback';
 export function useConnectionWait(conversationId: string) {
   const path = `/api/sessions/${encodeURIComponent(conversationId)}/connection-wait`;
   const { data, mutate, isLoading } = useSWR(path, async path => {
@@ -17,17 +17,17 @@ export function useConnectionWait(conversationId: string) {
   const locked = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const act = useCallback(async (action: ConnectionActionName, needKey?: string, accountId?: string, candidateRef?: string, callbackUrl?: string) => {
+  const act = useCallback(async (action: ConnectionActionName, needKey?: string, accountId?: string, candidateRef?: string, callbackUrl?: string, instanceId?: string): Promise<boolean> => {
     const snapshot = current.current;
     const wait = snapshot?.wait;
-    if (!wait || locked.current) return;
+    if (!wait || locked.current) return false;
     locked.current = true;
     setBusy(true);
     setError(undefined);
     const popup = action === 'connect' ? reserveOAuthAuthorizationWindow() : null;
     try {
       const response = await fetchJson<{ payload: { snapshot: ConnectionWaitSnapshot; authorizationUrl?: string } }>(apiUrl(`${path}/actions`), {
-        method: 'POST', body: JSON.stringify({ action, needKey, accountId, candidateRef, callbackUrl, waitId: wait.id,
+        method: 'POST', body: JSON.stringify({ action, needKey, accountId, candidateRef, callbackUrl, instanceId, waitId: wait.id,
           expectedTranscriptId: snapshot.transcriptId, expectedVersion: wait.version, idempotencyKey: crypto.randomUUID() }),
       });
       const next = response.payload.snapshot;
@@ -35,10 +35,12 @@ export function useConnectionWait(conversationId: string) {
       if (response.payload.authorizationUrl) {
         if (!await openOAuthAuthorizationUrl(response.payload.authorizationUrl, popup)) throw new Error('Unable to open the authorization window. Allow pop-ups, then retry.');
       } else closeOAuthAuthorizationWindow(popup);
+      return true;
     } catch (error) {
       closeOAuthAuthorizationWindow(popup);
       if ((error as { status?: number }).status !== 409) setError(error instanceof Error ? error.message : String(error));
       await mutate();
+      return false;
     } finally { locked.current = false; setBusy(false); }
   }, [path, mutate]);
   useEffect(() => {

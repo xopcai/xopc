@@ -10,7 +10,17 @@ export type PluginMcpConnectionTarget = {
   serverName: string;
 };
 
-export type ConnectionTarget = ConnectorConnectionTarget | PluginMcpConnectionTarget;
+export type StoreConnectorConnectionTarget = {
+  type: 'store-connector';
+  packageName: string;
+  connectorId: string;
+  version: string;
+  sha256: string;
+  reviewHash: string;
+  description: string;
+};
+
+export type ConnectionTarget = ConnectorConnectionTarget | PluginMcpConnectionTarget | StoreConnectorConnectionTarget;
 
 export type ConnectionNeed = {
   key: string;
@@ -60,7 +70,7 @@ export type ConnectionWait = {
 };
 
 export type ConnectionNeedView = ConnectionNeed & {
-  phase: 'connect' | 'authorizing' | 'reconnect' | 'choose_account' | 'ready' | 'blocked';
+  phase: 'install' | 'connect' | 'authorizing' | 'reconnect' | 'choose_account' | 'ready' | 'blocked';
   accounts: Array<{ id: string; label: string }>;
   alternatives?: Array<{ candidateRef: string; label: string }>;
   reason?: string;
