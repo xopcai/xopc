@@ -788,7 +788,7 @@
       },
       "objects": {
         "context": "上下文",
-        "scene": "场景",
+        "scene": "智能关注",
         "chatPreview": "对话预览",
         "productItem": "产品对象",
         "project": "项目",
@@ -798,7 +798,7 @@
         "note": "笔记",
         "task": "任务",
         "taskRun": "任务运行",
-        "localApp": "本地应用",
+        "localApp": "应用",
         "settings": "设置"
       },
       "fallback": { "running": "正在执行 {{name}}…", "completed": "执行了 {{name}}" }

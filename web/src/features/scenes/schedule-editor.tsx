@@ -34,7 +34,7 @@ export function ScheduleEditor({ activation, zh, onDirty, onChanged }: { activat
         setEditing(null); onDirty(false); await schedules.mutate(); onChanged?.();
       } catch (reason) { setError(reason); throw reason; }
     }} /> : <Button disabled={activation.status !== 'active'} onClick={() => { setError(undefined); setEditing({ cursor }); onDirty(true); }}>{cursor ? (zh ? '修改时间' : 'Edit schedule') : (zh ? '设置时间' : 'Set schedule')}</Button>}
-    <p className="text-xs text-fg-muted">{zh ? '没有值得关注的新变化时保持安静。暂停场景会停止定时检查。' : 'Stays quiet when there is no useful change. Pause the scene to stop scheduled checks.'}</p>
+    <p className="text-xs text-fg-muted">{zh ? '没有值得关注的新变化时保持安静。暂停关注会停止定时检查。' : 'Stays quiet when there is no useful change. Pause the monitor to stop scheduled checks.'}</p>
   </section>;
 }
 

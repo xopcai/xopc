@@ -32,20 +32,60 @@ function renderAt(path: string, node: ReactNode) {
   act(() => root.render(<MemoryRouter initialEntries={[path]}>{node}</MemoryRouter>));
 }
 
+function openMore(): HTMLButtonElement {
+  const button = container.querySelector<HTMLButtonElement>('button[aria-label="More navigation items"]')!;
+  act(() => button.click());
+  return button;
+}
+
 describe('product primary navigation', () => {
-  it('renders only the four fixed desktop product domains', () => {
+  it('shows three primary destinations by default and groups the rest under More', () => {
     renderAt('/projects/example', <SidebarNavItems />);
 
     const links = [...container.querySelectorAll('a')];
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/',
-      '/automations',
       '/capabilities/skills',
-      '/local-apps',
+      '/automations',
     ]);
-    expect(links[0]?.getAttribute('aria-current')).toBe('page');
-    expect(container.textContent).not.toContain('工作流');
-    expect(container.textContent).not.toContain('浏览器自动化');
+    expect(container.textContent).not.toContain('Workflows');
+    const more = openMore();
+    expect(more.className).toContain('bg-surface-active');
+    expect(document.body.querySelector<HTMLAnchorElement>('a[href="/projects"]')?.getAttribute('aria-current')).toBe('page');
+    expect(document.body.textContent).toContain('Workflows');
+    expect(document.body.textContent).toContain('Browser automation');
+    expect(document.body.textContent).toContain('Capabilities');
+    expect(document.body.textContent).toContain('Apps');
+    expect(document.body.textContent).toContain('App Studio');
+    expect(document.body.textContent).not.toContain('Run history');
+  });
+
+  it('keeps Automations active while viewing its internal run history', () => {
+    renderAt('/automations?view=activity', <SidebarNavItems />);
+
+    openMore();
+    const automationLink = document.body.querySelector<HTMLAnchorElement>('a[href="/automations"]');
+    expect(automationLink?.getAttribute('aria-current')).toBe('page');
+    expect(document.body.textContent).not.toContain('Run history');
+  });
+
+  it('allows the visible shortcut area to grow to five items', () => {
+    renderAt('/', <SidebarNavItems visibleLimit={5} />);
+
+    expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
+      '/',
+      '/capabilities/skills',
+      '/automations',
+      '/capabilities/connectors',
+      '/projects',
+    ]);
+  });
+
+  it('allows the visible shortcut area to shrink to one item', () => {
+    renderAt('/', <SidebarNavItems visibleLimit={1} />);
+
+    expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/']);
+    expect(container.querySelector('button[aria-label="More navigation items"]')).not.toBeNull();
   });
 
   it('uses the same domains and active rule on mobile', () => {
@@ -77,12 +117,14 @@ describe('product primary navigation', () => {
     renderAt('/extensions/sample-extension/dashboard', <SidebarNavItems />);
 
     const links = [...container.querySelectorAll('a')];
-    expect(links).toHaveLength(5);
-    expect(links[4]?.getAttribute('href')).toBe('/extensions/sample-extension/dashboard');
-    expect(links[4]?.getAttribute('aria-current')).toBe('page');
-    expect(links[2]?.getAttribute('aria-current')).toBeNull();
-    expect(links[4]?.textContent).toBe('Sample dashboard');
-    expect(container.textContent).not.toContain('Hidden page');
+    expect(links).toHaveLength(3);
+    const more = openMore();
+    expect(more.className).toContain('bg-surface-active');
+    const extensionLink = document.body.querySelector<HTMLAnchorElement>('a[href="/extensions/sample-extension/dashboard"]');
+    expect(extensionLink?.getAttribute('aria-current')).toBe('page');
+    expect(extensionLink?.textContent).toBe('Sample dashboard');
+    expect(document.body.textContent).toContain('Extension apps');
+    expect(document.body.textContent).not.toContain('Hidden page');
   });
 
   it('hides extension pages disabled pending a gateway restart', () => {
@@ -102,11 +144,11 @@ describe('product primary navigation', () => {
 
     renderAt('/', <SidebarNavItems />);
 
-    expect(container.querySelectorAll('a')).toHaveLength(4);
-    expect(container.textContent).not.toContain('Disabled dashboard');
+    openMore();
+    expect(document.body.textContent).not.toContain('Disabled dashboard');
   });
 
-  it('moves extra extension pages into More instead of overflowing the sidebar', () => {
+  it('keeps extension pages available in the More group', () => {
     extensionState.items.push({
       id: 'many-pages',
       name: 'Many pages',
@@ -126,9 +168,9 @@ describe('product primary navigation', () => {
 
     renderAt('/', <SidebarNavItems />);
 
-    expect(container.querySelectorAll('a')).toHaveLength(5);
-    expect(container.textContent).toContain('Extension one');
-    expect(container.textContent).not.toContain('Extension two');
-    expect(container.querySelector<HTMLButtonElement>('button[aria-label="More navigation items"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('Extension one');
+    openMore();
+    expect(document.body.textContent).toContain('Extension one');
+    expect(document.body.textContent).toContain('Extension two');
   });
 });

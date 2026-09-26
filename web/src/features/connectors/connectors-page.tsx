@@ -1,4 +1,4 @@
-import { Loader2, Settings2, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -708,44 +708,42 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
 
           {tab === 'discover' && hasToken ? (
             <div className="flex flex-col gap-5">
-              {!understandingIntent ? <div className="flex flex-wrap gap-2" role="group" aria-label={cs.taskFilterAria}>
-                {(['all', ...availableTasks] as DiscoveryTask[]).map((task) => (
-                  <button
-                    key={task}
-                    type="button"
-                    className={cn(
-                      'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                      selectedTask === task
-                        ? 'border-accent/40 bg-accent-soft text-accent-fg'
-                        : 'border-edge bg-surface-panel text-fg-muted hover:bg-surface-hover hover:text-fg',
-                    )}
-                    aria-pressed={selectedTask === task}
-                    onClick={() => setSelectedTask(task)}
-                  >
-                    {task === 'all' ? cs.taskAll : cs.connectorBenefitHeadings[task]}
-                  </button>
-                ))}
-              </div> : null}
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                {!understandingIntent ? <div className="flex min-w-0 flex-1 basis-80 flex-wrap gap-2" role="group" aria-label={cs.taskFilterAria}>
+                  {(['all', ...availableTasks] as DiscoveryTask[]).map((task) => (
+                    <button
+                      key={task}
+                      type="button"
+                      className={cn(
+                        'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                        selectedTask === task
+                          ? 'border-accent/40 bg-accent-soft text-accent-fg'
+                          : 'border-edge bg-surface-panel text-fg-muted hover:bg-surface-hover hover:text-fg',
+                      )}
+                      aria-pressed={selectedTask === task}
+                      onClick={() => setSelectedTask(task)}
+                    >
+                      {task === 'all' ? cs.taskAll : cs.connectorBenefitHeadings[task]}
+                    </button>
+                  ))}
+                </div> : null}
 
-              <div className="flex justify-end">
-                <details className="relative shrink-0">
-                  <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-edge bg-surface-panel px-3 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg">
-                    <SlidersHorizontal className="size-3.5" aria-hidden />
-                    {cs.filters}
-                  </summary>
-                  <div className={cn(
-                    'mt-2 grid min-w-[15rem] grid-cols-1 gap-2 rounded-xl border border-edge bg-surface-panel p-3 shadow-popover sm:absolute sm:right-0 sm:z-10',
-                    !understandingIntent && 'sm:min-w-[24rem] sm:grid-cols-2',
-                  )}>
-                    {!understandingIntent ? <PopoverSelect
-                        value={discoverSource}
-                        options={sourceOptions}
-                        placeholder={cs.discoverSourceAll}
-                        allowEmpty={false}
-                        ariaLabel={cs.registrySourceAria}
-                        triggerClassName="h-9 bg-surface-panel text-xs"
-                        onChange={setDiscoverSource}
-                      /> : null}
+                <div className={cn(
+                  'ml-auto grid w-full gap-2 sm:flex sm:w-auto sm:justify-end',
+                  understandingIntent ? 'grid-cols-1' : 'grid-cols-2',
+                )}>
+                  {!understandingIntent ? <div className="min-w-0 sm:w-40">
+                    <PopoverSelect
+                      value={discoverSource}
+                      options={sourceOptions}
+                      placeholder={cs.discoverSourceAll}
+                      allowEmpty={false}
+                      ariaLabel={cs.registrySourceAria}
+                      triggerClassName="h-9 bg-surface-panel text-xs"
+                      onChange={setDiscoverSource}
+                    />
+                  </div> : null}
+                  <div className="min-w-0 sm:w-40">
                     <PopoverSelect
                       value={connectorSort}
                       options={[
@@ -759,7 +757,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                       onChange={(value) => setConnectorSort(value as ConnectorSort)}
                     />
                   </div>
-                </details>
+                </div>
               </div>
 
               {(state.loading || registryLoading) && discoveryCatalog.length === 0 ? (
