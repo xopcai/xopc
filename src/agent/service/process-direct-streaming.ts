@@ -4,6 +4,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import { parseUserTurnDocument, renderUserTurnDocument } from '@xopcai/gateway-contract';
 
+import { stripEnvelopeTimestampPrefix } from '../../channels/envelope-timestamp.js';
 import { getConnectionResumeInput } from '../../storage/sqlite/connection-wait-repository.js';
 import { getClarificationResumeInput } from '../../storage/sqlite/clarification-wait-repository.js';
 import type { Config } from '../../config/schema.js';
@@ -425,10 +426,11 @@ export async function* runProcessDirectStreaming(
           }
         }
       }
-      const userTurnDocument = parseUserTurnDocument(mergedUserText);
-      const authoredText = userTurnDocument
+      const modelUserTurnDocument = parseUserTurnDocument(mergedUserText);
+      const userTurnDocument = parseUserTurnDocument(stripEnvelopeTimestampPrefix(mergedUserText));
+      const authoredText = modelUserTurnDocument
         ? renderUserTurnDocument(
-            userTurnDocument,
+            modelUserTurnDocument,
             refId => sourceContexts.find(context => context.refId === refId)?.title ?? null,
           )
         : mergedUserText;

@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatOptionsViewModel } from '../viewmodel/chatOptionsViewModel';
 import { XopcChatModel, XopcChatAgent, XopcQueuedInput } from '../model/chat';
 import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
@@ -5,9 +6,12 @@ import { appSettings } from '../service/settings';
 
 @ComponentV2
 export struct XopcChatOptions {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param model: XopcChatOptionsViewModel = new XopcChatOptionsViewModel();
   @Param mode: string = 'actions';
+  @Param contextSummary: ResourceStr = '';
   @Event onMode: (mode: string) => void = (_mode: string): void => {};
+  @Event onContext: () => void = (): void => {};
   @Event onAgent: (id: string) => void = (_id: string): void => {};
   @Event onFiles: () => void = (): void => {};
   @Event onNewChat: () => void = (): void => {};
@@ -22,16 +26,16 @@ export struct XopcChatOptions {
       Row() {
         Text(this.mode === 'model' ? $r('app.string.chat_model') : this.mode === 'agent' ? $r('app.string.chat_agent')
           : this.mode === 'queue' ? $r('app.string.chat_queue') : $r('app.string.chat_actions'))
-          .fontSize(20).fontWeight(FontWeight.Bold).fontColor($r('app.color.foreground')).layoutWeight(1)
+          .fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
         Button('×').width(44).height(44).padding(0).fontSize(28).backgroundColor(Color.Transparent)
-          .fontColor($r('app.color.secondary')).accessibilityText($r('app.string.chat_close')).onClick((): void => { this.onClose(); })
+          .fontColor(this.colors.secondary).accessibilityText($r('app.string.chat_close')).onClick((): void => { this.onClose(); })
       }.width('100%')
       if (this.mode === 'model' || this.mode === 'agent') {
         TextInput({ text: this.query, placeholder: $r('app.string.search') }).onChange((value: string): void => { this.query = value; })
       }
       if (this.model.loading) { XopcListSkeleton() }
       if (this.model.error && this.mode !== 'queue') {
-        Text(this.model.error).fontColor($r('app.color.danger'))
+        Text(this.model.error).fontColor(this.colors.danger)
         Button($r('app.string.refresh')).onClick((): void => { this.onRetry(); })
       }
       List({ space: this.mode === 'actions' ? 0 : 8 }) {
@@ -51,7 +55,7 @@ export struct XopcChatOptions {
           if (this.model.queueError) {
             ListItem() {
               Column({ space: 8 }) {
-                Text(this.model.queueError).fontColor($r('app.color.danger'))
+                Text(this.model.queueError).fontColor(this.colors.danger)
                 Button($r('app.string.refresh')).onClick((): void => { this.model.refreshQueue(); })
               }
             }
@@ -68,23 +72,25 @@ export struct XopcChatOptions {
                       .onClick(async (): Promise<void> => { if (await this.model.changeQueued(item, this.editText)) this.editing = ''; })
                   }
                 } else {
-                  Text(item.content || $r('app.string.add_attachment')).fontColor($r('app.color.foreground')).width('100%')
+                  Text(item.content || $r('app.string.add_attachment')).fontColor(this.colors.foreground).width('100%')
                   Row({ space: 8 }) {
                     Button($r('app.string.chat_edit')).enabled(!this.model.queueBusy).onClick((): void => { this.editing = item.id; this.editText = item.content; })
                     Button($r('app.string.cancel')).enabled(!this.model.queueBusy).onClick((): void => { this.model.changeQueued(item); })
                   }
                 }
-              }.width('100%').padding(12).borderRadius(12).backgroundColor($r('app.color.grouped'))
+              }.width('100%').padding(12).borderRadius(12).backgroundColor(this.colors.grouped)
             }
           }, (item: XopcQueuedInput): string => item.id)
-          if (!this.model.queued.length && !this.model.queueError) { ListItem() { Text($r('app.string.chat_queue_empty')).fontColor($r('app.color.secondary')).padding(24) } }
+          if (!this.model.queued.length && !this.model.queueError) { ListItem() { Text($r('app.string.chat_queue_empty')).fontColor(this.colors.secondary).padding(24) } }
         } else {
+          ListItem() { XopcHubRow({ heading: $r('app.string.chat_context'), summary: this.contextSummary,
+            compact: true, symbol: $r('sys.symbol.link'), onOpen: (): void => { this.onContext(); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_agent'), summary: this.model.agentName(), compact: true, onOpen: (): void => { this.onMode('agent'); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_model'), summary: this.model.modelName(appSettings.effectiveLanguage()), compact: true, onOpen: (): void => { this.onMode('model'); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.new_chat'), compact: true, symbol: $r('sys.symbol.square_and_pencil'), onOpen: (): void => { this.onNewChat(); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_session_files'), compact: true, symbol: $r('sys.symbol.folder'), onOpen: (): void => { this.onFiles(); } }) }
         }
       }.layoutWeight(1).width('100%')
-    }.padding({ left: 20, right: 20, top: 4, bottom: 16 }).width('100%').height('100%').backgroundColor($r('app.color.panel'))
+    }.padding({ left: 20, right: 20, top: 4, bottom: 16 }).width('100%').height('100%').backgroundColor(this.colors.panel)
   }
 }

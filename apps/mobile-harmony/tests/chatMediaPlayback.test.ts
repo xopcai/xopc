@@ -30,6 +30,13 @@ describe('chat attachment audio lifecycle', () => {
     await audio.stop(); expect(native.release).toHaveBeenCalledOnce(); expect(mocks.close).toHaveBeenCalledWith({ fd: 7 });
     native.emit('timeUpdate', 7000); expect(audio.position).toBe(0); expect(audio.state).toBe('idle');
   });
+  it('can start inline voice playback as soon as native preparation completes', async () => {
+    const native = playerFixture(); mocks.create.mockResolvedValue(native);
+    const audio = new XopcChatMediaPlayback(); await audio.open('/cache/voice.audio', 321, true);
+    native.emit('stateChange', 'initialized'); native.emit('stateChange', 'prepared');
+    await Promise.resolve();
+    expect(audio.duration).toBe(8); expect(native.play).toHaveBeenCalledOnce();
+  });
   it('disposes a player that finishes creation after its preview closes', async () => {
     let finish!: (value: ReturnType<typeof playerFixture>) => void;
     mocks.create.mockImplementation(() => new Promise(resolve => { finish = resolve; }));

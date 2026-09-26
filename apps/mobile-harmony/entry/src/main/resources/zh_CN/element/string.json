@@ -39,6 +39,8 @@
     {"name":"chat_artifact_missing","value":"文件不存在"},
     {"name":"chat_artifact_failed","value":"生成失败"},
     {"name":"chat_artifact_unavailable","value":"暂不可用"},
+    {"name":"chat_artifact_available","value":"可用"},
+    {"name":"chat_artifact_available_size","value":"可用 · %s"},
     {"name":"chat_review","value":"代码审查"},
     {"name":"chat_review_correct","value":"未发现阻断问题"},
     {"name":"chat_review_incorrect","value":"需要修改"},
@@ -147,6 +149,11 @@
     { "name": "chat_queue", "value": "待发送消息" },
     { "name": "chat_queue_empty", "value": "没有待发送的消息" },
     { "name": "chat_read_aloud", "value": "朗读" },
+    { "name": "chat_read_aloud_loading", "value": "正在准备语音…" },
+    { "name": "chat_read_aloud_playing", "value": "正在朗读" },
+    { "name": "chat_read_aloud_paused", "value": "朗读已暂停" },
+    { "name": "chat_read_aloud_pause_hint", "value": "轻触暂停" },
+    { "name": "chat_read_aloud_resume_hint", "value": "轻触继续" },
     { "name": "chat_more_sources", "value": "此上下文还包含其他来源。" },
     { "name": "chat_queue_hint", "value": "排队发送，或立即介入当前回复" },
     { "name": "chat_steer", "value": "立即介入" },
@@ -206,6 +213,26 @@
     {
       "name": "record_voice",
       "value": "语音输入"
+    },
+    {
+      "name": "voice_hold_to_speak",
+      "value": "按住说话"
+    },
+    {
+      "name": "voice_preparing",
+      "value": "正在准备麦克风…"
+    },
+    {
+      "name": "voice_release_send",
+      "value": "松开发送"
+    },
+    {
+      "name": "voice_release_cancel",
+      "value": "松开取消"
+    },
+    {
+      "name": "voice_release_text",
+      "value": "松开转文字"
     },
     {
       "name": "stop_recording",
@@ -325,7 +352,7 @@
     },
     {
       "name": "message_hint",
-      "value": "发送消息给 xopc…"
+      "value": "任何事都可以"
     },
     {
       "name": "send",
@@ -341,7 +368,7 @@
     },
     {
       "name": "new_chat",
-      "value": "新建"
+      "value": "新建会话"
     },
     {
       "name": "reconnecting",
@@ -486,6 +513,34 @@
     {
       "name": "dark",
       "value": "深色"
+    },
+    {
+      "name": "display_mode",
+      "value": "显示模式"
+    },
+    {
+      "name": "color_scheme",
+      "value": "配色方案"
+    },
+    {
+      "name": "color_scheme_default",
+      "value": "默认"
+    },
+    {
+      "name": "color_scheme_porcelain",
+      "value": "暖瓷"
+    },
+    {
+      "name": "color_scheme_dawn",
+      "value": "晨曦"
+    },
+    {
+      "name": "color_scheme_emerald",
+      "value": "翡翠"
+    },
+    {
+      "name": "color_scheme_clay",
+      "value": "陶土"
     },
     {
       "name": "disconnect",
@@ -673,6 +728,14 @@
     {
       "name": "chat_html_unavailable",
       "value": "无法加载 HTML 预览。"
+    },
+    {
+      "name": "chat_open_with_app",
+      "value": "使用其他应用打开"
+    },
+    {
+      "name": "chat_open_file_failed",
+      "value": "没有可打开该文件的应用，可以先下载保存。"
     },
     {
       "name": "chat_reference_note",

@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { common } from '@kit.AbilityKit';
 import { markdownBlocks, markdownSpans, markdownLink, XopcMarkdownBlock, XopcMarkdownSpan, XopcMarkdownTableRow, XopcMarkdownCell } from '../common/markdown';
 import { copyChatMessage } from '../service/chatMessageActions';
@@ -6,6 +7,7 @@ import { XopcHistoryMedia } from '../model/chat';
 
 @ComponentV2
 struct XopcMarkdownInline {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param content: string = '';
   @Param headingLevel: number = 0;
   @Param muted: boolean = false;
@@ -16,7 +18,7 @@ struct XopcMarkdownInline {
     if (!markdownLink(href)) return;
     try {
       const result = await this.getUIContext().getPromptAction().showDialog({ title: $r('app.string.chat_open_link'), message: href,
-        buttons: [{ text: $r('app.string.cancel'), color: $r('app.color.secondary') }, { text: $r('app.string.open'), color: $r('app.color.accent') }] });
+        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary }, { text: $r('app.string.open'), color: this.colors.accent }] });
       if (result.index === 1) await (this.getUIContext().getHostContext() as common.UIAbilityContext).openLink(href, { appLinkingOnly: false });
     } catch (_) { this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_link_failed') }); }
   }
@@ -27,7 +29,7 @@ struct XopcMarkdownInline {
           .fontWeight(span.kind === 'bold' || this.headingLevel > 0 || this.strong ? FontWeight.Bold : FontWeight.Normal)
           .fontStyle(span.kind === 'italic' ? FontStyle.Italic : FontStyle.Normal)
           .fontFamily(span.kind === 'code' ? 'monospace' : 'sans-serif')
-          .fontColor(span.href ? $r('app.color.accent') : this.muted ? $r('app.color.secondary') : $r('app.color.foreground'))
+          .fontColor(span.href ? this.colors.accent : this.muted ? this.colors.secondary : this.colors.foreground)
           .decoration({ type: span.href ? TextDecorationType.Underline : span.kind === 'strike' ? TextDecorationType.LineThrough : TextDecorationType.None })
           .onClick((): void => { if (span.href) this.openTarget(span.href); })
       }, (span: XopcMarkdownSpan): string => span.id + ':' + span.kind + ':' + span.text + ':' + (span.href || ''))
@@ -39,6 +41,7 @@ struct XopcMarkdownInline {
 
 @ComponentV2
 export struct XopcMarkdownView {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param content: string = '';
   @Param conversationId: string = '';
   @Computed get blocks(): XopcMarkdownBlock[] { return markdownBlocks(this.content); }
@@ -55,17 +58,20 @@ export struct XopcMarkdownView {
     Column({ space: 12 }) {
       Repeat<XopcMarkdownBlock>(this.blocks).each((item: RepeatItem<XopcMarkdownBlock>) => {
         if (item.item.kind === 'image') { XopcChatMediaView({ file: this.imageFile(item.item), conversationId: this.conversationId }) }
-        else if (item.item.kind === 'rule') { Divider().color($r('app.color.secondary')).opacity(0.3) }
+        else if (item.item.kind === 'rule') {
+          Column().width('100%').height(8).borderRadius(4).backgroundColor(this.colors.grouped)
+            .margin({ top: 4, bottom: 4 })
+        }
         else if (item.item.kind === 'code') {
           Column() {
             Row() {
-              Text(item.item.language || '').fontSize(12).fontColor($r('app.color.secondary')).layoutWeight(1)
-              Button($r('app.string.chat_copy')).height(44).backgroundColor(Color.Transparent).fontColor($r('app.color.accent'))
+              Text(item.item.language || '').fontSize(12).fontColor(this.colors.secondary).layoutWeight(1)
+              Button($r('app.string.chat_copy')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
                 .onClick((): void => { this.copyCode(item.item.text); })
             }.width('100%')
             Text(item.item.text).fontFamily('monospace').fontSize(14).lineHeight(22)
-              .fontColor($r('app.color.foreground')).copyOption(CopyOptions.InApp).width('100%')
-          }.padding(12).width('100%').borderRadius(8).backgroundColor($r('app.color.grouped'))
+              .fontColor(this.colors.foreground).copyOption(CopyOptions.InApp).width('100%')
+          }.padding(12).width('100%').borderRadius(8).backgroundColor(this.colors.grouped)
         } else if (item.item.kind === 'table') {
           Scroll() {
             Column() {
@@ -75,8 +81,8 @@ export struct XopcMarkdownView {
                     XopcMarkdownInline({ content: cell.text, strong: row.header, alignment: cell.align })
                       .width(168).padding(10)
                   }, (cell: XopcMarkdownCell): string => cell.id + ':' + cell.text)
-                }.alignItems(VerticalAlign.Top).backgroundColor(row.header ? $r('app.color.grouped') : Color.Transparent)
-                  .border({ width: { bottom: 0.5 }, color: $r('app.color.secondary') })
+                }.alignItems(VerticalAlign.Top).backgroundColor(row.header ? this.colors.grouped : this.colors.panel)
+                  .margin({ bottom: 4 })
               }, (row: XopcMarkdownTableRow): string => row.id + ':' + JSON.stringify(row.cells))
             }
           }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Auto)

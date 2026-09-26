@@ -65,7 +65,7 @@ export function createExternalToolGatewayTools(
   const searchTool: AgentTool<typeof ToolSearchSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.search,
     label: '🔎 External Tool Search',
-    description: `Search external tools from these sources: ${EXTERNAL_TOOL_SOURCES.join(', ')}. CLI connectors include Feishu/Lark, WeCom and WPS 365. Omit sources unless intentionally restricting the search; do not guess a source list. Use concise English capability keywords, e.g. "wecom doc.search". Returns executable tools, connection candidates, or reviewed Store install candidates. Call xopc_tool_describe before executing a tool. If a source-filtered search finds no relevant tools, retry without sources before concluding a capability is unavailable.`,
+    description: `Search external tools from these sources: ${EXTERNAL_TOOL_SOURCES.join(', ')}. CLI connectors include Feishu/Lark, WeCom and WPS 365. Omit sources unless intentionally restricting the search; do not guess a source list. Use concise English capability keywords, e.g. "wecom doc.search". Returns executable tools, connection candidates, or reviewed Store install candidates. Call xopc_tool_describe before executing a tool. When no executable tool exists but a connection or install candidate is returned, use xopc_require_connection instead of falling back to browser automation. If a source-filtered search finds no relevant tools, retry without sources before concluding a capability is unavailable.`,
     parameters: ToolSearchSchema,
     async execute(_toolCallId, params) {
       const selectedSources = new Set<string>(params.sources ?? []);
@@ -84,6 +84,9 @@ export function createExternalToolGatewayTools(
         }
       }
       return textResult({ ...result, connectionCandidates: candidates, installCandidates,
+        ...(result.tools.length === 0 && (candidates.length > 0 || installCandidates.length > 0) ? {
+          instruction: 'The requested app is available but is not connected. Explain that connection is required, then call xopc_require_connection with an exact candidateRef from this result. Do not fall back to browser automation unless the user explicitly asked for browser use or skips the connection.',
+        } : {}),
         ...(installCatalogError ? { installCatalogError } : {}),
         ...(excludedSources.length ? { searchScope: {
           excludedSources,

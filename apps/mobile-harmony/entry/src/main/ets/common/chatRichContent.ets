@@ -14,7 +14,8 @@ export function chatReview(raw?: XopcContentBlock): XopcContentBlock | undefined
 
 export function chatAnswerText(row: XopcChatRow): string {
   if (!row.blocks) return row.text;
-  return row.blocks.filter((block: XopcChatBlock): boolean => block.kind === 'text' && block.presentation !== 'narration')
+  return row.blocks.filter((block: XopcChatBlock): boolean => block.kind === 'text'
+    && block.presentation !== 'narration' && block.presentation !== 'pending')
     .map((block: XopcChatBlock): string => block.text).join('\n').trim();
 }
 
@@ -220,11 +221,13 @@ export function mergeAssistantRows(rows: XopcChatRow[]): XopcChatRow[] {
 
 export function chatActivities(row: XopcChatRow, reasoning: string): XopcChatBlock[] {
   return (row.blocks || []).filter((block: XopcChatBlock): boolean => block.kind === 'tool' || block.kind === 'plan' || block.kind === 'diff'
-    || (reasoning !== 'off' && block.kind === 'thinking' && (!!block.text.trim() || !!block.active)));
+    || (reasoning !== 'off' && ((block.kind === 'thinking' && (!!block.text.trim() || !!block.active))
+      || (block.kind === 'text' && (block.presentation === 'pending' || block.presentation === 'narration') && !!block.text.trim()))));
 }
 
 export function chatAnswerStarted(row: XopcChatRow): boolean {
-  return (row.blocks || []).some((block: XopcChatBlock): boolean => block.kind === 'text' && block.presentation !== 'narration' && !!block.text.trim());
+  return (row.blocks || []).some((block: XopcChatBlock): boolean => block.kind === 'text'
+    && block.presentation !== 'narration' && block.presentation !== 'pending' && !!block.text.trim());
 }
 
 export function chatToolKey(name: string): string { return name.split('__').pop() || name; }

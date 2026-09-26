@@ -141,6 +141,41 @@ describe('direct stream input visibility', () => {
     );
   });
 
+  it('keeps the runtime timestamp out of inline context display metadata', async () => {
+    const { deps, buildTranscriptUserMessage } = setup();
+    const source = {
+      refId: 'folder_ref', kind: 'file' as const, sourceId: 'folder-1', version: '7',
+      title: 'extensions/hello', text: 'index.ts', fileKind: 'directory' as const,
+    };
+    const events = [];
+    for await (const event of runProcessDirectStreaming(deps, {
+      content: `[2026-09-27 01:21 GMT+8] ${contextRefWireToken('folder_ref')} 介绍下这个是什么?`,
+      conversationId: 'agent:main:main',
+      runId: 'timestamped-context-run',
+      origin: { type: 'system', source: 'internal' },
+      sourceContexts: [source],
+    })) events.push(event);
+
+    expect(buildTranscriptUserMessage).toHaveBeenCalledWith(
+      '[2026-09-27 01:21 GMT+8] @extensions/hello 介绍下这个是什么?',
+      undefined,
+      'agent:main:main',
+      expect.anything(),
+    );
+    expect(events[0]).toEqual(expect.objectContaining({
+      type: 'user_message',
+      metadata: expect.objectContaining({
+        userTurnDocument: {
+          version: 1,
+          parts: [
+            { type: 'context_ref', refId: 'folder_ref' },
+            { type: 'text', text: ' 介绍下这个是什么?' },
+          ],
+        },
+      }),
+    }));
+  });
+
   it('suppresses read_media prompts for successfully transcribed voice while retaining its media', async () => {
     const uri = 'media://inbound/voice.m4a';
     const media = [{

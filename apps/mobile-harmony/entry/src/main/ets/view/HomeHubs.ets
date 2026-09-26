@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcPageHeader, XopcHubRow, XopcSectionLabel, XopcEmptyHint, XopcListSkeleton } from './MobileComponents';
 import { XopcProgressViewModel, XopcLibraryViewModel } from '../viewmodel/homeViewModel';
 import { XopcHomeAction, XopcHomeItem, XopcMobileRoute } from '../model/home';
@@ -7,6 +8,7 @@ import { mobileRoute } from '../common/homeProtocol';
 
 @ComponentV2
 export struct XopcProgressView {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param activePage: boolean = false;
   @Local model: XopcProgressViewModel = new XopcProgressViewModel();
   @Local pulling: boolean = false;
@@ -38,8 +40,8 @@ export struct XopcProgressView {
     try {
       const result = await this.getUIContext().getPromptAction().showDialog({
         title: action.label, message: $r('app.string.confirm_action_help'),
-        buttons: [{ text: $r('app.string.cancel'), color: $r('app.color.secondary') },
-          { text: $r('app.string.confirm'), color: $r('app.color.accent') }]
+        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
+          { text: $r('app.string.confirm'), color: this.colors.accent }]
       });
       if (result.index === 1) await this.model.act(action);
     } catch (error) { this.model.actionError = (error as Error).message; }
@@ -49,16 +51,16 @@ export struct XopcProgressView {
     Column({ space: 8 }) {
       XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.checkmark_circle'),
         navigable: Boolean(item.openAction), onOpen: (): void => { if (item.openAction) this.runAction(item.openAction); } })
-      if (item.recommendation) { Text(item.recommendation).fontSize(13).fontColor($r('app.color.secondary')).width('100%') }
+      if (item.recommendation) { Text(item.recommendation).fontSize(13).fontColor(this.colors.secondary).width('100%') }
       Column({ space: 4 }) {
         if (item.primaryAction) {
-          Button(item.primaryAction.label).width('100%').constraintSize({ minHeight: 44 }).backgroundColor($r('app.color.accent_soft'))
-            .fontColor($r('app.color.accent')).enabled(!this.model.pending)
+          Button(item.primaryAction.label).width('100%').constraintSize({ minHeight: 44 }).backgroundColor(this.colors.accentSoft)
+            .fontColor(this.colors.accent).enabled(!this.model.pending)
             .onClick((): void => { if (item.primaryAction) this.runAction(item.primaryAction); })
         }
         ForEach(item.secondaryActions, (action: XopcHomeAction) => {
           Button(action.label).width('100%').constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent)
-            .fontColor($r('app.color.secondary')).enabled(!this.model.pending)
+            .fontColor(this.colors.secondary).enabled(!this.model.pending)
             .onClick((): void => { this.runAction(action); })
         }, (action: XopcHomeAction): string => action.type + ':' + action.label)
       }.width('100%')
@@ -68,13 +70,12 @@ export struct XopcProgressView {
   workTool(label: ResourceStr, icon: Resource, page: string) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 10 }) {
-        Row() { SymbolGlyph(icon).fontSize(20).fontColor([$r('app.color.accent')]) }
-          .width(34).height(34).justifyContent(FlexAlign.Center).borderRadius(17).backgroundColor($r('app.color.accent_soft'))
-        Text(label).fontSize(14).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground')).layoutWeight(1).maxLines(1)
-        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([$r('app.color.tertiary')])
+        Row() { SymbolGlyph(icon).fontSize(20).fontColor([this.colors.accent]) }
+          .width(34).height(34).justifyContent(FlexAlign.Center).borderRadius(17).backgroundColor(this.colors.accentSoft)
+        Text(label).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).layoutWeight(1).maxLines(1)
+        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').height(64).padding({ left: 12, right: 12 })
-    }.layoutWeight(1).padding(0).borderRadius(16).backgroundColor($r('app.color.panel'))
-      .border({ width: 0.5, color: $r('app.color.border_subtle') })
+    }.layoutWeight(1).padding(0).borderRadius(16).backgroundColor(this.colors.panel)
       .onClick((): void => { this.openPage(page); })
   }
   build() {
@@ -86,14 +87,14 @@ export struct XopcProgressView {
           Column() {
             Row({ space: 12 }) {
               SymbolGlyph(this.model.needsUser.length ? $r('sys.symbol.exclamationmark_circle') : $r('sys.symbol.checkmark_circle'))
-                .fontSize(24).fontColor([$r('app.color.accent')])
+                .fontSize(24).fontColor([this.colors.accent])
               Column({ space: 5 }) {
                 Text($r('app.string.progress_summary', this.model.needsUser.length, this.model.background.length))
-                  .fontSize(16).lineHeight(22).fontWeight(FontWeight.Bold).fontColor($r('app.color.foreground'))
-                Text($r('app.string.progress_hint')).fontSize(13).lineHeight(18).fontColor($r('app.color.secondary'))
+                  .fontSize(16).lineHeight(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+                Text($r('app.string.progress_hint')).fontSize(13).lineHeight(18).fontColor(this.colors.secondary)
               }.layoutWeight(1).alignItems(HorizontalAlign.Start)
             }.width('100%').constraintSize({ minHeight: 92 }).padding(16).borderRadius(20)
-              .backgroundColor($r('app.color.accent_soft')).border({ width: 0.5, color: $r('app.color.border_subtle') })
+              .backgroundColor(this.colors.accentSoft)
             if (this.model.loading) { XopcListSkeleton() }
             else {
               if (this.model.homeError) {
@@ -122,7 +123,7 @@ export struct XopcProgressView {
                 }, (task: XopcTask): string => task.id + ':' + (task.updatedAt ?? 0))
               }
             }
-            if (this.model.actionError) { Text(this.model.actionError).fontColor($r('app.color.danger')).width('100%').padding(12) }
+            if (this.model.actionError) { Text(this.model.actionError).fontColor(this.colors.danger).width('100%').padding(12) }
             XopcSectionLabel({ heading: $r('app.string.work_tools') })
             Row({ space: 12 }) {
               this.workTool($r('app.string.workflows'), $r('sys.symbol.arrow_clockwise'), 'workflows')
@@ -133,12 +134,13 @@ export struct XopcProgressView {
       }.layoutWeight(1).onRefreshing((): void => {
         this.pulling = true; this.model.refresh().finally((): void => { this.pulling = false; });
       })
-    }.width('100%').height('100%').backgroundColor($r('app.color.surface'))
+    }.width('100%').height('100%').backgroundColor(this.colors.surface)
   }
 }
 
 @ComponentV2
 export struct XopcLibraryView {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param activePage: boolean = false;
   @Local model: XopcLibraryViewModel = new XopcLibraryViewModel();
   @Local pulling: boolean = false;
@@ -157,13 +159,13 @@ export struct XopcLibraryView {
   shortcut(label: ResourceStr, icon: Resource, page: string) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 10 }) {
-        Row() { SymbolGlyph(icon).fontSize(21).fontColor([$r('app.color.accent')]) }
-          .width(36).height(36).justifyContent(FlexAlign.Center).borderRadius(18).backgroundColor($r('app.color.accent_soft'))
-        Text(label).fontSize(15).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground')).layoutWeight(1).maxLines(1)
-        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([$r('app.color.tertiary')])
+        Row() { SymbolGlyph(icon).fontSize(21).fontColor([this.colors.accent]) }
+          .width(36).height(36).justifyContent(FlexAlign.Center).borderRadius(18).backgroundColor(this.colors.accentSoft)
+        Text(label).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).layoutWeight(1).maxLines(1)
+        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').height(68).padding({ left: 12, right: 12 })
-    }.layoutWeight(1).padding(0).borderRadius(16).backgroundColor($r('app.color.panel'))
-      .border({ width: 0.5, color: $r('app.color.border_subtle') }).onClick((): void => { this.openPage(page); })
+    }.layoutWeight(1).padding(0).borderRadius(16).backgroundColor(this.colors.panel)
+      .onClick((): void => { this.openPage(page); })
   }
   build() {
     Column() {
@@ -171,7 +173,7 @@ export struct XopcLibraryView {
       Refresh({ refreshing: this.pulling }) {
         Scroll() {
           Column() {
-            Text($r('app.string.library_hint')).fontSize(15).lineHeight(22).fontColor($r('app.color.secondary')).width('100%')
+            Text($r('app.string.library_hint')).fontSize(15).lineHeight(22).fontColor(this.colors.secondary).width('100%')
             XopcSectionLabel({ heading: $r('app.string.quick_access') })
             Row({ space: 12 }) {
               this.shortcut($r('app.string.notes'), $r('sys.symbol.doc_text'), 'notes')
@@ -202,6 +204,6 @@ export struct XopcLibraryView {
       }.layoutWeight(1).onRefreshing((): void => {
         this.pulling = true; this.model.refresh().finally((): void => { this.pulling = false; });
       })
-    }.width('100%').height('100%').backgroundColor($r('app.color.surface'))
+    }.width('100%').height('100%').backgroundColor(this.colors.surface)
   }
 }

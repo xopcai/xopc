@@ -68,11 +68,31 @@ describe('external tool discovery gateway', () => {
     expect(found.searchScope.instruction).toContain('Results from other apps');
   });
 
+  it('directs the agent to the connection flow when an app is available but disconnected', async () => {
+    const provider: ExternalToolProvider = {
+      source: 'composio', search: async () => [],
+      connectionCandidates: async () => [{
+        candidateRef: 'composio-clickup', source: 'composio', label: 'ClickUp',
+        summary: 'Connect ClickUp', capabilities: ['tools'], reason: 'not_connected',
+      }],
+      describe: async () => undefined, execute: async () => ({ content: [], details: {} }),
+    };
+    const search = createExternalToolGatewayTools([provider]).find(tool => tool.name === EXTERNAL_TOOL_NAMES.search)!;
+    const found = payload(await search.execute('search', { query: 'ClickUp list my tasks' }));
+
+    expect(found.connectionCandidates).toEqual([
+      expect.objectContaining({ candidateRef: 'composio-clickup' }),
+    ]);
+    expect(found.instruction).toContain('xopc_require_connection');
+    expect(found.instruction).toContain('Do not fall back to browser automation');
+  });
+
   it('advertises every registered source and recommends searching without a filter', () => {
     const { search } = setup();
     for (const source of EXTERNAL_TOOL_SOURCES) expect(search.description).toContain(source);
     expect(search.description).toContain('WeCom');
     expect(search.description).toContain('retry without sources');
+    expect(search.description).toContain('xopc_require_connection');
     expect(search.parameters.properties.sources.description).toContain('Omit to search all sources');
   });
 });
