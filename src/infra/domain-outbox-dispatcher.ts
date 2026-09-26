@@ -1,4 +1,4 @@
-import type { AutomationEvent } from '../automations/domain/types.js';
+import { ingestAutomationEvent } from '../automations/events/event-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
 type OutboxRow = {
@@ -7,15 +7,14 @@ type OutboxRow = {
   payload_json: string;
   created_at: number;
   subject_kind: string;
+  subject_id: string;
   operation_id: string | null;
 };
 
 export class DomainOutboxDispatcher {
-  constructor(private readonly publish: (event: AutomationEvent) => void) {}
-
   drain(limit = 100, subjectKind?: string): number {
     const rows = getSqliteDatabase().prepare(
-      `SELECT event_id, event_type, payload_json, created_at, subject_kind, operation_id
+      `SELECT event_id, event_type, payload_json, created_at, subject_kind, subject_id, operation_id
        FROM domain_outbox WHERE published_at IS NULL AND (? IS NULL OR subject_kind = ?)
        ORDER BY created_at, event_id LIMIT ?`,
     ).all(subjectKind ?? null, subjectKind ?? null, Math.max(1, Math.min(500, Math.floor(limit)))) as OutboxRow[];
@@ -23,11 +22,18 @@ export class DomainOutboxDispatcher {
     for (const row of rows) {
       try {
         const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
-        this.publish({
+        ingestAutomationEvent({
+          id: row.event_id,
           type: row.event_type,
           source: row.subject_kind === 'note' ? 'notes' : row.subject_kind === 'project' ? 'projects' : row.subject_kind === 'scene' ? 'scenes' : row.subject_kind === 'local_app' ? 'local_apps' : 'tasks',
+          schemaVersion: 1,
+          subject: { kind: row.subject_kind, id: row.subject_id },
           payload: { ...payload, sourceEventId: row.event_id, ...(row.operation_id ? { operationId: row.operation_id } : {}) },
           occurredAtMs: row.created_at,
+          correlationId: typeof payload.correlationId === 'string' ? payload.correlationId : row.event_id,
+          causationId: typeof payload.causationId === 'string' ? payload.causationId : undefined,
+          dedupeKey: row.event_id,
+          trust: 'system',
         });
         runSqliteWriteTransaction((db) => {
           db.prepare(

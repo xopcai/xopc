@@ -13,10 +13,9 @@ export function defaultAutomationTimeoutSeconds(action: AutomationAction): numbe
 
 export function resolveAutomationTimeoutSeconds(
   action: AutomationAction,
-  reliability?: { executionTimeoutSeconds?: number; timeoutSeconds?: number },
+  reliability?: { executionTimeoutSeconds?: number },
 ): number {
   return reliability?.executionTimeoutSeconds
     ?? ('timeoutSeconds' in action ? action.timeoutSeconds : undefined)
-    ?? reliability?.timeoutSeconds
     ?? defaultAutomationTimeoutSeconds(action);
 }

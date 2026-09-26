@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DomainOutboxDispatcher } from '../../infra/domain-outbox-dispatcher.js';
+import { listAutomationEvents } from '../../automations/events/index.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ProjectService } from '../project-service.js';
@@ -87,15 +88,17 @@ describe('project lifecycle resource events', () => {
 
   it('recovers pending events after reopening the database and does not republish acknowledged events', () => {
     const project = projects.create({ name: 'Recovery' });
-    const publish = vi.fn().mockImplementationOnce(() => { throw new Error('offline'); });
-    expect(new DomainOutboxDispatcher(publish).drain(100, 'project')).toBe(0);
+    getSqliteDatabase().exec(`CREATE TRIGGER reject_automation_event BEFORE INSERT ON automation_events
+      BEGIN SELECT RAISE(ABORT, 'offline'); END`);
+    expect(new DomainOutboxDispatcher().drain(100, 'project')).toBe(0);
+    getSqliteDatabase().exec('DROP TRIGGER reject_automation_event');
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(directory, 'xopc.db') });
-    const dispatcher = new DomainOutboxDispatcher(publish);
+    const dispatcher = new DomainOutboxDispatcher();
     expect(dispatcher.drain(100, 'project')).toBe(1);
     expect(dispatcher.drain(100, 'project')).toBe(0);
-    expect(publish).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(listAutomationEvents({ source: 'projects' })).toContainEqual(expect.objectContaining({
       type: 'project.created', source: 'projects', payload: expect.objectContaining({ projectId: project.id, version: 1 }),
     }));
   });

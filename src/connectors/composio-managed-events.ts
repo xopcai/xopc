@@ -48,7 +48,7 @@ export class ManagedComposioEventPoller {
 
   constructor(private readonly input: {
     getConfig: () => Config;
-    triggerAutomation: (event: { type: string; source: string; payload: Record<string, unknown> }) => Promise<unknown>;
+    ingestEvent: (event: { id: string; type: string; source: string; payload: Record<string, unknown>; dedupeKey: string; trust: 'connector' }) => unknown;
     requestLearning: (toolkit: string) => void;
     setLearningPaused: (connectionId: string, paused: boolean) => void;
     client?: ManagedEventClient;
@@ -110,9 +110,12 @@ export class ManagedComposioEventPoller {
       await appendComposioTriggerEvent(config, payload);
       const toolkit = normalized.toolkit ?? event.toolkit;
       if (toolkit) this.input.requestLearning(toolkit);
-      await this.input.triggerAutomation({
+      this.input.ingestEvent({
+        id: `connector:composio:${event.id}`,
         type: `connector.${normalized.trigger ?? normalized.type}`,
         source: toolkit ? `composio:${toolkit}` : 'composio',
+        dedupeKey: event.id,
+        trust: 'connector',
         payload: {
           ...normalized.data,
           connectorId: toolkit ? `composio-${toolkit}` : 'composio',

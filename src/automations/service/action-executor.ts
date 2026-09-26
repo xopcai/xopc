@@ -15,6 +15,20 @@ import { resolveAutomationTimeoutSeconds } from '../domain/defaults.js';
 const log = createLogger('Automation:ActionExecutor');
 const CANCELLATION_GRACE_MS = 10_000;
 
+type AutomationActionKind = AutomationAction['kind'];
+type AutomationActionOf<K extends AutomationActionKind> = Extract<AutomationAction, { kind: K }>;
+
+interface AutomationExecutorInput {
+  automation: Automation;
+  run: AutomationRun;
+  signal: AbortSignal;
+  hooks: AutomationActionExecutionHooks;
+  deadlineAtMs: number;
+  context: AutomationActionExecutionContext;
+}
+
+type AutomationExecutorHandler = (input: AutomationExecutorInput) => Promise<AutomationActionTask>;
+
 class AutomationExecutionStoppedError extends Error {
   constructor(
     readonly status: 'timeout' | 'cancelled',
@@ -100,6 +114,29 @@ async function executeWithDeadline<T>(
 
 export class AutomationActionExecutor {
   private deps: AutomationDeps = {};
+  private readonly handlers = new Map<AutomationActionKind, AutomationExecutorHandler>();
+
+  constructor() {
+    this.register('agent', (input, action) => this.executeAgent(
+      input.automation, action, input.run, input.signal, input.hooks, input.deadlineAtMs, input.context,
+    ));
+    this.register('workflow', (input, action) => this.executeWorkflow(
+      input.automation, action, input.run, input.signal, input.hooks, input.context,
+    ));
+    this.register('browser_automation', (input, action) => this.executeBrowserAutomation(
+      input.automation, action, input.signal, input.hooks, input.context,
+    ));
+    this.register('task_command', (input, action) => this.executeTaskCommand(input, action));
+    this.register('system', (input, action) => this.executeSystemAction(input, action));
+  }
+
+  register<K extends AutomationActionKind>(
+    kind: K,
+    handler: (input: AutomationExecutorInput, action: AutomationActionOf<K>) => Promise<AutomationActionTask>,
+  ): void {
+    if (this.handlers.has(kind)) throw new Error(`Automation executor already registered: ${kind}`);
+    this.handlers.set(kind, (input) => handler(input, input.automation.action as AutomationActionOf<K>));
+  }
 
   setDeps(deps: AutomationDeps): void {
     this.deps = { ...this.deps, ...deps };
@@ -169,38 +206,42 @@ export class AutomationActionExecutor {
     if (signal.aborted) {
       return { status: 'cancelled', error: 'Automation run was cancelled' };
     }
-    if (automation.action.kind === 'workflow') {
-      return this.executeWorkflow(automation, automation.action, run, signal, hooks, context);
-    }
-    if (automation.action.kind === 'browser_automation') {
-      return this.executeBrowserAutomation(automation, automation.action, signal, hooks, context);
-    }
-    if (automation.action.kind === 'task_command') {
-      await hooks.onRunPatch?.({ currentPhase: 'action' });
-      const execute = this.deps.executeTaskCommand;
-      if (!execute) return { status: 'failed', error: 'Task command executor is unavailable' };
-      const result = execute({
-        taskId: automation.action.taskId,
-        idempotencyKey: `automation:${automation.id}:${run.id}`,
-        command: automation.action.command,
-        ...(context.triggerEvent ? { triggerEvent: context.triggerEvent } : {}),
-      });
-      return result.ok
-        ? { status: 'succeeded', summary: result.runId ? `TaskRun ${result.runId} queued` : 'Task command applied' }
-        : { status: 'failed', error: result.reason ?? 'Task command failed' };
-    }
-    if (automation.action.kind === 'system') {
-      await hooks.onRunPatch?.({ currentPhase: 'action' });
-      const execute = this.deps.executeSystemAction;
-      if (!execute) return { status: 'failed', error: 'System action executor is unavailable' };
-      const result = await execute({
-        capability: automation.action.capability,
-        automationId: automation.id,
-        runId: run.id,
-      });
-      return { status: 'succeeded', summary: result.summary ?? 'System action completed' };
-    }
-    return this.executeAgent(automation, automation.action, run, signal, hooks, deadlineAtMs, context);
+    const handler = this.handlers.get(automation.action.kind);
+    if (!handler) return { status: 'failed', error: `Automation executor is unavailable: ${automation.action.kind}` };
+    return handler({ automation, run, signal, hooks, deadlineAtMs, context });
+  }
+
+  private async executeTaskCommand(
+    input: AutomationExecutorInput,
+    action: Extract<AutomationAction, { kind: 'task_command' }>,
+  ): Promise<AutomationActionTask> {
+    await input.hooks.onRunPatch?.({ currentPhase: 'action' });
+    const execute = this.deps.executeTaskCommand;
+    if (!execute) return { status: 'failed', error: 'Task command executor is unavailable' };
+    const result = execute({
+      taskId: action.taskId,
+      idempotencyKey: `automation:${input.automation.id}:${input.run.id}`,
+      command: action.command,
+      ...(input.context.triggerEvent ? { triggerEvent: input.context.triggerEvent } : {}),
+    });
+    return result.ok
+      ? { status: 'succeeded', summary: result.runId ? `TaskRun ${result.runId} queued` : 'Task command applied' }
+      : { status: 'failed', error: result.reason ?? 'Task command failed' };
+  }
+
+  private async executeSystemAction(
+    input: AutomationExecutorInput,
+    action: Extract<AutomationAction, { kind: 'system' }>,
+  ): Promise<AutomationActionTask> {
+    await input.hooks.onRunPatch?.({ currentPhase: 'action' });
+    const execute = this.deps.executeSystemAction;
+    if (!execute) return { status: 'failed', error: 'System action executor is unavailable' };
+    const result = await execute({
+      capability: action.capability,
+      automationId: input.automation.id,
+      runId: input.run.id,
+    });
+    return { status: 'succeeded', summary: result.summary ?? 'System action completed' };
   }
 
   private async executeBrowserAutomation(

@@ -205,13 +205,13 @@ describe('automation state capability', () => {
   it('preserves omitted policies and runtime state when changing only the name', async () => {
     const { service, dispatcher } = await fixture();
     const automation = await service.create({ name: 'Policy fixture', trigger: { kind: 'manual' },
-      action: { kind: 'agent', instruction: 'No execution' }, conversationMode: 'continuous', notificationPolicy: 'none',
+      action: { kind: 'agent', instruction: 'No execution' }, conversationMode: 'continuous', delivery: { notificationPolicy: 'none' },
       state: { lastError: 'Retained diagnostic', consecutiveFailures: 2 } });
     const operation = 'xopc.automations.update';
     const result = AutomationMutationOutputSchema.parse(await dispatcher.call(operation,
       { id: automation.id, expectedRevision: automation.updatedAtMs, patch: { name: 'Renamed' } }, caller,
       { ...dispatcher.describe(operation, caller), idempotencyKey: 'rename' }));
-    expect(result.automation).toMatchObject({ name: 'Renamed', conversationMode: 'continuous', notificationPolicy: 'none',
+    expect(result.automation).toMatchObject({ name: 'Renamed', conversationMode: 'continuous', delivery: { notificationPolicy: 'none' },
       state: { lastError: 'Retained diagnostic', consecutiveFailures: 2 } });
     expect(await service.get(automation.id)).toEqual(result.automation);
   });

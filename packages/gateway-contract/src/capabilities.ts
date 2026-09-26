@@ -279,6 +279,27 @@ export const ProductReadContracts = {
     output: z.object({ ok: z.literal(true), events: z.array(AutomationRunEventSchema.loose()) }) },
   'xopc.automations.metrics': { input: z.strictObject({}),
     output: z.object({ ok: z.literal(true), metrics: AutomationMetricsSchema }) },
+  'xopc.automations.events': { input: z.strictObject({
+    type: z.string().trim().min(1).max(512).optional(), source: z.string().trim().min(1).max(512).optional(),
+    limit: z.number().int().min(1).max(200).default(50),
+  }), output: z.object({ ok: z.literal(true), items: z.array(z.object({
+    event: z.object({ id: z.string(), type: z.string(), schemaVersion: z.number().int(), source: z.string(),
+      subject: z.object({ kind: z.string(), id: z.string() }).optional(), payload: z.record(z.string(), z.unknown()),
+      occurredAtMs: z.number(), ingestedAtMs: z.number(), correlationId: z.string(), causationId: z.string().optional(),
+      rootEventId: z.string(), chainDepth: z.number().int(), dedupeKey: z.string().optional(),
+      trust: z.enum(['system', 'user', 'connector', 'untrusted_webhook']),
+    }), projected: z.boolean(), projectionAttempts: z.number().int(), projectionError: z.string().optional(),
+    deliveries: z.array(z.object({ automationId: z.string(), status: z.enum(['pending', 'queued', 'completed', 'failed', 'cancelled', 'skipped']),
+      runId: z.string().optional(), attempts: z.number().int(), lastError: z.string().optional() })),
+  })) }) },
+  'xopc.automations.deliveries': { input: z.strictObject({
+    runId: z.string().trim().min(1).max(200).optional(), status: z.enum(['pending', 'delivering', 'delivered', 'failed']).optional(),
+    limit: z.number().int().min(1).max(200).default(50),
+  }), output: z.object({ ok: z.literal(true), items: z.array(z.object({
+    runId: z.string(), destinationKey: z.string(), kind: z.string(), status: z.enum(['pending', 'delivering', 'delivered', 'failed']),
+    attempts: z.number().int(), nextAttemptAtMs: z.number(), lastError: z.string().optional(),
+    createdAtMs: z.number(), updatedAtMs: z.number(),
+  })) }) },
   'xopc.automations.product_events': { input: z.strictObject({
     eventType: z.string().trim().min(1).max(512), source: z.string().trim().min(1).max(512).optional(),
     payloadKey: z.string().trim().min(1).max(512).optional(), payloadValue: z.string().max(4096).optional(),

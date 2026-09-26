@@ -47,6 +47,7 @@ Agent 定义、继承默认、路由绑定和界面默认值保存在 `~/.xopc/x
 | `XOPC_CREDENTIALS_DIR` | 凭据目录 |
 | `XOPC_LOG_DIR` | 日志目录 |
 | `XOPC_LOG_LEVEL` | 日志详细程度 |
+| `XOPC_AUTOMATION_WEBHOOK_SECRETS` | Automation Webhook 密钥 ID 到真实密钥的 JSON 映射 |
 
 `OPENAI_API_KEY` 等服务商变量可以通过服务商设置和 `xopc providers schema <provider>` 查看。
 

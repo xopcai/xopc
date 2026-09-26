@@ -196,7 +196,7 @@ describe('SQLite migrations', () => {
       applyPendingMigrations(db);
       const snapshot = db.prepare('SELECT automation_json FROM automation_run_requests WHERE run_id = ?').get('queued');
       expect(AutomationSchema.parse(JSON.parse(String(snapshot?.automation_json)))).toMatchObject({
-        id: 'queued-owner', enabled: true, name: 'Queued name', notificationPolicy: 'none',
+        id: 'queued-owner', enabled: true, name: 'Queued name', delivery: { notificationPolicy: 'none' },
         action: { kind: 'workflow', workflowId: 'accepted', input: { keep: null } },
       });
       db.prepare('UPDATE automations SET name = ?').run('Later');
@@ -213,10 +213,12 @@ describe('SQLite migrations', () => {
       applyPendingMigrations(db, { targetVersion: 194 });
       db.prepare(`INSERT INTO automations (automation_id, name, enabled, trigger_json, action_json, state_json, created_at_ms, updated_at_ms)
         VALUES (?, ?, 1, ?, ?, ?, 10, 12)`).run('retained', 'Retained', '{"kind":"manual"}', '{"kind":"agent","instruction":"Do not execute"}', '{"lastError":"Retained"}');
-      const before = db.prepare('SELECT * FROM automations').all();
       applyPendingMigrations(db);
       expect(db.prepare('SELECT * FROM automations').all()).toEqual([
-        expect.objectContaining(before[0] as Record<string, unknown>),
+        expect.objectContaining({ automation_id: 'retained', name: 'Retained', enabled: 1,
+          trigger_json: '{"kind":"manual"}', action_json: '{"kind":"agent","instruction":"Do not execute"}',
+          state_json: '{"lastError":"Retained"}', delivery_json: '{"notificationPolicy":"attention"}',
+          created_at_ms: 10, updated_at_ms: 12 }),
       ]);
       expect(db.prepare('SELECT * FROM automation_deleted_revisions').all()).toEqual([]);
       db.prepare('INSERT INTO automation_deleted_revisions VALUES (?, ?)').run('removed', 42);

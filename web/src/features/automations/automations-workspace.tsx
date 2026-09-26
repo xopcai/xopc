@@ -944,7 +944,7 @@ export function AutomationsWorkspace({
         ...draft.automation,
         ...(draftProjectId ? { projectId: draftProjectId } : { projectId: undefined }),
         conversationMode: draftConversationMode,
-        notificationPolicy: draftNotificationPolicy,
+        delivery: { ...draft.automation.delivery, notificationPolicy: draftNotificationPolicy },
       });
       setDraft(null);
       setDraftPrompt('');
@@ -971,7 +971,7 @@ export function AutomationsWorkspace({
         ...draft.automation,
         ...(draftProjectId ? { projectId: draftProjectId } : { projectId: undefined }),
         conversationMode: draftConversationMode,
-        notificationPolicy: draftNotificationPolicy,
+        delivery: { ...draft.automation.delivery, notificationPolicy: draftNotificationPolicy },
         enabled: false,
       });
       const { run } = await automationApi.runNow(automation.id);
@@ -2078,12 +2078,6 @@ function runEventLabel(event: AutomationRunEvent, labels: AutomationsMessages): 
       return actionKind ? eventLabels.actionCompleted.replace('{kind}', actionKind) : eventLabels.actionCompletedFallback;
     case 'action.failed':
       return actionKind ? eventLabels.actionFailed.replace('{kind}', actionKind) : eventLabels.actionFailedFallback;
-    case 'completion_hook.started':
-      return eventLabels.completionHookStarted;
-    case 'completion_hook.completed':
-      return eventLabels.completionHookCompleted;
-    case 'completion_hook.failed':
-      return eventLabels.completionHookFailed;
     case 'run.completed':
       return status ? eventLabels.runCompleted.replace('{status}', status) : eventLabels.runCompletedFallback;
     default:
@@ -2615,9 +2609,9 @@ function AutomationOverview({
         <OverviewItem
           icon={<CircleAlert className="size-4" aria-hidden />}
           label={labels.info.notifications}
-          value={automation.notificationPolicy === 'all'
+          value={automation.delivery.notificationPolicy === 'all'
             ? labels.info.notifyAll
-            : automation.notificationPolicy === 'none'
+            : automation.delivery.notificationPolicy === 'none'
               ? labels.info.notifyNone
               : labels.info.notifyAttention}
         />

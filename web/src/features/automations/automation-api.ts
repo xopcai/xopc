@@ -66,7 +66,6 @@ export type AutomationNotificationPolicy = 'attention' | 'all' | 'none';
 
 export interface AutomationReliability {
   executionTimeoutSeconds?: number;
-  timeoutSeconds?: number;
   retryCount?: number;
   maxConcurrentRuns?: number;
   disableAfterConsecutiveFailures?: number;
@@ -88,8 +87,10 @@ export interface Automation {
   action: AutomationAction;
   safety?: AutomationSafetyPolicy;
   conversationMode: AutomationConversationMode;
-  notificationPolicy: AutomationNotificationPolicy;
-  completionWebhookUrl?: string;
+  delivery: {
+    notificationPolicy: AutomationNotificationPolicy;
+    completionWebhookUrl?: string;
+  };
   reliability?: AutomationReliability;
   management?: {
     owner: string;
@@ -127,7 +128,7 @@ export interface AutomationRun {
   workflowRunId?: string;
   model?: string;
   deadlineAtMs?: number;
-  currentPhase?: 'queued' | 'action' | 'completion_hook' | 'cancelling' | 'completed';
+  currentPhase?: 'queued' | 'action' | 'cancelling' | 'completed';
   cancelRequestedAtMs?: number;
   cancelConfirmedAtMs?: number;
   termination?: {
@@ -160,9 +161,6 @@ export interface AutomationRunEvent {
     | 'action.retry_scheduled'
     | 'action.completed'
     | 'action.failed'
-    | 'completion_hook.started'
-    | 'completion_hook.completed'
-    | 'completion_hook.failed'
     | 'run.completed';
   message: string;
   data?: unknown;
@@ -172,6 +170,32 @@ export interface AutomationRunEvent {
 export interface AutomationProductEventRun {
   run: AutomationRun;
   triggerEvent: AutomationRunEvent;
+}
+
+export interface AutomationEventRecord {
+  event: { id: string; type: string; source: string; occurredAtMs: number; ingestedAtMs: number; payload: Record<string, unknown> };
+  projected: boolean;
+  projectionAttempts: number;
+  projectionError?: string;
+  deliveries: Array<{
+    automationId: string;
+    status: 'pending' | 'queued' | 'completed' | 'failed' | 'cancelled' | 'skipped';
+    runId?: string;
+    attempts: number;
+    lastError?: string;
+  }>;
+}
+
+export interface AutomationResultDeliveryRecord {
+  runId: string;
+  destinationKey: string;
+  kind: string;
+  status: 'pending' | 'delivering' | 'delivered' | 'failed';
+  attempts: number;
+  nextAttemptAtMs: number;
+  lastError?: string;
+  createdAtMs: number;
+  updatedAtMs: number;
 }
 
 export interface AutomationMetrics {
@@ -204,8 +228,10 @@ export interface AutomationInput {
   action: AutomationAction;
   safety?: AutomationSafetyPolicy;
   conversationMode?: AutomationConversationMode;
-  notificationPolicy?: AutomationNotificationPolicy;
-  completionWebhookUrl?: string;
+  delivery: {
+    notificationPolicy: AutomationNotificationPolicy;
+    completionWebhookUrl?: string;
+  };
   reliability?: AutomationReliability;
 }
 
@@ -300,6 +326,18 @@ export const automationApi = {
     return fetchJson<{ items: AutomationProductEventRun[] }>(
       apiUrl(`/api/automation-runs/product-events?${params.toString()}`),
     );
+  },
+  events: (input: { type?: string; source?: string; limit?: number } = {}) => {
+    const params = new URLSearchParams({ limit: String(input.limit ?? 50) });
+    if (input.type) params.set('type', input.type);
+    if (input.source) params.set('source', input.source);
+    return fetchJson<{ items: AutomationEventRecord[] }>(apiUrl(`/api/automation-events?${params.toString()}`));
+  },
+  deliveries: (input: { runId?: string; status?: AutomationResultDeliveryRecord['status']; limit?: number } = {}) => {
+    const params = new URLSearchParams({ limit: String(input.limit ?? 50) });
+    if (input.runId) params.set('runId', input.runId);
+    if (input.status) params.set('status', input.status);
+    return fetchJson<{ items: AutomationResultDeliveryRecord[] }>(apiUrl(`/api/automation-deliveries?${params.toString()}`));
   },
   runEvents: (runId: string) =>
     fetchJson<{ events: AutomationRunEvent[] }>(apiUrl(`/api/automation-runs/${encodeURIComponent(runId)}/events`)),

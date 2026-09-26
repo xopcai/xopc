@@ -3,7 +3,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import { type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import { changedFieldsFromPatch, emitActivity, previewText, systemActivityActor, systemActivitySource } from '../activity/emitter.js';
-import { publishAutomationProductEvent } from '../automations/product-events.js';
 import type { Config } from '../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../providers/index.js';
 import { completeWithResolvedCredentials } from '../providers/model-call.js';
@@ -205,7 +204,7 @@ export class NotesService {
   flushCommittedEffects(): void {
     this.store.drainAttachmentCleanup();
     this.store.drainDeletionCleanup();
-    new DomainOutboxDispatcher(publishAutomationProductEvent).drain(100, 'note');
+    new DomainOutboxDispatcher().drain(100, 'note');
   }
 
   async quickCapture(markdown: string, source: CaptureSource, idempotencyKey?: string): Promise<Note> {
