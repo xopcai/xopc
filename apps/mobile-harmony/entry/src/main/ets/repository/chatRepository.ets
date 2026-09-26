@@ -50,12 +50,22 @@ export class XopcChatRepository {
     if (!result.session?.key) throw new Error('INVALID_SESSION');
     return result.session.key;
   }
-  async history(id: string, before: string = ''): Promise<XopcHistory> {
+  async history(id: string, before: string = '', transcriptId: string = ''): Promise<XopcHistory> {
     const revision = chatHistoryCache.revision();
     const gatewayId = gatewaySession.currentProfile()?.gatewayId || '';
+    const connection = gatewaySession.connectionRevision();
+    if (before && transcriptId) {
+      const cached = await chatHistoryCache.readPage(gatewayId, id, transcriptId, before);
+      gatewaySession.assertConnection(connection);
+      if (cached) return cached;
+    }
     const page = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/history?limit=50'
       + (before ? '&before=' + encodeURIComponent(before) : ''))) as XopcHistory;
     if (!before) { this.cachePage = page; this.cacheGatewayId = gatewayId; this.cacheRevision = revision; }
+    else if (transcriptId && page.session?.transcriptId === transcriptId && revision === chatHistoryCache.revision()
+      && gatewayId === gatewaySession.currentProfile()?.gatewayId) {
+      await chatHistoryCache.writePage(gatewayId, id, transcriptId, before, page);
+    }
     return page;
   }
   async cachedHistory(id: string): Promise<XopcHistory | undefined> {

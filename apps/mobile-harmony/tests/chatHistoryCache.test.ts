@@ -39,4 +39,20 @@ describe('bounded secure history heads', () => {
     const cache = new XopcChatHistoryCache(); await cache.write('g', 'c', page()); await cache.write('g', 'c', page());
     expect(mock.write).toHaveBeenCalledOnce();
   });
+  it('persists immutable older pages by transcript and cursor', async () => {
+    const cache = new XopcChatHistoryCache();
+    await cache.writePage('g', 'c', 't', 'before-1', page());
+    const restored = new XopcChatHistoryCache();
+    expect(await restored.readPage('g', 'c', 't', 'before-1')).toEqual(page());
+    expect(await restored.readPage('g', 'c', 'other', 'before-1')).toBeUndefined();
+    expect(await restored.readPage('g', 'c', 't', 'before-2')).toBeUndefined();
+  });
+  it('bounds older pages and clears them with their conversation', async () => {
+    const cache = new XopcChatHistoryCache();
+    for (let i = 0; i < 24; i++) await cache.writePage('g', 'c', 't', 'before-' + i, page('c', String(i)));
+    expect(await cache.readPage('g', 'c', 't', 'before-0')).toBeUndefined();
+    expect(await cache.readPage('g', 'c', 't', 'before-23')).toBeDefined();
+    await cache.remove('g', 'c');
+    expect(await cache.readPage('g', 'c', 't', 'before-23')).toBeUndefined();
+  });
 });
