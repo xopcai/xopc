@@ -9,7 +9,12 @@ vi.mock('../../../stores/gateway-store', () => ({
 }));
 vi.mock('../../../query/sessions', () => ({ useGatewayConfigured: () => true, fetchSessionMessagePage: vi.fn() }));
 vi.mock('../session-history-prefetch', () => ({ loadSessionHistoryHead: vi.fn(async () => { throw new Error('offline'); }) }));
-vi.mock('../session-history-cache', () => ({ readCachedSessionHistoryHead: vi.fn(), writeCachedSessionHistoryHead: vi.fn() }));
+vi.mock('../session-history-cache', () => ({
+  readCachedSessionHistoryHead: vi.fn(),
+  writeCachedSessionHistoryHead: vi.fn(),
+  readCachedSessionHistoryPage: vi.fn(() => null),
+  writeCachedSessionHistoryPage: vi.fn(),
+}));
 
 import { useSessionHistory } from '../use-session-history';
 import { readCachedSessionHistoryHead, writeCachedSessionHistoryHead } from '../session-history-cache';

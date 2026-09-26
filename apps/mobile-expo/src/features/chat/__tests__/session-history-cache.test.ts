@@ -17,14 +17,17 @@ vi.mock('../../../storage/mmkv', () => ({
 
 import type { SessionMessagePage } from '../../../query/sessions';
 import {
+  readCachedSessionHistoryPage,
   readCachedSessionHistoryHead,
+  writeCachedSessionHistoryPage,
   writeCachedSessionHistoryHead,
 } from '../session-history-cache';
 
-function page(conversationId: string, text: string): SessionMessagePage {
+function page(conversationId: string, text: string, transcriptId = 'transcript-a'): SessionMessagePage {
   return {
     session: {
       key: conversationId,
+      transcriptId,
       messages: [{ role: 'user', content: text }],
     },
     pagination: {
@@ -65,5 +68,14 @@ describe('session history head cache', () => {
     writeCachedSessionHistoryHead('gateway-a', conversationId, page(conversationId, 'cached'));
 
     expect(readCachedSessionHistoryHead(null, conversationId)).toBeNull();
+  });
+
+  it('persists immutable older pages and isolates them by transcript and cursor', () => {
+    writeCachedSessionHistoryPage('gateway-a', 'saved', '50', page('saved', 'older', 'transcript-a'));
+
+    expect(readCachedSessionHistoryPage('gateway-a', 'saved', 'transcript-a', '50')?.session.messages[0]?.content)
+      .toBe('older');
+    expect(readCachedSessionHistoryPage('gateway-a', 'saved', 'transcript-b', '50')).toBeNull();
+    expect(readCachedSessionHistoryPage('gateway-a', 'saved', 'transcript-a', '100')).toBeNull();
   });
 });

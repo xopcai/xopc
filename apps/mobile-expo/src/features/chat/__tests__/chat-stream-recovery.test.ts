@@ -248,14 +248,14 @@ describe('chat stream lifecycle', () => {
   });
 
 
-  it('does not turn an unacknowledged failed submission into sent when returning to an idle chat', async () => {
+  it('keeps an ambiguous submission confirming until durable history acknowledges it', async () => {
     state.apiFetch.mockRejectedValueOnce(new Error('Network request failed'));
     await act(async () => { await chat.send('unsent question'); });
-    expect(chat.optimisticMessages[0]?.deliveryState).toBe('failed');
+    expect(chat.optimisticMessages[0]?.deliveryState).toBe('confirming');
     state.activeRun.mockResolvedValue({ active: false });
     await appState('background');
     await appState('active');
-    expect(chat.optimisticMessages[0]?.deliveryState).toBe('failed');
+    expect(chat.optimisticMessages[0]?.deliveryState).toBe('confirming');
   });
 
 });

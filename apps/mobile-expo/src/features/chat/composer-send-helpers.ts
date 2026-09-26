@@ -28,6 +28,10 @@ function serverMessageReplacesOptimistic(server: Message, optimistic: Message): 
   if (!isUserMessage(server) || !isUserMessage(optimistic)) return false;
   if (optimistic.deliveryState === 'failed') return false;
 
+  if (server.clientMessageId && optimistic.clientMessageId) {
+    return server.clientMessageId === optimistic.clientMessageId;
+  }
+
   const serverTimestamp = server.timestamp;
   const optimisticTimestamp = optimistic.timestamp;
   if (
@@ -76,7 +80,11 @@ export function mergeOptimisticUserMessages(
       && optimistic.timestamp > tail.timestamp;
     if (!isLaterTurn && serverUser && serverMessageReplacesOptimistic(serverUser, optimistic)) {
       const index = merged.indexOf(serverUser);
-      if (index >= 0) merged[index] = { ...serverUser, renderKey: messageKey(optimistic, index) };
+      if (index >= 0) merged[index] = {
+        ...serverUser,
+        clientMessageId: serverUser.clientMessageId ?? optimistic.clientMessageId,
+        renderKey: messageKey(optimistic, index),
+      };
       continue;
     }
     const nextMessage = optimistic.timestamp == null ? -1 : merged.findIndex(message =>

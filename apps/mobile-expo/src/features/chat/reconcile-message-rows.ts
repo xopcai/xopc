@@ -5,6 +5,7 @@ import type { Message } from './messages.types';
 
 function identities(message: Message): string[] {
   return [
+    message.clientMessageId && `client:${message.clientMessageId}`,
     message.id && `id:${message.id}`,
     message.persistedId && `id:${message.persistedId}`,
     message.turnId && `turn:${message.turnId}`,

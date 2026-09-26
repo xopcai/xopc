@@ -53,6 +53,8 @@ import { buildMobileWelcomeModel } from './mobile-welcome-starters';
 import { useChatPageBootstrap } from './use-chat-page-bootstrap';
 import { useChatSession } from './use-chat-session';
 import { useSessionHistory } from './use-session-history';
+import { confirmOutboxMessages } from './message-outbox';
+import { confirmLocalMessages, localMessageScope, useLocalMessagesStore } from './local-messages-store';
 
 export type UseChatPageOptions = {
   root?: boolean;
@@ -250,6 +252,14 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     if (!raw.length) return [];
     return parseSessionMessages(dedupeWireMessages(raw as Array<Record<string, unknown>>));
   }, [sessionHistoryQuery.data?.pages]);
+
+  useEffect(() => {
+    const confirmedIds = sessionMessages.flatMap(message => message.clientMessageId ? [message.clientMessageId] : []);
+    if (confirmedIds.length === 0) return;
+    const scope = localMessageScope(activeGatewayId, conversationId);
+    confirmOutboxMessages(scope, confirmedIds);
+    useLocalMessagesStore.getState().update(scope, messages => confirmLocalMessages(messages, confirmedIds));
+  }, [activeGatewayId, conversationId, sessionMessages]);
 
   const committedRowsRef = useRef({ scope: '', messages: [] as Message[] });
   const rowScope = JSON.stringify([activeGatewayId, conversationId]);

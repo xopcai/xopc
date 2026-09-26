@@ -79,12 +79,15 @@ import {
   useLocalMessagesStore,
 } from './local-messages-store';
 import type { MessageSubmission } from './message-submission';
+import { readMessageOutbox, upsertMessageOutbox } from './message-outbox';
 import { shouldWakeStreamRecoveryOnForeground } from './stream-recovery-foreground';
 import { formatMobileAgentRunError } from './agent-run-error';
 import { queueAssistantAudioAutoplay } from './assistant-audio-autoplay';
 import { useReadAloudStore } from '../voice/read-aloud-store';
 import { sessionContainsFinalAssistant } from './session-refresh-confirmation';
 import { recordConnectionEvent } from '../gateway/connection-log';
+import { releaseSessionSync, requestSessionSync } from './session-sync-coordinator';
+import { readSessionSyncCursor, writeSessionSyncCursor } from './session-sync-cursor';
 
 // Discrete 10 Hz text commits keep the answer responsive without continuously
 // rebuilding Markdown and remeasuring the virtualized row.
@@ -153,7 +156,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const messageEndReconcileGenerationRef = useRef(0);
   const displayMessagesRef = useRef<Message[]>([]);
   const messageListAtBottomRef = useRef(true);
-  const sessionHeadRefreshGenerationRef = useRef(new Map<string, number>());
   const prevGatewayOnlineForStreamRef = useRef(gatewayOnline);
 
   const streamRecoveryRef = useRef({
@@ -201,6 +203,27 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const activeMessageIdRef = useRef<string | null>(null);
   const sending = optimisticMessages.some(message => message.deliveryState === 'sending');
   const [pendingRunTick, setPendingRunTick] = useState(0);
+
+  useEffect(() => {
+    const records = readMessageOutbox(scope);
+    if (records.length === 0) return;
+    setOptimisticMessages((messages) => {
+      const known = new Set(messages.map(message => message.clientMessageId ?? message.id));
+      const recovered = records.flatMap((record): Message[] => {
+        const { submission } = record;
+        if (known.has(submission.clientMessageId)) return [];
+        return [{
+          ...buildOptimisticUserMessage(submission.content, submission.attachments),
+          id: submission.clientMessageId,
+          clientMessageId: submission.clientMessageId,
+          submission,
+          timestamp: record.createdAt,
+          deliveryState: record.deliveryState === 'sending' ? 'confirming' : record.deliveryState,
+        }];
+      });
+      return recovered.length ? [...messages, ...recovered] : messages;
+    });
+  }, [scope, setOptimisticMessages]);
 
   // ── Streaming helpers ────────────────────────────────────
   const clearStreamingFlushTimer = useCallback(() => {
@@ -306,32 +329,36 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   }, [activeGatewayId, queryClient]);
 
   const refreshSessionHeadByKey = useCallback(async (targetConversationId: string) => {
-    const generations = sessionHeadRefreshGenerationRef.current;
-    const generation = (generations.get(targetConversationId) ?? 0) + 1;
-    generations.set(targetConversationId, generation);
-    let latestPage: SessionMessagePage | null;
-    try {
-      latestPage = await fetchSessionMessagePage(targetConversationId, { limit: 50 });
-    } catch (error) {
-      if (generations.get(targetConversationId) !== generation) return;
-      throw error;
-    }
-    // Weak networks can complete an older foreground/finalize request after a
-    // newer one. Only the newest started refresh may update the transcript.
-    if (generations.get(targetConversationId) !== generation) return;
-    if (!latestPage) {
-      invalidateSessionByKey(targetConversationId);
-      return;
-    }
+    const syncKey = `${activeGatewayId ?? 'unassigned'}:${targetConversationId}`;
+    await requestSessionSync(syncKey, async () => {
+      const cursor = readSessionSyncCursor(activeGatewayId, targetConversationId);
+      const latestPage = cursor
+        ? await fetchSessionMessagePage(targetConversationId, {
+            limit: 50,
+            ifNoneMatch: `"${cursor.transcriptId ?? targetConversationId}:${cursor.revision}"`,
+          })
+        : await fetchSessionMessagePage(targetConversationId, { limit: 50 });
+      if (latestPage === 'not-modified') return;
+      if (!latestPage) {
+        invalidateSessionByKey(targetConversationId);
+        return;
+      }
 
-    void import('./session-history-cache').then((mod) => {
-      mod.writeCachedSessionHistoryHead(activeGatewayId, targetConversationId, latestPage);
+      void import('./session-history-cache').then((mod) => {
+        mod.writeCachedSessionHistoryHead(activeGatewayId, targetConversationId, latestPage);
+      });
+      if (typeof latestPage.pagination.revision === 'number') {
+        writeSessionSyncCursor(activeGatewayId, targetConversationId, {
+          transcriptId: latestPage.session.transcriptId,
+          revision: latestPage.pagination.revision,
+        });
+      }
+      queryClient.setQueryData<InfiniteData<SessionMessagePage | null, string | undefined>>(
+        queryKeys.sessionHistory(targetConversationId, activeGatewayId),
+        (oldData) => mergeLatestSessionHistoryPage(oldData, latestPage),
+      );
+      invalidateSessionLists(queryClient);
     });
-    queryClient.setQueryData<InfiniteData<SessionMessagePage | null, string | undefined>>(
-      queryKeys.sessionHistory(targetConversationId, activeGatewayId),
-      (oldData) => mergeLatestSessionHistoryPage(oldData, latestPage),
-    );
-    invalidateSessionLists(queryClient);
   }, [activeGatewayId, invalidateSessionByKey, queryClient]);
 
   const invalidateSession = useCallback(() => {
@@ -580,7 +607,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         touchStreamActivity();
         updateStreamingMessage((message) => {
           updateToolDetails(message.content, toolName, toolCallId, details);
-        }, true);
+        });
       },
       onToolEnd: (toolName, isErr, result, toolCallId) => {
         if (!isCurrentSession()) return;
@@ -609,7 +636,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         touchStreamActivity();
         updateStreamingMessage((message) => {
           appendCommandOutputDelta(message.content, payload.toolCallId, payload.stream, payload.delta);
-        }, true);
+        });
       },
       onCommandCompleted: (payload) => {
         if (!isCurrentSession()) return;
@@ -744,6 +771,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     const continuingRun = streamingRef.current;
     sendingRef.current = true;
     runBusyRef.current = true;
+    upsertMessageOutbox(targetScope, input, 'sending');
     updateMessage('sending');
     if (!continuingRun) {
       activeMessageIdRef.current = input.clientMessageId;
@@ -754,13 +782,21 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     let runId: string | undefined;
     try {
       ({ runId } = await senderRef.current.sendMessage(input));
-      updateMessage('sent');
+      updateMessage('confirming');
+      upsertMessageOutbox(targetScope, input, 'confirming');
       void queryClient.invalidateQueries({ queryKey: ['session-inputs', input.gatewayId, input.conversationId] });
     } catch (error) {
-      useLocalMessagesStore.getState().update(
-        targetScope,
-        messages => failLocalMessageIfSending(messages, input.clientMessageId),
-      );
+      const transient = isTransientNetworkError(error instanceof Error ? error.message : String(error));
+      if (transient) {
+        updateMessage('confirming');
+        upsertMessageOutbox(targetScope, input, 'confirming');
+      } else {
+        useLocalMessagesStore.getState().update(
+          targetScope,
+          messages => failLocalMessageIfSending(messages, input.clientMessageId),
+        );
+        upsertMessageOutbox(targetScope, input, 'failed');
+      }
       if (isCurrent()) {
         sendingRef.current = false;
         runBusyRef.current = streamingRef.current;
@@ -813,6 +849,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     const message = {
       ...buildOptimisticUserMessage(input.content, input.attachments, contextRefs),
       id: input.clientMessageId,
+      clientMessageId: input.clientMessageId,
       submission: input,
       deliveryState: 'sending' as const,
     };
@@ -829,6 +866,13 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       || readLocalMessages(scope).some(row => row.deliveryState === 'sending')) return;
     await submitMessage(current.submission);
   }, [scope, submitMessage]);
+
+  const retryPendingOutbox = useCallback(() => {
+    if (!gatewayOnline || !conversationId || sendingRef.current) return;
+    const pending = readMessageOutbox(scope).find(record => record.deliveryState === 'confirming');
+    if (!pending || (pending.lastAttemptAt && Date.now() - pending.lastAttemptAt < 2_000)) return;
+    void submitMessage(pending.submission);
+  }, [conversationId, gatewayOnline, scope, submitMessage]);
 
   // ── Abort ────────────────────────────────────────────────
   const abort = useCallback(() => {
@@ -981,10 +1025,11 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       // Pull the durable transcript immediately so a run that completed while
       // suspended becomes visible without waiting for realtime replay.
       void refreshSessionHeadByKey(conversationId).catch(() => invalidateSessionByKey(conversationId));
+      retryPendingOutbox();
       wakeStreamRecovery();
     });
     return () => subscription.remove();
-  }, [conversationId, wakeStreamRecovery, refreshSessionHeadByKey, invalidateSessionByKey]);
+  }, [conversationId, wakeStreamRecovery, refreshSessionHeadByKey, invalidateSessionByKey, retryPendingOutbox]);
 
   // Resolve server-side active runs on session entry. Local pending run storage is
   // only a cache; the gateway is the source of truth when the screen remounts.
@@ -1047,6 +1092,10 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   }), [refreshClarification, conversationId, setOptimisticMessages]);
 
   useEffect(() => {
+    retryPendingOutbox();
+  }, [retryPendingOutbox]);
+
+  useEffect(() => {
     if (!clarifyPrompt?.expiresAt) return;
     const timer = setTimeout(() => {
       void refreshClarification(conversationId).catch(() => undefined);
@@ -1062,8 +1111,9 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       senderRef.current.detachLocalStream();
       cancelMessageEndReconcile();
       clearStreamingFlushTimer();
+      releaseSessionSync(`${activeGatewayId ?? 'unassigned'}:${conversationId}`);
     };
-  }, [cancelMessageEndReconcile, clearStreamingFlushTimer]);
+  }, [activeGatewayId, cancelMessageEndReconcile, clearStreamingFlushTimer, conversationId]);
 
   // ── Gateway connectivity effects ─────────────────────────
   // Resume streams when gateway connectivity returns
@@ -1097,12 +1147,13 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     return subscribeGatewayEvent('gateway.realtime-connected', () => {
       if (!conversationId || activeConversationIdRef.current !== conversationId) return;
       void refreshClarification(conversationId).catch(() => undefined);
+      retryPendingOutbox();
       if (sendingRef.current) return;
       if (!readPendingAgentRunId(conversationId)) return;
       if (senderRef.current.isStreamingFor(conversationId)) return;
       streamRecoveryRef.current.wake();
     });
-  }, [refreshClarification, conversationId]);
+  }, [refreshClarification, conversationId, retryPendingOutbox]);
 
   // Socket liveness belongs to the realtime heartbeat. A quiet tool/model is
   // still a healthy run; only reconcile its status here.

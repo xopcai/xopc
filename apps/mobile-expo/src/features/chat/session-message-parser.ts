@@ -141,6 +141,11 @@ function normalizeMessageContextRefs(metadata: unknown): Message['contextRefs'] 
   return refs.length ? refs : undefined;
 }
 
+function normalizeClientMessageId(metadata: unknown): string | undefined {
+  const value = asRecord(metadata)?.clientMessageId;
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
 function normalizeTurnOutcome(metadata: unknown): Message['outcome'] {
   return parseTurnOutcome(asRecord(metadata)?.turnOutcome) ?? undefined;
 }
@@ -835,6 +840,7 @@ export function parseSessionMessages(raw: Array<Record<string, unknown>>): Messa
       const attachments = mergeWireAttachments(m.attachments, m.media);
       out.push({
         id: wireMessageId(m),
+        clientMessageId: normalizeClientMessageId(m.metadata),
         role: roleTyped,
         content: applyStripToUserContent(roleTyped, normalizeContentBlocks(m.content)),
         attachments,

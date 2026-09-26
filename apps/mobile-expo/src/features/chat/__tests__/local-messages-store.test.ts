@@ -27,7 +27,7 @@ describe('local message delivery state', () => {
     ]);
   });
 
-  it('uses session input-state as an independent gateway acknowledgement', () => {
+  it('uses session input-state as an independent gateway acknowledgement pending transcript confirmation', () => {
     const sending = localMessage('message-a', 'sending');
     const failed = localMessage('message-b', 'failed');
 
@@ -35,7 +35,7 @@ describe('local message delivery state', () => {
       { clientMessageId: 'message-a', status: 'running' },
       { clientMessageId: 'message-b', status: 'queued' },
     ])).toEqual([
-      { ...sending, deliveryState: 'sent' },
+      { ...sending, deliveryState: 'confirming' },
     ]);
   });
 

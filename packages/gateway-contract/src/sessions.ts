@@ -268,6 +268,8 @@ export interface SessionMessagePage {
     hasMore: boolean;
     before?: string;
     nextBeforeCursor?: string;
+    /** Monotonic sequence of the newest visible row in the active transcript. */
+    revision?: number;
   };
 }
 
@@ -361,6 +363,7 @@ export const sessionMessagePageSchema = z
         hasMore: z.boolean(),
         before: z.string().optional(),
         nextBeforeCursor: z.string().optional(),
+        revision: z.number().int().nonnegative().optional(),
       })
       .passthrough(),
   })
