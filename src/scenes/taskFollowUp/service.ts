@@ -17,14 +17,15 @@ import { TaskContextRepository } from '../../tasks/task-context-repository.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { enqueueTaskAttentionRequiredEvent } from '../../tasks/task-change-events.js';
-import { sceneContentHash, type ScenePrincipal } from '../contracts.js';
+import { sceneContentHash, type ScenePrincipal, type SceneTemplate } from '../contracts.js';
+import type { SceneActivationAdapter } from '../activationAdapter.js';
 import { ScenePreferenceService } from '../preferences.js';
-import { SceneConflictError, SceneNotFoundError, SceneRepository } from '../repository.js';
+import { SceneConflictError, SceneNotFoundError, SceneRepository, type SceneRunClaim } from '../repository.js';
 import { SceneSetupError } from '../service.js';
 import { FollowUpAgentExecutor, type FollowUpExecutor } from './agentExecutor.js';
 import { VerificationTerminationUnknownError, verifyTaskWorkspace } from '../../agent/commands/approved-verification.js';
 import { TaskResources, type TaskResource } from './resources.js';
-import { taskFollowUpInputSchema, taskFollowUpTemplate, sourceIdentity, TaskSourceRegistry, type TaskFollowUpInput, type SourceSnapshot } from './contracts.js';
+import { taskFollowUpInputSchema, sourceIdentity, SceneSourceRegistry, type TaskFollowUpInput, type SourceSnapshot } from './contracts.js';
 import { TaskBranchInventory } from './branchInventory.js';
 import { resolveModelSelector } from '../../config/agent-model-intents.js';
 
@@ -42,7 +43,8 @@ const delegationHash = (input: TaskFollowUpInput) => {
 };
 
 /** Scene orchestration owns source cursors, not a second Task/TaskRun lifecycle. */
-export class TaskFollowUpService {
+export class SceneTaskExecutionService implements SceneActivationAdapter {
+  readonly id = 'task';
   readonly branches: TaskBranchInventory;
   private readonly scenes: SceneRepository;
   private readonly tasks = new TaskRepository();
@@ -51,7 +53,7 @@ export class TaskFollowUpService {
   private readonly environments = new ExecutionEnvironmentStore();
   private readonly executor: FollowUpExecutor;
   private readonly resources: TaskResources;
-  readonly sources: TaskSourceRegistry;
+  readonly sources: SceneSourceRegistry;
   private readonly active = new Map<string, { controller: AbortController; promise: Promise<void> }>();
   private polling?: Promise<void>;
   private stopped = false;
@@ -59,25 +61,15 @@ export class TaskFollowUpService {
   private recovered = false;
 
   constructor(private readonly db: DatabaseSync, private readonly deps: {
-    config: () => Config; sources: TaskSourceRegistry; executor?: FollowUpExecutor; worktrees?: LocalWorktreeManager; stateDir?: string;
+    config: () => Config; sources: SceneSourceRegistry; executor?: FollowUpExecutor; worktrees?: LocalWorktreeManager; stateDir?: string;
     verify?: typeof verifyTaskWorkspace;
     stopVerification?: (name: string) => Promise<void>;
   }) {
     this.scenes = new SceneRepository(db);
     this.branches = new TaskBranchInventory(db);
-    this.scenes.installTemplate(taskFollowUpTemplate);
     this.executor = deps.executor ?? new FollowUpAgentExecutor(() => resolveModel(resolveModelSelector(deps.config(), resolveDefaultAgentId(), '@reasoning')), deps.config);
     this.sources = deps.sources;
     this.resources = new TaskResources({ stateDir: deps.stateDir, worktrees: deps.worktrees });
-    // v190 records keep their original authority and remain paused after migration.
-    for (const row of db.prepare(`SELECT b.* FROM scene_task_bindings b JOIN scene_activations a ON a.id = b.activation_id
-      WHERE a.template_key = 'slack-development'`).all() as Binding[]) {
-      const input = taskFollowUpInputSchema.parse(JSON.parse(row.input_json));
-      db.prepare('UPDATE scene_task_bindings SET source_key = ? WHERE activation_id = ?').run(sourceIdentity(this.principal(row.activation_id), input.source), row.activation_id);
-      db.prepare("UPDATE scene_activations SET template_key = 'task-follow-up', template_version = '1.0.0' WHERE id = ?").run(row.activation_id);
-    }
-    db.prepare(`DELETE FROM scene_template_versions WHERE template_key = 'slack-development'
-      AND NOT EXISTS (SELECT 1 FROM scene_activations WHERE template_key = 'slack-development')`).run();
   }
 
   private binding(id: string): Binding {
@@ -108,9 +100,17 @@ export class TaskFollowUpService {
     catch { return false; }
   }
 
-  async preflight(principal: ScenePrincipal, value: unknown) {
+  async preflight(principal: ScenePrincipal, template: SceneTemplate, value: unknown) {
+    if (template.execution.kind !== this.id || template.contextProviders.length !== 1 || template.contextProviders[0] !== 'connected_source'
+      || !template.triggers.some(trigger => trigger.type === 'event' && trigger.eventType === 'source.changed')
+      || !template.allowedOutcomeKinds.includes('receipt')) {
+      throw new SceneConflictError('Template is incompatible with the task execution adapter');
+    }
     const input = this.parse(value);
     const missing: string[] = [];
+    if (input.capabilities.some(capability => capability !== 'workspace.read' && !template.allowedEffectHandlers.includes(capability))) {
+      missing.push('capability_not_allowed');
+    }
     if (!this.source(input).authorized(principal, input.source.reference)) missing.push('source_read_permission');
     const project = input.projectId ? new ProjectStore().get(input.projectId) : undefined;
     if (input.projectId && (!project || (project.ownerId && project.ownerId !== principal.ownerId))) missing.push('project_access');
@@ -137,30 +137,38 @@ export class TaskFollowUpService {
     return { ready: missing.length === 0, missing };
   }
 
-  async create(principal: ScenePrincipal, value: unknown) {
+  async create(principal: ScenePrincipal, template: SceneTemplate, value: unknown) {
     const input = this.parse(value);
     const key = sourceIdentity(principal, input.source);
-    const existing = this.db.prepare('SELECT activation_id, input_json FROM scene_task_bindings WHERE source_key = ?').get(key);
+    const existing = this.db.prepare(`SELECT b.activation_id, b.input_json, a.template_key, a.template_version
+      FROM scene_task_bindings b JOIN scene_activations a ON a.id = b.activation_id WHERE b.source_key = ?`).get(key);
     if (existing) {
-      if (delegationHash(JSON.parse(String(existing.input_json))) !== delegationHash(input)) throw new SceneConflictError('This source is already delegated with a different goal or project');
+      if (existing.template_key !== template.key || existing.template_version !== template.version
+        || delegationHash(JSON.parse(String(existing.input_json))) !== delegationHash(input)) {
+        throw new SceneConflictError('This source is already delegated with a different template, goal or project');
+      }
       return this.get(principal, String(existing.activation_id));
     }
-    const readiness = await this.preflight(principal, input);
+    const readiness = await this.preflight(principal, template, input);
     if (!readiness.ready) throw new SceneSetupError(readiness.missing);
     const snapshot = await this.source(input).read(principal, input.source.reference, AbortSignal.any([this.stopController.signal, AbortSignal.timeout(30_000)]));
     this.stopController.signal.throwIfAborted();
     if (!this.source(input).authorized(principal, input.source.reference)) throw new SceneSetupError(['source_read_permission']);
     const id = runSqliteWriteTransaction(() => {
-      const concurrent = this.db.prepare('SELECT activation_id, input_json FROM scene_task_bindings WHERE source_key = ?').get(key);
+      const concurrent = this.db.prepare(`SELECT b.activation_id, b.input_json, a.template_key, a.template_version
+        FROM scene_task_bindings b JOIN scene_activations a ON a.id = b.activation_id WHERE b.source_key = ?`).get(key);
       if (concurrent) {
-        if (delegationHash(JSON.parse(String(concurrent.input_json))) !== delegationHash(input)) throw new SceneConflictError('This source is already delegated with a different goal or project');
+        if (concurrent.template_key !== template.key || concurrent.template_version !== template.version
+          || delegationHash(JSON.parse(String(concurrent.input_json))) !== delegationHash(input)) {
+          throw new SceneConflictError('This source is already delegated with a different template, goal or project');
+        }
         return String(concurrent.activation_id);
       }
-      const activation = this.scenes.createActivation(principal, { templateKey: taskFollowUpTemplate.key, templateVersion: taskFollowUpTemplate.version,
+      const activation = this.scenes.createActivation(principal, { templateKey: template.key, templateVersion: template.version,
         goal: input.goal, scope: input.projectId ? { kind: 'project', id: input.projectId } : { kind: 'personal' },
         permissions: { accountIds: this.source(input).accountIds(input.source.reference), contextProviders: ['connected_source'],
           effectHandlers: input.capabilities.filter(capability => capability !== 'workspace.read') } }, key);
-      const created = this.application.create({ idempotencyKey: `scene-task-follow-up:${key}`, title: input.goal.slice(0, 200), projectId: input.projectId,
+      const created = this.application.create({ idempotencyKey: `scene-task-execution:${key}`, title: input.goal.slice(0, 200), projectId: input.projectId,
         ownerId: principal.ownerId, priority: 'normal', contract: this.contract(input, 1), dependencies: [], authorityGrants: [],
         context: [{ targetKind: 'source', targetId: key, role: 'input', title: input.source.provider, pinned: true, retrievalPolicy: {}, metadata: input.source }],
         activation: { mode: 'capture', phase: 'ready' } }, { kind: 'user', id: principal.ownerId });
@@ -209,6 +217,11 @@ export class TaskFollowUpService {
       WHERE b.task_id = ? AND json_extract(p.preferences_json, '$.notificationsMuted') = 1`).get(taskId);
   }
 
+  listProjectBranches(principal: ScenePrincipal, projectId: string) { return this.branches.list(principal, projectId); }
+  associateBranch(principal: ScenePrincipal, input: unknown) {
+    return this.branches.associate(principal, input as Parameters<TaskBranchInventory['associate']>[1]);
+  }
+
   async configure(principal: ScenePrincipal, id: string, expectedRevision: number, value: unknown) {
     const activation = this.scenes.getActivation(principal, id);
     const row = this.binding(id);
@@ -221,7 +234,8 @@ export class TaskFollowUpService {
     if (sourceIdentity(principal, old.source) !== sourceIdentity(principal, input.source) || old.projectId !== input.projectId || old.resource !== input.resource) {
       throw new SceneConflictError('Source and resource identity cannot change on an existing task');
     }
-    const readiness = await this.preflight(principal, input);
+    const template = this.scenes.getTemplate(activation.templateKey, activation.templateVersion);
+    const readiness = await this.preflight(principal, template, input);
     if (!readiness.ready) throw new SceneSetupError(readiness.missing);
     runSqliteWriteTransaction(() => {
       if (this.binding(id).executing_run_id || this.runs.getActiveRoot(task.id)) throw new SceneConflictError('Task started while changing permissions');
@@ -289,7 +303,7 @@ export class TaskFollowUpService {
       const { taskId: _taskId, version: _version, createdBy: _createdBy, createdAt: _createdAt, ...contract } = task.contract!;
       contract.acceptanceCriteria = [...contract.acceptanceCriteria.filter(item => !/^Process source revision \d+$/.test(item)), `Process source revision ${revision}`];
       const result = this.application.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: `scene:${id}:revision:${revision}`,
-        command: { type: 'revise_contract', contract }, actor: { kind: 'system', id: 'scene-task-follow-up' } });
+        command: { type: 'revise_contract', contract }, actor: { kind: 'system', id: 'scene-task-execution' } });
       if (!result.ok) throw new Error('Task contract revision failed');
     }
     this.active.get(id)?.controller.abort(new Error('New source revision'));
@@ -314,7 +328,7 @@ export class TaskFollowUpService {
     const count = Number(this.db.prepare('SELECT count(*) AS n FROM task_runs WHERE task_id = ? AND queued_at > ?').get(task.id, Date.now() - 86400000)?.n);
     if (count >= 10) return;
     this.application.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: `scene:${id}:run:${row.observed_revision}:${task.version}`,
-      command: { type: 'start', executor: { kind: 'agent', agentId: resolveDefaultAgentId() } }, actor: { kind: 'system', id: 'scene-task-follow-up' } });
+      command: { type: 'start', executor: { kind: 'agent', agentId: resolveDefaultAgentId() } }, actor: { kind: 'system', id: 'scene-task-execution' } });
   }
 
   tick(): Promise<void> {
@@ -384,17 +398,50 @@ export class TaskFollowUpService {
     if (!raw) return false;
     const id = String(raw.activation_id);
     if (this.active.has(id)) throw new SceneConflictError('Task follow-up already has a writer');
+    const intentId = this.executionIntent(id, runId);
+    const sceneRun = this.scenes.claimIntentForAdapter(this.principal(id), id, intentId, this.id, `task:${runId}`, Date.now(), 310_000);
     const controller = new AbortController();
-    const promise = this.execute(id, runId, conversationId, AbortSignal.any([controller.signal, this.stopController.signal, AbortSignal.timeout(300_000)]))
+    const promise = this.execute(id, runId, conversationId, sceneRun, AbortSignal.any([controller.signal, this.stopController.signal, AbortSignal.timeout(300_000)]))
       .finally(() => { this.active.delete(id); });
     this.active.set(id, { controller, promise });
     await promise;
     return true;
   }
 
-  private async execute(id: string, runId: string, conversationId: string, signal: AbortSignal) {
+  private executionIntent(id: string, taskRunId: string): string {
+    const principal = this.principal(id);
+    const activation = this.scenes.getActivation(principal, id);
+    const template = this.scenes.getTemplate(activation.templateKey, activation.templateVersion);
+    const trigger = template.triggers.find((item): item is Extract<typeof item, { type: 'event' }> =>
+      item.type === 'event' && item.eventType === 'source.changed');
+    if (!trigger) throw new SceneConflictError('Scene has no source change trigger');
+    const row = this.binding(id);
+    const revision = this.db.prepare('SELECT source_hash, observed_at FROM scene_task_revisions WHERE activation_id = ? AND revision = ?')
+      .get(id, row.observed_revision) as { source_hash: string; observed_at: number } | undefined;
+    if (!revision) throw new SceneConflictError('Scene source revision is unavailable');
+    const input = taskFollowUpInputSchema.parse(JSON.parse(row.input_json));
+    const occurrenceKey = sceneContentHash({ activationRevision: activation.revision, sourceRevision: row.observed_revision, taskRunId });
+    const accountIds = this.source(input).accountIds(input.source.reference);
+    const now = Date.now();
+    return this.scenes.acceptTrigger(principal, id, {
+      triggerKey: trigger.id,
+      occurrenceKey,
+      dueAt: now,
+      event: {
+        source: input.source.provider,
+        sourceEventId: revision.source_hash,
+        eventType: trigger.eventType,
+        subjectId: row.source_key,
+        occurredAt: revision.observed_at,
+        ...(accountIds.length === 1 ? { accountId: accountIds[0] } : {}),
+      },
+    }, now);
+  }
+
+  private async execute(id: string, runId: string, conversationId: string, sceneRun: SceneRunClaim, signal: AbortSignal) {
     const row = this.binding(id);
     const activation = this.scenes.getActivation(this.principal(id), id);
+    const template = this.scenes.getTemplate(activation.templateKey, activation.templateVersion);
     const input = taskFollowUpInputSchema.parse(JSON.parse(row.input_json));
     const revision = row.observed_revision;
     const contractVersion = this.runs.require(runId).contractVersion;
@@ -406,6 +453,7 @@ export class TaskFollowUpService {
     const guard = () => {
       if (terminationUnknown) throw new VerificationTerminationUnknownError('Verification termination is unknown');
       signal.throwIfAborted();
+      if (!this.scenes.getRunInput(sceneRun, Date.now())) throw new Error('Scene execution lease changed');
       resource?.assertLive();
       const current = this.binding(id);
       const task = this.tasks.require(row.task_id);
@@ -422,6 +470,7 @@ export class TaskFollowUpService {
     const leaseOwner = this.runs.require(runId).leaseOwner;
     const heartbeat = setInterval(() => {
       if (leaseOwner) this.runs.heartbeat({ runId, owner: leaseOwner, leaseMs: 60_000 });
+      this.scenes.renewLease(sceneRun, Date.now(), 310_000);
     }, 15_000);
     heartbeat.unref();
     try {
@@ -450,7 +499,7 @@ export class TaskFollowUpService {
       } : undefined;
       const result = await this.executor.execute({
         runId, conversationId, workspace: resource?.rootPath ?? this.principal(id).workspaceId,
-        goal: `${activation.goal}\nCurrent task contract (within the original authority): ${JSON.stringify(this.tasks.require(row.task_id).contract)}\nUser decisions: ${JSON.stringify(answers).slice(0, 8000)}`,
+        goal: `${template.execution.instruction}\nUser goal: ${activation.goal}\nCurrent task contract (within the original authority): ${JSON.stringify(this.tasks.require(row.task_id).contract)}\nUser decisions: ${JSON.stringify(answers).slice(0, 8000)}`,
         instruction: input.instruction, evidence, capabilities: input.capabilities, signal, guard, verify,
       });
       guard(); await resource?.assertIdentity();
@@ -485,6 +534,18 @@ export class TaskFollowUpService {
           remainingWork, needsUser, completionVerdict: 'partial',
         } });
         if (!completed.ok) throw new SceneConflictError('Task run changed before the result was recorded');
+        if (!this.scenes.finishAdapterRun(sceneRun, {
+          kind: 'receipt',
+          summary: result.summary,
+          taskId: row.task_id,
+          taskRunId: runId,
+          sourceRevision: revision,
+          verification: { status: verification.passed ? 'passed' : 'unverified' },
+          remainingWork,
+          needsUser,
+          changes: resource ? [{ title: 'Task workspace', summary: `Resource: ${input.resource}; fingerprint: ${fingerprint}`, uri: resource.rootPath }] : [],
+          evidence: verification.output || verification.passed ? [{ title: 'Approved verification', summary: verification.output || 'Exit code 0' }] : [],
+        }, Date.now())) throw new SceneConflictError('Scene run changed before the result was recorded');
         this.db.prepare('UPDATE scene_task_bindings SET processed_revision = ?, continuation_requested = ? WHERE activation_id = ?')
           .run(revision, continueAutomatically && !needsUser ? 1 : 0, id);
         if (needsUser) this.runs.createWait({ taskId: row.task_id, kind: 'user_input',
@@ -499,6 +560,7 @@ export class TaskFollowUpService {
       if (run && !['succeeded', 'failed', 'cancelled'].includes(run.status)) this.application.completeRun({ runId, expectedRunVersion: run.version, suppressAttention: true,
         receipt: { status: changed ? 'cancelled' : 'failed', summary: changed ? 'Stopped at a scene checkpoint' : 'Task execution needs attention',
           changes: [], evidence: [], verification: { status: 'unverified', checks: [] }, remainingWork: [activation.goal], needsUser: !changed, completionVerdict: 'not_achieved' } });
+      this.scenes.failRun(sceneRun, Date.now(), changed ? 'execution_cancelled' : 'execution_failed');
       if (!changed) this.fail(current, error instanceof Error ? error.message : 'Task execution failed');
     } finally {
       clearInterval(heartbeat);

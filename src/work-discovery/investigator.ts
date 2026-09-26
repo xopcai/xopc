@@ -175,6 +175,8 @@ async function chooseAction(input: {
     resolveModel(modelRef),
     { messages: [{ role: 'user', content: prompt, timestamp: Date.now() } satisfies UserMessage] },
     { maxTokens: 1_200, temperature: 0.1, signal: input.signal },
+    undefined,
+    { operation: 'work_discovery.investigate' },
   );
   const parsed = parseObject(extractText(response.content));
   return decisionFromValue(parsed, new Set(input.snapshot.structure.sampledPaths));

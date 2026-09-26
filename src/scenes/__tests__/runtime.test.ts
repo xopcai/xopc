@@ -6,6 +6,7 @@ import { SceneExecutionService } from '../execution.js';
 import { SceneRepository } from '../repository.js';
 import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { SceneRuntime } from '../runtime.js';
+import { SceneCapabilityRegistry } from '../registry.js';
 import { SceneApplicationService } from '../service.js';
 import { familyPlanTemplate } from '../templates.js';
 import { SceneUserNotesProvider } from '../userNotes.js';
@@ -31,13 +32,13 @@ describe('single-Gateway scene runtime', () => {
     repository.installTemplate(familyPlanTemplate);
     const provider = new SceneUserNotesProvider(db, () => now);
     const authorize = async () => permissions;
-    application = new SceneApplicationService(repository, [provider], authorize, () => now);
+    application = new SceneApplicationService(repository, new SceneCapabilityRegistry([provider]), authorize, () => now);
     activationId = (await application.start(principal, { templateKey: familyPlanTemplate.key, templateVersion: familyPlanTemplate.version,
       goal: 'Protect rest time', scope: { kind: 'personal' }, permissions }, 'start')).id;
     application.writeNotes(principal, activationId, { expectedRevision: 0, content: 'Keep Sunday free.' });
     execute.mockReset().mockImplementation(async ({ evidence }) => ({ kind: 'artifact', summary: 'Keep Sunday free.', evidenceIds: evidence.map((item) => item.id) }));
     scan.mockReset().mockResolvedValue({ changed: 0, unavailable: 0, nextCursor: null });
-    runtime = new SceneRuntime(repository, new SceneExecutionService(repository, [provider], { execute }, authorize, () => now), { scan }, () => now, 100);
+    runtime = new SceneRuntime(repository, new SceneExecutionService(repository, new SceneCapabilityRegistry([provider]), { execute }, authorize, () => now), { scan }, () => now, 100);
   });
   afterEach(async () => { await runtime.stop(); db.close(); vi.useRealTimers(); });
 

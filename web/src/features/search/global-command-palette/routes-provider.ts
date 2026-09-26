@@ -94,6 +94,13 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       keywords: ['history', 'archive', 'pin'],
     },
     {
+      id: 'route:usage',
+      title: m.nav.usage,
+      subtitle: r.usageSubtitle,
+      path: '/settings/usage',
+      keywords: ['usage', 'cost', 'tokens', 'model', '用量', '费用'],
+    },
+    {
       id: 'route:logs',
       title: m.nav.logs,
       subtitle: r.logsSubtitle,

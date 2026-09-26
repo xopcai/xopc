@@ -136,6 +136,7 @@ export async function runBtwQuery(opts: {
             { messages: [userMessage] },
             modelCallOptions,
             opts.credentialOptions,
+            { operation: 'agent.answer', conversationId: opts.conversationId },
           );
           for await (const event of stream) {
             const streamEvent = event as { type?: unknown; delta?: unknown; error?: unknown };
@@ -154,7 +155,13 @@ export async function runBtwQuery(opts: {
           }
           return await stream.result();
         })()
-      : await completeWithResolvedCredentials(model, { messages: [userMessage] }, modelCallOptions, opts.credentialOptions);
+      : await completeWithResolvedCredentials(
+          model,
+          { messages: [userMessage] },
+          modelCallOptions,
+          opts.credentialOptions,
+          { operation: 'agent.answer', conversationId: opts.conversationId },
+        );
     const response = out as {
       content?: unknown;
       stopReason?: unknown;

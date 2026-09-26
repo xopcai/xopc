@@ -94,10 +94,11 @@ Commands: \`templates\`, \`list\`, \`get\`, \`mail_accounts\`, \`mail_search\`,
 \`check\`, \`notes\`, \`work_item\`, \`update_work_item\`, \`schedule\`, \`results\`,
 \`feedback\`, \`mark_read\`, \`diagnostics\`, \`get_preferences\`, and \`set_preferences\`.
 
-The built-in templates are \`weekly-family-plan\` and \`mail-follow-up\`, currently version
-\`1.0.0\`. Discover templates instead of guessing keys or versions. Timestamps are Unix epoch
-milliseconds. Use \`preflight\` or \`dryRun: true\` before \`start\` when account or model readiness
-is uncertain.
+Templates are installed capabilities, not a fixed scenario list. Discover them instead of guessing
+keys, versions, context providers, or execution adapters. The core read-only start protocol applies
+to templates whose execution kind is \`agent\`; adapter-backed templates expose their own setup in
+the Monitors UI. Timestamps are Unix epoch milliseconds. Use \`preflight\` or \`dryRun: true\` before
+\`start\` when account or model readiness is uncertain.
 
 ### Safe start protocol
 

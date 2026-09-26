@@ -19,7 +19,7 @@ import { OutcomeCard } from './outcome-card';
 import { ScheduleEditor } from './schedule-editor';
 import { MailSourcePicker } from './mail-source-picker';
 import { MailDeadlineEditor } from './mail-deadline-editor';
-import { CreateTaskFollowUp, TaskFollowUpDetail } from './task-follow-up';
+import { CreateTaskExecution, TaskExecutionDetail, type TaskExecutionDetails } from './task-follow-up';
 import { useSceneRealtime } from './use-scene-realtime';
 
 const fieldClass = 'min-h-11 w-full rounded-md border border-edge bg-surface-panel px-3 py-2 text-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:text-sm';
@@ -202,15 +202,20 @@ function SceneInbox() {
 }
 
 function CreateScene({ templateKey }: { templateKey: string }) {
-  return templateKey === 'task-follow-up' ? <CreateTaskFollowUp /> : <CreateReadOnlyScene templateKey={templateKey} />;
-}
-
-function CreateReadOnlyScene({ templateKey }: { templateKey: string }) {
-  const zh = useLocaleStore((state) => state.language) === 'zh';
   const [params] = useSearchParams();
-  const navigate = useNavigate();
   const version = params.get('version') ?? '1.0.0';
   const template = useSWR<{ template: SceneTemplate }>(`/templates/${encodeURIComponent(templateKey)}/versions/${encodeURIComponent(version)}`, sceneGet);
+  if (template.error) return <Failure error={template.error} retry={() => void template.mutate()} />;
+  if (!template.data) return <Loading />;
+  const manifest = template.data.template;
+  return manifest.execution.kind === 'task'
+    ? <CreateTaskExecution template={manifest} />
+    : <CreateReadOnlyScene manifest={manifest} />;
+}
+
+function CreateReadOnlyScene({ manifest }: { manifest: SceneTemplate }) {
+  const zh = useLocaleStore((state) => state.language) === 'zh';
+  const navigate = useNavigate();
   const [goal, setGoal] = useState('');
   const [accountId, setAccountId] = useState('');
   const [subjectId, setSubjectId] = useState('');
@@ -222,13 +227,10 @@ function CreateReadOnlyScene({ templateKey }: { templateKey: string }) {
   const savedId = useRef('');
   const dirty = Boolean(goal || subjectId || confirmed) && !saved;
   useEffect(() => { if (saved) navigate(savedId.current, { replace: true }); }, [saved, navigate]);
-  if (template.error) return <Failure error={template.error} retry={() => void template.mutate()} />;
-  if (!template.data) return <Loading />;
-  const manifest = template.data.template;
   const mail = manifest.contextProviders.includes('mail');
   const start = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError(undefined);
-    const input = { templateKey, templateVersion: version, goal, scope: mail ? { kind: 'objects', ids: [subjectId.trim()] } : { kind: 'personal' },
+    const input = { templateKey: manifest.key, templateVersion: manifest.version, goal, scope: mail ? { kind: 'objects', ids: [subjectId.trim()] } : { kind: 'personal' },
       permissions: { accountIds: mail ? [accountId.trim()] : [], contextProviders: manifest.contextProviders, effectHandlers: [] } };
     const content = JSON.stringify(input);
     if (key.current.content !== content) key.current = { content, id: crypto.randomUUID() };
@@ -250,10 +252,12 @@ function CreateReadOnlyScene({ templateKey }: { templateKey: string }) {
 }
 
 function SceneDetail({ id }: { id: string }) {
-  const detail = useSWR<{ activation: SceneActivation }>(`/activations/${encodeURIComponent(id)}`, sceneGet);
+  const detail = useSWR<{ activation: SceneActivation; template: SceneTemplate; details?: TaskExecutionDetails }>(`/activations/${encodeURIComponent(id)}`, sceneGet);
   if (detail.error) return <Failure error={detail.error} />;
   if (!detail.data) return <Loading />;
-  return detail.data.activation.templateKey === 'task-follow-up' ? <TaskFollowUpDetail id={id} /> : <ReadOnlySceneDetail id={id} />;
+  return detail.data.template.execution.kind === 'task' && detail.data.details
+    ? <TaskExecutionDetail id={id} initial={detail.data.details} />
+    : <ReadOnlySceneDetail id={id} />;
 }
 
 function ReadOnlySceneDetail({ id }: { id: string }) {
@@ -308,7 +312,7 @@ function ReadOnlySceneDetail({ id }: { id: string }) {
     <SceneDiagnostics activationId={id} zh={zh} />
     {['active', 'paused', 'needs_setup'].includes(activation.status) && <GoalEditor key={activation.id} activation={activation} zh={zh} onDirty={setGoalDirty} onSaved={() => { void detail.mutate(); void results.mutate(); void runs.mutate(); }} />}
     {activation.permissions.contextProviders.includes('user_notes') && <NotesEditor path={path} zh={zh} onDirty={setNotesDirty} onSaved={() => { void detail.mutate(); void results.mutate(); void runs.mutate(); }} />}
-    {(activation.templateKey === 'mail-follow-up' ? <MailDeadlineEditor activation={activation} zh={zh} onDirty={setScheduleDirty} onChanged={() => { void detail.mutate(); void results.mutate(); void runs.mutate(); }} /> : <ScheduleEditor activation={activation} zh={zh} onDirty={setScheduleDirty} onChanged={() => void detail.mutate()} />)}
+    {(activation.permissions.contextProviders.includes('mail') ? <MailDeadlineEditor activation={activation} zh={zh} onDirty={setScheduleDirty} onChanged={() => { void detail.mutate(); void results.mutate(); void runs.mutate(); }} /> : <ScheduleEditor activation={activation} zh={zh} onDirty={setScheduleDirty} onChanged={() => void detail.mutate()} />)}
     {selectedResult && <LinkedSceneResult activationId={id} presentationId={selectedResult} zh={zh} />}
     <section className="space-y-3"><h2 className="text-base font-semibold text-fg">{zh ? '最近成果' : 'Recent results'}</h2>
       {results.error ? <Failure error={results.error} retry={() => void results.mutate()} /> : !results.data ? <Loading /> : results.data.outcomes.filter((item) => item.activationId === id).length === 0

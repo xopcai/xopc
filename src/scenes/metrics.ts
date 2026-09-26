@@ -17,12 +17,6 @@ export class SceneMetrics {
       FROM scene_trigger_intents i JOIN scene_activations a ON a.id = i.activation_id
       WHERE a.owner_id = ? AND a.workspace_id = ? AND i.status = 'pending'`)
       .get(principal.ownerId, principal.workspaceId)!;
-    const usage = this.db.prepare(`SELECT COUNT(*) AS calls, COALESCE(SUM(u.total_tokens), 0) AS tokens,
-      COALESCE(SUM(u.estimated_cost), 0) AS cost FROM scene_model_usage u JOIN scene_runs r ON r.id = u.run_id
-      JOIN scene_activations a ON a.id = r.activation_id WHERE a.owner_id = ? AND a.workspace_id = ? AND u.recorded_at >= ?`)
-      .get(principal.ownerId, principal.workspaceId, now - 7 * 86400000)!;
-    const connectorReads = Number(this.db.prepare(`SELECT COALESCE(SUM(request_count), 0) AS count FROM scene_connector_usage
-      WHERE owner_id = ? AND workspace_id = ? AND utc_day >= ?`).get(principal.ownerId, principal.workspaceId, Math.floor(now / 86400000) - 6)?.count);
     const notifications = this.db.prepare(`SELECT status, COUNT(*) AS count FROM notification_dispatches
       WHERE owner_id = ? AND workspace_id = ? GROUP BY status`).all(principal.ownerId, principal.workspaceId);
     const activations = this.db.prepare(`SELECT a.id, a.status,
@@ -46,7 +40,7 @@ export class SceneMetrics {
     let currentModel: string | null = null;
     try { currentModel = this.modelRef(); } catch { /* Readiness reports invalid model configuration. */ }
     return { checksPaused, currentModel, pendingChecks: Number(queue.depth), oldestDueWaitMs: queue.oldest == null ? 0 : Math.max(0, now - Number(queue.oldest)),
-      lastSevenDays: { modelCalls: Number(usage.calls), connectorReads, tokens: Number(usage.tokens), estimatedCost: Number(usage.cost) }, notifications, activations };
+      notifications, activations };
   }
 
   forUser(principal: ScenePrincipal, days = 7) {

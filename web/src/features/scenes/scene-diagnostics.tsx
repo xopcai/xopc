@@ -4,7 +4,7 @@ import useSWR from 'swr';
 import { sceneGet } from './api';
 
 export function SceneDiagnostics({ activationId, zh }: { activationId: string; zh: boolean }) {
-  const diagnostics = useSWR<{ checksPaused: boolean; currentModel: string | null; pendingChecks: number; oldestDueWaitMs: number; lastSevenDays: { modelCalls: number; tokens: number; estimatedCost: number };
+  const diagnostics = useSWR<{ checksPaused: boolean; currentModel: string | null; pendingChecks: number; oldestDueWaitMs: number;
     activations: Array<{ id: string; status: string; next_deadline_check_at: number | null; retry_at: number | null; source_reason: string | null; source_attempt_at: number | null; source_failures: number | null; source_success_at: number | null; source_retry_at: number | null; last_check_at: number | null; next_schedule_at: number | null; deadline_at: number | null; last_reason: string | null }> }>('/diagnostics', sceneGet, { refreshInterval: 15000 });
   const row = diagnostics.data?.activations.find(item => item.id === activationId);
   if (!row) return null;
@@ -35,6 +35,5 @@ export function SceneDiagnostics({ activationId, zh }: { activationId: string; z
     <p>{zh ? '当前关注使用的模型' : 'Current monitor model'}: {diagnostics.data!.currentModel ?? (zh ? '配置不可用' : 'Configuration unavailable')}</p>
     {row.source_reason && row.status === 'active' && !diagnostics.data?.checksPaused && row.source_retry_at != null && <p>{zh ? '来源重试时间' : 'Source retry'}: {format(row.source_retry_at)}</p>}
     <p>{zh ? '所有智能关注待检查' : 'Pending checks across monitors'}: {diagnostics.data!.pendingChecks}</p>
-    <p>{zh ? '最近 7 天所有智能关注的模型用量' : 'Model usage across monitors in the last 7 days'}: {diagnostics.data!.lastSevenDays.modelCalls} {zh ? '次调用' : 'calls'} · {diagnostics.data!.lastSevenDays.tokens} tokens · {zh ? '估算费用' : 'estimated cost'} ${diagnostics.data!.lastSevenDays.estimatedCost.toFixed(4)}</p>
   </section>;
 }

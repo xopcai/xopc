@@ -6,11 +6,14 @@ import type { SceneApplicationService } from './service.js';
 import type { SceneMailContextProvider } from './mailContext.js';
 import type { ScenePreferenceService } from './preferences.js';
 import type { SceneMetrics } from './metrics.js';
-import type { TaskFollowUpService } from './taskFollowUp/service.js';
+import type { SceneActivationAdapter } from './activationAdapter.js';
+import type { SceneCapabilityRegistry } from './registry.js';
+import type { SceneSourceRegistry } from './taskFollowUp/contracts.js';
 
 /** An explicitly installed scene domain; never resolves to the old runtime. */
 export interface SceneHttpServices {
-  followUps?: TaskFollowUpService;
+  activationAdapters: SceneCapabilityRegistry<SceneActivationAdapter>;
+  sourceProviders: SceneSourceRegistry;
   repository: SceneRepository;
   application: SceneApplicationService;
   inbox: SceneInboxService;

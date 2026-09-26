@@ -6,6 +6,7 @@ import { SceneExecutionService } from '../execution.js';
 import { SceneRepository } from '../repository.js';
 import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { SceneApplicationService } from '../service.js';
+import { SceneCapabilityRegistry } from '../registry.js';
 import { familyPlanTemplate } from '../templates.js';
 import { SceneUserNotesProvider } from '../userNotes.js';
 
@@ -29,7 +30,7 @@ describe('personal family planning without project or task dependencies', () => 
     repository = new SceneRepository(db);
     repository.installTemplate(familyPlanTemplate);
     provider = new SceneUserNotesProvider(db, () => 2000);
-    application = new SceneApplicationService(repository, [provider], authorize, () => 2000);
+    application = new SceneApplicationService(repository, new SceneCapabilityRegistry([provider]), authorize, () => 2000);
     activationId = (await application.start(principal, { templateKey: familyPlanTemplate.key, templateVersion: familyPlanTemplate.version,
       goal: 'Make family arrangements easier while keeping room for rest.', scope: { kind: 'personal' }, permissions }, 'start')).id;
   });
@@ -39,7 +40,7 @@ describe('personal family planning without project or task dependencies', () => 
     expect(application.writeNotes(principal, activationId, note)).toBe(1);
     application.check(principal, activationId, 'review');
     const execute = vi.fn(async ({ evidence }) => ({ kind: 'artifact', summary: 'Prepare lunch on Saturday. Leave Sunday unplanned.', evidenceIds: [evidence[0].id] }));
-    const runtime = new SceneExecutionService(repository, [provider], { execute }, authorize, () => 2000);
+    const runtime = new SceneExecutionService(repository, new SceneCapabilityRegistry([provider]), { execute }, authorize, () => 2000);
     expect(await runtime.runNext('worker')).toBe('completed');
     expect(execute.mock.calls[0][0].evidence).toMatchObject([{ content: note.content }]);
     expect(repository.listInbox(principal)).toHaveLength(1);
@@ -50,7 +51,7 @@ describe('personal family planning without project or task dependencies', () => 
   it('does not invent arrangements or call the model when no notes were supplied', async () => {
     application.check(principal, activationId, 'review');
     const execute = vi.fn();
-    const runtime = new SceneExecutionService(repository, [provider], { execute }, authorize, () => 2000);
+    const runtime = new SceneExecutionService(repository, new SceneCapabilityRegistry([provider]), { execute }, authorize, () => 2000);
     expect(await runtime.runNext('worker')).toBe('completed');
     expect(execute).not.toHaveBeenCalled();
     expect(repository.listInbox(principal)).toEqual([]);
@@ -63,7 +64,7 @@ describe('personal family planning without project or task dependencies', () => 
     expect(repository.readNotes(principal, activationId)).toMatchObject({ content: '', revision: 2 });
     application.check(principal, activationId, 'review');
     const execute = vi.fn();
-    const runtime = new SceneExecutionService(repository, [provider], { execute }, authorize, () => 2000);
+    const runtime = new SceneExecutionService(repository, new SceneCapabilityRegistry([provider]), { execute }, authorize, () => 2000);
     expect(await runtime.runNext('worker')).toBe('completed');
     expect(execute).not.toHaveBeenCalled();
   });
@@ -71,7 +72,7 @@ describe('personal family planning without project or task dependencies', () => 
   it('prevents late results if arrangements change during execution', async () => {
     application.writeNotes(principal, activationId, note);
     application.check(principal, activationId, 'review');
-    const runtime = new SceneExecutionService(repository, [provider], { execute: async () => {
+    const runtime = new SceneExecutionService(repository, new SceneCapabilityRegistry([provider]), { execute: async () => {
       application.writeNotes(principal, activationId, { expectedRevision: 1, content: 'Cancel the lunch; keep this weekend free.' });
       return { kind: 'artifact', summary: 'Outdated lunch plan', evidenceIds: [`scene-notes:${activationId}`] };
     } }, authorize, () => 2000);
@@ -91,7 +92,7 @@ describe('personal family planning without project or task dependencies', () => 
     repository.writeNotes(principal, activationId, { ...note, validUntil: 1500 }, 1000);
     application.check(principal, activationId, 'review');
     const execute = vi.fn();
-    const runtime = new SceneExecutionService(repository, [provider], { execute }, authorize, () => 2000);
+    const runtime = new SceneExecutionService(repository, new SceneCapabilityRegistry([provider]), { execute }, authorize, () => 2000);
     expect(await runtime.runNext('worker')).toBe('deferred');
     expect(execute).not.toHaveBeenCalled();
   });
@@ -99,7 +100,7 @@ describe('personal family planning without project or task dependencies', () => 
   it('withdraws an obsolete plan when notes are edited', async () => {
     application.writeNotes(principal, activationId, note);
     application.check(principal, activationId, 'review');
-    const runtime = new SceneExecutionService(repository, [provider], { execute: async () => ({ kind: 'artifact', summary: 'Lunch plan', evidenceIds: [`scene-notes:${activationId}`] }) }, authorize, () => 2000);
+    const runtime = new SceneExecutionService(repository, new SceneCapabilityRegistry([provider]), { execute: async () => ({ kind: 'artifact', summary: 'Lunch plan', evidenceIds: [`scene-notes:${activationId}`] }) }, authorize, () => 2000);
     await runtime.runNext('worker');
     expect(repository.listInbox(principal)).toHaveLength(1);
     application.writeNotes(principal, activationId, { expectedRevision: 1, content: 'Lunch cancelled' });

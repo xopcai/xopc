@@ -306,7 +306,7 @@ export async function analyzeWorkContext(input: {
     maxTokens: input.projectOverviewOnly ? 2_000 : WORK_ANALYSIS_MAX_TOKENS,
     temperature: 0.1,
     signal: input.signal,
-  });
+  }, undefined, { operation: 'work_discovery.analyze' });
   const raw = extractText(response.content);
   const parsed = parseJson(raw);
   if (!parsed) throw invalidJsonError('Analysis', response, raw);
@@ -456,6 +456,8 @@ async function analyzeUnderstandingBatch(input: {
     resolveModel(modelRef),
     { messages: [{ role: 'user', content: prompt, timestamp: Date.now() } satisfies UserMessage] },
     { maxTokens: 3_000, temperature: 0.1, signal: input.signal },
+    undefined,
+    { operation: 'work_discovery.analyze' },
   );
   const raw = extractText(response.content);
   const parsed = parseJson(raw);

@@ -161,6 +161,8 @@ async function refineTranscript(
         temperature: 0.2,
         signal: mergedSignal as AbortSignal,
       },
+      undefined,
+      { operation: 'voice.select' },
     );
 
     let out = '';

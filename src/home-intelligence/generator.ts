@@ -171,7 +171,8 @@ export class HomeAdviceGenerator {
     const response = await completeWithResolvedCredentials(model, {
       systemPrompt,
       messages: [message],
-    }, { maxTokens: 3_000, temperature: 0.1, signal: requestSignal });
+    }, { maxTokens: 3_000, temperature: 0.1, signal: requestSignal }, undefined,
+    { operation: 'home.generate_advice' });
     const raw = extractHomeResponseText(response);
     let result: HomeModelResult;
     try {
@@ -191,7 +192,8 @@ export class HomeAdviceGenerator {
       const corrected = await completeWithResolvedCredentials(model, {
         systemPrompt,
         messages: [message, correction],
-      }, { maxTokens: 3_000, temperature: 0, signal: requestSignal });
+      }, { maxTokens: 3_000, temperature: 0, signal: requestSignal }, undefined,
+      { operation: 'home.generate_advice', trigger: 'retry' });
       try {
         result = HomeModelResultSchema.parse(parseJson(extractHomeResponseText(corrected)));
       } catch (correctionError) {

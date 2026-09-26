@@ -106,6 +106,8 @@ export class ModelTaskContractPlanner implements TaskContractPlanner {
           maxTokens: 2_000,
           temperature: 0,
         },
+        undefined,
+        { operation: 'task.plan_contract' },
       );
       const planned = parseTaskContractResponse(extractText(result.content));
       return planned ? { ...planned, objective: fallback.objective } : fallback;

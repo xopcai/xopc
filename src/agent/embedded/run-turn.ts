@@ -61,6 +61,7 @@ import { RunVerification } from '../coding/run-verification.js';
 import { withDelegationScope } from '../orchestration/delegation-scope.js';
 import { runWithEmbeddedExecutionSession } from './execution-context.js';
 import type { CompactionDiscardedAttempt } from '../memory/compaction.js';
+import { continuesAfterTool, trackAiUsageStream } from '../../usage/recorder.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -554,9 +555,12 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         },
         'Sending messages to AI',
       );
-      return streamFnWithXopcExtensions(streamModel, effectiveContext, {
-        ...options,
-      });
+      return trackAiUsageStream(streamModel, {
+        operation: continuesAfterTool(effectiveContext.messages) ? 'agent.continue_after_tool' : 'agent.answer',
+        conversationId,
+        runId,
+        traceId: runId,
+      }, () => streamFnWithXopcExtensions(streamModel, effectiveContext, { ...options }));
     };
     session.agent.streamFunction = loggingStreamFn;
     const verification = await RunVerification.open(workspaceDir);

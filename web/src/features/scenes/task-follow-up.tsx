@@ -11,12 +11,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { fetchProjects } from '@/features/projects/api';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import { sceneErrorText, sceneGet, sceneWrite, type SceneActivation } from './api';
+import { sceneErrorText, sceneGet, sceneWrite, type SceneActivation, type SceneTemplate } from './api';
 import { SceneDirtyGuard } from './scene-dirty-guard';
 
 const field = 'min-h-11 w-full rounded-md border border-edge bg-surface-panel px-3 py-2 text-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:text-sm';
 const panel = 'min-w-0 space-y-4 rounded-xl border border-edge bg-surface-panel p-4';
-type FollowUp = {
+export type TaskExecutionDetails = {
   activation: SceneActivation; task: { id: string; title: string; phase: string }; input: TaskFollowUpInput;
   source?: { content: string; observedAt: number }; artifactPath?: string;
   environment?: { rootPath: string; branchRef?: string };
@@ -30,7 +30,7 @@ function capabilities(resource: TaskFollowUpInput['resource'], writable: boolean
     ...(resource === 'worktree' && command.trim() ? ['verification.run' as const] : [])];
 }
 
-export function CreateTaskFollowUp() {
+export function CreateTaskExecution({ template }: { template: SceneTemplate }) {
   const zh = useLocaleStore(state => state.language) === 'zh';
   const text = (cn: string, en: string) => zh ? cn : en;
   const navigate = useNavigate();
@@ -62,7 +62,8 @@ export function CreateTaskFollowUp() {
         ...(resource === 'worktree' ? { projectId } : {}),
         capabilities: capabilities(resource, writable, command),
         ...(resource === 'worktree' && command.trim() ? { verificationCommand: command.trim() } : {}) };
-      const preflight = await sceneWrite<{ ready: boolean; missing: string[] }>('/task-follow-ups/preflight', 'POST', input);
+      const request = { templateKey: template.key, templateVersion: template.version, configuration: input };
+      const preflight = await sceneWrite<{ ready: boolean; missing: string[] }>('/preflight', 'POST', request);
       if (!preflight.ready) {
         const labels: Record<string, string> = {
           verification_backend: text('可选验证需要配置隔离后端；也可清空验证命令，先生成修改。', 'Optional verification needs an isolation backend. Clear the command to proceed without running tests.'),
@@ -74,7 +75,7 @@ export function CreateTaskFollowUp() {
         };
         setError(preflight.missing.map(item => labels[item] ?? item).join(' ')); return;
       }
-      const created = await sceneWrite<FollowUp>('/task-follow-ups', 'POST', input);
+      const created = await sceneWrite<TaskExecutionDetails>('/activations', 'POST', request);
       flushSync(() => setSaved(true)); navigate(`/scenes/${created.activation.id}`, { replace: true });
     } catch (cause) { setError(sceneErrorText(cause, zh)); }
     finally { setBusy(false); setTimeout(() => errorRef.current?.focus(), 0); }
@@ -83,8 +84,8 @@ export function CreateTaskFollowUp() {
   if (!providers.data || !projects.data || (providerId && !accounts.data)) return <div aria-busy="true"><Skeleton className="h-12" /><Skeleton className="mt-4 h-32" /></div>;
   return <form className="space-y-5" onSubmit={submit}>
     <SceneDirtyGuard dirty={!saved && Boolean(url || goal || instruction)} zh={zh} />
-    <h2 className="text-lg font-semibold text-fg">{text('持续推进一件事', 'Keep work moving')}</h2>
-    <p className="text-sm text-fg-muted">{text('选定来源，告诉 AI 要完成什么。后续变化自动进入同一任务；仅在需要判断或遇到阻塞时提醒你。', 'Choose a source and describe the outcome. Updates stay with one task; attention is requested for decisions or blockers.')}</p>
+    <h2 className="text-lg font-semibold text-fg">{template.title}</h2>
+    <p className="text-sm text-fg-muted">{template.description}</p>
     <fieldset disabled={busy} className="space-y-5">
       <label className="grid gap-2 text-sm text-fg">{text('来源', 'Source')}<Select aria-label={text('来源', 'Source')} value={providerId} onChange={e => { setProvider(e.target.value); setAccount(''); }} required>
         {providers.data.providers.map(item => <SelectOption key={item.id} value={item.id}>{item.label}</SelectOption>)}
@@ -121,23 +122,23 @@ export function CreateTaskFollowUp() {
   </form>;
 }
 
-export function TaskFollowUpDetail({ id }: { id: string }) {
+export function TaskExecutionDetail({ id, initial }: { id: string; initial: TaskExecutionDetails }) {
   const [configurationDirty, setConfigurationDirty] = useState(false);
   const zh = useLocaleStore(state => state.language) === 'zh';
   const text = (cn: string, en: string) => zh ? cn : en;
-  const path = `/task-follow-ups/${encodeURIComponent(id)}`;
-  const detail = useSWR<FollowUp>(path, sceneGet, { refreshInterval: 5000 });
+  const path = `/activations/${encodeURIComponent(id)}`;
+  const detail = useSWR<{ details: TaskExecutionDetails }>(path, sceneGet, { refreshInterval: 5000, fallbackData: { details: initial } });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function transition(status: 'active' | 'paused' | 'archived') {
     setBusy(true); setError('');
-    try { await sceneWrite(path, 'PATCH', { expectedRevision: detail.data!.activation.revision, status }); await detail.mutate(); }
+    try { await sceneWrite(path, 'PATCH', { expectedRevision: detail.data!.details.activation.revision, status }); await detail.mutate(); }
     catch (cause) { setError(sceneErrorText(cause, zh)); }
     finally { setBusy(false); }
   }
   if (detail.error) return <p role="alert">{sceneErrorText(detail.error, zh)}</p>;
   if (!detail.data) return <div aria-busy="true"><Skeleton className="h-48" /></div>;
-  const item = detail.data;
+  const item = detail.data.details;
   const current = item.processedRevision > 0 && item.processedRevision === item.observedRevision;
   return <div className="space-y-5">
     <h2 className="break-words text-lg font-semibold text-fg">{item.activation.goal}</h2>
@@ -184,10 +185,10 @@ export function TaskFollowUpDetail({ id }: { id: string }) {
   </div>;
 }
 
-function FollowUpConfiguration({ item, onSaved, onDirty }: { item: FollowUp; onSaved: () => Promise<unknown>; onDirty: (dirty: boolean) => void }) {
+function FollowUpConfiguration({ item, onSaved, onDirty }: { item: TaskExecutionDetails; onSaved: () => Promise<unknown>; onDirty: (dirty: boolean) => void }) {
   const zh = useLocaleStore(state => state.language) === 'zh';
   const text = (cn: string, en: string) => zh ? cn : en;
-  const [draft, setDraft] = useState<{ base: FollowUp; instruction: string; writable: boolean; command: string } | null>(null);
+  const [draft, setDraft] = useState<{ base: TaskExecutionDetails; instruction: string; writable: boolean; command: string } | null>(null);
   const fields = draft ?? { base: item, instruction: item.input.instruction, writable: item.input.capabilities.includes('workspace.write'), command: item.input.verificationCommand ?? '' };
   const { instruction, writable, command } = fields;
   const edit = (patch: Partial<Pick<typeof fields, 'instruction' | 'writable' | 'command'>>) => setDraft(previous => ({ ...(previous ?? fields), ...patch }));
@@ -199,7 +200,7 @@ function FollowUpConfiguration({ item, onSaved, onDirty }: { item: FollowUp; onS
     event.preventDefault(); setBusy(true); setError('');
     try {
       const base = fields.base;
-      await sceneWrite(`/task-follow-ups/${item.activation.id}`, 'PATCH', { expectedRevision: base.activation.revision,
+      await sceneWrite(`/activations/${item.activation.id}`, 'PATCH', { expectedRevision: base.activation.revision,
         configuration: { ...base.input, instruction, capabilities: capabilities(base.input.resource, writable, command), verificationCommand: command.trim() || undefined } });
       await onSaved();
       setDraft(null);
@@ -227,12 +228,12 @@ function TaskBranches({ projectId, taskId }: { projectId: string; taskId: string
   const [selected, setSelected] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const inventory = useSWR<{ checkoutDirty: boolean; branches: Branch[] }>(open ? `/task-follow-ups/projects/${encodeURIComponent(projectId)}/branches` : null, sceneGet);
+  const inventory = useSWR<{ checkoutDirty: boolean; branches: Branch[] }>(open ? `/resources/projects/${encodeURIComponent(projectId)}/branches` : null, sceneGet);
   const branch = inventory.data?.branches.find(item => item.ref === selected);
   async function associate() {
     if (!branch) return; setBusy(true); setError('');
     try {
-      await sceneWrite('/task-follow-ups/branch-links', 'POST', { projectId, taskId, branchRef: branch.ref, expectedSha: branch.sha });
+      await sceneWrite('/resources/branch-links', 'POST', { projectId, taskId, branchRef: branch.ref, expectedSha: branch.sha });
       await inventory.mutate();
     } catch (cause) { setError(sceneErrorText(cause, zh)); }
     finally { setBusy(false); }

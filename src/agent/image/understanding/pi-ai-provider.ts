@@ -80,7 +80,7 @@ export function buildPiAiImageUnderstandingProvider(providerId: string): ImageUn
         apiKey,
         maxTokens,
         signal,
-      });
+      }, undefined, { operation: 'media.understand_image' });
 
       const text = coerceImageAssistantText({
         message,

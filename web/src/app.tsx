@@ -30,6 +30,7 @@ import {
   loadSettingsPage,
   loadSharePreviewPage,
   loadSessionsPage,
+  loadUsagePage,
   loadUserModelPage,
   loadWorkflowsPage,
   loadLocalAppsPage,
@@ -44,6 +45,7 @@ import { syncElectronLocaleAfterHydration } from '@/stores/locale-store';
 import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/stores/theme-store';
 
 const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.SessionsPage })));
+const UsageSettingsPage = lazy(() => loadUsagePage().then((m) => ({ default: m.UsageSettingsPage })));
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
 const BrowserAutomationsPage = lazy(() => loadBrowserAutomationsPage().then((m) => ({ default: m.BrowserAutomationsPage })));
 const ScenesPage = lazy(() => loadScenesPage().then((m) => ({ default: m.ScenesPage })));
@@ -387,6 +389,14 @@ const router = createHashRouter([
             element: (
               <Suspense fallback={<SecondaryRouteFallback />}>
                 <SessionsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'usage',
+            element: (
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <UsageSettingsPage />
               </Suspense>
             ),
           },

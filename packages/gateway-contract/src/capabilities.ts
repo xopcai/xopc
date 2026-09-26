@@ -338,7 +338,6 @@ export const ProductReadContracts = {
   }) },
   'xopc.scenes.diagnostics': { input: z.strictObject({}), output: z.object({ checksPaused: z.boolean(), currentModel: z.string().nullable(),
     pendingChecks: z.number().int().nonnegative(), oldestDueWaitMs: z.number().nonnegative(),
-    lastSevenDays: z.object({ modelCalls: z.number().int().nonnegative(), connectorReads: z.number().int().nonnegative(), tokens: z.number().nonnegative(), estimatedCost: z.number().nonnegative() }),
     notifications: z.array(z.object({ status: z.string(), count: z.number().int().nonnegative() })), activations: z.array(z.record(z.string(), z.json())),
   }) },
   'xopc.scenes.get_preferences': { input: z.strictObject({}), output: scenePreferencesSchema.extend({ revision: z.number().int().nonnegative() }) },

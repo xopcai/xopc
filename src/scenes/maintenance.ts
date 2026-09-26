@@ -12,7 +12,7 @@ export function maintainSceneStorage(db: DatabaseSync, now = Date.now()): void {
     db.prepare(`DELETE FROM scene_mail_sources WHERE id IN (SELECT s.id FROM scene_mail_sources s
       WHERE s.selected_at < ? AND NOT EXISTS (SELECT 1 FROM scene_activations a, json_each(a.scope_json, '$.ids') ids WHERE ids.value = s.id)
       ORDER BY selected_at LIMIT 100)`).run(now - 30 * 86400000);
-    for (const table of ['scene_context_snapshots', 'scene_model_reservations', 'scene_model_usage']) {
+    for (const table of ['scene_context_snapshots', 'scene_model_reservations']) {
       db.prepare(`DELETE FROM ${table} WHERE run_id IN (SELECT DISTINCT r.id FROM scene_runs r JOIN ${table} t ON t.run_id = r.id
         WHERE r.status NOT IN ('running', 'retry_wait') AND r.created_at < ? ORDER BY r.created_at LIMIT 100)`).run(cutoff);
     }

@@ -742,6 +742,10 @@ Return a JSON delta containing only missing facts, using {"upserts":[]}. Include
             maxRetries: 0,
             sessionId: COMPACTION_CACHE_SESSION_ID,
             onPayload: compactionPayloadGuard(requestedMaxTokens, (actual) => { actualMaxTokens = actual; }),
+          }, undefined, {
+            operation: 'session.compact',
+            conversationId: callContext.conversationId,
+            trigger: attempt === 0 && modelIndex === 0 ? 'system' : 'retry',
           });
           parentSignal?.throwIfAborted();
           if (linked.timedOut()) throw new CompactionRequestError('timeout', 'Compaction handover timed out');

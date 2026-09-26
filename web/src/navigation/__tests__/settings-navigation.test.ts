@@ -24,7 +24,7 @@ describe('settings navigation information architecture', () => {
       'settingsComputerUse',
     ]);
     expect(connection?.tabs).toEqual(['settingsDevices', 'settingsTunnel', 'settingsShares']);
-    expect(system?.tabs).toEqual(['settingsGateway', 'settingsRuntimes', 'settingsImports', 'sessions', 'logs']);
+    expect(system?.tabs).toEqual(['settingsGateway', 'settingsRuntimes', 'settingsImports', 'sessions', 'usage', 'logs']);
   });
 
   it('uses concise group labels', () => {

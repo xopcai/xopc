@@ -22,6 +22,8 @@ describe('scene contracts', () => {
   it('rejects duplicate triggers and unknown providers', () => {
     expect(sceneTemplateSchema.safeParse({ ...template, triggers: [...template.triggers, ...template.triggers] }).success).toBe(false);
     expect(() => validateTemplate(template, { contextProviders: [], effectHandlers: [] })).toThrow('Unknown scene context provider');
+    expect(() => validateTemplate(template, { contextProviders: ['mail'], effectHandlers: [], executionAdapters: ['task'] }))
+      .toThrow('Unknown scene execution adapter');
   });
   it('never grants a permission missing in any authorization layer', () => {
     expect(intersectPermissions(

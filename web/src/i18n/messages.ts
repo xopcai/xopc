@@ -4,6 +4,7 @@ import { en, zh } from './locales/bundle';
 
 export type Tab =
   | 'sessions'
+  | 'usage'
   | 'logs'
   | 'settingsImports'
   | 'settingsOverview'

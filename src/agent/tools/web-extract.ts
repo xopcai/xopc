@@ -170,6 +170,8 @@ async function callExtractionLlm(
       temperature: 0.2,
       signal: buildTimeoutSignal(signal) as AbortSignal,
     },
+    undefined,
+    { operation: 'tool.web_extract' },
   );
 
   return extractTextFromCompletion(result);

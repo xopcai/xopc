@@ -160,6 +160,7 @@ import { HomeCapabilityPreflightService } from '../home-intelligence/capability-
 import { listKnowledgeItems } from '../knowledge-memory/index.js';
 import { resolveKnowledgeReadPolicy } from '../user-context/config.js';
 import { listSessionMetadata } from '../storage/sqlite/session-repository.js';
+import { markStaleAiUsageEventsUnknown } from '../storage/sqlite/ai-usage-repository.js';
 
 export type {
   GatewayChannelStartupPhase1Metrics,
@@ -361,6 +362,7 @@ export class GatewayService {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
     bootstrapApplicationStateSync(this.configPath);
+    markStaleAiUsageEventsUnknown(Date.now() - 6 * 60 * 60 * 1000);
     this.config = loadConfig(this.configPath);
     let bootstrapConfigChanged = initializeVoiceDefaults(
       this.config,
@@ -796,14 +798,12 @@ export class GatewayService {
           return (await this.ensureTaskConversation(taskId, { runId, requestedAgentId })).conversationId;
         },
         runAgent: async (runId, conversationId, message) => {
-          const taskRun = new TaskRunRepository().require(runId);
-          const followUpBinding = getSqliteDatabase().prepare('SELECT 1 FROM scene_task_bindings WHERE task_id = ?').get(taskRun.taskId);
-          if (followUpBinding) {
-            if (!this.sceneHost?.http.followUps) throw new Error('Task follow-up runtime is disabled');
-            // The shared AgentService owns the single transcript persistence listener.
-            this.ensureAgentService();
-            await this.sceneHost.http.followUps.executeTask(runId, conversationId);
-            return;
+          for (const adapter of this.sceneHost?.http.activationAdapters.list() ?? []) {
+            if (adapter.executeTask && await adapter.executeTask(runId, conversationId)) {
+              // The shared AgentService owns the single transcript persistence listener.
+              this.ensureAgentService();
+              return;
+            }
           }
           const clientMessageId = `task:${runId}`;
           const session = await this.sessionIndex.getSessionMetadata(conversationId);
@@ -824,8 +824,12 @@ export class GatewayService {
     if (!this.notificationService) {
       this.notificationService = new NotificationService({
         publish: (type, payload) => this.realtime.broker.publish('gateway', type, payload),
-        allowsNotification: notification => notification.target.kind !== 'task'
-          || this.sceneHost?.http.followUps?.allowsTaskNotification(notification.target.taskId) !== false,
+        allowsNotification: notification => {
+          if (notification.target.kind !== 'task') return true;
+          const taskId = notification.target.taskId;
+          return (this.sceneHost?.http.activationAdapters.list() ?? [])
+            .every(adapter => adapter.allowsTaskNotification?.(taskId) !== false);
+        },
       });
     }
     return this.notificationService;

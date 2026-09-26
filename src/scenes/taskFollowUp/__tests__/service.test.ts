@@ -15,14 +15,15 @@ import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
 import { TaskApplicationService } from '../../../tasks/task-application-service.js';
 import { ScenePreferenceService } from '../../preferences.js';
-import { TaskSourceRegistry, type TaskFollowUpInput } from '../contracts.js';
-import { TaskFollowUpService } from '../service.js';
+import { decisionLogTemplate, SceneSourceRegistry, taskFollowUpTemplate, type TaskFollowUpInput } from '../contracts.js';
+import { SceneTaskExecutionService } from '../service.js';
+import { SceneRepository } from '../../repository.js';
 import { VerificationTerminationUnknownError } from '../../../agent/commands/approved-verification.js';
 
 describe('Source-driven task follow-up', () => {
   let directory: string;
   let repository: string;
-  let service: TaskFollowUpService;
+  let service: SceneTaskExecutionService;
   let input: TaskFollowUpInput;
   let conversationId: string;
   let revision = 1;
@@ -31,7 +32,7 @@ describe('Source-driven task follow-up', () => {
   const read = vi.fn();
   const listAccounts = vi.fn();
   const verify = vi.fn();
-  const sources = () => new TaskSourceRegistry([{ id: 'fixture_thread', label: 'Fixture source',
+  const sources = () => new SceneSourceRegistry([{ id: 'fixture_thread', label: 'Fixture source',
     normalize: reference => reference, authorized: () => listAccounts().length > 0,
     accountIds: () => ['account'], listAccounts, read }]);
   const config = ConfigSchema.parse({});
@@ -59,7 +60,9 @@ describe('Source-driven task follow-up', () => {
       return { summary: 'Implemented', needsUser: false, continueAutomatically: false, remainingWork: [] };
     });
     verify.mockReset().mockResolvedValue({ passed: true, output: '1 test passed' });
-    service = new TaskFollowUpService(getSqliteDatabase(), { config: () => config, sources: sources(), stateDir: directory, executor: { execute }, verify,
+    new SceneRepository(getSqliteDatabase()).installTemplate(taskFollowUpTemplate);
+    new SceneRepository(getSqliteDatabase()).installTemplate(decisionLogTemplate);
+    service = new SceneTaskExecutionService(getSqliteDatabase(), { config: () => config, sources: sources(), stateDir: directory, executor: { execute }, verify,
       worktrees: new LocalWorktreeManager({ stateDir: directory }) });
     input = { source: { provider: 'fixture_thread', reference: { id: 'discussion' } },
       projectId: project.id, goal: 'Fix value', instruction: '', resource: 'worktree',
@@ -77,19 +80,23 @@ describe('Source-driven task follow-up', () => {
   function due() { getSqliteDatabase().prepare('UPDATE scene_task_bindings SET next_poll_at = 0').run(); }
 
   it('rejects unknown source providers and resource grants without a resource', async () => {
-    await expect(service.create(principal, { ...input, source: { provider: 'missing', reference: {} } })).rejects.toThrow('unavailable');
-    await expect(service.create(principal, { ...input, resource: 'none' })).rejects.toThrow('resource');
+    await expect(service.create(principal, taskFollowUpTemplate, { ...input, source: { provider: 'missing', reference: {} } })).rejects.toThrow('unavailable');
+    await expect(service.create(principal, taskFollowUpTemplate, { ...input, resource: 'none' })).rejects.toThrow('resource');
   });
 
   it('deduplicates thread delegation, binds a named worktree, and verifies the latest revision', async () => {
-    const created = await service.create(principal, input);
-    expect((await service.create(principal, input)).task.id).toBe(created.task.id);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
+    expect((await service.create(principal, taskFollowUpTemplate, input)).task.id).toBe(created.task.id);
     const done = await run(created.activation.id);
     expect(done.lastError).toBeNull();
     expect(done.processedRevision).toBe(1);
     expect(done.task.phase).toBe('review');
     expect(done.environment?.branchRef).toBe(`xopc/task-${done.task.id}`);
     expect(done.receipt?.verification.status).toBe('passed');
+    const sceneResult = getSqliteDatabase().prepare(`SELECT r.status, o.kind, p.status AS presentation_status
+      FROM scene_runs r JOIN scene_outcomes o ON o.run_id = r.id
+      JOIN scene_presentations p ON p.outcome_id = o.id WHERE r.activation_id = ?`).get(done.activation.id);
+    expect(sceneResult).toEqual({ status: 'succeeded', kind: 'receipt', presentation_status: 'unread' });
     expect(readFileSync(join(repository, 'app.js'), 'utf8')).toContain('value = 1');
     expect(verify).toHaveBeenCalledOnce();
     await service.tick();
@@ -97,7 +104,7 @@ describe('Source-driven task follow-up', () => {
   });
 
   it('updates the same task and worktree when the thread changes', async () => {
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     const first = await run(created.activation.id);
     revision = 2; due(); await service.tick();
     const second = await run(created.activation.id);
@@ -109,23 +116,23 @@ describe('Source-driven task follow-up', () => {
   }, 30_000); // Multiple real Git operations and fsyncs may contend with full-suite workers.
 
   it('deduplicates concurrent delegation after asynchronous source checks', async () => {
-    const items = await Promise.all([service.create(principal, input), service.create(principal, input)]);
+    const items = await Promise.all([service.create(principal, taskFollowUpTemplate, input), service.create(principal, taskFollowUpTemplate, input)]);
     expect(items[0].task.id).toBe(items[1].task.id);
     expect(service.list(principal)).toHaveLength(1);
     expect(new TaskRunRepository().listByTask(items[0].task.id)).toHaveLength(1);
   });
 
   it('treats capability ordering in migrated bindings as the same delegation', async () => {
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     getSqliteDatabase().prepare('UPDATE scene_task_bindings SET input_json = ? WHERE activation_id = ?')
       .run(JSON.stringify({ ...input, capabilities: [...input.capabilities].reverse() }), created.activation.id);
-    expect((await service.create(principal, input)).task.id).toBe(created.task.id);
+    expect((await service.create(principal, taskFollowUpTemplate, input)).task.id).toBe(created.task.id);
   });
 
   it('does not infer an immediate retry from remaining work outside current authority', async () => {
     execute.mockResolvedValue({ summary: 'Document prepared; verification is unavailable', needsUser: false,
       continueAutomatically: false, remainingWork: ['Verification requires a separately approved environment'] });
-    const created = await service.create(principal, { ...input, capabilities: ['workspace.read', 'workspace.write'], verificationCommand: undefined });
+    const created = await service.create(principal, taskFollowUpTemplate, { ...input, capabilities: ['workspace.read', 'workspace.write'], verificationCommand: undefined });
     const result = await run(created.activation.id);
     due(); await service.tick();
     expect(result.receipt?.needsUser).toBe(false);
@@ -136,7 +143,7 @@ describe('Source-driven task follow-up', () => {
   it('continues explicitly requested work without a verification tool and stops within budget', async () => {
     execute.mockResolvedValue({ summary: 'Partially updated', needsUser: false,
       continueAutomatically: true, remainingWork: ['Finish the remaining section'] });
-    const created = await service.create(principal, { ...input, capabilities: ['workspace.read', 'workspace.write'], verificationCommand: undefined });
+    const created = await service.create(principal, taskFollowUpTemplate, { ...input, capabilities: ['workspace.read', 'workspace.write'], verificationCommand: undefined });
     await run(created.activation.id);
     await service.tick(); await run(created.activation.id);
     await service.tick(); const result = await run(created.activation.id);
@@ -152,7 +159,7 @@ describe('Source-driven task follow-up', () => {
       writeFileSync(join(workspace, 'app.js'), 'export const humanChange = 3;\n');
       return { passed: true, output: 'old tests passed' };
     });
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     const result = await run(created.activation.id);
     expect(result.processedRevision).toBe(0);
     expect(result.lastError).toContain('Workspace changed');
@@ -161,7 +168,7 @@ describe('Source-driven task follow-up', () => {
 
   it('retains the writer fence when container termination cannot be confirmed', async () => {
     verify.mockRejectedValue(new VerificationTerminationUnknownError('termination unknown'));
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     const result = await run(created.activation.id);
     expect(result.processedRevision).toBe(0);
     expect(result.activation.status).toBe('needs_setup');
@@ -171,7 +178,7 @@ describe('Source-driven task follow-up', () => {
 
   it('automatically resumes the same task after the user answers a blocking question', async () => {
     execute.mockResolvedValueOnce({ summary: 'Which behavior is intended?', needsUser: true, continueAutomatically: false, remainingWork: ['Choose behavior'] });
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     const waiting = await run(created.activation.id);
     const wait = new TaskRunRepository().listActiveWaits(waiting.task.id)[0];
     expect(wait.kind).toBe('user_input');
@@ -188,7 +195,7 @@ describe('Source-driven task follow-up', () => {
 
   it('does not certify an old result if discussion changes before verification', async () => {
     execute.mockImplementation(async () => { revision = 2; return { summary: 'Old result', needsUser: false, continueAutomatically: false, remainingWork: [] }; });
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     const result = await run(created.activation.id);
     expect(result.processedRevision).toBe(0);
     expect(result.observedRevision).toBe(2);
@@ -197,9 +204,9 @@ describe('Source-driven task follow-up', () => {
   });
 
   it('enforces principal isolation and refuses to silently reuse a different project or goal', async () => {
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     expect(() => service.get({ ...principal, ownerId: 'someone-else' }, created.activation.id)).toThrow();
-    await expect(service.create(principal, { ...input, goal: 'Different goal' })).rejects.toThrow('already delegated');
+    await expect(service.create(principal, taskFollowUpTemplate, { ...input, goal: 'Different goal' })).rejects.toThrow('already delegated');
   });
 
   it('stops at the next tool boundary when the scene is paused', async () => {
@@ -208,7 +215,7 @@ describe('Source-driven task follow-up', () => {
     const reached = new Promise<void>(resolve => { ready = resolve; });
     execute.mockImplementation(async ({ guard }) => { ready(); await new Promise<void>(resolve => { release = resolve; }); guard();
       return { summary: 'Must not certify', needsUser: false, continueAutomatically: false, remainingWork: [] }; });
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     const pending = run(created.activation.id); await reached;
     const pause = service.transition(principal, created.activation.id, created.activation.revision, 'paused');
     release(); await pause; await pending;
@@ -218,12 +225,12 @@ describe('Source-driven task follow-up', () => {
 
   it('permits file editing without Docker, while verification is an independent grant', async () => {
     await service.stop();
-    service = new TaskFollowUpService(getSqliteDatabase(), { config: () => ConfigSchema.parse({}),
+    service = new SceneTaskExecutionService(getSqliteDatabase(), { config: () => ConfigSchema.parse({}),
       sources: sources(), executor: { execute }, stateDir: directory, worktrees: new LocalWorktreeManager({ stateDir: directory }) });
-    expect((await service.preflight(principal, input)).missing).toContain('verification_backend_unavailable');
+    expect((await service.preflight(principal, taskFollowUpTemplate, input)).missing).toContain('verification_backend_unavailable');
     const editOnly = { ...input, capabilities: ['workspace.read', 'workspace.write'], verificationCommand: undefined };
-    expect((await service.preflight(principal, editOnly)).ready).toBe(true);
-    const created = await service.create(principal, editOnly);
+    expect((await service.preflight(principal, taskFollowUpTemplate, editOnly)).ready).toBe(true);
+    const created = await service.create(principal, taskFollowUpTemplate, editOnly);
     const done = await run(created.activation.id);
     expect(done.processedRevision).toBe(1);
     expect(done.receipt?.verification.status).toBe('unverified');
@@ -235,7 +242,7 @@ describe('Source-driven task follow-up', () => {
 
   it('changes instructions and file authority without creating another task or resource', async () => {
     execute.mockResolvedValue({ summary: 'Inspected', needsUser: false, continueAutomatically: false, remainingWork: [] });
-    const created = await service.create(principal, { ...input, capabilities: ['workspace.read'], verificationCommand: undefined });
+    const created = await service.create(principal, taskFollowUpTemplate, { ...input, capabilities: ['workspace.read'], verificationCommand: undefined });
     const first = await run(created.activation.id);
     const paused = await service.transition(principal, first.activation.id, first.activation.revision, 'paused');
     const configured = await service.configure(principal, first.activation.id, paused.activation.revision, {
@@ -252,7 +259,7 @@ describe('Source-driven task follow-up', () => {
 
   it('associates an existing branch without changing checkout, files, or execution ownership', async () => {
     git(['branch', 'old-fix']);
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     const inventory = await service.branches.list(principal, input.projectId!);
     const branch = inventory.branches.find(item => item.ref === 'refs/heads/old-fix')!;
     expect(branch.association).toBe('unassociated');
@@ -264,7 +271,7 @@ describe('Source-driven task follow-up', () => {
   });
 
   it('withdraws permission without invoking the agent or claiming success', async () => {
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     listAccounts.mockReturnValue([]); await service.tick();
     const result = service.get(principal, created.activation.id);
     expect(result.activation.status).toBe('needs_setup');
@@ -273,7 +280,7 @@ describe('Source-driven task follow-up', () => {
   });
 
   it('blocks stale contract completion and preserves the newer user contract', async () => {
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     execute.mockImplementation(async () => {
       const task = service.get(principal, created.activation.id).task;
       new TaskApplicationService().execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'user-change',
@@ -289,7 +296,7 @@ describe('Source-driven task follow-up', () => {
   });
 
   it('keeps quiet on unchanged polls and respects global pause', async () => {
-    const created = await service.create(principal, input); await run(created.activation.id);
+    const created = await service.create(principal, taskFollowUpTemplate, input); await run(created.activation.id);
     const count = getSqliteDatabase().prepare("SELECT count(*) AS n FROM domain_outbox WHERE event_type = 'task.attention_required.v2'").get()!.n;
     due(); await service.tick(); due(); await service.tick();
     expect(execute).toHaveBeenCalledOnce();
@@ -304,7 +311,7 @@ describe('Source-driven task follow-up', () => {
 
   it('continues incomplete work within a bounded budget, then requests a concrete review', async () => {
     verify.mockResolvedValue({ passed: false, output: 'Test failed' });
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     let result = await run(created.activation.id);
     expect(result.processedRevision).toBe(1);
     expect(result.receipt?.needsUser).toBe(false);
@@ -318,7 +325,7 @@ describe('Source-driven task follow-up', () => {
 
   it('continues a failed verification through the same Task dispatch path', async () => {
     verify.mockResolvedValueOnce({ passed: false, output: 'Expected value 2' }).mockResolvedValueOnce({ passed: true, output: 'Passed after repair' });
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     const first = await run(created.activation.id);
     await service.tick(); const second = await run(created.activation.id);
     expect(second.task.id).toBe(first.task.id);
@@ -333,7 +340,7 @@ describe('Source-driven task follow-up', () => {
       guard(); writeFileSync(join(workspace, 'decisions.md'), instruction + '\\n' + evidence);
       return { summary: 'Document updated', needsUser: false, continueAutomatically: false, remainingWork: [] };
     });
-    const created = await service.create(principal, { source: input.source, goal: 'Maintain the decision log',
+    const created = await service.create(principal, taskFollowUpTemplate, { source: input.source, goal: 'Maintain the decision log',
       instruction: 'Record decisions and open questions', resource: 'artifacts', capabilities: ['workspace.read', 'workspace.write'] });
     const first = await run(created.activation.id);
     expect(first.environment).toBeUndefined();
@@ -351,14 +358,15 @@ describe('Source-driven task follow-up', () => {
 
   it('runs a different source adapter and a no-resource task through the same coordinator', async () => {
     await service.stop();
-    service = new TaskFollowUpService(getSqliteDatabase(), { config: () => ConfigSchema.parse({}), stateDir: directory,
-      sources: new TaskSourceRegistry([{ id: 'mail_fixture', label: 'Mail fixture', normalize: ref => ref, accountIds: () => [],
+    service = new SceneTaskExecutionService(getSqliteDatabase(), { config: () => ConfigSchema.parse({}), stateDir: directory,
+      sources: new SceneSourceRegistry([{ id: 'mail_fixture', label: 'Mail fixture', normalize: ref => ref, accountIds: () => [],
         authorized: () => true, read: async () => ({ revision: String(revision), text: 'Meeting moved to Friday', observedAt: Date.now() }) }]),
       executor: { execute: async args => {
         expect(args.capabilities).toEqual([]); expect(args.evidence).toContain('Friday');
+        expect(args.goal).toContain('Maintain a concise decision log');
         return { summary: 'Friday confirmed', needsUser: false, continueAutomatically: false, remainingWork: [] };
       } } });
-    const created = await service.create(principal, { source: { provider: 'mail_fixture', reference: { id: 'mail' } }, goal: 'Track meeting decisions' });
+    const created = await service.create(principal, decisionLogTemplate, { source: { provider: 'mail_fixture', reference: { id: 'mail' } }, goal: 'Track meeting decisions' });
     const done = await run(created.activation.id);
     expect(done.environment).toBeUndefined();
     expect(done.artifactPath).toBeUndefined();
@@ -366,12 +374,12 @@ describe('Source-driven task follow-up', () => {
   });
 
   it('retains an unknown writer on restart until termination is verified', async () => {
-    const created = await service.create(principal, input);
+    const created = await service.create(principal, taskFollowUpTemplate, input);
     const runId = created.run!.id;
     getSqliteDatabase().prepare('UPDATE scene_task_bindings SET executing_run_id = ? WHERE activation_id = ?').run(runId, created.activation.id);
     await service.stop();
     const stopVerification = vi.fn().mockRejectedValue(new Error('Docker unavailable'));
-    service = new TaskFollowUpService(getSqliteDatabase(), { config: () => config, sources: sources(), stateDir: directory, executor: { execute }, verify, stopVerification,
+    service = new SceneTaskExecutionService(getSqliteDatabase(), { config: () => config, sources: sources(), stateDir: directory, executor: { execute }, verify, stopVerification,
       worktrees: new LocalWorktreeManager({ stateDir: directory }) });
     await service.tick();
     let item = service.get(principal, created.activation.id);
