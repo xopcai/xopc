@@ -51,7 +51,24 @@ export type AutomationAction =
       kind: 'task_command';
       taskId: string;
       command: TaskCommand;
+    }
+  | {
+      kind: 'system';
+      capability:
+        | 'home.advisor.refresh'
+        | 'memory.temporal_sweep'
+        | 'memory.daily_reconciliation'
+        | 'memory.weekly_knowledge';
     };
+
+export type AutomationEditableField = 'enabled' | 'trigger';
+
+export interface AutomationManagement {
+  owner: string;
+  editable: AutomationEditableField[];
+  runnable: boolean;
+  deletable: boolean;
+}
 
 export type AutomationConversationMode = 'new_session' | 'continuous';
 
@@ -103,6 +120,7 @@ export interface Automation {
   notificationPolicy: AutomationNotificationPolicy;
   completionWebhookUrl?: string;
   reliability?: AutomationReliability;
+  management?: AutomationManagement;
   state: AutomationState;
   createdAtMs: number;
   updatedAtMs: number;
@@ -249,6 +267,11 @@ export interface AutomationDeps {
     command: TaskCommand;
     triggerEvent?: AutomationEvent;
   }) => { ok: boolean; reason?: string; runId?: string };
+  executeSystemAction?: (input: {
+    capability: Extract<AutomationAction, { kind: 'system' }>['capability'];
+    automationId: string;
+    runId: string;
+  }) => Promise<{ summary?: string }> | { summary?: string };
 }
 
 export interface AutomationActionTask {

@@ -82,7 +82,7 @@ describe('HomeIntelligenceHost', () => {
     expect(publish).toHaveBeenCalledWith('home.advisor.updated', expect.objectContaining({ state: 'ready' }));
 
     now += 1_000;
-    host.requestRefresh('home_opened', 'open:2', 'zh');
+    host.requestRefresh('task_changed', 'task:2', 'zh');
     await vi.waitFor(() => expect(host.getAdvisor()).toMatchObject({ state: 'ready', stale: false }));
     expect(generate).toHaveBeenCalledOnce();
     expect(host.getAdvisor()).toMatchObject({ state: 'ready', stale: false });
@@ -104,7 +104,7 @@ describe('HomeIntelligenceHost', () => {
     });
     host.requestRefresh('manual_refresh', 'manual:1');
     await vi.waitFor(() => expect(host.getAdvisor()).toEqual({ state: 'quiet', reason: 'model_unavailable' }));
-    host.requestRefresh('home_opened', 'open:1');
+    host.requestRefresh('task_changed', 'task:1');
     await new Promise((resolve) => setTimeout(resolve, 0));
     await host.tick();
     await vi.waitFor(() => expect(host.getAdvisor()).toEqual({ state: 'quiet', reason: 'no_change' }));
@@ -158,7 +158,7 @@ describe('HomeIntelligenceHost', () => {
       notifyOpportunity: vi.fn(), publish: vi.fn(), locale: () => 'en', now: () => now,
     });
 
-    host.requestRefresh('home_opened', 'open:budget');
+    host.requestRefresh('task_changed', 'task:budget');
     await vi.waitFor(() => expect(host.getAdvisor()).toEqual({ state: 'quiet', reason: 'budget_exhausted' }));
     expect(generate).not.toHaveBeenCalled();
 
@@ -181,7 +181,7 @@ describe('HomeIntelligenceHost', () => {
       notifyOpportunity: vi.fn(),
       publish: vi.fn(), locale: () => 'en', enabled: () => false,
     });
-    expect(host.requestRefresh('home_opened')).toBe('disabled');
+    expect(host.requestRefresh('task_changed')).toBe('disabled');
     expect(host.getAdvisor()).toEqual({ state: 'disabled' });
     host.stop();
     db.close();

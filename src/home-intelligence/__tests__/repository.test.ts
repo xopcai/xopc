@@ -55,7 +55,7 @@ describe('HomeIntelligenceRepository', () => {
 
   it('coalesces refresh requests and marks a running generation dirty', () => {
     const first = repository.enqueue(principal, {
-      idempotencyKey: 'open:1', reasons: ['home_opened'], requestedAt: 1_000,
+      idempotencyKey: 'task:1', reasons: ['task_changed'], requestedAt: 1_000,
     });
     const claim = repository.claimNext(principal, 'worker-1', 1_001)!;
     const second = repository.enqueue(principal, {
@@ -107,7 +107,7 @@ describe('HomeIntelligenceRepository', () => {
     });
     for (const [index, reason] of (['no_change', 'budget_exhausted'] as const).entries()) {
       repository.enqueue(principal, {
-        idempotencyKey: `skip:${index}`, reasons: ['home_opened'], requestedAt: 1_003 + index,
+        idempotencyKey: `skip:${index}`, reasons: ['task_changed'], requestedAt: 1_003 + index,
       });
       repository.complete(repository.claimNext(principal, 'worker', 1_003 + index)!, {
         result: { state: 'quiet', reason }, snapshotHash: `skip-${index}`, evidenceIds: [],
@@ -127,14 +127,14 @@ describe('HomeIntelligenceRepository', () => {
       snapshotHash: 'model', evidenceIds: [], modelRef: 'test/reasoning', completedAt: 1_002,
     });
     repository.enqueue(principal, {
-      idempotencyKey: 'skip:1', reasons: ['home_opened'], requestedAt: 1_003,
+      idempotencyKey: 'skip:1', reasons: ['task_changed'], requestedAt: 1_003,
     });
     repository.complete(repository.claimNext(principal, 'worker', 1_004)!, {
       result: { state: 'quiet', reason: 'no_change' },
       snapshotHash: 'skip', evidenceIds: [], completedAt: 1_005,
     });
     repository.enqueue(principal, {
-      idempotencyKey: 'current:1', reasons: ['home_opened'], requestedAt: 1_006,
+      idempotencyKey: 'current:1', reasons: ['task_changed'], requestedAt: 1_006,
     });
     const current = repository.claimNext(principal, 'worker', 1_007)!;
 
@@ -326,10 +326,10 @@ describe('HomeIntelligenceRepository', () => {
   it('isolates idempotency and claims by principal', () => {
     const other = { ownerId: 'other-user', workspaceId: 'other-workspace' };
     const first = repository.enqueue(principal, {
-      idempotencyKey: 'same-key', reasons: ['home_opened'], requestedAt: 1_000,
+      idempotencyKey: 'same-key', reasons: ['task_changed'], requestedAt: 1_000,
     });
     const second = repository.enqueue(other, {
-      idempotencyKey: 'same-key', reasons: ['home_opened'], requestedAt: 1_001,
+      idempotencyKey: 'same-key', reasons: ['task_changed'], requestedAt: 1_001,
     });
 
     expect(second.generationId).not.toBe(first.generationId);

@@ -16,7 +16,7 @@ export function buildHomeOpportunityNotification(
   placement: 'primary' | 'compact',
 ): HomeOpportunityNotification | undefined {
   const backgroundRefresh = reasons.includes('connector_changed') || reasons.includes('scheduled_refresh');
-  const foregroundRefresh = reasons.includes('home_opened') || reasons.includes('manual_refresh');
+  const foregroundRefresh = reasons.includes('manual_refresh');
   const hasCrossSourceEvidence = opportunity.evidence.some((item) => (
     item.sourceType === 'calendar' || item.sourceType === 'mail' || item.sourceType === 'communication'
   ));

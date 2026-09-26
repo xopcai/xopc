@@ -37,7 +37,7 @@ const workflow: WorkflowDefinition = {
 };
 
 describe('automation buildInput', () => {
-  it('classifies built-in and explicitly managed automations as system-owned', () => {
+  it('classifies only explicitly managed automations as system-owned', () => {
     const base: Automation = {
       id: 'user-daily-brief',
       name: 'Daily brief',
@@ -52,8 +52,10 @@ describe('automation buildInput', () => {
     };
 
     expect(isSystemManagedAutomation(base)).toBe(false);
-    expect(isSystemManagedAutomation({ ...base, id: 'system-memory-daily-reconciliation' })).toBe(true);
-    expect(isSystemManagedAutomation({ ...base, description: '[managed-by=extension:calendar]' })).toBe(true);
+    expect(isSystemManagedAutomation({ ...base, id: 'system-memory-daily-reconciliation' })).toBe(false);
+    expect(isSystemManagedAutomation({ ...base, management: {
+      owner: 'memory-maintenance', editable: ['enabled', 'trigger'], runnable: true, deletable: false,
+    } })).toBe(true);
   });
 
   it('round-trips an AI-generated weekly schedule through the editable form', () => {

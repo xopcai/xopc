@@ -46,6 +46,35 @@ async function fixture() {
 }
 
 describe('automation state capability', () => {
+  it('protects managed automations while allowing declared user controls', async () => {
+    const service = new AutomationService();
+    const automation = await service.create({
+      id: 'managed-refresh',
+      name: 'Managed refresh',
+      trigger: { kind: 'schedule', schedule: { kind: 'interval', everyMs: 30_000 } },
+      action: { kind: 'system', capability: 'home.advisor.refresh' },
+      management: { owner: 'home-intelligence', editable: ['enabled', 'trigger'], runnable: true, deletable: false },
+    });
+    const dispatcher = createProductDispatcher(undefined, { getAutomations: () => service });
+    const call = (operation: string, input: unknown, key: string) => dispatcher.call(operation, input, caller,
+      { ...dispatcher.describe(operation, caller), idempotencyKey: key });
+
+    await expect(call('xopc.automations.delete', {
+      id: automation.id, expectedRevision: automation.updatedAtMs,
+    }, 'managed-delete')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(call('xopc.automations.update', {
+      id: automation.id, expectedRevision: automation.updatedAtMs, patch: { name: 'Renamed' },
+    }, 'managed-rename')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    const paused = await call('xopc.automations.set_enabled', {
+      id: automation.id, expectedRevision: automation.updatedAtMs, enabled: false,
+    }, 'managed-pause');
+    expect(paused).toMatchObject({ automation: { enabled: false } });
+
+    await expect(call('xopc.automations.create', {
+      name: 'Forged system action', trigger: { kind: 'manual' },
+      action: { kind: 'system', capability: 'home.advisor.refresh' },
+    }, 'forged-system')).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+  });
   it('shares draft receipts across surfaces without repeating model calls or creating automations', async () => {
     const service = new AutomationService();
     const automation = { name: 'Suggested', trigger: { kind: 'manual' as const }, action: { kind: 'agent' as const, instruction: 'Review' } };
