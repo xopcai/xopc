@@ -43,9 +43,18 @@ The runtime uses one durable pipeline for every entry point:
 
 `manual / schedule / webhook / product event → event hub → matching automation → action executor → result delivery`
 
-Events carry correlation, causation, trust, deduplication, and chain-depth metadata. Each event-to-automation delivery and each result delivery is persisted independently, so a full executor does not drop triggers, gateway restarts can reconcile terminal work, and a failed completion webhook does not change a successful run into a failed run. Action and delivery kinds are registry-based extension points; adding a new executor or destination does not change trigger ingestion.
+Events carry correlation, causation, trust, deduplication, and chain-depth metadata. Each event-to-automation delivery and each result delivery is persisted independently, so a full executor does not drop triggers, gateway restarts can reconcile terminal work, and a failed result webhook does not change a successful run into a failed run. Action and delivery kinds are registry-based extension points; adding a new executor or destination does not change trigger ingestion.
 
 Authenticated diagnostics are available through `GET /api/automation-events` and `GET /api/automation-deliveries`. The first reports event projection plus per-automation run delivery; the second reports result destinations, attempts, and the latest error. Both endpoints accept `limit`; event diagnostics also accept `type` and `source`, while result diagnostics accept `runId` and `status`.
+
+Terminal failures move to a dead letter state and emit one `automation.attention.required` event. Operators can recover them without editing SQLite:
+
+- `POST /api/automation-events/:eventId/replay` replays failed projection and event-to-run delivery;
+- `POST /api/automation-deliveries/:runId/:destinationKey/retry` retries one failed result destination.
+
+Both recovery requests require an `Idempotency-Key` header and a JSON body containing a non-empty `reason`. Metrics include pending work, oldest pending age, active leases, and dead-letter counts.
+
+The next reliability and business-integration contract is defined in [Automation reliability and integration contract](./design/automation-reliability-integration-contract.md).
 
 Use **Pause** when a dependency, credential, or expected input is temporarily unavailable. Pausing preserves the definition and history. Delete only when you no longer need them.
 
@@ -62,7 +71,9 @@ Use **Pause** when a dependency, credential, or expected input is temporarily un
 
 Treat a webhook URL and secret as credentials. Do not put them in public repositories, screenshots, or logs. Validate any external input before allowing the action to write files, send messages, or change connected services.
 
-Webhook Automations receive `POST /api/automation-hooks/:automationId`. Set the trigger's `secretId`, then provide its secret through `XOPC_AUTOMATION_WEBHOOK_SECRETS`, a JSON object keyed by secret id. Callers must send the secret as `Authorization: Bearer ...` (or `X-Xopc-Webhook-Secret`) and a stable `Idempotency-Key`. Payloads must be JSON objects and are limited to 1 MB. Secrets shorter than 16 characters are rejected. Completion webhook destinations must use HTTPS.
+Webhook Automations receive `POST /api/automation-hooks/:automationId`. Set the trigger's `secretId`, then provide its secret through `XOPC_AUTOMATION_WEBHOOK_SECRETS`, a JSON object keyed by secret id. Callers must send the secret as `Authorization: Bearer ...` (or `X-Xopc-Webhook-Secret`) and a stable `Idempotency-Key`. Payloads must be JSON objects and are limited to 256 KiB. Secrets shorter than 16 characters are rejected.
+
+Result webhook destinations use the same secret registry and must use HTTPS. Deliveries include a stable `Idempotency-Key`, delivery id, attempt number, timestamp, and `X-Xopc-Signature` HMAC-SHA256 header. The receiver should verify the signature and deduplicate by idempotency key before applying side effects.
 
 ## Examples
 

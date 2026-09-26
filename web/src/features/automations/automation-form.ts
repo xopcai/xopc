@@ -65,7 +65,8 @@ export interface FormState {
   timeoutSeconds: string;
   conversationMode: AutomationConversationMode;
   notificationPolicy: AutomationNotificationPolicy;
-  completionWebhookUrl: string;
+  resultWebhookEndpoint: string;
+  resultWebhookSecretId: string;
   disableAfterFailures: string;
 }
 
@@ -105,7 +106,8 @@ export const initialForm: FormState = {
   timeoutSeconds: '1800',
   conversationMode: 'new_session',
   notificationPolicy: 'attention',
-  completionWebhookUrl: '',
+  resultWebhookEndpoint: '',
+  resultWebhookSecretId: '',
   disableAfterFailures: '3',
 };
 
@@ -274,9 +276,13 @@ export function buildInput(
     conversationMode: form.conversationMode,
     delivery: {
       notificationPolicy: form.notificationPolicy,
-      ...(safetyMode === 'auto_apply' && form.completionWebhookUrl.trim()
-        ? { completionWebhookUrl: form.completionWebhookUrl.trim() }
-        : {}),
+      destinations: [
+        { key: 'gateway_event', kind: 'gateway_event' },
+        ...(form.resultWebhookEndpoint.trim() && form.resultWebhookSecretId.trim()
+          ? [{ key: 'result_webhook', kind: 'webhook' as const,
+              endpoint: form.resultWebhookEndpoint.trim(), secretId: form.resultWebhookSecretId.trim() }]
+          : []),
+      ],
     },
     reliability: {
       executionTimeoutSeconds: Math.max(
@@ -495,7 +501,8 @@ export function formFromAutomation(
     timeoutSeconds: String(timeoutSeconds),
     conversationMode: automation.conversationMode ?? 'new_session',
     notificationPolicy: automation.delivery.notificationPolicy,
-    completionWebhookUrl: automation.delivery.completionWebhookUrl ?? '',
+    resultWebhookEndpoint: automation.delivery.destinations.find(destination => destination.kind === 'webhook')?.endpoint ?? '',
+    resultWebhookSecretId: automation.delivery.destinations.find(destination => destination.kind === 'webhook')?.secretId ?? '',
     disableAfterFailures: String(
       automation.reliability?.disableAfterConsecutiveFailures ?? 3,
     ),
@@ -555,13 +562,29 @@ export function buildAutomationEditInput(
   ) {
     action = input.action;
   }
+  const gatewayDestinations = automation.delivery.destinations.filter(destination => destination.kind === 'gateway_event');
+  const webhookDestinations = automation.delivery.destinations.filter(destination => destination.kind === 'webhook');
   return {
     ...input,
     description: form.description.trim(),
     projectId: form.projectId.trim(),
     delivery: {
       notificationPolicy: form.notificationPolicy,
-      ...(form.completionWebhookUrl.trim() ? { completionWebhookUrl: form.completionWebhookUrl.trim() } : {}),
+      destinations: [
+        ...(gatewayDestinations.length > 0
+          ? gatewayDestinations
+          : [{ key: 'gateway_event', kind: 'gateway_event' as const }]),
+        ...automation.delivery.destinations.filter(destination => destination.kind === 'file' || destination.kind === 'card'),
+        ...webhookDestinations.slice(1),
+        ...(form.resultWebhookEndpoint.trim() && form.resultWebhookSecretId.trim()
+          ? [{
+              key: webhookDestinations[0]?.key ?? 'result_webhook',
+              kind: 'webhook' as const,
+              endpoint: form.resultWebhookEndpoint.trim(),
+              secretId: form.resultWebhookSecretId.trim(),
+            }]
+          : []),
+      ],
     },
     trigger,
     action,

@@ -105,7 +105,7 @@ JSON shape:
     "action": "optional complete action object",
     "safety": "optional complete safety object",
     "conversationMode": "optional new_session or continuous",
-    "delivery": { "notificationPolicy": "optional attention, all, or none", "completionWebhookUrl": "optional HTTPS URL" },
+    "delivery": { "notificationPolicy": "optional attention, all, or none", "destinations": [{ "key": "stable key", "kind": "gateway_event or webhook", "endpoint": "HTTPS URL for webhook", "secretId": "outbound secret id for webhook" }] },
     "reliability": "optional complete reliability object",
     "enabled": true
   },

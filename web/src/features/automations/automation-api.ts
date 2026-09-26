@@ -63,6 +63,11 @@ export interface AutomationTaskOption {
 
 export type AutomationConversationMode = 'new_session' | 'continuous';
 export type AutomationNotificationPolicy = 'attention' | 'all' | 'none';
+export type AutomationDeliveryDestination =
+  | { key: string; kind: 'gateway_event' }
+  | { key: string; kind: 'webhook'; endpoint: string; secretId: string }
+  | { key: string; kind: 'file'; targetId: string; pathTemplate: string }
+  | { key: string; kind: 'card'; channelId: string; templateId: string };
 
 export interface AutomationReliability {
   executionTimeoutSeconds?: number;
@@ -89,7 +94,7 @@ export interface Automation {
   conversationMode: AutomationConversationMode;
   delivery: {
     notificationPolicy: AutomationNotificationPolicy;
-    completionWebhookUrl?: string;
+    destinations: AutomationDeliveryDestination[];
   };
   reliability?: AutomationReliability;
   management?: {
@@ -174,12 +179,12 @@ export interface AutomationProductEventRun {
 
 export interface AutomationEventRecord {
   event: { id: string; type: string; source: string; occurredAtMs: number; ingestedAtMs: number; payload: Record<string, unknown> };
-  projected: boolean;
+  projectionStatus: 'pending' | 'projecting' | 'retrying' | 'projected' | 'dead_letter';
   projectionAttempts: number;
   projectionError?: string;
   deliveries: Array<{
     automationId: string;
-    status: 'pending' | 'queued' | 'completed' | 'failed' | 'cancelled' | 'skipped';
+    status: 'pending' | 'retrying' | 'queued' | 'completed' | 'failed' | 'cancelled' | 'skipped' | 'dead_letter';
     runId?: string;
     attempts: number;
     lastError?: string;
@@ -190,7 +195,7 @@ export interface AutomationResultDeliveryRecord {
   runId: string;
   destinationKey: string;
   kind: string;
-  status: 'pending' | 'delivering' | 'delivered' | 'failed';
+  status: 'pending' | 'delivering' | 'retrying' | 'delivered' | 'dead_letter';
   attempts: number;
   nextAttemptAtMs: number;
   lastError?: string;
@@ -208,6 +213,15 @@ export interface AutomationMetrics {
     name: string;
     runAtMs: number;
   };
+  pendingEvents: number;
+  oldestPendingEventAgeMs: number;
+  projectionDeadLetters: number;
+  pendingRunDeliveries: number;
+  runDeliveryDeadLetters: number;
+  pendingResultDeliveries: number;
+  resultDeliveryDeadLetters: number;
+  activeExecutions: number;
+  activeDeliveryLeases: number;
 }
 
 export interface AutomationSimulation {
@@ -230,7 +244,7 @@ export interface AutomationInput {
   conversationMode?: AutomationConversationMode;
   delivery: {
     notificationPolicy: AutomationNotificationPolicy;
-    completionWebhookUrl?: string;
+    destinations: AutomationDeliveryDestination[];
   };
   reliability?: AutomationReliability;
 }

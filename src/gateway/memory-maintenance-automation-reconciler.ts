@@ -49,7 +49,7 @@ export async function reconcileMemoryMaintenanceAutomations(input: {
       action,
       safety: { mode: 'auto_apply' as const },
       conversationMode: 'continuous' as const,
-      delivery: { notificationPolicy: 'none' as const },
+      delivery: { notificationPolicy: 'none' as const, destinations: [] },
       reliability: { disableAfterConsecutiveFailures: 3 },
       management: {
         owner: 'memory-maintenance',

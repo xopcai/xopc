@@ -217,7 +217,8 @@ describe('SQLite migrations', () => {
       expect(db.prepare('SELECT * FROM automations').all()).toEqual([
         expect.objectContaining({ automation_id: 'retained', name: 'Retained', enabled: 1,
           trigger_json: '{"kind":"manual"}', action_json: '{"kind":"agent","instruction":"Do not execute"}',
-          state_json: '{"lastError":"Retained"}', delivery_json: '{"notificationPolicy":"attention"}',
+          state_json: '{"lastError":"Retained"}',
+          delivery_json: '{"notificationPolicy":"attention","destinations":[{"key":"gateway_event","kind":"gateway_event"}]}',
           created_at_ms: 10, updated_at_ms: 12 }),
       ]);
       expect(db.prepare('SELECT * FROM automation_deleted_revisions').all()).toEqual([]);
@@ -225,6 +226,58 @@ describe('SQLite migrations', () => {
       applyPendingMigrations(db);
       expect(db.prepare('SELECT revision FROM automation_deleted_revisions WHERE automation_id = ?').get('removed')).toEqual({ revision: 42 });
       expect(db.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
+    } finally { db.close(); }
+  });
+
+  it('migrates v212 automation queues and delivery policy to the reliability contract', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 212 });
+      db.prepare(`INSERT INTO automations (
+        automation_id, name, enabled, trigger_json, action_json, state_json,
+        created_at_ms, updated_at_ms, conversation_mode, delivery_json
+      ) VALUES ('automation-1', 'Legacy result', 1, ?, ?, '{}', 10, 11, 'new_session', ?)`)
+        .run('{"kind":"manual"}', '{"kind":"agent","instruction":"Done"}',
+          '{"notificationPolicy":"all","completionWebhookUrl":"https://example.com/result"}');
+      db.prepare(`INSERT INTO automation_runs (
+        run_id, automation_id, automation_name, status, trigger_snapshot_json,
+        action_snapshot_json, manual, created_at_ms, ended_at_ms
+      ) VALUES ('run-1', 'automation-1', 'Legacy result', 'succeeded', ?, ?, 1, 20, 30)`)
+        .run('{"kind":"manual"}', '{"kind":"agent","instruction":"Done"}');
+      db.prepare(`INSERT INTO automation_events (
+        event_id, event_type, source, occurred_at_ms, ingested_at_ms, correlation_id,
+        root_event_id, trust, payload_json, projection_attempts
+      ) VALUES ('event-1', 'fixture.changed', 'test', 20, 20, 'event-1', 'event-1', 'system', '{}', 2)`).run();
+      db.prepare(`INSERT INTO automation_event_deliveries (
+        event_id, automation_id, status, run_id, attempts, next_attempt_at_ms, created_at_ms, updated_at_ms
+      ) VALUES ('event-1', 'automation-1', 'completed', 'run-1', 1, 20, 20, 30)`).run();
+      db.prepare(`INSERT INTO automation_result_deliveries (
+        run_id, destination_key, kind, status, config_json, attempts,
+        next_attempt_at_ms, last_error, created_at_ms, updated_at_ms
+      ) VALUES ('run-1', 'completion_webhook', 'webhook', 'failed', ?, 5, 30, 'timeout', 20, 30)`)
+        .run('{"url":"https://example.com/result"}');
+
+      applyPendingMigrations(db);
+
+      const automation = db.prepare(`SELECT delivery_json FROM automations WHERE automation_id = 'automation-1'`).get();
+      expect(JSON.parse(String(automation?.delivery_json))).toEqual({
+        notificationPolicy: 'all',
+        destinations: [
+          { key: 'gateway_event', kind: 'gateway_event' },
+          { key: 'completion_webhook', kind: 'webhook', endpoint: 'https://example.com/result', secretId: 'completion_webhook' },
+        ],
+      });
+      expect(db.prepare(`SELECT projection_status, projection_attempts FROM automation_events WHERE event_id = 'event-1'`).get())
+        .toEqual({ projection_status: 'pending', projection_attempts: 2 });
+      expect(db.prepare(`SELECT status, attempts, config_json FROM automation_result_deliveries
+        WHERE run_id = 'run-1' AND destination_key = 'completion_webhook'`).get()).toEqual({
+        status: 'dead_letter', attempts: 5,
+        config_json: '{"key":"completion_webhook","kind":"webhook","endpoint":"https://example.com/result","secretId":"completion_webhook"}',
+      });
+      expect(db.prepare(`SELECT result_id FROM automation_results WHERE run_id = 'run-1'`).get())
+        .toEqual({ result_id: 'result:run-1' });
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally { db.close(); }
   });
 

@@ -68,6 +68,13 @@ export const AutomationRunStatusSchema = z.enum([
   'timeout',
 ]);
 
+export const AutomationDeliveryDestinationSchema = z.discriminatedUnion('kind', [
+  z.object({ key: z.string(), kind: z.literal('gateway_event') }),
+  z.object({ key: z.string(), kind: z.literal('webhook'), endpoint: z.string().url().startsWith('https://'), secretId: z.string() }),
+  z.object({ key: z.string(), kind: z.literal('file'), targetId: z.string(), pathTemplate: z.string() }),
+  z.object({ key: z.string(), kind: z.literal('card'), channelId: z.string(), templateId: z.string() }),
+]);
+
 export const AutomationSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -80,7 +87,7 @@ export const AutomationSchema = z.object({
   conversationMode: z.enum(['new_session', 'continuous']).optional(),
   delivery: z.object({
     notificationPolicy: z.enum(['attention', 'all', 'none']),
-    completionWebhookUrl: z.string().url().startsWith('https://').optional(),
+    destinations: z.array(AutomationDeliveryDestinationSchema),
   }),
   reliability: z.object({
     executionTimeoutSeconds: z.number().positive().optional(),
@@ -169,6 +176,15 @@ export const AutomationMetricsSchema = z.object({
   runningRuns: z.number().int().nonnegative(),
   failedLastHour: z.number().int().nonnegative(),
   nextRun: z.object({ automationId: z.string(), name: z.string(), runAtMs: z.number() }).optional(),
+  pendingEvents: z.number().int().nonnegative(),
+  oldestPendingEventAgeMs: z.number().int().nonnegative(),
+  projectionDeadLetters: z.number().int().nonnegative(),
+  pendingRunDeliveries: z.number().int().nonnegative(),
+  runDeliveryDeadLetters: z.number().int().nonnegative(),
+  pendingResultDeliveries: z.number().int().nonnegative(),
+  resultDeliveryDeadLetters: z.number().int().nonnegative(),
+  activeExecutions: z.number().int().nonnegative(),
+  activeDeliveryLeases: z.number().int().nonnegative(),
 });
 
 export type Automation = z.infer<typeof AutomationSchema>;

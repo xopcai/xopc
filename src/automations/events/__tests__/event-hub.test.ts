@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import { AutomationService } from '../../service/automation-service.js';
-import { ingestAutomationEvent } from '../event-repository.js';
+import { ingestAutomationEvent, replayAutomationEvent } from '../event-repository.js';
+import { AutomationEventDispatcher } from '../event-dispatcher.js';
 
 async function waitUntil(predicate: () => boolean): Promise<void> {
   const deadline = Date.now() + 3_000;
@@ -76,5 +77,48 @@ describe('automation event hub', () => {
       ).get() as { count: number };
       return row.count === 2;
     });
+  });
+
+  it('does not let a poison projection block later events and can replay its dead letter', async () => {
+    ingestAutomationEvent({ id: 'poison', type: 'test.poison', source: 'test', payload: {} });
+    ingestAutomationEvent({ id: 'healthy', type: 'test.healthy', source: 'test', payload: {} });
+    const projected: string[] = [];
+    const dispatcher = new AutomationEventDispatcher(service, {
+      onEvent: (event) => {
+        if (event.id === 'poison') throw new Error('bad projection');
+        projected.push(event.id);
+      },
+    });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await dispatcher.dispatch();
+      getSqliteDatabase().prepare(`UPDATE automation_events SET projection_next_attempt_at_ms = 0
+        WHERE event_id = 'poison'`).run();
+    }
+    expect(projected).toContain('healthy');
+    expect(getSqliteDatabase().prepare(`SELECT projection_status FROM automation_events WHERE event_id = 'poison'`).get())
+      .toEqual({ projection_status: 'dead_letter' });
+    expect(replayAutomationEvent('poison')).toBe(true);
+    expect(getSqliteDatabase().prepare(`SELECT projection_status FROM automation_events WHERE event_id = 'poison'`).get())
+      .toEqual({ projection_status: 'retrying' });
+  });
+
+  it('prioritizes runnable work beyond the delivery scan budget', async () => {
+    const busy = await service.create({
+      id: 'busy', name: 'Busy', trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'busy' },
+    });
+    const free = await service.create({
+      id: 'free', name: 'Free', trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'free' },
+    });
+    service.queueRunAtomically(busy.id);
+    for (let index = 0; index < 550; index += 1) {
+      ingestAutomationEvent({ id: `busy-${index}`, type: 'test.busy', source: 'test', payload: {} },
+        { targetAutomationIds: [busy.id] });
+    }
+    ingestAutomationEvent({ id: 'free-event', type: 'test.free', source: 'test', payload: {} },
+      { targetAutomationIds: [free.id] });
+    const dispatcher = new AutomationEventDispatcher(service);
+    expect(await dispatcher.dispatch()).toBe(1);
+    expect(getSqliteDatabase().prepare(`SELECT status FROM automation_event_deliveries
+      WHERE event_id = 'free-event' AND automation_id = 'free'`).get()).toEqual({ status: 'queued' });
   });
 });

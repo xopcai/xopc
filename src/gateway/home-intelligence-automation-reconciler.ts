@@ -12,7 +12,7 @@ export async function reconcileHomeIntelligenceAutomation(
     action: { kind: 'system' as const, capability: 'home.advisor.refresh' as const },
     safety: { mode: 'auto_apply' as const },
     conversationMode: 'new_session' as const,
-    delivery: { notificationPolicy: 'none' as const },
+    delivery: { notificationPolicy: 'none' as const, destinations: [] },
     reliability: { disableAfterConsecutiveFailures: 3 },
     management: {
       owner: 'home-intelligence',

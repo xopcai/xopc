@@ -101,6 +101,33 @@ export function registerAutomationRoutes(authenticated: Hono, deps: Authenticate
     } catch (error) { return capabilityHttpError(c, error); }
   });
 
+  authenticated.post('/api/automation-events/:eventId/replay', async (c) => {
+    try {
+      const idempotencyKey = c.req.header('idempotency-key')?.trim();
+      if (!idempotencyKey) throw new CapabilityError('INVALID_INPUT', 'Idempotency-Key is required');
+      const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
+      const caller = capabilityHttpContext(c);
+      const operation = 'xopc.automations.replay_event';
+      return c.json(await capabilities.call(operation, { ...body, id: c.req.param('eventId') }, caller,
+        { ...capabilities.describe(operation, caller), idempotencyKey }), 202);
+    } catch (error) { return capabilityHttpError(c, error); }
+  });
+
+  authenticated.post('/api/automation-deliveries/:runId/:destinationKey/retry', async (c) => {
+    try {
+      const idempotencyKey = c.req.header('idempotency-key')?.trim();
+      if (!idempotencyKey) throw new CapabilityError('INVALID_INPUT', 'Idempotency-Key is required');
+      const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
+      const caller = capabilityHttpContext(c);
+      const operation = 'xopc.automations.retry_delivery';
+      return c.json(await capabilities.call(operation, {
+        ...body,
+        runId: c.req.param('runId'),
+        destinationKey: c.req.param('destinationKey'),
+      }, caller, { ...capabilities.describe(operation, caller), idempotencyKey }), 202);
+    } catch (error) { return capabilityHttpError(c, error); }
+  });
+
   authenticated.get('/api/automation-runs/product-events', async (c) => {
     try {
       const { items } = ProductReadContracts['xopc.automations.product_events'].output.parse(await capabilities.call('xopc.automations.product_events', {

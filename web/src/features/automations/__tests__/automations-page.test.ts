@@ -45,7 +45,7 @@ describe('automation buildInput', () => {
       trigger: { kind: 'manual' },
       action: { kind: 'agent', instruction: 'Brief me.' },
       conversationMode: 'new_session',
-      delivery: { notificationPolicy: 'attention' },
+      delivery: { notificationPolicy: 'attention', destinations: [{ key: 'gateway_event', kind: 'gateway_event' }] },
       state: {},
       createdAtMs: 1,
       updatedAtMs: 1,
@@ -66,7 +66,7 @@ describe('automation buildInput', () => {
       action: { kind: 'agent', instruction: 'Write my weekly report.', timeoutSeconds: 300 },
       safety: { mode: 'suggest_only' },
       conversationMode: 'new_session',
-      delivery: { notificationPolicy: 'attention' },
+      delivery: { notificationPolicy: 'attention', destinations: [{ key: 'gateway_event', kind: 'gateway_event' }] },
       reliability: { executionTimeoutSeconds: 300, disableAfterConsecutiveFailures: 3 },
     };
 
@@ -143,7 +143,7 @@ describe('automation buildInput', () => {
       },
       safety: { mode: 'ask_before_apply' },
       conversationMode: 'continuous',
-      delivery: { notificationPolicy: 'all' },
+      delivery: { notificationPolicy: 'all', destinations: [{ key: 'gateway_event', kind: 'gateway_event' }] },
       reliability: {
         executionTimeoutSeconds: 600,
         retryCount: 2,
@@ -189,7 +189,7 @@ describe('automation buildInput', () => {
       trigger: { kind: 'manual' },
       action: { kind: 'agent', instruction: 'Prepare a report.', model: 'openai/gpt-5' },
       conversationMode: 'new_session',
-      delivery: { notificationPolicy: 'attention' },
+      delivery: { notificationPolicy: 'attention', destinations: [{ key: 'gateway_event', kind: 'gateway_event' }] },
       state: {},
       createdAtMs: 1,
       updatedAtMs: 1,
@@ -213,13 +213,17 @@ describe('automation buildInput', () => {
       safetyMode: 'auto_apply',
       conversationMode: 'continuous',
       notificationPolicy: 'all',
-      completionWebhookUrl: 'https://example.com/completed',
+      resultWebhookEndpoint: 'https://example.com/completed',
+      resultWebhookSecretId: 'primary',
     }, null);
 
     expect(input).toMatchObject({
       projectId: 'project-1',
       conversationMode: 'continuous',
-      delivery: { notificationPolicy: 'all', completionWebhookUrl: 'https://example.com/completed' },
+      delivery: { notificationPolicy: 'all', destinations: [
+        { key: 'gateway_event', kind: 'gateway_event' },
+        { key: 'result_webhook', kind: 'webhook', endpoint: 'https://example.com/completed', secretId: 'primary' },
+      ] },
     });
   });
 
@@ -289,7 +293,7 @@ describe('automation buildInput', () => {
     expect(input.reliability?.executionTimeoutSeconds).toBe(1800);
   });
 
-  it('suppresses completion webhooks outside auto-apply mode', () => {
+  it('keeps result delivery independent from action safety mode', () => {
     const input = buildInput({
       ...initialForm,
       name: 'Safe report',
@@ -316,11 +320,15 @@ describe('automation buildInput', () => {
       browserAutomationInputs: {},
       safetyMode: 'ask_before_apply',
       timeoutSeconds: '300',
-      completionWebhookUrl: 'https://example.com/hook',
+      resultWebhookEndpoint: 'https://example.com/hook',
+      resultWebhookSecretId: 'primary',
     }, null);
 
     expect(input.safety).toEqual({ mode: 'ask_before_apply' });
-    expect(input.delivery?.completionWebhookUrl).toBeUndefined();
+    expect(input.delivery.destinations).toEqual([
+      { key: 'gateway_event', kind: 'gateway_event' },
+      { key: 'result_webhook', kind: 'webhook', endpoint: 'https://example.com/hook', secretId: 'primary' },
+    ]);
   });
 
   it('converts the selected interval unit without asking for minutes', () => {

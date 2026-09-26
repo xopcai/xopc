@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import type { BuildChildToolsOptions } from '../../agent/child-agent-factory.js';
-import { getAutomationEventForRun, ingestAutomationEvent } from '../../automations/events/event-repository.js';
+import { automationEventPublisher, getAutomationEventForRun } from '../../automations/events/event-repository.js';
 import {
   extractProfileAgentId,
   resolveEffectiveAgentProfileForSession,
@@ -711,7 +711,7 @@ export class WorkflowRunService {
       ? getAutomationEventForRun(view.run.source.runId)
       : null;
     if (parentEvent && parentEvent.chainDepth >= 32) return;
-    ingestAutomationEvent({
+    automationEventPublisher.publish({
       id: `workflow:${view.run.id}:completed`,
       type: 'workflow.run.completed',
       source: 'workflows',

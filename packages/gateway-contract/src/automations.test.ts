@@ -5,8 +5,12 @@ describe('current automation contract', () => {
   it('preserves current conversation and notification policy fields', () => {
     const parsed = AutomationSchema.parse({ id: 'a', name: 'Review', enabled: true, trigger: { kind: 'manual' },
       action: { kind: 'agent', instruction: 'Review' }, state: {}, createdAtMs: 1, updatedAtMs: 1,
-      conversationMode: 'continuous', delivery: { notificationPolicy: 'none', completionWebhookUrl: 'https://example.com/hook' } });
-    expect(parsed).toMatchObject({ conversationMode: 'continuous', delivery: { notificationPolicy: 'none', completionWebhookUrl: 'https://example.com/hook' } });
+      conversationMode: 'continuous', delivery: { notificationPolicy: 'none', destinations: [
+        { key: 'webhook', kind: 'webhook', endpoint: 'https://example.com/hook', secretId: 'primary' },
+      ] } });
+    expect(parsed).toMatchObject({ conversationMode: 'continuous', delivery: { notificationPolicy: 'none', destinations: [
+      { key: 'webhook', kind: 'webhook', endpoint: 'https://example.com/hook', secretId: 'primary' },
+    ] } });
   });
   it('accepts completion hooks and rejects obsolete run phases and events', () => {
     expect(() => AutomationRunSchema.shape.currentPhase.parse('completion_hook')).toThrow();

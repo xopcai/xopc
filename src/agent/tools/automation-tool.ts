@@ -9,6 +9,7 @@ import {
   AutomationReadOutputSchema,
   AutomationReadAllOutputSchema,
   AutomationDeleteOutputSchema,
+  AutomationRecoveryOutputSchema,
   ProductReadContracts,
   PRODUCT_DELIVERY_VERSION,
   type Automation as AutomationDto,
@@ -40,6 +41,8 @@ const AutomationToolSchema = Type.Object({
     Type.Literal('events'),
     Type.Literal('deliveries'),
     Type.Literal('product_events'),
+    Type.Literal('replay_event'),
+    Type.Literal('retry_delivery'),
   ]),
   automationId: Type.Optional(Type.String({ description: 'Automation id for update/delete/run/pause/resume/history' })),
   runId: Type.Optional(Type.String({ description: 'Run id for rerun/cancel/read' })),
@@ -48,16 +51,22 @@ const AutomationToolSchema = Type.Object({
   patch: Type.Optional(Type.Any({ description: 'Automation update patch' })),
   limit: Type.Optional(Type.Number({ description: 'History limit, default 5' })),
   eventType: Type.Optional(Type.String()),
+  eventId: Type.Optional(Type.String({ description: 'Dead-letter event id for replay_event' })),
+  destinationKey: Type.Optional(Type.String({ description: 'Dead-letter result destination key for retry_delivery' })),
+  reason: Type.Optional(Type.String({ description: 'Operator reason recorded for an explicit recovery action' })),
   source: Type.Optional(Type.String()),
   payloadKey: Type.Optional(Type.String()),
   payloadValue: Type.Optional(Type.String()),
   expectedRevision: Type.Optional(Type.Union([Type.Integer({ minimum: 0 }), Type.Null()], { description: 'Original updatedAtMs for edits/deletion; null only means deletion expects an absent object' })),
-  idempotencyKey: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: 'Stable write retry key, including cancel/read/read_all; only edits and deletion require expectedRevision' })),
+  idempotencyKey: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: 'Stable write retry key, including cancel/read/read_all/recovery; only edits and deletion require expectedRevision' })),
 });
 
 type AutomationToolInput = {
-  action: 'list' | 'create' | 'update' | 'delete' | 'run' | 'rerun' | 'cancel' | 'read' | 'read_all' | 'pause' | 'resume' | 'history' | 'get_run' | 'run_events' | 'metrics' | 'events' | 'deliveries' | 'product_events';
+  action: 'list' | 'create' | 'update' | 'delete' | 'run' | 'rerun' | 'cancel' | 'read' | 'read_all' | 'pause' | 'resume' | 'history' | 'get_run' | 'run_events' | 'metrics' | 'events' | 'deliveries' | 'product_events' | 'replay_event' | 'retry_delivery';
   eventType?: string;
+  eventId?: string;
+  destinationKey?: string;
+  reason?: string;
   source?: string;
   payloadKey?: string;
   payloadValue?: string;
@@ -203,6 +212,25 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
         case 'read_all': {
           const result = AutomationReadAllOutputSchema.parse(await call('xopc.automations.read_all', { projectId: params.projectId }));
           return textResult(`Marked ${result.count} completed runs read.`, result);
+        }
+        case 'replay_event': {
+          const eventId = params.eventId?.trim();
+          const reason = params.reason?.trim();
+          if (!eventId || !reason) return textResult('eventId and reason are required for replay_event.', { ok: false });
+          const result = AutomationRecoveryOutputSchema.parse(await call('xopc.automations.replay_event', { id: eventId, reason }));
+          return textResult(`Accepted replay for automation event ${eventId}.`, result);
+        }
+        case 'retry_delivery': {
+          const runId = params.runId?.trim();
+          const destinationKey = params.destinationKey?.trim();
+          const reason = params.reason?.trim();
+          if (!runId || !destinationKey || !reason) {
+            return textResult('runId, destinationKey, and reason are required for retry_delivery.', { ok: false });
+          }
+          const result = AutomationRecoveryOutputSchema.parse(await call('xopc.automations.retry_delivery', {
+            runId, destinationKey, reason,
+          }));
+          return textResult(`Accepted retry for automation delivery ${runId}:${destinationKey}.`, result);
         }
         case 'run':
         case 'rerun': {
