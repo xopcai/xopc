@@ -44,9 +44,9 @@ describe('getToolExecutionTitle', () => {
     ['note', 'update', 'Updating note…', 'Updated note'],
     ['task', 'delete', 'Removing task…', 'Removed task'],
     ['task_run', 'cancel', 'Stopping task run…', 'Stopped task run'],
-    ['local_app', 'validate', 'Checking local app…', 'Checked local app'],
+    ['local_app', 'validate', 'Checking app…', 'Checked app'],
     ['settings', 'open', 'Opening settings…', 'Opened settings'],
-    ['scene', 'check', 'Checking scene…', 'Checked scene'],
+    ['scene', 'check', 'Checking monitor…', 'Checked monitor'],
   ])('describes xopc_use %s/%s in English', (mode, command, running, completed) => {
     expect(title('en', 'xopc_use', { mode, command }, 'running')).toBe(running);
     expect(title('en', 'xopc_use', { mode, command }, 'completed')).toBe(completed);

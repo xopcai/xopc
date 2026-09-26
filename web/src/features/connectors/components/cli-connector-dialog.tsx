@@ -113,7 +113,7 @@ export function CliConnectorDialog({ definition, instance: initialInstance, onCl
         {instance ? <div className="flex flex-wrap gap-2">
           <Button disabled={busy || Boolean(pending)} onClick={() => void manage('toggle')}>{instance.enabled ? (zh ? '停用' : 'Disable') : (zh ? '启用' : 'Enable')}</Button>
           <Button disabled={busy || Boolean(pending) || !instance.enabled} onClick={() => void manage('test')}>{zh ? '检查连接' : 'Check connection'}</Button>
-          <Button variant="ghost" disabled={busy || Boolean(pending)} onClick={() => void manage('remove')}>{zh ? '移除连接器' : 'Remove connector'}</Button>
+          <Button variant="ghost" disabled={busy || Boolean(pending)} onClick={() => void manage('remove')}>{zh ? '移除连接' : 'Remove connection'}</Button>
         </div> : null}
         {health ? <p className="text-sm text-fg-muted">{health}</p> : null}
         {accounts?.accounts.map(account => <div key={account.id} className="space-y-2 rounded-lg border border-edge p-3">
