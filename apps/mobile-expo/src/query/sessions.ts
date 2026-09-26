@@ -66,6 +66,7 @@ export type SessionMessagePage = {
     hasMore: boolean;
     before?: string;
     nextBeforeCursor?: string;
+    revision?: number;
   };
 };
 
@@ -218,11 +219,23 @@ export async function fetchSessionActiveRun(key: string, signal?: AbortSignal): 
   return normalizeSessionActiveRunResponse(await res.json());
 }
 
+export function fetchSessionMessagePage(
+  key: string,
+  options?: { limit?: number; before?: string; ifNoneMatch?: undefined },
+): Promise<SessionMessagePage | null>;
+export function fetchSessionMessagePage(
+  key: string,
+  options: { limit?: number; before?: string; ifNoneMatch: string },
+): Promise<SessionMessagePage | null | 'not-modified'>;
 export async function fetchSessionMessagePage(
   key: string,
-  options?: { limit?: number; before?: string },
-): Promise<SessionMessagePage | null> {
-  const res = await apiFetch(buildSessionHistoryPath(key, options));
+  options?: { limit?: number; before?: string; ifNoneMatch?: string },
+): Promise<SessionMessagePage | null | 'not-modified'> {
+  const path = buildSessionHistoryPath(key, options);
+  const res = options?.ifNoneMatch
+    ? await apiFetch(path, { headers: { 'If-None-Match': options.ifNoneMatch } })
+    : await apiFetch(path);
+  if (res.status === 304) return 'not-modified';
   if (res.status === 404) return null;
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
   return parseSessionMessagePage(await res.json());

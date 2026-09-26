@@ -344,6 +344,7 @@ export class SessionStore {
       hasMore: boolean;
       before?: string;
       nextBeforeCursor?: string;
+      revision?: number;
     };
   } | null> {
     const metadata = await this.getMetadata(key);
@@ -364,11 +365,13 @@ export class SessionStore {
         beforeIndex: hasBeforeCursor ? parsedBefore : undefined,
         includeContext: true,
       });
-      const messages = transcriptRowsToClientHistory(page.rows) as unknown as Message[];
       const endIndex = hasBeforeCursor
         ? Math.min(page.total, Math.max(0, parsedBefore!))
         : Math.max(0, page.total - offset);
       const startIndex = Math.max(0, endIndex - page.rows.length);
+      const messages = transcriptRowsToClientHistory(page.rows, {
+        rowNumberOffset: startIndex,
+      }) as unknown as Message[];
       const session: SessionDetail = {
         ...metadata,
         messages,
@@ -384,6 +387,7 @@ export class SessionStore {
           hasMore: hasBeforeCursor ? startIndex > 0 : offset + limit < page.total,
           ...(hasBeforeCursor ? { before: String(endIndex) } : {}),
           ...(nextBeforeCursor ? { nextBeforeCursor } : {}),
+          revision: page.revision,
         },
       };
     }

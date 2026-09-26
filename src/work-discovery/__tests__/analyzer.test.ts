@@ -70,9 +70,7 @@ describe('work discovery analyzer', () => {
     const analysis = await analyzeWorkContext({ config: {} as never, snapshot });
 
     expect(analysis.result.suggestions).toHaveLength(3);
-    expect(completeWithResolvedCredentials).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[2]).toEqual(
       expect.objectContaining({ maxTokens: 6_000 }),
     );
     const request = vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[1] as {
@@ -91,7 +89,9 @@ describe('work discovery analyzer', () => {
     const analysis = await analyzeWorkContext({ config: {} as never, snapshot, projectOverviewOnly: true });
     expect(analysis.result.projectSummary).toBe('Purpose from README.md');
     expect(analysis.result.lowConfidence).not.toBe(true);
-    expect(completeWithResolvedCredentials).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ maxTokens: 2_000 }));
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[2]).toEqual(
+      expect.objectContaining({ maxTokens: 2_000 }),
+    );
   });
 
   it('reports output truncation instead of a generic JSON failure', async () => {

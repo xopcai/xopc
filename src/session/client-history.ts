@@ -18,6 +18,8 @@ export interface ClientHistoryMessage {
   timestamp?: number;
   /** Whitelisted display metadata; never includes source snapshot text. */
   metadata?: {
+    /** Stable client-generated id used to reconcile optimistic sends exactly. */
+    clientMessageId?: string;
     sourceContexts?: Array<{
       refId?: string;
       kind: 'note' | 'task' | 'file' | 'session' | 'browser_tab' | 'browser_page' | 'mcp_resource';
@@ -69,11 +71,18 @@ export interface ClientHistoryMessage {
 function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['metadata'] {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
   const record = metadata as Record<string, unknown>;
+  const clientMessageId = typeof record.clientMessageId === 'string' && record.clientMessageId.trim()
+    ? record.clientMessageId
+    : undefined;
   const rows = record.sourceContexts;
   const userTurnDocument = isUserTurnDocument(record.userTurnDocument)
     ? record.userTurnDocument
     : undefined;
-  if (!Array.isArray(rows)) return userTurnDocument ? { userTurnDocument } : undefined;
+  if (!Array.isArray(rows)) {
+    return clientMessageId || userTurnDocument
+      ? { ...(clientMessageId ? { clientMessageId } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
+      : undefined;
+  }
   const sourceContexts = rows.flatMap((value): NonNullable<NonNullable<ClientHistoryMessage['metadata']>['sourceContexts']>[number][] => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
     const row = value as Record<string, unknown>;
@@ -101,8 +110,8 @@ function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['
         : {}),
     }];
   });
-  return sourceContexts.length || userTurnDocument
-    ? { ...(sourceContexts.length ? { sourceContexts } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
+  return clientMessageId || sourceContexts.length || userTurnDocument
+    ? { ...(clientMessageId ? { clientMessageId } : {}), ...(sourceContexts.length ? { sourceContexts } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
     : undefined;
 }
 
@@ -553,7 +562,7 @@ function branchSummaryRowToClientHistory(row: TranscriptStoredRow): ClientHistor
  */
 export function transcriptRowsToClientHistory(
   rows: TranscriptStoredRow[],
-  opts?: { limit?: number; startRowNumber?: number; endRowNumber?: number },
+  opts?: { limit?: number; startRowNumber?: number; endRowNumber?: number; rowNumberOffset?: number },
 ): ClientHistoryMessage[] {
   const displayIndexByRowNumber = new Map(
     buildTranscriptOutline(rows)
@@ -585,9 +594,10 @@ export function transcriptRowsToClientHistory(
   const reviewTraceToolById = new Map<string, NonNullable<ClientHistoryMessage['toolCalls']>[number]>();
 
   for (const [offset, row] of slice.entries()) {
-    const rowNumber = startIndex + offset + 1;
+    const localRowNumber = startIndex + offset + 1;
+    const rowNumber = (opts?.rowNumberOffset ?? 0) + localRowNumber;
     const id = `row-${rowNumber}`;
-    const displayIndex = displayIndexByRowNumber.get(rowNumber);
+    const displayIndex = displayIndexByRowNumber.get(localRowNumber);
     if (isCompactionRow(row)) {
       out.push({
         id,

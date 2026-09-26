@@ -30,6 +30,26 @@ describe('messagesToClientHistory', () => {
     ]);
   });
 
+  it('exposes only the stable client message id needed for optimistic reconciliation', () => {
+    const rows = [{
+      role: 'user',
+      content: 'hello',
+      metadata: { clientMessageId: 'client-1', internalSecret: 'hidden' },
+    }] as never[];
+
+    expect(transcriptRowsToClientHistory(rows)[0]?.metadata).toEqual({ clientMessageId: 'client-1' });
+  });
+
+  it('offsets row identities so separately loaded history pages never reuse FlashList keys', () => {
+    const rows = [
+      { role: 'user', content: 'older' },
+      { role: 'assistant', content: 'reply' },
+    ] as never[];
+
+    expect(transcriptRowsToClientHistory(rows, { rowNumberOffset: 50 }).map(message => message.id))
+      .toEqual(['row-51', 'row-52']);
+  });
+
   it('maps a persisted turn_outcome state row to an assistant result message', () => {
     const rows = [{
       type: 'custom',

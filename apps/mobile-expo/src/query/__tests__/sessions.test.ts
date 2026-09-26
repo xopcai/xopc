@@ -342,4 +342,17 @@ describe('fetchSessionMessagePage', () => {
       '/api/sessions/agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_a/history?limit=50&before=cursor_1',
     );
   });
+
+  it('uses a persisted revision validator and recognizes an unchanged transcript', async () => {
+    mockedApiFetch.mockResolvedValueOnce({ ok: false, status: 304 } as Response);
+
+    await expect(fetchSessionMessagePage('chat-a', {
+      limit: 50,
+      ifNoneMatch: '"transcript-a:42"',
+    })).resolves.toBe('not-modified');
+    expect(mockedApiFetch).toHaveBeenCalledWith(
+      '/api/sessions/chat-a/history?limit=50',
+      { headers: { 'If-None-Match': '"transcript-a:42"' } },
+    );
+  });
 });

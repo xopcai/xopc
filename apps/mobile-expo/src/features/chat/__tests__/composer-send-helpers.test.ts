@@ -40,6 +40,23 @@ describe('mergeOptimisticUserMessages', () => {
     expect(mergeOptimisticUserMessages([server], [optimistic])).toEqual([{ ...server, renderKey: optimistic.id }]);
   });
 
+  it('uses clientMessageId for exact reconciliation even when timestamps and rendered text differ', () => {
+    const server = {
+      ...textMessage('row-1', 'server-normalized text', 500_000),
+      clientMessageId: 'client-1',
+    };
+    const optimistic = {
+      ...textMessage('client-1', 'local text', 1),
+      clientMessageId: 'client-1',
+      deliveryState: 'confirming' as const,
+    };
+
+    expect(mergeOptimisticUserMessages([server], [optimistic])).toEqual([{
+      ...server,
+      renderKey: optimistic.id,
+    }]);
+  });
+
   it('matches a server transcript that expands the optimistic display text', () => {
     const server: Message = {
       ...textMessage('row-1', 'inspect this image\n\n[media attached]', 10_010, 'user-with-attachments'),
