@@ -43,7 +43,7 @@ function Loading() {
 function Failure({ error, retry }: { error: unknown; retry?: () => void }) {
   const zh = useLocaleStore((state) => state.language) === 'zh';
   if ((error as { status?: number } | undefined)?.status === 503) return <section className={`${panelClass} space-y-3`}>
-    <h1 className="text-xl font-semibold text-fg">{zh ? '场景尚未开放' : 'Scenes are not available yet'}</h1>
+    <h1 className="text-xl font-semibold text-fg">{zh ? '智能关注尚未开放' : 'Monitors are not available yet'}</h1>
     <p className="text-sm text-fg-muted">{sceneErrorText(error, zh)}</p>
     <Button asChild><Link to="/chat">{zh ? '返回对话' : 'Back to chat'}</Link></Button>
   </section>;
@@ -78,7 +78,7 @@ function SceneContent() {
     setPageHeader({
       startExtra: null,
       main: <div className="min-w-0">
-        <h1 className="truncate text-base font-semibold tracking-tight text-fg">{zh ? '场景' : 'Scenes'}</h1>
+        <h1 className="truncate text-base font-semibold tracking-tight text-fg">{zh ? '智能关注' : 'Monitors'}</h1>
         <p className="truncate text-xs text-fg-muted" title={description}>{description}</p>
       </div>,
       end: <>
@@ -100,8 +100,8 @@ function SceneContent() {
       <SceneList />
     </div></main>
     {(activationId || templateKey || inbox) && <SceneDialog key={activationId ?? templateKey ?? 'inbox'}
-      titleText={inbox ? (params.has('digest') ? (zh ? '摘要中的成果' : 'Results in this digest') : (zh ? '场景成果' : 'Scene results')) : activationId ? (zh ? '场景详情' : 'Scene details') : (zh ? '了解并开启' : 'Explore and start')}
-      closeLabel={inbox ? (zh ? '关闭场景成果' : 'Close scene results') : activationId ? (zh ? '关闭场景详情' : 'Close scene details') : (zh ? '关闭场景设置' : 'Close scene setup')}
+      titleText={inbox ? (params.has('digest') ? (zh ? '摘要中的成果' : 'Results in this digest') : (zh ? '关注成果' : 'Monitor results')) : activationId ? (zh ? '关注详情' : 'Monitor details') : (zh ? '了解并开启' : 'Explore and start')}
+      closeLabel={inbox ? (zh ? '关闭关注成果' : 'Close monitor results') : activationId ? (zh ? '关闭关注详情' : 'Close monitor details') : (zh ? '关闭关注设置' : 'Close monitor setup')}
       backTo={inboxReturn} backLabel={zh ? '返回成果' : 'Back to results'}
       restoreSelector={inbox ? '[data-scene-inbox]' : activationId ? `[data-scene-id="${CSS.escape(activationId)}"]` : `[data-scene-template="${CSS.escape(templateKey!)}"]`}>
       {inbox ? <SceneInbox /> : activationId ? <SceneDetail id={activationId} /> : <CreateScene templateKey={templateKey!} />}
@@ -154,10 +154,10 @@ function SceneList() {
         <Sparkles className="text-fg-muted" size={20} aria-hidden="true" /><h3 className="text-balance font-medium text-fg">{template.title}</h3>
         <p className="text-sm text-fg-muted">{template.description}</p><Button asChild><Link data-scene-template={template.key} to={`/scenes/new/${encodeURIComponent(template.key)}?version=${encodeURIComponent(template.version)}`}>{zh ? '了解并开启' : 'Explore and start'}</Link></Button>
       </article>)}</div></section>
-    <section className="space-y-3"><h2 className="text-base font-semibold text-fg">{zh ? '我的场景' : 'My scenes'}</h2>
+    <section className="space-y-3"><h2 className="text-base font-semibold text-fg">{zh ? '我的关注' : 'My monitors'}</h2>
       {mine.data.activations.length ? mine.data.activations.map((activation) => <Link key={activation.id} to={`/scenes/${activation.id}`} data-scene-id={activation.id} className={`${panelClass} block space-y-2 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}>
         <p className="break-words font-medium text-fg">{activation.goal}</p><p className="text-sm text-fg-muted">{statusText(activation.status === 'active' && activation.setupMissing?.length ? 'needs_setup' : activation.status, zh)}</p>
-      </Link>) : <div className={`${panelClass} space-y-2`}><CalendarDays aria-hidden="true" className="text-fg-muted" /><p className="text-fg">{zh ? '还没有开启场景' : 'No scenes yet'}</p><p className="text-sm text-fg-muted">{zh ? '从上面选择一件你希望 AI 帮忙照看的事。' : 'Choose something above that you would like AI to look after.'}</p></div>}
+      </Link>) : <div className={`${panelClass} space-y-2`}><CalendarDays aria-hidden="true" className="text-fg-muted" /><p className="text-fg">{zh ? '还没有开启智能关注' : 'No monitors yet'}</p><p className="text-sm text-fg-muted">{zh ? '从上面选择一件你希望 AI 帮忙照看的事。' : 'Choose something above that you would like AI to monitor.'}</p></div>}
       <div className="flex gap-3">{cursor && <Button onClick={() => setParams({})}>{zh ? '返回第一页' : 'First page'}</Button>}{mine.data.nextCursor && <Button onClick={() => setParams({ after: mine.data!.nextCursor! })}>{zh ? '下一页' : 'Next page'}</Button>}</div>
     </section>
   </>;
@@ -165,7 +165,7 @@ function SceneList() {
 
 function FeedbackOverview({ zh }: { zh: boolean }) {
   const metrics = useSWR<SceneMetricsReport>('/metrics', sceneGet, { refreshInterval: 15000, shouldRetryOnError: false });
-  const labels = zh ? ['有帮助的成果', '没有帮助的成果', '带来帮助的场景'] : ['Helpful results', 'Unhelpful results', 'Scenes that helped'];
+  const labels = zh ? ['有帮助的成果', '没有帮助的成果', '带来帮助的关注'] : ['Helpful results', 'Unhelpful results', 'Monitors that helped'];
   const values = metrics.data ? [metrics.data.usefulOutcomes, metrics.data.unhelpfulOutcomes, metrics.data.scenesWithUsefulOutcomes] : [];
   const number = new Intl.NumberFormat(zh ? 'zh-CN' : 'en');
   return <section className={`${panelClass} space-y-3`} aria-label={zh ? '反馈概览' : 'Feedback overview'}>
@@ -187,14 +187,14 @@ function SceneInbox() {
   const results = useSWR<{ outcomes: SceneOutcome[]; nextCursor: string | null }>(`${digestId ? `/digests/${encodeURIComponent(digestId)}` : '/outcomes'}?limit=20&afterId=${encodeURIComponent(cursor)}`, sceneGet, { refreshInterval: 15000 });
   if (results.error) return <Failure error={results.error} retry={() => void results.mutate()} />;
   if (!results.data) return <Loading />;
-  return <><p className="text-sm text-fg-muted">{zh ? '集中查看各个场景准备的成果，告诉 AI 哪些对你有帮助。' : 'Review results across your scenes and tell AI what helps.'}</p>
+  return <><p className="text-sm text-fg-muted">{zh ? '集中查看各项智能关注准备的成果，告诉 AI 哪些对你有帮助。' : 'Review results across your monitors and tell AI what helps.'}</p>
     <FeedbackOverview zh={zh} />
     <section className="space-y-4" aria-label={zh ? '成果列表' : 'Results list'}>
       {results.data.outcomes.length ? results.data.outcomes.map((item) => <div key={item.id} className="space-y-2">
         <OutcomeCard item={item} zh={zh} onChange={() => void results.mutate()} />
-        <Button asChild variant="ghost"><Link state={{ fromSceneInbox: true, inboxSearch: `?${params.toString()}` }} to={`/scenes/${encodeURIComponent(item.activationId)}`}>{zh ? '查看所属场景' : 'View scene'}</Link></Button>
+        <Button asChild variant="ghost"><Link state={{ fromSceneInbox: true, inboxSearch: `?${params.toString()}` }} to={`/scenes/${encodeURIComponent(item.activationId)}`}>{zh ? '查看所属关注' : 'View monitor'}</Link></Button>
       </div>) : <div className={`${panelClass} space-y-3`}><Inbox size={32} aria-hidden="true" className="text-fg-muted" /><h2 className="text-base font-semibold text-fg">{zh ? '这里还没有成果' : 'No results here yet'}</h2>
-        <p className="text-sm text-fg-muted">{digestId ? (zh ? '这份摘要中的成果目前不可查看，可能已被撤回。' : 'Results in this digest are currently unavailable and may have been withdrawn.') : (zh ? '回到场景，提供资料并检查一次；有新成果时会出现在这里。' : 'Open a scene, provide context and run a check. New results will appear here.')}</p></div>}
+        <p className="text-sm text-fg-muted">{digestId ? (zh ? '这份摘要中的成果目前不可查看，可能已被撤回。' : 'Results in this digest are currently unavailable and may have been withdrawn.') : (zh ? '回到智能关注，提供资料并检查一次；有新成果时会出现在这里。' : 'Open a monitor, provide context and run a check. New results will appear here.')}</p></div>}
     </section>
     <nav className="flex flex-wrap gap-3" aria-label={zh ? '成果分页' : 'Results pages'}>{cursor && <Button onClick={() => setParams(digestId ? { digest: digestId } : {})}>{zh ? '返回第一页' : 'First page'}</Button>}
       {results.data.nextCursor && <Button onClick={() => setParams({ ...(digestId ? { digest: digestId } : {}), after: results.data!.nextCursor! })}>{zh ? '下一页' : 'Next page'}</Button>}</nav>
@@ -294,15 +294,15 @@ function ReadOnlySceneDetail({ id }: { id: string }) {
     <p className="text-sm text-fg-muted">{statusText(activation.status === 'active' && activation.setupMissing?.length ? 'needs_setup' : activation.status, zh)}</p>
     <p className="text-sm text-fg-muted">{(zh ? '只准备建议和成果，不自动发送或写入外部系统。' : 'Prepares suggestions and results. Does not send or write to external systems.')}</p>
     <div className="flex flex-wrap gap-3"><Button variant="primary" disabled={busy || activation.status !== 'active'} onClick={() => void act(true)}>{busy ? (zh ? '处理中…' : 'Working…') : (zh ? '现在检查' : 'Check now')}</Button>
-      {['active', 'paused', 'needs_setup'].includes(activation.status) && <Button disabled={busy} onClick={() => void act(false)}><CirclePause size={16} aria-hidden="true" />{activation.status === 'active' ? (zh ? '暂停场景' : 'Pause scene') : (zh ? '检查设置并恢复' : 'Review setup and resume')}</Button>}</div>
+      {['active', 'paused', 'needs_setup'].includes(activation.status) && <Button disabled={busy} onClick={() => void act(false)}><CirclePause size={16} aria-hidden="true" />{activation.status === 'active' ? (zh ? '暂停关注' : 'Pause monitor') : (zh ? '检查设置并恢复' : 'Review setup and resume')}</Button>}</div>
     {['active', 'paused'].includes(activation.status) && <Button disabled={busy} variant="ghost" onClick={() => {
       setBusy(true); void sceneWrite(path, 'PATCH', { expectedRevision: activation.revision, status: 'completed' })
         .then(() => Promise.all([detail.mutate(), results.mutate(), runs.mutate()])).catch(setError).finally(() => setBusy(false));
-    }}>{zh ? '结束场景（保留成果）' : 'End scene (keep results)'}</Button>}
+    }}>{zh ? '结束关注（保留成果）' : 'End monitor (keep results)'}</Button>}
     {queued && <p role="status" className="text-sm text-fg-muted">{zh ? '检查已排队；没有新变化时不会生成新卡片。' : 'Check queued. No new card is created when nothing has changed.'}</p>}
   </header>{error && <Failure error={error} retry={() => { void detail.mutate(); setError(undefined); }} />}
     {activation.status === 'active' && !!activation.setupMissing?.length && <section role="status" className={panelClass}>
-      <h2 className="font-medium text-fg">{zh ? '完成以下设置后，场景才会自动检查' : 'Complete setup for automatic checks'}</h2>
+      <h2 className="font-medium text-fg">{zh ? '完成以下设置后，这项关注才会自动检查' : 'Complete setup for automatic checks'}</h2>
       <ul className="mt-2 list-inside list-disc text-sm text-fg-muted">{activation.setupMissing.map(item => <li key={item}>{({ notes: zh ? '填写安排和约束' : 'Provide arrangements and constraints', schedule: zh ? '设置周期检查时间' : 'Set a recurring review time', deadline: zh ? '设置邮件跟进截止时间' : 'Set a mail follow-up deadline' } as Record<string, string>)[item]}</li>)}</ul>
     </section>}
     <SceneDiagnostics activationId={id} zh={zh} />
@@ -371,7 +371,7 @@ function NotesEditor({ path, zh, onSaved, onDirty }: { path: string; zh: boolean
     } catch (reason) { setError(reason); } finally { setBusy(false); }
   };
   return <form onSubmit={(event) => void save(event)} className={`${panelClass} space-y-3`}><label className={labelClass}>{zh ? '你愿意提供的安排和约束' : 'Arrangements and constraints you choose to share'}<textarea disabled={busy} rows={5} maxLength={32000} className={fieldClass} value={draft?.content ?? notes.data.notes.content} onChange={(event) => setDraft((previous) => ({ ...(previous ?? notes.data!.notes), content: event.target.value }))} autoComplete="off" /></label>
-    <p className="text-sm text-fg-muted">{zh ? '只用于这个场景，不会因此访问其他家庭成员的数据。修改资料会撤回旧计划。' : 'Used only in this scene. Does not grant access to other family members. Editing withdraws the previous plan.'}</p>
+    <p className="text-sm text-fg-muted">{zh ? '只用于这项关注，不会因此访问其他家庭成员的数据。修改资料会撤回旧计划。' : 'Used only by this monitor. Does not grant access to other family members. Editing withdraws the previous plan.'}</p>
     {Boolean(error) && <Failure error={error} />}<Button type="submit" disabled={busy || !dirty}>{busy ? (zh ? '正在保存…' : 'Saving…') : (zh ? '保存资料' : 'Save context')}</Button>
     {dirty && <Button type="button" disabled={busy} variant="ghost" onClick={() => { setDraft(null); setError(undefined); void notes.mutate(); }}>{zh ? '放弃修改并重新加载' : 'Discard edits and reload'}</Button>}
   </form>;

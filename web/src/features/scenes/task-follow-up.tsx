@@ -68,7 +68,7 @@ export function CreateTaskFollowUp() {
           verification_backend: text('可选验证需要配置隔离后端；也可清空验证命令，先生成修改。', 'Optional verification needs an isolation backend. Clear the command to proceed without running tests.'),
           verification_backend_unavailable: text('验证后端不可用；检查配置或清空验证命令。', 'Verification backend unavailable. Check settings or clear the command.'),
           clean_base_checkout: text('项目基础工作区有未提交改动，请先整理。', 'The project base checkout has uncommitted changes.'),
-          source_read_permission: text('来源读取权限不足，请检查连接器。', 'Source read permission is missing. Check the connector.'),
+          source_read_permission: text('来源读取权限不足，请检查连接。', 'Source read permission is missing. Check the connection.'),
           model_credentials: text('请配置模型凭据。', 'Configure model credentials.'),
           model_configuration: text('请选择可用模型。', 'Choose an available model.'),
         };
@@ -89,7 +89,7 @@ export function CreateTaskFollowUp() {
       <label className="grid gap-2 text-sm text-fg">{text('来源', 'Source')}<Select aria-label={text('来源', 'Source')} value={providerId} onChange={e => { setProvider(e.target.value); setAccount(''); }} required>
         {providers.data.providers.map(item => <SelectOption key={item.id} value={item.id}>{item.label}</SelectOption>)}
       </Select></label>
-      {!accounts.data?.accounts.length && <p className="text-sm text-fg-muted">{text('请先连接可读取的账号。', 'Connect an account with read access first.')} <Link className="text-accent-fg" to="/capabilities/connectors">{text('连接器', 'Connectors')}</Link></p>}
+      {!accounts.data?.accounts.length && <p className="text-sm text-fg-muted">{text('请先连接可读取的账号。', 'Connect an account with read access first.')} <Link className="text-accent-fg" to="/capabilities/connectors">{text('连接', 'Connections')}</Link></p>}
       <label className="grid gap-2 text-sm text-fg">{text('账号', 'Account')}<Select aria-label={text('账号', 'Account')} value={accountId} onChange={e => setAccount(e.target.value)} required>
         <SelectOption value="">{text('选择账号', 'Choose an account')}</SelectOption>{accounts.data?.accounts.map(item => <SelectOption key={item.id} value={item.id}>{item.label}</SelectOption>)}
       </Select></label>
@@ -211,7 +211,7 @@ function FollowUpConfiguration({ item, onSaved, onDirty }: { item: FollowUp; onS
       <label className="grid gap-2 text-sm text-fg">{text('处理指令', 'Instructions')}<textarea disabled={busy} className={field} rows={4} maxLength={12000} value={instruction} onChange={e => edit({ instruction: e.target.value })} /></label>
       {fields.base.input.resource !== 'none' && <label className="flex min-h-11 items-center gap-3 text-sm text-fg"><input disabled={busy} type="checkbox" className="ui-checkbox" checked={writable} onChange={e => edit({ writable: e.target.checked })} />{text('允许修改任务工作区文件', 'Allow task workspace file edits')}</label>}
       {fields.base.input.resource === 'worktree' && <label className="grid gap-2 text-sm text-fg">{text('验证命令（可选；留空不执行）', 'Verification command (optional; blank disables execution)')}<input disabled={busy} className={field} maxLength={2000} value={command} onChange={e => edit({ command: e.target.value })} /></label>}
-      <p className="text-sm text-fg-muted">{text('保存后仍保持暂停。确认授权范围后再恢复。', 'Saving keeps the scene paused. Review permissions before resuming.')}</p>
+      <p className="text-sm text-fg-muted">{text('保存后仍保持暂停。确认授权范围后再恢复。', 'Saving keeps the monitor paused. Review permissions before resuming.')}</p>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       <Button type="submit" disabled={busy || !dirty}>{busy ? text('正在保存…', 'Saving…') : text('保存指令与授权', 'Save instructions and permissions')}</Button>
       {draft && <Button type="button" variant="ghost" disabled={busy} onClick={() => { setDraft(null); setError(''); }}>{text('放弃修改', 'Discard edits')}</Button>}

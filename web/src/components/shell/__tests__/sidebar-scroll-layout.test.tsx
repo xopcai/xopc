@@ -30,6 +30,7 @@ let unmount: () => void;
 afterEach(() => {
   act(unmount);
   container.remove();
+  localStorage.clear();
 });
 
 describe('sidebar scroll layout', () => {
@@ -57,6 +58,8 @@ describe('sidebar scroll layout', () => {
     expect(newChat?.parentElement?.className).not.toContain('border-b');
     expect(scrollRegion?.querySelector('.bg-edge-subtle')).toBeNull();
     expect(scrollRegion?.querySelector('[role="separator"] span')?.className).toContain('bg-transparent');
+    expect(scrollRegion?.querySelector('[role="separator"]')?.getAttribute('aria-valuenow')).toBe('3');
+    expect(scrollRegion?.querySelectorAll('nav[aria-label="Main"] a')).toHaveLength(3);
     expect(newChat?.className).toContain('leading-6');
     expect(newChat?.className).toContain('text-fg-muted');
     expect(newChat?.className).toContain('md:py-1.5');
@@ -70,5 +73,22 @@ describe('sidebar scroll layout', () => {
       : 0;
     expect(menuBeforeSessions).toBeTruthy();
     expect(container.querySelector('[data-testid="sidebar-footer"]')).not.toBeNull();
+  });
+
+  it('allows the shortcut area to expand from three to five with the keyboard', () => {
+    container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    unmount = () => root.unmount();
+
+    act(() => {
+      root.render(<MemoryRouter><SidebarNav /></MemoryRouter>);
+    });
+
+    const separator = container.querySelector<HTMLElement>('[role="separator"]')!;
+    act(() => separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })));
+
+    expect(separator.getAttribute('aria-valuenow')).toBe('5');
+    expect(container.querySelectorAll('nav[aria-label="Main"] a')).toHaveLength(5);
   });
 });

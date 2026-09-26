@@ -22,7 +22,7 @@ export function SceneControlsDialog({ zh, open, onOpenChange, onCloseAutoFocus }
         onCloseAutoFocus={event => { event.preventDefault(); onCloseAutoFocus(); }}>
         <div className="shrink-0 border-b border-edge p-4 sm:px-6">
           <Dialog.Title className="text-base font-semibold text-fg">{zh ? '检查与提醒设置' : 'Checks and reminders'}</Dialog.Title>
-          <Dialog.Description className="mt-1 text-sm text-fg-muted">{zh ? '适用于所有场景，设置更改后自动保存。' : 'Applies to all scenes. Changes are saved automatically.'}</Dialog.Description>
+          <Dialog.Description className="mt-1 text-sm text-fg-muted">{zh ? '适用于所有智能关注，设置更改后自动保存。' : 'Applies to all monitors. Changes are saved automatically.'}</Dialog.Description>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"><SceneControls zh={zh} /></div>
         <div className="flex shrink-0 justify-end border-t border-edge p-4 sm:px-6">

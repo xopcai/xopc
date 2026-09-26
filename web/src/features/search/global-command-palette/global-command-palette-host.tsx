@@ -772,7 +772,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
           onChange={(e) => dispatchUi({ type: 'setQuery', value: e.target.value })}
           placeholder={
             language === 'zh'
-              ? '搜索…（会话 / 文件 / 连接器 / 设置 / 命令）'
+              ? '搜索…（会话 / 文件 / 连接 / 设置 / 命令）'
               : 'Search… (sessions, files, connectors, settings, commands)'
           }
           className="border-b border-edge bg-transparent px-4 py-3 text-sm text-fg outline-none placeholder:text-fg-muted"

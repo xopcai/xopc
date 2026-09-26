@@ -18,7 +18,7 @@ export function LocalAppsPage() {
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: null,
-      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{zh ? '应用工坊' : 'App Workshop'}</h1>,
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{zh ? '应用工坊' : 'App Studio'}</h1>,
       end: (
         <Button asChild variant="primary" className="h-9">
           <Link to="/local-apps/new"><Plus className="size-4" />{zh ? '创建应用' : 'Create app'}</Link>
@@ -32,8 +32,8 @@ export function LocalAppsPage() {
     <div className="min-h-0 flex-1 overflow-y-auto bg-surface-panel px-3 py-8 sm:px-5 xl:px-6">
       <div className="mx-auto max-w-6xl">
         <div className="mb-7 max-w-2xl">
-          <h2 className="text-2xl font-semibold tracking-tight text-fg">{zh ? '把自己的工具放进 XOPC' : 'Put your own tools inside XOPC'}</h2>
-          <p className="mt-2 text-sm leading-6 text-fg-muted">{zh ? '每个应用都会自动创建一个由 Coder 负责的 Project，可预览、安装到侧栏，并持续迭代。' : 'Every app gets a Coder-owned Project for previewing, installing in the sidebar, and ongoing iteration.'}</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-fg">{zh ? '创建属于你的 XOPC 应用' : 'Build your own apps for XOPC'}</h2>
+          <p className="mt-2 text-sm leading-6 text-fg-muted">{zh ? '创建、预览并持续改进自己的工具，需要时可以添加到侧栏。' : 'Create, preview, and improve your own tools, then add them to the sidebar when they are ready.'}</p>
         </div>
 
         {isLoading ? (
@@ -56,14 +56,14 @@ export function LocalAppsPage() {
                 </div>
                 <h3 className="mt-4 truncate text-sm font-semibold text-fg">{app.name}</h3>
                 <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{app.description || app.idea}</p>
-                <div className="mt-auto flex items-center justify-end pt-3 text-xs font-medium text-accent">{zh ? '打开工作台' : 'Open workbench'}<ArrowRight className="ml-1 size-3.5 transition-transform group-hover:translate-x-0.5" /></div>
+                <div className="mt-auto flex items-center justify-end pt-3 text-xs font-medium text-accent">{zh ? '编辑应用' : 'Edit app'}<ArrowRight className="ml-1 size-3.5 transition-transform group-hover:translate-x-0.5" /></div>
               </Link>
             ))}
           </div>
         ) : (
           <div className="px-6 py-16 text-center">
             <Box className="mx-auto size-8 text-fg-subtle" />
-            <h3 className="mt-4 text-sm font-semibold text-fg">{zh ? '还没有本地应用' : 'No local apps yet'}</h3>
+            <h3 className="mt-4 text-sm font-semibold text-fg">{zh ? '还没有应用' : 'No apps yet'}</h3>
             <p className="mx-auto mt-2 max-w-md text-sm text-fg-muted">{zh ? '描述你想解决的问题，XOPC 会创建应用骨架和可持续开发的 Project。' : 'Describe the problem and XOPC will create an app scaffold and an ongoing Project.'}</p>
             <Button asChild variant="primary" className="mt-5"><Link to="/local-apps/new"><Plus className="size-4" />{zh ? '创建第一个应用' : 'Create your first app'}</Link></Button>
           </div>

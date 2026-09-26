@@ -4,7 +4,6 @@ export type ProductSectionId =
   | 'work-overview'
   | 'work-projects'
   | 'work-notes'
-  | 'automation-activity'
   | 'automation-scenes'
   | 'automation-triggers'
   | 'automation-workflows'
@@ -35,11 +34,10 @@ const workSections = [
 ] as const satisfies readonly ProductSectionDefinition[];
 
 const automationSections = [
-  { id: 'automation-triggers', domain: 'automation', path: '/automations' },
   { id: 'automation-scenes', domain: 'automation', path: '/scenes' },
+  { id: 'automation-triggers', domain: 'automation', path: '/automations' },
   { id: 'automation-workflows', domain: 'automation', path: '/workflows' },
   { id: 'automation-browser', domain: 'automation', path: '/browser-automations' },
-  { id: 'automation-activity', domain: 'automation', path: '/automations?view=activity' },
 ] as const satisfies readonly ProductSectionDefinition[];
 
 export const CAPABILITY_SECTIONS = ['skills', 'connectors', 'agents', 'channels', 'extensions'] as const;
@@ -61,7 +59,7 @@ const appSections = [
 
 export const PRODUCT_DOMAINS = [
   { id: 'work', path: '/', sections: workSections },
-  { id: 'automation', path: '/automations', sections: automationSections },
+  { id: 'automation', path: '/scenes', sections: automationSections },
   { id: 'capabilities', path: '/capabilities/skills', sections: capabilitySections },
   { id: 'apps', path: '/local-apps', sections: appSections },
 ] as const satisfies readonly ProductDomainDefinition[];
@@ -86,15 +84,11 @@ export function productDomainAtPath(pathname: string): ProductDomainId | null {
   return null;
 }
 
-export function productSectionAtLocation(pathname: string, search = ''): ProductSectionId | null {
+export function productSectionAtLocation(pathname: string, _search = ''): ProductSectionId | null {
   if (pathname === '/') return 'work-overview';
   if (isPath(pathname, '/projects')) return 'work-projects';
   if (isPath(pathname, '/notes')) return 'work-notes';
-  if (isPath(pathname, '/automations')) {
-    return new URLSearchParams(search).get('view') === 'activity'
-      ? 'automation-activity'
-      : 'automation-triggers';
-  }
+  if (isPath(pathname, '/automations')) return 'automation-triggers';
   if (isPath(pathname, '/scenes')) return 'automation-scenes';
   if (isPath(pathname, '/workflows')) return 'automation-workflows';
   if (isPath(pathname, '/browser-automations')) return 'automation-browser';
@@ -107,14 +101,4 @@ export function productSectionAtLocation(pathname: string, search = ''): Product
       : 'capabilities-skills';
   }
   return null;
-}
-
-export function productDomainDefinition(id: ProductDomainId): ProductDomainDefinition {
-  return PRODUCT_DOMAINS.find((domain) => domain.id === id)!;
-}
-
-export function showsProductSectionHeader(pathname: string): boolean {
-  if (isPath(pathname, '/chat') || isPath(pathname, '/tasks')) return false;
-  const domain = productDomainAtPath(pathname);
-  return domain === 'work' || domain === 'automation' || domain === 'capabilities';
 }

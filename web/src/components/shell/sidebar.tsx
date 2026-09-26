@@ -10,14 +10,12 @@ import { cn } from '@/lib/cn';
 import { SidebarFooter } from '@/components/shell/sidebar-footer';
 import { SidebarNavItems } from '@/components/shell/sidebar-nav-items';
 import { SidebarTaskList } from '@/components/shell/sidebar-task-list';
-import {
-  DEFAULT_VISIBLE_NAV_ITEMS,
-  MAX_VISIBLE_NAV_ITEMS,
-  MIN_VISIBLE_NAV_ITEMS,
-} from '@/navigation/sidebar-nav-items';
 
 const NAV_ITEM_PITCH_PX = 42;
-const VISIBLE_APP_COUNT_STORAGE_KEY = 'xopc-web-sidebar-visible-app-count';
+const MIN_VISIBLE_NAV_ITEMS = 1;
+const MAX_VISIBLE_NAV_ITEMS = 5;
+const DEFAULT_VISIBLE_NAV_ITEMS = 3;
+const VISIBLE_APP_COUNT_STORAGE_KEY = 'xopc-web-sidebar-visible-app-count-v2';
 
 function clampVisibleAppCount(value: number): number {
   return Math.min(MAX_VISIBLE_NAV_ITEMS, Math.max(MIN_VISIBLE_NAV_ITEMS, value));
@@ -153,13 +151,9 @@ export function SidebarNav({
       </div>
 
       {collapsed ? (
-        <nav className="shrink-0 px-1.5 pt-4" aria-label="Main">
+        <nav className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2 pt-4" aria-label="Main">
           <div className="flex flex-col gap-0.5">
-            <SidebarNavItems
-              collapsed
-              onNavigate={onNavigate}
-              visibleLimit={DEFAULT_VISIBLE_NAV_ITEMS}
-            />
+            <SidebarNavItems collapsed onNavigate={onNavigate} visibleLimit={DEFAULT_VISIBLE_NAV_ITEMS} />
           </div>
         </nav>
       ) : null}

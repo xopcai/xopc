@@ -434,9 +434,9 @@
       "sunday": "Sunday"
     },
     "experience": {
-      "scenes": "Start with a scenario",
-      "scenesDescription": "Choose an outcome, then confirm the content and schedule.",
-      "discover": "Explore scenarios",
+      "scenes": "Start with a monitor",
+      "scenesDescription": "Choose what AI should monitor, then confirm the content and schedule.",
+      "discover": "Explore monitors",
       "custom": "Describe what you need",
       "settings": "Task settings",
       "executionIssues": "Execution issues",

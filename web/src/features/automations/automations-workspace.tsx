@@ -297,6 +297,7 @@ export function AutomationsWorkspace({
   const language = useLocaleStore((s) => s.language);
   const messageBundle = messages(language);
   const labels = messageBundle.automations;
+  const pageTitle = messageBundle.productNavigation.sections['automation-triggers'];
   const cronLabels = messageBundle.cron;
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
@@ -1060,11 +1061,11 @@ export function AutomationsWorkspace({
     if (embedded) return;
     setPageHeader({
       startExtra: null,
-      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{labels.title}</h1>,
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{pageTitle}</h1>,
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, embedded, headerEnd, labels.title, setPageHeader]);
+  }, [clearPageHeader, embedded, headerEnd, pageTitle, setPageHeader]);
 
   return (
     <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', embedded ? 'bg-transparent' : 'bg-surface-panel')}>

@@ -89,7 +89,7 @@
       "advisorConfigure": "去配置",
       "advisorDegradedStart": "先用现有信息处理",
       "advisorSceneHint": "这类工作此前已经成功完成过；如果它会重复出现，可以把它变成持续帮助。",
-      "advisorSceneAction": "查看场景",
+      "advisorSceneAction": "查看智能关注",
       "advisorAutomationHint": "这类工作已经稳定完成多次。可以先生成 Automation 草稿，确认触发条件、频率、范围和外部动作边界后再发布。",
       "advisorAutomationAction": "生成自动化草稿",
       "advisorHistory": "建议记录",

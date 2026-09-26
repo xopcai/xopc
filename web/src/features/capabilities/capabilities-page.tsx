@@ -35,10 +35,12 @@ function CapabilityContentFallback({ label }: { label: string }) {
 
 export function CapabilitiesPage() {
   const language = useLocaleStore(state => state.language);
-  const copy = messages(language).capabilitiesHub;
+  const messageBundle = messages(language);
+  const copy = messageBundle.capabilitiesHub;
   const { section: sectionParam, detailId } = useParams<{ section?: string; detailId?: string }>();
   const parsedSection = parseCapabilitySection(sectionParam);
   const section = parsedSection ?? 'skills';
+  const sectionTitle = messageBundle.productNavigation.sections[`capabilities-${section}`];
   const setPageHeader = usePageHeaderStore(state => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore(state => state.clearPageHeader);
   const [headerContribution, setHeaderContribution] = useState<{ section: CapabilitySection; value: CapabilityHeaderContribution | null }>({ section, value: null });
@@ -50,11 +52,11 @@ export function CapabilitiesPage() {
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: null,
-      main: null,
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{sectionTitle}</h1>,
       end: <CapabilityHeaderActions contribution={currentContribution} />,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, currentContribution, setPageHeader]);
+  }, [clearPageHeader, currentContribution, sectionTitle, setPageHeader]);
 
   if (!parsedSection) return <Navigate to="/capabilities/skills" replace />;
 
