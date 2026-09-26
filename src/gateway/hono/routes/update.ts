@@ -47,13 +47,23 @@ export function registerUpdateRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.post('/api/update/check', strictRateLimitMiddleware, async (c) => {
     const config = loadConfig(service.getHealth().configPath);
-    await runGatewayUpdateCheck({
+    const checkResult = await runGatewayUpdateCheck({
       config,
       force: true,
       onUpdateAvailableChange: (update) => {
         service.emit('update.available', update);
       },
     });
+    if (checkResult.ok === false) {
+      return c.json(
+        {
+          ok: false,
+          error: 'update-check-failed',
+          message: `Could not check npm for updates: ${checkResult.error}`,
+        },
+        502,
+      );
+    }
     const result = getUpdateAvailable();
     return c.json({
       ok: true,

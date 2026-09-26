@@ -54,6 +54,10 @@ export function getUpdateAvailable(): UpdateAvailable | null {
   return updateAvailableCache;
 }
 
+export type GatewayUpdateCheckResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
 // --- Core logic ---
 
 async function readState(statePath: string): Promise<UpdateCheckState> {
@@ -114,12 +118,12 @@ export async function runGatewayUpdateCheck(params: {
   triggerInProcessRestart?: InProcessRestartTrigger;
   /** When true, bypass checkOnStart/auto-disabled early exit and throttle (for POST /api/update/check). */
   force?: boolean;
-}): Promise<void> {
+}): Promise<GatewayUpdateCheckResult> {
   const { config, force } = params;
 
   const autoEnabled = config.update?.auto?.enabled ?? false;
   const shouldCheckHints = config.update?.checkOnStart !== false;
-  if (!force && !shouldCheckHints && !autoEnabled) return;
+  if (!force && !shouldCheckHints && !autoEnabled) return { ok: true };
 
   const statePath = resolveUpdateCheckStatePath();
   const state = await readState(statePath);
@@ -142,8 +146,13 @@ export async function runGatewayUpdateCheck(params: {
 
   const checkIntervalMs = resolveCheckIntervalMs(config);
   // Re-check npm when the local package version changed (e.g. after editing package.json) even within 24h.
+  const staleAvailableComparison = compareSemver(PACKAGE_VERSION, state.lastAvailableVersion ?? null);
+  const hasStaleAvailableVersion =
+    staleAvailableComparison !== null && staleAvailableComparison >= 0;
   const shouldBypassThrottleForVersion =
-    state.lastCheckPackageVersion === undefined || state.lastCheckPackageVersion !== PACKAGE_VERSION;
+    state.lastCheckPackageVersion === undefined ||
+    state.lastCheckPackageVersion !== PACKAGE_VERSION ||
+    hasStaleAvailableVersion;
   if (
     !force &&
     !shouldBypassThrottleForVersion &&
@@ -151,7 +160,7 @@ export async function runGatewayUpdateCheck(params: {
     Number.isFinite(lastCheckedAt) &&
     now - lastCheckedAt < checkIntervalMs
   ) {
-    return; // Within throttle window
+    return { ok: true }; // Within throttle window
   }
 
   // Install kind: auto-install only for npm global installs, but we still query npm in git
@@ -175,9 +184,12 @@ export async function runGatewayUpdateCheck(params: {
   };
 
   if (!resolved.version) {
-    nextState.lastCheckPackageVersion = PACKAGE_VERSION;
-    await writeState(statePath, nextState);
-    return;
+    const error = resolved.error ?? `npm tag ${resolved.tag} did not return a version`;
+    log.warn(
+      { tag: resolved.tag, errorMessage: error },
+      `Update check failed: ${error}`,
+    );
+    return { ok: false, error };
   }
 
   const comparison = compareSemver(PACKAGE_VERSION, resolved.version);
@@ -237,6 +249,7 @@ export async function runGatewayUpdateCheck(params: {
 
   nextState.lastCheckPackageVersion = PACKAGE_VERSION;
   await writeState(statePath, nextState);
+  return { ok: true };
 }
 
 async function handleAutoUpdate(params: {
