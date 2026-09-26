@@ -30,6 +30,10 @@ const automation = {
   enabled: true,
   trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: '0 9 * * 1-5' } },
   action: { kind: 'agent', instruction: 'Summarize my inbox' },
+  delivery: {
+    notificationPolicy: 'attention',
+    destinations: [{ key: 'gateway_event', kind: 'gateway_event' }],
+  },
   state: {
     nextRunAtMs: 1_800_000_000_000,
     lastRunAtMs: 1_700_000_000_000,
