@@ -1,16 +1,16 @@
 # xopc 数据库业务域、表模型与关系审计
 
 > 审计日期：2026-09-26<br>
-> 代码版本：数据库 schema v216（基线 v165 + 166–216 迁移）<br>
+> 代码版本：数据库 schema v222（基线 v165 + 166–222 迁移）<br>
 > 范围：`src/storage/sqlite/schema.sql`、`src/storage/sqlite/schemas/*.sql`、`src/storage/sqlite/migrations/*.sql` 以及生产代码中的 SQL 读写点。
 
 ## 1. 结论摘要
 
-- 当前最终结构包含 **206 张普通业务/支撑表**、**6 张 FTS5 虚拟表**，另有 **1 张 `schema_meta`**。SQLite 自动生成的 30 张 FTS shadow table 不属于业务模型，不在下文单独列出。
+- 当前最终结构包含 **203 张普通业务/支撑表**、**5 张 FTS5 虚拟表**，另有 **1 张 `schema_meta`**。SQLite 自动生成的 25 张 FTS shadow table 不属于业务模型，不在下文单独列出。
 - 数据模型已经形成 16 个主要业务域：会话、Agent、项目任务、工作流与执行环境、自动化、笔记与讨论、知识与记忆、用户理解、连接器、场景、通知与首页、设备与端点、本地应用、活动关系、工作发现、AI 用量账本。
-- 关系既有数据库外键，也有大量依赖应用层维护的隐式 ID、JSON 快照和多态引用。最终 schema 中共有 **160 条显式外键边**。
-- 高置信度废弃候选是旧文件记忆索引：`memory_files`、`memory_chunks`、`memory_fts`、`memory_relations`。四者在生产代码中均无读写引用；其中 `memory_relations` 还引用了不存在的 `memory_records`，属于确定的 schema 缺陷。
-- 主要设计债务不是“表太多”本身，而是：核心实体间缺少外键、时间字段格式不统一、JSON 完整性约束覆盖率低、同一事实在多处冗余、历史系统退役后仍留有 baseline 定义。
+- 关系既有数据库外键，也有依赖应用层维护的隐式 ID、JSON 快照和多态引用。最终 schema 中共有 **157 条显式外键边**。
+- 旧文件记忆索引 `memory_files`、`memory_chunks`、`memory_fts`、`memory_relations` 已由 v217 删除；悬空到不存在 `memory_records` 的外键缺陷随之消除。
+- v218–v222 已完成核心关系索引、关键 JSON 约束、时间字段归一化、AI 用量保留策略，以及 session 配置单一权威源。剩余重点是 compact baseline、更多 JSON 约束和多态关系治理。
 
 ## 2. 口径与关系标记
 
@@ -163,7 +163,7 @@ erDiagram
 
 | 表 | 职责 | 主要关系 |
 |---|---|---|
-| `automations` | 定时/事件自动化定义、动作、安全、管理、可靠性和结果投递策略 | project 为隐式关系；`management_json` 有 JSON 校验，`delivery_json` 尚无数据库校验 |
+| `automations` | 定时/事件自动化定义、动作、安全、管理、可靠性和结果投递策略 | project 为隐式关系；关键 JSON 列均有数据库校验 |
 | `automation_runs` | 自动化运行快照、租约、取消和结果 | automation/conversation/workflow/root run 均为隐式关系，以保留运行历史 |
 | `automation_run_events` | 自动化运行事件 | run/automation 为隐式关系 |
 | `automation_run_requests` | 启动 run 时的完整 automation 快照 | run 为隐式关系、快照语义 |
@@ -216,10 +216,6 @@ erDiagram
 | `memory_maintenance_runs` | 用户模型/记忆压缩、清理运行 | 独立运行聚合根 |
 | `memory_maintenance_decisions` | 每次维护对对象采取的动作 | FK → `memory_maintenance_runs`；对象为多态关系 |
 | `memory_suppressions` | 被用户抑制的记忆指纹 | 独立去重集合 |
-| `memory_files` | **候选废弃**：旧 Markdown 文件索引 | 无生产代码引用 |
-| `memory_chunks` | **候选废弃**：旧文件分块 | FK → `memory_files`，无生产代码引用 |
-| `memory_fts` | **候选废弃**：旧文件分块 FTS | 无同步触发器、无生产代码引用 |
-| `memory_relations` | **应删除或修复**：旧 memory graph 边 | 两个 FK 指向不存在的 `memory_records` |
 
 主要 TypeScript 模型：`src/knowledge/types.ts`、`src/knowledge/ingestion-service.ts`、`src/knowledge/connected-knowledge-pipeline.ts`、`src/memory-maintenance/`。
 
@@ -438,23 +434,13 @@ erDiagram
 
 ## 6. 不再使用或已退役的结构
 
-### 6.1 高置信度清理候选
+### 6.1 已完成的旧 memory 清理
 
-1. `memory_files`、`memory_chunks`、`memory_fts`
-   - 只存在于 `schema.sql`，生产 TypeScript 没有表名引用。
-   - `memory_fts` 没有触发器，也没有当前同步代码，无法保持索引一致。
-   - 当前记忆/知识主链已经迁移到 `knowledge_*`、`user_assertion_*`、`context_evidence` 和 `memory_maintenance_*`。
-
-2. `memory_relations`
-   - 生产 TypeScript 没有读写引用。
-   - `from_record_id` 和 `to_record_id` 都引用不存在的 `memory_records(record_id)`。
-   - SQLite 在空表执行 `foreign_key_check` 不会暴露这个问题，但第一次写入会因父表不存在而失败。
-
-建议：新增迁移删除上述 4 个普通/虚拟表及相关索引。迁移前先在用户真实数据库统计行数；如果存在历史数据，导出或映射到新知识模型后再删除。
+v217 按依赖顺序删除了 `memory_relations`、`memory_fts`、`memory_chunks`、`memory_files`。当前记忆/知识主链只保留 `knowledge_*`、`user_assertion_*`、`context_evidence` 和 `memory_maintenance_*`，生产代码与最终 schema 均不再引用旧结构。
 
 ### 6.2 已通过迁移退役，不属于当前表
 
-以下名称仍可能出现在 baseline 或历史迁移里，但最终 v216 schema 已不存在，不应被新代码使用：
+以下名称仍可能出现在 baseline 或历史迁移里，但最终 v222 schema 已不存在，不应被新代码使用：
 
 - 旧 proactive 系统：`proactive_events`、`proactive_signal_batches`、`proactive_batch_events`、`proactive_scenarios`、`proactive_scenario_subscriptions`、`proactive_runs`、`proactive_insights`、`proactive_inbox_items` 及其 delivery/digest/push/follow-up 附属表。v188 场景迁移重置后由 `scene_*`、`notification_*`、`home_*` 取代。
 - `proactive_preview_runs`：v166 明确删除。
@@ -470,13 +456,13 @@ erDiagram
 - FTS5 shadow tables（例如 `notes_fts_data`、`notes_fts_idx`）由 SQLite 管理，不能手工删除；删除对应虚拟表时才会一并处理。
 - 快照、事件、审计、墓碑和补偿队列表可能只有单一 repository 写入，低调用量不代表废弃。
 
-## 7. 设计问题与改进建议
+## 7. 已完成治理与剩余问题
 
-### P0：修复悬空外键
+### P0（已完成）：修复悬空外键
 
-`memory_relations` → 不存在的 `memory_records` 是确定错误。建议连同旧 memory 文件索引一起清理；如果业务仍需要知识图关系，应重新设计为指向 `knowledge_items` 或 `user_assertions`，并明确关系类型和删除策略。
+v217 已删除 `memory_relations` 及其旧文件记忆依赖。新知识关系应基于 `knowledge_items`、`user_assertions` 或统一多态边模型建设，不再恢复旧表。
 
-### P1：给核心聚合补上可执行的完整性约束
+### P1（部分完成）：给核心聚合补上可执行的完整性约束
 
 优先评估以下隐式关系：
 
@@ -492,9 +478,9 @@ erDiagram
 - `workflow_events.run_id` → `workflow_runs.run_id`
 - `local_apps.active_release_id` → `local_app_releases.release_id`
 
-其中运行快照或历史审计如果必须在父记录删除后保留，可使用 `ON DELETE SET NULL`，或明确保留非 FK 的原因；不要让“历史保留”和“忘了加约束”混在一起。
+深度 doctor 已覆盖外键目标、`foreign_key_check` 和 9 组关键隐式关系孤儿检查。没有把会话归档、自动化历史等保留语义强行改成级联外键；剩余隐式关系应逐项记录删除语义后再决定是否建 FK。
 
-### P1：补齐高频外键索引
+### P1（已完成首批）：补齐高频外键索引
 
 当前有多条 FK 的子列没有索引前缀。优先关注可能发生父记录删除或高频 join 的：
 
@@ -506,48 +492,43 @@ erDiagram
 - `knowledge_source_changes(source_item_id)`
 - `notification_deliveries(device_id)`
 
-应结合 `EXPLAIN QUERY PLAN` 和真实数据量决定，不建议一次性机械添加全部索引。
+v218 已增加上述 13 个高价值关系索引。后续索引只应在真实慢查询或 `EXPLAIN QUERY PLAN` 证据下增加，避免机械堆叠。
 
-### P1：统一时间存储规范
+### P1（已完成）：统一时间存储规范
 
-当前时间/游标相关列中，373 个声明为 `INTEGER`，另有 27 个声明为 `TEXT`。尤其 connector 相关 `created_at`/`expires_at` 多为 TEXT，而核心域普遍使用 epoch milliseconds；`sessions.last_flushed_at` 也是 TEXT。
+v220 将 `sessions.last_flushed_at` 和 connector/account/backend/trust 相关的 23 个 TEXT 时间字段一次性迁移为 epoch milliseconds。最新 schema 中按时间命名的列已无 TEXT 类型；仓储边界负责 ISO 字符串与毫秒整数转换，运行时没有双格式兼容逻辑。
 
 建议新表统一：
 
 - 时间点：`INTEGER`，epoch milliseconds；列名统一为 `*_at_ms`，或全项目约定 `*_at` 即毫秒，二选一。
 - 业务 cursor：不要使用 `*_before`/`*_after` 的时间命名误导，保留 TEXT 但写入文档。
-- 迁移旧列时先提供双读，再批量归一化，避免时区和排序错误。
+- 迁移使用单次数据转换，迁移完成后只读写整数格式。
 
-### P1：提高 JSON 列的数据库级校验
+### P1（进行中）：提高 JSON 列的数据库级校验
 
-最终 schema 有 172 个 `*_json` 列，只有 47 个在建表 SQL 中明确使用 `json_valid(...)`，125 个依赖应用层保证合法性。优先为会进入检索、调度或权限判断的 JSON 增加校验，例如：
+最终 schema 有 172 个 `*_json` 列，当前建表 SQL 可识别到 56 个 `json_valid(...)` 约束。v219 已覆盖自动化定义、事件 payload、结果投递配置与 AI 价格快照；剩余优先项包括：
 
 - `sessions.routing_json`、`sessions.custom_data_json`
-- `automations.trigger_json`、`action_json`、`safety_json`、`delivery_json`
-- `automation_events.payload_json`、`automation_result_deliveries.config_json`
-- `ai_usage_events.pricing_snapshot_json`
 - `connector_installations.allowed_agent_ids_json`、`selected_account_ids_json`
 - `context_snapshots.authorization_snapshot_json`
 - `user_assertions` 的用途、敏感度和允许 Agent 列表
 
-### P2：减少同一事实的双写
+### P2（核心项已完成）：减少同一事实的双写
 
-- `sessions` 已含 `thinking_level`、`verbose_level`，`session_config` 又保存同名配置；应明确哪个是权威值、哪个是兼容投影，最好只保留一个写入源。
-- `connector_accounts.current_connection_id` 与 `connector_connections.account_id/is_default` 都表达当前连接；应由单向关系或查询规则推导，避免双写漂移。
-- `local_apps.active_release_id` 与 `local_app_releases.activated_at` 同时表达激活状态；需要事务内唯一性约束或单一真相源。
+- v222 已把 `session_config` 设为 thinking/verbose 唯一权威源，并从 `sessions` 删除重复列；迁移时已有 session config 优先，缺失值才从旧列补齐。
+- `connector_accounts.current_connection_id` 表示某账户当前授权，`connector_connections.is_default` 表示 connector/principal 下的默认连接，两者粒度不同，不应合并；当前授权变化继续在事务内维护。
+- `local_apps.active_release_id` 是当前状态，`local_app_releases.activated_at` 是每个 release 的审计时间，不是双写状态；当前版本只由前者判断。
 - `user_goals.current_revision_id`、`collaboration_rules.current_revision_id` 采用“父指当前版本 + 版本指父”的环形模型。该模型可用，但写入必须统一走延迟约束事务。
 
-### P2：为 AI 用量账本制定保留与索引策略
+### P2（已完成基础策略）：为 AI 用量账本制定保留与索引策略
 
-`ai_usage_events` 已经统一承接所有模型调用，但当前没有删除、归档或聚合降采样逻辑。它会随每次物理模型请求持续增长，并长期保留 conversation/run/agent 归属及有界错误摘要。
+`ai_usage_events` 统一承接所有物理模型调用。v221 增加 `(provider, model, started_at)` 索引；Gateway 启动时先恢复超过 6 小时的悬挂调用，再删除 180 天前且非运行中的明细。运行中记录不会被保留清理误删。
 
 建议：
 
-- 明确默认保留期、用户可配置范围和导出后清理策略；
-- 将长期统计下沉到按日聚合表，再清理明细；
-- 根据实际查询量评估 `(provider, model, started_at)` 索引；
-- 给 `pricing_snapshot_json` 增加 `json_valid`，防止详情解析因脏数据失败；
-- 将该账本纳入隐私删除、数据库体积统计和 doctor 检查。
+- 当前 KISS 实现采用固定 180 天明细保留，不增加配置和日聚合表。
+- 若真实数据量证明需要多年趋势，再增加日聚合，不提前引入双层账本。
+- 后续仍需把账本纳入按用户隐私删除和数据库体积报告。
 
 ### P2：自动化事件链的完整性仍部分依赖应用层
 
@@ -578,21 +559,21 @@ principal（用户/信任主体） -> device/endpoint instance（具体安装）
 
 ### P3：降低 baseline 的历史噪声
 
-`schema.sql` 仍先创建多组随后由迁移删除的实验表，新数据库启动时会做无意义的建表/删表。长期建议生成一个 v216（或下一大版本）的 compact baseline，并只保留仍需支持的升级迁移。这样可减少审计误判、启动时间和 schema 漂移风险。
+`schema.sql` 仍先创建多组随后由迁移删除的实验表，新数据库启动时会做无意义的建表/删表。长期建议生成一个 v222（或下一大版本）的 compact baseline，并只保留仍需支持的升级迁移。这样可减少审计误判、启动时间和 schema 漂移风险。
 
-## 8. 建议实施顺序
+## 8. 分阶段实施结果与后续顺序
 
-1. 新增 doctor 检查：缺失 FK 目标、关键隐式关系孤儿、FTS 与主表数量/内容一致性。
-2. 在真实用户库上只读统计 4 张 legacy memory 表的行数与最近更新时间。
-3. 新增迁移删除或迁移 legacy memory 数据，修复 `memory_relations` 悬空外键。
-4. 给 task run、connector audit、knowledge change 的高频 FK 补索引，并以查询计划验证。
-5. 明确 session config、connector current connection、active release 三组权威字段。
-6. 为 `ai_usage_events` 增加保留、清理、隐私删除和体积监控策略。
-7. 制定时间与 JSON 列规范；以后新增迁移必须遵循，旧表分批治理。
-8. 在下一次 baseline 重整时移除已经退役的 proactive/experimental DDL，并吸收 v208–v216 的最终结构。
+1. **完成（v217）**：删除 4 张 legacy memory 表，消除悬空外键。
+2. **完成**：深度 doctor 检查外键目标、SQLite 外键违规及关键隐式关系孤儿。
+3. **完成（v218）**：补齐 13 个高价值关系索引。
+4. **完成（v219–v220）**：关键 JSON 约束与时间整数化。
+5. **完成（v221）**：AI 用量 180 天保留与 provider/model 索引。
+6. **完成（v222）**：session 配置单一权威源。
+7. **下一优先级**：生成 compact baseline，并将最终结构吸收到新基线。
+8. **按证据推进**：继续补关键 JSON 校验、多态引用 doctor 与 AI 用量隐私删除/体积报告。
 
 ## 9. 审计限制
 
 - “是否不用”基于当前仓库生产代码的静态表名引用与 schema trigger 检查，不包含用户本地数据库的实际行数，也不包含外部工具直接查询数据库的情况。
-- 动态 SQL、通用 repository、SQLite trigger、FTS shadow table 会降低单纯文本引用统计的可靠性，因此本报告只把无代码引用且结构已经断裂的旧 memory 组列为高置信度候选。
-- 删除任何表之前仍需：备份数据库、统计真实数据、运行 `PRAGMA foreign_key_check` 和 `PRAGMA integrity_check`，并验证从旧版本升级与全新建库两条路径。
+- 动态 SQL、通用 repository、SQLite trigger、FTS shadow table 会降低单纯文本引用统计的可靠性；后续废弃判断仍需结合生产数据库行数与调用路径。
+- 后续删除任何表之前仍需：备份数据库、统计真实数据、运行 `PRAGMA foreign_key_check` 和 `PRAGMA integrity_check`，并验证旧版本升级与全新建库两条路径。

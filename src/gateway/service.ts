@@ -160,7 +160,11 @@ import { HomeCapabilityPreflightService } from '../home-intelligence/capability-
 import { listKnowledgeItems } from '../knowledge-memory/index.js';
 import { resolveKnowledgeReadPolicy } from '../user-context/config.js';
 import { listSessionMetadata } from '../storage/sqlite/session-repository.js';
-import { markStaleAiUsageEventsUnknown } from '../storage/sqlite/ai-usage-repository.js';
+import {
+  AI_USAGE_RETENTION_MS,
+  markStaleAiUsageEventsUnknown,
+  pruneAiUsageEvents,
+} from '../storage/sqlite/ai-usage-repository.js';
 
 export type {
   GatewayChannelStartupPhase1Metrics,
@@ -362,7 +366,9 @@ export class GatewayService {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
     bootstrapApplicationStateSync(this.configPath);
-    markStaleAiUsageEventsUnknown(Date.now() - 6 * 60 * 60 * 1000);
+    const now = Date.now();
+    markStaleAiUsageEventsUnknown(now - 6 * 60 * 60 * 1000, now);
+    pruneAiUsageEvents(now - AI_USAGE_RETENTION_MS);
     this.config = loadConfig(this.configPath);
     let bootstrapConfigChanged = initializeVoiceDefaults(
       this.config,

@@ -23,7 +23,7 @@ const log = createLogger('Sqlite:Migrations');
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = 165;
 
 /** Latest schema version this release supports (increment when adding migrations). */
-export const XOPC_DB_SCHEMA_VERSION = 216;
+export const XOPC_DB_SCHEMA_VERSION = 222;
 
 function writeMigrationReport(backupPath: string, report: Record<string, unknown>): void {
   const reportPath = `${backupPath}.report.json`;
@@ -49,7 +49,7 @@ function applySingleMigration(db: DatabaseSync, migration: SqlMigration, discard
   // Schema rebuilds and the experimental scene reset validate all FKs before commit.
   const requiresForeignKeyPause = discardOldScenes || migration.targetVersion === 179 || migration.targetVersion === 182
     || migration.targetVersion === 188 || migration.targetVersion === 200 || migration.targetVersion === 201
-    || migration.targetVersion === 203;
+    || migration.targetVersion === 203 || migration.targetVersion === 219 || migration.targetVersion === 220;
   const foreignKeysEnabled = Number(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys) === 1;
   if (requiresForeignKeyPause) db.exec('PRAGMA foreign_keys = OFF');
   let transactionStarted = false;

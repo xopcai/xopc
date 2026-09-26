@@ -87,6 +87,8 @@ describe('SessionCompactor', () => {
         })],
       }),
       expect.objectContaining({ maxTokens: 4000 }),
+      undefined,
+      expect.objectContaining({ operation: 'session.compact', trigger: 'system' }),
     );
     expect(vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[2]).not.toHaveProperty('reasoning');
   });
