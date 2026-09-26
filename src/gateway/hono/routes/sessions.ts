@@ -135,6 +135,13 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, payload: { runs: service.sessions.listActiveRuns() } });
   });
 
+  authenticated.get('/api/runtime/quit-impact', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.list');
+    if (blocked) return blocked;
+    c.header('Cache-Control', 'no-store');
+    return c.json({ ok: true, payload: await service.sessions.getQuitImpact() });
+  });
+
   authenticated.get('/api/sidebar/chat-list', async (c) => {
     const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.list');
     if (blocked) {

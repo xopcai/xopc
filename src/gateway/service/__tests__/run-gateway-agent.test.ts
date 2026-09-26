@@ -59,6 +59,7 @@ describe('runGatewayAgent', () => {
       bus: { publishInbound: async () => {} },
       runAbortControllers: new Map<string, AbortController>(),
       activeWebchatRunBySession: new Map<string, string>(),
+      activeExecutionBySession: new Map(),
       sessionIndex: {
         getSessionMetadata: async () => ({ transcriptId: 'session-thinking' }),
         updateSessionMetadata: async () => {},
@@ -194,6 +195,7 @@ describe('runGatewayAgent', () => {
       bus: { publishInbound: async () => {} },
       runAbortControllers: new Map<string, AbortController>(),
       activeWebchatRunBySession: new Map<string, string>(),
+      activeExecutionBySession: new Map(),
       sessionIndex: {
         getSessionMetadata: async () => ({ transcriptId: 's1', name: 'Finish notifications' }),
       },
@@ -271,6 +273,7 @@ describe('runGatewayAgent', () => {
       bus: { publishInbound: async () => {} },
       runAbortControllers: new Map<string, AbortController>(),
       activeWebchatRunBySession: new Map<string, string>(),
+      activeExecutionBySession: new Map(),
       sessionIndex: {
         getSessionMetadata: async () => ({ transcriptId: 's1' }),
         appendTranscriptCustomEntry: async () => {},
@@ -310,7 +313,7 @@ describe('runGatewayAgent', () => {
     const controller = new AbortController();
     const emitted: Array<{ type: string; payload: unknown }> = [];
     const deps = {
-      config: {}, bus: {}, runAbortControllers: new Map(), activeWebchatRunBySession: new Map(),
+      config: {}, bus: {}, runAbortControllers: new Map(), activeWebchatRunBySession: new Map(), activeExecutionBySession: new Map(),
       sessionIndex: { getSessionMetadata: async () => ({ transcriptId: 'session-test' }), updateSessionMetadata: async () => {} },
       agentService: {
         resolveUserTimezoneForSession: () => 'UTC', prepareInboundAttachments: async () => undefined,

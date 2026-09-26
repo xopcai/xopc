@@ -89,6 +89,7 @@ import {
   appQuitConfirmationGate,
   bypassNextAppQuitConfirmation,
 } from './quit-confirmation.js';
+import { getAppQuitImpact } from './quit-impact.js';
 import {
   classifyGatewayStartupFailure,
   enrichGatewayStartupFailure,
@@ -373,15 +374,35 @@ let quitCleanupStarted = false;
 let quitCleanupComplete = false;
 let quitCleanupPromise: Promise<void> | null = null;
 
-async function confirmAppQuit(): Promise<void> {
+function approveAppQuit(): void {
+  if (appQuitConfirmationGate.resolve(true)) app.quit();
+}
+
+async function evaluateAppQuit(): Promise<void> {
+  let impact: Awaited<ReturnType<typeof getAppQuitImpact>>;
+  try {
+    impact = await getAppQuitImpact();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    appendElectronStartupLog(`quit impact check failed; continuing quit: ${message}`);
+    approveAppQuit();
+    return;
+  }
+
+  if (!impact.shouldConfirm) {
+    approveAppQuit();
+    return;
+  }
+
   const copy = currentMenuMessages().quitConfirmation;
+  const title = copy.title(impact.blockingCount, impact.taskTitle);
   const options = {
     type: 'warning' as const,
-    title: copy.title,
-    message: copy.title,
+    title,
+    message: title,
     detail: copy.detail,
     buttons: [copy.cancel, copy.quit],
-    defaultId: 1,
+    defaultId: 0,
     cancelId: 0,
     noLink: true,
   };
@@ -390,9 +411,8 @@ async function confirmAppQuit(): Promise<void> {
     const result = owner
       ? await dialog.showMessageBox(owner, options)
       : await dialog.showMessageBox(options);
-    if (appQuitConfirmationGate.resolve(result.response === 1)) {
-      app.quit();
-    }
+    if (result.response === 1) approveAppQuit();
+    else appQuitConfirmationGate.resolve(false);
   } catch (error) {
     appQuitConfirmationGate.resolve(false);
     const message = error instanceof Error ? error.message : String(error);
@@ -1335,8 +1355,8 @@ app.on('before-quit', (event) => {
   const confirmationStep = appQuitConfirmationGate.begin(canConfirm);
   if (confirmationStep !== 'allow') {
     event.preventDefault();
-    if (confirmationStep === 'confirm') {
-      void confirmAppQuit();
+    if (confirmationStep === 'evaluate') {
+      void evaluateAppQuit();
     }
     return;
   }

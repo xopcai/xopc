@@ -59,6 +59,22 @@ describe('GET /api/session-runs', () => {
   });
 });
 
+describe('GET /api/runtime/quit-impact', () => {
+  it('returns the gateway shutdown impact snapshot', async () => {
+    const payload = { shouldConfirm: true, blockingCount: 1, blockingRuns: [], backgroundCount: 0, assessedAt: 1 };
+    const service = {
+      isGatewayReady: () => true,
+      sessions: { getQuitImpact: async () => payload },
+    } as unknown as GatewayService;
+    const app = new Hono();
+    registerSessionsRoutes(app, { service });
+
+    const res = await app.request('/api/runtime/quit-impact');
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ ok: true, payload });
+  });
+});
+
 describe('POST /api/sessions/:key/fork-at-turn', () => {
   it('delegates using only the turn id and returns the server-generated session', async () => {
     const sourceKey = "186828a5-4b36-42e0-85cc-6cd0114bd4c7";

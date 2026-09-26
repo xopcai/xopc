@@ -4,19 +4,48 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 
-const mockState = vi.hoisted(() => ({
-  capabilities: {
-    vision: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'vision' } },
-    'image-generation': { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'image' } },
-    stt: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'stt' } },
-    tts: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'tts' } },
-    'computer-use': { status: 'unavailable', selectionSource: 'explicit-config', rejected: [{ provider: 'cloud', model: 'gui' }] },
-  },
-}));
+interface CatalogTestPayload {
+  sources: Record<string, { lastSuccessAt: number; models: Array<{ availability: 'available' | 'unavailable' }> }>;
+  references: Array<{
+    ref: string;
+    availability: 'available' | 'unavailable';
+    locations: string[];
+    suggestedRef?: string;
+  }>;
+  sync: {
+    refreshing: boolean;
+    lastAttemptAt?: number;
+    lastSuccessAt?: number;
+    lastError?: string;
+    sourceErrors?: Record<string, string>;
+  };
+}
 
-vi.mock('swr', () => ({ default: (key: string) => ({ data: key === 'model-catalog'
-  ? { sources: {}, references: [], sync: { refreshing: false } }
-  : { capabilities: mockState.capabilities }, isLoading: false }) }));
+const mockState = vi.hoisted(() => {
+  const catalog: CatalogTestPayload = {
+    sources: {},
+    references: [],
+    sync: { refreshing: false },
+  };
+  const catalogError: Error | null = null;
+  return {
+    catalog,
+    catalogError,
+    capabilities: {
+      vision: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'vision' } },
+      'image-generation': { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'image' } },
+      stt: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'stt' } },
+      tts: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'tts' } },
+      'computer-use': { status: 'unavailable', selectionSource: 'explicit-config', rejected: [{ provider: 'cloud', model: 'gui' }] },
+    },
+  };
+});
+
+vi.mock('swr', () => ({ default: (key: string) => ({
+  data: key === 'model-catalog' ? mockState.catalog : { capabilities: mockState.capabilities },
+  error: key === 'model-catalog' ? mockState.catalogError : null,
+  isLoading: false,
+}) }));
 vi.mock('../models-hub-cache', () => ({
   MODEL_CATALOG_SWR_KEY: 'model-catalog', CAPABILITY_READINESS_SWR_KEY: 'capability-readiness',
   revalidateModelsHubCaches: vi.fn(),
@@ -31,6 +60,8 @@ afterEach(async () => {
   await act(async () => root?.unmount());
   root = undefined;
   window.electronAPI = previousApi;
+  mockState.catalog = { sources: {}, references: [], sync: { refreshing: false } };
+  mockState.catalogError = null;
   Object.assign(mockState.capabilities, {
     vision: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'vision' } },
     'image-generation': { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'image' } },
@@ -81,4 +112,56 @@ it('presents never-configured optional capabilities without warnings', async () 
   expect(container.textContent).toContain('Not configured');
   expect(container.textContent).not.toContain('Needs attention');
   expect(container.querySelector('.lucide-triangle-alert')).toBeNull();
+});
+
+it('presents provider sync failures as temporarily unverified with repair actions', async () => {
+  window.electronAPI = undefined;
+  mockState.catalog = {
+    sources: {},
+    references: [{
+      ref: 'deepseek/deepseek-v4-flash',
+      availability: 'unavailable',
+      locations: ['agentCatalog.defaults.models.chat.primary'],
+      suggestedRef: 'deepseek/deepseek-v3',
+    }],
+    sync: {
+      refreshing: false,
+      lastAttemptAt: 1_750_000_000_000,
+      sourceErrors: { deepseek: 'fetch failed' },
+    },
+  };
+  const container = document.createElement('div');
+  root = createRoot(container);
+  await act(async () => root!.render(<MemoryRouter><ModelCatalogStatus /></MemoryRouter>));
+
+  expect(container.textContent).toContain('Temporarily unverified');
+  expect(container.textContent).not.toContain('deepseek/deepseek-v4-flash is unavailable');
+  expect(container.textContent).toContain('Check again');
+  expect(container.textContent).toContain('Replace model');
+  expect(container.textContent).toContain('View 1 reference');
+  expect(container.querySelector('a[href="/settings/agent-defaults"]')).not.toBeNull();
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(container.querySelector('[aria-label="Sync error details"]')?.textContent).toContain('deepseek: fetch failed');
+});
+
+it('keeps confirmed unresolved references actionable without exposing a generic page error', async () => {
+  window.electronAPI = undefined;
+  mockState.catalog = {
+    sources: {},
+    references: [{
+      ref: 'removed/model',
+      availability: 'unavailable',
+      locations: ['agentCatalog.agents.reviewer.models.intents.review.primary'],
+    }],
+    sync: { refreshing: false, lastSuccessAt: 1_750_000_000_000 },
+  };
+  const container = document.createElement('div');
+  root = createRoot(container);
+  await act(async () => root!.render(<MemoryRouter><ModelCatalogStatus /></MemoryRouter>));
+
+  expect(container.textContent).toContain('Unavailable');
+  expect(container.textContent).toContain('Adjust configuration');
+  expect(container.textContent).toContain('Agent reviewer');
+  expect(container.querySelector('a[href="/capabilities/agents/reviewer"]')).not.toBeNull();
+  expect(container.querySelector('[role="alert"]')).toBeNull();
 });

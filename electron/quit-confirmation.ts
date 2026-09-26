@@ -1,7 +1,7 @@
-export type QuitConfirmationStep = 'allow' | 'block' | 'confirm';
+export type QuitConfirmationStep = 'allow' | 'block' | 'evaluate';
 
 /**
- * Coordinates Electron's synchronous `before-quit` event with an asynchronous native dialog.
+ * Coordinates Electron's synchronous `before-quit` event with asynchronous impact evaluation and dialog.
  * One accepted or explicitly bypassed quit also permits the follow-up `app.quit()` used after cleanup.
  */
 export class QuitConfirmationGate {
@@ -18,7 +18,7 @@ export class QuitConfirmationGate {
     }
     if (this.pending) return 'block';
     this.pending = true;
-    return 'confirm';
+    return 'evaluate';
   }
 
   resolve(confirmed: boolean): boolean {

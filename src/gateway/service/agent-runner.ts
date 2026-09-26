@@ -21,11 +21,12 @@ import {
 } from '../../storage/sqlite/clarification-wait-repository.js';
 import type { ClarifyRequestPayload, ClarifyRequestResult } from '../../agent/tools/clarify-tool.js';
 import { runGatewayAgent } from './run-gateway-agent.js';
+import { describeActiveExecution, type ActiveExecution, type ActiveExecutionKind } from './active-execution.js';
 import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
 import type { AgentSourceContext, TurnContextRef } from '../../agent/source-context/types.js';
 import { fitSourceContextsToBudget } from '../../agent/source-context/budget.js';
 import { createLogger } from '../../utils/logger.js';
-import { listActiveSessionInputRuns } from '../../storage/sqlite/index.js';
+import { listActiveSessionInputExecutions, listActiveSessionInputRuns } from '../../storage/sqlite/index.js';
 import {
   SessionInputCoordinator,
   type ReplaceLatestTurnInput,
@@ -68,6 +69,7 @@ export class GatewayAgentRunner {
   private readonly ephemeralClarifications = new EphemeralClarificationWaiter();
   /** Maps webchat session key → active `runId` for `clarify` tool routing. */
   private readonly activeWebchatRunBySession = new Map<string, string>();
+  private readonly activeExecutionBySession = new Map<string, ActiveExecution>();
   private readonly externalStreamBySession = new Map<string, (event: ClarificationStreamEvent) => void>();
   private readonly externalClarificationResponses = new Map<string, () => boolean>();
   readonly inputs: SessionInputCoordinator;
@@ -166,6 +168,19 @@ export class GatewayAgentRunner {
     return [...runs].map(([conversationId, runId]) => ({ conversationId, runId }));
   }
 
+  listActiveExecutions(): ActiveExecution[] {
+    const executions = new Map(
+      listActiveSessionInputExecutions().map((run) => [
+        run.conversationId,
+        describeActiveExecution(run),
+      ]),
+    );
+    for (const [conversationId, execution] of this.activeExecutionBySession) {
+      executions.set(conversationId, execution);
+    }
+    return [...executions.values()];
+  }
+
   disposeClarifications(): void {
     this.ephemeralClarifications.dispose();
     this.unsubscribeConnectionWait();
@@ -175,9 +190,15 @@ export class GatewayAgentRunner {
     conversationId: string,
     runId: string,
     publish: (event: ClarificationStreamEvent) => void,
-    options?: { beforeClarificationResponse?: () => boolean },
+    options?: { beforeClarificationResponse?: () => boolean; kind?: ActiveExecutionKind },
   ): void {
     this.activeWebchatRunBySession.set(conversationId, runId);
+    this.activeExecutionBySession.set(conversationId, describeActiveExecution({
+      conversationId,
+      runId,
+      origin: { type: 'endpoint', endpointId: 'electron-side-chat' },
+      kind: options?.kind,
+    }));
     this.externalStreamBySession.set(conversationId, publish);
     if (options?.beforeClarificationResponse) this.externalClarificationResponses.set(conversationId, options.beforeClarificationResponse);
   }
@@ -185,6 +206,7 @@ export class GatewayAgentRunner {
   unregisterExternalWebchatRun(conversationId: string, runId: string): void {
     if (this.activeWebchatRunBySession.get(conversationId) === runId) {
       this.activeWebchatRunBySession.delete(conversationId);
+      this.activeExecutionBySession.delete(conversationId);
       this.externalStreamBySession.delete(conversationId);
       this.externalClarificationResponses.delete(conversationId);
     }
@@ -222,6 +244,7 @@ export class GatewayAgentRunner {
         bus: this.opts.bus,
         runAbortControllers: this.runAbortControllers,
         activeWebchatRunBySession: this.activeWebchatRunBySession,
+        activeExecutionBySession: this.activeExecutionBySession,
         sessionIndex: this.opts.sessionIndex,
         emit: this.opts.emit,
         publishRealtime: this.opts.publishRealtime,

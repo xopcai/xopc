@@ -5,7 +5,7 @@ export type ElectronMenuMessages = {
     settings: string;
   };
   quitConfirmation: {
-    title: string;
+    title: (count: number, taskTitle?: string) => string;
     detail: string;
     cancel: string;
     quit: string;
@@ -92,10 +92,12 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       settings: 'Settings…',
     },
     quitConfirmation: {
-      title: 'Quit xopc?',
-      detail: 'Active local tasks and chats on this machine will be interrupted.',
-      cancel: 'Cancel',
-      quit: 'Quit',
+      title: (count, taskTitle) => taskTitle
+        ? `“${taskTitle}” is still running`
+        : count === 1 ? 'A task is still running' : `${count} tasks are still running`,
+      detail: 'Quitting now will interrupt the running work. Work already completed will be kept.',
+      cancel: 'Keep Waiting',
+      quit: 'Quit and Interrupt',
     },
     file: {
       label: 'File',
@@ -177,10 +179,12 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       settings: '设置…',
     },
     quitConfirmation: {
-      title: '退出 xopc？',
-      detail: '这台设备上正在运行的本地任务和对话将会中断。',
-      cancel: '取消',
-      quit: '退出',
+      title: (count, taskTitle) => taskTitle
+        ? `“${taskTitle}”仍在运行`
+        : count === 1 ? '有 1 个任务仍在运行' : `有 ${count} 个任务仍在运行`,
+      detail: '现在退出会中断正在执行的任务，已经完成的内容会保留。',
+      cancel: '继续等待',
+      quit: '退出并中断',
     },
     file: {
       label: '文件',
