@@ -85,12 +85,6 @@ export struct XopcChatResultTail {
   build() {
     if (!this.row.live && (this.artifacts.length || this.deliveries.length)) {
       Column({ space: 4 }) {
-          Row({ space: 8 }) {
-            SymbolGlyph($r('sys.symbol.doc_plaintext')).fontSize(17).fontColor([this.colors.secondary])
-            Text($r('app.string.chat_deliverables')).fontSize(13).fontWeight(FontWeight.Medium)
-              .fontColor(this.colors.secondary).layoutWeight(1)
-            Text((this.artifacts.length + this.deliveries.length).toString()).fontSize(12).fontColor(this.colors.tertiary)
-          }.height(36).padding({ left: 12, right: 12 }).width('100%')
           Repeat<XopcArtifact>(this.visibleArtifacts).each((item: RepeatItem<XopcArtifact>) => {
             if (item.item.availability === 'available' && (item.item.uri || item.item.workspaceRelativePath)) {
               XopcChatMediaView({ file: artifactMedia(item.item), conversationId: this.conversationId, compact: true,

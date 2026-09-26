@@ -44,7 +44,8 @@ export struct XopcChatToolGroupView {
       Button({ type: ButtonType.Normal }) {
         Row({ space: 6 }) {
           Text(chatToolTitle(this.first)).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1)
-          Text('×' + this.calls.length.toString()).fontSize(11).fontColor(this.colors.tertiary)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text('×' + this.calls.length.toString()).fontSize(11).fontColor(this.colors.tertiary).maxLines(1).flexShrink(0)
           SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(12).fontColor([this.colors.secondary])
         }.width('100%')
       }.id('chat-tool-group-' + this.first.id).width('100%').constraintSize({ minHeight: 36 }).padding({ left: 2, right: 2 }).backgroundColor(Color.Transparent)
@@ -72,14 +73,16 @@ export struct XopcChatToolView {
   }
   build() {
     Row({ space: 6 }) {
-      Column({ space: 2 }) {
+      Row({ space: 6 }) {
         Text(this.title()).fontSize(13).fontColor(this.colors.secondary)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '60%' }).flexShrink(0)
         if (chatToolPreview(this.call)) {
           Text(chatToolPreview(this.call)).fontSize(12).fontColor(this.colors.tertiary).maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
         }
-      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+      }.layoutWeight(1)
       if (this.call.status === 'running') {
-        Text($r('app.string.chat_running')).fontSize(11).fontColor(this.colors.tertiary)
+        Text($r('app.string.chat_running')).fontSize(11).fontColor(this.colors.tertiary).maxLines(1).flexShrink(0)
       }
     }.id('chat-tool-' + this.call.id).width('100%').constraintSize({ minHeight: 36 }).padding({ left: 2, right: 2 })
   }
