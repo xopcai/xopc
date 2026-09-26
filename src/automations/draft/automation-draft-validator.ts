@@ -133,6 +133,7 @@ function summarizeAction(action: CreateAutomationInput['action']): string {
   if (action.kind === 'workflow') return `Starts workflow ${action.workflowId}.`;
   if (action.kind === 'browser_automation') return `Runs browser automation ${action.automationId}.`;
   if (action.kind === 'task_command') return `Applies ${action.command?.type ?? 'a command'} to task ${action.taskId}.`;
+  if (action.kind === 'system') return `Runs system capability ${action.capability}.`;
   return action.agentId ? `Runs agent ${action.agentId}.` : 'Runs the default agent.';
 }
 

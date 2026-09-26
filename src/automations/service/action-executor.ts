@@ -189,6 +189,17 @@ export class AutomationActionExecutor {
         ? { status: 'succeeded', summary: result.runId ? `TaskRun ${result.runId} queued` : 'Task command applied' }
         : { status: 'failed', error: result.reason ?? 'Task command failed' };
     }
+    if (automation.action.kind === 'system') {
+      await hooks.onRunPatch?.({ currentPhase: 'action' });
+      const execute = this.deps.executeSystemAction;
+      if (!execute) return { status: 'failed', error: 'System action executor is unavailable' };
+      const result = await execute({
+        capability: automation.action.capability,
+        automationId: automation.id,
+        runId: run.id,
+      });
+      return { status: 'succeeded', summary: result.summary ?? 'System action completed' };
+    }
     return this.executeAgent(automation, automation.action, run, signal, hooks, deadlineAtMs, context);
   }
 

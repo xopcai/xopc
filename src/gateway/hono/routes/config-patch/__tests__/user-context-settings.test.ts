@@ -21,6 +21,18 @@ describe('applyMiscPatch user context settings', () => {
     });
   });
 
+  it('updates Home suggestion generation independently', async () => {
+    const config = ConfigSchema.parse({});
+    const result = await applyMiscPatch(config, {
+      userContext: { homeIntelligence: { enabled: false, refreshOnContextChange: false } },
+    });
+    expect(result.ok).toBe(true);
+    expect(config.userContext.homeIntelligence).toEqual({
+      enabled: false,
+      refreshOnContextChange: false,
+    });
+  });
+
   it('rejects invalid and removed settings', async () => {
     await expect(applyMiscPatch(ConfigSchema.parse({}), {
       userContext: { userModel: { maintenance: { dailyTime: '25:00' } } },

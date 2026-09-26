@@ -92,7 +92,23 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
     taskId: nonEmptyString.max(200),
     command: TaskCommandSchema,
   }).strict(),
+  z.object({
+    kind: z.literal('system'),
+    capability: z.enum([
+      'home.advisor.refresh',
+      'memory.temporal_sweep',
+      'memory.daily_reconciliation',
+      'memory.weekly_knowledge',
+    ]),
+  }).strict(),
 ]);
+
+export const AutomationManagementSchema = z.object({
+  owner: nonEmptyString.max(100),
+  editable: z.array(z.enum(['enabled', 'trigger'])).max(2),
+  runnable: z.boolean(),
+  deletable: z.boolean(),
+}).strict();
 
 export const AutomationReliabilitySchema = z.object({
   executionTimeoutSeconds: z.number().int().min(1).max(86400).optional(),
@@ -128,6 +144,7 @@ export const AutomationSchema = z.object({
   notificationPolicy: z.enum(['attention', 'all', 'none']).default('attention'),
   completionWebhookUrl: optionalTrimmedString(2000),
   reliability: AutomationReliabilitySchema.optional(),
+  management: AutomationManagementSchema.optional(),
   state: AutomationStateSchema.default({}),
   createdAtMs: z.number().int().nonnegative(),
   updatedAtMs: z.number().int().nonnegative(),

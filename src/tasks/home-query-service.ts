@@ -92,6 +92,7 @@ function actionLabel(automation: Automation): string {
   if (automation.action.kind === 'workflow') return `workflow:${automation.action.workflowId}`;
   if (automation.action.kind === 'browser_automation') return `browser-automation:${automation.action.automationId}`;
   if (automation.action.kind === 'task_command') return `task:${automation.action.command.type}`;
+  if (automation.action.kind === 'system') return `system:${automation.action.capability}`;
   return automation.action.agentId ? `agent:${automation.action.agentId}` : 'agent';
 }
 

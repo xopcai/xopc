@@ -67,6 +67,10 @@ describe('memory maintenance automation reconciliation', () => {
     expect(cron((await service.get('system-memory-temporal-sweep'))!.trigger)).toBe('*/60 * * * *');
     expect(cron((await service.get('system-memory-daily-reconciliation'))!.trigger)).toBe('30 2 * * *');
     expect(cron((await service.get('system-memory-weekly-knowledge'))!.trigger)).toBe('0 4 * * 0');
+    expect(await service.get('system-memory-temporal-sweep')).toMatchObject({
+      action: { kind: 'system', capability: 'memory.temporal_sweep' },
+      management: { owner: 'memory-maintenance', editable: ['enabled', 'trigger'], runnable: true, deletable: false },
+    });
   });
 
   it('disables every built-in job when maintenance is off', async () => {
@@ -77,5 +81,19 @@ describe('memory maintenance automation reconciliation', () => {
       automationService: service,
     });
     expect(result.disabled).toBe(3);
+  });
+
+  it('preserves user-owned pause and schedule after the first reconciliation', async () => {
+    const workspace = join(stateDir, 'workspace');
+    await reconcileMemoryMaintenanceAutomations({ config: config(workspace), automationService: service });
+    await service.update('system-memory-temporal-sweep', {
+      enabled: false,
+      trigger: { kind: 'schedule', schedule: { kind: 'interval', everyMs: 7_200_000 } },
+    });
+    await reconcileMemoryMaintenanceAutomations({ config: config(workspace), automationService: service });
+    expect(await service.get('system-memory-temporal-sweep')).toMatchObject({
+      enabled: false,
+      trigger: { kind: 'schedule', schedule: { kind: 'interval', everyMs: 7_200_000 } },
+    });
   });
 });
