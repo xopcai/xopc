@@ -113,6 +113,16 @@ export default defineConfig({
           sequence: { groupOrder: 3 },
         },
       },
+      {
+        extends: true,
+        test: {
+          name: 'scripts',
+          include: ['scripts/**/*.{test,spec}.{ts,tsx}'],
+          setupFiles: [setupFile],
+          maxWorkers: '30%',
+          sequence: { groupOrder: 3 },
+        },
+      },
     ],
   },
 });
