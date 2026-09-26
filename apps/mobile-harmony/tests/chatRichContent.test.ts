@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { historyRows } from '../entry/src/main/ets/common/chatProtocol.ets';
-import { chatActivities, chatDeliveries, chatOutcome, mergeAssistantRows, toolOutputText, chatReview, chatSearchLinks, chatAnswerText, chatProductCapability, chatAttachments, chatToolDisplayKind, chatToolFailed, chatToolFailureSummary, chatToolSemanticKind, chatToolPreview, chatToolReadGroupKey } from '../entry/src/main/ets/common/chatRichContent.ets';
+import { chatActivities, chatAnswerStarted, chatDeliveries, chatOutcome, mergeAssistantRows, toolOutputText, chatReview, chatSearchLinks, chatAnswerText, chatProductCapability, chatAttachments, chatToolDisplayKind, chatToolFailed, chatToolFailureSummary, chatToolSemanticKind, chatToolPreview, chatToolReadGroupKey } from '../entry/src/main/ets/common/chatRichContent.ets';
 import { reduceChatStream } from '../entry/src/main/ets/common/chatStream.ets';
 import type { XopcChatRow, XopcMessage } from '../entry/src/main/ets/model/chat.ets';
 
@@ -125,6 +125,17 @@ describe('rich live event reducer', () => {
     const rows = parse([{ role: 'assistant', content: [{ type: 'text', text: 'checking' }, { type: 'toolCall', id: 'c', name: 'read' }] },
       { role: 'toolResult', toolCallId: 'c', content: 'output' }, { role: 'assistant', content: 'answer' }]);
     expect(chatAnswerText(rows[0])).toBe('answer');
+  });
+  it('keeps pending and narration text in the work log rather than the final answer', () => {
+    const row: XopcChatRow = { id: 'r', role: 'assistant', text: 'checking\nanswer', blocks: [
+      { id: 'pending', kind: 'text', text: 'checking', presentation: 'pending', active: true },
+      { id: 'narration', kind: 'text', text: 'reading files', presentation: 'narration' },
+      { id: 'answer', kind: 'text', text: 'answer', presentation: 'answer' }] };
+    expect(chatAnswerText(row)).toBe('answer');
+    expect(chatAnswerStarted(row)).toBe(true);
+    expect(chatActivities(row, 'on').map(block => block.id)).toEqual(['pending', 'narration']);
+    expect(chatActivities(row, 'off')).toEqual([]);
+    expect(chatAnswerStarted({ ...row, blocks: row.blocks?.slice(0, 2) })).toBe(false);
   });
   it('projects tool activity into compact semantic labels and bounded failure summaries', () => {
     expect(chatToolDisplayKind('mcp__web__search_query')).toBe('search');

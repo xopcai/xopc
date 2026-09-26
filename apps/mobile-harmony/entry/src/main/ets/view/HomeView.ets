@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatView } from './ChatView';
 import { XopcSessionsView } from './SessionsView';
 import { XopcWorkspaceView } from './WorkspaceView';
@@ -22,6 +23,7 @@ import { accessibility } from '@kit.AccessibilityKit';
 
 @ComponentV2
 export struct XopcHomeView {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Local tab: number = 0;
   @Local detailVisible: boolean = false;
   @Local layout: XopcLayoutState = layoutState;
@@ -99,8 +101,8 @@ export struct XopcHomeView {
             onOpenSection: (section: string): void => { this.navigate({ page: 'settings', itemId: section }); },
             onDisconnected: (): void => { this.onDisconnected(); } })
         }
-        else { Text($r('app.string.unsupported_route')).fontColor($r('app.color.secondary')).padding(20) }
-      }.hideTitleBar(page === 'settings').title($r('app.string.back')).backgroundColor($r('app.color.surface'))
+        else { Text($r('app.string.unsupported_route')).fontColor(this.colors.secondary).padding(20) }
+      }.hideTitleBar(page === 'settings').title($r('app.string.back')).backgroundColor(this.colors.surface)
     }
   }
 
@@ -110,17 +112,17 @@ export struct XopcHomeView {
     Column({ space: 3 }) {
       Stack({ alignContent: Alignment.TopEnd }) {
         Row() {
-          SymbolGlyph(icon).fontSize(22).fontColor([this.tab === index ? $r('app.color.accent') : $r('app.color.secondary')])
+          SymbolGlyph(icon).fontSize(22).fontColor([this.tab === index ? this.colors.accent : this.colors.secondary])
         }.width(42).height(28).justifyContent(FlexAlign.Center).borderRadius(16)
-          .backgroundColor(this.tab === index ? $r('app.color.grouped') : Color.Transparent)
+          .backgroundColor(this.tab === index ? this.colors.grouped : Color.Transparent)
         if (index === 1 && this.attention.needsUser.length) {
           Text(this.attention.needsUser.length > 99 ? '99+' : this.attention.needsUser.length.toString()).fontSize(10)
-            .fontColor($r('app.color.accent')).backgroundColor($r('app.color.accent_soft')).borderRadius(8)
+            .fontColor(this.colors.accent).backgroundColor(this.colors.accentSoft).borderRadius(8)
             .constraintSize({ minWidth: 16, minHeight: 16 }).textAlign(TextAlign.Center).position({ x: 15, y: -5 })
         }
       }
       Text(label).fontSize(11).fontWeight(FontWeight.Medium)
-        .fontColor(this.tab === index ? $r('app.color.accent') : $r('app.color.secondary'))
+        .fontColor(this.tab === index ? this.colors.accent : this.colors.secondary)
     }.width('100%').height(44).justifyContent(FlexAlign.Center)
       .backgroundColor(Color.Transparent).borderRadius(26)
     }.id('main-tab-' + index).layoutWeight(1).height(44).padding(0).borderRadius(26).backgroundColor(Color.Transparent)
@@ -143,7 +145,7 @@ export struct XopcHomeView {
     if (this.tab === 0 && this.layout.isMainDockVisible(0)) {
       Column() {
         this.dockItems()
-      }.id('main-tab-dock').width('100%').backgroundColor($r('app.color.panel'))
+      }.id('main-tab-dock').width('100%').backgroundColor(this.colors.panel)
     }
   }
 
@@ -167,13 +169,13 @@ export struct XopcHomeView {
       if (this.tab !== 0 && this.layout.isMainDockVisible(this.tab)) {
         Stack({ alignContent: Alignment.Start }) {
         this.dockItems()
-        }.id('secondary-tab-dock').width('92%').height(52).borderRadius(30).backgroundColor($r('app.color.panel'))
-          .border({ width: 0.5, color: $r('app.color.border_subtle') }).margin({ bottom: 8 })
+        }.id('secondary-tab-dock').width('92%').height(52).borderRadius(30).backgroundColor(this.colors.panel)
+          .margin({ bottom: 8 })
       }
         }.width('100%').height('100%')
       }.hideTitleBar(true).mode(NavigationMode.Stack).navDestination(this.destination)
         .onNavBarStateChange((shown: boolean): void => { this.detailVisible = !shown; })
-        .width('100%').height('100%').backgroundColor($r('app.color.surface'))
+        .width('100%').height('100%').backgroundColor(this.colors.surface)
       XopcShareIntakeDialog({ onExplore: async (value: XopcIncomingShare): Promise<boolean> => await this.exploreShare(value),
         onSaved: (noteId: string): void => { this.navigate({ page: 'notes', itemId: noteId }); } })
     }.width('100%').height('100%')

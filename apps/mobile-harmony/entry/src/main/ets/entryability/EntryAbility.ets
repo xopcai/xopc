@@ -1,4 +1,4 @@
-import { UIAbility, Want } from '@kit.AbilityKit';
+import { Configuration, UIAbility, Want } from '@kit.AbilityKit';
 import { KeyboardAvoidMode, window } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -36,10 +36,16 @@ export default class EntryAbility extends UIAbility {
   }
   onCreate(want: Want): void { this.receiveWant(want); }
   onNewWant(want: Want): void { this.receiveWant(want); }
+  onConfigurationUpdate(configuration: Configuration): void { appSettings.syncSystemColorMode(configuration.colorMode); }
   onForeground(): void { gatewaySession.setForeground(true); voiceCall.onForeground(); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
   onBackground(): void { gatewaySession.setForeground(false); voiceCall.onBackground(); realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
   onDestroy(): void { voiceCall.end(); realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.disableContinuous(); }
   onWindowStageCreate(stage: window.WindowStage): void {
+    this.restoreAndLoad(stage);
+  }
+  private async restoreAndLoad(stage: window.WindowStage): Promise<void> {
+    try { await appSettings.restore(this.context); }
+    catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Preferences could not be restored'); }
     stage.loadContent('pages/Index', (error: BusinessError): void => {
       if (error.code) {
         hilog.error(0x0000, 'XopcApp', 'Window load failed: %{public}d', error.code);
@@ -51,9 +57,6 @@ export default class EntryAbility extends UIAbility {
           layoutState.keyboardVisible = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD).bottomRect.height > 0;
         } catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Keyboard layout initialization failed'); }
         pushNotifications.onWindowReady();
-        appSettings.restore(this.context).catch((_error: Error): void => {
-          hilog.warn(0x0000, 'XopcApp', 'Preferences could not be restored');
-        });
       }
     });
   }

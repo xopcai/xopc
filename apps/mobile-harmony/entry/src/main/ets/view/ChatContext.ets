@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatContextViewModel } from '../viewmodel/chatContextViewModel';
 import { XopcContextRef, XopcContextSource, XopcHostDirectory, XopcReferenceItem } from '../model/chat';
 import { XopcProject } from '../model/workspace';
@@ -5,10 +6,12 @@ import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
 
 @ComponentV2
 export struct XopcChatContext {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param model: XopcChatContextViewModel = new XopcChatContextViewModel();
   @Param initialMode: string = 'context';
   @Param initialReferenceKind: string = 'note';
   @Param refs: XopcContextRef[] = [];
+  @Event onMode: (mode: string) => void = (_mode: string): void => {};
   @Event onScope: (project: string | null, mode?: string) => void = (_project: string | null, _mode?: string): void => {};
   @Event onReference: (item: XopcReferenceItem) => void = (_item: XopcReferenceItem): void => {};
   @Event onClose: () => void = (): void => {};
@@ -22,6 +25,7 @@ export struct XopcChatContext {
   aboutToDisappear(): void { clearTimeout(this.searchTimer); }
   private choose(mode: string): void {
     this.mode = mode;
+    this.onMode(mode);
     if (mode === 'project' || mode === 'environment') this.model.choices(mode);
     else if (mode === 'directory') this.model.browse(this.model.config?.effectiveWorkspacePath || '');
     else if (mode === 'references') this.model.searchReferences(this.kind, this.search, this.path);
@@ -39,9 +43,9 @@ export struct XopcChatContext {
   build() {
     Column({ space: 12 }) {
       Row() {
-        Text($r('app.string.chat_context')).fontSize(22).fontWeight(FontWeight.Bold).fontColor($r('app.color.foreground')).layoutWeight(1)
+        Text($r('app.string.chat_context')).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
         Button('×').width(44).height(44).padding(0).fontSize(28).backgroundColor(Color.Transparent)
-          .fontColor($r('app.color.secondary')).accessibilityText($r('app.string.chat_close')).onClick((): void => { this.onClose(); })
+          .fontColor(this.colors.secondary).accessibilityText($r('app.string.chat_close')).onClick((): void => { this.onClose(); })
       }.width('100%')
       if (this.mode === 'references') {
         Row({ space: 8 }) {
@@ -59,10 +63,10 @@ export struct XopcChatContext {
             this.search = ''; this.model.searchReferences(this.kind, '', this.path);
           })
         }
-        if (this.refs.length >= 5 && this.kind !== 'file') { Text($r('app.string.chat_ref_limit')).fontColor($r('app.color.secondary')) }
+        if (this.refs.length >= 5 && this.kind !== 'file') { Text($r('app.string.chat_ref_limit')).fontColor(this.colors.secondary) }
       }
       if (this.model.error) {
-        Text(this.model.error).fontColor($r('app.color.danger'))
+        Text(this.model.error).fontColor(this.colors.danger)
         Button($r('app.string.refresh')).onClick((): void => { if (this.mode === 'context') this.onRetry(); else this.choose(this.mode); })
       }
       if (this.model.loading) { XopcListSkeleton() }
@@ -82,11 +86,11 @@ export struct XopcChatContext {
             Button('Worktree').width('100%').height(48).enabled(!this.model.loading && !!this.model.environment && !this.model.environment.worktreeUnavailableReason)
               .onClick((): void => { if (this.model.summary?.work.project) this.selectScope(this.model.summary.work.project.id, 'managed_worktree'); })
           }
-          if (this.model.environment?.worktreeUnavailableReason) { ListItem() { Text(this.model.environment.worktreeUnavailableReason).fontColor($r('app.color.secondary')) } }
+          if (this.model.environment?.worktreeUnavailableReason) { ListItem() { Text(this.model.environment.worktreeUnavailableReason).fontColor(this.colors.secondary) } }
         } else if (this.mode === 'directory') {
-          if (this.model.config?.workingDirectoryLocked) { ListItem() { Text($r('app.string.chat_directory_locked')).fontColor($r('app.color.secondary')) } }
+          if (this.model.config?.workingDirectoryLocked) { ListItem() { Text($r('app.string.chat_directory_locked')).fontColor(this.colors.secondary) } }
           else if (this.model.directories) {
-            ListItem() { Text(this.model.directories.currentPath).fontColor($r('app.color.secondary')) }
+            ListItem() { Text(this.model.directories.currentPath).fontColor(this.colors.secondary) }
             if (this.model.directories.parentPath !== null && this.model.directories.parentPath !== undefined) {
               ListItem() { Button('↑').onClick((): void => { this.model.browse(this.model.directories?.parentPath || ''); }) }
             }
@@ -107,7 +111,7 @@ export struct XopcChatContext {
               && (item.kind === 'file' || this.refs.length < 5))
           }, (item: XopcReferenceItem): string => item.kind + ':' + item.id)
         } else if (this.model.summary) {
-          ListItem() { Text($r('app.string.chat_context_hint')).fontSize(13).fontColor($r('app.color.secondary')).padding(8) }
+          ListItem() { Text($r('app.string.chat_context_hint')).fontSize(13).fontColor(this.colors.secondary).padding(8) }
           ListItem() { XopcHubRow({ heading: this.model.summary.work.project?.title || $r('app.string.chat_no_project'),
             summary: this.model.summary.work.task?.title || '', symbol: $r('sys.symbol.folder'), onOpen: (): void => { this.choose('project'); } }) }
           if (this.model.summary.environment) {
@@ -121,7 +125,7 @@ export struct XopcChatContext {
           ForEach(this.model.summary.sources, (source: XopcContextSource) => {
             ListItem() { XopcHubRow({ heading: source.title || $r('app.string.untitled'), summary: source.unavailable ? $r('app.string.chat_source_unavailable') : '', navigable: false }) }
           }, (source: XopcContextSource): string => source.id)
-          if (this.model.summary.sourcesHasMore) { ListItem() { Text($r('app.string.chat_more_sources')).fontColor($r('app.color.tertiary')) } }
+          if (this.model.summary.sourcesHasMore) { ListItem() { Text($r('app.string.chat_more_sources')).fontColor(this.colors.tertiary) } }
           ListItem() { Button($r('app.string.chat_add_reference')).onClick((): void => { this.choose('references'); }) }
         }
       }.layoutWeight(1).width('100%')
@@ -129,6 +133,6 @@ export struct XopcChatContext {
         Button($r('app.string.chat_use_directory')).width('100%').height(44).enabled(!this.model.loading)
           .onClick(async (): Promise<void> => { if (await this.model.setDirectory()) this.mode = 'context'; })
       }
-    }.padding({ left: 24, right: 24, top: 8, bottom: 24 }).height('100%').width('100%').backgroundColor($r('app.color.panel'))
+    }.padding({ left: 24, right: 24, top: 8, bottom: 24 }).height('100%').width('100%').backgroundColor(this.colors.panel)
   }
 }

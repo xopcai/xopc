@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcShareItem, XopcShareResult } from '../model/share';
 import { XopcShareViewModel } from '../viewmodel/shareViewModel';
 import { XopcListSkeleton } from './MobileComponents';
@@ -7,6 +8,7 @@ const DAY_MS: number = 86400000;
 
 @ComponentV2
 export struct XopcShareCenterView {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Event onExit: () => void = (): void => {};
   @Local model: XopcShareViewModel = new XopcShareViewModel();
   @Local result?: XopcShareResult;
@@ -35,7 +37,7 @@ export struct XopcShareCenterView {
   private revoke(item: XopcShareItem): void {
     this.getUIContext().showAlertDialog({ title: $r('app.string.share_revoke'), message: $r('app.string.share_revoke_confirm'),
       primaryButton: { value: $r('app.string.cancel'), action: (): void => {} },
-      secondaryButton: { value: $r('app.string.share_revoke'), fontColor: $r('app.color.danger'),
+      secondaryButton: { value: $r('app.string.share_revoke'), fontColor: this.colors.danger,
         action: (): void => { this.model.revoke(item); } } });
   }
   private menu(item: XopcShareItem): void {
@@ -61,16 +63,16 @@ export struct XopcShareCenterView {
     NavDestination() {
       Column() {
         Row({ space: 8 }) {
-          Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([$r('app.color.foreground')]) }
+          Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
             .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back')).onClick(this.onExit)
-          Text($r('app.string.share_center')).fontSize(24).fontWeight(FontWeight.Bold).fontColor($r('app.color.foreground')).layoutWeight(1)
+          Text($r('app.string.share_center')).fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
           Button(this.model.showInactive ? $r('app.string.share_hide_inactive') : $r('app.string.share_show_inactive'))
-            .height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
+            .height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
             .onClick((): void => { this.model.showInactive = !this.model.showInactive; })
         }.width('100%').padding(12)
         if (this.model.error) {
           Row({ space: 8 }) {
-            Text(this.model.error).fontSize(13).fontColor($r('app.color.danger')).layoutWeight(1)
+            Text(this.model.error).fontSize(13).fontColor(this.colors.danger).layoutWeight(1)
             Button($r('app.string.refresh')).enabled(!this.model.loading).onClick((): void => { this.model.load(); })
           }.padding({ left: 20, right: 20 })
         }
@@ -83,26 +85,26 @@ export struct XopcShareCenterView {
                   Row({ space: 12 }) {
                     SymbolGlyph(item.kind === 'directory' ? $r('sys.symbol.folder') : item.kind === 'session'
                       ? $r('sys.symbol.message') : item.kind === 'note' ? $r('sys.symbol.doc_text') : $r('sys.symbol.doc'))
-                      .fontSize(23).fontColor([$r('app.color.secondary')])
+                      .fontSize(23).fontColor([this.colors.secondary])
                     Column({ space: 5 }) {
-                      Text(item.fileName).fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground'))
+                      Text(item.fileName).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
                         .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                      Text(this.status(item)).fontSize(12).fontColor(this.active(item) ? $r('app.color.accent') : $r('app.color.tertiary'))
-                      Text(new Date(item.expiresAt).toLocaleString()).fontSize(11).fontColor($r('app.color.tertiary')).maxLines(1)
+                      Text(this.status(item)).fontSize(12).fontColor(this.active(item) ? this.colors.accent : this.colors.tertiary)
+                      Text(new Date(item.expiresAt).toLocaleString()).fontSize(11).fontColor(this.colors.tertiary).maxLines(1)
                     }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                    Button('•••').width(44).height(44).padding(0).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
+                    Button('•••').width(44).height(44).padding(0).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
                       .onClick((): void => { this.menu(item); })
-                  }.width('100%').padding(14).borderRadius(16).backgroundColor($r('app.color.panel'))
-                    .border({ width: 0.5, color: $r('app.color.border_subtle') }).onClick((): void => { this.open(item); })
+                  }.width('100%').padding(14).borderRadius(16).backgroundColor(this.colors.panel)
+                    .onClick((): void => { this.open(item); })
                 }
               }, (item: XopcShareItem): string => item.id + ':' + item.expiresAt + ':' + item.revoked)
               if (!this.model.loading && !this.model.visibleItems().length) {
-                ListItem() { Text($r('app.string.share_empty')).fontColor($r('app.color.secondary')).width('100%').padding(32).textAlign(TextAlign.Center) }
+                ListItem() { Text($r('app.string.share_empty')).fontColor(this.colors.secondary).width('100%').padding(32).textAlign(TextAlign.Center) }
               }
             }.layoutWeight(1).width('100%').padding({ left: 20, right: 20, bottom: 20 })
           }.layoutWeight(1).onRefreshing((): void => { this.model.load(); })
         }
-      }.width('100%').height('100%').backgroundColor($r('app.color.surface'))
+      }.width('100%').height('100%').backgroundColor(this.colors.surface)
         .bindSheet($$this.resultOpen, this.resultSheet, { height: '92%', dragBar: false })
     }.hideTitleBar(true).onBackPressed((): boolean => { if (this.resultOpen) this.resultOpen = false; else this.onExit(); return true; })
   }

@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcHubRow, XopcListSkeleton, XopcEmptyHint } from './MobileComponents';
 import { XopcMarkdownView } from './MarkdownView';
@@ -15,6 +16,7 @@ interface XopcWorkflowEnvelope { view: XopcWorkflowDetail; }
 
 @ComponentV2
 export struct XopcWorkflowView {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param initialId: string = '';
   @Local runs: XopcWorkflowSummary[] = [];
   @Local selected: XopcWorkflowDetail | undefined = undefined;
@@ -45,7 +47,7 @@ export struct XopcWorkflowView {
     try {
       const result = await this.getUIContext().getPromptAction().showDialog({
         title: $r('app.string.cancel'), message: $r('app.string.confirm_action_help'),
-        buttons: [{ text: $r('app.string.back'), color: $r('app.color.secondary') }, { text: $r('app.string.confirm'), color: $r('app.color.danger') }]
+        buttons: [{ text: $r('app.string.back'), color: this.colors.secondary }, { text: $r('app.string.confirm'), color: this.colors.danger }]
       });
       if (result.index !== 1 || this.busy) return;
       this.busy = true;
@@ -57,14 +59,14 @@ export struct XopcWorkflowView {
   build() {
     NavDestination() {
       Column() {
-        Button($r('app.string.refresh')).enabled(!this.busy).backgroundColor(Color.Transparent).fontColor($r('app.color.accent'))
+        Button($r('app.string.refresh')).enabled(!this.busy).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
           .onClick((): void => { this.load(this.selected?.run.id ?? this.initialId); })
         Scroll() {
           Column() {
-            if (this.error) { Text(this.error).fontColor($r('app.color.danger')).padding(12) }
+            if (this.error) { Text(this.error).fontColor(this.colors.danger).padding(12) }
             if (this.busy) { XopcListSkeleton() }
             if (this.selected) {
-              Text(this.selected.run.title).fontSize(22).fontWeight(FontWeight.Bold).fontColor($r('app.color.foreground'))
+              Text(this.selected.run.title).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
               XopcEmptyHint({ message: this.selected.run.status })
               XopcMarkdownView({ content: this.selected.run.goal ?? '' })
               if (this.selected.run.result) { XopcMarkdownView({ content: this.selected.run.result.summary }) }
@@ -84,7 +86,7 @@ export struct XopcWorkflowView {
           }.width('100%').padding(20).alignItems(HorizontalAlign.Start)
         }.layoutWeight(1).width('100%')
       }.width('100%').height('100%')
-    }.title($r('app.string.workflows')).backgroundColor($r('app.color.surface'))
+    }.title($r('app.string.workflows')).backgroundColor(this.colors.surface)
       .onBackPressed((): boolean => {
         if (this.selected && !this.initialId) { this.selected = undefined; this.load(); return true; }
         return false;

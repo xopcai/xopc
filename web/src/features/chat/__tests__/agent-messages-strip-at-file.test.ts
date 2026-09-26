@@ -122,6 +122,37 @@ describe('runtime user context display', () => {
     expect(ui[0]?.content).toEqual([{ type: 'text', text: '看下note 内容' }]);
   });
 
+  it('normalizes the leading text part of a persisted inline context document', () => {
+    const ui = normalizeAgentMessages([{
+      role: 'user',
+      content: '[2026-09-27 01:21 GMT+8] @extensions/hello 介绍下这个是什么?',
+      metadata: {
+        userTurnDocument: {
+          version: 1,
+          parts: [
+            { type: 'text', text: '[2026-09-27 01:21 GMT+8] ' },
+            { type: 'context_ref', refId: 'folder_ref' },
+            { type: 'text', text: ' 介绍下这个是什么?' },
+          ],
+        },
+        sourceContexts: [{
+          refId: 'folder_ref', kind: 'file', sourceId: 'folder-1', version: '7',
+          title: 'extensions/hello', fileKind: 'directory',
+        }],
+      },
+      timestamp: 1,
+    }]);
+
+    expect(ui[0]?.userTurnDocument).toEqual({
+      version: 1,
+      parts: [
+        { type: 'text', text: '' },
+        { type: 'context_ref', refId: 'folder_ref' },
+        { type: 'text', text: ' 介绍下这个是什么?' },
+      ],
+    });
+  });
+
 });
 
 describe('normalizeAgentMessages expanded @file XML', () => {

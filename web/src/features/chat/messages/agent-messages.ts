@@ -358,7 +358,16 @@ function normalizeMessageContextRefs(metadata: unknown): Message['contextRefs'] 
 
 function normalizeUserTurnDocument(metadata: unknown): Message['userTurnDocument'] {
   const document = asRecord(metadata)?.userTurnDocument;
-  return isUserTurnDocument(document) ? document : undefined;
+  if (!isUserTurnDocument(document)) return undefined;
+  let cleanedLeadingText = false;
+  return {
+    ...document,
+    parts: document.parts.map((part) => {
+      if (cleanedLeadingText || part.type !== 'text') return { ...part };
+      cleanedLeadingText = true;
+      return { ...part, text: stripUserMessageForDisplay(part.text) };
+    }),
+  };
 }
 
 function buildAssistantMessage(m: WireMessage): Message {

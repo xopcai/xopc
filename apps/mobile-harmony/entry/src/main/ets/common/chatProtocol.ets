@@ -9,6 +9,10 @@ function toolText(name: string, input?: Object, result?: Object): string {
 
 function resultText(result: Object): string { return typeof result === 'string' ? result : JSON.stringify(result); }
 
+function legacyEmptyVoiceTranscript(text: string): boolean {
+  return /^\[Voice:\s*no speech detected\]$/i.test(text.trim());
+}
+
 // Run again when older pages arrive so page-boundary tool results can join their calls.
 export function mergeHistoryToolResults(rows: XopcChatRow[]): XopcChatRow[] {
   const output: XopcChatRow[] = [];
@@ -93,6 +97,12 @@ export function historyRows(history: XopcHistory, page: string = 'latest'): Xopc
     if (message.role === 'user' || message.role === 'user-with-attachments') {
       text = stripUserMessageForDisplay(text);
       blocks.forEach((block: XopcChatBlock): void => { if (block.kind === 'text') block.text = stripUserMessageForDisplay(block.text); });
+      if (media.some((file: XopcHistoryMedia): boolean => file.mimeType.startsWith('audio/')) && legacyEmptyVoiceTranscript(text)) {
+        text = '';
+        blocks.forEach((block: XopcChatBlock): void => {
+          if (block.kind === 'text' && legacyEmptyVoiceTranscript(block.text)) block.text = '';
+        });
+      }
     }
     const review = chatReview(message.metadata?.review);
     if (review?.type === 'review' && !blocks.some((block: XopcChatBlock): boolean => block.kind === 'review')) blocks.push({ id: rowId + ':review', kind: 'review', text: '', review });

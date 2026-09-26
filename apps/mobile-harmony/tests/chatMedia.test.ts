@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ request: vi.fn(), destroy: vi.fn(), transferAuth: vi.fn(), gateway: vi.fn(), save: vi.fn(), open: vi.fn(), write: vi.fn(), close: vi.fn(), assertConnection: vi.fn() }));
-vi.mock('@kit.AbilityKit', () => ({}));
-vi.mock('@kit.CoreFileKit', () => ({ fileIo: { open: mocks.open, write: mocks.write, close: mocks.close, OpenMode: { WRITE_ONLY: 1, TRUNC: 2 } },
-  picker: { DocumentViewPicker: class { save = mocks.save; } } }));
+const mocks = vi.hoisted(() => ({ request: vi.fn(), destroy: vi.fn(), transferAuth: vi.fn(), gateway: vi.fn(), save: vi.fn(), open: vi.fn(),
+  write: vi.fn(), read: vi.fn(), stat: vi.fn(), mkdir: vi.fn(), unlink: vi.fn(), close: vi.fn(), assertConnection: vi.fn() }));
+vi.mock('@kit.AbilityKit', () => ({ wantConstant: { Flags: { FLAG_AUTH_READ_URI_PERMISSION: 1 } } }));
+vi.mock('@kit.ArkTS', () => ({ util: { generateRandomUUID: () => 'uuid',
+  Base64Helper: class { decodeSync(source: string) { return new Uint8Array(Buffer.from(source, 'base64')); } } } }));
+vi.mock('@kit.CoreFileKit', () => ({ fileIo: { open: mocks.open, write: mocks.write, read: mocks.read, stat: mocks.stat, mkdir: mocks.mkdir,
+  unlink: mocks.unlink, close: mocks.close, OpenMode: { READ_ONLY: 0, WRITE_ONLY: 1, CREATE: 2, TRUNC: 4 } },
+  fileUri: { getUriFromPath: (path: string): string => 'file://' + path }, picker: { DocumentViewPicker: class { save = mocks.save; } } }));
 vi.mock('@kit.NetworkKit', () => ({ http: { createHttp: () => ({ request: mocks.request, destroy: mocks.destroy }),
   RequestMethod: { GET: 'GET' }, HttpDataType: { ARRAY_BUFFER: 'buffer' } } }));
 vi.mock('../entry/src/main/ets/service/transport.ets', () => ({ XopcHttpError: class extends Error { constructor(code: number) { super(`HTTP_${code}`); } } }));
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { transferAuth: mocks.transferAuth, request: mocks.gateway,
-  connectionRevision: () => 1, assertConnection: mocks.assertConnection } }));
-import { readChatMedia, saveChatMedia, clearChatMediaCache } from '../entry/src/main/ets/service/chatMedia.ets';
+  connectionRevision: () => 1, assertConnection: mocks.assertConnection, currentProfile: () => ({ gatewayId: 'gateway-1' }) } }));
+import { readChatMedia, saveChatMedia, clearChatMediaCache, seedChatMediaCache, openChatMedia } from '../entry/src/main/ets/service/chatMedia.ets';
 const file = { id: 'f', name: 'f.png', type: 'image', mimeType: 'image/png', size: 5, uri: 'xopc-file:f' };
 describe('authenticated chat media transport', () => {
   beforeEach(() => { clearChatMediaCache(); vi.resetAllMocks(); mocks.transferAuth.mockResolvedValue({ origin: 'https://gateway.test', token: 'fixture-token' });
@@ -32,6 +36,27 @@ describe('authenticated chat media transport', () => {
     await expect(readChatMedia(file, 'c')).rejects.toThrow('OFFLINE');
     await readChatMedia(file, 'c'); clearChatMediaCache(); await readChatMedia(file, 'c');
     expect(mocks.request).toHaveBeenCalledTimes(3);
+  });
+  it('seeds a sent voice recording and reuses it for the persisted history media', async () => {
+    const bytes = Buffer.from('voice');
+    mocks.open.mockResolvedValueOnce({ fd: 21 });
+    mocks.write.mockResolvedValueOnce(bytes.byteLength);
+    await seedChatMediaCache({ cacheDir: '/cache' } as never, {
+      type: 'voice', name: 'voice.m4a', mimeType: 'audio/mp4', size: bytes.byteLength, data: bytes.toString('base64')
+    }, 'conversation-1');
+    expect(mocks.mkdir).toHaveBeenCalledWith('/cache/xopc-chat-media', true);
+    expect(mocks.open.mock.calls[0][0]).toMatch(/^\/cache\/xopc-chat-media\/[a-f0-9]{16}\.audio$/);
+
+    clearChatMediaCache();
+    mocks.open.mockResolvedValueOnce({ fd: 22 });
+    mocks.stat.mockResolvedValueOnce({ size: bytes.byteLength });
+    mocks.read.mockImplementationOnce(async (_fd: number, output: ArrayBuffer): Promise<number> => {
+      new Uint8Array(output).set(bytes); return bytes.byteLength;
+    });
+    const result = await readChatMedia({ id: 'server-media', type: 'audio', name: 'voice.m4a', mimeType: 'audio/mp4',
+      size: bytes.byteLength, uri: 'media://inbound/server-id' }, 'conversation-1', { cacheDir: '/cache' } as never);
+    expect(Buffer.from(result).toString()).toBe('voice');
+    expect(mocks.request).not.toHaveBeenCalled();
   });
   it('uses bounded authenticated requests for registered artifacts', async () => {
     await readChatMedia(file, 'c');
@@ -72,6 +97,17 @@ describe('authenticated chat media transport', () => {
     mocks.save.mockResolvedValueOnce(['file://selected']); mocks.open.mockResolvedValueOnce({ fd: 17 }); mocks.write.mockResolvedValueOnce(2);
     await expect(saveChatMedia({} as never, file, 'c')).rejects.toThrow('INCOMPLETE_FILE_WRITE');
     expect(mocks.close).toHaveBeenCalledWith({ fd: 17 });
+  });
+  it('materializes a bounded cache file and grants read access to a system viewer', async () => {
+    const startAbility = vi.fn().mockResolvedValue(undefined);
+    mocks.mkdir.mockResolvedValue(undefined); mocks.open.mockRejectedValueOnce(new Error('CACHE_MISS'))
+      .mockResolvedValueOnce({ fd: 30 }).mockResolvedValueOnce({ fd: 31 });
+    mocks.write.mockResolvedValue(5);
+    await openChatMedia({ cacheDir: '/cache', startAbility } as never,
+      { ...file, name: 'report.pdf', mimeType: 'application/octet-stream' }, 'c');
+    expect(mocks.mkdir.mock.calls[1][0]).toMatch(/^\/cache\/xopc-open-files\/[a-f0-9]{16}$/);
+    expect(mocks.open.mock.calls[2][0]).toMatch(/^\/cache\/xopc-open-files\/[a-f0-9]{16}\/report\.pdf$/);
+    expect(startAbility).toHaveBeenCalledWith(expect.objectContaining({ action: 'ohos.want.action.viewData', type: 'application/pdf', flags: 1 }));
   });
   it('rejects invalid or oversized HTTP bodies even when metadata claims a small file', async () => {
     for (const body of ['wrong type', new ArrayBuffer(16 * 1024 * 1024 + 1)]) {

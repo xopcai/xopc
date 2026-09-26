@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcFilesViewModel } from '../viewmodel/filesViewModel';
 import { XopcFile, XopcFileSpace } from '../model/files';
 import { XopcHubRow } from './MobileComponents';
@@ -7,6 +8,7 @@ import { XopcShareResultView } from './ShareResultView';
 
 @ComponentV2
 export struct XopcFilesView {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param initialId: string = '';
   @Param conversationId: string = '';
   @Event onExit: () => void = (): void => {};
@@ -23,7 +25,7 @@ export struct XopcFilesView {
     try {
       if (this.model.selected && this.model.editable && this.model.content !== this.model.savedContent) {
         const result = await this.getUIContext().getPromptAction().showDialog({ message: $r('app.string.discard_changes'),
-          buttons: [{ text: $r('app.string.cancel'), color: $r('app.color.secondary') }, { text: $r('app.string.confirm'), color: $r('app.color.danger') }] });
+          buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary }, { text: $r('app.string.confirm'), color: this.colors.danger }] });
         if (result.index !== 1) return;
       }
       if (this.conversationId && !this.model.directory && !this.model.selected) this.onExit();
@@ -35,8 +37,8 @@ export struct XopcFilesView {
     try {
       const result = await this.getUIContext().getPromptAction().showDialog({
         title: $r('app.string.delete'), message: $r('app.string.confirm_action_help'),
-        buttons: [{ text: $r('app.string.cancel'), color: $r('app.color.secondary') },
-          { text: $r('app.string.confirm'), color: $r('app.color.danger') }]
+        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
+          { text: $r('app.string.confirm'), color: this.colors.danger }]
       });
       if (result.index === 1) await this.model.remove();
     } catch (error) { this.model.error = (error as Error).message; }
@@ -78,21 +80,21 @@ export struct XopcFilesView {
     NavDestination() {
     Column() {
       Row({ space: 8 }) {
-        Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([$r('app.color.foreground')]) }
+        Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
           .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back'))
           .enabled(!this.model.busy).onClick((): void => { this.goBack(); })
-        Text($r('app.string.files')).fontSize(24).fontWeight(FontWeight.Bold).layoutWeight(1).fontColor($r('app.color.foreground'))
+        Text($r('app.string.files')).fontSize(24).fontWeight(FontWeight.Bold).layoutWeight(1).fontColor(this.colors.foreground)
         if (this.model.space?.writable && !this.model.selected) {
           Button($r('app.string.upload')).enabled(!this.model.busy).onClick((): void => {
             const context = this.getUIContext().getHostContext(); if (context) this.model.upload(context);
           })
         }
       }.width('100%').padding(16)
-      if (this.model.error) { Text(this.model.error).fontColor($r('app.color.danger')).padding(12) }
-      if (this.model.busy) { Column() {}.height(48).width('90%').backgroundColor($r('app.color.panel')).borderRadius(12).margin(12) }
+      if (this.model.error) { Text(this.model.error).fontColor(this.colors.danger).padding(12) }
+      if (this.model.busy) { Column() {}.height(48).width('90%').backgroundColor(this.colors.panel).borderRadius(12).margin(12) }
       if (this.model.selected) {
-        Text(this.model.selected.name).fontSize(20).fontColor($r('app.color.foreground')).padding(12)
-        Text(this.model.selected.mimeType + ' · ' + this.model.selected.size + ' B').fontColor($r('app.color.secondary')).fontSize(12)
+        Text(this.model.selected.name).fontSize(20).fontColor(this.colors.foreground).padding(12)
+        Text(this.model.selected.mimeType + ' · ' + this.model.selected.size + ' B').fontColor(this.colors.secondary).fontSize(12)
         TextArea({ text: this.model.content, placeholder: $r('app.string.file_preview_help') })
           .layoutWeight(1).width('92%').margin(12).enabled(this.model.editable && !this.model.busy)
           .onChange((value: string): void => { this.model.content = value; })
@@ -117,7 +119,7 @@ export struct XopcFilesView {
           Button($r('app.string.refresh')).enabled(!this.model.busy).onClick((): void => { this.model.load(this.search); })
         }.padding(12)
         Text(this.model.space ? this.model.space.title + ' / ' + this.model.directory : $r('app.string.recent_files'))
-          .fontColor($r('app.color.secondary')).fontSize(13).padding(8)
+          .fontColor(this.colors.secondary).fontSize(13).padding(8)
         List({ space: 8 }) {
           if (!this.model.space && !this.search.trim()) {
             ForEach(this.model.spaces, (space: XopcFileSpace) => {
@@ -134,9 +136,9 @@ export struct XopcFilesView {
             }))
           }, (file: XopcFile): string => file.id)
         }.layoutWeight(1).width('100%').padding(12)
-        Text($r('app.string.transfer_limits')).fontSize(11).fontColor($r('app.color.secondary')).padding(8)
+        Text($r('app.string.transfer_limits')).fontSize(11).fontColor(this.colors.secondary).padding(8)
       }
-    }.height('100%').width('100%').backgroundColor($r('app.color.surface'))
+    }.height('100%').width('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
     }.hideTitleBar(true).onBackPressed((): boolean => {
       this.goBack(); return true;

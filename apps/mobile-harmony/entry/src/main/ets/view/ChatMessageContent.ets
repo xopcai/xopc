@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatRow, XopcChatBlock, XopcHistoryMedia, XopcReviewFinding, XopcContextRef } from '../model/chat';
 import { XopcMobileRoute } from '../model/home';
 import { XopcMarkdownView } from './MarkdownView';
@@ -10,6 +11,7 @@ import { filePreviewKind } from '../common/filePreview';
 
 @ComponentV2
 export struct XopcChatMessageContent {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param row: XopcChatRow = { id: '', role: 'assistant', text: '' };
   @Param conversationId: string = '';
   @Param reasoning: string = 'on';
@@ -32,8 +34,9 @@ export struct XopcChatMessageContent {
     const body: XopcChatBlock[] = []; let inserted = false;
     const hasSteps = chatActivities(this.row, this.reasoning).length > 0;
     for (const block of this.row.blocks || []) {
-      if (block.kind === 'text' || block.kind === 'review') body.push(block);
-      else if (!inserted && hasSteps && ['thinking', 'tool', 'plan', 'diff'].includes(block.kind)) {
+      const workText = block.kind === 'text' && (block.presentation === 'pending' || block.presentation === 'narration');
+      if (block.kind === 'review' || (block.kind === 'text' && !workText)) body.push(block);
+      else if (!inserted && hasSteps && (workText || ['thinking', 'tool', 'plan', 'diff'].includes(block.kind))) {
         inserted = true; body.push({ id: 'steps:' + this.row.id, kind: 'steps', text: '' });
       }
     }
@@ -42,8 +45,8 @@ export struct XopcChatMessageContent {
   build() {
     Column({ space: 10 }) {
       ForEach(this.row.refs || [], (ref: XopcContextRef) => {
-        Button(ref.title || ref.sourceId).fontSize(13).constraintSize({ minHeight: 44 }).fontColor($r('app.color.accent'))
-          .backgroundColor($r('app.color.accent_soft')).onClick((): void => {
+        Button(ref.title || ref.sourceId).fontSize(13).constraintSize({ minHeight: 44 }).fontColor(this.colors.accent)
+          .backgroundColor(this.colors.accentSoft).onClick((): void => {
             this.onNavigate({ page: ref.kind === 'task' ? 'tasks' : 'notes', itemId: ref.sourceId });
           })
       }, (ref: XopcContextRef): string => ref.kind + ':' + ref.sourceId)
@@ -54,42 +57,46 @@ export struct XopcChatMessageContent {
             XopcMarkdownView({ content: item.item.text, conversationId: this.conversationId })
           } else if (item.item.review) {
             Column({ space: 10 }) {
-              Text($r('app.string.chat_review')).fontSize(16).fontWeight(FontWeight.Bold).fontColor($r('app.color.foreground'))
+              Text($r('app.string.chat_review')).fontSize(16).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
               Text(item.item.review.overallCorrectness === 'patch is incorrect' ? $r('app.string.chat_review_incorrect')
                 : item.item.review.overallCorrectness === 'patch is correct' ? $r('app.string.chat_review_correct') : $r('app.string.chat_review_unknown'))
-                .fontSize(12).fontColor($r('app.color.secondary'))
+                .fontSize(12).fontColor(this.colors.secondary)
               if (item.item.review.summary) { XopcMarkdownView({ content: item.item.review.summary }) }
               ForEach(item.item.review.findings || [], (finding: XopcReviewFinding, index: number) => {
                 Column({ space: 6 }) {
-                  Text('P' + finding.priority + ' · ' + finding.title).fontSize(15).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground'))
-                  if (finding.filePath) { Text(finding.filePath + (finding.lineStart ? ':' + finding.lineStart : '')).fontSize(12).fontFamily('monospace').fontColor($r('app.color.secondary')).copyOption(CopyOptions.InApp) }
+                  Text('P' + finding.priority + ' · ' + finding.title).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+                  if (finding.filePath) { Text(finding.filePath + (finding.lineStart ? ':' + finding.lineStart : '')).fontSize(12).fontFamily('monospace').fontColor(this.colors.secondary).copyOption(CopyOptions.InApp) }
                   XopcMarkdownView({ content: finding.body })
-                }.width('100%').padding(10).borderRadius(8).backgroundColor($r('app.color.grouped')).alignItems(HorizontalAlign.Start)
+                }.width('100%').padding(10).borderRadius(8).backgroundColor(this.colors.grouped).alignItems(HorizontalAlign.Start)
               }, (finding: XopcReviewFinding, index: number): string => index + ':' + finding.title)
               if (item.item.review.overallExplanation) { XopcMarkdownView({ content: item.item.review.overallExplanation }) }
-            }.id('chat-review-' + item.item.id).width('100%').padding(12).borderRadius(12).alignItems(HorizontalAlign.Start)
-              .border({ width: 1, color: $r('app.color.border_subtle') })
+            }.id('chat-review-' + item.item.id).width('100%').padding(12).borderRadius(12)
+              .backgroundColor(this.colors.grouped).alignItems(HorizontalAlign.Start)
           }
         }).key((block: XopcChatBlock): string => block.id)
         if (!this.body.length && !this.row.blocks && this.row.text) { XopcMarkdownView({ content: this.row.text, conversationId: this.conversationId }) }
-        if (this.row.live && !this.row.text && !this.row.blocks?.length) { Text(this.row.progress || $r('app.string.chat_thinking')).fontSize(13).fontColor($r('app.color.secondary')) }
+        if (this.row.live && !this.row.text && !this.row.blocks?.length) { Text(this.row.progress || $r('app.string.chat_thinking')).fontSize(13).fontColor(this.colors.secondary) }
       } else if (this.row.role === 'user') {
-        if (this.row.text) { Text(this.row.text).fontSize(16).lineHeight(25).fontColor($r('app.color.foreground')).copyOption(CopyOptions.InApp) }
+        if (this.row.text) { Text(this.row.text).fontSize(16).lineHeight(25).fontColor(this.colors.foreground).copyOption(CopyOptions.InApp) }
       } else {
-        Text(this.row.text).fontSize(13).fontColor($r('app.color.secondary')).copyOption(CopyOptions.InApp)
+        Text(this.row.text).fontSize(13).fontColor(this.colors.secondary).copyOption(CopyOptions.InApp)
       }
       Repeat<XopcHistoryMedia>(this.audioMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
-        XopcChatMediaView({ file: item.item, conversationId: this.conversationId })
+        if (this.row.role === 'user') {
+          XopcChatMediaView({ file: item.item, conversationId: this.conversationId, inlineVoice: true })
+        } else {
+          XopcChatMediaView({ file: item.item, conversationId: this.conversationId })
+        }
       }).key((file: XopcHistoryMedia): string => file.id || file.uri)
       if (this.fileMedia.length) {
-        Text($r('app.string.chat_attachments_heading')).fontSize(12).fontWeight(FontWeight.Medium).fontColor($r('app.color.secondary'))
+        Text($r('app.string.chat_attachments_heading')).fontSize(12).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
         Repeat<XopcHistoryMedia>(this.displayedMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
           XopcChatMediaView({ file: item.item, conversationId: this.conversationId, compact: true })
         }).key((file: XopcHistoryMedia): string => file.id || file.uri)
         if (this.fileMedia.length > 3) {
           Button(this.mediaExpanded ? $r('app.string.chat_fewer_attachments')
             : $r('app.string.chat_more_attachments', this.fileMedia.length - 3)).height(44).fontSize(13)
-            .backgroundColor(Color.Transparent).fontColor($r('app.color.accent'))
+            .backgroundColor(Color.Transparent).fontColor(this.colors.accent)
             .onClick((): void => { this.mediaExpanded = !this.mediaExpanded; })
         }
       }

@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcMobileRoute } from '../model/home';
 import { XopcHubRow, XopcListSkeleton, XopcEmptyHint } from './MobileComponents';
@@ -13,6 +14,7 @@ interface XopcRunEvents { events: XopcRunEvent[]; }
 
 @ComponentV2
 export struct XopcAutomationRunView {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param runId: string = '';
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local run: XopcRunDetail | undefined = undefined;
@@ -43,17 +45,17 @@ export struct XopcAutomationRunView {
   build() {
     NavDestination() {
       Column() {
-        Button($r('app.string.refresh')).backgroundColor(Color.Transparent).fontColor($r('app.color.accent'))
+        Button($r('app.string.refresh')).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
           .enabled(!this.busy).onClick((): void => { this.load(); })
         Scroll() {
           Column({ space: 12 }) {
             if (this.busy && !this.run) { XopcListSkeleton() }
-            if (this.error) { Text(this.error).fontColor($r('app.color.danger')) }
+            if (this.error) { Text(this.error).fontColor(this.colors.danger) }
             if (this.run) {
-              Text(this.run.automationName).fontSize(24).fontWeight(FontWeight.Bold).fontColor($r('app.color.foreground'))
+              Text(this.run.automationName).fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
               XopcEmptyHint({ message: this.run.status })
               if (this.run.summary) { XopcMarkdownView({ content: this.run.summary }) }
-              if (this.run.error) { Text(this.run.error).fontColor($r('app.color.danger')) }
+              if (this.run.error) { Text(this.run.error).fontColor(this.colors.danger) }
               XopcHubRow({ heading: $r('app.string.automations'), onOpen: (): void => {
                 if (this.run) this.onNavigate({ page: 'automations', itemId: this.run.automationId });
               } })
@@ -67,7 +69,7 @@ export struct XopcAutomationRunView {
                   if (this.run?.workflowRunId) this.onNavigate({ page: 'workflows', itemId: this.run.workflowRunId });
                 } })
               }
-              if (this.eventError) { Text(this.eventError).fontColor($r('app.color.danger')) }
+              if (this.eventError) { Text(this.eventError).fontColor(this.colors.danger) }
               ForEach(this.events, (event: XopcRunEvent) => {
                 XopcHubRow({ heading: event.message, navigable: false })
               }, (event: XopcRunEvent): string => event.id)
@@ -75,6 +77,6 @@ export struct XopcAutomationRunView {
           }.width('100%').padding(20).alignItems(HorizontalAlign.Start)
         }.layoutWeight(1).width('100%')
       }.width('100%').height('100%')
-    }.title($r('app.string.automations')).backgroundColor($r('app.color.surface'))
+    }.title($r('app.string.automations')).backgroundColor(this.colors.surface)
   }
 }

@@ -119,6 +119,39 @@ describe('userMessageFromStreamPayload', () => {
 });
 
 describe('shouldReplaceOptimisticUserRow', () => {
+  it('replaces an inline context send even when the server resolves a different label', () => {
+    const document = {
+      version: 1 as const,
+      parts: [
+        { type: 'context_ref' as const, refId: 'folder_ref' },
+        { type: 'text' as const, text: ' 介绍下这个是什么?' },
+      ],
+    };
+    const optimistic: Message = {
+      role: 'user',
+      content: [{ type: 'text', text: '@hello 介绍下这个是什么?' }],
+      userTurnDocument: document,
+      contextRefs: [{
+        refId: 'folder_ref', kind: 'file', sourceId: 'folder-1', version: '7', title: 'hello',
+        fileKind: 'directory',
+      }],
+      timestamp: 1000,
+    };
+    const server: Message = {
+      role: 'user',
+      content: [{ type: 'text', text: '@extensions/hello 介绍下这个是什么?' }],
+      userTurnDocument: document,
+      contextRefs: [{
+        refId: 'folder_ref', kind: 'file', sourceId: 'folder-1', version: '7', title: 'extensions/hello',
+        fileKind: 'directory',
+      }],
+      timestamp: 1005,
+    };
+
+    expect(shouldReplaceOptimisticUserRow(optimistic, server)).toBe(true);
+    expect(userMessagesEquivalent(optimistic, server)).toBe(true);
+  });
+
   it('replaces a multiline skill draft with its expanded server row', () => {
     const text = `/skill:build-xopc-local-app 请修复当前草稿。
 

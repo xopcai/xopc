@@ -39,6 +39,8 @@
     {"name":"chat_artifact_missing","value":"File not found"},
     {"name":"chat_artifact_failed","value":"Could not prepare file"},
     {"name":"chat_artifact_unavailable","value":"Unavailable"},
+    {"name":"chat_artifact_available","value":"Available"},
+    {"name":"chat_artifact_available_size","value":"Available · %s"},
     {"name":"chat_review","value":"Code review"},
     {"name":"chat_review_correct","value":"No blocking findings"},
     {"name":"chat_review_incorrect","value":"Changes requested"},
@@ -147,6 +149,11 @@
     { "name": "chat_queue", "value": "Queued messages" },
     { "name": "chat_queue_empty", "value": "No queued messages" },
     { "name": "chat_read_aloud", "value": "Read aloud" },
+    { "name": "chat_read_aloud_loading", "value": "Preparing audio…" },
+    { "name": "chat_read_aloud_playing", "value": "Reading aloud" },
+    { "name": "chat_read_aloud_paused", "value": "Reading paused" },
+    { "name": "chat_read_aloud_pause_hint", "value": "Tap to pause" },
+    { "name": "chat_read_aloud_resume_hint", "value": "Tap to continue" },
     { "name": "chat_more_sources", "value": "More sources are included in this context." },
     { "name": "chat_queue_hint", "value": "Send next, or steer the current response" },
     { "name": "chat_steer", "value": "Steer now" },
@@ -210,6 +217,26 @@
     {
       "name": "record_voice",
       "value": "Voice input"
+    },
+    {
+      "name": "voice_hold_to_speak",
+      "value": "Hold to speak"
+    },
+    {
+      "name": "voice_preparing",
+      "value": "Preparing microphone…"
+    },
+    {
+      "name": "voice_release_send",
+      "value": "Release to send"
+    },
+    {
+      "name": "voice_release_cancel",
+      "value": "Release to cancel"
+    },
+    {
+      "name": "voice_release_text",
+      "value": "Release to convert to text"
     },
     {
       "name": "stop_recording",
@@ -325,7 +352,7 @@
     },
     {
       "name": "message_hint",
-      "value": "Message xopc…"
+      "value": "Do anything"
     },
     {
       "name": "send",
@@ -341,7 +368,7 @@
     },
     {
       "name": "new_chat",
-      "value": "New"
+      "value": "New conversation"
     },
     {
       "name": "reconnecting",
@@ -486,6 +513,34 @@
     {
       "name": "dark",
       "value": "Dark"
+    },
+    {
+      "name": "display_mode",
+      "value": "Display mode"
+    },
+    {
+      "name": "color_scheme",
+      "value": "Color scheme"
+    },
+    {
+      "name": "color_scheme_default",
+      "value": "Default"
+    },
+    {
+      "name": "color_scheme_porcelain",
+      "value": "Porcelain"
+    },
+    {
+      "name": "color_scheme_dawn",
+      "value": "Dawn"
+    },
+    {
+      "name": "color_scheme_emerald",
+      "value": "Emerald"
+    },
+    {
+      "name": "color_scheme_clay",
+      "value": "Clay"
     },
     {
       "name": "disconnect",
@@ -673,6 +728,14 @@
     {
       "name": "chat_html_unavailable",
       "value": "Could not load HTML preview."
+    },
+    {
+      "name": "chat_open_with_app",
+      "value": "Open with another app"
+    },
+    {
+      "name": "chat_open_file_failed",
+      "value": "No app could open this file. You can download it instead."
     },
     {
       "name": "chat_reference_note",

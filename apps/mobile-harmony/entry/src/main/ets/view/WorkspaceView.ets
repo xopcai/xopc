@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcSection, XopcWorkspaceItem, XopcAutomationRun } from '../model/workspace';
 import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
@@ -8,6 +9,7 @@ import { XopcShareResultView } from './ShareResultView';
 
 @ComponentV2
 export struct XopcWorkspaceView {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param section: XopcSection = 'tasks';
   @Param heading: ResourceStr = '';
   @Param initialId: string = '';
@@ -31,7 +33,7 @@ export struct XopcWorkspaceView {
         try {
           const result = await this.getUIContext().getPromptAction().showDialog({
             title: $r('app.string.back'), message: $r('app.string.discard_changes'),
-            buttons: [{ text: $r('app.string.cancel'), color: $r('app.color.secondary') }, { text: $r('app.string.confirm'), color: $r('app.color.danger') }]
+            buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary }, { text: $r('app.string.confirm'), color: this.colors.danger }]
           });
           if (result.index !== 1) return;
         } catch (_error) { return; }
@@ -66,8 +68,8 @@ export struct XopcWorkspaceView {
       try {
         const result = await this.getUIContext().getPromptAction().showDialog({
           title: this.label(action), message: $r('app.string.confirm_action_help'),
-          buttons: [{ text: $r('app.string.cancel'), color: $r('app.color.secondary') },
-            { text: $r('app.string.confirm'), color: $r('app.color.accent') }]
+          buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
+            { text: $r('app.string.confirm'), color: this.colors.accent }]
         });
         if (result.index !== 1) return;
       } catch (error) { this.model.error = (error as Error).message; return; }
@@ -107,7 +109,7 @@ export struct XopcWorkspaceView {
         ListItem() { Button($r('app.string.load_more')).onClick((): void => { this.model.list(this.search, true); }) }
       }
       if (!this.model.busy && this.model.items.length === 0) {
-        ListItem() { Text($r('app.string.empty_list')).fontColor($r('app.color.secondary')).padding(24) }
+        ListItem() { Text($r('app.string.empty_list')).fontColor(this.colors.secondary).padding(24) }
       }
     }.layoutWeight(1).padding({ left: 20, right: 20 }).width('100%')
   }
@@ -127,7 +129,7 @@ export struct XopcWorkspaceView {
         if (this.section === 'automations') {
           ListItem() {
             Column({ space: 8 }) {
-              Text($r('app.string.cron_help')).fontColor($r('app.color.secondary'))
+              Text($r('app.string.cron_help')).fontColor(this.colors.secondary)
               TextInput({ text: this.model.cron }).onChange((text: string): void => { this.model.cron = text; })
             }.alignItems(HorizontalAlign.Start)
           }
@@ -140,10 +142,10 @@ export struct XopcWorkspaceView {
         }
         ListItem() { Button($r('app.string.save')).enabled(!this.model.busy).onClick((): void => { this.model.save(); }) }
       } else {
-        ListItem() { Text(item.title || $r('app.string.untitled')).fontSize(24).fontColor($r('app.color.foreground')) }
+        ListItem() { Text(item.title || $r('app.string.untitled')).fontSize(24).fontColor(this.colors.foreground) }
         ListItem() { XopcMarkdownView({ content: item.body }) }
-        ListItem() { Text(item.status).fontColor($r('app.color.secondary')) }
-        if (item.cron) { ListItem() { Text(item.cron).fontColor($r('app.color.secondary')) } }
+        ListItem() { Text(item.status).fontColor(this.colors.secondary) }
+        if (item.cron) { ListItem() { Text(item.cron).fontColor(this.colors.secondary) } }
         if (item.editable) {
           ListItem() { Button($r('app.string.edit')).onClick((): void => { this.model.editing = true; }) }
         }
@@ -163,7 +165,7 @@ export struct XopcWorkspaceView {
           }
         }, (action: string): string => action)
         ForEach(this.model.runs, (run: XopcAutomationRun) => {
-          ListItem() { Text(run.status + ' · ' + run.id).fontSize(13).fontColor($r('app.color.secondary')) }
+          ListItem() { Text(run.status + ' · ' + run.id).fontSize(13).fontColor(this.colors.secondary) }
         }, (run: XopcAutomationRun): string => run.id)
       }
     }.layoutWeight(1).width('100%').padding(16)
@@ -173,20 +175,20 @@ export struct XopcWorkspaceView {
     NavDestination() {
     Column() {
       Row({ space: 12 }) {
-        Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([$r('app.color.foreground')]) }
+        Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
           .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back'))
           .enabled(!this.model.busy).onClick((): void => { this.goBack(); })
-        Text(this.heading).layoutWeight(1).fontSize(22).fontWeight(FontWeight.Bold).fontColor($r('app.color.foreground'))
+        Text(this.heading).layoutWeight(1).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
         if (!this.model.selected) {
           Button($r('app.string.new_chat')).enabled(!this.model.busy).onClick((): void => { this.model.create(); })
         }
       }.width('100%').padding(16)
-      if (this.model.error) { Text(this.model.error).fontColor($r('app.color.danger')).padding(12) }
+      if (this.model.error) { Text(this.model.error).fontColor(this.colors.danger).padding(12) }
       if (this.model.busy) {
         Column() { XopcListSkeleton() }.padding({ left: 20, right: 20 }).width('100%')
       }
       if (this.model.selected) { this.detail(this.model.selected) } else { this.list() }
-    }.height('100%').width('100%').backgroundColor($r('app.color.surface'))
+    }.height('100%').width('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
     }.hideTitleBar(true).onBackPressed((): boolean => { if (!this.model.busy) this.goBack(); return true; })
   }

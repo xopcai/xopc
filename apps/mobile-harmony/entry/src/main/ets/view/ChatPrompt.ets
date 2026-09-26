@@ -1,7 +1,9 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatPromptViewModel } from '../viewmodel/chatPromptViewModel';
 
 @ComponentV2
 export struct XopcChatPrompt {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param model: XopcChatPromptViewModel = new XopcChatPromptViewModel();
   @Local answer: string = '';
   @Monitor('model.prompt.id')
@@ -9,13 +11,13 @@ export struct XopcChatPrompt {
   build() {
     Column({ space: 8 }) {
       if (this.model.prompt) {
-        Text(this.model.prompt.question).fontSize(15).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground')).width('100%')
-        if (this.model.prompt.suggestedAnswer) { Text(this.model.prompt.suggestedAnswer).fontSize(12).fontColor($r('app.color.secondary')).width('100%') }
+        Text(this.model.prompt.question).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
+        if (this.model.prompt.suggestedAnswer) { Text(this.model.prompt.suggestedAnswer).fontSize(12).fontColor(this.colors.secondary).width('100%') }
         Scroll() {
           Column({ space: 4 }) {
             ForEach(this.model.prompt.choices || [], (choice: string) => {
               Button(choice).height(44).width('100%').enabled(!this.model.busy)
-                .backgroundColor($r('app.color.grouped')).fontColor($r('app.color.foreground'))
+                .backgroundColor(this.colors.grouped).fontColor(this.colors.foreground)
                 .onClick((): void => { this.model.respond('answer', choice); })
             }, (choice: string): string => choice)
           }.width('100%')
@@ -29,8 +31,8 @@ export struct XopcChatPrompt {
           Button($r('app.string.chat_agent_decide')).height(44).enabled(!this.model.busy).onClick((): void => { this.model.respond('agent_decide'); })
           Button($r('app.string.cancel')).height(44).enabled(!this.model.busy).onClick((): void => { this.model.respond('cancel'); })
         }
-        if (this.model.error) { Text(this.model.error).fontSize(12).fontColor($r('app.color.danger')) }
+        if (this.model.error) { Text(this.model.error).fontSize(12).fontColor(this.colors.danger) }
       }
-    }.padding(12).width('92%').borderRadius(16).backgroundColor($r('app.color.grouped')).margin({ bottom: 8 })
+    }.padding(12).width('92%').borderRadius(16).backgroundColor(this.colors.grouped).margin({ bottom: 8 })
   }
 }
