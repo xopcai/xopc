@@ -73,8 +73,6 @@ describe('openXopcDatabase', () => {
         'automations',
         'automation_runs',
         'notes',
-        'memory_files',
-        'memory_chunks',
         'local_apps',
         'local_app_releases',
         'local_app_acceptance_runs',
@@ -114,6 +112,8 @@ describe('openXopcDatabase', () => {
     expect(tables).not.toContain('user_profiles');
     expect(tables).not.toContain('user_understandings');
     expect(tables).not.toContain('memory_records');
+    expect(tables).not.toContain('memory_files');
+    expect(tables).not.toContain('memory_chunks');
     expect(tables).not.toContain('dreaming_runs');
     expect(tables).not.toContain('dreaming_decisions');
   });

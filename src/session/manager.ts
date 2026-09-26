@@ -103,6 +103,7 @@ export class SessionIndex extends EventEmitter {
       hasMore: boolean;
       before?: string;
       nextBeforeCursor?: string;
+      revision?: number;
     };
   } | null> {
     const result = await this.store.getMessagePage(key, options);

@@ -60,17 +60,17 @@ async function materializeAttachments(attachments: WireAttachment[]): Promise<Wi
     if (isAudio) {
       const audioAttachment = { ...attachment };
       delete audioAttachment.data;
-      if (audioAttachment.uri || audioAttachment.workspaceRelativePath) return audioAttachment;
+      if (audioAttachment.uri || audioAttachment.workspaceRelativePath) return { ...audioAttachment, ...(localUri ? { localUri } : {}) };
       if (!localUri) throw new Error('Audio attachment is missing a native file URI');
       const uploaded = await uploadMediaFile({
         uri: localUri,
         mimeType: audioAttachment.mimeType ?? 'audio/mp4',
       });
-      return { ...audioAttachment, ...uploaded };
+      return { ...audioAttachment, ...uploaded, localUri };
     }
-    if (!localUri || attachment.uri || attachment.workspaceRelativePath) return attachment;
+    if (!localUri || attachment.uri || attachment.workspaceRelativePath) return { ...attachment, ...(localUri ? { localUri } : {}) };
     const { content, size } = await readUriAsBase64(localUri, attachment.name);
-    return { ...attachment, data: content, size };
+    return { ...attachment, data: content, size, localUri };
   }));
 }
 
@@ -400,6 +400,7 @@ export class AgentMessageSender {
       ? `/api/tasks/${encodeURIComponent(input.taskId)}/inputs`
       : `/api/sessions/${encodeURIComponent(input.conversationId)}/inputs`, {
       method: 'POST',
+      recoverRouteOnNetworkError: true,
       ...(input.taskId ? { headers: { 'X-Xopc-Expected-Session-Key': input.conversationId } } : {}),
       body: JSON.stringify({
         clientMessageId: input.clientMessageId,
@@ -407,7 +408,9 @@ export class AgentMessageSender {
         delivery: input.delivery,
         content: input.content,
         origin,
-        ...(input.attachments.length ? { attachments: input.attachments } : {}),
+        ...(input.attachments.length ? {
+          attachments: input.attachments.map(({ localUri: _localUri, ...attachment }) => attachment),
+        } : {}),
         ...(input.contextRefs.length ? { contextRefs: input.contextRefs } : {}),
       }),
     });

@@ -609,6 +609,13 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ error: 'Session not found' }, 404);
     }
 
+    const revision = result.pagination.revision;
+    if (typeof revision === 'number') {
+      const etag = `"${result.session.transcriptId ?? key}:${revision}"`;
+      c.header('ETag', etag);
+      if (c.req.header('If-None-Match') === etag) return c.body(null, 304);
+    }
+
     return c.json(result);
   });
 

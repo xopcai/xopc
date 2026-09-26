@@ -4,7 +4,7 @@ import type { Message } from './messages.types';
 
 const EMPTY_MESSAGES: Message[] = [];
 
-/** In-memory message UI state; nothing is sent on reconnect or app startup. */
+/** Ephemeral UI projection. Durable pending submissions live in message-outbox. */
 export const useLocalMessagesStore = create<{
   sessions: Record<string, Message[]>;
   update: (scope: string, update: (messages: Message[]) => Message[]) => void;
@@ -45,6 +45,13 @@ export function failLocalMessageIfSending(messages: Message[], messageId: string
     : messages;
 }
 
+export function confirmLocalMessages(messages: Message[], clientMessageIds: Iterable<string>): Message[] {
+  const confirmed = new Set(clientMessageIds);
+  if (confirmed.size === 0) return messages;
+  const next = messages.filter(message => !message.clientMessageId || !confirmed.has(message.clientMessageId));
+  return next.length === messages.length ? messages : next;
+}
+
 /** A session input-state event is an authoritative acknowledgement from the gateway. */
 export function acknowledgeLocalSessionInputs(
   messages: Message[],
@@ -67,7 +74,7 @@ export function acknowledgeLocalSessionInputs(
   }).map((message) => {
     if (!message.id || !acceptedIds.has(message.id) || message.deliveryState === 'sent') return message;
     changed = true;
-    return { ...message, deliveryState: 'sent' as const };
+    return { ...message, deliveryState: 'confirming' as const };
   });
   return changed ? next : messages;
 }

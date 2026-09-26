@@ -119,25 +119,30 @@ function withSessionInputContextMetadata(
   const metadata = message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
     ? message.metadata as Record<string, unknown>
     : {};
-  if (Array.isArray(metadata.sourceContexts) && metadata.sourceContexts.length > 0) return row;
-
   const input = db.prepare(
-    `SELECT context_refs_json FROM session_inputs
-     WHERE conversation_id = ? AND run_id = ? AND context_refs_json IS NOT NULL
+    `SELECT client_message_id, context_refs_json FROM session_inputs
+     WHERE conversation_id = ? AND run_id = ?
      LIMIT 1`,
-  ).get(conversationId, turnId) as { context_refs_json: string } | undefined;
+  ).get(conversationId, turnId) as { client_message_id: string; context_refs_json: string | null } | undefined;
   if (!input) return row;
 
+  let sourceContexts = metadata.sourceContexts;
   try {
-    const sourceContexts = JSON.parse(input.context_refs_json) as unknown;
-    if (!Array.isArray(sourceContexts) || sourceContexts.length === 0) return row;
-    return {
-      ...message,
-      metadata: { ...metadata, sourceContexts },
-    } as unknown as TranscriptStoredRow;
+    if ((!Array.isArray(sourceContexts) || sourceContexts.length === 0) && input.context_refs_json) {
+      const parsed = JSON.parse(input.context_refs_json) as unknown;
+      if (Array.isArray(parsed) && parsed.length > 0) sourceContexts = parsed;
+    }
   } catch {
-    return row;
+    sourceContexts = metadata.sourceContexts;
   }
+  return {
+    ...message,
+    metadata: {
+      ...metadata,
+      clientMessageId: input.client_message_id,
+      ...(Array.isArray(sourceContexts) && sourceContexts.length > 0 ? { sourceContexts } : {}),
+    },
+  } as unknown as TranscriptStoredRow;
 }
 
 export function appendTranscriptEntry(
@@ -453,10 +458,11 @@ export function paginateTranscriptMessages(
   total: number;
   startSeq: number;
   endSeq: number;
+  revision: number;
 } {
   const transcriptId = getCurrentTranscriptId(conversationId);
   if (!transcriptId) {
-    return { rows: [], messages: [], total: 0, startSeq: 0, endSeq: 0 };
+    return { rows: [], messages: [], total: 0, startSeq: 0, endSeq: 0, revision: 0 };
   }
 
   const db = getSqliteDatabase();
@@ -477,6 +483,11 @@ export function paginateTranscriptMessages(
     )
     .get(transcriptArg, ...kinds) as { total: number };
   const total = countRow.total;
+  const revisionRow = db.prepare(
+    `SELECT COALESCE(MAX(seq), 0) AS revision
+     FROM transcript_entries
+     WHERE transcript_id = ? AND entry_kind IN (${kindPlaceholders})`,
+  ).get(transcriptId, ...kinds) as { revision: number };
 
   const limit = Math.min(200, Math.max(1, Math.trunc(options.limit ?? 50)));
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
@@ -517,7 +528,7 @@ export function paginateTranscriptMessages(
   const messages = buildSessionContextForLlm(storedRows);
   const startSeq = rows[0]?.seq ?? 0;
   const endSeq = rows[rows.length - 1]?.seq ?? 0;
-  return { rows: storedRows, messages, total, startSeq, endSeq };
+  return { rows: storedRows, messages, total, startSeq, endSeq, revision: revisionRow.revision };
 }
 
 export function listCompactionBoundaries(conversationId: string): CompactionBoundarySummary[] {
