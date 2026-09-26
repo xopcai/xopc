@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { CapabilityDispatcher, type CapabilityContext } from '../../capabilities/runtime/dispatcher.js';
 import { DomainOutboxDispatcher } from '../../infra/domain-outbox-dispatcher.js';
+import { listAutomationEvents } from '../../automations/events/index.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import { registerSceneWriteCapabilities } from '../capabilities/write.js';
@@ -95,10 +96,9 @@ describe('durable scene resource events', () => {
     repository = new SceneRepository(getSqliteDatabase());
     repository.writeNotes(principal, id, { expectedRevision: 0, content: 'After reopen' }, Date.now());
     expect(events().length).toBeGreaterThan(before);
-    const published: string[] = [];
-    const dispatcher = new DomainOutboxDispatcher(event => { expect(event.source).toBe('scenes'); published.push(event.type); });
+    const dispatcher = new DomainOutboxDispatcher();
     expect(dispatcher.drain(100, 'scene')).toBe(events().length);
-    expect(published).toContain('scene.changed');
+    expect(listAutomationEvents({ source: 'scenes' }).map(event => event.type)).toContain('scene.changed');
     expect(dispatcher.drain(100, 'scene')).toBe(0);
   });
 });

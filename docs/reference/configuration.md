@@ -47,6 +47,7 @@ Agent definitions, inherited defaults, routing bindings, and surface defaults li
 | `XOPC_CREDENTIALS_DIR` | Credential directory |
 | `XOPC_LOG_DIR` | Log directory |
 | `XOPC_LOG_LEVEL` | Log verbosity |
+| `XOPC_AUTOMATION_WEBHOOK_SECRETS` | JSON object mapping Automation webhook secret ids to secrets |
 
 Provider-specific variables such as `OPENAI_API_KEY` are shown by provider setup and `xopc providers schema <provider>`.
 

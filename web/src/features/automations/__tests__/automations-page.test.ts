@@ -45,7 +45,7 @@ describe('automation buildInput', () => {
       trigger: { kind: 'manual' },
       action: { kind: 'agent', instruction: 'Brief me.' },
       conversationMode: 'new_session',
-      notificationPolicy: 'attention',
+      delivery: { notificationPolicy: 'attention' },
       state: {},
       createdAtMs: 1,
       updatedAtMs: 1,
@@ -66,8 +66,8 @@ describe('automation buildInput', () => {
       action: { kind: 'agent', instruction: 'Write my weekly report.', timeoutSeconds: 300 },
       safety: { mode: 'suggest_only' },
       conversationMode: 'new_session',
-      notificationPolicy: 'attention',
-      reliability: { timeoutSeconds: 300, disableAfterConsecutiveFailures: 3 },
+      delivery: { notificationPolicy: 'attention' },
+      reliability: { executionTimeoutSeconds: 300, disableAfterConsecutiveFailures: 3 },
     };
 
     const form = formFromAutomation(automation);
@@ -143,9 +143,9 @@ describe('automation buildInput', () => {
       },
       safety: { mode: 'ask_before_apply' },
       conversationMode: 'continuous',
-      notificationPolicy: 'all',
+      delivery: { notificationPolicy: 'all' },
       reliability: {
-        timeoutSeconds: 600,
+        executionTimeoutSeconds: 600,
         retryCount: 2,
         maxConcurrentRuns: 4,
         disableAfterConsecutiveFailures: 5,
@@ -189,7 +189,7 @@ describe('automation buildInput', () => {
       trigger: { kind: 'manual' },
       action: { kind: 'agent', instruction: 'Prepare a report.', model: 'openai/gpt-5' },
       conversationMode: 'new_session',
-      notificationPolicy: 'attention',
+      delivery: { notificationPolicy: 'attention' },
       state: {},
       createdAtMs: 1,
       updatedAtMs: 1,
@@ -219,8 +219,7 @@ describe('automation buildInput', () => {
     expect(input).toMatchObject({
       projectId: 'project-1',
       conversationMode: 'continuous',
-      notificationPolicy: 'all',
-      completionWebhookUrl: 'https://example.com/completed',
+      delivery: { notificationPolicy: 'all', completionWebhookUrl: 'https://example.com/completed' },
     });
   });
 
@@ -321,7 +320,7 @@ describe('automation buildInput', () => {
     }, null);
 
     expect(input.safety).toEqual({ mode: 'ask_before_apply' });
-    expect(input.completionWebhookUrl).toBeUndefined();
+    expect(input.delivery?.completionWebhookUrl).toBeUndefined();
   });
 
   it('converts the selected interval unit without asking for minutes', () => {

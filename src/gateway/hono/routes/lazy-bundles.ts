@@ -269,7 +269,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'automations',
-    match: (path) => startsWithAny(path, ['/api/automations', '/api/automation-runs']),
+    match: (path) => startsWithAny(path, ['/api/automations', '/api/automation-runs', '/api/automation-events', '/api/automation-deliveries']),
     load: async () => {
       const { registerAutomationRoutes } = await import('../../../automations/api/routes.js');
       return { register: registerAutomationRoutes };

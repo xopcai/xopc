@@ -65,9 +65,6 @@
       "actionCompletedFallback": "动作已完成",
       "actionFailed": "{kind} 动作失败",
       "actionFailedFallback": "动作失败",
-      "completionHookStarted": "正在调用完成 Webhook",
-      "completionHookCompleted": "完成 Webhook 已结束",
-      "completionHookFailed": "完成 Webhook 调用失败",
       "runCompleted": "自动化运行已{status}",
       "runCompletedFallback": "自动化运行已完成"
     },

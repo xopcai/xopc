@@ -12,8 +12,7 @@ type AutomationRow = {
   action_json: string;
   safety_json: string | null;
   conversation_mode: Automation['conversationMode'];
-  notification_policy: Automation['notificationPolicy'];
-  completion_webhook_url: string | null;
+  delivery_json: string;
   reliability_json: string | null;
   management_json: string | null;
   state_json: string;
@@ -41,8 +40,7 @@ function rowToAutomation(row: AutomationRow): Automation {
     action: parseJson(row.action_json),
     safety: parseJson(row.safety_json) ?? { mode: 'auto_apply' },
     conversationMode: row.conversation_mode,
-    notificationPolicy: row.notification_policy,
-    completionWebhookUrl: row.completion_webhook_url ?? undefined,
+    delivery: parseJson(row.delivery_json),
     reliability: parseJson(row.reliability_json),
     management: parseJson(row.management_json),
     state: parseJson(row.state_json) ?? {},
@@ -55,9 +53,9 @@ function upsertAutomation(db: ReturnType<typeof getSqliteDatabase>, automation: 
   db.prepare(
     `INSERT OR REPLACE INTO automations (
       automation_id, name, description, project_id, enabled, trigger_json, action_json,
-      safety_json, conversation_mode, notification_policy, completion_webhook_url,
+      safety_json, conversation_mode, delivery_json,
       reliability_json, management_json, state_json, created_at_ms, updated_at_ms
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     automation.id,
     automation.name,
@@ -68,8 +66,7 @@ function upsertAutomation(db: ReturnType<typeof getSqliteDatabase>, automation: 
     JSON.stringify(automation.action),
     bindJson(automation.safety ?? { mode: 'auto_apply' }),
     automation.conversationMode,
-    automation.notificationPolicy,
-    automation.completionWebhookUrl ?? null,
+    bindJson(automation.delivery),
     bindJson(automation.reliability),
     bindJson(automation.management),
     JSON.stringify(automation.state ?? {}),
@@ -80,7 +77,7 @@ function upsertAutomation(db: ReturnType<typeof getSqliteDatabase>, automation: 
 
 const AUTOMATION_SELECT = `
   SELECT automation_id, name, description, project_id, enabled, trigger_json, action_json,
-         safety_json, conversation_mode, notification_policy, completion_webhook_url,
+         safety_json, conversation_mode, delivery_json,
          reliability_json, management_json, state_json, created_at_ms, updated_at_ms
   FROM automations
 `;

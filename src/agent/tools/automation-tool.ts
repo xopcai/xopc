@@ -37,6 +37,8 @@ const AutomationToolSchema = Type.Object({
     Type.Literal('get_run'),
     Type.Literal('run_events'),
     Type.Literal('metrics'),
+    Type.Literal('events'),
+    Type.Literal('deliveries'),
     Type.Literal('product_events'),
   ]),
   automationId: Type.Optional(Type.String({ description: 'Automation id for update/delete/run/pause/resume/history' })),
@@ -54,7 +56,7 @@ const AutomationToolSchema = Type.Object({
 });
 
 type AutomationToolInput = {
-  action: 'list' | 'create' | 'update' | 'delete' | 'run' | 'rerun' | 'cancel' | 'read' | 'read_all' | 'pause' | 'resume' | 'history' | 'get_run' | 'run_events' | 'metrics' | 'product_events';
+  action: 'list' | 'create' | 'update' | 'delete' | 'run' | 'rerun' | 'cancel' | 'read' | 'read_all' | 'pause' | 'resume' | 'history' | 'get_run' | 'run_events' | 'metrics' | 'events' | 'deliveries' | 'product_events';
   eventType?: string;
   source?: string;
   payloadKey?: string;
@@ -242,9 +244,15 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
         case 'get_run':
         case 'run_events':
         case 'metrics':
+        case 'events':
+        case 'deliveries':
         case 'product_events': {
           const operation = `xopc.automations.${params.action}` as const;
-          const input = params.action === 'metrics' ? {} : params.action === 'product_events'
+          const input = params.action === 'metrics' ? {} : params.action === 'events'
+            ? { type: params.eventType, source: params.source, limit: params.limit }
+            : params.action === 'deliveries'
+            ? { runId: params.runId, limit: params.limit }
+            : params.action === 'product_events'
             ? { eventType: params.eventType, source: params.source, payloadKey: params.payloadKey, payloadValue: params.payloadValue, limit: params.limit }
             : { id: params.runId };
           const result = ProductReadContracts[operation].output.parse(await call(operation, input, 'automations.read'));

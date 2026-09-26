@@ -6,6 +6,7 @@ import { getAutomation, getAutomationRun, markAutomationRunRead, markAllAutomati
 import { AutomationAlreadyExistsError, AutomationAlreadyRunningError, type AutomationService } from '../service/automation-service.js';
 import { CreateAutomationSchema, UpdateAutomationSchema } from '../domain/validation.js';
 import type { ProjectService } from '../../projects/project-service.js';
+import { getAutomationEventForRun } from '../events/index.js';
 
 export const AutomationCreateCapabilityInputSchema = CreateAutomationSchema
   .omit({ state: true, management: true })
@@ -71,13 +72,26 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
       ...policy, id: `xopc.automations.${command}`,
       description: command === 'run' ? 'Queue a manual run with the currently accepted execution configuration.' : 'Queue a rerun with current configuration and the original trigger event.',
       input: CapabilityResourceInputSchema, output: AutomationRunMutationOutputSchema,
-      execute({ id }) {
+      execute({ id }, context) {
         const automationId = command === 'run' ? id : getAutomationRun(id)?.automationId;
         const automation = automationId ? getAutomation(automationId) : null;
         if (!automation) throw new CapabilityError('NOT_FOUND', 'Automation or source run not found');
         assertManagedOperation(automation, 'run');
         try {
-          const run = command === 'run' ? service.queueRunAtomically(id) : service.queueRerunAtomically(id);
+          const request = {
+            id: `${command}:${context.operationId}`,
+            type: command === 'run' ? 'automation.manual.requested' : 'automation.rerun.requested',
+            source: 'user',
+            trust: 'user',
+            subject: { kind: 'automation', id: automation.id },
+            correlationId: context.operationId,
+            dedupeKey: context.idempotencyKey,
+            payload: command === 'run'
+              ? { automationId: automation.id }
+              : { automationId: automation.id, previousRunId: id },
+          } as const;
+          const executionEvent = command === 'rerun' ? getAutomationEventForRun(id) ?? request : request;
+          const run = service.queueTriggerAtomically(automation.id, request, executionEvent);
           return { ok: true as const, automation: { ...automation }, run: { ...run } };
         } catch (error) {
           if (error instanceof AutomationAlreadyRunningError) throw new CapabilityError('IN_PROGRESS', error.message);

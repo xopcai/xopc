@@ -23,7 +23,7 @@ const log = createLogger('Sqlite:Migrations');
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = 165;
 
 /** Latest schema version this release supports (increment when adding migrations). */
-export const XOPC_DB_SCHEMA_VERSION = 208;
+export const XOPC_DB_SCHEMA_VERSION = 212;
 
 function writeMigrationReport(backupPath: string, report: Record<string, unknown>): void {
   const reportPath = `${backupPath}.report.json`;

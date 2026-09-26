@@ -15,7 +15,7 @@ import { NotesService } from '../service.js';
 import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import type { Note, NoteSnapshot, NoteSnapshotEntry, SnapshotTrigger } from '../types.js';
 import { ConfigSchema, type Config } from '../../config/schema.js';
-import { onAutomationProductEvent } from '../../automations/product-events.js';
+import { listAutomationEvents } from '../../automations/events/index.js';
 
 function configWithGlobalModel(model = 'anthropic/claude-sonnet-4-5'): Config {
   const repository = new AgentCatalogRepository();
@@ -184,17 +184,10 @@ describe('NotesService markdown sync and AI edit', () => {
     expect((await service.getNote(note.id))?.attachments).toHaveLength(1);
   });
 
-  it('publishes product events when notes are created and updated', async () => {
-    const events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    const unsubscribe = onAutomationProductEvent((event) => {
-      events.push({ type: event.type, payload: event.payload });
-    });
-    try {
-      const note = await service.createNote({ markdown: 'Product event note', capturedVia: { channel: 'web' } });
-      await service.updateNote(note.id, { markdown: 'Updated product event note' });
-    } finally {
-      unsubscribe();
-    }
+  it('persists automation events when notes are created and updated', async () => {
+    const note = await service.createNote({ markdown: 'Product event note', capturedVia: { channel: 'web' } });
+    await service.updateNote(note.id, { markdown: 'Updated product event note' });
+    const events = listAutomationEvents({ source: 'notes' });
 
     expect(events.map((event) => event.type)).toEqual(['note.created', 'note.updated']);
     expect(events[0]?.payload).toMatchObject({ kind: 'thought', status: 'inbox' });

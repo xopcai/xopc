@@ -7,6 +7,16 @@ import {
 } from '../automation-draft-validator.js';
 
 describe('automation draft validator', () => {
+  it('rejects non-HTTPS completion webhooks', () => {
+    expect(() => parseGeneratedAutomationDraft(JSON.stringify({
+      automation: {
+        name: 'Unsafe callback',
+        trigger: { kind: 'manual' },
+        action: { kind: 'agent', instruction: 'Prepare a report' },
+        delivery: { notificationPolicy: 'attention', completionWebhookUrl: 'http://example.com/hook' },
+      },
+    }))).toThrow('Completion webhook URL must be a valid HTTPS URL');
+  });
   it('parses generated automation JSON and simulates safety notes', () => {
     const draft = parseGeneratedAutomationDraft(JSON.stringify({
       automation: {
@@ -23,7 +33,7 @@ describe('automation draft validator', () => {
           timeoutSeconds: 300,
         },
         conversationMode: 'new_session',
-        notificationPolicy: 'attention',
+        delivery: { notificationPolicy: 'attention' },
         reliability: { executionTimeoutSeconds: 300, disableAfterConsecutiveFailures: 3 },
       },
       explanation: 'Runs when a Task becomes blocked.',

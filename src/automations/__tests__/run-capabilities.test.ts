@@ -33,7 +33,7 @@ afterEach(async () => {
 });
 async function fixture() {
   const automation = await service.create({ name: 'Safe fixture', trigger: { kind: 'manual' },
-    action: { kind: 'workflow', workflowId: 'not-executed' }, safety: { mode: 'suggest_only' }, notificationPolicy: 'none' });
+    action: { kind: 'workflow', workflowId: 'not-executed' }, safety: { mode: 'suggest_only' }, delivery: { notificationPolicy: 'none' } });
   const dispatcher = createProductDispatcher(undefined, { getAutomations: () => service });
   const invoke = (id: string, key: string, command = 'run', context = caller) => {
     const operation = `xopc.automations.${command}`;
@@ -90,8 +90,10 @@ describe('automation execution capabilities', () => {
     const deps = { getAutomationService: () => service };
     const direct = createAutomationTool(deps);
     const unified = createXopcUseTool(deps);
-    for (const action of ['get_run', 'run_events', 'metrics', 'product_events'] as const) {
-      const args = action === 'product_events' ? { eventType: 'unknown' } : action === 'metrics' ? {} : { runId: run.id };
+    for (const action of ['get_run', 'run_events', 'metrics', 'events', 'deliveries', 'product_events'] as const) {
+      const args = action === 'product_events' ? { eventType: 'unknown' }
+        : action === 'metrics' || action === 'events' ? {}
+        : { runId: run.id };
       const result = await direct.execute(action, { action, ...args });
       expect((await unified.execute(action, { mode: 'automation', command: action, args })).details.result).toEqual(result.details);
     }
@@ -193,12 +195,13 @@ describe('automation execution capabilities', () => {
   it('does not rearm a timer for a schedule already reserved by queued work', async () => {
     vi.useFakeTimers();
     await service.initialize();
+    const backgroundTimers = vi.getTimerCount();
     const automation = await service.create({ name: 'Scheduled', trigger: { kind: 'schedule', schedule: { kind: 'interval', everyMs: 1000 } },
       action: { kind: 'workflow', workflowId: 'not-executed' }, safety: { mode: 'suggest_only' } });
-    expect(vi.getTimerCount()).toBe(1);
+    expect(vi.getTimerCount()).toBe(backgroundTimers + 1);
     service.queueRunAtomically(automation.id);
     service.refreshSchedule();
-    expect(vi.getTimerCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(backgroundTimers);
   });
 
   it('commits before dispatch, retries a failed wake, and replays without starting another execution', async () => {
@@ -298,7 +301,7 @@ describe('automation execution capabilities', () => {
     expect(await completed(queued.id)).toMatchObject({ status: 'succeeded' });
   });
 
-  it('preserves the trigger event for an idempotent rerun and rejects overlapping runs', async () => {
+  it('records an idempotent user rerun trigger and rejects overlapping runs', async () => {
     const { automation, invoke } = await fixture();
     const event = { type: 'fixture.event', source: 'test', payload: { key: 'original' }, occurredAtMs: Date.now() };
     const source = service.queueRunAtomically(automation.id, { manual: false, event });
@@ -307,9 +310,11 @@ describe('automation execution capabilities', () => {
     await completed(source.id);
     vi.spyOn(service, 'dispatchQueuedRun').mockImplementation(() => {});
     const rerun = AutomationRunMutationOutputSchema.parse(await invoke(source.id, 'rerun', 'rerun'));
-    expect(rerun.run).toMatchObject({ manual: false, status: 'queued' });
+    expect(rerun.run).toMatchObject({ manual: true, status: 'queued' });
     expect(await invoke(source.id, 'rerun', 'rerun')).toEqual(rerun);
-    expect((await service.listRunEvents(rerun.run.id))[0]).toMatchObject({ data: { event } });
+    expect((await service.listRunEvents(rerun.run.id))[0]).toMatchObject({ data: { event: expect.objectContaining({
+      type: 'automation.rerun.requested', payload: { automationId: automation.id, previousRunId: source.id },
+    }) } });
     expect(await service.listRuns()).toHaveLength(2);
   });
 

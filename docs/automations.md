@@ -39,6 +39,14 @@ Sending, deleting, purchasing, publishing, or changing an external system should
 
 The Automations page shows whether an item is active, its next run time, recent results, and consecutive failures. Open a run to see the summary, linked Session or Workflow run, timestamps, and error.
 
+The runtime uses one durable pipeline for every entry point:
+
+`manual / schedule / webhook / product event → event hub → matching automation → action executor → result delivery`
+
+Events carry correlation, causation, trust, deduplication, and chain-depth metadata. Each event-to-automation delivery and each result delivery is persisted independently, so a full executor does not drop triggers, gateway restarts can reconcile terminal work, and a failed completion webhook does not change a successful run into a failed run. Action and delivery kinds are registry-based extension points; adding a new executor or destination does not change trigger ingestion.
+
+Authenticated diagnostics are available through `GET /api/automation-events` and `GET /api/automation-deliveries`. The first reports event projection plus per-automation run delivery; the second reports result destinations, attempts, and the latest error. Both endpoints accept `limit`; event diagnostics also accept `type` and `source`, while result diagnostics accept `runId` and `status`.
+
 Use **Pause** when a dependency, credential, or expected input is temporarily unavailable. Pausing preserves the definition and history. Delete only when you no longer need them.
 
 ## Reliable schedules
@@ -53,6 +61,8 @@ Use **Pause** when a dependency, credential, or expected input is temporarily un
 ## Webhook safety
 
 Treat a webhook URL and secret as credentials. Do not put them in public repositories, screenshots, or logs. Validate any external input before allowing the action to write files, send messages, or change connected services.
+
+Webhook Automations receive `POST /api/automation-hooks/:automationId`. Set the trigger's `secretId`, then provide its secret through `XOPC_AUTOMATION_WEBHOOK_SECRETS`, a JSON object keyed by secret id. Callers must send the secret as `Authorization: Bearer ...` (or `X-Xopc-Webhook-Secret`) and a stable `Idempotency-Key`. Payloads must be JSON objects and are limited to 1 MB. Secrets shorter than 16 characters are rejected. Completion webhook destinations must use HTTPS.
 
 ## Examples
 

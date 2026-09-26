@@ -49,7 +49,7 @@ export async function reconcileMemoryMaintenanceAutomations(input: {
       action,
       safety: { mode: 'auto_apply' as const },
       conversationMode: 'continuous' as const,
-      notificationPolicy: 'none' as const,
+      delivery: { notificationPolicy: 'none' as const },
       reliability: { disableAfterConsecutiveFailures: 3 },
       management: {
         owner: 'memory-maintenance',
@@ -73,7 +73,7 @@ export async function reconcileMemoryMaintenanceAutomations(input: {
       || JSON.stringify(current.trigger) !== JSON.stringify(reconciled.trigger)
       || JSON.stringify(current.action) !== JSON.stringify(action)
       || current.safety?.mode !== 'auto_apply'
-      || current.notificationPolicy !== 'none'
+      || current.delivery.notificationPolicy !== 'none'
       || JSON.stringify(current.management) !== JSON.stringify(next.management);
     if (changed) {
       await input.automationService.update(schedule.automationId, reconciled);

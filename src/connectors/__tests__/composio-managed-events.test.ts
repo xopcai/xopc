@@ -56,10 +56,10 @@ describe('ManagedComposioEventPoller', () => {
       createdAt: new Date().toISOString(),
     };
     const client = { events: vi.fn(async () => ({ items: [event], nextCursor: 7 })) };
-    const triggerAutomation = vi.fn(async () => []);
+    const ingestEvent = vi.fn(() => ({ deliveryCount: 0 }));
     const options = {
       getConfig: () => config,
-      triggerAutomation,
+      ingestEvent,
       requestLearning: vi.fn(),
       setLearningPaused: vi.fn(),
       client,
@@ -68,8 +68,8 @@ describe('ManagedComposioEventPoller', () => {
     await new ManagedComposioEventPoller(options).sync();
     await new ManagedComposioEventPoller(options).sync();
 
-    expect(triggerAutomation).toHaveBeenCalledTimes(1);
-    expect(triggerAutomation).toHaveBeenCalledWith(expect.objectContaining({
+    expect(ingestEvent).toHaveBeenCalledTimes(1);
+    expect(ingestEvent).toHaveBeenCalledWith(expect.objectContaining({
       type: 'connector.GMAIL_NEW_GMAIL_MESSAGE', source: 'composio:gmail',
     }));
     await expect(listComposioTriggerEvents(config)).resolves.toEqual([
@@ -81,7 +81,7 @@ describe('ManagedComposioEventPoller', () => {
     const client = { events: vi.fn(async () => ({ items: [], nextCursor: 0 })) };
     await new ManagedComposioEventPoller({
       getConfig: () => config,
-      triggerAutomation: vi.fn(async () => []),
+      ingestEvent: vi.fn(() => ({ deliveryCount: 0 })),
       requestLearning: vi.fn(),
       setLearningPaused: vi.fn(),
       client,
