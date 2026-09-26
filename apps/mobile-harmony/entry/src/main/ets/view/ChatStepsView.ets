@@ -60,9 +60,10 @@ export struct XopcChatStepsView {
               .fontColor(this.colors.secondary).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
             SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(12).fontColor([this.colors.tertiary])
           }.width('100%')
-        }.id('chat-steps-' + this.row.id).constraintSize({ minHeight: 36, maxWidth: '100%' }).padding({ left: 2, right: 2 })
+        }.id('chat-steps-' + this.row.id).width('100%').constraintSize({ minHeight: 36 }).padding({ left: 2, right: 2 })
           .backgroundColor(Color.Transparent).onClick((): void => { this.disclosure.set(this.scope + ':steps:' + this.row.id, !this.expanded); })
         if (this.expanded && this.visibleSteps.length) {
+          Scroll() {
           Column({ space: 6 }) {
             ForEach(this.visibleSteps, (step: XopcChatBlock, index: number) => {
               if (step.call && !this.isReadGroupContinuation(index)) {
@@ -87,12 +88,15 @@ export struct XopcChatStepsView {
               }
             }, (step: XopcChatBlock): string => step.id)
           }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 8, right: 2, top: 2, bottom: 4 })
+          }.id('chat-steps-scroll-' + this.row.id).width('100%').constraintSize({ maxHeight: 240 })
+            .scrollable(ScrollDirection.Vertical).scrollBar(BarState.Off)
+            .nestedScroll({ scrollForward: NestedScrollMode.SELF_FIRST, scrollBackward: NestedScrollMode.SELF_FIRST })
         }
       } else if (this.active) {
         Row() {
           Text(this.runningTitle()).fontSize(13).fontColor(this.colors.secondary).maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.constraintSize({ minHeight: 36, maxWidth: '100%' }).padding({ left: 2, right: 2 })
+        }.width('100%').constraintSize({ minHeight: 36 }).padding({ left: 2, right: 2 })
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
