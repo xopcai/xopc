@@ -7,6 +7,18 @@ const nonEmptyString = z.string().trim().min(1);
 const optionalTrimmedString = (max: number) =>
   z.string().trim().max(max).nullish().transform(value => value || undefined);
 
+const optionalHttpsUrl = z.string().trim().max(2000).nullish().transform((value, ctx) => {
+  if (!value) return undefined;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:') throw new Error('unsupported protocol');
+    return parsed.toString();
+  } catch {
+    ctx.addIssue({ code: 'custom', message: 'Completion webhook URL must be a valid HTTPS URL' });
+    return z.NEVER;
+  }
+});
+
 export const AutomationScheduleSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('once'),
@@ -112,7 +124,6 @@ export const AutomationManagementSchema = z.object({
 
 export const AutomationReliabilitySchema = z.object({
   executionTimeoutSeconds: z.number().int().min(1).max(86400).optional(),
-  timeoutSeconds: z.number().int().min(1).max(86400).optional(),
   retryCount: z.number().int().min(0).max(10).optional(),
   maxConcurrentRuns: z.number().int().min(1).max(20).optional(),
   disableAfterConsecutiveFailures: z.number().int().min(1).max(100).optional(),
@@ -120,6 +131,11 @@ export const AutomationReliabilitySchema = z.object({
 
 export const AutomationSafetyPolicySchema = z.object({
   mode: z.enum(['suggest_only', 'ask_before_apply', 'auto_apply']),
+}).strict();
+
+export const AutomationDeliveryPolicySchema = z.object({
+  notificationPolicy: z.enum(['attention', 'all', 'none']).default('attention'),
+  completionWebhookUrl: optionalHttpsUrl,
 }).strict();
 
 export const AutomationStateSchema = z.object({
@@ -141,8 +157,7 @@ export const AutomationSchema = z.object({
   action: AutomationActionSchema,
   safety: AutomationSafetyPolicySchema.optional(),
   conversationMode: z.enum(['new_session', 'continuous']).default('new_session'),
-  notificationPolicy: z.enum(['attention', 'all', 'none']).default('attention'),
-  completionWebhookUrl: optionalTrimmedString(2000),
+  delivery: AutomationDeliveryPolicySchema.default({ notificationPolicy: 'attention' }),
   reliability: AutomationReliabilitySchema.optional(),
   management: AutomationManagementSchema.optional(),
   state: AutomationStateSchema.default({}),
@@ -168,7 +183,7 @@ export const UpdateAutomationSchema = AutomationSchema.omit({
   updatedAtMs: true,
 }).extend({
   conversationMode: z.enum(['new_session', 'continuous']),
-  notificationPolicy: z.enum(['attention', 'all', 'none']),
+  delivery: AutomationDeliveryPolicySchema.optional(),
   state: AutomationStateSchema,
 }).partial().refine(
   (data) => Object.keys(data).length > 0,

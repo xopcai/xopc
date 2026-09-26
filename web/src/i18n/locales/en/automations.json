@@ -65,9 +65,6 @@
       "actionCompletedFallback": "Action completed",
       "actionFailed": "{kind} action failed",
       "actionFailedFallback": "Action failed",
-      "completionHookStarted": "Calling completion webhook",
-      "completionHookCompleted": "Completion webhook finished",
-      "completionHookFailed": "Completion webhook failed",
       "runCompleted": "Automation run {status}",
       "runCompletedFallback": "Automation run completed"
     },

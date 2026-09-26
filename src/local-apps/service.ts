@@ -606,7 +606,7 @@ export class LocalAppService {
   }
 
   flushAcceptanceEvents(): void {
-    new DomainOutboxDispatcher(event => this.options.emit(event.type, event.payload)).drain(100, 'local_app');
+    new DomainOutboxDispatcher().drain(100, 'local_app');
   }
 
   private releaseRoot(appId: string): string {

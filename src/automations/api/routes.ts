@@ -81,6 +81,26 @@ export function registerAutomationRoutes(authenticated: Hono, deps: Authenticate
     } catch (error) { return capabilityHttpError(c, error); }
   });
 
+  authenticated.get('/api/automation-events', async (c) => {
+    try {
+      const { items } = ProductReadContracts['xopc.automations.events'].output.parse(await capabilities.call('xopc.automations.events', {
+        type: c.req.query('type'), source: c.req.query('source'),
+        limit: c.req.query('limit') === undefined ? undefined : Number(c.req.query('limit')),
+      }, capabilityHttpContext(c)));
+      return c.json({ items });
+    } catch (error) { return capabilityHttpError(c, error); }
+  });
+
+  authenticated.get('/api/automation-deliveries', async (c) => {
+    try {
+      const { items } = ProductReadContracts['xopc.automations.deliveries'].output.parse(await capabilities.call('xopc.automations.deliveries', {
+        runId: c.req.query('runId'), status: c.req.query('status'),
+        limit: c.req.query('limit') === undefined ? undefined : Number(c.req.query('limit')),
+      }, capabilityHttpContext(c)));
+      return c.json({ items });
+    } catch (error) { return capabilityHttpError(c, error); }
+  });
+
   authenticated.get('/api/automation-runs/product-events', async (c) => {
     try {
       const { items } = ProductReadContracts['xopc.automations.product_events'].output.parse(await capabilities.call('xopc.automations.product_events', {

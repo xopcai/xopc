@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import type { BuildChildToolsOptions } from '../../agent/child-agent-factory.js';
-import { publishAutomationProductEvent } from '../../automations/product-events.js';
+import { getAutomationEventForRun, ingestAutomationEvent } from '../../automations/events/event-repository.js';
 import {
   extractProfileAgentId,
   resolveEffectiveAgentProfileForSession,
@@ -707,9 +707,21 @@ export class WorkflowRunService {
     if (!isTerminalWorkflowRunStatus(view.run.status)) return;
     if (this.emittedTerminalAutomationEvents.has(view.run.id)) return;
     this.emittedTerminalAutomationEvents.add(view.run.id);
-    publishAutomationProductEvent({
+    const parentEvent = view.run.source.kind === 'automation' && view.run.source.runId
+      ? getAutomationEventForRun(view.run.source.runId)
+      : null;
+    if (parentEvent && parentEvent.chainDepth >= 32) return;
+    ingestAutomationEvent({
+      id: `workflow:${view.run.id}:completed`,
       type: 'workflow.run.completed',
       source: 'workflows',
+      subject: { kind: 'workflow_run', id: view.run.id },
+      correlationId: parentEvent?.correlationId ?? view.run.metadata?.correlation?.idempotencyKey ?? view.run.id,
+      causationId: parentEvent?.id ?? view.run.metadata?.origin?.runId,
+      rootEventId: parentEvent?.rootEventId,
+      chainDepth: parentEvent ? parentEvent.chainDepth + 1 : 0,
+      dedupeKey: `workflow:${view.run.id}:completed`,
+      trust: 'system',
       payload: {
         runId: view.run.id,
         status: view.run.status,

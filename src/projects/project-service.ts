@@ -5,7 +5,6 @@ import { ProjectStore } from './project-store.js';
 import { enqueueProjectChanged } from './project-change-events.js';
 import { drainProjectWorkspaceCreation, queueProjectWorkspaceCreation } from './project-workspace-creation.js';
 import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
-import { publishAutomationProductEvent } from '../automations/product-events.js';
 import { ExecutionEnvironmentStore } from '../execution-environments/store.js';
 import { listPendingProjectUnderstandingRuns } from '../work-discovery/repository.js';
 import { inferProjectExecutionMode } from './project-kind.js';
@@ -274,7 +273,7 @@ export class ProjectService {
 
   flushCommittedEffects(projectId?: string): void {
     drainProjectWorkspaceCreation(projectId);
-    new DomainOutboxDispatcher(publishAutomationProductEvent).drain(100, 'project');
+    new DomainOutboxDispatcher().drain(100, 'project');
   }
 
   listUpdates(projectId: string, limit?: number): ProjectUpdate[] {

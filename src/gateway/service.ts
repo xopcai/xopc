@@ -34,7 +34,12 @@ import { setPairingBroadcastSink } from '../channels/pairing/pairing-events.js';
 import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
-import { AutomationService, type AutomationRun } from '../automations/index.js';
+import {
+  AutomationService,
+  type AutomationEvent,
+  type AutomationEventEnvelope,
+  type AutomationRun,
+} from '../automations/index.js';
 import {
   DiscussionLiveWorker,
   DiscussionOrganizer,
@@ -42,7 +47,6 @@ import {
   DiscussionSealer,
   DiscussionService,
 } from '../discussions/index.js';
-import { onAutomationProductEvent, publishAutomationProductEvent } from '../automations/product-events.js';
 import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
 import { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
@@ -298,7 +302,6 @@ export class GatewayService {
   private connectorSupervisor: ConnectorSupervisor | null = null;
   private connectorLearningCoordinator: ConnectorLearningCoordinator | null = null;
   private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
-  private stopAutomationProductEventBridge: (() => void) | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
   private stopRealtimeLogBridge: (() => void) | null = null;
 
@@ -469,9 +472,13 @@ export class GatewayService {
             openQuestionCount: organization.openQuestions.length,
           };
           this.emit('discussion.completed', payload);
-          publishAutomationProductEvent({
+          this.ingestAutomationEvent({
+            id: `discussion:${capture.id}:completed:${capture.completedAt}`,
             type: 'discussion.completed',
             source: 'discussions',
+            subject: { kind: 'discussion', id: capture.id },
+            dedupeKey: `${capture.id}:${capture.completedAt}`,
+            trust: 'system',
             payload,
             occurredAtMs: capture.completedAt,
           });
@@ -909,10 +916,8 @@ export class GatewayService {
   }
 
   dispatchTaskEvents(): void {
-    new DomainOutboxDispatcher(event => {
-      if (event.source === 'local_apps') this.emit(event.type, event.payload);
-      else publishAutomationProductEvent(event);
-    }).drain();
+    new DomainOutboxDispatcher().drain();
+    void this.automationService.dispatchEvents();
   }
 
   runAgent(
@@ -1360,8 +1365,9 @@ export class GatewayService {
       },
       executeSystemAction: (input) => this.executeSystemAutomationAction(input),
       onRunCompleted: (run) => this.handleAutomationRunCompleted(run),
+      onEvent: (event) => this.projectAutomationEvent(event),
     });
-    this.startAutomationProductEventBridge();
+    this.startSessionTranscriptEventIngestion();
 
     await trace.measure('workflows.reconcile', () => this.reconcileInterruptedWorkflowRuns());
 
@@ -1390,7 +1396,7 @@ export class GatewayService {
     });
     this.managedComposioEventPoller = new ManagedComposioEventPoller({
       getConfig: () => this.config,
-      triggerAutomation: (event) => this.automationService.triggerEvent(event),
+      ingestEvent: (event) => this.ingestAutomationEvent(event),
       requestLearning: (toolkit) => { this.requestConnectorLearningForToolkit(toolkit); },
       setLearningPaused: (connectionId, paused) => { this.setConnectorLearningPaused(connectionId, paused); },
     });
@@ -1638,8 +1644,6 @@ export class GatewayService {
     await this.extensionLoader?.shutdown();
 
     await this.automationService.stop();
-    this.stopAutomationProductEventBridge?.();
-    this.stopAutomationProductEventBridge = null;
     this.stopSessionTranscriptAutomationEvents?.();
     this.stopSessionTranscriptAutomationEvents = null;
 
@@ -2088,7 +2092,7 @@ export class GatewayService {
         || (automation.safety?.mode ?? 'auto_apply') !== 'auto_apply';
       this.emit('automation.run.completed', {
         run,
-        notificationPolicy: automation.notificationPolicy,
+        notificationPolicy: automation.delivery.notificationPolicy,
         requiresAttention,
         projectId: automation.projectId,
       });
@@ -2097,52 +2101,17 @@ export class GatewayService {
     });
   }
 
-  private startAutomationProductEventBridge(): void {
-    this.stopAutomationProductEventBridge?.();
+  private startSessionTranscriptEventIngestion(): void {
     this.stopSessionTranscriptAutomationEvents?.();
-    this.stopAutomationProductEventBridge = onAutomationProductEvent((event) => {
-      if (event.type === 'project.deleted' && typeof event.payload.projectId === 'string') {
-        const runIds = event.payload.deletedUnderstandingRunIds;
-        if (Array.isArray(runIds) && runIds.every(id => typeof id === 'string')) {
-          this._workDiscovery?.abortDeletedProjectRuns(event.payload.projectId, runIds);
-        }
-      }
-      if (event.type === 'note.created' || event.type === 'note.updated' || event.type === 'note.deleted' || event.type === 'task.changed.v2' || event.type === 'task.deleted.v1' || event.type === 'project.changed' || event.type === 'project.created' || event.type === 'project.deleted' || event.type === 'scene.changed' || event.type === 'scene.created' || event.type === 'scene.deleted') {
-        const note = event.type.startsWith('note.');
-        const project = event.type.startsWith('project.');
-        const scene = event.type.startsWith('scene.');
-        const payload = event.payload as Record<string, unknown>;
-        if (typeof payload.sourceEventId === 'string') this.realtime.broker.publish(
-          note ? 'resources:notes' : project ? 'resources:projects' : scene ? 'resources:scenes' : 'resources:tasks', 'resource.changed', {
-            eventId: payload.sourceEventId, kind: note ? 'note' : project ? 'project' : scene ? 'scene' : 'task',
-            id: note ? payload.noteId : project ? payload.projectId : scene ? payload.sceneId : payload.taskId, revision: note || scene ? payload.revision : payload.version,
-            operation: event.type === 'task.deleted.v1' || event.type.endsWith('.deleted') ? 'deleted' : event.type.endsWith('.created') ? 'created' : 'updated',
-            ...(typeof payload.operationId === 'string' ? { operationId: payload.operationId } : {}),
-          });
-      }
-      if (event.type.startsWith('task.')) {
-        this.emit(event.type, event.payload);
-      }
-      if (this.config.userContext.homeIntelligence.refreshOnContextChange
-        && (event.type.startsWith('task.') || event.type.startsWith('project.'))) {
-        const payload = event.payload as Record<string, unknown>;
-        const objectId = event.type.startsWith('task.') ? payload.taskId : payload.projectId;
-        const revision = payload.version ?? payload.revision ?? 'unknown';
-        this.homeIntelligenceHost?.requestRefresh(
-          event.type.startsWith('task.') ? 'task_changed' : 'project_changed',
-          `domain:${event.type}:${String(objectId)}:${String(revision)}`,
-        );
-      }
-      void this.automationService.triggerEvent(event).catch((err) => {
-        const em = err instanceof Error ? err.message : String(err);
-        log.warn({ err, eventType: event.type, source: event.source }, `Automation product event failed: ${em}`);
-      });
-    });
     this.stopSessionTranscriptAutomationEvents = onSessionTranscriptUpdate((update) => {
       if (!update.conversationId || getSessionMetadata(update.conversationId)?.sourceChannel === 'automation') return;
-      publishAutomationProductEvent({
+      this.ingestAutomationEvent({
         type: 'session.transcript.updated',
         source: 'sessions',
+        subject: { kind: 'session', id: update.conversationId },
+        correlationId: update.conversationId,
+        dedupeKey: update.messageId ?? `${update.conversationId}:${Date.now()}`,
+        trust: 'system',
         payload: {
           conversationId: update.conversationId,
           messageId: update.messageId,
@@ -2150,6 +2119,44 @@ export class GatewayService {
         },
       });
     });
+  }
+
+  ingestAutomationEvent(event: AutomationEvent, options?: { targetAutomationIds?: string[] }) {
+    return this.automationService.ingestEvent(event, options?.targetAutomationIds);
+  }
+
+  private projectAutomationEvent(event: AutomationEventEnvelope): void {
+    if (event.source === 'local_apps') this.emit(event.type, event.payload);
+    if (event.type === 'project.deleted' && typeof event.payload.projectId === 'string') {
+      const runIds = event.payload.deletedUnderstandingRunIds;
+      if (Array.isArray(runIds) && runIds.every(id => typeof id === 'string')) {
+        this._workDiscovery?.abortDeletedProjectRuns(event.payload.projectId, runIds);
+      }
+    }
+    if (event.type === 'note.created' || event.type === 'note.updated' || event.type === 'note.deleted' || event.type === 'task.changed.v2' || event.type === 'task.deleted.v1' || event.type === 'project.changed' || event.type === 'project.created' || event.type === 'project.deleted' || event.type === 'scene.changed' || event.type === 'scene.created' || event.type === 'scene.deleted') {
+      const note = event.type.startsWith('note.');
+      const project = event.type.startsWith('project.');
+      const scene = event.type.startsWith('scene.');
+      const payload = event.payload as Record<string, unknown>;
+      if (typeof payload.sourceEventId === 'string') this.realtime.broker.publish(
+        note ? 'resources:notes' : project ? 'resources:projects' : scene ? 'resources:scenes' : 'resources:tasks', 'resource.changed', {
+          eventId: payload.sourceEventId, kind: note ? 'note' : project ? 'project' : scene ? 'scene' : 'task',
+          id: note ? payload.noteId : project ? payload.projectId : scene ? payload.sceneId : payload.taskId, revision: note || scene ? payload.revision : payload.version,
+          operation: event.type === 'task.deleted.v1' || event.type.endsWith('.deleted') ? 'deleted' : event.type.endsWith('.created') ? 'created' : 'updated',
+          ...(typeof payload.operationId === 'string' ? { operationId: payload.operationId } : {}),
+        });
+    }
+    if (event.type.startsWith('task.')) this.emit(event.type, event.payload);
+    if (this.config.userContext.homeIntelligence.refreshOnContextChange
+      && (event.type.startsWith('task.') || event.type.startsWith('project.'))) {
+      const payload = event.payload as Record<string, unknown>;
+      const objectId = event.type.startsWith('task.') ? payload.taskId : payload.projectId;
+      const revision = payload.version ?? payload.revision ?? 'unknown';
+      this.homeIntelligenceHost?.requestRefresh(
+        event.type.startsWith('task.') ? 'task_changed' : 'project_changed',
+        `domain:${event.type}:${String(objectId)}:${String(revision)}`,
+      );
+    }
   }
 
   /**

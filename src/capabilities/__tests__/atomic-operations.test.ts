@@ -339,11 +339,11 @@ describe('atomic capability operations', () => {
   it('preserves automation policy fields and historical queries across surfaces', async () => {
     const service = new AutomationService();
     const automation = await service.create({ name: 'Review', trigger: { kind: 'manual' },
-      action: { kind: 'agent', instruction: 'Review notes' }, conversationMode: 'continuous', notificationPolicy: 'none' });
+      action: { kind: 'agent', instruction: 'Review notes' }, conversationMode: 'continuous', delivery: { notificationPolicy: 'none' } });
     const dispatcher = createProductDispatcher(undefined, { getAutomations: () => service });
     const reader = { ...context, scopes: ['automations.read'] };
     const http = await dispatcher.call('xopc.automations.get', { id: automation.id }, reader);
-    expect(http).toMatchObject({ automation: { conversationMode: 'continuous', notificationPolicy: 'none' } });
+    expect(http).toMatchObject({ automation: { conversationMode: 'continuous', delivery: { notificationPolicy: 'none' } } });
     expect(await dispatcher.call('xopc.automations.get', { id: automation.id }, { ...reader, surface: 'agent' })).toEqual(http);
     expect(await dispatcher.call('xopc.automations.history', { automationId: 'deleted-automation' }, reader)).toMatchObject({ items: [] });
     await expect(dispatcher.call('xopc.automations.list', { projectId: 'missing' }, reader)).rejects.toMatchObject({ code: 'NOT_FOUND' });

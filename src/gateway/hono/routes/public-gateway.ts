@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 import type { Hono } from 'hono';
 
@@ -10,6 +10,7 @@ import {
   verifyComposioWebhook,
 } from '../../../connectors/composio-triggers.js';
 import { PACKAGE_VERSION } from '../../../package-version.js';
+import { resolveAutomationWebhookSecret } from '../../../automations/webhook-secrets.js';
 import {
   claimConnectorWebhookDelivery,
   completeConnectorWebhookDelivery,
@@ -29,6 +30,13 @@ const PUBLIC_UI_ROOT_ASSETS = [
   'pwa-512x512.png',
   'site.webmanifest',
 ] as const;
+
+function secretsEqual(actual: string, expected: string): boolean {
+  return timingSafeEqual(
+    createHash('sha256').update(actual).digest(),
+    createHash('sha256').update(expected).digest(),
+  );
+}
 
 export function registerPublicGatewayRoutes(app: Hono, service: GatewayService): void {
   app.get('/health', (c) => {
@@ -82,9 +90,13 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
       if (inactiveConnectionId) service.setConnectorLearningPaused(inactiveConnectionId, true);
       const event = await appendComposioTriggerEvent(service.currentConfig, archivedPayload);
       if (normalized.toolkit) service.requestConnectorLearningForToolkit(normalized.toolkit);
-      const runs = await service.automationServiceInstance.triggerEvent({
+      const ingested = service.ingestAutomationEvent({
+        id: `connector:composio:${webhookId}`,
         type: `connector.${normalized.trigger ?? normalized.type}`,
         source: normalized.toolkit ? `composio:${normalized.toolkit}` : 'composio',
+        subject: { kind: 'connector_event', id: webhookId },
+        dedupeKey: webhookId,
+        trust: 'connector',
         payload: {
           ...normalized.data,
           connectorId: normalized.toolkit ? `composio-${normalized.toolkit}` : 'composio',
@@ -92,10 +104,68 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
         },
       });
       completeConnectorWebhookDelivery(webhookId);
-      return c.json({ ok: true, payload: { eventId: event.id, automationRuns: runs.length } });
+      return c.json({ ok: true, payload: { eventId: event.id, automationDeliveries: ingested.deliveryCount } });
     } catch (error) {
       releaseConnectorWebhookDelivery(webhookId, error);
       return c.json({ ok: false, error: 'Composio webhook processing failed.' }, 500);
+    }
+  });
+
+  app.post('/api/automation-hooks/:automationId', async (c) => {
+    const automationId = c.req.param('automationId');
+    const automation = await service.automationServiceInstance.get(automationId);
+    if (!automation || !automation.enabled || automation.trigger.kind !== 'webhook') {
+      return c.json({ ok: false, error: 'Automation webhook not found.' }, 404);
+    }
+    const secretId = automation.trigger.secretId?.trim();
+    let expectedSecret: string | undefined;
+    try {
+      expectedSecret = secretId ? resolveAutomationWebhookSecret(secretId) : undefined;
+    } catch {
+      return c.json({ ok: false, error: 'Automation webhook secrets are misconfigured.' }, 503);
+    }
+    if (!expectedSecret) return c.json({ ok: false, error: 'Automation webhook secret is not configured.' }, 503);
+    const authorization = c.req.header('authorization')?.trim() ?? '';
+    const suppliedSecret = authorization.startsWith('Bearer ')
+      ? authorization.slice('Bearer '.length).trim()
+      : c.req.header('x-xopc-webhook-secret')?.trim() ?? '';
+    if (!suppliedSecret || !secretsEqual(suppliedSecret, expectedSecret)) {
+      return c.json({ ok: false, error: 'Invalid automation webhook secret.' }, 401);
+    }
+    const idempotencyKey = c.req.header('idempotency-key')?.trim();
+    if (!idempotencyKey || idempotencyKey.length > 200) {
+      return c.json({ ok: false, error: 'A valid Idempotency-Key header is required.' }, 400);
+    }
+    const declaredSize = Number(c.req.header('content-length') ?? 0);
+    if (Number.isFinite(declaredSize) && declaredSize > 1_000_000) {
+      return c.json({ ok: false, error: 'Webhook payload is too large.' }, 413);
+    }
+    const rawBody = await c.req.text();
+    if (Buffer.byteLength(rawBody) > 1_000_000) {
+      return c.json({ ok: false, error: 'Webhook payload is too large.' }, 413);
+    }
+    let payload: Record<string, unknown>;
+    try {
+      const parsed = rawBody ? JSON.parse(rawBody) : {};
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid payload');
+      payload = parsed as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: false, error: 'Webhook payload must be a JSON object.' }, 400);
+    }
+    try {
+      const result = service.ingestAutomationEvent({
+        id: `webhook:${automationId}:${idempotencyKey}`,
+        type: 'automation.webhook.received',
+        source: `webhook:${automationId}`,
+        subject: { kind: 'automation', id: automationId },
+        correlationId: c.req.header('x-correlation-id')?.trim() || undefined,
+        dedupeKey: idempotencyKey,
+        trust: 'untrusted_webhook',
+        payload,
+      }, { targetAutomationIds: [automationId] });
+      return c.json({ ok: true, eventId: result.event.id, duplicate: !result.created }, result.created ? 202 : 200);
+    } catch {
+      return c.json({ ok: false, error: 'Automation webhook ingestion failed.' }, 500);
     }
   });
 

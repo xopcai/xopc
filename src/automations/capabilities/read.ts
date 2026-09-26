@@ -32,6 +32,16 @@ export function registerAutomationReadCapabilities(dispatcher: CapabilityDispatc
     async execute() { return { ok: true as const, metrics: await service.getMetrics() }; },
   }));
   dispatcher.register(defineReadCapability({
+    ...policy, id: 'xopc.automations.events', description: 'Inspect durable trigger events and per-automation delivery state.',
+    ...ProductReadContracts['xopc.automations.events'],
+    execute(input) { return { ok: true as const, items: service.listEventRecords(input) }; },
+  }));
+  dispatcher.register(defineReadCapability({
+    ...policy, id: 'xopc.automations.deliveries', description: 'Inspect durable automation result delivery state.',
+    ...ProductReadContracts['xopc.automations.deliveries'],
+    execute(input) { return { ok: true as const, items: service.listResultDeliveries(input) }; },
+  }));
+  dispatcher.register(defineReadCapability({
     ...policy, id: 'xopc.automations.product_events', description: 'Find runs by their original product trigger event.',
     ...ProductReadContracts['xopc.automations.product_events'],
     async execute(input) {

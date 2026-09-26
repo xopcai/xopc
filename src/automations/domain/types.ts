@@ -74,16 +74,19 @@ export type AutomationConversationMode = 'new_session' | 'continuous';
 
 export type AutomationNotificationPolicy = 'attention' | 'all' | 'none';
 
+export interface AutomationDeliveryPolicy {
+  notificationPolicy: AutomationNotificationPolicy;
+  completionWebhookUrl?: string;
+}
+
 export interface AutomationReliability {
-  /** Overall run deadline. `timeoutSeconds` remains a read-only legacy fallback. */
   executionTimeoutSeconds?: number;
-  timeoutSeconds?: number;
   retryCount?: number;
   maxConcurrentRuns?: number;
   disableAfterConsecutiveFailures?: number;
 }
 
-export type AutomationRunPhase = 'queued' | 'action' | 'completion_hook' | 'cancelling' | 'completed';
+export type AutomationRunPhase = 'queued' | 'action' | 'cancelling' | 'completed';
 
 export interface AutomationRunTermination {
   reason: 'completed' | 'failed' | 'user_cancelled' | 'deadline_exceeded';
@@ -117,8 +120,7 @@ export interface Automation {
   action: AutomationAction;
   safety?: AutomationSafetyPolicy;
   conversationMode: AutomationConversationMode;
-  notificationPolicy: AutomationNotificationPolicy;
-  completionWebhookUrl?: string;
+  delivery: AutomationDeliveryPolicy;
   reliability?: AutomationReliability;
   management?: AutomationManagement;
   state: AutomationState;
@@ -177,9 +179,6 @@ export type AutomationRunEventType =
   | 'action.retry_scheduled'
   | 'action.completed'
   | 'action.failed'
-  | 'completion_hook.started'
-  | 'completion_hook.completed'
-  | 'completion_hook.failed'
   | 'run.completed';
 
 export interface AutomationRunEvent {
@@ -198,10 +197,66 @@ export interface AutomationProductEventRun {
 }
 
 export interface AutomationEvent {
+  id?: string;
   type: string;
   source?: string;
+  schemaVersion?: number;
+  subject?: { kind: string; id: string };
   payload?: Record<string, unknown>;
   occurredAtMs?: number;
+  correlationId?: string;
+  causationId?: string;
+  rootEventId?: string;
+  chainDepth?: number;
+  dedupeKey?: string;
+  trust?: 'system' | 'user' | 'connector' | 'untrusted_webhook';
+}
+
+export interface AutomationEventEnvelope extends AutomationEvent {
+  id: string;
+  source: string;
+  schemaVersion: number;
+  occurredAtMs: number;
+  ingestedAtMs: number;
+  correlationId: string;
+  rootEventId: string;
+  chainDepth: number;
+  trust: 'system' | 'user' | 'connector' | 'untrusted_webhook';
+  payload: Record<string, unknown>;
+}
+
+export type AutomationEventDeliveryStatus =
+  | 'pending'
+  | 'queued'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'skipped';
+
+export interface AutomationEventRecord {
+  event: AutomationEventEnvelope;
+  projected: boolean;
+  projectionAttempts: number;
+  projectionError?: string;
+  deliveries: Array<{
+    automationId: string;
+    status: AutomationEventDeliveryStatus;
+    runId?: string;
+    attempts: number;
+    lastError?: string;
+  }>;
+}
+
+export interface AutomationResultDeliveryRecord {
+  runId: string;
+  destinationKey: string;
+  kind: string;
+  status: 'pending' | 'delivering' | 'delivered' | 'failed';
+  attempts: number;
+  nextAttemptAtMs: number;
+  lastError?: string;
+  createdAtMs: number;
+  updatedAtMs: number;
 }
 
 export interface AutomationMetrics {
@@ -261,6 +316,7 @@ export interface AutomationDeps {
     }>;
   };
   onRunCompleted?: (run: AutomationRun) => void;
+  onEvent?: (event: AutomationEventEnvelope) => void | Promise<void>;
   executeTaskCommand?: (input: {
     taskId: string;
     idempotencyKey: string;

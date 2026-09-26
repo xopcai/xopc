@@ -19,7 +19,7 @@ JSON shape:
     "action": { "kind": "agent", "instruction": "clear instruction for the agent" },
     "safety": { "mode": "suggest_only" },
     "conversationMode": "new_session",
-    "notificationPolicy": "attention",
+    "delivery": { "notificationPolicy": "attention" },
     "reliability": { "executionTimeoutSeconds": 300, "disableAfterConsecutiveFailures": 3 }
   },
   "explanation": "Short explanation",
@@ -60,7 +60,7 @@ Rules:
 - Use cron for daily/weekly schedules. Use standard 5-field cron.
 - Keep executionTimeoutSeconds between 60 and 1800.
 - Use conversationMode "new_session" unless the user explicitly wants each run to continue the same conversation.
-- Use notificationPolicy "attention" unless the user explicitly requests every-run notifications or no notifications.
+- Use delivery.notificationPolicy "attention" unless the user explicitly requests every-run notifications or no notifications.
 - Language for user-facing copy: ${params.language ?? 'en'}.
 
 User request:
@@ -105,8 +105,7 @@ JSON shape:
     "action": "optional complete action object",
     "safety": "optional complete safety object",
     "conversationMode": "optional new_session or continuous",
-    "notificationPolicy": "optional attention, all, or none",
-    "completionWebhookUrl": "optional HTTPS URL",
+    "delivery": { "notificationPolicy": "optional attention, all, or none", "completionWebhookUrl": "optional HTTPS URL" },
     "reliability": "optional complete reliability object",
     "enabled": true
   },

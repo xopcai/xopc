@@ -272,10 +272,12 @@ export function buildInput(
     action,
     safety: { mode: safetyMode },
     conversationMode: form.conversationMode,
-    notificationPolicy: form.notificationPolicy,
-    ...(safetyMode === 'auto_apply' && form.completionWebhookUrl.trim()
-      ? { completionWebhookUrl: form.completionWebhookUrl.trim() }
-      : {}),
+    delivery: {
+      notificationPolicy: form.notificationPolicy,
+      ...(safetyMode === 'auto_apply' && form.completionWebhookUrl.trim()
+        ? { completionWebhookUrl: form.completionWebhookUrl.trim() }
+        : {}),
+    },
     reliability: {
       executionTimeoutSeconds: Math.max(
         1,
@@ -452,7 +454,6 @@ export function formFromAutomation(
   const timeoutSeconds =
     automation.reliability?.executionTimeoutSeconds
     ?? ('timeoutSeconds' in action ? action.timeoutSeconds : undefined)
-    ?? automation.reliability?.timeoutSeconds
     ?? (action.kind === 'browser_automation' ? 600 : 1800);
 
   return {
@@ -493,8 +494,8 @@ export function formFromAutomation(
     safetyMode: automation.safety?.mode ?? 'auto_apply',
     timeoutSeconds: String(timeoutSeconds),
     conversationMode: automation.conversationMode ?? 'new_session',
-    notificationPolicy: automation.notificationPolicy ?? 'attention',
-    completionWebhookUrl: automation.completionWebhookUrl ?? '',
+    notificationPolicy: automation.delivery.notificationPolicy,
+    completionWebhookUrl: automation.delivery.completionWebhookUrl ?? '',
     disableAfterFailures: String(
       automation.reliability?.disableAfterConsecutiveFailures ?? 3,
     ),
@@ -558,7 +559,10 @@ export function buildAutomationEditInput(
     ...input,
     description: form.description.trim(),
     projectId: form.projectId.trim(),
-    completionWebhookUrl: form.completionWebhookUrl.trim(),
+    delivery: {
+      notificationPolicy: form.notificationPolicy,
+      ...(form.completionWebhookUrl.trim() ? { completionWebhookUrl: form.completionWebhookUrl.trim() } : {}),
+    },
     trigger,
     action,
     reliability: {

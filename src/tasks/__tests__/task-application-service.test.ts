@@ -12,6 +12,7 @@ import {
 import { TaskApplicationService } from '../task-application-service.js';
 import { TaskContextRepository } from '../task-context-repository.js';
 import { DomainOutboxDispatcher } from '../../infra/domain-outbox-dispatcher.js';
+import { listAutomationEvents } from '../../automations/events/index.js';
 import { TaskRepository } from '../task-repository.js';
 import { TaskRunRepository } from '../task-run-repository.js';
 import { TaskReadModelProjector } from '../task-read-model-projector.js';
@@ -344,8 +345,8 @@ describe('TaskApplicationService', () => {
     if (blocked.ok || !blocked.model) return;
     expect(blocked.model.operationalState).toBe('blocked');
     expect(blocked.model.attention[0]).toMatchObject({ kind: 'dependency_blocked' });
-    const events: Array<{ type: string; payload: Record<string, unknown> }> = [];
-    new DomainOutboxDispatcher((event) => events.push(event)).drain();
+    new DomainOutboxDispatcher().drain();
+    const events = listAutomationEvents();
     expect(events.filter((event) => event.type === 'task.attention_required.v2')).toEqual([
       expect.objectContaining({
         payload: expect.objectContaining({
@@ -400,8 +401,8 @@ describe('TaskApplicationService', () => {
       model: { task: { phase: 'closed', resolution: 'done' }, operationalState: 'idle' },
     });
     expect(runs.getReceipt(run.id)?.summary).toBe('Implemented and verified');
-    const events: Array<{ type: string; payload: Record<string, unknown> }> = [];
-    new DomainOutboxDispatcher((event) => events.push(event)).drain();
+    new DomainOutboxDispatcher().drain();
+    const events = listAutomationEvents();
     expect(events).toContainEqual(expect.objectContaining({
       type: 'task.phase_changed.v2',
       payload: expect.objectContaining({
@@ -445,8 +446,8 @@ describe('TaskApplicationService', () => {
         failure: { code: 'deploy_failed', phase: 'execution', recoveryAction: 'Retry the task run' },
       },
     });
-    const events: Array<{ type: string; payload: Record<string, unknown> }> = [];
-    new DomainOutboxDispatcher((event) => events.push(event)).drain();
+    new DomainOutboxDispatcher().drain();
+    const events = listAutomationEvents();
     expect(events).toContainEqual(expect.objectContaining({
       type: 'task.attention_required.v2',
       payload: expect.objectContaining({
@@ -557,8 +558,7 @@ describe('TaskApplicationService', () => {
     run = runs.start({
       runId: run.id, expectedVersion: run.version, contextSnapshotId: snapshot.id, policySnapshot: {},
     })!;
-    const initialEvents: Array<{ type: string; payload: Record<string, unknown> }> = [];
-    new DomainOutboxDispatcher((event) => initialEvents.push(event)).drain();
+    new DomainOutboxDispatcher().drain();
 
     const result = service.execute({
       taskId: created.model.task.id,
@@ -570,8 +570,8 @@ describe('TaskApplicationService', () => {
       },
     });
     expect(result.ok).toBe(true);
-    const events: Array<{ type: string; payload: Record<string, unknown> }> = [];
-    new DomainOutboxDispatcher((event) => events.push(event)).drain();
+    new DomainOutboxDispatcher().drain();
+    const events = listAutomationEvents();
     const attention = events.filter((event) => event.type === 'task.attention_required.v2');
     expect(attention).toHaveLength(1);
     expect(attention[0]?.payload).toMatchObject({
@@ -588,10 +588,10 @@ describe('TaskApplicationService', () => {
       idempotencyKey: 'outbox-task', title: 'Publish event', priority: 'normal', contract,
       dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'backlog' },
     });
-    const events: Array<{ type: string; payload: Record<string, unknown> }> = [];
-    const dispatcher = new DomainOutboxDispatcher((event) => events.push(event));
+    const dispatcher = new DomainOutboxDispatcher();
     expect(dispatcher.drain()).toBe(2);
     expect(dispatcher.drain()).toBe(0);
+    const events = listAutomationEvents();
     expect(events.map((event) => event.type).sort()).toEqual(['task.changed.v2', 'task.created.v2']);
     expect(events.find((event) => event.type === 'task.changed.v2')?.payload).toMatchObject({
       taskId: expect.any(String),

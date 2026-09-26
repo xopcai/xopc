@@ -109,7 +109,7 @@ function toHomeAutomation(automation: Automation): HomeAutomation | null {
 
 function effectiveAutomationTimeoutSeconds(run: AutomationRun, automation?: Automation): number {
   return ('timeoutSeconds' in run.actionSnapshot ? run.actionSnapshot.timeoutSeconds : undefined)
-    ?? automation?.reliability?.timeoutSeconds
+    ?? automation?.reliability?.executionTimeoutSeconds
     ?? DEFAULT_AUTOMATION_TIMEOUT_SECONDS;
 }
 
@@ -424,7 +424,7 @@ export class HomeQueryService {
       .slice(0, 5)
       .map(toHomeWorkflowRun);
     const upcomingAutomations = automations
-      .filter((automation) => automation.notificationPolicy !== 'none')
+      .filter((automation) => automation.delivery.notificationPolicy !== 'none')
       .map(toHomeAutomation)
       .filter((automation): automation is HomeAutomation => Boolean(automation))
       .sort((a, b) => Date.parse(a.nextRunAt) - Date.parse(b.nextRunAt));
@@ -471,7 +471,7 @@ export class HomeQueryService {
         })),
       ...latestAutomationRuns
         .filter((run) => run.status === 'failed' || run.status === 'timeout')
-        .filter((run) => automationsById.get(run.automationId)?.notificationPolicy !== 'none')
+        .filter((run) => automationsById.get(run.automationId)?.delivery.notificationPolicy !== 'none')
         .filter((run) => !isHomeAttentionAcknowledged('automation_run', run.id))
         .map((run): HomeAttention => ({
           id: `automation_run:${run.id}`,
