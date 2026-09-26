@@ -249,6 +249,8 @@ Title:`;
         temperature: 0.35,
         signal: signal as AbortSignal,
       },
+      undefined,
+      { operation: 'session.generate_title' },
     );
 
     let text = '';

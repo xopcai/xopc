@@ -6,8 +6,10 @@ import { randomUUID } from 'node:crypto';
 
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { SceneActivationAdapter } from '../../../../scenes/activationAdapter.js';
+import { sceneTemplateSchema } from '../../../../scenes/contracts.js';
 import { SceneExecutionService } from '../../../../scenes/execution.js';
 import { SceneInboxService } from '../../../../scenes/inbox.js';
 import { SceneMetrics } from '../../../../scenes/metrics.js';
@@ -16,7 +18,9 @@ import { SceneRepository } from '../../../../scenes/repository.js';
 import { openXopcDatabase, closeXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../../../storage/sqlite/transaction.js';
 import { SceneApplicationService } from '../../../../scenes/service.js';
+import { SceneCapabilityRegistry } from '../../../../scenes/registry.js';
 import { familyPlanTemplate, mailFollowUpTemplate } from '../../../../scenes/templates.js';
+import { SceneSourceRegistry } from '../../../../scenes/taskFollowUp/contracts.js';
 import { SceneUserNotesProvider } from '../../../../scenes/userNotes.js';
 import { createXopcUseTool } from '../../../../agent/tools/xopc-use-tool.js';
 import { auth } from '../../middleware/auth.js';
@@ -33,6 +37,13 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
   let deps: AuthenticatedRouteDeps;
   const input = { templateKey: familyPlanTemplate.key, templateVersion: familyPlanTemplate.version, goal: 'Keep family arrangements manageable.',
     scope: { kind: 'personal' }, permissions: { accountIds: [], contextProviders: ['user_notes'], effectHandlers: [] } };
+  const adapterTemplate = sceneTemplateSchema.parse({
+    schemaVersion: 1, key: 'adapter-fixture', version: '1.0.0', title: 'Adapter fixture', description: 'Exercises capability routing.',
+    goalMode: 'ongoing', contextProviders: [], triggers: [{ id: 'changed', type: 'event', eventType: 'fixture.changed' }],
+    execution: { kind: 'fixture', instruction: 'Process fixture changes.',
+      limits: { timeoutSeconds: 30, maxIterations: 2, maxToolCalls: 0, maxOutputTokens: 100 } },
+    allowedOutcomeKinds: ['receipt'], allowedEffectHandlers: [],
+  });
   const request = (path: string, method = 'GET', body?: unknown, authenticated = true,
     key = method === 'POST' && path === '/activations' ? 'request'
       : method === 'POST' && path.endsWith('/checks') ? path : randomUUID()) => fetch(`${origin}/api/scenes${path}`, {
@@ -49,14 +60,17 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
     repository.installTemplate(familyPlanTemplate);
     const provider = new SceneUserNotesProvider(db);
     const authorize = async () => input.permissions;
-    const application = new SceneApplicationService(repository, [provider], authorize);
-    runtime = new SceneExecutionService(repository, [provider], { execute: async ({ evidence }) => ({
+    const contextProviders = new SceneCapabilityRegistry([provider]);
+    const application = new SceneApplicationService(repository, contextProviders, authorize);
+    runtime = new SceneExecutionService(repository, contextProviders, { execute: async ({ evidence }) => ({
       kind: 'artifact', summary: 'Leave Sunday free for rest.', evidenceIds: evidence.map((entry) => entry.id),
     }) }, authorize);
     const pass = async (_c, next) => { await next(); };
     deps = { service: { currentWorkspacePath: 'workspace' } as never, strictRateLimitMiddleware: pass,
       chatRateLimitMiddleware: pass, xopcCloudPollRateLimitMiddleware: pass,
-      scenes: { repository, application, inbox: new SceneInboxService(db), mail: new SceneMailContextProvider(db), browser: new BrowserSubscriptionService(db), preferences: new ScenePreferenceService(db), metrics: new SceneMetrics(db) } };
+      scenes: { activationAdapters: new SceneCapabilityRegistry([]), sourceProviders: new SceneSourceRegistry([]), repository, application,
+        inbox: new SceneInboxService(db), mail: new SceneMailContextProvider(db), browser: new BrowserSubscriptionService(db),
+        preferences: new ScenePreferenceService(db), metrics: new SceneMetrics(db) } };
     const app = new Hono();
     app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'scenes-http-test', allowTailscale: false }) }));
     app.use(gatewayScopes());
@@ -81,7 +95,7 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
     const response = await read({ id: activation.id });
     expect(response.status).toBe(200);
     const result = (await response.json()).data;
-    expect(await (await request(`/activations/${activation.id}`)).json()).toEqual({ activation: result.activation });
+    expect(await (await request(`/activations/${activation.id}`)).json()).toMatchObject({ activation: result.activation });
     const tool = createXopcUseTool({ getSceneAccess: () => ({ services: deps.scenes!, principal: { ownerId: 'local-owner', workspaceId: 'workspace' } }) });
     expect((await tool.execute('read', { mode: 'scene', command: 'get', args: { id: activation.id } })).details.result).toEqual(result);
     expect((await read({ id: activation.id, ownerId: 'other' })).status).toBe(400);
@@ -151,6 +165,43 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
     expect((await request(path, 'PATCH', { expectedRevision: activation.revision, status: 'paused' })).status).toBe(200);
     expect((await request(path, 'PATCH', { expectedRevision: activation.revision, status: 'active' })).status).toBe(409);
     expect((await request(`${path}/checks`, 'POST', undefined, true, 'new')).status).toBe(409);
+  });
+
+  it('routes non-agent templates through their registered execution capability', async () => {
+    repository.installTemplate(adapterTemplate);
+    const create = vi.fn(async (scenePrincipal, template, configuration) => ({
+      activation: repository.createActivation(scenePrincipal, {
+        templateKey: template.key, templateVersion: template.version, goal: String((configuration as { goal: string }).goal),
+        scope: { kind: 'personal' }, permissions: { accountIds: [], contextProviders: [], effectHandlers: [] },
+      }),
+    }));
+    const adapter: SceneActivationAdapter = {
+      id: 'fixture',
+      preflight: vi.fn(async () => ({ ready: true, missing: [] })),
+      create,
+      get: vi.fn(() => ({ source: 'fixture-source' })),
+      configure: vi.fn(async (_principal, activationId) => ({ activationId, configured: true })),
+      transition: vi.fn(async (_principal, activationId, _revision, status) => ({ activationId, status })),
+      tick: async () => undefined,
+      stop: async () => undefined,
+    };
+    deps.scenes!.activationAdapters = new SceneCapabilityRegistry([adapter]);
+    const body = { templateKey: adapterTemplate.key, templateVersion: adapterTemplate.version, configuration: { goal: 'Track it' } };
+
+    expect(await (await request('/preflight', 'POST', body)).json()).toEqual({ ready: true, missing: [] });
+    const created = await (await request('/activations', 'POST', body, true, 'adapter-create')).json();
+    expect(create).toHaveBeenCalledOnce();
+    expect(await (await request(`/activations/${created.activation.id}`)).json()).toMatchObject({
+      activation: { id: created.activation.id, templateKey: adapterTemplate.key },
+      template: { execution: { kind: 'fixture' } },
+      details: { source: 'fixture-source' },
+    });
+    expect(await (await request(`/activations/${created.activation.id}`, 'PATCH', {
+      expectedRevision: 1, configuration: { goal: 'Updated' },
+    })).json()).toMatchObject({ configured: true });
+    expect(await (await request(`/activations/${created.activation.id}`, 'PATCH', {
+      expectedRevision: 1, status: 'paused',
+    })).json()).toMatchObject({ status: 'paused' });
   });
 
   it('isolates result filters and rejects cross-scene cursors', async () => {
@@ -263,5 +314,10 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
     deps.scenes = undefined;
     expect((await request('/templates')).status).toBe(503);
     expect(db.prepare('SELECT count(*) AS n FROM scene_activations').get()?.n).toBe(0);
+  });
+
+  it('does not expose the removed scenario-specific task follow-up API', async () => {
+    expect((await request('/task-follow-ups')).status).toBe(404);
+    expect((await request('/task-follow-ups/preflight', 'POST', {})).status).toBe(404);
   });
 });

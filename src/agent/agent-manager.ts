@@ -31,6 +31,7 @@ import { createLogger } from '../utils/logger.js';
 import { resolveProviderApiKeySync } from '../auth/sync-provider-auth.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
 import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
+import { continuesAfterTool, trackAiUsageStream } from '../usage/recorder.js';
 import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
 import { extractTextContent } from './context/workspace.js';
@@ -1476,6 +1477,7 @@ export class AgentManager implements AgentInstanceGateway {
 
     const thinkingLevel = this.config.thinkingLevel ?? 'medium';
     const turnPolicy = this.buildAgentTurnPolicy(conversationId, profile);
+    const providerStreamFn = createExtensionAwareStreamFn();
 
     agent = new Agent({
       initialState: {
@@ -1498,7 +1500,13 @@ export class AgentManager implements AgentInstanceGateway {
         messages: [],
       },
       toolExecution: 'parallel',
-      streamFn: createExtensionAwareStreamFn(),
+      streamFn: (streamModel, context, options) => trackAiUsageStream(streamModel, {
+        operation: continuesAfterTool(context.messages)
+          ? 'agent.continue_after_tool'
+          : 'agent.answer',
+        conversationId,
+        agentId: profile.agentId,
+      }, () => providerStreamFn(streamModel, context, options)),
       getApiKey: (provider: string) => this.resolveApiKeyWithCache(provider),
       finishTurn: context => turnPolicy.shouldStopAfterTurn(context) ? { action: 'end' } : undefined,
       beforeToolCall: turnPolicy.beforeToolCall,

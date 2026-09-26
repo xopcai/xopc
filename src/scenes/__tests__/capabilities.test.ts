@@ -9,6 +9,7 @@ import { registerSceneWriteCapabilities } from '../capabilities/write.js';
 import type { SceneHttpServices } from '../httpServices.js';
 import { SceneRepository } from '../repository.js';
 import { SceneApplicationService } from '../service.js';
+import { SceneCapabilityRegistry } from '../registry.js';
 import { ScenePreferenceService } from '../preferences.js';
 import { familyPlanTemplate } from '../templates.js';
 
@@ -28,7 +29,7 @@ describe('atomic scene capabilities', () => {
       goal: 'Plan the week', scope: { kind: 'personal' }, permissions: { accountIds: [], contextProviders: ['user_notes'], effectHandlers: [] } });
     id = activation.id;
     repository.transitionActivation(principal, id, activation.revision, 'active');
-    application = new SceneApplicationService(repository, [{ id: 'user_notes', read: async () => [] }], async () => activation.permissions);
+    application = new SceneApplicationService(repository, new SceneCapabilityRegistry([{ id: 'user_notes', read: async () => [] }]), async () => activation.permissions);
     dispatcher = new CapabilityDispatcher();
     registerSceneWriteCapabilities(dispatcher, () => ({ principal, services: {
       application, preferences: new ScenePreferenceService(getSqliteDatabase()),
@@ -138,7 +139,7 @@ describe('atomic scene capabilities', () => {
     try {
       const separate = new CapabilityDispatcher();
       registerSceneWriteCapabilities(separate, () => ({ principal, services: {
-        application: new SceneApplicationService(new SceneRepository(other), [], async () => ({ accountIds: [], contextProviders: [], effectHandlers: [] })),
+        application: new SceneApplicationService(new SceneRepository(other), new SceneCapabilityRegistry([]), async () => ({ accountIds: [], contextProviders: [], effectHandlers: [] })),
       } as SceneHttpServices }));
       const operation = 'xopc.scenes.notes';
       await expect(separate.call(operation, { id, expectedRevision: 0, content: 'Denied' }, context,

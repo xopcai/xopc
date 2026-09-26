@@ -10,6 +10,7 @@ import {
   resolveModelCallOptions,
 } from '../providers/model-call.js';
 import { createLogger } from '../utils/logger.js';
+import { trackAiUsageStream } from '../usage/recorder.js';
 
 const log = createLogger('AiTextAssist');
 
@@ -362,7 +363,8 @@ export async function* streamTextAssist(
 
   yield { type: 'start', provider: model.provider, modelId: model.id, scenario: scenario.id };
 
-  const stream = await createExtensionAwareStreamFn()(model, normalizeContext(prompt), modelCallOptions);
+  const stream = await trackAiUsageStream(model, { operation: 'text_assist.generate', trigger: 'user' }, () =>
+    createExtensionAwareStreamFn()(model, normalizeContext(prompt), modelCallOptions));
   let streamedText = '';
 
   for await (const event of stream) {

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { SceneExecutionService } from '../execution.js';
+import { SceneCapabilityRegistry } from '../registry.js';
 import { SceneInboxService } from '../inbox.js';
 import { SceneMailObservationService } from '../mailObservations.js';
 import { SceneMetrics } from '../metrics.js';
@@ -23,7 +24,7 @@ describe('production readiness regressions', () => {
   const evidence = { ...principal, id: 'message', subjectId: 'thread', accountId: 'gmail', revision: '1', freshUntil: 9e15, content: 'Please reply.' };
   const read = vi.fn(async () => [evidence]);
   const execute = vi.fn(async () => ({ kind: 'artifact', summary: 'Suggested reply', evidenceIds: ['message'] }));
-  const service = () => new SceneExecutionService(repository, [{ id: 'mail', read }], { execute }, async () => permissions, () => now);
+  const service = () => new SceneExecutionService(repository, new SceneCapabilityRegistry([{ id: 'mail', read }]), { execute }, async () => permissions, () => now);
   const check = async () => {
     now += 1;
     repository.acceptManualCheck(principal, id, 'check', String(now), now);

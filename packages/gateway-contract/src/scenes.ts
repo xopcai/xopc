@@ -22,6 +22,12 @@ const limitsSchema = z.strictObject({
   maxOutputTokens: z.number().int().min(1).max(32_768),
 });
 
+const executionSchema = z.strictObject({
+  kind: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+  instruction: z.string().trim().min(1).max(32_000),
+  limits: limitsSchema,
+});
+
 export const sceneTemplateSchema = z.strictObject({
   schemaVersion: z.literal(1),
   key: z.string().regex(/^[a-z][a-z0-9-]{0,79}$/),
@@ -35,11 +41,7 @@ export const sceneTemplateSchema = z.strictObject({
     z.strictObject({ id: identifier, type: z.literal('event'), eventType: identifier }),
     z.strictObject({ id: identifier, type: z.literal('schedule') }),
   ])).min(1).max(20).refine((items) => new Set(items.map((item) => item.id)).size === items.length, 'Duplicate trigger IDs'),
-  execution: z.strictObject({
-    kind: z.literal('agent'),
-    instruction: z.string().trim().min(1).max(32_000),
-    limits: limitsSchema,
-  }),
+  execution: executionSchema,
   allowedOutcomeKinds: z.array(z.enum(sceneOutcomeKinds)).min(1),
   allowedEffectHandlers: uniqueIds,
 });

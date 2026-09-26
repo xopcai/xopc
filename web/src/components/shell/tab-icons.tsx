@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
+  ChartNoAxesColumn,
   FileText,
   FolderOpen,
   Globe,
@@ -24,6 +25,7 @@ import type { Tab } from '@/i18n/messages';
 
 const TAB_ICONS: Record<Tab, LucideIcon> = {
   sessions: FolderOpen,
+  usage: ChartNoAxesColumn,
   logs: FileText,
   settingsImports: FolderOpen,
   settingsOverview: Activity,

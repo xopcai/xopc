@@ -1,4 +1,5 @@
 export const loadSessionsPage = () => import('@/pages/sessions-page');
+export const loadUsagePage = () => import('@/pages/usage-page');
 export const loadAutomationsPage = () => import('@/pages/automations-page');
 export const loadScenesPage = () => import('@/features/scenes/scenes-page');
 export const loadBrowserAutomationsPage = () => import('@/pages/browser-automations-page');
@@ -103,6 +104,7 @@ export function preloadRouteForPath(to: string) {
   if (path.startsWith('/share/')) return preload(loadSharePreviewPage);
 
   if (path === '/settings/sessions') return preload(loadSessionsPage);
+  if (path === '/settings/usage') return preload(loadUsagePage);
   if (path === '/settings/logs') return preload(loadLogsPage);
   if (path === '/settings/extensions/debug') return preload(loadExtensionDebugPage);
   if (path.startsWith('/settings/ext/')) return preload(loadExtensionSettingsPage);

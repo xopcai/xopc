@@ -21,13 +21,16 @@ export function sceneContentHash(value: unknown): string {
   return createHash('sha256').update(canonical(value)).digest('hex');
 }
 
-export function validateTemplate(value: unknown, registered: Pick<ScenePermission, 'contextProviders' | 'effectHandlers'>): SceneTemplate {
+export function validateTemplate(value: unknown, registered: Pick<ScenePermission, 'contextProviders' | 'effectHandlers'> & { executionAdapters?: string[] }): SceneTemplate {
   const template = sceneTemplateSchema.parse(value);
   for (const provider of template.contextProviders) {
     if (!registered.contextProviders.includes(provider)) throw new Error(`Unknown scene context provider: ${provider}`);
   }
   for (const handler of template.allowedEffectHandlers) {
     if (!registered.effectHandlers.includes(handler)) throw new Error(`Unknown scene effect handler: ${handler}`);
+  }
+  if (registered.executionAdapters && !registered.executionAdapters.includes(template.execution.kind)) {
+    throw new Error(`Unknown scene execution adapter: ${template.execution.kind}`);
   }
   return template;
 }
@@ -49,5 +52,3 @@ export function canTransitionActivation(from: ActivationStatus, to: ActivationSt
   };
   return transitions[from].includes(to);
 }
-
-export type SceneModelUsage = { provider: string; model: string; inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number };

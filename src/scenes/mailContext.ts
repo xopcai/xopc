@@ -22,7 +22,19 @@ const accountPolicy = `a.enabled = 1 AND installation.enabled = 1 AND c.status =
 /** Reads a bounded, account-scoped thread from synchronized connector knowledge. */
 export class SceneMailContextProvider implements SceneContextProvider {
   readonly id = 'mail';
+  readonly tracksHealth = true;
+  readonly requiresAccountIdentity = true;
   constructor(private readonly db: DatabaseSync, private readonly clock: () => number = Date.now) {}
+
+  setupIssues(activation: SceneActivation): string[] {
+    return activation.scope.kind === 'objects' && activation.scope.ids.length === 1 && activation.permissions.accountIds.length === 1
+      ? [] : ['one_mail_thread_and_account'];
+  }
+
+  authorization(activation: SceneActivation): string[] | null {
+    const accounts = this.authorizedAccounts(activation);
+    return accounts.length ? accounts : null;
+  }
 
   /** Resolve current account grants for the exact delegated source, including reconnects and revocation. */
   authorizedAccounts(activation: SceneActivation): string[] {

@@ -15,7 +15,7 @@ export const SCENE_TABLES = [
   'scene_intent_events', 'scene_model_reservations', 'scene_notes',
   'scene_outcomes', 'scene_preferences', 'scene_presentations',
   'scene_runs', 'scene_schedule_cursors', 'scene_template_versions',
-  'scene_trigger_intents', 'scene_work_items', 'scene_mail_sources', 'scene_model_usage', 'scene_connector_usage',
+  'scene_trigger_intents', 'scene_work_items', 'scene_mail_sources', 'scene_connector_usage',
 ] as const;
 
 /** Installs fresh tables; the normal versioned upgrade owns existing databases. */

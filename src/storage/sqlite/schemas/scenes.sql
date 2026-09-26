@@ -190,13 +190,6 @@ CREATE TABLE scene_mail_sources (
   UNIQUE(owner_id, workspace_id, account_id, thread_id)
 );
 
-CREATE TABLE scene_model_usage (
-  run_id TEXT NOT NULL REFERENCES scene_runs(id), lease_epoch INTEGER NOT NULL,
-  provider TEXT NOT NULL, model TEXT NOT NULL, input_tokens INTEGER NOT NULL,
-  output_tokens INTEGER NOT NULL, total_tokens INTEGER NOT NULL, estimated_cost REAL NOT NULL,
-  recorded_at INTEGER NOT NULL, PRIMARY KEY(run_id, lease_epoch)
-);
-
 CREATE TABLE scene_connector_usage (
   owner_id TEXT NOT NULL, workspace_id TEXT NOT NULL, account_id TEXT NOT NULL,
   utc_day INTEGER NOT NULL, request_count INTEGER NOT NULL,

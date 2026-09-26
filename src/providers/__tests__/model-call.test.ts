@@ -60,6 +60,9 @@ describe('model-call', () => {
       completeWithResolvedCredentials(
         model({ provider: 'extension-model', baseUrl: 'extension://provider-plugin' }),
         { messages: [] },
+        {},
+        undefined,
+        { operation: 'test.complete' },
       ),
     ).resolves.toBe(message);
 
@@ -76,6 +79,8 @@ describe('model-call', () => {
         model(),
         { messages: [] },
         { maxTokens: 1000, reasoning: 'low' },
+        undefined,
+        { operation: 'test.complete' },
       ),
     ).resolves.toBe(message);
 

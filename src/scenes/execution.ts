@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
-import { intersectPermissions, sceneContentHash, type SceneModelUsage, type SceneActivation, type ScenePermission, type SceneTemplate } from './contracts.js';
+import type { AiUsageContext } from '../usage/types.js';
+import { intersectPermissions, sceneContentHash, type SceneActivation, type ScenePermission, type SceneTemplate } from './contracts.js';
 import { SceneRepository } from './repository.js';
+import { SceneCapabilityRegistry } from './registry.js';
 import { sceneSourceFailureReason, SceneSourceNotReady } from './readiness.js';
 
 export const readOnlyResultSchema = z.strictObject({
@@ -27,11 +29,15 @@ export interface SceneEvidence {
 
 export interface SceneContextProvider {
   id: string;
+  setupIssues?(activation: SceneActivation): string[];
+  authorization?(activation: SceneActivation): string[] | null;
+  tracksHealth?: boolean;
+  requiresAccountIdentity?: boolean;
   read(input: { activation: SceneActivation; subjectId: string; permissions: ScenePermission; notBefore?: number; signal: AbortSignal }): Promise<SceneEvidence[]>;
 }
 
 export interface SceneReadOnlyExecutor {
-  execute(input: { template: SceneTemplate; goal: string; evidence: SceneEvidence[]; signal: AbortSignal; onUsage?: (usage: SceneModelUsage) => void }): Promise<unknown>;
+  execute(input: { template: SceneTemplate; goal: string; evidence: SceneEvidence[]; signal: AbortSignal; usage: AiUsageContext }): Promise<unknown>;
 }
 
 class SceneExecutionRejected extends Error {
@@ -53,13 +59,11 @@ function evidenceAllowed(item: SceneEvidence, activation: SceneActivation, permi
 export class SceneExecutionService {
   constructor(
     private readonly repository: SceneRepository,
-    private readonly providers: readonly SceneContextProvider[],
+    private readonly providers: SceneCapabilityRegistry<SceneContextProvider>,
     private readonly executor: SceneReadOnlyExecutor,
     private readonly authorize: (activation: SceneActivation) => Promise<ScenePermission>,
     private readonly clock: () => number = Date.now,
-  ) {
-    if (new Set(providers.map((provider) => provider.id)).size !== providers.length) throw new Error('Duplicate scene context providers');
-  }
+  ) {}
 
   async runNext(worker: string, outerSignal?: AbortSignal): Promise<'idle' | 'completed' | 'discarded' | 'failed' | 'deferred'> {
     outerSignal?.throwIfAborted();
@@ -69,6 +73,7 @@ export class SceneExecutionService {
     if (!runInput) return 'discarded';
     const { activation, subjectId, accountId, notBefore } = runInput;
     const template = this.repository.getTemplate(activation.templateKey, activation.templateVersion);
+    if (template.execution.kind !== 'agent') throw new SceneExecutionRejected('executor_unavailable');
     if (!this.repository.renewLease(claim, this.clock(), template.execution.limits.timeoutSeconds * 1000 + 5000)) return 'discarded';
     const controller = new AbortController();
     const abort = () => controller.abort(outerSignal?.reason);
@@ -91,7 +96,9 @@ export class SceneExecutionService {
       let granted: ScenePermission;
       try { granted = await this.authorize(activation); }
       catch (error) {
-        if (template.contextProviders.includes('mail')) this.repository.recordSourceHealth(activation, sceneSourceFailureReason(error), this.clock(), this.clock() + 60_000);
+        if (template.contextProviders.some(id => this.providers.get(id).tracksHealth)) {
+          this.repository.recordSourceHealth(activation, sceneSourceFailureReason(error), this.clock(), this.clock() + 60_000);
+        }
         throw error;
       }
       assertCurrent();
@@ -100,20 +107,19 @@ export class SceneExecutionService {
       });
       const evidence: SceneEvidence[] = [];
       for (const providerId of template.contextProviders) {
+        const provider = this.providers.get(providerId);
         if (!permissions.contextProviders.includes(providerId)) {
-          if (providerId === 'mail') this.repository.recordSourceHealth(activation, 'needs_permission', this.clock(), this.clock() + 60_000);
+          if (provider.tracksHealth) this.repository.recordSourceHealth(activation, 'needs_permission', this.clock(), this.clock() + 60_000);
           throw new SceneExecutionRejected('needs_permission');
         }
-        const provider = this.providers.find((item) => item.id === providerId);
-        if (!provider) throw new SceneExecutionRejected('provider_unavailable');
         let items: SceneEvidence[];
         try { items = await provider.read({ activation, subjectId, permissions, notBefore, signal: controller.signal }); }
         catch (error) {
-          if (providerId === 'mail' && !outerSignal?.aborted) this.repository.recordSourceHealth(activation, sceneSourceFailureReason(error), this.clock(), this.clock() + 60_000);
+          if (provider.tracksHealth && !outerSignal?.aborted) this.repository.recordSourceHealth(activation, sceneSourceFailureReason(error), this.clock(), this.clock() + 60_000);
           throw error;
         }
         assertCurrent();
-        if (providerId === 'mail' && items.some((item) => item.accountId === undefined)) throw new SceneExecutionRejected('missing_account_identity');
+        if (provider.requiresAccountIdentity && items.some((item) => item.accountId === undefined)) throw new SceneExecutionRejected('missing_account_identity');
         if (items.some((item) => !evidenceAllowed(item, activation, permissions, this.clock()))) throw new SceneExecutionRejected('unauthorized_or_stale_evidence');
         evidence.push(...items);
       }
@@ -121,7 +127,7 @@ export class SceneExecutionService {
       if (new Set(evidence.map((item) => item.id)).size !== evidence.length) throw new SceneExecutionRejected('duplicate_evidence');
       evidence.sort((left, right) => left.id.localeCompare(right.id));
       const fingerprint = sceneContentHash(evidence.map(({ freshUntil: _freshUntil, ...item }) => item));
-      if (template.contextProviders.includes('mail')) this.repository.recordSourceHealth(activation, null, this.clock());
+      if (template.contextProviders.some(id => this.providers.get(id).tracksHealth)) this.repository.recordSourceHealth(activation, null, this.clock());
       return { evidence, fingerprint, permissions };
     };
     const execute = async (): Promise<'completed' | 'discarded' | 'deferred' | 'failed'> => {
@@ -139,8 +145,18 @@ export class SceneExecutionService {
       }
       const raw = snapshot.evidence.length === 0
         ? { kind: 'no_change', summary: '', evidenceIds: [] }
-        : await this.executor.execute({ template, goal: activation.goal, evidence: snapshot.evidence, signal: controller.signal,
-          onUsage: usage => { assertCurrent(); this.repository.recordModelUsage(claim, usage, this.clock()); } });
+        : await this.executor.execute({
+          template,
+          goal: activation.goal,
+          evidence: snapshot.evidence,
+          signal: controller.signal,
+          usage: {
+            operation: 'scene.execute',
+            traceId: claim.id,
+            runId: claim.id,
+            ...(activation.scope.kind === 'conversation' ? { conversationId: activation.scope.id } : {}),
+          },
+        });
       assertCurrent();
       const result = readOnlyResultSchema.parse(raw);
       if (!template.allowedOutcomeKinds.includes(result.kind)) throw new SceneExecutionRejected('invalid_model_result');

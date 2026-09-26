@@ -57,6 +57,8 @@ export class AutomationDraftService {
         model,
         { messages: [userMsg] },
         { maxTokens: 2048, temperature: attempt === 0 ? 0.2 : 0.1, signal },
+        undefined,
+        { operation: 'automation.generate_draft', trigger: attempt === 0 ? 'user' : 'retry' },
       );
       lastText = extractText(result);
       try {
@@ -114,6 +116,8 @@ export class AutomationDraftService {
         model,
         { messages: [userMsg] },
         { maxTokens: 2048, temperature: attempt === 0 ? 0.15 : 0.05, signal },
+        undefined,
+        { operation: 'automation.generate_draft', trigger: attempt === 0 ? 'user' : 'retry' },
       );
       lastText = extractText(result);
       try {
