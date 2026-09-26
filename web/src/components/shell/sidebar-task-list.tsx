@@ -192,7 +192,7 @@ function sessionUpdatedAtMs(session: SessionMetadata): number {
 function rowShellClass(isActive: boolean, indented: boolean): string {
   return cn(
     'group relative flex min-h-8 w-full min-w-0 items-center rounded-lg pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
-    indented ? 'pl-[1.125rem]' : 'pl-1.5',
+    indented ? 'pl-6' : 'pl-1.5',
     'focus-within:outline-none',
     isActive
       ? 'bg-surface-active font-medium text-fg'
@@ -209,7 +209,7 @@ const sidebarSectionButtonClass = cn(
 
 function SidebarSessionSkeletonRow({ indented = false }: { indented?: boolean }) {
   return (
-    <div className={cn('flex items-center gap-2 p-1.5', indented && 'pl-7')}>
+    <div className={cn('flex items-center gap-2 p-1.5', indented && 'pl-6')}>
       <div className="min-w-0 flex-1">
         <Skeleton className="h-3 w-4/5 animate-none" />
         <Skeleton className="mt-1.5 h-2.5 w-2/5 animate-none" />
@@ -677,7 +677,11 @@ function SidebarProjectSection({
           title={group.project.name}
           aria-expanded={!isCollapsed}
         >
-          <Folder className="size-3.5 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden />
+          {isCollapsed ? (
+            <Folder className="size-3.5 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden />
+          ) : (
+            <FolderOpen className="size-3.5 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden />
+          )}
           <span className="min-w-0 flex-1 truncate">{group.project.name}</span>
         </button>
         <SidebarProjectMenu
