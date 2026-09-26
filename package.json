@@ -1,6 +1,6 @@
 {
   "name": "@xopcai/xopc",
-  "version": "0.0.331",
+  "version": "0.0.332",
   "description": "Local-first personal AI for the one-person company, with durable context, tasks, workflows, automations, and local or cloud models.",
   "packageManager": "pnpm@11.9.0",
   "type": "module",
