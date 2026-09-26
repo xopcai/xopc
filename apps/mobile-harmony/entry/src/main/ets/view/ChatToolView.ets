@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatTool } from '../model/chat';
 import { XopcChatDisclosure } from '../common/chatDisclosure';
 import { chatToolDisplayKind, chatToolPreview, chatToolSemanticKind } from '../common/chatRichContent';
@@ -32,6 +33,7 @@ function chatToolTitle(call: XopcChatTool): ResourceStr {
 
 @ComponentV2
 export struct XopcChatToolGroupView {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param calls: XopcChatTool[] = [];
   @Param disclosure: XopcChatDisclosure = new XopcChatDisclosure();
   @Param scope: string = '';
@@ -41,9 +43,9 @@ export struct XopcChatToolGroupView {
     Column({ space: 4 }) {
       Button({ type: ButtonType.Normal }) {
         Row({ space: 6 }) {
-          Text(chatToolTitle(this.first)).fontSize(13).fontColor($r('app.color.secondary')).layoutWeight(1)
-          Text('×' + this.calls.length.toString()).fontSize(11).fontColor($r('app.color.tertiary'))
-          SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(12).fontColor([$r('app.color.secondary')])
+          Text(chatToolTitle(this.first)).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1)
+          Text('×' + this.calls.length.toString()).fontSize(11).fontColor(this.colors.tertiary)
+          SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(12).fontColor([this.colors.secondary])
         }.width('100%')
       }.id('chat-tool-group-' + this.first.id).width('100%').constraintSize({ minHeight: 36 }).padding({ left: 2, right: 2 }).backgroundColor(Color.Transparent)
         .onClick((): void => { this.disclosure.set(this.scope + ':tool-group:' + this.first.id, !this.expanded); })
@@ -52,7 +54,7 @@ export struct XopcChatToolGroupView {
           ForEach(this.calls, (call: XopcChatTool) => {
             XopcChatToolView({ call: call, disclosure: this.disclosure, scope: this.scope + ':group:' + this.first.id })
           }, (call: XopcChatTool): string => call.id)
-        }.width('100%').padding({ left: 8 }).border({ width: { left: 1 }, color: $r('app.color.border_subtle') })
+        }.width('100%').padding(8).borderRadius(10).backgroundColor(this.colors.input)
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -60,6 +62,7 @@ export struct XopcChatToolGroupView {
 
 @ComponentV2
 export struct XopcChatToolView {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param call: XopcChatTool = { id: '', name: '' };
   @Param live: boolean = false;
   @Param disclosure: XopcChatDisclosure = new XopcChatDisclosure();
@@ -70,13 +73,13 @@ export struct XopcChatToolView {
   build() {
     Row({ space: 6 }) {
       Column({ space: 2 }) {
-        Text(this.title()).fontSize(13).fontColor($r('app.color.secondary'))
+        Text(this.title()).fontSize(13).fontColor(this.colors.secondary)
         if (chatToolPreview(this.call)) {
-          Text(chatToolPreview(this.call)).fontSize(12).fontColor($r('app.color.tertiary')).maxLines(1)
+          Text(chatToolPreview(this.call)).fontSize(12).fontColor(this.colors.tertiary).maxLines(1)
         }
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       if (this.call.status === 'running') {
-        Text($r('app.string.chat_running')).fontSize(11).fontColor($r('app.color.tertiary'))
+        Text($r('app.string.chat_running')).fontSize(11).fontColor(this.colors.tertiary)
       }
     }.id('chat-tool-' + this.call.id).width('100%').constraintSize({ minHeight: 36 }).padding({ left: 2, right: 2 })
   }

@@ -11,7 +11,7 @@ export class XopcChatMediaPlayback {
   private player?: media.AVPlayer;
   private file?: fs.File;
 
-  async open(path: string, length: number): Promise<void> {
+  async open(path: string, length: number, autoPlay: boolean = false): Promise<void> {
     const cleanup = this.stop(); const generation = this.generation;
     await cleanup; if (generation !== this.generation) return;
     this.state = 'loading'; this.error = '';
@@ -25,7 +25,13 @@ export class XopcChatMediaPlayback {
       player.on('stateChange', (state: string): void => {
         if (generation !== this.generation || this.player !== player) return;
         if (state === 'initialized') player.prepare().catch((error: Error): void => { this.fail(error, generation); });
-        if (state === 'prepared') this.duration = player.duration / 1000;
+        if (state === 'prepared') {
+          this.duration = player.duration / 1000;
+          if (autoPlay) {
+            autoPlay = false;
+            player.play().catch((error: Error): void => { this.fail(error, generation); });
+          }
+        }
         this.state = state;
       });
       player.on('timeUpdate', (time: number): void => { if (generation === this.generation) this.position = time / 1000; });

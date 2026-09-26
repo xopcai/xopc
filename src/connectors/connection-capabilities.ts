@@ -30,6 +30,9 @@ export function capabilityActions(need: ConnectionNeed): string[][] {
 }
 
 export function missingConnectionCapabilities(need: ConnectionNeed, actions: Set<string>): string[] {
-  return capabilityActions(need).flatMap((alternatives, index) => alternatives.some(action => actions.has(action))
-    ? [] : [need.capabilities[index]!]);
+  return capabilityActions(need).flatMap((alternatives, index) => {
+    const capability = need.capabilities[index]!;
+    if (capability === 'tools') return actions.size > 0 ? [] : [capability];
+    return alternatives.some(action => actions.has(action)) ? [] : [capability];
+  });
 }

@@ -1,3 +1,5 @@
+import { serializeUserTurnDocument } from '@xopcai/gateway-contract';
+
 import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages';
 import type { Message } from '@/features/chat/messages/messages.types';
 import { extractUserMessagePlainText } from '@/features/chat/messages/user-message-plain-text';
@@ -45,6 +47,14 @@ export function userMessageFromStreamPayload(parsed: Record<string, unknown>): M
 
 const OPTIMISTIC_USER_REPLACE_WINDOW_MS = 120_000;
 
+function userTurnDocumentsEquivalent(a: Message, b: Message): boolean {
+  return Boolean(
+    a.userTurnDocument
+    && b.userTurnDocument
+    && serializeUserTurnDocument(a.userTurnDocument) === serializeUserTurnDocument(b.userTurnDocument),
+  );
+}
+
 /** True when the server row should replace the last optimistic user bubble from send(). */
 export function shouldReplaceOptimisticUserRow(optimistic: Message, server: Message): boolean {
   if (!isUiUserMessage(optimistic.role) || !isUiUserMessage(server.role)) return false;
@@ -54,6 +64,10 @@ export function shouldReplaceOptimisticUserRow(optimistic: Message, server: Mess
   const optAtt = optimistic.attachments?.length ?? 0;
   const srvAtt = server.attachments?.length ?? 0;
   const serverPreservesOptimisticAttachments = optAtt === 0 || srvAtt >= optAtt;
+
+  if (serverPreservesOptimisticAttachments && userTurnDocumentsEquivalent(optimistic, server)) {
+    return true;
+  }
 
   if (
     serverPreservesOptimisticAttachments &&
@@ -77,6 +91,7 @@ export function shouldReplaceOptimisticUserRow(optimistic: Message, server: Mess
 export function userMessagesEquivalent(a: Message, b: Message): boolean {
   if (!isUiUserMessage(a.role) || !isUiUserMessage(b.role)) return false;
   if (a.timestamp === b.timestamp) return true;
+  if (userTurnDocumentsEquivalent(a, b)) return true;
   return extractUserMessagePlainText(a.content) === extractUserMessagePlainText(b.content);
 }
 

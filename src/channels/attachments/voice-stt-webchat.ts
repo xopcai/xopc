@@ -102,7 +102,10 @@ export async function mergeVoiceTranscriptsIntoUserText(
         fileName: att.name,
       });
       const transcript = r.text.trim();
-      transcripts.push(transcript || '[Voice: no speech detected]');
+      // An empty STT result must not replace a valid, playable voice message
+      // with an error-like transcript. The persisted media remains the source
+      // of truth and can still be inspected or replayed by the client.
+      if (transcript) transcripts.push(transcript);
       if (transcript && 'uri' in att && att.uri?.trim()) {
         transcribedMediaUris.push(att.uri.trim());
       }

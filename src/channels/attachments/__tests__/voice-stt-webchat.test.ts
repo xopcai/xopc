@@ -100,6 +100,23 @@ describe('mergeVoiceTranscriptsIntoUserText', () => {
     expect(result.transcribedMediaUris).toEqual([saved.uri]);
   });
 
+  it('keeps a playable voice message without an error-like placeholder when STT is empty', async () => {
+    sttMocks.transcribe.mockResolvedValueOnce({ text: '   ', provider: 'custom-stt' });
+
+    const result = await mergeVoiceTranscriptsIntoUserText([{
+      type: 'voice',
+      mimeType: 'audio/mp4',
+      name: 'voice.m4a',
+      size: 3,
+      data: Buffer.from('abc').toString('base64'),
+    }], '', { enabled: true, provider: 'custom-stt' });
+
+    expect(result.text).toBe('');
+    expect(result.inboundVoice).toBe(true);
+    expect(result.voiceTranscripts).toEqual([]);
+    expect(result.transcribedMediaUris).toEqual([]);
+  });
+
   it('recognizes explicit requests to inspect the original recording', () => {
     expect(requestsOriginalVoiceInspection('请分析原始音频里的背景噪声')).toBe(true);
     expect(requestsOriginalVoiceInspection('Analyze the raw audio for speaker tone')).toBe(true);

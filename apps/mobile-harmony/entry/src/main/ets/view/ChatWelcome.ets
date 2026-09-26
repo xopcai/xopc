@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatAgent, XopcContextSummary } from '../model/chat';
 import { XopcWelcomeData, XopcWelcomeStarter } from '../common/chatWelcome';
 import { XopcChatWelcomeViewModel } from '../viewmodel/chatWelcomeViewModel';
@@ -6,6 +7,7 @@ import { XopcListSkeleton } from './MobileComponents';
 
 @ComponentV2
 export struct XopcChatWelcome {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Param scope: XopcContextSummary | undefined = undefined;
   @Param workspace: string = '';
   @Param agent: XopcChatAgent | undefined = undefined;
@@ -52,28 +54,27 @@ export struct XopcChatWelcome {
         if (!this.data || this.contextPending || this.model.loading) { XopcListSkeleton() }
         else if (this.model.model) {
           Text(this.model.model.headline).fontSize(17).lineHeight(24).fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.foreground')).width('100%').textAlign(TextAlign.Center)
-          Text(this.model.model.tagline).fontSize(13).lineHeight(18).fontColor($r('app.color.secondary'))
+            .fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.Center)
+          Text(this.model.model.tagline).fontSize(13).lineHeight(18).fontColor(this.colors.secondary)
             .constraintSize({ maxWidth: 280 }).textAlign(TextAlign.Center).opacity(0.58)
           Column({ space: 8 }) {
           ForEach(this.model.model.starters, (starter: XopcWelcomeStarter) => {
             Button({ type: ButtonType.Normal }) {
               Row({ space: 10 }) {
-                Row() { SymbolGlyph(this.starterSymbol(starter.icon)).fontSize(18).fontColor([$r('app.color.accent')]) }
-                  .width(36).height(36).justifyContent(FlexAlign.Center).borderRadius(18).backgroundColor($r('app.color.accent_soft'))
+                Row() { SymbolGlyph(this.starterSymbol(starter.icon)).fontSize(18).fontColor([this.colors.accent]) }
+                  .width(36).height(36).justifyContent(FlexAlign.Center).borderRadius(18).backgroundColor(this.colors.accentSoft)
                 Column({ space: 2 }) {
-                  Text(starter.title).fontSize(15).lineHeight(20).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground')).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(starter.description).fontSize(12).lineHeight(16).fontColor($r('app.color.secondary')).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  Text(starter.title).fontSize(15).lineHeight(20).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  Text(starter.description).fontSize(12).lineHeight(16).fontColor(this.colors.secondary).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 }.layoutWeight(1)
               }.width('100%')
             }.id('chat-starter-' + starter.id).width('100%').constraintSize({ minHeight: 60 }).padding({ left: 12, right: 12, top: 10, bottom: 10 })
-              .border({ width: 0.5, color: $r('app.color.border_subtle'), radius: 16 })
-              .backgroundColor($r('app.color.panel')).onClick((): void => { this.onChoose(starter.prompt); })
+              .borderRadius(16).backgroundColor(this.colors.panel).onClick((): void => { this.onChoose(starter.prompt); })
           }, (starter: XopcWelcomeStarter): string => starter.id + ':' + starter.prompt)
           }.width('100%').constraintSize({ maxWidth: 360 }).margin({ top: 14 })
           if ((this.model.degraded || this.contextError) && this.data) {
-            Text(this.data.copy.contextFallback).fontSize(12).fontColor($r('app.color.secondary')).width('100%')
-            Button(this.data.copy.retryContext).height(44).backgroundColor(Color.Transparent).fontColor($r('app.color.accent'))
+            Text(this.data.copy.contextFallback).fontSize(12).fontColor(this.colors.secondary).width('100%')
+            Button(this.data.copy.retryContext).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
               .onClick((): void => { if (this.contextError) this.onRetryContext(); else this.reload(); })
           }
         }

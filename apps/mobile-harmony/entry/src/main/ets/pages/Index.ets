@@ -1,3 +1,4 @@
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { connectionModel, XopcConnectionViewModel } from '../viewmodel/connectionViewModel';
 import { XopcGatewayProfilesView } from '../view/GatewayProfilesView';
 import { XopcHomeView } from '../view/HomeView';
@@ -8,10 +9,12 @@ import { XopcSettingsView } from '../view/SettingsView';
 import { layoutState } from '../service/layoutState';
 import { voiceCall, XopcVoiceCall } from '../service/voiceCall';
 import { XopcVoiceCallView } from '../view/VoiceCallView';
+import { appSettings, XopcSettings } from '../service/settings';
 
 @Entry
 @ComponentV2
 struct XopcIndex {
+  @Local colors: XopcThemeColors = appThemeColors;
   @Local invitation: string = '';
   @Local connection: XopcConnectionViewModel = connectionModel;
   @Local showSettings: boolean = false;
@@ -20,9 +23,14 @@ struct XopcIndex {
   @Local scanning: boolean = false;
   @Local contentHeight: number = 0;
   @Local call: XopcVoiceCall = voiceCall;
+  @Local preferences: XopcSettings = appSettings;
   private invitationEditor: TextAreaController = new TextAreaController();
 
-  aboutToAppear(): void { this.connection.restore(); }
+  aboutToAppear(): void { this.restoreConnection(); }
+
+  private async restoreConnection(): Promise<void> {
+    await this.connection.restore();
+  }
   @Monitor('connection.adding')
   onAddingGateway(): void {
     if (this.connection.adding) { this.invitation = ''; this.manualEntry = false; this.showHelp = false; this.showSettings = false; }
@@ -79,18 +87,18 @@ struct XopcIndex {
     Row({ space: 10 }) {
       if (this.manualEntry || this.showHelp || this.connection.adding) {
         Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([$r('app.color.foreground')])
+          SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground])
         }.id('pairing-back').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
           .enabled(!this.connection.busy).accessibilityText($r('app.string.back')).onClick((): void => {
             if (this.manualEntry || this.showHelp) this.closeSecondary(); else this.connection.cancel();
           })
       } else {
         Image($r('app.media.brand_logo')).width(32).height(32).objectFit(ImageFit.Contain).accessibilityText('xopc')
-        Text('xopc').fontSize(22).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground'))
+        Text('xopc').fontSize(22).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
       }
       Blank().layoutWeight(1)
       Button({ type: ButtonType.Circle }) {
-        SymbolGlyph($r('sys.symbol.gearshape')).fontSize(22).fontColor([$r('app.color.secondary')])
+        SymbolGlyph($r('sys.symbol.gearshape')).fontSize(22).fontColor([this.colors.secondary])
       }.id('open-settings').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
         .accessibilityText($r('app.string.settings')).enabled(!this.connection.busy && !this.scanning)
         .onClick((): void => { this.invitationEditor.stopEditing(); this.showSettings = true; })
@@ -102,28 +110,27 @@ struct XopcIndex {
     Column({ space: 16 }) {
       Text(this.connection.busy ? (this.connection.confirmationCode ? $r('app.string.pair_waiting') : $r('app.string.pair_connecting'))
         : this.showHelp ? $r('app.string.pair_help_title') : this.manualEntry ? $r('app.string.pair_manual_title') : $r('app.string.pair_title'))
-        .id('connect-title').fontSize(32).fontWeight(FontWeight.Bold).fontColor($r('app.color.foreground')).width('100%')
+        .id('connect-title').fontSize(32).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).width('100%')
       Text(this.connection.busy ? (this.connection.confirmationCode ? $r('app.string.pair_approve_hint') : $r('app.string.pair_connecting_hint'))
         : this.showHelp ? $r('app.string.pair_help_steps') : this.manualEntry ? $r('app.string.pair_manual_hint') : $r('app.string.pair_hint'))
-        .fontSize(16).lineHeight(26).fontColor($r('app.color.secondary')).width('100%')
+        .fontSize(16).lineHeight(26).fontColor(this.colors.secondary).width('100%')
       if (this.connection.confirmationCode) {
         Column({ space: 12 }) {
           Text(this.connection.confirmationCode).id('pairing-confirmation-code').fontSize(40).fontWeight(FontWeight.Medium)
-            .letterSpacing(6).fontColor($r('app.color.foreground'))
-          Text($r('app.string.pair_compare')).fontSize(13).lineHeight(20).fontColor($r('app.color.secondary')).textAlign(TextAlign.Center)
-        }.width('100%').padding(24).margin({ top: 16 }).backgroundColor($r('app.color.panel'))
-          .border({ radius: 20, width: 0.5, color: $r('app.color.border_subtle') })
+            .letterSpacing(6).fontColor(this.colors.foreground)
+          Text($r('app.string.pair_compare')).fontSize(13).lineHeight(20).fontColor(this.colors.secondary).textAlign(TextAlign.Center)
+        }.width('100%').padding(24).margin({ top: 16 }).borderRadius(20).backgroundColor(this.colors.panel)
       }
       if (this.manualEntry && !this.connection.busy) {
         TextArea({ text: this.invitation, placeholder: $r('app.string.invitation_hint'), controller: this.invitationEditor })
           .id('pairing-link').width('100%').height(112).fontSize(15).padding(16)
-          .backgroundColor($r('app.color.panel')).fontColor($r('app.color.foreground')).placeholderColor($r('app.color.tertiary'))
-          .border({ radius: 16, width: 1, color: $r('app.color.border_subtle') })
+          .backgroundColor(this.colors.input).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
+          .borderRadius(16)
           .onChange((text: string): void => { this.invitation = text; this.connection.errorMessage = ''; })
       }
       if (this.connection.errorMessage) {
         Text(this.errorText()).id('pairing-error').fontSize(14).lineHeight(22).width('100%')
-          .fontColor($r('app.color.danger')).padding({ top: 8 })
+          .fontColor(this.colors.danger).padding({ top: 8 })
       }
     }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 40, bottom: 32 })
   }
@@ -133,13 +140,13 @@ struct XopcIndex {
     Column({ space: 8 }) {
       if (this.connection.busy) {
         Button($r('app.string.cancel')).id('pairing-cancel').height(48).width('100%')
-          .backgroundColor($r('app.color.input')).fontColor($r('app.color.secondary')).onClick((): void => { this.connection.cancel(); })
+          .backgroundColor(this.colors.input).fontColor(this.colors.secondary).onClick((): void => { this.connection.cancel(); })
       } else if (this.showHelp) {
         Button($r('app.string.pair_ready')).height(52).width('100%').fontSize(16)
-          .backgroundColor($r('app.color.accent')).fontColor(Color.White).onClick((): void => { this.closeSecondary(); })
+          .backgroundColor(this.colors.accent).fontColor(Color.White).onClick((): void => { this.closeSecondary(); })
       } else if (this.manualEntry) {
         Button($r('app.string.connect')).id('pairing-connect').height(52).width('100%').fontSize(16)
-          .backgroundColor($r('app.color.accent')).fontColor(Color.White).enabled(this.invitation.trim().length > 0)
+          .backgroundColor(this.colors.accent).fontColor(Color.White).enabled(this.invitation.trim().length > 0)
           .onClick((): void => { this.invitationEditor.stopEditing(); this.connection.connect(this.invitation); })
       } else {
         Button({ type: ButtonType.Normal }) {
@@ -147,21 +154,22 @@ struct XopcIndex {
             SymbolGlyph($r('sys.symbol.qrcode')).fontSize(22).fontColor([Color.White])
             Text($r('app.string.pair_scan')).fontSize(16).fontWeight(FontWeight.Medium).fontColor(Color.White)
           }.justifyContent(FlexAlign.Center).width('100%')
-        }.id('pairing-scan').height(52).width('100%').borderRadius(16).backgroundColor($r('app.color.accent'))
+        }.id('pairing-scan').height(52).width('100%').borderRadius(16).backgroundColor(this.colors.accent)
           .enabled(!this.scanning).accessibilityText($r('app.string.pair_scan')).onClick((): void => { this.scan(); })
         Button($r('app.string.pair_manual')).id('pairing-manual').height(48).width('100%').fontSize(15)
-          .backgroundColor(Color.Transparent).fontColor($r('app.color.secondary')).enabled(!this.scanning)
+          .backgroundColor(Color.Transparent).fontColor(this.colors.secondary).enabled(!this.scanning)
           .onClick((): void => { this.manualEntry = true; this.connection.errorMessage = ''; })
         Button($r('app.string.pair_help')).id('pairing-help').height(44).width('100%').fontSize(14)
-          .backgroundColor(Color.Transparent).fontColor($r('app.color.tertiary')).enabled(!this.scanning)
+          .backgroundColor(Color.Transparent).fontColor(this.colors.tertiary).enabled(!this.scanning)
           .onClick((): void => { this.showHelp = true; this.connection.errorMessage = ''; })
       }
-      Text($r('app.string.pair_requirement')).fontSize(12).fontColor($r('app.color.tertiary')).textAlign(TextAlign.Center)
+      Text($r('app.string.pair_requirement')).fontSize(12).fontColor(this.colors.tertiary).textAlign(TextAlign.Center)
         .width('100%').margin({ top: 20 })
     }.width('100%').padding({ bottom: 24 })
   }
 
   build() {
+    WithTheme({ theme: this.preferences.customTheme(), colorMode: this.preferences.themeColorMode() }) {
     Stack({ alignContent: Alignment.TopStart }) {
     Column() {
     if (this.connection.managing) {
@@ -184,8 +192,9 @@ struct XopcIndex {
       }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
         .onAreaChange((_previous: Area, current: Area): void => { this.contentHeight = Number(current.height); })
     }
-    }.width('100%').height('100%').backgroundColor($r('app.color.surface'))
+    }.width('100%').height('100%').backgroundColor(this.colors.surface)
     XopcVoiceCallView({ call: this.call })
     }.width('100%').height('100%')
+    }
   }
 }

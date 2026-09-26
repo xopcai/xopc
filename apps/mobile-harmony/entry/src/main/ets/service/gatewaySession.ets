@@ -1,5 +1,6 @@
 import { XopcDeviceCrypto } from './deviceCrypto';
 import { chatHistoryCache } from './chatHistoryCache';
+import { chatSessionCache } from './chatSessionCache';
 import { XopcSecureStore } from './secureStore';
 import { XopcTransport, XopcHttpError } from './transport';
 import { XopcTransferAuth } from '../model/files';
@@ -86,6 +87,7 @@ export class XopcGatewaySession {
       if (this.refreshTask) { try { await this.refreshTask; } catch (_) {} }
       const active = this.profile?.gatewayId === gatewayId;
       await chatHistoryCache.remove(gatewayId);
+      await chatSessionCache.remove(gatewayId);
       await this.profiles.remove(gatewayId);
       if (active) { this.profile = this.profiles.active(); this.tokens = undefined; this.verifiedUntil.clear(); }
       // Device and endpoint keys are shared by the remaining profiles and must survive removal.

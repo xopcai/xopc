@@ -30,6 +30,15 @@ describe('native chat attachment contract', () => {
     expect(rows).toMatchObject([{ id: 'message-1', role: 'user', text: '', thinking: '', tools: '',
       media: [{ id: 'media-1', name: 'hello.txt', type: 'document', mimeType: 'text/plain', size: 5, uri: 'media://test' }] }]);
   });
+  it('shows legacy empty-STT voice turns as playable audio without an error-like caption', () => {
+    const rows = historyRows({ session: { key: 'one', messages: [{ id: 'voice-1', role: 'user',
+      content: '[Voice: no speech detected]', media: [{ id: 'media-1', name: 'voice.m4a', type: 'voice',
+        mimeType: 'audio/mp4', size: 1024, uri: 'media://inbound/voice-1' }] }] }, pagination: { hasMore: false } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].text).toBe('');
+    expect(rows[0].media).toEqual([expect.objectContaining({ mimeType: 'audio/mp4', uri: 'media://inbound/voice-1' })]);
+    expect(rows[0].blocks?.find((block) => block.kind === 'text')?.text).toBe('');
+  });
   it('prefers structured history and preserves source versions for regeneration', () => {
     const rows = historyRows({ session: { key: 'one', messages: [{ messageId: 'm', role: 'assistant', content: 'flattened',
       rawContent: [{ type: 'thinking', thinking: 'reasoning' }, { type: 'text', text: 'answer' }, { type: 'toolCall', id: 'call', name: 'search', args: { q: 'x' } }],
