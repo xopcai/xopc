@@ -2,6 +2,7 @@ import type { AiUsageEvent, AiUsageFinish } from '../../usage/types.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 const ERROR_SUMMARY_LIMIT = 512;
+export const AI_USAGE_RETENTION_MS = 180 * 24 * 60 * 60 * 1000;
 
 function boundedError(value: string | undefined): string | undefined {
   if (!value) return undefined;
@@ -58,6 +59,11 @@ export function markStaleAiUsageEventsUnknown(cutoffMs: number, now = Date.now()
   return runSqliteWriteTransaction((db) => Number(db.prepare(`UPDATE ai_usage_events
     SET status = 'unknown', finished_at = ?, duration_ms = MAX(0, ? - started_at), updated_at = ?
     WHERE status = 'running' AND started_at < ?`).run(now, now, now, cutoffMs).changes));
+}
+
+export function pruneAiUsageEvents(cutoffMs: number): number {
+  return runSqliteWriteTransaction((db) => Number(db.prepare(`DELETE FROM ai_usage_events
+    WHERE status <> 'running' AND started_at < ?`).run(cutoffMs).changes));
 }
 
 export function getAiUsageEvent(id: string): Record<string, unknown> | undefined {

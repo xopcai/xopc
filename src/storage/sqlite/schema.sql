@@ -215,27 +215,6 @@ CREATE TABLE note_agent_contexts (
 CREATE INDEX idx_note_agent_contexts_generated
   ON note_agent_contexts(generated_at DESC);
 
-CREATE TABLE memory_files (
-  file_id       TEXT PRIMARY KEY,
-  user_id      TEXT NOT NULL,
-  path          TEXT NOT NULL,
-  mtime_ms      INTEGER NOT NULL,
-  content_hash  TEXT NOT NULL,
-  UNIQUE(user_id, path)
-);
-
-CREATE TABLE memory_chunks (
-  chunk_id    TEXT PRIMARY KEY,
-  file_id     TEXT NOT NULL,
-  start_line  INTEGER NOT NULL,
-  end_line    INTEGER NOT NULL,
-  content     TEXT NOT NULL,
-  FOREIGN KEY (file_id) REFERENCES memory_files(file_id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_memory_chunks_file
-  ON memory_chunks(file_id, start_line);
-
 CREATE VIRTUAL TABLE notes_fts USING fts5(
   content,
   note_id UNINDEXED,
@@ -409,27 +388,6 @@ CREATE INDEX idx_knowledge_sync_runs_source_started
 CREATE INDEX idx_knowledge_sync_runs_status_started
   ON knowledge_sync_runs(status, started_at DESC);
 
-CREATE TABLE memory_relations (
-  relation_id      TEXT PRIMARY KEY,
-  from_record_id   TEXT NOT NULL,
-  relation_type    TEXT NOT NULL,
-  to_record_id     TEXT NOT NULL,
-  confidence       REAL NOT NULL,
-  valid_from       INTEGER,
-  valid_to         INTEGER,
-  created_at       INTEGER NOT NULL,
-  updated_at       INTEGER NOT NULL,
-  UNIQUE(from_record_id, relation_type, to_record_id),
-  FOREIGN KEY(from_record_id) REFERENCES memory_records(record_id) ON DELETE CASCADE,
-  FOREIGN KEY(to_record_id) REFERENCES memory_records(record_id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_memory_relations_from
-  ON memory_relations(from_record_id, relation_type);
-
-CREATE INDEX idx_memory_relations_to
-  ON memory_relations(to_record_id, relation_type);
-
 CREATE TABLE connector_catalog_entries (
   connector_id TEXT PRIMARY KEY,
   provider TEXT NOT NULL,
@@ -579,16 +537,6 @@ CREATE TABLE knowledge_consumer_watermarks (
   last_sequence       INTEGER NOT NULL DEFAULT 0,
   updated_at          INTEGER NOT NULL,
   PRIMARY KEY(consumer_id, source_instance_id)
-);
-
-CREATE VIRTUAL TABLE memory_fts USING fts5(
-  content,
-  chunk_id UNINDEXED,
-  user_id UNINDEXED,
-  path UNINDEXED,
-  start_line UNINDEXED,
-  end_line UNINDEXED,
-  tokenize='unicode61'
 );
 
 CREATE TABLE local_apps (

@@ -12,7 +12,6 @@ export const SESSION_COLUMNS = `
   s.project_id, s.routing_json, s.custom_data_json,
   s.message_count, s.estimated_tokens, s.compacted_count,
   s.last_flushed_at, s.flush_count,
-  s.thinking_level, s.verbose_level,
   t.cwd AS cwd
 `;
 

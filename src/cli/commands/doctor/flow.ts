@@ -4,6 +4,7 @@ import { checkNodeVersion } from './checks/node-version.js';
 import { checkConfigHealth } from './checks/config-health.js';
 import { checkStateIntegrity } from './checks/state-integrity.js';
 import { checkDatabaseSchema } from './checks/database-schema.js';
+import { checkDatabaseRelations } from './checks/database-relations.js';
 import { checkProviderAuth } from './checks/provider-auth.js';
 import { checkChannelConfig } from './checks/channel-config.js';
 import { checkChannelPairingPending } from './checks/channel-pairing-pending.js';
@@ -27,6 +28,7 @@ const DOCTOR_CHECKS: DoctorCheck[] = [
   checkConfigHealth,
   checkStateIntegrity,
   checkDatabaseSchema,
+  checkDatabaseRelations,
   checkProviderAuth,
   checkImageProviders,
   checkChannelConfig,

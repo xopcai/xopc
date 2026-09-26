@@ -1,4 +1,5 @@
 import type { ConnectorAccount } from '../../connectors/types.js';
+import { timestampToIso } from './timestamps.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 type AccountRow = {
@@ -13,8 +14,8 @@ type AccountRow = {
   label: string | null;
   enabled: number;
   allowed_agent_ids_json: string | null;
-  created_at: string;
-  updated_at: string;
+  created_at: number;
+  updated_at: number;
 };
 
 function parseIdentity(value: string): Record<string, unknown> {
@@ -41,8 +42,8 @@ function fromRow(row: AccountRow): ConnectorAccount {
     label: row.label ?? undefined,
     enabled: row.enabled === 1,
     allowedAgentIds: row.allowed_agent_ids_json === null ? null : JSON.parse(row.allowed_agent_ids_json),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: timestampToIso(row.created_at),
+    updatedAt: timestampToIso(row.updated_at),
   };
 }
 
@@ -123,7 +124,7 @@ export function updateConnectorAccount(id: string, patch: {
     patch.allowedAgentIds === undefined
       ? account.allowedAgentIds === null ? null : JSON.stringify(account.allowedAgentIds)
       : patch.allowedAgentIds === null ? null : JSON.stringify([...new Set(patch.allowedAgentIds)]),
-    new Date().toISOString(), id,
+    Date.now(), id,
   );
   return getConnectorAccount(id)!;
 }
@@ -140,7 +141,7 @@ export function listConnectorAccounts(options: { principalId?: string; connector
 }
 
 export function refreshConnectorAccountCurrent(accountId: string): ConnectorAccount | undefined {
-  const now = new Date().toISOString();
+  const now = Date.now();
   runSqliteWriteTransaction((db) => {
     const primary = db.prepare(`
       SELECT id FROM connector_connections
@@ -166,7 +167,7 @@ export function reconcileConnectorAccount(input: {
   identityKey: string;
   identity: Record<string, unknown>;
 }): ConnectorAccount {
-  const now = new Date().toISOString();
+  const now = Date.now();
   const accountId = runSqliteWriteTransaction((db) => {
     const connection = db.prepare(
       `SELECT c.account_id, c.connector_id, c.principal_id, a.backend_id FROM connector_connections c

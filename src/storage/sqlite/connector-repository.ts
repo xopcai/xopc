@@ -8,6 +8,12 @@ import type {
   ConnectorExecutionAuditRecord,
   ConnectorInstallationPolicy,
 } from '../../connectors/types.js';
+import {
+  optionalTimestampToIso,
+  optionalTimestampToMs,
+  timestampToIso,
+  timestampToMs,
+} from './timestamps.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 type InstallationRow = {
@@ -19,8 +25,8 @@ type InstallationRow = {
   max_scope: ConnectorInstallationPolicy['maxScope'];
   confirmation_policy: ConnectorInstallationPolicy['confirmationPolicy'];
   selected_account_ids_json: string;
-  created_at: string;
-  updated_at: string;
+  created_at: number;
+  updated_at: number;
 };
 
 type ConnectionRow = {
@@ -35,12 +41,12 @@ type ConnectionRow = {
   identity_json: string;
   status: ConnectorConnection['status'];
   is_default: number;
-  connected_at: string | null;
-  expires_at: string | null;
+  connected_at: number | null;
+  expires_at: number | null;
   last_error: string | null;
   metadata_json: string;
-  created_at: string;
-  updated_at: string;
+  created_at: number;
+  updated_at: number;
 };
 
 type ActionRow = {
@@ -51,7 +57,7 @@ type ActionRow = {
   curated: number;
   input_schema_json: string | null;
   schema_version: string | null;
-  cached_at: string;
+  cached_at: number;
 };
 
 type AuditRow = {
@@ -68,15 +74,15 @@ type AuditRow = {
   result_status: ConnectorExecutionAuditRecord['resultStatus'];
   duration_ms: number | null;
   error_code: string | null;
-  created_at: string;
+  created_at: number;
 };
 
 type CatalogRow = {
   connector_id: string;
   provider: string;
   definition_json: string;
-  fetched_at: string;
-  expires_at: string | null;
+  fetched_at: number;
+  expires_at: number | null;
 };
 
 type ApprovalRow = {
@@ -92,10 +98,10 @@ type ApprovalRow = {
   arguments_hash: string;
   arguments_preview_json: string;
   status: ConnectorApprovalRecord['status'];
-  expires_at: string;
-  created_at: string;
-  decided_at: string | null;
-  consumed_at: string | null;
+  expires_at: number;
+  created_at: number;
+  decided_at: number | null;
+  consumed_at: number | null;
 };
 
 export type CachedConnectorCatalogEntry = {
@@ -136,8 +142,8 @@ function installationFromRow(row: InstallationRow): ConnectorInstallationPolicy 
     maxScope: row.max_scope,
     confirmationPolicy: row.confirmation_policy,
     selectedAccountIds: row.selected_account_ids_json === 'null' ? null : parseStringArray(row.selected_account_ids_json),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: timestampToIso(row.created_at),
+    updatedAt: timestampToIso(row.updated_at),
   };
 }
 
@@ -154,12 +160,12 @@ function connectionFromRow(row: ConnectionRow): ConnectorConnection {
     identity: parseObject(row.identity_json),
     status: row.status,
     isDefault: row.is_default === 1,
-    connectedAt: row.connected_at ?? undefined,
-    expiresAt: row.expires_at ?? undefined,
+    connectedAt: optionalTimestampToIso(row.connected_at),
+    expiresAt: optionalTimestampToIso(row.expires_at),
     lastError: row.last_error ?? undefined,
     metadata: parseObject(row.metadata_json),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: timestampToIso(row.created_at),
+    updatedAt: timestampToIso(row.updated_at),
   };
 }
 
@@ -172,7 +178,7 @@ function actionFromRow(row: ActionRow): ConnectorActionMetadata {
     curated: row.curated === 1,
     inputSchema: row.input_schema_json == null ? undefined : JSON.parse(row.input_schema_json),
     schemaVersion: row.schema_version ?? undefined,
-    cachedAt: row.cached_at,
+    cachedAt: timestampToIso(row.cached_at),
   };
 }
 
@@ -191,7 +197,7 @@ function auditFromRow(row: AuditRow): ConnectorExecutionAuditRecord {
     resultStatus: row.result_status,
     durationMs: row.duration_ms ?? undefined,
     errorCode: row.error_code ?? undefined,
-    createdAt: row.created_at,
+    createdAt: timestampToIso(row.created_at),
   };
 }
 
@@ -203,8 +209,8 @@ function catalogFromRow(row: CatalogRow): CachedConnectorCatalogEntry | undefine
       connectorId: row.connector_id,
       provider: row.provider,
       definition,
-      fetchedAt: row.fetched_at,
-      expiresAt: row.expires_at ?? undefined,
+      fetchedAt: timestampToIso(row.fetched_at),
+      expiresAt: optionalTimestampToIso(row.expires_at),
     };
   } catch {
     return undefined;
@@ -225,10 +231,10 @@ function approvalFromRow(row: ApprovalRow): ConnectorApprovalRecord {
     argumentsHash: row.arguments_hash,
     argumentsPreview: parseObject(row.arguments_preview_json),
     status: row.status,
-    expiresAt: row.expires_at,
-    createdAt: row.created_at,
-    decidedAt: row.decided_at ?? undefined,
-    consumedAt: row.consumed_at ?? undefined,
+    expiresAt: timestampToIso(row.expires_at),
+    createdAt: timestampToIso(row.created_at),
+    decidedAt: optionalTimestampToIso(row.decided_at),
+    consumedAt: optionalTimestampToIso(row.consumed_at),
   };
 }
 
@@ -260,10 +266,10 @@ export function createConnectorApproval(
       record.argumentsHash,
       JSON.stringify(record.argumentsPreview),
       record.status,
-      record.expiresAt,
-      record.createdAt,
-      record.decidedAt ?? null,
-      record.consumedAt ?? null,
+      timestampToMs(record.expiresAt),
+      timestampToMs(record.createdAt),
+      optionalTimestampToMs(record.decidedAt),
+      optionalTimestampToMs(record.consumedAt),
       record.waitId ?? null,
     );
   });
@@ -307,16 +313,16 @@ export function decideConnectorApproval(id: string, decision: 'approved' | 'deni
   return runSqliteWriteTransaction((db) => {
     const current = db.prepare('SELECT * FROM connector_approvals WHERE id = ?').get(id) as ApprovalRow | undefined;
     if (!current) return undefined;
-    if (current.status !== 'pending' || Date.parse(current.expires_at) <= now.getTime()) {
+    if (current.status !== 'pending' || current.expires_at <= now.getTime()) {
       if (current.status === 'pending') {
         db.prepare("UPDATE connector_approvals SET status = 'expired', decided_at = ? WHERE id = ?")
-          .run(now.toISOString(), id);
+          .run(now.getTime(), id);
       }
       const updated = db.prepare('SELECT * FROM connector_approvals WHERE id = ?').get(id) as ApprovalRow;
       return approvalFromRow(updated);
     }
     db.prepare('UPDATE connector_approvals SET status = ?, decided_at = ? WHERE id = ?')
-      .run(decision, now.toISOString(), id);
+      .run(decision, now.getTime(), id);
     const updated = db.prepare('SELECT * FROM connector_approvals WHERE id = ?').get(id) as ApprovalRow;
     return approvalFromRow(updated);
   });
@@ -326,14 +332,14 @@ export function consumeConnectorApproval(id: string, argumentsHash: string, now 
   return runSqliteWriteTransaction((db) => {
     const current = db.prepare('SELECT * FROM connector_approvals WHERE id = ?').get(id) as ApprovalRow | undefined;
     if (!current || current.arguments_hash !== argumentsHash) return undefined;
-    if (current.status !== 'approved' || Date.parse(current.expires_at) <= now.getTime()) {
-      if (current.status === 'approved' && Date.parse(current.expires_at) <= now.getTime()) {
+    if (current.status !== 'approved' || current.expires_at <= now.getTime()) {
+      if (current.status === 'approved' && current.expires_at <= now.getTime()) {
         db.prepare("UPDATE connector_approvals SET status = 'expired' WHERE id = ?").run(id);
       }
       return undefined;
     }
     db.prepare("UPDATE connector_approvals SET status = 'consumed', consumed_at = ? WHERE id = ? AND status = 'approved'")
-      .run(now.toISOString(), id);
+      .run(now.getTime(), id);
     const updated = db.prepare('SELECT * FROM connector_approvals WHERE id = ?').get(id) as ApprovalRow;
     return approvalFromRow(updated);
   });
@@ -353,8 +359,8 @@ export function upsertConnectorCatalogEntry(input: CachedConnectorCatalogEntry):
       input.connectorId,
       input.provider,
       JSON.stringify(input.definition),
-      input.fetchedAt,
-      input.expiresAt ?? null,
+      timestampToMs(input.fetchedAt),
+      optionalTimestampToMs(input.expiresAt),
     );
   });
   return input;
@@ -375,8 +381,8 @@ export function replaceConnectorCatalogEntries(
         entry.connectorId,
         provider,
         JSON.stringify(entry.definition),
-        entry.fetchedAt,
-        entry.expiresAt ?? null,
+        timestampToMs(entry.fetchedAt),
+        optionalTimestampToMs(entry.expiresAt),
       );
     }
   });
@@ -403,7 +409,7 @@ export function listCachedConnectorCatalogEntries(provider?: string): CachedConn
 export function upsertConnectorInstallation(
   input: Omit<ConnectorInstallationPolicy, 'createdAt' | 'updatedAt'> & Partial<Pick<ConnectorInstallationPolicy, 'createdAt' | 'updatedAt'>>,
 ): ConnectorInstallationPolicy {
-  const now = new Date().toISOString();
+  const now = Date.now();
   return runSqliteWriteTransaction((db) => {
     db.prepare(`
       INSERT INTO connector_installations (
@@ -428,8 +434,8 @@ export function upsertConnectorInstallation(
       input.maxScope,
       input.confirmationPolicy,
       JSON.stringify(input.selectedAccountIds),
-      input.createdAt ?? now,
-      input.updatedAt ?? now,
+      input.createdAt ? timestampToMs(input.createdAt) : now,
+      input.updatedAt ? timestampToMs(input.updatedAt) : now,
     );
     return getConnectorInstallation(input.id)!;
   });
@@ -454,7 +460,7 @@ export function deleteConnectorInstallation(id: string): boolean {
 export function upsertConnectorConnection(
   input: Omit<ConnectorConnection, 'createdAt' | 'updatedAt'> & Partial<Pick<ConnectorConnection, 'createdAt' | 'updatedAt'>>,
 ): ConnectorConnection {
-  const now = new Date().toISOString();
+  const now = Date.now();
   return runSqliteWriteTransaction((db) => {
     // Identity reconciliation may have moved this authorization since it was read.
     const current = db.prepare('SELECT account_id FROM connector_connections WHERE id = ?').get(input.id) as { account_id: string | null } | undefined;
@@ -470,8 +476,8 @@ export function upsertConnectorConnection(
       input.principalId,
       JSON.stringify(input.identity),
       input.id,
-      input.createdAt ?? now,
-      input.updatedAt ?? now,
+      input.createdAt ? timestampToMs(input.createdAt) : now,
+      input.updatedAt ? timestampToMs(input.updatedAt) : now,
     );
     if (input.isDefault) {
       db.prepare('UPDATE connector_connections SET is_default = 0 WHERE principal_id = ? AND connector_id = ? AND id <> ?')
@@ -511,12 +517,12 @@ export function upsertConnectorConnection(
       JSON.stringify(input.identity),
       input.status,
       input.isDefault ? 1 : 0,
-      input.connectedAt ?? null,
-      input.expiresAt ?? null,
+      optionalTimestampToMs(input.connectedAt),
+      optionalTimestampToMs(input.expiresAt),
       input.lastError ?? null,
       JSON.stringify(input.metadata),
-      input.createdAt ?? now,
-      input.updatedAt ?? now,
+      input.createdAt ? timestampToMs(input.createdAt) : now,
+      input.updatedAt ? timestampToMs(input.updatedAt) : now,
     );
     return getConnectorConnection(input.id)!;
   });
@@ -568,7 +574,7 @@ export function upsertConnectorActionMetadata(input: ConnectorActionMetadata): C
       input.curated ? 1 : 0,
       input.inputSchema === undefined ? null : JSON.stringify(input.inputSchema),
       input.schemaVersion ?? null,
-      input.cachedAt,
+      timestampToMs(input.cachedAt),
     );
     return input;
   });
@@ -609,7 +615,7 @@ export function appendConnectorExecutionAudit(
       record.resultStatus,
       record.durationMs ?? null,
       record.errorCode ?? null,
-      record.createdAt,
+      timestampToMs(record.createdAt),
     );
   });
   return record;
@@ -644,26 +650,26 @@ export function claimConnectorWebhookDelivery(input: {
   const now = input.now ?? new Date();
   return runSqliteWriteTransaction((db) => {
     const current = db.prepare('SELECT status, processing_at, payload_hash FROM connector_webhook_deliveries WHERE id = ?')
-      .get(input.id) as { status: string; processing_at: string | null; payload_hash: string } | undefined;
+      .get(input.id) as { status: string; processing_at: number | null; payload_hash: string } | undefined;
     if (!current) {
       db.prepare(`
         INSERT INTO connector_webhook_deliveries (
           id, provider, payload_hash, status, attempts, received_at, processing_at
         ) VALUES (?, ?, ?, 'processing', 1, ?, ?)
-      `).run(input.id, input.provider, input.payloadHash, now.toISOString(), now.toISOString());
+      `).run(input.id, input.provider, input.payloadHash, now.getTime(), now.getTime());
       return 'claimed';
     }
     if (current.payload_hash !== input.payloadHash) throw new Error('Webhook delivery id was reused with a different payload.');
     if (current.status === 'processed') return 'processed';
     const leaseMs = input.leaseMs ?? 5 * 60_000;
-    if (current.status === 'processing' && current.processing_at && Date.parse(current.processing_at) + leaseMs > now.getTime()) {
+    if (current.status === 'processing' && current.processing_at && current.processing_at + leaseMs > now.getTime()) {
       return 'in_flight';
     }
     db.prepare(`
       UPDATE connector_webhook_deliveries
       SET status = 'processing', attempts = attempts + 1, processing_at = ?, last_error = NULL
       WHERE id = ?
-    `).run(now.toISOString(), input.id);
+    `).run(now.getTime(), input.id);
     return 'claimed';
   });
 }
@@ -674,7 +680,7 @@ export function completeConnectorWebhookDelivery(id: string, now = new Date()): 
       UPDATE connector_webhook_deliveries
       SET status = 'processed', processed_at = ?, processing_at = NULL, last_error = NULL
       WHERE id = ?
-    `).run(now.toISOString(), id);
+    `).run(now.getTime(), id);
   });
 }
 

@@ -216,7 +216,6 @@ export {
   getCurrentTranscriptId,
   getGlobalSessionStats,
   findConversationIdByTranscriptId,
-  getSessionPersistedLevels,
   getSessionMetadata,
   incrementSessionStatsOnAppend,
   listSessionMetadata,
