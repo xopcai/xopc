@@ -38,6 +38,7 @@ import type { CapabilityContext } from '../../capabilities/runtime/dispatcher.js
 import { createXopcUseTool } from '../../agent/tools/xopc-use-tool.js';
 import { ChatPreviewService } from '../../chat-previews/index.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
+import { listAutomationEvents } from '../../automations/events/index.js';
 
 describe('LocalAppService', () => {
   let config: Config;
@@ -289,7 +290,11 @@ describe('LocalAppService', () => {
     const result = await invoke();
     expect(await invoke()).toEqual(result);
     expect(service.get(app.id)?.acceptanceRuns).toHaveLength(2);
-    expect(events).toEqual(['local_app.acceptance_recorded']);
+    expect(events).toEqual([]);
+    expect(listAutomationEvents({ source: 'local_apps' })
+      .filter(event => typeof event.payload.operationId === 'string')
+      .map(event => event.type))
+      .toEqual(['local_app.acceptance_recorded']);
     const rows = getSqliteDatabase().prepare("SELECT operation_id FROM domain_outbox WHERE subject_kind = 'local_app' AND operation_id IS NOT NULL").all();
     expect(rows).toHaveLength(1);
     await invoke('new-intent');

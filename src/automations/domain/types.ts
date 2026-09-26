@@ -74,9 +74,21 @@ export type AutomationConversationMode = 'new_session' | 'continuous';
 
 export type AutomationNotificationPolicy = 'attention' | 'all' | 'none';
 
+export type AutomationDeliveryDestination =
+  | { key: string; kind: 'gateway_event' }
+  | { key: string; kind: 'webhook'; endpoint: string; secretId: string }
+  | { key: string; kind: 'file'; targetId: string; pathTemplate: string }
+  | { key: string; kind: 'card'; channelId: string; templateId: string };
+
 export interface AutomationDeliveryPolicy {
   notificationPolicy: AutomationNotificationPolicy;
-  completionWebhookUrl?: string;
+  destinations: AutomationDeliveryDestination[];
+}
+
+export interface AutomationRunDeliveryContext {
+  notificationPolicy: AutomationNotificationPolicy;
+  requiresAttention: boolean;
+  projectId?: string;
 }
 
 export interface AutomationReliability {
@@ -225,17 +237,26 @@ export interface AutomationEventEnvelope extends AutomationEvent {
   payload: Record<string, unknown>;
 }
 
+export type AutomationEventProjectionStatus =
+  | 'pending'
+  | 'projecting'
+  | 'retrying'
+  | 'projected'
+  | 'dead_letter';
+
 export type AutomationEventDeliveryStatus =
   | 'pending'
+  | 'retrying'
   | 'queued'
   | 'completed'
   | 'failed'
   | 'cancelled'
-  | 'skipped';
+  | 'skipped'
+  | 'dead_letter';
 
 export interface AutomationEventRecord {
   event: AutomationEventEnvelope;
-  projected: boolean;
+  projectionStatus: AutomationEventProjectionStatus;
   projectionAttempts: number;
   projectionError?: string;
   deliveries: Array<{
@@ -251,7 +272,7 @@ export interface AutomationResultDeliveryRecord {
   runId: string;
   destinationKey: string;
   kind: string;
-  status: 'pending' | 'delivering' | 'delivered' | 'failed';
+  status: 'pending' | 'delivering' | 'retrying' | 'delivered' | 'dead_letter';
   attempts: number;
   nextAttemptAtMs: number;
   lastError?: string;
@@ -269,7 +290,43 @@ export interface AutomationMetrics {
     name: string;
     runAtMs: number;
   };
+  pendingEvents: number;
+  oldestPendingEventAgeMs: number;
+  projectionDeadLetters: number;
+  pendingRunDeliveries: number;
+  runDeliveryDeadLetters: number;
+  pendingResultDeliveries: number;
+  resultDeliveryDeadLetters: number;
+  activeExecutions: number;
+  activeDeliveryLeases: number;
 }
+
+export type AutomationArtifact =
+  | { id: string; kind: 'text'; text: string; mediaType: 'text/plain' | 'text/markdown' }
+  | { id: string; kind: 'json'; schema: string; data: Record<string, unknown> }
+  | { id: string; kind: 'file'; uri: string; name: string; mediaType: string; bytes?: number; sha256?: string }
+  | { id: string; kind: 'card'; schema: string; data: Record<string, unknown> }
+  | { id: string; kind: 'reference'; resourceType: string; resourceId: string; url?: string };
+
+export interface AutomationResultEnvelope {
+  schemaVersion: 1;
+  resultId: string;
+  runId: string;
+  automationId: string;
+  status: Extract<AutomationRunStatus, 'succeeded' | 'failed' | 'cancelled' | 'timeout'>;
+  summary?: string;
+  error?: { code: string; message: string; retryable: boolean };
+  artifacts: AutomationArtifact[];
+  correlationId: string;
+  rootEventId: string;
+  createdAtMs: number;
+  completedAtMs: number;
+}
+
+export type AutomationRetrySafety =
+  | { mode: 'never' }
+  | { mode: 'idempotent'; key: 'run_id' }
+  | { mode: 'transient_only'; classify: (error: unknown) => boolean };
 
 export interface PrepareAutomationAgentSessionInput {
   automationName?: string;
@@ -315,8 +372,16 @@ export interface AutomationDeps {
       error?: string;
     }>;
   };
-  onRunCompleted?: (run: AutomationRun) => void;
-  onEvent?: (event: AutomationEventEnvelope) => void | Promise<void>;
+  onRunCompleted?: (run: AutomationRun, context: AutomationRunDeliveryContext) => void | Promise<void>;
+  onEvent?: (event: AutomationEventEnvelope, signal?: AbortSignal) => void | Promise<void>;
+  onReliabilityAttention?: (input: {
+    phase: 'event_projection' | 'event_delivery' | 'result_delivery';
+    eventId?: string;
+    automationId?: string;
+    runId?: string;
+    destinationKey?: string;
+    error: string;
+  }) => void;
   executeTaskCommand?: (input: {
     taskId: string;
     idempotencyKey: string;
@@ -339,6 +404,7 @@ export interface AutomationActionTask {
   model?: string;
   deadlineAtMs?: number;
   termination?: AutomationRunTermination;
+  artifacts?: AutomationArtifact[];
 }
 
 export interface AutomationActionExecutionHooks {

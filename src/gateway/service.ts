@@ -780,7 +780,7 @@ export class GatewayService {
         return { ok: true, ...(result.runId ? { runId: result.runId } : {}) };
       },
       executeSystemAction: (input) => this.executeSystemAutomationAction(input),
-      onRunCompleted: (run) => this.handleAutomationRunCompleted(run),
+      onRunCompleted: (run, context) => this.handleAutomationRunCompleted(run, context),
     });
 
     return this._agentService;
@@ -1364,8 +1364,9 @@ export class GatewayService {
         return { ok: true, ...(result.runId ? { runId: result.runId } : {}) };
       },
       executeSystemAction: (input) => this.executeSystemAutomationAction(input),
-      onRunCompleted: (run) => this.handleAutomationRunCompleted(run),
+      onRunCompleted: (run, context) => this.handleAutomationRunCompleted(run, context),
       onEvent: (event) => this.projectAutomationEvent(event),
+      onReliabilityAttention: (input) => this.emit('automation.attention.required', input),
     });
     this.startSessionTranscriptEventIngestion();
 
@@ -2085,19 +2086,13 @@ export class GatewayService {
     this.createNotificationService().handleGatewayEvent(type, payload);
   }
 
-  private handleAutomationRunCompleted(run: AutomationRun): void {
-    void this.automationService.get(run.automationId).then((automation) => {
-      if (!automation) return;
-      const requiresAttention = run.status !== 'succeeded'
-        || (automation.safety?.mode ?? 'auto_apply') !== 'auto_apply';
-      this.emit('automation.run.completed', {
-        run,
-        notificationPolicy: automation.delivery.notificationPolicy,
-        requiresAttention,
-        projectId: automation.projectId,
-      });
-    }).catch((err) => {
-      log.warn({ err, automationId: run.automationId, runId: run.id }, 'Automation completion event failed');
+  private async handleAutomationRunCompleted(
+    run: AutomationRun,
+    context: import('../automations/index.js').AutomationRunDeliveryContext,
+  ): Promise<void> {
+    this.emit('automation.run.completed', {
+      run,
+      ...context,
     });
   }
 

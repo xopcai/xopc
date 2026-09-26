@@ -7,15 +7,17 @@ import {
 } from '../automation-draft-validator.js';
 
 describe('automation draft validator', () => {
-  it('rejects non-HTTPS completion webhooks', () => {
+  it('rejects non-HTTPS result webhooks', () => {
     expect(() => parseGeneratedAutomationDraft(JSON.stringify({
       automation: {
         name: 'Unsafe callback',
         trigger: { kind: 'manual' },
         action: { kind: 'agent', instruction: 'Prepare a report' },
-        delivery: { notificationPolicy: 'attention', completionWebhookUrl: 'http://example.com/hook' },
+        delivery: { notificationPolicy: 'attention', destinations: [
+          { key: 'result_webhook', kind: 'webhook', endpoint: 'http://example.com/hook', secretId: 'primary' },
+        ] },
       },
-    }))).toThrow('Completion webhook URL must be a valid HTTPS URL');
+    }))).toThrow('Webhook endpoint must be a valid HTTPS URL');
   });
   it('parses generated automation JSON and simulates safety notes', () => {
     const draft = parseGeneratedAutomationDraft(JSON.stringify({

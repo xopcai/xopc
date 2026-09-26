@@ -8,8 +8,10 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
+import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import { AutomationService } from '../automation-service.js';
 import { AutomationEventDispatcher, ingestAutomationEvent } from '../../events/index.js';
+import { saveAutomationRun } from '../../storage/index.js';
 
 async function waitFor<T>(read: () => Promise<T> | T, predicate: (value: T) => boolean): Promise<T> {
   const deadline = Date.now() + 2_000;
@@ -150,11 +152,14 @@ describe('AutomationService', () => {
       (calls) => calls.some(([run]) => run.id === queued.id),
     );
 
-    expect(onRunCompleted).toHaveBeenCalledWith(expect.objectContaining({
-      id: queued.id,
-      automationId: automation.id,
-      status: 'succeeded',
-    }));
+    expect(onRunCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: queued.id,
+        automationId: automation.id,
+        status: 'succeeded',
+      }),
+      { notificationPolicy: 'attention', requiresAttention: false },
+    );
   });
 
   it('executes a typed task command with a stable automation idempotency key', async () => {
@@ -234,12 +239,16 @@ describe('AutomationService', () => {
   it('keeps result delivery failure separate from execution status', async () => {
     const fetchMock = vi.fn(async () => new Response('offline', { status: 503 }));
     vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('XOPC_AUTOMATION_WEBHOOK_SECRETS', JSON.stringify({ primary: '0123456789abcdef' }));
     try {
       const automation = await service.create({
         name: 'Independent webhook delivery',
         trigger: { kind: 'manual' },
         action: { kind: 'agent', instruction: 'finish quickly' },
-        delivery: { notificationPolicy: 'attention', completionWebhookUrl: 'https://example.com/hook' },
+        delivery: { notificationPolicy: 'attention', destinations: [
+          { key: 'gateway_event', kind: 'gateway_event' },
+          { key: 'result_webhook', kind: 'webhook', endpoint: 'https://example.com/hook', secretId: 'primary' },
+        ] },
         reliability: { executionTimeoutSeconds: 1 },
       });
 
@@ -252,10 +261,11 @@ describe('AutomationService', () => {
       expect(completed).toMatchObject({ status: 'succeeded', termination: { reason: 'completed' } });
       expect(service.listResultDeliveries({ runId: queued.id })).toEqual(expect.arrayContaining([
         expect.objectContaining({ destinationKey: 'gateway_event', status: 'delivered' }),
-        expect.objectContaining({ destinationKey: 'completion_webhook', status: 'failed', attempts: 1 }),
+        expect.objectContaining({ destinationKey: 'result_webhook', status: 'retrying', attempts: 1 }),
       ]));
     } finally {
       vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
     }
   });
 
@@ -332,7 +342,7 @@ describe('AutomationService', () => {
     expect(completed?.summary).toBe('Workflow run workflow-run-wait completed');
   });
 
-  it('retries a failed action within the same durable run', async () => {
+  it('does not retry an agent action with unknown side effects', async () => {
     let calls = 0;
     const conversationIds: string[] = [];
     service.setDeps({
@@ -357,15 +367,15 @@ describe('AutomationService', () => {
     const queued = await service.runNow(automation.id);
     const completed = await waitFor(
       () => service.getRun(queued.id),
-      (run) => run?.status === 'succeeded',
+      (run) => run?.status === 'failed',
     );
 
-    expect(calls).toBe(2);
+    expect(calls).toBe(1);
     expect(new Set(conversationIds).size).toBe(1);
     expect(completed?.conversationId).toBe(conversationIds[0]);
-    expect(completed).toMatchObject({ status: 'succeeded', attemptNumber: 2, rootRunId: queued.id });
+    expect(completed).toMatchObject({ status: 'failed', attemptNumber: 1, rootRunId: queued.id });
     expect((await service.listRunEvents(queued.id)).map((event) => event.type))
-      .toContain('action.retry_scheduled');
+      .not.toContain('action.retry_scheduled');
   });
 
   it('retains the session link when an agent action throws', async () => {
@@ -720,5 +730,42 @@ describe('AutomationService', () => {
       { triggerEvent: expect.objectContaining({ type: 'automation.manual.requested' }) },
     );
     expect(runs.find((item) => item.id === queued.id)?.summary).toContain('"title":"Example"');
+  });
+
+  it('trims more than two thousand completed runs without orphaning result delivery state', async () => {
+    const automation = await service.create({
+      name: 'Retention fixture', trigger: { kind: 'manual' }, action: { kind: 'agent', instruction: 'done' },
+    });
+    const db = getSqliteDatabase();
+    const insertResult = db.prepare(`INSERT INTO automation_results (run_id, result_id, result_json, created_at_ms)
+      VALUES (?, ?, '{}', ?)`);
+    const insertDelivery = db.prepare(`INSERT INTO automation_result_deliveries (
+      delivery_id, run_id, destination_key, kind, status, config_json, attempts,
+      next_attempt_at_ms, created_at_ms, updated_at_ms
+    ) VALUES (?, ?, 'gateway', 'gateway_event', 'delivered', '{}', 1, ?, ?, ?)`);
+    for (let index = 0; index < 2_001; index += 1) {
+      const runId = `retention-${String(index).padStart(4, '0')}`;
+      saveAutomationRun({
+        id: runId,
+        automationId: automation.id,
+        automationName: automation.name,
+        status: 'succeeded',
+        triggerSnapshot: automation.trigger,
+        actionSnapshot: automation.action,
+        manual: true,
+        createdAtMs: index + 1,
+        endedAtMs: index + 1,
+        currentPhase: 'completed',
+      });
+      insertResult.run(runId, `result:${runId}`, index + 1);
+      insertDelivery.run(`delivery:${runId}`, runId, index + 1, index + 1, index + 1);
+    }
+
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM automation_runs WHERE automation_id = ?`).get(automation.id))
+      .toEqual({ count: 1_500 });
+    expect(db.prepare('SELECT COUNT(*) AS count FROM automation_results').get()).toEqual({ count: 1_500 });
+    expect(db.prepare('SELECT COUNT(*) AS count FROM automation_result_deliveries').get()).toEqual({ count: 1_500 });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM automation_results r
+      LEFT JOIN automation_runs ar ON ar.run_id = r.run_id WHERE ar.run_id IS NULL`).get()).toEqual({ count: 0 });
   });
 });

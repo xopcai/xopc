@@ -106,6 +106,15 @@ export const AutomationCancelOutputSchema = z.object({ ok: z.literal(true), canc
 export const AutomationReadOutputSchema = z.object({ ok: z.literal(true), marked: z.literal(true) });
 export const AutomationReadAllInputSchema = z.strictObject({ projectId: z.string().trim().min(1).max(512).optional() });
 export const AutomationReadAllOutputSchema = z.object({ ok: z.literal(true), count: z.number().int().nonnegative() });
+export const AutomationReplayEventInputSchema = CapabilityResourceInputSchema.extend({
+  reason: z.string().trim().min(1).max(2000),
+});
+export const AutomationRetryDeliveryInputSchema = z.strictObject({
+  runId: z.string().trim().min(1).max(200),
+  destinationKey: z.string().trim().min(1).max(100),
+  reason: z.string().trim().min(1).max(2000),
+});
+export const AutomationRecoveryOutputSchema = z.object({ ok: z.literal(true), accepted: z.literal(true) });
 export const AutomationDeleteInputSchema = CapabilityResourceInputSchema.extend({
   expectedRevision: z.number().int().nonnegative().nullable(),
 });
@@ -288,15 +297,16 @@ export const ProductReadContracts = {
       occurredAtMs: z.number(), ingestedAtMs: z.number(), correlationId: z.string(), causationId: z.string().optional(),
       rootEventId: z.string(), chainDepth: z.number().int(), dedupeKey: z.string().optional(),
       trust: z.enum(['system', 'user', 'connector', 'untrusted_webhook']),
-    }), projected: z.boolean(), projectionAttempts: z.number().int(), projectionError: z.string().optional(),
-    deliveries: z.array(z.object({ automationId: z.string(), status: z.enum(['pending', 'queued', 'completed', 'failed', 'cancelled', 'skipped']),
+    }), projectionStatus: z.enum(['pending', 'projecting', 'retrying', 'projected', 'dead_letter']),
+    projectionAttempts: z.number().int(), projectionError: z.string().optional(),
+    deliveries: z.array(z.object({ automationId: z.string(), status: z.enum(['pending', 'retrying', 'queued', 'completed', 'failed', 'cancelled', 'skipped', 'dead_letter']),
       runId: z.string().optional(), attempts: z.number().int(), lastError: z.string().optional() })),
   })) }) },
   'xopc.automations.deliveries': { input: z.strictObject({
-    runId: z.string().trim().min(1).max(200).optional(), status: z.enum(['pending', 'delivering', 'delivered', 'failed']).optional(),
+    runId: z.string().trim().min(1).max(200).optional(), status: z.enum(['pending', 'delivering', 'retrying', 'delivered', 'dead_letter']).optional(),
     limit: z.number().int().min(1).max(200).default(50),
   }), output: z.object({ ok: z.literal(true), items: z.array(z.object({
-    runId: z.string(), destinationKey: z.string(), kind: z.string(), status: z.enum(['pending', 'delivering', 'delivered', 'failed']),
+    runId: z.string(), destinationKey: z.string(), kind: z.string(), status: z.enum(['pending', 'delivering', 'retrying', 'delivered', 'dead_letter']),
     attempts: z.number().int(), nextAttemptAtMs: z.number(), lastError: z.string().optional(),
     createdAtMs: z.number(), updatedAtMs: z.number(),
   })) }) },

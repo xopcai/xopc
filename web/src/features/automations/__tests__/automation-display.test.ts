@@ -21,7 +21,7 @@ function automation(overrides: Partial<Automation> = {}): Automation {
     trigger: { kind: 'schedule', schedule: { kind: 'interval', everyMs: 86_400_000 } },
     action: { kind: 'agent', instruction: 'Prepare a brief' },
     conversationMode: 'new_session',
-    delivery: { notificationPolicy: 'attention' },
+    delivery: { notificationPolicy: 'attention', destinations: [{ key: 'gateway_event', kind: 'gateway_event' }] },
     state: {},
     createdAtMs: 1,
     updatedAtMs: 1,

@@ -1,4 +1,4 @@
-import { AutomationCancelOutputSchema, AutomationReadOutputSchema, AutomationReadAllInputSchema, AutomationReadAllOutputSchema, AutomationDeleteInputSchema, AutomationDeleteOutputSchema, AutomationMutationOutputSchema, AutomationRunMutationOutputSchema, AutomationSetEnabledInputSchema, CapabilityResourceInputSchema } from '@xopcai/gateway-contract';
+import { AutomationCancelOutputSchema, AutomationReadOutputSchema, AutomationReadAllInputSchema, AutomationReadAllOutputSchema, AutomationDeleteInputSchema, AutomationDeleteOutputSchema, AutomationMutationOutputSchema, AutomationRunMutationOutputSchema, AutomationSetEnabledInputSchema, CapabilityResourceInputSchema, AutomationReplayEventInputSchema, AutomationRetryDeliveryInputSchema, AutomationRecoveryOutputSchema } from '@xopcai/gateway-contract';
 import { z } from 'zod';
 
 import { CapabilityError, defineAtomicCapability, type CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
@@ -45,6 +45,32 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
   const requireProject = (id?: string) => {
     if (id && !projects?.get(id)) throw new CapabilityError('NOT_FOUND', 'Project not found');
   };
+  dispatcher.register(defineAtomicCapability({
+    ...policy,
+    id: 'xopc.automations.replay_event',
+    description: 'Replay dead-letter projection and run-delivery work for one immutable event.',
+    input: AutomationReplayEventInputSchema,
+    output: AutomationRecoveryOutputSchema,
+    execute({ id }) {
+      if (!service.replayEventAtomically(id)) throw new CapabilityError('NOT_FOUND', 'Dead-letter event work not found');
+      return { ok: true as const, accepted: true as const };
+    },
+    afterCommit: () => service.dispatchRecoveryWork(),
+  }));
+  dispatcher.register(defineAtomicCapability({
+    ...policy,
+    id: 'xopc.automations.retry_delivery',
+    description: 'Retry one dead-letter result destination using its stable delivery identity.',
+    input: AutomationRetryDeliveryInputSchema,
+    output: AutomationRecoveryOutputSchema,
+    execute({ runId, destinationKey }) {
+      if (!service.retryResultDeliveryAtomically(runId, destinationKey)) {
+        throw new CapabilityError('NOT_FOUND', 'Dead-letter result delivery not found');
+      }
+      return { ok: true as const, accepted: true as const };
+    },
+    afterCommit: () => service.dispatchRecoveryWork(),
+  }));
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.automations.cancel',
     description: 'Persist cancellation intent for a run. Only queued work is confirmed stopped immediately; receipts describe acceptance time.',

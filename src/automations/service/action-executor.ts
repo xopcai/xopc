@@ -8,6 +8,7 @@ import type {
   AutomationActionExecutionHooks,
   AutomationActionTask,
   AutomationDeps,
+  AutomationRetrySafety,
   AutomationRun,
 } from '../domain/types.js';
 import { resolveAutomationTimeoutSeconds } from '../domain/defaults.js';
@@ -28,6 +29,10 @@ interface AutomationExecutorInput {
 }
 
 type AutomationExecutorHandler = (input: AutomationExecutorInput) => Promise<AutomationActionTask>;
+type AutomationExecutorRegistration = {
+  handler: AutomationExecutorHandler;
+  retrySafety: AutomationRetrySafety;
+};
 
 class AutomationExecutionStoppedError extends Error {
   constructor(
@@ -114,28 +119,43 @@ async function executeWithDeadline<T>(
 
 export class AutomationActionExecutor {
   private deps: AutomationDeps = {};
-  private readonly handlers = new Map<AutomationActionKind, AutomationExecutorHandler>();
+  private readonly handlers = new Map<AutomationActionKind, AutomationExecutorRegistration>();
 
   constructor() {
-    this.register('agent', (input, action) => this.executeAgent(
+    this.register('agent', { mode: 'never' }, (input, action) => this.executeAgent(
       input.automation, action, input.run, input.signal, input.hooks, input.deadlineAtMs, input.context,
     ));
-    this.register('workflow', (input, action) => this.executeWorkflow(
+    this.register('workflow', { mode: 'idempotent', key: 'run_id' }, (input, action) => this.executeWorkflow(
       input.automation, action, input.run, input.signal, input.hooks, input.context,
     ));
-    this.register('browser_automation', (input, action) => this.executeBrowserAutomation(
+    this.register('browser_automation', { mode: 'never' }, (input, action) => this.executeBrowserAutomation(
       input.automation, action, input.signal, input.hooks, input.context,
     ));
-    this.register('task_command', (input, action) => this.executeTaskCommand(input, action));
-    this.register('system', (input, action) => this.executeSystemAction(input, action));
+    this.register('task_command', { mode: 'idempotent', key: 'run_id' },
+      (input, action) => this.executeTaskCommand(input, action));
+    this.register('system', {
+      mode: 'transient_only',
+      classify: error => /temporar|timeout|timed out|unavailable|busy|rate limit|econn|network/i.test(String(error)),
+    }, (input, action) => this.executeSystemAction(input, action));
   }
 
   register<K extends AutomationActionKind>(
     kind: K,
+    retrySafety: AutomationRetrySafety,
     handler: (input: AutomationExecutorInput, action: AutomationActionOf<K>) => Promise<AutomationActionTask>,
   ): void {
     if (this.handlers.has(kind)) throw new Error(`Automation executor already registered: ${kind}`);
-    this.handlers.set(kind, (input) => handler(input, input.automation.action as AutomationActionOf<K>));
+    this.handlers.set(kind, {
+      retrySafety,
+      handler: input => handler(input, input.automation.action as AutomationActionOf<K>),
+    });
+  }
+
+  canRetry(kind: AutomationActionKind, error: unknown): boolean {
+    const retrySafety = this.handlers.get(kind)?.retrySafety ?? { mode: 'never' };
+    if (retrySafety.mode === 'never') return false;
+    if (retrySafety.mode === 'idempotent') return true;
+    return retrySafety.classify(error);
   }
 
   setDeps(deps: AutomationDeps): void {
@@ -206,9 +226,9 @@ export class AutomationActionExecutor {
     if (signal.aborted) {
       return { status: 'cancelled', error: 'Automation run was cancelled' };
     }
-    const handler = this.handlers.get(automation.action.kind);
-    if (!handler) return { status: 'failed', error: `Automation executor is unavailable: ${automation.action.kind}` };
-    return handler({ automation, run, signal, hooks, deadlineAtMs, context });
+    const registration = this.handlers.get(automation.action.kind);
+    if (!registration) return { status: 'failed', error: `Automation executor is unavailable: ${automation.action.kind}` };
+    return registration.handler({ automation, run, signal, hooks, deadlineAtMs, context });
   }
 
   private async executeTaskCommand(

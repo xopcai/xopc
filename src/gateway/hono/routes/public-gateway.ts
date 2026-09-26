@@ -137,11 +137,11 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
       return c.json({ ok: false, error: 'A valid Idempotency-Key header is required.' }, 400);
     }
     const declaredSize = Number(c.req.header('content-length') ?? 0);
-    if (Number.isFinite(declaredSize) && declaredSize > 1_000_000) {
+    if (Number.isFinite(declaredSize) && declaredSize > 256 * 1024) {
       return c.json({ ok: false, error: 'Webhook payload is too large.' }, 413);
     }
     const rawBody = await c.req.text();
-    if (Buffer.byteLength(rawBody) > 1_000_000) {
+    if (Buffer.byteLength(rawBody) > 256 * 1024) {
       return c.json({ ok: false, error: 'Webhook payload is too large.' }, 413);
     }
     let payload: Record<string, unknown>;

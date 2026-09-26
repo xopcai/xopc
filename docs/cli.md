@@ -27,6 +27,7 @@ Global options such as `--config <path>` and `--workspace <path>` select a diffe
 | `resume` | Resume a previous TUI Session |
 | `tunnel` | Manage public tunnel access |
 | `gateway` | Run and manage the Gateway |
+| `mcp` | Serve and inspect the MCP bridge |
 | `history` | Export Session history for external tools such as ctx |
 | `import` | Select Skills, context, and Projects to import from another AI app |
 | `session` | List and manage Sessions |

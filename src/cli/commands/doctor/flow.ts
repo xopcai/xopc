@@ -17,6 +17,7 @@ import { checkChannelPlugins } from './checks/channel-plugins.js';
 import { checkMigrations } from './checks/migrations.js';
 import { checkImageProviders } from './checks/image-providers.js';
 import { checkToolRuntimes } from './checks/tool-runtimes.js';
+import { checkAutomationIntegrity } from './checks/automation-integrity.js';
 
 const DOCTOR_CHECKS: DoctorCheck[] = [
   checkVersionUpdate,
@@ -35,6 +36,7 @@ const DOCTOR_CHECKS: DoctorCheck[] = [
   checkGatewayService,
   checkGatewayHealth,
   checkSessionIntegrity,
+  checkAutomationIntegrity,
 ];
 
 /**

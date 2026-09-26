@@ -7,14 +7,13 @@ const nonEmptyString = z.string().trim().min(1);
 const optionalTrimmedString = (max: number) =>
   z.string().trim().max(max).nullish().transform(value => value || undefined);
 
-const optionalHttpsUrl = z.string().trim().max(2000).nullish().transform((value, ctx) => {
-  if (!value) return undefined;
+const httpsUrl = z.string().trim().min(1).max(2000).transform((value, ctx) => {
   try {
     const parsed = new URL(value);
     if (parsed.protocol !== 'https:') throw new Error('unsupported protocol');
     return parsed.toString();
   } catch {
-    ctx.addIssue({ code: 'custom', message: 'Completion webhook URL must be a valid HTTPS URL' });
+    ctx.addIssue({ code: 'custom', message: 'Webhook endpoint must be a valid HTTPS URL' });
     return z.NEVER;
   }
 });
@@ -135,7 +134,29 @@ export const AutomationSafetyPolicySchema = z.object({
 
 export const AutomationDeliveryPolicySchema = z.object({
   notificationPolicy: z.enum(['attention', 'all', 'none']).default('attention'),
-  completionWebhookUrl: optionalHttpsUrl,
+  destinations: z.array(z.discriminatedUnion('kind', [
+    z.object({ key: nonEmptyString.max(100), kind: z.literal('gateway_event') }).strict(),
+    z.object({
+      key: nonEmptyString.max(100), kind: z.literal('webhook'), endpoint: httpsUrl,
+      secretId: nonEmptyString.max(200),
+    }).strict(),
+    z.object({
+      key: nonEmptyString.max(100), kind: z.literal('file'), targetId: nonEmptyString.max(200),
+      pathTemplate: nonEmptyString.max(2000),
+    }).strict(),
+    z.object({
+      key: nonEmptyString.max(100), kind: z.literal('card'), channelId: nonEmptyString.max(200),
+      templateId: nonEmptyString.max(200),
+    }).strict(),
+  ])).max(20).superRefine((destinations, ctx) => {
+    const keys = new Set<string>();
+    destinations.forEach((destination, index) => {
+      if (keys.has(destination.key)) ctx.addIssue({
+        code: 'custom', path: [index, 'key'], message: `Duplicate destination key: ${destination.key}`,
+      });
+      keys.add(destination.key);
+    });
+  }).default([{ key: 'gateway_event', kind: 'gateway_event' }]),
 }).strict();
 
 export const AutomationStateSchema = z.object({
@@ -157,7 +178,9 @@ export const AutomationSchema = z.object({
   action: AutomationActionSchema,
   safety: AutomationSafetyPolicySchema.optional(),
   conversationMode: z.enum(['new_session', 'continuous']).default('new_session'),
-  delivery: AutomationDeliveryPolicySchema.default({ notificationPolicy: 'attention' }),
+  delivery: AutomationDeliveryPolicySchema.default({
+    notificationPolicy: 'attention', destinations: [{ key: 'gateway_event', kind: 'gateway_event' }],
+  }),
   reliability: AutomationReliabilitySchema.optional(),
   management: AutomationManagementSchema.optional(),
   state: AutomationStateSchema.default({}),
