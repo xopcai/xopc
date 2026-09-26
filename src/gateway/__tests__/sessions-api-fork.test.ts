@@ -29,6 +29,7 @@ describe('GatewaySessionsApi.forkAtTurn', () => {
       getAgentService: () => { throw new Error('not used'); },
       getActiveWebchatRunId: () => undefined,
       listActiveWebchatRuns: () => [],
+      listActiveExecutions: () => [],
     });
 
     const result = await api.forkAtTurn(sourceKey, 'turn-1');
@@ -69,6 +70,7 @@ describe('GatewaySessionsApi.forkAtTurn', () => {
       getAgentService: () => { throw new Error('not used'); },
       getActiveWebchatRunId: () => 'turn-running',
       listActiveWebchatRuns: () => [],
+      listActiveExecutions: () => [],
     });
 
     await expect(api.forkAtTurn(sourceKey, 'turn-running'))

@@ -1,10 +1,11 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, CircleDashed, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, CircleDashed, Loader2, RefreshCw, Wrench } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { cn } from '@/lib/cn';
 import { isComputerUseAvailable } from '@/lib/electron-env';
 import { apiFetch } from '@/lib/fetch';
@@ -30,6 +31,7 @@ interface CatalogPayload {
   }>;
   sync: {
     refreshing: boolean;
+    lastAttemptAt?: number;
     lastSuccessAt?: number;
     lastError?: string;
     sourceErrors?: Record<string, string>;
@@ -40,6 +42,32 @@ interface CatalogPayload {
     locations: string[];
     suggestedRef?: string;
   }>;
+}
+
+function referenceLocation(location: string, zh: boolean): { label: string; href: string } {
+  if (location.startsWith('agentCatalog.defaults.models')) {
+    return {
+      label: zh ? '全局智能体默认模型' : 'Global agent defaults',
+      href: '/settings/agent-defaults',
+    };
+  }
+  const agentMatch = location.match(/^agentCatalog\.agents\.([^.]+)\.models/);
+  if (agentMatch?.[1]) {
+    return {
+      label: zh ? `智能体 ${agentMatch[1]}` : `Agent ${agentMatch[1]}`,
+      href: agentsAppDetailPath(agentMatch[1]),
+    };
+  }
+  if (location.startsWith('sessions.')) {
+    return {
+      label: zh ? '会话模型覆盖' : 'Session model override',
+      href: '/settings/sessions',
+    };
+  }
+  return {
+    label: location,
+    href: '/settings/agent-defaults',
+  };
 }
 
 function capabilityAction(capability: CapabilityId, zh: boolean) {
@@ -120,7 +148,8 @@ async function fetchCapabilityReadiness(): Promise<CapabilityReadinessPayload> {
 export function ModelCatalogStatus() {
   const zh = useLocaleStore((state) => state.language) === 'zh';
   const { data, error, isLoading } = useSWR(MODEL_CATALOG_SWR_KEY, fetchCatalog, {
-    revalidateOnFocus: false,
+    revalidateOnFocus: true,
+    refreshInterval: 60_000,
   });
   const { data: readiness } = useSWR(
     CAPABILITY_READINESS_SWR_KEY,
@@ -141,9 +170,15 @@ export function ModelCatalogStatus() {
   );
   const unavailable = (data?.references ?? []).filter((reference) => reference.availability === 'unavailable');
   const lastSuccessAt = data?.sync.lastSuccessAt ?? Math.max(0, ...sources.map((source) => source.lastSuccessAt));
-  const failure = actionError ?? (error instanceof Error
-    ? error.message
-    : data?.sync.lastError ?? Object.values(data?.sync.sourceErrors ?? {})[0]);
+  const loadFailed = Boolean(error);
+  const sourceErrors = data?.sync.sourceErrors ?? {};
+  const diagnosticErrors = [
+    ...(data?.sync.lastError ? [['catalog', data.sync.lastError] as const] : []),
+    ...Object.entries(sourceErrors),
+    ...(actionError ? [['refresh', actionError] as const] : []),
+    ...(error instanceof Error ? [['load', error.message] as const] : []),
+  ];
+  const lastCheckedAt = data?.sync.lastAttemptAt ?? lastSuccessAt;
   const capabilityEntries = (Object.entries(readiness?.capabilities ?? {}) as Array<[
     CapabilityId,
     CapabilityReadinessPayload['capabilities'][CapabilityId],
@@ -162,7 +197,7 @@ export function ModelCatalogStatus() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       await revalidateModelsHubCaches();
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : (zh ? '模型目录刷新失败' : 'Model catalog refresh failed'));
+      setActionError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setRefreshing(false);
     }
@@ -271,27 +306,102 @@ export function ModelCatalogStatus() {
         ) : null}
       </details>
       {unavailable.length > 0 ? (
-        <div className="mt-2 space-y-1 text-sm text-amber-700 dark:text-amber-300">
-          {unavailable.slice(0, 3).map((reference) => (
-            <p key={reference.ref}>
-              {reference.ref} {zh ? '不可用' : 'is unavailable'}
-              {reference.suggestedRef ? ` · ${zh ? '建议' : 'Suggested'} ${reference.suggestedRef}` : ''}
-              {` · ${reference.locations.length} ${zh ? '处引用' : 'references'}`}
-            </p>
+        <div className="mt-3 space-y-2" aria-live="polite">
+          {unavailable.map((reference) => (
+            <div key={reference.ref} className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3">
+              {(() => {
+                const providerId = reference.ref.split('/')[0] ?? '';
+                const temporarilyUnverified = Boolean(sourceErrors[providerId]);
+                const repairLocation = referenceLocation(reference.locations[0] ?? '', zh);
+                return (
+                  <>
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-sm font-medium text-fg">
+                          {reference.ref}
+                          <span className="ml-2 font-normal text-amber-700 dark:text-amber-300">
+                            {temporarilyUnverified
+                              ? (zh ? '暂时无法验证' : 'Temporarily unverified')
+                              : (zh ? '不可用' : 'Unavailable')}
+                          </span>
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-fg-muted">
+                          {temporarilyUnverified
+                            ? (zh ? '模型目录同步暂时失败，当前状态可能已过期；不会影响其他可用模型。' : 'Catalog sync temporarily failed, so this status may be stale. Other available models are unaffected.')
+                            : (zh ? '此模型已无法从当前配置中解析，使用它的功能可能失败。' : 'This model no longer resolves from the current configuration. Features using it may fail.')}
+                          {lastCheckedAt ? ` · ${zh ? '最近检测' : 'Last checked'} ${new Date(lastCheckedAt).toLocaleString()}` : ''}
+                        </p>
+                        {reference.suggestedRef ? (
+                          <p className="mt-1 text-xs text-fg-muted">
+                            {zh ? '可替换为' : 'Suggested replacement'}：<span className="font-medium text-fg">{reference.suggestedRef}</span>
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                      <Button className="px-2.5 py-1.5 text-xs" variant="ghost" disabled={refreshing} onClick={() => void refresh()}>
+                        {refreshing ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <RefreshCw className="size-3.5" aria-hidden />}
+                        {refreshing ? (zh ? '检测中…' : 'Checking…') : (zh ? '重新检测' : 'Check again')}
+                      </Button>
+                      <Button asChild className="px-2.5 py-1.5 text-xs" variant="ghost">
+                        <Link to={repairLocation.href}>
+                          <Wrench className="size-3.5" aria-hidden />
+                          {reference.suggestedRef ? (zh ? '更换模型' : 'Replace model') : (zh ? '调整配置' : 'Adjust configuration')}
+                        </Link>
+                      </Button>
+                      <details className="group/references">
+                        <summary className="touch-target inline-flex cursor-pointer list-none items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                          {zh ? `查看 ${reference.locations.length} 处引用` : `View ${reference.locations.length} ${reference.locations.length === 1 ? 'reference' : 'references'}`}
+                          <ChevronRight className="size-3.5 transition-transform group-open/references:rotate-90 motion-reduce:transition-none" aria-hidden />
+                        </summary>
+                        <ul className="mt-1 space-y-1 pl-2 text-xs text-fg-muted">
+                          {reference.locations.map((location) => {
+                            const target = referenceLocation(location, zh);
+                            return (
+                              <li key={location}>
+                                <Link className="inline-flex rounded px-1.5 py-1 text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" to={target.href} title={location}>
+                                  {target.label}
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </details>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
           ))}
         </div>
       ) : null}
-      {failure ? <p className="mt-3 text-sm text-danger" role="alert">{failure}</p> : null}
+      {loadFailed || actionError ? (
+        <p className="mt-3 text-sm text-danger" role="alert">
+          {loadFailed
+            ? (zh ? '暂时无法读取模型状态，请重新检测；详细信息可在高级诊断中查看。' : 'Model status is temporarily unavailable. Check again; details are available in Advanced diagnostics.')
+            : (zh ? '重新检测失败，请稍后重试；详细信息可在高级诊断中查看。' : 'The check failed. Try again later; details are available in Advanced diagnostics.')}
+        </p>
+      ) : null}
       <details className="mt-4 border-t border-edge-subtle pt-3">
         <summary className="min-h-8 cursor-pointer rounded-md py-1.5 text-xs font-medium text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           {zh ? '高级诊断' : 'Advanced diagnostics'}
         </summary>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-fg-muted">
-            {zh
-              ? `${sources.length} 个来源，${availableCount} 个可用模型${lastSuccessAt ? ` · 最近同步 ${new Date(lastSuccessAt).toLocaleString()}` : ''}`
-              : `${sources.length} sources, ${availableCount} available models${lastSuccessAt ? ` · Last synced ${new Date(lastSuccessAt).toLocaleString()}` : ''}`}
-          </p>
+          <div className="min-w-0 text-xs text-fg-muted">
+            <p>
+              {zh
+                ? `${sources.length} 个来源，${availableCount} 个可用模型${lastSuccessAt ? ` · 最近同步 ${new Date(lastSuccessAt).toLocaleString()}` : ''}`
+                : `${sources.length} sources, ${availableCount} available models${lastSuccessAt ? ` · Last synced ${new Date(lastSuccessAt).toLocaleString()}` : ''}`}
+            </p>
+            {diagnosticErrors.length > 0 ? (
+              <div className="mt-2 space-y-1 rounded-lg bg-surface-base/45 p-2 font-mono text-[11px] leading-5" aria-label={zh ? '同步错误详情' : 'Sync error details'}>
+                {diagnosticErrors.map(([source, message], index) => (
+                  <p className="break-words" key={`${source}-${index}`}>{source}: {message}</p>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <Button className="shrink-0" type="button" variant="secondary" disabled={refreshing} onClick={() => void refresh()}>
             {refreshing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}
             {refreshing ? (zh ? '刷新中…' : 'Refreshing…') : (zh ? '刷新目录' : 'Refresh catalog')}

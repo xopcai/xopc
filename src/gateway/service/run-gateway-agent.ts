@@ -38,6 +38,7 @@ import type { ChatStreamEvent } from '../chat-stream/protocol.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
 import type { UserTurnAttachment } from '../user-turn-input.js';
 import type { AgentSourceContext } from '../../agent/source-context/types.js';
+import { describeActiveExecution, type ActiveExecution } from './active-execution.js';
 const log = createLogger('Gateway:Service');
 
 export type RunGatewayAgentYield = ChatStreamEvent;
@@ -48,6 +49,7 @@ export type RunGatewayAgentDeps = {
   bus: MessageBus;
   runAbortControllers: Map<string, AbortController>;
   activeWebchatRunBySession: Map<string, string>;
+  activeExecutionBySession: Map<string, ActiveExecution>;
   sessionIndex: SessionIndex;
   emit: (type: string, payload: unknown) => void;
   publishRealtime: (topic: string, event: string, data: unknown) => void;
@@ -84,6 +86,7 @@ export async function *runGatewayAgent(
     bus,
     runAbortControllers,
     activeWebchatRunBySession,
+    activeExecutionBySession,
     sessionIndex: sessionIndexFromDeps,
     emit,
     publishRealtime,
@@ -194,6 +197,12 @@ export async function *runGatewayAgent(
       agentService.beginInboundTurn(conversationId);
       if (!activeWebchatRunBySession.has(conversationId)) {
         activeWebchatRunBySession.set(conversationId, runId);
+        activeExecutionBySession.set(conversationId, describeActiveExecution({
+          conversationId,
+          runId,
+          origin,
+          taskRunId: runOptions?.taskRunId,
+        }));
         registeredActiveWebchatRun = true;
         publishRealtime('sessions', 'run.started', { conversationId, runId });
       }
@@ -285,6 +294,7 @@ export async function *runGatewayAgent(
         }
         if (registeredActiveWebchatRun && activeWebchatRunBySession.get(conversationId) === runId) {
           activeWebchatRunBySession.delete(conversationId);
+          activeExecutionBySession.delete(conversationId);
           publishRealtime('sessions', 'run.completed', { conversationId, runId, status: terminalStatus });
         }
         runAbortControllers.delete(runId);
