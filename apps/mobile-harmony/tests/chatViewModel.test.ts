@@ -58,7 +58,7 @@ describe('chat history isolation', () => {
     mocks.history.mockResolvedValueOnce(history(['3', '4', '5'], 'head-cursor')); await chat.loadHistory(false);
     expect(chat.rows.map(row => row.id)).toEqual(['1', '2', '3', '4', '5']);
     mocks.history.mockResolvedValueOnce(history(['0'], '')); await chat.loadHistory(true);
-    expect(mocks.history).toHaveBeenLastCalledWith('one', 'oldest');
+    expect(mocks.history).toHaveBeenLastCalledWith('one', 'oldest', 't');
     expect(chat.rows.map(row => row.id)).toEqual(['0', '1', '2', '3', '4', '5']); chat.dispose();
   });
   beforeEach(() => { vi.resetAllMocks(); mocks.activeRun.mockResolvedValue({ active: false }); mocks.saveMainConversation.mockResolvedValue(undefined); mocks.rememberHistory.mockResolvedValue(undefined); });
