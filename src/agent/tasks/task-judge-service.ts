@@ -185,6 +185,8 @@ export class TaskJudgeService {
         model,
         { messages: [request] },
         { apiKey, maxTokens: 900, temperature: 0 },
+        undefined,
+        { operation: 'task.judge_result', conversationId: payload.conversationId, runId: run.id },
       );
       const modelError = getAssistantMessageErrorReason(response);
       if (modelError) throw new Error(modelError);

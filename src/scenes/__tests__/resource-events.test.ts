@@ -16,6 +16,7 @@ import { SceneRepository } from '../repository.js';
 import { SceneApplicationService } from '../service.js';
 import { familyPlanTemplate } from '../templates.js';
 import { SceneUserNotesProvider } from '../userNotes.js';
+import { SceneCapabilityRegistry } from '../registry.js';
 
 describe('durable scene resource events', () => {
   let directory: string;
@@ -30,7 +31,7 @@ describe('durable scene resource events', () => {
     openXopcDatabase({ path: join(directory, 'xopc.db') });
     repository = new SceneRepository(getSqliteDatabase());
     repository.installTemplate(familyPlanTemplate);
-    application = new SceneApplicationService(repository, [new SceneUserNotesProvider(getSqliteDatabase())], async () => permissions);
+    application = new SceneApplicationService(repository, new SceneCapabilityRegistry([new SceneUserNotesProvider(getSqliteDatabase())]), async () => permissions);
     id = (await application.start(principal, { templateKey: familyPlanTemplate.key, templateVersion: familyPlanTemplate.version,
       goal: 'Plan the week', scope: { kind: 'personal' }, permissions }, 'start')).id;
   });
@@ -78,7 +79,7 @@ describe('durable scene resource events', () => {
     repository.failRun(claim, now + 2, 'test-finished');
     application.check(principal, id, 'second-check');
     const before = events().length;
-    const runtime = new SceneExecutionService(repository, [new SceneUserNotesProvider(getSqliteDatabase())], {
+    const runtime = new SceneExecutionService(repository, new SceneCapabilityRegistry([new SceneUserNotesProvider(getSqliteDatabase())]), {
       execute: async ({ evidence }) => ({ kind: 'artifact', summary: 'Sunday is free.', evidenceIds: evidence.map(item => item.id) }),
     }, async () => permissions);
     await runtime.runNext('background');

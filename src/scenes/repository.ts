@@ -1,4 +1,3 @@
-import type { SceneModelUsage } from './contracts.js';
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
@@ -278,13 +277,6 @@ export class SceneRepository {
     });
   }
 
-  /** Internal worker scan; identity comes from persisted ownership, never an event payload. */
-  recordModelUsage(claim: SceneRunClaim, usage: SceneModelUsage, now: number): void {
-    if (!this.isCurrentClaim(claim, now)) return;
-    this.db.prepare(`INSERT OR IGNORE INTO scene_model_usage VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(claim.id, claim.leaseEpoch, usage.provider, usage.model, usage.inputTokens, usage.outputTokens, usage.totalTokens, usage.estimatedCost, now);
-  }
-
   listMailObservationItems(afterId = '', now = Date.now()): Array<{ principal: ScenePrincipal; item: SceneWorkItem }> {
     const rows = this.db.prepare(`SELECT w.*, a.owner_id, a.workspace_id FROM scene_work_items w
       JOIN scene_activations a ON a.id = w.activation_id
@@ -529,7 +521,9 @@ export class SceneRepository {
       this.db.prepare(`UPDATE scene_trigger_intents SET status = 'resolved' WHERE status = 'claimed'
         AND id IN (SELECT intent_id FROM scene_runs WHERE status = 'failed')`).run();
       const retry = this.db.prepare(`SELECT r.* FROM scene_runs r JOIN scene_activations a ON a.id = r.activation_id
+        JOIN scene_template_versions t ON t.template_key = a.template_key AND t.version = a.template_version
         WHERE a.status = 'active' AND a.revision = r.activation_revision AND ${checksAllowed}
+        AND json_extract(t.manifest_json, '$.execution.kind') = 'agent'
         AND (r.attempt < 3 OR (r.status = 'retry_wait' AND r.reason IN ('source_not_ready', 'daily_budget')))
         AND ((r.status = 'running' AND r.lease_until <= ?) OR (r.status = 'retry_wait' AND r.retry_at <= ?))
         ORDER BY r.created_at, r.id LIMIT 1`).get(now / 1000, now, now) as Row | undefined;
@@ -539,7 +533,9 @@ export class SceneRepository {
         return this.readClaim(String(retry.id));
       }
       const intent = this.db.prepare(`SELECT i.* FROM scene_trigger_intents i JOIN scene_activations a ON a.id = i.activation_id
+        JOIN scene_template_versions t ON t.template_key = a.template_key AND t.version = a.template_version
         WHERE i.status = 'pending' AND i.due_at <= ? AND a.status = 'active' AND a.revision = i.activation_revision AND ${checksAllowed}
+        AND json_extract(t.manifest_json, '$.execution.kind') = 'agent'
         AND NOT EXISTS (SELECT 1 FROM scene_runs r WHERE r.activation_id = a.id AND r.status IN ('running', 'retry_wait'))
         ORDER BY i.due_at, i.id LIMIT 1`).get(now, now / 1000) as Row | undefined;
       if (!intent) return null;
@@ -547,6 +543,27 @@ export class SceneRepository {
       this.db.prepare(`INSERT INTO scene_runs (id, intent_id, activation_id, activation_revision, status, attempt, lease_epoch, lease_owner, lease_until, created_at)
         VALUES (?, ?, ?, ?, 'running', 1, 1, ?, ?, ?)`).run(id, intent.id, intent.activation_id, intent.activation_revision, worker, now + leaseMs, now);
       this.db.prepare("UPDATE scene_trigger_intents SET status = 'claimed' WHERE id = ?").run(intent.id);
+      return this.readClaim(id);
+    });
+  }
+
+  claimIntentForAdapter(principal: ScenePrincipal, activationId: string, intentId: string, adapterId: string, worker: string, now: number, leaseMs: number): SceneRunClaim {
+    if (!adapterId.trim() || !worker.trim() || !Number.isSafeInteger(now) || now < 0 || !Number.isSafeInteger(leaseMs) || leaseMs < 1) throw new Error('Invalid scene lease');
+    return this.transaction(() => {
+      const activation = this.getActivation(principal, activationId);
+      const template = this.getTemplate(activation.templateKey, activation.templateVersion);
+      if (template.execution.kind !== adapterId) throw new SceneConflictError('Scene execution adapter changed');
+      const intent = this.db.prepare(`SELECT * FROM scene_trigger_intents
+        WHERE id = ? AND activation_id = ? AND activation_revision = ? AND status = 'pending' AND due_at <= ?`)
+        .get(intentId, activationId, activation.revision, now) as Row | undefined;
+      if (!intent) throw new SceneConflictError('Scene trigger is no longer available');
+      if (this.db.prepare("SELECT 1 FROM scene_runs WHERE activation_id = ? AND status IN ('running', 'retry_wait')").get(activationId)) {
+        throw new SceneConflictError('Scene already has an active run');
+      }
+      const id = randomUUID();
+      this.db.prepare(`INSERT INTO scene_runs (id, intent_id, activation_id, activation_revision, status, attempt, lease_epoch, lease_owner, lease_until, created_at)
+        VALUES (?, ?, ?, ?, 'running', 1, 1, ?, ?, ?)`).run(id, intentId, activationId, activation.revision, worker, now + leaseMs, now);
+      this.db.prepare("UPDATE scene_trigger_intents SET status = 'claimed' WHERE id = ?").run(intentId);
       return this.readClaim(id);
     });
   }
@@ -644,6 +661,33 @@ export class SceneRepository {
         ? (snapshot && JSON.parse(String(snapshot.evidence_ids_json)).length === 0 ? 'empty_input' : 'no_relevant_change') : null;
       this.db.prepare("UPDATE scene_runs SET status = ?, reason = ?, lease_owner = NULL, lease_until = NULL WHERE id = ?")
         .run(result.kind === 'no_change' ? 'skipped' : 'succeeded', reason, claim.id);
+      this.db.prepare("UPDATE scene_trigger_intents SET status = 'resolved' WHERE id = ?").run(claim.intentId);
+      return true;
+    });
+  }
+
+  finishAdapterRun(claim: SceneRunClaim, result: { kind: 'artifact' | 'decision' | 'receipt'; summary: string; [key: string]: unknown }, now: number): boolean {
+    return this.transaction(() => {
+      if (!this.isCurrentClaim(claim, now)) return false;
+      const row = this.db.prepare(`SELECT t.manifest_json, a.owner_id, a.workspace_id FROM scene_activations a JOIN scene_template_versions t
+        ON a.template_key = t.template_key AND a.template_version = t.version WHERE a.id = ?`).get(claim.activationId) as Row;
+      const template = sceneTemplateSchema.parse(JSON.parse(String(row.manifest_json)));
+      if (template.execution.kind === 'agent' || !template.allowedOutcomeKinds.includes(result.kind)) throw new Error('Scene result kind is not allowed');
+      if (!result.summary.trim()) throw new Error('Scene result needs a summary');
+      const outcomeId = randomUUID();
+      this.db.prepare(`UPDATE scene_presentations AS p SET status = 'withdrawn', withdrawn_at = ? WHERE p.outcome_id IN (
+        SELECT o.id FROM scene_outcomes o JOIN scene_runs r ON r.id = o.run_id
+        WHERE r.activation_id = ?
+      )`).run(now, claim.activationId);
+      this.db.prepare('INSERT INTO scene_outcomes VALUES (?, ?, ?, ?, ?)').run(outcomeId, claim.id, result.kind, JSON.stringify(result), now);
+      const presentationId = randomUUID();
+      this.db.prepare("INSERT INTO scene_presentations(id, outcome_id, destination, status, created_at) VALUES (?, ?, 'inbox', 'unread', ?)")
+        .run(presentationId, outcomeId, now);
+      this.db.prepare(`INSERT INTO notification_result_outbox
+        (id, owner_id, workspace_id, subject_id, status, attempt, next_attempt_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'pending', 0, ?, ?, ?)`)
+        .run(presentationId, row.owner_id, row.workspace_id, presentationId, now, now, now);
+      this.db.prepare("UPDATE scene_runs SET status = 'succeeded', reason = NULL, lease_owner = NULL, lease_until = NULL WHERE id = ?").run(claim.id);
       this.db.prepare("UPDATE scene_trigger_intents SET status = 'resolved' WHERE id = ?").run(claim.intentId);
       return true;
     });

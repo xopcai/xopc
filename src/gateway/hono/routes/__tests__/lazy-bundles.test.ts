@@ -6,6 +6,12 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps usage routes without capturing neighboring paths', () => {
+    for (const path of ['/api/usage/summary', '/api/usage/events', '/api/usage/events/id', '/api/usage/traces/trace']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('usage');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/usage-other')).toBeUndefined();
+  });
   it('maps every home intelligence route without capturing neighboring paths', () => {
     for (const path of [
       '/api/home',
@@ -105,10 +111,11 @@ describe('lazy route bundles', () => {
       '/api/scenes/activations/id/notes', '/api/scenes/activations/id/work-items', '/api/scenes/activations/id/schedules',
       '/api/scenes/activations/id/schedules/weekly', '/api/scenes/work-items/id', '/api/scenes/outcomes', '/api/scenes/presentations/id',
       '/api/scenes/presentations/id/feedback', '/api/scenes/metrics', '/api/scenes/digests/id']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('scenes');
-    for (const path of ['/api/scenes/task-follow-ups', '/api/scenes/task-follow-ups/id', '/api/scenes/source-providers',
+    for (const path of ['/api/scenes/source-providers',
       '/api/scenes/source-providers/slack_thread/accounts', '/api/scenes/source-providers/slack_thread/resolve-link',
-      '/api/scenes/task-follow-ups/preflight', '/api/scenes/task-follow-ups/projects/id/branches',
-      '/api/scenes/task-follow-ups/branch-links']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('scenes');
+      '/api/scenes/resources/projects/id/branches', '/api/scenes/resources/branch-links']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('scenes');
+    }
     for (const path of ['/api/scenes-other', '/api/scene', '/api/inbox/other', '/api/development']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('scenes');
   });
   it('maps connector account management without swallowing nearby paths', () => {

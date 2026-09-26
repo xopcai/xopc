@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SceneExecutionService, type SceneContextProvider, type SceneEvidence } from '../execution.js';
+import { SceneCapabilityRegistry } from '../registry.js';
 import { SceneRepository } from '../repository.js';
 import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { mailFollowUpTemplate } from '../templates.js';
@@ -19,7 +20,7 @@ describe('scene read-only execution', () => {
   const read = vi.fn(async (_input: Parameters<SceneContextProvider['read']>[0]) => [evidence]);
   const authorize = vi.fn(async () => permissions);
   const execute = vi.fn(async () => result);
-  const service = () => new SceneExecutionService(repository, [{ id: 'mail', read }], { execute }, authorize, () => 1001);
+  const service = () => new SceneExecutionService(repository, new SceneCapabilityRegistry([{ id: 'mail', read }]), { execute }, authorize, () => 1001);
 
   it('rejects an outcome kind outside the template with an actionable reason', async () => {
     execute.mockResolvedValueOnce({ ...result, kind: 'observation' });
@@ -137,7 +138,7 @@ describe('scene read-only execution', () => {
   it('defers stale synchronization without calling the model, then recovers', async () => {
     read.mockRejectedValueOnce(new SceneSourceNotReady());
     let now = 1001;
-    const runtime = new SceneExecutionService(repository, [{ id: 'mail', read }], { execute }, authorize, () => now);
+    const runtime = new SceneExecutionService(repository, new SceneCapabilityRegistry([{ id: 'mail', read }]), { execute }, authorize, () => now);
     expect(await runtime.runNext('worker')).toBe('deferred');
     expect(execute).not.toHaveBeenCalled();
     expect(db.prepare('SELECT count(*) AS n FROM scene_model_reservations').get()?.n).toBe(0);

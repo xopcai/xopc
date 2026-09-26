@@ -1,12 +1,16 @@
 import type { DatabaseSync } from 'node:sqlite';
 
 import type { SceneContextProvider, SceneEvidence } from './execution.js';
+import type { SceneActivation } from './contracts.js';
 import { SceneSourceNotReady } from './readiness.js';
 
 /** Explicit notes belong to one delegation, not an implicit family-wide data grant. */
 export class SceneUserNotesProvider implements SceneContextProvider {
   readonly id = 'user_notes';
   constructor(private readonly db: DatabaseSync, private readonly clock: () => number = Date.now) {}
+
+  setupIssues(activation: SceneActivation): string[] { return activation.scope.kind === 'personal' ? [] : ['personal_notes_scope']; }
+  authorization(activation: SceneActivation): string[] | null { return activation.scope.kind === 'personal' ? [] : null; }
 
   async read(input: Parameters<SceneContextProvider['read']>[0]): Promise<SceneEvidence[]> {
     input.signal.throwIfAborted();

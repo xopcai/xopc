@@ -22,6 +22,7 @@ import {
 } from '../../user-model/capture/index.js';
 import { getAssertionSlot, listUserAssertions } from '../../user-model/repository.js';
 import { createExtensionAwareStreamFn } from '../../providers/extension-stream-bridge.js';
+import { trackAiUsageStream } from '../../usage/recorder.js';
 import { createLogger } from '../../utils/logger.js';
 
 import { extractTextContent } from '../context/workspace.js';
@@ -158,6 +159,7 @@ async function interpret(params: {
   timeoutMs: number;
   model: Model<Api>;
 }): Promise<UserModelInterpretation | null> {
+  const providerStreamFn = createExtensionAwareStreamFn();
   const reviewAgent = new Agent({
     initialState: {
       systemPrompt: USER_MODEL_MAINTAINER_SYSTEM_PROMPT,
@@ -166,7 +168,10 @@ async function interpret(params: {
       tools: [],
       messages: [],
     },
-    streamFn: createExtensionAwareStreamFn(),
+    streamFn: (model, context, options) => trackAiUsageStream(model, {
+      operation: 'user_model.interpret',
+      conversationId: params.conversationId,
+    }, () => providerStreamFn(model, context, options)),
     getApiKey: (provider: string) => resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',
   });
   reviewAgent.state.messages = params.evidence.map(tagMessage);

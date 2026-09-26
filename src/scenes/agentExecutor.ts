@@ -4,6 +4,7 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 import { resolveProviderApiKeySync } from '../auth/sync-provider-auth.js';
 import { getApiKeySync } from '../providers/index.js';
 import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
+import { trackAiUsageStream } from '../usage/recorder.js';
 import { readOnlyResultSchema, type SceneReadOnlyExecutor } from './execution.js';
 
 /** A single reasoning turn over host-selected evidence; no tools or delegation. */
@@ -21,7 +22,10 @@ export class SceneAgentExecutor implements SceneReadOnlyExecutor {
       },
       streamFn: (model, context, options) => {
         if (++calls > 1) throw new Error('Scene executor permits one model call');
-        return stream(model, context, { ...options, maxTokens: input.template.execution.limits.maxOutputTokens });
+        return trackAiUsageStream(model, input.usage, () => stream(model, context, {
+          ...options,
+          maxTokens: input.template.execution.limits.maxOutputTokens,
+        }));
       },
       getApiKey: (provider) => resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',
     });
@@ -32,9 +36,6 @@ export class SceneAgentExecutor implements SceneReadOnlyExecutor {
       await agent.prompt(JSON.stringify({ goal: input.goal, evidence: input.evidence }));
       input.signal.throwIfAborted();
       const response = agent.state.messages.findLast((message) => message.role === 'assistant');
-      if (response?.role === 'assistant') input.onUsage?.({ provider: response.provider, model: response.model,
-        inputTokens: response.usage.input, outputTokens: response.usage.output, totalTokens: response.usage.totalTokens,
-        estimatedCost: response.usage.cost.total });
       if (!response || response.role !== 'assistant' || response.stopReason !== 'stop') throw new Error('Scene model did not complete a read-only result');
       if (response.content.some((block) => block.type === 'toolCall')) throw new Error('Scene model attempted an unavailable tool');
       const text = response.content.filter((block) => block.type === 'text').map((block) => block.text).join('');

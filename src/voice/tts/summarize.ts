@@ -119,6 +119,8 @@ export async function summarizeForTts(options: SummarizeForTtsOptions): Promise<
         temperature: 0.3,
         signal: mergedSignal as AbortSignal,
       },
+      undefined,
+      { operation: 'voice.summarize_for_tts' },
     );
 
     let out = '';

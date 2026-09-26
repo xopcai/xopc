@@ -12,6 +12,7 @@ import { SceneExecutionService } from '../execution.js';
 import { SceneMailContextProvider } from '../mailContext.js';
 import { SceneRepository } from '../repository.js';
 import { SceneApplicationService } from '../service.js';
+import { SceneCapabilityRegistry } from '../registry.js';
 import { mailFollowUpTemplate } from '../templates.js';
 import { SceneMailObservationService } from '../mailObservations.js';
 import { SceneRuntime } from '../runtime.js';
@@ -43,12 +44,12 @@ describe('mail scene backend vertical slice', () => {
       const provider = new SceneMailContextProvider(db, () => now);
       const permissions = { accountIds: [connection.accountId!], contextProviders: ['mail'], effectHandlers: [] };
       const authorize = async () => permissions;
-      const application = new SceneApplicationService(repository, [provider], authorize, () => now);
+      const application = new SceneApplicationService(repository, new SceneCapabilityRegistry([provider]), authorize, () => now);
       const activation = await application.start(principal, { templateKey: mailFollowUpTemplate.key, templateVersion: mailFollowUpTemplate.version,
         goal: 'Get a confirmed review date', scope: { kind: 'objects', ids: [source.id] }, permissions }, 'start-one');
       application.check(principal, activation.id, 'check-one');
       const execute = vi.fn(async ({ evidence }) => ({ kind: 'artifact', summary: 'Could you confirm the review date?', evidenceIds: evidence.map((item) => item.id) }));
-      const execution = new SceneExecutionService(repository, [provider], { execute }, authorize, () => now);
+      const execution = new SceneExecutionService(repository, new SceneCapabilityRegistry([provider]), { execute }, authorize, () => now);
       expect(await execution.runNext('worker')).toBe('completed');
       const inbox = repository.listInbox(principal);
       expect(inbox).toHaveLength(1);

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SceneRepository } from '../repository.js';
 import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { SceneApplicationService } from '../service.js';
+import { SceneCapabilityRegistry } from '../registry.js';
 import { mailFollowUpTemplate } from '../templates.js';
 
 describe('scene application service', () => {
@@ -26,7 +27,9 @@ describe('scene application service', () => {
 
     repository = new SceneRepository(db);
     repository.installTemplate(mailFollowUpTemplate);
-    service = new SceneApplicationService(repository, [{ id: 'mail', read: async () => [] }], authorize, () => now);
+    service = new SceneApplicationService(repository, new SceneCapabilityRegistry([{ id: 'mail', read: async () => [],
+      setupIssues: activation => activation.scope.kind === 'objects' && activation.scope.ids.length === 1 && activation.permissions.accountIds.length === 1
+        ? [] : ['one_mail_thread_and_account'] }]), authorize, () => now);
   });
   afterEach(() => db.close());
 

@@ -6,7 +6,7 @@ import { ComposioSessionsAdapter } from '../../connectors/composio-sessions.js';
 import { sanitizeConnectedSourceValue } from '../../connectors/connected-source-sanitization.js';
 import { getConnectorConnection, getConnectorInstallation } from '../../storage/sqlite/connector-repository.js';
 import { sceneContentHash, type ScenePrincipal } from '../../scenes/contracts.js';
-import type { TaskSourceAdapter, SourceSnapshot } from '../../scenes/taskFollowUp/contracts.js';
+import type { SceneSourceAdapter, SourceSnapshot } from '../../scenes/taskFollowUp/contracts.js';
 
 export const slackThreadSchema = z.strictObject({ accountId: z.string().min(1).max(200), teamId: z.string().regex(/^T[A-Z0-9]+$/),
   channelId: z.string().regex(/^[CDG][A-Z0-9]+$/), threadTs: z.string().regex(/^\d{10,}\.\d{6}$/) });
@@ -26,7 +26,7 @@ export function parseSlackThreadUrl(value: string): { channelId: string; threadT
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
 /** Read-only connector adapter. Account policy is rechecked before and after every page. */
-export class SlackThreadSource implements TaskSourceAdapter {
+export class SlackThreadSource implements SceneSourceAdapter {
   readonly id = 'slack_thread';
   readonly label = 'Slack thread';
   normalize(reference: Record<string, string>) { return slackThreadSchema.parse(reference); }

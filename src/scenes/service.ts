@@ -4,6 +4,7 @@ import { SceneConfigureSchema, SceneTransitionSchema, SceneWorkItemCreateSchema,
 import { activationInputSchema, intersectPermissions, validateTemplate,
   type SceneActivation, type ScenePermission, type ScenePrincipal } from './contracts.js';
 import type { SceneContextProvider } from './execution.js';
+import { SceneCapabilityRegistry } from './registry.js';
 import { SceneConflictError, SceneRepository } from './repository.js';
 import { sceneScheduleSchema } from './schedule.js';
 
@@ -15,7 +16,7 @@ export class SceneSetupError extends Error {
 export class SceneApplicationService {
   constructor(
     private readonly repository: SceneRepository,
-    private readonly providers: readonly SceneContextProvider[],
+    private readonly providers: SceneCapabilityRegistry<SceneContextProvider>,
     private readonly authorize: (activation: SceneActivation) => Promise<ScenePermission>,
     private readonly clock: () => number = Date.now,
     private readonly modelReadiness: () => string[] = () => [],
@@ -31,7 +32,7 @@ export class SceneApplicationService {
   private async checkReadiness(activation: SceneActivation): Promise<{ ready: boolean; missing: string[] }> {
     const input = activation;
     const template = validateTemplate(this.repository.getTemplate(input.templateKey, input.templateVersion), {
-      contextProviders: this.providers.map((provider) => provider.id), effectHandlers: [],
+      contextProviders: this.providers.ids(), effectHandlers: [], executionAdapters: ['agent'],
     });
     const permissions = intersectPermissions(input.permissions, await this.authorize(activation));
     const missing = template.contextProviders.filter((provider) => !permissions.contextProviders.includes(provider)).map((id) => `context:${id}`);
@@ -39,8 +40,7 @@ export class SceneApplicationService {
     missing.push(...input.permissions.accountIds.filter((id) => !permissions.accountIds.includes(id)).map((id) => `account:${id}`));
     if (input.permissions.effectHandlers.length > 0) missing.push('read_only_execution');
     if (input.permissions.contextProviders.some((id) => !template.contextProviders.includes(id))) missing.push('unrequested_context');
-    if (template.key === 'mail-follow-up' && (input.scope.kind !== 'objects' || input.scope.ids.length !== 1 || input.permissions.accountIds.length !== 1)) missing.push('one_mail_thread_and_account');
-    if (template.contextProviders.includes('user_notes') && input.scope.kind !== 'personal') missing.push('personal_notes_scope');
+    for (const providerId of template.contextProviders) missing.push(...(this.providers.get(providerId).setupIssues?.(activation) ?? []));
     return { ready: missing.length === 0, missing };
   }
 
@@ -75,7 +75,9 @@ export class SceneApplicationService {
   async prepareTransition(principal: ScenePrincipal, id: string, value: unknown): Promise<void> {
     const input = SceneTransitionSchema.parse(value);
     const activation = this.repository.getActivation(principal, id);
-    if (activation.templateKey === 'task-follow-up') throw new SceneConflictError('Use the task follow-up controls');
+    if (this.repository.getTemplate(activation.templateKey, activation.templateVersion).execution.kind !== 'agent') {
+      throw new SceneConflictError('Use the activation execution adapter');
+    }
     if (activation.revision !== input.expectedRevision) throw new SceneConflictError('Scene activation changed');
     if (input.status === 'active') {
       const result = await this.checkReadiness(activation);
@@ -86,12 +88,18 @@ export class SceneApplicationService {
   /** The exact revision fences changes made while asynchronous readiness checks were running. */
   transitionAfterPreflight(principal: ScenePrincipal, id: string, value: unknown): SceneActivation {
     const input = SceneTransitionSchema.parse(value);
-    if (this.repository.getActivation(principal, id).templateKey === 'task-follow-up') throw new SceneConflictError('Use the task follow-up controls');
+    const activation = this.repository.getActivation(principal, id);
+    if (this.repository.getTemplate(activation.templateKey, activation.templateVersion).execution.kind !== 'agent') {
+      throw new SceneConflictError('Use the activation execution adapter');
+    }
     return this.repository.transitionActivation(principal, id, input.expectedRevision, input.status, this.clock());
   }
 
   configure(principal: ScenePrincipal, id: string, value: unknown): SceneActivation {
-    if (this.repository.getActivation(principal, id).templateKey === 'task-follow-up') throw new SceneConflictError('Use the task follow-up controls');
+    const activation = this.repository.getActivation(principal, id);
+    if (this.repository.getTemplate(activation.templateKey, activation.templateVersion).execution.kind !== 'agent') {
+      throw new SceneConflictError('Use the activation execution adapter');
+    }
     const { expectedRevision, ...input } = SceneConfigureSchema.parse(value);
     return this.repository.configureActivation(principal, id, expectedRevision, input);
   }

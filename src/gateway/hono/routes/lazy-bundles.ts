@@ -318,6 +318,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'usage',
+    match: (path) => startsWithAny(path, ['/api/usage']),
+    load: async () => {
+      const { registerUsageRoutes } = await import('./usage.js');
+      return { register: registerUsageRoutes };
+    },
+  },
+  {
     id: 'shares',
     match: (path) =>
       startsWithAny(path, ['/api/shares', '/api/hosted-publications']) ||

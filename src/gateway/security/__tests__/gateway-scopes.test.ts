@@ -48,6 +48,12 @@ describe('gateway scopes', () => {
     }
   });
 
+  it('restricts AI usage and cost data to gateway administrators', () => {
+    expect(requiredGatewayScope('GET', '/api/usage/summary')).toBe('gateway.admin');
+    expect(requiredGatewayScope('GET', '/api/usage/events')).toBe('gateway.admin');
+    expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, 'gateway.admin')).toBe(false);
+  });
+
   it('fails closed for unclassified routes', () => {
     expect(requiredGatewayScope('GET', '/api/new-feature')).toBe('gateway.admin');
     expect(hasGatewayScope(['gateway.status'], 'gateway.admin')).toBe(false);

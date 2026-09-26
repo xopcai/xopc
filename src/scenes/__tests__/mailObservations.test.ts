@@ -7,6 +7,7 @@ import { ScenePreferenceService } from '../preferences.js';
 import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { mailFollowUpTemplate } from '../templates.js';
 import { SceneExecutionService } from '../execution.js';
+import { SceneCapabilityRegistry } from '../registry.js';
 
 describe('mail change observations', () => {
   let db: DatabaseSync;
@@ -119,7 +120,7 @@ describe('mail change observations', () => {
 
   it('uses an executed snapshot as baseline even before the first observation scan', async () => {
     repository.acceptManualCheck(principal, activationId, 'check', 'manual', 2000);
-    const runtime = new SceneExecutionService(repository, [{ id: 'mail', read }], {
+    const runtime = new SceneExecutionService(repository, new SceneCapabilityRegistry([{ id: 'mail', read }]), {
       execute: async () => ({ kind: 'artifact', summary: 'Draft', evidenceIds: ['message'] }),
     }, async () => permissions, () => 2000);
     expect(await runtime.runNext('worker')).toBe('completed');

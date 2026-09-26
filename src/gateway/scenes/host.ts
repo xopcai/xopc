@@ -17,6 +17,7 @@ import { maintainSceneStorage } from '../../scenes/maintenance.js';
 import { SceneMetrics } from '../../scenes/metrics.js';
 import { resolveSceneModelRef } from '../../scenes/model.js';
 import { SceneRepository } from '../../scenes/repository.js';
+import { SceneCapabilityRegistry } from '../../scenes/registry.js';
 import { SceneResultNotifications } from '../../scenes/resultNotifications.js';
 import { SceneRuntime } from '../../scenes/runtime.js';
 import { SceneApplicationService } from '../../scenes/service.js';
@@ -27,8 +28,8 @@ import { createLogger } from '../../utils/logger.js';
 import { createSceneBrowserDispatcher } from './browserNotifications.js';
 import { GatewaySceneMailContext } from './mailContext.js';
 import { SlackThreadSource } from './slackThreadSource.js';
-import { TaskFollowUpService } from '../../scenes/taskFollowUp/service.js';
-import { TaskSourceRegistry } from '../../scenes/taskFollowUp/contracts.js';
+import { SceneTaskExecutionService } from '../../scenes/taskFollowUp/service.js';
+import { decisionLogTemplate, SceneSourceRegistry, taskFollowUpTemplate } from '../../scenes/taskFollowUp/contracts.js';
 
 const log = createLogger('Gateway:Scenes');
 
@@ -60,22 +61,27 @@ export class GatewaySceneHost {
     const repository = new SceneRepository(db);
     repository.installTemplate(mailFollowUpTemplate);
     repository.installTemplate(familyPlanTemplate);
+    repository.installTemplate(taskFollowUpTemplate);
+    repository.installTemplate(decisionLogTemplate);
     const mail = input.mail ?? new GatewaySceneMailContext(db, clock);
-    const providers = [mail, new SceneUserNotesProvider(db, clock)];
+    const providers = new SceneCapabilityRegistry([mail, new SceneUserNotesProvider(db, clock)]);
     const authorize = (activation: SceneActivation): ScenePermission => {
       if (activation.ownerId !== input.principal.ownerId || activation.workspaceId !== input.principal.workspaceId) {
         return { accountIds: [], contextProviders: [], effectHandlers: [] };
       }
-      const accountIds = mail.authorizedAccounts(activation);
-      return { accountIds, contextProviders: [
-        ...(activation.scope.kind === 'personal' ? ['user_notes'] : []), ...(accountIds.length ? ['mail'] : []),
-      ], effectHandlers: [] };
+      const grants = providers.list().flatMap(provider => {
+        const accountIds = provider.authorization?.(activation) ?? null;
+        return accountIds === null ? [] : [{ id: provider.id, accountIds }];
+      });
+      return { accountIds: [...new Set(grants.flatMap(grant => grant.accountIds))],
+        contextProviders: grants.map(grant => grant.id), effectHandlers: [] };
     };
     const grant = async (activation: SceneActivation) => authorize(activation);
     const executor = input.executor ?? new SceneAgentExecutor(() => resolveModel(resolveSceneModelRef(input.config())));
-    const slackThread = new SlackThreadSource(db);
-    const followUps = new TaskFollowUpService(db, { config: input.config, sources: new TaskSourceRegistry([slackThread]) });
-    this.http = { followUps, repository, mail, mailDiscovery: mail instanceof GatewaySceneMailContext ? mail : undefined, application: new SceneApplicationService(repository, providers, grant, clock, () => {
+    const sourceProviders = new SceneSourceRegistry([new SlackThreadSource(db)]);
+    const taskExecution = new SceneTaskExecutionService(db, { config: input.config, sources: sourceProviders });
+    const activationAdapters = new SceneCapabilityRegistry([taskExecution]);
+    this.http = { activationAdapters, sourceProviders, repository, mail, mailDiscovery: mail instanceof GatewaySceneMailContext ? mail : undefined, application: new SceneApplicationService(repository, providers, grant, clock, () => {
         if (input.executor) return [];
         try {
           const model = resolveModel(resolveSceneModelRef(input.config()));
@@ -99,7 +105,9 @@ export class GatewaySceneHost {
     assertSceneStorageReady(this.db);
     this.runtime.start();
     const poll = () => {
-      void this.http.followUps?.tick().catch(err => log.error({ err }, 'Task follow-up check failed'));
+      for (const adapter of this.http.activationAdapters.list()) {
+        void adapter.tick().catch(err => log.error({ err, adapter: adapter.id }, 'Scene adapter check failed'));
+      }
       try {
         if (this.clock() >= this.nextMaintenanceAt) { maintainSceneStorage(this.db, this.clock()); this.nextMaintenanceAt = this.clock() + 3600000; }
         this.notifications.drain(); void this.browserDispatcher.drainOne().catch(err => log.error({ err }, 'Scene browser reminder failed')); } catch (err) { log.error({ err }, 'Scene result publication failed'); }
@@ -112,7 +120,7 @@ export class GatewaySceneHost {
   tick(): Promise<void> {
     if (this.stopped) return Promise.reject(new Error('Scene host stopped'));
     if (this.active) return this.active;
-    const work = Promise.all([this.runtime.tick(), this.http.followUps?.tick()]).then(() => {
+    const work = Promise.all([this.runtime.tick(), ...this.http.activationAdapters.list().map(adapter => adapter.tick())]).then(() => {
       if (!this.stopped) this.notifications.drain();
     });
     this.active = work.finally(() => { this.active = undefined; });
@@ -124,7 +132,7 @@ export class GatewaySceneHost {
     this.stopped = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
-    await this.http.followUps?.stop();
+    await Promise.all(this.http.activationAdapters.list().map(adapter => adapter.stop()));
     await this.runtime.stop();
     await this.browserDispatcher.stop();
     await this.active?.catch(() => undefined);

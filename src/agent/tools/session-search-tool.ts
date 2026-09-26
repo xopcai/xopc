@@ -88,6 +88,8 @@ ${formatted}`;
         temperature: 0.15,
         signal: signal as AbortSignal,
       },
+      undefined,
+      { operation: 'tool.session_search_summarize' },
     );
 
     let text = '';

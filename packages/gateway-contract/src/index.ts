@@ -38,3 +38,4 @@ export * from './app-context.js';
 export * from './extension-capabilities.js';
 export * from './local-apps.js';
 export * from './chat-previews.js';
+export * from './usage.js';

@@ -178,7 +178,9 @@ async function buildAiCatalysisReport(note: Note, config?: Config): Promise<Note
   }
   const resolved = resolveModel(modelRef);
   const messages: UserMessage[] = [{ role: 'user', content: buildCatalysisPrompt(note), timestamp: Date.now() }];
-  const response = await completeWithResolvedCredentials(resolved, { messages }, { temperature: 0.2 });
+  const response = await completeWithResolvedCredentials(
+    resolved, { messages }, { temperature: 0.2 }, undefined, { operation: 'note.generate' },
+  );
   let responseText = '';
   if (Array.isArray(response.content)) {
     for (const part of response.content) {

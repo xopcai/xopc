@@ -12,6 +12,8 @@ import type { CredentialResolverOptions } from '../auth/credentials.js';
 import { EXTENSION_PROVIDER_BASE_URL } from './constants.js';
 import { createExtensionAwareStreamFn } from './extension-stream-bridge.js';
 import { getApiKey } from './index.js';
+import { finishAiUsageFromMessage, observeAiUsageStream, startAiUsageCall } from '../usage/recorder.js';
+import type { AiUsageContext } from '../usage/types.js';
 
 export function isLocalModelBaseUrl(baseUrl: string | undefined): boolean {
   if (!baseUrl) return false;
@@ -78,15 +80,26 @@ export async function resolveModelCallOptions(
 export async function completeWithResolvedCredentials(
   model: Model<Api>,
   context: Context,
-  options: SimpleStreamOptions = {},
-  credentialOptions?: CredentialResolverOptions,
+  options: SimpleStreamOptions,
+  credentialOptions: CredentialResolverOptions | undefined,
+  usageContext: AiUsageContext,
 ): Promise<AssistantMessage> {
   const resolvedOptions = await resolveModelCallOptions(model, options, credentialOptions);
-  if (model.baseUrl === EXTENSION_PROVIDER_BASE_URL) {
-    const stream = await createExtensionAwareStreamFn()(model, normalizeContext(context), resolvedOptions);
-    return await stream.result();
+  const usageCall = startAiUsageCall(model, usageContext);
+  try {
+    if (model.baseUrl === EXTENSION_PROVIDER_BASE_URL) {
+      const stream = await createExtensionAwareStreamFn()(model, normalizeContext(context), resolvedOptions);
+      const result = await stream.result();
+      finishAiUsageFromMessage(usageCall, result);
+      return result;
+    }
+    const result = await completeSimple(model, context, resolvedOptions);
+    finishAiUsageFromMessage(usageCall, result);
+    return result;
+  } catch (error) {
+    usageCall?.finish({ status: 'failed', errorSummary: error instanceof Error ? error.message : String(error) });
+    throw error;
   }
-  return await completeSimple(model, context, resolvedOptions);
 }
 
 /**
@@ -97,9 +110,17 @@ export async function completeWithResolvedCredentials(
 export async function createResolvedModelStream(
   model: Model<Api>,
   context: Context,
-  options: SimpleStreamOptions = {},
-  credentialOptions?: CredentialResolverOptions,
+  options: SimpleStreamOptions,
+  credentialOptions: CredentialResolverOptions | undefined,
+  usageContext: AiUsageContext,
 ) {
   const resolvedOptions = await resolveModelCallOptions(model, options, credentialOptions);
-  return await createExtensionAwareStreamFn()(model, normalizeContext(context), resolvedOptions);
+  const usageCall = startAiUsageCall(model, usageContext);
+  try {
+    const stream = await createExtensionAwareStreamFn()(model, normalizeContext(context), resolvedOptions);
+    return observeAiUsageStream(stream, usageCall);
+  } catch (error) {
+    usageCall?.finish({ status: 'failed', errorSummary: error instanceof Error ? error.message : String(error) });
+    throw error;
+  }
 }
