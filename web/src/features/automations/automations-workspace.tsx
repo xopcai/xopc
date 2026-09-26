@@ -129,6 +129,12 @@ function formatDate(ms: number | undefined, labels: AutomationsMessages, languag
 }
 
 function actionLabel(action: AutomationAction, labels: AutomationsMessages): string {
+  if (action.kind === 'system') {
+    if (action.capability === 'home.advisor.refresh') return 'Home AI suggestions refresh';
+    if (action.capability === 'memory.temporal_sweep') return 'Memory temporal sweep';
+    if (action.capability === 'memory.daily_reconciliation') return 'Memory daily reconciliation';
+    return 'Memory weekly knowledge maintenance';
+  }
   if (action.kind === 'workflow') return labels.action.workflowWithId.replace('{id}', action.workflowId);
   if (action.kind === 'browser_automation') return `Browser automation: ${action.automationId}`;
   if (action.kind === 'task_command') return labels.action.taskWithId.replace('{id}', action.taskId);
@@ -136,6 +142,7 @@ function actionLabel(action: AutomationAction, labels: AutomationsMessages): str
 }
 
 function actionKindLabel(action: AutomationAction, labels: AutomationsMessages): string {
+  if (action.kind === 'system') return 'System';
   if (action.kind === 'workflow') return labels.sources.workflow;
   if (action.kind === 'browser_automation') return labels.sources.browser;
   if (action.kind === 'task_command') return labels.sources.task;
@@ -156,6 +163,7 @@ function triggerModeLabel(mode: TriggerMode, labels: AutomationsMessages): strin
 }
 
 function AutomationSourceIcon({ kind, className }: { kind: AutomationAction['kind']; className?: string }) {
+  if (kind === 'system') return <Zap className={className} aria-hidden />;
   if (kind === 'workflow') return <GitBranch className={className} aria-hidden />;
   if (kind === 'browser_automation') return <ListTree className={className} aria-hidden />;
   if (kind === 'task_command') return <CheckCircle2 className={className} aria-hidden />;
@@ -191,6 +199,7 @@ function needsAttention(run: AutomationRun): boolean {
 }
 
 function automationTaskSummary(automation: Automation, labels: AutomationsMessages): string {
+  if (automation.action.kind === 'system') return actionLabel(automation.action, labels);
   if (automation.action.kind === 'agent') return automation.action.instruction;
   if (automation.action.kind === 'workflow') {
     return automation.action.goal?.trim() || actionLabel(automation.action, labels);
@@ -199,17 +208,12 @@ function automationTaskSummary(automation: Automation, labels: AutomationsMessag
   return actionLabel(automation.action, labels);
 }
 
-function automationManagedBy(automation: Automation): string | null {
-  const marker = automation.description?.match(/\[managed-by=([^\]]+)\]/);
-  return marker?.[1]?.trim() || null;
-}
-
 export function isSystemManagedAutomation(automation: Automation): boolean {
-  return automation.id.startsWith('system-') || Boolean(automationManagedBy(automation));
+  return automation.management !== undefined;
 }
 
 function visibleAutomationDescription(automation: Automation): string {
-  return automation.description?.replace(/\s*\[managed-by=[^\]]+\]\s*/g, ' ').trim() ?? '';
+  return automation.description?.trim() ?? '';
 }
 
 function runSortWeight(run: AutomationRun): number {
@@ -533,8 +537,14 @@ export function AutomationsWorkspace({
     form.actionMode === 'workflow' && selectedWorkflow
       ? !validateWorkflowInputEditorValue(selectedWorkflow, form.workflowInput, form.workflowInputValid).valid
       : false;
-  const formCanSubmit =
-    Boolean(form.name.trim()) &&
+  const managedTriggerEdit = Boolean(editingAutomation?.management?.editable.includes('trigger'));
+  const managedTriggerValid = ['daily', 'weekly', 'interval', 'cron'].includes(form.triggerMode)
+    && (!['daily', 'weekly'].includes(form.triggerMode) || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.time))
+    && (form.triggerMode !== 'interval' || automationIntervalMs(form.intervalValue, form.intervalUnit) >= 60_000)
+    && (form.triggerMode !== 'cron' || Boolean(form.cronExpr.trim()));
+  const formCanSubmit = managedTriggerEdit
+    ? managedTriggerValid
+    : Boolean(form.name.trim()) &&
     (form.triggerMode !== 'once' || (Number.isFinite(new Date(form.onceAt).getTime()) && (Boolean(editingAutomation) || new Date(form.onceAt).getTime() > Date.now()))) &&
     (!['daily', 'weekly'].includes(form.triggerMode) || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.time)) &&
     (form.triggerMode !== 'event' || (Boolean(form.eventType.trim()) && payloadMatchIsValid(form.eventPayloadMatch))) &&
@@ -855,7 +865,9 @@ export function AutomationsWorkspace({
     if (editingAutomation) {
       const automationId = editingAutomation.id;
       const updated = await mutateAutomation(`automation:${automationId}:edit`, () => (
-        automationApi.update(automationId, buildAutomationEditInput(editingAutomation, form, selectedWorkflow))
+        automationApi.update(automationId, managedTriggerEdit
+          ? { trigger: buildAutomationEditInput(editingAutomation, { ...form, instruction: 'managed' }, null).trigger }
+          : buildAutomationEditInput(editingAutomation, form, selectedWorkflow))
       ));
       if (updated) {
         setCreateOpen(false);
@@ -1459,7 +1471,7 @@ export function AutomationsWorkspace({
               </div>
             ) : (
               <>
-                {createMode === 'quick' && quickTemplate ? <AutomationQuickCreate form={form} setForm={setForm} labels={labels} projects={projects} projectLocked={projectLocked} source={quickTemplate.source} requiresProject={quickTemplate.requiresProject} /> : <AutomationForm
+                {managedTriggerEdit ? <ManagedScheduleForm form={form} setForm={setForm} labels={labels} /> : createMode === 'quick' && quickTemplate ? <AutomationQuickCreate form={form} setForm={setForm} labels={labels} projects={projects} projectLocked={projectLocked} source={quickTemplate.source} requiresProject={quickTemplate.requiresProject} /> : <AutomationForm
                   form={form}
                   labels={labels}
                   setForm={setForm}
@@ -1571,6 +1583,65 @@ function ScenarioCards({ templates, labels, onSelect }: { templates: AutomationT
       <p className="mt-3 text-xs text-fg-muted">{labels.experience.source}: {template.source}</p>
     </button>
   ))}</div>;
+}
+
+function ManagedScheduleForm({
+  form,
+  setForm,
+  labels,
+}: {
+  form: FormState;
+  setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  labels: AutomationsMessages;
+}) {
+  const update = (patch: Partial<FormState>) => setForm(previous => ({ ...previous, ...patch }));
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto p-5">
+      <Section step="1" title={labels.form.trigger} description={labels.form.triggerStepDescription} />
+      <Select className={inputClass} value={form.triggerMode} onChange={(event) => update({ triggerMode: event.target.value as TriggerMode })}>
+        <SelectOption value="daily">{labels.trigger.daily}</SelectOption>
+        <SelectOption value="weekly">{labels.trigger.weekly}</SelectOption>
+        <SelectOption value="interval">{labels.trigger.interval}</SelectOption>
+        <SelectOption value="cron">{labels.trigger.customCron}</SelectOption>
+      </Select>
+      {form.triggerMode === 'daily' || form.triggerMode === 'weekly' ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Field label={labels.form.time}><TimePicker value={form.time} onChange={(time) => update({ time })} ariaLabel={labels.form.time} /></Field>
+          {form.triggerMode === 'weekly' ? (
+            <Field label={labels.form.day}>
+              <Select className={inputClass} value={form.weekday} onChange={(event) => update({ weekday: event.target.value })}>
+                <SelectOption value="1">{labels.weekdays.monday}</SelectOption>
+                <SelectOption value="2">{labels.weekdays.tuesday}</SelectOption>
+                <SelectOption value="3">{labels.weekdays.wednesday}</SelectOption>
+                <SelectOption value="4">{labels.weekdays.thursday}</SelectOption>
+                <SelectOption value="5">{labels.weekdays.friday}</SelectOption>
+                <SelectOption value="6">{labels.weekdays.saturday}</SelectOption>
+                <SelectOption value="0">{labels.weekdays.sunday}</SelectOption>
+              </Select>
+            </Field>
+          ) : null}
+        </div>
+      ) : null}
+      {form.triggerMode === 'interval' ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+          <Field label={labels.form.intervalEvery}>
+            <input className={inputClass} type="number" min="1" value={form.intervalValue} onChange={(event) => update({ intervalValue: event.target.value })} />
+          </Field>
+          <Field label={labels.form.intervalUnits.minute}>
+            <Select className={inputClass} value={form.intervalUnit} onChange={(event) => update({ intervalUnit: event.target.value as AutomationIntervalUnit })}>
+              <SelectOption value="minute">{labels.form.intervalUnits.minute}</SelectOption>
+              <SelectOption value="hour">{labels.form.intervalUnits.hour}</SelectOption>
+              <SelectOption value="day">{labels.form.intervalUnits.day}</SelectOption>
+              <SelectOption value="week">{labels.form.intervalUnits.week}</SelectOption>
+            </Select>
+          </Field>
+        </div>
+      ) : null}
+      {form.triggerMode === 'cron' ? (
+        <div className="mt-4"><Field label={labels.form.expression}><input className={inputClass} value={form.cronExpr} onChange={(event) => update({ cronExpr: event.target.value })} /></Field></div>
+      ) : null}
+    </div>
+  );
 }
 
 function DraftPanel({
@@ -2303,7 +2374,10 @@ function AutomationDetails({
   const runBusy = busyAction === `automation:${automation.id}:run`;
   const toggleBusy = busyAction === `automation:${automation.id}:toggle`;
   const deleteBusy = busyAction === `automation:${automation.id}:delete`;
-  const readOnly = isSystemManagedAutomation(automation);
+  const canToggle = !automation.management || automation.management.editable.includes('enabled');
+  const canRun = !automation.management || automation.management.runnable;
+  const canEdit = !automation.management || automation.management.editable.includes('trigger');
+  const canDelete = !automation.management || automation.management.deletable;
 
   return (
     <article className="min-w-0 overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel shadow-surface">
@@ -2336,9 +2410,9 @@ function AutomationDetails({
             </span>
           </div>
         </div>
-        {!readOnly ? (
+        {canToggle || canRun || canEdit || canDelete ? (
           <div className="flex w-full flex-wrap items-center gap-2">
-            <Button
+            {canToggle ? <Button
               variant="secondary"
               disabled={busyAction !== null}
               onClick={() => void onAction(
@@ -2349,8 +2423,8 @@ function AutomationDetails({
             >
               {toggleBusy ? <RefreshCw className="size-4 animate-spin" /> : automation.enabled ? <Pause className="size-4" /> : <Play className="size-4" />}
               {automation.enabled ? labels.dashboard.pause : labels.dashboard.resume}
-            </Button>
-            <Button
+            </Button> : null}
+            {canRun ? <Button
               variant="primary"
               disabled={busyAction !== null}
               onClick={() => void onAction(
@@ -2361,8 +2435,8 @@ function AutomationDetails({
             >
               {runBusy ? <RefreshCw className="size-4 animate-spin" /> : <Play className="size-4" />}
               {labels.dashboard.runNow}
-            </Button>
-            <DropdownMenu.Root>
+            </Button> : null}
+            {canEdit || canDelete ? <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <Button variant="ghost" className="size-9 p-0" aria-label={labels.details.moreActions}>
                   <MoreHorizontal className="size-4" />
@@ -2370,19 +2444,19 @@ function AutomationDetails({
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>
                 <DropdownMenu.Content align="end" className="z-70 min-w-40 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
-                  <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover" onSelect={() => onEdit(automation)}>
+                  {canEdit ? <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover" onSelect={() => onEdit(automation)}>
                     <Pencil className="size-4" />{labels.edit}
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item
+                  </DropdownMenu.Item> : null}
+                  {canDelete ? <DropdownMenu.Item
                     className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-red-700 outline-none hover:bg-red-500/10 dark:text-red-300"
                     disabled={busyAction !== null}
                     onSelect={() => { if (window.confirm(labels.experience.deleteConfirm)) void onAction(`automation:${automation.id}:delete`, () => automationApi.remove(automation.id), labels.dashboard.deleted); }}
                   >
                     {deleteBusy ? <RefreshCw className="size-4 animate-spin" /> : <Trash2 className="size-4" />}{labels.dashboard.delete}
-                  </DropdownMenu.Item>
+                  </DropdownMenu.Item> : null}
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
-            </DropdownMenu.Root>
+            </DropdownMenu.Root> : null}
           </div>
         ) : null}
       </header>

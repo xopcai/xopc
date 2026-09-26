@@ -1249,6 +1249,10 @@ export const ConfigSchema = z.object({
       maxChars: 6_000,
       compaction: DEFAULT_CONTEXT_COMPACTION_POLICY,
     },
+    homeIntelligence: {
+      enabled: true,
+      refreshOnContextChange: true,
+    },
   },
   session: {
     scope: 'per-sender' as const,

@@ -111,6 +111,9 @@ import { RealtimeRuntime } from '../realtime/runtime.js';
 import { VoiceRealtimeRuntime } from '../voice/realtime/runtime.js';
 import { DurableVoiceAgentBroker } from '../voice/realtime/agentBroker.js';
 import { reconcileMemoryMaintenanceAutomations } from './memory-maintenance-automation-reconciler.js';
+import { reconcileHomeIntelligenceAutomation } from './home-intelligence-automation-reconciler.js';
+import { runMemoryMaintenance } from '../memory-maintenance/index.js';
+import type { AutomationAction } from '../automations/domain/types.js';
 import type {
   GatewayChannelStartupPhase1Metrics,
   GatewayChannelStartupPhase2Metrics,
@@ -768,6 +771,7 @@ export class GatewayService {
         if (result.ok === false) return { ok: false, reason: result.reason };
         return { ok: true, ...(result.runId ? { runId: result.runId } : {}) };
       },
+      executeSystemAction: (input) => this.executeSystemAutomationAction(input),
       onRunCompleted: (run) => this.handleAutomationRunCompleted(run),
     });
 
@@ -1175,7 +1179,7 @@ export class GatewayService {
       publish: (type, payload) => this.realtime.broker.publish('gateway', type, payload),
       notifyOpportunity: (payload) => this.emit('home.opportunity.ready', payload),
       locale: () => 'en',
-      enabled: () => this.config.userContext.enabled,
+      enabled: () => this.config.userContext.enabled && this.config.userContext.homeIntelligence.enabled,
       dispatchTaskRuns: () => this.dispatchTaskRuns(),
     });
     await this.localApps.recoverPendingReleases();
@@ -1353,6 +1357,7 @@ export class GatewayService {
         if (result.ok === false) return { ok: false, reason: result.reason };
         return { ok: true, ...(result.runId ? { runId: result.runId } : {}) };
       },
+      executeSystemAction: (input) => this.executeSystemAutomationAction(input),
       onRunCompleted: (run) => this.handleAutomationRunCompleted(run),
     });
     this.startAutomationProductEventBridge();
@@ -1364,6 +1369,7 @@ export class GatewayService {
     });
 
     await trace.measure('automations.initialize', () => this.automationService.initialize());
+    await trace.measure('homeIntelligence.reconcileAutomation', () => reconcileHomeIntelligenceAutomation(this.automationService));
     await trace.measure('memoryMaintenance.reconcile', () => this.reconcileMemoryMaintenanceAutomations());
 
     await this.notesService.initialize();
@@ -1974,6 +1980,28 @@ export class GatewayService {
     });
   }
 
+  private executeSystemAutomationAction(input: {
+    capability: Extract<AutomationAction, { kind: 'system' }>['capability'];
+    runId: string;
+  }): { summary: string } {
+    if (input.capability === 'home.advisor.refresh') {
+      const generationId = this.homeIntelligence.requestRefresh('scheduled_refresh', `automation:${input.runId}`);
+      return { summary: generationId === 'disabled' ? 'Home AI suggestions are disabled' : `Home advice refresh queued: ${generationId}` };
+    }
+    const maintenance = this.config.userContext.userModel.maintenance;
+    if (!this.config.userContext.enabled || !this.config.userContext.userModel.enabled || !maintenance.enabled) {
+      return { summary: 'Memory maintenance is disabled' };
+    }
+    const jobType = input.capability.slice('memory.'.length) as 'temporal_sweep' | 'daily_reconciliation' | 'weekly_knowledge';
+    const result = runMemoryMaintenance({
+      jobType,
+      limit: maintenance.limit,
+      staleRetentionDays: maintenance.staleRetentionDays,
+      evidenceThreshold: maintenance.evidenceThreshold,
+    });
+    return { summary: `Memory maintenance completed: ${JSON.stringify(result.metrics)}` };
+  }
+
   get notesServiceInstance(): NotesService {
     return this.notesService;
   }
@@ -2044,6 +2072,7 @@ export class GatewayService {
         this.homeIntelligenceHost?.sourceChanged({
           sourceInstanceId: job.sourceInstanceId,
           revision: job.updatedAt,
+          refresh: this.config.userContext.homeIntelligence.refreshOnContextChange,
         });
       }
     }
@@ -2093,7 +2122,8 @@ export class GatewayService {
       if (event.type.startsWith('task.')) {
         this.emit(event.type, event.payload);
       }
-      if (event.type.startsWith('task.') || event.type.startsWith('project.')) {
+      if (this.config.userContext.homeIntelligence.refreshOnContextChange
+        && (event.type.startsWith('task.') || event.type.startsWith('project.'))) {
         const payload = event.payload as Record<string, unknown>;
         const objectId = event.type.startsWith('task.') ? payload.taskId : payload.projectId;
         const revision = payload.version ?? payload.revision ?? 'unknown';

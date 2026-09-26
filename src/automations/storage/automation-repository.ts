@@ -15,6 +15,7 @@ type AutomationRow = {
   notification_policy: Automation['notificationPolicy'];
   completion_webhook_url: string | null;
   reliability_json: string | null;
+  management_json: string | null;
   state_json: string;
   created_at_ms: number;
   updated_at_ms: number;
@@ -43,6 +44,7 @@ function rowToAutomation(row: AutomationRow): Automation {
     notificationPolicy: row.notification_policy,
     completionWebhookUrl: row.completion_webhook_url ?? undefined,
     reliability: parseJson(row.reliability_json),
+    management: parseJson(row.management_json),
     state: parseJson(row.state_json) ?? {},
     createdAtMs: row.created_at_ms,
     updatedAtMs: row.updated_at_ms,
@@ -54,8 +56,8 @@ function upsertAutomation(db: ReturnType<typeof getSqliteDatabase>, automation: 
     `INSERT OR REPLACE INTO automations (
       automation_id, name, description, project_id, enabled, trigger_json, action_json,
       safety_json, conversation_mode, notification_policy, completion_webhook_url,
-      reliability_json, state_json, created_at_ms, updated_at_ms
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      reliability_json, management_json, state_json, created_at_ms, updated_at_ms
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     automation.id,
     automation.name,
@@ -69,6 +71,7 @@ function upsertAutomation(db: ReturnType<typeof getSqliteDatabase>, automation: 
     automation.notificationPolicy,
     automation.completionWebhookUrl ?? null,
     bindJson(automation.reliability),
+    bindJson(automation.management),
     JSON.stringify(automation.state ?? {}),
     automation.createdAtMs,
     automation.updatedAtMs,
@@ -78,7 +81,7 @@ function upsertAutomation(db: ReturnType<typeof getSqliteDatabase>, automation: 
 const AUTOMATION_SELECT = `
   SELECT automation_id, name, description, project_id, enabled, trigger_json, action_json,
          safety_json, conversation_mode, notification_policy, completion_webhook_url,
-         reliability_json, state_json, created_at_ms, updated_at_ms
+         reliability_json, management_json, state_json, created_at_ms, updated_at_ms
   FROM automations
 `;
 

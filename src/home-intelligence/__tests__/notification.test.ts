@@ -23,7 +23,7 @@ describe('buildHomeOpportunityNotification', () => {
       opportunityId: 'meeting-1', title: '准备十点项目评审',
     });
     expect(buildHomeOpportunityNotification(opportunity, ['manual_refresh'], 'primary')).toBeUndefined();
-    expect(buildHomeOpportunityNotification(opportunity, ['connector_changed', 'home_opened'], 'primary')).toBeUndefined();
+    expect(buildHomeOpportunityNotification(opportunity, ['connector_changed', 'manual_refresh'], 'primary')).toBeUndefined();
     expect(buildHomeOpportunityNotification({ ...opportunity, urgency: 'today' }, ['connector_changed'], 'primary')).toBeUndefined();
     expect(buildHomeOpportunityNotification({
       ...opportunity,

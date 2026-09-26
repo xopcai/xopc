@@ -32,6 +32,7 @@ import { assertGatewayRuntimeConfig } from '../../../runtime-config.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../../../auth.js';
 import {
   ContextPlanningConfigSchema,
+  HomeIntelligenceConfigSchema,
   KnowledgeMemoryConfigSchema,
   UserContextConfigSchema,
   UserModelConfigSchema,
@@ -62,7 +63,7 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
     }
     const userContextPatch = body.userContext as Record<string, unknown>;
     const unknownKeys = Object.keys(userContextPatch)
-      .filter((key) => !['enabled', 'preferences', 'userModel', 'knowledgeMemory', 'contextPlanning'].includes(key));
+      .filter((key) => !['enabled', 'preferences', 'userModel', 'knowledgeMemory', 'contextPlanning', 'homeIntelligence'].includes(key));
     if (unknownKeys.length) {
       return patchError(`Unknown userContext settings: ${unknownKeys.join(', ')}`);
     }
@@ -132,6 +133,20 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
         return patchError(parsed.error.issues.map((issue) => issue.message).join('; '));
       }
       config.userContext = { ...config.userContext, contextPlanning: parsed.data };
+    }
+    if (userContextPatch.homeIntelligence !== undefined) {
+      const patch = userContextPatch.homeIntelligence;
+      if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
+        return patchError('userContext.homeIntelligence must be an object');
+      }
+      const parsed = HomeIntelligenceConfigSchema.safeParse({
+        ...config.userContext.homeIntelligence,
+        ...patch,
+      });
+      if (!parsed.success) {
+        return patchError(parsed.error.issues.map((issue) => issue.message).join('; '));
+      }
+      config.userContext = { ...config.userContext, homeIntelligence: parsed.data };
     }
     const parsedUserContext = UserContextConfigSchema.safeParse(config.userContext);
     if (!parsedUserContext.success) {

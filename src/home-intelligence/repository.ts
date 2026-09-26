@@ -27,7 +27,6 @@ export interface HomePrincipal {
 }
 
 export type HomeGenerationReason =
-  | 'home_opened'
   | 'manual_refresh'
   | 'project_changed'
   | 'task_changed'

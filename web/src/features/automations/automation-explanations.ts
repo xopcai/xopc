@@ -97,6 +97,7 @@ function actionExplanation(action: AutomationAction, labels: AutomationsMessages
   }
   if (action.kind === 'browser_automation') return `Runs browser automation ${action.automationId}.`;
   if (action.kind === 'task_command') return `Starts task ${action.taskId}.`;
+  if (action.kind === 'system') return `Runs system capability ${action.capability}.`;
   return labels.explain.actionAgent;
 }
 

@@ -215,7 +215,9 @@ describe('SQLite migrations', () => {
         VALUES (?, ?, 1, ?, ?, ?, 10, 12)`).run('retained', 'Retained', '{"kind":"manual"}', '{"kind":"agent","instruction":"Do not execute"}', '{"lastError":"Retained"}');
       const before = db.prepare('SELECT * FROM automations').all();
       applyPendingMigrations(db);
-      expect(db.prepare('SELECT * FROM automations').all()).toEqual(before);
+      expect(db.prepare('SELECT * FROM automations').all()).toEqual([
+        expect.objectContaining(before[0] as Record<string, unknown>),
+      ]);
       expect(db.prepare('SELECT * FROM automation_deleted_revisions').all()).toEqual([]);
       db.prepare('INSERT INTO automation_deleted_revisions VALUES (?, ?)').run('removed', 42);
       applyPendingMigrations(db);

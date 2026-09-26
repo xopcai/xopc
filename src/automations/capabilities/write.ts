@@ -7,8 +7,35 @@ import { AutomationAlreadyExistsError, AutomationAlreadyRunningError, type Autom
 import { CreateAutomationSchema, UpdateAutomationSchema } from '../domain/validation.js';
 import type { ProjectService } from '../../projects/project-service.js';
 
-export const AutomationCreateCapabilityInputSchema = CreateAutomationSchema.omit({ state: true });
-export const AutomationUpdatePatchSchema = UpdateAutomationSchema.safeExtend({ state: z.never().optional() });
+export const AutomationCreateCapabilityInputSchema = CreateAutomationSchema
+  .omit({ state: true, management: true })
+  .refine(input => input.action.kind !== 'system', { message: 'System actions can only be created by the runtime' });
+export const AutomationUpdatePatchSchema = UpdateAutomationSchema
+  .safeExtend({ state: z.never().optional(), management: z.never().optional() });
+
+function assertManagedOperation(
+  automation: NonNullable<ReturnType<typeof getAutomation>>,
+  operation: 'run' | 'delete' | 'update',
+  patch?: Record<string, unknown>,
+): void {
+  const management = automation.management;
+  if (!management) return;
+  if (operation === 'run') {
+    if (!management.runnable) throw new CapabilityError('FORBIDDEN', 'This managed automation cannot be run manually');
+    return;
+  }
+  if (operation === 'delete') {
+    if (!management.deletable) throw new CapabilityError('FORBIDDEN', 'This managed automation cannot be deleted');
+    return;
+  }
+  const changedFields = Object.entries(patch ?? {})
+    .filter(([key, value]) => JSON.stringify(automation[key as keyof typeof automation]) !== JSON.stringify(value))
+    .map(([key]) => key);
+  const forbidden = changedFields.filter(field => !management.editable.includes(field as 'enabled' | 'trigger'));
+  if (forbidden.length > 0) {
+    throw new CapabilityError('FORBIDDEN', `Managed fields cannot be changed: ${forbidden.join(', ')}`);
+  }
+}
 
 export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispatcher, service: AutomationService, projects?: ProjectService): void {
   const policy = { majorVersion: 1, effect: 'local-write' as const, surfaces: ['http', 'agent'] as const,
@@ -48,6 +75,7 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
         const automationId = command === 'run' ? id : getAutomationRun(id)?.automationId;
         const automation = automationId ? getAutomation(automationId) : null;
         if (!automation) throw new CapabilityError('NOT_FOUND', 'Automation or source run not found');
+        assertManagedOperation(automation, 'run');
         try {
           const run = command === 'run' ? service.queueRunAtomically(id) : service.queueRerunAtomically(id);
           return { ok: true as const, automation: { ...automation }, run: { ...run } };
@@ -65,6 +93,7 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
     execute({ id, expectedRevision }) {
       const current = getAutomation(id);
       if (current && current.updatedAtMs !== expectedRevision) throw new CapabilityError('REVISION_CONFLICT', 'Automation changed');
+      if (current) assertManagedOperation(current, 'delete');
       const result = service.removeAtomically(id);
       return { ok: true as const, ...result, automation: result.automation ? { ...result.automation } : undefined };
     },
@@ -90,6 +119,7 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
       const current = getAutomation(id);
       if (!current) throw new CapabilityError('NOT_FOUND', 'Automation not found');
       if (current.updatedAtMs !== expectedRevision) throw new CapabilityError('REVISION_CONFLICT', 'Automation changed');
+      assertManagedOperation(current, 'update', patch);
       requireProject(patch.projectId);
       return { ok: true as const, automation: { ...service.updateAtomically(id, patch)! } };
     },
@@ -103,6 +133,7 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
       const current = getAutomation(id);
       if (!current) throw new CapabilityError('NOT_FOUND', 'Automation not found');
       if (current.updatedAtMs !== expectedRevision) throw new CapabilityError('REVISION_CONFLICT', 'Automation changed');
+      assertManagedOperation(current, 'update', { enabled });
       const automation = service.updateAtomically(id, { enabled });
       if (!automation) throw new CapabilityError('NOT_FOUND', 'Automation not found');
       return { ok: true as const, automation: { ...automation } };

@@ -24,7 +24,6 @@ import { homePatternKey } from './strategy.js';
 
 const log = createLogger('HomeIntelligence');
 const POLL_INTERVAL_MS = 5_000;
-const REFRESH_INTERVAL_MS = 30 * 60_000;
 const GENERATION_LEASE_MS = 5 * 60_000;
 const DAILY_MODEL_GENERATION_BUDGET = 12;
 
@@ -61,7 +60,6 @@ export class HomeIntelligenceHost {
   private timer?: NodeJS.Timeout;
   private running = false;
   private stopped = false;
-  private nextScheduledRefresh = 0;
   private abortController = new AbortController();
   private localeHint: 'en' | 'zh';
 
@@ -75,7 +73,6 @@ export class HomeIntelligenceHost {
   start(): void {
     if (this.timer) return;
     this.stopped = false;
-    this.nextScheduledRefresh = this.now();
     this.timer = setInterval(() => void this.tick(), POLL_INTERVAL_MS);
     this.timer.unref?.();
     void this.tick();
@@ -117,18 +114,19 @@ export class HomeIntelligenceHost {
     return request.generationId;
   }
 
-  sourceChanged(input: { sourceInstanceId: string; revision: string }): void {
-    if (this.deps.enabled?.() === false) return;
+  sourceChanged(input: { sourceInstanceId: string; revision: string; refresh: boolean }): void {
     const now = this.now();
     const invalidated = this.repository.invalidateOpportunitiesByEvidenceSources(
       this.deps.principal,
       new Set(['calendar', 'mail', 'communication']),
       now,
     );
-    this.requestRefresh(
-      'connector_changed',
-      `connector:${input.sourceInstanceId}:${input.revision}`,
-    );
+    if (input.refresh) {
+      this.requestRefresh(
+        'connector_changed',
+        `connector:${input.sourceInstanceId}:${input.revision}`,
+      );
+    }
     if (invalidated > 0) {
       this.deps.publish('home.advisor.updated', {
         state: 'source_changed',
@@ -188,10 +186,6 @@ export class HomeIntelligenceHost {
     try {
       const now = this.now();
       this.repository.maintain(now);
-      if (now >= this.nextScheduledRefresh) {
-        this.nextScheduledRefresh = now + REFRESH_INTERVAL_MS;
-        this.requestRefresh('scheduled_refresh', `scheduled_refresh:${Math.floor(now / REFRESH_INTERVAL_MS)}`);
-      }
       const claim = this.repository.claimNext(
         this.deps.principal, `gateway:${process.pid}`, now, GENERATION_LEASE_MS,
       );

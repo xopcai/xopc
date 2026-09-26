@@ -117,6 +117,23 @@ describe('AutomationService', () => {
     });
   });
 
+  it('executes a protected system action without an agent turn', async () => {
+    const executeSystemAction = vi.fn(async () => ({ summary: 'refresh queued' }));
+    service.setDeps({ executeSystemAction });
+    const automation = await service.create({
+      name: 'Refresh suggestions',
+      trigger: { kind: 'manual' },
+      action: { kind: 'system', capability: 'home.advisor.refresh' },
+      management: { owner: 'home-intelligence', editable: ['enabled', 'trigger'], runnable: true, deletable: false },
+    });
+    const queued = await service.runNow(automation.id);
+    const finished = await waitFor(() => service.getRun(queued.id), run => run?.status === 'succeeded');
+    expect(finished).toMatchObject({ status: 'succeeded', summary: 'refresh queued' });
+    expect(executeSystemAction).toHaveBeenCalledWith({
+      capability: 'home.advisor.refresh', automationId: automation.id, runId: queued.id,
+    });
+  });
+
   it('reports completed runs through the completion hook', async () => {
     const onRunCompleted = vi.fn();
     service.setDeps({ onRunCompleted });
