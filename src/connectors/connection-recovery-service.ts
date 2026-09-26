@@ -29,8 +29,8 @@ const INTENT_TTL = 30 * 60_000;
 const ATTEMPT_TTL = 10 * 60_000;
 export type ConnectionAction = {
   waitId: string; expectedTranscriptId: string; expectedVersion: number; idempotencyKey: string;
-  action: 'connect' | 'check' | 'continue' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source' | 'submit_callback';
-  needKey?: string; accountId?: string; candidateRef?: string; callbackUrl?: string;
+  action: 'install_complete' | 'connect' | 'check' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source' | 'submit_callback';
+  needKey?: string; accountId?: string; candidateRef?: string; callbackUrl?: string; instanceId?: string;
 };
 
 function isConnectorNeed(need: ConnectionNeed): need is ConnectionNeed & { target: { type: 'connector'; connectorId: string } } {
@@ -89,6 +89,30 @@ export class ConnectionRecoveryService {
               : need.unavailable ? 'reconnect' : 'connect';
         return { ...need, phase, accounts: [], alternatives: [],
           ...((availability.reason || need.capabilityError) ? { reason: availability.reason ?? need.capabilityError } : {}) };
+      }
+      if (need.target.type === 'store-connector') {
+        const target = need.target;
+        const instance = listConnectorInstances(this.deps.getConfig()).find(item => item.connectorId === target.connectorId);
+        const definition = instance ? getInstalledConnectorDefinition(this.deps.getConfig(), instance.instanceId) : undefined;
+        const digestMatches = definition?.provenance?.packageName === target.packageName
+          && definition.provenance.sha256 === target.sha256
+          && definition.version === target.version;
+        const unhealthy = instance && (
+          !instance.enabled
+          || ['failed', 'disabled', 'not_configured', 'unauthorized', 'degraded'].includes(instance.status)
+          || ['missing', 'expired', 'unauthorized'].includes(instance.authStatus ?? '')
+        );
+        const phase = !instance ? 'install' : !digestMatches || unhealthy ? 'blocked' : 'ready';
+        return {
+          ...need,
+          ...(instance ? { connectionId: instance.instanceId } : {}),
+          phase,
+          accounts: [],
+          alternatives: [],
+          ...(phase === 'blocked' ? { reason: !digestMatches
+            ? 'The installed Connector does not match the reviewed Store package.'
+            : 'Connector setup is incomplete. Review its settings and try again.' } : {}),
+        };
       }
       const id = need.target.connectorId;
       const instance = listConnectorInstances(this.deps.getConfig()).find(instance => instance.connectorId === id);
@@ -161,7 +185,7 @@ export class ConnectionRecoveryService {
   private async checkCapabilities(wait: ConnectionWait, verified: Set<string>): Promise<ConnectionWait['needs']> {
     const views = this.view({ ...wait, needs: wait.needs.map(need => ({ ...need, capabilityError: undefined })) }, verified).needs;
     return Promise.all(wait.needs.map(async need => {
-      if (need.target.type === 'plugin-mcp') return need;
+      if (need.target.type === 'plugin-mcp' || need.target.type === 'store-connector') return need;
       if (views.find(view => view.key === need.key)?.phase !== 'ready') return { ...need, capabilityError: undefined };
       try {
         const id = need.target.connectorId;
@@ -291,6 +315,32 @@ export class ConnectionRecoveryService {
       } else if (action.action === 'skip') {
         queueConnectionResolution({ ...wait, intent: undefined }, 'skipped');
         this.deps.drain(conversationId);
+      } else if (action.action === 'install_complete') {
+        const need = wait.needs.find(need => need.key === action.needKey);
+        if (!need || need.target.type !== 'store-connector' || !action.instanceId) {
+          throw new Error('Unknown Store Connector installation.');
+        }
+        const instance = listConnectorInstances(this.deps.getConfig()).find(item => item.instanceId === action.instanceId);
+        const definition = instance ? getInstalledConnectorDefinition(this.deps.getConfig(), instance.instanceId) : undefined;
+        if (!instance || instance.connectorId !== need.target.connectorId || !instance.enabled
+          || definition?.provenance?.packageName !== need.target.packageName
+          || definition.provenance.sha256 !== need.target.sha256
+          || definition.version !== need.target.version) {
+          throw new Error('The installed Connector does not match the reviewed package.');
+        }
+        if (['failed', 'disabled', 'not_configured', 'unauthorized', 'degraded'].includes(instance.status)
+          || ['missing', 'expired', 'unauthorized'].includes(instance.authStatus ?? '')) {
+          throw new Error('Connector setup is incomplete. Finish setup before continuing.');
+        }
+        wait = updateConnectionWait({ ...wait, needs: wait.needs.map(item => item.key === need.key
+          ? { ...item, connectionId: instance.instanceId, unavailable: false, capabilityError: undefined }
+          : item), intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } }, wait.version);
+        const view = this.view(wait);
+        if (view.phase === 'ready') {
+          queueConnectionResolution({ ...wait, needs: view.needs.map(({ phase: _phase, accounts: _accounts, reason: _reason, alternatives: _alternatives, ...item }) => item) }, 'continued');
+          log.info({ conversationId, waitId: wait.id, objectiveRevision: wait.objectiveRevision, phase: 'resume_queued' }, 'Connector installation continuation queued');
+          this.deps.drain(conversationId);
+        }
       } else if (action.action === 'connect') {
         const need = wait.needs.find(need => need.key === action.needKey);
         if (!need) throw new Error('Unknown connection requirement.');
@@ -365,6 +415,12 @@ export class ConnectionRecoveryService {
         if (!latest || latest.version !== wait.version || latest.status !== 'open') throw new Error('WAIT_CHANGED');
         let needs: ConnectionWait['needs'] = wait.needs.map(need => {
           if (need.target.type === 'plugin-mcp') return need;
+          if (need.target.type === 'store-connector') {
+            const selected = this.view({ ...wait, needs }).needs.find(item => item.key === need.key);
+            return selected?.phase === 'ready'
+              ? { ...need, connectionId: selected.connectionId, unavailable: false, capabilityError: undefined }
+              : need;
+          }
           const id = need.target.connectorId;
           const authorized = fresh.find(item => item.providerConnectionId === need.attempt?.connectionId && item.status === 'active'
             && item.connectorId === id && (!need.accountId || item.accountId === need.accountId));
@@ -388,11 +444,13 @@ export class ConnectionRecoveryService {
         }
         needs = await this.checkCapabilities({ ...wait, needs }, verified);
         if (getConnectionWait(wait.id)?.version !== wait.version) throw new Error('WAIT_CHANGED');
-        const explicitContinue = action.action === 'continue' || action.action === 'confirm_scope';
+        const readyWithoutReview = this.view({ ...wait, needs }, verified).phase === 'ready';
         wait = updateConnectionWait({ ...wait, needs,
           ...(action.action === 'confirm_scope' ? { scopeConfirmedAt: Date.now(), reviewRequired: false } : {}),
           ...(needs.some(need => need.capabilityError) ? { intent: undefined }
-            : explicitContinue ? { intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } } : {}),
+            : readyWithoutReview || action.action === 'confirm_scope'
+              ? { intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } }
+              : {}),
         }, wait.version);
         const view = this.view(wait, verified);
         const canResume = view.phase === 'ready' && wait.intent?.objectiveRevision === wait.objectiveRevision && wait.intent.validUntil > Date.now();

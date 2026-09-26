@@ -74,7 +74,7 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
     const profile = conversationId ? resolveEffectiveAgentConfigForSession(conversationId)
       : deps.agentId ? resolveEffectiveAgentConfigForAgent(deps.agentId) : resolveEffectiveAgentConfigForSession(undefined);
     return profile.config.tools[toolRef];
-  })), deps.getCurrentContext);
+  })), deps.getCurrentContext, deps.getConfig);
 }
 
 export { ExternalToolService } from './service.js';

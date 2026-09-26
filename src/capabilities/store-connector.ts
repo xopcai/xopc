@@ -6,6 +6,7 @@ import AdmZip from 'adm-zip';
 
 import type { Config } from '../config/schema.js';
 import { installConnectorDefinition } from '../connectors/install.js';
+import { listConnectorInstances } from '../connectors/instances.js';
 import type {
   ConnectorDefinition,
   ConnectorInstallInput,
@@ -27,7 +28,76 @@ export type StoreConnectorInstallPlan = {
   definition: ConnectorDefinition;
   permissions: ConnectorPermissions;
   requiresRestart: false;
+  reviewHash: string;
 };
+
+export type StoreConnectorInstallCandidate = {
+  candidateRef: string;
+  source: 'store';
+  packageName: string;
+  version: string;
+  label: string;
+  summary: string;
+  capabilities: string[];
+};
+
+const STORE_CONNECTOR_CANDIDATE_PREFIX = 'store-connector:';
+
+export function storeConnectorCandidateRef(packageName: string, version: string): string {
+  return `${STORE_CONNECTOR_CANDIDATE_PREFIX}${encodeURIComponent(packageName)}:${encodeURIComponent(version)}`;
+}
+
+export function parseStoreConnectorCandidateRef(ref: string): { packageName: string; version: string } | undefined {
+  if (!ref.startsWith(STORE_CONNECTOR_CANDIDATE_PREFIX)) return undefined;
+  const parts = ref.slice(STORE_CONNECTOR_CANDIDATE_PREFIX.length).split(':');
+  if (parts.length !== 2) return undefined;
+  try {
+    const packageName = decodeURIComponent(parts[0]!);
+    const version = decodeURIComponent(parts[1]!);
+    return packageName && version ? { packageName, version } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function manifestCapabilities(value: unknown): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return ['connector.tools'];
+  const manifest = value as Record<string, unknown>;
+  if (!Array.isArray(manifest.provides)) return ['connector.tools'];
+  const values = manifest.provides.flatMap((entry): string[] => {
+    if (typeof entry === 'string' && entry.trim()) return [entry.trim()];
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+    const id = (entry as Record<string, unknown>).id;
+    return typeof id === 'string' && id.trim() ? [id.trim()] : [];
+  });
+  return values.length ? [...new Set(values)].slice(0, 20) : ['connector.tools'];
+}
+
+export async function searchStoreConnectorInstallCandidates(
+  config: Config,
+  query: string,
+  limit = 5,
+): Promise<StoreConnectorInstallCandidate[]> {
+  const result = await listStoreConnectors(config, { q: query, page: 1, pageSize: Math.min(10, Math.max(1, limit)), sort: 'downloads' });
+  const installed = new Set(listConnectorInstances(config).map(instance => instance.connectorId));
+  return result.items
+    .filter(item => item.type === 'connector' && !installed.has(item.name) && typeof item.latestVersion === 'string' && item.latestVersion)
+    .slice(0, limit)
+    .map(item => ({
+      candidateRef: storeConnectorCandidateRef(item.name, item.latestVersion!),
+      source: 'store' as const,
+      packageName: item.name,
+      version: item.latestVersion!,
+      label: (() => {
+        const manifest = item.connectorManifest;
+        if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) return item.name;
+        const displayName = (manifest as Record<string, unknown>).displayName;
+        return typeof displayName === 'string' && displayName.trim() ? displayName.trim() : item.name;
+      })(),
+      summary: item.description,
+      capabilities: manifestCapabilities(item.connectorManifest),
+    }));
+}
 
 function asRecord(value: unknown, label: string): JsonRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -361,6 +431,16 @@ export async function getStoreConnectorInstallPlan(
     version: detail.latestVersion.version,
     permissions: definition.permissions ?? {},
     requiresRestart: false,
+    reviewHash: createHash('sha256').update(JSON.stringify({
+      packageName: detail.name,
+      version: detail.latestVersion.version,
+      sha256: actualSha256,
+      permissions: definition.permissions ?? {},
+      capabilities: definition.capabilities,
+      auth: definition.auth,
+      setup: definition.setup,
+      runtime: definition.runtime,
+    })).digest('hex'),
     definition,
   };
 }
@@ -370,8 +450,12 @@ export async function installStoreConnector(
   packageName: string,
   input: ConnectorInstallInput,
   version?: string,
+  reviewHash?: string,
 ) {
   const plan = await getStoreConnectorInstallPlan(config, packageName, version);
+  if (!reviewHash || reviewHash !== plan.reviewHash) {
+    throw new Error(reviewHash ? 'Connector package changed after review; inspect it again.' : 'Connector capability review is required.');
+  }
   const instance = await installConnectorDefinition(config, plan.definition, input);
   return { instance, plan };
 }

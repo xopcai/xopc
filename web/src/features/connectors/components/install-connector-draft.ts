@@ -16,6 +16,7 @@ export type InstallDraft = {
   store?: {
     packageName: string;
     version: string;
+    reviewHash: string;
     permissions: StoreConnectorPermissions;
   };
 };

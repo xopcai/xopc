@@ -17,6 +17,8 @@ import { updateConnectorAccount } from '../../storage/sqlite/connector-account-r
 import { resumeApprovedConnectorAction } from '../approval-resume.js';
 import { ConnectionRecoveryService, type ConnectionAction } from '../connection-recovery-service.js';
 import { resolveConnectionCandidate } from '../connection-candidates.js';
+import { installConnectorDefinition } from '../install.js';
+import type { ConnectorDefinition } from '../types.js';
 import type { ComposioSessionsAdapter } from '../composio-sessions.js';
 import type { PluginMcpRecovery } from '../plugin-mcp-recovery.js';
 
@@ -279,7 +281,7 @@ describe('durable connection recovery', () => {
 
   it('does not request OAuth again for the selected account during a continuation', async () => {
     requireWait(); activeConnection();
-    await recovery.act(conversationId, action('continue'));
+    await recovery.act(conversationId, action('check'));
     finishSessionInputRun(conversationId, 'run-original', 'suspended');
     const input = claimNextSessionInput(conversationId, 'run-resume')!;
     expect(consumeConnectionResume(input)).toBe(true);
@@ -299,12 +301,10 @@ describe('durable connection recovery', () => {
     requireWait(); activeConnection('connection-1'); activeConnection('connection-2');
     expect(recovery.snapshot(conversationId).wait?.needs[0].phase).toBe('choose_account');
     const selected = await recovery.act(conversationId, action('select_account', { needKey: need.key, accountId: 'account:connection-2' }));
-    expect(selected.snapshot.wait?.phase).toBe('ready');
+    expect(selected.snapshot.wait?.phase).toBe('queued');
     expect(selected.snapshot.wait?.needs[0].connectionId).toBe('connection-2');
     expect(Object.keys(config.connectors.instances)).toContain('composio-gmail');
     expect(authorize).not.toHaveBeenCalled();
-    expect(drain).not.toHaveBeenCalled();
-    expect((await recovery.act(conversationId, action('continue'))).snapshot.wait?.phase).toBe('queued');
     expect(drain).toHaveBeenCalledOnce();
   });
 
@@ -325,7 +325,7 @@ describe('durable connection recovery', () => {
     config.connectors.instances = {};
     requireWait(); activeConnection();
     expect(recovery.snapshot(conversationId).wait?.phase).toBe('ready');
-    expect((await recovery.act(conversationId, action('continue'))).snapshot.wait?.phase).toBe('queued');
+    expect((await recovery.act(conversationId, action('check'))).snapshot.wait?.phase).toBe('queued');
     expect(authorize).not.toHaveBeenCalled();
     expect(Object.keys(config.connectors.instances)).toContain('composio-gmail');
   });
@@ -376,6 +376,55 @@ describe('durable connection recovery', () => {
     expect(pluginMcp.verify).toHaveBeenCalled();
     expect(drain).toHaveBeenCalledOnce();
   });
+  it('verifies an exact Store installation and immediately queues the preserved objective', async () => {
+    const definition: ConnectorDefinition = {
+      id: 'store-demo',
+      version: '1.2.3',
+      displayName: 'Store Demo',
+      description: 'Store recovery test.',
+      category: 'docs',
+      kind: 'mcp',
+      source: 'store',
+      capabilities: ['tools', 'runtime.mcp.streamableHttp'],
+      auth: { mode: 'none' },
+      setup: {},
+      runtime: {
+        type: 'mcp',
+        serverId: 'store_demo',
+        serverTemplate: { url: 'https://mcp.example.com/mcp', transport: 'streamable-http' },
+      },
+      provenance: {
+        packageName: '@xopc-connectors/store-demo',
+        sha256: 'a'.repeat(64),
+      },
+    };
+    const storeNeed = {
+      key: 'store:@xopc-connectors/store-demo@1.2.3',
+      target: {
+        type: 'store-connector' as const,
+        packageName: definition.provenance!.packageName,
+        connectorId: definition.id,
+        version: definition.version,
+        sha256: definition.provenance!.sha256,
+        reviewHash: 'b'.repeat(64),
+        description: definition.description,
+      },
+      label: definition.displayName,
+      capabilities: definition.capabilities,
+    };
+    requireSessionConnection({ conversationId, principalId: 'local-owner', agentId: 'main', summary: 'Use Store Demo', needs: [storeNeed] });
+    expect(recovery.snapshot(conversationId).wait?.needs[0].phase).toBe('install');
+
+    const instance = await installConnectorDefinition(config, definition, {});
+    const result = await recovery.act(conversationId, action('install_complete', {
+      needKey: storeNeed.key,
+      instanceId: instance.instanceId,
+    }));
+
+    expect(result.snapshot.wait?.phase).toBe('queued');
+    expect(result.snapshot.wait?.needs[0].connectionId).toBe(instance.instanceId);
+    expect(drain).toHaveBeenCalledOnce();
+  });
   it('preserves the wait through a gateway restart', () => {
     const wait = requireWait();
     finishSessionInputRun(conversationId, 'run-original', 'suspended');
@@ -411,7 +460,7 @@ describe('durable connection recovery', () => {
   it('keeps an authorized account connected when the required tool contracts are missing', async () => {
     requireWait(); activeConnection();
     searchCapabilities.mockResolvedValue({ toolSchemas: { GMAIL_GET_PROFILE: { inputSchema: { type: 'object' } }, GMAIL_FETCH_EMAILS: {} } });
-    const response = await recovery.act(conversationId, action('continue'));
+    const response = await recovery.act(conversationId, action('check'));
     expect(response.snapshot.wait?.needs[0]).toMatchObject({ phase: 'blocked', unavailable: false, capabilityError: expect.stringContaining('required tools are unavailable') });
     expect(getActiveConnectionWait(conversationId)?.intent).toBeUndefined();
     expect(drain).not.toHaveBeenCalled();
@@ -419,15 +468,14 @@ describe('durable connection recovery', () => {
     await recovery.poll();
     expect(searchCapabilities).toHaveBeenCalledTimes(1);
     searchCapabilities.mockResolvedValue({ toolSchemas: { GMAIL_FETCH_EMAILS: { inputSchema: { type: 'object' } } } });
-    expect((await recovery.act(conversationId, action('check'))).snapshot.wait?.phase).toBe('ready');
-    expect(drain).not.toHaveBeenCalled();
-    expect((await recovery.act(conversationId, action('continue'))).snapshot.wait?.phase).toBe('queued');
+    expect((await recovery.act(conversationId, action('check'))).snapshot.wait?.phase).toBe('queued');
+    expect(drain).toHaveBeenCalledOnce();
   });
 
   it('preserves authorization on a tool-check network error', async () => {
     requireWait(); activeConnection();
     searchCapabilities.mockRejectedValue(new Error('network unavailable'));
-    const response = await recovery.act(conversationId, action('continue'));
+    const response = await recovery.act(conversationId, action('check'));
     expect(response.snapshot.wait?.needs[0]).toMatchObject({ phase: 'blocked', unavailable: false, capabilityError: expect.stringContaining('could not be checked') });
     expect(authorize).not.toHaveBeenCalled();
     expect(drain).not.toHaveBeenCalled();
@@ -435,7 +483,7 @@ describe('durable connection recovery', () => {
 
   it('rechecks capability availability before consuming a queued continuation', async () => {
     requireWait(); activeConnection();
-    await recovery.act(conversationId, action('continue'));
+    await recovery.act(conversationId, action('check'));
     finishSessionInputRun(conversationId, 'run-original', 'suspended');
     const input = claimNextSessionInput(conversationId, 'run-resume')!;
     searchCapabilities.mockResolvedValue({ toolSchemas: {} });
@@ -444,24 +492,25 @@ describe('durable connection recovery', () => {
     expect(getActiveConnectionWait(conversationId)?.status).toBe('open');
   });
 
-  it('does not auto-resume when the account was connected in settings', async () => {
+  it('auto-resumes when the account was already connected in settings', async () => {
     requireWait(); activeConnection();
     await recovery.act(conversationId, action('check'));
-    expect(getActiveConnectionWait(conversationId)?.status).toBe('open');
-    expect(drain).not.toHaveBeenCalled();
+    expect(getActiveConnectionWait(conversationId)?.status).toBe('queued');
+    expect(drain).toHaveBeenCalledOnce();
   });
   it('requires explicit account selection when several accounts are connected', async () => {
     requireWait(); activeConnection(); activeConnection('connection-2');
     expect(recovery.snapshot(conversationId).wait?.needs[0].phase).toBe('choose_account');
-    await recovery.act(conversationId, action('continue'));
+    await recovery.act(conversationId, action('check'));
     expect(drain).not.toHaveBeenCalled();
-    await recovery.act(conversationId, action('select_account', { needKey: need.key, accountId: 'account:connection-2' }));
+    const selected = await recovery.act(conversationId, action('select_account', { needKey: need.key, accountId: 'account:connection-2' }));
+    expect(selected.snapshot.wait?.phase).toBe('queued');
     expect(getActiveConnectionWait(conversationId)?.needs[0].connectionId).toBe('connection-2');
   });
   it('requires review of a delayed objective before resuming', async () => {
     const wait = requireWait(); activeConnection();
     updateConnectionWait({ ...wait, createdAt: Date.now() - 86_400_000 }, wait.version);
-    await recovery.act(conversationId, action('continue'));
+    await recovery.act(conversationId, action('check'));
     expect(recovery.snapshot(conversationId).wait?.phase).toBe('review_scope');
     expect(drain).not.toHaveBeenCalled();
     await recovery.act(conversationId, action('confirm_scope'));
@@ -504,7 +553,7 @@ describe('durable connection recovery', () => {
   });
   it('rechecks revocation in the worker and preserves the objective', async () => {
     requireWait(); const connection = activeConnection();
-    await recovery.act(conversationId, action('continue'));
+    await recovery.act(conversationId, action('check'));
     finishSessionInputRun(conversationId, 'run-original', 'suspended');
     const input = claimNextSessionInput(conversationId, 'run-resume')!;
     upsertConnectorConnection({ ...connection, status: 'revoked' });
@@ -535,14 +584,14 @@ describe('durable connection recovery', () => {
   });
   it('can retry after worker preflight fails, using a fresh queue identity', async () => {
     requireWait(); const connection = activeConnection();
-    await recovery.act(conversationId, action('continue'));
+    await recovery.act(conversationId, action('check'));
     finishSessionInputRun(conversationId, 'run-original', 'suspended');
     const first = claimNextSessionInput(conversationId, 'run-first')!;
     upsertConnectorConnection({ ...connection, status: 'revoked' });
     expect(await recovery.preflight(first)).toBe(false);
     finishSessionInputRun(conversationId, 'run-first', 'cancelled');
     activeConnection();
-    await recovery.act(conversationId, action('continue'));
+    await recovery.act(conversationId, action('check'));
     const second = claimNextSessionInput(conversationId, 'run-second')!;
     expect(second.id).not.toBe(first.id);
     expect(await recovery.preflight(second)).toBe(true);

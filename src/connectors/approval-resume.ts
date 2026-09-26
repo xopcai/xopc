@@ -9,7 +9,7 @@ export async function resumeApprovedConnectorAction(approval: ConnectorApprovalR
   const wait = getActiveConnectionWait(approval.conversationId);
   if (!wait || wait.id !== approval.waitId || wait.principalId !== approval.principalId || wait.agentId !== approval.agentId || wait.status !== 'open') return false;
   try {
-    const result = await recovery.act(wait.conversationId, { action: 'continue', waitId: wait.id, expectedTranscriptId: wait.transcriptId,
+    const result = await recovery.act(wait.conversationId, { action: 'check', waitId: wait.id, expectedTranscriptId: wait.transcriptId,
       expectedVersion: wait.version, idempotencyKey: randomUUID() });
     return result.snapshot.wait?.phase === 'queued';
   } catch { return false; }
