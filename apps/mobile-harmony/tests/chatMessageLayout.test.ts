@@ -34,7 +34,7 @@ describe('chat message layout parity', () => {
     expect(assistantLayout).toContain(".padding({ left: 16, right: 16, top: 14, bottom: 14 })");
     expect(assistantLayout).toContain('.borderRadius(18)');
     expect(assistantLayout).not.toContain('.border(');
-    expect(chat).toContain("|| (row.toolCalls?.length || 0) > 0 || !!row.outcome) return '90%'");
+    expect(chat).toContain('if (chatNeedsWideBubble(row)) return \'90%\'');
     expect(chat).toContain('Repeat<XopcChatRow>(this.presentationRows)');
     expect(chat).not.toContain(".id('chat-assistant-live-card')");
     expect(chat).not.toContain(".id('chat-assistant-running-card')");
@@ -57,6 +57,48 @@ describe('chat message layout parity', () => {
     expect(composerReference).toContain('.height(36)');
     expect(composerReference).toContain("$r('app.string.chat_remove_reference')");
     expect(composerReference).toContain('.responseRegion({ x: 0, y: -4, width: \'100%\', height: 44 })');
+  });
+
+  it('places user references below text and renders images as previewable thumbnails', () => {
+    const userStart = content.indexOf("} else if (this.row.role === 'user') {");
+    const userEnd = content.indexOf('} else {', userStart);
+    const userContent = content.slice(userStart, userEnd);
+    const imageStart = content.indexOf("if (this.row.role === 'user' && this.imageMedia.length)");
+    const imageEnd = content.indexOf('if (this.attachmentMedia.length)', imageStart);
+    const imageStrip = content.slice(imageStart, imageEnd);
+
+    expect(userContent.indexOf('if (this.row.text)')).toBeLessThan(userContent.indexOf('ForEach(this.row.refs || []'));
+    expect(content).toContain("if (this.row.role !== 'user')");
+    expect(imageStrip).toContain(".id('chat-user-image-strip-' + this.row.id)");
+    expect(imageStrip).toContain('compactThumbnail: true, compactThumbnailWidth: 136, compactThumbnailHeight: 96');
+    expect(imageStrip).toContain('compactThumbnailContain: true, compactMetadata: false, compactDisclosure: false');
+    expect(imageStrip).toContain('imageGallery: this.imageMedia');
+    expect(imageStrip).toContain('.width(144).height(104)');
+    expect(content).toContain("return this.row.role === 'user'");
+    expect(content).toContain("filePreviewKind(file.name, file.mimeType) !== 'image'");
+  });
+
+  it('stages attachments as compact WebUI-style chips inside the composer shell', () => {
+    const attachmentStart = chat.indexOf("if (this.attachments.length)", chat.indexOf("if (this.palette.range"));
+    const shellEnd = chat.indexOf(".id('chat-composer-shell')", attachmentStart);
+    const composer = chat.slice(attachmentStart, shellEnd);
+
+    expect(composer).toContain(".id('chat-composer-attachments')");
+    expect(composer).toContain('scrollable(ScrollDirection.Horizontal)');
+    expect(composer).toContain('compact: true, embedded: true, compactThumbnail: true');
+    expect(composer).toContain('compactAvailable: true, compactDisclosure: false');
+    expect(composer).toContain('compactThumbnailWidth: 96, compactThumbnailHeight: 64, compactThumbnailContain: true');
+    expect(composer).toContain('compactAvailable: true, compactDisclosure: false, compactMetadata: false');
+    expect(composer).not.toContain(".id('chat-composer-attachment-edit-' + index.toString())");
+    expect(composer).toContain(".id('chat-composer-attachment-remove-' + index.toString())");
+    expect(composer).toContain(".id('chat-composer-attachment-' + index.toString()).width(104).height(72)");
+    expect(composer).toContain(".margin({ top: 4, right: 4 }).backgroundColor(Color.Black)");
+    expect(composer).toContain(".responseRegion({ x: -8, y: -8, width: 44, height: 44 })");
+    expect(composer).toContain(".width('100%').height(this.attachments.some((file: XopcChatAttachment): boolean => file.mimeType.startsWith('image/')) ? 90 : 74)");
+    expect(composer).toContain('.align(Alignment.TopStart)');
+    expect(attachmentStart).toBeGreaterThan(0);
+    expect(shellEnd).toBeGreaterThan(attachmentStart);
+    expect(chat.slice(0, attachmentStart)).not.toContain(".id('chat-composer-attachments')");
   });
 
   it('limits historical messages while keeping the latest visible message expanded', () => {

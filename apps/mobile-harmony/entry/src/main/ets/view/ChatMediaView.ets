@@ -24,6 +24,11 @@ export struct XopcChatMediaView {
   @Param embedded: boolean = false;
   @Param compactThumbnail: boolean = false;
   @Param compactAvailable: boolean = false;
+  @Param compactDisclosure: boolean = true;
+  @Param compactMetadata: boolean = true;
+  @Param compactThumbnailWidth: number = 0;
+  @Param compactThumbnailHeight: number = 0;
+  @Param compactThumbnailContain: boolean = false;
   @Param inlineVoice: boolean = false;
   @Param previewOnly: boolean = false;
   @Event onPreviewClosed: () => void = (): void => {};
@@ -406,8 +411,11 @@ export struct XopcChatMediaView {
           Row({ space: 10 }) {
             if (this.compactThumbnail && this.previewKind() === 'image') {
               if (this.picture) {
-                Image(this.picture).id('chat-compact-thumbnail-' + this.file.id).width(36).height(36)
-                  .objectFit(ImageFit.Cover).borderRadius(8).accessibilityText(this.file.name)
+                Image(this.picture).id('chat-compact-thumbnail-' + this.file.id)
+                  .width(this.compactThumbnailWidth || (this.compactMetadata ? 36 : 48))
+                  .height(this.compactThumbnailHeight || (this.compactMetadata ? 36 : 48))
+                  .objectFit(this.compactThumbnailContain ? ImageFit.Contain : ImageFit.Cover)
+                  .borderRadius(8).accessibilityText(this.file.name)
               } else {
                 Stack({ alignContent: Alignment.Center }) {
                   if (this.busy) {
@@ -415,22 +423,32 @@ export struct XopcChatMediaView {
                   } else {
                     SymbolGlyph($r('sys.symbol.picture')).fontSize(19).fontColor([this.colors.secondary])
                   }
-                }.id('chat-compact-thumbnail-placeholder-' + this.file.id).width(36).height(36)
+                }.id('chat-compact-thumbnail-placeholder-' + this.file.id)
+                  .width(this.compactThumbnailWidth || (this.compactMetadata ? 36 : 48))
+                  .height(this.compactThumbnailHeight || (this.compactMetadata ? 36 : 48))
                   .borderRadius(8).backgroundColor(this.colors.grouped)
               }
             } else {
               SymbolGlyph(this.mediaSymbol()).fontSize(20).fontColor([this.colors.secondary])
             }
-            Column({ space: 2 }) {
-              Text(this.file.name || this.file.type).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-                .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              if (this.compactAvailable) {
-                Text(this.file.size > 0 ? $r('app.string.chat_artifact_available_size', this.fileSizeLabel())
-                  : $r('app.string.chat_artifact_available')).fontSize(11).fontColor(this.colors.secondary).maxLines(1)
+            if (this.compactMetadata) {
+              Column({ space: 2 }) {
+                Text(this.file.name || this.file.type).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                if (this.compactAvailable) {
+                  Text(this.draftPreview ? this.fileSizeLabel() : this.file.size > 0
+                    ? $r('app.string.chat_artifact_available_size', this.fileSizeLabel())
+                    : $r('app.string.chat_artifact_available')).fontSize(11).fontColor(this.colors.secondary).maxLines(1)
+                }
               }
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
-          }.width('100%').constraintSize({ minHeight: this.compactThumbnail ? 56 : 48 }).padding({ left: 12, right: 12 })
+              .layoutWeight(1).alignItems(HorizontalAlign.Start)
+            }
+            if (this.compactDisclosure) {
+              SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
+            }
+          }.width('100%').constraintSize({ minHeight: this.compactThumbnailHeight > 0
+            ? this.compactThumbnailHeight + 8 : this.compactThumbnail ? 56 : 48 })
+            .padding(this.compactMetadata ? { left: 12, right: 12 } : { left: 4, right: 4 })
         }.id('chat-preview-' + this.file.id).width('100%').padding(0)
           .backgroundColor(this.embedded ? Color.Transparent : this.colors.input)
           .borderRadius(this.embedded ? 0 : 10)

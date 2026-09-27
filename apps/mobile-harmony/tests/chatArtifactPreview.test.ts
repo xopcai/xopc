@@ -11,10 +11,14 @@ describe('chat artifact image preview', () => {
     expect(resultTail).toContain('compactAvailable: true');
   });
 
-  it('loads, crops and opens compact image thumbnails with artifact metadata', () => {
+  it('loads and opens compact image thumbnails with configurable sizing and fit', () => {
     expect(media).toContain("if (!this.compact || (this.compactThumbnail && this.previewKind() === 'image')) this.load();");
-    expect(media).toContain("Image(this.picture).id('chat-compact-thumbnail-' + this.file.id).width(36).height(36)");
-    expect(media).toContain('.objectFit(ImageFit.Cover).borderRadius(8)');
+    expect(media).toContain('@Param compactThumbnailWidth: number = 0;');
+    expect(media).toContain('@Param compactThumbnailHeight: number = 0;');
+    expect(media).toContain("Image(this.picture).id('chat-compact-thumbnail-' + this.file.id)");
+    expect(media).toContain('.width(this.compactThumbnailWidth || (this.compactMetadata ? 36 : 48))');
+    expect(media).toContain('.height(this.compactThumbnailHeight || (this.compactMetadata ? 36 : 48))');
+    expect(media).toContain('.objectFit(this.compactThumbnailContain ? ImageFit.Contain : ImageFit.Cover)');
     expect(media).toContain('const maxDimension = this.compactThumbnail ? 128 : 1024;');
     expect(media).toContain(".onClick((): void => { this.openPreview(); })");
     expect(media).toContain("$r('app.string.chat_artifact_available_size', this.fileSizeLabel())");
