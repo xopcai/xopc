@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const chat = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', import.meta.url), 'utf8');
+const content = readFileSync(new URL('../entry/src/main/ets/view/ChatMessageContent.ets', import.meta.url), 'utf8');
 
 describe('chat message layout parity', () => {
   it('renders user messages as compact right-aligned bubbles', () => {
@@ -39,6 +40,23 @@ describe('chat message layout parity', () => {
     expect(chat).not.toContain(".id('chat-assistant-running-card')");
     expect(chat).toContain("List({ space: 20, scroller: this.messagesScroller })");
     expect(chat).toContain(".padding({ left: 12, right: 12 }).cachedCount(3)");
+  });
+
+  it('groups references with message text using a compact neutral inset row', () => {
+    const reference = content.slice(content.indexOf('  reference(ref: XopcContextRef)'), content.indexOf('\n  build()', content.indexOf('  reference(ref: XopcContextRef)')));
+    const composerReference = chat.slice(chat.indexOf("if (this.refs.length)"), chat.indexOf("if (this.attachments.length)", chat.indexOf("if (this.refs.length)")));
+
+    expect(content).toContain('Column({ space: this.showPreview ? 2 : 8 })');
+    expect(reference).toContain(".id('chat-reference-' + ref.kind + '-' + ref.sourceId)");
+    expect(reference).toContain('.width(\'100%\').height(40)');
+    expect(reference).toContain('.fontColor(this.colors.secondary)');
+    expect(reference).toContain('.backgroundColor(this.colors.panel)');
+    expect(reference).not.toContain('.border(');
+    expect(reference).not.toContain('.backgroundColor(this.colors.accentSoft)');
+    expect(composerReference).toContain(".id('chat-composer-reference-' + ref.kind + '-' + ref.sourceId)");
+    expect(composerReference).toContain('.height(36)');
+    expect(composerReference).toContain("$r('app.string.chat_remove_reference')");
+    expect(composerReference).toContain('.responseRegion({ x: 0, y: -4, width: \'100%\', height: 44 })');
   });
 
   it('limits historical messages while keeping the latest visible message expanded', () => {
