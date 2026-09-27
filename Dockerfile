@@ -4,13 +4,14 @@
 # The build stage uses full Debian for native packages; runtime uses slim and runs as non-root.
 ARG XOPC_NODE_IMAGE=docker.io/library/node:22-bookworm
 ARG XOPC_NODE_SLIM_IMAGE=docker.io/library/node:22-bookworm-slim
-ARG XOPC_PNPM_VERSION=11.6.0
+ARG XOPC_PNPM_VERSION=11.9.0
 
 FROM ${XOPC_NODE_IMAGE} AS build
 ARG XOPC_PNPM_VERSION
 
 ENV CI=true \
     NODE_ENV=development \
+    ELECTRON_SKIP_BINARY_DOWNLOAD=1 \
     PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH
 
@@ -18,16 +19,24 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare "pnpm@${XOPC_PNPM_VERSION}" --activate
 
+# Persist fetched packages in a normal layer, including on ephemeral CI builders.
+COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches ./patches
+COPY web/vendor ./web/vendor
+RUN pnpm fetch --config.store-dir=/pnpm/store \
+      --config.supportedArchitectures.os=linux \
+      --config.supportedArchitectures.cpu="$(node -p 'process.arch')" \
+      --config.supportedArchitectures.libc=glibc
+
 COPY . .
 
-RUN --mount=type=cache,id=xopc-pnpm-store,target=/pnpm/store,sharing=locked \
-    pnpm install --frozen-lockfile \
+RUN pnpm install --offline --frozen-lockfile \
       --config.store-dir=/pnpm/store \
       --config.supportedArchitectures.os=linux \
       --config.supportedArchitectures.cpu="$(node -p 'process.arch')" \
       --config.supportedArchitectures.libc=glibc
 
-RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm run build
+RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm run build:ci
 
 FROM build AS runtime-assets
 
@@ -38,12 +47,12 @@ ENV CI=true \
     PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH
 
-RUN --mount=type=cache,id=xopc-pnpm-store,target=/pnpm/store,sharing=locked \
-    if [ -n "$XOPC_INSTALL_BROWSER" ]; then \
+RUN if [ -n "$XOPC_INSTALL_BROWSER" ]; then \
       cp -LR node_modules/playwright-core /tmp/xopc-playwright-core; \
     fi && \
-    rm -rf node_modules && \
-    pnpm install --prod --frozen-lockfile \
+    rm -rf node_modules .pnpm && \
+    find extensions packages apps evals web -type d -name node_modules -prune -exec rm -rf '{}' + && \
+    pnpm install --offline --prod --frozen-lockfile \
       --config.store-dir=/pnpm/store \
       --config.supportedArchitectures.os=linux \
       --config.supportedArchitectures.cpu="$(node -p 'process.arch')" \
@@ -107,8 +116,7 @@ RUN install -d -m 0755 "$COREPACK_HOME" && \
       /home/node/.xopc \
       /home/node/.xopc/workspace \
       /home/node/.xopc/logs \
-      /home/node/.config/xopc && \
-    chown -R node:node /app
+      /home/node/.config/xopc
 
 # Install additional system packages for skills/extensions when needed.
 # Example: docker build --build-arg XOPC_IMAGE_APT_PACKAGES="python3-pip wget" .

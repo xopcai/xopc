@@ -3,12 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestDatabase } from '../../../../test/sqlite-fixture.js';
+
 import {
   closeXopcDatabase,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
-import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
 import { AutomationService } from '../automation-service.js';
 import { AutomationEventDispatcher, ingestAutomationEvent } from '../../events/index.js';
 import { saveAutomationRun } from '../../storage/index.js';
@@ -30,6 +32,7 @@ describe('AutomationService', () => {
   beforeEach(async () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-automation-'));
     resetXopcDatabaseSingletonForTest();
+    seedTestDatabase(join(stateDir, 'xopc.db'));
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     service = new AutomationService();
     service.setDeps({
@@ -743,23 +746,33 @@ describe('AutomationService', () => {
       delivery_id, run_id, destination_key, kind, status, config_json, attempts,
       next_attempt_at_ms, created_at_ms, updated_at_ms
     ) VALUES (?, ?, 'gateway', 'gateway_event', 'delivered', '{}', 1, ?, ?, ?)`);
-    for (let index = 0; index < 2_001; index += 1) {
-      const runId = `retention-${String(index).padStart(4, '0')}`;
+    const insertRun = db.prepare(`INSERT INTO automation_runs (
+      run_id, automation_id, automation_name, status, trigger_snapshot_json,
+      action_snapshot_json, manual, created_at_ms, ended_at_ms, current_phase
+    ) VALUES (?, ?, ?, 'succeeded', ?, ?, 1, ?, ?, 'completed')`);
+    // Seed history in one transaction; exercise production trimming at the boundary below.
+    runSqliteWriteTransaction(() => {
+      for (let index = 0; index < 1_999; index += 1) {
+        const runId = `retention-${String(index).padStart(4, '0')}`;
+        insertRun.run(runId, automation.id, automation.name, JSON.stringify(automation.trigger),
+          JSON.stringify(automation.action), index + 1, index + 1);
+        insertResult.run(runId, `result:${runId}`, index + 1);
+        insertDelivery.run(`delivery:${runId}`, runId, index + 1, index + 1, index + 1);
+      }
+    });
+    function appendCompletedRun(index: number) {
+      const runId = `retention-${index}`;
       saveAutomationRun({
-        id: runId,
-        automationId: automation.id,
-        automationName: automation.name,
-        status: 'succeeded',
-        triggerSnapshot: automation.trigger,
-        actionSnapshot: automation.action,
-        manual: true,
-        createdAtMs: index + 1,
-        endedAtMs: index + 1,
-        currentPhase: 'completed',
+        id: runId, automationId: automation.id, automationName: automation.name,
+        status: 'succeeded', triggerSnapshot: automation.trigger, actionSnapshot: automation.action,
+        manual: true, createdAtMs: index + 1, endedAtMs: index + 1, currentPhase: 'completed',
       });
       insertResult.run(runId, `result:${runId}`, index + 1);
       insertDelivery.run(`delivery:${runId}`, runId, index + 1, index + 1, index + 1);
     }
+    appendCompletedRun(1_999);
+    expect(db.prepare('SELECT COUNT(*) AS count FROM automation_runs').get()).toEqual({ count: 2_000 });
+    appendCompletedRun(2_000);
 
     expect(db.prepare(`SELECT COUNT(*) AS count FROM automation_runs WHERE automation_id = ?`).get(automation.id))
       .toEqual({ count: 1_500 });
@@ -767,5 +780,8 @@ describe('AutomationService', () => {
     expect(db.prepare('SELECT COUNT(*) AS count FROM automation_result_deliveries').get()).toEqual({ count: 1_500 });
     expect(db.prepare(`SELECT COUNT(*) AS count FROM automation_results r
       LEFT JOIN automation_runs ar ON ar.run_id = r.run_id WHERE ar.run_id IS NULL`).get()).toEqual({ count: 0 });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM automation_result_deliveries d
+      LEFT JOIN automation_runs ar ON ar.run_id = d.run_id WHERE ar.run_id IS NULL`).get()).toEqual({ count: 0 });
+    expect(db.prepare('SELECT MIN(created_at_ms) AS oldest FROM automation_runs').get()).toEqual({ oldest: 502 });
   });
 });

@@ -3,6 +3,8 @@ import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
+import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
+
 import * as modelCalls from '../../providers/model-call.js';
 import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
@@ -58,6 +60,7 @@ describe('SessionStore', () => {
     tempDir = await mkdtemp(join(tmpdir(), 'xopc-session-test-'));
     process.env.XOPC_STATE_DIR = tempDir;
     resetXopcDatabaseSingletonForTest();
+    seedTestDatabase(join(tempDir, 'xopc.db'));
     openXopcDatabase({ path: join(tempDir, 'xopc.db') });
     seedTestAgentCatalog({
       defaults: {
