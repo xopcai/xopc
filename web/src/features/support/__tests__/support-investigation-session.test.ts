@@ -38,6 +38,6 @@ describe('startSupportInvestigationSession', () => {
       mimeType: 'text/markdown',
       name: 'xopc-diagnostics.md',
     })]);
-    expect(send.mock.invocationCallOrder[0]).toBeLessThan(request.mock.invocationCallOrder[0]!);
+    expect(send.mock.invocationCallOrder[0]).toBeLessThan(request.mock.invocationCallOrder[0]);
   });
 });
