@@ -1,4 +1,5 @@
-import { waitForEndpointTurnClaim } from '@/features/endpoint-tools/turn-claim';
+import { SessionManager } from '@/features/chat/session/session-manager';
+import { sendSessionInput } from '@/features/chat/session/send-session-input';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -6,8 +7,8 @@ import type { SupportReport } from './support-report-api';
 
 type StartSupportInvestigationDeps = {
   fetch?: typeof fetchJson;
-  getTurnClaim?: typeof waitForEndpointTurnClaim;
-  randomUUID?: () => string;
+  create?: () => Promise<string>;
+  send?: typeof sendSessionInput;
 };
 
 function markdownAttachment(markdown: string) {
@@ -32,14 +33,8 @@ export async function startSupportInvestigationSession(
   deps: StartSupportInvestigationDeps = {},
 ): Promise<string> {
   const request = deps.fetch ?? fetchJson;
-  const getTurnClaim = deps.getTurnClaim ?? waitForEndpointTurnClaim;
-  const randomUUID = deps.randomUUID ?? (() => crypto.randomUUID());
-  const created = await request<{ session: { key: string } }>(apiUrl('/api/sessions'), {
-    method: 'POST',
-    body: JSON.stringify({ channel: 'webchat', agentId: 'main' }),
-  });
-  const conversationId = created.session.key.trim();
-  if (!conversationId) throw new Error('Session create did not return a session key');
+  const conversationId = deps.create ? await deps.create() : (await new SessionManager().createSession({ agentId: 'main' })).key;
+  await (deps.send ?? sendSessionInput)(conversationId, investigationPrompt, [markdownAttachment(report.markdown)]);
 
   await request(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}`), {
     method: 'PATCH',
@@ -48,23 +43,11 @@ export async function startSupportInvestigationSession(
       tags: ['support'],
       replaceTags: true,
       customData: {
-        genericNewChatShell: true,
         kind: 'support-investigation',
         supportReportCapturedAt: report.capturedAt,
       },
     }),
   }).catch(() => undefined);
 
-  const origin = await getTurnClaim();
-  await request(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/inputs`), {
-    method: 'POST',
-    body: JSON.stringify({
-      clientMessageId: randomUUID(),
-      delivery: 'next',
-      content: investigationPrompt,
-      attachments: [markdownAttachment(report.markdown)],
-      origin,
-    }),
-  });
   return conversationId;
 }

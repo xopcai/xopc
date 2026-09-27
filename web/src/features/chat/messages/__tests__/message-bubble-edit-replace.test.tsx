@@ -70,6 +70,27 @@ describe('MessageBubble user edit action', () => {
     expect(container.querySelector<HTMLButtonElement>('button[aria-label="Edit in composer"]')?.disabled).toBe(true);
   });
 
+  it('keeps user actions beside the bubble without adding vertical footer height', () => {
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <MessageBubble
+            message={message}
+            messageIndex={0}
+            isStreaming={false}
+            progress={null}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    const article = container.querySelector('article');
+    const actions = container.querySelector('[data-user-message-actions]');
+    expect(actions?.parentElement).toBe(article);
+    expect(actions?.classList.contains('self-end')).toBe(true);
+    expect(actions?.classList.contains('mt-1.5')).toBe(false);
+  });
+
   it('shows quiet delivery progress only after a slow-send threshold', () => {
     vi.useFakeTimers();
     try {

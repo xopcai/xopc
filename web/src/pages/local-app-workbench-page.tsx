@@ -61,7 +61,7 @@ import {
   AcceptanceScenarioList,
   type LocalAppAcceptanceScenarioSummary,
 } from '@/features/local-apps/acceptance-scenario-list';
-import { createProjectSession, fetchProjectSessions } from '@/features/projects/api';
+import { fetchProjectSessions } from '@/features/projects/api';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -164,8 +164,12 @@ export function LocalAppWorkbenchPage() {
 
   const openCoderConversation = useCallback(async (targetApp: LocalAppDetail, draft?: string) => {
     const sessions = await fetchProjectSessions(targetApp.projectId);
-    const session = selectLocalAppCoderSession(sessions)
-      ?? await createProjectSession(targetApp.projectId, 'coder');
+    const session = selectLocalAppCoderSession(sessions);
+    if (!session) {
+      const params = new URLSearchParams({ projectId: targetApp.projectId, ...(draft ? { draft } : {}) });
+      navigate(`/chat/new?${params}`, { state: { agentId: 'coder', forceNewChat: true } });
+      return;
+    }
     coderConversationIdsRef.current.add(session.key);
     navigate(localAppConversationUrl(session.key, draft));
   }, [navigate]);

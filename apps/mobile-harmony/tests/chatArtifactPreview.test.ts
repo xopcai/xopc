@@ -22,7 +22,7 @@ describe('chat artifact image preview', () => {
   });
 
   it('offers system-app and download fallbacks for unsupported files', () => {
-    expect(media).toContain('openChatMedia(context, this.file, this.conversationId)');
+    expect(media).toContain('openChatMedia(context, this.activeFile(), this.conversationId)');
     expect(media).toContain("$r('app.string.chat_open_with_app')");
     expect(media).toContain("Button($r('app.string.download')).height(44)");
     expect(media).toContain('this.fileDetailsLabel()');
@@ -47,5 +47,24 @@ describe('chat artifact image preview', () => {
     expect(media).toContain('this.htmlError = true');
     expect(media).not.toContain('verifyHtmlRendered');
     expect(media).not.toContain('.onUrlLoadIntercept(');
+  });
+});
+
+describe('chat image gallery preview', () => {
+  it('passes same-message images into each attachment preview', () => {
+    const content = readFileSync(new URL('../entry/src/main/ets/view/ChatMessageContent.ets', import.meta.url), 'utf8');
+    expect(content).toContain("filePreviewKind(file.name, file.mimeType) === 'image'");
+    expect(content).toContain('imageGallery: this.imageMedia');
+  });
+
+  it('navigates within bounds and keeps actions attached to the active image', () => {
+    expect(media).toContain('const next = current + offset;');
+    expect(media).toContain('next < 0 || next >= this.imageGallery.length');
+    expect(media).toContain(".id('chat-media-previous-image')");
+    expect(media).toContain(".id('chat-media-next-image')");
+    expect(media).toContain('PanGesture({ fingers: 1, direction: PanDirection.Horizontal, distance: 30 })');
+    expect(media).toContain('this.zoom > 1.05 || Math.abs(event.offsetX) < 60');
+    expect(media).toContain('saveChatMedia(context, this.activeFile(), this.conversationId)');
+    expect(media).toContain('createChatMediaShare(this.activeFile(), this.conversationId)');
   });
 });

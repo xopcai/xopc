@@ -137,6 +137,7 @@ export function useChatFollowUpClarify(options: {
   }, [conversationIdRef]);
 
   const refreshState = useCallback(async (key: string) => {
+    if (await readLocalSessionDraft(key)) return;
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/input-state`)).catch(() => null);
     if (!res?.ok || conversationIdRef.current !== key) return;
     const json = await res.json().catch(() => null) as { payload?: unknown } | null;
@@ -144,6 +145,7 @@ export function useChatFollowUpClarify(options: {
   }, [applyState, conversationIdRef]);
 
   const refreshClarification = useCallback(async (key: string) => {
+    if (await readLocalSessionDraft(key)) return;
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/clarification`)).catch(() => null);
     if (!res?.ok || conversationIdRef.current !== key) return;
     const json = await res.json().catch(() => null) as { payload?: unknown } | null;
@@ -482,3 +484,4 @@ export function useChatFollowUpClarify(options: {
     makeOnClarifyRequest,
   };
 }
+import { readLocalSessionDraft } from './local-session-drafts';

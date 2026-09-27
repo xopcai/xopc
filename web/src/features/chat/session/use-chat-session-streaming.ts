@@ -424,7 +424,6 @@ export function useChatSessionStreaming(deps: {
       return trackInputAcceptance(async (onInputAccepted) => {
         let inputAccepted = false;
         try {
-          await sessionMgrRef.current.ensureSessionExists(chatId);
 
           const sendStreamCallbacks = createAgentStreamMessagingCallbacks({
             chatId,

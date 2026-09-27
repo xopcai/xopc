@@ -275,8 +275,10 @@ export struct XopcSessionsView {
                 .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.search'))
                 .onClick((): void => { this.searchOpen = true; })
             }
-            Button('+').id('sessions-new').width(44).height(44).fontSize(28).backgroundColor(Color.Transparent)
-              .fontColor(this.colors.foreground).accessibilityText($r('app.string.new_chat')).enabled(!this.sessions.busy)
+            Button() {
+              SymbolGlyph($r('sys.symbol.plus')).fontSize(22).fontColor([this.colors.foreground])
+            }.id('sessions-new').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+              .accessibilityText($r('app.string.new_chat')).enabled(!this.sessions.busy)
               .onClick(async (): Promise<void> => { await this.createConversation(); })
           }
         }.width('100%').padding({ left: this.embedded ? 20 : 12, right: 12, top: 12, bottom: 12 })
@@ -317,7 +319,7 @@ export struct XopcSessionsView {
               ListItem() { Button($r('app.string.load_more')).width('100%').height(44).enabled(!this.sessions.busy)
                 .onClick((): void => { this.sessions.load(true); }) }
             }
-          }.id('sessions-list').width('100%').height('100%').padding({ left: 20, right: 20, bottom: 20 }).cachedCount(5)
+          }.id('sessions-list').width('100%').height('100%').padding({ left: 20, right: 20 }).cachedCount(5)
             .onReachEnd((): void => { if (!this.sessions.error && !this.sessions.busy) this.sessions.load(true); })
         }.layoutWeight(1).pullToRefresh(!this.sessions.busy).onRefreshing((): void => { this.sessions.load(); })
         if (this.sessions.undoId) {

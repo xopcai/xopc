@@ -53,6 +53,10 @@ describe('Harmony color schemes', () => {
     expect(settingsView).toContain('xopcThemePreview(scheme, true)');
   });
 
+  it('keeps preference option labels and selection marks inset from rounded card edges', () => {
+    expect(settingsView).toContain("}.width('100%').height(56).padding({ left: 16, right: 16 })");
+  });
+
   it('persists the scheme and restores appearance before the first page is loaded', () => {
     expect(settingsService).toContain('const saved: XopcPreferences = { language, theme, colorScheme: normalizedScheme }');
     expect(settingsService).toContain('this.colorScheme = normalizeXopcColorScheme(saved.colorScheme)');

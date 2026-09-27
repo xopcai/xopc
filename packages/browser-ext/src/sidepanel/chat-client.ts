@@ -4,12 +4,14 @@ import {
   type RealtimeWebSocket,
 } from '@xopcai/realtime-client';
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
-import type { BrowserPageContextInput, BrowserTabBinding, BrowserTabBindingMode } from '@xopcai/gateway-contract';
+import { sessionInputCommandSchema, type SessionCreation, type SessionInputCommand, type BrowserPageContextInput, type BrowserTabBinding, type BrowserTabBindingMode } from '@xopcai/gateway-contract';
 
 import { t } from '../i18n';
 import {
   gatewayFetch,
   getAccessProfile,
+  readProfile,
+  type BrowserGatewayIdentity,
 } from './auth';
 import type { BrowserAttachment } from './attachments';
 import { deleteBrowserOutbox, readBrowserOutbox, writeBrowserOutbox } from './chat-outbox';
@@ -59,7 +61,7 @@ export type BrowserApproval = {
 export type BrowserConfiguredModel = {
   id: string;
   name: string;
-  thinking?: { mode: string; options?: string[]; default?: string };
+  thinking?: { mode: string; options?: string[]; initialValue?: string };
 };
 
 export type BrowserSessionModelConfig = {
@@ -101,16 +103,52 @@ class GatewayRequestError extends Error {
 
 type TurnClaim = { endpointId: string; token: string };
 type Listener = (snapshot: BrowserChatSnapshot) => void;
-type BrowserOutboxRequest = {
-  content: string;
-  clientMessageId: string;
-  delivery: 'next';
-  expectedTranscriptId?: string;
-  configVersion?: number;
-  origin: { type: 'endpoint'; endpointId: string; token: string };
-  browserContexts?: BrowserPageContextInput[];
-  attachments?: BrowserAttachment[];
+type BrowserOutboxRequest = Omit<Extract<SessionInputCommand, { kind: 'start' }>, 'origin'> | Omit<Extract<SessionInputCommand, { kind: 'append' }>, 'origin'>;
+type BrowserInputResponse = { payload: {
+  receipt: { conversationId: string; transcriptId: string; clientMessageId: string };
+  session: { transcriptId?: string };
+  agentConfig: BrowserSessionModelConfig;
+  inputState: { activeRunId?: string; inputs?: Array<{ clientMessageId?: string; runId?: string }> };
+} };
+
+type DeliveryScope = {
+  identity: BrowserGatewayIdentity;
+  draftKey: string;
+  inputKey: string;
+  assertCurrent(): Promise<void>;
 };
+
+async function deliveryScope(conversationId: string, expected: BrowserGatewayIdentity | undefined): Promise<DeliveryScope> {
+  if (!expected) throw new Error(t('errorProfileNotLoaded'));
+  const profile = await readProfile();
+  if (!profile) throw new Error(t('errorEndpointNotReady'));
+  if (profile.gatewayId !== expected.gatewayId || profile.deviceId !== expected.deviceId
+    || profile.gatewayPublicKey !== expected.gatewayPublicKey) throw new Error(t('errorChatChanged'));
+  const draftKey = `creation:${profile.gatewayId}:${profile.deviceId}:${conversationId}`;
+  return {
+    identity: profile,
+    draftKey,
+    inputKey: `input:${draftKey}`,
+    async assertCurrent() {
+      const current = await readProfile();
+      if (!current || current.gatewayId !== profile.gatewayId || current.deviceId !== profile.deviceId
+        || current.gatewayPublicKey !== profile.gatewayPublicKey) throw new Error(t('errorChatChanged'));
+    },
+  };
+}
+
+async function draftStorageKey(conversationId: string): Promise<string> {
+  const profile = await readProfile();
+  if (!profile) throw new Error(t('errorEndpointNotReady'));
+  return `creation:${profile.gatewayId}:${profile.deviceId}:${conversationId}`;
+}
+
+async function readDraft(conversationId: string): Promise<SessionCreation | undefined> {
+  return readBrowserOutbox<SessionCreation>(await draftStorageKey(conversationId));
+}
+async function inputStorageKey(conversationId: string): Promise<string> {
+  return `input:${await draftStorageKey(conversationId)}`;
+}
 
 async function json<T>(response: Response): Promise<T> {
   const raw = await response.text();
@@ -135,6 +173,7 @@ async function json<T>(response: Response): Promise<T> {
 
 function isRetryableDeliveryError(cause: unknown): boolean {
   return !(cause instanceof GatewayRequestError)
+    || (cause.status >= 200 && cause.status < 300)
     || cause.status === 408
     || cause.status === 429
     || cause.status >= 500;
@@ -187,6 +226,7 @@ export class BrowserChatClient {
   private sendingInput = false;
   private lastOutboxRecoveryAt = 0;
   private sessionsRequest = 0;
+  private defaultModelId?: string;
   private inputsRequest = 0;
   private endpointBinding?: string;
   private endpointBindingTask?: Promise<void>;
@@ -332,6 +372,7 @@ export class BrowserChatClient {
     const conversationId = this.snapshot.conversationId;
     const endpointId = this.turnClaim?.endpointId;
     if (!conversationId || !endpointId) return;
+    if (await readDraft(conversationId)) return;
     const desired = `${conversationId}\n${endpointId}`;
     if (this.endpointBinding === desired) return;
     if (this.endpointBindingTask) {
@@ -378,13 +419,14 @@ export class BrowserChatClient {
   }
 
   async createSession(): Promise<void> {
-    const response = await json<{ session: { key: string; transcriptId?: string } }>(await gatewayFetch('/api/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel: 'webchat', createdSurface: 'browser_extension' }),
-    }));
-    await this.loadSessions();
-    await this.openSession(response.session.key);
+    const conversationId = crypto.randomUUID();
+    const scope = await deliveryScope(conversationId, this.profileIdentity);
+    const model = this.snapshot.models.find(candidate => candidate.id === this.defaultModelId);
+    const creation: SessionCreation = { agentId: 'main', projectId: null, execution: null,
+      temporary: false, model: model?.id ?? '', thinkingLevel: model?.thinking?.initialValue ?? 'off' };
+    await writeBrowserOutbox(scope.draftKey, creation);
+    await scope.assertCurrent();
+    await this.openSession(conversationId);
   }
 
   async openSession(conversationId: string): Promise<void> {
@@ -412,6 +454,13 @@ export class BrowserChatClient {
       await chrome.storage.session.set({ [`${TAB_SESSION_PREFIX}${tabId}`]: conversationId });
     }
     try {
+      const draft = await readDraft(conversationId);
+      if (draft) {
+        this.update({ modelConfig: { model: draft.model, thinkingLevel: draft.thinkingLevel, fixedModel: false, activityDetail: 'on' } });
+        this.update({ pendingDelivery: Boolean(await readBrowserOutbox<BrowserOutboxRequest>(await inputStorageKey(conversationId))) });
+        if (this.snapshot.endpointReady) await this.recoverOutbox();
+        return;
+      }
       await Promise.all([
         this.reloadMessages(),
         this.reloadModelConfig(),
@@ -428,7 +477,7 @@ export class BrowserChatClient {
       if (run.payload?.active && run.payload.runId) await this.followRun(run.payload.runId);
       await this.reloadBrowserApproval();
       if (this.snapshot.conversationId !== conversationId) return;
-      this.update({ pendingDelivery: Boolean(await readBrowserOutbox<BrowserOutboxRequest>(conversationId)) });
+      this.update({ pendingDelivery: Boolean(await readBrowserOutbox<BrowserOutboxRequest>(await inputStorageKey(conversationId))) });
       if (this.snapshot.endpointReady) await this.recoverOutbox();
     } catch (cause) {
       if (this.snapshot.conversationId !== conversationId) return;
@@ -442,6 +491,19 @@ export class BrowserChatClient {
   }
 
   get currentConversationId(): string | undefined { return this.snapshot.conversationId; }
+
+  private async acceptReceipt(conversationId: string, clientMessageId: string, result: BrowserInputResponse, scope: DeliveryScope): Promise<void> {
+    const payload = result.payload;
+    if (payload.receipt.conversationId !== conversationId || payload.receipt.clientMessageId !== clientMessageId || payload.receipt.transcriptId !== payload.session.transcriptId) {
+      throw new Error(t('errorChatChanged'));
+    }
+    await scope.assertCurrent();
+    await deleteBrowserOutbox(scope.draftKey);
+    await scope.assertCurrent();
+    if (this.snapshot.conversationId === conversationId) {
+      this.update({ transcriptId: payload.receipt.transcriptId, modelConfig: payload.agentConfig });
+    }
+  }
 
   async send(content: string, browserContexts: BrowserPageContextInput[] = [], attachments: BrowserAttachment[] = []): Promise<'sent' | 'queued'> {
     if (this.sendingInput) throw new Error(t('errorWaitQueuedMessage'));
@@ -463,26 +525,31 @@ export class BrowserChatClient {
     }
     if (!this.turnClaim) throw new Error(t('errorEndpointNotReady'));
     const conversationId = this.snapshot.conversationId;
-    await this.bindSessionEndpoint();
+    const scope = await deliveryScope(conversationId, this.profileIdentity);
+    const draft = await readBrowserOutbox<SessionCreation>(scope.draftKey);
+    if (!draft) await this.bindSessionEndpoint();
+    await scope.assertCurrent();
     if (this.snapshot.conversationId !== conversationId) throw new Error(t('errorChatChanged'));
     const clientMessageId = crypto.randomUUID();
-    const request: BrowserOutboxRequest = {
+    const input = {
       content: text,
-      clientMessageId,
-      delivery: 'next',
-      expectedTranscriptId: this.snapshot.transcriptId,
-      ...(this.snapshot.modelConfig?.fixedModel ? { configVersion: this.snapshot.modelConfig.configVersion } : {}),
-      origin: { type: 'endpoint', endpointId: this.turnClaim.endpointId, token: this.turnClaim.token },
       ...(browserContexts.length ? { browserContexts } : {}),
       ...(attachments.length ? { attachments } : {}),
     };
+    const origin = { type: 'endpoint' as const, endpointId: this.turnClaim.endpointId, token: this.turnClaim.token };
+    const request = sessionInputCommandSchema.parse(draft
+      ? { kind: 'start', clientMessageId, creation: draft, input, origin }
+      : { kind: 'append', clientMessageId, expectedTranscriptId: this.snapshot.transcriptId,
+        configVersion: this.snapshot.modelConfig?.configVersion, delivery: 'next', input, origin });
     const previousMessages = this.snapshot.messages;
     let outboxStored = false;
     let deliveryAccepted = false;
     this.update({ submitting: true, pendingDelivery: false });
     try {
-      await writeBrowserOutbox(conversationId, request);
+      const { origin: _origin, ...durable } = request;
+      await writeBrowserOutbox(scope.inputKey, durable);
       outboxStored = true;
+      await scope.assertCurrent();
       this.update({
         messages: this.snapshot.runId ? this.snapshot.messages : [...this.snapshot.messages, {
           id: clientMessageId,
@@ -500,25 +567,29 @@ export class BrowserChatClient {
         ...(this.snapshot.runId ? {} : { streamingMessage: undefined }),
         error: undefined,
       });
-      const response = await json<{ payload: { state: { activeRunId?: string; inputs?: Array<{ clientMessageId?: string; runId?: string }> } } }>(
+      const response = await json<BrowserInputResponse>(
         await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/inputs`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(request),
-        }),
+        }, scope.identity),
       );
+      await this.acceptReceipt(conversationId, clientMessageId, response, scope);
       deliveryAccepted = true;
-      await deleteBrowserOutbox(conversationId);
+      await deleteBrowserOutbox(scope.inputKey);
       outboxStored = false;
+      await scope.assertCurrent();
       if (this.snapshot.conversationId !== conversationId) return 'sent';
-      const runId = response.payload.state.inputs?.find((input) => input.clientMessageId === clientMessageId)?.runId
-        ?? response.payload.state.activeRunId
+      if (draft) await this.bindSessionEndpoint();
+      const runId = response.payload.inputState.inputs?.find((input) => input.clientMessageId === clientMessageId)?.runId
+        ?? response.payload.inputState.activeRunId
         ?? await this.waitForRun(conversationId, clientMessageId);
       if (this.snapshot.conversationId !== conversationId) return 'sent';
       if (runId) await this.followRun(runId);
       else await this.reloadMessages();
       return 'sent';
     } catch (cause) {
+      try { await scope.assertCurrent(); } catch { return deliveryAccepted ? 'sent' : 'queued'; }
       if (deliveryAccepted) {
         if (this.snapshot.conversationId === conversationId) {
           this.update({
@@ -534,11 +605,12 @@ export class BrowserChatClient {
         }
         return 'queued';
       }
-      if (outboxStored) await deleteBrowserOutbox(conversationId);
+      if (outboxStored) await deleteBrowserOutbox(scope.inputKey);
       if (this.snapshot.conversationId === conversationId) this.update({ messages: previousMessages });
       throw cause;
     } finally {
-      if (this.snapshot.conversationId === conversationId) this.update({ submitting: false });
+      const current = await scope.assertCurrent().then(() => true, () => false);
+      if (current && this.snapshot.conversationId === conversationId) this.update({ submitting: false });
     }
   }
 
@@ -546,35 +618,40 @@ export class BrowserChatClient {
     const conversationId = this.snapshot.conversationId;
     if (!conversationId || !this.turnClaim || this.recoveringOutbox) return;
     if (Date.now() - this.lastOutboxRecoveryAt < 3_000) return;
-    const pending = await readBrowserOutbox<BrowserOutboxRequest>(conversationId);
-    if (!pending?.clientMessageId || typeof pending.content !== 'string') return;
+    const scope = await deliveryScope(conversationId, this.profileIdentity);
+    const pending = await readBrowserOutbox<BrowserOutboxRequest>(scope.inputKey);
+    await scope.assertCurrent();
+    if (this.snapshot.conversationId !== conversationId || !this.turnClaim) return;
+    if (!pending?.clientMessageId || typeof pending.input.content !== 'string') return;
     this.recoveringOutbox = true;
     this.lastOutboxRecoveryAt = Date.now();
     this.update({ pendingDelivery: true });
     let deliveryAccepted = false;
     try {
-      const request: BrowserOutboxRequest = {
+      const request: SessionInputCommand = {
         ...pending,
         origin: { type: 'endpoint', endpointId: this.turnClaim.endpointId, token: this.turnClaim.token },
       };
-      const response = await json<{
-        payload: { state: { activeRunId?: string; inputs?: Array<{ clientMessageId?: string; runId?: string }> } };
-      }>(await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/inputs`, {
+      const response = await json<BrowserInputResponse>(await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/inputs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
-      }));
+      }, scope.identity));
+      await this.acceptReceipt(conversationId, request.clientMessageId, response, scope);
       deliveryAccepted = true;
-      await deleteBrowserOutbox(conversationId);
+      await deleteBrowserOutbox(scope.inputKey);
+      await scope.assertCurrent();
       if (this.snapshot.conversationId !== conversationId) return;
+      if (request.kind === 'start') await this.bindSessionEndpoint();
       this.update({ pendingDelivery: false, error: undefined });
-      const runId = response.payload.state.inputs?.find((input) => input.clientMessageId === request.clientMessageId)?.runId
-        ?? response.payload.state.activeRunId
+      const runId = response.payload.inputState.inputs?.find((input) => input.clientMessageId === request.clientMessageId)?.runId
+        ?? response.payload.inputState.activeRunId
         ?? await this.waitForRun(conversationId, request.clientMessageId);
       if (this.snapshot.conversationId !== conversationId) return;
       if (runId) await this.followRun(runId);
       else await this.reloadMessages();
     } catch (cause) {
+      try { await scope.assertCurrent(); } catch { return; }
       if (this.snapshot.conversationId === conversationId) {
         if (deliveryAccepted) {
           this.update({
@@ -584,7 +661,7 @@ export class BrowserChatClient {
         } else if (isRetryableDeliveryError(cause)) {
           this.update({ pendingDelivery: true, error: undefined });
         } else {
-          await deleteBrowserOutbox(conversationId);
+          await deleteBrowserOutbox(scope.inputKey);
           this.update({
             pendingDelivery: false,
             messages: this.snapshot.messages.filter((message) => message.id !== pending.clientMessageId),
@@ -663,7 +740,7 @@ export class BrowserChatClient {
     const selected = this.snapshot.models.find((candidate) => candidate.id === model);
     const thinkingLevel = selected?.thinking?.options?.includes(current.thinkingLevel)
       ? current.thinkingLevel
-      : selected?.thinking?.default;
+      : selected?.thinking?.initialValue;
     await this.patchModelConfig({ model, thinkingLevel });
   }
 
@@ -826,7 +903,7 @@ export class BrowserChatClient {
   }
 
   private async loadModels(): Promise<void> {
-    const result = await json<{ payload?: { models?: unknown[] } }>(await gatewayFetch('/api/models'));
+    const result = await json<{ payload?: { models?: unknown[]; defaultId?: string } }>(await gatewayFetch('/api/models?agentId=main', {}, this.profileIdentity));
     const models = (result.payload?.models ?? []).flatMap((value): BrowserConfiguredModel[] => {
       if (!value || typeof value !== 'object') return [];
       const model = value as Record<string, unknown>;
@@ -843,17 +920,23 @@ export class BrowserChatClient {
             ...(Array.isArray(thinking.options)
               ? { options: thinking.options.filter((option): option is string => typeof option === 'string') }
               : {}),
-            ...(typeof thinking.default === 'string' ? { default: thinking.default } : {}),
+            ...(typeof thinking.initialValue === 'string' ? { initialValue: thinking.initialValue } : {}),
           },
         } : {}),
       }];
     });
+    this.defaultModelId = result.payload?.defaultId;
     this.update({ models });
   }
 
   private async reloadModelConfig(): Promise<void> {
     const conversationId = this.snapshot.conversationId;
     if (!conversationId) return;
+    const draft = await readDraft(conversationId);
+    if (draft) {
+      this.update({ modelConfig: { model: draft.model, thinkingLevel: draft.thinkingLevel, fixedModel: false, activityDetail: 'on' } });
+      return;
+    }
     const result = await json<{ payload?: Record<string, unknown> }>(await gatewayFetch(
       `/api/sessions/${encodeURIComponent(conversationId)}/agent-config`,
     ));
@@ -875,6 +958,14 @@ export class BrowserChatClient {
     const conversationId = this.snapshot.conversationId;
     const current = this.snapshot.modelConfig;
     if (!conversationId || !current) return;
+    const draft = await readDraft(conversationId);
+    if (draft) {
+      if (await readBrowserOutbox(await inputStorageKey(conversationId))) throw new Error(t('errorWaitQueuedMessage'));
+      const creation = { ...draft, ...patch };
+      await writeBrowserOutbox(await draftStorageKey(conversationId), creation);
+      this.update({ modelConfig: { ...current, model: creation.model, thinkingLevel: creation.thinkingLevel } });
+      return;
+    }
     const result = await json<{ payload?: Record<string, unknown> }>(await gatewayFetch(
       `/api/sessions/${encodeURIComponent(conversationId)}/agent-config`,
       {
@@ -900,6 +991,7 @@ export class BrowserChatClient {
   private async reloadClarification(): Promise<void> {
     const conversationId = this.snapshot.conversationId;
     if (!conversationId) return;
+    if (await readDraft(conversationId)) return;
     const result = await json<{ payload: unknown }>(await gatewayFetch(
       `/api/sessions/${encodeURIComponent(conversationId)}/clarification`,
     ));
@@ -969,9 +1061,14 @@ export class BrowserChatClient {
   }
 
   private profileUrl?: string;
+  private profileIdentity?: BrowserGatewayIdentity;
 
   async prepare(): Promise<void> {
-    this.profileUrl = (await getAccessProfile()).gatewayUrl;
+    const profile = await getAccessProfile();
+    this.profileUrl = profile.gatewayUrl;
+    this.profileIdentity = {
+      gatewayId: profile.gatewayId, deviceId: profile.deviceId, gatewayPublicKey: profile.gatewayPublicKey,
+    };
   }
 
   private update(patch: Partial<BrowserChatSnapshot>): void {

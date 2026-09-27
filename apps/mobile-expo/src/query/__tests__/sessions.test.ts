@@ -38,6 +38,10 @@ vi.mock('../../stores/preferences-store', () => ({
 }));
 
 const mockedApiFetch = vi.mocked(apiFetch);
+const localDrafts = vi.hoisted(() => ({ create: vi.fn(() => 'local-uuid') }));
+vi.mock('../../features/chat/local-session-drafts', () => ({
+  createLocalSessionDraft: localDrafts.create, readLocalSessionDraft: () => undefined, removeLocalSessionDraft: vi.fn(),
+}));
 
 describe('restored session validation', () => {
   beforeEach(() => { mockedApiFetch.mockReset(); });
@@ -83,45 +87,29 @@ describe('createSession', () => {
     } as Response);
   });
 
-  it('creates webchat sessions without client-generated peer ids', async () => {
+  it('creates a local draft without contacting the Gateway', async () => {
     await createSession({ agentId: 'MainAgent' });
-
-    const [, init] = mockedApiFetch.mock.calls[0];
-    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-
-    expect(body.channel).toBe('webchat');
-    expect(body.agentId).toBe('mainagent');
-    expect(body).toEqual({ channel: 'webchat', agentId: 'mainagent' });
+    expect(mockedApiFetch).not.toHaveBeenCalled();
+    expect(localDrafts.create).toHaveBeenLastCalledWith(expect.objectContaining({ agentId: 'mainagent', projectId: null }));
   });
 
-  it('does not send client session identity by default so empty sessions can be reused', async () => {
-    await createSession({ agentId: 'MainAgent' });
-
-    const [, init] = mockedApiFetch.mock.calls[0];
-    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-
-    expect(body).toEqual({ channel: 'webchat', agentId: 'mainagent' });
+  it('returns the durable local identity', async () => {
+    expect(await createSession({ agentId: 'MainAgent' })).toBe('local-uuid');
+    expect(mockedApiFetch).not.toHaveBeenCalled();
   });
 
-  it('creates a project chat without overriding the project default agent', async () => {
-    await createSession({ projectId: '  project-1  ' });
-
-    const [, init] = mockedApiFetch.mock.calls[0];
-    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-
-    expect(body).toEqual({ channel: 'webchat', projectId: 'project-1' });
+  it('freezes the selected project agent locally', async () => {
+    await createSession({ projectId: '  project-1  ', agentId: 'coder' });
+    expect(localDrafts.create).toHaveBeenLastCalledWith(expect.objectContaining({ projectId: 'project-1', agentId: 'coder' }));
   });
 
   it('forwards an explicit project execution environment', async () => {
     await createSession({ projectId: 'project-1', executionMode: 'managed_worktree', baseRef: ' main ' });
 
-    const [, init] = mockedApiFetch.mock.calls[0];
-    expect(JSON.parse(String(init?.body))).toEqual({
-      channel: 'webchat',
+    expect(localDrafts.create).toHaveBeenLastCalledWith(expect.objectContaining({
       projectId: 'project-1',
-      executionMode: 'managed_worktree',
-      baseRef: 'main',
-    });
+      execution: { mode: 'managed_worktree', baseRef: 'main' },
+    }));
   });
 });
 

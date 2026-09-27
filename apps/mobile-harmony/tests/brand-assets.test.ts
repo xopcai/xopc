@@ -46,12 +46,16 @@ describe('Harmony mobile brand assets', () => {
     const entry = module.abilities.find((ability: { name: string }) => ability.name === 'EntryAbility');
     const push = module.abilities.find((ability: { name: string }) => ability.name === 'PushMessageAbility');
     expect(entry.icon).toBe('$media:app_icon');
-    expect(entry.startWindowIcon).toBe('$media:brand_logo');
-    expect(push.startWindowIcon).toBe('$media:brand_logo');
+    expect(entry.startWindowIcon).toBe('$media:launch_logo');
+    expect(push.startWindowIcon).toBe('$media:launch_logo');
 
     const launcher = await sharp(read('../AppScope/resources/base/media/app_icon.png')).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const alpha = launcher.data.filter((_value, index) => index % 4 === 3);
     expect(alpha.every(value => value === 255)).toBe(true);
     expect(read('../entry/src/main/resources/base/media/brand_logo.svg').toString()).not.toContain('<rect');
+    expect(read('../entry/src/main/resources/base/media/launch_logo.svg').toString())
+      .toContain('viewBox="-256 -256 1536 1536"');
+    expect(read('../entry/src/main/resources/dark/media/launch_logo.svg').toString())
+      .toContain('viewBox="-256 -256 1536 1536"');
   });
 });

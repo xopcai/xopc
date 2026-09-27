@@ -13,6 +13,7 @@ export type TuiChatInputStatus =
 export interface TuiChatInput {
   id: string;
   content: string;
+  attachments?: unknown[];
   requestedDelivery: TuiChatInputDelivery;
   effectiveDelivery: TuiChatInputDelivery;
   status: TuiChatInputStatus;

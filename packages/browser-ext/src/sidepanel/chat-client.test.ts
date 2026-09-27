@@ -8,6 +8,7 @@ const { gatewayFetch, outbox } = vi.hoisted(() => ({
 vi.mock('./auth', () => ({
   gatewayFetch,
   getAccessProfile: vi.fn().mockResolvedValue({ gatewayUrl: 'http://localhost:8080' }),
+  readProfile: vi.fn().mockResolvedValue({ gatewayId: 'gateway', deviceId: 'device' }),
 }));
 
 vi.mock('@xopcai/realtime-client', () => ({
@@ -21,12 +22,15 @@ vi.mock('./chat-outbox', () => ({
 }));
 
 import { BrowserChatClient, type BrowserChatSnapshot } from './chat-client';
+import { readProfile } from './auth';
 
 type ClientInternals = {
+  profileIdentity?: { gatewayId: string; deviceId: string; gatewayPublicKey?: string };
   snapshot: BrowserChatSnapshot;
   turnClaim?: { endpointId: string; token: string };
   runTopic?: string;
   reloadMessages(): Promise<void>;
+  loadModels(): Promise<void>;
   onRealtimeEvent(topic: string, seq: number, event: string, data: unknown): Promise<void>;
   update(patch: Partial<BrowserChatSnapshot>): void;
 };
@@ -40,6 +44,15 @@ function response(body: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+function acceptedInput(_path: unknown, init: RequestInit): Promise<Response> {
+  const command = JSON.parse(String(init.body));
+  return Promise.resolve(response({ payload: {
+    receipt: { conversationId: 'chat:one', clientMessageId: command.clientMessageId, transcriptId: 'transcript' },
+    session: { transcriptId: 'transcript' }, inputState: { inputs: [] },
+    agentConfig: { model: 'test/one', thinkingLevel: 'off', fixedModel: true, activityDetail: 'on', configVersion: 1 },
+  } }));
 }
 
 function stubChrome() {
@@ -71,12 +84,15 @@ function stubChrome() {
 
 function readyClient(): BrowserChatClient {
   const client = new BrowserChatClient();
-  internals(client).update({ conversationId: 'chat:one', endpointReady: true });
+  internals(client).profileIdentity = { gatewayId: 'gateway', deviceId: 'device' };
+  internals(client).update({ conversationId: 'chat:one', transcriptId: 'transcript', endpointReady: true,
+    modelConfig: { model: 'test/one', thinkingLevel: 'off', activityDetail: 'on', fixedModel: true, configVersion: 1 } });
   internals(client).turnClaim = { endpointId: 'browser:one', token: 'turn-token' };
   return client;
 }
 
 beforeEach(() => {
+  vi.mocked(readProfile).mockResolvedValue({ gatewayId: 'gateway', deviceId: 'device' } as Awaited<ReturnType<typeof readProfile>>);
   gatewayFetch.mockReset();
   outbox.clear();
   stubChrome();
@@ -85,12 +101,51 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('BrowserChatClient delivery safety', () => {
+  it.each([['test/configured', 'test/configured'], [undefined, '']])('creates locally using only the configured default %s', async (defaultId, expected) => {
+    const client = readyClient();
+    gatewayFetch.mockResolvedValue(response({ payload: { defaultId, models: [
+      { id: 'test/first', name: 'First' },
+      { id: 'test/configured', name: 'Configured', thinking: { mode: 'levels', initialValue: 'high' } },
+    ] } }));
+    await internals(client).loadModels();
+    gatewayFetch.mockClear();
+    vi.spyOn(client, 'openSession').mockResolvedValue(undefined);
+    await client.createSession();
+    expect(gatewayFetch).not.toHaveBeenCalled();
+    expect([...outbox.values()]).toEqual([expect.objectContaining({ model: expected,
+      thinkingLevel: defaultId ? 'high' : 'off' })]);
+  });
+
+  it('does not submit the previous conversation under a newly selected profile', async () => {
+    const client = readyClient();
+    vi.mocked(readProfile).mockResolvedValue({ gatewayId: 'other', deviceId: 'device' } as Awaited<ReturnType<typeof readProfile>>);
+    await expect(client.send('old conversation text')).rejects.toThrow('errorChatChanged');
+    expect(gatewayFetch).not.toHaveBeenCalled();
+    expect(outbox.size).toBe(0);
+  });
+  it('retains the original outbox and ignores a receipt after profile switching', async () => {
+    const client = readyClient();
+    const creation = { agentId: 'main', projectId: null, execution: null, temporary: false,
+      model: 'test/one', thinkingLevel: 'off' };
+    outbox.set('creation:gateway:device:chat:one', creation);
+    gatewayFetch.mockImplementation(async (path, init) => {
+      vi.mocked(readProfile).mockResolvedValue({ gatewayId: 'other', deviceId: 'device' } as Awaited<ReturnType<typeof readProfile>>);
+      return acceptedInput(path, init);
+    });
+    await expect(client.send('private draft')).resolves.toBe('queued');
+    expect(outbox.get('creation:gateway:device:chat:one')).toEqual(creation);
+    expect(outbox.has('input:creation:gateway:device:chat:one')).toBe(true);
+    expect([...outbox.keys()].some(key => key.includes('other'))).toBe(false);
+    expect(gatewayFetch).toHaveBeenCalledTimes(1);
+    expect(gatewayFetch.mock.calls[0]?.[2]).toMatchObject({ gatewayId: 'gateway', deviceId: 'device' });
+  });
+
   it('switches a session that already has a fixed model selection', async () => {
     const client = readyClient();
     internals(client).update({
       models: [
         { id: 'test/first', name: 'First' },
-        { id: 'test/second', name: 'Second', thinking: { mode: 'levels', options: ['low'], default: 'low' } },
+        { id: 'test/second', name: 'Second', thinking: { mode: 'levels', options: ['low'], initialValue: 'low' } },
       ],
       modelConfig: {
         model: 'test/first',
@@ -137,14 +192,14 @@ describe('BrowserChatClient delivery safety', () => {
       role: 'user',
       blocks: [{ type: 'text', text: 'hello' }],
     });
-    expect(outbox.has('chat:one')).toBe(true);
+    expect(outbox.has('input:creation:gateway:device:chat:one')).toBe(true);
     await expect(client.send('send twice')).rejects.toThrow('queued message');
     expect(gatewayFetch).toHaveBeenCalledTimes(2);
     expect(gatewayFetch).toHaveBeenNthCalledWith(1, '/api/endpoint-tools/bindings/chat%3Aone', expect.objectContaining({
       method: 'PUT',
       body: JSON.stringify({ endpointId: 'browser:one' }),
     }));
-    expect(gatewayFetch).toHaveBeenNthCalledWith(2, '/api/sessions/chat%3Aone/inputs', expect.objectContaining({ method: 'POST' }));
+    expect(gatewayFetch).toHaveBeenNthCalledWith(2, '/api/sessions/chat%3Aone/inputs', expect.objectContaining({ method: 'POST' }), expect.objectContaining({ gatewayId: 'gateway', deviceId: 'device' }));
   });
 
   it('rolls back an optimistic message when the Gateway rejects it', async () => {
@@ -156,15 +211,15 @@ describe('BrowserChatClient delivery safety', () => {
     await expect(client.send('invalid')).rejects.toThrow('Invalid input');
 
     expect(internals(client).snapshot).toMatchObject({ submitting: false, pendingDelivery: false, messages: [] });
-    expect(outbox.has('chat:one')).toBe(false);
-    expect(gatewayFetch).toHaveBeenNthCalledWith(2, '/api/sessions/chat%3Aone/inputs', expect.objectContaining({ method: 'POST' }));
+    expect(outbox.has('input:creation:gateway:device:chat:one')).toBe(false);
+    expect(gatewayFetch).toHaveBeenNthCalledWith(2, '/api/sessions/chat%3Aone/inputs', expect.objectContaining({ method: 'POST' }), expect.objectContaining({ gatewayId: 'gateway', deviceId: 'device' }));
   });
 
   it('does not queue a message again after the Gateway accepted it', async () => {
     const client = readyClient();
     gatewayFetch
       .mockResolvedValueOnce(response({}))
-      .mockResolvedValueOnce(response({ payload: { state: { inputs: [] } } }))
+      .mockImplementationOnce(acceptedInput)
       .mockRejectedValueOnce(new TypeError('Could not refresh input state'));
 
     await expect(client.send('accepted')).resolves.toBe('sent');
@@ -174,9 +229,9 @@ describe('BrowserChatClient delivery safety', () => {
       blocks: [{ type: 'text', text: 'accepted' }],
     });
     expect(internals(client).snapshot.error).toContain('Message sent');
-    expect(outbox.has('chat:one')).toBe(false);
+    expect(outbox.has('input:creation:gateway:device:chat:one')).toBe(false);
     expect(gatewayFetch).toHaveBeenCalledTimes(3);
-    expect(gatewayFetch).toHaveBeenNthCalledWith(2, '/api/sessions/chat%3Aone/inputs', expect.objectContaining({ method: 'POST' }));
+    expect(gatewayFetch).toHaveBeenNthCalledWith(2, '/api/sessions/chat%3Aone/inputs', expect.objectContaining({ method: 'POST' }), expect.objectContaining({ gatewayId: 'gateway', deviceId: 'device' }));
     expect(gatewayFetch).toHaveBeenNthCalledWith(3, '/api/sessions/chat%3Aone/input-state');
   });
 
@@ -187,7 +242,7 @@ describe('BrowserChatClient delivery safety', () => {
     await expect(client.send('hello')).rejects.toThrow('Failed to bind endpoint');
 
     expect(internals(client).snapshot).toMatchObject({ submitting: false, pendingDelivery: false, messages: [] });
-    expect(outbox.has('chat:one')).toBe(false);
+    expect(outbox.has('input:creation:gateway:device:chat:one')).toBe(false);
     expect(gatewayFetch).toHaveBeenCalledTimes(1);
     expect(gatewayFetch).toHaveBeenCalledWith('/api/endpoint-tools/bindings/chat%3Aone', expect.objectContaining({ method: 'PUT' }));
   });
@@ -245,9 +300,10 @@ describe('composer delivery concurrency', () => {
     const client = readyClient();
     let resolveBinding!: (response: Response) => void;
     gatewayFetch.mockImplementationOnce(() => new Promise(resolve => { resolveBinding = resolve; }))
-      .mockResolvedValueOnce(response({ payload: { state: { activeRunId: 'run-one', inputs: [] } } }));
+      .mockImplementationOnce(acceptedInput);
     const first = client.send('one');
     await expect(client.send('two')).rejects.toThrow('Wait for the queued');
+    await vi.waitFor(() => expect(resolveBinding).toBeTypeOf('function'));
     resolveBinding(response({ ok: true }));
     await first;
     expect(gatewayFetch.mock.calls.filter(([url]) => String(url).endsWith('/inputs'))).toHaveLength(1);
@@ -258,6 +314,7 @@ describe('composer delivery concurrency', () => {
     let resolveBinding!: (response: Response) => void;
     gatewayFetch.mockImplementationOnce(() => new Promise(resolve => { resolveBinding = resolve; }));
     const sending = client.send('belongs to one');
+    await vi.waitFor(() => expect(resolveBinding).toBeTypeOf('function'));
     internals(client).update({ conversationId: 'chat:two' });
     resolveBinding(response({ ok: true }));
     await expect(sending).rejects.toThrow('errorChatChanged');
@@ -279,7 +336,7 @@ describe('composer model and run state', () => {
     const client = readyClient();
     internals(client).update({ modelConfig: { model: 'test/one', thinkingLevel: 'high', activityDetail: 'on', fixedModel: true, configVersion: 7 } });
     gatewayFetch.mockResolvedValueOnce(response({ ok: true }))
-      .mockResolvedValueOnce(response({ payload: { state: { activeRunId: 'run-one', inputs: [] } } }));
+      .mockImplementationOnce(acceptedInput);
     await client.send('hello');
     const call = gatewayFetch.mock.calls.find(([url]) => String(url).endsWith('/inputs'))!;
     expect(JSON.parse(call[1].body as string).configVersion).toBe(7);

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="-256 -256 1536 1536" role="img" aria-labelledby="title description">
+  <title id="title">xopc launch logo for dark backgrounds</title>
+  <desc id="description">A compact launch treatment of the xopc Human–AI Loop mark.</desc>
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#F5F5F7" stroke-linecap="round" stroke-width="136" stroke-dasharray="1419.162121 654.289030" transform="rotate(11.8 512 512)" />
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#0A84FF" stroke-linecap="round" stroke-width="136" stroke-dasharray="354.790530 1718.660621" transform="rotate(284.2 512 512)" />
+</svg>

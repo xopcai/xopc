@@ -78,6 +78,10 @@ export const storage: KeyValueStorage = {
   },
 };
 
+export function getStorageKeys(): string[] {
+  return getNativeMmkv()?.getAllKeys() ?? [...memory.keys()];
+}
+
 export function pendingRunStorageKey(conversationId: string): string {
   const gatewayId = storage.getString(KEYS.activeId) ?? 'unassigned';
   return `${KEYS.pendingRunPrefix}v2:${encodeURIComponent(gatewayId)}:${encodeURIComponent(conversationId)}`;

@@ -3,12 +3,13 @@ import { BrowserSessionLimitError, createBrowserSession, deleteBrowserSession } 
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { browserCookieRequestAllowed, clearBrowserSessionCookie, writeBrowserSessionCookie } from '../../security/browser-session.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { getOrCreateGatewayIdentity } from '../../../storage/sqlite/gateway-identity-repository.js';
 
 export function registerBrowserSessionRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
   app.get('/api/browser-session', (c) => {
     c.header('Cache-Control', 'no-store');
     const principal = getGatewayPrincipal(c);
-    return c.json({ conversationId: principal.principalId });
+    return c.json({ conversationId: `${getOrCreateGatewayIdentity().id}:${principal.principalId}` });
   });
   app.post('/api/browser-session', deps.strictRateLimitMiddleware, (c) => {
     const principal = getGatewayPrincipal(c);
@@ -25,7 +26,7 @@ export function registerBrowserSessionRoutes(app: Hono, deps: AuthenticatedRoute
     }
     writeBrowserSessionCookie(c, session.token, session.expiresAt);
     c.header('Cache-Control', 'no-store');
-    return c.json({ conversationId: `browser:${session.sessionId}` });
+    return c.json({ conversationId: `${getOrCreateGatewayIdentity().id}:browser:${session.sessionId}` });
   });
   app.delete('/api/browser-session', (c) => {
     if (!browserCookieRequestAllowed(c)) return c.json({ error: 'Forbidden' }, 403);

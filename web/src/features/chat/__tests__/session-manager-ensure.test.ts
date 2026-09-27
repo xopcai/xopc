@@ -13,6 +13,12 @@ vi.mock('@/lib/fetch', () => ({
 vi.mock('@/lib/gateway-startup-retry', () => ({
   apiFetchWithStartupRetry: vi.fn(),
 }));
+const drafts = vi.hoisted(() => ({ read: vi.fn(), save: vi.fn() }));
+vi.mock('@/features/chat/session/local-session-drafts', () => ({
+  readLocalSessionDraft: drafts.read, saveLocalSessionDraft: drafts.save,
+  rememberSessionTranscript: vi.fn(), draftAgentConfig: vi.fn(),
+  readPendingSessionCommand: vi.fn(async () => undefined), confirmSessionCommand: vi.fn(),
+}));
 
 const mockedApiFetch = vi.mocked(apiFetch);
 const mockedApiFetchWithStartupRetry = vi.mocked(apiFetchWithStartupRetry);
@@ -50,49 +56,32 @@ describe('SessionManager.forkSessionAtTurn', () => {
   });
 });
 
-describe('SessionManager.ensureSessionExists', () => {
+describe('SessionManager local drafts', () => {
   beforeEach(() => {
     mockedApiFetch.mockReset();
   });
 
-  it('does not create when the session already resolves', async () => {
-    mockedApiFetch.mockResolvedValueOnce(jsonResponse({ ok: true, payload: {} }));
-
-    await new SessionManager().ensureSessionExists('134874b6-5536-51bc-8c22-57982488c47a');
-
-    expect(mockedApiFetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not resurrect a deleted conversation on a 404', async () => {
-    mockedApiFetch.mockResolvedValueOnce(jsonResponse({ error: 'Session not found' }, 404));
-    await expect(new SessionManager().ensureSessionExists('06e49449-6c47-45c3-868a-753193a8262a')).rejects.toThrow('Session not found');
-    expect(mockedApiFetch).toHaveBeenCalledOnce();
-  });
-
-  it('does not create when resolve fails for auth or other non-404 errors', async () => {
-    mockedApiFetch.mockResolvedValueOnce(jsonResponse({ error: 'Invalid authentication token' }, 401));
-
-    await expect(
-      new SessionManager().ensureSessionExists('134874b6-5536-51bc-8c22-57982488c47a'),
-    ).rejects.toThrow('Invalid authentication token');
-
-    expect(mockedApiFetch).toHaveBeenCalledTimes(1);
+  it('persists a final UUID without requesting the Gateway', async () => {
+    const session = await new SessionManager().createSession({ agentId: 'main' });
+    expect(session.key).toMatch(/^[a-f0-9-]{36}$/);
+    expect(drafts.save).toHaveBeenCalledWith(expect.objectContaining({ conversationId: session.key }));
+    expect(mockedApiFetch).not.toHaveBeenCalled();
   });
 });
 
 describe('SessionManager.createSession environment', () => {
   beforeEach(() => mockedApiFetch.mockReset());
-  it('sends the explicit mode together with initial model and project', async () => {
-    mockedApiFetch.mockResolvedValueOnce(jsonResponse({ session: { key: 'created' } }, 201));
+  it('persists the explicit mode together with initial model and project', async () => {
     await new SessionManager().createSession({ projectId: 'project-a', executionMode: 'managed_worktree', initialAgentConfig: { model: 'test/model' } });
-    expect(JSON.parse(String(mockedApiFetch.mock.calls[0]?.[1]?.body))).toEqual({
-      channel: 'webchat', projectId: 'project-a', executionMode: 'managed_worktree', initialAgentConfig: { model: 'test/model' },
-    });
+    expect(drafts.save).toHaveBeenLastCalledWith(expect.objectContaining({ creation: expect.objectContaining({
+      projectId: 'project-a', execution: { mode: 'managed_worktree' }, model: 'test/model',
+    }) }));
+    expect(mockedApiFetch).not.toHaveBeenCalled();
   });
-  it('surfaces the server reason instead of silently retrying in Local', async () => {
-    mockedApiFetch.mockResolvedValueOnce(jsonResponse({ error: 'Repository has uncommitted changes' }, 409));
-    await expect(new SessionManager().createSession({ projectId: 'project-a', executionMode: 'managed_worktree' })).rejects.toThrow('uncommitted changes');
-    expect(mockedApiFetch).toHaveBeenCalledOnce();
+  it('does not open a draft if persistence fails', async () => {
+    drafts.save.mockRejectedValueOnce(new Error('Disk full'));
+    await expect(new SessionManager().createSession()).rejects.toThrow('Disk full');
+    expect(mockedApiFetch).not.toHaveBeenCalled();
   });
 });
 

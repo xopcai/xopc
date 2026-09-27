@@ -5,7 +5,6 @@ export function canStartChatBootstrap(input: {
   alreadyAttempted: boolean;
 }): boolean {
   return input.gatewayReady
-    && input.gatewayOnline
     && !input.urlConversationId
     && !input.alreadyAttempted;
 }

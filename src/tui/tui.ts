@@ -19,7 +19,8 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import type { ReasoningLevel, ThinkLevel, VerboseLevel } from '../agent/transcript/thinking-types.js';
-import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
+import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
+import { TuiDraftFileStore } from './backends/embedded-drafts.js';
 import { loadConfig } from '../config/index.js';
 import { resolveStateDir, resolveXopcDatabasePath } from '../config/paths.js';
 import { ensureStarterAgentsInitialized } from '../agent/starter-agents.js';
@@ -81,11 +82,6 @@ import {
 } from './tui-picker-overlay.js';
 import { openModelPickerOverlay } from './tui-model-picker.js';
 import { runTuiOAuthLogin } from './tui-oauth-login.js';
-import {
-  cleanupAbandonedTuiSessions,
-  deleteGeneratedTuiSessionIfEmpty,
-  GENERATED_TUI_SESSION_SHELL_PATCH,
-} from './tui-empty-session-cleanup.js';
 import {
   createEditorSubmitHandler,
   createSubmitBurstCoalescer,
@@ -341,7 +337,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     generatedStartupConversationId ? [generatedStartupConversationId] : [],
   );
   const isGeneratedTuiConversationId = (id: string) => generatedStartupConversationIds.has(id);
-  let startupSessionHadUserTurn = false;
   const startupWorkingDirectory = resolveStartupWorkingDirectory(opts, isLocalMode);
   const implicitTrustedWorkspace = startupWorkingDirectory ?? (isLocalMode ? process.cwd() : undefined);
   const projectTrustStore = new ProjectTrustStore();
@@ -594,6 +589,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   editor.onChange = (text: string) => {
+    scheduleComposerDraftSave();
     const trimmed = text.trimStart();
     const nextExclude = trimmed.startsWith('!!');
     const nextBash = editorMode === 'shell' || trimmed.startsWith('!');
@@ -602,6 +598,28 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       isBashExcludeContext = nextExclude;
       updateEditorBorderColor();
     }
+  };
+
+  let composerDrafts: TuiDraftFileStore<{ text: string; attachments: TuiInboundAttachment[] }> | undefined;
+  let composerDraftTimer: ReturnType<typeof setTimeout> | undefined;
+  const saveComposerDraft = () => {
+    if (!composerDrafts) return;
+    try {
+      const text = editor.getText();
+      if (text || pendingImageAttachments.length) composerDrafts.save(state.currentConversationId, { text, attachments: pendingImageAttachments });
+      else composerDrafts.remove(state.currentConversationId);
+    } catch (error) { chatLog.addSystem(`Draft could not be saved: ${String(error)}`); }
+  };
+  const scheduleComposerDraftSave = () => {
+    clearTimeout(composerDraftTimer);
+    composerDraftTimer = setTimeout(saveComposerDraft, 300);
+  };
+  const restoreComposerDraft = () => {
+    if (!composerDrafts || editor.getText() || pendingImageAttachments.length) return;
+    try {
+      const saved = composerDrafts.read(state.currentConversationId);
+      if (saved) { pendingImageAttachments = saved.attachments; editor.setText(saved.text); }
+    } catch (error) { chatLog.addSystem(`Draft could not be restored: ${String(error)}`); }
   };
 
   const copyDefaultEditorAppHandlers = (target: EditorComponent) => {
@@ -788,7 +806,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     getAllProviders().filter((provider) => isProviderConfiguredSync(provider)).length;
 
   const getExtensionSystemPrompt = () =>
-    resolveEffectiveAgentProfileForSession(state.currentConversationId).customInstructions ?? '';
+    resolveEffectiveAgentProfile(currentAgentId).customInstructions ?? '';
 
   const waitForTuiIdle = async () => {
     while (
@@ -1251,6 +1269,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const requestExit = (options?: { showResumeHint?: boolean }) => {
     if (state.exitRequested) return;
+    clearTimeout(composerDraftTimer);
+    saveComposerDraft();
     state.exitRequested = true;
     if (elapsedTimerId) {
       clearInterval(elapsedTimerId);
@@ -1262,19 +1282,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
     tui.terminal.setProgress(false);
     void (async () => {
-      const removedEmptyStartupSessions = new Set<string>();
-      if (!state.activeRunId) {
-        for (const conversationId of generatedStartupConversationIds) {
-          if (conversationId === state.currentConversationId && startupSessionHadUserTurn) continue;
-          const removed = await deleteGeneratedTuiSessionIfEmpty(client, conversationId).catch(() => false);
-          if (removed) removedEmptyStartupSessions.add(conversationId);
-        }
-      }
       client.stop();
       await drainAndStopTuiSafely(tui);
       restoreStdio();
-      const currentSessionWasRemoved = removedEmptyStartupSessions.has(state.currentConversationId);
-      if (options?.showResumeHint !== false && !currentSessionWasRemoved) {
+      if (options?.showResumeHint !== false) {
         process.stdout.write(`\nTo resume this session: ${formatTuiResumeCommand(opts, state.currentConversationId)}\n`);
       }
       finishTui?.();
@@ -1302,11 +1313,20 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     refreshSessionInfo,
     loadHistory: loadSessionHistory,
     loadHistoryWindow,
-    setSession,
+    setSession: changeSession,
     abortActive,
     resetCurrentSession,
     clearChatForSessionSwitch,
   } = sessionActions;
+  const setSession = async (key: string) => {
+    clearTimeout(composerDraftTimer);
+    saveComposerDraft();
+    pendingImageAttachments = [];
+    editor.setText('');
+    clearTimeout(composerDraftTimer);
+    await changeSession(key);
+    restoreComposerDraft();
+  };
 
   const persistCurrentNewSessionContext = () => {
     const current = getTuiNewSessionPreferences(tuiSettings, newSessionPreferenceKey);
@@ -1338,9 +1358,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       await client.patchSession(state.currentConversationId, {
         ...initialAgentConfig,
         ...(projectId ? { projectId } : {}),
-        ...(isGeneratedTuiConversationId(state.currentConversationId)
-          ? GENERATED_TUI_SESSION_SHELL_PATCH
-          : {}),
       });
       await refreshSessionInfo();
     }
@@ -1385,9 +1402,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     startupWorkingDirectoryApplied = true;
     await client.patchSession(state.currentConversationId, {
       workingDirectory: startupWorkingDirectory,
-      ...(isGeneratedTuiConversationId(state.currentConversationId)
-        ? GENERATED_TUI_SESSION_SHELL_PATCH
-        : {}),
     });
     state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
     state.sessionInfo.workingDirectoryLocked = true;
@@ -1412,24 +1426,15 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       generatedStartupConversationIds.add(targetConversationId);
       await setSession(targetConversationId);
       currentAgentId = projectAgentId;
-      if (isGeneratedTuiConversationId(state.currentConversationId)) {
-        await client.patchSession(state.currentConversationId, GENERATED_TUI_SESSION_SHELL_PATCH);
-      }
       await client.patchSession(state.currentConversationId, {
         projectId: result.project.id,
         workingDirectory: startupWorkingDirectory,
-        ...(isGeneratedTuiConversationId(state.currentConversationId)
-          ? GENERATED_TUI_SESSION_SHELL_PATCH
-          : {}),
       });
       state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
       state.sessionInfo.workingDirectoryLocked = true;
     } else {
       await client.patchSession(state.currentConversationId, {
         projectId: result.project.id,
-        ...(isGeneratedTuiConversationId(state.currentConversationId)
-          ? GENERATED_TUI_SESSION_SHELL_PATCH
-          : {}),
       });
     }
     const verb = result.created ? 'Created project' : 'Using project';
@@ -1964,7 +1969,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
 
     chatLog.addUser(userDisplayContentForAttachments(text, attachments));
-    startupSessionHadUserTurn = true;
     sessionSnapshot.appendMessage('user', messageText);
     lastRetryMessageText = messageText;
     markRunSending(state);
@@ -2148,10 +2152,18 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const retryLastMessage = async () => {
-    const message = lastRetryMessageText?.trim();
+    const interrupted = state.chatInputState.inputs.find(input => input.status === 'interrupted');
+    const message = interrupted?.content.trim() || lastRetryMessageText?.trim();
     if (!message) {
       chatLog.addSystem('No previous user message to retry.');
       return;
+    }
+    if (interrupted) {
+      if (pendingImageAttachments.length || pendingNextTurnCustomMessages.length) {
+        chatLog.addSystem('Send or clear the current attachments and context before retrying an interrupted input.');
+        return;
+      }
+      pendingImageAttachments = (interrupted.attachments ?? []) as TuiInboundAttachment[];
     }
     if (state.activeRunId) {
       await abortActive({ clearUi: false });
@@ -2605,8 +2617,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   });
   defaultEditor.onAction('app.editor.external', openExternalEditor);
   defaultEditor.onPasteImage = () => {
+    const conversationId = state.currentConversationId;
     void (async () => {
       const image = await readClipboardImage();
+      if (conversationId !== state.currentConversationId) return;
       if (!image) {
         chatLog.addStatus(theme.dim('No image found on clipboard.'));
         tui.requestRender();
@@ -2633,6 +2647,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         name,
         size: image.bytes.byteLength,
       });
+      scheduleComposerDraftSave();
       chatLog.addStatus(
         theme.dim(`Attached image: ${name} (${pendingImageAttachments.length} pending). Send a message to include it.`),
       );
@@ -2788,6 +2803,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     setConnectionStatus(isLocalMode ? 'local ready' : 'gateway connected');
     touchStreamingActivity();
     void (async () => {
+      if (!composerDrafts) {
+        composerDrafts = new TuiDraftFileStore(await client.getComposerDraftDirectory());
+        restoreComposerDraft();
+      }
       if (!startupConversationCreated) {
         await client.createConversation(currentAgentId, state.currentConversationId);
         startupConversationCreated = true;
@@ -2841,7 +2860,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       }
       await refreshModelChoices();
       await loadSessionHistory({ merge: true });
-      void cleanupAbandonedTuiSessions(client, state.currentConversationId).catch(() => {});
       showStartupCardOnce();
       void refreshStartupResources().then(() => {
         updateFooter();

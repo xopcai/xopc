@@ -53,3 +53,4 @@ describe('shared voice model settings', () => {
     expect(voiceCatalogOptions('a').queryKey).not.toEqual(voiceCatalogOptions('b').queryKey);
   });
 });
+vi.mock('../session-materialization', () => ({ materializeSession: vi.fn(async () => {}) }));

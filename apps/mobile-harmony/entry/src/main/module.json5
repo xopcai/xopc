@@ -14,7 +14,7 @@
       "description": "$string:app_description",
       "icon": "$media:app_icon",
       "label": "$string:app_name",
-      "startWindowIcon": "$media:brand_logo",
+      "startWindowIcon": "$media:launch_logo",
       "startWindowBackground": "$color:surface",
       "exported": true,
       "launchType": "singleton",
@@ -29,7 +29,7 @@
       "srcEntry": "./ets/entryability/PushMessageAbility.ets",
       "launchType": "singleton",
       "exported": false,
-      "startWindowIcon": "$media:brand_logo",
+      "startWindowIcon": "$media:launch_logo",
       "startWindowBackground": "$color:surface",
       "skills": [{ "actions": ["action.ohos.push.listener"] }]
     }],

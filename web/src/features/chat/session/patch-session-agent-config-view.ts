@@ -5,6 +5,7 @@ import { useChatSessionStore } from '@/features/chat/session/chat-session-store'
 export type SessionAgentConfigView = {
   model: string;
   configVersion?: number;
+  localDraft?: boolean;
   thinkingLevel?: string | null;
   reasoningLevel?: string | null;
   activityDetail?: {
@@ -28,6 +29,7 @@ export function patchSessionAgentConfigView(conversationId: string, cfg: Session
   store.patchSessionMeta(key, {
     model: cfg.model,
     configVersion: cfg.configVersion,
+    localDraft: cfg.localDraft === true,
     thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
     reasoningLevel: coerceReasoningLevel(cfg.activityDetail?.default ?? cfg.reasoningLevel ?? undefined),
     effectiveWorkspacePath: cfg.effectiveWorkspacePath ?? '',

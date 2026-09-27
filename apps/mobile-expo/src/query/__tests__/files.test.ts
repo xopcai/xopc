@@ -67,3 +67,4 @@ describe('managed file requests', () => {
     expect(fetch).toHaveBeenCalledWith('/api/host/fs/list?path=%2Fwork');
   });
 });
+vi.mock('../session-materialization', () => ({ materializeSession: vi.fn(async () => {}) }));

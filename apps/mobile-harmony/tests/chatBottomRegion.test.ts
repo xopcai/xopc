@@ -5,6 +5,11 @@ const chat = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', imp
 const options = readFileSync(new URL('../entry/src/main/ets/view/ChatOptions.ets', import.meta.url), 'utf8');
 const home = readFileSync(new URL('../entry/src/main/ets/view/HomeView.ets', import.meta.url), 'utf8');
 const sessions = readFileSync(new URL('../entry/src/main/ets/view/SessionsView.ets', import.meta.url), 'utf8');
+const notesTab = readFileSync(new URL('../entry/src/main/ets/view/NotesTabView.ets', import.meta.url), 'utf8');
+const homeHubs = readFileSync(new URL('../entry/src/main/ets/view/HomeHubs.ets', import.meta.url), 'utf8');
+const personal = readFileSync(new URL('../entry/src/main/ets/view/PersonalView.ets', import.meta.url), 'utf8');
+const english = readFileSync(new URL('../entry/src/main/resources/base/element/string.json', import.meta.url), 'utf8');
+const chinese = readFileSync(new URL('../entry/src/main/resources/zh_CN/element/string.json', import.meta.url), 'utf8');
 
 describe('chat bottom region composition', () => {
   it('floats a light neutral jump button over a transparent message viewport', () => {
@@ -47,32 +52,85 @@ describe('chat bottom region composition', () => {
     expect(chat.match(/TextArea\(\{ text: this.draft/g)).toHaveLength(1);
   });
 
-  it('keeps one stable navigation geometry across chat and the other tabs', () => {
+  it('overlays the transparent outer region instead of reserving a colored layout block', () => {
+    expect(chat).toContain('@Local bottomRegionHeight: number = 0;');
+    expect(chat).toContain('Stack({ alignContent: Alignment.Bottom })');
+    expect(chat).toContain('.contentEndOffset(24)');
+    expect(chat).toContain('this.bottomRegionHeight = Number(current.height);');
+    expect(chat).toContain("}.id('chat-content-viewport').width('100%').height('100%')");
+    expect(chat).toContain('.padding({ bottom: this.bottomRegionHeight }).clip(true)');
+    expect(chat).toContain("}.width('100%').layoutWeight(1)\n  }");
+    expect(home).toContain('Stack({ alignContent: Alignment.Bottom })');
+    expect(home).toContain('@Local secondaryBottomRegionHeight: number = 0;');
+    expect(home).toContain("}.id('home-tab-viewport').width('100%').height('100%')");
+    expect(home).toContain('.padding({ bottom: this.tab === 0 || this.tab === 3 ? 0 : this.secondaryBottomRegionHeight }).clip(true)');
+    expect(home).toContain('this.secondaryBottomRegionHeight = Number(current.height);');
+    expect(home).toContain("}.id('secondary-bottom-region').width('100%')");
+    expect(home).not.toContain("}.id('secondary-bottom-region').width('100%').backgroundColor");
+    expect(home).toContain(".width('100%').height('100%')");
+  });
+
+  it('keeps one stable rounded glass navigation surface across every tab', () => {
     expect(home).toContain('bottomDock: this.chatDock');
     expect(home).toContain('@LocalBuilder\n  chatDock()');
     expect(home).toContain('this.tab === 0 && this.layout.isMainDockVisible(0)');
     expect(home).toContain('if (this.tab !== 0)');
     expect(home.match(/this.tabItem\(/g)).toHaveLength(5);
     expect(home).toContain('.onClick((): void => { this.selectTab(index); })');
+    expect(home).toContain("this.tabItem(0, $r('app.string.assistant'), $r('sys.symbol.ellipsis_bubble'))");
+    expect(home).not.toContain("$r('sys.symbol.star')");
     expect(home).toContain('this.attention.needsUser.length');
-    expect(chat).toContain(".id('chat-bottom-region').width('92%')");
-    expect(home).toContain(".id('secondary-bottom-region').width('92%')");
+    expect(chat).toContain(".id('chat-bottom-region').width('100%')");
+    expect(chat).not.toContain("}.id('chat-bottom-region').width('100%').backgroundColor");
+    expect(home).toContain(".id('secondary-bottom-region').width('100%')");
+    expect(home).not.toContain("}.id('secondary-bottom-region').width('100%').backgroundColor");
+    expect(chat).toContain(".id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(Color.Transparent)");
+    expect(chat).toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR).borderRadius(24).clip(true)');
+    expect(chat).toContain('.borderRadius(24).clip(true)');
+    expect(home).toContain(".id('main-tab-dock').width('100%')");
+    expect(home).not.toContain("}.id('main-tab-dock').width('100%').backgroundColor");
+    expect(home).toContain(".id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)");
+    expect(home).toContain('.borderRadius(24).clip(true)');
+    expect(home).not.toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR)');
+    expect(chat).toContain(".id('chat-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)");
+    expect(home).toContain(".id('home-quick-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)");
+    expect(home).toContain('.borderRadius(18).clip(true).margin({ top: 8, bottom: 8 })');
     expect(home).not.toContain(".id('secondary-tab-dock')");
   });
 
   it('offers a stable quick composer on non-chat tabs and routes its message into chat', () => {
     expect(home).toContain(".id('home-quick-composer')");
     expect(home).toContain(".id('home-quick-send')");
+    expect(home).toContain(".id('home-quick-voice').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE)");
+    expect(home).toContain(".id('home-quick-actions').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE)");
+    expect(home).toContain(".id('home-quick-composer').layoutWeight(1).height(COMPOSER_INPUT_MIN)");
     expect(home).toContain('private async sendQuickDraft(): Promise<void>');
     expect(home).toContain('if (!prompt || this.quickSending) return;');
     expect(home).toContain('this.quickSending = true;');
     expect(home).toContain('finally { this.quickSending = false; }');
     expect(home).toContain('this.intake.targetChat(id, prompt);');
     expect(home).toContain('this.switchToChat(id, prompt);');
-    expect(home).toContain('duration: this.layout.reduceMotion ? 0 : 220');
-    expect(home).toContain('.animationDuration(this.layout.reduceMotion ? 0 : 220)');
+    expect(home).toContain('private activateTab(index: number): void');
+    expect(home).toContain('.animationDuration(0)');
+    expect(home).not.toContain('transitionToTab');
+    expect(home).not.toContain('this.getUIContext().animateTo');
     expect(home).toContain('if (this.layout.isMainDockVisible(this.tab)) { this.dockItems() }');
-    expect(home).toContain('bottom: this.layout.keyboardVisible ? 0 : 8');
+    expect(home).toContain(".margin({ top: 4, bottom: 0 })");
+  });
+
+  it('adapts the quick composer placeholder to the active tab', () => {
+    expect(home).toContain('@Computed get quickComposerPlaceholder(): ResourceStr');
+    expect(home).toContain("this.tab === 2 ? $r('app.string.quick_chat_progress_placeholder')");
+    expect(home).toContain("this.tab === 3 ? $r('app.string.quick_chat_library_placeholder')");
+    expect(home).toContain("this.tab === 4 ? $r('app.string.quick_chat_personal_placeholder')");
+    expect(home).toContain("$r('app.string.quick_chat_conversations_placeholder')");
+    expect(home).toContain('placeholder: this.quickComposerPlaceholder');
+    expect(home).not.toContain("$r('app.string.quick_chat_placeholder')");
+    for (const resourceName of ['quick_chat_conversations_placeholder', 'quick_chat_progress_placeholder',
+      'quick_chat_library_placeholder', 'quick_chat_personal_placeholder']) {
+      expect(english).toContain(`\"name\": \"${resourceName}\"`);
+      expect(chinese).toContain(`\"name\": \"${resourceName}\"`);
+    }
   });
 
   it('opens creation in an editable AI sheet before offering the full chat', () => {
@@ -89,19 +147,48 @@ describe('chat bottom region composition', () => {
     expect(home).toContain("this.switchToChat(this.creationChatId, '', true);");
   });
 
-  it('removes the outer bottom gap above the keyboard', () => {
-    expect(chat).toContain('bottom: this.layout.keyboardVisible ? 0 : 8');
+  it('keeps the bottom surface flush with the app safe-area edge', () => {
+    expect(chat).toContain(".margin({ top: 4, bottom: 0 })");
+    expect(chat).not.toContain('bottom: this.layout.keyboardVisible ? 0 : 8');
+    expect(home).not.toContain('bottom: this.layout.keyboardVisible ? 0 : 8');
+  });
+
+  it('keeps the phone library content transparent over the shared page surface', () => {
+    expect(home).toContain('bottomInset: this.secondaryBottomRegionHeight');
+    expect(notesTab).toContain('@Param bottomInset: number = 0;');
+    expect(notesTab).toContain("}.id('notes-tab-content-viewport').width('100%').height('100%')");
+    expect(notesTab).toContain('.padding({ bottom: this.bottomInset }).clip(true)');
+    expect(notesTab).toContain("}.id('notes-tab-list-pane').width(this.contentWidth >= 840 ? 400 : '100%').height('100%')");
+    expect(notesTab).toContain('.backgroundColor(this.contentWidth >= 840 ? this.colors.grouped : Color.Transparent)');
+    expect(notesTab).toContain("}.id('notes-tab-root').width('100%').height('100%').backgroundColor(this.colors.surface)");
+    expect(notesTab).not.toContain('this.contentWidth >= 840 ? this.colors.grouped : this.colors.surface');
+  });
+
+  it('does not stack page-level bottom padding on top of the reserved composer inset', () => {
+    expect(notesTab).toContain(".padding({ left: 20, right: 20 }).scrollBar(BarState.Off)");
+    expect(notesTab).not.toContain("padding({ left: 20, right: 20, bottom: 24 })");
+    expect(sessions).not.toContain("padding({ left: 20, right: 20, bottom: 20 }).cachedCount(5)");
+    expect(homeHubs).not.toContain("padding({ left: 20, right: 20, bottom: 28 })");
+    expect(personal).not.toContain("padding({ left: 20, right: 20, bottom: 28 })");
   });
 
   it('uses a dedicated conversation tab and leaves the system back edge unobstructed', () => {
     expect(home).toContain('XopcSessionsView({ embedded: true');
     expect(home).toContain('this.openConversationFromList(id, false)');
     expect(home).toContain('this.openConversationFromList(id, true)');
-    expect(home).toContain('this.transitionToTab(1);');
+    expect(home).toContain('this.activateTab(1);');
     expect(sessions).toContain('.virtualScroll({ totalCount: this.rows.length })');
     expect(sessions).toContain('.cachedCount(5)');
     expect(chat).not.toContain('chat-drawer');
     expect(chat).not.toContain('PanGesture({ direction: PanDirection.Horizontal');
+  });
+
+  it('centers the conversation create icon without relying on a clipped text glyph', () => {
+    const createButton = sessions.slice(sessions.indexOf("SymbolGlyph($r('sys.symbol.plus'))"),
+      sessions.indexOf(".id('sessions-new')") + 96);
+    expect(createButton).toContain("SymbolGlyph($r('sys.symbol.plus')).fontSize(22)");
+    expect(createButton).toContain(".id('sessions-new').width(44).height(44).padding(0)");
+    expect(sessions).not.toContain("Button('+').id('sessions-new')");
   });
 
   it('keeps routine Gateway connection progress quiet and renders compact header dots', () => {

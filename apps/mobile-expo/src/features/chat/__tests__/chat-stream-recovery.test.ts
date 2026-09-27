@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { act, createElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
+vi.mock('../durable-attachments', () => ({ persistSubmissionAttachments: async (attachments: unknown[]) => attachments }));
 
 const state = vi.hoisted(() => ({
   appState: 'active',
@@ -31,9 +32,11 @@ vi.mock('react-native', () => ({ AppState: {
 } }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => state.query }));
 vi.mock('../../../query/sessions', () => ({ fetchSessionActiveRun: state.activeRun, fetchSessionMessagePage: state.history }));
+vi.mock('../../../query/models', () => ({ fetchSessionAgentConfig: async () => ({ configVersion: 1 }) }));
+vi.mock('../local-session-drafts', () => ({ readLocalSessionDraft: () => undefined, removeLocalSessionDraft: vi.fn() }));
 vi.mock('../../../query/workspace-sync', () => ({ invalidateSessionLists: vi.fn() }));
 vi.mock('../../../stores/gateway-store', () => {
-  const gateway = { activeGatewayId: 'gateway', connectionGeneration: 1 };
+  const gateway = { activeGatewayId: 'gateway', connectionGeneration: 1, getActiveProfile: () => ({ gatewayId: 'gateway', deviceId: 'device' }) };
   return { useGatewayStore: Object.assign((selector: (value: typeof gateway) => unknown) => selector(gateway), {
     getState: () => gateway,
   }) };
@@ -47,7 +50,7 @@ vi.mock('../session-history-cache', () => ({ writeCachedSessionHistoryHead: vi.f
 vi.mock('../../voice/read-aloud-store', () => ({ useReadAloudStore: { getState: () => state.reader } }));
 vi.mock('../assistant-audio-autoplay', () => ({ queueAssistantAudioAutoplay: state.autoplay }));
 vi.mock('../attachment-file-io', () => ({ readUriAsBase64: vi.fn() }));
-vi.mock('../../endpoint-tools/turn-claim', () => ({ waitForMobileEndpointTurnClaim: async () => ({ type: 'endpoint' }) }));
+vi.mock('../../endpoint-tools/turn-claim', () => ({ waitForMobileEndpointTurnClaim: async () => ({ type: 'endpoint', endpointId: 'test', token: 'test' }) }));
 vi.mock('../../../api/client', () => ({ apiFetch: state.apiFetch, apiUploadFile: vi.fn(), formatApiHttpError: () => 'Failed' }));
 vi.mock('../../../storage/mmkv', () => ({
   storage: {
@@ -110,8 +113,8 @@ beforeEach(async () => {
   useLocalMessagesStore.setState({ sessions: {} });
   state.activeRun.mockReset().mockResolvedValue({ active: false });
   state.history.mockReset().mockResolvedValue(null);
-  state.apiFetch.mockImplementation(async (path: string) => new Response(JSON.stringify({ ok: true, payload:
-    path.endsWith('/inputs') ? { state: { activeRunId: state.acceptedRunId, inputs: [] } } : { clarification: null },
+  state.apiFetch.mockImplementation(async (path: string, init?: RequestInit) => new Response(JSON.stringify({ ok: true, payload:
+    path.endsWith('/inputs') ? { receipt: { conversationId: 'chat', clientMessageId: JSON.parse(String(init?.body)).clientMessageId, transcriptId: 'transcript' }, session: { transcriptId: 'transcript' }, inputState: { activeRunId: state.acceptedRunId, inputs: [] } } : { clarification: null },
   })));
   root = createRoot(document.createElement('div'));
   await act(async () => { root.render(createElement(Probe)); });

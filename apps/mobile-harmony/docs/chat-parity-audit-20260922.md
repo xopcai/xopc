@@ -14,12 +14,12 @@
 | 离线历史/预取 | `session-history-cache`、`session-history-prefetch` | 本轮补充有界安全首屏缓存、陈旧提示、网络覆盖和删除/重置失效；后台旧页预取、完整离线历史尚缺 | P0 验收 |
 | 连续朗读 | `use-auto-read-aloud`、`ContinuousReadAloudBar` | 本轮补充会话开关、完成边沿去重、离开/录音停止；原生音频时序待验收 | P0 验收 |
 | 朗读文字/语言 | `../voice/read-aloud-text` | 已对齐正文清洗、短首段和正文语言检测，并直接使用 Expo 函数做同样例断言 | 回归 |
-| AI 音频自动播放 | `assistant-audio-autoplay*` | 历史音频可手动播放；缺新流音频去重队列与录音/播放统一协调 | P1 |
-| 语音消息发送 | `use-chat-voice-recording` | 新增语音附件直接发送、成功清理、失败保留、短录音/重复发送/取消保护；按住滑动取消/转文字手势仍缺 | P0 验收/开发 |
-| 实时语音 | `../voice/voice-call`、`voice-call-controller`、`voice-transport` | 普通 natural / 工具助手 assistant 两模式均未实现，不以录音转文字替代 | P0 下一批 |
-| ＋ action 卡片 | `ChatComposer`、`composer-action-panel` | 已补统一居中图标卡片、相机/相册/本地文件、三类独立引用、新对话；暂为有界纵向滚动，尚缺横向分页/关闭动画、两类通话、会议录音入口 | P0/P1 |
-| 图片编辑 | `ImageEditorModal`、`image-editing` | 选择、缩略图、原图有界解码已有；缺旋转/裁剪及发送前替换 | P1 |
-| 图片浏览 | `AttachmentRenderer`、图片预览组件 | 有单图预览与按钮缩放；缺多图浏览、捏合/拖动等手势 | P1 |
+| AI 音频自动播放 | `assistant-audio-autoplay*` | 已补完成边沿检测、历史基线防重播、有界去重队列、顺序播放和录音/通话/朗读冲突中断；真实音频路由与来电中断待真机验收 | P1 验收 |
+| 语音消息发送 | `use-chat-voice-recording` | 已有直接发送、失败保留、短录音/重复发送/取消保护，并补齐按住录音、左上取消、右上转文字的滑动判定 | P0 验收 |
+| 实时语音 | `../voice/voice-call`、`voice-call-controller`、`voice-transport` | 已实现 natural / assistant 两模式、preflight/session、PCM 采播、静音/扬声器、恢复、澄清和审批；真实 WSS、路由和回声仍是设备/服务验收门槛 | P0 验收 |
+| ＋ action 卡片 | `ChatComposer`、`composer-action-panel` | 已为双页横向 `Swiper`、页点、相机/相册/文件/引用/新对话、语音录制及两类实时通话；会议录音因缺 Harmony PCM-WAV 分块 spool 尚未接入 | P1 开发/验收 |
+| 图片编辑 | `ImageEditorModal`、`image-editing` | 已补真实 `PixelMap` 旋转、原图/1:1/4:3/16:9 居中裁剪、ImagePacker 重编码、发送前附件替换和总量复验 | P1 验收 |
+| 图片浏览 | `AttachmentRenderer`、图片预览组件 | 已有有界全图解码、按钮/双指缩放；同消息图片可按钮或横向滑动翻页，缩放态禁用误翻页并保留首尾边界 | P1 真机验收 |
 | 文档预览/分享 | `AttachmentRenderer`、`FilePreviewModal`、`ShareSheet` | 本轮补齐普通附件紧凑列表与预览分流，并把 Chat/Files 的托管文件分享改为 `/api/shares/auto` 受控链接：展示公网/LAN/仅本机状态后复制或系统分享，下载保持独立；不再把临时缓存文件误当为产品分享。HTML 使用 CSP、禁 JS/存储/文件/外部跳转。分享历史/撤销/续期、二维码/站点内预览、目录确认和真机系统面板仍待后续 | P1 开发/验收 |
 | Markdown | `MarkdownView`、`markdown-render-safety` | 原生子集覆盖常用块；扩展块、深链、表格/长代码/深色排版仍需逐项比对 | P1 |
 | 断线恢复 | `use-agent-stream-resume`、`use-agent-stream-recovery` | 鸿蒙恢复期间按快照刷新，而非完全同等增量续流；保留最终内容已有单测，真实 WSS gap/replay 待验收 | P0/P1 |
@@ -34,6 +34,8 @@
 回滚采用局部纠正补丁或新构建，不重置用户工作区、不清空配对、不修改用户 Gateway 数据。本轮已有自主实施授权；常规接口/文件拆分按现有 MVVM 风格执行。
 
 ## 本轮验证
+
+2026-09-27 对齐续作：新增 AI 回复音频自动播放状态机/队列、原生播放终态区分、图片真实旋转与比例裁剪、附件替换、预览双指缩放，以及同消息多图的按钮/横向滑动翻页。历史音频仍只允许用户手动播放，只有本次流式回复完成边沿产生的新增音频会自动进入队列；离开页面或进入录音、实时通话、朗读会中断并清空陈旧队列。图片编辑使用当前 SDK 的 `PixelMap.rotate/crop` 与 `ImagePacker.packToData`，不是仅修改预览。全量 host 验证为 72 文件 / 438 项，Gateway 相关回归 9 文件 / 71 项，根类型检查、Debug/Release HAP 构建及 CodeLinter 零诊断通过。未执行真机音频、系统中断、图片编码兼容矩阵或触控手势验收。
 
 本轮 host 测试 304 项 / 46 文件通过；Debug、Release、ohosTest 构建通过；最后图标居中 UI 修订再次通过签名 Debug 构建（5.787 秒）并覆盖安装成功。CodeLinter 无 error，1 条安全缓存 JSON 快照深拷贝性能建议，未隐瞒或批量禁用规则。安全缓存为 8 个首屏、总计 48 KiB 上限，不是全部历史离线。
 

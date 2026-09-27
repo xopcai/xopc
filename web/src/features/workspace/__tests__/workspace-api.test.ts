@@ -81,3 +81,4 @@ describe('resolveWorkspaceFileReference', () => {
     expect(apiFetch).toHaveBeenCalledWith('/api/files/space%2Ffile%20one', { method: 'DELETE' });
   });
 });
+vi.mock('@/features/chat/session/session-manager', () => ({ SessionManager: class { async materialize() {} } }));

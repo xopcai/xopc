@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 import { gatewaySession } from './gatewaySession';
+import { XopcChatRepository } from '../repository/chatRepository';
 import { voiceCapture } from './voiceCapture';
 import { chatReadAloud } from './chatReadAloud';
 import { voiceCallAudio } from './voiceCallAudio';
@@ -69,6 +70,7 @@ export class XopcVoiceCall {
     const generation = ++this.generation;
     this.phase = recovering ? 'recovering' : 'connecting'; this.error = '';
     try {
+      await new XopcChatRepository().materialize(target.conversationId, 'voice');
       const status = (JSON.parse(await gatewaySession.request('/api/voice/realtime/status')) as XopcVoicePayload<XopcVoiceStatus>).payload;
       if (!status.enabled) throw new Error('VOICE_DISABLED');
       const availability = this.mode === 'assistant' ? status.capabilities.assistant : status.capabilities.natural;

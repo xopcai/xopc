@@ -32,6 +32,8 @@ export class SessionEnvironmentService {
     project: Project;
     mode?: ProjectExecutionMode;
     baseRef?: string;
+    environmentId?: string;
+    assertCurrent?: () => void;
   }): Promise<ExecutionEnvironment> {
     const existing = this.get(input.conversationId);
     if (existing) {
@@ -56,21 +58,37 @@ export class SessionEnvironmentService {
       );
     }
     const mode = input.mode ?? input.project.executionMode;
-    const environment = mode === 'managed_worktree'
+    const reserved = input.environmentId ? this.store.get(input.environmentId) : undefined;
+    if (reserved && (reserved.projectId !== input.project.id || reserved.kind !== mode)) {
+      throw new ExecutionEnvironmentConflictError('Reserved execution environment does not match the project and mode');
+    }
+    let recovered = reserved?.kind === 'managed_worktree'
+      ? await this.worktrees.reconcile(reserved.id).catch(error => {
+        if (reserved.status === 'error') return reserved;
+        throw error;
+      }) : reserved;
+    if (recovered?.kind === 'managed_worktree' && recovered.status === 'error') {
+      recovered = await this.worktrees.provisionManagedWorktree({ projectId: input.project.id,
+        repositoryPath: workspaceRoot, baseRef: input.baseRef, environmentId: recovered.id });
+    }
+    if (recovered && recovered.status !== 'ready') throw new ExecutionEnvironmentConflictError(`Execution environment ${recovered.id} is ${recovered.status}`);
+    const environment = recovered ?? (mode === 'managed_worktree'
       ? await this.worktrees.provisionManagedWorktree({
           projectId: input.project.id,
           repositoryPath: workspaceRoot,
           baseRef: input.baseRef,
+          environmentId: input.environmentId,
         })
-      : await this.resolveLocalCheckout(input.project.id, workspaceRoot);
+      : await this.resolveLocalCheckout(input.project.id, workspaceRoot));
     try {
+      input.assertCurrent?.();
       this.store.bind({
         conversationId: input.conversationId,
         environmentId: environment.id,
       });
       return environment;
     } catch (error) {
-      if (environment.kind === 'managed_worktree') {
+      if (environment.kind === 'managed_worktree' && !input.assertCurrent) {
         await this.worktrees.remove(environment.id).catch(() => undefined);
       }
       throw error;
@@ -87,6 +105,17 @@ export class SessionEnvironmentService {
       this.store.releaseBinding(conversationId, binding.environmentId);
     }
     return environment;
+  }
+
+  async removeUnboundReservation(environmentId: string): Promise<boolean> {
+    const environment = this.store.get(environmentId);
+    if (!environment) return false;
+    if (environment.status === 'deleted') return true;
+    if (environment.kind !== 'managed_worktree' || this.store.listBindings(environmentId).length) {
+      throw new ExecutionEnvironmentConflictError('Reserved environment is not an unbound managed worktree');
+    }
+    await this.worktrees.remove(environmentId);
+    return true;
   }
 
   private async resolveLocalCheckout(projectId: string, workspaceRoot: string): Promise<ExecutionEnvironment> {

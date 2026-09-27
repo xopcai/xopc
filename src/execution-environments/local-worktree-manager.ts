@@ -141,7 +141,12 @@ export class LocalWorktreeManager {
     assertManagedWorktreePath(rootPath, this.stateDir, repository.repositoryRoot);
     if (existsSync(rootPath)) throw new ExecutionEnvironmentConflictError(`Worktree path already exists: ${rootPath}`);
 
-    const environment = this.store.create({
+    const reserved = this.store.get(environmentId);
+    if (reserved && (reserved.status !== 'error' || reserved.projectId !== input.projectId
+      || reserved.rootPath !== rootPath || reserved.baseSha !== baseSha || reserved.kind !== 'managed_worktree')) {
+      throw new ExecutionEnvironmentConflictError('Reserved worktree cannot be provisioned with these parameters');
+    }
+    const environment = reserved ?? this.store.create({
       id: environmentId,
       projectId: input.projectId,
       kind: 'managed_worktree',
@@ -238,6 +243,10 @@ export class LocalWorktreeManager {
         toStatus: 'ready',
         reason: 'managed worktree reconciliation succeeded',
       });
+    }
+    if (environment.status === 'provisioning' && !inspection.rootExists && !inspection.registered) {
+      return this.store.transition({ environmentId, expectedVersion: environment.version, toStatus: 'error',
+        reason: 'interrupted provisioning has no filesystem or Git side effects', error: 'Provisioning was interrupted' });
     }
     if (environment.status === 'degraded' || environment.status === 'error') return environment;
     if (environment.status !== 'ready' && environment.status !== 'provisioning') {

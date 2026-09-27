@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }));
+const { readDraft } = vi.hoisted(() => ({ readDraft: vi.fn() }));
+vi.mock('@/features/chat/session/local-session-drafts', () => ({ readLocalSessionDraft: readDraft }));
 
 vi.mock('@/lib/fetch', () => ({ apiFetch }));
 vi.mock('@/lib/url', () => ({ apiUrl: (path: string) => path }));
@@ -14,6 +16,7 @@ import {
 describe('command palette API', () => {
   beforeEach(() => {
     apiFetch.mockReset();
+    readDraft.mockReset().mockResolvedValue(undefined);
     clearSkillPaletteCaches();
   });
 
@@ -56,5 +59,14 @@ describe('command palette API', () => {
         trusted: true,
       }),
     }));
+  });
+
+  it('uses the selected agent catalog for a local draft and changes scope after acceptance', async () => {
+    apiFetch.mockImplementation(async () => new Response(JSON.stringify({ ok: true, payload: { skills: [] } })));
+    readDraft.mockResolvedValueOnce({ creation: { agentId: 'writer' } });
+    await getChatSkillsCached('main', 'local-uuid');
+    expect(apiFetch).toHaveBeenLastCalledWith('/api/chat/skills?agentId=writer');
+    await getChatSkillsCached('writer', 'local-uuid');
+    expect(apiFetch).toHaveBeenLastCalledWith('/api/chat/skills?agentId=writer&conversationId=local-uuid');
   });
 });

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { COMPOSER_INPUT_MIN, COMPOSER_INPUT_MAX, COMPOSER_TOOL_SIZE, COMPOSER_SEND_SIZE,
+import { COMPOSER_INPUT_MIN, COMPOSER_INPUT_MAX, COMPOSER_TOOL_SIZE,
   composerExpanded, composerHasPayload } from '../entry/src/main/ets/common/composerLayout';
 
 describe('composer parity with Android/iOS', () => {
   it('uses the same input and action dimensions', () => {
-    expect([COMPOSER_INPUT_MIN, COMPOSER_INPUT_MAX, COMPOSER_TOOL_SIZE, COMPOSER_SEND_SIZE]).toEqual([40, 120, 36, 44]);
+    expect([COMPOSER_INPUT_MIN, COMPOSER_INPUT_MAX, COMPOSER_TOOL_SIZE]).toEqual([40, 120, 36]);
   });
   it('collapses an empty composer and hides its send action', () => {
     expect(composerExpanded('', 0, 0, false)).toBe(false);

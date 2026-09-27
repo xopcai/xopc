@@ -41,6 +41,21 @@ vi.mock('@/features/gateway/gateway-realtime', () => ({
 }));
 
 import { apiFetch } from '@/lib/fetch';
+import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
+
+vi.mock('@/features/chat/session/local-session-drafts', () => ({
+  readLocalSessionDraft: vi.fn(async () => undefined),
+  readSessionTranscript: vi.fn(async () => 'transcript'),
+  rememberSessionTranscript: vi.fn(), acknowledgeLocalSessionDraft: vi.fn(), saveLocalSessionDraft: vi.fn(),
+  readPendingSessionCommand: vi.fn(async () => undefined), savePendingSessionCommand: vi.fn(),
+  clearPendingSessionCommand: vi.fn(), confirmSessionCommand: vi.fn(),
+}));
+
+function acceptedInput(conversationId: string, clientMessageId: string, inputState = { inputs: [] }): Response {
+  return new Response(JSON.stringify({ payload: { inputState,
+    receipt: { conversationId, clientMessageId, transcriptId: 'transcript' }, session: { transcriptId: 'transcript' },
+  } }), { status: 202 });
+}
 
 describe('resolveResumeRunId', () => {
   const conversationId = 'agent:main:webchat:default:direct:abc';
@@ -173,6 +188,7 @@ describe('MessageSender terminal state', () => {
   const storage = new Map<string, string>();
 
   beforeEach(() => {
+    useChatSessionStore.setState({ sessions: { [conversationId]: { configVersion: 1 } } } as never);
     vi.mocked(apiFetch).mockReset();
     storage.clear();
     realtimeState.listener = undefined;
@@ -204,7 +220,7 @@ describe('MessageSender terminal state', () => {
     const original = structuredClone(appContext);
     const attachments = [{ type: 'file', name: 'Original.txt', data: 'original' }];
     const refs = [{ kind: 'note' as const, sourceId: 'note', expectedVersion: '1' }];
-    vi.mocked(apiFetch).mockResolvedValue(new Response(JSON.stringify({ payload: { state: { inputs: [] } } }), { status: 202 }));
+    vi.mocked(apiFetch).mockImplementation(async (_url, init) => acceptedInput(conversationId, JSON.parse(String(init?.body)).clientMessageId));
     const sending = sender.send('Review', conversationId, attachments, undefined, undefined, undefined, undefined, refs, appContext);
     await expect(sender.send('Concurrent', conversationId)).rejects.toThrow('already in progress');
     appContext.selection!.text = 'Different page';
@@ -214,9 +230,10 @@ describe('MessageSender terminal state', () => {
     publishEndpointTurnClaim('web-test', 'test-turn-token');
     await sending;
     const body = JSON.parse(String(vi.mocked(apiFetch).mock.calls[0]?.[1]?.body));
-    expect(body.appContext).toEqual(original);
-    expect(body.attachments[0].data).toBe('original');
-    expect(body.contextRefs[0].expectedVersion).toBe('1');
+    expect(body.kind).toBe('append');
+    expect(body.input.appContext).toEqual(original);
+    expect(body.input.attachments[0].data).toBe('original');
+    expect(body.input.contextRefs[0].expectedVersion).toBe('1');
     expect(sender.isSending).toBe(false);
   });
 
@@ -257,12 +274,12 @@ describe('MessageSender terminal state', () => {
     vi.mocked(apiFetch).mockImplementationOnce(async () => {
       appContext.selection!.text = 'Later selection';
       return new Response('{}', { status: 503 });
-    }).mockResolvedValueOnce(new Response(JSON.stringify({ payload: { state: { inputs: [] } } }), { status: 202 }));
+    }).mockImplementationOnce(async (_url, init) => acceptedInput(conversationId, JSON.parse(String(init?.body)).clientMessageId));
     await sender.send('Review', conversationId, undefined, undefined, undefined, undefined, undefined, undefined, appContext);
     expect(apiFetch).toHaveBeenCalledTimes(2);
     const bodies = vi.mocked(apiFetch).mock.calls.map(call => call[1]?.body);
     expect(bodies[1]).toBe(bodies[0]);
-    expect(JSON.parse(String(bodies[1])).appContext.selection.text).toBe('Original selection');
+    expect(JSON.parse(String(bodies[1])).input.appContext.selection.text).toBe('Original selection');
     expect(sender.isSending).toBe(false);
   });
 
@@ -343,7 +360,8 @@ describe('MessageSender terminal state', () => {
           const submitted = JSON.parse(String(init?.body)) as { clientMessageId: string };
           return new Response(JSON.stringify({
             payload: {
-              state: {
+              receipt: { conversationId, clientMessageId: submitted.clientMessageId, transcriptId: 'transcript' }, session: { transcriptId: 'transcript' },
+              inputState: {
                 activeRunId: 'run-complete',
                 activeInputId: 'input-1',
                 inputs: [{ id: 'input-1', clientMessageId: submitted.clientMessageId }],
@@ -449,7 +467,8 @@ describe('MessageSender terminal state', () => {
         const submitted = JSON.parse(String(init?.body)) as { clientMessageId: string };
         return new Response(JSON.stringify({
           payload: {
-            state: {
+            receipt: { conversationId, clientMessageId: submitted.clientMessageId, transcriptId: 'transcript' }, session: { transcriptId: 'transcript' },
+            inputState: {
               activeRunId: 'run-plan',
               activeInputId: 'input-plan',
               inputs: [{ id: 'input-plan', clientMessageId: submitted.clientMessageId }],

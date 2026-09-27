@@ -12,6 +12,7 @@ import { layoutState } from '../service/layoutState';
 import { chatReadAloud } from '../service/chatReadAloud';
 import { decodeShareHandoff, shareIntake, SHARE_INTAKE_URI } from '../service/shareIntake';
 import { voiceCall } from '../service/voiceCall';
+import { localSessionStore } from '../service/localSessionStore';
 
 export default class EntryAbility extends UIAbility {
   private mainWindow?: window.Window;
@@ -44,6 +45,7 @@ export default class EntryAbility extends UIAbility {
     this.restoreAndLoad(stage);
   }
   private async restoreAndLoad(stage: window.WindowStage): Promise<void> {
+    await localSessionStore.initialize(this.context);
     try { await appSettings.restore(this.context); }
     catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Preferences could not be restored'); }
     stage.loadContent('pages/Index', (error: BusinessError): void => {

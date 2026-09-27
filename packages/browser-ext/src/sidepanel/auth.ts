@@ -36,6 +36,13 @@ export type BrowserGatewayProfile = {
   accessTokenExpiresAt: number;
 };
 
+export type BrowserGatewayIdentity = Pick<BrowserGatewayProfile, 'gatewayId' | 'deviceId' | 'gatewayPublicKey'>;
+
+function assertProfileIdentity(profile: BrowserGatewayProfile | undefined, expected: BrowserGatewayIdentity): asserts profile is BrowserGatewayProfile {
+  if (!profile || profile.gatewayId !== expected.gatewayId || profile.deviceId !== expected.deviceId
+    || profile.gatewayPublicKey !== expected.gatewayPublicKey) throw new Error('Gateway identity changed');
+}
+
 type PairingPayload = BrowserPairingInvitationPayload;
 
 type BrowserPairingJournal = {
@@ -642,6 +649,7 @@ async function refreshStoredProfile(options?: { rejectedAccessToken?: string }):
         journal,
       );
       const current = await readProfile();
+      assertProfileIdentity(current, profile);
       if (current && current.gatewayId === profile.gatewayId && current.refreshToken !== profile.refreshToken) {
         return current;
       }
@@ -655,6 +663,7 @@ async function refreshStoredProfile(options?: { rejectedAccessToken?: string }):
       return next;
     } catch (cause) {
       const current = await readProfile();
+      assertProfileIdentity(current, profile);
       if (current && current.gatewayId === profile.gatewayId && current.refreshToken !== profile.refreshToken
         && current.accessTokenExpiresAt > Date.now()) return current;
       if (!isRefreshDenied(cause)) throw cause;
@@ -684,17 +693,22 @@ export async function getAccessProfile(options?: { rejectedAccessToken?: string 
   }
 }
 
-export async function gatewayFetch(path: string, init: RequestInit = {}): Promise<Response> {
+export async function gatewayFetch(path: string, init: RequestInit = {}, expectedIdentity?: BrowserGatewayIdentity): Promise<Response> {
   let profile = await getAccessProfile();
+  const identity = expectedIdentity ?? profile;
+  assertProfileIdentity(profile, identity);
   const request = () => {
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${profile.accessToken}`);
     return fetch(`${profile.gatewayUrl}${path}`, { ...init, headers });
   };
   let response = await request();
+  assertProfileIdentity(await readProfile(), identity);
   if (response.status !== 401) return response;
   profile = await getAccessProfile({ rejectedAccessToken: profile.accessToken });
+  assertProfileIdentity(profile, identity);
   response = await request();
+  assertProfileIdentity(await readProfile(), identity);
   return response;
 }
 

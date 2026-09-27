@@ -1,12 +1,15 @@
 import type { ComposerAttachment } from './composer.types';
 import { MAX_CHAT_ATTACHMENTS } from './chat-limits';
 import { storage } from '../../storage/mmkv';
+import { collectUnusedChatAttachments, persistComposerAttachments } from './durable-attachments';
+import { isVolatileMessageOutbox } from './message-outbox';
 
-const STORAGE_PREFIX = 'xopc.chat.composerDraft:v3:';
+const STORAGE_PREFIX = 'xopc.chat.composerDraft:v4:';
+const volatileDrafts = new Map<string, ComposerDraftSnapshot>();
 const MAX_DRAFT_LENGTH = 20_000;
 
 export type ComposerDraftSnapshot = {
-  workspaceFiles?: ComposerAttachment[];
+  attachments?: ComposerAttachment[];
   text: string;
   cursorPos: number;
   contextRefs: Array<{ kind: 'note' | 'task'; sourceId: string; expectedVersion: string; title: string }>;
@@ -30,8 +33,10 @@ function normalizeCursorPos(cursorPos: unknown, textLength: number): number {
 export function readComposerDraftSnapshot(conversationId: string): ComposerDraftSnapshot | null {
   const normalizedConversationId = conversationId.trim();
   if (!normalizedConversationId) return null;
+  if (isVolatileMessageOutbox(normalizedConversationId)) return volatileDrafts.get(normalizedConversationId) ?? null;
 
   try {
+    collectUnusedChatAttachments();
     const raw = storage.getString(storageKey(normalizedConversationId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
@@ -45,20 +50,19 @@ export function readComposerDraftSnapshot(conversationId: string): ComposerDraft
           return [{ kind: value.kind, sourceId: value.sourceId, expectedVersion: value.expectedVersion, title: value.title }];
         }).slice(0, 5)
       : [];
-    const workspaceFiles: ComposerAttachment[] = Array.isArray(parsed.workspaceFiles)
-      ? parsed.workspaceFiles.flatMap((file): ComposerAttachment[] => {
+    const attachments: ComposerAttachment[] = Array.isArray(parsed.attachments)
+      ? parsed.attachments.flatMap((file): ComposerAttachment[] => {
         if (!isRecord(file) || typeof file.id !== 'string' || typeof file.name !== 'string'
-          || typeof file.workspaceRelativePath !== 'string' || !file.workspaceRelativePath
+          || !['image', 'document', 'audio'].includes(String(file.type)) || typeof file.content !== 'string'
           || typeof file.mimeType !== 'string' || typeof file.size !== 'number' || !Number.isFinite(file.size) || file.size < 0) return [];
-        return [{ id: file.id, name: file.name, workspaceRelativePath: file.workspaceRelativePath,
-          mimeType: file.mimeType, size: file.size, type: 'document', content: '' }];
+        return [file as ComposerAttachment];
       }).slice(0, MAX_CHAT_ATTACHMENTS) : [];
-    if (!text.trim() && contextRefs.length === 0 && workspaceFiles.length === 0) return null;
+    if (!text.trim() && contextRefs.length === 0 && attachments.length === 0) return null;
     return {
       text,
       cursorPos: normalizeCursorPos(parsed.cursorPos, text.length),
       contextRefs,
-      ...(workspaceFiles.length ? { workspaceFiles } : {}),
+      ...(attachments.length ? { attachments } : {}),
     };
   } catch {
     return null;
@@ -73,7 +77,7 @@ export function writeComposerDraftSnapshot(
   if (!normalizedConversationId) return;
 
   const text = snapshot.text.slice(0, MAX_DRAFT_LENGTH);
-  if (!text.trim() && !snapshot.contextRefs?.length && !snapshot.workspaceFiles?.length) {
+  if (!text.trim() && !snapshot.contextRefs?.length && !snapshot.attachments?.length) {
     clearComposerDraftSnapshot(normalizedConversationId);
     return;
   }
@@ -82,22 +86,24 @@ export function writeComposerDraftSnapshot(
     text,
     cursorPos: normalizeCursorPos(snapshot.cursorPos, text.length),
     contextRefs: snapshot.contextRefs?.slice(0, 5) ?? [],
-    ...(snapshot.workspaceFiles?.length ? { workspaceFiles: snapshot.workspaceFiles.slice(0, MAX_CHAT_ATTACHMENTS) } : {}),
+    ...(snapshot.attachments?.length ? { attachments: snapshot.attachments.slice(0, MAX_CHAT_ATTACHMENTS) } : {}),
   };
 
-  try {
-    storage.set(storageKey(normalizedConversationId), JSON.stringify({ v: 2, ...payload }));
-  } catch {
-    /* ignore quota */
-  }
+  if (isVolatileMessageOutbox(normalizedConversationId)) { volatileDrafts.set(normalizedConversationId, payload); return; }
+
+  if (payload.attachments) payload.attachments = persistComposerAttachments(payload.attachments);
+  storage.set(storageKey(normalizedConversationId), JSON.stringify(payload));
+  collectUnusedChatAttachments();
 }
 
 export function clearComposerDraftSnapshot(conversationId: string): void {
   const normalizedConversationId = conversationId.trim();
   if (!normalizedConversationId) return;
+  volatileDrafts.delete(normalizedConversationId);
 
   try {
     storage.delete(storageKey(normalizedConversationId));
+    collectUnusedChatAttachments();
   } catch {
     /* ignore */
   }

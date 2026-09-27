@@ -11,11 +11,13 @@ import {
 } from '@/features/chat/messages/message-sender';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { readLocalSessionDraft } from './local-session-drafts';
 
 /** Gateway source of truth for in-flight webchat runs (Phase 1). */
 export async function fetchSessionActiveRun(conversationId: string): Promise<SessionActiveRunPayload> {
   const key = String(conversationId ?? '').trim();
   if (!key) return { active: false };
+  if (await readLocalSessionDraft(key)) return { active: false };
   const res = await apiFetch(apiUrl(buildSessionRunPath(key)));
   if (!res.ok) throw new Error(`Active run lookup failed (${res.status})`);
   return normalizeSessionActiveRunResponse(await res.json());
