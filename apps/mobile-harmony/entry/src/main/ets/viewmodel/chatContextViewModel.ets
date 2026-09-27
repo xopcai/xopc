@@ -1,6 +1,7 @@
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcPayload } from '../model/realtime';
-import { XopcProject, XopcProjectList, XopcNoteList, XopcTaskList } from '../model/workspace';
+import { XopcProject, XopcProjectList, XopcTaskList } from '../model/workspace';
+import { XopcNoteIndexEntry, XopcNoteList } from '../model/note';
 import { XopcFileSpaceResult, XopcFiles } from '../model/files';
 import { XopcContextSummary, XopcContextResult, XopcEnvironmentOptions, XopcEnvironmentResult,
   XopcHostDirectories, XopcWorkingDirectory, XopcAgentConfig, XopcReferenceItem } from '../model/chat';
@@ -73,8 +74,8 @@ export class XopcChatContextViewModel {
       let items: XopcReferenceItem[] = [];
       if (kind === 'note') {
         const result = JSON.parse(await gatewaySession.request('/api/notes?limit=50&sortBy=updatedAt&sortOrder=desc&search=' + encodeURIComponent(search))) as XopcNoteList;
-        items = result.items.filter((note): boolean => note.status !== 'trashed' && note.updatedAt !== undefined)
-          .map((note): XopcReferenceItem => ({ kind, id: note.id, title: note.title || note.snippet || '', description: note.snippet || '', version: String(note.updatedAt) }));
+        items = result.items.filter((note: XopcNoteIndexEntry): boolean => note.status !== 'trashed')
+          .map((note: XopcNoteIndexEntry): XopcReferenceItem => ({ kind, id: note.id, title: note.title || note.snippet || '', description: note.snippet || '', version: String(note.updatedAt) }));
       } else if (kind === 'task') {
         const result = JSON.parse(await gatewaySession.request('/api/tasks?search=' + encodeURIComponent(search))) as XopcTaskList;
         items = result.items.map((item): XopcReferenceItem => ({ kind, id: item.task.id, title: item.task.title, description: item.task.body || '', version: String(item.task.version) }));

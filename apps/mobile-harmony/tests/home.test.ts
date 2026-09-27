@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request } }));
 vi.mock('../entry/src/main/ets/service/settings.ets', () => ({ appSettings: { effectiveLanguage: () => 'en-US' } }));
 import { homeCommand, mobileRoute, parseHome, recentClosed } from '../entry/src/main/ets/common/homeProtocol.ets';
-import { XopcLibraryViewModel, XopcProgressViewModel } from '../entry/src/main/ets/viewmodel/homeViewModel.ets';
+import { XopcProgressViewModel } from '../entry/src/main/ets/viewmodel/homeViewModel.ets';
 
 describe('mobile home protocol', () => {
   it('maps only recognized internal destinations', () => {
@@ -63,15 +63,6 @@ describe('home loading isolation', () => {
     finish[0](JSON.stringify({ needsUser: [{ id: 'late', title: 'Late', summary: '' }], background: [] }));
     finish[1](JSON.stringify({ items: [] })); await loading;
     expect(model.needsUser).toEqual([]);
-  });
-  it('deduplicates refresh and retains independently successful library results', async () => {
-    mocks.request.mockImplementation(async (path: string) => {
-      if (path.startsWith('/api/notes')) throw new Error('NOTES_FAILED');
-      return JSON.stringify({ items: [1, 2, 3, 4].map((id) => ({ id: String(id) })) });
-    });
-    const model = new XopcLibraryViewModel(); await Promise.all([model.refresh(), model.refresh()]);
-    expect(mocks.request).toHaveBeenCalledTimes(2); expect(model.files).toHaveLength(3);
-    expect(model.notesError).toBe('NOTES_FAILED'); expect(model.filesError).toBe('');
   });
   it('does not POST invalid attention actions', async () => {
     const model = new XopcProgressViewModel(); await model.act({ type: 'open', label: 'Open' });

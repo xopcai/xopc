@@ -28,7 +28,7 @@ export interface XopcTurnOutcome { version: number; outcomeId: string; runId: st
 export interface XopcProductReference { kind: string; id: string; title: string; summary?: string; status?: string; capabilities?: string[]; }
 export interface XopcProductPresentation { kind: string; items?: XopcProductReference[]; truncated?: boolean; }
 export interface XopcProductDelivery { version: number; operation: string; primary?: XopcProductReference; related?: XopcProductReference[]; presentation?: XopcProductPresentation; }
-export interface XopcHistoryMedia { id: string; name: string; type: string; mimeType: string; size: number; uri: string; fileId?: string; workspaceRelativePath?: string; data?: string; extractedText?: string; }
+export interface XopcHistoryMedia { id: string; name: string; type: string; mimeType: string; size: number; uri: string; fileId?: string; workspaceRelativePath?: string; data?: string; extractedText?: string; duration?: number; }
 export interface XopcHistorySource { kind: string; sourceId: string; version: string; title?: string; }
 export interface XopcMessageMetadata { sourceContexts?: XopcHistorySource[]; turnOutcome?: XopcTurnOutcome; review?: XopcContentBlock; }
 export interface XopcHistoryToolCall { id?: string; name?: string; args?: Object; result?: Object; isError?: boolean; details?: Object; }
@@ -53,7 +53,7 @@ export interface XopcInput {
   attachments?: XopcChatAttachment[];
   contextRefs?: XopcContextRef[];
 }
-export interface XopcChatAttachment { type: string; name: string; mimeType: string; size: number; data: string; workspaceRelativePath?: string; uri?: string; }
+export interface XopcChatAttachment { type: string; name: string; mimeType: string; size: number; data: string; workspaceRelativePath?: string; uri?: string; duration?: number; }
 export interface XopcInputState { activeRunId?: string; }
 export interface XopcInputResult { state: XopcInputState; }
 export interface XopcRun { active: boolean; runId?: string; }

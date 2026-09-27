@@ -47,14 +47,47 @@ describe('chat bottom region composition', () => {
     expect(chat.match(/TextArea\(\{ text: this.draft/g)).toHaveLength(1);
   });
 
-  it('uses the home-owned navigation builder and excludes a duplicate floating dock', () => {
+  it('keeps one stable navigation geometry across chat and the other tabs', () => {
     expect(home).toContain('bottomDock: this.chatDock');
     expect(home).toContain('@LocalBuilder\n  chatDock()');
     expect(home).toContain('this.tab === 0 && this.layout.isMainDockVisible(0)');
-    expect(home).toContain('this.tab !== 0 && this.layout.isMainDockVisible(this.tab)');
+    expect(home).toContain('if (this.tab !== 0)');
     expect(home.match(/this.tabItem\(/g)).toHaveLength(4);
-    expect(home).toContain('.onClick((): void => { this.tab = index; })');
+    expect(home).toContain('.onClick((): void => { this.transitionToTab(index); })');
     expect(home).toContain('this.attention.needsUser.length');
+    expect(chat).toContain(".id('chat-bottom-region').width('92%')");
+    expect(home).toContain(".id('secondary-bottom-region').width('92%')");
+    expect(home).not.toContain(".id('secondary-tab-dock')");
+  });
+
+  it('offers a stable quick composer on non-chat tabs and routes its message into chat', () => {
+    expect(home).toContain(".id('home-quick-composer')");
+    expect(home).toContain(".id('home-quick-send')");
+    expect(home).toContain('private async sendQuickDraft(): Promise<void>');
+    expect(home).toContain('if (!prompt || this.quickSending) return;');
+    expect(home).toContain('this.quickSending = true;');
+    expect(home).toContain('finally { this.quickSending = false; }');
+    expect(home).toContain('this.intake.targetChat(id, prompt);');
+    expect(home).toContain('this.switchToChat(id, prompt);');
+    expect(home).toContain('duration: this.layout.reduceMotion ? 0 : 220');
+    expect(home).toContain('.animationDuration(this.layout.reduceMotion ? 0 : 220)');
+    expect(home).toContain('if (this.layout.isMainDockVisible(this.tab)) { this.dockItems() }');
+    expect(home).toContain('bottom: this.layout.keyboardVisible ? 0 : 8');
+  });
+
+  it('opens creation in an editable AI sheet before offering the full chat', () => {
+    expect(home).toContain('this.creationSheetOpen = true;');
+    expect(home).toContain('.bindSheet($$this.creationSheetOpen, this.creationChatSheet');
+    expect(home).toContain('height: SheetSize.LARGE, dragBar: true, showClose: false');
+    expect(home).toContain('keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY');
+    expect(home).toContain('onDisappear: (): void => { this.completeCreationHandoff(); }');
+    expect(home).toContain("Button($r('app.string.continue_in_chat'))");
+    expect(home).toContain(".id('creation-chat-close')");
+    expect(home).toContain('activePage: this.creationSheetOpen, embedded: true');
+    expect(home).toContain("}.layoutWeight(1).width('100%')");
+    expect(chat).toContain('if (!this.drawerOpen && !this.embedded)');
+    expect(home).toContain('this.continueCreationChat();');
+    expect(home).toContain("this.switchToChat(this.creationChatId, '', true);");
   });
 
   it('removes the outer bottom gap above the keyboard', () => {

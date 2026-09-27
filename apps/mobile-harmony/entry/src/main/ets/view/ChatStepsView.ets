@@ -4,6 +4,7 @@ import { chatActivities, chatToolDisplayKind, chatToolReadGroupKey } from '../co
 import { XopcChatToolGroupView, XopcChatToolView } from './ChatToolView';
 import { XopcMarkdownView } from './MarkdownView';
 import { XopcChatDisclosure } from '../common/chatDisclosure';
+import { XopcMobileRoute } from '../model/home';
 
 @ComponentV2
 export struct XopcChatStepsView {
@@ -12,6 +13,7 @@ export struct XopcChatStepsView {
   @Param reasoning: string = 'on';
   @Param disclosure: XopcChatDisclosure = new XopcChatDisclosure();
   @Param scope: string = '';
+  @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Computed get steps(): XopcChatBlock[] { return chatActivities(this.row, this.reasoning); }
   @Computed get visibleSteps(): XopcChatBlock[] { return this.steps.filter((step: XopcChatBlock): boolean => step.kind !== 'thinking'); }
   @Computed get expanded(): boolean { return this.disclosure.get(this.scope + ':steps:' + this.row.id) ?? false; }
@@ -75,7 +77,7 @@ export struct XopcChatStepsView {
               } else if (step.kind === 'plan') {
                 Column({ space: 8 }) {
                   Text($r('app.string.chat_plan')).fontSize(13).fontColor(this.colors.secondary)
-                  if (step.text) { XopcMarkdownView({ content: step.text }) }
+                  if (step.text) { XopcMarkdownView({ content: step.text, conversationId: this.scope, onNavigate: this.onNavigate }) }
                   ForEach(step.plan || [], (planStep: XopcPlanStep, planIndex: number) => {
                     Text((planStep.status === 'completed' ? '✓ ' : planStep.status === 'in_progress' ? '◉ ' : '○ ') + planStep.step)
                       .fontSize(14).fontColor(this.colors.foreground)
@@ -84,7 +86,7 @@ export struct XopcChatStepsView {
               } else if (step.kind === 'diff') {
                 XopcChatToolView({ call: { id: step.id, name: 'apply_patch', result: step.text, status: 'done' }, disclosure: this.disclosure, scope: this.scope + ':' + this.row.id })
               } else if (step.kind === 'text' && step.text) {
-                Text(step.text).fontSize(13).lineHeight(19).fontColor(this.colors.secondary).width('100%')
+                XopcMarkdownView({ content: step.text, conversationId: this.scope, onNavigate: this.onNavigate })
               }
             }, (step: XopcChatBlock): string => step.id)
           }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 8, right: 2, top: 2, bottom: 4 })

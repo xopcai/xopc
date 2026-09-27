@@ -1,10 +1,15 @@
-import { XopcIncomingShare } from '../model/share';
+import { XopcIncomingShare, XopcIncomingShareAttachment } from '../model/share';
 import { gatewaySession } from './gatewaySession';
+import { fileIo as fs } from '@kit.CoreFileKit';
+import { util } from '@kit.ArkTS';
+import { XopcNoteMediaService } from './noteMedia';
+import { XopcNoteRepository } from '../repository/noteRepository';
+import { XopcNoteAttachment, XopcNoteDraft } from '../model/note';
 
 interface XopcShareCaptureBody { text: string; channel: string; platform: string; }
 interface XopcShareCaptureResult { note?: XopcShareCaptureNote; }
 interface XopcShareCaptureNote { id: string; }
-interface XopcShareHandoff { title: string; values: string[]; }
+interface XopcShareHandoff { title: string; values: string[]; attachments?: XopcIncomingShareAttachment[]; }
 
 export const SHARE_INTAKE_URI = 'xopc://intake';
 
@@ -51,13 +56,14 @@ function noteText(value: XopcIncomingShare): string {
   return value.content;
 }
 
-export function incomingShare(title: string, values: string[]): XopcIncomingShare | undefined {
+export function incomingShare(title: string, values: string[], attachments: XopcIncomingShareAttachment[] = []): XopcIncomingShare | undefined {
   const cleaned = values.map((value: string): string => value.trim()).filter((value: string): boolean => !!value);
   const label = title.trim();
   const raw = cleaned.join('\n').trim();
-  const content = label && cleaned.length === 1 && URL_ONLY.test(cleaned[0]) ? label + '\n' + cleaned[0] : raw;
-  if (content.length < 3 || content.length > 100000 || !/[A-Za-z0-9\u3400-\u9FFF]/.test(content)
-    || /^[\d\s-]{3,8}$/.test(content) || (content.length <= 160 && OTP.test(content))) return undefined;
+  const content = label && cleaned.length === 1 && URL_ONLY.test(cleaned[0]) ? label + '\n' + cleaned[0]
+    : raw || label || attachments.map((item: XopcIncomingShareAttachment): string => item.name).join('\n');
+  if (!attachments.length && (content.length < 3 || content.length > 100000 || !/[A-Za-z0-9\u3400-\u9FFF]/.test(content)
+    || /^[\d\s-]{3,8}$/.test(content) || (content.length <= 160 && OTP.test(content)))) return undefined;
   const sensitive = SECRET_ASSIGNMENT.test(content) || JWT.test(content) || EMAIL.test(content) || PHONE.test(content)
     || CARD.test(content) || SECRET.test(content);
   SECRET_ASSIGNMENT.lastIndex = 0; JWT.lastIndex = 0; EMAIL.lastIndex = 0; PHONE.lastIndex = 0; CARD.lastIndex = 0; SECRET.lastIndex = 0;
@@ -65,11 +71,12 @@ export function incomingShare(title: string, values: string[]): XopcIncomingShar
     .replace(PHONE, '[phone hidden]').replace(SECRET_ASSIGNMENT, '$1$2$3[hidden]$4').replace(SECRET, 'Bearer [hidden]') : content;
   JWT.lastIndex = 0; EMAIL.lastIndex = 0; PHONE.lastIndex = 0; CARD.lastIndex = 0; SECRET.lastIndex = 0; SECRET_ASSIGNMENT.lastIndex = 0;
   const kind = kindOf(content);
-  return { title: title.trim(), content, chatPrompt: promptFor(kind, content), kind, preview: preview.slice(0, 1200), sensitive };
+  return { title: title.trim(), content, chatPrompt: promptFor(kind, content), kind, preview: preview.slice(0, 1200), sensitive,
+    attachments: attachments.length ? attachments : undefined };
 }
 
-export function encodeShareHandoff(title: string, values: string[]): string {
-  const handoff: XopcShareHandoff = { title, values };
+export function encodeShareHandoff(title: string, values: string[], attachments: XopcIncomingShareAttachment[] = []): string {
+  const handoff: XopcShareHandoff = { title, values, attachments: attachments.length ? attachments : undefined };
   return JSON.stringify(handoff);
 }
 
@@ -83,7 +90,18 @@ export function decodeShareHandoff(payload: string): XopcIncomingShare | undefin
       if (typeof value !== 'string') return undefined;
       values.push(value);
     }
-    return incomingShare(handoff.title, values);
+    const attachments: XopcIncomingShareAttachment[] = [];
+    if (Array.isArray(handoff.attachments)) {
+      for (const item of handoff.attachments) {
+        if (!item || typeof item.path !== 'string' || typeof item.name !== 'string' || typeof item.mimeType !== 'string'
+          || typeof item.size !== 'number' || item.size <= 0 || item.size > 8 * 1024 * 1024
+          || !/\/files\/share-[0-9a-f-]{36}-[^/]+$/i.test(item.path) || item.name.includes('/') || item.name.includes('\\')) {
+          return undefined;
+        }
+        attachments.push({ path: item.path, name: item.name, mimeType: item.mimeType, size: item.size });
+      }
+    }
+    return incomingShare(handoff.title, values, attachments);
   } catch (_) { return undefined; }
 }
 
@@ -94,9 +112,22 @@ export class XopcShareIntake {
   @Trace chatText: string = '';
   @Trace chatRevision: number = 0;
   @Trace chatConversationId: string = '';
+  private media: XopcNoteMediaService = new XopcNoteMediaService();
+  private notes: XopcNoteRepository = new XopcNoteRepository();
+  private saveMutationId: string = '';
+  private attachmentMutationIds: string[] = [];
 
-  receive(value: XopcIncomingShare): void { this.pending = value; this.revision++; }
-  dismiss(): void { this.pending = undefined; this.revision++; }
+  receive(value: XopcIncomingShare): void {
+    this.cleanupPendingFiles();
+    this.pending = value;
+    this.saveMutationId = util.generateRandomUUID();
+    this.attachmentMutationIds = (value.attachments ?? []).map((_item: XopcIncomingShareAttachment): string => util.generateRandomUUID());
+    this.revision++;
+  }
+  dismiss(): void {
+    this.cleanupPendingFiles();
+    this.pending = undefined; this.saveMutationId = ''; this.attachmentMutationIds = []; this.revision++;
+  }
   targetChat(conversationId: string, text: string): void {
     this.chatConversationId = conversationId; this.chatText = text; this.chatRevision++;
   }
@@ -106,10 +137,36 @@ export class XopcShareIntake {
   }
   async save(): Promise<string> {
     const value = this.pending; if (!value) return '';
-    const body: XopcShareCaptureBody = { text: noteText(value), channel: 'share', platform: 'harmonyos' };
-    const result = JSON.parse(await gatewaySession.request('/api/notes/quick-capture', 'POST', JSON.stringify(body))) as XopcShareCaptureResult;
+    const originalMarkdown = noteText(value);
+    const body: XopcShareCaptureBody = { text: originalMarkdown, channel: 'share', platform: 'harmonyos' };
+    const result = JSON.parse(await gatewaySession.request('/api/notes/quick-capture', 'POST', JSON.stringify(body),
+      this.saveMutationId)) as XopcShareCaptureResult;
     if (!result.note?.id) throw new Error('INVALID_CAPTURE_RESPONSE');
-    this.dismiss(); return result.note.id;
+    const noteId = result.note.id;
+    const refs: string[] = [];
+    const incoming = value.attachments ?? [];
+    for (let index = 0; index < incoming.length; index++) {
+      const item = incoming[index];
+      const attachment: XopcNoteAttachment = await this.media.uploadFile(noteId, item.path, item.name, item.mimeType,
+        this.attachmentMutationIds[index]);
+      const escaped = attachment.fileName.replace(/([\\\[\]])/g, '\\$1');
+      const target = 'xopc-attachment://notes/' + encodeURIComponent(noteId) + '/' + encodeURIComponent(attachment.id);
+      refs.push(attachment.type === 'image' ? '![' + escaped + '](' + target + ')' : '[' + escaped + '](' + target + ')');
+    }
+    if (refs.length) {
+      const note = await this.notes.detail(noteId);
+      const draft: XopcNoteDraft = {
+        noteId, title: note.title ?? '', markdown: originalMarkdown.replace(/\s+$/, '') + '\n\n' + refs.join('\n\n'),
+        baseRevision: note.remoteVersion ?? 1, localVersion: (note.localVersion ?? 1) + 1,
+        updatedAt: Date.now(), syncState: 'dirty', mutationId: util.generateRandomUUID()
+      };
+      await this.notes.sync(draft);
+    }
+    this.dismiss(); return noteId;
+  }
+
+  private cleanupPendingFiles(): void {
+    for (const item of this.pending?.attachments ?? []) { fs.unlink(item.path).catch((_error: Error): void => {}); }
   }
 }
 

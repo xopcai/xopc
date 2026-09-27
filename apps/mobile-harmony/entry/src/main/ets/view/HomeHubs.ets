@@ -1,9 +1,8 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { XopcPageHeader, XopcHubRow, XopcSectionLabel, XopcEmptyHint, XopcListSkeleton } from './MobileComponents';
-import { XopcProgressViewModel, XopcLibraryViewModel } from '../viewmodel/homeViewModel';
+import { XopcPageHeader, XopcHubRow, XopcSectionLabel, XopcListSkeleton } from './MobileComponents';
+import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { XopcHomeAction, XopcHomeItem, XopcMobileRoute } from '../model/home';
-import { XopcTask, XopcNote } from '../model/workspace';
-import { XopcFile } from '../model/files';
+import { XopcTask } from '../model/workspace';
 import { mobileRoute } from '../common/homeProtocol';
 
 @ComponentV2
@@ -23,6 +22,11 @@ export struct XopcProgressView {
   }
   private stopTimer(): void { if (this.refreshTimer >= 0) clearInterval(this.refreshTimer); this.refreshTimer = -1; }
   private openPage(page: string, itemId: string = ''): void { this.onNavigate({ page, itemId }); }
+  private automationTime(timestamp: number): string {
+    const date = new Date(timestamp);
+    const pad = (value: number): string => value.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
   private resolutionLabel(value: string): ResourceStr {
     if (value === 'done') return $r('app.string.closed_done');
     if (value === 'cancelled') return $r('app.string.closed_cancelled');
@@ -95,6 +99,15 @@ export struct XopcProgressView {
               }.layoutWeight(1).alignItems(HorizontalAlign.Start)
             }.width('100%').constraintSize({ minHeight: 92 }).padding(16).borderRadius(20)
               .backgroundColor(this.colors.accentSoft)
+            XopcSectionLabel({ heading: $r('app.string.frequent_tools') })
+            Row({ space: 12 }) {
+              this.workTool($r('app.string.tasks'), $r('sys.symbol.checkmark_circle'), 'tasks')
+              this.workTool($r('app.string.projects'), $r('sys.symbol.folder'), 'projects')
+            }.width('100%')
+            Row({ space: 12 }) {
+              this.workTool($r('app.string.automations'), $r('sys.symbol.clock'), 'automations')
+              this.workTool($r('app.string.workflows'), $r('sys.symbol.arrow_clockwise'), 'workflows')
+            }.width('100%').margin({ top: 12 })
             if (this.model.loading) { XopcListSkeleton() }
             else {
               if (this.model.homeError) {
@@ -113,6 +126,14 @@ export struct XopcProgressView {
                   }, (item: XopcHomeItem): string => item.id + JSON.stringify(item))
                 }
               }
+              if (this.model.automationMetrics?.nextRun) {
+                XopcSectionLabel({ heading: $r('app.string.upcoming') })
+                XopcHubRow({ heading: this.model.automationMetrics.nextRun.name,
+                  summary: this.automationTime(this.model.automationMetrics.nextRun.runAtMs), symbol: $r('sys.symbol.clock'),
+                  onOpen: (): void => {
+                    if (this.model.automationMetrics?.nextRun) this.openPage('automations', this.model.automationMetrics.nextRun.automationId);
+                  } })
+              }
               if (this.model.tasksError) {
                 XopcHubRow({ heading: $r('app.string.load_failed'), summary: this.model.tasksError, symbol: $r('sys.symbol.arrow_clockwise'), onOpen: (): void => { this.model.refresh(); } })
               } else if (this.model.closed.length) {
@@ -124,81 +145,6 @@ export struct XopcProgressView {
               }
             }
             if (this.model.actionError) { Text(this.model.actionError).fontColor(this.colors.danger).width('100%').padding(12) }
-            XopcSectionLabel({ heading: $r('app.string.work_tools') })
-            Row({ space: 12 }) {
-              this.workTool($r('app.string.workflows'), $r('sys.symbol.arrow_clockwise'), 'workflows')
-              this.workTool($r('app.string.automations'), $r('sys.symbol.clock'), 'automations')
-            }.width('100%')
-          }.width('100%').padding({ left: 20, right: 20, bottom: 28 }).alignItems(HorizontalAlign.Start)
-        }.width('100%').height('100%').align(Alignment.Top).scrollBar(BarState.Off)
-      }.layoutWeight(1).onRefreshing((): void => {
-        this.pulling = true; this.model.refresh().finally((): void => { this.pulling = false; });
-      })
-    }.width('100%').height('100%').backgroundColor(this.colors.surface)
-  }
-}
-
-@ComponentV2
-export struct XopcLibraryView {
-  @Local colors: XopcThemeColors = appThemeColors;
-  @Param activePage: boolean = false;
-  @Local model: XopcLibraryViewModel = new XopcLibraryViewModel();
-  @Local pulling: boolean = false;
-  @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
-  private refreshTimer: number = -1;
-  aboutToAppear(): void { this.updateActivity(); }
-  aboutToDisappear(): void { this.stopTimer(); this.model.dispose(); }
-  @Monitor('activePage')
-  updateActivity(): void {
-    this.stopTimer();
-    if (this.activePage) { this.model.refresh(); this.refreshTimer = setInterval((): void => { this.model.refresh(); }, 60000); }
-  }
-  private stopTimer(): void { if (this.refreshTimer >= 0) clearInterval(this.refreshTimer); this.refreshTimer = -1; }
-  private openPage(page: string, itemId: string = ''): void { this.onNavigate({ page, itemId }); }
-  @Builder
-  shortcut(label: ResourceStr, icon: Resource, page: string) {
-    Button({ type: ButtonType.Normal }) {
-      Row({ space: 10 }) {
-        Row() { SymbolGlyph(icon).fontSize(21).fontColor([this.colors.accent]) }
-          .width(36).height(36).justifyContent(FlexAlign.Center).borderRadius(18).backgroundColor(this.colors.accentSoft)
-        Text(label).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).layoutWeight(1).maxLines(1)
-        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
-      }.width('100%').height(68).padding({ left: 12, right: 12 })
-    }.layoutWeight(1).padding(0).borderRadius(16).backgroundColor(this.colors.panel)
-      .onClick((): void => { this.openPage(page); })
-  }
-  build() {
-    Column() {
-      XopcPageHeader({ heading: $r('app.string.library') })
-      Refresh({ refreshing: this.pulling }) {
-        Scroll() {
-          Column() {
-            Text($r('app.string.library_hint')).fontSize(15).lineHeight(22).fontColor(this.colors.secondary).width('100%')
-            XopcSectionLabel({ heading: $r('app.string.quick_access') })
-            Row({ space: 12 }) {
-              this.shortcut($r('app.string.notes'), $r('sys.symbol.doc_text'), 'notes')
-              this.shortcut($r('app.string.files'), $r('sys.symbol.folder'), 'files')
-            }.width('100%')
-            Row({ space: 12 }) {
-              this.shortcut($r('app.string.inbox'), $r('sys.symbol.doc'), 'inbox')
-              Blank().layoutWeight(1)
-            }.width('100%').margin({ top: 12 })
-            XopcSectionLabel({ heading: $r('app.string.library_recent_files') })
-            if (this.model.loading) { XopcListSkeleton() }
-            else if (this.model.filesError) {
-              XopcHubRow({ heading: $r('app.string.load_failed'), summary: this.model.filesError, symbol: $r('sys.symbol.arrow_clockwise'), onOpen: (): void => { this.model.refresh(); } })
-            } else if (!this.model.files.length) { XopcEmptyHint({ message: $r('app.string.no_files') }) }
-            ForEach(this.model.files, (file: XopcFile) => {
-              XopcHubRow({ heading: file.name, summary: file.relativePath, symbol: $r('sys.symbol.doc'), onOpen: (): void => { this.openPage('files', file.id); } })
-            }, (file: XopcFile): string => file.id + ':' + file.revision)
-            XopcSectionLabel({ heading: $r('app.string.recent_notes') })
-            if (this.model.loading) { XopcListSkeleton() }
-            else if (this.model.notesError) {
-              XopcHubRow({ heading: $r('app.string.load_failed'), summary: this.model.notesError, symbol: $r('sys.symbol.arrow_clockwise'), onOpen: (): void => { this.model.refresh(); } })
-            } else if (!this.model.notes.length) { XopcEmptyHint({ message: $r('app.string.no_notes') }) }
-            ForEach(this.model.notes, (note: XopcNote) => {
-              XopcHubRow({ heading: note.title || $r('app.string.untitled'), summary: note.snippet ?? '', symbol: $r('sys.symbol.doc_text'), onOpen: (): void => { this.openPage('notes', note.id); } })
-            }, (note: XopcNote): string => note.id + ':' + (note.remoteVersion ?? 0))
           }.width('100%').padding({ left: 20, right: 20, bottom: 28 }).alignItems(HorizontalAlign.Start)
         }.width('100%').height('100%').align(Alignment.Top).scrollBar(BarState.Off)
       }.layoutWeight(1).onRefreshing((): void => {

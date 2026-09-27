@@ -4,6 +4,9 @@ import { markdownBlocks, markdownSpans, markdownLink, XopcMarkdownBlock, XopcMar
 import { copyChatMessage } from '../service/chatMessageActions';
 import { XopcChatMediaView } from './ChatMediaView';
 import { XopcHistoryMedia } from '../model/chat';
+import { XopcMobileRoute } from '../model/home';
+import { internalMessageLink } from '../common/messageLink';
+import { normalizedFileMimeType } from '../common/filePreview';
 
 @ComponentV2
 struct XopcMarkdownInline {
@@ -13,8 +16,10 @@ struct XopcMarkdownInline {
   @Param muted: boolean = false;
   @Param strong: boolean = false;
   @Param alignment: string = 'left';
+  @Event onOpenLink: (href: string) => void = (_href: string): void => {};
   @Computed get spans(): XopcMarkdownSpan[] { return markdownSpans(this.content); }
   private async openTarget(href: string): Promise<void> {
+    if (internalMessageLink(href)) { this.onOpenLink(href); return; }
     if (!markdownLink(href)) return;
     try {
       const result = await this.getUIContext().getPromptAction().showDialog({ title: $r('app.string.chat_open_link'), message: href,
@@ -44,6 +49,18 @@ export struct XopcMarkdownView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param content: string = '';
   @Param conversationId: string = '';
+  @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
+  @Local linkedFile?: XopcHistoryMedia;
+  @Local previewRequest: number = 0;
+  private openInternalLink(href: string): void {
+    const target = internalMessageLink(href);
+    if (!target) return;
+    if (target.kind === 'route') { this.onNavigate({ page: target.page, itemId: target.itemId }); return; }
+    const name = target.path.split('/').pop() || target.path;
+    this.linkedFile = { id: href, name, uri: '', workspaceRelativePath: target.path,
+      type: 'file', mimeType: normalizedFileMimeType(name, ''), size: 0 };
+    this.previewRequest++;
+  }
   @Computed get blocks(): XopcMarkdownBlock[] { return markdownBlocks(this.content); }
   private imageFile(block: XopcMarkdownBlock): XopcHistoryMedia {
     return { id: block.id, name: block.text || 'image', type: 'image', mimeType: 'image/png', size: 0, uri: block.href || '' };
@@ -78,7 +95,8 @@ export struct XopcMarkdownView {
               ForEach(item.item.rows || [], (row: XopcMarkdownTableRow) => {
                 Row() {
                   ForEach(row.cells, (cell: XopcMarkdownCell) => {
-                    XopcMarkdownInline({ content: cell.text, strong: row.header, alignment: cell.align })
+                    XopcMarkdownInline({ content: cell.text, strong: row.header, alignment: cell.align,
+                      onOpenLink: (href: string): void => { this.openInternalLink(href); } })
                       .width(168).padding(10)
                   }, (cell: XopcMarkdownCell): string => cell.id + ':' + cell.text)
                 }.alignItems(VerticalAlign.Top).backgroundColor(row.header ? this.colors.grouped : this.colors.panel)
@@ -86,8 +104,13 @@ export struct XopcMarkdownView {
               }, (row: XopcMarkdownTableRow): string => row.id + ':' + JSON.stringify(row.cells))
             }
           }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Auto)
-        } else { XopcMarkdownInline({ content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0, muted: item.item.kind === 'quote' }).width('100%').padding({ left: item.item.kind === 'quote' ? 12 : item.item.kind === 'list' ? Math.min(item.item.level, 6) * 12 : 0 }) }
+        } else { XopcMarkdownInline({ content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0, muted: item.item.kind === 'quote',
+          onOpenLink: (href: string): void => { this.openInternalLink(href); } }).width('100%').padding({ left: item.item.kind === 'quote' ? 12 : item.item.kind === 'list' ? Math.min(item.item.level, 6) * 12 : 0 }) }
       }).key((block: XopcMarkdownBlock): string => block.id + ':' + block.kind)
+      if (this.linkedFile) {
+        XopcChatMediaView({ file: this.linkedFile, conversationId: this.conversationId, previewOnly: true, previewRequest: this.previewRequest })
+          .height(0)
+      }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 }

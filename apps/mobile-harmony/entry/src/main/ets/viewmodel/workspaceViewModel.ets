@@ -15,14 +15,13 @@ export class XopcWorkspaceViewModel {
   @Trace cron: string = '';
   @Trace projectId: string = '';
   private section: XopcSection = 'tasks';
-  private noteStatus: string = '';
   private repository: XopcWorkspaceRepository = new XopcWorkspaceRepository();
   private generation: number = 0;
   private mutationId: string = '';
   private mutationSignature: string = '';
 
-  start(section: XopcSection, initialId: string = '', noteStatus: string = ''): void {
-    this.section = section; this.noteStatus = noteStatus;
+  start(section: XopcSection, initialId: string = ''): void {
+    this.section = section;
     if (initialId) this.open(initialId); else this.list('');
   }
   dispose(): void { this.generation++; }
@@ -30,7 +29,7 @@ export class XopcWorkspaceViewModel {
     if (this.busy) return;
     const generation = ++this.generation; this.busy = true; this.error = '';
     try {
-      const page = await this.repository.list(this.section, search, more ? this.items.length : 0, this.noteStatus);
+      const page = await this.repository.list(this.section, search, more ? this.items.length : 0);
       if (generation !== this.generation) return;
       this.items = more ? this.items.concat(page.items.filter((item): boolean => !this.items.some((old): boolean => old.id === item.id))) : page.items;
       this.hasMore = page.hasMore;
@@ -66,7 +65,7 @@ export class XopcWorkspaceViewModel {
   }
   async save(): Promise<void> {
     const selected = this.selected;
-    if (!selected || this.busy || (!this.title.trim() && this.section !== 'notes')) return;
+    if (!selected || this.busy || !this.title.trim()) return;
     this.busy = true; this.error = '';
     const item: XopcWorkspaceItem = { id: selected.id, title: this.title, body: this.body, status: selected.status,
       version: selected.version, projectId: this.projectId.trim() || undefined, cron: this.cron,

@@ -1,6 +1,6 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
-import { XopcHubRow, XopcListSkeleton, XopcEmptyHint } from './MobileComponents';
+import { XopcHubRow, XopcListSkeleton, XopcEmptyHint, XopcSectionLabel } from './MobileComponents';
 import { XopcMarkdownView } from './MarkdownView';
 
 interface XopcWorkflowSummary { id: string; title: string; status: string; goal?: string; }
@@ -18,13 +18,39 @@ interface XopcWorkflowEnvelope { view: XopcWorkflowDetail; }
 export struct XopcWorkflowView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param initialId: string = '';
+  @Event onCreateWithChat: () => Promise<void> = async (): Promise<void> => {};
   @Local runs: XopcWorkflowSummary[] = [];
   @Local selected: XopcWorkflowDetail | undefined = undefined;
   @Local busy: boolean = false;
   @Local error: string = '';
+  @Local creatingChat: boolean = false;
   private generation: number = 0;
-  aboutToAppear(): void { this.load(this.initialId); }
-  aboutToDisappear(): void { this.generation++; }
+  private refreshTimer: number = -1;
+  aboutToAppear(): void {
+    this.load(this.initialId);
+    this.refreshTimer = setInterval((): void => {
+      if (this.selected && this.active(this.selected.run.status)) this.load(this.selected.run.id);
+    }, 4000);
+  }
+  aboutToDisappear(): void { this.generation++; if (this.refreshTimer >= 0) clearInterval(this.refreshTimer); this.refreshTimer = -1; }
+  private active(status: string): boolean { return status === 'queued' || status === 'running'; }
+  private statusLabel(status: string): ResourceStr {
+    if (status === 'queued') return $r('app.string.status_queued');
+    if (status === 'running') return $r('app.string.status_running');
+    if (status === 'succeeded' || status === 'done') return $r('app.string.status_succeeded');
+    if (status === 'failed') return $r('app.string.status_failed');
+    if (status === 'cancelled') return $r('app.string.status_cancelled');
+    return status;
+  }
+  private completedSteps(): number {
+    return this.selected?.agents.filter((step: XopcWorkflowStep): boolean => step.status === 'done' || step.status === 'succeeded').length ?? 0;
+  }
+  private async createWithChat(): Promise<void> {
+    if (this.busy || this.creatingChat) return;
+    this.creatingChat = true;
+    try { await this.onCreateWithChat(); }
+    finally { this.creatingChat = false; }
+  }
   private async load(runId: string = ''): Promise<void> {
     if (this.busy) return;
     this.busy = true; this.error = ''; const generation = ++this.generation;
@@ -38,7 +64,14 @@ export struct XopcWorkflowView {
         if (!Array.isArray(result.runs)) throw new Error('INVALID_WORKFLOWS');
         if (generation === this.generation) this.runs = result.runs;
       }
-    } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
+    } catch (error) {
+      if (generation === this.generation) {
+        const message = (error as Error).message;
+        this.error = message === 'HTTP_404'
+          ? this.getUIContext().getHostContext()?.resourceManager.getStringSync($r('app.string.workflow_run_unavailable').id) ?? message
+          : message;
+      }
+    }
     finally { if (generation === this.generation) this.busy = false; }
   }
   private async cancelRun(): Promise<void> {
@@ -59,32 +92,69 @@ export struct XopcWorkflowView {
   build() {
     NavDestination() {
       Column() {
-        Button($r('app.string.refresh')).enabled(!this.busy).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
-          .onClick((): void => { this.load(this.selected?.run.id ?? this.initialId); })
+        Row() {
+          Text(this.selected ? $r('app.string.workflow_overview') : $r('app.string.recent_runs'))
+            .fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary).layoutWeight(1)
+          if (!this.selected) {
+            Button($r('app.string.new_workflow')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
+              .enabled(!this.busy && !this.creatingChat).onClick((): void => { this.createWithChat(); })
+          }
+          Button({ type: ButtonType.Circle }) {
+            SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(20).fontColor([this.colors.accent])
+          }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).enabled(!this.busy)
+            .accessibilityText($r('app.string.refresh')).onClick((): void => { this.load(this.selected?.run.id ?? this.initialId); })
+        }.width('100%').padding({ left: 20, right: 12 })
         Scroll() {
           Column() {
             if (this.error) { Text(this.error).fontColor(this.colors.danger).padding(12) }
             if (this.busy) { XopcListSkeleton() }
             if (this.selected) {
-              Text(this.selected.run.title).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-              XopcEmptyHint({ message: this.selected.run.status })
-              XopcMarkdownView({ content: this.selected.run.goal ?? '' })
-              if (this.selected.run.result) { XopcMarkdownView({ content: this.selected.run.result.summary }) }
+              Column({ space: 10 }) {
+                Row({ space: 12 }) {
+                  Row() { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(22).fontColor([this.colors.accent]) }
+                    .width(42).height(42).justifyContent(FlexAlign.Center).borderRadius(21).backgroundColor(this.colors.accentSoft)
+                  Column({ space: 4 }) {
+                    Text(this.selected.run.title).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+                    Text(this.statusLabel(this.selected.run.status)).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
+                  }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                }.width('100%')
+                Text($r('app.string.workflow_progress', this.completedSteps(), this.selected.agents.length))
+                  .fontSize(13).fontColor(this.colors.secondary).width('100%')
+                if (this.selected.controls.canCancel) {
+                  Button($r('app.string.cancel_run')).width('100%').constraintSize({ minHeight: 46 })
+                    .backgroundColor(this.colors.input).fontColor(this.colors.danger).enabled(!this.busy)
+                    .onClick((): void => { this.cancelRun(); })
+                }
+              }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(18).backgroundColor(this.colors.panel)
+              if (this.selected.run.goal) {
+                XopcSectionLabel({ heading: $r('app.string.goal') })
+                XopcMarkdownView({ content: this.selected.run.goal })
+              }
+              if (this.selected.run.result) {
+                XopcSectionLabel({ heading: $r('app.string.result') })
+                XopcMarkdownView({ content: this.selected.run.result.summary })
+              }
+              if (this.selected.phases.length) { XopcSectionLabel({ heading: $r('app.string.phases') }) }
               ForEach(this.selected.phases, (step: XopcWorkflowStep) => {
-                XopcHubRow({ heading: step.title ?? step.id, summary: step.status, navigable: false })
+                XopcHubRow({ heading: step.title ?? step.id, summary: this.statusLabel(step.status),
+                  symbol: step.status === 'done' || step.status === 'succeeded' ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.clock'), navigable: false })
               }, (step: XopcWorkflowStep): string => step.id + ':' + step.status)
+              if (this.selected.agents.length) { XopcSectionLabel({ heading: $r('app.string.agent_work') }) }
               ForEach(this.selected.agents, (step: XopcWorkflowStep) => {
-                XopcHubRow({ heading: step.label ?? step.id, summary: step.resultPreview || step.error || step.status, navigable: false })
+                XopcHubRow({ heading: step.label ?? step.id, summary: step.resultPreview || step.error || this.statusLabel(step.status),
+                  symbol: step.error ? $r('sys.symbol.exclamationmark_circle') : step.status === 'done' || step.status === 'succeeded'
+                    ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.clock'), navigable: false })
               }, (step: XopcWorkflowStep): string => step.id + ':' + step.status)
-              if (this.selected.controls.canCancel) { Button($r('app.string.cancel')).enabled(!this.busy).onClick((): void => { this.cancelRun(); }) }
             } else {
               if (!this.busy && !this.error && !this.runs.length) { XopcEmptyHint({ message: $r('app.string.empty_list') }) }
               ForEach(this.runs, (run: XopcWorkflowSummary) => {
-                XopcHubRow({ heading: run.title, summary: run.status, symbol: $r('sys.symbol.arrow_clockwise'), onOpen: (): void => { this.load(run.id); } })
+                XopcHubRow({ heading: run.title, summary: this.statusLabel(run.status),
+                  symbol: run.status === 'succeeded' || run.status === 'done' ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.arrow_clockwise'),
+                  onOpen: (): void => { this.load(run.id); } })
               }, (run: XopcWorkflowSummary): string => run.id + ':' + run.status)
             }
           }.width('100%').padding(20).alignItems(HorizontalAlign.Start)
-        }.layoutWeight(1).width('100%')
+        }.layoutWeight(1).width('100%').align(Alignment.Top)
       }.width('100%').height('100%')
     }.title($r('app.string.workflows')).backgroundColor(this.colors.surface)
       .onBackPressed((): boolean => {
