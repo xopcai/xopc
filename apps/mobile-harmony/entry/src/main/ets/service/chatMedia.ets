@@ -42,6 +42,8 @@ function chatMediaHash(source: string): string {
 }
 
 function chatMediaCachePath(context: common.Context | undefined, file: XopcHistoryMedia, conversationId: string): string {
+  // Managed documents are mutable; attachment caches must never hide a saved revision.
+  if (file.uri.startsWith('xopc-file:') || file.workspaceRelativePath) return '';
   if (!context?.cacheDir || file.size <= 0 || file.size > CHAT_MEDIA_DISK_FILE_LIMIT) return '';
   const extension = file.mimeType.startsWith('audio/') ? '.audio' : '.media';
   return context.cacheDir + '/' + CHAT_MEDIA_DISK_DIRECTORY + '/' + chatMediaHash(chatMediaIdentity(file, conversationId)) + extension;
@@ -98,6 +100,7 @@ export async function readChatMedia(file: XopcHistoryMedia, conversationId: stri
   const revision = gatewaySession.connectionRevision();
   gatewaySession.assertConnection(revision);
   if (mediaCacheRevision !== revision) { clearChatMediaCache(); mediaCacheRevision = revision; }
+  if (file.uri.startsWith('xopc-file:') || file.workspaceRelativePath) return fetchChatMedia(file, conversationId);
   // Embedded payloads already live in message memory. Do not retain another copy.
   if (file.uri.startsWith('data:')) {
     const embedded = await fetchChatMedia(file, conversationId);
@@ -153,6 +156,7 @@ async function fetchChatMedia(file: XopcHistoryMedia, conversationId: string): P
     const result = await request.request(source.external ? source.path : auth!.origin + source.path, { method: http.RequestMethod.GET, header: headers,
       expectDataType: http.HttpDataType.ARRAY_BUFFER, maxRedirects: 0, maxLimit: CHAT_MEDIA_LIMIT,
       connectTimeout: 8000, readTimeout: 30000, usingCache: false });
+    if (!source.external) gatewaySession.assertConnection(revision);
     if (result.responseCode !== 200) throw new XopcHttpError(result.responseCode);
     const bytes = result.result;
     if (!(bytes instanceof ArrayBuffer) || bytes.byteLength > CHAT_MEDIA_LIMIT) throw new Error('INVALID_MEDIA_OR_TOO_LARGE');

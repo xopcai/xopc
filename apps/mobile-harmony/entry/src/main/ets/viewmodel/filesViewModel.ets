@@ -2,7 +2,7 @@ import { common } from '@kit.AbilityKit';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcChatRepository } from '../repository/chatRepository';
 import { XopcFileTransfer } from '../service/fileTransfer';
-import { XopcFile, XopcFiles, XopcFileSpace, XopcFileSpaces, XopcFileWrite, XopcFileResult } from '../model/files';
+import { XopcFile, XopcFiles, XopcFileSpace, XopcFileSpaces, XopcFileResult } from '../model/files';
 import { XopcFileSpaceResult } from '../model/files';
 
 @ObservedV2
@@ -12,11 +12,8 @@ export class XopcFilesViewModel {
   @Trace space?: XopcFileSpace;
   @Trace directory: string = '';
   @Trace selected?: XopcFile;
-  @Trace content: string = '';
-  @Trace savedContent: string = '';
   @Trace busy: boolean = false;
   @Trace error: string = '';
-  @Trace editable: boolean = false;
   private transfer: XopcFileTransfer = new XopcFileTransfer();
   private generation: number = 0;
   private contextId: string = '';
@@ -82,31 +79,9 @@ export class XopcFilesViewModel {
       this.space = this.spaces.find((space): boolean => space.id === file.spaceId);
       this.directory = file.relativePath; await this.load(); return;
     }
-    this.selected = file; this.content = ''; this.savedContent = ''; this.editable = false; this.error = '';
-    const text = file.mimeType.startsWith('text/') || ['application/json', 'application/xml'].includes(file.mimeType);
-    if (!text || file.size > 1024 * 1024 || !file.capabilities.includes('preview')) return;
-    this.busy = true; const generation = ++this.generation;
-    try {
-      const content = await gatewaySession.request('/api/files/' + encodeURIComponent(file.id) + '/content');
-      if (generation !== this.generation) return;
-      this.content = content; this.savedContent = content; this.editable = file.capabilities.includes('edit');
-    } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
-    finally { if (generation === this.generation) this.busy = false; }
+    this.selected = file; this.error = '';
   }
-  async save(): Promise<void> {
-    const file = this.selected;
-    if (!file || !this.editable || this.busy) return;
-    this.busy = true; this.error = '';
-    try {
-      const body: XopcFileWrite = { content: this.content, revision: file.revision };
-      const result = JSON.parse(await gatewaySession.request('/api/files/' + encodeURIComponent(file.id) + '/content', 'PUT', JSON.stringify(body))) as XopcFileResult;
-      if (!result.resource?.revision) throw new Error('INVALID_FILE_RESPONSE');
-      this.selected = result.resource; this.savedContent = body.content;
-    } catch (error) { this.error = (error as Error).message; }
-    finally { this.busy = false; }
-  }
-  async remove(): Promise<void> {
-    const file = this.selected;
+  async remove(file: XopcFile): Promise<void> {
     if (!file?.capabilities.includes('delete') || this.busy) return;
     this.busy = true; this.error = '';
     try { await gatewaySession.request('/api/files/' + encodeURIComponent(file.id), 'DELETE'); this.selected = undefined; }

@@ -12,6 +12,14 @@ const english = readFileSync(new URL('../entry/src/main/resources/base/element/s
 const chinese = readFileSync(new URL('../entry/src/main/resources/zh_CN/element/string.json', import.meta.url), 'utf8');
 
 describe('chat bottom region composition', () => {
+  it('animates session refresh only for an explicit pull gesture', () => {
+    expect(sessions).toContain('Refresh({ refreshing: this.sessions.refreshing })');
+    expect(sessions).not.toContain('refreshing: this.sessions.loading');
+    expect(sessions).toContain('.onRefreshing((): void => { this.sessions.load(false, true); })');
+    const activation = sessions.slice(sessions.indexOf('  private activate()'), sessions.indexOf('  @Computed'));
+    expect(activation).toContain('this.sessions.load();');
+    expect(activation).not.toContain('load(false, true)');
+  });
   it('floats a light neutral jump button over a transparent message viewport', () => {
     expect(chat).toContain('Stack({ alignContent: Alignment.Bottom })');
     expect(chat).toContain(".id('chat-message-list').height('100%')");

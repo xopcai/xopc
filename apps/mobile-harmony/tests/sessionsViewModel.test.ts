@@ -25,6 +25,37 @@ describe('native conversation manager', () => {
     mock.list.mockResolvedValue(page(['a', 'b'])); mock.action.mockResolvedValue(undefined); mock.rename.mockResolvedValue(undefined);
   });
   afterEach(() => vi.useRealTimers());
+  it('refreshes existing rows silently on activation and animates only a manual pull', async () => {
+    const vm = new XopcSessionsViewModel(); await vm.load();
+    for (const manual of [false, true]) {
+      const next = deferred<ReturnType<typeof page>>(); mock.list.mockReturnValueOnce(next.promise);
+      const pending = vm.load(false, manual);
+      expect(vm.loading).toBe(true); expect(vm.refreshing).toBe(manual);
+      expect(vm.items.map(x => x.key)).toEqual(['a', 'b']);
+      next.resolve(page(['a', 'b'])); await pending;
+      expect(vm.refreshing).toBe(false);
+    }
+  });
+  it('ends the manual animation on failure and does not let a stale refresh end a newer one', async () => {
+    const vm = new XopcSessionsViewModel(); await vm.load();
+    mock.list.mockRejectedValueOnce(new Error('OFFLINE'));
+    await vm.load(false, true); expect(vm.refreshing).toBe(false); expect(vm.items).toHaveLength(2);
+    const first = deferred<ReturnType<typeof page>>(); const second = deferred<ReturnType<typeof page>>();
+    mock.list.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const old = vm.load(); const current = vm.load(false, true);
+    first.resolve(page(['old'])); await old; expect(vm.refreshing).toBe(true);
+    second.resolve(page(['new'])); await current; expect(vm.refreshing).toBe(false);
+    expect(vm.items[0].key).toBe('new');
+  });
+  it('clears manual refresh state when returning to silent activation, search, or disposal', async () => {
+    const vm = new XopcSessionsViewModel();
+    const first = deferred<ReturnType<typeof page>>(); mock.list.mockReturnValueOnce(first.promise);
+    const pending = vm.load(false, true); expect(vm.refreshing).toBe(true);
+    await vm.load(); expect(vm.refreshing).toBe(false);
+    first.resolve(page(['old'])); await pending;
+    vm.refreshing = true; vm.setSearch('query'); expect(vm.refreshing).toBe(false);
+    vm.refreshing = true; vm.dispose(); expect(vm.refreshing).toBe(false);
+  });
   it('queries all channels and advances raw offsets even when rows overlap', async () => {
     mock.list.mockResolvedValueOnce(page(['a', 'b'], true)).mockResolvedValueOnce(page(['b', 'c'], true)).mockResolvedValueOnce(page(['d']));
     const vm = new XopcSessionsViewModel(); await vm.load(); await vm.load(true); await vm.load(true);

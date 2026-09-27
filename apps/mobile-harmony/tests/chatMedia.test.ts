@@ -24,6 +24,7 @@ describe('authenticated chat media transport', () => {
     expect(mocks.gateway).not.toHaveBeenCalled(); expect(mocks.transferAuth).not.toHaveBeenCalled();
   });
   it('deduplicates concurrent reads and returns independent buffers from bounded cache', async () => {
+    const file = { id: 'f', name: 'f.png', type: 'image', mimeType: 'image/png', size: 5, uri: 'media://inbound/f' };
     const [one, two] = await Promise.all([readChatMedia(file, 'c'), readChatMedia(file, 'c')]);
     new Uint8Array(one)[0] = 42;
     expect(new Uint8Array(two)[0]).toBe(0);
@@ -100,14 +101,19 @@ describe('authenticated chat media transport', () => {
   });
   it('materializes a bounded cache file and grants read access to a system viewer', async () => {
     const startAbility = vi.fn().mockResolvedValue(undefined);
-    mocks.mkdir.mockResolvedValue(undefined); mocks.open.mockRejectedValueOnce(new Error('CACHE_MISS'))
-      .mockResolvedValueOnce({ fd: 30 }).mockResolvedValueOnce({ fd: 31 });
+    mocks.mkdir.mockResolvedValue(undefined); mocks.open.mockResolvedValueOnce({ fd: 31 });
     mocks.write.mockResolvedValue(5);
     await openChatMedia({ cacheDir: '/cache', startAbility } as never,
       { ...file, name: 'report.pdf', mimeType: 'application/octet-stream' }, 'c');
-    expect(mocks.mkdir.mock.calls[1][0]).toMatch(/^\/cache\/xopc-open-files\/[a-f0-9]{16}$/);
-    expect(mocks.open.mock.calls[2][0]).toMatch(/^\/cache\/xopc-open-files\/[a-f0-9]{16}\/report\.pdf$/);
+    expect(mocks.mkdir.mock.calls[0][0]).toMatch(/^\/cache\/xopc-open-files\/[a-f0-9]{16}$/);
+    expect(mocks.open.mock.calls[0][0]).toMatch(/^\/cache\/xopc-open-files\/[a-f0-9]{16}\/report\.pdf$/);
     expect(startAbility).toHaveBeenCalledWith(expect.objectContaining({ action: 'ohos.want.action.viewData', type: 'application/pdf', flags: 1 }));
+  });
+  it('does not reuse stale memory or disk bytes for editable managed documents', async () => {
+    await readChatMedia(file, 'c', { cacheDir: '/cache' } as never);
+    await readChatMedia(file, 'c', { cacheDir: '/cache' } as never);
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(mocks.open).not.toHaveBeenCalled();
   });
   it('rejects invalid or oversized HTTP bodies even when metadata claims a small file', async () => {
     for (const body of ['wrong type', new ArrayBuffer(16 * 1024 * 1024 + 1)]) {

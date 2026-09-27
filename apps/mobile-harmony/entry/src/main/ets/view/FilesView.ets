@@ -5,6 +5,8 @@ import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
 import { createManagedShare } from '../service/chatMediaShare';
 import { XopcShareResult } from '../model/share';
 import { XopcShareResultView } from './ShareResultView';
+import { XopcChatMediaView } from './ChatMediaView';
+import { managedFileMedia } from '../viewmodel/fileDocumentViewModel';
 
 @ComponentV2
 export struct XopcFilesView {
@@ -23,37 +25,22 @@ export struct XopcFilesView {
   private async goBack(): Promise<void> {
     if (this.model.busy) return;
     try {
-      if (this.model.selected && this.model.editable && this.model.content !== this.model.savedContent) {
-        const result = await this.getUIContext().getPromptAction().showDialog({ message: $r('app.string.discard_changes'),
-          buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary }, { text: $r('app.string.confirm'), color: this.colors.danger }] });
-        if (result.index !== 1) return;
-      }
       if (this.conversationId && !this.model.directory && !this.model.selected) this.onExit();
       else if (!this.initialId && (this.model.space || this.model.selected)) this.model.parent(); else this.onExit();
     } catch (error) { this.model.error = (error as Error).message; }
   }
 
-  private async remove(): Promise<void> {
+  private async remove(file: XopcFile): Promise<void> {
     try {
       const result = await this.getUIContext().getPromptAction().showDialog({
         title: $r('app.string.delete'), message: $r('app.string.confirm_action_help'),
         buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
           { text: $r('app.string.confirm'), color: this.colors.danger }]
       });
-      if (result.index === 1) await this.model.remove();
+      if (result.index === 1) await this.model.remove(file);
     } catch (error) { this.model.error = (error as Error).message; }
   }
 
-  private async share(): Promise<void> {
-    const file = this.model.selected;
-    if (!file || this.model.busy) return;
-    this.model.busy = true; this.model.error = '';
-    try {
-      const payload = await createManagedShare({ fileId: file.id, audience: 'friend' });
-      this.shareResult = payload.share; this.shareOpen = true;
-    } catch (error) { this.model.error = (error as Error).message; }
-    finally { this.model.busy = false; }
-  }
 
   private async shareDirectory(file: XopcFile, zipOnly: boolean): Promise<void> {
     if (this.model.busy) return;
@@ -89,11 +76,6 @@ export struct XopcFilesView {
     return file.relativePath ? file.relativePath + ' · ' + metadata : metadata;
   }
 
-  private canPreview(file: XopcFile): boolean {
-    const text = file.mimeType.startsWith('text/') || ['application/json', 'application/xml'].includes(file.mimeType);
-    return text && file.size <= 1024 * 1024 && file.capabilities.includes('preview');
-  }
-
   @Builder
   shareSheet() {
     if (this.shareResult) { XopcShareResultView({ share: this.shareResult, onClose: (): void => { this.shareOpen = false; } }) }
@@ -121,67 +103,12 @@ export struct XopcFilesView {
   }
 
   @Builder
-  fileAction(label: ResourceStr, symbol: Resource, danger: boolean, handleTap: () => void) {
-    Button() {
-      Column({ space: 5 }) {
-        SymbolGlyph(symbol).fontSize(20).fontColor([danger ? this.colors.danger : this.colors.secondary])
-        Text(label).fontSize(12).fontColor(danger ? this.colors.danger : this.colors.foreground)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.width('100%').justifyContent(FlexAlign.Center)
-    }.layoutWeight(1).height(64).padding(0).borderRadius(14).backgroundColor(this.colors.input)
-      .enabled(!this.model.busy).onClick((): void => { handleTap(); })
-  }
-
-  @Builder
   fileDetail(file: XopcFile) {
-    Column({ space: 0 }) {
-      Column({ space: 7 }) {
-        Text(file.name).fontSize(24).lineHeight(31).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-          .width('100%').maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(file.mimeType + ' · ' + this.formatSize(file.size)).fontColor(this.colors.secondary).fontSize(13).width('100%')
-      }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 16 }).alignItems(HorizontalAlign.Start)
-
-      if (this.model.busy) {
-        Column() {
-          Column() {}.height(96).width('100%').backgroundColor(this.colors.panel).borderRadius(14)
-        }.width('100%').padding({ left: 20, right: 20, bottom: 12 })
-      } else if (this.canPreview(file)) {
-        Column() {
-          TextArea({ text: this.model.content, placeholder: $r('app.string.file_preview_help') })
-            .width('100%').height('100%').fontSize(15).lineHeight(22).fontColor(this.colors.foreground)
-            .padding(16).backgroundColor(this.colors.panel).borderRadius(16)
-            .enabled(this.model.editable && !this.model.busy)
-            .onChange((content: string): void => { this.model.content = content; })
-        }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 })
-      } else {
-        Column({ space: 12 }) {
-          Row() {
-            SymbolGlyph($r('sys.symbol.doc')).fontSize(34).fontColor([this.colors.accent])
-          }.width(60).height(60).justifyContent(FlexAlign.Center).borderRadius(18).backgroundColor(this.colors.accentSoft)
-          Text($r('app.string.file_preview_help')).fontSize(14).lineHeight(21).textAlign(TextAlign.Center)
-            .fontColor(this.colors.secondary).width('80%')
-        }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
-      }
-
-      if (this.model.editable && this.model.content !== this.model.savedContent) {
-        Row() {
-          Button($r('app.string.save')).width('100%').height(46).fontSize(15).fontWeight(FontWeight.Medium)
-            .fontColor(Color.White).backgroundColor(this.colors.accent).borderRadius(14)
-            .enabled(!this.model.busy).onClick((): void => { this.model.save(); })
-        }.width('100%').padding({ left: 20, right: 20, top: 12 })
-      }
-      Row({ space: 8 }) {
-        if (file.capabilities.includes('download')) {
-          this.fileAction($r('app.string.download'), $r('sys.symbol.square_and_arrow_down'), false, (): void => {
-            const context = this.getUIContext().getHostContext(); if (context) this.model.download(context);
-          })
-        }
-        this.fileAction($r('app.string.chat_share'), $r('sys.symbol.share'), false, (): void => { void this.share(); })
-        if (file.capabilities.includes('delete')) {
-          this.fileAction($r('app.string.delete'), $r('sys.symbol.trash'), true, (): void => { void this.remove(); })
-        }
-      }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 16 })
-    }.layoutWeight(1).width('100%')
+    XopcChatMediaView({ file: managedFileMedia(file), conversationId: this.conversationId, previewOnly: true,
+      onPreviewClosed: (): void => {
+        this.model.selected = undefined;
+        if (this.initialId) this.onExit(); else this.model.load(this.search);
+      } })
   }
 
   @Builder
@@ -226,6 +153,11 @@ export struct XopcFilesView {
               onOpen: (): void => { this.model.open(file); } })
           }.gesture(LongPressGesture({ duration: 350, repeat: false }).onAction((): void => {
             if (file.kind === 'directory' && file.capabilities.includes('share')) this.confirmDirectoryShare(file);
+            else if (file.capabilities.includes('delete')) {
+              this.getUIContext().showActionSheet({ title: file.name, message: '', sheets: [
+                { title: this.text($r('app.string.delete')), action: (): void => { this.remove(file); } }
+              ] });
+            }
           }))
         }, (file: XopcFile): string => file.id)
       }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
@@ -246,11 +178,8 @@ export struct XopcFilesView {
           Text(this.model.error).fontSize(13).fontColor(this.colors.danger).width('100%')
             .padding({ left: 20, right: 20, bottom: 8 })
         }
-        if (this.model.selected) {
-          this.fileDetail(this.model.selected)
-        } else {
-          this.fileList()
-        }
+        this.fileList()
+        if (this.model.selected) { this.fileDetail(this.model.selected) }
       }.height('100%').width('100%').backgroundColor(this.colors.surface)
         .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
     }.hideTitleBar(true).onBackPressed((): boolean => {
