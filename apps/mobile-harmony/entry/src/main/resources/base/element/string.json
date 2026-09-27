@@ -1,5 +1,6 @@
 {
   "string": [
+    { "name": "chat_retry_send", "value": "Send failed. Tap to resend this message" },
     { "name": "chat_continuous_start", "value": "Read new replies aloud" },
     { "name": "chat_continuous_stop", "value": "Stop continuous reading" },
     { "name": "chat_continuous_active", "value": "New replies will be read aloud" },

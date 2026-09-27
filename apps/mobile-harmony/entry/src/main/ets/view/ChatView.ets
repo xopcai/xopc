@@ -343,17 +343,19 @@ export struct XopcChatView {
     this.olderFailed = false;
     const conversationId = this.chat.selectedId;
     const generation = ++this.olderGeneration;
-    const headerCount = this.chat.hasOlder ? 1 : 0;
-    const anchorIndex = Math.max(headerCount, this.firstVisible);
-    const anchor = this.chat.rows[anchorIndex - headerCount]?.id;
+    let anchor: string | undefined;
     let anchorOffset = 0;
-    try { anchorOffset = this.messagesScroller.getItemRect(anchorIndex).y; } catch (_) {}
     const previousRows = this.chat.rows;
-    await this.chat.loadHistory(true);
+    await this.chat.loadHistory(true, (): void => {
+      const headerCount = this.chat.hasOlder ? 1 : 0;
+      const anchorIndex = Math.max(headerCount, this.firstVisible);
+      anchor = this.presentationRows[anchorIndex - headerCount]?.id;
+      try { anchorOffset = this.messagesScroller.getItemRect(anchorIndex).y; } catch (_) {}
+    });
     if (!this.visible || generation !== this.olderGeneration || conversationId !== this.chat.selectedId) return;
     this.olderFailed = previousRows === this.chat.rows && !!this.chat.error;
     if (anchor && this.visible) {
-      const index = this.chat.rows.findIndex((row: XopcChatRow): boolean => row.id === anchor || !!row.sourceIds?.includes(anchor));
+      const index = this.presentationRows.findIndex((row: XopcChatRow): boolean => row.id === anchor || (!!anchor && !!row.sourceIds?.includes(anchor)));
       setTimeout((): void => {
         if (generation !== this.olderGeneration) return;
         if (this.visible && conversationId === this.chat.selectedId && index >= 0) {
@@ -365,6 +367,10 @@ export struct XopcChatView {
     } else {
       this.loadingOlder = false;
     }
+  }
+  @Monitor('chat.loading', 'chat.rows', 'activePage')
+  warmOlderHistory(): void {
+    if (this.activePage && !this.disposed) this.chat.prefetchOlder();
   }
   private async messageAction(action: string, row: XopcChatRow): Promise<void> {
     try {
@@ -580,13 +586,16 @@ export struct XopcChatView {
   private async send(delivery: string = 'next'): Promise<void> {
     if (this.restoringDraft) return;
     const text = this.draft; const files = this.attachments; const refs = this.refs; const id = this.chat.selectedId;
-    if (await this.chat.send(text, files, delivery, refs)) {
-      if (id !== this.chat.selectedId) return;
+    const sent = await this.chat.send(text, files, delivery, refs, (): void => {
       if (this.draft === text) this.draft = '';
       if (this.attachments === files) this.attachments = [];
       if (this.refs === refs) this.refs = [];
-      this.palette.close(); this.saveDraft(); this.setPanel(false); if (this.visible) this.options.refreshQueue();
-    }
+      this.palette.close(); this.saveDraft(); this.setPanel(false);
+    });
+    if (sent && this.visible && id === this.chat.selectedId) this.options.refreshQueue();
+  }
+  private async retryMessage(id: string): Promise<void> {
+    if (await this.chat.retrySend(id)) { if (this.visible) this.options.refreshQueue(); }
   }
   private addReference(item: XopcReferenceItem): void {
     if (item.kind === 'file') {
@@ -632,9 +641,10 @@ export struct XopcChatView {
     const sent = await this.voice.send(async (attachment: XopcChatAttachment): Promise<boolean> => {
       if (!this.visible || this.disposed || id !== this.chat.selectedId) return false;
       const context = this.getUIContext().getHostContext();
-      const accepted = await this.chat.send('', [attachment]);
-      if (accepted && context) await seedChatMediaCache(context, attachment, id);
-      return accepted;
+      let queued = false;
+      this.chat.send('', [attachment], 'next', [], (): void => { queued = true; });
+      if (queued && context) seedChatMediaCache(context, attachment, id).catch((_error: Error): void => {});
+      return queued;
     });
     if (sent && closeVoiceAfterSend && this.visible && id === this.chat.selectedId) this.showVoice = false;
   }
@@ -784,7 +794,7 @@ export struct XopcChatView {
         }.id('chat-send').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
           .backgroundColor(this.colors.foreground).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
           .accessibilityText(this.chat.runId ? $r('app.string.chat_send_next') : $r('app.string.send'))
-          .enabled(!!this.chat.selectedId && !this.chat.loading && !this.chat.cachedHistory && !this.pickingAttachment && this.voice.state === 'idle' && !this.voice.busy && !this.chat.sending && !this.options.saving && this.chat.connection === 'connected')
+          .enabled(!!this.chat.selectedId && !this.chat.loading && !this.chat.cachedHistory && !this.pickingAttachment && this.voice.state === 'idle' && !this.voice.busy && !this.chat.sending && !this.options.saving)
           .onClick((): void => { this.send(); })
       }
       if (this.chat.runId) {
@@ -897,6 +907,16 @@ export struct XopcChatView {
           if (item.item.role === 'user') {
             Column({ space: 2 }) {
               Row() {
+                if (item.item.sendState === 'sending') {
+                  LoadingProgress().width(24).height(24).color(this.colors.secondary).margin({ right: 8 })
+                } else if (item.item.sendState === 'failed') {
+                  Button({ type: ButtonType.Circle }) {
+                    Text('!').fontSize(18).fontWeight(FontWeight.Bold).fontColor(this.colors.danger)
+                  }.id('chat-message-retry-' + item.item.id).width(32).height(44).padding(0)
+                    .backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_retry_send'))
+                    .enabled(!this.chat.sending && !this.chat.loading && !this.chat.cachedHistory)
+                    .onClick((): void => { this.retryMessage(item.item.id); })
+                }
                 Column() {
                   XopcChatMessageContent({ row: item.item, conversationId: this.chat.selectedId, disclosure: this.disclosure,
                     previewEligible: item.item.id !== this.latestMessageId,
@@ -904,7 +924,7 @@ export struct XopcChatView {
                     reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
                     onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
                 }.id('chat-user-bubble-' + item.item.id).width(this.userBubbleWidth(item.item))
-                  .constraintSize({ minWidth: 44, maxWidth: '90%' })
+                  .constraintSize({ minWidth: 44, maxWidth: item.item.sendState === 'sending' || item.item.sendState === 'failed' ? '84%' : '90%' })
                   .padding(this.userVoiceOnly(item.item) ? { left: 4, right: 4, top: 0, bottom: 0 }
                     : { left: 14, right: 14, top: 10, bottom: 10 }).alignItems(HorizontalAlign.Start)
                   .borderRadius(18).backgroundColor(this.colors.accentSoft)
@@ -946,7 +966,7 @@ export struct XopcChatView {
         if (this.atBottom) this.showJumpBottom = false;
         else if (offset > 0) this.showJumpBottom = true;
         else if (offset < 0) this.showJumpBottom = false;
-        if (offset < 0 && this.messagesScroller.currentOffset().yOffset < 160 && !this.olderFailed) this.loadOlder();
+        if (offset < 0 && this.messagesScroller.currentOffset().yOffset < 960 && !this.olderFailed) this.loadOlder();
       })
       .onScrollStop((): void => { this.finishLayoutScroll(); })
       .onTouch((event: TouchEvent): void => {
@@ -1140,7 +1160,7 @@ export struct XopcChatView {
           TextArea({ text: this.draft, placeholder: $r('app.string.message_hint'), controller: this.editor })
             .id('chat-composer').layoutWeight(1).constraintSize({ minHeight: COMPOSER_INPUT_MIN, maxHeight: this.expandedComposer ? COMPOSER_INPUT_MAX : COMPOSER_INPUT_MIN })
             .padding({ left: 4, right: 4, top: this.expandedComposer ? 5 : 10, bottom: this.expandedComposer ? 5 : 10 }).lineHeight(20)
-            .enabled(!this.chat.sending && !this.restoringDraft).backgroundColor(Color.Transparent)
+            .enabled(!this.restoringDraft).backgroundColor(Color.Transparent)
             .fontSize(16).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
             .onAppear((): void => { this.focusMountedComposer(); })
             .onEditChange((editing: boolean): void => { if (editing) this.setPanel(false); })

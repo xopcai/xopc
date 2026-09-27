@@ -69,6 +69,9 @@ export class XopcChatRepository {
     return id;
   }
   async draft(id: string): Promise<XopcLocalSession | undefined> { return localSessionStore.read(id); }
+  async pendingInput(id: string): Promise<XopcSessionCommand | undefined> {
+    return await localSessionStore.readCommand(id, localSessionStore.scope()) ?? (await this.draft(id))?.command;
+  }
   async reconcile(id: string): Promise<void> {
     const scope = localSessionStore.scope();
     const connection = gatewaySession.connectionRevision();
@@ -131,7 +134,7 @@ export class XopcChatRepository {
       gatewaySession.assertConnection(connection);
       if (cached) return cached;
     }
-    const page = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/history?limit=50'
+    const page = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/history?limit=' + (before ? 100 : 150)
       + (before ? '&before=' + encodeURIComponent(before) : ''))) as XopcHistory;
     if (!before) { this.cachePage = page; this.cacheGatewayId = gatewayId; this.cacheRevision = revision; }
     else if (transcriptId && page.session?.transcriptId === transcriptId && revision === chatHistoryCache.revision()
@@ -171,11 +174,11 @@ export class XopcChatRepository {
     const pending = await localSessionStore.readCommand(id, scope);
     gatewaySession.assertConnection(connection);
     if (pending) {
-      if (JSON.stringify(pending.input) !== JSON.stringify(input)) throw new Error('INPUT_PENDING');
+      if (pending.clientMessageId !== clientMessageId || JSON.stringify(pending.input) !== JSON.stringify(input)) throw new Error('INPUT_PENDING');
       body = pending;
     } else if (draft) {
       if (draft.materialization) throw new Error('SESSION_PREPARING');
-      if (draft.command && JSON.stringify(draft.command.input) !== JSON.stringify(input)) throw new Error('FIRST_INPUT_PENDING');
+      if (draft.command && (draft.command.clientMessageId !== clientMessageId || JSON.stringify(draft.command.input) !== JSON.stringify(input))) throw new Error('FIRST_INPUT_PENDING');
       body = draft.command ?? { kind: 'start', clientMessageId, creation: draft.creation, input };
       if (!draft.creation.model) throw new Error('SELECT_MODEL_FIRST');
       draft.command = body;

@@ -106,6 +106,9 @@ export struct XopcSessionsView {
   @Local sessions: XopcSessionsViewModel = new XopcSessionsViewModel();
   @Local searchOpen: boolean = true;
   @Local renameOpen: boolean = false;
+  @Local menuOpen: boolean = false;
+  @Local menuItem?: XopcSessionItem;
+  private pendingMenuAction: string = '';
   @Local renameId: string = '';
   @Local renameText: string = '';
   @Local shareResult?: XopcShareResult;
@@ -153,6 +156,7 @@ export struct XopcSessionsView {
     this.onNew(id);
   }
   private back(): boolean {
+    if (this.menuOpen) { this.menuOpen = false; return true; }
     if (this.sessions.busy) return true;
     if (this.renameOpen) { this.renameOpen = false; return true; }
     if (this.sessions.selecting) { this.sessions.cancelSelection(); return true; }
@@ -164,17 +168,30 @@ export struct XopcSessionsView {
   private menu(item: XopcSessionItem): void {
     if (this.sessions.busy) return;
     this.getUIContext().getFocusController().clearFocus();
-    this.getUIContext().showActionSheet({ title: item.displayName || item.name || item.title || this.text($r('app.string.untitled')), message: '',
-      sheets: [
-        { title: this.text($r('app.string.chat_share')), action: (): void => { this.shareSession(item); } },
-        { title: this.text($r('app.string.sessions_rename')), action: (): void => { this.renameItem(item); } },
-        { title: this.text(item.status === 'pinned' ? $r('app.string.unpin') : $r('app.string.pin')),
-          action: (): void => { this.sessions.act([item], item.status === 'pinned' ? 'unpin' : 'pin'); } },
-        { title: this.text(item.status === 'archived' ? $r('app.string.unarchive') : $r('app.string.archive')),
-          action: (): void => { this.sessions.act([item], 'archive'); } },
-        { title: this.text($r('app.string.delete')), action: (): void => { this.sessions.scheduleDelete(item.key); } },
-        { title: this.text($r('app.string.sessions_select')), action: (): void => { this.sessions.select(item.key); } }
-      ] });
+    this.menuItem = item; this.pendingMenuAction = ''; this.menuOpen = true;
+  }
+  private menuLabel(action: string): Resource {
+    if (action === 'share') return $r('app.string.chat_share');
+    if (action === 'rename') return $r('app.string.sessions_rename');
+    if (action === 'pin') return this.menuItem?.status === 'pinned' ? $r('app.string.unpin') : $r('app.string.pin');
+    if (action === 'archive') return this.menuItem?.status === 'archived' ? $r('app.string.unarchive') : $r('app.string.archive');
+    return action === 'delete' ? $r('app.string.delete') : $r('app.string.sessions_select');
+  }
+  private chooseMenuAction(action: string): void {
+    if (!this.menuOpen || this.sessions.busy) return;
+    this.pendingMenuAction = action; this.menuOpen = false;
+  }
+  private finishMenuDismiss(): void {
+    const item = this.menuItem; const action = this.pendingMenuAction;
+    this.pendingMenuAction = ''; this.menuItem = undefined;
+    if (!item || !action || this.sessions.busy) return;
+    // Open follow-up dialogs only after the action sheet has fully dismissed.
+    if (action === 'share') this.shareSession(item);
+    else if (action === 'rename') this.renameItem(item);
+    else if (action === 'pin') this.sessions.act([item], item.status === 'pinned' ? 'unpin' : 'pin');
+    else if (action === 'archive') this.sessions.act([item], 'archive');
+    else if (action === 'delete') this.sessions.scheduleDelete(item.key);
+    else if (action === 'select') this.sessions.select(item.key);
   }
   private async shareSession(item: XopcSessionItem): Promise<void> {
     if (this.shareBusy || this.sessions.busy) return;
@@ -197,6 +214,33 @@ export struct XopcSessionsView {
       primaryButton: { value: $r('app.string.cancel'), action: (): void => {} },
       secondaryButton: { value: $r('app.string.delete'), fontColor: this.colors.danger,
         action: (): void => { this.sessions.act(targets, 'delete'); } } });
+  }
+  @Builder
+  sessionMenuSheet() {
+    Column({ space: 12 }) {
+      Text(this.menuItem?.displayName || this.menuItem?.name || this.menuItem?.title || $r('app.string.untitled'))
+        .fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+        .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+        .padding({ left: 16, right: 16, top: 8, bottom: 4 })
+      Scroll() {
+        Column({ space: 4 }) {
+          ForEach(['share', 'rename', 'pin', 'archive', 'select', 'delete'], (action: string) => {
+            Button({ type: ButtonType.Normal }) {
+              Text(this.menuLabel(action)).fontSize(16)
+                .fontColor(action === 'delete' ? this.colors.danger : this.colors.foreground)
+                .width('100%').textAlign(TextAlign.Start)
+            }.id('session-menu-' + action).width('100%').constraintSize({ minHeight: 52 })
+              .padding({ left: 16, right: 16, top: 14, bottom: 14 }).borderRadius(12)
+              .backgroundColor(this.colors.grouped).enabled(!this.sessions.busy)
+              .onClick((): void => { this.chooseMenuAction(action); })
+          }, (action: string): string => action)
+        }.width('100%')
+      }.layoutWeight(1).width('100%').align(Alignment.TopStart).scrollBar(BarState.Auto)
+      Button($r('app.string.cancel')).id('session-menu-cancel').width('100%').height(48)
+        .backgroundColor(this.colors.input).fontColor(this.colors.secondary)
+        .onClick((): void => { this.menuOpen = false; })
+    }.id('session-actions-sheet').width('100%').height('100%')
+      .padding({ left: 16, right: 16, top: 8, bottom: 24 }).alignItems(HorizontalAlign.Start)
   }
   @Builder
   renameSheet() {
@@ -331,8 +375,12 @@ export struct XopcSessionsView {
           }.padding(12).backgroundColor(this.colors.panel)
         }
         if (this.sessions.selecting) { this.batchBar() }
+        Column().id('session-menu-sheet-host').width('100%').height(0)
+          .bindSheet($$this.menuOpen, this.sessionMenuSheet, { height: '65%', dragBar: true, showClose: false,
+            backgroundColor: this.colors.panel, onDisappear: (): void => { this.finishMenuDismiss(); } })
+        Column().id('session-rename-sheet-host').width('100%').height(0)
+          .bindSheet($$this.renameOpen, this.renameSheet, { height: '45%', dragBar: true, backgroundColor: this.colors.panel })
     }.width('100%').height('100%')
-      .bindSheet($$this.renameOpen, this.renameSheet, { height: '45%', dragBar: true, backgroundColor: this.colors.panel })
       .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
   }
   build() {

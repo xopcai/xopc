@@ -11,7 +11,7 @@ describe('chat message layout parity', () => {
 
     expect(userLayout).toContain(".id('chat-user-bubble-' + item.item.id)");
     expect(userLayout).toContain(".width(this.userBubbleWidth(item.item))");
-    expect(userLayout).toContain("constraintSize({ minWidth: 44, maxWidth: '90%' })");
+    expect(userLayout).toContain("maxWidth: item.item.sendState === 'sending' || item.item.sendState === 'failed' ? '84%' : '90%'");
     expect(userLayout).toContain(".justifyContent(FlexAlign.End)");
     expect(userLayout).toContain(".alignItems(HorizontalAlign.End)");
     expect(userLayout).toContain('.backgroundColor(this.colors.accentSoft)');
