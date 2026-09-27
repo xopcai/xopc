@@ -1,5 +1,6 @@
 {
   "string": [
+    { "name": "chat_response_failed", "value": "暂时无法完成回复，请检查模型或稍后重试。" },
     { "name": "chat_retry_send", "value": "发送失败，点击重新发送此消息" },
     { "name": "chat_continuous_start", "value": "连续朗读新回复" },
     { "name": "chat_continuous_stop", "value": "停止连续朗读" },
@@ -925,6 +926,7 @@
     { "name": "note_ai_instruction", "value": "描述你想要的修改" },
     { "name": "note_generate_preview", "value": "生成预览" },
     { "name": "note_apply_ai", "value": "应用修改" },
+    { "name": "note_history_empty", "value": "暂无历史版本" },
     { "name": "note_version_history", "value": "版本历史" },
     { "name": "note_restore_version", "value": "恢复到编辑器" },
     { "name": "note_continue_chat", "value": "引用笔记继续对话" }

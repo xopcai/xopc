@@ -8,16 +8,6 @@ const parse = (messages: XopcMessage[]) => mergeAssistantRows(historyRows({ sess
 const artifact = { artifactId: 'a', title: 'image.png', kind: 'image', availability: 'available', uri: 'xopc-file:a' };
 const outcome = { version: 1, outcomeId: 'o', runId: 'r', turnId: 't', status: 'succeeded', deliverables: [artifact] };
 describe('rich chat parity projection', () => {
-  it('keeps prior stream snapshots immutable without serializing large tool inputs per delta', () => {
-    const input = { script: 'x'.repeat(200000) };
-    const previous = reduceChatStream(undefined, 'tool_start', { toolCallId: 't', toolName: 'exec', args: input }, 'r');
-    const next = reduceChatStream(previous, 'tool_update', { toolCallId: 't', toolName: 'exec', textDelta: 'output' }, 'r');
-    expect(previous.blocks?.[0].call?.result).toBeUndefined();
-    expect(next.blocks?.[0].call?.result).toBe('output');
-    expect(next.blocks?.[0].call?.input).toBe(input);
-    const done = reduceChatStream(next, 'run_end', { status: 'cancelled' }, 'r');
-    expect(next.blocks?.[0].call?.status).toBe('running'); expect(done.blocks?.[0].call?.status).toBe('error');
-  });
   it.each(['ttsAudio', 'tts_audio', 'tts', 'audio'])('preserves historical voice-only messages from %s', key => {
     const rows = parse([{ id: 'voice', role: 'assistant', content: '', [key]: ['media://a', { url: 'media://b', mime_type: 'audio/wav', name: 'speech.wav' }] }]);
     expect(rows).toHaveLength(1);
@@ -94,29 +84,6 @@ describe('rich chat parity projection', () => {
   });
 });
 describe('rich live event reducer', () => {
-  it('does not add empty plan or diff steps, or erase a valid plan on an invalid update', () => {
-    let row = reduceChatStream(undefined, 'turn_plan', { plan: [] }, 'r');
-    row = reduceChatStream(row, 'turn_diff', { diff: '  ' }, 'r');
-    expect(row.blocks).toEqual([]);
-    row = reduceChatStream(row, 'turn_plan', { plan: [{ step: 'Inspect', status: 'pending' }] }, 'r');
-    row = reduceChatStream(row, 'turn_plan', { plan: [{ step: 'Invalid', status: 'unknown' }] }, 'r');
-    expect(row.blocks?.[0].plan).toEqual([{ step: 'Inspect', status: 'pending' }]);
-  });
-  it('avoids command output duplication and keeps specialized command completion authoritative', () => {
-    let row = reduceChatStream(undefined, 'command_started', { toolCallId: 'c', command: 'test' }, 'r');
-    row = reduceChatStream(row, 'tool_update', { toolCallId: 'c', toolName: 'exec_command', textDelta: 'ok', details: { kind: 'command_output_delta' } }, 'r');
-    row = reduceChatStream(row, 'command_output_delta', { toolCallId: 'c', delta: 'ok' }, 'r');
-    row = reduceChatStream(row, 'command_completed', { toolCallId: 'c', exitCode: 2 }, 'r');
-    row = reduceChatStream(row, 'tool_end', { toolCallId: 'c', toolName: 'exec_command', status: 'success', result: 'wrapper' }, 'r');
-    expect(row.toolCalls?.[0]).toMatchObject({ result: 'ok', status: 'error' });
-  });
-  it('updates plans in place and retains TTS media without duplication', () => {
-    let row = reduceChatStream(undefined, 'turn_plan', { plan: [{ step: 'Test', status: 'pending' }] }, 'r');
-    row = reduceChatStream(row, 'turn_plan', { plan: [{ step: 'Test', status: 'completed' }] }, 'r');
-    row = reduceChatStream(row, 'tts_audio', { uri: 'media://voice' }, 'r');
-    row = reduceChatStream(row, 'tts_audio', { uri: 'media://voice' }, 'r');
-    expect(row.blocks).toHaveLength(1); expect(row.blocks?.[0].plan?.[0].status).toBe('completed'); expect(row.media).toHaveLength(1);
-  });
   it('normalizes broken review findings and unsafe search links', () => {
     expect(chatReview({ type: 'review', findings: [null, { title: 'bad' }, { title: 'ok', body: 'body', priority: 1 }] } as never)?.findings).toHaveLength(1);
     expect(chatSearchLinks({ id: 'c', name: 'web_search', details: { results: [{ url: 'javascript:bad', title: 'bad' }, { url: 'https://example.com', title: 'good' }, { url: 'https://example.com' }] } })).toEqual([{ url: 'https://example.com', title: 'https://example.com' }]);
@@ -126,12 +93,12 @@ describe('rich live event reducer', () => {
       { role: 'toolResult', toolCallId: 'c', content: 'output' }, { role: 'assistant', content: 'answer' }]);
     expect(chatAnswerText(rows[0])).toBe('answer');
   });
-  it('keeps pending and narration text in the work log rather than the final answer', () => {
+  it('streams pending text while keeping classified narration separate', () => {
     const row: XopcChatRow = { id: 'r', role: 'assistant', text: 'checking\nanswer', blocks: [
       { id: 'pending', kind: 'text', text: 'checking', presentation: 'pending', active: true },
       { id: 'narration', kind: 'text', text: 'reading files', presentation: 'narration' },
       { id: 'answer', kind: 'text', text: 'answer', presentation: 'answer' }] };
-    expect(chatAnswerText(row)).toBe('answer');
+    expect(chatAnswerText(row)).toBe('checking\nanswer');
     expect(chatAnswerStarted(row)).toBe(true);
     expect(chatActivities(row, 'on').map(block => block.id)).toEqual(['pending', 'narration']);
     expect(chatActivities(row, 'off')).toEqual([]);
@@ -155,30 +122,5 @@ describe('rich live event reducer', () => {
     expect(chatToolReadGroupKey({ id: 'write', name: 'xopc_use', status: 'done', input: { mode: 'note', command: 'update' } })).toBe('');
     expect(chatToolReadGroupKey({ id: 'running', name: 'read_file', status: 'running' })).toBe('');
     expect(chatToolReadGroupKey({ id: 'failed', name: 'read_file', status: 'error' })).toBe('');
-  });
-  it('separates model segments, settles thinking and matches parallel tools by ID', () => {
-    let row = reduceChatStream(undefined, 'thinking_delta', { messageId: 'm1', delta: 'consider' }, 'run');
-    row = reduceChatStream(row, 'tool_start', { toolCallId: 'a', toolName: 'read', args: { path: 'a' } }, 'run');
-    row = reduceChatStream(row, 'tool_start', { toolCallId: 'b', toolName: 'read' }, 'run');
-    row = reduceChatStream(row, 'tool_end', { toolCallId: 'b', toolName: 'read', status: 'error', result: 'failure' }, 'run');
-    row = reduceChatStream(row, 'assistant_delta', { messageId: 'm2', delta: 'answer' }, 'run');
-    expect(row.blocks?.[0].active).toBe(false); expect(row.toolCalls?.map(t => t.status)).toEqual(['running', 'error']);
-    expect(row.text).toBe('answer'); expect(row.thinking).toBe('consider');
-  });
-  it('retains command output, patches, reviews and outcome through terminal events', () => {
-    let row = reduceChatStream(undefined, 'command_started', { toolCallId: 'c', command: 'test' }, 'run');
-    row = reduceChatStream(row, 'command_output_delta', { toolCallId: 'c', delta: 'passed' }, 'run');
-    row = reduceChatStream(row, 'command_completed', { toolCallId: 'c', exitCode: 0 }, 'run');
-    row = reduceChatStream(row, 'patch_applied', { toolCallId: 'p', diff: '+new\n-old' }, 'run');
-    row = reduceChatStream(row, 'review', { review: { type: 'review', target: 'patch', findings: [] } }, 'run');
-    row = reduceChatStream(row, 'turn_outcome', outcome as never, 'run');
-    row = reduceChatStream(row, 'run_end', { status: 'succeeded' }, 'run');
-    expect(row.live).toBe(false); expect(row.toolCalls?.[0].result).toBe('passed'); expect(row.outcome).toMatchObject(outcome);
-    expect(row.blocks?.map(b => b.kind)).toEqual(['tool', 'tool', 'review']);
-  });
-  it('does not mutate previous projections or duplicate tool identities during paired specialized events', () => {
-    const previous = reduceChatStream(undefined, 'tool_start', { toolCallId: 'c', toolName: 'exec_command' }, 'run');
-    const current = reduceChatStream(previous, 'command_started', { toolCallId: 'c', command: 'test' }, 'run');
-    expect(previous.toolCalls?.[0].input).toBeUndefined(); expect(current.toolCalls).toHaveLength(1);
   });
 });

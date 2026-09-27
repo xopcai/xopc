@@ -451,6 +451,8 @@ export function paginateTranscriptMessages(
     includeContext?: boolean;
     /** Include reset/rollover transcripts for read-only conversation history. */
     includeArchived?: boolean;
+    /** Count user turns rather than diagnostic rows for compact chat history. */
+    userTurns?: boolean;
   } = {},
 ): {
   rows: TranscriptStoredRow[];
@@ -489,8 +491,21 @@ export function paginateTranscriptMessages(
      WHERE transcript_id = ? AND entry_kind IN (${kindPlaceholders})`,
   ).get(transcriptId, ...kinds) as { revision: number };
 
-  const limit = Math.min(200, Math.max(1, Math.trunc(options.limit ?? 50)));
+  let limit = Math.min(200, Math.max(1, Math.trunc(options.limit ?? 50)));
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
+
+  if (options.userTurns) {
+    const end = options.beforeIndex === undefined ? Math.max(0, total - offset)
+      : Math.min(total, Math.max(0, Math.trunc(options.beforeIndex)));
+    const anchors = db.prepare(`SELECT idx FROM (
+      SELECT e.role, ROW_NUMBER() OVER (ORDER BY t.created_at ASC, t.rowid ASC, e.seq ASC) - 1 AS idx
+      FROM transcript_entries e JOIN transcripts t ON t.transcript_id = e.transcript_id
+      WHERE ${transcriptWhere} AND e.entry_kind IN (${kindPlaceholders})
+    ) WHERE role = 'user' AND idx < ? ORDER BY idx DESC LIMIT ?`)
+      .all(transcriptArg, ...kinds, end, limit + 1) as Array<{ idx: number }>;
+    const start = anchors.length > limit ? anchors[limit - 1]!.idx : 0;
+    limit = end - start;
+  }
 
   let rows: TranscriptEntryRow[];
   if (options.beforeIndex !== undefined && Number.isFinite(options.beforeIndex)) {

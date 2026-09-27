@@ -2,6 +2,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { isUserTurnDocument, parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
 
 import type { EmbeddedStreamEvent } from '../../agent/embedded/types.js';
+import { productDeliveries } from '../../session/compact-history.js';
 import { createPetFeedback } from './pet-feedback.js';
 import type { ChatStreamEvent, ChatStreamStatus } from './protocol.js';
 
@@ -367,6 +368,7 @@ export class ChatStreamMapper {
         status: event.isError ? 'error' : 'success',
         activity: resolveToolActivity(toolName, event.isError ? 'failed' : 'completed', fullResult),
         result,
+        deliveries: event.isError ? undefined : productDeliveries(fullResult),
         errorMessage: event.isError ? result?.text ?? extractText(result?.content) : undefined,
       }),
     ];

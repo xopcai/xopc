@@ -1,5 +1,6 @@
 {
   "string": [
+    { "name": "chat_response_failed", "value": "Unable to complete this reply. Check the model or try again later." },
     { "name": "chat_retry_send", "value": "Send failed. Tap to resend this message" },
     { "name": "chat_continuous_start", "value": "Read new replies aloud" },
     { "name": "chat_continuous_stop", "value": "Stop continuous reading" },
@@ -925,6 +926,7 @@
     { "name": "note_ai_instruction", "value": "Describe the change you want" },
     { "name": "note_generate_preview", "value": "Generate preview" },
     { "name": "note_apply_ai", "value": "Apply changes" },
+    { "name": "note_history_empty", "value": "No previous versions yet" },
     { "name": "note_version_history", "value": "Version history" },
     { "name": "note_restore_version", "value": "Restore into editor" },
     { "name": "note_continue_chat", "value": "Continue with this note" }

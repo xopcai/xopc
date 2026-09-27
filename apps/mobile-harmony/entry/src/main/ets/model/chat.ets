@@ -35,6 +35,7 @@ export interface XopcHistoryToolCall { id?: string; name?: string; args?: Object
 export interface XopcOpenAiToolCall { id: string; function: XopcToolFunction; }
 export interface XopcToolFunction { name: string; arguments?: string; }
 export interface XopcMessage { id?: string; messageId?: string; role: string; content: string | XopcContentBlock[];
+  deliveries?: XopcProductDelivery[];
   rawContent?: XopcContentBlock[]; media?: XopcHistoryMedia[]; attachments?: XopcHistoryMedia[]; metadata?: XopcMessageMetadata;
   toolCalls?: XopcHistoryToolCall[]; tool_calls?: XopcOpenAiToolCall[];
   toolCallId?: string; tool_call_id?: string; isError?: boolean; details?: Object; turnId?: string;
@@ -60,6 +61,7 @@ export interface XopcRun { active: boolean; runId?: string; }
 export interface XopcAbort { runId: string; }
 export interface XopcRename { name: string; }
 export interface XopcStreamPayload { delta?: string; messageId?: string; message?: string; toolName?: string; status?: string;
+  offset?: number; deliveries?: XopcProductDelivery[];
   toolCallId?: string; args?: Object; result?: Object; details?: Object; textDelta?: string; presentation?: string;
   command?: string; cwd?: string; exitCode?: number; timedOut?: boolean; diff?: string; review?: XopcContentBlock;
   plan?: XopcPlanStep[]; explanation?: string; uri?: string; mimeType?: string; name?: string;
@@ -67,6 +69,7 @@ export interface XopcStreamPayload { delta?: string; messageId?: string; message
 export interface XopcStreamEvent { type: string; runId: string; conversationId: string; payload: XopcStreamPayload; }
 export interface XopcChatTool { id: string; name: string; input?: Object; result?: string; isError?: boolean; status?: string; details?: Object; }
 export interface XopcChatRow { id: string; role: string; text: string; thinking?: string; tools?: string; media?: XopcHistoryMedia[]; refs?: XopcContextRef[];
+  deliveries?: XopcProductDelivery[];
   sendState?: string;
   toolCalls?: XopcChatTool[]; toolResultId?: string; toolResultError?: boolean; toolResultDetails?: Object;
   blocks?: XopcChatBlock[]; outcome?: XopcTurnOutcome; turnId?: string; live?: boolean; progress?: string; sourceIds?: string[];

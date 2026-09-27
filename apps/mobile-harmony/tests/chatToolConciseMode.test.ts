@@ -35,12 +35,12 @@ describe('Harmony chat tool concise mode', () => {
     const stepsView = source('entry/src/main/ets/view/ChatStepsView.ets');
     const richContent = source('entry/src/main/ets/common/chatRichContent.ets');
 
-    expect(contentView).toContain("block.presentation === 'pending' || block.presentation === 'narration'");
+    expect(contentView).toContain("block.presentation !== 'narration'");
     expect(richContent).toContain("block.presentation === 'pending' || block.presentation === 'narration'");
     expect(stepsView).toContain("?? false");
     expect(stepsView).not.toContain("this.reasoning === 'stream' && !!this.row.live");
     expect(stepsView).not.toContain("Text('●')");
-    expect(stepsView).toContain("step.kind === 'text' && step.text");
-    expect(stepsView).toContain("step.kind !== 'thinking'");
+    expect(stepsView).toContain("block.kind === 'text' && block.presentation === 'narration'");
+    expect(stepsView).not.toContain('XopcChatToolView');
   });
 });

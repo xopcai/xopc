@@ -53,7 +53,7 @@ describe('Harmony realtime lifecycle', () => {
     const event = { topic: 'run:r1', seq: 1, event: 'assistant_delta', data: { text: 'a' } };
     socket.frame('realtime.event', event); socket.frame('realtime.event', event); expect(events).toHaveBeenCalledOnce();
     socket.listeners.get('close')?.(null, { code: 1006 }); await vi.advanceTimersByTimeAsync(1500);
-    expect(sockets).toHaveLength(2); expect(sockets[1]!.frames()[0].payload.subscriptions).toEqual([{ topic: 'run:r1', afterSeq: 1 }]);
+    expect(sockets).toHaveLength(2); expect(sockets[1]!.frames()[0].payload.subscriptions).toEqual([{ topic: 'run:r1', afterSeq: 1, view: 'compact' }]);
     expect(socket.listeners.size).toBe(0);
   });
   it('rebases restarted topic cursors and requests live subscription after an unrecoverable gap', async () => {

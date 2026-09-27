@@ -10,9 +10,9 @@ interface XopcCachedHistoryPage {
   before: string;
   page: XopcHistory;
 }
-const CACHE_KEY: string = 'chat-history-heads.v1';
+const CACHE_KEY: string = 'chat-history-heads.compact.v1';
 const CACHE_LIMIT: number = 48 * 1024;
-const PAGE_CACHE_KEY: string = 'chat-history-pages.v1';
+const PAGE_CACHE_KEY: string = 'chat-history-pages.compact.v1';
 const PAGE_CACHE_LIMIT: number = 120 * 1024;
 const PAGE_LIMIT: number = 20;
 

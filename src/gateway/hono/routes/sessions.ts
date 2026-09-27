@@ -445,6 +445,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return blocked;
     }
     const key = c.req.param('key');
+    const compact = c.req.query('view') === 'compact';
     const offsetRaw = c.req.query('offset');
     const limitRaw = c.req.query('limit');
     const beforeRaw = c.req.query('before');
@@ -461,6 +462,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       limit,
       ...(before ? { before } : {}),
       includeContextRows: true,
+      compact,
     });
 
     if (!result) {
@@ -469,7 +471,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
     const revision = result.pagination.revision;
     if (typeof revision === 'number') {
-      const etag = `"${result.session.transcriptId ?? key}:${revision}"`;
+      const etag = `"${result.session.transcriptId ?? key}:${revision}:${compact ? 'compact' : 'full'}:${before ?? offset}:${limit}"`;
       c.header('ETag', etag);
       if (c.req.header('If-None-Match') === etag) return c.body(null, 304);
     }

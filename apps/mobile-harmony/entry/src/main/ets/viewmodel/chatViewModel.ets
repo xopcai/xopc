@@ -390,6 +390,10 @@ export class XopcChatViewModel {
     const data = event.data as XopcStreamEvent;
     if (data.conversationId !== this.selectedId || !data.payload) return;
     const payload = data.payload;
+    if (event.event === 'user_message') {
+      if (this.liveRow?.text) this.recover();
+      return;
+    }
     if (event.event === 'run_end') {
       if (this.liveRow) this.liveRow = reduceChatStream(this.liveRow, event.event, payload, this.runId);
       this.trackRun(''); this.streaming = ''; this.thinking = ''; this.tool = '';
