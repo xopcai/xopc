@@ -227,10 +227,39 @@ describe('chat bottom region composition', () => {
   it('uses a hold-and-slide voice gesture instead of click-to-start recording', () => {
     expect(chat).toContain("@Local voiceDestination: XopcVoiceRecordingDestination = 'send'");
     expect(chat).toContain('.onTouch((event: TouchEvent): void => { this.handleVoiceTouch(event); })');
-    expect(chat).toContain("destination === 'text'");
+    expect(chat).toContain("this.voiceRetryDestination === 'text'");
     expect(chat).toContain("destination === 'cancel'");
     expect(chat).toContain('await this.sendVoice(false)');
     expect(chat).not.toContain(".onClick(async (): Promise<void> => { await this.reader.stop(); if (this.visible) this.voice.start");
+  });
+
+  it('keeps voice recording compact and shows only a retry path after failure', () => {
+    expect(chat).not.toContain("$r('app.string.play_recording')");
+    expect(chat).not.toContain(".id('chat-voice-send')");
+    expect(chat).not.toContain(".id('chat-voice-finish')");
+    expect(chat).toContain(".id('chat-voice-retry')");
+    expect(chat).toContain("if (this.voiceHeld) { this.voiceGestureFeedback() }");
+    expect(chat).toContain('.margin({ bottom: this.bottomRegionHeight + 16 })');
+    expect(chat).toContain('.hitTestBehavior(HitTestMode.None)');
+    expect(chat).toContain('point.id === this.voicePointerId');
+    expect(chat).toContain('generation !== this.voiceHoldGeneration');
+  });
+
+  it('uses a compact icon capsule without duplicate recording instructions', () => {
+    const feedback = chat.slice(chat.indexOf('  voiceGestureFeedback() {'), chat.indexOf('  emptyDock() {}'));
+    expect(feedback).toContain(".constraintSize({ maxWidth: 340 }).height(80)");
+    expect(feedback).toContain("$r('sys.symbol.xmark')");
+    expect(feedback).toContain("$r('sys.symbol.text_alignleft')");
+    expect(feedback).toContain('.accessibilityText(');
+    expect(feedback).not.toContain('Text(this.voiceHoldHint())');
+    expect(feedback).not.toMatch(/\n\s+Text\(\$r\('app\.string\.voice_slide_/);
+    expect(feedback).not.toContain("Text('↖')");
+    expect(feedback).toContain('.backgroundColor(this.colors.panel).border({ width: 1, color: this.colors.border })');
+    expect(feedback).toContain('.fontColor(this.colors.secondary)');
+    expect(feedback).toContain('.fontColor([this.colors.accent])');
+    expect(feedback).toContain("this.voiceDestination === 'text' ? this.colors.accentSoft : Color.Transparent");
+    expect(feedback).not.toContain('.backgroundColor(this.colors.foreground)');
+    expect(feedback).not.toContain('.fontColor([this.colors.panel])');
   });
 
   it('moves persistent project and environment controls out of the composer into the header menu', () => {

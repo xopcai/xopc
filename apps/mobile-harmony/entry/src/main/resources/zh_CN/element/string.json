@@ -230,7 +230,7 @@
     },
     {
       "name": "microphone_reason",
-      "value": "仅在你选择语音输入时录音，并将录音转写为草稿。"
+      "value": "仅在你按住说话时录音，用于发送语音或转成文字草稿。"
     },
     {
       "name": "record_voice",
@@ -239,6 +239,14 @@
     {
       "name": "voice_hold_to_speak",
       "value": "按住说话"
+    },
+    {
+      "name": "voice_slide_cancel",
+      "value": "滑到这里取消"
+    },
+    {
+      "name": "voice_slide_text",
+      "value": "滑到这里转文字"
     },
     {
       "name": "voice_preparing",

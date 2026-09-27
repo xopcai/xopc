@@ -47,6 +47,24 @@ describe('native voice lifecycle', () => {
     await voice.start(context as never); expect(voice.state).toBe('idle');
     expect(voice.error).toBe('MICROPHONE_PERMISSION_REQUIRED'); expect(mocks.createRecorder).not.toHaveBeenCalled();
   });
+  it('waits for the automatic stop when the finger releases at the duration limit', async () => {
+    await voice.start(context as never);
+    let finish!: () => void;
+    mocks.stop.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+    await vi.advanceTimersByTimeAsync(120000);
+    expect(voice.busy).toBe(true);
+    let released = false;
+    const release = voice.stop().then(() => { released = true; });
+    await Promise.resolve();
+    expect(released).toBe(false);
+    finish(); await release;
+    expect(voice.state).toBe('ready');
+    expect(voice.busy).toBe(false);
+    const send = vi.fn(async () => true);
+    expect(await voice.send(send)).toBe(true);
+    expect(send).toHaveBeenCalledOnce();
+    expect(mocks.stop).toHaveBeenCalledOnce();
+  });
   it('cancels while the permission prompt is pending without opening the microphone', async () => {
     let resolve!: (result: unknown) => void;
     mocks.permission.mockImplementation(() => new Promise((done) => { resolve = done; }));
