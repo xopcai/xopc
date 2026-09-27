@@ -1161,7 +1161,7 @@ export struct XopcChatView {
     if (this.panelOpen) { this.actionPanel() }
     this.bottomDock()
     }.id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(Color.Transparent)
-      .backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR).borderRadius(24).clip(true)
+      .borderRadius(24).clip(true)
     }.id('chat-bottom-region').width('100%')
       .margin({ top: 4, bottom: 0 })
       .onAreaChange((_previous: Area, current: Area): void => { this.bottomRegionHeight = Number(current.height); })
