@@ -491,6 +491,11 @@ export function SessionsPage() {
     unpin: s.unpin,
     export: s.export,
     delete: s.delete,
+    tokens: s.tokens,
+    cost: s.cost,
+    costPartial: s.costPartial,
+    costUnknown: s.costUnknown,
+    noUsage: s.noUsage,
     unnamedSession: m.chat.newSession,
   };
 

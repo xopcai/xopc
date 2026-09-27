@@ -1,12 +1,13 @@
 import {
   Archive,
   ArchiveRestore,
+  Coins,
+  Database,
   Download,
   MessageSquare,
   Pin,
   PinOff,
   Trash2,
-  Zap,
 } from 'lucide-react';
 
 import type { SessionMetadata } from '@/features/sessions/session.types';
@@ -39,9 +40,15 @@ function formatRelativeDate(dateStr: string): string {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-function formatTokens(tokens: number): string {
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`;
-  return String(tokens);
+function formatTokens(tokens: number, language: string): string {
+  return new Intl.NumberFormat(language === 'zh' ? 'zh-CN' : 'en-US').format(tokens);
+}
+
+function formatCost(knownCostUsd: string): string {
+  return `$${Number(knownCostUsd).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 6,
+  })}`;
 }
 
 export function SessionCard({
@@ -65,6 +72,11 @@ export function SessionCard({
     unpin: string;
     export: string;
     delete: string;
+    tokens: string;
+    cost: string;
+    costPartial: string;
+    costUnknown: string;
+    noUsage: string;
     /** Shown when `session.name` is empty (e.g. new chat before auto-title). */
     unnamedSession: string;
   };
@@ -77,6 +89,17 @@ export function SessionCard({
   const showKeySubtitle = Boolean(session.name?.trim());
   const isArchived = session.status === 'archived';
   const isPinned = session.status === 'pinned';
+  const usage = session.usage;
+  const cost = usage?.calls
+    ? usage.costCompleteness === 'unknown'
+      ? labels.costUnknown
+      : `${usage.costCompleteness === 'partial' ? '≥ ' : '≈ '}${formatCost(usage.knownCostUsd)}`
+    : labels.noUsage;
+  const costTitle = !usage?.calls
+    ? labels.noUsage
+    : usage.costCompleteness === 'partial'
+      ? labels.costPartial
+      : usage.costCompleteness === 'unknown' ? labels.costUnknown : labels.cost;
 
   return (
     <div
@@ -143,8 +166,12 @@ export function SessionCard({
             {session.messageCount}
           </span>
           <span className="inline-flex items-center gap-1">
-            <Zap className="size-3.5" strokeWidth={1.75} aria-hidden />
-            {formatTokens(session.estimatedTokens)}
+            <Database className="size-3.5" strokeWidth={1.75} aria-hidden />
+            {formatTokens(usage?.totalTokens ?? 0, language)} {labels.tokens}
+          </span>
+          <span className="inline-flex items-center gap-1" title={costTitle}>
+            <Coins className="size-3.5" strokeWidth={1.75} aria-hidden />
+            {cost}
           </span>
         </div>
         {session.tags.length > 0 ? (

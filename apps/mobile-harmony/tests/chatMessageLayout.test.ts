@@ -34,11 +34,9 @@ describe('chat message layout parity', () => {
     expect(assistantLayout).toContain('.borderRadius(18)');
     expect(assistantLayout).not.toContain('.border(');
     expect(chat).toContain("|| (row.toolCalls?.length || 0) > 0 || !!row.outcome) return '90%'");
-    expect(chat).toContain(".id('chat-assistant-live-card')");
-    expect(chat).toContain('.width(this.assistantBubbleWidth(this.chat.liveRow))');
-    expect(chat).toContain(".id('chat-assistant-running-card')");
-    expect(chat).toContain(".id('chat-assistant-running-card').width('132vp')");
-    expect(chat).toContain(".constraintSize({ maxWidth: '90%' })");
+    expect(chat).toContain('Repeat<XopcChatRow>(this.presentationRows)');
+    expect(chat).not.toContain(".id('chat-assistant-live-card')");
+    expect(chat).not.toContain(".id('chat-assistant-running-card')");
     expect(chat).toContain("List({ space: 20, scroller: this.messagesScroller })");
     expect(chat).toContain(".padding({ left: 12, right: 12 }).cachedCount(3)");
   });
@@ -49,7 +47,7 @@ describe('chat message layout parity', () => {
     const assistantLayout = chat.slice(assistantStart, assistantEnd);
 
     expect(chat).toContain('@Computed get latestMessageId(): string');
-    expect(chat).toContain('return this.chat.liveRow?.id || latestChatMessageId(this.chat.rows)');
+    expect(chat).toContain('return latestChatMessageId(this.presentationRows)');
     expect(chat.match(/previewEligible: item\.item\.id !== this\.latestMessageId/g)).toHaveLength(2);
     expect(chat).not.toContain('previewEligible: true');
     expect(chat).toContain('.bindSheet($$this.messageDetailOpen, this.messageDetailSheet');
@@ -58,7 +56,7 @@ describe('chat message layout parity', () => {
 
   it('keeps common assistant actions visible and puts secondary actions in a menu', () => {
     expect(chat).toContain('assistantMessageActions(row: XopcChatRow)');
-    expect(chat).toContain('if (chatAnswerText(item.item)) { this.assistantMessageActions(item.item) }');
+    expect(chat).toContain('if (!item.item.live && chatAnswerText(item.item)) { this.assistantMessageActions(item.item) }');
     expect(chat).toContain('assistantMessageMoreMenu(row: XopcChatRow)');
     expect(chat).toContain(".id('chat-assistant-more-' + row.id)");
     expect(chat).toContain('.bindMenu(this.assistantMessageMoreMenu(row))');

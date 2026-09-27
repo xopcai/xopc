@@ -21,7 +21,7 @@ vi.mock('../../providers/model-call.js', () => ({
 }));
 
 import { completeWithResolvedCredentials } from '../../providers/model-call.js';
-import { HomeAdviceGenerator } from '../generator.js';
+import { HomeAdviceBudgetExceededError, HomeAdviceGenerator } from '../generator.js';
 
 const snapshot: HomeContextSnapshot = {
   generatedAt: 1,
@@ -119,6 +119,24 @@ describe('HomeAdviceGenerator', () => {
     expect(correction?.content).toContain('candidates.0.confidence');
     expect(correction?.content).toContain('candidates.0.verification');
     expect(correction?.content).toContain('Return the corrected JSON object only');
+  });
+
+  it('checks the provider budget again before a JSON correction call', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(modelResponse({
+      state: 'ready', candidates: [{ ...readyResult().candidates[0], confidence: 'invalid' }],
+    }));
+    const allowProviderCall = vi.fn()
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false);
+
+    await expect(new HomeAdviceGenerator(() => config).generate(
+      snapshot,
+      { agentId: 'main', connectors: new Set(), skills: new Set() },
+      undefined,
+      { allowProviderCall },
+    )).rejects.toBeInstanceOf(HomeAdviceBudgetExceededError);
+    expect(completeWithResolvedCredentials).toHaveBeenCalledOnce();
+    expect(allowProviderCall).toHaveBeenCalledTimes(2);
   });
 
   it('accepts structured output returned in a thinking block', async () => {
