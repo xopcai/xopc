@@ -5,6 +5,9 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestDatabase } from '../../../../test/sqlite-fixture.js';
+
+import * as processRunner from '../../../process/run-process.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import { seedTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { LocalWorktreeManager } from '../../../execution-environments/local-worktree-manager.js';
@@ -44,7 +47,9 @@ describe('Source-driven task follow-up', () => {
     git(['init', '-b', 'main']); git(['config', 'user.email', 'test@example.invalid']); git(['config', 'user.name', 'Test']);
     writeFileSync(join(repository, 'app.js'), 'export const value = 1;\n');
     git(['add', 'app.js']); git(['commit', '-m', 'fixture']);
-    resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(directory, 'state.db') });
+    resetXopcDatabaseSingletonForTest();
+    seedTestDatabase(join(directory, 'state.db'));
+    openXopcDatabase({ path: join(directory, 'state.db') });
     seedTestAgentCatalog({ defaults: {
       models: { chat: { primary: 'test/model', fallbacks: [] }, intents: {} },
       skills: { mode: 'selected', include: [] }, tools: {}, workflows: {},
@@ -69,6 +74,7 @@ describe('Source-driven task follow-up', () => {
       capabilities: ['workspace.read', 'workspace.write', 'verification.run'], verificationCommand: 'node --test' };
   });
   afterEach(async () => {
+    vi.restoreAllMocks();
     await service.stop(); closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(directory, { recursive: true, force: true });
   });
   async function run(id: string) {
@@ -224,6 +230,9 @@ describe('Source-driven task follow-up', () => {
   });
 
   it('permits file editing without Docker, while verification is an independent grant', async () => {
+    const runProcess = processRunner.runProcess;
+    vi.spyOn(processRunner, 'runProcess').mockImplementation(options => options.program === 'docker'
+      ? Promise.reject(new Error('Docker unavailable in this scenario')) : runProcess(options));
     await service.stop();
     service = new SceneTaskExecutionService(getSqliteDatabase(), { config: () => ConfigSchema.parse({}),
       sources: sources(), executor: { execute }, stateDir: directory, worktrees: new LocalWorktreeManager({ stateDir: directory }) });

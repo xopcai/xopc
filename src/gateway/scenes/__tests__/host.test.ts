@@ -9,6 +9,8 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestDatabase } from '../../../../test/sqlite-fixture.js';
+
 import type { Config } from '../../../config/schema.js';
 import { ScenePreferenceService } from '../../../scenes/preferences.js';
 import { SceneMailContextProvider } from '../../../scenes/mailContext.js';
@@ -51,7 +53,10 @@ describe('Gateway scene host on a normally initialized database', () => {
   beforeEach(async () => {
     directory = mkdtempSync(join(tmpdir(), 'xopc-scene-host-'));
     now = Date.parse('2026-09-20T04:00:00Z');
-    resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(directory, 'xopc.db') }); db = getSqliteDatabase();
+    resetXopcDatabaseSingletonForTest();
+    seedTestDatabase(join(directory, 'xopc.db'));
+    openXopcDatabase({ path: join(directory, 'xopc.db') });
+    db = getSqliteDatabase();
     execute.mockReset().mockImplementation(async ({ evidence }) => ({ kind: 'artifact', summary: 'Could you confirm the review date?', evidenceIds: evidence.map((item) => item.id) }));
     publish.mockReset();
     upsertConnectorInstallation({ id: 'installation', connectorId: 'composio-gmail', principalId: 'local-owner', enabled: true,

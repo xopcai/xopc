@@ -2,6 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
@@ -39,6 +41,7 @@ describe('durable connection recovery', () => {
     vi.resetAllMocks();
     dir = mkdtempSync(join(tmpdir(), 'xopc-recovery-'));
     resetXopcDatabaseSingletonForTest();
+    seedTestDatabase(join(dir, 'xopc.db'));
     openXopcDatabase({ path: join(dir, 'xopc.db') });
     ensureSessionRecord(conversationId, dir, { agentId: "main", sourceChannel: "webchat", sourceChatId: "recovery" });
     config = ConfigSchema.parse({});

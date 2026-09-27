@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestDatabase } from '../../../../../test/sqlite-fixture.js';
+
 import { ActivityService } from '../../../../activity/index.js';
 import { seedTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../../../config/schema.js';
@@ -61,6 +63,7 @@ describe('project association routes', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-project-routes-'));
     process.env.XOPC_STATE_DIR = stateDir;
     resetXopcDatabaseSingletonForTest();
+    seedTestDatabase(join(stateDir, 'xopc.db'));
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     seedTestAgentCatalog({ agents: [{ id: 'main' }, { id: 'coder' }] });
   });

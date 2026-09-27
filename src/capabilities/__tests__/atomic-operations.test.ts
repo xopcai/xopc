@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
 import { z } from 'zod';
 
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
@@ -23,6 +25,7 @@ const context: CapabilityContext = { principalId: 'owner', surface: 'http', scop
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'xopc-capability-atomic-'));
   resetXopcDatabaseSingletonForTest();
+  seedTestDatabase(join(directory, 'xopc.db'));
   openXopcDatabase({ path: join(directory, 'xopc.db') });
 });
 afterEach(() => {
