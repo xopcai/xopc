@@ -115,6 +115,7 @@ export struct XopcNotesTabView {
             }, (file: XopcFile): string => file.id)
           }
         }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
+          .contentEndOffset(this.bottomInset)
       }
     }.id('notes-tab-list-pane').width(this.contentWidth >= 840 ? 400 : '100%').height('100%')
       .backgroundColor(this.contentWidth >= 840 ? this.colors.grouped : Color.Transparent)
@@ -137,7 +138,7 @@ export struct XopcNotesTabView {
           }
         }
       }.id('notes-tab-content-viewport').width('100%').height('100%')
-        .padding({ bottom: this.bottomInset }).clip(true)
+        .clip(true)
     }.id('notes-tab-root').width('100%').height('100%').backgroundColor(this.colors.surface)
       .onAreaChange((_previous: Area, current: Area): void => { this.contentWidth = Number(current.width); })
   }

@@ -360,26 +360,26 @@ export struct XopcHomeView {
           activePage: this.tab === 0 && !this.detailVisible, attentionItems: this.attention.needsUser, onAttentionRefresh: (): void => { this.attention.refresh(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
           onConversationChange: (id: string): void => { this.activeChatId = id; } }) }
-        TabContent() { XopcSessionsView({ embedded: true, activePage: this.tab === 1 && !this.detailVisible,
+        TabContent() { XopcSessionsView({ embedded: true, bottomInset: this.secondaryBottomRegionHeight, activePage: this.tab === 1 && !this.detailVisible,
           currentId: this.activeChatId, onOpen: (id: string): void => { this.openConversationFromList(id, false); },
           onNew: (id: string): void => { this.openConversationFromList(id, true); } }) }
-        TabContent() { XopcProgressView({ activePage: this.tab === 2 && !this.detailVisible, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
+        TabContent() { XopcProgressView({ bottomInset: this.secondaryBottomRegionHeight, activePage: this.tab === 2 && !this.detailVisible, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
         TabContent() { XopcNotesTabView({ activePage: this.tab === 3 && !this.detailVisible,
           bottomInset: this.secondaryBottomRegionHeight,
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
-        TabContent() { XopcPersonalView({ onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
+        TabContent() { XopcPersonalView({ bottomInset: this.secondaryBottomRegionHeight, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
       }.scrollable(false).barHeight(0).barMode(BarMode.Fixed)
         .animationDuration(0)
         .onChange((index: number): void => { this.tab = index; })
         .width('100%').layoutWeight(1)
       }.id('home-tab-viewport').width('100%').height('100%')
-        .padding({ bottom: this.tab === 0 || this.tab === 3 ? 0 : this.secondaryBottomRegionHeight }).clip(true)
+        .clip(true)
       if (this.tab !== 0) {
         Column() {
           Column() {
             this.quickComposer()
             if (this.layout.isMainDockVisible(this.tab)) { this.dockItems() }
-          }.id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(Color.Transparent)
+          }.id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)
             .borderRadius(24).clip(true)
         }.id('secondary-bottom-region').width('100%')
           .margin({ top: 4, bottom: 0 })
