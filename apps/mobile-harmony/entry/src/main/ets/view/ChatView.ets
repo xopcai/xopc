@@ -1,4 +1,5 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { quickChatIntake, XopcQuickChatIntake } from '../service/quickChatIntake';
 import { XopcChatViewModel } from '../viewmodel/chatViewModel';
 import { XopcChatRow, XopcChatAttachment, XopcChatBlock, XopcContextRef, XopcReferenceItem, XopcChatAgent,
   XopcHistoryMedia, XopcHostDirectory } from '../model/chat';
@@ -150,6 +151,7 @@ export struct XopcChatView {
   @Local reader: XopcChatReadAloud = chatReadAloud;
   @Local call: XopcVoiceCall = voiceCall;
   @Local attachments: XopcChatAttachment[] = [];
+  @Local quickIntake: XopcQuickChatIntake = quickChatIntake;
   @Local pickingAttachment: boolean = false;
   @Local imageEditorOpen: boolean = false;
   @Local imageEditorIndex: number = -1;
@@ -558,6 +560,21 @@ export struct XopcChatView {
     }
     this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.draft = ''; this.attachments = []; this.refs = [];
     this.sheetOpen = false; this.setPanel(false); await this.chat.create(agentId, projectId, executionMode);
+  }
+
+  @Monitor('quickIntake.revision', 'chat.selectedId', 'chat.loading', 'chat.sending', 'chat.connection', 'restoringDraft', 'activePage')
+  async sendQuickSubmission(): Promise<void> {
+    if (!this.activePage || this.embedded || this.restoringDraft || this.chat.loading || this.chat.sending
+      || this.chat.selectedId !== this.requestedId || this.chat.connection !== 'connected') return;
+    const profile = gatewaySession.currentProfile();
+    const scope = JSON.stringify([profile?.gatewayId || '', profile?.deviceId || '', this.chat.selectedId]);
+    if (this.draftScope !== scope) return;
+    const submission = this.quickIntake.consume(this.chat.selectedId);
+    if (!submission) return;
+    // Claim before awaiting: repeated layout/connection notifications must not send twice.
+    this.draft = submission.text; this.attachments = submission.files; this.refs = [];
+    this.saveDraft();
+    await this.send();
   }
 
   private async send(delivery: string = 'next'): Promise<void> {
