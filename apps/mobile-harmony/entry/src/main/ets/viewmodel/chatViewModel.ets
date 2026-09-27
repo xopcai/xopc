@@ -264,7 +264,9 @@ export class XopcChatViewModel {
       this.rows = this.mergePendingRows(confirmed);
       if (!older && this.snapshotMode) { this.liveRow = undefined; this.streaming = ''; this.thinking = ''; this.tool = ''; }
       this.title = result.session.name ?? '';
-      this.agentId = result.session.agentId ?? '';
+      // A local draft can be reconciled between the initial identity read and this history read.
+      // Compact history may omit agentId, so do not erase the authoritative draft identity.
+      if (result.session.agentId) this.agentId = result.session.agentId;
       this.projectId = result.session.projectId ?? '';
       this.status = result.session.status ?? '';
       this.transcriptId = result.session.transcriptId;
