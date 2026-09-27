@@ -25,7 +25,7 @@ describe('Harmony color schemes', () => {
   it('provides complete light and dark semantic palettes for every scheme', () => {
     const names = new Set(colors.color.map((item) => item.name));
     const tokens = ['surface', 'panel', 'foreground', 'secondary', 'tertiary', 'accent', 'danger',
-      'grouped', 'input', 'border', 'accent_soft'];
+      'grouped', 'input', 'border', 'accent_soft', 'active'];
     for (const scheme of XOPC_COLOR_SCHEMES) {
       for (const mode of ['light', 'dark']) {
         for (const token of tokens) expect(names.has(`theme_${scheme}_${token}_${mode}`)).toBe(true);
@@ -33,7 +33,16 @@ describe('Harmony color schemes', () => {
       const theme = xopcCustomTheme(scheme);
       expect(theme.colors?.fontPrimary).toContain(`theme_${scheme}_foreground_light`);
       expect(theme.darkColors?.backgroundPrimary).toContain(`theme_${scheme}_surface_dark`);
+      expect(theme.colors?.interactiveSelect).toContain(`theme_${scheme}_active_light`);
+      expect(theme.darkColors?.interactiveActive).toContain(`theme_${scheme}_active_dark`);
     }
+  });
+
+  it('keeps default panels and active controls visibly separated from the canvas', () => {
+    const palette = new Map(colors.color.map((item) => [item.name, item.value]));
+    expect(palette.get('theme_default_surface_light')).toBe('#EEF1F5');
+    expect(palette.get('theme_default_panel_light')).toBe('#FFFFFF');
+    expect(palette.get('theme_default_active_light')).toBe('#DFE5EC');
   });
 
   it('wraps the complete app tree and exposes five live preview selectors', () => {

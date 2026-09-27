@@ -2,15 +2,15 @@ import { gatewaySession } from '../service/gatewaySession';
 import { XopcDeviceCrypto } from '../service/deviceCrypto';
 import {
   XopcSection, XopcWorkspaceItem, XopcWorkspacePage, XopcTaskList, XopcProjectList,
-  XopcAutomationList, XopcNoteList, XopcTaskResult, XopcProjectResult, XopcAutomationResult, XopcNoteResult,
-  XopcTaskPatch, XopcProjectWrite, XopcNoteWrite, XopcTaskCommandBody, XopcTaskCommand,
+  XopcAutomationList, XopcTaskResult, XopcProjectResult, XopcAutomationResult,
+  XopcTaskPatch, XopcProjectWrite, XopcTaskCommandBody, XopcTaskCommand,
   XopcAutomationRuns, XopcAutomationRun
 } from '../model/workspace';
-import { taskItem, projectItem, automationItem, noteItem, newTask, scheduledAutomation } from '../common/workspaceProtocol';
+import { taskItem, projectItem, automationItem, newTask, scheduledAutomation } from '../common/workspaceProtocol';
 
 export class XopcWorkspaceRepository {
   uuid(): string { return new XopcDeviceCrypto().uuid(); }
-  async list(section: XopcSection, search: string, offset: number = 0, noteStatus: string = ''): Promise<XopcWorkspacePage> {
+  async list(section: XopcSection, search: string, _offset: number = 0): Promise<XopcWorkspacePage> {
     const query = encodeURIComponent(search.trim());
     let items: XopcWorkspaceItem[] = [];
     let hasMore: boolean = false;
@@ -26,10 +26,6 @@ export class XopcWorkspaceRepository {
       const result = JSON.parse(await gatewaySession.request('/api/automations')) as XopcAutomationList;
       if (!Array.isArray(result.automations)) throw new Error('INVALID_AUTOMATION_LIST');
       items = result.automations.map(automationItem).filter((item): boolean => item.title.toLowerCase().includes(search.toLowerCase()));
-    } else {
-      const result = JSON.parse(await gatewaySession.request('/api/notes?limit=30&offset=' + offset + '&sortBy=updatedAt&sortOrder=desc&search=' + query + (noteStatus ? '&status=' + encodeURIComponent(noteStatus) : ''))) as XopcNoteList;
-      if (!Array.isArray(result.items)) throw new Error('INVALID_NOTE_LIST');
-      items = result.items.map(noteItem); hasMore = result.hasMore ?? false;
     }
     return { items, hasMore };
   }
@@ -39,7 +35,7 @@ export class XopcWorkspaceRepository {
     if (section === 'tasks') return taskItem(JSON.parse(raw) as XopcTaskResult);
     if (section === 'projects') return projectItem((JSON.parse(raw) as XopcProjectResult).project);
     if (section === 'automations') return automationItem((JSON.parse(raw) as XopcAutomationResult).automation);
-    return noteItem((JSON.parse(raw) as XopcNoteResult).note);
+    throw new Error('INVALID_WORKSPACE_SECTION');
   }
 
   async save(section: XopcSection, item: XopcWorkspaceItem, idempotencyKey: string): Promise<void> {
@@ -54,11 +50,7 @@ export class XopcWorkspaceRepository {
     } else if (section === 'automations') {
       if (!item.editable) throw new Error('AUTOMATION_NOT_MOBILE_EDITABLE');
       body = JSON.stringify(scheduledAutomation(item.title, item.body, item.cron ?? '', create, item.automation));
-    } else {
-      const patch: XopcNoteWrite = { title: item.title.trim(), markdown: item.body };
-      if (create) { patch.kind = 'thought'; patch.channel = 'app'; patch.platform = 'harmonyos'; }
-      body = JSON.stringify(patch);
-    }
+    } else throw new Error('INVALID_WORKSPACE_SECTION');
     await gatewaySession.request(path, create ? 'POST' : 'PATCH', body);
   }
 
@@ -80,7 +72,7 @@ export class XopcWorkspaceRepository {
       else throw new Error('INVALID_ACTION');
     } else if (section === 'automations' && ['run', 'pause', 'resume'].includes(action)) {
       await gatewaySession.request(path + '/' + action, 'POST', '{}');
-    } else if ((section === 'notes' || section === 'automations') && action === 'delete') {
+    } else if (section === 'automations' && action === 'delete') {
       await gatewaySession.request(path, 'DELETE');
     } else throw new Error('INVALID_ACTION');
   }

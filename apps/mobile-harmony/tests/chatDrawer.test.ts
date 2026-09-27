@@ -59,6 +59,14 @@ describe('chat drawer', () => {
     expect(chineseStrings).toContain('"name": "new_chat"');
     expect(chineseStrings).toContain('"value": "新建会话"');
   });
+  it('follows a left swipe, closes past the threshold, and otherwise rebounds', () => {
+    expect(drawerView).toContain('PanGesture({ direction: PanDirection.Horizontal, distance: 16 })');
+    expect(drawerView).toContain('.onActionUpdate((event: GestureEvent): void => { this.updateDrawerDrag(event); })');
+    expect(drawerView).toContain('event.offsetX <= -CHAT_DRAWER_CLOSE_DISTANCE');
+    expect(drawerView).toContain('.translate({ x: this.drawerDragX })');
+    expect(drawerView).toContain('duration: layoutState.reduceMotion ? 0 : 180');
+    expect(drawerView).toContain('.opacity(this.scrimOpacity())');
+  });
   it('shows the cached Gateway-scoped session list before the network refresh completes', async () => {
     let finish!: (value: unknown) => void;
     mock.cacheRead.mockResolvedValue({ items: [item('cached')], total: 3, hasMore: true });

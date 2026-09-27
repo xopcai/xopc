@@ -19,6 +19,15 @@ export function chatMediaSource(uri: string, conversationId: string): XopcChatMe
     if (!id) throw new Error('INVALID_MEDIA');
     return { path: '/api/files/' + encodeURIComponent(id) + '/content', external: false };
   }
+  const noteAttachment = uri.match(/^xopc-attachment:\/\/notes\/([^/?#]+)\/([^/?#]+)$/i);
+  if (noteAttachment) {
+    try {
+      const noteId = decodeURIComponent(noteAttachment[1]).trim();
+      const attachmentId = decodeURIComponent(noteAttachment[2]).trim();
+      if (!noteId || !attachmentId) throw new Error('INVALID_MEDIA');
+      return { path: '/api/notes/' + encodeURIComponent(noteId) + '/media/' + encodeURIComponent(attachmentId), external: false };
+    } catch (_) { throw new Error('INVALID_MEDIA'); }
+  }
   if (uri.startsWith('media://') && conversationId) return {
     path: '/api/media/read?uri=' + encodeURIComponent(uri) + '&conversationId=' + encodeURIComponent(conversationId), external: false };
   if (uri.startsWith('https://') && markdownLink(uri)) return { path: uri, external: true };

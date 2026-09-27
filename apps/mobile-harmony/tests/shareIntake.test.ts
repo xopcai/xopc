@@ -5,6 +5,10 @@ vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (): void => {}, Trace: (): void => {} });
 });
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request } }));
+vi.mock('@kit.CoreFileKit', () => ({ fileIo: { unlink: vi.fn() } }));
+vi.mock('@kit.ArkTS', () => ({ util: { generateRandomUUID: (): string => 'mutation-1' } }));
+vi.mock('../entry/src/main/ets/service/noteMedia.ets', () => ({ XopcNoteMediaService: class {} }));
+vi.mock('../entry/src/main/ets/repository/noteRepository.ets', () => ({ XopcNoteRepository: class {} }));
 
 import { decodeShareHandoff, encodeShareHandoff, incomingShare, XopcShareIntake } from '../entry/src/main/ets/service/shareIntake.ets';
 
@@ -38,6 +42,9 @@ describe('Harmony inbound share intake', () => {
     });
     expect(decodeShareHandoff('{')).toBeUndefined();
     expect(decodeShareHandoff(JSON.stringify({ title: 'Article', values: [42] }))).toBeUndefined();
+    expect(decodeShareHandoff(JSON.stringify({ title: '', values: [], attachments: [{
+      path: '/tmp/private', name: 'private', mimeType: 'text/plain', size: 10,
+    }] }))).toBeUndefined();
   });
 
   it('saves only after confirmation and hands a chat prompt to one matching conversation', async () => {
@@ -48,11 +55,22 @@ describe('Harmony inbound share intake', () => {
     await expect(intake.save()).resolves.toBe('note-1');
     expect(mocks.request).toHaveBeenCalledWith('/api/notes/quick-capture', 'POST', JSON.stringify({
       text: value.content, channel: 'share', platform: 'harmonyos'
-    }));
+    }), 'mutation-1');
 
     intake.targetChat('conversation-1', value.chatPrompt);
     expect(intake.consumeChat('conversation-2')).toBe('');
     expect(intake.consumeChat('conversation-1')).toBe(value.chatPrompt);
     expect(intake.consumeChat('conversation-1')).toBe('');
+  });
+
+  it('reuses the capture mutation id after a retryable save failure', async () => {
+    const intake = new XopcShareIntake();
+    intake.receive(incomingShare('', ['Retry this shared note'])!);
+    mocks.request.mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(JSON.stringify({ note: { id: 'note-2' } }));
+    await expect(intake.save()).rejects.toThrow('offline');
+    await expect(intake.save()).resolves.toBe('note-2');
+    expect(mocks.request.mock.calls[0][3]).toBe('mutation-1');
+    expect(mocks.request.mock.calls[1][3]).toBe('mutation-1');
   });
 });

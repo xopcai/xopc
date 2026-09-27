@@ -132,7 +132,7 @@ export class XopcVoiceCapture {
       const encoded = await new util.Base64Helper().encodeToString(new Uint8Array(data));
       if (generation !== this.generation) return false;
       const sent = await sendAttachment({ type: 'voice', name: 'voice.m4a', mimeType: 'audio/mp4',
-        size: data.byteLength, data: encoded });
+        size: data.byteLength, data: encoded, duration: Math.max(1, Math.ceil(this.durationMs / 1000)) });
       if (generation !== this.generation) return false;
       if (sent) { await this.cleanup(); this.state = 'idle'; this.seconds = 0; }
       return sent;

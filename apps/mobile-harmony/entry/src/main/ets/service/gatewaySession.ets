@@ -295,7 +295,7 @@ export class XopcGatewaySession {
     return { origin, token };
   }
 
-  async request(path: string, method: string = 'GET', body: string = ''): Promise<string> {
+  async request(path: string, method: string = 'GET', body: string = '', idempotencyKey: string = ''): Promise<string> {
     const generation = this.generation;
     let token = await this.accessToken();
     this.assertGeneration(generation);
@@ -309,13 +309,13 @@ export class XopcGatewaySession {
         await this.verifyRoute(profile, route.url);
         this.assertGeneration(generation);
         let result: string;
-        try { result = await this.transport.request(route.url, path, method, body, token); }
+        try { result = await this.transport.request(route.url, path, method, body, token, idempotencyKey); }
         catch (error) {
           this.assertGeneration(generation);
           if (!(error instanceof XopcHttpError) || error.status !== 401) throw error as Error;
           this.tokens = undefined; token = await this.accessToken();
           this.assertGeneration(generation);
-          result = await this.transport.request(route.url, path, method, body, token);
+          result = await this.transport.request(route.url, path, method, body, token, idempotencyKey);
         }
         this.assertGeneration(generation);
         profile.activeRouteId = route.id;
