@@ -43,7 +43,8 @@ struct XopcIndex {
     if (!this.connection.connected && !this.connection.busy && (this.manualEntry || this.showHelp)) {
       this.closeSecondary(); return true;
     }
-    return layoutState.dismissChatOverlay?.() ?? false;
+    if (layoutState.dismissChatOverlay?.()) return true;
+    return layoutState.dismissTabNavigation?.() ?? false;
   }
 
   private closeSecondary(): void {

@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 const chat = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', import.meta.url), 'utf8');
 const options = readFileSync(new URL('../entry/src/main/ets/view/ChatOptions.ets', import.meta.url), 'utf8');
-const drawer = readFileSync(new URL('../entry/src/main/ets/view/ChatDrawer.ets', import.meta.url), 'utf8');
 const home = readFileSync(new URL('../entry/src/main/ets/view/HomeView.ets', import.meta.url), 'utf8');
+const sessions = readFileSync(new URL('../entry/src/main/ets/view/SessionsView.ets', import.meta.url), 'utf8');
 
 describe('chat bottom region composition', () => {
   it('floats a light neutral jump button over a transparent message viewport', () => {
@@ -52,8 +52,8 @@ describe('chat bottom region composition', () => {
     expect(home).toContain('@LocalBuilder\n  chatDock()');
     expect(home).toContain('this.tab === 0 && this.layout.isMainDockVisible(0)');
     expect(home).toContain('if (this.tab !== 0)');
-    expect(home.match(/this.tabItem\(/g)).toHaveLength(4);
-    expect(home).toContain('.onClick((): void => { this.transitionToTab(index); })');
+    expect(home.match(/this.tabItem\(/g)).toHaveLength(5);
+    expect(home).toContain('.onClick((): void => { this.selectTab(index); })');
     expect(home).toContain('this.attention.needsUser.length');
     expect(chat).toContain(".id('chat-bottom-region').width('92%')");
     expect(home).toContain(".id('secondary-bottom-region').width('92%')");
@@ -85,7 +85,6 @@ describe('chat bottom region composition', () => {
     expect(home).toContain(".id('creation-chat-close')");
     expect(home).toContain('activePage: this.creationSheetOpen, embedded: true');
     expect(home).toContain("}.layoutWeight(1).width('100%')");
-    expect(chat).toContain('if (!this.drawerOpen && !this.embedded)');
     expect(home).toContain('this.continueCreationChat();');
     expect(home).toContain("this.switchToChat(this.creationChatId, '', true);");
   });
@@ -94,11 +93,15 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain('bottom: this.layout.keyboardVisible ? 0 : 8');
   });
 
-  it('dismisses input on the drawer touch overlay without removing its pan gesture', () => {
-    const strip = chat.slice(chat.indexOf(".id('chat-drawer-gesture-strip')"), chat.indexOf('if (this.drawerOpen) {', chat.indexOf(".id('chat-drawer-gesture-strip')")));
-    expect(strip).toContain('event.type === TouchType.Down) this.dismissComposer()');
-    expect(strip).toContain('PanGesture({ direction: PanDirection.Horizontal, distance: 16 })');
-    expect(strip).toContain('if (event.offsetX > 32) this.setDrawer(true)');
+  it('uses a dedicated conversation tab and leaves the system back edge unobstructed', () => {
+    expect(home).toContain('XopcSessionsView({ embedded: true');
+    expect(home).toContain('this.openConversationFromList(id, false)');
+    expect(home).toContain('this.openConversationFromList(id, true)');
+    expect(home).toContain('this.transitionToTab(1);');
+    expect(sessions).toContain('.virtualScroll({ totalCount: this.rows.length })');
+    expect(sessions).toContain('.cachedCount(5)');
+    expect(chat).not.toContain('chat-drawer');
+    expect(chat).not.toContain('PanGesture({ direction: PanDirection.Horizontal');
   });
 
   it('keeps routine Gateway connection progress quiet and renders compact header dots', () => {
@@ -111,8 +114,9 @@ describe('chat bottom region composition', () => {
   });
 
   it('shows the conversation title in the header and keeps model selection in the actions sheet', () => {
-    const header = chat.slice(chat.indexOf(".id('chat-open-drawer')"), chat.indexOf('if (this.hasConnectionIssue())'));
+    const header = chat.slice(chat.indexOf('if (!this.embedded)'), chat.indexOf('if (this.hasConnectionIssue())'));
     expect(header).toContain("Text(this.chat.title || $r('app.string.untitled'))");
+    expect(header).not.toContain("$r('sys.symbol.line_3_horizontal')");
     expect(header).not.toContain("this.options.modelName(appSettings.effectiveLanguage())");
     expect(header).not.toContain(".id('chat-model-picker')");
     expect(header).not.toContain("this.openSheet('model')");
@@ -162,10 +166,10 @@ describe('chat bottom region composition', () => {
     expect(player).not.toContain("Button($r('app.string.stop'))");
   });
 
-  it('keeps Gateway connection management out of the session drawer header', () => {
-    expect(drawer).not.toContain(".id('drawer-gateways')");
-    expect(drawer).not.toContain('connectionModel.openGateways()');
-    expect(drawer).not.toContain('gatewaySession.currentProfile()');
+  it('keeps Gateway connection management out of the conversation tab header', () => {
+    expect(sessions).not.toContain(".id('drawer-gateways')");
+    expect(sessions).not.toContain('connectionModel.openGateways()');
+    expect(sessions).not.toContain('gatewaySession.currentProfile()');
   });
 
   it('uses a compact horizontally swipeable action grid with common actions on the first page', () => {

@@ -475,6 +475,10 @@
       "value": "Chat"
     },
     {
+      "name": "assistant",
+      "value": "Assistant"
+    },
+    {
       "name": "scan",
       "value": "Scan QR code"
     },
