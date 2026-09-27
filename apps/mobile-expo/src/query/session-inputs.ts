@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { apiFetch, formatApiHttpError } from '../api/client';
+import { sessionPreparationViewSchema, type SessionPreparationView } from '@xopcai/gateway-contract';
+import { readLocalSessionDraft } from '../features/chat/local-session-drafts';
 
 export const sessionInputStateSchema = z.object({
+  preparation: sessionPreparationViewSchema.optional(),
   conversationId: z.string(),
   activeRunId: z.string().optional(),
   inputs: z.array(z.object({
@@ -21,7 +24,15 @@ async function readState(response: Response): Promise<SessionInputState> {
   return sessionInputStateSchema.parse(body.payload);
 }
 export async function fetchSessionInputs(conversationId: string) {
+  const draft = readLocalSessionDraft(conversationId);
+  if (draft && !draft.materialization) return { conversationId, inputs: [] } as SessionInputState;
   return readState(await apiFetch(`/api/sessions/${encodeURIComponent(conversationId)}/input-state`));
+}
+export async function retrySessionPreparation(conversationId: string, preparation: SessionPreparationView) {
+  const response = await apiFetch(`/api/sessions/${encodeURIComponent(conversationId)}/preparation/retry`, {
+    method: 'POST', body: JSON.stringify({ operationId: preparation.operationId, expectedRevision: preparation.revision, idempotencyKey: `${preparation.operationId}:${preparation.revision}` }),
+  });
+  if (!response.ok) throw new Error(formatApiHttpError(response.status, response.statusText));
 }
 export async function updateSessionInput(conversationId: string, input: Pick<SessionInput, 'id' | 'version'>, content: string) {
   return readState(await apiFetch(`/api/sessions/${encodeURIComponent(conversationId)}/inputs/${encodeURIComponent(input.id)}`, { method: 'PATCH', body: JSON.stringify({ version: input.version, content }) }));

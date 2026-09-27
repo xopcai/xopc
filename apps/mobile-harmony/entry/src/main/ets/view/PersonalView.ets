@@ -57,7 +57,7 @@ export struct XopcPersonalView {
           if (this.model.error) {
             Text($r('app.string.personal_profile_unavailable')).fontSize(12).fontColor(this.colors.tertiary).margin({ top: 12 })
           }
-        }.width('100%').padding({ left: 20, right: 20, bottom: 28 }).alignItems(HorizontalAlign.Start)
+        }.width('100%').padding({ left: 20, right: 20 }).alignItems(HorizontalAlign.Start)
       }.layoutWeight(1).width('100%').align(Alignment.Top).scrollBar(BarState.Off)
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
   }

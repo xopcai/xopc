@@ -9,7 +9,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import {
   modelPreferenceForAgent,
   resolveNewSessionSpec,
-  type SessionCreateRequest,
+  type LocalSessionOptions,
   type SessionInitialAgentConfig,
 } from '@xopcai/gateway-contract';
 
@@ -33,7 +33,7 @@ export interface ProjectSessionPreparation {
   project: Project;
   agentId: string;
   temporary: boolean;
-  create: (mode: NonNullable<SessionCreateRequest['executionMode']>, config?: SessionInitialAgentConfig) => Promise<string>;
+  create: (mode: NonNullable<LocalSessionOptions['executionMode']>, config?: SessionInitialAgentConfig) => Promise<string>;
 }
 
 export function useChatSessionInit(opts: {
@@ -173,7 +173,7 @@ export function useChatSessionInit(opts: {
       if (!isLive()) return;
       if (!request.requestedAgentId && project?.defaultAgentId) spec.agentId = project.defaultAgentId;
       const modelPreference = modelPreferenceForAgent(preferences, spec.agentId);
-      const open = (executionMode?: SessionCreateRequest['executionMode'], config?: SessionInitialAgentConfig) => openNewChatHandoff({
+      const open = (executionMode?: LocalSessionOptions['executionMode'], config?: SessionInitialAgentConfig) => openNewChatHandoff({
         sessionMgr: runtime.sessionMgrRef.current,
         agentId: spec.agentId,
         currentConversationId: lastNonNewConversationIdRef.current,

@@ -73,18 +73,20 @@ export interface XopcChatRow { id: string; role: string; text: string; thinking?
 export interface XopcDrawerProfile { profile?: XopcProfileFields; suggestedCallName?: string; }
 export interface XopcProfileFields { callName?: string; role?: string; }
 export interface XopcSessionGroup { id: string; label: string; items: XopcSessionItem[]; }
-export interface XopcChatModel { id: string; name?: string; description?: string; displayNames?: Record<string, string>; }
+export interface XopcModelThinking { initialValue: string; options: string[]; }
+export interface XopcChatModel { id: string; name?: string; description?: string; displayNames?: Record<string, string>; thinking?: XopcModelThinking; }
 export interface XopcChatModels { defaultId?: string; models?: XopcChatModel[]; items?: XopcChatModel[]; }
 export interface XopcAgentSkillConfig { mode?: string; include?: string[]; }
 export interface XopcAgentEffective { skills?: XopcAgentSkillConfig; }
 export interface XopcChatAgent { id: string; name?: string; description?: string; effective?: XopcAgentEffective; }
 export interface XopcChatAgents { defaultId: string; agents: XopcChatAgent[]; }
-export interface XopcAgentConfig { model?: string; thinkingLevel?: string; reasoningLevel?: string; effectiveWorkspacePath?: string; workingDirectoryLocked?: boolean; }
+export interface XopcAgentConfig { model?: string; thinkingLevel?: string; reasoningLevel?: string; effectiveWorkspacePath?: string; workingDirectoryLocked?: boolean; configVersion?: number; }
 export interface XopcQueuedInput {
   id: string; clientMessageId: string; content: string; version: number; position: number;
   kind: string; status: string; effectiveDelivery: string;
 }
-export interface XopcQueueState { conversationId: string; activeRunId?: string; inputs: XopcQueuedInput[]; }
+export interface XopcSessionPreparation { operationId: string; revision: number; state: string; lastError?: string; }
+export interface XopcQueueState { conversationId: string; activeRunId?: string; inputs: XopcQueuedInput[]; preparation?: XopcSessionPreparation; }
 export interface XopcQueueUpdate { version: number; content: string; }
 export interface XopcContextRef { kind: string; sourceId: string; expectedVersion: string; title?: string; }
 export interface XopcContextWorkItem { id: string; title: string; phase?: string; }

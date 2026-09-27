@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 
-import { takeNewChatConversationId } from '@/features/chat/session-prefetch';
+import { openNewChat } from '@/features/chat/open-new-chat';
 import { useMessages } from '@/i18n/messages';
 import { openChat } from '@/lib/navigation';
 import { useEffectiveDefaultAgentId } from '@/query/agents';
@@ -69,7 +69,7 @@ export function useContentIntakeActions(
   const exploreInChat = useCallback(
     (candidate: ContentIntakeCandidate | null) => {
       if (!candidate || saving) return;
-      void takeNewChatConversationId({ agentId: defaultAgentId, projectId: null })
+      void openNewChat({ agentId: defaultAgentId, projectId: null })
         .then((conversationId) => {
           setContentChatIntake({
             conversationId,

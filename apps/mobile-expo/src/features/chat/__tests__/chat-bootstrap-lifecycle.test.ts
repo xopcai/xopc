@@ -13,13 +13,13 @@ vi.mock('expo-router', () => ({
 vi.mock('../../../lib/navigation', () => ({ openChat: vi.fn() }));
 vi.mock('../../../stores/gateway-store', () => ({ useGatewayStore: { getState: () => ({ activeGatewayId: environment.gatewayId }) } }));
 vi.mock('../../../query/sessions', () => ({ fetchSessionResumeStatus: vi.fn(), fetchSessionsList: vi.fn() }));
-vi.mock('../session-prefetch', () => ({ takeNewChatConversationId: vi.fn() }));
+vi.mock('../open-new-chat', () => ({ openNewChat: vi.fn() }));
 
 import { fetchSessionResumeStatus, fetchSessionsList, type SessionsPage } from '../../../query/sessions';
 import { KEYS, storage } from '../../../storage/mmkv';
 import { createChatSelectionStore, useChatSelectionStore } from '../chat-selection-store';
 import { useChatPageBootstrap, type ChatBootstrapDeps } from '../use-chat-page-bootstrap';
-import { takeNewChatConversationId } from '../session-prefetch';
+import { openNewChat } from '../open-new-chat';
 import { openChat } from '../../../lib/navigation';
 
 const { createRoot } = createRequire(import.meta.url)('react-dom/client') as {
@@ -64,7 +64,7 @@ beforeEach(() => {
   renderedKeys.length = 0;
   vi.mocked(fetchSessionResumeStatus).mockResolvedValue('available');
   vi.mocked(fetchSessionsList).mockResolvedValue(page('server-latest'));
-  vi.mocked(takeNewChatConversationId).mockResolvedValue('created');
+  vi.mocked(openNewChat).mockResolvedValue('created');
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   root = createRoot(document.createElement('div'));
   props = {
@@ -93,7 +93,7 @@ describe('chat startup lifecycle', () => {
     renderedKeys.length = 0;
     await render({ gatewayOnline: false });
     expect(renderedKeys[0]).toBe('drawer-chat');
-    expect(takeNewChatConversationId).not.toHaveBeenCalled();
+    expect(openNewChat).not.toHaveBeenCalled();
   });
 
   it('restores a newly created home chat before its first message or list refresh', async () => {
@@ -110,7 +110,7 @@ describe('chat startup lifecycle', () => {
     await render();
     expect(renderedKeys[0]).toBe('new-empty-chat');
     expect(fetchSessionsList).not.toHaveBeenCalled();
-    expect(takeNewChatConversationId).not.toHaveBeenCalled();
+    expect(openNewChat).not.toHaveBeenCalled();
     expect(openChat).not.toHaveBeenCalled();
   });
 
@@ -133,14 +133,14 @@ describe('chat startup lifecycle', () => {
     await render(); await tick();
     expect(result.pendingBootstrapKey).toBe('saved');
     expect(fetchSessionsList).not.toHaveBeenCalled();
-    expect(takeNewChatConversationId).not.toHaveBeenCalled();
+    expect(openNewChat).not.toHaveBeenCalled();
   });
 
   it('creates a main conversation independently of recent sessions', async () => {
     client.setQueryData(['sessions', 'recent', 'a'], page('old-cache'));
     await render(); await selected('created');
     expect(fetchSessionsList).not.toHaveBeenCalled();
-    expect(takeNewChatConversationId).toHaveBeenCalledOnce();
+    expect(openNewChat).toHaveBeenCalledOnce();
     expect(renderedKeys).not.toContain('old-cache');
   });
 
@@ -165,7 +165,7 @@ describe('chat startup lifecycle', () => {
 
   it('does not override a selection with a late main conversation creation', async () => {
     const request = deferred<string>();
-    vi.mocked(takeNewChatConversationId).mockReturnValue(request.promise);
+    vi.mocked(openNewChat).mockReturnValue(request.promise);
     await render();
     await act(async () => result.setPendingBootstrapKey('chosen'));
     await act(async () => request.resolve('late'));
@@ -201,7 +201,7 @@ describe('chat startup lifecycle', () => {
     expect(openChat).not.toHaveBeenCalled();
     await render({ urlConversationId: '', shouldNavigateToRoute: false });
     expect(result.pendingBootstrapKey).toBe('new-home-chat');
-    expect(takeNewChatConversationId).not.toHaveBeenCalled();
+    expect(openNewChat).not.toHaveBeenCalled();
   });
 
   it('does not replace home when a detail creation completes after leaving', async () => {
@@ -217,13 +217,13 @@ describe('chat startup lifecycle', () => {
   });
 
   it('shows a failed creation and supports an explicit retry', async () => {
-    vi.mocked(takeNewChatConversationId).mockRejectedValue(new Error('offline'));
+    vi.mocked(openNewChat).mockRejectedValue(new Error('offline'));
     await render(); await tick();
     expect(result.bootstrapError).toBe('offline');
-    vi.mocked(takeNewChatConversationId).mockResolvedValue('created');
+    vi.mocked(openNewChat).mockResolvedValue('created');
     await act(async () => result.retryBootstrapSession());
     await selected('created');
-    expect(takeNewChatConversationId).toHaveBeenCalledTimes(2);
+    expect(openNewChat).toHaveBeenCalledTimes(2);
   });
 
   it('keeps gateway selections isolated and ignores an old gateway response', async () => {

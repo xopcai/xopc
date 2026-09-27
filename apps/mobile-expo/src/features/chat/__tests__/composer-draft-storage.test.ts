@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const memory = new Map<string, string>();
+vi.mock('../durable-attachments', () => ({
+  persistComposerAttachments: (attachments: unknown[]) => attachments,
+  collectUnusedChatAttachments: vi.fn(),
+}));
 
 vi.mock('../../../storage/mmkv', () => ({
   storage: {
@@ -19,6 +23,18 @@ import {
   readComposerDraftSnapshot,
   writeComposerDraftSnapshot,
 } from '../composer-draft-storage';
+import { markVolatileMessageOutbox } from '../message-outbox';
+
+it('keeps temporary text and attachments out of persistent storage', () => {
+  const scope = 'temporary-scope';
+  markVolatileMessageOutbox(scope);
+  const attachment = { id: 'image', type: 'image' as const, name: 'image.png', mimeType: 'image/png', size: 3, content: 'YWJj' };
+  writeComposerDraftSnapshot(scope, { text: 'private', cursorPos: 7, attachments: [attachment] });
+  expect(readComposerDraftSnapshot(scope)?.attachments).toEqual([attachment]);
+  expect([...memory.keys()].some(key => key.includes(scope))).toBe(false);
+  clearComposerDraftSnapshot(scope);
+  expect(readComposerDraftSnapshot(scope)).toBeNull();
+});
 
 describe('composer-draft-storage', () => {
   beforeEach(() => {
@@ -88,6 +104,6 @@ it('restores task references with their selected version', () => {
 
 it('restores workspace files even without message text', () => {
   const file = { id: 'file-1', type: 'document' as const, name: 'Plan', mimeType: 'text/plain', size: 12, content: '', workspaceRelativePath: 'plan.txt' };
-  writeComposerDraftSnapshot('file-reference', { text: '', cursorPos: 0, workspaceFiles: [file] });
-  expect(readComposerDraftSnapshot('file-reference')?.workspaceFiles).toEqual([file]);
+  writeComposerDraftSnapshot('file-reference', { text: '', cursorPos: 0, attachments: [file] });
+  expect(readComposerDraftSnapshot('file-reference')?.attachments).toEqual([file]);
 });

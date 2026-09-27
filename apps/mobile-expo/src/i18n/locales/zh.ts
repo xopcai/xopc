@@ -6,6 +6,7 @@ import type { MessageBundle } from './en';
 
 export const zh: MessageBundle = {
   mobileExperience: {
+    sessionPreparing: '正在准备会话环境…', sessionPreparationFailed: '会话环境准备失败',
     queueSyncFailed: '待发送消息尚未同步', queuedExplain: '查看、修改或取消等待处理的消息。', queueEmpty: '没有等待处理的消息。', attachedContent: '附加内容',
     continueFile: '回到对话继续', fileContext: '关于文件',
     closedState: {"done": "已完成", "cancelled": "已取消", "duplicate": "重复事项", "wont_do": "不再推进"},
@@ -467,6 +468,7 @@ export const zh: MessageBundle = {
 
   // ── 聊天界面 ────────────────────────────────────────────
   chat: {
+    draftSaveFailed: '草稿无法保存到设备，请暂时不要关闭页面，并检查可用存储空间。',
     contextCenter: {
       title: '上下文',
       subtitle: 'Agent 在哪里工作，以及可以使用哪些资料',

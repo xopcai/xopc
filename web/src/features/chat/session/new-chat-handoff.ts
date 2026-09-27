@@ -1,7 +1,6 @@
 import { resolveNewChatTarget } from '@/features/chat/session/resolve-new-chat-target';
-import { newSessionCacheKey, type SessionCreateRequest, type SessionInitialAgentConfig } from '@xopcai/gateway-contract';
+import { newSessionCacheKey, type LocalSessionOptions, type SessionInitialAgentConfig } from '@xopcai/gateway-contract';
 import type { SessionManager } from '@/features/chat/session/session-manager';
-import { addWebchatEmptyShellToCache } from '@/features/chat/session/webchat-empty-shell-cache';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export type NewChatHandoffNavigate = (
@@ -20,7 +19,7 @@ export type NewChatHandoffOpts = {
   forceNew?: boolean;
   temporary?: boolean;
   initialAgentConfig?: SessionInitialAgentConfig;
-  executionMode?: SessionCreateRequest['executionMode'];
+  executionMode?: LocalSessionOptions['executionMode'];
   navigateToSession: NewChatHandoffNavigate;
   onOpened: (conversationId: string) => void;
   replaceNavigate?: boolean;
@@ -33,7 +32,7 @@ const inflightByScope = new Map<string, {
 }>();
 let latestHandoffGeneration = 0;
 
-/** Resolve reuse / noop / create; navigate when the target key changes. */
+/** Persist a local draft before navigating; duplicate React effects share one draft. */
 export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
   const gateway = useGatewayStore.getState();
   const scopeKey = newSessionCacheKey(gateway.baseUrl, {
@@ -72,37 +71,7 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
       executionMode: opts.executionMode,
     });
 
-    if (resolution.kind !== 'create' && opts.initialAgentConfig) {
-      await opts.sessionMgr.patchSessionAgentConfig(
-        resolution.conversationId,
-        opts.initialAgentConfig,
-      );
-    }
-
-    if (resolution.kind === 'noop') {
-      applyOpened(resolution.conversationId);
-      return resolution.conversationId;
-    }
-
-    if (resolution.kind === 'reuse') {
-      applyOpened(resolution.conversationId);
-      return resolution.conversationId;
-    }
-
-    const { conversationId, session } = resolution;
-    if (!opts.executionMode) addWebchatEmptyShellToCache({
-      key: conversationId,
-      agentId: session.agentId,
-      customData: session.customData,
-      transcriptId: session.transcriptId,
-      name: session.name,
-      messageCount: 0,
-      updatedAt: session.updatedAt || new Date().toISOString(),
-      sourceChannel: session.sourceChannel,
-      sourceChatId: session.sourceChatId,
-      projectId: session.projectId,
-      routing: session.routing,
-    });
+    const { conversationId } = resolution;
     applyOpened(conversationId);
     return conversationId;
   })().finally(() => {

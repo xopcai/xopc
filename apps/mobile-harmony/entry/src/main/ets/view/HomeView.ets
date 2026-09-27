@@ -23,13 +23,21 @@ import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { XopcSection } from '../model/workspace';
 import { accessibility } from '@kit.AccessibilityKit';
+import { COMPOSER_INPUT_MIN, COMPOSER_TOOL_SIZE } from '../common/composerLayout';
 
 @ComponentV2
 export struct XopcHomeView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Local tab: number = 0;
+  @Computed get quickComposerPlaceholder(): ResourceStr {
+    return this.tab === 2 ? $r('app.string.quick_chat_progress_placeholder')
+      : this.tab === 3 ? $r('app.string.quick_chat_library_placeholder')
+      : this.tab === 4 ? $r('app.string.quick_chat_personal_placeholder')
+      : $r('app.string.quick_chat_conversations_placeholder');
+  }
   @Local detailVisible: boolean = false;
   @Local layout: XopcLayoutState = layoutState;
+  @Local secondaryBottomRegionHeight: number = 0;
   @Local attention: XopcProgressViewModel = new XopcProgressViewModel();
   @Local requestedChatId: string = '';
   @Local activeChatId: string = '';
@@ -77,9 +85,9 @@ export struct XopcHomeView {
     if (route.page === 'chat') {
       this.returnToConversations = false;
       if (route.itemId) { this.requestedChatId = route.itemId; this.requestedChatDraft = ''; this.chatRequestRevision++; }
-      this.pathStack.clear(); this.transitionToTab(0); return;
+      this.pathStack.clear(); this.activateTab(0); return;
     }
-    if (route.page === 'progress') { this.pathStack.clear(); this.transitionToTab(2); return; }
+    if (route.page === 'progress') { this.pathStack.clear(); this.activateTab(2); return; }
     this.pathStack.pushPath({ name: route.page, param: route });
   }
   private async exploreShare(value: XopcIncomingShare): Promise<boolean> {
@@ -114,22 +122,20 @@ export struct XopcHomeView {
     }
   }
 
-  private transitionToTab(index: number): void {
+  private activateTab(index: number): void {
     if (this.tab === index) return;
-    this.getUIContext().animateTo({ duration: this.layout.reduceMotion ? 0 : 220, curve: Curve.EaseOut }, (): void => {
-      this.tab = index;
-    });
+    this.tab = index;
   }
 
   private selectTab(index: number): void {
     this.returnToConversations = false;
-    this.transitionToTab(index);
+    this.activateTab(index);
   }
 
   private handleTabBack(): boolean {
     if (this.tab !== 0 || !this.returnToConversations) return false;
     this.returnToConversations = false;
-    this.transitionToTab(1);
+    this.activateTab(1);
     return true;
   }
 
@@ -139,7 +145,7 @@ export struct XopcHomeView {
     this.chatRequestRevision++;
     if (focusComposer) this.chatFocusRevision++;
     this.pathStack.clear();
-    this.transitionToTab(0);
+    this.activateTab(0);
   }
 
   private openConversationFromList(id: string, focusComposer: boolean): void {
@@ -156,6 +162,17 @@ export struct XopcHomeView {
       this.quickDraft = '';
       this.intake.targetChat(id, prompt);
       this.switchToChat(id, prompt);
+    } catch (error) {
+      this.getUIContext().getPromptAction().showToast({ message: (error as Error).message });
+    } finally { this.quickSending = false; }
+  }
+
+  private async openQuickChat(): Promise<void> {
+    if (this.quickSending) return;
+    this.quickSending = true;
+    try {
+      const id = await this.chatRepository.create();
+      this.switchToChat(id, '', true);
     } catch (error) {
       this.getUIContext().getPromptAction().showToast({ message: (error as Error).message });
     } finally { this.quickSending = false; }
@@ -241,7 +258,7 @@ export struct XopcHomeView {
   @Builder
   dockItems() {
     Row() {
-      this.tabItem(0, $r('app.string.assistant'), $r('sys.symbol.star'))
+      this.tabItem(0, $r('app.string.assistant'), $r('sys.symbol.ellipsis_bubble'))
       this.tabItem(1, $r('app.string.conversations'), $r('sys.symbol.message'))
       this.tabItem(2, $r('app.string.progress'), $r('sys.symbol.checkmark_circle'))
       this.tabItem(3, $r('app.string.library'), $r('sys.symbol.square_stack_3d'))
@@ -251,31 +268,48 @@ export struct XopcHomeView {
 
   @Builder
   quickComposer() {
-    Row({ space: 4 }) {
-      SymbolGlyph($r('sys.symbol.message')).fontSize(20).fontColor([this.colors.secondary])
-        .width(36).height(36)
-      TextInput({ text: this.quickDraft, placeholder: $r('app.string.quick_chat_placeholder') })
-        .id('home-quick-composer').layoutWeight(1).height(44).maxLength(4000)
-        .padding({ left: 4, right: 4 }).enterKeyType(EnterKeyType.Send)
-        .enabled(!this.quickSending)
-        .fontSize(16).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
-        .backgroundColor(Color.Transparent)
-        .onChange((text: string): void => { this.quickDraft = text; })
-        .onSubmit((_enterKey: EnterKeyType): void => { this.sendQuickDraft(); })
-      Button({ type: ButtonType.Circle, stateEffect: true }) {
-        if (this.quickSending) {
-          LoadingProgress().width(20).height(20).color(this.colors.panel)
+    Column() {
+      Row({ space: 4 }) {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.mic')).fontSize(22).fontColor([this.colors.accent])
+        }.id('home-quick-voice').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
+          .backgroundColor(this.colors.input).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
+          .accessibilityText($r('app.string.assistant')).enabled(!this.quickSending)
+          .onClick((): void => { void this.openQuickChat(); })
+        TextInput({ text: this.quickDraft, placeholder: this.quickComposerPlaceholder })
+          .id('home-quick-composer').layoutWeight(1).height(COMPOSER_INPUT_MIN).maxLength(4000)
+          .padding({ left: 4, right: 4 }).enterKeyType(EnterKeyType.Send)
+          .enabled(!this.quickSending).lineHeight(20)
+          .fontSize(16).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
+          .backgroundColor(Color.Transparent)
+          .onChange((text: string): void => { this.quickDraft = text; })
+          .onSubmit((_enterKey: EnterKeyType): void => { this.sendQuickDraft(); })
+        if (this.quickDraft.trim()) {
+          Button({ type: ButtonType.Circle }) {
+            if (this.quickSending) {
+              LoadingProgress().width(20).height(20).color(this.colors.panel)
+            } else {
+              SymbolGlyph($r('sys.symbol.arrow_up')).fontSize(22).fontColor([this.colors.panel])
+            }
+          }.id('home-quick-send').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
+            .backgroundColor(this.colors.foreground).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
+            .enabled(!this.quickSending).accessibilityText($r('app.string.send'))
+            .onClick((): void => { this.sendQuickDraft(); })
         } else {
-          SymbolGlyph($r('sys.symbol.arrow_up')).fontSize(20)
-            .fontColor([this.quickDraft.trim() ? this.colors.panel : this.colors.tertiary])
+          Button({ type: ButtonType.Circle }) {
+            if (this.quickSending) {
+              LoadingProgress().width(20).height(20).color(this.colors.accent)
+            } else {
+              SymbolGlyph($r('sys.symbol.plus_circle')).fontSize(24).fontColor([this.colors.accent])
+            }
+          }.id('home-quick-actions').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
+            .backgroundColor(this.colors.input).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
+            .enabled(!this.quickSending).accessibilityText($r('app.string.assistant'))
+            .onClick((): void => { void this.openQuickChat(); })
         }
-      }.id('home-quick-send').width(44).height(44).padding(0)
-        .backgroundColor(this.quickDraft.trim() || this.quickSending ? this.colors.foreground : this.colors.input)
-        .enabled(Boolean(this.quickDraft.trim()) && !this.quickSending)
-        .accessibilityText($r('app.string.send'))
-        .onClick((): void => { this.sendQuickDraft(); })
-    }.width('calc(100% - 16vp)').height(48).padding({ left: 4, right: 4, top: 2, bottom: 2 })
-      .margin({ top: 8, bottom: 8 })
+      }.width('100%').padding({ left: 4, right: 4, top: 4, bottom: 4 })
+    }.id('home-quick-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)
+      .borderRadius(18).clip(true).margin({ top: 8, bottom: 8 })
   }
 
   @Builder
@@ -309,14 +343,15 @@ export struct XopcHomeView {
     if (this.tab === 0 && this.layout.isMainDockVisible(0)) {
       Column() {
         this.dockItems()
-      }.id('main-tab-dock').width('100%').backgroundColor(this.colors.panel)
+      }.id('main-tab-dock').width('100%')
     }
   }
 
   build() {
     Stack() {
       Navigation(this.pathStack) {
-        Column() {
+        Stack({ alignContent: Alignment.Bottom }) {
+      Column() {
       Tabs({ barPosition: BarPosition.End, index: this.tab }) {
         TabContent() { XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
           focusRevision: this.chatFocusRevision,
@@ -329,18 +364,28 @@ export struct XopcHomeView {
           currentId: this.activeChatId, onOpen: (id: string): void => { this.openConversationFromList(id, false); },
           onNew: (id: string): void => { this.openConversationFromList(id, true); } }) }
         TabContent() { XopcProgressView({ activePage: this.tab === 2 && !this.detailVisible, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
-        TabContent() { XopcNotesTabView({ activePage: this.tab === 3 && !this.detailVisible, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
+        TabContent() { XopcNotesTabView({ activePage: this.tab === 3 && !this.detailVisible,
+          bottomInset: this.secondaryBottomRegionHeight,
+          onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
         TabContent() { XopcPersonalView({ onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
       }.scrollable(false).barHeight(0).barMode(BarMode.Fixed)
-        .animationDuration(this.layout.reduceMotion ? 0 : 220)
+        .animationDuration(0)
         .onChange((index: number): void => { this.tab = index; })
         .width('100%').layoutWeight(1)
+      }.id('home-tab-viewport').width('100%').height('100%')
+        .padding({ bottom: this.tab === 0 || this.tab === 3 ? 0 : this.secondaryBottomRegionHeight }).clip(true)
       if (this.tab !== 0) {
         Column() {
-          this.quickComposer()
-          if (this.layout.isMainDockVisible(this.tab)) { this.dockItems() }
-        }.id('secondary-bottom-region').width('92%').backgroundColor(this.colors.panel)
-          .borderRadius(20).clip(true).margin({ top: 4, bottom: this.layout.keyboardVisible ? 0 : 8 })
+          Column() {
+            this.quickComposer()
+            if (this.layout.isMainDockVisible(this.tab)) { this.dockItems() }
+          }.id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)
+            .borderRadius(24).clip(true)
+        }.id('secondary-bottom-region').width('100%')
+          .margin({ top: 4, bottom: 0 })
+          .onAreaChange((_previous: Area, current: Area): void => {
+            this.secondaryBottomRegionHeight = Number(current.height);
+          })
       }
         }.width('100%').height('100%')
       }.hideTitleBar(true).mode(NavigationMode.Stack).navDestination(this.destination)

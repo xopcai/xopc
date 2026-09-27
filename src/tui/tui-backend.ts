@@ -44,7 +44,6 @@ export interface TuiComposerHistoryItem {
 export interface TuiSessionItem {
   agentId?: string;
   sourceChannel?: string;
-  generatedShell?: boolean;
   key: string;
   updatedAt?: number | null;
   model?: string | null;
@@ -219,6 +218,7 @@ export interface TuiBackend {
 
   /** Global composer history, shared across sessions and clients. */
   getComposerInputHistory(): Promise<TuiComposerHistoryItem[]>;
+  getComposerDraftDirectory(): Promise<string>;
 
   /** Persist one submitted chat input. */
   recordComposerInputHistory(text: string): Promise<TuiComposerHistoryItem>;

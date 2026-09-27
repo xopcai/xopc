@@ -1,8 +1,9 @@
-import { XopcChatModel, XopcChatAgent, XopcQueuedInput } from '../model/chat';
+import { XopcChatModel, XopcChatAgent, XopcQueuedInput, XopcSessionPreparation } from '../model/chat';
 import { XopcChatRepository } from '../repository/chatRepository';
 
 @ObservedV2
 export class XopcChatOptionsViewModel {
+  @Trace preparation?: XopcSessionPreparation;
   @Trace models: XopcChatModel[] = [];
   @Trace agents: XopcChatAgent[] = [];
   @Trace modelId: string = '';
@@ -42,6 +43,11 @@ export class XopcChatOptionsViewModel {
       if (generation !== this.generation) return;
       this.modelId = config.model || models.defaultId || this.models[0]?.id || '';
       this.thinkingLevel = config.thinkingLevel;
+      if (!config.model && this.modelId && await this.repository.draft(id)) {
+        const selected = this.models.find((item: XopcChatModel): boolean => item.id === this.modelId);
+        this.thinkingLevel = selected?.thinking?.initialValue ?? 'off';
+        await this.repository.setModel(id, this.modelId, this.thinkingLevel);
+      }
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) this.loading = false; }
   }
@@ -70,7 +76,8 @@ export class XopcChatOptionsViewModel {
       if (request !== this.queueRequest) return;
       this.queued = state.inputs.filter((item: XopcQueuedInput): boolean => item.kind === 'message' && item.status === 'queued')
         .sort((a: XopcQueuedInput, b: XopcQueuedInput): number => a.position - b.position);
-      this.queueError = '';
+      this.preparation = state.preparation;
+      this.queueError = state.preparation?.state === 'preparation_failed' ? state.preparation.lastError || 'SESSION_PREPARATION_FAILED' : '';
     } catch (error) { if (request === this.queueRequest) this.queueError = (error as Error).message; }
   }
   async changeQueued(input: XopcQueuedInput, content?: string): Promise<boolean> {
@@ -81,6 +88,17 @@ export class XopcChatOptionsViewModel {
       if (generation !== this.generation) return false;
       await this.refreshQueue(); return true;
     } catch (error) { if (generation === this.generation) { await this.refreshQueue(); this.queueError = (error as Error).message; } return false; }
+    finally { this.queueBusy = false; }
+  }
+  async retryQueue(): Promise<void> {
+    if (this.queueBusy) return;
+    this.queueBusy = true;
+    try {
+      if (this.preparation?.state === 'preparation_failed') {
+        await this.repository.retryPreparation(this.conversationId, this.preparation.operationId, this.preparation.revision);
+      }
+      await this.refreshQueue();
+    } catch (error) { this.queueError = (error as Error).message; }
     finally { this.queueBusy = false; }
   }
 }

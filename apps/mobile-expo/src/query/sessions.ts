@@ -1,11 +1,9 @@
 import {
-  buildCreateSessionPath,
   buildSessionActionPath,
   buildSessionDetailPath,
   buildSessionHistoryPath,
   buildSessionListPath,
   buildSessionRunPath,
-  extractCreatedConversationId,
   normalizeSessionActiveRunResponse,
   parseSessionMessagePage,
   parseSessionResponse,
@@ -15,7 +13,7 @@ import {
   type SessionRoutingMeta as GatewaySessionRoutingMeta,
   type SessionStatus as GatewaySessionStatus,
   type SessionsListResponse,
-  type SessionCreateRequest,
+  type LocalSessionOptions,
   type SessionContextSummary,
   modelPreferenceForAgent,
   createDefaultNewSessionPreferences,
@@ -27,8 +25,9 @@ import {
   writeCachedSessions,
 } from '../features/gateway/sessions-cache';
 import { useGatewayStore } from '../stores/gateway-store';
+import { reconcileLocalSession } from './session-reconciliation';
 import { usePreferencesStore } from '../stores/preferences-store';
-import { setSessionInitialAgentConfig } from './models';
+import { createLocalSessionDraft, readLocalSessionDraft, removeLocalSessionDraft } from '../features/chat/local-session-drafts';
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -188,6 +187,8 @@ export async function fetchSession(
   key: string,
   options: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<SessionDetail | null> {
+  await reconcileLocalSession(key);
+  if (readLocalSessionDraft(key)) return { key, messages: [] };
   const path = buildSessionDetailPath(key);
   const res = await (options.signal || options.timeoutMs !== undefined
     ? apiFetch(path, options)
@@ -200,6 +201,8 @@ export async function fetchSession(
 
 /** Validate a restored selection without downloading the full transcript. Auth/network failures remain errors. */
 export async function fetchSessionResumeStatus(key: string, signal?: AbortSignal): Promise<'available' | 'unavailable'> {
+  await reconcileLocalSession(key);
+  if (readLocalSessionDraft(key)) return 'available';
   const res = await apiFetch(`${buildSessionDetailPath(key)}?limit=1`, { signal });
   if (res.status === 404 || res.status === 410 || res.status === 403) return 'unavailable';
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
@@ -209,8 +212,10 @@ export async function fetchSessionResumeStatus(key: string, signal?: AbortSignal
 }
 
 export async function fetchSessionActiveRun(key: string, signal?: AbortSignal): Promise<SessionActiveRunPayload> {
+  await reconcileLocalSession(key);
   const normalizedKey = key.trim();
   if (!normalizedKey) return { active: false };
+  if (readLocalSessionDraft(key)) return { active: false };
 
   const path = buildSessionRunPath(normalizedKey);
   const res = await (signal ? apiFetch(path, { signal }) : apiFetch(path));
@@ -231,6 +236,8 @@ export async function fetchSessionMessagePage(
   key: string,
   options?: { limit?: number; before?: string; ifNoneMatch?: string },
 ): Promise<SessionMessagePage | null | 'not-modified'> {
+  await reconcileLocalSession(key);
+  if (readLocalSessionDraft(key)) return emptySessionMessagePage(key);
   const path = buildSessionHistoryPath(key, options);
   const res = options?.ifNoneMatch
     ? await apiFetch(path, { headers: { 'If-None-Match': options.ifNoneMatch } })
@@ -250,9 +257,9 @@ export async function fetchSessionContextSummary(key: string): Promise<SessionCo
 }
 
 export async function createSession(
-  input: Omit<SessionCreateRequest, 'channel'> = {},
+  input: LocalSessionOptions = {},
 ): Promise<string> {
-  const body: SessionCreateRequest = { channel: 'webchat' };
+  const body: LocalSessionOptions = {};
   if (input.agentId?.trim()) body.agentId = input.agentId.trim().toLowerCase();
   if (input.projectId?.trim()) body.projectId = input.projectId.trim();
   if (input.executionMode) body.executionMode = input.executionMode;
@@ -272,37 +279,23 @@ export async function createSession(
           : {}),
       }
     : undefined);
-  const res = await apiFetch(buildCreateSessionPath(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+  return createLocalSessionDraft({
+    agentId: body.agentId ?? preferences.selectedAgentId ?? 'main',
+    projectId: body.projectId ?? null,
+    execution: body.executionMode ? { mode: body.executionMode, ...(body.baseRef ? { baseRef: body.baseRef } : {}) } : null,
+    temporary: body.temporary === true,
+    model: body.initialAgentConfig?.model ?? '', thinkingLevel: body.initialAgentConfig?.thinkingLevel ?? 'off',
   });
-  if (!res.ok) throwApiError(res, await parseErrorBody(res));
-  const raw = await res.json();
-  const conversationId = extractCreatedConversationId(raw);
-  if (!body.initialAgentConfig) {
-    const routedAgentId = (raw as { session?: { routing?: { agentId?: unknown } } })
-      .session?.routing?.agentId;
-    const routedPreference = typeof routedAgentId === 'string'
-      ? modelPreferenceForAgent(preferences, routedAgentId)
-      : undefined;
-    if (routedPreference) {
-      await setSessionInitialAgentConfig(conversationId, {
-        model: routedPreference.modelRef,
-        ...(routedPreference.thinkingLevel
-          ? { thinkingLevel: routedPreference.thinkingLevel }
-          : {}),
-      });
-    }
-  }
-  return conversationId;
 }
 
 // ── Session actions ──────────────────────────────────────────────
 
 export async function deleteSession(key: string): Promise<void> {
+  const draft = readLocalSessionDraft(key);
+  if (draft && !draft.clientMessageId && !draft.materialization) { removeLocalSessionDraft(key); return; }
   const res = await apiFetch(buildSessionActionPath(key, 'delete'), { method: 'DELETE' });
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
+  removeLocalSessionDraft(key);
 }
 
 export async function renameSession(key: string, name: string): Promise<void> {

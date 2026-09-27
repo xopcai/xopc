@@ -15,8 +15,8 @@ export const useLocalMessagesStore = create<{
   })),
 }));
 
-export function localMessageScope(gatewayId: string | null, conversationId: string): string {
-  return JSON.stringify([gatewayId, conversationId]);
+export function localMessageScope(gatewayId: string | null, conversationId: string, deviceId: string | null): string {
+  return JSON.stringify([gatewayId, deviceId, conversationId]);
 }
 
 export function readLocalMessages(scope: string): Message[] {

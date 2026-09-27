@@ -6,6 +6,8 @@ import {
 import {
   buildSessionDetailPath,
   parseSessionResponse,
+  sessionInputCommandSchema,
+  isSessionCommandRejected,
   type ClarificationResponseAction,
   type ClarificationWaitSnapshot,
 } from '@xopcai/gateway-contract';
@@ -37,6 +39,12 @@ import {
 import { useGatewayStore } from '../stores/gateway-store';
 import type { MessageSubmission } from '../features/chat/message-submission';
 import { usePreferencesStore } from '../stores/preferences-store';
+import { readLocalSessionDraft, saveLocalSessionDraft, removeLocalSessionDraft } from '../features/chat/local-session-drafts';
+import { upsertMessageOutbox } from '../features/chat/message-outbox';
+import { localMessageScope } from '../features/chat/local-messages-store';
+import { fetchSessionAgentConfig } from '../query/models';
+import { writeCachedSessionDetail } from '../features/gateway/session-detail-cache';
+import { persistSubmissionAttachments } from '../features/chat/durable-attachments';
 
 export type MessagingCallbacks = AgentStreamCallbacks;
 
@@ -383,7 +391,19 @@ export class AgentMessageSender {
       }
     };
     assertCurrent();
-    if (!input.expectedTranscriptId) {
+    const draft = input.taskId ? undefined : readLocalSessionDraft(input.conversationId);
+    if (!(input.creation?.temporary || draft?.creation.temporary)) input.attachments = await persistSubmissionAttachments(input.attachments);
+    assertCurrent();
+    if (draft) {
+      if (draft.materialization) throw new Error('Conversation preparation is awaiting confirmation');
+      if (!draft.creation.model) throw new Error('Select a model before sending');
+      if (draft.clientMessageId && draft.clientMessageId !== input.clientMessageId) throw new Error('The first input is awaiting confirmation');
+      input.creation ??= structuredClone(draft.creation);
+      draft.clientMessageId = input.clientMessageId;
+      saveLocalSessionDraft(draft);
+      upsertMessageOutbox(localMessageScope(input.gatewayId, input.conversationId, useGatewayStore.getState().getActiveProfile()?.deviceId ?? null), input, 'sending');
+    }
+    if (!input.creation && !input.expectedTranscriptId) {
       const response = await apiFetch(buildSessionDetailPath(input.conversationId));
       assertCurrent();
       if (!response.ok) throw new Error(formatApiHttpError(response.status, response.statusText));
@@ -391,39 +411,65 @@ export class AgentMessageSender {
       if (!identity) throw new Error('Session identity is unavailable');
       input.expectedTranscriptId = identity;
     }
+    if (!input.creation && !input.taskId && input.configVersion === undefined) {
+      input.configVersion = (await fetchSessionAgentConfig(input.conversationId)).configVersion;
+      assertCurrent();
+    }
     // Keep uploaded references on the same submission so manual retries use identical media.
     input.attachments = await materializeAttachments(input.attachments);
     assertCurrent();
     const origin = await waitForMobileEndpointTurnClaim(undefined, requestMobileRealtimeReconnect);
     assertCurrent();
+    const content = { content: input.content,
+      ...(input.attachments.length ? { attachments: input.attachments.map(({ localUri: _localUri, ...attachment }) => attachment) } : {}),
+      ...(input.contextRefs.length ? { contextRefs: input.contextRefs } : {}) };
+    const command = input.taskId
+      ? { clientMessageId: input.clientMessageId, expectedTranscriptId: input.expectedTranscriptId, delivery: input.delivery, ...content, origin }
+      : sessionInputCommandSchema.parse(input.creation
+        ? { kind: 'start', clientMessageId: input.clientMessageId, creation: input.creation, input: content, origin }
+        : { kind: 'append', clientMessageId: input.clientMessageId, expectedTranscriptId: input.expectedTranscriptId,
+          configVersion: input.configVersion, delivery: input.delivery, input: content, origin });
+    upsertMessageOutbox(localMessageScope(input.gatewayId, input.conversationId, useGatewayStore.getState().getActiveProfile()?.deviceId ?? null), input, 'sending');
     const response = await apiFetch(input.taskId
       ? `/api/tasks/${encodeURIComponent(input.taskId)}/inputs`
       : `/api/sessions/${encodeURIComponent(input.conversationId)}/inputs`, {
       method: 'POST',
       recoverRouteOnNetworkError: true,
       ...(input.taskId ? { headers: { 'X-Xopc-Expected-Session-Key': input.conversationId } } : {}),
-      body: JSON.stringify({
-        clientMessageId: input.clientMessageId,
-        expectedTranscriptId: input.expectedTranscriptId,
-        delivery: input.delivery,
-        content: input.content,
-        origin,
-        ...(input.attachments.length ? {
-          attachments: input.attachments.map(({ localUri: _localUri, ...attachment }) => attachment),
-        } : {}),
-        ...(input.contextRefs.length ? { contextRefs: input.contextRefs } : {}),
-      }),
+      body: JSON.stringify(command),
     });
     assertCurrent();
     const json = await response.json().catch(() => null) as {
       error?: { message?: string };
-      payload?: { state?: { activeRunId?: string; inputs?: Array<{ clientMessageId: string }> } };
+      payload?: {
+        receipt?: { conversationId: string; clientMessageId: string; transcriptId: string };
+        session?: { key: string; transcriptId?: string };
+        inputState?: { activeRunId?: string; inputs?: Array<{ clientMessageId: string }> };
+        state?: { activeRunId?: string; inputs?: Array<{ clientMessageId: string }> };
+      };
     } | null;
+    assertCurrent();
     if (!response.ok) {
+      if (!input.taskId && isSessionCommandRejected(response.status, json)) {
+        if (draft?.clientMessageId === input.clientMessageId) {
+          delete draft.clientMessageId;
+          saveLocalSessionDraft(draft);
+        }
+        delete input.creation;
+        delete input.configVersion;
+        delete input.expectedTranscriptId;
+      }
       throw new Error(formatApiHttpError(response.status, response.statusText, json?.error?.message));
     }
     assertCurrent();
-    const state = json?.payload?.state;
+    if (!input.taskId) {
+      const receipt = json?.payload?.receipt;
+      if (!receipt || receipt.conversationId !== input.conversationId || receipt.clientMessageId !== input.clientMessageId) throw new Error('Invalid input receipt');
+      if (json?.payload?.session?.transcriptId !== receipt.transcriptId) throw new Error('Conversation was reset; reload before sending');
+      if (input.creation) writeCachedSessionDetail(input.gatewayId, input.conversationId, { key: input.conversationId, transcriptId: receipt.transcriptId, messages: [] });
+      removeLocalSessionDraft(input.conversationId);
+    }
+    const state = input.taskId ? json?.payload?.state : json?.payload?.inputState;
     // Completed idempotent retries have no row in the active input list.
     if (!state || !Array.isArray(state.inputs)) {
       throw new Error('Network response was invalid');

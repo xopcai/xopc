@@ -301,7 +301,7 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
             </div>
           </div>
         ) : null}
-      </section> : <ChatPanel key={`${profile!.gatewayId}:${profile!.gatewayUrl}`} gatewayId={profile!.gatewayId} />}
+      </section> : <ChatPanel key={JSON.stringify([profile!.gatewayId, profile!.gatewayUrl, profile!.deviceId])} gatewayId={profile!.gatewayId} deviceId={profile!.deviceId} />}
     </main>
   );
 }

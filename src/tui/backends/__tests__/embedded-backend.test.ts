@@ -1,4 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { EmbeddedDraftStore } from '../embedded-drafts.js';
+import { openXopcDatabase, closeXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../storage/sqlite/connection.js';
+import { getSessionMetadata } from '../../../storage/sqlite/session-repository.js';
+import { claimNextSessionInput, getSessionInputById } from '../../../storage/sqlite/session-input-repository.js';
+import { acceptSessionCommand, getSessionInputReceipt } from '../../../storage/sqlite/session-creation-repository.js';
 
 const mocks = vi.hoisted(() => {
   const sessionConfigPatch = vi.fn(async () => ({ ok: true }));
@@ -44,6 +52,9 @@ vi.mock('../../../config/schema.js', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../../config/schema.js')>(),
   getAgentDefaultModelRef: () => 'openai/test',
 }));
+vi.mock('../../../config/agent-profile.js', () => ({
+  resolveEffectiveAgentProfile: (agentId: string) => ({ agentId, primaryModelRef: 'openai/test', resolvedWorkspacePath: '/tmp/workspace' }),
+}));
 
 vi.mock('../../../infra/bus/index.js', () => {
   class MessageBusShutdownError extends Error {}
@@ -78,6 +89,87 @@ vi.mock('../../../providers/xopc-cloud-catalog-coordinator.js', () => ({
 import { EmbeddedBackend } from '../embedded-backend.js';
 
 describe('EmbeddedBackend', () => {
+  it('recovers an orphan claim without replay and retries the original durable input explicitly', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'xopc-embedded-recovery-'));
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(directory, 'test.db') });
+    try {
+      const backend = new EmbeddedBackend({ config: {} as never });
+      const store = new EmbeddedDraftStore(directory);
+      (backend as unknown as { drafts: EmbeddedDraftStore }).drafts = store;
+      const execute = vi.fn(async function* () {});
+      (backend as unknown as { ensureAgent: unknown }).ensureAgent = async () => ({ turnDispatcher: { processDirectStreaming: execute } });
+      const id = await backend.createConversation('writer');
+      const draft = store.read(id)!;
+      draft.command = { kind: 'start', clientMessageId: '22222222-2222-4222-8222-222222222222',
+        creation: draft.creation, input: { content: 'hello' }, origin: { type: 'system', source: 'cli' } };
+      draft.ownerPid = process.pid;
+      store.save(id, draft);
+      const receipt = acceptSessionCommand({ conversationId: id, principalId: 'local:tui', sourceChannel: 'tui', command: draft.command,
+        preparedInput: { content: 'hello', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: draft.command.origin } });
+      claimNextSessionInput(id, 'old-run', receipt.inputId!);
+      expect((await backend.getChatInputState(id)).inputs[0].status).toBe('running');
+      const probe = vi.spyOn(process, 'kill').mockImplementation(() => { throw Object.assign(new Error('gone'), { code: 'ESRCH' }); });
+      let recoveryRevision = 0;
+      try {
+        const state = await backend.getChatInputState(id);
+        recoveryRevision = state.revision;
+        expect(state.inputs[0].status).toBe('interrupted');
+        expect(state.activeRunId).toBeUndefined();
+        expect(execute).not.toHaveBeenCalled();
+      } finally { probe.mockRestore(); }
+      await backend.sendChat({ conversationId: id, message: 'hello' });
+      await vi.waitFor(() => expect(getSessionInputById(id, receipt.inputId!)?.status).toBe('completed'));
+      expect(getSessionInputReceipt(id, draft.command.clientMessageId, 'local:tui')?.inputId).toBe(receipt.inputId);
+      expect(store.read(id)).toBeUndefined();
+      const completed = await backend.getChatInputState(id);
+      expect(completed.inputs).toEqual([]);
+      expect(completed.revision).toBeGreaterThan(recoveryRevision);
+    } finally { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(directory, { recursive: true, force: true }); }
+  });
+  it('freezes the first input before agent initialization and atomically accepts it on retry', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'xopc-embedded-input-'));
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(directory, 'test.db') });
+    try {
+      const backend = new EmbeddedBackend({ config: {} as never });
+      const store = new EmbeddedDraftStore(directory);
+      (backend as unknown as { drafts: EmbeddedDraftStore }).drafts = store;
+      const ensureAgent = vi.fn().mockRejectedValueOnce(new Error('agent unavailable')).mockResolvedValue({
+        turnDispatcher: { processDirectStreaming: async function* () { yield { type: 'message_start', message: { role: 'user', content: 'hello' } }; } },
+      });
+      (backend as unknown as { ensureAgent: typeof ensureAgent }).ensureAgent = ensureAgent;
+      const id = await backend.createConversation('writer');
+      expect(getSessionMetadata(id)).toBeNull();
+      await expect(backend.sendChat({ conversationId: id, message: 'hello' })).rejects.toThrow('agent unavailable');
+      const clientMessageId = store.read(id)?.command?.clientMessageId;
+      expect(clientMessageId).toBeTruthy();
+      expect(getSessionMetadata(id)).toBeNull();
+      await expect(backend.sendChat({ conversationId: id, message: 'changed' })).rejects.toThrow('awaiting confirmation');
+      const result = await backend.sendChat({ conversationId: id, message: 'hello' });
+      expect(getSessionMetadata(id)).toMatchObject({ sourceChannel: 'tui', agentId: 'writer' });
+      const receipt = getSessionInputReceipt(id, clientMessageId!, 'local:tui')!;
+      await vi.waitFor(() => expect(getSessionInputById(id, receipt.inputId!)).toMatchObject({ clientMessageId, runId: result.runId, status: 'completed' }));
+      expect(store.read(id)).toBeUndefined();
+    } finally { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('creates, restores, edits and discards a local draft without starting the agent', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'xopc-embedded-draft-'));
+    try {
+      const backend = new EmbeddedBackend({ config: {} as never });
+      (backend as unknown as { drafts: EmbeddedDraftStore }).drafts = new EmbeddedDraftStore(directory);
+      const id = await backend.createConversation('writer');
+      await backend.patchSession(id, { model: 'openai/selected', workingDirectory: '/tmp/chosen' });
+      expect(await backend.getSessionInfo(id)).toMatchObject({ agentId: 'writer', model: 'selected', effectiveWorkspacePath: '/tmp/chosen' });
+      expect(await backend.loadHistory({ conversationId: id })).toEqual({ messages: [] });
+      expect(new EmbeddedDraftStore(directory).read(id)?.creation.model).toBe('openai/selected');
+      expect(mocks.agentService).not.toHaveBeenCalled();
+      expect(await backend.deleteSession(id)).toEqual({ ok: true });
+      expect(() => readFileSync(join(directory, `${id}.json`))).toThrow();
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
     vi.clearAllTimers();

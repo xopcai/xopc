@@ -48,7 +48,7 @@ import {
 } from './session-message-parser';
 import { reconcileMessageRows } from './reconcile-message-rows';
 import { sessionContainsFinalAssistant } from './session-refresh-confirmation';
-import { takeNewChatConversationId } from './session-prefetch';
+import { openNewChat } from './open-new-chat';
 import { buildMobileWelcomeModel } from './mobile-welcome-starters';
 import { useChatPageBootstrap } from './use-chat-page-bootstrap';
 import { useChatSession } from './use-chat-session';
@@ -256,7 +256,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   useEffect(() => {
     const confirmedIds = sessionMessages.flatMap(message => message.clientMessageId ? [message.clientMessageId] : []);
     if (confirmedIds.length === 0) return;
-    const scope = localMessageScope(activeGatewayId, conversationId);
+    const scope = localMessageScope(activeGatewayId, conversationId, useGatewayStore.getState().getActiveProfile()?.deviceId ?? null);
     confirmOutboxMessages(scope, confirmedIds);
     useLocalMessagesStore.getState().update(scope, messages => confirmLocalMessages(messages, confirmedIds));
   }, [activeGatewayId, conversationId, sessionMessages]);
@@ -401,7 +401,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
                 queryFn: () => fetchTask(routeTaskId),
               })).task.version,
             )).activeConversationId
-          : await takeNewChatConversationId(
+          : await openNewChat(
               { agentId, projectId: sessionContext.projectId ?? null },
               (() => {
                 const preference = modelPreferenceForAgent(newSessionPreferences, agentId);
@@ -438,7 +438,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     const agentId = currentSessionAgentId || defaultAgentId;
     void (async () => {
       const preference = modelPreferenceForAgent(newSessionPreferences, agentId);
-      const key = await takeNewChatConversationId(
+      const key = await openNewChat(
         { agentId, projectId: sessionContext.projectId ?? null },
         preference
           ? {
@@ -466,7 +466,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     const agentId = currentSessionAgentId || defaultAgentId;
     void (async () => {
       const preference = modelPreferenceForAgent(newSessionPreferences, agentId);
-      const key = await takeNewChatConversationId(
+      const key = await openNewChat(
         { agentId, projectId, executionMode },
         preference
           ? {

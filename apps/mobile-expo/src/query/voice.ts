@@ -8,6 +8,7 @@ import {
 import { apiFetch } from '../api/client';
 import { queryClient } from './query-client';
 import { fetchSession } from './sessions';
+import { materializeSession } from './session-materialization';
 
 export class VoiceRequestError extends Error {
   constructor(readonly code: string, readonly status = 0) { super(code); }
@@ -33,12 +34,14 @@ export async function preflightVoice(
   signal: AbortSignal,
   timeoutMs?: number,
 ): Promise<void> {
+  if (request.purpose === 'conversation' && request.conversationId) await materializeSession(request.conversationId, 'voice');
   const response = await apiFetch('/api/voice/realtime/preflight', {
     method: 'POST', body: JSON.stringify(request), signal, timeoutMs,
   });
   if (!response.ok) throw new VoiceRequestError((await response.json()).error?.code ?? 'SERVICE_UNAVAILABLE', response.status);
 }
 export async function createVoiceConnection(request: CreateVoiceSessionRequest, signal: AbortSignal) {
+  if (request.purpose === 'conversation' && request.conversationId) await materializeSession(request.conversationId, 'voice');
   let origin = '';
   const response = await apiFetch('/api/voice/realtime/sessions', {
     method: 'POST', body: JSON.stringify(request), signal, onResolvedOrigin: value => { origin = value; },
@@ -66,7 +69,10 @@ export async function cancelVoiceConnection(
 }
 export function voiceSessionIdentity(gatewayId: string, conversationId: string, signal?: AbortSignal, timeoutMs?: number) {
   return queryClient.fetchQuery({ queryKey: ['voice-identity', gatewayId, conversationId], staleTime: 0, retry: false,
-    queryFn: () => fetchSession(conversationId, { signal, timeoutMs }),
+    queryFn: async () => {
+      await materializeSession(conversationId, 'voice');
+      return fetchSession(conversationId, { signal, timeoutMs });
+    },
   });
 }
 

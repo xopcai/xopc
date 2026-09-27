@@ -73,7 +73,6 @@ export interface TuiRunStatus {
 /** Session metadata shown in the TUI footer. */
 export interface SessionInfo {
   agentId?: string;
-  generatedShell?: boolean;
   model?: string;
   modelProvider?: string;
   thinkingLevel?: string;

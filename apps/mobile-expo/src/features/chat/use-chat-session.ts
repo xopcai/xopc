@@ -192,7 +192,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     clarificationAttemptRef.current = null;
     setClarifySubmitError(null);
   }, []);
-  const scope = localMessageScope(activeGatewayId, conversationId);
+  const scope = localMessageScope(activeGatewayId, conversationId, useGatewayStore.getState().getActiveProfile()?.deviceId ?? null);
   const optimisticMessages = useLocalMessagesStore(state => state.sessions[scope] ?? readLocalMessages(scope));
   const setOptimisticMessages = useCallback((update: (messages: Message[]) => Message[]) => {
     useLocalMessagesStore.getState().update(scope, update);
@@ -759,7 +759,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   // ── Submit once; only the message retry action submits again. ──────
   const submitMessage = useCallback(async (input: MessageSubmission): Promise<void> => {
-    const targetScope = localMessageScope(input.gatewayId, input.conversationId);
+    const targetScope = localMessageScope(input.gatewayId, input.conversationId, useGatewayStore.getState().getActiveProfile()?.deviceId ?? null);
     const updateMessage = (deliveryState: Message['deliveryState']) => {
       useLocalMessagesStore.getState().update(
         targetScope,

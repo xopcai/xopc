@@ -12,11 +12,13 @@ import { ComposerFrame } from '@/features/chat/composer/composer-frame';
 import { shouldRouteGlobalComposerPaste } from '@/features/chat/composer/composer-global-paste';
 import { applyComposerPaste, resolveComposerPaste } from '@/features/chat/composer/composer-paste';
 import { ChatPendingFollowUpStack } from '@/features/chat/follow-up/chat-pending-follow-up-stack';
+import { SessionPreparationStatus } from '@/features/chat/session/session-preparation-status';
 import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
 import { ComposerContextChips } from '@/features/chat/composer/composer-context-chips';
 import { ComposerContextBar, type ComposerContextBarProps } from '@/features/chat/composer/composer-context-bar';
 import { takeComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
 import { ComposerToolbar } from '@/features/chat/composer/composer-toolbar';
+import { readLocalSessionDraft } from '../session/local-session-drafts';
 import { wireFollowUpAttachmentsToComposer } from '@/features/chat/composer/follow-up-attachments-wire';
 import { MAX_PENDING_FOLLOW_UPS } from '@/features/chat/follow-up/pending-follow-up.types';
 import { AtMentionPicker } from '@/features/chat/palette/at-mention-picker';
@@ -42,6 +44,7 @@ import type { WelcomeSuggestionSelection } from '@/features/chat/welcome/welcome
 import { useComposerActions } from '@/features/chat/composer/use-composer-actions';
 import { commitAcceptedSend } from '@/features/chat/composer/commit-accepted-send';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
+import { usePersistedComposer } from './use-persisted-composer';
 import { useComposerEditor } from '@/features/chat/composer/use-composer-editor';
 import { useComposerPickers } from '@/features/chat/composer/use-composer-pickers';
 import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcript-to-draft';
@@ -89,6 +92,7 @@ function composerAttachmentFromWire(attachment: WireAttachment): Attachment {
 export const ChatComposer = memo(function ChatComposer({
   placeholder,
   disabled,
+  sendDisabled = false,
   sending,
   streaming,
   conversationId,
@@ -99,7 +103,7 @@ export const ChatComposer = memo(function ChatComposer({
   thinkingLevel,
   modelSupportsThinking,
   onThinkingChange,
-  onSend,
+  onSend: submit,
   onAbort,
   onAddPendingFollowUp,
   onSteeringInterrupt,
@@ -131,6 +135,7 @@ export const ChatComposer = memo(function ChatComposer({
 }: {
   placeholder?: string;
   disabled: boolean;
+  sendDisabled?: boolean;
   sending: boolean;
   streaming: boolean;
   conversationId: string | null;
@@ -188,6 +193,7 @@ export const ChatComposer = memo(function ChatComposer({
   useEffect(() => {
     void fetchCommandsCached();
   }, []);
+  const onSend: ComposerSendHandler = (...args) => sendDisabled ? false : submit(...args);
   const shouldSyncSelectionRef = useRef(false);
   const commandPalettePanelRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -208,10 +214,10 @@ export const ChatComposer = memo(function ChatComposer({
       return;
     }
     let cancelled = false;
-    void getWorkspaceTrust(conversationId)
+    void readLocalSessionDraft(conversationId).then(draft => draft ? null : getWorkspaceTrust(conversationId))
       .then((state) => {
         if (cancelled) return;
-        setWorkspaceTrustPrompt(state.required && !state.trusted && state.decision === null ? state : null);
+        setWorkspaceTrustPrompt(state && state.required && !state.trusted && state.decision === null ? state : null);
       })
       .catch(() => {
         if (!cancelled) setWorkspaceTrustPrompt(null);
@@ -314,6 +320,7 @@ export const ChatComposer = memo(function ChatComposer({
   });
 
   const attachmentHandoffId = searchParams.get('attachmentHandoff');
+  usePersistedComposer(conversationId, editor, att, contextRefs, setContextRefs);
   useEffect(() => {
     if (!attachmentHandoffId) return;
     const file = takeComposerAttachmentHandoff(attachmentHandoffId);
@@ -667,6 +674,7 @@ export const ChatComposer = memo(function ChatComposer({
         </div>
       ) : null}
 
+      <SessionPreparationStatus conversationId={conversationId} />
       {pendingFollowUps.length > 0 ? (
         <div className="max-h-[min(30vh,11rem)] shrink-0 overflow-y-auto overflow-x-hidden border-b border-edge-subtle/80 [scrollbar-gutter:stable] dark:border-edge-subtle/70">
           <ChatPendingFollowUpStack
@@ -809,7 +817,7 @@ export const ChatComposer = memo(function ChatComposer({
         </div>
 
         <ComposerToolbar
-          disabled={disabled}
+          disabled={disabled || sendDisabled}
           sending={sending}
           streaming={streaming}
           runBusy={runBusyState}

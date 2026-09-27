@@ -194,10 +194,16 @@ export class XopcChannelBridge {
 
   async sendMessage(params: { conversationId: string; text: string }): Promise<Record<string, unknown>> {
     const client = this.client!;
+    const path = `/api/sessions/${encodeURIComponent(params.conversationId)}`;
+    const [detail, config] = await Promise.all([
+      client.getJson<{ session: { transcriptId: string } }>(path),
+      client.getJson<{ configVersion: number }>(`${path}/agent-config`),
+    ]);
     return client.postJson(`/api/sessions/${encodeURIComponent(params.conversationId)}/inputs`, {
-      clientMessageId: crypto.randomUUID(),
+      kind: 'append', clientMessageId: crypto.randomUUID(),
+      expectedTranscriptId: detail.session.transcriptId, configVersion: config.configVersion,
       delivery: 'next',
-      content: params.text,
+      input: { content: params.text }, origin: { type: 'system', source: 'cli' },
     });
   }
 

@@ -542,6 +542,82 @@ export const MessageBubble = memo(function MessageBubble({
       isUser ? 'justify-end' : 'justify-start',
       animateUserEntry && 'xopc-chat-user-message-enter',
     )}>
+      {isUser && !isStreaming && !readonly ? (
+        <div
+          data-user-message-actions
+          className={cn(
+            'mr-1.5 flex h-8 shrink-0 items-center gap-0.5 self-end pb-0.5 sm:gap-2',
+            'pointer-events-none opacity-0 transition-opacity duration-150 ease-out',
+            'group-hover/msg:pointer-events-auto group-hover/msg:opacity-100',
+            'group-focus-within/msg:pointer-events-auto group-focus-within/msg:opacity-100',
+            '[@media(hover:none)_and_(pointer:coarse)]:pointer-events-auto [@media(hover:none)_and_(pointer:coarse)]:opacity-100',
+          )}
+        >
+          {onRetryUserMessageRound && messageIndex != null && message.deliveryStatus !== 'failed' ? (
+            <button
+              type="button"
+              className={cn(userMessageFooterAction, retryDisabled && 'opacity-40')}
+              onClick={() => onRetryUserMessageRound(messageIndex)}
+              disabled={retryDisabled}
+              title={
+                deleteRoundDisabled
+                  ? m.chat.userMessageActionsWait
+                  : !userMessageCanRetry
+                    ? m.chat.userMessageRetryDisabledHint
+                    : m.chat.userMessageRetry
+              }
+              aria-label={m.chat.userMessageRetry}
+            >
+              <RefreshCw className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+              <span className="max-w-[4.5rem] truncate sm:max-w-none">{m.chat.userMessageRetry}</span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={cn(userMessageFooterAction, 'size-8 px-0')}
+            onClick={() => {
+              if (onEditUserMessage && messageIndex != null) {
+                onEditUserMessage(message, messageIndex);
+                return;
+              }
+              dispatchFillChatComposer(userCopyText, messageAttachmentsToWire(message.attachments));
+            }}
+            disabled={(
+              !userCopyText && !message.attachments?.length && !message.contextRefs?.length
+            ) || !userMessageCanEdit}
+            title={userMessageCanEdit ? m.chat.userMessageEdit : m.chat.userMessageEditDisabledHint}
+            aria-label={m.chat.userMessageEdit}
+          >
+            <Pencil className="size-3.5" strokeWidth={1.75} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className={cn(userMessageFooterAction, 'size-8 px-0')}
+            onClick={handleCopyUserMessage}
+            disabled={!userCopyText}
+            title={copyFeedback === 'user' ? m.chat.messageCopied : m.chat.userMessageCopy}
+            aria-label={copyFeedback === 'user' ? m.chat.messageCopied : m.chat.userMessageCopy}
+          >
+            {copyFeedback === 'user' ? (
+              <Check className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
+            ) : (
+              <Copy className="size-3.5" strokeWidth={1.75} aria-hidden />
+            )}
+          </button>
+          {onDeleteRound && messageIndex != null && !deleteRoundDisabled ? (
+            <button
+              type="button"
+              className={cn(userMessageFooterAction, 'size-8 px-0 hover:text-red-500 dark:hover:text-red-400')}
+              onClick={openDeleteConfirm}
+              title={m.chat.userMessageDelete}
+              aria-label={m.chat.userMessageDelete}
+            >
+              <Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div
         className={cn(
           'min-w-0',
@@ -730,83 +806,6 @@ export const MessageBubble = memo(function MessageBubble({
                 {m.chat.userMessageRetry}
               </button>
             ) : null}
-          </div>
-        ) : null}
-
-        {isUser && !isStreaming && !readonly ? (
-          <div className="mt-1.5 flex h-8 w-full min-w-0 shrink-0 justify-end">
-            <div
-              className={cn(
-                'flex h-full max-w-full items-center justify-end gap-0.5 sm:gap-2',
-                'pointer-events-none opacity-0 transition-opacity duration-150 ease-out',
-                'group-hover/msg:pointer-events-auto group-hover/msg:opacity-100',
-                'group-focus-within/msg:pointer-events-auto group-focus-within/msg:opacity-100',
-                '[@media(hover:none)_and_(pointer:coarse)]:pointer-events-auto [@media(hover:none)_and_(pointer:coarse)]:opacity-100',
-              )}
-            >
-              {onRetryUserMessageRound && messageIndex != null && message.deliveryStatus !== 'failed' ? (
-                <button
-                  type="button"
-                  className={cn(userMessageFooterAction, retryDisabled && 'opacity-40')}
-                  onClick={() => onRetryUserMessageRound(messageIndex)}
-                  disabled={retryDisabled}
-                  title={
-                    deleteRoundDisabled
-                      ? m.chat.userMessageActionsWait
-                      : !userMessageCanRetry
-                        ? m.chat.userMessageRetryDisabledHint
-                        : m.chat.userMessageRetry
-                  }
-                  aria-label={m.chat.userMessageRetry}
-                >
-                  <RefreshCw className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-                  <span className="max-w-[4.5rem] truncate sm:max-w-none">{m.chat.userMessageRetry}</span>
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className={cn(userMessageFooterAction, 'size-8 px-0')}
-                onClick={() => {
-                  if (onEditUserMessage && messageIndex != null) {
-                    onEditUserMessage(message, messageIndex);
-                    return;
-                  }
-                  dispatchFillChatComposer(userCopyText, messageAttachmentsToWire(message.attachments));
-                }}
-                disabled={(
-                  !userCopyText && !message.attachments?.length && !message.contextRefs?.length
-                ) || !userMessageCanEdit}
-                title={userMessageCanEdit ? m.chat.userMessageEdit : m.chat.userMessageEditDisabledHint}
-                aria-label={m.chat.userMessageEdit}
-              >
-                <Pencil className="size-3.5" strokeWidth={1.75} aria-hidden />
-              </button>
-              <button
-                type="button"
-                className={cn(userMessageFooterAction, 'size-8 px-0')}
-                onClick={handleCopyUserMessage}
-                disabled={!userCopyText}
-                title={copyFeedback === 'user' ? m.chat.messageCopied : m.chat.userMessageCopy}
-                aria-label={copyFeedback === 'user' ? m.chat.messageCopied : m.chat.userMessageCopy}
-              >
-                {copyFeedback === 'user' ? (
-                  <Check className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
-                ) : (
-                  <Copy className="size-3.5" strokeWidth={1.75} aria-hidden />
-                )}
-              </button>
-              {onDeleteRound && messageIndex != null && !deleteRoundDisabled ? (
-                <button
-                  type="button"
-                  className={cn(userMessageFooterAction, 'size-8 px-0 hover:text-red-500 dark:hover:text-red-400')}
-                  onClick={openDeleteConfirm}
-                  title={m.chat.userMessageDelete}
-                  aria-label={m.chat.userMessageDelete}
-                >
-                  <Trash2 className="size-3.5" strokeWidth={1.75} aria-hidden />
-                </button>
-              ) : null}
-            </div>
           </div>
         ) : null}
 

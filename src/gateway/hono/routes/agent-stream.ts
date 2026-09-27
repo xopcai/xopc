@@ -5,7 +5,8 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
 import { parseTurnContextRefs } from '../../../agent/source-context/types.js';
 import type { UserTurnAttachment } from '../../user-turn-input.js';
-import { replaceLatestSessionTurn, submitSessionInput } from './session-input-handler.js';
+import { replaceLatestSessionTurn } from './session-input-handler.js';
+import { handleSessionCommand, handleSessionInputReceipt, handleSessionPreparationRetry } from './session-command-handler.js';
 
 export function registerAgentStreamRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, chatRateLimitMiddleware } = deps;
@@ -33,9 +34,11 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
   });
 
   authenticated.post('/api/sessions/:conversationId/inputs', chatRateLimitMiddleware, async (c) => {
-    const conversationId = (c.req.param('conversationId') ?? '').trim();
-    return submitSessionInput(c, deps, conversationId);
+    return handleSessionCommand(c, deps);
   });
+  authenticated.post('/api/sessions/:conversationId/materialize', chatRateLimitMiddleware, c => handleSessionCommand(c, deps, true));
+  authenticated.get('/api/sessions/:conversationId/input-receipts/:clientMessageId', c => handleSessionInputReceipt(c, deps));
+  authenticated.post('/api/sessions/:conversationId/preparation/retry', chatRateLimitMiddleware, c => handleSessionPreparationRetry(c, deps));
 
   authenticated.post('/api/sessions/:conversationId/turns/:turnId/replace', chatRateLimitMiddleware, async (c) => {
     const conversationId = (c.req.param('conversationId') ?? '').trim();

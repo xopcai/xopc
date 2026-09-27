@@ -80,7 +80,7 @@ export struct XopcSettingsView {
       Row() {
         Text(label).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
         if (selected) { SymbolGlyph($r('sys.symbol.checkmark')).fontSize(20).fontColor([this.colors.accent]) }
-      }.width('100%').height(56)
+      }.width('100%').height(56).padding({ left: 16, right: 16 })
     }.id(id).width('100%').padding(0).borderRadius(14)
       .backgroundColor(selected ? this.colors.accentSoft : this.colors.panel).margin({ bottom: 8 }).onClick(action)
   }

@@ -165,6 +165,9 @@ describe('lazy route bundles', () => {
       '/api/status',
       '/api/realtime/tickets',
       '/api/sessions/example/inputs',
+      '/api/sessions/example/materialize',
+      '/api/sessions/example/input-receipts/client-message-id',
+      '/api/sessions/example/preparation/retry',
       '/api/sessions/example/turns/turn-1/replace',
       '/api/send',
     ];

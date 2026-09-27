@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
+vi.mock('../../features/chat/durable-attachments', () => ({ persistSubmissionAttachments: async (attachments: unknown[]) => attachments }));
 
 const testState = vi.hoisted(() => ({
   memory: new Map<string, string>(),
@@ -54,6 +55,7 @@ vi.mock('../../stores/gateway-store', () => ({
     getState: vi.fn(() => ({
       activeGatewayId: testState.gatewayId,
       connectionGeneration: testState.generation,
+      getActiveProfile: () => ({ gatewayId: testState.gatewayId, deviceId: 'device' }),
       apiUrl: (path: string) => `https://gateway.test${path}`,
     })),
   },
@@ -86,21 +88,37 @@ import {
 } from '../../features/endpoint-tools/turn-claim';
 
 import type { MessageSubmission } from '../../features/chat/message-submission';
+import { saveLocalSessionDraft, readLocalSessionDraft, patchLocalSessionDraft } from '../../features/chat/local-session-drafts';
 
 function submission(overrides: Partial<MessageSubmission> = {}): MessageSubmission {
   return {
     clientMessageId: 'message-a', gatewayId: 'computer-a', conversationId: 'session-a',
-    delivery: 'next', expectedTranscriptId: 'instance-a', content: 'hello', attachments: [], contextRefs: [], ...overrides,
+    delivery: 'next', expectedTranscriptId: 'instance-a', configVersion: 1, content: 'hello', attachments: [], contextRefs: [], ...overrides,
   };
 }
 
 function accepted(runId?: string): Response {
-  return new Response(JSON.stringify({ payload: { state: {
+  return new Response(JSON.stringify({ payload: { receipt: { conversationId: 'session-a', clientMessageId: 'message-a', transcriptId: 'instance-a' }, session: { transcriptId: 'instance-a' }, inputState: {
     activeRunId: runId, inputs: [{ id: 'input-a', clientMessageId: 'message-a' }],
   } } }), { status: 202 });
 }
 
 describe('AgentMessageSender voice message', () => {
+  it('releases a definitively rejected creation snapshot and permits model correction', async () => {
+    publishMobileEndpointTurnClaim('mobile-test', 'test-turn-token');
+    const id = '11111111-1111-4111-8111-111111111111';
+    saveLocalSessionDraft({ conversationId: id, createdAt: new Date().toISOString(), creation: {
+      agentId: 'main', projectId: null, execution: null, temporary: false, model: 'test/model', thinkingLevel: 'off',
+    } });
+    const input = submission({ conversationId: id, clientMessageId: '22222222-2222-4222-8222-222222222222' });
+    testState.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'BAD_REQUEST' } }), { status: 400 }));
+    const sender = new AgentMessageSender();
+    await expect(sender.sendMessage(input)).rejects.toThrow('400');
+    expect(readLocalSessionDraft(id)?.clientMessageId).toBeUndefined();
+    expect(input.creation).toBeUndefined();
+    expect(input.configVersion).toBeUndefined();
+    expect(patchLocalSessionDraft(id, { model: 'test/fixed' })).toBe(true);
+  });
   beforeEach(() => {
     testState.memory.clear();
     testState.gatewayId = 'computer-a';
@@ -131,7 +149,7 @@ describe('AgentMessageSender voice message', () => {
       const body = JSON.parse(String(init?.body)) as { clientMessageId: string };
       return new Response(JSON.stringify({
         ok: true,
-        payload: { state: { inputs: [{ id: 'input-1', clientMessageId: body.clientMessageId }] } },
+        payload: { receipt: { conversationId: 'session-a', clientMessageId: body.clientMessageId, transcriptId: 'instance-a' }, session: { transcriptId: 'instance-a' }, inputState: { inputs: [{ id: 'input-1', clientMessageId: body.clientMessageId }] } },
       }), { status: 202, headers: { 'Content-Type': 'application/json' } });
     });
 
@@ -152,7 +170,7 @@ describe('AgentMessageSender voice message', () => {
       timeoutMs: 60_000,
     });
     const sessionCall = testState.apiFetch.mock.calls.find(([path]) => path === '/api/sessions/session-a/inputs');
-    const submitted = JSON.parse(String(sessionCall?.[1]?.body)) as {
+    const submitted = JSON.parse(String(sessionCall?.[1]?.body)).input as {
       attachments: Array<{ uri?: string; data?: string; localUri?: string }>;
     };
     expect(submitted.attachments).toEqual([
@@ -184,7 +202,7 @@ describe('AgentMessageSender voice message', () => {
     }));
 
     const body = JSON.parse(String(testState.apiFetch.mock.calls[0]?.[1]?.body));
-    expect(body.contextRefs).toEqual([{ kind: 'note', sourceId: 'note-1', expectedVersion: '42' }]);
+    expect(body.input.contextRefs).toEqual([{ kind: 'note', sourceId: 'note-1', expectedVersion: '42' }]);
   });
 
   it('uploads transcription audio natively with the preferred UI language', async () => {
@@ -378,7 +396,7 @@ describe('AgentMessageSender local detach', () => {
   });
 
   it('submits task chat messages through the bound task endpoint', async () => {
-    testState.apiFetch.mockResolvedValue(accepted());
+    testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({ payload: { state: { inputs: [] } } }), { status: 202 }));
 
     await new AgentMessageSender().sendMessage(submission({ taskId: 'task/1' }));
 
@@ -433,14 +451,14 @@ describe('AgentMessageSender local detach', () => {
         inputs: null,
       } } }), { status: 202 }));
     const input = submission();
-    await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Network response was invalid');
-    await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Network response was invalid');
+    await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Invalid input receipt');
+    await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Invalid input receipt');
     expect(input.clientMessageId).toBe('message-a');
   });
 
   it('accepts a manual retry after the original run has already completed', async () => {
     testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({
-      payload: { state: { inputs: [] } },
+      payload: { receipt: { conversationId: 'session-a', clientMessageId: 'message-a', transcriptId: 'instance-a' }, session: { transcriptId: 'instance-a' }, inputState: { inputs: [] } },
     }), { status: 202 }));
     await expect(new AgentMessageSender().sendMessage(submission())).resolves.toEqual({ runId: undefined });
     expect(testState.apiFetch).toHaveBeenCalledTimes(1);
@@ -459,7 +477,7 @@ describe('AgentMessageSender local detach', () => {
     expect(testState.apiUploadFile).toHaveBeenCalledTimes(1);
     const bodies = testState.apiFetch.mock.calls.map(([, init]) => JSON.parse(String(init.body)));
     expect(bodies[0]).toEqual(bodies[1]);
-    expect(bodies[1].attachments[0]).toMatchObject({ uri: 'media://voice.m4a', durationSeconds: 1.25 });
+    expect(bodies[1].input.attachments[0]).toMatchObject({ uri: 'media://voice.m4a', durationSeconds: 1.25 });
   });
 
   it('resolves missing session identity before sending and keeps it on the message', async () => {

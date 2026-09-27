@@ -112,6 +112,39 @@ export class SessionInputCoordinator {
     return getSessionInputState(conversationId);
   }
 
+  async prepareInput(input: SubmitSessionInput) {
+    const attachments = await this.deps.prepareAttachments(input.conversationId, input.attachments);
+    const resolved = await this.deps.prepareContexts(input.conversationId, input.contextRefs) ?? [];
+    const contexts = fitSourceContextsToBudget([...resolved, ...(input.sourceContexts ?? [])]);
+    return {
+      status: 'queued' as const, requestedDelivery: input.delivery, effectiveDelivery: 'next' as const,
+      content: input.content.trim(), attachments, contextRefs: contexts.map(summarizeSourceContext),
+      contextSnapshots: contexts, thinking: input.thinking, origin: input.origin,
+    };
+  }
+
+  async dispatchAcceptedInput(conversationId: string, inputId: string): Promise<void> {
+    const input = getSessionInputById(conversationId, inputId);
+    if (!input) return;
+    await this.runSubmissionExclusive(input.conversationId, async () => {
+      const row = getSessionInputById(conversationId, inputId);
+      const state = this.snapshot(input.conversationId);
+      if (!row || row.status !== 'queued' || row.origin.type === 'endpoint' || row.requestedDelivery !== 'steer'
+        || !state.activeRunId || row.attachments?.length || row.contextSnapshots?.length
+        || (state.preparation && state.preparation.state !== 'ready')) return;
+      setSessionInputStatus(row.id, 'injecting', { effectiveDelivery: 'steer', targetRunId: state.activeRunId });
+      try {
+        if (!await this.deps.steer(row.conversationId, row.content)) {
+          setSessionInputStatus(row.id, 'queued', { effectiveDelivery: 'next', targetRunId: null });
+        }
+      } catch (error) {
+        // An ambiguous injection must not be executed again as a queued turn.
+        log.warn({ err: error, conversationId: row.conversationId, inputId }, 'Accepted steering input awaits execution recovery');
+      }
+      this.publish(row.conversationId);
+    });
+  }
+
   private publish(conversationId: string): SessionInputState {
     const state = this.snapshot(conversationId);
     this.deps.emit('session.input-state', state);

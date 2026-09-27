@@ -3,7 +3,8 @@ import { CapabilityCallSchema, ExtensionCapabilityBindingSchema, type Capability
 import { z } from 'zod';
 
 import { apiFetch, fetchJson } from '@/lib/fetch';
-import { waitForEndpointTurnClaim } from '@/features/endpoint-tools/turn-claim';
+import { SessionManager } from '@/features/chat/session/session-manager';
+import { sendSessionInput } from '@/features/chat/session/send-session-input';
 import { apiUrl } from '@/lib/url';
 import { showActivity } from '@/stores/activity-store';
 import { useThemeStore } from '@/stores/theme-store';
@@ -422,28 +423,9 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
     };
     let targetConversationId = conversationId?.trim() || '';
     if (newSession || !targetConversationId) {
-      const createResponse = await apiFetch(apiUrl('/api/sessions'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: 'webchat' }),
-      });
-      if (!createResponse.ok) throw new Error(`Session create failed: ${createResponse.status}`);
-      const created = (await createResponse.json()) as { session?: { key?: string } };
-      targetConversationId = created.session?.key ?? '';
-      if (!targetConversationId) throw new Error('Session create did not return a session key');
+      targetConversationId = (await new SessionManager().createSession()).key;
     }
-    const origin = await waitForEndpointTurnClaim();
-    const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(targetConversationId)}/inputs`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientMessageId: crypto.randomUUID(),
-        delivery: 'next',
-        content: message,
-        origin,
-      }),
-    });
-    if (!response.ok) throw new Error(`Agent request failed: ${response.status}`);
+    await sendSessionInput(targetConversationId, message);
     return { conversationId: targetConversationId };
   });
 

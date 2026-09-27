@@ -1,8 +1,4 @@
-import { conversationIdSchema } from '@xopcai/gateway-contract';
-import { ConversationAlreadyExistsError, createConversation } from '../../../storage/sqlite/conversation-repository.js';
-import { deleteSessionRecord } from '../../../storage/sqlite/session-repository.js';
 import { patchChatModelConfig } from './chat-model-config.js';
-import { randomUUID } from 'node:crypto';
 
 import type { Hono } from 'hono';
 import { SessionDiscoveryQuerySchema } from '@xopcai/gateway-contract';
@@ -10,8 +6,6 @@ import { SessionDiscoveryQuerySchema } from '@xopcai/gateway-contract';
 import { getSessionContextSummary } from '../../session-context-summary.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 
-import { resolveProjectAgentId } from '../../../projects/index.js';
-import type { SessionMetadataSeed } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
@@ -89,30 +83,6 @@ function listAllSidebarProjects(
 function isHistoryCursor(value: string): boolean {
   if (!/^(0|[1-9]\d*)$/.test(value)) return false;
   return Number.isSafeInteger(Number(value));
-}
-
-function buildDirectSessionMetadata(params: {
-  agentId: string;
-  source: string;
-  accountId: string;
-  peerId: string;
-}): SessionMetadataSeed {
-  return {
-    sourceChannel: params.source,
-    sourceChatId: [params.accountId, 'direct', params.peerId].join(':'),
-    sessionType: 'chat',
-    hiddenFromSessionList: true,
-    routing: {
-      agentId: params.agentId,
-      source: params.source,
-      accountId: params.accountId,
-      peerKind: 'direct',
-      peerId: params.peerId,
-    },
-    customData: {
-      genericNewChatShell: params.source === 'webchat' && params.peerId.startsWith('chat_'),
-    },
-  };
 }
 
 export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -312,128 +282,6 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     }
   });
 
-  // POST /api/sessions - Create a new session. Empty-shell reuse is a client concern.
-  authenticated.post('/api/sessions', async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    if (body.conversationId !== undefined && !conversationIdSchema.safeParse(body.conversationId).success) {
-      return c.json({ ok: false, error: 'conversationId must be a UUID' }, 400);
-    }
-    const channel = typeof body.channel === 'string' && body.channel.trim() ? body.channel.trim() : 'webchat';
-    const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
-    const routingCfg = service.currentConfig;
-    const project = projectId ? service.projects.get(projectId) : null;
-    if (projectId && !project) {
-      return c.json({ ok: false, error: 'Project not found' }, 404);
-    }
-    const requestedExecutionMode = parseExecutionMode(body.executionMode);
-    if (body.executionMode !== undefined && !requestedExecutionMode) {
-      return c.json({ ok: false, error: 'Invalid execution mode' }, 400);
-    }
-    if (requestedExecutionMode && !project) {
-      return c.json({ ok: false, error: 'An execution mode requires a project' }, 400);
-    }
-    let agentId: string;
-    try {
-      agentId = resolveProjectAgentId({
-        config: routingCfg,
-        projects: service.projects,
-        explicitAgentId: typeof body.agentId === 'string' ? body.agentId : undefined,
-        projectId,
-      });
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-    const requestedChatId = typeof body.chat_id === 'string' && body.chat_id.trim()
-      ? body.chat_id.trim()
-      : undefined;
-    const chatId = requestedChatId ?? `chat_${randomUUID()}`;
-    const metadata = {
-      agentId, ...buildDirectSessionMetadata({ agentId, source: channel, accountId: 'default', peerId: chatId }),
-      ...(channel === 'tui' ? { hiddenFromSessionList: true, customData: { genericNewChatShell: true } } : {}),
-    };
-    let conversationId: string;
-    try {
-      conversationId = createConversation(metadata, '', body.conversationId).key;
-    } catch (error) {
-      if (error instanceof ConversationAlreadyExistsError) return c.json({ ok: false, error: error.message }, 409);
-      throw error;
-    }
-
-    let environment;
-    if (project && (project.workspaceRoot?.trim() || requestedExecutionMode)) {
-      try {
-        environment = await environments.attach({
-          conversationId,
-          project,
-          mode: requestedExecutionMode,
-          baseRef: typeof body.baseRef === 'string' ? body.baseRef : undefined,
-        });
-      } catch (error) {
-        deleteSessionRecord(conversationId);
-        return c.json({
-          ok: false,
-          code: 'execution_environment_unavailable',
-          error: error instanceof Error ? error.message : String(error),
-        }, 409);
-      }
-    }
-
-    try {
-      await service.sessionIndexInstance.saveMessages(conversationId, [], {
-        metadata,
-      });
-
-      if (projectId) {
-        service.projects.attachSession(conversationId, projectId);
-      }
-    } catch (error) {
-      await service.sessions.delete(conversationId).catch(() => undefined);
-      await environments.release(conversationId).catch(() => undefined);
-      throw error;
-    }
-    const rawInitialConfig = body.initialAgentConfig && typeof body.initialAgentConfig === 'object'
-      ? body.initialAgentConfig as Record<string, unknown>
-      : {};
-    const model = typeof rawInitialConfig.model === 'string' && rawInitialConfig.model.trim()
-      ? rawInitialConfig.model.trim()
-      : undefined;
-    const thinkingLevel = typeof rawInitialConfig.thinkingLevel === 'string' && rawInitialConfig.thinkingLevel.trim()
-      ? rawInitialConfig.thinkingLevel.trim()
-      : undefined;
-    const initialAgentConfig = {
-      ...(model ? { model } : {}),
-      ...(thinkingLevel ? { thinkingLevel } : {}),
-      ...(body.temporary === true ? { userContextMode: 'temporary' as const } : {}),
-    };
-    if (channel === 'webchat' && model) {
-      const result = await service.sessions.initializeChatModel(conversationId, model, thinkingLevel);
-      if (!result.ok) {
-        await service.sessions.delete(conversationId).catch(() => undefined);
-        await environments.release(conversationId).catch((error) => {
-          log.warn({ err: error, conversationId }, 'Invalid new session model and execution environment cleanup failed');
-        });
-        return c.json({ ok: false, error: result.error }, 400);
-      }
-      delete initialAgentConfig.model;
-      delete initialAgentConfig.thinkingLevel;
-    }
-    if (Object.keys(initialAgentConfig).length > 0) {
-      const result = await service.sessions.patchAgentConfig(conversationId, initialAgentConfig);
-      if (!result.ok) {
-        await service.sessions.delete(conversationId).catch(() => undefined);
-        await environments.release(conversationId).catch((error) => {
-          log.warn({ err: error, conversationId }, 'Invalid new session config and execution environment cleanup failed');
-        });
-        return c.json({ ok: false, error: result.error }, 400);
-      }
-    }
-    if (body.createdSurface === 'browser_extension') {
-      await service.sessions.patch(conversationId, { customData: { createdSurface: 'browser_extension' } });
-    }
-    const session = await service.sessions.getSession(conversationId);
-    const agentConfig = channel === 'webchat' ? await service.sessions.getFixedAgentConfig(conversationId) : undefined;
-    return c.json({ conversationId, session, agentConfig, ...(environment ? { environment } : {}) }, 201);
-  });
 
   // GET /api/sessions - List sessions
   authenticated.get('/api/sessions', async (c) => {

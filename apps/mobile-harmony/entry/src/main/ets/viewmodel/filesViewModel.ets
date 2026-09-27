@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { gatewaySession } from '../service/gatewaySession';
+import { XopcChatRepository } from '../repository/chatRepository';
 import { XopcFileTransfer } from '../service/fileTransfer';
 import { XopcFile, XopcFiles, XopcFileSpace, XopcFileSpaces, XopcFileWrite, XopcFileResult } from '../model/files';
 import { XopcFileSpaceResult } from '../model/files';
@@ -25,6 +26,7 @@ export class XopcFilesViewModel {
     if (conversationId) {
       const generation = ++this.generation; this.busy = true; this.contextId = conversationId;
       try {
+        await new XopcChatRepository().materialize(conversationId, 'session_resources');
         const result = JSON.parse(await gatewaySession.request('/api/files/contexts/session/' + encodeURIComponent(conversationId))) as XopcFileSpaceResult;
         if (!result.space?.id) throw new Error('INVALID_FILE_SPACE');
         if (generation !== this.generation) return;

@@ -21,7 +21,7 @@ describe('Harmony startup flow', () => {
   });
 
   it('keeps the system start window as the only launch placeholder', () => {
-    expect(moduleProfile).toContain('"startWindowIcon": "$media:brand_logo"');
+    expect(moduleProfile).toContain('"startWindowIcon": "$media:launch_logo"');
     expect(moduleProfile).toContain('"startWindowBackground": "$color:surface"');
   });
 });

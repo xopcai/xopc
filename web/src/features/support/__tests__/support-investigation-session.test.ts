@@ -17,43 +17,27 @@ const report: SupportReport = {
 
 describe('startSupportInvestigationSession', () => {
   it('creates a main-agent session, tags it, and starts the first investigation turn', async () => {
-    const request = vi.fn()
-      .mockResolvedValueOnce({ session: { key: 'agent:main:webchat:default:direct:support-1' } })
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: true });
-    const getTurnClaim = vi.fn(async () => ({
-      type: 'endpoint' as const,
-      endpointId: 'desktop-1',
-      token: 'a'.repeat(32),
-    }));
+    const request = vi.fn().mockResolvedValue({ ok: true });
+    const create = vi.fn(async () => 'support-1');
+    const send = vi.fn(async () => undefined);
 
     const conversationId = await startSupportInvestigationSession(report, 'investigate this', {
       fetch: request as never,
-      getTurnClaim,
-      randomUUID: () => 'message-1',
+      create,
+      send,
     });
 
-    expect(conversationId).toBe('agent:main:webchat:default:direct:support-1');
-    expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body))).toEqual({
-      channel: 'webchat',
-      agentId: 'main',
-    });
-    expect(JSON.parse(String(request.mock.calls[1]?.[1]?.body))).toEqual(expect.objectContaining({
+    expect(conversationId).toBe('support-1');
+    expect(create).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body))).toEqual(expect.objectContaining({
       tags: ['support'],
       customData: expect.objectContaining({ kind: 'support-investigation' }),
     }));
-    const input = JSON.parse(String(request.mock.calls[2]?.[1]?.body));
-    expect(input).toEqual(expect.objectContaining({
-      clientMessageId: 'message-1',
-      delivery: 'next',
-      content: 'investigate this',
-      origin: expect.objectContaining({ endpointId: 'desktop-1' }),
-    }));
-    expect(input.attachments).toEqual([expect.objectContaining({
+    expect(send).toHaveBeenCalledWith('support-1', 'investigate this', [expect.objectContaining({
       type: 'file',
       mimeType: 'text/markdown',
       name: 'xopc-diagnostics.md',
     })]);
-    expect(atob(input.attachments[0].data)).toBe('# report');
+    expect(send.mock.invocationCallOrder[0]).toBeLessThan(request.mock.invocationCallOrder[0]!);
   });
 });

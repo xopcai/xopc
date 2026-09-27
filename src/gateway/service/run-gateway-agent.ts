@@ -110,7 +110,7 @@ export async function *runGatewayAgent(
     webchatConversationId = resolved.conversationId;
     const meta = await sessionIndex.getSessionMetadata(webchatConversationId);
     if (!meta) {
-      throw new Error('Session not found; create sessions via POST /api/sessions');
+      throw new Error('Session not found; submit a start input command first');
     }
     webchatTranscriptId = meta?.transcriptId;
     webchatMetadata = meta;

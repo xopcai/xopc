@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   executionModePreferenceForProject,
   type ProjectEnvironmentOptions,
-  type SessionCreateRequest,
+  type LocalSessionOptions,
 } from '@xopcai/gateway-contract';
 import useSWR from 'swr';
 
@@ -17,7 +17,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 import type { ComposerSendHandler } from './composer.types';
 
-type ExecutionMode = NonNullable<SessionCreateRequest['executionMode']>;
+type ExecutionMode = NonNullable<LocalSessionOptions['executionMode']>;
 type PendingCreation = {
   preparation: ProjectSessionPreparation;
   baseUrl: string;

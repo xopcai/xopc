@@ -105,6 +105,10 @@ export const ChatComposer = memo(function ChatComposer({
   const m = useMessages();
   const cm = m.chat;
   const { colors, elevation } = useTheme();
+  const gatewayId = useGatewayStore(state => state.activeGatewayId);
+  const deviceId = useGatewayStore(state => state.getActiveProfile()?.deviceId);
+  const composerScope = gatewayId && deviceId && conversationId.trim()
+    ? JSON.stringify([gatewayId, deviceId, conversationId.trim()]) : '';
 
   const [referenceKind, setReferenceKind] = useState<ReferenceKind | null>(null);
   useEffect(() => setReferenceKind(null), [conversationId, disabled]);
@@ -226,7 +230,7 @@ export const ChatComposer = memo(function ChatComposer({
   }, []);
 
   useEffect(() => {
-    const normalizedConversationId = conversationId.trim();
+    const normalizedConversationId = composerScope;
     restoredDraftConversationIdRef.current = normalizedConversationId;
     skipDraftPersistConversationIdRef.current = normalizedConversationId;
 
@@ -237,7 +241,7 @@ export const ChatComposer = memo(function ChatComposer({
     }
 
     const snapshot = readComposerDraftSnapshot(normalizedConversationId);
-    att.restoreAttachments(snapshot?.workspaceFiles ?? []);
+    att.restoreAttachments(snapshot?.attachments ?? []);
     if (!snapshot) {
       resetEditor();
       onContextRefsChange([]);
@@ -249,10 +253,10 @@ export const ChatComposer = memo(function ChatComposer({
     setInputHeight(estimateComposerInputHeight(snapshot.text));
     setMode('text');
     onContextRefsChange(snapshot.contextRefs);
-  }, [att.restoreAttachments, onContextRefsChange, resetEditor, conversationId]);
+  }, [att.restoreAttachments, onContextRefsChange, resetEditor, composerScope]);
 
   useEffect(() => {
-    const normalizedConversationId = conversationId.trim();
+    const normalizedConversationId = composerScope;
     if (!normalizedConversationId) return;
     if (restoredDraftConversationIdRef.current !== normalizedConversationId) return;
     if (skipDraftPersistConversationIdRef.current === normalizedConversationId) {
@@ -260,10 +264,14 @@ export const ChatComposer = memo(function ChatComposer({
       return;
     }
 
-    writeComposerDraftSnapshot(normalizedConversationId, { text: draft, cursorPos, contextRefs,
-      workspaceFiles: att.attachments.filter(file => Boolean(file.workspaceRelativePath) && !file.content && !file.uri && !file.localUri),
-    });
-  }, [att.attachments, contextRefs, cursorPos, draft, conversationId]);
+    try {
+      writeComposerDraftSnapshot(normalizedConversationId, { text: draft, cursorPos, contextRefs,
+        attachments: att.attachments,
+      });
+    } catch {
+      setSnack(cm.draftSaveFailed);
+    }
+  }, [att.attachments, contextRefs, cursorPos, draft, composerScope, cm.draftSaveFailed]);
 
   const isExpanded = useMemo(
     () =>
@@ -293,7 +301,6 @@ export const ChatComposer = memo(function ChatComposer({
     [inputWidth],
   );
 
-  const gatewayId = useGatewayStore(state => state.activeGatewayId);
   const handoff = useComposerHandoff(state => state.pending);
   useFocusEffect(useCallback(() => {
     if (!gatewayId || !conversationId || !handoff) return;
@@ -396,7 +403,7 @@ export const ChatComposer = memo(function ChatComposer({
       .then((accepted) => {
         if (accepted) {
           if (!draftRef.current && !att.toWirePayload().length && !contextRefsRef.current.length) {
-            clearComposerDraftSnapshot(conversationId);
+            clearComposerDraftSnapshot(composerScope);
           }
           return;
         }

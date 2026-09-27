@@ -1,4 +1,6 @@
 import { gatewaySession } from '../service/gatewaySession';
+import { XopcChatRepository } from '../repository/chatRepository';
+import { localSessionStore } from '../service/localSessionStore';
 import { XopcPayload } from '../model/realtime';
 import { XopcProject, XopcProjectList, XopcTaskList } from '../model/workspace';
 import { XopcNoteIndexEntry, XopcNoteList } from '../model/note';
@@ -24,6 +26,8 @@ export class XopcChatContextViewModel {
     this.conversationId = id; this.summary = undefined; this.config = undefined;
     const generation = ++this.generation; this.loading = true; this.error = '';
     try {
+      const draft = await localSessionStore.read(id);
+      if (draft) { this.config = { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel, workingDirectoryLocked: true }; return; }
       const result = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/context-summary')) as XopcContextResult;
       if (!result.summary || result.summary.conversationId !== id) throw new Error('INVALID_CONTEXT');
       if (generation !== this.generation) return;
@@ -80,6 +84,7 @@ export class XopcChatContextViewModel {
         const result = JSON.parse(await gatewaySession.request('/api/tasks?search=' + encodeURIComponent(search))) as XopcTaskList;
         items = result.items.map((item): XopcReferenceItem => ({ kind, id: item.task.id, title: item.task.title, description: item.task.body || '', version: String(item.task.version) }));
       } else if (kind === 'file') {
+        await new XopcChatRepository().materialize(this.conversationId, 'session_resources');
         const space = JSON.parse(await gatewaySession.request('/api/files/contexts/session/' + encodeURIComponent(this.conversationId))) as XopcFileSpaceResult;
         if (generation !== this.generation) return;
         if (!space.space?.id) throw new Error('INVALID_FILE_SPACE');

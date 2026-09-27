@@ -7,6 +7,7 @@ import { getSkills } from '@/features/skills/skill-list-api';
 
 import type { CommandEntry, SkillAvailabilityStatus } from '@/features/chat/palette/command-palette.types';
 import { refreshSlashCommandWireIndex } from '@/features/chat/palette/slash-command-wire';
+import { readLocalSessionDraft } from '../session/local-session-drafts';
 
 async function readErrorMessage(res: Response): Promise<string> {
   const j = (await res.json().catch(() => ({}))) as { error?: unknown };
@@ -113,6 +114,13 @@ export async function getChatSkillsCached(
   conversationId?: string | null,
   forceRefresh = false,
 ): Promise<ChatSkillsPayload> {
+  const identity = useGatewayStore.getState().conversationId;
+  const draft = conversationId ? await readLocalSessionDraft(conversationId) : undefined;
+  if (identity !== useGatewayStore.getState().conversationId) throw new Error('Active Gateway changed');
+  if (draft) {
+    agentId = draft.creation.agentId;
+    conversationId = undefined;
+  }
   const key = chatSkillsCacheKey(agentId, conversationId);
   const now = Date.now();
   const cached = _chatSkillsCache.get(key);

@@ -8,12 +8,12 @@ export type ResolveWebchatConversationIdResult =
 
 /**
  * Resolve the server-owned session key for webchat `/api/agent` requests.
- * Creation is intentionally out-of-band via `POST /api/sessions`.
+ * Ordinary creation is accepted atomically by a start input command.
  */
 export function resolveWebchatConversationId(
   input: ResolveWebchatConversationIdInput,
 ): ResolveWebchatConversationIdResult {
   const raw = input.conversationId?.trim() ?? '';
-  if (!raw) return { ok: false, error: 'Missing conversationId; create sessions via POST /api/sessions' };
+  if (!raw) return { ok: false, error: 'Missing conversationId' };
   return { ok: true, conversationId: raw };
 }

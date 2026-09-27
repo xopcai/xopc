@@ -4,7 +4,7 @@ import {
   parseSessionForkAtTurnResponse,
   parseSessionMessagePage,
   parseSessionResetResponse,
-  type SessionCreateRequest,
+  type LocalSessionOptions,
   type SessionForkAtTurnResponse,
   type SessionInitialAgentConfig,
   type SessionResetResponse,
@@ -18,12 +18,16 @@ import { listSessions } from '@/features/sessions/session-api';
 import { apiFetch } from '@/lib/fetch';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { apiUrl } from '@/lib/url';
-import { upsertWebchatEmptyShellCache } from '@/features/chat/session/webchat-empty-shell-cache';
+import { useGatewayStore } from '@/stores/gateway-store';
+import { readLocalSessionDraft, saveLocalSessionDraft, draftAgentConfig, rememberSessionTranscript, readPendingSessionCommand, confirmSessionCommand } from './local-session-drafts';
+import { fetchConfiguredModelsCached } from '../api/registry-api';
+import { fetchGatewayAgentEffectiveConfig } from '@/features/settings/agents-admin-api';
 
 /** `GET /api/sessions?channel=…` filters on {@link SessionMetadata.sourceChannel}. */
 export const WEB_UI_SESSION_SOURCE_CHANNELS = 'webchat';
 
 export type SessionAgentConfig = {
+  localDraft?: boolean;
   thinkingLevel: string;
   configVersion?: number;
   fixedModel?: boolean;
@@ -103,6 +107,13 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
 }
 
 const _agentConfigInflight = new Map<string, Promise<SessionAgentConfig>>();
+
+function captureScope(): () => void {
+  const identity = useGatewayStore.getState().conversationId;
+  return () => {
+    if (useGatewayStore.getState().conversationId !== identity) throw new Error('Active Gateway identity changed');
+  };
+}
 
 type SessionLoadResult = {
   messages: Message[];
@@ -186,11 +197,33 @@ export class SessionManager {
     const sorted = out.sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
-    upsertWebchatEmptyShellCache(sorted);
     return sorted;
   }
 
   async loadSessionAgentConfig(conversationId: string): Promise<SessionAgentConfig> {
+    const assertScope = captureScope();
+    await this.reconcileDraft(conversationId);
+    assertScope();
+    const draft = await readLocalSessionDraft(conversationId);
+    if (draft) {
+      if (!draft.creation.model && !draft.submission && !draft.materialization) {
+        const [models, defaults] = await Promise.all([fetchConfiguredModelsCached(), fetchGatewayAgentEffectiveConfig(draft.creation.agentId)]);
+        assertScope();
+        const modelRef = defaults.config.models.chat.primary;
+        const matches = models.filter(item => item.id === modelRef || item.id.endsWith(`/${modelRef}`));
+        const model = models.find(item => item.id === modelRef) ?? (matches.length === 1 ? matches[0] : undefined);
+        const latest = await readLocalSessionDraft(conversationId);
+        assertScope();
+        if (latest && !latest.creation.model && !latest.submission && !latest.materialization && model) {
+          latest.creation.model = model.id;
+          latest.creation.thinkingLevel = model.thinking?.initialValue ?? 'off';
+          await saveLocalSessionDraft(latest);
+          return draftAgentConfig(latest);
+        }
+        if (latest) return draftAgentConfig(latest);
+      }
+      return draftAgentConfig(draft);
+    }
     const existing = _agentConfigInflight.get(conversationId);
     if (existing) return existing;
 
@@ -218,6 +251,15 @@ export class SessionManager {
       userContextMode?: 'enabled' | 'off' | 'temporary';
     },
   ): Promise<SessionAgentConfig> {
+    const draft = await readLocalSessionDraft(conversationId);
+    if (draft) {
+      if (draft.submission || draft.materialization) throw new Error('Resolve the pending creation command before changing its configuration');
+      if (patch.model !== undefined) draft.creation.model = patch.model ?? '';
+      if (patch.thinkingLevel !== undefined) draft.creation.thinkingLevel = patch.thinkingLevel;
+      if (patch.userContextMode !== undefined) draft.creation.temporary = patch.userContextMode === 'temporary';
+      await saveLocalSessionDraft(draft);
+      return draftAgentConfig(draft);
+    }
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/agent-config`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -254,6 +296,8 @@ export class SessionManager {
     beforeCursor?: string | null,
     taskId?: string,
   ): Promise<SessionLoadResult> {
+    if (!taskId) await this.reconcileDraft(conversationId);
+    if (!taskId && await readLocalSessionDraft(conversationId)) return { messages: [], hasMore: false };
     const dedupeKey = `${taskId ?? conversationId}\0${offset}\0${beforeCursor ?? ''}`;
     const existing = _sessionLoadInflight.get(dedupeKey);
     if (existing) return existing;
@@ -277,6 +321,7 @@ export class SessionManager {
       };
 
       let data = await loadPage(offset, beforeCursor);
+      if (data.session.transcriptId) await rememberSessionTranscript(conversationId, data.session.transcriptId);
       let raw = data.session.messages;
       let messages = sessionWireToUiMessages(raw);
       let hasMore = data.pagination.hasMore;
@@ -353,23 +398,21 @@ export class SessionManager {
     projectId?: string | null;
     temporary?: boolean;
     initialAgentConfig?: SessionInitialAgentConfig;
-    executionMode?: SessionCreateRequest['executionMode'];
+    executionMode?: LocalSessionOptions['executionMode'];
   }): Promise<SessionInfo> {
-    const body: SessionCreateRequest = { channel: 'webchat' };
-    const raw = options?.agentId?.trim();
-    if (raw) body.agentId = raw.toLowerCase();
-    const projectId = options?.projectId?.trim();
-    if (projectId) body.projectId = projectId;
-    if (options?.temporary === true) body.temporary = true;
-    if (options?.initialAgentConfig) body.initialAgentConfig = options.initialAgentConfig;
-    if (options?.executionMode) body.executionMode = options.executionMode;
-    const res = await apiFetch(apiUrl('/api/sessions'), {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(await readErrorMessage(res));
-    const data = (await res.json()) as { session: SessionInfo };
-    return data.session;
+    const conversationId = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    const creation = {
+      agentId: options?.agentId?.trim().toLowerCase() || 'main',
+      projectId: options?.projectId?.trim() || null,
+      execution: options?.executionMode ? { mode: options.executionMode } : null,
+      temporary: options?.temporary === true,
+      model: options?.initialAgentConfig?.model ?? '',
+      thinkingLevel: options?.initialAgentConfig?.thinkingLevel ?? 'off',
+    };
+    await saveLocalSessionDraft({ conversationId, creation, createdAt });
+    return { key: conversationId, agentId: creation.agentId, projectId: creation.projectId ?? undefined,
+      messageCount: 0, updatedAt: createdAt, sourceChannel: 'webchat' };
   }
 
   async resetSession(conversationId: string): Promise<SessionResetResponse> {
@@ -379,18 +422,52 @@ export class SessionManager {
       method: 'POST',
     });
     if (!res.ok) throw new Error(await readErrorMessage(res));
-    return parseSessionResetResponse(await res.json());
+    const result = parseSessionResetResponse(await res.json());
+    if (!result.transcriptId) throw new Error('Reset response is missing transcript identity');
+    await rememberSessionTranscript(conversationId, result.transcriptId);
+    return result;
   }
 
-  async ensureSessionExists(conversationId: string): Promise<void> {
-    const trimmed = conversationId.trim();
-    if (!trimmed) throw new Error('Session key is required');
+  async reconcileDraft(conversationId: string): Promise<void> {
+    const assertScope = captureScope();
+    const draft = await readLocalSessionDraft(conversationId);
+    assertScope();
+    const pending = await readPendingSessionCommand(conversationId);
+    assertScope();
+    const clientMessageId = pending?.clientMessageId ?? draft?.submission?.clientMessageId ?? draft?.materialization?.commandId;
+    if (!clientMessageId) return;
+    const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/input-receipts/${encodeURIComponent(clientMessageId)}`));
+    if (response.status === 404) return;
+    if (!response.ok) throw new Error(await readErrorMessage(response));
+    const result = await response.json() as { payload: { receipt: { conversationId: string; clientMessageId: string; transcriptId: string; lifecycle: string }; session: { transcriptId: string } } };
+    assertScope();
+    if (result.payload.receipt.conversationId !== conversationId || result.payload.receipt.clientMessageId !== clientMessageId || !result.payload.session.transcriptId) throw new Error('Invalid input receipt');
+    if (draft?.materialization && result.payload.receipt.lifecycle !== 'ready') return;
+    await confirmSessionCommand(conversationId, result.payload.session.transcriptId);
+  }
 
-    const resolved = await apiFetch(apiUrl('/api/sessions/resolve'), {
-      method: 'POST',
-      body: JSON.stringify({ conversationId: trimmed }),
+  async materialize(conversationId: string, purpose: 'voice' | 'session_resources'): Promise<void> {
+    const assertScope = captureScope();
+    if (!await readLocalSessionDraft(conversationId)) return;
+    assertScope();
+    await this.loadSessionAgentConfig(conversationId);
+    assertScope();
+    const draft = await readLocalSessionDraft(conversationId);
+    assertScope();
+    if (!draft) return;
+    if (draft.submission) throw new Error('The first input is awaiting confirmation');
+    draft.materialization ??= { commandId: crypto.randomUUID(), purpose };
+    await saveLocalSessionDraft(draft);
+    assertScope();
+    const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/materialize`), {
+      method: 'POST', body: JSON.stringify({ ...draft.materialization, creation: draft.creation }),
     });
-    if (!resolved.ok) throw new Error(await readErrorMessage(resolved));
+    if (!response.ok) throw new Error(await readErrorMessage(response));
+    const result = await response.json() as { payload: { receipt: { conversationId: string; clientMessageId: string; transcriptId: string; lifecycle: string } } };
+    assertScope();
+    if (result.payload.receipt.conversationId !== conversationId || result.payload.receipt.clientMessageId !== draft.materialization.commandId) throw new Error('Invalid materialization receipt');
+    if (result.payload.receipt.lifecycle !== 'ready') throw new Error('Conversation environment is not ready yet');
+    await confirmSessionCommand(conversationId, result.payload.receipt.transcriptId);
   }
 
   /** Lightweight name read after auto-title (matches `ui` SessionManager). */

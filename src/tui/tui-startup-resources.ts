@@ -4,7 +4,7 @@ import { resolveBootstrapFilesSync } from '../agent/bootstrap/bootstrap-files.js
 import { loadSkills } from '../agent/skills/index.js';
 import { isSkillEnabled, createSkillConfigManager } from '../agent/skills/config.js';
 import { createWorkflowCatalog } from '../agent/workflow/catalog.js';
-import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
+import { resolveEffectiveAgentProfile, resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { getWorkspacePath } from '../config/index.js';
 import {
   resolveAgentProfileDir,
@@ -23,9 +23,9 @@ function uniqueSorted(values: Iterable<string>): string[] {
 export function collectTuiStartupResources(
   config: Config,
   conversationId?: string,
-  options: { isWorkspaceTrusted?: (workspaceDir: string) => boolean } = {},
+  options: { agentId?: string; isWorkspaceTrusted?: (workspaceDir: string) => boolean } = {},
 ): TuiStartupResources {
-  const profile = resolveEffectiveAgentProfileForSession(conversationId);
+  const profile = options.agentId ? resolveEffectiveAgentProfile(options.agentId) : resolveEffectiveAgentProfileForSession(conversationId);
   const profileDir = resolveAgentProfileDir(profile.agentId);
   const workspaceDir = profile.resolvedWorkspacePath || getWorkspacePath(config);
 

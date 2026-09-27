@@ -1,55 +1,8 @@
 import type { SessionInfo } from '@/features/chat/chat.types';
-import type { SessionCreateRequest, SessionInitialAgentConfig } from '@xopcai/gateway-contract';
-import {
-  pickReusableEmptyShell,
-  isReusableEmptyShell,
-} from '@/features/chat/session/reusable-empty-shell';
-import { readWebchatEmptyShellCache } from '@/features/chat/session/webchat-empty-shell-cache';
-import type { SessionManager } from '@/features/chat/session/session-manager';
-import { normalizeAgentId } from '@/lib/agent-id';
+import type { LocalSessionOptions, SessionInitialAgentConfig } from '@xopcai/gateway-contract';
+import type { SessionManager } from './session-manager';
 
-export type NewChatResolution =
-  | { kind: 'noop'; conversationId: string }
-  | { kind: 'reuse'; conversationId: string; session: SessionInfo }
-  | { kind: 'create'; conversationId: string; session: SessionInfo };
-
-function findSessionRow(sessions: SessionInfo[], key: string): SessionInfo | undefined {
-  const k = key.trim();
-  return sessions.find((s) => s.key.trim() === k);
-}
-
-function mergeOptimisticEmptyShells(
-  server: SessionInfo[],
-  cached: SessionInfo[] | null,
-  agentId: string,
-  projectId?: string | null,
-): SessionInfo[] {
-  if (!cached?.length) return server;
-  const byKey = new Map(server.map((s) => [s.key.trim(), s]));
-  for (const row of cached) {
-    const key = row.key.trim();
-    if (!key || byKey.has(key)) continue;
-    if (!isReusableEmptyShell(row, { agentId, projectId })) continue;
-    byKey.set(key, row);
-  }
-  return [...byKey.values()].toSorted(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
-}
-
-async function loadAllWebchatSessions(
-  sessionMgr: SessionManager,
-  agentId: string,
-  projectId?: string | null,
-): Promise<SessionInfo[]> {
-  const cached = readWebchatEmptyShellCache();
-  try {
-    const server = await sessionMgr.loadSessions();
-    return mergeOptimisticEmptyShells(server, cached, agentId, projectId);
-  } catch {
-    return cached?.filter((row) => isReusableEmptyShell(row, { agentId, projectId })) ?? [];
-  }
-}
+export type NewChatResolution = { kind: 'create'; conversationId: string; session: SessionInfo };
 
 export async function resolveNewChatTarget(opts: {
   sessionMgr: SessionManager;
@@ -59,41 +12,8 @@ export async function resolveNewChatTarget(opts: {
   forceNew?: boolean;
   temporary?: boolean;
   initialAgentConfig?: SessionInitialAgentConfig;
-  executionMode?: SessionCreateRequest['executionMode'];
+  executionMode?: LocalSessionOptions['executionMode'];
 }): Promise<NewChatResolution> {
-  const agentId = normalizeAgentId(opts.agentId);
-  const projectId = opts.projectId?.trim() || undefined;
-  const current = opts.currentConversationId?.trim() || null;
-
-  if (opts.forceNew || opts.temporary || opts.executionMode) {
-    const session = await opts.sessionMgr.createSession({
-      agentId,
-      ...(projectId ? { projectId } : {}),
-      ...(opts.temporary ? { temporary: true } : {}),
-      ...(opts.initialAgentConfig ? { initialAgentConfig: opts.initialAgentConfig } : {}),
-      ...(opts.executionMode ? { executionMode: opts.executionMode } : {}),
-    });
-    return { kind: 'create', conversationId: session.key, session };
-  }
-
-  const sessions = await loadAllWebchatSessions(opts.sessionMgr, agentId, projectId);
-
-  if (current) {
-    const row = findSessionRow(sessions, current);
-    if (row && isReusableEmptyShell(row, { agentId, projectId })) {
-      return { kind: 'noop', conversationId: current };
-    }
-  }
-
-  const reusable = pickReusableEmptyShell(sessions, { agentId, projectId });
-  if (reusable && reusable.key.trim() !== current) {
-    return { kind: 'reuse', conversationId: reusable.key, session: reusable };
-  }
-
-  const session = await opts.sessionMgr.createSession({
-    agentId,
-    projectId,
-    ...(opts.initialAgentConfig ? { initialAgentConfig: opts.initialAgentConfig } : {}),
-  });
+  const session = await opts.sessionMgr.createSession(opts);
   return { kind: 'create', conversationId: session.key, session };
 }

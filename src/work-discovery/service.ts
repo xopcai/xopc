@@ -281,7 +281,6 @@ function sessionMetadata(agentId: string, peerId: string): SessionMetadataSeed {
     },
     customData: {
       workDiscovery: true,
-      genericNewChatShell: false,
     },
   };
 }
