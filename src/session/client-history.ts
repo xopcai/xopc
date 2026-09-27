@@ -15,6 +15,7 @@ export interface ClientHistoryMessage {
   rawContent?: string | unknown[];
   /** Persisted inbound attachment metadata used by chat clients to reload media. */
   media?: Message['media'];
+  deliveries?: import('@xopcai/gateway-contract').ProductDeliveryEnvelope[];
   timestamp?: number;
   /** Whitelisted display metadata; never includes source snapshot text. */
   metadata?: {

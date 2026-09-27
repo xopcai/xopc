@@ -54,6 +54,7 @@ export type ToolEndEvent = ChatStreamEnvelope<
     status: ChatStreamStatus;
     activity: ToolActivity;
     result?: { content?: unknown[]; details?: unknown; text?: string };
+    deliveries?: import('@xopcai/gateway-contract').ProductDeliveryEnvelope[];
     errorMessage?: string;
   }
 >;

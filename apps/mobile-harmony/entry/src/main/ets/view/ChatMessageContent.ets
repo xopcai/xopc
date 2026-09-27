@@ -5,7 +5,7 @@ import { XopcMarkdownView } from './MarkdownView';
 import { XopcChatStepsView } from './ChatStepsView';
 import { XopcChatMediaView } from './ChatMediaView';
 import { XopcChatResultTail } from './ChatResultTail';
-import { chatActivities, chatAnswerText } from '../common/chatRichContent';
+import { chatAnswerText } from '../common/chatRichContent';
 import { XopcChatDisclosure } from '../common/chatDisclosure';
 import { filePreviewKind } from '../common/filePreview';
 import { chatMessageNeedsPreview, chatMessagePreviewLines, chatMessagePreviewText } from '../common/chatMessagePreview';
@@ -41,19 +41,21 @@ export struct XopcChatMessageContent {
   }
   @Computed get displayedMedia(): XopcHistoryMedia[] { return this.mediaExpanded ? this.fileMedia : this.fileMedia.slice(0, 3); }
   @Computed get body(): XopcChatBlock[] {
-    const body: XopcChatBlock[] = []; let inserted = false;
-    const hasSteps = chatActivities(this.row, this.reasoning).length > 0;
-    for (const block of this.row.blocks || []) {
-      const workText = block.kind === 'text' && (block.presentation === 'pending' || block.presentation === 'narration');
-      if (block.kind === 'review' || (block.kind === 'text' && !workText)) body.push(block);
-      else if (!inserted && hasSteps && (workText || ['thinking', 'tool', 'plan', 'diff'].includes(block.kind))) {
-        inserted = true; body.push({ id: 'steps:' + this.row.id, kind: 'steps', text: '' });
-      }
-    }
-    return body;
+    return (this.row.blocks || []).filter((block: XopcChatBlock): boolean =>
+      block.kind === 'review' || (block.kind === 'text' && block.presentation !== 'narration'));
+  }
+  @Computed get hasProgress(): boolean {
+    return (this.row.blocks || []).some((block: XopcChatBlock): boolean => block.kind === 'text' && block.presentation === 'narration')
+      || (!!this.row.live && !this.row.text);
   }
   build() {
     Column({ space: this.showPreview ? 2 : 10 }) {
+      if (this.row.role === 'assistant' && this.hasProgress) {
+        XopcChatStepsView({ row: this.row, disclosure: this.disclosure, scope: this.conversationId })
+      }
+      if (this.row.outcome?.status === 'failed') {
+        Text($r('app.string.chat_response_failed')).fontSize(13).fontColor(this.colors.danger)
+      }
       if (this.showPreview) {
         if (this.row.role === 'assistant') {
           XopcMarkdownView({ content: this.previewMarkdown, conversationId: this.conversationId, compactReading: true,
@@ -78,8 +80,7 @@ export struct XopcChatMessageContent {
         }, (ref: XopcContextRef): string => ref.kind + ':' + ref.sourceId)
         if (this.row.role === 'assistant') {
           Repeat<XopcChatBlock>(this.body).each((item: RepeatItem<XopcChatBlock>) => {
-            if (item.item.kind === 'steps') { XopcChatStepsView({ row: this.row, reasoning: this.reasoning, disclosure: this.disclosure, scope: this.conversationId, onNavigate: this.onNavigate }) }
-            else if (item.item.kind === 'text' && item.item.text) {
+            if (item.item.kind === 'text' && item.item.text) {
               XopcMarkdownView({ content: item.item.text, conversationId: this.conversationId, compactReading: true,
                 onNavigate: this.onNavigate })
             } else if (item.item.review) {
@@ -106,10 +107,6 @@ export struct XopcChatMessageContent {
           }).key((block: XopcChatBlock): string => block.id)
           if (!this.body.length && !this.row.blocks && this.row.text) { XopcMarkdownView({ content: this.row.text,
             conversationId: this.conversationId, compactReading: true, onNavigate: this.onNavigate }) }
-          if (this.row.live && !this.row.text && !this.row.blocks?.length) {
-            Text(this.row.progress || $r('app.string.chat_thinking')).fontSize(13).fontColor(this.colors.secondary)
-              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '100%' })
-          }
         } else if (this.row.role === 'user') {
           if (this.row.text) { Text(this.row.text).fontSize(16).lineHeight(25).fontColor(this.colors.foreground) }
         } else {

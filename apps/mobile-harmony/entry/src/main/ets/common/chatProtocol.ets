@@ -113,9 +113,9 @@ export function historyRows(history: XopcHistory, page: string = 'latest'): Xopc
     const refs: XopcContextRef[] = (message.metadata?.sourceContexts || []).filter((ref): boolean => !!ref && ['note', 'task'].includes(ref.kind)
       && typeof ref.sourceId === 'string' && typeof ref.version === 'string')
       .map((ref): XopcContextRef => ({ kind: ref.kind, sourceId: ref.sourceId, expectedVersion: ref.version, title: ref.title }));
-    if (text || thinking || tools || blocks.length || outcome || media.length || refs.length || message.role === 'tool' || message.role === 'toolResult') {
+    if (text || thinking || tools || blocks.length || outcome || message.deliveries?.length || media.length || refs.length || message.role === 'tool' || message.role === 'toolResult') {
       const row: XopcChatRow = { id: rowId, role: message.role === 'user-with-attachments' ? 'user' : message.role,
-        text: text.trim(), thinking: thinking.trim(), tools: tools.trim(), media, blocks, outcome, turnId: message.turnId };
+        text: text.trim(), thinking: thinking.trim(), tools: tools.trim(), media, blocks, outcome, turnId: message.turnId, deliveries: message.deliveries };
       if (row.role === 'assistant') {
         blocks.forEach((block: XopcChatBlock): void => { if (block.kind === 'text' && !block.presentation) block.presentation = calls.length ? 'narration' : 'answer'; });
         refreshChatRow(row);

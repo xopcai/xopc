@@ -93,6 +93,7 @@ export class SessionIndex extends EventEmitter {
       includeTranscriptSummary?: boolean;
       includeTranscriptRows?: boolean;
       includeContextRows?: boolean;
+      compact?: boolean;
     },
   ): Promise<{
     session: SessionDetail;

@@ -20,7 +20,7 @@ describe('Harmony realtime protocol', () => {
     expect(cursors.accept('run:unknown', 1)).toBe(false);
     expect(cursors.accept('run:one', NaN)).toBe(false);
     cursors.add('run:one');
-    expect(cursors.snapshot()).toEqual([{ topic: 'run:one', afterSeq: 1 }]);
+    expect(cursors.snapshot()).toEqual([{ topic: 'run:one', afterSeq: 1, view: 'compact' }]);
     cursors.remove('run:one');
     expect(cursors.snapshot()).toEqual([]);
   });

@@ -3,6 +3,8 @@ import type { IncomingMessage } from 'node:http';
 import { createRequire } from 'node:module';
 import type { Socket } from 'node:net';
 
+import { compactRunEvent } from './compact-run-event.js';
+
 import {
   REALTIME_CAPABILITIES,
   REALTIME_HEARTBEAT_INTERVAL_MS,
@@ -205,7 +207,8 @@ export class RealtimeRuntime {
         }
         subscriptions.get(item.topic)?.unsubscribe();
         const handle = this.broker.subscribe(item.topic, item.afterSeq, (event) => {
-          writer.enqueue(event);
+          const output = item.view === 'compact' ? compactRunEvent(event) : event;
+          if (output) writer.enqueue(output);
         });
         subscriptions.set(item.topic, handle);
         writer.enqueue(serverMessage('realtime.subscribed', {
@@ -213,7 +216,8 @@ export class RealtimeRuntime {
           cursor: handle.cursor,
         }), 'critical');
         for (const message of handle.initial) {
-          writer.enqueue(message);
+          const output = item.view === 'compact' ? compactRunEvent(message) : message;
+          if (output) writer.enqueue(output);
         }
       }
       return true;

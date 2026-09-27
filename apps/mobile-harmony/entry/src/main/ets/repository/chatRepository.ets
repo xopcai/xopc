@@ -134,7 +134,7 @@ export class XopcChatRepository {
       gatewaySession.assertConnection(connection);
       if (cached) return cached;
     }
-    const page = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/history?limit=' + (before ? 100 : 150)
+    const page = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/history?view=compact&limit=20'
       + (before ? '&before=' + encodeURIComponent(before) : ''))) as XopcHistory;
     if (!before) { this.cachePage = page; this.cacheGatewayId = gatewayId; this.cacheRevision = revision; }
     else if (transcriptId && page.session?.transcriptId === transcriptId && revision === chatHistoryCache.revision()

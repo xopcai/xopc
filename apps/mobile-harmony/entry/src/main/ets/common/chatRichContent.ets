@@ -15,7 +15,7 @@ export function chatReview(raw?: XopcContentBlock): XopcContentBlock | undefined
 export function chatAnswerText(row: XopcChatRow): string {
   if (!row.blocks) return row.text;
   return row.blocks.filter((block: XopcChatBlock): boolean => block.kind === 'text'
-    && block.presentation !== 'narration' && block.presentation !== 'pending')
+    && block.presentation !== 'narration')
     .map((block: XopcChatBlock): string => block.text).join('\n').trim();
 }
 
@@ -170,6 +170,15 @@ export function chatSearchLinks(call: XopcChatTool): XopcSearchLink[] {
 }
 
 export function chatDeliveries(row: XopcChatRow): XopcProductDelivery[] {
+  if (row.deliveries) {
+    const products = new Map<string, XopcProductDelivery>();
+    for (const delivery of row.deliveries) {
+      for (const display of displayDeliveries(delivery)) {
+        if (display.primary) products.set(display.primary.kind + ':' + display.primary.id, display);
+      }
+    }
+    return Array.from(products.values());
+  }
   const results = new Map<string, XopcProductDelivery>();
   for (const call of row.toolCalls || []) {
     if (call.isError || call.status === 'running' || (call.result === undefined && call.status !== 'done')) continue;
@@ -211,6 +220,7 @@ export function mergeAssistantRows(rows: XopcChatRow[]): XopcChatRow[] {
       if (index < 0) blocks.push(block); else blocks[index] = block;
     }
     previous.blocks = blocks; previous.outcome = row.outcome || previous.outcome; previous.turnId = row.turnId || previous.turnId;
+    if (previous.deliveries || row.deliveries) previous.deliveries = (previous.deliveries || []).concat(row.deliveries || []);
     previous.sourceIds = Array.from(new Set<string>((previous.sourceIds || [previous.id]).concat(row.sourceIds)));
     const media = previous.media || [];
     previous.media = media.concat((row.media || []).filter((file: XopcHistoryMedia): boolean => !media.some((old: XopcHistoryMedia): boolean => old.uri === file.uri && old.id === file.id)));

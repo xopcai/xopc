@@ -153,6 +153,7 @@ export class GatewaySessionsApi {
       includeTranscriptSummary?: boolean;
       includeTranscriptRows?: boolean;
       includeContextRows?: boolean;
+      compact?: boolean;
     },
   ) {
     return this.opts.sessionIndex.getSessionMessagePage(key, options);

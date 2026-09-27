@@ -77,6 +77,7 @@ import type { Message } from './types.js';
 import type { SessionTranscriptUpdate } from './transcript-events.js';
 import { isAppendOnlyLlmTranscriptMessage } from './transcript-stats.js';
 import { transcriptRowsToClientHistory } from './client-history.js';
+import { compactHistory } from './compact-history.js';
 import { backfillStructuredTurnOutcomes } from './turn-outcome-projector.js';
 import { computeTranscriptUserRoundDeleteRange } from './user-round-delete.js';
 import { findSessionMessages, type SessionFindResult } from './session-find.js';
@@ -334,6 +335,7 @@ export class SessionStore {
       includeTranscriptSummary?: boolean;
       includeTranscriptRows?: boolean;
       includeContextRows?: boolean;
+      compact?: boolean;
     } = {},
   ): Promise<{
     session: SessionDetail;
@@ -364,14 +366,16 @@ export class SessionStore {
         offset: hasBeforeCursor ? undefined : offset,
         beforeIndex: hasBeforeCursor ? parsedBefore : undefined,
         includeContext: true,
+        userTurns: options.compact,
       });
       const endIndex = hasBeforeCursor
         ? Math.min(page.total, Math.max(0, parsedBefore!))
         : Math.max(0, page.total - offset);
       const startIndex = Math.max(0, endIndex - page.rows.length);
-      const messages = transcriptRowsToClientHistory(page.rows, {
+      const history = transcriptRowsToClientHistory(page.rows, {
         rowNumberOffset: startIndex,
-      }) as unknown as Message[];
+      });
+      const messages = (options.compact ? compactHistory(history) : history) as unknown as Message[];
       const session: SessionDetail = {
         ...metadata,
         messages,
@@ -384,7 +388,7 @@ export class SessionStore {
           total: page.total,
           limit,
           offset,
-          hasMore: hasBeforeCursor ? startIndex > 0 : offset + limit < page.total,
+          hasMore: startIndex > 0,
           ...(hasBeforeCursor ? { before: String(endIndex) } : {}),
           ...(nextBeforeCursor ? { nextBeforeCursor } : {}),
           revision: page.revision,

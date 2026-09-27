@@ -55,6 +55,29 @@ describe('SessionStore', () => {
   let store: SessionStore;
   let previousStateDir: string | undefined;
 
+  it('paginates compact history by user turns without losing cursors or changing full history', async () => {
+    const key = '949b330a-a76f-4ec3-918b-dca04d02d580';
+    const messages = Array.from({ length: 5 }, (_, turn) => [
+      { role: 'user', content: `question-${turn}`, timestamp: Date.now() + turn * 10 },
+      { role: 'assistant', content: [{ type: 'text', text: `Checking ${turn}` },
+        { type: 'toolCall', id: `tool-${turn}`, name: 'read_file', arguments: { path: 'secret' } }], timestamp: Date.now() + turn * 10 + 1 },
+      { role: 'toolResult', toolCallId: `tool-${turn}`, content: 'private'.repeat(10000), timestamp: Date.now() + turn * 10 + 2 },
+      { role: 'assistant', content: `answer-${turn}`, timestamp: Date.now() + turn * 10 + 3 },
+    ]).flat();
+    await store.saveMessages(key, messages as never, { metadata: { agentId: 'main' } });
+    const options = { compact: true, includeContextRows: true, limit: 2 };
+    const first = await store.getMessagePage(key, options);
+    const second = await store.getMessagePage(key, { ...options, before: first!.pagination.nextBeforeCursor });
+    const third = await store.getMessagePage(key, { ...options, before: second!.pagination.nextBeforeCursor });
+    expect(first!.session.messages.filter(m => m.role === 'user').map(m => m.content)).toEqual(['question-3', 'question-4']);
+    expect(second!.session.messages.filter(m => m.role === 'user').map(m => m.content)).toEqual(['question-1', 'question-2']);
+    expect(third!.session.messages.filter(m => m.role === 'user').map(m => m.content)).toEqual(['question-0']);
+    expect(third!.pagination.hasMore).toBe(false);
+    expect(JSON.stringify(first)).not.toMatch(/private|secret|toolCalls/);
+    const full = await store.getMessagePage(key, { includeContextRows: true, limit: 200 });
+    expect(JSON.stringify(full)).toContain('private');
+  });
+
   beforeEach(async () => {
     previousStateDir = process.env.XOPC_STATE_DIR;
     tempDir = await mkdtemp(join(tmpdir(), 'xopc-session-test-'));
