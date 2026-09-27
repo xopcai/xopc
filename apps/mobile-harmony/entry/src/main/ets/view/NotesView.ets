@@ -12,6 +12,8 @@ import { XopcShareResultView } from './ShareResultView';
 import { XopcVoiceCapture } from '../service/voiceCapture';
 import { XopcChatMediaView } from './ChatMediaView';
 
+type XopcNoteSheet = 'history' | 'ai' | 'share' | 'tags' | 'more' | 'attachment' | 'voice';
+
 /** Dedicated native note list/detail/editor. Notes no longer depend on the generic workspace screen. */
 @ComponentV2
 export struct XopcNotesView {
@@ -25,13 +27,8 @@ export struct XopcNotesView {
   @Local model: XopcNoteViewModel = new XopcNoteViewModel();
   @Local aiInstruction: string = '';
   @Local tagsText: string = '';
-  @Local historyOpen: boolean = false;
-  @Local aiOpen: boolean = false;
-  @Local shareOpen: boolean = false;
-  @Local tagsOpen: boolean = false;
-  @Local moreOpen: boolean = false;
-  @Local attachmentOpen: boolean = false;
-  @Local voiceOpen: boolean = false;
+  @Local sheetOpen: boolean = false;
+  @Local activeSheet: XopcNoteSheet = 'more';
   @Local shareResult?: XopcShareResult;
   @Local voice: XopcVoiceCapture = new XopcVoiceCapture();
 
@@ -49,6 +46,27 @@ export struct XopcNotesView {
 
   @Monitor('initialId')
   onInitialIdChanged(): void { if (this.initialId) void this.model.open(this.initialId); }
+
+  private openSheet(sheet: XopcNoteSheet): void {
+    this.activeSheet = sheet;
+    this.sheetOpen = true;
+  }
+
+  private sheetHeight(): number | string {
+    if (this.activeSheet === 'history') return '88%';
+    if (this.activeSheet === 'ai') return '76%';
+    if (this.activeSheet === 'share') return '92%';
+    if (this.activeSheet === 'tags') return 260;
+    if (this.activeSheet === 'attachment') return 340;
+    if (this.activeSheet === 'voice') return 300;
+    return 410;
+  }
+
+  private openHistory(): void {
+    this.model.snapshot = undefined;
+    this.openSheet('history');
+    void this.model.loadHistory();
+  }
 
   private back(): void {
     if (this.model.editing) { void this.model.closeEditor(); return; }
@@ -88,18 +106,18 @@ export struct XopcNotesView {
 
   private async share(note: XopcNote): Promise<void> {
     try {
-      this.shareResult = await shareService.note(note.id, note.remoteVersion ?? 1); this.shareOpen = true;
+      this.shareResult = await shareService.note(note.id, note.remoteVersion ?? 1); this.openSheet('share');
     } catch (error) { this.model.error = (error as Error).message; }
   }
 
   private attach(source: 'file' | 'photo' | 'camera'): void {
-    this.attachmentOpen = false;
+    this.sheetOpen = false;
     const context = this.getUIContext().getHostContext() as common.Context;
     void this.model.attach(context, source);
   }
 
   private recordVoice(): void {
-    this.attachmentOpen = false; this.voiceOpen = true;
+    this.openSheet('voice');
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     void this.voice.start(context);
   }
@@ -256,6 +274,7 @@ export struct XopcNotesView {
       XopcNativeNoteEditor({ markdown: this.model.draft?.markdown ?? '', revision: this.model.editorRevision,
         onChange: (value: string): void => { this.model.updateMarkdown(value); },
         onSelection: (value: string): void => { this.model.selectedText = value; } })
+        .layoutWeight(1)
       if (this.model.selected?.attachments?.length) {
         Scroll() {
           Row({ space: 8 }) {
@@ -266,95 +285,102 @@ export struct XopcNotesView {
         }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
       }
       Row({ space: 8 }) {
-        Button($r('app.string.note_add_attachment')).layoutWeight(1).height(42).backgroundColor(this.colors.input)
-          .fontColor(this.colors.foreground).enabled(!this.model.saving).onClick((): void => { this.attachmentOpen = true; })
-        Button($r('app.string.note_done')).layoutWeight(1).height(42).backgroundColor(this.colors.accent)
+        Button($r('app.string.note_add_attachment')).id('note-add-attachment').layoutWeight(1).height(42).backgroundColor(this.colors.input)
+          .fontColor(this.colors.foreground).enabled(!this.model.saving).onClick((): void => { this.openSheet('attachment'); })
+        Button($r('app.string.note_done')).id('note-done').layoutWeight(1).height(42).backgroundColor(this.colors.accent)
           .fontColor(Color.White).enabled(!this.model.saving).onClick((): void => { void this.model.closeEditor(); })
       }.width('100%')
     }.layoutWeight(1).width('100%').padding({ left: 20, right: 20, bottom: 12 }).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
-  detailAction(label: ResourceStr, symbol: Resource, emphasized: boolean, handleTap: () => void) {
+  detailAction(id: string, label: Resource, symbol: Resource, handleTap: () => void) {
     Button() {
-      Column({ space: 5 }) {
-        SymbolGlyph(symbol).fontSize(20).fontColor([emphasized ? this.colors.accent : this.colors.secondary])
-        Text(label).fontSize(12).fontWeight(FontWeight.Medium)
-          .fontColor(emphasized ? this.colors.accent : this.colors.foreground)
+      Column({ space: 3 }) {
+        SymbolGlyph(symbol).fontSize(21).fontColor([this.colors.foreground])
+        Text(label).fontSize(10).fontColor(this.colors.secondary)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.width('100%').justifyContent(FlexAlign.Center)
-    }.layoutWeight(1).height(64).padding(0).borderRadius(14)
-      .backgroundColor(emphasized ? this.colors.accentSoft : this.colors.input)
-      .onClick((): void => { handleTap(); })
+    }.id(id).layoutWeight(1).height(52).padding(0).borderRadius(26)
+      .backgroundColor(Color.Transparent).accessibilityText(label).onClick(handleTap)
+  }
+
+  @Builder
+  detailToolbar() {
+    Row({ space: 10 }) {
+      Row({ space: 2 }) {
+        this.detailAction('note-edit', $r('app.string.edit'), $r('sys.symbol.pencil_line'),
+          (): void => { this.model.editing = true; })
+        this.detailAction('note-ai', $r('app.string.note_ai_edit'), $r('sys.symbol.star'),
+          (): void => { this.openSheet('ai'); })
+        this.detailAction('note-history', $r('app.string.note_version_history'), $r('sys.symbol.clock'),
+          (): void => { this.openHistory(); })
+        this.detailAction('note-more', $r('app.string.more'), $r('sys.symbol.ellipsis_circle'),
+          (): void => { this.openSheet('more'); })
+      }.layoutWeight(1).padding(4).borderRadius(30)
+        .backgroundColor(Color.Transparent).backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR).clip(true)
+      Button() {
+        SymbolGlyph($r('sys.symbol.message')).fontSize(24).fontColor([this.colors.accent])
+      }.id('note-continue-chat').width(60).height(60).padding(0).borderRadius(30)
+        .backgroundColor(Color.Transparent).backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR).clip(true)
+        .accessibilityText($r('app.string.note_continue_chat'))
+        .enabled(!this.model.openingConversation && !this.model.saving)
+        .onClick((): void => { void this.continueInChat(); })
+    }.id('note-detail-toolbar').width('100%').constraintSize({ maxWidth: 480 })
+      .padding({ left: 20, right: 20 }).margin({ bottom: 16 })
   }
 
   @Builder
   detail() {
     if (this.model.selected) {
-      List({ space: 0 }) {
-        ListItem() {
-          Column({ space: 16 }) {
-            Column({ space: 7 }) {
-              Text(this.model.selected.title || $r('app.string.untitled')).fontSize(27).lineHeight(34).fontWeight(FontWeight.Bold)
-                .fontColor(this.colors.foreground).width('100%')
-              Row({ space: 8 }) {
-                Text(new Date(this.model.selected.updatedAt).toLocaleString()).fontSize(12).fontColor(this.colors.tertiary)
-                Text(this.statusLabel(this.model.selected.status)).fontSize(12).fontColor(this.colors.secondary)
-              }.width('100%')
-            }.width('100%').alignItems(HorizontalAlign.Start)
+      Stack({ alignContent: Alignment.Bottom }) {
+        List({ space: 0 }) {
+          ListItem() {
+            Column({ space: 16 }) {
+              Column({ space: 7 }) {
+                Text(this.model.selected.title || $r('app.string.untitled')).fontSize(27).lineHeight(34).fontWeight(FontWeight.Bold)
+                  .fontColor(this.colors.foreground).width('100%')
+                Row({ space: 8 }) {
+                  Text(new Date(this.model.selected.updatedAt).toLocaleString()).fontSize(12).fontColor(this.colors.tertiary)
+                  Text(this.statusLabel(this.model.selected.status)).fontSize(12).fontColor(this.colors.secondary)
+                }.width('100%')
+              }.width('100%').alignItems(HorizontalAlign.Start)
 
-            Row({ space: 8 }) {
-              if (this.model.selected.tags?.length) {
-                Scroll() {
-                  Row({ space: 6 }) {
-                    ForEach(this.model.selected.tags, (tag: string) => {
-                      Text('#' + tag).fontSize(12).fontColor(this.colors.accent)
-                        .height(30).padding({ left: 10, right: 10 }).borderRadius(15).backgroundColor(this.colors.accentSoft)
-                    }, (tag: string): string => tag)
-                  }
-                }.layoutWeight(1).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-              } else {
-                Text($r('app.string.note_manage_tags')).layoutWeight(1).fontSize(13).fontColor(this.colors.tertiary)
+              Row({ space: 8 }) {
+                if (this.model.selected.tags?.length) {
+                  Scroll() {
+                    Row({ space: 6 }) {
+                      ForEach(this.model.selected.tags, (tag: string) => {
+                        Text('#' + tag).fontSize(12).fontColor(this.colors.accent)
+                          .height(30).padding({ left: 10, right: 10 }).borderRadius(15).backgroundColor(this.colors.accentSoft)
+                      }, (tag: string): string => tag)
+                    }
+                  }.layoutWeight(1).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+                } else {
+                  Text($r('app.string.note_manage_tags')).layoutWeight(1).fontSize(13).fontColor(this.colors.tertiary)
+                }
+                Button() { SymbolGlyph($r('sys.symbol.flag')).fontSize(18).fontColor([this.colors.secondary]) }
+                  .width(38).height(38).padding(0).borderRadius(12).backgroundColor(this.colors.input)
+                  .accessibilityText($r('app.string.note_manage_tags')).onClick((): void => {
+                    this.tagsText = this.model.selected?.tags?.join(', ') ?? ''; this.openSheet('tags');
+                  })
+              }.width('100%').alignItems(VerticalAlign.Center)
+
+              XopcMarkdownView({ content: this.model.selected.markdown, conversationId: this.model.selected.id })
+              if (this.model.selected.attachments?.length) {
+                Column({ space: 8 }) {
+                  ForEach(this.model.selected.attachments, (attachment: XopcNoteAttachment) => {
+                    this.noteAttachment(this.model.selected as XopcNote, attachment)
+                  }, (attachment: XopcNoteAttachment): string => attachment.id)
+                }.width('100%')
               }
-              Button() { SymbolGlyph($r('sys.symbol.flag')).fontSize(18).fontColor([this.colors.secondary]) }
-                .width(38).height(38).padding(0).borderRadius(12).backgroundColor(this.colors.input)
-                .accessibilityText($r('app.string.note_manage_tags')).onClick((): void => {
-                  this.tagsText = this.model.selected?.tags?.join(', ') ?? ''; this.tagsOpen = true;
-                })
-            }.width('100%').alignItems(VerticalAlign.Center)
 
-            XopcMarkdownView({ content: this.model.selected.markdown, conversationId: this.model.selected.id })
-            if (this.model.selected.attachments?.length) {
-              Column({ space: 8 }) {
-                ForEach(this.model.selected.attachments, (attachment: XopcNoteAttachment) => {
-                  this.noteAttachment(this.model.selected as XopcNote, attachment)
-                }, (attachment: XopcNoteAttachment): string => attachment.id)
-              }.width('100%')
-            }
-
-            Button() {
-              Row({ space: 8 }) {
-                SymbolGlyph($r('sys.symbol.message')).fontSize(19).fontColor([Color.White])
-                Text($r('app.string.note_continue_chat')).fontSize(15).fontWeight(FontWeight.Medium).fontColor(Color.White)
-              }.width('100%').justifyContent(FlexAlign.Center)
-            }.width('100%').height(46).padding(0).borderRadius(14).backgroundColor(this.colors.accent)
-              .enabled(!this.model.openingConversation && !this.model.saving)
-              .onClick((): void => { void this.continueInChat(); })
-
-            Row({ space: 8 }) {
-              this.detailAction($r('app.string.edit'), $r('sys.symbol.pencil_line'), true,
-                (): void => { this.model.editing = true; })
-              this.detailAction($r('app.string.note_ai_edit'), $r('sys.symbol.star'), false,
-                (): void => { this.aiOpen = true; })
-              this.detailAction($r('app.string.history'), $r('sys.symbol.clock'), false, (): void => {
-                void this.model.loadHistory().then((): void => { this.historyOpen = true; });
-              })
-              this.detailAction($r('app.string.more'), $r('sys.symbol.ellipsis_circle'), false,
-                (): void => { this.moreOpen = true; })
-            }.width('100%')
-          }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 30 }).alignItems(HorizontalAlign.Start)
-        }
-      }.layoutWeight(1).width('100%').scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring)
+            }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 30 }).alignItems(HorizontalAlign.Start)
+          }
+        }.id('note-detail-content').height('100%').width('100%').scrollBar(BarState.Off)
+          .contentEndOffset(92).edgeEffect(EdgeEffect.Spring)
+        this.detailToolbar()
+      }.layoutWeight(1).width('100%').clip(true)
     }
   }
 
@@ -365,25 +391,25 @@ export struct XopcNotesView {
         .width('100%').margin({ bottom: 4 })
       XopcHubRow({ heading: this.model.selected?.pinned ? $r('app.string.unpin') : $r('app.string.pin'),
         symbol: $r('sys.symbol.pin'), compact: true, onOpen: (): void => {
-          this.moreOpen = false; void this.model.togglePin();
+          this.sheetOpen = false; void this.model.togglePin();
         } })
       XopcHubRow({ heading: $r('app.string.note_manage_tags'), symbol: $r('sys.symbol.flag'), compact: true,
         onOpen: (): void => {
-          this.tagsText = this.model.selected?.tags?.join(', ') ?? ''; this.moreOpen = false; this.tagsOpen = true;
+          this.tagsText = this.model.selected?.tags?.join(', ') ?? ''; this.openSheet('tags');
         } })
       XopcHubRow({ heading: $r('app.string.chat_share'), symbol: $r('sys.symbol.share'), compact: true,
         onOpen: (): void => {
-          const note = this.model.selected; this.moreOpen = false; if (note) void this.share(note);
+          const note = this.model.selected; this.sheetOpen = false; if (note) void this.share(note);
         } })
       XopcHubRow({ heading: $r('app.string.archive'), symbol: $r('sys.symbol.archivebox'), compact: true,
-        onOpen: (): void => { this.moreOpen = false; void this.model.archive(); } })
+        onOpen: (): void => { this.sheetOpen = false; void this.model.archive(); } })
       Button() {
         Row({ space: 10 }) {
           SymbolGlyph($r('sys.symbol.trash')).fontSize(19).fontColor([this.colors.danger])
           Text($r('app.string.delete')).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.danger)
         }.width('100%').padding({ left: 12, right: 12 })
       }.width('100%').height(48).padding(0).borderRadius(12).backgroundColor(Color.Transparent)
-        .onClick((): void => { this.moreOpen = false; void this.confirmDelete(); })
+        .onClick((): void => { this.sheetOpen = false; void this.confirmDelete(); })
     }.width('100%').padding({ left: 20, right: 20, top: 4, bottom: 20 })
       .backgroundColor(this.colors.surface).alignItems(HorizontalAlign.Start)
   }
@@ -392,12 +418,16 @@ export struct XopcNotesView {
   historySheet() {
     Column({ space: 12 }) {
       Text($r('app.string.note_version_history')).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).width('100%')
-      if (this.model.snapshot) {
+      if (this.model.loading) {
+        XopcListSkeleton()
+      } else if (this.model.snapshot) {
         Scroll() { Column({ space: 12 }) {
           XopcMarkdownView({ content: this.model.snapshot?.markdown ?? '' })
           Button($r('app.string.note_restore_version')).width('100%').height(44).backgroundColor(this.colors.accent).fontColor(Color.White)
-            .onClick((): void => { this.model.restoreSnapshotToDraft(); this.historyOpen = false; })
+            .onClick((): void => { this.model.restoreSnapshotToDraft(); this.sheetOpen = false; })
         }.width('100%').alignItems(HorizontalAlign.Start) }.layoutWeight(1).width('100%')
+      } else if (!this.model.history.length) {
+        XopcEmptyHint({ message: $r('app.string.note_history_empty') })
       } else {
         List({ space: 8 }) {
           ForEach(this.model.history, (entry: XopcNoteHistoryEntry) => {
@@ -406,7 +436,7 @@ export struct XopcNotesView {
           }, (entry: XopcNoteHistoryEntry): string => entry.timestamp.toString())
         }.layoutWeight(1).width('100%')
       }
-    }.width('100%').height('100%').padding(20).backgroundColor(this.colors.surface).alignItems(HorizontalAlign.Start)
+    }.width('100%').layoutWeight(1).padding(20).backgroundColor(this.colors.surface).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -429,7 +459,7 @@ export struct XopcNotesView {
           Button($r('app.string.cancel')).layoutWeight(1).height(44).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
             .onClick((): void => { this.model.discardAiPreview(); })
           Button($r('app.string.note_apply_ai')).layoutWeight(1).height(44).backgroundColor(this.colors.accent).fontColor(Color.White)
-            .onClick((): void => { void this.model.applyAiPreview(); this.aiOpen = false; })
+            .onClick((): void => { void this.model.applyAiPreview(); this.sheetOpen = false; })
         }.width('100%')
       } else {
         Scroll() {
@@ -445,11 +475,11 @@ export struct XopcNotesView {
           .enabled(!this.model.loading && Boolean(this.aiInstruction.trim()))
           .onClick((): void => { void this.model.previewAi(this.aiInstruction); })
       }
-    }.width('100%').height('100%').padding(20).backgroundColor(this.colors.surface).alignItems(HorizontalAlign.Start)
+    }.width('100%').layoutWeight(1).padding(20).backgroundColor(this.colors.surface).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
-  shareSheet() { if (this.shareResult) { XopcShareResultView({ share: this.shareResult, onClose: (): void => { this.shareOpen = false; } }) } }
+  shareSheet() { if (this.shareResult) { XopcShareResultView({ share: this.shareResult, onClose: (): void => { this.sheetOpen = false; } }) } }
 
   @Builder
   tagsSheet() {
@@ -459,7 +489,9 @@ export struct XopcNotesView {
         .backgroundColor(this.colors.input).borderRadius(14).onChange((value: string): void => { this.tagsText = value; })
       Button($r('app.string.save')).width('100%').height(46).backgroundColor(this.colors.accent).fontColor(Color.White)
         .onClick((): void => {
-          void this.model.updateTags(this.tagsText.split(',')).then((): void => { this.tagsOpen = false; });
+          void this.model.updateTags(this.tagsText.split(',')).then((): void => {
+            if (!this.model.error) this.sheetOpen = false;
+          });
         })
     }.width('100%').padding(20).backgroundColor(this.colors.surface).alignItems(HorizontalAlign.Start)
   }
@@ -492,7 +524,7 @@ export struct XopcNotesView {
           Button($r('app.string.note_attach_recording')).layoutWeight(1).height(46).backgroundColor(this.colors.accent)
             .fontColor(Color.White).enabled(!this.voice.busy).onClick((): void => {
               void this.voice.send(async (attachment): Promise<boolean> => {
-                const result = await this.model.attachPayload(attachment); if (result) this.voiceOpen = false; return result;
+                const result = await this.model.attachPayload(attachment); if (result) this.sheetOpen = false; return result;
               });
             })
         }.width('100%')
@@ -501,8 +533,26 @@ export struct XopcNotesView {
           .onClick((): void => { void this.voice.stopPlayback(); })
       }
       Button($r('app.string.cancel')).width('100%').height(44).enabled(!this.voice.busy)
-        .onClick((): void => { void this.voice.cancel(); this.voiceOpen = false; })
+        .onClick((): void => { void this.voice.cancel(); this.sheetOpen = false; })
     }.width('100%').padding(20).backgroundColor(this.colors.surface).alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  activeSheetContent() {
+    Column() {
+      if (this.model.error) {
+        Text(this.model.error).fontSize(13).fontColor(this.colors.danger)
+          .width('100%').padding({ left: 20, right: 20, bottom: 8 })
+      }
+      if (this.activeSheet === 'history') { this.historySheet() }
+      else if (this.activeSheet === 'ai') { this.aiSheet() }
+      else if (this.activeSheet === 'share') { this.shareSheet() }
+      else if (this.activeSheet === 'tags') { this.tagsSheet() }
+      else if (this.activeSheet === 'attachment') { this.attachmentSheet() }
+      else if (this.activeSheet === 'voice') { this.voiceSheet() }
+      else { this.moreSheet() }
+    }.id('note-sheet-' + this.activeSheet).width('100%').height('100%')
+      .backgroundColor(this.colors.surface)
   }
 
   @Builder
@@ -512,7 +562,7 @@ export struct XopcNotesView {
         if (this.model.error) {
           Text(this.model.error).fontSize(13).fontColor(this.colors.danger).width('100%').padding({ left: 20, right: 20, bottom: 8 })
         }
-        if (this.model.loading && (this.model.selected || this.initialId)) {
+        if (this.model.loading && !this.model.selected && !this.model.draft && this.initialId) {
           Column() { XopcListSkeleton() }.padding(20).width('100%')
         } else if (this.model.editing && this.model.draft) {
           this.editor()
@@ -522,13 +572,10 @@ export struct XopcNotesView {
           this.list()
         }
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
-      .bindSheet($$this.historyOpen, this.historySheet, { height: '88%', dragBar: true })
-      .bindSheet($$this.aiOpen, this.aiSheet, { height: '76%', dragBar: true })
-      .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
-      .bindSheet($$this.tagsOpen, this.tagsSheet, { height: 220, dragBar: true })
-      .bindSheet($$this.moreOpen, this.moreSheet, { height: 410, dragBar: true })
-      .bindSheet($$this.attachmentOpen, this.attachmentSheet, { height: 340, dragBar: true })
-      .bindSheet($$this.voiceOpen, this.voiceSheet, { height: 300, dragBar: true })
+      .bindSheet($$this.sheetOpen, this.activeSheetContent, {
+        height: this.sheetHeight(), dragBar: true,
+        onDisappear: (): void => { if (this.activeSheet === 'voice') void this.voice.cancel(); }
+      })
   }
 
   build() {

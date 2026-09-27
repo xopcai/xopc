@@ -416,6 +416,14 @@ describe('chat history isolation', () => {
     realtimeClient.onEvent({ topic: 'gateway', seq: 1, event: 'session.input-state', data: { conversationId: 'one', activeRunId: 'run', inputs: [] } });
     expect(chat.auxiliaryRevision).toBe(1); expect(chat.streaming).toBe('live text'); expect(mocks.history).not.toHaveBeenCalled(); chat.dispose();
   });
+  it('does not switch a new send into history polling on its initial user boundary', () => {
+    const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
+    const event = (type: string, payload: object) => realtimeClient.onEvent({ topic: 'run:run', seq: 1, event: type,
+      data: { conversationId: 'one', runId: 'run', payload } });
+    event('run_start', {}); event('user_message', {});
+    event('assistant_delta', { messageId: 'answer', delta: 'Hello', offset: 0 });
+    expect(chat.liveRow?.text).toBe('Hello'); expect(mocks.history).not.toHaveBeenCalled(); chat.dispose();
+  });
   it('retains terminal rich output when history refresh fails and replaces it after a successful retry', async () => {
     const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
     const event = (name: string, payload: object) => realtimeClient.onEvent({ topic: 'run:run', seq: 1, event: name,
@@ -424,7 +432,7 @@ describe('chat history isolation', () => {
     mocks.history.mockRejectedValueOnce(new Error('OFFLINE'));
     event('run_end', { status: 'cancelled' });
     await vi.waitFor(() => expect(chat.error).toBe('OFFLINE'));
-    expect(chat.liveRow?.live).toBe(false); expect(chat.liveRow?.text).toBe('answer'); expect(chat.liveRow?.blocks?.[0].active).toBe(false);
+    expect(chat.liveRow?.live).toBe(false); expect(chat.liveRow?.text).toBe('answer'); expect(chat.liveRow?.blocks?.[0].presentation).toBe('answer');
     mocks.history.mockResolvedValueOnce(page('one', 'answer')); await chat.loadHistory(false);
     expect(chat.liveRow).toBeUndefined(); expect(chat.rows[0].text).toBe('answer'); chat.dispose();
   });

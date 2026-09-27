@@ -146,6 +146,32 @@ describe('RealtimeRuntime', () => {
     });
   });
 
+  it('applies compact filtering to replay and live events on the existing socket topic', async () => {
+    runtime = new RealtimeRuntime();
+    server = createServer();
+    server.on('upgrade', (request, connection, head) => runtime!.handleUpgrade(request, connection, head));
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    runtime.broker.publish('run:compact', 'thinking_delta', { type: 'thinking_delta', payload: { delta: 'private' } });
+    runtime.broker.publish('run:compact', 'assistant_delta', { type: 'assistant_delta', payload: { delta: 'answer', offset: 0 } });
+    const issued = runtime.tickets.issue('compact-client', 'mobile', { principalId: 'owner', scopes: ['gateway.admin'] });
+    socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`);
+    await waitForOpen(socket);
+    const messages = collectMessages(socket);
+    socket.send(JSON.stringify({
+      protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), kind: 'realtime.hello', sentAt: Date.now(),
+      payload: { ticket: issued.ticket, clientId: 'compact-client', clientKind: 'mobile',
+        subscriptions: [{ topic: 'run:compact', afterSeq: 0, view: 'compact' }] },
+    }));
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready' });
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.subscribed' });
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.event', payload: { seq: 2, event: 'assistant_delta' } });
+    runtime.broker.publish('run:compact', 'tool_update', { type: 'tool_update', payload: { textDelta: 'private' } });
+    runtime.broker.publish('run:compact', 'run_end', { type: 'run_end', payload: { status: 'success' } });
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.event', payload: { seq: 4, event: 'run_end' } });
+  });
+
   it('restricts resource topics to their domain scopes', async () => {
     runtime = new RealtimeRuntime();
     server = createServer();

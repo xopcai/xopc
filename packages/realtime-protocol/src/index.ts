@@ -55,6 +55,7 @@ const envelope = <TKind extends string, TPayload extends z.ZodType>(
 export const realtimeSubscriptionSchema = z.object({
   topic: realtimeTopicSchema,
   afterSeq: z.number().int().nonnegative().optional(),
+  view: z.literal('compact').optional(),
 });
 
 export const clientRealtimeMessageSchema = z.discriminatedUnion('kind', [

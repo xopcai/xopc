@@ -13,7 +13,7 @@ export interface XopcTicket { ticket: string; realtime: XopcRealtimeRange; }
 export interface XopcPayload<T> { payload: T; }
 export interface XopcErrorBody { code: string; message: string; retryable: boolean; }
 export interface XopcErrorEnvelope { error: XopcErrorBody; }
-export interface XopcSubscription { topic: string; afterSeq?: number; }
+export interface XopcSubscription { topic: string; afterSeq?: number; view?: string; }
 export interface XopcSubscriptions { subscriptions: XopcSubscription[]; }
 export interface XopcTopics { topics: string[]; }
 export interface XopcHello extends XopcRealtimeClientIdentity, XopcSubscriptions { ticket: string; endpoint: XopcEndpointHello; }

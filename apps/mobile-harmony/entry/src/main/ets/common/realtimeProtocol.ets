@@ -36,7 +36,9 @@ export class XopcCursors {
   }
   snapshot(): XopcSubscription[] {
     const subscriptions: XopcSubscription[] = [];
-    this.cursors.forEach((seq: number, topic: string): void => { subscriptions.push({ topic, afterSeq: seq }); });
+    this.cursors.forEach((seq: number, topic: string): void => {
+      subscriptions.push({ topic, afterSeq: seq, view: topic.startsWith('run:') ? 'compact' : undefined });
+    });
     return subscriptions;
   }
 }
