@@ -114,11 +114,11 @@ describe('chat bottom region composition', () => {
     expect(home).toContain(".id('home-quick-actions').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE)");
     expect(home).toContain(".id('home-quick-composer').layoutWeight(1).height(COMPOSER_INPUT_MIN)");
     expect(home).toContain('private async sendQuickDraft(): Promise<void>');
-    expect(home).toContain('if (!prompt || this.quickSending) return;');
+    expect(home).toContain('if ((!prompt && !this.quickFiles.length) || this.quickSending || this.quickPicking) return;');
     expect(home).toContain('this.quickSending = true;');
     expect(home).toContain('finally { this.quickSending = false; }');
-    expect(home).toContain('this.intake.targetChat(id, prompt);');
-    expect(home).toContain('this.switchToChat(id, prompt);');
+    expect(home).toContain('quickChatIntake.enqueue(id, prompt, this.quickFiles);');
+    expect(home).toContain("this.switchToChat(id, '');");
     expect(home).toContain('private activateTab(index: number): void');
     expect(home).toContain('.animationDuration(0)');
     expect(home).not.toContain('transitionToTab');

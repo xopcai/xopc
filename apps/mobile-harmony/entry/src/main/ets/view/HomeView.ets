@@ -24,6 +24,11 @@ import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { XopcSection } from '../model/workspace';
 import { accessibility } from '@kit.AccessibilityKit';
 import { COMPOSER_INPUT_MIN, COMPOSER_TOOL_SIZE } from '../common/composerLayout';
+import { XopcChatAttachment } from '../model/chat';
+import { quickChatIntake } from '../service/quickChatIntake';
+import { pickChatAttachment } from '../service/chatAttachmentPicker';
+import { pickChatPhoto } from '../service/chatPhotoPicker';
+import { MAX_ATTACHMENTS } from '../common/attachments';
 
 @ComponentV2
 export struct XopcHomeView {
@@ -46,6 +51,8 @@ export struct XopcHomeView {
   @Local chatFocusRevision: number = 0;
   @Local quickDraft: string = '';
   @Local quickSending: boolean = false;
+  @Local quickFiles: XopcChatAttachment[] = [];
+  @Local quickPicking: boolean = false;
   @Local creationSheetOpen: boolean = false;
   @Local creationChatId: string = '';
   @Local creationChatDraft: string = '';
@@ -77,6 +84,7 @@ export struct XopcHomeView {
     this.attentionTimer = setInterval((): void => { this.attention.refresh(); }, 30000);
   }
   aboutToDisappear(): void {
+    quickChatIntake.clear();
     layoutState.dismissTabNavigation = undefined;
     notificationNavigation.onTarget = undefined; clearInterval(this.attentionTimer); this.attention.dispose();
     try { accessibility.offAnimationReduceStateChange(this.onMotionChange); } catch (_) {}
@@ -155,13 +163,14 @@ export struct XopcHomeView {
 
   private async sendQuickDraft(): Promise<void> {
     const prompt = this.quickDraft.trim();
-    if (!prompt || this.quickSending) return;
+    if ((!prompt && !this.quickFiles.length) || this.quickSending || this.quickPicking) return;
     this.quickSending = true;
     try {
       const id = await this.chatRepository.create();
-      this.quickDraft = '';
-      this.intake.targetChat(id, prompt);
-      this.switchToChat(id, prompt);
+      quickChatIntake.enqueue(id, prompt, this.quickFiles);
+      this.quickDraft = ''; this.quickFiles = [];
+      this.returnToConversations = false;
+      this.switchToChat(id, '');
     } catch (error) {
       this.getUIContext().getPromptAction().showToast({ message: (error as Error).message });
     } finally { this.quickSending = false; }
@@ -176,6 +185,28 @@ export struct XopcHomeView {
     } catch (error) {
       this.getUIContext().getPromptAction().showToast({ message: (error as Error).message });
     } finally { this.quickSending = false; }
+  }
+
+  private showQuickAttachments(): void {
+    const resources = this.getUIContext().getHostContext()?.resourceManager;
+    if (!resources || this.quickSending || this.quickPicking) return;
+    this.getUIContext().showActionSheet({ title: '', message: '', sheets: [
+      { title: resources.getStringSync($r('app.string.chat_photos').id), action: (): void => { this.pickQuickFile('photo'); } },
+      { title: resources.getStringSync($r('app.string.chat_camera').id), action: (): void => { this.pickQuickFile('camera'); } },
+      { title: resources.getStringSync($r('app.string.chat_local_files').id), action: (): void => { this.pickQuickFile('document'); } }
+    ] });
+  }
+
+  private async pickQuickFile(kind: string): Promise<void> {
+    const context = this.getUIContext().getHostContext();
+    if (!context || this.quickSending || this.quickPicking || this.quickFiles.length >= MAX_ATTACHMENTS) return;
+    this.quickPicking = true;
+    try {
+      const file = kind === 'document' ? await pickChatAttachment(context, this.quickFiles)
+        : await pickChatPhoto(context, this.quickFiles, kind === 'camera');
+      if (file) this.quickFiles = this.quickFiles.concat([file]);
+    } catch (error) { this.getUIContext().getPromptAction().showToast({ message: (error as Error).message }); }
+    finally { this.quickPicking = false; }
   }
 
   private continueCreationChat(): void {
@@ -269,6 +300,20 @@ export struct XopcHomeView {
   @Builder
   quickComposer() {
     Column() {
+      if (this.quickFiles.length) {
+        ForEach(this.quickFiles, (file: XopcChatAttachment, index: number) => {
+          Row({ space: 8 }) {
+            if (file.mimeType.startsWith('image/') && file.data) {
+              Image('data:' + file.mimeType + ';base64,' + file.data).width(40).height(40).objectFit(ImageFit.Cover).borderRadius(8)
+            }
+            Text(file.name).fontSize(13).fontColor(this.colors.foreground).maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+            Button($r('app.string.remove_attachment')).height(40).fontSize(12).backgroundColor(Color.Transparent)
+              .fontColor(this.colors.secondary).enabled(!this.quickSending && !this.quickPicking)
+              .onClick((): void => { this.quickFiles = this.quickFiles.filter((_file: XopcChatAttachment, position: number): boolean => position !== index); })
+          }.width('100%').padding({ left: 12, right: 8, top: 4 })
+        }, (file: XopcChatAttachment, index: number): string => file.name + ':' + index)
+      }
       Row({ space: 4 }) {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.mic')).fontSize(22).fontColor([this.colors.accent])
@@ -279,12 +324,12 @@ export struct XopcHomeView {
         TextInput({ text: this.quickDraft, placeholder: this.quickComposerPlaceholder })
           .id('home-quick-composer').layoutWeight(1).height(COMPOSER_INPUT_MIN).maxLength(4000)
           .padding({ left: 4, right: 4 }).enterKeyType(EnterKeyType.Send)
-          .enabled(!this.quickSending).lineHeight(20)
+          .enabled(!this.quickSending && !this.quickPicking).lineHeight(20)
           .fontSize(16).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
           .backgroundColor(Color.Transparent)
           .onChange((text: string): void => { this.quickDraft = text; })
           .onSubmit((_enterKey: EnterKeyType): void => { this.sendQuickDraft(); })
-        if (this.quickDraft.trim()) {
+        if (this.quickDraft.trim() || this.quickFiles.length) {
           Button({ type: ButtonType.Circle }) {
             if (this.quickSending) {
               LoadingProgress().width(20).height(20).color(this.colors.panel)
@@ -293,9 +338,10 @@ export struct XopcHomeView {
             }
           }.id('home-quick-send').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
             .backgroundColor(this.colors.foreground).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
-            .enabled(!this.quickSending).accessibilityText($r('app.string.send'))
+            .enabled(!this.quickSending && !this.quickPicking).accessibilityText($r('app.string.send'))
             .onClick((): void => { this.sendQuickDraft(); })
-        } else {
+        }
+        if (this.quickFiles.length < MAX_ATTACHMENTS) {
           Button({ type: ButtonType.Circle }) {
             if (this.quickSending) {
               LoadingProgress().width(20).height(20).color(this.colors.accent)
@@ -304,8 +350,8 @@ export struct XopcHomeView {
             }
           }.id('home-quick-actions').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
             .backgroundColor(this.colors.input).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
-            .enabled(!this.quickSending).accessibilityText($r('app.string.assistant'))
-            .onClick((): void => { void this.openQuickChat(); })
+            .enabled(!this.quickSending && !this.quickPicking).accessibilityText($r('app.string.add_attachment'))
+            .onClick((): void => { this.showQuickAttachments(); })
         }
       }.width('100%').padding({ left: 4, right: 4, top: 4, bottom: 4 })
     }.id('home-quick-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)
