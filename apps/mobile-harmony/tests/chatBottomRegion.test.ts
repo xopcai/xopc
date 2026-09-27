@@ -85,11 +85,11 @@ describe('chat bottom region composition', () => {
     expect(home).toContain(".id('secondary-bottom-region').width('100%')");
     expect(home).not.toContain("}.id('secondary-bottom-region').width('100%').backgroundColor");
     expect(chat).toContain(".id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(Color.Transparent)");
-    expect(chat).toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR).borderRadius(24).clip(true)');
+    expect(chat).not.toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR)');
     expect(chat).toContain('.borderRadius(24).clip(true)');
     expect(home).toContain(".id('main-tab-dock').width('100%')");
     expect(home).not.toContain("}.id('main-tab-dock').width('100%').backgroundColor");
-    expect(home).toContain(".id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)");
+    expect(home).toContain(".id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(Color.Transparent)");
     expect(home).toContain('.borderRadius(24).clip(true)');
     expect(home).not.toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR)');
     expect(chat).toContain(".id('chat-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)");

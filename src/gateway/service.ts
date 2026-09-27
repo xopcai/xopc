@@ -136,7 +136,6 @@ import {
   type ConnectorLearningCoordinator,
 } from '../connectors/learning-coordinator.js';
 import { GatewaySceneHost } from './scenes/host.js';
-import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import type { SceneAccess } from '../scenes/httpServices.js';
 import { createProductDispatcher } from '../capabilities/runtime/product.js';

@@ -15,7 +15,7 @@ import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import type { StartupUnavailableGatewayMethod } from '../../startup-readiness.js';
 import { evictEmbeddedSessionRunner } from '../../../agent/embedded/session-runner.js';
 import { SessionEnvironmentService } from '../../../execution-environments/session-environment-service.js';
-import type { Project, ProjectExecutionMode } from '../../../projects/types.js';
+import type { Project } from '../../../projects/types.js';
 import { deleteBrowserTabBinding } from '../../../storage/sqlite/browser-tab-binding-repository.js';
 import {
   getSidebarLayout,
@@ -33,10 +33,6 @@ const DEFAULT_SIDEBAR_STALE_DAYS = 60;
 
 function isSessionType(value: string): value is SessionType {
   return SESSION_TYPES.has(value as SessionType);
-}
-
-function parseExecutionMode(value: unknown): ProjectExecutionMode | undefined {
-  return value === 'local_checkout' || value === 'managed_worktree' ? value : undefined;
 }
 
 function ensureGatewayReadyForSessions(

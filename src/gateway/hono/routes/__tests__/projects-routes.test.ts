@@ -1,5 +1,4 @@
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -14,8 +13,6 @@ import { ProjectService } from '../../../../projects/index.js';
 import { listKnowledgeItems } from '../../../../knowledge-memory/index.js';
 import {
   closeXopcDatabase,
-  ensureSessionRecord,
-  getSessionMetadata,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';

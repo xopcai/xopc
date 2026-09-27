@@ -379,7 +379,7 @@ export struct XopcHomeView {
           Column() {
             this.quickComposer()
             if (this.layout.isMainDockVisible(this.tab)) { this.dockItems() }
-          }.id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)
+          }.id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(Color.Transparent)
             .borderRadius(24).clip(true)
         }.id('secondary-bottom-region').width('100%')
           .margin({ top: 4, bottom: 0 })
