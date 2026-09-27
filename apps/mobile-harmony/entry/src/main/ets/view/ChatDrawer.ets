@@ -4,6 +4,9 @@ import { XopcSessionGroup, XopcSessionItem } from '../model/chat';
 import { XopcListSkeleton } from './MobileComponents';
 import { layoutState } from '../service/layoutState';
 
+const CHAT_DRAWER_MAX_DRAG: number = 420;
+const CHAT_DRAWER_CLOSE_DISTANCE: number = 56;
+
 @ComponentV2
 export struct XopcChatDrawer {
   @Local colors: XopcThemeColors = appThemeColors;
@@ -14,6 +17,7 @@ export struct XopcChatDrawer {
   @Event onNewChat: () => void = (): void => {};
   @Local drawer: XopcChatDrawerViewModel = new XopcChatDrawerViewModel();
   @Local actionItem?: XopcSessionItem;
+  @Local drawerDragX: number = 0;
   aboutToAppear(): void { this.drawer.open(); }
   aboutToDisappear(): void { this.drawer.dispose(); }
 
@@ -62,10 +66,31 @@ export struct XopcChatDrawer {
     }
   }
 
+  private updateDrawerDrag(event: GestureEvent): void {
+    if (this.actionItem || event.offsetX >= 0) return;
+    this.drawerDragX = Math.max(-CHAT_DRAWER_MAX_DRAG, event.offsetX);
+  }
+
+  private finishDrawerDrag(event: GestureEvent): void {
+    if (event.offsetX <= -CHAT_DRAWER_CLOSE_DISTANCE) {
+      this.drawerDragX = 0;
+      this.onClose();
+      return;
+    }
+    this.getUIContext().animateTo({ duration: layoutState.reduceMotion ? 0 : 180, curve: Curve.EaseOut }, (): void => {
+      this.drawerDragX = 0;
+    });
+  }
+
+  private scrimOpacity(): number {
+    return 1 - Math.min(0.55, Math.abs(this.drawerDragX) / CHAT_DRAWER_MAX_DRAG * 0.55);
+  }
+
   build() {
     Stack({ alignContent: Alignment.Start }) {
       Button({ type: ButtonType.Normal }) {}.id('chat-drawer-scrim').width('100%').height('100%')
-        .backgroundColor('#66000000').accessibilityText($r('app.string.chat_close_drawer')).onClick((): void => { this.onClose(); })
+        .backgroundColor('#66000000').opacity(this.scrimOpacity())
+        .accessibilityText($r('app.string.chat_close_drawer')).onClick((): void => { this.onClose(); })
       Column() {
         Row() {
           Button() { SymbolGlyph($r('sys.symbol.line_3_horizontal')).fontSize(23).fontColor([this.colors.foreground]) }
@@ -139,9 +164,11 @@ export struct XopcChatDrawer {
         }.width('100%').padding({ left: 16, right: 16, top: 12, bottom: 12 })
           .backgroundColor(this.colors.grouped)
       }.id('chat-drawer').width('94%').constraintSize({ maxWidth: 420 }).height('100%').backgroundColor(this.colors.panel)
+        .translate({ x: this.drawerDragX })
         .transition(TransitionEffect.move(TransitionEdge.START).animation({ duration: layoutState.reduceMotion ? 0 : 220, curve: Curve.EaseOut }))
         .parallelGesture(PanGesture({ direction: PanDirection.Horizontal, distance: 16 })
-          .onActionEnd((event: GestureEvent): void => { if (event.offsetX < -40) this.onClose(); }))
+          .onActionUpdate((event: GestureEvent): void => { this.updateDrawerDrag(event); })
+          .onActionEnd((event: GestureEvent): void => { this.finishDrawerDrag(event); }))
       if (this.actionItem) { this.actionMenu(this.actionItem) }
     }.width('100%').height('100%')
   }

@@ -20,7 +20,7 @@ describe('inline user voice messages', () => {
     expect(voiceBubble).toContain("sys.symbol.stop_circle_fill");
     expect(voiceBubble).toContain("sys.symbol.speaker_wave_2");
     expect(voiceBubble).toContain("padding({ left: 8, right: 8 }).justifyContent(FlexAlign.Start)");
-    expect(voiceBubble.indexOf("sys.symbol.speaker_wave_2")).toBeLessThan(voiceBubble.indexOf("Math.max(1, Math.ceil(this.audioPlayer.duration))"));
+    expect(voiceBubble.indexOf("sys.symbol.speaker_wave_2")).toBeLessThan(voiceBubble.indexOf("Math.max(1, Math.ceil(this.inlineAudioDuration()))"));
     expect(voiceBubble).not.toContain('this.file.name');
     expect(voiceBubble).not.toContain('chat_preview');
     expect(voiceBubble).not.toContain('download');

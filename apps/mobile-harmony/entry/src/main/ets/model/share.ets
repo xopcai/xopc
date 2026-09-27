@@ -70,4 +70,12 @@ export interface XopcIncomingShare {
   kind: 'url' | 'code' | 'todo' | 'long-text' | 'text';
   preview: string;
   sensitive: boolean;
+  attachments?: XopcIncomingShareAttachment[];
+}
+
+export interface XopcIncomingShareAttachment {
+  path: string;
+  name: string;
+  mimeType: string;
+  size: number;
 }

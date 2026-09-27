@@ -1,7 +1,7 @@
 import { http } from '@kit.NetworkKit';
 import { secureOrigin } from '../common/protocol';
 
-interface XopcHttpHeaders { 'Content-Type': string; 'Authorization': string; }
+interface XopcHttpHeaders { 'Content-Type': string; 'Authorization': string; 'Idempotency-Key'?: string; }
 
 export class XopcHttpError extends Error {
   status: number;
@@ -14,10 +14,13 @@ export class XopcHttpError extends Error {
 }
 
 export class XopcTransport {
-  async request(origin: string, path: string, method: string = 'GET', body: string = '', token: string = ''): Promise<string> {
+  async request(origin: string, path: string, method: string = 'GET', body: string = '', token: string = '',
+    idempotencyKey: string = ''): Promise<string> {
     if (!path.startsWith('/api/') || path.includes('#')) throw new Error('INVALID_API_PATH');
     const connection = http.createHttp();
-    const headers: XopcHttpHeaders = { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' };
+    const headers: XopcHttpHeaders = idempotencyKey
+      ? { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '', 'Idempotency-Key': idempotencyKey }
+      : { 'Content-Type': 'application/json', 'Authorization': token ? 'Bearer ' + token : '' };
     const options: http.HttpRequestOptions = {
       method: http.RequestMethod.GET, customMethod: method, header: headers,
       expectDataType: http.HttpDataType.STRING, connectTimeout: 8000, readTimeout: 30000,

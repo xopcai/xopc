@@ -1,6 +1,6 @@
 import { pasteboard } from '@kit.BasicServicesKit';
 import { gatewaySession } from './gatewaySession';
-import { XopcNoteResult } from '../model/workspace';
+import { XopcNoteResult } from '../model/note';
 
 interface XopcMessageNote { text: string; channel: string; platform: string; }
 

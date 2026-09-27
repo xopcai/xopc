@@ -5,6 +5,9 @@ describe('chat media source isolation', () => {
   it('scopes media reads to the conversation and escapes all identifiers', () => {
     expect(chatMediaSource('media://a/b', 'c&d')).toEqual({ external: false, path: '/api/media/read?uri=media%3A%2F%2Fa%2Fb&conversationId=c%26d' });
     expect(chatMediaSource('xopc-file:a%2Fb', '')).toEqual({ external: false, path: '/api/files/a%2Fb/content' });
+    expect(chatMediaSource('xopc-attachment://notes/note%2F1/att%3F2', '')).toEqual({
+      external: false, path: '/api/notes/note%2F1/media/att%3F2',
+    });
   });
   it('decodes image data without accessing the gateway', () => {
     expect(new Uint8Array(chatMediaSource('data:image/png;base64,YWJj', '').data!)).toEqual(new Uint8Array([97, 98, 99]));
@@ -15,7 +18,8 @@ describe('chat media source isolation', () => {
   it('never authenticates externally supplied URLs', () => {
     expect(chatMediaSource('https://example.com/p.png', 'c')).toEqual({ external: true, path: 'https://example.com/p.png' });
   });
-  it.each(['file:///etc/passwd', '/api/config', 'http://external.test/a', 'javascript:alert(1)', 'media://a', 'xopc-file:', 'data:image/png;base64,%%%'])('rejects unsafe or incomplete source %s', uri => {
+  it.each(['file:///etc/passwd', '/api/config', 'http://external.test/a', 'javascript:alert(1)', 'media://a', 'xopc-file:',
+    'xopc-attachment://notes//a', 'xopc-attachment://notes/a/%', 'data:image/png;base64,%%%'])('rejects unsafe or incomplete source %s', uri => {
     expect(() => chatMediaSource(uri, '')).toThrow();
   });
   it('rejects oversized embedded media before decoding', () => {

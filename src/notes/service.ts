@@ -354,28 +354,32 @@ export class NotesService {
     }
   }
 
-  async createAiEditPatch(id: string, instruction: string, markdownOverride?: string): Promise<{ message: string; patch: NoteAiPatch } | null> {
+  async createAiEditPatch(id: string, instruction: string, markdownOverride?: string,
+    requestedRange?: { start: number; end: number }): Promise<{ message: string; patch: NoteAiPatch } | null> {
     const note = await this.store.getNote(id);
     if (!note) return null;
     const source = markdownOverride ?? note.markdown;
-    const parsed = parseNoteMarkdown(source, id);
+    const start = Math.max(0, Math.min(source.length, requestedRange?.start ?? 0));
+    const end = Math.max(start, Math.min(source.length, requestedRange?.end ?? source.length));
+    const target = source.slice(start, end);
+    const parsed = parseNoteMarkdown(target, id);
     const wantsTodos = /待办|todo|task|行动|提醒/i.test(instruction);
     const wantsSummary = /摘要|总结|summary|压缩/i.test(instruction);
     let generated = '';
     if (wantsTodos) {
-      const lines = source.split(/\n|。|；|;/).map((line) => line.trim()).filter(Boolean);
+      const lines = target.split(/\n|。|；|;/).map((line) => line.trim()).filter(Boolean);
       generated = (lines.length ? lines : [parsed.plainText]).slice(0, 12).map((line) => `- [ ] ${line.replace(/^[-*\d.\s\[\]x]+/i, '').trim()}`).join('\n');
     } else if (wantsSummary) {
       generated = `> [!SUMMARY]\n> ${parsed.plainText.slice(0, 220)}`;
     } else {
-      generated = `${source.trimEnd()}\n\n## AI 整理\n\n${instruction.trim()}`;
+      generated = `${target.trimEnd()}\n\n## AI 整理\n\n${instruction.trim()}`;
     }
     return {
       message: 'AI edit patch generated',
       patch: {
         id: randomUUID(),
         summary: instruction,
-        operations: [{ type: 'replaceRange', from: 0, to: source.length, markdown: generated || source }],
+        operations: [{ type: 'replaceRange', from: start, to: end, markdown: generated || target }],
       },
     };
   }

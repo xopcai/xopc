@@ -66,7 +66,7 @@ describe('native voice lifecycle', () => {
     await record();
     const send = vi.fn(async (attachment) => {
       expect(mocks.unlink).not.toHaveBeenCalled();
-      expect(attachment).toMatchObject({ type: 'voice', name: 'voice.m4a', mimeType: 'audio/mp4', size: 64 });
+      expect(attachment).toMatchObject({ type: 'voice', name: 'voice.m4a', mimeType: 'audio/mp4', size: 64, duration: 1 });
       expect(Buffer.from(attachment.data, 'base64')).toHaveLength(64);
       return true;
     });

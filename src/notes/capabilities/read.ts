@@ -10,8 +10,8 @@ export function registerNoteReadCapabilities(dispatcher: CapabilityDispatcher, g
   dispatcher.register(defineReadCapability({
     ...policy, id: 'xopc.notes.preview_edit', description: 'Build a local edit suggestion without modifying the note or calling a model.',
     ...ProductReadContracts['xopc.notes.preview_edit'],
-    async execute({ id, instruction, markdown }) {
-      const result = await getNotes().createAiEditPatch(id, instruction, markdown);
+    async execute({ id, instruction, markdown, context }) {
+      const result = await getNotes().createAiEditPatch(id, instruction, markdown, context?.range);
       if (!result) throw new CapabilityError('NOT_FOUND', 'Note not found');
       return ProductReadContracts['xopc.notes.preview_edit'].output.parse(result);
     },

@@ -52,35 +52,35 @@ export struct XopcChatMessageContent {
       }, (ref: XopcContextRef): string => ref.kind + ':' + ref.sourceId)
       if (this.row.role === 'assistant') {
         Repeat<XopcChatBlock>(this.body).each((item: RepeatItem<XopcChatBlock>) => {
-          if (item.item.kind === 'steps') { XopcChatStepsView({ row: this.row, reasoning: this.reasoning, disclosure: this.disclosure, scope: this.conversationId }) }
+          if (item.item.kind === 'steps') { XopcChatStepsView({ row: this.row, reasoning: this.reasoning, disclosure: this.disclosure, scope: this.conversationId, onNavigate: this.onNavigate }) }
           else if (item.item.kind === 'text' && item.item.text) {
-            XopcMarkdownView({ content: item.item.text, conversationId: this.conversationId })
+            XopcMarkdownView({ content: item.item.text, conversationId: this.conversationId, onNavigate: this.onNavigate })
           } else if (item.item.review) {
             Column({ space: 10 }) {
               Text($r('app.string.chat_review')).fontSize(16).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
               Text(item.item.review.overallCorrectness === 'patch is incorrect' ? $r('app.string.chat_review_incorrect')
                 : item.item.review.overallCorrectness === 'patch is correct' ? $r('app.string.chat_review_correct') : $r('app.string.chat_review_unknown'))
                 .fontSize(12).fontColor(this.colors.secondary)
-              if (item.item.review.summary) { XopcMarkdownView({ content: item.item.review.summary }) }
+              if (item.item.review.summary) { XopcMarkdownView({ content: item.item.review.summary, conversationId: this.conversationId, onNavigate: this.onNavigate }) }
               ForEach(item.item.review.findings || [], (finding: XopcReviewFinding, index: number) => {
                 Column({ space: 6 }) {
                   Text('P' + finding.priority + ' · ' + finding.title).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
                   if (finding.filePath) { Text(finding.filePath + (finding.lineStart ? ':' + finding.lineStart : '')).fontSize(12).fontFamily('monospace').fontColor(this.colors.secondary).copyOption(CopyOptions.InApp) }
-                  XopcMarkdownView({ content: finding.body })
+                  XopcMarkdownView({ content: finding.body, conversationId: this.conversationId, onNavigate: this.onNavigate })
                 }.width('100%').padding(10).borderRadius(8).backgroundColor(this.colors.grouped).alignItems(HorizontalAlign.Start)
               }, (finding: XopcReviewFinding, index: number): string => index + ':' + finding.title)
-              if (item.item.review.overallExplanation) { XopcMarkdownView({ content: item.item.review.overallExplanation }) }
+              if (item.item.review.overallExplanation) { XopcMarkdownView({ content: item.item.review.overallExplanation, conversationId: this.conversationId, onNavigate: this.onNavigate }) }
             }.id('chat-review-' + item.item.id).width('100%').padding(12).borderRadius(12)
               .backgroundColor(this.colors.grouped).alignItems(HorizontalAlign.Start)
           }
         }).key((block: XopcChatBlock): string => block.id)
-        if (!this.body.length && !this.row.blocks && this.row.text) { XopcMarkdownView({ content: this.row.text, conversationId: this.conversationId }) }
+        if (!this.body.length && !this.row.blocks && this.row.text) { XopcMarkdownView({ content: this.row.text, conversationId: this.conversationId, onNavigate: this.onNavigate }) }
         if (this.row.live && !this.row.text && !this.row.blocks?.length) {
           Text(this.row.progress || $r('app.string.chat_thinking')).fontSize(13).fontColor(this.colors.secondary)
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '100%' })
         }
       } else if (this.row.role === 'user') {
-        if (this.row.text) { Text(this.row.text).fontSize(16).lineHeight(25).fontColor(this.colors.foreground).copyOption(CopyOptions.InApp) }
+        if (this.row.text) { Text(this.row.text).fontSize(16).lineHeight(25).fontColor(this.colors.foreground) }
       } else {
         Text(this.row.text).fontSize(13).fontColor(this.colors.secondary).copyOption(CopyOptions.InApp)
       }

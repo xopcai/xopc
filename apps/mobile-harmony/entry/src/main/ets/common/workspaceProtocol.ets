@@ -1,5 +1,5 @@
 import type {
-  XopcTaskResult, XopcProject, XopcAutomation, XopcNote, XopcWorkspaceItem,
+  XopcTaskResult, XopcProject, XopcAutomation, XopcWorkspaceItem,
   XopcTaskCreate, XopcAutomationWrite
 } from '../model/workspace';
 
@@ -22,11 +22,6 @@ export function automationItem(automation: XopcAutomation): XopcWorkspaceItem {
       && automation.trigger.schedule?.kind === 'cron' && automation.action.kind === 'agent',
     actions: ['run', automation.enabled ? 'pause' : 'resume', 'delete'], automation };
 }
-export function noteItem(note: XopcNote): XopcWorkspaceItem {
-  if (!note?.id) throw new Error('INVALID_NOTE');
-  return { id: note.id, title: note.title ?? '', body: note.markdown ?? note.snippet ?? '', status: note.status,
-    version: note.updatedAt ?? note.remoteVersion ?? 0, editable: true, actions: ['delete'] };
-}
 export function newTask(title: string, body: string, idempotencyKey: string, projectId?: string): XopcTaskCreate {
   return { title: title.trim(), body, idempotencyKey, projectId,
     contract: { objective: body.trim() || title.trim(), expectedOutputs: [], acceptanceCriteria: [], constraints: [],
@@ -36,7 +31,7 @@ export function newTask(title: string, body: string, idempotencyKey: string, pro
 export function scheduledAutomation(title: string, body: string, cron: string, create: boolean, existing?: XopcAutomation): XopcAutomationWrite {
   const result: XopcAutomationWrite = { name: title.trim(), trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: cron.trim() } },
     action: { kind: 'agent', instruction: body.trim() } };
-  if (create) { result.enabled = true; result.conversationMode = 'new_session'; result.notificationPolicy = 'attention'; }
+  if (create) { result.enabled = true; result.conversationMode = 'new_session'; }
   else if (existing) {
     const original = JSON.parse(JSON.stringify(existing)) as XopcAutomation;
     if (original.trigger.kind !== 'schedule' || original.trigger.schedule?.kind !== 'cron' || original.action.kind !== 'agent') {

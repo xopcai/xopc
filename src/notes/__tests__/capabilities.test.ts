@@ -47,6 +47,10 @@ describe('note transactional capabilities', () => {
     expect(agent.patch.operations).toEqual(http.patch.operations);
     expect(changes()).toBe(before);
     expect((await service.getNote(note.id))?.markdown).toBe('Original content');
+    const selected = await runtime.call('xopc.notes.preview_edit', {
+      ...input, instruction: '总结', context: { type: 'selection', range: { start: 8, end: 13 } },
+    }, context) as { patch: { operations: Array<{ from: number; to: number }> } };
+    expect(selected.patch.operations[0]).toMatchObject({ from: 8, to: 13 });
     await expect(runtime.call('xopc.notes.preview_edit', { ...input, instruction: '' }, context)).rejects.toMatchObject({ code: 'INVALID_INPUT' });
     await expect(runtime.call('xopc.notes.preview_edit', { ...input, id: 'missing' }, context)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });

@@ -16,10 +16,11 @@ class XopcThemeTokens {
   input: Resource;
   border: Resource;
   accentSoft: Resource;
+  active: Resource;
 
   constructor(surface: Resource, panel: Resource, foreground: Resource,
     secondary: Resource, tertiary: Resource, accent: Resource, danger: Resource,
-    grouped: Resource, input: Resource, border: Resource, accentSoft: Resource) {
+    grouped: Resource, input: Resource, border: Resource, accentSoft: Resource, active: Resource) {
     this.surface = surface;
     this.panel = panel;
     this.foreground = foreground;
@@ -31,6 +32,7 @@ class XopcThemeTokens {
     this.input = input;
     this.border = border;
     this.accentSoft = accentSoft;
+    this.active = active;
   }
 }
 
@@ -47,6 +49,7 @@ export class XopcThemeColors {
   @Trace input: Resource;
   @Trace border: Resource;
   @Trace accentSoft: Resource;
+  @Trace active: Resource;
 
   constructor(tokens: XopcThemeTokens) {
     this.surface = tokens.surface;
@@ -60,6 +63,7 @@ export class XopcThemeColors {
     this.input = tokens.input;
     this.border = tokens.border;
     this.accentSoft = tokens.accentSoft;
+    this.active = tokens.active;
   }
 
   apply(scheme: XopcColorScheme, dark: boolean): void {
@@ -75,6 +79,7 @@ export class XopcThemeColors {
     this.input = tokens.input;
     this.border = tokens.border;
     this.accentSoft = tokens.accentSoft;
+    this.active = tokens.active;
   }
 }
 
@@ -111,7 +116,8 @@ function xopcThemeTokens(scheme: XopcColorScheme, dark: boolean): XopcThemeToken
     $r('app.color.theme_default_grouped_light'),
     $r('app.color.theme_default_input_light'),
     $r('app.color.theme_default_border_light'),
-    $r('app.color.theme_default_accent_soft_light')
+    $r('app.color.theme_default_accent_soft_light'),
+    $r('app.color.theme_default_active_light')
   );
   if (scheme === 'default' && dark === true) return new XopcThemeTokens(
     $r('app.color.theme_default_surface_dark'),
@@ -124,7 +130,8 @@ function xopcThemeTokens(scheme: XopcColorScheme, dark: boolean): XopcThemeToken
     $r('app.color.theme_default_grouped_dark'),
     $r('app.color.theme_default_input_dark'),
     $r('app.color.theme_default_border_dark'),
-    $r('app.color.theme_default_accent_soft_dark')
+    $r('app.color.theme_default_accent_soft_dark'),
+    $r('app.color.theme_default_active_dark')
   );
   if (scheme === 'porcelain' && dark === false) return new XopcThemeTokens(
     $r('app.color.theme_porcelain_surface_light'),
@@ -137,7 +144,8 @@ function xopcThemeTokens(scheme: XopcColorScheme, dark: boolean): XopcThemeToken
     $r('app.color.theme_porcelain_grouped_light'),
     $r('app.color.theme_porcelain_input_light'),
     $r('app.color.theme_porcelain_border_light'),
-    $r('app.color.theme_porcelain_accent_soft_light')
+    $r('app.color.theme_porcelain_accent_soft_light'),
+    $r('app.color.theme_porcelain_active_light')
   );
   if (scheme === 'porcelain' && dark === true) return new XopcThemeTokens(
     $r('app.color.theme_porcelain_surface_dark'),
@@ -150,7 +158,8 @@ function xopcThemeTokens(scheme: XopcColorScheme, dark: boolean): XopcThemeToken
     $r('app.color.theme_porcelain_grouped_dark'),
     $r('app.color.theme_porcelain_input_dark'),
     $r('app.color.theme_porcelain_border_dark'),
-    $r('app.color.theme_porcelain_accent_soft_dark')
+    $r('app.color.theme_porcelain_accent_soft_dark'),
+    $r('app.color.theme_porcelain_active_dark')
   );
   if (scheme === 'dawn' && dark === false) return new XopcThemeTokens(
     $r('app.color.theme_dawn_surface_light'),
@@ -163,7 +172,8 @@ function xopcThemeTokens(scheme: XopcColorScheme, dark: boolean): XopcThemeToken
     $r('app.color.theme_dawn_grouped_light'),
     $r('app.color.theme_dawn_input_light'),
     $r('app.color.theme_dawn_border_light'),
-    $r('app.color.theme_dawn_accent_soft_light')
+    $r('app.color.theme_dawn_accent_soft_light'),
+    $r('app.color.theme_dawn_active_light')
   );
   if (scheme === 'dawn' && dark === true) return new XopcThemeTokens(
     $r('app.color.theme_dawn_surface_dark'),
@@ -176,7 +186,8 @@ function xopcThemeTokens(scheme: XopcColorScheme, dark: boolean): XopcThemeToken
     $r('app.color.theme_dawn_grouped_dark'),
     $r('app.color.theme_dawn_input_dark'),
     $r('app.color.theme_dawn_border_dark'),
-    $r('app.color.theme_dawn_accent_soft_dark')
+    $r('app.color.theme_dawn_accent_soft_dark'),
+    $r('app.color.theme_dawn_active_dark')
   );
   if (scheme === 'emerald' && dark === false) return new XopcThemeTokens(
     $r('app.color.theme_emerald_surface_light'),
@@ -189,7 +200,8 @@ function xopcThemeTokens(scheme: XopcColorScheme, dark: boolean): XopcThemeToken
     $r('app.color.theme_emerald_grouped_light'),
     $r('app.color.theme_emerald_input_light'),
     $r('app.color.theme_emerald_border_light'),
-    $r('app.color.theme_emerald_accent_soft_light')
+    $r('app.color.theme_emerald_accent_soft_light'),
+    $r('app.color.theme_emerald_active_light')
   );
   if (scheme === 'emerald' && dark === true) return new XopcThemeTokens(
     $r('app.color.theme_emerald_surface_dark'),
@@ -202,7 +214,8 @@ function xopcThemeTokens(scheme: XopcColorScheme, dark: boolean): XopcThemeToken
     $r('app.color.theme_emerald_grouped_dark'),
     $r('app.color.theme_emerald_input_dark'),
     $r('app.color.theme_emerald_border_dark'),
-    $r('app.color.theme_emerald_accent_soft_dark')
+    $r('app.color.theme_emerald_accent_soft_dark'),
+    $r('app.color.theme_emerald_active_dark')
   );
   if (scheme === 'clay' && dark === false) return new XopcThemeTokens(
     $r('app.color.theme_clay_surface_light'),
@@ -215,7 +228,8 @@ function xopcThemeTokens(scheme: XopcColorScheme, dark: boolean): XopcThemeToken
     $r('app.color.theme_clay_grouped_light'),
     $r('app.color.theme_clay_input_light'),
     $r('app.color.theme_clay_border_light'),
-    $r('app.color.theme_clay_accent_soft_light')
+    $r('app.color.theme_clay_accent_soft_light'),
+    $r('app.color.theme_clay_active_light')
   );
   if (scheme === 'clay' && dark === true) return new XopcThemeTokens(
     $r('app.color.theme_clay_surface_dark'),
@@ -228,7 +242,8 @@ function xopcThemeTokens(scheme: XopcColorScheme, dark: boolean): XopcThemeToken
     $r('app.color.theme_clay_grouped_dark'),
     $r('app.color.theme_clay_input_dark'),
     $r('app.color.theme_clay_border_dark'),
-    $r('app.color.theme_clay_accent_soft_dark')
+    $r('app.color.theme_clay_accent_soft_dark'),
+    $r('app.color.theme_clay_active_dark')
   );
   return xopcThemeTokens('default', dark);
 }
@@ -266,8 +281,8 @@ function xopcThemeColors(tokens: XopcThemeTokens): CustomColors {
     compDivider: tokens.border,
     interactiveHover: tokens.input,
     interactivePressed: tokens.grouped,
-    interactiveActive: tokens.accentSoft,
-    interactiveSelect: tokens.accentSoft,
+    interactiveActive: tokens.active,
+    interactiveSelect: tokens.active,
   };
 }
 

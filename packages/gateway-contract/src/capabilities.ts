@@ -277,7 +277,10 @@ export const ProjectUpdateOutputSchema = z.object({ ok: z.literal(true), update:
 export const ProductReadContracts = {
   'xopc.context.resolve': { input: AppContextEnvelopeSchema, output: ResolvedAppContextSchema },
   'xopc.notes.preview_edit': {
-    input: CapabilityResourceInputSchema.extend({ instruction: z.string().trim().min(1).max(16000), markdown: z.string().max(2_000_000).optional() }),
+    input: CapabilityResourceInputSchema.extend({ instruction: z.string().trim().min(1).max(16000), markdown: z.string().max(2_000_000).optional(),
+      context: z.looseObject({ type: z.enum(['selection', 'section', 'block', 'note']), range: z.strictObject({
+        start: z.number().int().nonnegative(), end: z.number().int().nonnegative(),
+      }) }).optional() }),
     output: z.object({ message: z.string(), patch: z.object({ id: z.string(), summary: z.string(),
       operations: z.array(z.object({ type: z.literal('replaceRange'), from: z.number().int().nonnegative(), to: z.number().int().nonnegative(), markdown: z.string() })),
     }) }),

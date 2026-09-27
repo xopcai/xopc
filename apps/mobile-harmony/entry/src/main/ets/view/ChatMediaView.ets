@@ -24,6 +24,8 @@ export struct XopcChatMediaView {
   @Param compactThumbnail: boolean = false;
   @Param compactAvailable: boolean = false;
   @Param inlineVoice: boolean = false;
+  @Param previewOnly: boolean = false;
+  @Param previewRequest: number = 0;
   @Local picture?: image.PixelMap;
   @Local previewPicture?: image.PixelMap;
   @Local pictureRatio: number = 1;
@@ -48,12 +50,22 @@ export struct XopcChatMediaView {
   private attempted: boolean = false;
   private failedAction: string = 'preview';
   private sourceIdentity: string = '';
+  aboutToAppear(): void {
+    if (this.previewOnly) { this.sourceIdentity = this.sourceKey(); this.openPreview(); }
+  }
+  @Monitor('previewRequest')
+  onPreviewRequest(): void {
+    if (!this.previewOnly) return;
+    if (this.sourceKey() !== this.sourceIdentity) { this.reset(); this.sourceIdentity = this.sourceKey(); }
+    this.openPreview();
+  }
   aboutToDisappear(): void { try { this.webController.stop(); } catch (_) {} this.reset(); }
   @Monitor('file', 'conversationId')
   onSourceChange(): void {
     const key = this.sourceKey(); if (key === this.sourceIdentity) return;
     this.reset(); this.sourceIdentity = key;
-    if (!this.compact || (this.compactThumbnail && this.previewKind() === 'image')) this.load();
+    if (this.previewOnly) this.openPreview();
+    else if (!this.compact || (this.compactThumbnail && this.previewKind() === 'image')) this.load();
   }
   private sourceKey(): string { return this.conversationId + ':' + this.file.uri + ':' + (this.file.workspaceRelativePath || '') + ':' + this.file.mimeType; }
   private reset(): void {
@@ -174,6 +186,7 @@ export struct XopcChatMediaView {
     const time = Math.max(0, Math.floor(seconds));
     return Math.floor(time / 60) + ':' + String(time % 60).padStart(2, '0');
   }
+  private inlineAudioDuration(): number { return this.audioPlayer.duration || this.file.duration || 0; }
   private togglePlayback(): void {
     try { if (this.playing) this.controller.pause(); else this.controller.start(); }
     catch (_) { this.error = 'MEDIA_PLAYBACK_FAILED'; }
@@ -280,6 +293,7 @@ export struct XopcChatMediaView {
   }
   build() {
     Column({ space: 8 }) {
+      if (!this.previewOnly) {
       if (this.inlineVoice && this.previewKind() === 'audio') {
         Button({ type: ButtonType.Normal }) {
           Row({ space: 8 }) {
@@ -289,8 +303,8 @@ export struct XopcChatMediaView {
               SymbolGlyph(this.audioPlayer.state === 'playing' ? $r('sys.symbol.stop_circle_fill') : $r('sys.symbol.speaker_wave_2'))
                 .fontSize(22).fontColor([this.error || this.audioPlayer.error ? this.colors.danger : this.colors.foreground])
             }
-            if (this.audioPlayer.duration > 0) {
-              Text(Math.max(1, Math.ceil(this.audioPlayer.duration)).toString() + '″')
+            if (this.inlineAudioDuration() > 0) {
+              Text(Math.max(1, Math.ceil(this.inlineAudioDuration())).toString() + '″')
                 .fontSize(14).fontColor(this.colors.foreground)
             }
           }.width('100%').height(44).padding({ left: 8, right: 8 }).justifyContent(FlexAlign.Start)
@@ -364,8 +378,9 @@ export struct XopcChatMediaView {
           })
         }
       }
+      }
     }.width('100%').onVisibleAreaChange([0.1], (visible: boolean): void => {
-      if (!visible || this.inlineVoice || this.attempted) return;
+      if (!visible || this.previewOnly || this.inlineVoice || this.attempted) return;
       if (this.compact && this.previewKind() === 'html') this.prefetchHtml();
       else if (!this.compact || this.compactThumbnail) this.load();
     })
