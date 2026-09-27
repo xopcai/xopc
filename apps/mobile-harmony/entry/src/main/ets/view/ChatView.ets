@@ -1024,7 +1024,18 @@ export struct XopcChatView {
       Scroll() {
         Row({ space: 8 }) {
           ForEach(this.refs, (ref: XopcContextRef) => {
-            Button((ref.title || ref.sourceId) + ' ×').height(36).fontSize(12).backgroundColor(this.colors.accentSoft).fontColor(this.colors.accent)
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 6 }) {
+                SymbolGlyph(ref.kind === 'task' ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.doc_text'))
+                  .fontSize(14).fontColor([this.colors.secondary])
+                Text(ref.title || ref.sourceId).fontSize(12).fontWeight(FontWeight.Medium)
+                  .fontColor(this.colors.secondary).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                SymbolGlyph($r('sys.symbol.xmark')).fontSize(11).fontColor([this.colors.tertiary])
+              }.height('100%').alignItems(VerticalAlign.Center)
+            }.id('chat-composer-reference-' + ref.kind + '-' + ref.sourceId).height(36)
+              .padding({ left: 10, right: 9 }).borderRadius(10).backgroundColor(this.colors.panel)
+              .accessibilityText($r('app.string.chat_remove_reference'))
+              .responseRegion({ x: 0, y: -4, width: '100%', height: 44 })
               .onClick((): void => { this.refs = this.refs.filter((item: XopcContextRef): boolean => item !== ref); })
           }, (ref: XopcContextRef): string => ref.kind + ':' + ref.sourceId)
         }

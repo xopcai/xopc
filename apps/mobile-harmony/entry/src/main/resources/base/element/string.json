@@ -129,6 +129,7 @@
     { "name": "chat_camera", "value": "Take photo" },
     { "name": "chat_ref_limit", "value": "Up to 5 note/task references per message" },
     { "name": "chat_add_reference", "value": "Add reference" },
+    { "name": "chat_remove_reference", "value": "Remove reference" },
     { "name": "chat_directory_locked", "value": "This conversation owns a fixed working directory" },
     { "name": "chat_change_directory", "value": "Change working directory" },
     { "name": "chat_use_directory", "value": "Use this directory" },
