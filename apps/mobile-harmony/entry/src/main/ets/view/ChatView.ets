@@ -1041,26 +1041,6 @@ export struct XopcChatView {
         }
       }.scrollable(ScrollDirection.Horizontal).width('92%').height(44)
     }
-    if (this.attachments.length) {
-      Scroll() {
-        Column({ space: 4 }) {
-          ForEach(this.attachments, (file: XopcChatAttachment, index: number) => {
-            if (file.mimeType.startsWith('image/') && this.attachmentPreviews[index]) {
-              XopcChatMediaView({ file: this.attachmentPreviews[index], conversationId: this.chat.selectedId, draftPreview: true })
-            }
-            Row({ space: 8 }) {
-              Text(file.name).layoutWeight(1).maxLines(1).fontColor(this.colors.foreground)
-              if (file.mimeType.startsWith('image/') && file.data) {
-                Button($r('app.string.chat_image_edit')).enabled(!this.chat.sending).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
-                  .onClick((): void => { this.openImageEditor(index); })
-              }
-              Button($r('app.string.remove_attachment')).enabled(!this.chat.sending).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
-                .onClick((): void => { this.attachments = this.attachments.filter((_file: XopcChatAttachment, i: number): boolean => i !== index); })
-            }.width('100%')
-          }, (file: XopcChatAttachment, index: number): string => index.toString() + ':' + file.name)
-        }.padding(8)
-      }.width('100%').constraintSize({ maxHeight: 180 })
-    }
     if (this.voice.error) { Text(this.voice.error).fontColor(this.colors.danger).padding(8) }
     if (this.reader.error) { Text(this.reader.error).fontColor(this.colors.danger).padding(8) }
     if (this.reader.continuousConversationId === this.chat.selectedId && this.chat.selectedId) {
@@ -1139,6 +1119,54 @@ export struct XopcChatView {
       }.id('chat-command-palette').width('92%').padding(8).borderRadius(16).backgroundColor(this.colors.panel).margin({ bottom: 4 })
     }
     Column() {
+      if (this.attachments.length) {
+        Scroll() {
+          Row({ space: 8 }) {
+            ForEach(this.attachments, (file: XopcChatAttachment, index: number) => {
+              if (file.mimeType.startsWith('image/')) {
+                Stack({ alignContent: Alignment.TopEnd }) {
+                  Column() {
+                    XopcChatMediaView({ file: this.attachmentPreviews[index], conversationId: this.chat.selectedId,
+                      draftPreview: true, compact: true, embedded: true, compactThumbnail: true,
+                      compactThumbnailWidth: 96, compactThumbnailHeight: 64, compactThumbnailContain: true,
+                      compactAvailable: true, compactDisclosure: false, compactMetadata: false })
+                  }.width('100%').height('100%')
+                  Button({ type: ButtonType.Circle }) {
+                    SymbolGlyph($r('sys.symbol.xmark')).fontSize(13).fontColor([Color.White])
+                  }.id('chat-composer-attachment-remove-' + index.toString()).width(28).height(28).padding(0)
+                    .margin({ top: 4, right: 4 }).backgroundColor(Color.Black).enabled(!this.chat.sending)
+                    .responseRegion({ x: -8, y: -8, width: 44, height: 44 })
+                    .accessibilityText($r('app.string.remove_attachment'))
+                    .onClick((): void => {
+                      this.attachments = this.attachments.filter((_file: XopcChatAttachment, i: number): boolean => i !== index);
+                    })
+                }.id('chat-composer-attachment-' + index.toString()).width(104).height(72)
+                  .borderRadius(12).backgroundColor(this.colors.grouped).clip(true)
+              } else {
+                Row() {
+                  Column() {
+                    XopcChatMediaView({ file: this.attachmentPreviews[index], conversationId: this.chat.selectedId,
+                      draftPreview: true, compact: true, embedded: true, compactThumbnail: true,
+                      compactAvailable: true, compactDisclosure: false, compactMetadata: true })
+                  }.layoutWeight(1)
+                  Button({ type: ButtonType.Circle }) {
+                    SymbolGlyph($r('sys.symbol.xmark')).fontSize(13).fontColor([this.colors.secondary])
+                  }.id('chat-composer-attachment-remove-' + index.toString()).width(36).height(44).padding(0)
+                    .backgroundColor(Color.Transparent).enabled(!this.chat.sending)
+                    .accessibilityText($r('app.string.remove_attachment'))
+                    .onClick((): void => {
+                      this.attachments = this.attachments.filter((_file: XopcChatAttachment, i: number): boolean => i !== index);
+                    })
+                }.id('chat-composer-attachment-' + index.toString()).width(220).height(56)
+                  .borderRadius(10).backgroundColor(this.colors.grouped).clip(true)
+              }
+            }, (file: XopcChatAttachment, index: number): string => index.toString() + ':' + file.name + ':' + file.size.toString())
+          }.padding({ left: 12, right: 12, top: 10, bottom: 8 })
+        }.id('chat-composer-attachments').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+          .width('100%').height(this.attachments.some((file: XopcChatAttachment): boolean => file.mimeType.startsWith('image/')) ? 90 : 74)
+          .align(Alignment.TopStart)
+        Divider().color(this.colors.border).strokeWidth(0.5).opacity(0.7)
+      }
       Row({ space: 4 }) {
         if (!this.expandedComposer) { this.voiceToggle() }
         if (this.showVoice || this.voice.state !== 'idle') {

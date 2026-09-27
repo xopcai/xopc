@@ -39,7 +39,12 @@ export struct XopcChatMessageContent {
   @Computed get imageMedia(): XopcHistoryMedia[] {
     return this.fileMedia.filter((file: XopcHistoryMedia): boolean => filePreviewKind(file.name, file.mimeType) === 'image');
   }
-  @Computed get displayedMedia(): XopcHistoryMedia[] { return this.mediaExpanded ? this.fileMedia : this.fileMedia.slice(0, 3); }
+  @Computed get attachmentMedia(): XopcHistoryMedia[] {
+    return this.row.role === 'user'
+      ? this.fileMedia.filter((file: XopcHistoryMedia): boolean => filePreviewKind(file.name, file.mimeType) !== 'image')
+      : this.fileMedia;
+  }
+  @Computed get displayedMedia(): XopcHistoryMedia[] { return this.mediaExpanded ? this.attachmentMedia : this.attachmentMedia.slice(0, 3); }
   @Computed get body(): XopcChatBlock[] {
     return (this.row.blocks || []).filter((block: XopcChatBlock): boolean =>
       block.kind === 'review' || (block.kind === 'text' && block.presentation !== 'narration'));
@@ -91,9 +96,11 @@ export struct XopcChatMessageContent {
           .accessibilityText($r('app.string.chat_view_more'))
           .onClick((): void => { this.onShowMore(this.row); })
       } else {
-        ForEach(this.row.refs || [], (ref: XopcContextRef) => {
-          this.reference(ref)
-        }, (ref: XopcContextRef): string => ref.kind + ':' + ref.sourceId)
+        if (this.row.role !== 'user') {
+          ForEach(this.row.refs || [], (ref: XopcContextRef) => {
+            this.reference(ref)
+          }, (ref: XopcContextRef): string => ref.kind + ':' + ref.sourceId)
+        }
         if (this.row.role === 'assistant') {
           Repeat<XopcChatBlock>(this.body).each((item: RepeatItem<XopcChatBlock>) => {
             if (item.item.kind === 'text' && item.item.text) {
@@ -125,6 +132,9 @@ export struct XopcChatMessageContent {
             conversationId: this.conversationId, compactReading: true, onNavigate: this.onNavigate }) }
         } else if (this.row.role === 'user') {
           if (this.row.text) { Text(this.row.text).fontSize(16).lineHeight(25).fontColor(this.colors.foreground) }
+          ForEach(this.row.refs || [], (ref: XopcContextRef) => {
+            this.reference(ref)
+          }, (ref: XopcContextRef): string => ref.kind + ':' + ref.sourceId)
         } else {
           Text(this.row.text).fontSize(13).fontColor(this.colors.secondary).copyOption(CopyOptions.InApp)
         }
@@ -135,14 +145,29 @@ export struct XopcChatMessageContent {
             XopcChatMediaView({ file: item.item, conversationId: this.conversationId })
           }
         }).key((file: XopcHistoryMedia): string => file.id || file.uri)
-        if (this.fileMedia.length) {
+        if (this.row.role === 'user' && this.imageMedia.length) {
+          Scroll() {
+            Row({ space: 8 }) {
+              Repeat<XopcHistoryMedia>(this.imageMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
+                Column() {
+                  XopcChatMediaView({ file: item.item, conversationId: this.conversationId, compact: true,
+                    compactThumbnail: true, compactThumbnailWidth: 136, compactThumbnailHeight: 96,
+                    compactThumbnailContain: true, compactMetadata: false, compactDisclosure: false,
+                    imageGallery: this.imageMedia })
+                }.width(144).height(104).borderRadius(10).clip(true).backgroundColor(this.colors.grouped)
+              }).key((file: XopcHistoryMedia): string => file.id || file.uri)
+            }
+          }.id('chat-user-image-strip-' + this.row.id).scrollable(ScrollDirection.Horizontal)
+            .scrollBar(BarState.Off).width('100%').height(104)
+        }
+        if (this.attachmentMedia.length) {
           Text($r('app.string.chat_attachments_heading')).fontSize(12).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
           Repeat<XopcHistoryMedia>(this.displayedMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
             XopcChatMediaView({ file: item.item, conversationId: this.conversationId, compact: true, imageGallery: this.imageMedia })
           }).key((file: XopcHistoryMedia): string => file.id || file.uri)
-          if (this.fileMedia.length > 3) {
+          if (this.attachmentMedia.length > 3) {
             Button(this.mediaExpanded ? $r('app.string.chat_fewer_attachments')
-              : $r('app.string.chat_more_attachments', this.fileMedia.length - 3)).height(44).fontSize(13)
+              : $r('app.string.chat_more_attachments', this.attachmentMedia.length - 3)).height(44).fontSize(13)
               .backgroundColor(Color.Transparent).fontColor(this.colors.accent)
               .onClick((): void => { this.mediaExpanded = !this.mediaExpanded; })
           }
