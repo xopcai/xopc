@@ -1,6 +1,7 @@
 import { XopcChatRow } from '../model/chat';
 import { markdownBlocks, markdownSpans, XopcMarkdownBlock, XopcMarkdownSpan } from './markdown';
 import { chatAnswerText } from './chatRichContent';
+import { markdownEstimatedLines } from './markdownLayout';
 
 export const USER_MESSAGE_PREVIEW_LINES: number = 4;
 export const ASSISTANT_MESSAGE_PREVIEW_LINES: number = 8;
@@ -29,6 +30,11 @@ export function chatMessagePreviewLines(row: XopcChatRow): number {
 }
 
 export function chatMessageNeedsPreview(row: XopcChatRow): boolean {
+  if (row.role === 'assistant') {
+    return markdownBlocks(chatAnswerText(row))
+      .filter((block: XopcMarkdownBlock): boolean => block.kind !== 'image' && block.kind !== 'rule' && !!block.text)
+      .reduce((lines: number, block: XopcMarkdownBlock): number => lines + markdownEstimatedLines(block), 0) > ASSISTANT_MESSAGE_PREVIEW_LINES;
+  }
   const text = chatMessagePreviewText(row);
   if (!text) return false;
   const maximumLines = chatMessagePreviewLines(row);

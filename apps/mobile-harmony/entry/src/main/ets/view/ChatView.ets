@@ -1338,6 +1338,7 @@ export struct XopcChatView {
             onFillDraft: (text: string): void => { this.fillDraftFromMessageDetail(text); } })
         }.width('100%').padding({ left: 16, right: 16, top: 20, bottom: 32 }).alignItems(HorizontalAlign.Start)
       }.id('chat-message-detail-scroll').layoutWeight(1).width('100%').scrollBar(BarState.Auto)
+        .align(Alignment.TopStart)
     }.id('chat-message-detail').width('100%').height('100%').backgroundColor(this.colors.panel)
   }
 
