@@ -5,7 +5,8 @@ import { fileIo as fs } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
 import { webview } from '@kit.ArkWeb';
 import { XopcHistoryMedia } from '../model/chat';
-import { openChatMedia, readChatMedia, saveChatMedia } from '../service/chatMedia';
+import { clearChatMediaCache, openChatMedia, readChatMedia, saveChatMedia } from '../service/chatMedia';
+import { XopcFileDocumentViewModel } from '../viewmodel/fileDocumentViewModel';
 import { XopcChatMediaPlayback } from '../service/chatMediaPlayback';
 import { chatMediaShareRequest, createChatMediaShare, shareChatLink, shareReachabilityText } from '../service/chatMediaShare';
 import { copyChatMessage } from '../service/chatMessageActions';
@@ -25,6 +26,8 @@ export struct XopcChatMediaView {
   @Param compactAvailable: boolean = false;
   @Param inlineVoice: boolean = false;
   @Param previewOnly: boolean = false;
+  @Event onPreviewClosed: () => void = (): void => {};
+  @Local document: XopcFileDocumentViewModel = new XopcFileDocumentViewModel();
   @Param previewRequest: number = 0;
   @Param imageGallery: XopcHistoryMedia[] = [];
   @Local picture?: image.PixelMap;
@@ -103,6 +106,7 @@ export struct XopcChatMediaView {
     await this.openPreview();
   }
   private reset(): void {
+    this.document.reset();
     this.generation++; this.picture?.release(); this.picture = undefined; this.busy = false;
     this.previewText = ''; this.expanded = false; this.attempted = false; this.zoom = 1; this.pinchZoom = 1; this.error = '';
     this.htmlLoading = false; this.htmlError = false;
@@ -132,6 +136,9 @@ export struct XopcChatMediaView {
     if (this.busy) return;
     const context = this.getUIContext().getHostContext(); if (!context) return;
     this.activateInitialGalleryFile();
+    this.expanded = true;
+    if (this.activeFile().uri.startsWith('xopc-file:') || this.activeFile().workspaceRelativePath) this.previewText = '';
+    if (!this.draftPreview) this.document.inspect(this.activeFile(), this.conversationId);
     this.failedAction = 'preview';
     const kind = this.previewKind();
     if (kind === 'binary') { this.previewText = this.activeFile().extractedText || ''; this.expanded = true; return; }
@@ -194,6 +201,32 @@ export struct XopcChatMediaView {
   private previewKind(): XopcFilePreviewKind {
     const file = this.activeFile();
     return filePreviewKind(file.name, file.mimeType);
+  }
+  private async canLeaveEditor(): Promise<boolean> {
+    if (this.document.busy) return false;
+    if (!this.document.dirty()) return true;
+    try {
+      const result = await this.getUIContext().getPromptAction().showDialog({ message: $r('app.string.discard_changes'),
+        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
+          { text: $r('app.string.confirm'), color: this.colors.danger }] });
+      return result.index === 1;
+    } catch (_) { return false; }
+  }
+  private async closePreview(): Promise<void> {
+    if (await this.canLeaveEditor()) { this.document.cancelEdit(); this.expanded = false; }
+  }
+  private async dismissPreview(action: DismissSheetAction): Promise<void> {
+    if (await this.canLeaveEditor()) { this.document.cancelEdit(); action.dismiss(); }
+  }
+  private async cancelEditing(): Promise<void> {
+    if (await this.canLeaveEditor()) this.document.cancelEdit();
+  }
+  private async saveEditing(): Promise<void> {
+    if (!await this.document.save()) return;
+    clearChatMediaCache();
+    this.previewText = this.previewKind() === 'html' ? htmlPreviewTextLimit(this.document.savedContent)
+      : previewTextLimit(this.document.savedContent);
+    this.htmlDataLoaded = false; this.htmlLoading = this.previewKind() === 'html'; this.htmlError = false;
   }
   private loadHtmlData(): void {
     if (this.htmlDataLoaded || !this.previewText) return;
@@ -441,11 +474,14 @@ export struct XopcChatMediaView {
       else if (!this.compact || this.compactThumbnail) this.load();
     })
       .bindSheet($$this.expanded, this.preview, { height: this.previewKind() === 'audio' ? 280 : '100%', dragBar: false,
+        showClose: false, backgroundColor: this.colors.surface,
+        onWillDismiss: (action: DismissSheetAction): void => { this.dismissPreview(action); },
         onDisappear: (): void => {
           try { this.webController.stop(); } catch (_) {}
           if (this.busy) { this.generation++; this.busy = false; }
           this.htmlLoading = false; this.htmlError = false; this.htmlDataLoaded = false; this.clearPlayback();
           this.restoreOriginalFile();
+          this.document.reset(); this.onPreviewClosed();
         } })
   }
   @Builder
@@ -454,6 +490,16 @@ export struct XopcChatMediaView {
       Row({ space: 4 }) {
         Text(this.activeFile().name).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+        if (this.document.editing) {
+          Button($r('app.string.cancel')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
+            .enabled(!this.document.busy).onClick((): void => { this.cancelEditing(); })
+          Button($r('app.string.save')).id('file-preview-save').height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
+            .enabled(!this.document.busy && this.document.dirty()).onClick((): void => { this.saveEditing(); })
+        } else {
+        if (this.document.canEdit()) {
+          Button($r('app.string.edit')).id('file-preview-edit').height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
+            .enabled(!this.busy && !this.document.busy).onClick((): void => { this.document.beginEdit(); })
+        }
         if (this.shareable()) {
           Button() { SymbolGlyph($r('sys.symbol.share')).fontSize(20).fontColor([this.colors.secondary]) }
             .width(44).height(44).padding(0).backgroundColor(Color.Transparent).enabled(!this.busy)
@@ -462,12 +508,28 @@ export struct XopcChatMediaView {
         Button() { SymbolGlyph($r('sys.symbol.arrow_down_to_line')).fontSize(20).fontColor([this.colors.secondary]) }
           .width(44).height(44).padding(0).backgroundColor(Color.Transparent).enabled(!this.busy && this.transferable())
           .accessibilityText($r('app.string.download')).onClick((): void => { this.save(); })
+        }
         Button() { SymbolGlyph($r('sys.symbol.xmark')).fontSize(20).fontColor([this.colors.secondary]) }
           .id('chat-media-close').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .accessibilityText($r('app.string.chat_close')).onClick((): void => { this.expanded = false; this.clearPlayback(); })
+          .accessibilityText($r('app.string.chat_close')).enabled(!this.document.busy).onClick((): void => { this.closePreview(); })
       }.width('100%').padding(this.previewKind() === 'html' ? { left: 16, right: 16 } : 0)
-      if (this.error || this.audioPlayer.error) { Text($r('app.string.chat_media_failed')).fontSize(13).fontColor(this.colors.danger) }
-      if (this.picture) {
+      if (this.error || this.audioPlayer.error) {
+        Text($r('app.string.chat_media_failed')).fontSize(13).fontColor(this.colors.danger)
+        if (!this.document.editing) {
+          Button($r('app.string.refresh')).height(44).enabled(!this.busy)
+            .backgroundColor(this.colors.input).fontColor(this.colors.foreground).onClick((): void => { this.openPreview(); })
+        }
+      }
+      if (this.document.error) { Text(this.document.error).fontSize(13).fontColor(this.colors.danger).padding({ left: 16, right: 16 }) }
+      if (this.document.busy) { LoadingProgress().width(24).height(24).color(this.colors.secondary) }
+      if (this.document.editing) {
+        TextArea({ text: this.document.content }).id('file-preview-editor').width('100%').layoutWeight(1)
+          .fontFamily('monospace').fontSize(14).fontColor(this.colors.foreground).backgroundColor(this.colors.panel)
+          .padding(16).enabled(!this.document.busy)
+          .onChange((content: string): void => { this.document.content = content; })
+      } else if (this.busy && this.previewKind() !== 'html' && !this.picture) {
+        Column() {}.width('100%').layoutWeight(1).borderRadius(12).backgroundColor(this.colors.grouped)
+      } else if (this.picture) {
         Scroll() { Image(this.previewPicture || this.picture).width((this.zoom * 100) + '%').aspectRatio(this.pictureRatio).objectFit(ImageFit.Contain)
           .gesture(PinchGesture({ fingers: 2 }).onActionStart((_event: GestureEvent): void => { this.pinchZoom = this.zoom; })
             .onActionUpdate((event: GestureEvent): void => { this.zoom = Math.max(1, Math.min(3, this.pinchZoom * event.scale)); })) }
@@ -493,7 +555,7 @@ export struct XopcChatMediaView {
           Button('−').width(44).height(44).backgroundColor(this.colors.grouped).fontColor(this.colors.secondary).onClick((): void => { this.zoom = Math.max(1, this.zoom - 0.5); })
           Button('+').width(44).height(44).backgroundColor(this.colors.grouped).fontColor(this.colors.secondary).onClick((): void => { this.zoom = Math.min(3, this.zoom + 0.5); })
         }
-      } else if (this.playbackPath && this.activeFile().mimeType.startsWith('audio/')) {
+      } else if (this.playbackPath && this.previewKind() === 'audio') {
         Row({ space: 12 }) {
           Button(this.audioPlayer.state === 'playing' ? $r('app.string.pause') : $r('app.string.chat_media_play'))
             .id(this.audioPlayer.state === 'playing' ? 'chat-media-pause' : 'chat-media-play').height(44)

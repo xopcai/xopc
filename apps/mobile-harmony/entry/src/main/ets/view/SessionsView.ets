@@ -300,7 +300,7 @@ export struct XopcSessionsView {
             Button($r('app.string.refresh')).height(44).enabled(!this.sessions.busy).onClick((): void => { this.sessions.load(); })
           }.padding({ left: 20, right: 20 })
         }
-        Refresh({ refreshing: this.sessions.loading && this.sessions.items.length > 0 }) {
+        Refresh({ refreshing: this.sessions.refreshing }) {
           List({ scroller: this.scroller }) {
             if (this.sessions.loading && !this.sessions.items.length) { ListItem() { XopcListSkeleton() } }
             Repeat<XopcSessionDisplayRow>(this.rows).each((row: RepeatItem<XopcSessionDisplayRow>) => {
@@ -323,7 +323,7 @@ export struct XopcSessionsView {
           }.id('sessions-list').width('100%').height('100%').padding({ left: 20, right: 20 }).cachedCount(5)
             .contentEndOffset(this.bottomInset)
             .onReachEnd((): void => { if (!this.sessions.error && !this.sessions.busy) this.sessions.load(true); })
-        }.layoutWeight(1).pullToRefresh(!this.sessions.busy).onRefreshing((): void => { this.sessions.load(); })
+        }.layoutWeight(1).pullToRefresh(!this.sessions.busy).onRefreshing((): void => { this.sessions.load(false, true); })
         if (this.sessions.undoId) {
           Row() {
             Text($r('app.string.sessions_deleted')).fontColor(this.colors.foreground).layoutWeight(1)

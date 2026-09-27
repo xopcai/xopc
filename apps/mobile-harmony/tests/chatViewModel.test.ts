@@ -23,6 +23,56 @@ const page = (id: string, text: string, before = '') => ({
   pagination: { hasMore: !!before, nextBeforeCursor: before },
 });
 describe('chat history isolation', () => {
+  const sentPage = (confirmed: boolean, transcriptId = 't') => ({ session: { key: 'one', transcriptId,
+    messages: confirmed ? [{ id: 'server-row', role: 'user', content: 'hello', metadata: { clientMessageId: 'input-1' } }] : [] },
+    pagination: { hasMore: false } });
+  it('retains an accepted message until history confirms it, even without an active run yet', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    mocks.uuid.mockReturnValue('input-1'); mocks.send.mockResolvedValue(''); mocks.history.mockResolvedValue(sentPage(false));
+    expect(await chat.send('hello')).toBe(true);
+    expect(chat.rows.map(row => row.id)).toEqual(['input-1']);
+    await chat.loadHistory(false); expect(chat.rows.map(row => row.id)).toEqual(['input-1']);
+    mocks.history.mockResolvedValue(sentPage(true)); await chat.loadHistory(false);
+    expect(chat.rows.map(row => row.id)).toEqual(['input-1']); expect(chat.rows[0].text).toBe('hello');
+    await chat.loadHistory(false); expect(chat.rows).toHaveLength(1); chat.dispose();
+  });
+  it('ignores a pre-acceptance history response that arrives after sending', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    let finish!: (value: ReturnType<typeof sentPage>) => void;
+    mocks.history.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const stale = chat.loadHistory(false);
+    mocks.uuid.mockReturnValue('input-1'); mocks.send.mockResolvedValue('run'); await chat.send('hello');
+    finish(sentPage(false)); await stale;
+    expect(chat.rows.map(row => row.id)).toEqual(['input-1']); expect(chat.runId).toBe('run'); chat.dispose();
+  });
+  it('does not duplicate a message when history confirms it before the send response', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    let finish!: (value: string) => void;
+    mocks.uuid.mockReturnValue('input-1'); mocks.send.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const sending = chat.send('hello');
+    mocks.history.mockResolvedValue(sentPage(true)); await chat.loadHistory(false);
+    finish('run'); await sending;
+    expect(chat.rows.map(row => row.id)).toEqual(['input-1']); chat.dispose();
+  });
+  it('clears pending presentation rows on transcript reset and conversation switch', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    mocks.history.mockResolvedValue(sentPage(false)); await chat.loadHistory(false);
+    mocks.uuid.mockReturnValue('input-1'); mocks.send.mockResolvedValue('run'); await chat.send('hello');
+    mocks.history.mockResolvedValue(sentPage(false, 'reset')); await chat.loadHistory(false); expect(chat.rows).toEqual([]);
+    await chat.send('hello');
+    mocks.history.mockResolvedValue({ ...sentPage(false), session: { key: 'two', transcriptId: 'two-t', messages: [] } });
+    await chat.open('two'); expect(chat.rows).toEqual([]); chat.dispose();
+  });
+  it('retains accepted attachments and references while history is behind or unavailable', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    mocks.uuid.mockReturnValue('input-1'); mocks.send.mockResolvedValue('run');
+    const refs = [{ kind: 'note', sourceId: 'note', title: 'Notes' }];
+    await chat.send('hello', [{ type: 'image', name: 'a.png', mimeType: 'image/png', size: 1, data: 'YQ==' }], 'next', refs);
+    mocks.history.mockRejectedValueOnce(new Error('OFFLINE')); await chat.loadHistory(false);
+    mocks.history.mockResolvedValue(sentPage(false)); await chat.loadHistory(false);
+    expect(chat.rows[0].refs).toEqual(refs); expect(chat.rows[0].media?.[0].uri).toBe('data:image/png;base64,YQ==');
+    chat.dispose();
+  });
   it('releases loading after receipt lookup failure and allows history retry', async () => {
     mocks.reconcile.mockRejectedValueOnce(new Error('OFFLINE'));
     mocks.cachedHistory.mockResolvedValue(page('one', 'saved'));

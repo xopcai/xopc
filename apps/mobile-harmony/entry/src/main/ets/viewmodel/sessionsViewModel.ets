@@ -7,6 +7,7 @@ export class XopcSessionsViewModel {
   @Trace items: XopcSessionItem[] = [];
   @Trace search: string = '';
   @Trace loading: boolean = false;
+  @Trace refreshing: boolean = false;
   @Trace loadingMore: boolean = false;
   @Trace hasMore: boolean = false;
   @Trace error: string = '';
@@ -29,22 +30,23 @@ export class XopcSessionsViewModel {
   }
   dispose(): void {
     this.disposed = true; this.generation++; clearTimeout(this.searchTimer);
-    this.loading = false; this.loadingMore = false;
+    this.loading = false; this.loadingMore = false; this.refreshing = false;
     // Already requested deletes keep their undo deadline, but never follow a Gateway switch.
   }
   setSearch(text: string): void {
     if (this.busy) return;
     clearTimeout(this.searchTimer); this.generation++;
     this.search = text; this.selected = []; this.selecting = false;
-    this.loading = true; this.loadingMore = false;
+    this.loading = true; this.loadingMore = false; this.refreshing = false;
     this.searchTimer = setTimeout((): void => { this.load(); }, 250);
   }
-  async load(more: boolean = false): Promise<void> {
+  async load(more: boolean = false, userRefresh: boolean = false): Promise<void> {
     if (!this.current() || (more && (this.loading || this.loadingMore || !this.hasMore))) return;
     clearTimeout(this.searchTimer);
     const generation = ++this.generation;
     const offset = more ? this.offset : 0;
     this.loading = !more; this.loadingMore = more; this.error = '';
+    this.refreshing = !more && userRefresh;
     try {
       const page = await this.repository.list(this.search.trim(), offset, 20, '');
       if (generation !== this.generation || !this.current()) return;
@@ -60,7 +62,7 @@ export class XopcSessionsViewModel {
     } catch (error) {
       if (generation === this.generation && this.current()) this.error = (error as Error).message;
     } finally {
-      if (generation === this.generation) { this.loading = false; this.loadingMore = false; }
+      if (generation === this.generation) { this.loading = false; this.loadingMore = false; this.refreshing = false; }
     }
   }
   select(id: string): void {
