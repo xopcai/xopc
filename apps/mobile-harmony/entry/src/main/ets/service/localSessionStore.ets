@@ -31,7 +31,7 @@ export class XopcLocalSessionStore {
   }
   async save(draft: XopcLocalSession, scope: string): Promise<void> {
     const row: relationalStore.ValuesBucket = { scope, id: draft.conversationId, payload: JSON.stringify(draft) };
-    await this.required().insert('drafts', row, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE);
+    this.required().insert('drafts', row, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE);
   }
   async remove(id: string, scope: string): Promise<void> {
     await this.required().delete(new relationalStore.RdbPredicates('drafts').equalTo('scope', scope).and().equalTo('id', id));
@@ -43,7 +43,7 @@ export class XopcLocalSessionStore {
   }
   async saveCommand(id: string, command: XopcSessionCommand, scope: string): Promise<void> {
     const row: relationalStore.ValuesBucket = { scope, id, payload: JSON.stringify(command) };
-    await this.required().insert('commands', row, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE);
+    this.required().insert('commands', row, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE);
   }
   async clearCommand(id: string, scope: string): Promise<void> {
     await this.required().delete(new relationalStore.RdbPredicates('commands').equalTo('scope', scope).and().equalTo('id', id));
@@ -58,7 +58,7 @@ export class XopcLocalSessionStore {
       await this.required().delete(new relationalStore.RdbPredicates('composers').equalTo('scope', scope));
     } else {
       const row: relationalStore.ValuesBucket = { scope, payload };
-      await this.required().insert('composers', row, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE);
+      this.required().insert('composers', row, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE);
     }
   }
 }
