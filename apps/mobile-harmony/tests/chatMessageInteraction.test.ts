@@ -6,6 +6,12 @@ const chat = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', imp
 const markdown = readFileSync(new URL('../entry/src/main/ets/view/MarkdownView.ets', import.meta.url), 'utf8');
 
 describe('chat message interactions', () => {
+  it('anchors message details to the top of the scroll viewport, including short responses', () => {
+    const sheet = chat.slice(chat.indexOf('  messageDetailSheet()'), chat.indexOf('  imageEditorSheet()'));
+    expect(sheet).toContain(".id('chat-message-detail-scroll').layoutWeight(1).width('100%').scrollBar(BarState.Auto)\n        .align(Alignment.TopStart)");
+    expect(sheet).not.toContain('FlexAlign.Center');
+    expect(sheet).not.toContain('Alignment.Center');
+  });
   it('renders view more as a distinct accessible action without an underline', () => {
     expect(content).toContain(".fontColor($r('app.color.accent'))");
     expect(content).not.toContain('TextDecorationType.Underline');
@@ -34,7 +40,8 @@ describe('chat message interactions', () => {
     expect(content).toContain("lineHeight(this.row.role === 'assistant' ? 23 : 25)");
     expect(content).toContain('compactReading: true');
     expect(markdown).toContain('@Param compactReading: boolean = false;');
-    expect(markdown).toContain('Column({ space: this.compactReading ? 8 : 12 })');
+    expect(markdown).toContain('markdownBlockGap(this.blocks[index], this.blocks[index - 1])');
+    expect(content).toContain('previewLineLimit: this.previewLines');
     expect(markdown).toContain('if (!this.headingLevel) return this.compactReading ? 23 : 25;');
   });
 
