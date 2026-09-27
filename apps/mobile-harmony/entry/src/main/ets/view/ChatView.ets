@@ -201,6 +201,7 @@ export struct XopcChatView {
   private composerFocusTimer: number = -1;
   private messagesScroller: Scroller = new Scroller();
   private scrollTimer: number = -1;
+  private layoutScrollAnimating: boolean = false;
   private firstVisible: number = 0;
   @Local loadingOlder: boolean = false;
   @Local olderFailed: boolean = false;
@@ -265,6 +266,7 @@ export struct XopcChatView {
     const scope = JSON.stringify([profile?.gatewayId || '', profile?.deviceId || '', this.chat.selectedId]);
     if (!this.chat.selectedId || scope === this.draftScope) return;
     clearTimeout(this.draftTimer); this.saveDraft();
+    clearTimeout(this.scrollTimer); this.layoutScrollAnimating = false;
     this.initialScrollPending = true; this.atBottom = true; this.showJumpBottom = false; this.palette.close();
     if (this.reader.continuousConversationId !== this.chat.selectedId) this.reader.disableContinuous();
     this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false; this.firstVisible = 0;
@@ -300,13 +302,38 @@ export struct XopcChatView {
 
   @Monitor('chat.rows', 'chat.liveRow', 'chat.streaming', 'chat.thinking', 'chat.tool', 'chat.loading')
   onMessageChange(): void {
-    if (!this.visible || (!this.atBottom && !this.initialScrollPending) || this.loadingOlder || (this.chat.loading && !this.chat.cachedHistory)) return;
+    if (this.layoutScrollAnimating || !this.visible || (!this.atBottom && !this.initialScrollPending) || this.loadingOlder || (this.chat.loading && !this.chat.cachedHistory)) return;
     clearTimeout(this.scrollTimer);
     this.scrollTimer = setTimeout((): void => {
       if (this.visible && (this.atBottom || this.initialScrollPending) && !this.loadingOlder) {
         this.initialScrollPending = false; this.messagesScroller.scrollEdge(Edge.Bottom);
       }
     }, 50);
+  }
+  @Monitor('bottomRegionHeight')
+  onMessageLayoutChange(): void {
+    if (!this.visible || !this.atBottom || this.loadingOlder || this.chat.loading) return;
+    if (this.initialScrollPending || this.layout.reduceMotion) { this.onMessageChange(); return; }
+    clearTimeout(this.scrollTimer);
+    this.layoutScrollAnimating = true;
+    this.scrollTimer = setTimeout((): void => {
+      if (!this.visible || !this.atBottom || this.loadingOlder) { this.layoutScrollAnimating = false; return; }
+      const last = this.presentationRows.length - 1 + (this.chat.hasOlder ? 1 : 0);
+      if (last < 0 || this.messagesScroller.isAtEnd()) { this.layoutScrollAnimating = false; return; }
+      // Native smooth alignment includes contentEndOffset and remains interruptible by touch.
+      this.messagesScroller.scrollToIndex(last, true, ScrollAlign.END);
+    }, 16);
+  }
+  private finishLayoutScroll(): void {
+    if (!this.layoutScrollAnimating) return;
+    this.layoutScrollAnimating = false;
+    this.onMessageChange();
+  }
+  private onMessageViewportChange(previous: Area, current: Area): void {
+    // Keyboard resize changes the viewport without changing any message rows.
+    if (Number(previous.height) !== Number(current.height) || Number(previous.width) !== Number(current.width)) {
+      this.onMessageLayoutChange();
+    }
   }
   private async loadOlder(): Promise<void> {
     if (this.loadingOlder || !this.chat.hasOlder || this.chat.loading || this.initialScrollPending) return;
@@ -479,6 +506,7 @@ export struct XopcChatView {
   @Monitor('activePage')
   onActivityChange(): void {
     this.visible = this.activePage;
+    if (!this.activePage) { clearTimeout(this.scrollTimer); this.layoutScrollAnimating = false; }
     if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.attention.dispose(); this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.stop(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.chat.deactivate(); }
     else { this.attention.activate(); this.bindBack(); this.chat.activate(); this.onHistoryReady(); this.options.resume(); this.prompt.resume(); }
   }
@@ -891,18 +919,24 @@ export struct XopcChatView {
       }).key((row: XopcChatRow): string => this.chat.selectedId + ':' + row.id).virtualScroll({ totalCount: this.presentationRows.length })
     }.id('chat-message-list').height('100%').width('100%').padding({ left: 12, right: 12 }).cachedCount(3)
       .contentEndOffset(this.bottomRegionHeight + 24)
+      .onAreaChange((previous: Area, current: Area): void => { this.onMessageViewportChange(previous, current); })
       .onScrollIndex((start: number, end: number): void => {
         this.firstVisible = start;
       })
       .onDidScroll((offset: number, state: ScrollState): void => {
-        if (this.initialScrollPending || this.loadingOlder || this.chat.loading || state === ScrollState.Idle) return;
+        if (this.layoutScrollAnimating || this.initialScrollPending || this.loadingOlder || this.chat.loading || state === ScrollState.Idle) return;
         this.atBottom = this.messagesScroller.isAtEnd();
         if (this.atBottom) this.showJumpBottom = false;
         else if (offset > 0) this.showJumpBottom = true;
         else if (offset < 0) this.showJumpBottom = false;
         if (offset < 0 && this.messagesScroller.currentOffset().yOffset < 160 && !this.olderFailed) this.loadOlder();
       })
-      .onTouch((event: TouchEvent): void => { if (event.type === TouchType.Down) this.dismissComposer(); })
+      .onScrollStop((): void => { this.finishLayoutScroll(); })
+      .onTouch((event: TouchEvent): void => {
+        if (event.type === TouchType.Down) {
+          this.layoutScrollAnimating = false; clearTimeout(this.scrollTimer); this.dismissComposer();
+        }
+      })
     if (!this.atBottom && this.showJumpBottom) {
       Button({ type: ButtonType.Circle }) {
         if (this.chat.runId) {

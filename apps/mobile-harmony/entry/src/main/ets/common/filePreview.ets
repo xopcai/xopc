@@ -31,7 +31,7 @@ export function filePreviewKind(name: string, mimeType: string): XopcFilePreview
   if (mime.startsWith('video/') || ['mp4', 'webm', 'mov', 'm4v', 'ogv'].includes(extension)) return 'video';
   if (mime === 'text/markdown' || extension === 'md' || extension === 'markdown') return 'markdown';
   if (mime === 'text/html' || extension === 'html' || extension === 'htm') return 'html';
-  if (mime.startsWith('text/') || mime === 'application/json' || ['txt', 'json', 'jsonc', 'json5', 'css', 'scss', 'less',
+  if (mime.startsWith('text/') || mime === 'application/json' || mime === 'application/xml' || ['txt', 'json', 'jsonc', 'json5', 'css', 'scss', 'less',
     'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'xml', 'yaml', 'yml', 'toml', 'ini', 'conf', 'properties', 'env', 'csv',
     'tsv', 'log', 'sql', 'py', 'rb', 'java', 'kt', 'swift', 'go', 'rs', 'sh', 'bash', 'zsh'].includes(extension)) return 'text';
   return 'binary';

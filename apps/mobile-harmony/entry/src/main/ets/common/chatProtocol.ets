@@ -47,7 +47,10 @@ export function historyRows(history: XopcHistory, page: string = 'latest'): Xopc
   const rows: XopcChatRow[] = [];
   history.session.messages.forEach((message, index: number): void => {
     if (!['user', 'user-with-attachments', 'assistant', 'tool', 'toolResult'].includes(message.role)) return;
-    const rowId = message.id ?? message.messageId ?? page + ':' + index;
+    const clientId = message.metadata?.clientMessageId;
+    const userIdentity = (message.role === 'user' || message.role === 'user-with-attachments')
+      && typeof clientId === 'string' && !!clientId.trim();
+    const rowId = userIdentity ? clientId! : message.id ?? message.messageId ?? page + ':' + index;
     const blocks: XopcChatBlock[] = [];
     const inlineMedia: XopcHistoryMedia[] = [];
     let text: string = '';
