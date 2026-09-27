@@ -5,7 +5,7 @@ import { XopcMarkdownView } from './MarkdownView';
 import { XopcChatStepsView } from './ChatStepsView';
 import { XopcChatMediaView } from './ChatMediaView';
 import { XopcChatResultTail } from './ChatResultTail';
-import { chatActivities } from '../common/chatRichContent';
+import { chatActivities, chatAnswerText } from '../common/chatRichContent';
 import { XopcChatDisclosure } from '../common/chatDisclosure';
 import { filePreviewKind } from '../common/filePreview';
 import { chatMessageNeedsPreview, chatMessagePreviewLines, chatMessagePreviewText } from '../common/chatMessagePreview';
@@ -23,6 +23,7 @@ export struct XopcChatMessageContent {
   @Event onShowMore: (row: XopcChatRow) => void = (_row: XopcChatRow): void => {};
   @Computed get showPreview(): boolean { return this.previewEligible && chatMessageNeedsPreview(this.row); }
   @Computed get previewText(): string { return chatMessagePreviewText(this.row); }
+  @Computed get previewMarkdown(): string { return chatAnswerText(this.row); }
   @Computed get previewLines(): number { return chatMessagePreviewLines(this.row); }
   @Computed get visibleMedia(): XopcHistoryMedia[] {
     const artifacts = this.row.outcome?.deliverables || [];
@@ -52,11 +53,16 @@ export struct XopcChatMessageContent {
     return body;
   }
   build() {
-    Column({ space: 10 }) {
+    Column({ space: this.showPreview ? 2 : 10 }) {
       if (this.showPreview) {
+        if (this.row.role === 'assistant') {
+          XopcMarkdownView({ content: this.previewMarkdown, conversationId: this.conversationId, compactReading: true,
+            previewLineLimit: this.previewLines, onNavigate: this.onNavigate })
+        } else {
         Text(this.previewText).fontSize(16).lineHeight(this.row.role === 'assistant' ? 23 : 25)
           .fontColor(this.colors.foreground).width('100%')
           .maxLines(this.previewLines).textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
         Button() {
           Text($r('app.string.chat_view_more')).fontSize(15).fontWeight(FontWeight.Medium)
             .fontColor($r('app.color.accent'))
