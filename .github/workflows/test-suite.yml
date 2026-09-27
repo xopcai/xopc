@@ -1,0 +1,51 @@
+name: Test suite
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  shards:
+    name: Test shard (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VITEST_MAX_WORKERS: '2'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install audio test dependencies
+        run: |
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+          ffmpeg -version
+      - name: Run tests
+        run: |
+          mkdir -p test-results
+          node -e 'console.log({node: process.version, cpu: require("node:os").availableParallelism(), workers: process.env.VITEST_MAX_WORKERS, memory: require("node:os").totalmem()})'
+          /usr/bin/time -v -o test-results/resources.txt \
+            pnpm run test:all --shard=${{ matrix.shard }}/4 \
+              --reporter=default --reporter=json --reporter=junit \
+              --outputFile.json=test-results/results.json \
+              --outputFile.junit=test-results/junit.xml
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tests-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: test-results/
+          retention-days: 7

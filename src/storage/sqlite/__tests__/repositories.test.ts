@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { seedTestDatabase } from '../../../../test/sqlite-fixture.js';
+
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import { ProjectStore } from '../../../projects/project-store.js';
@@ -64,6 +66,7 @@ describe('sqlite repositories', () => {
   beforeEach(() => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-repo-'));
     resetXopcDatabaseSingletonForTest();
+    seedTestDatabase(join(stateDir, 'xopc.db'));
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
   });
 

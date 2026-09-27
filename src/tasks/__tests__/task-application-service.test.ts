@@ -4,6 +4,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
+
 import {
   closeXopcDatabase,
   openXopcDatabase,
@@ -40,6 +42,7 @@ describe('TaskApplicationService', () => {
   beforeEach(() => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-task-application-'));
     resetXopcDatabaseSingletonForTest();
+    seedTestDatabase(join(stateDir, 'xopc.db'));
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
   });
 

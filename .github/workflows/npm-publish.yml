@@ -11,135 +11,193 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: npm-publish-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publish:
+  preflight:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      exists: ${{ steps.release.outputs.exists }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Validate release and check npm
+        id: release
+        run: node scripts/npm-release-preflight.mjs
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v5
+  tests:
+    needs: preflight
+    if: needs.preflight.outputs.exists != 'true'
+    uses: ./.github/workflows/test-suite.yml
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+  build:
+    needs: preflight
+    if: needs.preflight.outputs.exists != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
-          registry-url: 'https://registry.npmjs.org'
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Build
+      - name: Build package including declarations
         run: pnpm run build
-
-      # Recording integration tests decode real audio through FFmpeg.
-      - name: Install audio test dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
-          ffmpeg -version
-
-      - name: Run tests
-        run: pnpm run test:all
-
       - name: Run skills regression tests
         run: pnpm run test:skills:regression
-
       - name: Validate publish manifest
         run: pnpm run release:check-package
-
-      - name: Resolve package version
-        id: package
-        shell: bash
+      - name: Pack verified build
+        id: pack
         run: |
-          VERSION="$(node -p "require('./package.json').version")"
-          if [[ "${{ github.event_name }}" == "push" && "v${VERSION}" != "${{ github.ref_name }}" ]]; then
-            echo "Package version ${VERSION} does not match release tag ${{ github.ref_name }}" >&2
-            exit 1
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          test -s dist/src/index.d.ts
+          test -s dist/src/extensions/sdk/index.d.ts
+          test -s dist/src/cli/bin.js
+          test -s dist/gateway/static/root/index.html
+          mkdir -p release-package
+          pnpm pack --out release-package/xopc.tgz
+          echo "sha256=$(sha256sum release-package/xopc.tgz | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-package-${{ github.sha }}
+          path: release-package/xopc.tgz
+          overwrite: true
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Determine npm tag
-        id: npm-tag
+  publish:
+    needs: [preflight, tests, build]
+    if: >-
+      ${{ !cancelled() && needs.preflight.result == 'success' &&
+          (needs.preflight.outputs.exists == 'true' ||
+           (needs.tests.result == 'success' && needs.build.result == 'success')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+      - uses: actions/download-artifact@v8
+        if: needs.preflight.outputs.exists != 'true'
+        with:
+          name: npm-package-${{ github.sha }}
+          path: release-package
+      - name: Verify and publish the built tarball
+        if: needs.preflight.outputs.exists != 'true'
+        env:
+          PACKAGE_SHA256: ${{ needs.build.outputs.sha256 }}
+          NPM_TAG: ${{ needs.preflight.outputs.tag }}
         run: |
-          TAG_NAME="${{ github.ref_name }}"
-          if [[ "$TAG_NAME" == *"-beta"* ]]; then
-            echo "tag=beta" >> "$GITHUB_OUTPUT"
-          elif [[ "$TAG_NAME" == *"-dev"* ]] || [[ "$TAG_NAME" == *"-alpha"* ]]; then
-            echo "tag=dev" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=latest" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check whether version is already published
-        id: npm-version
-        shell: bash
-        run: |
-          VERSION="${{ steps.package.outputs.version }}"
-          if npm view "@xopcai/xopc@${VERSION}" version >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "@xopcai/xopc@${VERSION} is already published; publish will be skipped."
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publish to npm
-        if: steps.npm-version.outputs.exists != 'true'
-        # Build, full tests (including skills), skills regression, and manifest checks
-        # above cover prepublishOnly; do not run the full suite and build twice.
-        run: pnpm publish --ignore-scripts --no-git-checks --tag ${{ steps.npm-tag.outputs.tag }}
-
+          test -n "$PACKAGE_SHA256"
+          echo "$PACKAGE_SHA256  release-package/xopc.tgz" | sha256sum --check
+          pnpm publish release-package/xopc.tgz --ignore-scripts --no-git-checks --tag "$NPM_TAG" --access public
       - name: Confirm existing npm version
-        if: steps.npm-version.outputs.exists == 'true'
-        run: npm view "@xopcai/xopc@${{ steps.package.outputs.version }}" version dist.tarball
+        if: needs.preflight.outputs.exists == 'true'
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: npm view "@xopcai/xopc@${VERSION}" version dist.tarball
 
   docker:
-    name: Publish Docker image
-    needs: publish
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+    name: Docker (${{ matrix.arch }})
+    needs: [preflight, publish]
+    if: >-
+      ${{ !cancelled() && github.event_name == 'push' &&
+          needs.preflight.result == 'success' && needs.publish.result == 'success' }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
+      - uses: actions/checkout@v6
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build Docker smoke-test image
+      - uses: docker/setup-buildx-action@v4
+      - name: Build candidate image by digest
+        id: image
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./Dockerfile
-          load: true
-          tags: xopc:release-smoke
-          cache-from: type=gha,scope=xopc-docker
+          platforms: linux/${{ matrix.arch }}
+          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.preflight.outputs.version }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache-${{ matrix.arch }}
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache-${{ matrix.arch }},mode=max
+      - name: Test candidate image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}@${{ steps.image.outputs.digest }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: bash scripts/docker-release-smoke.sh "$IMAGE" "$VERSION"
+      - name: Record tested digest
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          mkdir -p "$RUNNER_TEMP/digests"
+          echo "$DIGEST" > "$RUNNER_TEMP/digests/$ARCH.txt"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docker-digest-${{ github.sha }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*.txt
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Run Docker smoke test
-        run: docker run --rm xopc:release-smoke xopc --version
-
+  docker-manifest:
+    name: Publish Docker manifest
+    needs: docker
+    if: ${{ !cancelled() && needs.docker.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: docker-digest-${{ github.sha }}-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v4
       - name: Generate Docker metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -149,15 +207,21 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=xopc-docker
-          cache-to: type=gha,mode=max,scope=xopc-docker
+      - name: Publish tested architectures
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          METADATA: ${{ steps.meta.outputs.json }}
+        run: |
+          sources=()
+          for arch in amd64 arm64; do
+            digest="$(cat "$RUNNER_TEMP/digests/$arch.txt")"
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            sources+=("$IMAGE@$digest")
+          done
+          mapfile -t names < <(jq -r '.tags[]' <<< "$METADATA")
+          test "${#names[@]}" -gt 0
+          tags=()
+          for name in "${names[@]}"; do tags+=(--tag "$name"); done
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"
+          docker buildx imagetools inspect "${names[0]}" --raw | \
+            jq -e '[.manifests[] | select(.platform.os == "linux") | .platform.architecture] | sort == ["amd64", "arm64"]'

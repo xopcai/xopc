@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
 import { AutomationMutationOutputSchema } from '@xopcai/gateway-contract';
 
 import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
@@ -23,6 +25,7 @@ const caller: CapabilityContext = { principalId: 'owner', surface: 'http', scope
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'xopc-automation-capability-'));
   resetXopcDatabaseSingletonForTest();
+  seedTestDatabase(join(directory, 'xopc.db'));
   openXopcDatabase({ path: join(directory, 'xopc.db') });
   seedTestAgentCatalog();
 });

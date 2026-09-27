@@ -4,6 +4,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
+
 vi.mock('node:fs', async (importOriginal) => ({
   ...await importOriginal<typeof import('node:fs')>(),
 }));
@@ -50,6 +52,7 @@ describe('LocalAppService', () => {
   beforeEach(() => {
     rmSync(paths.root, { recursive: true, force: true });
     resetXopcDatabaseSingletonForTest();
+    seedTestDatabase(join(paths.root, 'xopc.db'));
     openXopcDatabase({ path: join(paths.root, 'xopc.db') });
     config = { extensions: { disabled: ['placeholder'] } } as unknown as Config;
     projects = new ProjectService();

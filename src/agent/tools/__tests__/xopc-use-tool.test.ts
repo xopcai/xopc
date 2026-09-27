@@ -10,6 +10,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestDatabase } from '../../../../test/sqlite-fixture.js';
+
 import { ActivityService, ObjectLinkService } from '../../../activity/index.js';
 import { AutomationService } from '../../../automations/index.js';
 import { NotesService, NotesStore } from '../../../notes/index.js';
@@ -48,6 +50,7 @@ describe('xopc_use tool', () => {
     previousStateDir = process.env.XOPC_STATE_DIR;
     process.env.XOPC_STATE_DIR = stateDir;
     resetXopcDatabaseSingletonForTest();
+    seedTestDatabase(join(stateDir, 'xopc.db'));
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     const catalog = new AgentCatalogRepository();
     catalog.ensureInitialized();

@@ -3,6 +3,8 @@ import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
+
 import {
   closeXopcDatabase,
   ensureSessionRecord,
@@ -26,6 +28,7 @@ describe('ProjectService', () => {
   beforeEach(() => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-projects-'));
     resetXopcDatabaseSingletonForTest();
+    seedTestDatabase(join(stateDir, 'xopc.db'));
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     seedTestAgentCatalog({ agents: [{ id: 'main', enabled: true }, { id: 'coder', enabled: true }] });
     projects = new ProjectService();
