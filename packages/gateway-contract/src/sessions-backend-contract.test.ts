@@ -28,6 +28,13 @@ describe('sessions backend response contract', () => {
           lastAccessedAt: '2026-07-09T00:10:00.000Z',
           messageCount: 3,
           estimatedTokens: 320,
+          usage: {
+            calls: 2,
+            unknownCostCalls: 0,
+            totalTokens: 640,
+            knownCostUsd: '0.00125',
+            costCompleteness: 'complete',
+          },
           compactedCount: 0,
           sourceChannel: 'webchat',
           sourceChatId: 'chat_a',
@@ -55,6 +62,7 @@ describe('sessions backend response contract', () => {
     expect(parsed.total).toBe(1);
     expect(first?.key).toBe("c0f12290-5df2-4203-8bfd-5d5f34467d20");
     expect(first?.routing?.agentId).toBe('main');
+    expect(first?.usage?.totalTokens).toBe(640);
   });
 
   it('accepts the gateway session detail response shape', () => {

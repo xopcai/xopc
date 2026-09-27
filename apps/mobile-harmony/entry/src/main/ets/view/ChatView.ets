@@ -42,6 +42,7 @@ import { advanceAssistantAudio, latestAssistantAudio, XopcAssistantAudioState } 
 import { assistantAudioAutoplay } from '../service/assistantAudioAutoplay';
 import { editChatImageAttachment } from '../service/chatImageEditing';
 import { latestChatMessageId } from '../common/chatMessagePreview';
+import { chatPresentationRows } from '../common/chatPresentation';
 
 @ComponentV2
 struct XopcChatRunningLogo {
@@ -159,7 +160,10 @@ export struct XopcChatView {
   @Local messageDetailOpen: boolean = false;
   @Local messageDetailRow: XopcChatRow = { id: '', role: 'assistant', text: '' };
   @Computed get latestMessageId(): string {
-    return this.chat.liveRow?.id || latestChatMessageId(this.chat.rows);
+    return latestChatMessageId(this.presentationRows);
+  }
+  @Computed get presentationRows(): XopcChatRow[] {
+    return chatPresentationRows(this.chat.rows, this.chat.liveRow, this.chat.runId);
   }
   @Computed get attachmentPreviews(): XopcHistoryMedia[] {
     return this.attachments.map((file: XopcChatAttachment, index: number): XopcHistoryMedia => {
@@ -843,7 +847,7 @@ export struct XopcChatView {
           }.width('100%').height(44).justifyContent(FlexAlign.Center)
         }
       }
-      Repeat<XopcChatRow>(this.chat.rows).each((item: RepeatItem<XopcChatRow>) => {
+      Repeat<XopcChatRow>(this.presentationRows).each((item: RepeatItem<XopcChatRow>) => {
         ListItem() {
           if (item.item.role === 'user') {
             Column({ space: 2 }) {
@@ -874,7 +878,7 @@ export struct XopcChatView {
                 .constraintSize({ minWidth: 64, maxWidth: '90%' })
                 .padding({ left: 16, right: 16, top: 14, bottom: 14 }).alignItems(HorizontalAlign.Start)
                 .borderRadius(18).backgroundColor(this.colors.panel)
-              if (chatAnswerText(item.item)) { this.assistantMessageActions(item.item) }
+              if (!item.item.live && chatAnswerText(item.item)) { this.assistantMessageActions(item.item) }
             }.width('100%').alignItems(HorizontalAlign.Start)
           } else {
             Column({ space: 2 }) {
@@ -884,28 +888,7 @@ export struct XopcChatView {
             }.width('100%').alignItems(HorizontalAlign.Start)
           }
         }
-      }).key((row: XopcChatRow): string => this.chat.selectedId + ':' + row.id).virtualScroll({ totalCount: this.chat.rows.length })
-      if (this.chat.liveRow) {
-        ListItem() {
-          Column() {
-            XopcChatMessageContent({ row: this.chat.liveRow, conversationId: this.chat.selectedId, disclosure: this.disclosure,
-              reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
-              onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
-          }.id('chat-assistant-live-card').width(this.assistantBubbleWidth(this.chat.liveRow))
-            .constraintSize({ minWidth: 64, maxWidth: '90%' })
-            .padding({ left: 16, right: 16, top: 14, bottom: 14 })
-            .alignItems(HorizontalAlign.Start).borderRadius(18).backgroundColor(this.colors.panel)
-        }
-      } else if (this.chat.runId) {
-        ListItem() {
-          Row() {
-            Text($r('app.string.chat_running')).fontSize(13).fontColor(this.colors.secondary)
-          }.id('chat-assistant-running-card').width('132vp')
-            .constraintSize({ maxWidth: '90%' })
-            .padding({ left: 16, right: 16, top: 14, bottom: 14 })
-            .borderRadius(18).backgroundColor(this.colors.panel)
-        }
-      }
+      }).key((row: XopcChatRow): string => this.chat.selectedId + ':' + row.id).virtualScroll({ totalCount: this.presentationRows.length })
     }.id('chat-message-list').height('100%').width('100%').padding({ left: 12, right: 12 }).cachedCount(3)
       .contentEndOffset(this.bottomRegionHeight + 24)
       .onScrollIndex((start: number, end: number): void => {

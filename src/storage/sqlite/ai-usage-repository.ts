@@ -117,6 +117,11 @@ export type AiUsageTotals = {
   costCompleteness: 'complete' | 'partial' | 'unknown';
 };
 
+export type ConversationAiUsageTotals = Pick<
+  AiUsageTotals,
+  'calls' | 'unknownCostCalls' | 'totalTokens' | 'knownCostUsd' | 'costCompleteness'
+>;
+
 function totalsFromRow(row: UsageRow): AiUsageTotals {
   const calls = Number(row.calls ?? 0);
   const unknownCostCalls = Number(row.unknown_cost_calls ?? 0);
@@ -147,6 +152,36 @@ const TOTALS_SQL = `COUNT(*) AS calls,
   COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
   COALESCE(SUM(total_tokens), 0) AS total_tokens,
   COALESCE(SUM(estimated_cost_microusd), 0) AS known_cost_microusd`;
+
+/** Aggregate all retained AI usage records for the requested conversations. */
+export function summarizeAiUsageByConversations(
+  conversationIds: readonly string[],
+): Map<string, ConversationAiUsageTotals> {
+  const uniqueIds = [...new Set(conversationIds.filter(Boolean))];
+  const result = new Map<string, ConversationAiUsageTotals>();
+  const db = getSqliteDatabase();
+
+  // Stay comfortably below SQLite's bound-parameter limit for unusually large pages.
+  for (let offset = 0; offset < uniqueIds.length; offset += 500) {
+    const batch = uniqueIds.slice(offset, offset + 500);
+    const rows = db.prepare(`SELECT conversation_id, ${TOTALS_SQL}
+      FROM ai_usage_events
+      WHERE conversation_id IN (${batch.map(() => '?').join(', ')})
+      GROUP BY conversation_id`).all(...batch) as UsageRow[];
+    for (const row of rows) {
+      const totals = totalsFromRow(row);
+      result.set(String(row.conversation_id), {
+        calls: totals.calls,
+        unknownCostCalls: totals.unknownCostCalls,
+        totalTokens: totals.totalTokens,
+        knownCostUsd: totals.knownCostUsd,
+        costCompleteness: totals.costCompleteness,
+      });
+    }
+  }
+
+  return result;
+}
 
 export function summarizeAiUsage(query: AiUsageQuery): {
   totals: AiUsageTotals;

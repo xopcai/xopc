@@ -26,7 +26,6 @@ import type { SessionStore } from '../../session/index.js';
 import type { Config } from '../../config/schema.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
-import { extractAgentUserPlainText } from '../memory/user-message-text.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
 import { resolveImageHandlingStrategy } from '../image/vision-detection.js';
@@ -176,7 +175,6 @@ export async function runDirectAgentTurn(
   const isConnectionResume = Boolean(getConnectionResumeInput(input.conversationId, turnId));
   const isClarificationResume = Boolean(getClarificationResumeInput(input.conversationId, turnId));
   const isResume = isConnectionResume || isClarificationResume;
-  const userPlain = extractAgentUserPlainText(input.userMessage);
   const userContext = await deps.agentManager.prepareUserTurnContext(
     input.userMessage,
     input.conversationId,
@@ -219,9 +217,6 @@ export async function runDirectAgentTurn(
     onEvent: input.onEvent,
   });
 
-  if (!isResume) {
-    deps.agentManager.scheduleUserUnderstandingMaintenance(input.conversationId, userPlain, turnId);
-  }
   if (!isResume && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required') {
     deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.conversationId);
   }

@@ -118,29 +118,6 @@ describe('HomeIntelligenceRepository', () => {
     expect(repository.getLatestSnapshotHash(principal)).toBe('evaluated');
   });
 
-  it('counts only model generation attempts and excludes the current claim', () => {
-    repository.enqueue(principal, {
-      idempotencyKey: 'model:1', reasons: ['manual_refresh'], requestedAt: 1_000,
-    });
-    repository.complete(repository.claimNext(principal, 'worker', 1_001)!, {
-      result: { state: 'quiet', reason: 'insufficient_value' },
-      snapshotHash: 'model', evidenceIds: [], modelRef: 'test/reasoning', completedAt: 1_002,
-    });
-    repository.enqueue(principal, {
-      idempotencyKey: 'skip:1', reasons: ['task_changed'], requestedAt: 1_003,
-    });
-    repository.complete(repository.claimNext(principal, 'worker', 1_004)!, {
-      result: { state: 'quiet', reason: 'no_change' },
-      snapshotHash: 'skip', evidenceIds: [], completedAt: 1_005,
-    });
-    repository.enqueue(principal, {
-      idempotencyKey: 'current:1', reasons: ['task_changed'], requestedAt: 1_006,
-    });
-    const current = repository.claimNext(principal, 'worker', 1_007)!;
-
-    expect(repository.countModelGenerationAttemptsSince(principal, 0, current.generationId)).toBe(1);
-  });
-
   it('exposes a terminal generation failure instead of silently returning no change', () => {
     repository.enqueue(principal, {
       idempotencyKey: 'failed:1', reasons: ['manual_refresh'], requestedAt: 1_000,
@@ -152,7 +129,6 @@ describe('HomeIntelligenceRepository', () => {
     const third = repository.claimNext(principal, 'worker', 1_005)!;
     repository.fail(third, 1_006, 'generation_failed', 1_007);
 
-    expect(repository.countModelGenerationAttemptsSince(principal, 0, 'not-running')).toBe(3);
     expect(repository.getAdvisor(principal, 1_008))
       .toEqual({ state: 'quiet', reason: 'generation_failed' });
   });

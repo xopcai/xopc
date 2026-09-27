@@ -324,22 +324,24 @@ export class HomeIntelligenceRepository {
     return row?.snapshot_hash ?? undefined;
   }
 
-  countModelGenerationAttemptsSince(
-    principal: HomePrincipal,
-    since: number,
-    currentGenerationId: string,
-  ): number {
-    const row = this.db.prepare(`SELECT COALESCE(SUM(CASE
-        WHEN generation_id = ? THEN MAX(attempt - 1, 0)
-        WHEN model_ref IS NOT NULL THEN 1
-        WHEN status IN ('failed', 'retry_wait') THEN attempt
-        ELSE 0
-      END), 0) AS count
+  getLatestContextRefreshRequestedAt(principal: HomePrincipal): number | undefined {
+    const row = this.db.prepare(`SELECT MAX(requested_at) AS requested_at
       FROM home_advice_generations
-      WHERE owner_id = ? AND workspace_id = ? AND COALESCE(started_at, requested_at) >= ?`).get(
-      currentGenerationId, principal.ownerId, principal.workspaceId, since,
-    ) as { count: number };
-    return Number(row.count);
+      WHERE owner_id = ? AND workspace_id = ?
+        AND EXISTS (
+          SELECT 1 FROM json_each(reasons_json)
+          WHERE value IN ('project_changed', 'task_changed', 'connector_changed', 'conversation_changed')
+        )`).get(principal.ownerId, principal.workspaceId) as { requested_at: number | null };
+    return row.requested_at === null ? undefined : Number(row.requested_at);
+  }
+
+  getProviderUsageSince(startedAt: number, operation: string): { calls: number; totalTokens: number } {
+    const row = this.db.prepare(`SELECT COUNT(*) AS calls, COALESCE(SUM(total_tokens), 0) AS total_tokens
+      FROM ai_usage_events WHERE operation = ? AND started_at >= ?`).get(
+      operation,
+      startedAt,
+    ) as { calls: number; total_tokens: number };
+    return { calls: Number(row.calls), totalTokens: Number(row.total_tokens) };
   }
 
   listSuppressionKeys(principal: HomePrincipal): Set<string> {
