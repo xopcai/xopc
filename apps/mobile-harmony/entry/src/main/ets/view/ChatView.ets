@@ -814,7 +814,7 @@ export struct XopcChatView {
           if (this.restoringDraft) return;
           this.draft = text; this.cursor = text.length;
           this.getUIContext().getFocusController().requestFocus('chat-composer'); this.editor.caretPosition(text.length);
-        } }).layoutWeight(1).width('100%')
+        } }).layoutWeight(1).width('100%').padding({ bottom: this.bottomRegionHeight })
     } else {
     Stack({ alignContent: Alignment.Bottom }) {
     List({ space: 20, scroller: this.messagesScroller }) {
@@ -892,7 +892,7 @@ export struct XopcChatView {
         }
       }
     }.id('chat-message-list').height('100%').width('100%').padding({ left: 12, right: 12 }).cachedCount(3)
-      .contentEndOffset(24)
+      .contentEndOffset(this.bottomRegionHeight + 24)
       .onScrollIndex((start: number, end: number): void => {
         this.firstVisible = start;
       })
@@ -912,7 +912,7 @@ export struct XopcChatView {
         } else {
           Text('↓').fontSize(20).fontColor(this.colors.secondary)
         }
-      }.id('chat-jump-bottom').height(36).width(36).padding(0).margin({ bottom: 8 })
+      }.id('chat-jump-bottom').height(36).width(36).padding(0).margin({ bottom: this.bottomRegionHeight + 8 })
         .responseRegion({ x: -4, y: -4, width: 44, height: 44 })
         .backgroundColor(this.colors.grouped).accessibilityText($r('app.string.chat_jump_bottom'))
         .onClick((): void => { this.atBottom = true; this.showJumpBottom = false; this.messagesScroller.scrollEdge(Edge.Bottom); })
@@ -920,7 +920,8 @@ export struct XopcChatView {
     }.id('chat-message-viewport').layoutWeight(1).width('100%').backgroundColor(Color.Transparent)
     }
     }.id('chat-content-viewport').width('100%').height('100%')
-      .padding({ bottom: this.bottomRegionHeight }).clip(true)
+      // Keep messages behind the floating dock; reserve clearance inside the list's scroll extent.
+      .clip(true)
     Column() {
     Column() {
     if (this.prompt.prompt) { XopcChatPrompt({ model: this.prompt }) }
@@ -1161,7 +1162,7 @@ export struct XopcChatView {
     if (this.panelOpen) { this.actionPanel() }
     this.bottomDock()
     }.id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(Color.Transparent)
-      .borderRadius(24).clip(true)
+      .backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR).borderRadius(24).clip(true)
     }.id('chat-bottom-region').width('100%')
       .margin({ top: 4, bottom: 0 })
       .onAreaChange((_previous: Area, current: Area): void => { this.bottomRegionHeight = Number(current.height); })

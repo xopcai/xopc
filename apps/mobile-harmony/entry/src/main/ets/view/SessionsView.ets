@@ -97,6 +97,7 @@ struct XopcSessionManagerRow {
 export struct XopcSessionsView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param embedded: boolean = false;
+  @Param bottomInset: number = 0;
   @Param activePage: boolean = true;
   @Param currentId: string = '';
   @Event onExit: () => void = (): void => {};
@@ -320,6 +321,7 @@ export struct XopcSessionsView {
                 .onClick((): void => { this.sessions.load(true); }) }
             }
           }.id('sessions-list').width('100%').height('100%').padding({ left: 20, right: 20 }).cachedCount(5)
+            .contentEndOffset(this.bottomInset)
             .onReachEnd((): void => { if (!this.sessions.error && !this.sessions.busy) this.sessions.load(true); })
         }.layoutWeight(1).pullToRefresh(!this.sessions.busy).onRefreshing((): void => { this.sessions.load(); })
         if (this.sessions.undoId) {

@@ -9,6 +9,7 @@ import { mobileRoute } from '../common/homeProtocol';
 export struct XopcProgressView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param activePage: boolean = false;
+  @Param bottomInset: number = 0;
   @Local model: XopcProgressViewModel = new XopcProgressViewModel();
   @Local pulling: boolean = false;
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
@@ -145,7 +146,7 @@ export struct XopcProgressView {
               }
             }
             if (this.model.actionError) { Text(this.model.actionError).fontColor(this.colors.danger).width('100%').padding(12) }
-          }.width('100%').padding({ left: 20, right: 20 }).alignItems(HorizontalAlign.Start)
+          }.width('100%').padding({ left: 20, right: 20, bottom: this.bottomInset }).alignItems(HorizontalAlign.Start)
         }.width('100%').height('100%').align(Alignment.Top).scrollBar(BarState.Off)
       }.layoutWeight(1).onRefreshing((): void => {
         this.pulling = true; this.model.refresh().finally((): void => { this.pulling = false; });
