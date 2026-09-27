@@ -43,7 +43,7 @@ import { advanceAssistantAudio, latestAssistantAudio, XopcAssistantAudioState } 
 import { assistantAudioAutoplay } from '../service/assistantAudioAutoplay';
 import { editChatImageAttachment } from '../service/chatImageEditing';
 import { latestChatMessageId } from '../common/chatMessagePreview';
-import { chatPresentationRows } from '../common/chatPresentation';
+import { chatPresentationRows, chatNeedsWideBubble } from '../common/chatPresentation';
 
 @ComponentV2
 struct XopcChatRunningLogo {
@@ -433,10 +433,8 @@ export struct XopcChatView {
   }
 
   private assistantBubbleWidth(row: XopcChatRow): string {
+    if (chatNeedsWideBubble(row)) return '90%';
     if (row.live && !row.text && !row.blocks?.length) return this.textBubbleWidth(row.progress || '', 132, 272);
-    const richBlock = (row.blocks || []).some((block: XopcChatBlock): boolean => block.kind !== 'text');
-    if (richBlock || (row.media?.length || 0) > 0 || (row.refs?.length || 0) > 0
-      || (row.toolCalls?.length || 0) > 0 || !!row.outcome) return '90%';
     return this.textBubbleWidth(chatAnswerText(row), 64, 272);
   }
 
