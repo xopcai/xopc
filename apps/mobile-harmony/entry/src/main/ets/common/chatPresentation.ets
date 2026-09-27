@@ -1,9 +1,17 @@
-import { XopcChatRow } from '../model/chat';
+import { XopcChatRow, XopcChatBlock } from '../model/chat';
 import { mergeAssistantRows, chatAnswerText } from './chatRichContent';
+
+/** Progress and rich results need a readable container even before answer text exists. */
+export function chatNeedsWideBubble(row: XopcChatRow): boolean {
+  return (row.blocks || []).some((block: XopcChatBlock): boolean =>
+    block.kind !== 'text' || block.presentation === 'narration')
+    || (row.deliveries?.length || 0) > 0 || (row.media?.length || 0) > 0
+    || (row.refs?.length || 0) > 0 || (row.toolCalls?.length || 0) > 0 || !!row.outcome;
+}
 
 function copyPresentationRow(row: XopcChatRow): XopcChatRow {
   return { id: row.id, role: row.role, text: row.text, thinking: row.thinking, tools: row.tools,
-    media: row.media?.slice(), refs: row.refs, toolCalls: row.toolCalls, blocks: row.blocks?.slice(),
+    media: row.media?.slice(), refs: row.refs, deliveries: row.deliveries?.slice(), toolCalls: row.toolCalls, blocks: row.blocks?.slice(),
     outcome: row.outcome, turnId: row.turnId, live: row.live, progress: row.progress, sourceIds: row.sourceIds?.slice(),
     toolResultId: row.toolResultId, toolResultError: row.toolResultError, toolResultDetails: row.toolResultDetails };
 }
