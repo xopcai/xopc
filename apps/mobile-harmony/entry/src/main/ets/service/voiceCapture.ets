@@ -79,7 +79,9 @@ export class XopcVoiceCapture {
   }
 
   async stop(): Promise<void> {
-    if (this.busy || this.state !== 'recording') return;
+    if (this.state !== 'recording') return;
+    // A release at the duration limit must wait for the timer's in-flight stop.
+    if (this.busy) { await this.operation; return; }
     this.busy = true; this.clearTimer();
     this.durationMs = Date.now() - this.startedAt;
     this.operation = this.finishCapture(this.generation);
