@@ -38,3 +38,36 @@ it('preserves the new conversation project and temporary mode when selecting ano
     localStorage.clear();
   }
 });
+
+it('marks an agent switch from an existing conversation as a forced new chat', async () => {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  const previousToken = useGatewayStore.getState().conversationId;
+  useGatewayStore.setState({ conversationId: undefined });
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  const navigate = vi.fn();
+  let agents!: ReturnType<typeof useChatSessionAgents>;
+  function Harness() {
+    agents = useChatSessionAgents({
+      navigate,
+      conversationIdRef: { current: 'session-main' },
+      conversationId: 'session-main',
+      isNewRoute: false,
+      locationSearch: '',
+      locationState: null,
+    });
+    return null;
+  }
+  try {
+    await act(async () => root.render(<Harness />));
+    await act(async () => agents.onChatAgentChange('reviewer'));
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('/chat/new?projectScope=none', {
+      replace: false,
+      state: { agentId: 'reviewer', forceNewChat: true },
+    });
+  } finally {
+    await act(async () => root.unmount());
+    useGatewayStore.setState({ conversationId: previousToken });
+    localStorage.clear();
+  }
+});

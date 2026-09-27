@@ -17,8 +17,8 @@ import {
   rememberLastChatScope,
   rememberSelectedAgent,
 } from '@/features/chat/session/new-session-preferences';
+import { resolveChatSessionAgentContext } from '@/features/chat/session/chat-session-agent-context';
 import { isSkillsOnlyConfigReload } from '@/features/gateway/config-reload-event';
-import { getSessionDetail } from '@/features/sessions/session-api';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export function useChatSessionAgents(opts: {
@@ -39,12 +39,12 @@ export function useChatSessionAgents(opts: {
     { revalidateOnFocus: false },
   );
 
-  const { data: currentSession } = useSWR(
+  const { data: currentSessionContext } = useSWR(
     token && sessionAgentKey ? ['gateway-chat-session-agent', token, sessionAgentKey] : null,
-    () => getSessionDetail(sessionAgentKey),
+    () => resolveChatSessionAgentContext(sessionAgentKey),
     { revalidateOnFocus: false },
   );
-  const currentSessionAgentId = currentSession?.routing?.agentId?.trim().toLowerCase() ?? '';
+  const currentSessionAgentId = currentSessionContext?.agentId ?? '';
 
   useEffect(() => {
     const onConfigReload = (event: Event) => {
@@ -95,21 +95,23 @@ export function useChatSessionAgents(opts: {
   const onChatAgentChange = useCallback(
     (id: string) => {
       const next = id.trim().toLowerCase();
-      setPreferredAgentId(next);
-      rememberSelectedAgent(next);
       const curKey = conversationIdRef.current;
       const curAgent = curKey ? currentSessionAgentId || preferredAgentIdRef.current : null;
+      preferredAgentIdRef.current = next;
+      setPreferredAgentId(next);
+      rememberSelectedAgent(next);
       if (curAgent !== next) {
-        navigate(isNewRoute ? `/chat/new${locationSearch}` : newChatHrefForProject(currentSession?.projectId), {
+        navigate(isNewRoute ? `/chat/new${locationSearch}` : newChatHrefForProject(currentSessionContext?.projectId), {
           replace: false,
           state: {
             ...(isNewRoute && locationState && typeof locationState === 'object' ? locationState : {}),
             agentId: next,
+            forceNewChat: true,
           },
         });
       }
     },
-    [currentSession?.projectId, currentSessionAgentId, isNewRoute, locationSearch, locationState, navigate, conversationIdRef],
+    [currentSessionContext?.projectId, currentSessionAgentId, isNewRoute, locationSearch, locationState, navigate, conversationIdRef],
   );
 
   useEffect(() => {
@@ -132,9 +134,9 @@ export function useChatSessionAgents(opts: {
   }, [currentSessionAgentId, conversationId]);
 
   useLayoutEffect(() => {
-    if (!conversationId || !currentSession) return;
-    rememberLastChatScope(currentSession.projectId);
-  }, [currentSession, conversationId]);
+    if (!conversationId || !currentSessionContext) return;
+    rememberLastChatScope(currentSessionContext.projectId);
+  }, [currentSessionContext, conversationId]);
 
   useLayoutEffect(() => {
     if (!isNewRoute) return;
@@ -164,6 +166,6 @@ export function useChatSessionAgents(opts: {
     onChatAgentChange,
     displayAgentId,
     showChatAgentSelector,
-    currentSessionProjectId: currentSession?.projectId ?? null,
+    currentSessionProjectId: currentSessionContext?.projectId ?? null,
   };
 }

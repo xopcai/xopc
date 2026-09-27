@@ -286,6 +286,23 @@ describe('chat history isolation', () => {
     await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
     finish(page('next', 'next')); await pending; chat.dispose();
   });
+  it('preserves the selected draft agent when reconciliation materializes before history loads', async () => {
+    mocks.draft.mockResolvedValueOnce({ conversationId: 'draft', createdAt: '2026-09-27T00:00:00.000Z', creation: {
+      agentId: 'reviewer', projectId: null, execution: null, temporary: false, model: 'provider/model', thinkingLevel: 'off',
+    } }).mockResolvedValueOnce(undefined);
+    mocks.history.mockResolvedValue(page('draft', 'ready'));
+    const chat = new XopcChatViewModel(); await chat.open('draft');
+    expect(chat.agentId).toBe('reviewer'); expect(chat.rows[0].text).toBe('ready'); chat.dispose();
+  });
+  it('carries an explicit agent switch into the new local conversation', async () => {
+    mocks.create.mockResolvedValue('draft');
+    mocks.draft.mockResolvedValue({ conversationId: 'draft', createdAt: '2026-09-27T00:00:00.000Z', creation: {
+      agentId: 'reviewer', projectId: 'project-a', execution: null, temporary: false, model: '', thinkingLevel: 'off',
+    } });
+    const chat = new XopcChatViewModel(); chat.projectId = 'project-a'; await chat.create('reviewer');
+    expect(mocks.create).toHaveBeenCalledWith('project-a', 'reviewer', undefined);
+    expect(chat.selectedId).toBe('draft'); expect(chat.agentId).toBe('reviewer'); chat.dispose();
+  });
   it('does not let a late create clear the loading state of a selected conversation', async () => {
     let finishCreate!: (id: string) => void;
     let finishHistory!: (value: unknown) => void;
