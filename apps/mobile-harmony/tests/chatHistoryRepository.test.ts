@@ -20,6 +20,13 @@ vi.mock('../entry/src/main/ets/service/chatHistoryCache.ets', () => ({ chatHisto
 import { XopcChatRepository } from '../entry/src/main/ets/repository/chatRepository.ets';
 const page = { session: { key: 'c', transcriptId: 't', messages: [] }, pagination: { hasMore: false } };
 describe('history cache mutation fences', () => {
+  it('loads a larger initial window and bounded subsequent pages', async () => {
+    const repo = new XopcChatRepository();
+    await repo.history('c');
+    expect(mock.request).toHaveBeenLastCalledWith('/api/sessions/c/history?limit=150');
+    await repo.history('c', 'cursor', 't');
+    expect(mock.request).toHaveBeenLastCalledWith('/api/sessions/c/history?limit=100&before=cursor');
+  });
   beforeEach(() => { vi.resetAllMocks(); mock.gateway = 'g'; mock.connection = 0; mock.revision = 0; mock.request.mockResolvedValue(JSON.stringify(page)); });
   it('remembers only a fetched head from the same Gateway', async () => {
     const repo = new XopcChatRepository(); const head = await repo.history('c');

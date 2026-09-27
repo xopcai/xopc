@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
   return { history: vi.fn(), list: vi.fn(), activeRun: vi.fn(), send: vi.fn(), uuid: vi.fn(),
-    create: vi.fn(), draft: vi.fn(), reconcile: vi.fn(), mainConversation: vi.fn(), saveMainConversation: vi.fn(),
+    create: vi.fn(), draft: vi.fn(), pendingInput: vi.fn(), reconcile: vi.fn(), mainConversation: vi.fn(), saveMainConversation: vi.fn(),
     subscribe: vi.fn(), unsubscribe: vi.fn(), cachedHistory: vi.fn(), rememberHistory: vi.fn() };
 });
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {
   history = mocks.history; list = mocks.list; activeRun = mocks.activeRun; send = mocks.send; uuid = mocks.uuid;
-  create = mocks.create; draft = mocks.draft; reconcile = mocks.reconcile;
+  create = mocks.create; draft = mocks.draft; pendingInput = mocks.pendingInput; reconcile = mocks.reconcile;
   mainConversation = mocks.mainConversation; saveMainConversation = mocks.saveMainConversation;
   cachedHistory = mocks.cachedHistory; rememberHistory = mocks.rememberHistory;
 } }));
@@ -23,6 +23,124 @@ const page = (id: string, text: string, before = '') => ({
   pagination: { hasMore: !!before, nextBeforeCursor: before },
 });
 describe('chat history isolation', () => {
+  it('prefetches only one older page silently and consumes it without another request', async () => {
+    const chat = new XopcChatViewModel(); chat.connection = 'connected';
+    mocks.history.mockResolvedValueOnce(page('one', 'latest', 'cursor'));
+    await chat.open('one');
+    let resolve!: (result: ReturnType<typeof page>) => void;
+    mocks.history.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    const visible = chat.rows;
+    chat.prefetchOlder(); chat.prefetchOlder();
+    expect(mocks.history).toHaveBeenCalledTimes(2); expect(chat.rows).toBe(visible); expect(chat.loading).toBe(false);
+    const anchor = vi.fn(); const loading = chat.loadHistory(true, anchor);
+    expect(anchor).not.toHaveBeenCalled();
+    resolve(page('one', 'older')); await loading;
+    expect(anchor).toHaveBeenCalledOnce(); expect(mocks.history).toHaveBeenCalledTimes(2);
+    expect(chat.rows.map(row => row.text).join(' ')).toContain('older'); chat.dispose();
+  });
+
+  it('keeps speculative failures silent and retries when the page is actually requested', async () => {
+    const chat = new XopcChatViewModel(); chat.connection = 'connected';
+    mocks.history.mockResolvedValueOnce(page('one', 'latest', 'cursor')); await chat.open('one');
+    mocks.history.mockRejectedValueOnce(new Error('NETWORK')); chat.prefetchOlder();
+    await Promise.resolve(); expect(chat.error).toBe('');
+    mocks.history.mockResolvedValueOnce(page('one', 'older')); await chat.loadHistory(true);
+    expect(mocks.history).toHaveBeenCalledTimes(3); expect(chat.error).toBe(''); chat.dispose();
+  });
+  it('restores a persisted ambiguous request with its original retry identity', async () => {
+    mocks.pendingInput.mockResolvedValue({ kind: 'append', clientMessageId: 'persisted', expectedTranscriptId: 't', delivery: 'steer',
+      input: { content: 'saved', attachments: [{ type: 'audio', name: 'voice.m4a', mimeType: 'audio/mp4', size: 2, data: 'YQ==', durationSeconds: 2 }] } });
+    mocks.history.mockResolvedValue({ session: { key: 'one', transcriptId: 't', messages: [] }, pagination: { hasMore: false } });
+    const chat = new XopcChatViewModel(); chat.connection = 'connected'; await chat.open('one');
+    expect(chat.rows).toMatchObject([{ id: 'persisted', text: 'saved', sendState: 'failed' }]);
+    mocks.send.mockResolvedValue('run'); await chat.retrySend('persisted');
+    expect(mocks.send).toHaveBeenCalledWith('one', 'saved', 'persisted', 't',
+      [expect.objectContaining({ duration: 2, data: 'YQ==' })], 'steer', []);
+    expect(mocks.uuid).not.toHaveBeenCalled(); expect(chat.rows).toHaveLength(1); chat.dispose();
+  });
+
+  it('does not move a failed bubble below newer messages when history confirms those messages', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    mocks.uuid.mockReturnValueOnce('failed').mockReturnValueOnce('new');
+    mocks.send.mockRejectedValueOnce(new Error('NETWORK')).mockResolvedValueOnce('run');
+    await chat.send('first'); await chat.send('second');
+    mocks.history.mockResolvedValue({ session: { key: 'one', transcriptId: 't', messages: [
+      { id: 'server', role: 'user', content: 'second', metadata: { clientMessageId: 'new' } },
+    ] }, pagination: { hasMore: false } });
+    await chat.loadHistory(false);
+    expect(chat.rows.map(row => row.id)).toEqual(['failed', 'new']);
+    expect(chat.rows[0].sendState).toBe('failed'); chat.dispose();
+  });
+  it('enqueues before HTTP completion and preserves the bubble through failed history refreshes', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    mocks.uuid.mockReturnValue('optimistic');
+    let reject!: (error: Error) => void;
+    mocks.send.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+    const enqueued = vi.fn(); const pending = chat.send('hello', [], 'next', [], enqueued);
+    expect(enqueued).toHaveBeenCalledOnce();
+    expect(chat.rows).toMatchObject([{ id: 'optimistic', text: 'hello', sendState: 'sending' }]);
+    mocks.history.mockResolvedValue({ session: { key: 'one', transcriptId: 't', messages: [] }, pagination: { hasMore: false } });
+    await chat.loadHistory(false);
+    expect(chat.rows[0].sendState).toBe('sending');
+    reject(new Error('NETWORK')); expect(await pending).toBe(false);
+    expect(chat.rows[0].sendState).toBe('failed');
+    await chat.loadHistory(false); expect(chat.rows).toHaveLength(1);
+    expect(chat.rows[0].sendState).toBe('failed');
+    chat.dispose();
+  });
+
+  it('retries the original payload in place after newer messages and deduplicates repeated taps', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    mocks.uuid.mockReturnValueOnce('failed').mockReturnValueOnce('new');
+    mocks.send.mockRejectedValueOnce(new Error('NETWORK')).mockResolvedValueOnce('run');
+    const file = { type: 'image', name: 'photo.png', mimeType: 'image/png', size: 1, data: 'YQ==' };
+    const refs = [{ kind: 'note', sourceId: 'note', expectedVersion: 'v1' }];
+    await chat.send('first', [file], 'next', refs);
+    await chat.send('second');
+    let resolve!: (run: string) => void;
+    mocks.send.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    const retry = chat.retrySend('failed');
+    expect(await chat.retrySend('failed')).toBe(false);
+    expect(chat.rows.map(row => row.id)).toEqual(['failed', 'new']);
+    expect(chat.rows[0].sendState).toBe('sending');
+    expect(mocks.send.mock.calls[2]).toEqual(mocks.send.mock.calls[0]);
+    resolve('run'); expect(await retry).toBe(true);
+    expect(chat.rows).toHaveLength(2); expect(chat.rows[0].sendState).toBe('sent');
+    expect(mocks.uuid).toHaveBeenCalledTimes(2); chat.dispose();
+  });
+
+  it('does not mark a confirmed history message failed when its HTTP acknowledgement is lost', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    mocks.uuid.mockReturnValue('input-1');
+    let reject!: (error: Error) => void;
+    mocks.send.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+    const pending = chat.send('hello');
+    mocks.history.mockResolvedValue(sentPage(true)); await chat.loadHistory(false);
+    reject(new Error('TIMEOUT')); expect(await pending).toBe(true);
+    expect(chat.rows).toHaveLength(1); expect(chat.rows[0].sendState).toBeUndefined();
+    expect(await chat.retrySend('input-1')).toBe(false); chat.dispose();
+  });
+
+  it('keeps failed messages when switching conversations and isolates retry targets', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    mocks.uuid.mockReturnValue('failed'); mocks.send.mockRejectedValue(new Error('NETWORK'));
+    await chat.send('first');
+    mocks.history.mockImplementation(async id => ({ session: { key: id, messages: [] }, pagination: { hasMore: false } }));
+    await chat.open('two'); expect(chat.rows).toEqual([]);
+    expect(await chat.retrySend('failed')).toBe(false);
+    await chat.open('one'); expect(chat.rows).toMatchObject([{ id: 'failed', sendState: 'failed' }]);
+    chat.dispose();
+  });
+
+  it('creates an immediately retryable bubble offline and a distinct bubble for identical new input', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'offline';
+    mocks.uuid.mockReturnValueOnce('a').mockReturnValueOnce('b');
+    const enqueued = vi.fn(); await chat.send('hello', [], 'next', [], enqueued);
+    await chat.send('hello');
+    expect(enqueued).toHaveBeenCalledOnce(); expect(mocks.send).not.toHaveBeenCalled();
+    expect(chat.rows.map(row => [row.id, row.sendState])).toEqual([['a', 'failed'], ['b', 'failed']]);
+    chat.dispose();
+  });
   const sentPage = (confirmed: boolean, transcriptId = 't') => ({ session: { key: 'one', transcriptId,
     messages: confirmed ? [{ id: 'server-row', role: 'user', content: 'hello', metadata: { clientMessageId: 'input-1' } }] : [] },
     pagination: { hasMore: false } });
@@ -222,7 +340,7 @@ describe('chat history isolation', () => {
     mocks.uuid.mockReturnValue('input-1'); mocks.send.mockRejectedValueOnce(new Error('NETWORK')).mockResolvedValueOnce('run-1');
     const attachment = { type: 'document', name: 'a.txt', mimeType: 'text/plain', size: 1, data: 'YQ==' };
     expect(await chat.send('', [attachment])).toBe(false);
-    expect(await chat.send('', [attachment])).toBe(true);
+    expect(await chat.retrySend('input-1')).toBe(true);
     expect(mocks.uuid).toHaveBeenCalledOnce();
     expect(mocks.send.mock.calls.map((call) => call[2])).toEqual(['input-1', 'input-1']);
     expect(mocks.send.mock.calls[1][4]).toEqual([attachment]); expect(chat.rows[0].text).toBe('');
@@ -269,7 +387,8 @@ describe('chat history isolation', () => {
   it('queues while running without resetting the live response or duplicating history', async () => {
     const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected'; chat.runId = 'run'; chat.streaming = 'in progress';
     mocks.uuid.mockReturnValue('queued'); mocks.send.mockResolvedValue('run');
-    expect(await chat.send('next turn')).toBe(true); expect(chat.streaming).toBe('in progress'); expect(chat.rows).toEqual([]);
+    expect(await chat.send('next turn')).toBe(true); expect(chat.streaming).toBe('in progress');
+    expect(chat.rows).toHaveLength(1); expect(chat.rows[0]).toMatchObject({ id: 'queued', text: 'next turn', sendState: 'sent' });
     expect(mocks.send.mock.calls[0][5]).toBe('next');
   });
   it('includes steer and references in the idempotent retry identity', async () => {

@@ -2,11 +2,20 @@ import { XopcChatRepository } from '../repository/chatRepository';
 import { realtimeClient } from '../service/realtimeClient';
 import { XopcChatRow, XopcSessionItem, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia, XopcMessage, XopcHistory } from '../model/chat';
 import { dedupeChatHistory, chatHistoryOverlap } from '../common/chatHistory';
-import { chatInputIdentity } from '../common/attachments';
 import { XopcEvent } from '../model/realtime';
 import { historyRows } from '../common/chatProtocol';
 import { mergeAssistantRows, chatAttachments } from '../common/chatRichContent';
 import { reduceChatStream } from '../common/chatStream';
+import { XopcInputAttachment } from '../model/sessionCommand';
+
+interface XopcPendingChatSend {
+  conversationId: string;
+  transcriptId?: string;
+  row: XopcChatRow;
+  attachments: XopcChatAttachment[];
+  refs: XopcContextRef[];
+  delivery: string;
+}
 
 @ObservedV2
 export class XopcChatViewModel {
@@ -35,15 +44,15 @@ export class XopcChatViewModel {
   private selection: number = 0;
   private historyRequest: number = 0;
   private historyMessages: XopcMessage[] = [];
-  private acceptedRows: XopcChatRow[] = [];
+  private outbox: Map<string, XopcPendingChatSend> = new Map<string, XopcPendingChatSend>();
   private olderPending: boolean = false;
+  private prefetchKey: string = '';
+  private prefetchedHistory?: Promise<XopcHistory | undefined>;
   private transcriptId?: string;
   private before: string = '';
   private search: string = '';
   private snapshotMode: boolean = false;
   private refreshTimer: number = -1;
-  private pendingContent: string = '';
-  private pendingId: string = '';
   private main: boolean = false;
   private disposed: boolean = false;
   private listRequest: number = 0;
@@ -96,6 +105,7 @@ export class XopcChatViewModel {
   }
 
   dispose(): void {
+    this.prefetchKey = ''; this.prefetchedHistory = undefined;
     this.deactivate(); this.disposed = true; this.listRequest++;
     this.selection++; clearTimeout(this.refreshTimer);
   }
@@ -127,13 +137,14 @@ export class XopcChatViewModel {
 
   async open(id: string): Promise<void> {
     if (this.sending || this.disposed || !id) return;
+    this.prefetchKey = ''; this.prefetchedHistory = undefined;
     if (this.runId && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
     this.selection++; this.historyRequest++; this.olderPending = false;
     this.selectedId = id; this.rows = []; this.runId = ''; this.streaming = ''; this.thinking = ''; this.tool = '';
-    this.liveRow = undefined; this.historyMessages = []; this.acceptedRows = [];
+    this.liveRow = undefined; this.historyMessages = []; this.rows = this.pendingRows();
     this.cachedHistory = false; this.hasNetworkHistory = false;
     this.transcriptId = undefined; this.title = ''; this.agentId = ''; this.projectId = ''; this.status = ''; this.hasOlder = false;
-    this.pendingId = ''; this.pendingContent = ''; this.before = ''; this.error = ''; this.loading = true;
+    this.before = ''; this.error = ''; this.loading = true;
     const selection = this.selection;
     if (this.main) {
       this.repository.saveMainConversation(id).catch((_error: Error): void => {
@@ -144,6 +155,8 @@ export class XopcChatViewModel {
       const local = await this.repository.draft(id);
       if (this.disposed || selection !== this.selection) return;
       if (local) { this.agentId = local.creation.agentId; this.projectId = local.creation.projectId || ''; }
+      await this.restorePendingInput(id, selection);
+      if (this.disposed || selection !== this.selection) return;
       await this.repository.reconcile(id);
       const draft = await this.repository.draft(id);
       if (this.disposed || selection !== this.selection) return;
@@ -165,7 +178,8 @@ export class XopcChatViewModel {
       const page = await this.repository.cachedHistory(id);
       if (!page || this.disposed || selection !== this.selection || this.hasNetworkHistory) return;
       const rows = mergeAssistantRows(historyRows(page));
-      this.historyMessages = page.session.messages; this.rows = rows;
+      this.historyMessages = page.session.messages;
+      this.rows = rows.concat(this.pendingRows().filter((row: XopcChatRow): boolean => !rows.some((saved: XopcChatRow): boolean => saved.id === row.id)));
       this.title = page.session.name || ''; this.transcriptId = page.session.transcriptId;
       this.before = page.pagination.nextBeforeCursor || ''; this.hasOlder = page.pagination.hasMore && !!this.before;
       this.cachedHistory = true;
@@ -174,9 +188,10 @@ export class XopcChatViewModel {
 
   back(): void {
     if (this.sending) return;
+    this.prefetchKey = ''; this.prefetchedHistory = undefined;
     this.selection++; clearTimeout(this.refreshTimer); this.refreshTimer = -1;
     if (this.runId) realtimeClient.unsubscribe('run:' + this.runId);
-    this.selectedId = ''; this.runId = ''; this.rows = []; this.acceptedRows = []; this.loading = false; this.liveRow = undefined;
+    this.selectedId = ''; this.runId = ''; this.rows = []; this.loading = false; this.liveRow = undefined;
   }
 
   private async recover(): Promise<void> {
@@ -201,21 +216,43 @@ export class XopcChatViewModel {
     try { await this.recover(); } finally { this.loading = false; }
   }
 
-  async loadHistory(older: boolean): Promise<void> {
+  private olderPageKey(): string {
+    return JSON.stringify([this.selection, this.selectedId, this.transcriptId || '', this.before]);
+  }
+
+  prefetchOlder(): void {
+    if (this.disposed || this.loading || this.cachedHistory || !this.hasOlder || !this.before || !this.transcriptId || this.connection !== 'connected') return;
+    const key = this.olderPageKey();
+    if (key === this.prefetchKey) return;
+    this.prefetchKey = key;
+    // Keep one page ahead without modifying visible rows or showing a loading state.
+    this.prefetchedHistory = this.repository.history(this.selectedId, this.before, this.transcriptId)
+      .catch((_error: Error): undefined => undefined);
+  }
+
+  async loadHistory(older: boolean, beforePrepend: () => void = (): void => {}): Promise<void> {
     if (!this.selectedId || (older && (this.olderPending || !this.hasOlder))) return;
     if (older) this.olderPending = true;
     const request = ++this.historyRequest;
     const selection = this.selection; const before = older ? this.before : '';
     try {
-      const result = await this.repository.history(this.selectedId, before, older ? this.transcriptId ?? '' : '');
+      const prefetched = older && this.prefetchKey === this.olderPageKey() ? this.prefetchedHistory : undefined;
+      const prepared = prefetched ? await prefetched : undefined;
+      if (selection !== this.selection || request !== this.historyRequest) return;
+      const result = prepared || await this.repository.history(this.selectedId, before, older ? this.transcriptId ?? '' : '');
       if (selection !== this.selection || request !== this.historyRequest) return;
       // Validate before touching retained pages or their cursor.
       historyRows(result, before || 'latest');
       if (result.session.key !== this.selectedId) throw new Error('INVALID_HISTORY_SESSION');
+      if (older) beforePrepend();
       if (!older) { this.hasNetworkHistory = true; this.cachedHistory = false; }
       if (!older && !this.runId) this.repository.rememberHistory(this.selectedId, result).catch((_error: Error): void => {});
       const sameTranscript = !!this.transcriptId && this.transcriptId === result.session.transcriptId;
-      if (this.transcriptId && result.session.transcriptId && !sameTranscript) this.acceptedRows = [];
+      if (result.session.transcriptId) {
+        this.outbox.forEach((input: XopcPendingChatSend, id: string): void => {
+          if (input.conversationId === this.selectedId && input.transcriptId && input.transcriptId !== result.session.transcriptId) this.outbox.delete(id);
+        });
+      }
       const overlap = !older && sameTranscript ? chatHistoryOverlap(this.historyMessages, result.session.messages) : -1;
       const preserveCursor = !older && overlap >= 0;
       this.historyMessages = dedupeChatHistory(older && sameTranscript
@@ -223,9 +260,8 @@ export class XopcChatViewModel {
         : preserveCursor ? this.historyMessages.slice(0, overlap).concat(result.session.messages) : result.session.messages);
       const combined: XopcHistory = { session: { key: result.session.key, messages: this.historyMessages }, pagination: result.pagination };
       const confirmed = mergeAssistantRows(historyRows(combined));
-      this.acceptedRows = this.acceptedRows.filter((row: XopcChatRow): boolean =>
-        !confirmed.some((saved: XopcChatRow): boolean => saved.role === 'user' && saved.id === row.id));
-      this.rows = confirmed.concat(this.acceptedRows);
+      confirmed.forEach((row: XopcChatRow): void => { if (row.role === 'user') this.outbox.delete(row.id); });
+      this.rows = this.mergePendingRows(confirmed);
       if (!older && this.snapshotMode) { this.liveRow = undefined; this.streaming = ''; this.thinking = ''; this.tool = ''; }
       this.title = result.session.name ?? '';
       this.agentId = result.session.agentId ?? '';
@@ -246,38 +282,98 @@ export class XopcChatViewModel {
     if (id && XopcChatViewModel.owner === this) realtimeClient.subscribe('run:' + id);
   }
 
-  async send(content: string, attachments: XopcChatAttachment[] = [], delivery: string = 'next', refs: XopcContextRef[] = []): Promise<boolean> {
-    if (this.sending || this.cachedHistory || !this.selectedId || (!content.trim() && !attachments.length && !refs.length) || this.connection !== 'connected') return false;
+  private async restorePendingInput(id: string, selection: number): Promise<void> {
+    const command = await this.repository.pendingInput(id);
+    if (!command || this.disposed || selection !== this.selection || this.outbox.has(command.clientMessageId)) return;
+    const attachments = (command.input.attachments || []).map((file: XopcInputAttachment): XopcChatAttachment => ({
+      type: file.type, name: file.name, mimeType: file.mimeType, size: file.size, data: file.data,
+      uri: file.uri, workspaceRelativePath: file.workspaceRelativePath, duration: file.durationSeconds }));
+    const media = attachments.map((file: XopcChatAttachment, index: number): XopcHistoryMedia => ({
+      id: command.clientMessageId + ':attachment:' + index, name: file.name, type: file.type, mimeType: file.mimeType,
+      size: file.size, uri: file.uri || '', data: file.data, workspaceRelativePath: file.workspaceRelativePath, duration: file.duration }));
+    const refs = command.input.contextRefs || [];
+    const row: XopcChatRow = { id: command.clientMessageId, role: 'user', text: command.input.content,
+      media: chatAttachments(media, command.clientMessageId), refs, sendState: 'failed' };
+    this.outbox.set(row.id, { conversationId: id, transcriptId: command.expectedTranscriptId,
+      row, attachments, refs, delivery: command.delivery || 'next' });
+    this.rows = this.rows.concat([row]);
+  }
+
+  private pendingRows(): XopcChatRow[] {
+    const rows: XopcChatRow[] = [];
+    this.outbox.forEach((input: XopcPendingChatSend): void => { if (input.conversationId === this.selectedId) rows.push(input.row); });
+    return rows;
+  }
+
+  private mergePendingRows(confirmed: XopcChatRow[]): XopcChatRow[] {
+    const merged = confirmed.slice();
+    for (const pending of this.pendingRows()) {
+      const previousIndex = this.rows.findIndex((row: XopcChatRow): boolean => row.id === pending.id);
+      let insertAt = -1;
+      if (previousIndex >= 0) {
+        for (let index = previousIndex + 1; index < this.rows.length; index++) {
+          insertAt = merged.findIndex((row: XopcChatRow): boolean => row.id === this.rows[index].id);
+          if (insertAt >= 0) break;
+        }
+      }
+      if (insertAt >= 0) merged.splice(insertAt, 0, pending); else merged.push(pending);
+    }
+    return merged;
+  }
+
+  private updateSendState(input: XopcPendingChatSend, state: string): void {
+    if (!this.outbox.has(input.row.id)) return;
+    input.row = { id: input.row.id, role: 'user', text: input.row.text, media: input.row.media, refs: input.refs, sendState: state };
+    if (input.conversationId === this.selectedId && !this.disposed) {
+      this.rows = this.rows.map((row: XopcChatRow): XopcChatRow => row.id === input.row.id ? input.row : row);
+    }
+  }
+
+  async send(content: string, attachments: XopcChatAttachment[] = [], delivery: string = 'next', refs: XopcContextRef[] = [],
+    onEnqueued: () => void = (): void => {}): Promise<boolean> {
+    if (this.disposed || this.loading || this.sending || this.cachedHistory || !this.selectedId || (!content.trim() && !attachments.length && !refs.length)) return false;
     if (delivery !== 'next' && delivery !== 'steer') return false;
+    const id = this.repository.uuid();
+    const media = attachments.map((file: XopcChatAttachment, index: number): XopcHistoryMedia => ({
+      id: id + ':attachment:' + index, name: file.name, type: file.type, mimeType: file.mimeType,
+      size: file.size, uri: file.uri || '', data: file.data, workspaceRelativePath: file.workspaceRelativePath, duration: file.duration }));
+    const row: XopcChatRow = { id, role: 'user', text: content, media: chatAttachments(media, id), refs: refs.slice(), sendState: 'sending' };
+    const input: XopcPendingChatSend = { conversationId: this.selectedId, transcriptId: this.transcriptId,
+      row, attachments: attachments.slice(), refs: refs.slice(), delivery };
+    this.outbox.set(id, input); this.rows = this.rows.concat([row]);
+    this.historyRequest++; this.recoveryRequest++; this.olderPending = false;
+    onEnqueued();
+    return this.deliver(input);
+  }
+
+  async retrySend(id: string): Promise<boolean> {
+    const input = this.outbox.get(id);
+    if (!input || input.conversationId !== this.selectedId || input.row.sendState !== 'failed' || this.sending || this.disposed || this.loading || this.cachedHistory) return false;
+    return this.deliver(input);
+  }
+
+  private async deliver(input: XopcPendingChatSend): Promise<boolean> {
     this.sending = true; this.error = '';
     const selection = this.selection;
-    // Retry an ambiguous network result with the same idempotent input identity.
-    const identity = delivery + ':' + chatInputIdentity(content, attachments) + ':' + JSON.stringify(refs);
-    if (identity !== this.pendingContent || !this.pendingId) { this.pendingContent = identity; this.pendingId = this.repository.uuid(); }
+    this.updateSendState(input, 'sending');
     try {
+      if (this.connection !== 'connected') throw new Error('OFFLINE');
       const alreadyRunning = !!this.runId;
-      const run = await this.repository.send(this.selectedId, content, this.pendingId, this.transcriptId, attachments, delivery, refs);
+      const run = await this.repository.send(input.conversationId, input.row.text, input.row.id, input.transcriptId, input.attachments, input.delivery, input.refs);
       if (selection !== this.selection) return false;
       // In-flight reads predate this acceptance and must not roll back the visible input or run.
       this.historyRequest++; this.recoveryRequest++; this.olderPending = false;
       this.hasNetworkHistory = true;
-      if (!alreadyRunning) {
-        const media = attachments.map((file: XopcChatAttachment, index: number): XopcHistoryMedia => ({
-          id: this.pendingId + ':attachment:' + index, name: file.name, type: file.type, mimeType: file.mimeType,
-          size: file.size, uri: file.uri || '', data: file.data, workspaceRelativePath: file.workspaceRelativePath }));
-        if (!this.rows.some((row: XopcChatRow): boolean => row.role === 'user' && row.id === this.pendingId)) {
-          const accepted: XopcChatRow = { id: this.pendingId, role: 'user', text: content,
-            media: chatAttachments(media, this.pendingId), refs };
-          this.acceptedRows = this.acceptedRows.concat([accepted]);
-          this.rows = this.rows.concat([accepted]);
-        }
-      }
-      this.pendingId = ''; this.pendingContent = '';
+      this.updateSendState(input, 'sent');
       if (!alreadyRunning) { this.snapshotMode = false; this.streaming = ''; this.thinking = ''; this.tool = ''; this.liveRow = undefined; }
       this.trackRun(run);
       if (!run) await this.recover();
       return true;
-    } catch (error) { if (selection === this.selection) this.error = (error as Error).message; return false; }
+    } catch (_) {
+      // A matching history row is authoritative even if the HTTP acknowledgement was lost.
+      if (!this.outbox.has(input.row.id)) return true;
+      this.updateSendState(input, 'failed'); return false;
+    }
     finally { this.sending = false; }
   }
 
