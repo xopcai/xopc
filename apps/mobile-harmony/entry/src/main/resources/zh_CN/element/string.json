@@ -129,6 +129,7 @@
     { "name": "chat_camera", "value": "拍照" },
     { "name": "chat_ref_limit", "value": "每条消息最多引用 5 个笔记或任务" },
     { "name": "chat_add_reference", "value": "添加引用" },
+    { "name": "chat_remove_reference", "value": "移除引用" },
     { "name": "chat_directory_locked", "value": "此会话的工作目录已锁定" },
     { "name": "chat_change_directory", "value": "更改工作目录" },
     { "name": "chat_use_directory", "value": "使用此目录" },

@@ -48,8 +48,27 @@ export struct XopcChatMessageContent {
     return (this.row.blocks || []).some((block: XopcChatBlock): boolean => block.kind === 'text' && block.presentation === 'narration')
       || (!!this.row.live && !this.row.text);
   }
+
+  @Builder
+  reference(ref: XopcContextRef) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 8 }) {
+        SymbolGlyph(ref.kind === 'task' ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.doc_text'))
+          .fontSize(15).fontColor([this.colors.secondary])
+        Text(ref.title || ref.sourceId).fontSize(13).fontWeight(FontWeight.Medium)
+          .fontColor(this.colors.secondary).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          .layoutWeight(1)
+        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(12).fontColor([this.colors.tertiary])
+      }.width('100%').height('100%').alignItems(VerticalAlign.Center)
+    }.id('chat-reference-' + ref.kind + '-' + ref.sourceId).width('100%').height(40)
+      .padding({ left: 10, right: 8 }).borderRadius(10).backgroundColor(this.colors.panel)
+      .onClick((): void => {
+        this.onNavigate({ page: ref.kind === 'task' ? 'tasks' : 'notes', itemId: ref.sourceId });
+      })
+  }
+
   build() {
-    Column({ space: this.showPreview ? 2 : 10 }) {
+    Column({ space: this.showPreview ? 2 : 8 }) {
       if (this.row.role === 'assistant' && this.hasProgress) {
         XopcChatStepsView({ row: this.row, disclosure: this.disclosure, scope: this.conversationId })
       }
@@ -73,10 +92,7 @@ export struct XopcChatMessageContent {
           .onClick((): void => { this.onShowMore(this.row); })
       } else {
         ForEach(this.row.refs || [], (ref: XopcContextRef) => {
-          Button(ref.title || ref.sourceId).fontSize(13).constraintSize({ minHeight: 44 }).fontColor(this.colors.accent)
-            .backgroundColor(this.colors.accentSoft).onClick((): void => {
-              this.onNavigate({ page: ref.kind === 'task' ? 'tasks' : 'notes', itemId: ref.sourceId });
-            })
+          this.reference(ref)
         }, (ref: XopcContextRef): string => ref.kind + ':' + ref.sourceId)
         if (this.row.role === 'assistant') {
           Repeat<XopcChatBlock>(this.body).each((item: RepeatItem<XopcChatBlock>) => {
