@@ -47,8 +47,8 @@ import {
   pruneAutomationHistory,
 } from '../storage/index.js';
 import { AutomationActionExecutor } from './action-executor.js';
+import { AutomationEventDispatcher } from '../events/event-dispatcher.js';
 import {
-  AutomationEventDispatcher,
   getAutomationEventForRun,
   getAutomationEventDeliveryRunId,
   getAutomationEventQueueMetrics,
@@ -56,7 +56,7 @@ import {
   listAutomationEventRecords,
   markAutomationEventDeliveryQueued,
   replayAutomationEvent,
-} from '../events/index.js';
+} from '../events/event-repository.js';
 import {
   AutomationDeliveryRouter,
   getAutomationResultDeliveryMetrics,

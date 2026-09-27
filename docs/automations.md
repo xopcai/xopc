@@ -54,7 +54,7 @@ Terminal failures move to a dead letter state and emit one `automation.attention
 
 Both recovery requests require an `Idempotency-Key` header and a JSON body containing a non-empty `reason`. Metrics include pending work, oldest pending age, active leases, and dead-letter counts.
 
-The next reliability and business-integration contract is defined in [Automation reliability and integration contract](./design/automation-reliability-integration-contract.md).
+The next reliability and business-integration contract is defined in the [Automation reliability and integration contract](https://github.com/xopcai/xopc/blob/main/docs/design/automation-reliability-integration-contract.md).
 
 Use **Pause** when a dependency, credential, or expected input is temporarily unavailable. Pausing preserves the definition and history. Delete only when you no longer need them.
 

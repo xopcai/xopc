@@ -2,8 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import { createLogger } from '../../utils/logger.js';
-import type { AutomationEventEnvelope, AutomationRun } from '../domain/types.js';
-import type { AutomationService } from '../service/automation-service.js';
+import type { AutomationEvent, AutomationEventEnvelope, AutomationRun } from '../domain/types.js';
 import { getAutomation } from '../storage/index.js';
 import {
   claimAutomationEventDeliveries,
@@ -23,6 +22,12 @@ import {
 const log = createLogger('AutomationEventDispatcher');
 const DELIVERY_SCAN_BUDGET = 500;
 
+export interface AutomationEventDispatchService {
+  availableRunSlots(): number;
+  queueRunAtomically(id: string, opts: { manual: boolean; event?: AutomationEvent }): AutomationRun;
+  dispatchQueuedRun(runId: string): void;
+}
+
 export class AutomationEventDispatcher {
   private timer?: ReturnType<typeof setInterval>;
   private active?: Promise<number>;
@@ -30,7 +35,7 @@ export class AutomationEventDispatcher {
   private readonly owner = `automation-event:${process.pid}:${randomUUID()}`;
   private readonly abortController = new AbortController();
 
-  constructor(private readonly automationService: AutomationService, private readonly options: {
+  constructor(private readonly automationService: AutomationEventDispatchService, private readonly options: {
     onEvent?: (event: AutomationEventEnvelope, signal?: AbortSignal) => void | Promise<void>;
     onDeadLetter?: (input: { phase: 'event_projection' | 'event_delivery'; eventId: string; automationId?: string; error: string }) => void;
     intervalMs?: number;

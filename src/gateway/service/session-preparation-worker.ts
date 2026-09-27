@@ -1,12 +1,20 @@
 import { SessionEnvironmentService } from '../../execution-environments/session-environment-service.js';
 import { resolveGitCommit } from '../../execution-environments/git.js';
+import type { ProjectService } from '../../projects/project-service.js';
+import type { SessionInputState } from '../../storage/sqlite/session-input-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import { claimSessionPreparation, finishSessionPreparation, pendingSessionPreparations, getSessionPreparation } from '../../storage/sqlite/session-creation-repository.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { createLogger } from '../../utils/logger.js';
-import type { GatewayService } from '../service.js';
 
 const log = createLogger('Gateway:SessionPreparation');
+
+export interface SessionPreparationWorkerService {
+  projects: Pick<ProjectService, 'get'>;
+  drainSessionInputs(conversationId: string): Promise<unknown>;
+  getSessionInputState(conversationId: string): SessionInputState;
+  emit(type: string, payload: unknown): void;
+}
 
 export class SessionPreparationWorker {
   private timer?: ReturnType<typeof setInterval>;
@@ -14,7 +22,7 @@ export class SessionPreparationWorker {
   private cleaning = false;
   private cleanupTask?: Promise<void>;
   private readonly environments = new SessionEnvironmentService();
-  constructor(private readonly service: GatewayService) {}
+  constructor(private readonly service: SessionPreparationWorkerService) {}
 
   start(): void {
     if (this.timer) return;
