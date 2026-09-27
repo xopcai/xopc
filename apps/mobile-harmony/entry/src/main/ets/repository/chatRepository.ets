@@ -16,8 +16,36 @@ import {
 interface XopcPreparationRetry { operationId: string; expectedRevision: number; idempotencyKey: string; }
 interface XopcCommandFailure { error?: XopcCommandFailureCode; }
 interface XopcCommandFailureCode { code?: string; }
+interface XopcSendNetworkError { code?: number; }
 
 export class XopcChatRepository {
+  private recoverableSend(error: Error): boolean {
+    if (error instanceof XopcHttpError) return error.status === 408 || error.status >= 500;
+    return [2300006, 2300007, 2300028, 2300052, 2300055, 2300056].includes((error as XopcSendNetworkError).code ?? 0);
+  }
+
+  private async submitInput(id: string, body: XopcSessionCommand, connection: number): Promise<string> {
+    const path = '/api/sessions/' + encodeURIComponent(id);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      gatewaySession.assertConnection(connection);
+      body.origin = realtimeClient.turnClaim();
+      try {
+        return await gatewaySession.request(path + '/inputs', 'POST', JSON.stringify(body));
+      } catch (error) {
+        gatewaySession.assertConnection(connection);
+        if (!this.recoverableSend(error as Error)) throw error as Error;
+        // A timeout is not a rejection. Check durable acceptance before replaying the same identity.
+        try {
+          return await gatewaySession.request(path + '/input-receipts/' + encodeURIComponent(body.clientMessageId));
+        } catch (receiptError) {
+          gatewaySession.assertConnection(connection);
+          if (!(receiptError instanceof XopcHttpError) || receiptError.status !== 404 || attempt === 1) throw error as Error;
+        }
+      }
+    }
+    throw new Error('INPUT_NOT_CONFIRMED');
+  }
+
   private rejected(error: Error): boolean {
     if (!(error instanceof XopcHttpError) || (error.status !== 400 && error.status !== 409 && error.status !== 410)) return false;
     try {
@@ -193,10 +221,9 @@ export class XopcChatRepository {
     gatewaySession.assertConnection(connection);
     await localSessionStore.saveCommand(id, body, scope);
     gatewaySession.assertConnection(connection);
-    body.origin = realtimeClient.turnClaim();
     let raw: string;
     try {
-      raw = await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/inputs', 'POST', JSON.stringify(body));
+      raw = await this.submitInput(id, body, connection);
     } catch (error) {
       if (this.rejected(error as Error)) {
         await localSessionStore.clearCommand(id, scope);
