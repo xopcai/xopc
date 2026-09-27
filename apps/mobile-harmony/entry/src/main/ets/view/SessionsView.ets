@@ -38,6 +38,7 @@ struct XopcSessionManagerRow {
   @Param entry: XopcSessionDisplayRow = { key: '', label: '', first: false, last: false };
   @Param selecting: boolean = false;
   @Param selected: boolean = false;
+  @Param current: boolean = false;
   @Param locked: boolean = false;
   @Event onOpen: (item: XopcSessionItem) => void = (_item: XopcSessionItem): void => {};
   @Event onMenu: (item: XopcSessionItem) => void = (_item: XopcSessionItem): void => {};
@@ -78,9 +79,9 @@ struct XopcSessionManagerRow {
         Text(this.time()).fontSize(12).fontColor(this.colors.tertiary).maxLines(1)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').constraintSize({ minHeight: 76 }).padding({ left: 14, right: 14, top: 12, bottom: 12 })
-        .backgroundColor(this.selected ? this.colors.accentSoft : this.colors.panel)
+        .backgroundColor(this.selected || this.current ? this.colors.active : this.colors.panel)
         .borderRadius(16).margin({ bottom: 8 })
-        .id('sessions-row-' + this.entry.session.key).accessibilitySelected(this.selected).enabled(!this.locked)
+        .id('sessions-row-' + this.entry.session.key).accessibilitySelected(this.selected || this.current).enabled(!this.locked)
         .onClick((): void => { if (this.entry.session) this.onOpen(this.entry.session); })
         .gesture(LongPressGesture({ duration: 300, repeat: false }).onAction((): void => {
           if (!this.selecting && this.entry.session) this.onMenu(this.entry.session);
@@ -95,8 +96,12 @@ struct XopcSessionManagerRow {
 @ComponentV2
 export struct XopcSessionsView {
   @Local colors: XopcThemeColors = appThemeColors;
+  @Param embedded: boolean = false;
+  @Param activePage: boolean = true;
+  @Param currentId: string = '';
   @Event onExit: () => void = (): void => {};
   @Event onOpen: (id: string) => void = (_id: string): void => {};
+  @Event onNew: (id: string) => void = (_id: string): void => {};
   @Local sessions: XopcSessionsViewModel = new XopcSessionsViewModel();
   @Local searchOpen: boolean = true;
   @Local renameOpen: boolean = false;
@@ -107,8 +112,17 @@ export struct XopcSessionsView {
   @Local shareBusy: boolean = false;
   private scroller: Scroller = new Scroller();
   private opening: boolean = false;
+  private loaded: boolean = false;
 
+  aboutToAppear(): void { if (this.activePage) this.activate(); }
   aboutToDisappear(): void { this.sessions.dispose(); }
+  @Monitor('activePage')
+  onActivityChange(): void { if (this.activePage) this.activate(); }
+  private activate(): void {
+    this.opening = false;
+    this.sessions.load();
+    this.loaded = true;
+  }
   @Computed
   get rows(): XopcSessionDisplayRow[] {
     const result: XopcSessionDisplayRow[] = [];
@@ -124,7 +138,18 @@ export struct XopcSessionsView {
   private text(resource: Resource): string { return this.getUIContext().getHostContext()?.resourceManager.getStringSync(resource.id) ?? ''; }
   private open(item: XopcSessionItem): void {
     if (this.sessions.selecting) this.sessions.select(item.key);
-    else if (!this.opening) { this.opening = true; this.onOpen(item.key); }
+    else if (!this.opening) {
+      this.opening = true;
+      this.getUIContext().getFocusController().clearFocus();
+      this.onOpen(item.key);
+    }
+  }
+  private async createConversation(): Promise<void> {
+    const id = await this.sessions.newConversation();
+    if (!id) return;
+    this.opening = true;
+    this.getUIContext().getFocusController().clearFocus();
+    this.onNew(id);
   }
   private back(): boolean {
     if (this.sessions.busy) return true;
@@ -137,6 +162,7 @@ export struct XopcSessionsView {
   }
   private menu(item: XopcSessionItem): void {
     if (this.sessions.busy) return;
+    this.getUIContext().getFocusController().clearFocus();
     this.getUIContext().showActionSheet({ title: item.displayName || item.name || item.title || this.text($r('app.string.untitled')), message: '',
       sheets: [
         { title: this.text($r('app.string.chat_share')), action: (): void => { this.shareSession(item); } },
@@ -231,24 +257,29 @@ export struct XopcSessionsView {
       .borderRadius(28).margin({ top: 6, bottom: 8 })
       .enabled(!this.sessions.busy && this.sessions.selected.length > 0)
   }
-  build() {
-    NavDestination() {
-      Column() {
+  @Builder
+  content() {
+    Column() {
         Row({ space: 8 }) {
-          Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
-            .id('sessions-back').width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back'))
-            .onClick((): void => { if (!this.back()) this.onExit(); })
-          Text(this.sessions.selecting ? $r('app.string.sessions_selected', this.sessions.selected.length) : $r('app.string.history'))
-            .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
+          if (!this.embedded) {
+            Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
+              .id('sessions-back').width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back'))
+              .onClick((): void => { if (!this.back()) this.onExit(); })
+          }
+          Text(this.sessions.selecting ? $r('app.string.sessions_selected', this.sessions.selected.length)
+            : this.embedded ? $r('app.string.conversations') : $r('app.string.history'))
+            .fontSize(this.embedded ? 30 : 24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
           if (!this.sessions.selecting) {
-            Button() { SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(22).fontColor([this.colors.foreground]) }
-              .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.search'))
-              .onClick((): void => { this.searchOpen = true; })
+            if (!this.searchOpen) {
+              Button() { SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(22).fontColor([this.colors.foreground]) }
+                .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.search'))
+                .onClick((): void => { this.searchOpen = true; })
+            }
             Button('+').id('sessions-new').width(44).height(44).fontSize(28).backgroundColor(Color.Transparent)
               .fontColor(this.colors.foreground).accessibilityText($r('app.string.new_chat')).enabled(!this.sessions.busy)
-              .onClick(async (): Promise<void> => { const id = await this.sessions.newConversation(); if (id) this.onOpen(id); })
+              .onClick(async (): Promise<void> => { await this.createConversation(); })
           }
-        }.width('100%').padding({ left: 12, right: 12, top: 12, bottom: 12 })
+        }.width('100%').padding({ left: this.embedded ? 20 : 12, right: 12, top: 12, bottom: 12 })
         if (this.searchOpen && !this.sessions.selecting) {
           Row({ space: 4 }) {
             TextInput({ text: this.sessions.search, placeholder: $r('app.string.sessions_search') }).id('sessions-search')
@@ -272,7 +303,8 @@ export struct XopcSessionsView {
             Repeat<XopcSessionDisplayRow>(this.rows).each((row: RepeatItem<XopcSessionDisplayRow>) => {
               ListItem() {
                 XopcSessionManagerRow({ entry: row.item, selecting: this.sessions.selecting,
-                  selected: this.sessions.selected.includes(row.item.key), locked: this.sessions.busy || this.sessions.loading,
+                  selected: this.sessions.selected.includes(row.item.key), current: row.item.key === this.currentId,
+                  locked: this.sessions.busy || this.sessions.loading,
                   onOpen: (item: XopcSessionItem): void => { this.open(item); }, onMenu: (item: XopcSessionItem): void => { this.menu(item); } })
               }
             }).key((row: XopcSessionDisplayRow): string => row.key).virtualScroll({ totalCount: this.rows.length })
@@ -295,11 +327,18 @@ export struct XopcSessionsView {
           }.padding(12).backgroundColor(this.colors.panel)
         }
         if (this.sessions.selecting) { this.batchBar() }
-      }.width('100%').height('100%')
-        .bindSheet($$this.renameOpen, this.renameSheet, { height: '45%', dragBar: true, backgroundColor: this.colors.panel })
-        .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
-    }.hideTitleBar(true).backgroundColor(this.colors.surface)
-      .onShown((): void => { this.opening = false; this.sessions.load(); })
-      .onBackPressed((): boolean => this.back())
+    }.width('100%').height('100%')
+      .bindSheet($$this.renameOpen, this.renameSheet, { height: '45%', dragBar: true, backgroundColor: this.colors.panel })
+      .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
+  }
+  build() {
+    if (this.embedded) {
+      this.content()
+    } else {
+      NavDestination() { this.content() }
+        .hideTitleBar(true).backgroundColor(this.colors.surface)
+        .onShown((): void => { this.opening = false; if (!this.loaded) this.activate(); })
+        .onBackPressed((): boolean => this.back())
+    }
   }
 }
