@@ -31,7 +31,8 @@ export class XopcLocalSessionStore {
   }
   async save(draft: XopcLocalSession, scope: string): Promise<void> {
     const row: relationalStore.ValuesBucket = { scope, id: draft.conversationId, payload: JSON.stringify(draft) };
-    this.required().insert('drafts', row, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE);
+    return this.required().insert('drafts', row, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE)
+      .then((_rowId: number): void => {});
   }
   async remove(id: string, scope: string): Promise<void> {
     await this.required().delete(new relationalStore.RdbPredicates('drafts').equalTo('scope', scope).and().equalTo('id', id));
