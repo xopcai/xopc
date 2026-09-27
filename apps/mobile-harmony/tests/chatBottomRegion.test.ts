@@ -55,15 +55,16 @@ describe('chat bottom region composition', () => {
   it('overlays the transparent outer region instead of reserving a colored layout block', () => {
     expect(chat).toContain('@Local bottomRegionHeight: number = 0;');
     expect(chat).toContain('Stack({ alignContent: Alignment.Bottom })');
-    expect(chat).toContain('.contentEndOffset(24)');
+    expect(chat).toContain('.contentEndOffset(this.bottomRegionHeight + 24)');
     expect(chat).toContain('this.bottomRegionHeight = Number(current.height);');
     expect(chat).toContain("}.id('chat-content-viewport').width('100%').height('100%')");
-    expect(chat).toContain('.padding({ bottom: this.bottomRegionHeight }).clip(true)');
+    expect(chat).not.toContain('.padding({ bottom: this.bottomRegionHeight }).clip(true)');
+    expect(chat).toContain('.margin({ bottom: this.bottomRegionHeight + 8 })');
     expect(chat).toContain("}.width('100%').layoutWeight(1)\n  }");
     expect(home).toContain('Stack({ alignContent: Alignment.Bottom })');
     expect(home).toContain('@Local secondaryBottomRegionHeight: number = 0;');
     expect(home).toContain("}.id('home-tab-viewport').width('100%').height('100%')");
-    expect(home).toContain('.padding({ bottom: this.tab === 0 || this.tab === 3 ? 0 : this.secondaryBottomRegionHeight }).clip(true)');
+    expect(home).not.toContain('.padding({ bottom: this.tab === 0 || this.tab === 3 ? 0 : this.secondaryBottomRegionHeight }).clip(true)');
     expect(home).toContain('this.secondaryBottomRegionHeight = Number(current.height);');
     expect(home).toContain("}.id('secondary-bottom-region').width('100%')");
     expect(home).not.toContain("}.id('secondary-bottom-region').width('100%').backgroundColor");
@@ -85,11 +86,11 @@ describe('chat bottom region composition', () => {
     expect(home).toContain(".id('secondary-bottom-region').width('100%')");
     expect(home).not.toContain("}.id('secondary-bottom-region').width('100%').backgroundColor");
     expect(chat).toContain(".id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(Color.Transparent)");
-    expect(chat).not.toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR)');
+    expect(chat).toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR).borderRadius(24).clip(true)');
     expect(chat).toContain('.borderRadius(24).clip(true)');
     expect(home).toContain(".id('main-tab-dock').width('100%')");
     expect(home).not.toContain("}.id('main-tab-dock').width('100%').backgroundColor");
-    expect(home).toContain(".id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(Color.Transparent)");
+    expect(home).toContain(".id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)");
     expect(home).toContain('.borderRadius(24).clip(true)');
     expect(home).not.toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR)');
     expect(chat).toContain(".id('chat-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)");
@@ -157,7 +158,8 @@ describe('chat bottom region composition', () => {
     expect(home).toContain('bottomInset: this.secondaryBottomRegionHeight');
     expect(notesTab).toContain('@Param bottomInset: number = 0;');
     expect(notesTab).toContain("}.id('notes-tab-content-viewport').width('100%').height('100%')");
-    expect(notesTab).toContain('.padding({ bottom: this.bottomInset }).clip(true)');
+    expect(notesTab).not.toContain('.padding({ bottom: this.bottomInset }).clip(true)');
+    expect(notesTab).toContain('.contentEndOffset(this.bottomInset)');
     expect(notesTab).toContain("}.id('notes-tab-list-pane').width(this.contentWidth >= 840 ? 400 : '100%').height('100%')");
     expect(notesTab).toContain('.backgroundColor(this.contentWidth >= 840 ? this.colors.grouped : Color.Transparent)');
     expect(notesTab).toContain("}.id('notes-tab-root').width('100%').height('100%').backgroundColor(this.colors.surface)");
