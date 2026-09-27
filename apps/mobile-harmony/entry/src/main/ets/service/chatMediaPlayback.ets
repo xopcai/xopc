@@ -1,6 +1,8 @@
 import { media } from '@kit.MediaKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 
+export type XopcChatMediaPlaybackResult = 'completed' | 'failed' | 'interrupted';
+
 @ObservedV2
 export class XopcChatMediaPlayback {
   @Trace state: string = 'idle';
@@ -10,10 +12,13 @@ export class XopcChatMediaPlayback {
   private generation: number = 0;
   private player?: media.AVPlayer;
   private file?: fs.File;
+  private terminalResult?: XopcChatMediaPlaybackResult;
+  private terminal?: (result: XopcChatMediaPlaybackResult) => void;
 
   async open(path: string, length: number, autoPlay: boolean = false): Promise<void> {
     const cleanup = this.stop(); const generation = this.generation;
     await cleanup; if (generation !== this.generation) return;
+    this.terminalResult = undefined;
     this.state = 'loading'; this.error = '';
     try {
       const file = await fs.open(path, fs.OpenMode.READ_ONLY);
@@ -33,11 +38,26 @@ export class XopcChatMediaPlayback {
           }
         }
         this.state = state;
+        if (state === 'completed') this.settle('completed');
       });
       player.on('timeUpdate', (time: number): void => { if (generation === this.generation) this.position = time / 1000; });
       player.on('error', (error: Error): void => { this.fail(error, generation); });
       player.fdSrc = { fd: file.fd, offset: 0, length };
     } catch (error) { this.fail(error as Error, generation); }
+  }
+
+  waitForTerminal(): Promise<XopcChatMediaPlaybackResult> {
+    if (this.terminalResult) return Promise.resolve(this.terminalResult);
+    return new Promise<XopcChatMediaPlaybackResult>((resolve: (result: XopcChatMediaPlaybackResult) => void): void => {
+      this.terminal = resolve;
+    });
+  }
+
+  private settle(result: XopcChatMediaPlaybackResult): void {
+    if (this.terminalResult) return;
+    this.terminalResult = result;
+    const terminal = this.terminal; this.terminal = undefined;
+    if (terminal) terminal(result);
   }
 
   async toggle(): Promise<void> {
@@ -50,10 +70,12 @@ export class XopcChatMediaPlayback {
 
   private fail(error: Error, generation: number): void {
     if (generation !== this.generation) return;
+    this.settle('failed');
     this.stop(); this.error = error.message; this.state = 'error';
   }
 
   async stop(): Promise<void> {
+    this.settle('interrupted');
     this.generation++; this.state = 'idle'; this.position = 0; this.duration = 0; this.error = '';
     const player = this.player; const file = this.file;
     this.player = undefined; this.file = undefined;

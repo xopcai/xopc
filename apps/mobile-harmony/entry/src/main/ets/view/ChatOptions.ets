@@ -56,7 +56,7 @@ export struct XopcChatOptions {
             ListItem() {
               Column({ space: 8 }) {
                 Text(this.model.queueError).fontColor(this.colors.danger)
-                Button($r('app.string.refresh')).onClick((): void => { this.model.refreshQueue(); })
+                Button($r('app.string.retry')).enabled(!this.model.queueBusy).onClick((): void => { this.model.retryQueue(); })
               }
             }
           }

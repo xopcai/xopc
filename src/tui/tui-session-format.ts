@@ -41,7 +41,6 @@ export function sessionMetadataToTuiItem(meta: SessionMetadata): TuiSessionItem 
     key: meta.key,
     agentId: meta.agentId,
     sourceChannel: meta.sourceChannel,
-    generatedShell: meta.customData?.genericNewChatShell === true,
     displayName: meta.name,
     updatedAt: Date.parse(meta.updatedAt),
     totalTokens: meta.estimatedTokens ?? null,

@@ -16,8 +16,38 @@ struct XopcMarkdownInline {
   @Param muted: boolean = false;
   @Param strong: boolean = false;
   @Param alignment: string = 'left';
+  @Param compactReading: boolean = false;
   @Event onOpenLink: (href: string) => void = (_href: string): void => {};
   @Computed get spans(): XopcMarkdownSpan[] { return markdownSpans(this.content); }
+  @Computed get textSize(): number {
+    if (!this.headingLevel) return 16;
+    if (this.compactReading) {
+      if (this.headingLevel === 1) return 20;
+      if (this.headingLevel === 2) return 18;
+      return 16;
+    }
+    if (this.headingLevel === 1) return 24;
+    if (this.headingLevel === 2) return 20;
+    if (this.headingLevel === 3) return 18;
+    return 16;
+  }
+  @Computed get textLineHeight(): number {
+    if (!this.headingLevel) return this.compactReading ? 23 : 25;
+    if (this.compactReading) {
+      if (this.headingLevel === 1) return 27;
+      if (this.headingLevel === 2) return 25;
+      return 23;
+    }
+    if (this.headingLevel === 1) return 32;
+    if (this.headingLevel === 2) return 28;
+    if (this.headingLevel === 3) return 26;
+    return 24;
+  }
+  private spanWeight(kind: string): FontWeight {
+    if (kind === 'bold' || this.strong) return this.compactReading ? FontWeight.Medium : FontWeight.Bold;
+    if (this.headingLevel > 0) return this.compactReading ? FontWeight.Medium : FontWeight.Bold;
+    return FontWeight.Normal;
+  }
   private async openTarget(href: string): Promise<void> {
     if (internalMessageLink(href)) { this.onOpenLink(href); return; }
     if (!markdownLink(href)) return;
@@ -31,15 +61,16 @@ struct XopcMarkdownInline {
     Text() {
       ForEach(this.spans, (span: XopcMarkdownSpan) => {
         Span(span.text)
-          .fontWeight(span.kind === 'bold' || this.headingLevel > 0 || this.strong ? FontWeight.Bold : FontWeight.Normal)
+          .fontWeight(this.spanWeight(span.kind))
           .fontStyle(span.kind === 'italic' ? FontStyle.Italic : FontStyle.Normal)
           .fontFamily(span.kind === 'code' ? 'monospace' : 'sans-serif')
           .fontColor(span.href ? this.colors.accent : this.muted ? this.colors.secondary : this.colors.foreground)
           .decoration({ type: span.href ? TextDecorationType.Underline : span.kind === 'strike' ? TextDecorationType.LineThrough : TextDecorationType.None })
           .onClick((): void => { if (span.href) this.openTarget(span.href); })
       }, (span: XopcMarkdownSpan): string => span.id + ':' + span.kind + ':' + span.text + ':' + (span.href || ''))
-    }.fontSize(this.headingLevel ? Math.max(17, 28 - this.headingLevel * 2) : 16)
-      .lineHeight(this.headingLevel ? 32 : 25).copyOption(CopyOptions.InApp).width('100%')
+    }.fontSize(this.textSize)
+      .lineHeight(this.textLineHeight)
+      .copyOption(CopyOptions.InApp).width('100%')
       .textAlign(this.alignment === 'right' ? TextAlign.End : this.alignment === 'center' ? TextAlign.Center : TextAlign.Start)
   }
 }
@@ -49,6 +80,7 @@ export struct XopcMarkdownView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param content: string = '';
   @Param conversationId: string = '';
+  @Param compactReading: boolean = false;
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local linkedFile?: XopcHistoryMedia;
   @Local previewRequest: number = 0;
@@ -72,7 +104,7 @@ export struct XopcMarkdownView {
   }
 
   build() {
-    Column({ space: 12 }) {
+    Column({ space: this.compactReading ? 8 : 12 }) {
       Repeat<XopcMarkdownBlock>(this.blocks).each((item: RepeatItem<XopcMarkdownBlock>) => {
         if (item.item.kind === 'image') { XopcChatMediaView({ file: this.imageFile(item.item), conversationId: this.conversationId }) }
         else if (item.item.kind === 'rule') {
@@ -96,6 +128,7 @@ export struct XopcMarkdownView {
                 Row() {
                   ForEach(row.cells, (cell: XopcMarkdownCell) => {
                     XopcMarkdownInline({ content: cell.text, strong: row.header, alignment: cell.align,
+                      compactReading: this.compactReading,
                       onOpenLink: (href: string): void => { this.openInternalLink(href); } })
                       .width(168).padding(10)
                   }, (cell: XopcMarkdownCell): string => cell.id + ':' + cell.text)
@@ -105,6 +138,7 @@ export struct XopcMarkdownView {
             }
           }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Auto)
         } else { XopcMarkdownInline({ content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0, muted: item.item.kind === 'quote',
+          compactReading: this.compactReading,
           onOpenLink: (href: string): void => { this.openInternalLink(href); } }).width('100%').padding({ left: item.item.kind === 'quote' ? 12 : item.item.kind === 'list' ? Math.min(item.item.level, 6) * 12 : 0 }) }
       }).key((block: XopcMarkdownBlock): string => block.id + ':' + block.kind)
       if (this.linkedFile) {

@@ -110,6 +110,7 @@ import { GatewaySessionsApi } from './service/sessions-api.js';
 import { GatewayMarketplaceService } from './service/marketplace-service.js';
 import { GatewayConfigCoordinator } from './service/config-coordinator.js';
 import { GatewayAgentRunner } from './service/agent-runner.js';
+import { SessionPreparationWorker } from './service/session-preparation-worker.js';
 import { isBrowserSessionActive } from '../storage/sqlite/browser-session-repository.js';
 import { RealtimeRuntime } from '../realtime/runtime.js';
 import { VoiceRealtimeRuntime } from '../voice/realtime/runtime.js';
@@ -316,6 +317,7 @@ export class GatewayService {
    * `activeWebchatRunBySession` + `runAbortControllers` maps.
    */
   readonly agentRunner: GatewayAgentRunner;
+  readonly sessionPreparations = new SessionPreparationWorker(this);
 
   /** Process-local, non-persistent side conversations forked from durable sessions. */
   readonly sideChats: EphemeralSideChatManager;
@@ -946,6 +948,18 @@ export class GatewayService {
     return this.agentRunner.submitSessionInput(...args);
   }
 
+  prepareSessionCommandInput(input: Parameters<GatewayAgentRunner['inputs']['prepareInput']>[0]) {
+    return this.agentRunner.inputs.prepareInput(input);
+  }
+
+  drainSessionInputs(conversationId: string) {
+    return this.agentRunner.inputs.drain(conversationId);
+  }
+
+  dispatchAcceptedSessionInput(conversationId: string, inputId: string) {
+    return this.agentRunner.inputs.dispatchAcceptedInput(conversationId, inputId);
+  }
+
   private appContextDispatcher() {
     return createProductDispatcher(() => this.notesService, {
       getProjects: () => this.projects, getLocalApps: () => this.localApps,
@@ -1248,6 +1262,7 @@ export class GatewayService {
 
     this.ensureAgentService();
     this.agentRunner.recoverSessionInputs();
+    this.sessionPreparations.start();
     this.connectionRecovery.start();
 
     this.channelManager.setOutboundHooks({
@@ -1584,6 +1599,7 @@ export class GatewayService {
 
   async stop(): Promise<void> {
     if (!this.running) return;
+    await this.sessionPreparations.stop();
 
     setPairingBroadcastSink(null);
     this.stopRealtimeLogBridge?.();

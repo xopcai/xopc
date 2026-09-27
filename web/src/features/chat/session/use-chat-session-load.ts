@@ -3,7 +3,7 @@ import { patchSessionAgentConfigView } from './patch-session-agent-config-view';
 import { useCallback, useRef, type RefObject } from 'react';
 
 import type { SessionInfo } from '@/features/chat/chat.types';
-import { chooseModelThinking, modelPreferenceForAgent, type SessionCreateRequest } from '@xopcai/gateway-contract';
+import { chooseModelThinking, modelPreferenceForAgent, type LocalSessionOptions } from '@xopcai/gateway-contract';
 import { type Message } from '@/features/chat/messages/messages.types';
 import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities';
 import { isViewingSession, resolveViewConversationId } from '@/features/chat/session/chat-session-view';
@@ -341,7 +341,7 @@ export function useChatSessionLoad(deps: {
     [applySessionAgentConfig, conversationId, sessionMgrRef],
   );
   const createNewSession = useCallback(
-    async (opts?: { forceNew?: boolean; projectId?: string | null; temporary?: boolean; executionMode?: SessionCreateRequest['executionMode'] }) => {
+    async (opts?: { forceNew?: boolean; projectId?: string | null; temporary?: boolean; executionMode?: LocalSessionOptions['executionMode'] }) => {
       store().setShellError(null);
       const aid = resolveAgentIdForPost();
       const modelPreference = modelPreferenceForAgent(

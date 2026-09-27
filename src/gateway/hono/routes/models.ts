@@ -1,4 +1,5 @@
 import { getModelThinking } from '../../../providers/model-thinking.js';
+import { resolveEffectiveAgentConfigForAgent } from '../../../config/agent-profile.js';
 import { computerModelProfile, isDedicatedComputerModel } from '../../../computer/model-policy.js';
 import type { Hono } from 'hono';
 
@@ -398,7 +399,17 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     });
 
-    return c.json({ ok: true, payload: { models } });
+    const agentId = c.req.query('agentId')?.trim();
+    let defaultId: string | undefined;
+    if (agentId) {
+      try {
+        const configured = resolveEffectiveAgentConfigForAgent(agentId).config.models.chat.primary;
+        const matches = models.filter(model => model.id === configured || model.id.endsWith(`/${configured}`));
+        defaultId = models.find(model => model.id === configured)?.id ?? (matches.length === 1 ? matches[0].id : configured);
+      }
+      catch (error) { return c.json({ ok: false, error: { message: error instanceof Error ? error.message : 'Invalid agent' } }, 400); }
+    }
+    return c.json({ ok: true, payload: { models, ...(defaultId ? { defaultId } : {}) } });
   });
 
   authenticated.get('/api/image-generation/catalog', (c) => {

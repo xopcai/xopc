@@ -151,22 +151,12 @@ export interface SessionResponse {
   session: SessionDetail;
 }
 
-export interface SessionCreateResponse {
-  session: {
-    key: string;
-    transcriptId?: string;
-    projectId?: string;
-    routing?: SessionRoutingMeta;
-  };
-}
-
 export interface SessionInitialAgentConfig {
   model?: string;
   thinkingLevel?: string;
 }
 
-export interface SessionCreateRequest {
-  channel?: string;
+export interface LocalSessionOptions {
   agentId?: string;
   projectId?: string;
   executionMode?: 'local_checkout' | 'managed_worktree';
@@ -369,19 +359,6 @@ export const sessionMessagePageSchema = z
   })
   .passthrough();
 
-export const sessionCreateResponseSchema = z
-  .object({
-    session: z
-      .object({
-        key: z.string(),
-        transcriptId: transcriptIdSchema.optional(),
-        projectId: z.string().optional(),
-        routing: sessionRoutingMetaSchema.optional(),
-      })
-      .passthrough(),
-  })
-  .passthrough();
-
 export const sessionForkAtTurnResponseSchema = z
   .object({
     ok: z.literal(true),
@@ -497,10 +474,6 @@ export function parseSessionMessagePage(raw: unknown): SessionMessagePage {
   return sessionMessagePageSchema.parse(raw) as unknown as SessionMessagePage;
 }
 
-export function parseSessionCreateResponse(raw: unknown): SessionCreateResponse {
-  return sessionCreateResponseSchema.parse(raw) as SessionCreateResponse;
-}
-
 export function parseSessionForkAtTurnResponse(raw: unknown): SessionForkAtTurnResponse {
   return sessionForkAtTurnResponseSchema.parse(raw) as unknown as SessionForkAtTurnResponse;
 }
@@ -539,15 +512,6 @@ export function normalizeSessionActiveRunResponse(raw: unknown): SessionActiveRu
   const runId = typeof payload?.runId === 'string' ? payload.runId.trim() : '';
   if (!payload?.active || !runId) return { active: false };
   return { active: true, runId };
-}
-
-export function extractCreatedConversationId(raw: unknown): string {
-  const data = parseSessionCreateResponse(raw);
-  const key = data.session.key;
-  if (typeof key !== 'string' || !key.trim()) {
-    throw new Error('Create session: missing key');
-  }
-  return key.trim();
 }
 
 export function buildSessionListQueryString(query?: SessionListQuery): string {
@@ -657,10 +621,6 @@ export function buildSessionActionPath(
   const encoded = encodeURIComponent(key);
   if (action === 'delete') return `/api/sessions/${encoded}`;
   return `/api/sessions/${encoded}/${action}`;
-}
-
-export function buildCreateSessionPath(): string {
-  return '/api/sessions';
 }
 
 export function buildSessionAgentConfigPath(key: string): string {

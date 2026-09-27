@@ -1,10 +1,13 @@
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
+import { mkdir, readdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
+import { join } from 'node:path';
+import { resolveStateDir } from '../../config/paths.js';
 
 import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
 import { REALTIME_PROTOCOL_VERSION, type RealtimeEventPayload } from '@xopcai/realtime-protocol';
+import { isSessionCommandRejected, sessionInputCommandSchema, type SessionCreation, type SessionInputCommand } from '@xopcai/gateway-contract';
 
-import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { parseModelRef } from '../../agent/models/selection.js';
 import type { ExportFormat } from '../../session/types.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
@@ -83,6 +86,10 @@ export class GatewayRealtimeBackend implements TuiBackend {
   private activeRunId: string | null = null;
   private observedConversationId: string | null = null;
   private chatAbort: AbortController | null = null;
+  private readonly drafts = new Map<string, SessionCreation>();
+  private readonly pendingInputs = new Map<string, SessionInputCommand>();
+  private draftDirectory?: string;
+  private draftInitialization?: Promise<void>;
 
   onEvent?: (evt: TuiEvent) => void;
   onConnected?: () => void;
@@ -96,6 +103,43 @@ export class GatewayRealtimeBackend implements TuiBackend {
 
   get connectionLabel(): string {
     return this.baseUrl;
+  }
+  async getComposerDraftDirectory(): Promise<string> {
+    await this.initializeDrafts();
+    return join(this.draftDirectory!, 'composers');
+  }
+
+  private initializeDrafts(): Promise<void> {
+    return this.draftInitialization ??= (async () => {
+      const response = await gatewayFetch(this.baseUrl, '/api/browser-session', this.credential);
+      if (!response.ok) throw new Error('Gateway identity is unavailable');
+      const identity = await response.json() as { conversationId: string };
+      if (!identity.conversationId) throw new Error('Gateway identity is missing');
+      const directory = join(resolveStateDir(), 'client-drafts', crypto.createHash('sha256').update(identity.conversationId).digest('hex'));
+      await mkdir(directory, { recursive: true, mode: 0o700 });
+      for (const file of await readdir(directory)) {
+        if (!/^[0-9a-f-]{36}\.json$/.test(file)) continue;
+        const saved = JSON.parse(await readFile(join(directory, file), 'utf8')) as { creation?: SessionCreation; command?: SessionInputCommand };
+        const id = file.slice(0, -5);
+        if (saved.creation) this.drafts.set(id, saved.creation);
+        if (saved.command) this.pendingInputs.set(id, sessionInputCommandSchema.parse(saved.command));
+      }
+      this.draftDirectory = directory;
+    })().catch(error => { this.draftInitialization = undefined; throw error; });
+  }
+
+  private async persistDraft(conversationId: string): Promise<void> {
+    if (!this.draftDirectory || !/^[0-9a-f-]{36}$/.test(conversationId)) throw new Error('Local conversation storage is unavailable');
+    const path = join(this.draftDirectory, `${conversationId}.json`);
+    const creation = this.drafts.get(conversationId);
+    const command = this.pendingInputs.get(conversationId);
+    if (!creation && !command) {
+      await unlink(path).catch(error => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; });
+      return;
+    }
+    const temporary = `${path}.${crypto.randomUUID()}.tmp`;
+    await writeFile(temporary, JSON.stringify({ creation, command }), { mode: 0o600 });
+    await rename(temporary, path);
   }
 
   start(): void {
@@ -135,28 +179,93 @@ export class GatewayRealtimeBackend implements TuiBackend {
 
   // ── Agent chat ──
 
+  private async acceptReceipt(conversationId: string, command: SessionInputCommand, raw: unknown): Promise<void> {
+    const payload = (raw as { payload?: { receipt?: { conversationId?: string; clientMessageId?: string }; session?: { transcriptId?: string } } })?.payload;
+    if (payload?.receipt?.conversationId !== conversationId || payload.receipt.clientMessageId !== command.clientMessageId || !payload.session?.transcriptId) {
+      throw new Error('Invalid input receipt; pending input retained');
+    }
+    this.drafts.delete(conversationId);
+    this.pendingInputs.delete(conversationId);
+    await this.persistDraft(conversationId);
+  }
+
+  private async reconcileInput(conversationId: string): Promise<void> {
+    const pending = this.pendingInputs.get(conversationId);
+    if (!pending) return;
+    const response = await gatewayFetch(this.baseUrl,
+      `/api/sessions/${encodeURIComponent(conversationId)}/input-receipts/${encodeURIComponent(pending.clientMessageId)}`, this.credential);
+    if (response.status === 404) return;
+    if (!response.ok) throw new Error(`Input confirmation failed (${response.status})`);
+    await this.acceptReceipt(conversationId, pending, await response.json());
+  }
+
+  private async prepareInput(conversationId: string, clientMessageId: string, content: string,
+    delivery: 'next' | 'steer', attachments?: ChatSendOptions['attachments']): Promise<SessionInputCommand> {
+    const pending = this.pendingInputs.get(conversationId);
+    if (pending) {
+      if (pending.input.content !== content || JSON.stringify(pending.input.attachments) !== JSON.stringify(attachments)) {
+        throw new Error('Previous input is awaiting confirmation; retry it before sending different content');
+      }
+      return pending;
+    }
+    const creation = this.drafts.get(conversationId);
+    const input = { content, ...(attachments?.length ? { attachments } : {}) };
+    const origin = { type: 'system' as const, source: 'cli' as const };
+    let command: SessionInputCommand;
+    if (creation) {
+      if (!creation.model) {
+        const response = await gatewayFetch(this.baseUrl, `/api/models?agentId=${encodeURIComponent(creation.agentId)}`, this.credential);
+        if (!response.ok) throw new Error('Agent model configuration is unavailable');
+        const { payload } = await response.json() as { payload: { defaultId?: string; models: Array<{ id: string; provider: string; thinking?: { initialValue: string } }> } };
+        const model = payload.models.find(item => item.id === payload.defaultId);
+        if (!model) throw new Error('Configure a model before sending');
+        creation.model = model.id;
+        creation.thinkingLevel = model.thinking?.initialValue ?? 'off';
+      }
+      command = sessionInputCommandSchema.parse({ kind: 'start', clientMessageId, creation, input, origin });
+    } else {
+      const path = `/api/sessions/${encodeURIComponent(conversationId)}`;
+      const [detailResponse, configResponse] = await Promise.all([
+        gatewayFetch(this.baseUrl, path, this.credential), gatewayFetch(this.baseUrl, `${path}/agent-config`, this.credential),
+      ]);
+      if (!detailResponse.ok || !configResponse.ok) throw new Error('Session identity is unavailable');
+      const detail = await detailResponse.json() as { session: { transcriptId: string } };
+      const config = await configResponse.json() as { payload: { configVersion: number } };
+      command = sessionInputCommandSchema.parse({ kind: 'append', clientMessageId,
+        expectedTranscriptId: detail.session.transcriptId, configVersion: config.payload.configVersion, delivery, input, origin });
+    }
+    this.pendingInputs.set(conversationId, command);
+    await this.persistDraft(conversationId);
+    return command;
+  }
+
   async sendChat(opts: ChatSendOptions): Promise<{ runId: string }> {
     this.observedConversationId = opts.conversationId;
     this.chatAbort?.abort();
     this.chatAbort = new AbortController();
     const signal = this.chatAbort.signal;
     const clientMessageId = crypto.randomUUID();
+    const command = await this.prepareInput(opts.conversationId, clientMessageId,
+      opts.message, 'next', opts.attachments);
     const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(opts.conversationId)}/inputs`, this.credential, {
       method: 'POST',
-      body: JSON.stringify({
-        clientMessageId, delivery: 'next',
-        content: opts.message.trimStart().startsWith('/') ? opts.message : prependEnvelopeTimestamp(opts.message),
-        attachments: opts.attachments, thinking: opts.thinking,
-      }),
+      body: JSON.stringify(command),
       signal,
     });
     const json = await res.json().catch(() => null) as {
-      payload?: { state?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> } };
+      payload?: { inputState?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> } };
       error?: { message?: string };
     } | null;
-    if (!res.ok) throw new Error(json?.error?.message ?? `Gateway error: ${res.status}`);
-    const state = json?.payload?.state;
-    const own = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
+    if (!res.ok) {
+      if (isSessionCommandRejected(res.status, json)) {
+        this.pendingInputs.delete(opts.conversationId);
+        await this.persistDraft(opts.conversationId);
+      }
+      throw new Error(json?.error?.message ?? `Gateway error: ${res.status}`);
+    }
+    await this.acceptReceipt(opts.conversationId, command, json);
+    const state = json?.payload?.inputState;
+    const own = state?.inputs?.find((input) => input.clientMessageId === command.clientMessageId);
     const runId = state?.activeRunId ?? crypto.randomUUID();
     if (state?.activeRunId && own?.id === state.activeInputId) void this.resumeChat({ conversationId: opts.conversationId, runId });
     return { runId };
@@ -173,7 +282,9 @@ export class GatewayRealtimeBackend implements TuiBackend {
       params.set('limit', String(options?.limit ?? 15));
       const context = await gatewayFetch(
         this.baseUrl,
-        `/api/files/contexts/session/${encodeURIComponent(conversationId)}`,
+        this.drafts.has(conversationId)
+          ? `/api/files/contexts/${this.drafts.get(conversationId)!.projectId ? 'project' : 'agent'}/${encodeURIComponent(this.drafts.get(conversationId)!.projectId || this.drafts.get(conversationId)!.agentId)}`
+          : `/api/files/contexts/session/${encodeURIComponent(conversationId)}`,
         this.credential,
       );
       if (!context.ok) return [];
@@ -198,7 +309,10 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }
 
   async getReviewContext(conversationId: string): Promise<ReviewContext> {
-    const params = new URLSearchParams({ conversationId });
+    const draft = this.drafts.get(conversationId);
+    const params = new URLSearchParams(draft
+      ? { agentId: draft.agentId, ...(draft.projectId ? { projectId: draft.projectId } : {}) }
+      : { conversationId });
     const res = await gatewayFetch(this.baseUrl, `/api/review/context?${params.toString()}`, this.credential);
     const json = (await res.json().catch(() => ({}))) as {
       ok?: boolean;
@@ -248,7 +362,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }): Promise<TuiStartupProjectResult> {
     const res = await gatewayFetch(this.baseUrl, '/api/projects/resolve-workspace', this.credential, {
       method: 'POST',
-      body: JSON.stringify(opts),
+      body: JSON.stringify({ ...opts, ...(this.drafts.has(opts.conversationId) ? { conversationId: undefined } : {}) }),
     });
     const json = (await res.json().catch(() => ({}))) as TuiStartupProjectResult & {
       ok?: boolean;
@@ -297,23 +411,27 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }> {
     this.observedConversationId = opts.conversationId;
     try {
+      const command = await this.prepareInput(opts.conversationId, crypto.randomUUID(), opts.message, opts.delivery);
       const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(opts.conversationId)}/inputs`, this.credential, {
         method: 'POST',
-        body: JSON.stringify({
-          clientMessageId: crypto.randomUUID(),
-          delivery: opts.delivery,
-          content: opts.message,
-        }),
+        body: JSON.stringify(command),
       });
-      if (!res.ok) return { ok: false };
+      if (!res.ok) {
+        if (isSessionCommandRejected(res.status, await res.json().catch(() => null))) {
+          this.pendingInputs.delete(opts.conversationId);
+          await this.persistDraft(opts.conversationId);
+        }
+        return { ok: false };
+      }
       const json = (await res.json()) as {
         ok?: boolean;
-        payload?: { effectiveDelivery?: 'next' | 'steer'; state?: TuiChatInputState };
+        payload?: { effectiveDelivery?: 'next' | 'steer'; inputState?: TuiChatInputState };
       };
+      await this.acceptReceipt(opts.conversationId, command, json);
       return {
         ok: json.ok === true,
         effectiveDelivery: json.payload?.effectiveDelivery,
-        state: json.payload?.state,
+        state: json.payload?.inputState,
       };
     } catch {
       return { ok: false };
@@ -321,6 +439,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }
 
   async getChatInputState(conversationId: string): Promise<TuiChatInputState> {
+    if (this.drafts.has(conversationId)) return { conversationId, revision: 0, inputs: [] };
     const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(conversationId)}/input-state`, this.credential);
     if (!res.ok) throw new Error(`Input state failed (${res.status})`);
     const json = await res.json() as { payload: TuiChatInputState };
@@ -370,7 +489,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
     try {
       const res = await gatewayFetch(
         this.baseUrl,
-        `/api/tui/startup-resources?conversationId=${encodeURIComponent(conversationId)}`,
+        `/api/tui/startup-resources?${this.drafts.has(conversationId) ? `agentId=${encodeURIComponent(this.drafts.get(conversationId)!.agentId)}` : `conversationId=${encodeURIComponent(conversationId)}`}`,
         this.credential,
       );
       if (!res.ok) return empty;
@@ -391,6 +510,8 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }
 
   async loadHistory(opts: { conversationId: string; limit?: number }): Promise<{ messages: HistoryMessage[] }> {
+    await this.reconcileInput(opts.conversationId);
+    if (this.drafts.has(opts.conversationId)) return { messages: [] };
     try {
       const res = await gatewayFetch(
         this.baseUrl,
@@ -546,7 +667,6 @@ export class GatewayRealtimeBackend implements TuiBackend {
         key: s.key,
         agentId: s.agentId,
         sourceChannel: s.sourceChannel,
-        generatedShell: s.customData?.genericNewChatShell === true,
         displayName: s.name,
         updatedAt: s.updatedAt ? Date.parse(s.updatedAt) : undefined,
         totalTokens: s.estimatedTokens ?? null,
@@ -613,15 +733,16 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }
 
   async createConversation(agentId: string, conversationId?: string): Promise<string> {
-    const res = await gatewayFetch(this.baseUrl, '/api/sessions', this.credential, {
-      method: 'POST', body: JSON.stringify({ agentId, conversationId, channel: 'tui' }),
-    });
-    if (!res.ok) throw new Error(`Conversation creation failed (${res.status})`);
-    const result = await res.json() as { conversationId: string };
-    return result.conversationId;
+    const id = conversationId ?? crypto.randomUUID();
+    this.drafts.set(id, { agentId, projectId: null, execution: null, temporary: false, model: '', thinkingLevel: 'off' });
+    await this.persistDraft(id);
+    return id;
   }
 
   async getSessionInfo(conversationId: string): Promise<SessionInfo> {
+    await this.reconcileInput(conversationId);
+    const draft = this.drafts.get(conversationId);
+    if (draft) return { agentId: draft.agentId, model: draft.model, thinkingLevel: draft.thinkingLevel, projectId: draft.projectId ?? undefined };
     const out: SessionInfo = {};
     try {
       const sessionPath = `/api/sessions/${encodeURIComponent(conversationId)}`;
@@ -644,7 +765,6 @@ export class GatewayRealtimeBackend implements TuiBackend {
         session = json.session;
         if (session) {
           out.agentId = session.agentId;
-          out.generatedShell = session.customData?.genericNewChatShell === true;
           if (session.name) out.displayName = session.name;
           if (session.estimatedTokens != null) out.totalTokens = session.estimatedTokens;
           if (session.projectId?.trim()) out.projectId = session.projectId.trim();
@@ -1039,6 +1159,26 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }
 
   async patchSession(conversationId: string, patch: Record<string, unknown>): Promise<void> {
+    const draft = this.drafts.get(conversationId);
+    if (draft) {
+      if (this.pendingInputs.has(conversationId)) throw new Error('First input is awaiting confirmation');
+      if (typeof patch.workingDirectory === 'string') {
+        const resolved = await this.resolveStartupProject({ workspacePath: patch.workingDirectory,
+          conversationId, agentId: draft.agentId, autoCreate: true });
+        if (!resolved.project) throw new Error('Working directory could not be bound to a project');
+        draft.projectId = resolved.project.id;
+        draft.execution = { mode: 'local_checkout' };
+      }
+      if (typeof patch.model === 'string') draft.model = patch.model;
+      if (typeof patch.thinkingLevel === 'string') draft.thinkingLevel = patch.thinkingLevel;
+      if (typeof patch.projectId === 'string') {
+        draft.projectId = patch.projectId;
+        draft.execution = { mode: 'local_checkout' };
+      }
+      if (patch.projectId === null) { draft.projectId = null; draft.execution = null; }
+      await this.persistDraft(conversationId);
+      return;
+    }
     const res = await gatewayFetch(
       this.baseUrl,
       `/api/sessions/${encodeURIComponent(conversationId)}/agent-config`,
@@ -1123,6 +1263,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
         return url.toString();
       },
       issueTicket: async () => {
+        await this.initializeDrafts();
         const response = await gatewayFetch(this.baseUrl, '/api/realtime/tickets', this.credential, {
           method: 'POST',
           body: JSON.stringify({ clientId: this.clientId, clientKind: 'tui', protocolVersion: REALTIME_PROTOCOL_VERSION }),

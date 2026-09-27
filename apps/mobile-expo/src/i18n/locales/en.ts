@@ -4,6 +4,7 @@
  */
 export const en = {
   mobileExperience: {
+    sessionPreparing: 'Preparing conversation environment…', sessionPreparationFailed: 'Conversation environment preparation failed',
     queueSyncFailed: 'Queue not synced', queuedExplain: 'Review, edit, or cancel messages awaiting processing.', queueEmpty: 'No messages waiting.', attachedContent: 'Attached content',
     continueFile: 'Continue in chat', fileContext: 'About file ',
     closedState: {"done": "Completed", "cancelled": "Cancelled", "duplicate": "Duplicate", "wont_do": "Not proceeding"},
@@ -465,6 +466,7 @@ export const en = {
 
   // ── Chat screen ─────────────────────────────────────────
   chat: {
+    draftSaveFailed: 'Draft could not be saved on this device. Keep this screen open and check available storage.',
     contextCenter: {
       title: 'Context',
       subtitle: 'Where the agent works and what it can use',

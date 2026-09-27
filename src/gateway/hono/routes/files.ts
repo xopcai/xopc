@@ -68,6 +68,8 @@ export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRout
     try {
       const kind = c.req.param('kind');
       if (kind !== 'agent' && kind !== 'project' && kind !== 'session') throw new FileServiceError(400, 'Invalid context kind');
+      const preparation = kind === 'session' ? getSessionPreparation(c.req.param('id')) : undefined;
+      if (preparation && preparation.state !== 'ready') throw new FileServiceError(409, 'Session environment is not ready');
       return c.json({ space: publicSpace(await files.forContext(kind, c.req.param('id'))) });
     } catch (error) { return errorResponse(c, error); }
   });
@@ -216,3 +218,4 @@ export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRout
     } catch (error) { return errorResponse(c, error); }
   });
 }
+import { getSessionPreparation } from '../../../storage/sqlite/session-creation-repository.js';

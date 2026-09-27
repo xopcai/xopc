@@ -281,6 +281,8 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ ok: false, error: { code: 'INVALID_REQUEST', message: 'Invalid realtime voice session request' } }, 400);
     }
     try {
+      const preparation = parsed.data.conversationId ? getSessionPreparation(parsed.data.conversationId) : undefined;
+      if (preparation && preparation.state !== 'ready') return c.json({ ok: false, error: { code: 'SESSION_PREPARING', message: 'Session environment is not ready' } }, 409);
       if (action === 'preflight') {
         await service.voiceRealtime.preflight(parsed.data);
         return c.json({ ok: true });
@@ -705,3 +707,4 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
   });
 
 }
+import { getSessionPreparation } from '../../../storage/sqlite/session-creation-repository.js';

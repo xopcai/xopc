@@ -863,7 +863,6 @@ describe('SessionStore', () => {
       expect(targetMeta?.routing?.peerId).toBe('fork-turn-target');
       expect(targetMeta?.customData).toMatchObject({
         retained: true,
-        genericNewChatShell: false,
         forkedFromConversationId: source,
         forkedFromTurnId: 'turn-1',
       });

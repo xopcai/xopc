@@ -295,7 +295,6 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
           ...(projectId ? { projectId } : {}),
           customData: {
             ...(meta?.customData ?? {}),
-            genericNewChatShell: false,
             sourceBinding,
           },
         });
@@ -336,7 +335,6 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       tags: Array.from(new Set([...(meta?.tags ?? []), 'note'])),
       customData: {
         ...(meta?.customData ?? {}),
-        genericNewChatShell: false,
         sourceBinding,
       },
     });

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  extractCreatedConversationId,
   normalizeSessionActiveRunResponse,
   parseSessionActionResponse,
   parseSessionMessagePage,
@@ -42,7 +41,7 @@ describe('sessions backend response contract', () => {
           transcriptId: '117d8aa7-f120-54ad-a0dd-48a11ded92b1',
           sessionStartedAt: '2026-07-09T00:00:00.000Z',
           lastInteractionAt: '2026-07-09T00:10:00.000Z',
-          customData: { genericNewChatShell: false },
+          customData: {},
         },
       ],
       total: 1,
@@ -132,18 +131,12 @@ describe('sessions backend response contract', () => {
     expect(parsed.session.messages[0]?.timestamp).toBe(1_784_064_000_000);
   });
 
-  it('accepts active run and create session response shapes', () => {
+  it('accepts active run response shapes', () => {
     expect(normalizeSessionActiveRunResponse({
       ok: true,
       payload: { active: true, runId: ' run-a ' },
     })).toEqual({ active: true, runId: 'run-a' });
 
-    expect(extractCreatedConversationId({
-      session: {
-        key: ' 2f414f56-2a1f-4889-8328-d4f8510d3a95 ',
-        transcriptId: '23c6e1ec-2563-510e-be85-6d9e619d2f10',
-      },
-    })).toBe("2f414f56-2a1f-4889-8328-d4f8510d3a95");
   });
 
   it('accepts gateway action and reset response shapes', () => {

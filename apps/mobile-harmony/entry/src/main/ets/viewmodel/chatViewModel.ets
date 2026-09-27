@@ -139,9 +139,24 @@ export class XopcChatViewModel {
         if (!this.disposed && selection === this.selection) this.error = 'CHAT_SELECTION_SAVE_FAILED';
       });
     }
-    this.restoreCachedHistory(id, selection);
-    await this.recover();
-    if (selection === this.selection) this.loading = false;
+    try {
+      const local = await this.repository.draft(id);
+      if (this.disposed || selection !== this.selection) return;
+      if (local) { this.agentId = local.creation.agentId; this.projectId = local.creation.projectId || ''; }
+      await this.repository.reconcile(id);
+      const draft = await this.repository.draft(id);
+      if (this.disposed || selection !== this.selection) return;
+      if (draft) return;
+      this.restoreCachedHistory(id, selection);
+      await this.recover();
+    } catch (error) {
+      if (!this.disposed && selection === this.selection) {
+        this.error = (error as Error).message;
+        await this.restoreCachedHistory(id, selection);
+      }
+    } finally {
+      if (!this.disposed && selection === this.selection) this.loading = false;
+    }
   }
 
   private async restoreCachedHistory(id: string, selection: number): Promise<void> {

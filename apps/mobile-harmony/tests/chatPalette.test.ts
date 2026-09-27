@@ -4,6 +4,8 @@ const mock = vi.hoisted(() => {
   return { request: vi.fn() };
 });
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mock.request, currentProfile: () => ({ gatewayId: 'g' }) } }));
+vi.mock('../entry/src/main/ets/service/localSessionStore.ets', () => ({ localSessionStore: { read: vi.fn().mockResolvedValue(undefined) } }));
+vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class { materialize = vi.fn(); } }));
 import { composerRange, workspaceMention } from '../entry/src/main/ets/common/composerTokens.ets';
 import { XopcChatPaletteViewModel } from '../entry/src/main/ets/viewmodel/chatPaletteViewModel.ets';
 describe('composer token palette', () => {

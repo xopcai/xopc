@@ -6,6 +6,7 @@ const mock = vi.hoisted(() => {
 });
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mock.request } }));
 vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCrypto: class { uuid() { return randomUUID(); } } }));
+vi.mock('../entry/src/main/ets/service/localSessionStore.ets', () => ({ localSessionStore: { read: vi.fn().mockResolvedValue(undefined) } }));
 import { XopcChatPromptViewModel } from '../entry/src/main/ets/viewmodel/chatPromptViewModel.ets';
 const question = (conversationId = 'one') => ({ id: 'q-' + conversationId, conversationId, kind: 'clarification', status: 'open', question: 'Which?', choices: ['A', 'B'], version: 3 });
 const snapshot = (value: unknown) => JSON.stringify({ payload: { clarification: value } });
@@ -40,7 +41,7 @@ describe('chat clarification', () => {
   });
   it('invalidates a pending refresh and stops polling while hidden', async () => {
     let resolve!: (value: string) => void; mock.request.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
-    model.start('one'); model.pause(); resolve(snapshot(question())); await vi.advanceTimersByTimeAsync(30000);
+    model.start('one'); await Promise.resolve(); model.pause(); resolve(snapshot(question())); await vi.advanceTimersByTimeAsync(30000);
     expect(model.prompt).toBeUndefined(); expect(mock.request).toHaveBeenCalledOnce();
   });
 });

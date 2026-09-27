@@ -6,6 +6,8 @@ import {
   parseAppContextEnvelope,
   sessionInputFingerprint,
   shouldRetrySessionInputStatus,
+  sessionInputCommandSchema,
+  canonicalSessionCommand,
   type AgentStreamRunEndPayload,
   type ToolActivity,
   type TurnOutcome,
@@ -27,6 +29,10 @@ import {
   claimSubmissionId,
   completeSubmission,
 } from '@/features/chat/messages/session-input-outbox';
+import { readLocalSessionDraft, saveLocalSessionDraft, readSessionTranscript, readPendingSessionCommand, savePendingSessionCommand, clearPendingSessionCommand, confirmSessionCommand } from '../session/local-session-drafts';
+import { useGatewayStore } from '@/stores/gateway-store';
+import { patchSessionAgentConfigView } from '../session/patch-session-agent-config-view';
+import type { SessionAgentConfig } from '../session/session-manager';
 
 async function retryDelay(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -387,34 +393,69 @@ export class MessageSender {
           : attachments;
 
       const selection = useChatSessionStore.getState().sessions[chatId];
+      const scope = useGatewayStore.getState().conversationId;
+      const assertScope = () => { if (scope !== useGatewayStore.getState().conversationId) throw new Error('Active Gateway changed'); };
       if (selection?.modelConfigSaving) throw new Error('Wait for model configuration to finish saving');
       const configVersion = selection?.configVersion;
       const origin = await waitForEndpointTurnClaim(controller.signal);
       const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel, contextRefs, appContext: capturedContext })}:${configVersion ?? ''}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
-      const clientMessageId = claimSubmissionId(chatId, fingerprint);
+      let clientMessageId = claimSubmissionId(chatId, fingerprint);
+      const input = { content, attachments: capped, contextRefs, appContext: capturedContext };
+      let body: object;
+      if (taskId || replaceTurnId) {
+        body = { clientMessageId, configVersion, delivery: 'next', ...input, thinking: thinkingLevel, origin };
+      } else {
+        assertScope();
+        const pending = await readPendingSessionCommand(chatId);
+        const draft = await readLocalSessionDraft(chatId);
+        assertScope();
+        if (pending) {
+          if (canonicalSessionCommand(pending.input) !== canonicalSessionCommand(input)) throw new Error('The previous input is awaiting confirmation');
+          clientMessageId = pending.clientMessageId;
+          body = sessionInputCommandSchema.parse({ ...pending, origin });
+        } else if (draft) {
+          if (draft.materialization) throw new Error('Conversation materialization is awaiting confirmation');
+          const proposed = { kind: 'start' as const, clientMessageId, creation: draft.creation, input };
+          if (draft.submission && canonicalSessionCommand(draft.submission.input) !== canonicalSessionCommand(input)) {
+            throw new Error('The first input is awaiting confirmation. Retry it before sending different content.');
+          }
+          body = sessionInputCommandSchema.parse({ ...(draft.submission ?? proposed), origin });
+          clientMessageId = draft.submission?.clientMessageId ?? clientMessageId;
+          draft.submission ??= proposed;
+          await saveLocalSessionDraft(draft);
+        } else {
+          body = sessionInputCommandSchema.parse({ kind: 'append', clientMessageId,
+            expectedTranscriptId: await readSessionTranscript(chatId), configVersion, delivery: 'next', input, origin });
+        }
+        assertScope();
+        const { origin: _origin, ...durable } = sessionInputCommandSchema.parse(body);
+        await savePendingSessionCommand(chatId, durable);
+      }
+      assertScope();
       const res = await postSessionInput(
         apiUrl(taskId
           ? `/api/tasks/${encodeURIComponent(taskId)}/inputs`
           : replaceTurnId
             ? `/api/sessions/${encodeURIComponent(chatId)}/turns/${encodeURIComponent(replaceTurnId)}/replace`
             : `/api/sessions/${encodeURIComponent(chatId)}/inputs`),
-        JSON.stringify({
-          clientMessageId,
-          configVersion,
-          delivery: 'next',
-          content,
-          attachments: capped,
-          thinking: thinkingLevel,
-          origin,
-          contextRefs,
-          appContext: capturedContext,
-        }),
+        JSON.stringify(body),
         controller.signal,
         taskId ? chatId : undefined,
       );
 
       if (!res.ok) {
+        assertScope();
+        if (!taskId && !replaceTurnId && res.status >= 400 && res.status < 500 && ![401, 408, 429].includes(res.status)) await clearPendingSessionCommand(chatId);
         const body = (await res.json().catch(() => ({}))) as { error?: { message?: string; code?: string } };
+        if (!taskId && !replaceTurnId && res.status === 400 && body.error?.code === 'BAD_REQUEST') {
+          const rejected = await readLocalSessionDraft(chatId);
+          assertScope();
+          if (rejected?.submission?.clientMessageId === clientMessageId) {
+            delete rejected.submission;
+            await saveLocalSessionDraft(rejected);
+          }
+          completeSubmission(chatId, clientMessageId);
+        }
         if (body.error?.code === 'CONFIG_CHANGED') window.dispatchEvent(new CustomEvent('session-model-config-stale', { detail: { conversationId: chatId } }));
         throw new Error(formatApiHttpError(res.status, res.statusText, body.error?.message));
       }
@@ -422,13 +463,26 @@ export class MessageSender {
       const json = await res.json() as {
         payload?: {
           conversationId?: string;
+          receipt?: { conversationId: string; clientMessageId: string; transcriptId: string };
+          session?: { transcriptId?: string };
+          agentConfig?: SessionAgentConfig;
+          inputState?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> };
           state?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> };
         };
       };
       controller.signal.throwIfAborted();
+      assertScope();
+      if (!taskId && !replaceTurnId) {
+        const receipt = json.payload?.receipt;
+        if (!receipt || receipt.conversationId !== chatId || receipt.clientMessageId !== clientMessageId) throw new Error('Invalid input receipt');
+        if (json.payload?.session?.transcriptId !== receipt.transcriptId) throw new Error('Conversation was reset; reload before sending');
+        await confirmSessionCommand(chatId, receipt.transcriptId);
+        window.dispatchEvent(new CustomEvent('session-input-state', { detail: { ...json.payload?.inputState, conversationId: chatId } }));
+        if (json.payload?.agentConfig) patchSessionAgentConfigView(chatId, json.payload.agentConfig);
+      }
       completeSubmission(chatId, clientMessageId);
       callbacks?.onInputAccepted?.();
-      const state = json.payload?.state;
+      const state = taskId || replaceTurnId ? json.payload?.state : json.payload?.inputState;
       const resolvedChatId = json.payload?.conversationId?.trim() || chatId;
       const ownInput = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
       if (state?.activeRunId && ownInput?.id === state.activeInputId) {

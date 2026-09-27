@@ -4,7 +4,9 @@ import { commandRegistry } from '../../../chat-commands/index.js';
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import { isRegisteredProvider } from '../../../agent/skills/skills-marketplace.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { effectiveWorkspacePathForSession } from '../../../session/session-workspace.js';
+import { effectiveWorkspacePathForSession, projectWorkspacePath } from '../../../session/session-workspace.js';
+import { resolveEffectiveAgentProfile } from '../../../config/agent-profile.js';
+import { ProjectService } from '../../../projects/index.js';
 import { getProjectForSession } from '../../../projects/workspace.js';
 import { buildReviewContext, resolveGitRoot } from '../../../review/review-git.js';
 import {
@@ -81,12 +83,18 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
   authenticated.get('/api/review/context', async (c) => {
     const conversationId = c.req.query('conversationId')?.trim();
     try {
-      const workspace = effectiveWorkspacePathForSession(
-        service.getConfig(),
-        conversationId,
-        null,
-        getProjectForSession(conversationId),
-      );
+      const agentId = c.req.query('agentId')?.trim();
+      const projectId = c.req.query('projectId')?.trim();
+      const project = !conversationId && projectId ? new ProjectService().get(projectId) : null;
+      if (!conversationId && projectId && !project) throw new Error('Project not found');
+      const workspace = !conversationId && agentId
+        ? projectWorkspacePath(project) ?? resolveEffectiveAgentProfile(agentId).resolvedWorkspacePath
+        : effectiveWorkspacePathForSession(
+          service.getConfig(),
+          conversationId,
+          null,
+          getProjectForSession(conversationId),
+        );
       const cwd = await resolveGitRoot(workspace);
       const payload = await buildReviewContext(cwd);
       return c.json({ ok: true, payload });

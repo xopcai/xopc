@@ -33,6 +33,7 @@ export type ChatSessionSlice = {
   name: string | null;
   model: string;
   configVersion?: number;
+  localDraft?: boolean;
   modelConfigSaving?: boolean;
   thinkingLevel: string;
   reasoningLevel: ReasoningLevel;
@@ -72,6 +73,7 @@ type ChatSessionStoreActions = {
         | 'name'
         | 'model'
         | 'configVersion'
+        | 'localDraft'
         | 'modelConfigSaving'
         | 'thinkingLevel'
         | 'reasoningLevel'

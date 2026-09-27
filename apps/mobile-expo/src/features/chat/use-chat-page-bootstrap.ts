@@ -12,7 +12,7 @@ import type { useMessages } from '../../i18n/messages';
 import { canStartChatBootstrap } from './chat-bootstrap-gate';
 import { rootChatLookupComplete } from './chat-root-session';
 import { EMPTY_CHAT_SELECTION, useChatSelectionStore, type ChatSelection } from './chat-selection-store';
-import { takeNewChatConversationId } from './session-prefetch';
+import { openNewChat } from './open-new-chat';
 
 export type ChatBootstrapDeps = {
   scopeKey?: string;
@@ -128,7 +128,7 @@ export function useChatPageBootstrap({
     attemptedRef.current = { scope: scopeKey, selection };
     setCreating({ scope: scopeKey, selection });
     setCreateError(null);
-    void takeNewChatConversationId(newSessionSpec, initialAgentConfig)
+    void openNewChat(newSessionSpec, initialAgentConfig)
       .then(key => {
         if (!isCurrent(selection)) return;
         commitSelection(key);

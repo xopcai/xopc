@@ -1,6 +1,11 @@
-import { createConversation } from '../../storage/sqlite/conversation-repository.js';
+import { sessionInputCommandSchema, canonicalSessionCommand } from '@xopcai/gateway-contract';
+import { EmbeddedDraftStore } from './embedded-drafts.js';
+import { resolveStateDir } from '../../config/paths.js';
+import { resolveEffectiveAgentProfile } from '../../config/agent-profile.js';
+import { acceptSessionCommand } from '../../storage/sqlite/session-creation-repository.js';
+import { cancelQueuedSessionInput, claimNextSessionInput, finishSessionInputRun, getSessionInputById, getSessionInputState, setSessionInputStatus } from '../../storage/sqlite/session-input-repository.js';
 import type { ExtensionRegistryImpl } from '../../extensions/extension-registry-impl.js';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import type { AgentService } from '../../agent/service.js';
 import { listAgentEntries, normalizeAgentId } from '../../agent/agent-scope.js';
 import { resolveAgentIdFromConversationId } from '../../routing/agent-session-key.js';
@@ -111,6 +116,8 @@ export class EmbeddedBackend implements TuiBackend {
   private running = false;
   private chatAbort: AbortController | null = null;
   private readonly chatInputStates = new Map<string, TuiChatInputState>();
+  private readonly drafts = new EmbeddedDraftStore();
+  private readonly inputStateRevisions = new Map<string, number>();
 
   onEvent?: (evt: TuiEvent) => void;
   onConnected?: () => void;
@@ -126,6 +133,9 @@ export class EmbeddedBackend implements TuiBackend {
 
   async getComposerInputHistory(): Promise<TuiComposerHistoryItem[]> {
     return listComposerInputHistory();
+  }
+  async getComposerDraftDirectory(): Promise<string> {
+    return join(resolveStateDir(), 'client-drafts', 'embedded', 'composers');
   }
 
   async recordComposerInputHistory(text: string): Promise<TuiComposerHistoryItem> {
@@ -286,7 +296,9 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async getStartupResources(conversationId: string) {
-    return collectTuiStartupResources(this.activeConfig(), conversationId, {
+    const draft = this.drafts.read(conversationId);
+    return collectTuiStartupResources(this.activeConfig(), draft ? undefined : conversationId, {
+      agentId: draft?.creation.agentId,
       isWorkspaceTrusted: (workspaceDir) => this.isWorkspaceTrusted(workspaceDir),
     });
   }
@@ -296,6 +308,7 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async startWorkflowRun(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult> {
+    await this.materializeDraft(opts.conversationId);
     await this.sessionIndexReady;
     const agentId = opts.agentId?.trim() || resolveAgentIdFromConversationId(opts.conversationId);
     const result = await this.getWorkflowRunService().startWorkflowRun({
@@ -342,6 +355,13 @@ export class EmbeddedBackend implements TuiBackend {
     if (projectAgentId && projectAgentId !== normalizeAgentId(opts.agentId)) {
       return { project: match.project, created: match.created, reason: match.reason };
     }
+    const draft = this.drafts.read(opts.conversationId);
+    if (draft) {
+      if (draft.command || draft.materialization) throw new Error('First input is awaiting confirmation');
+      draft.creation.projectId = match.project.id;
+      this.drafts.save(opts.conversationId, draft);
+      return { project: match.project, created: match.created, reason: match.reason };
+    }
     if (!getSessionMetadata(opts.conversationId)) {
       await this.sessionIndex.getStore().resolveTranscriptPath(opts.conversationId, {
         metadata: {
@@ -368,9 +388,11 @@ export class EmbeddedBackend implements TuiBackend {
     query: string,
     options?: { limit?: number },
   ): Promise<TuiWorkspaceFileSearchEntry[]> {
-    if (!this.agent) return [];
+    const draft = this.drafts.read(conversationId);
+    if (!this.agent && !draft) return [];
     try {
-      const workspaceRoot = await this.agent.getEffectiveWorkspacePathForSession(conversationId);
+      const workspaceRoot = draft ? (await this.getSessionInfo(conversationId)).effectiveWorkspacePath!
+        : await this.agent!.getEffectiveWorkspacePathForSession(conversationId);
       return await fuzzySearchWorkspaceFiles(workspaceRoot, query, options?.limit ?? 15);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -380,6 +402,10 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async getReviewContext(conversationId: string) {
+    if (this.drafts.read(conversationId)) {
+      const info = await this.getSessionInfo(conversationId);
+      return buildReviewContext(await resolveGitRoot(info.effectiveWorkspacePath!));
+    }
     const config = this.activeConfig();
     const metadata = getSessionMetadata(conversationId);
     const project = metadata?.projectId ? new ProjectService().get(metadata.projectId) : null;
@@ -389,9 +415,56 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async sendChat(opts: ChatSendOptions): Promise<{ runId: string }> {
-    const agent = await this.ensureAgent();
-
+    if (this.drafts.read(opts.conversationId)?.materialization) await this.materializeDraft(opts.conversationId);
     const runId = crypto.randomUUID();
+    let durableInput = false;
+    const draft = this.drafts.read(opts.conversationId);
+    if (draft) {
+      const candidate = sessionInputCommandSchema.parse({ kind: 'start',
+        clientMessageId: draft.command?.clientMessageId ?? crypto.randomUUID(),
+        creation: { ...draft.creation, thinkingLevel: opts.thinking ?? draft.creation.thinkingLevel },
+        input: { content: opts.message, ...(opts.attachments?.length ? { attachments: opts.attachments } : {}) },
+        origin: { type: 'system', source: 'cli' },
+      });
+      if (candidate.kind !== 'start') throw new Error('Expected first input');
+      if (draft.command && canonicalSessionCommand(draft.command) !== canonicalSessionCommand(candidate)) {
+        throw new Error('First input is awaiting confirmation');
+      }
+      draft.command = candidate;
+      draft.creation = candidate.creation;
+      this.drafts.save(opts.conversationId, draft);
+      await this.ensureAgent();
+      const receipt = acceptSessionCommand({ conversationId: opts.conversationId, principalId: 'local:tui',
+        command: candidate, sourceChannel: 'tui', config: { ...draft.config,
+          modelOverride: draft.creation.model, fixedModel: true,
+          thinkingLevel: draft.creation.thinkingLevel as typeof draft.config.thinkingLevel },
+        attachProject: (id, projectId) => { new ProjectService().attachSession(id, projectId); },
+        preparedInput: { content: opts.message, attachments: opts.attachments, thinking: opts.thinking,
+          requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: candidate.origin },
+      });
+      const accepted = getSessionInputById(opts.conversationId, receipt.inputId!);
+      if (accepted?.runId && !['running', 'interrupted', 'queued'].includes(accepted.status)) {
+        this.drafts.remove(opts.conversationId);
+        return { runId: accepted.runId };
+      }
+      if (accepted?.status === 'running') {
+        let alive = true;
+        if (draft.ownerPid) {
+          try { process.kill(draft.ownerPid, 0); }
+          catch (error) { alive = (error as NodeJS.ErrnoException).code !== 'ESRCH'; }
+        }
+        if (alive) throw new Error('First input is still owned by a running process');
+        finishSessionInputRun(opts.conversationId, accepted.runId!, 'interrupted', 'Embedded process exited');
+        throw new Error('Previous run was interrupted. Review its history before explicitly retrying the same input.');
+      }
+      if (accepted?.status === 'interrupted') setSessionInputStatus(accepted.id, 'queued');
+      draft.ownerPid = process.pid;
+      this.drafts.save(opts.conversationId, draft);
+      const claimed = claimNextSessionInput(opts.conversationId, runId, receipt.inputId!);
+      if (!claimed || claimed.id !== receipt.inputId) throw new Error('First input is already queued for execution');
+      durableInput = true;
+    }
+    const agent = await this.ensureAgent();
     this.chatAbort?.abort();
     this.chatAbort = new AbortController();
     const signal = this.chatAbort.signal;
@@ -404,6 +477,7 @@ export class EmbeddedBackend implements TuiBackend {
     // Run the stream in background so the TUI event loop stays responsive.
     void (async () => {
       let initialUserMessageObserved = false;
+      let outcome: 'completed' | 'failed' = 'completed';
       try {
         // Prepend envelope timestamp so the model knows the current date/time,
         // matching the behavior of channel pipelines (Telegram, Weixin, etc.).
@@ -442,6 +516,7 @@ export class EmbeddedBackend implements TuiBackend {
           }
         }
       } catch (error) {
+        outcome = 'failed';
         if (signal.aborted) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
         for (const mapped of mapper.error(errorMessage)) {
@@ -449,6 +524,14 @@ export class EmbeddedBackend implements TuiBackend {
         }
         for (const mapped of mapper.end('error', errorMessage)) {
           this.onEvent?.({ event: mapped.type, data: mapped, source: 'embedded' });
+        }
+      } finally {
+        if (durableInput) {
+          finishSessionInputRun(opts.conversationId, runId, signal.aborted ? 'cancelled' : outcome);
+          try { this.drafts.remove(opts.conversationId); }
+          catch (err) { log.warn({ err, conversationId: opts.conversationId }, 'Accepted draft cleanup failed'); }
+          this.publishChatInputState(this.chatInputStates.get(opts.conversationId)
+            ?? { conversationId: opts.conversationId, revision: 0, inputs: [] });
         }
       }
     })();
@@ -486,7 +569,26 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async getChatInputState(conversationId: string): Promise<TuiChatInputState> {
-    return this.chatInputStates.get(conversationId) ?? { conversationId, revision: 0, inputs: [] };
+    const draft = this.drafts.read(conversationId);
+    if (draft?.command) {
+      const durable = getSessionInputState(conversationId);
+      const input = durable.inputs.find(item => item.clientMessageId === draft.command!.clientMessageId);
+      if (input?.status === 'running' && draft.ownerPid) {
+        let alive = true;
+        try { process.kill(draft.ownerPid, 0); }
+        catch (error) { alive = (error as NodeJS.ErrnoException).code !== 'ESRCH'; }
+        if (!alive) {
+          finishSessionInputRun(conversationId, input.runId!, 'interrupted', 'Embedded process exited');
+          return this.sequenceInputState(getSessionInputState(conversationId));
+        }
+      }
+      if (durable.inputs.length) {
+        const local = this.chatInputStates.get(conversationId);
+        return this.sequenceInputState({ ...durable,
+          inputs: [...durable.inputs, ...(local?.inputs.filter(item => !durable.inputs.some(saved => saved.id === item.id)) ?? [])] });
+      }
+    }
+    return this.sequenceInputState(this.chatInputStates.get(conversationId) ?? { conversationId, revision: 0, inputs: [] });
   }
 
   async updateChatInput(opts: {
@@ -515,6 +617,11 @@ export class EmbeddedBackend implements TuiBackend {
     inputId: string;
     version: number;
   }): Promise<{ ok: boolean; state?: TuiChatInputState }> {
+    if (this.drafts.read(opts.conversationId)?.command && getSessionInputById(opts.conversationId, opts.inputId)) {
+      const ok = cancelQueuedSessionInput(opts.conversationId, opts.inputId, opts.version);
+      if (ok) this.drafts.remove(opts.conversationId);
+      return { ok, state: this.sequenceInputState(getSessionInputState(opts.conversationId)) };
+    }
     const current = await this.getChatInputState(opts.conversationId);
     const target = current.inputs.find((input) => input.id === opts.inputId);
     if (!target || target.version !== opts.version || (target.status !== 'queued' && target.status !== 'interrupted')) {
@@ -557,8 +664,15 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   private publishChatInputState(state: TuiChatInputState): void {
-    this.chatInputStates.set(state.conversationId, state);
+    state = this.sequenceInputState(state);
+    this.chatInputStates.set(state.conversationId, { ...state, inputs: state.inputs.filter(input => input.status !== 'running') });
     this.onEvent?.({ event: 'session.input-state', data: state, source: 'embedded' });
+  }
+
+  private sequenceInputState(state: TuiChatInputState): TuiChatInputState {
+    const revision = Math.max(state.revision, (this.inputStateRevisions.get(state.conversationId) ?? -1) + 1);
+    this.inputStateRevisions.set(state.conversationId, revision);
+    return { ...state, revision };
   }
 
   private async replaceEmbeddedQueue(conversationId: string, state: TuiChatInputState): Promise<boolean> {
@@ -568,7 +682,7 @@ export class EmbeddedBackend implements TuiBackend {
     handle.session.clearQueue();
     for (const input of state.inputs) {
       if (input.status === 'injecting') await handle.session.steer(input.content);
-      else await handle.session.followUp(input.content);
+      else if (input.status === 'queued') await handle.session.followUp(input.content);
     }
     return true;
   }
@@ -577,6 +691,8 @@ export class EmbeddedBackend implements TuiBackend {
     conversationId: string;
     limit?: number;
   }): Promise<{ messages: HistoryMessage[] }> {
+    const draft = this.drafts.read(opts.conversationId);
+    if (draft && (!draft.command || !getSessionMetadata(opts.conversationId))) return { messages: [] };
     if (!this.agent) {
       return { messages: [] };
     }
@@ -712,10 +828,13 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async deleteSession(conversationId: string): Promise<{ ok: boolean }> {
+    const draft = this.drafts.read(conversationId);
+    if (draft && !draft.command && !draft.materialization) { this.drafts.remove(conversationId); return { ok: true }; }
     const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
     if (!store) return { ok: false };
     try {
       const ok = await store.deleteSession(conversationId);
+      if (ok && draft) this.drafts.remove(conversationId);
       return { ok };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -725,10 +844,40 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async createConversation(agentId: string, conversationId?: string): Promise<string> {
-    return createConversation({ agentId, sourceChannel: 'tui', customData: { genericNewChatShell: true }, hiddenFromSessionList: true }, '', conversationId).key;
+    const id = conversationId ?? crypto.randomUUID();
+    if (this.drafts.read(id)) return id;
+    const profile = resolveEffectiveAgentProfile(agentId);
+    this.drafts.save(id, { creation: { agentId: profile.agentId, projectId: null, execution: null,
+      temporary: false, model: profile.primaryModelRef, thinkingLevel: 'off' }, config: {} });
+    return id;
+  }
+
+  private async materializeDraft(conversationId: string): Promise<void> {
+    const draft = this.drafts.read(conversationId);
+    if (!draft) return;
+    if (draft.command) throw new Error('First input is awaiting confirmation');
+    draft.materialization ??= { commandId: crypto.randomUUID(), purpose: 'session_resources', creation: draft.creation };
+    this.drafts.save(conversationId, draft);
+    await this.ensureAgent();
+    acceptSessionCommand({ conversationId, principalId: 'local:tui', sourceChannel: 'tui', command: draft.materialization,
+      config: { ...draft.config, modelOverride: draft.creation.model, fixedModel: true,
+        thinkingLevel: draft.creation.thinkingLevel as typeof draft.config.thinkingLevel },
+      attachProject: (id, projectId) => { new ProjectService().attachSession(id, projectId); } });
+    this.drafts.remove(conversationId);
   }
 
   async getSessionInfo(conversationId: string): Promise<SessionInfo> {
+    const draft = this.drafts.read(conversationId);
+    if (draft) {
+      const model = parseModelRef(draft.creation.model);
+      const profile = resolveEffectiveAgentProfile(draft.creation.agentId);
+      const project = draft.creation.projectId ? new ProjectService().get(draft.creation.projectId) : null;
+      return { agentId: draft.creation.agentId, model: model?.model ?? draft.creation.model,
+        modelProvider: model?.provider, thinkingLevel: draft.creation.thinkingLevel,
+        reasoningLevel: draft.config.reasoningLevel, verboseLevel: draft.config.verboseLevel,
+        projectId: draft.creation.projectId ?? undefined, workingDirectoryLocked: Boolean(project),
+        effectiveWorkspacePath: project?.workspaceRoot || draft.config.workingDirectoryOverride || profile.resolvedWorkspacePath };
+    }
     if (!this.agent) {
       const model = getAgentDefaultModelRef();
       return { model: model ?? undefined };
@@ -739,7 +888,6 @@ export class EmbeddedBackend implements TuiBackend {
       const usage = await this.agent.sessionInspector.contextUsage(conversationId);
       return {
         agentId: getSessionMetadata(conversationId)?.agentId,
-        generatedShell: getSessionMetadata(conversationId)?.customData?.genericNewChatShell === true,
         model: parsed?.model ?? cfg.model,
         modelProvider: parsed?.provider,
         thinkingLevel: cfg.thinkingLevel,
@@ -784,6 +932,18 @@ export class EmbeddedBackend implements TuiBackend {
     conversationId: string,
     patch: Record<string, unknown>,
   ): Promise<void> {
+    const draft = this.drafts.read(conversationId);
+    if (draft) {
+      if (draft.command || draft.materialization) throw new Error('First input is awaiting confirmation');
+      if (typeof patch.model === 'string') draft.creation.model = patch.model;
+      if (typeof patch.thinkingLevel === 'string') draft.creation.thinkingLevel = patch.thinkingLevel;
+      if (typeof patch.workingDirectory === 'string') draft.config.workingDirectoryOverride = resolve(patch.workingDirectory);
+      if (patch.reasoningLevel === 'off' || patch.reasoningLevel === 'on' || patch.reasoningLevel === 'stream') draft.config.reasoningLevel = patch.reasoningLevel;
+      if (patch.verboseLevel === 'off' || patch.verboseLevel === 'on' || patch.verboseLevel === 'full') draft.config.verboseLevel = patch.verboseLevel;
+      if (patch.projectId === null || typeof patch.projectId === 'string') draft.creation.projectId = typeof patch.projectId === 'string' ? patch.projectId : null;
+      this.drafts.save(conversationId, draft);
+      return;
+    }
     const agent = await this.ensureAgent();
     const hasProjectPatch = Object.prototype.hasOwnProperty.call(patch, 'projectId');
     const projectId = typeof patch.projectId === 'string' ? patch.projectId.trim() : '';

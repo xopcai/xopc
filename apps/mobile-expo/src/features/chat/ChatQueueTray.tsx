@@ -10,6 +10,7 @@ import { useGatewayStore } from '../../stores/gateway-store';
 import { spacing, typography, useTheme } from '../../theme';
 import { acknowledgeLocalSessionInputs, localMessageScope, useLocalMessagesStore } from './local-messages-store';
 import { subscribeGatewayEvent } from '../gateway/gateway-event-bus';
+import { retrySessionPreparation } from '../../query/session-inputs';
 
 export function ChatQueueTray({ conversationId }: { conversationId: string }) {
   const gatewayId = useGatewayStore(s => s.activeGatewayId);
@@ -19,7 +20,7 @@ export function ChatQueueTray({ conversationId }: { conversationId: string }) {
   const key = sessionInputsKey(gatewayId, conversationId);
   const state = useQuery({ queryKey: key, queryFn: () => fetchSessionInputs(conversationId), enabled: Boolean(gatewayId && conversationId), refetchInterval: 15_000 });
   useEffect(() => {
-    if (state.data) useLocalMessagesStore.getState().update(localMessageScope(gatewayId, conversationId), messages => acknowledgeLocalSessionInputs(messages, state.data.inputs));
+    if (state.data) useLocalMessagesStore.getState().update(localMessageScope(gatewayId, conversationId, useGatewayStore.getState().getActiveProfile()?.deviceId ?? null), messages => acknowledgeLocalSessionInputs(messages, state.data.inputs));
   }, [conversationId, gatewayId, state.data]);
   const [visible, setVisible] = useState(false);
   const [editing, setEditing] = useState<SessionInput | null>(null);
@@ -36,6 +37,11 @@ export function ChatQueueTray({ conversationId }: { conversationId: string }) {
     onSettled: () => { void client.invalidateQueries({ queryKey: key }); },
   });
   const queue = queuedMessages(state.data);
+  const preparation = state.data?.preparation;
+  const retryPreparation = useMutation({
+    mutationFn: () => preparation ? retrySessionPreparation(conversationId, preparation) : Promise.resolve(),
+    onSettled: () => { void client.invalidateQueries({ queryKey: key }); },
+  });
   if (!queue.length && !visible && !state.isError) return null;
   return <>
     <Pressable accessibilityRole="button" onPress={() => { setVisible(true); void state.refetch(); }} style={styles.trigger}>
@@ -45,6 +51,11 @@ export function ChatQueueTray({ conversationId }: { conversationId: string }) {
     </Pressable>
     <BottomSheetModal visible={visible} onDismiss={() => { setVisible(false); setEditing(null); mutation.reset(); }} title={m.queue} subtitle={m.queuedExplain} keyboardAvoiding>
       <View style={styles.content}>
+        {preparation && preparation.state !== 'ready' ? <View>
+          <Text>{preparation.state === 'preparing' ? m.sessionPreparing : preparation.lastError ?? m.sessionPreparationFailed}</Text>
+          {preparation.state === 'preparation_failed' ? <Button disabled={retryPreparation.isPending} onPress={() => retryPreparation.mutate()}>{m.retry}</Button> : null}
+          {retryPreparation.isError ? <Text accessibilityRole="alert">{retryPreparation.error.message}</Text> : null}
+        </View> : null}
         {state.isError ? <Button onPress={() => void state.refetch()}>{m.retry}</Button> : !queue.length ? <Text style={{ color: colors.text.secondary }}>{m.queueEmpty}</Text> : null}
         {mutation.isError ? <Text accessibilityRole="alert" style={{ color: colors.semantic.error }}>{m.queueError}</Text> : null}
         {queue.map(input => <View key={input.id} style={[styles.row, { borderBottomColor: colors.border.subtle }]}>

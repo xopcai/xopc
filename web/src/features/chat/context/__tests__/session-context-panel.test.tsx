@@ -14,6 +14,7 @@ import { mergeContextSources } from '../merge-context-sources';
 import { SessionContextPanel, type SessionContextPanelProps } from '../session-context-panel';
 
 vi.mock('@/lib/fetch', () => ({ fetchJson: vi.fn() }));
+vi.mock('../../session/local-session-drafts', () => ({ readLocalSessionDraft: vi.fn(async () => undefined) }));
 
 describe('session context panel', () => {
   let container: HTMLDivElement;

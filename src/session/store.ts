@@ -1184,7 +1184,6 @@ export class SessionStore {
         customData: {
           ...(sourceMetadata.customData ?? {}),
           ...(options.targetMetadata.customData ?? {}),
-          genericNewChatShell: false,
           forkedFromConversationId: sourceKey,
           forkedFromTranscriptId: sourceMetadata.transcriptId,
           forkedFromSessionName: sourceMetadata.name,

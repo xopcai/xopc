@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildCreateSessionPath,
   buildSessionDetailPath,
   buildSessionHistoryPath,
   buildSessionListPath,
@@ -11,7 +10,6 @@ import {
   buildSessionStatsPath,
   buildSidebarChatListPath,
   buildSidebarLayoutPath,
-  extractCreatedConversationId,
   normalizeSessionActiveRunResponse,
   parseSessionActionResponse,
   parseSessionRenameResponse,
@@ -82,7 +80,6 @@ describe('sessions contract', () => {
     expect(buildSessionRunPath(key)).toBe(
       '/api/sessions/c0f12290-5df2-4203-8bfd-5d5f34467d20/run',
     );
-    expect(buildCreateSessionPath()).toBe('/api/sessions');
   });
 
   it('builds stats, resolve, sidebar, and action paths', () => {
@@ -140,7 +137,6 @@ describe('sessions contract', () => {
       runId: 'run-1',
     });
     expect(normalizeSessionActiveRunResponse({ payload: { active: false } })).toEqual({ active: false });
-    expect(extractCreatedConversationId({ session: { key: ' 055849b2-da79-51fd-b4e6-17f7f4f3670d ' } })).toBe('055849b2-da79-51fd-b4e6-17f7f4f3670d');
   });
 
   it('parses action, stats, resolve, and sidebar responses', () => {

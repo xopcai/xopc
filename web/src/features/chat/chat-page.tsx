@@ -1401,7 +1401,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 pageContextPreview={pageContextDraft && pageContextKey ? <PageContextPreview draft={pageContextDraft} disabled={stream.sending} waiting={stream.streaming}
                   onRemove={() => pageContextDrafts.remove(pageContextKey, pageContextDraft)} /> : undefined}
                 setContextRefs={setComposerContextRefs}
-                disabled={
+                disabled={isLoadingHistory || projectComposer.busy || updatingContext}
+                sendDisabled={
                   !session.modelConfigReady || (!session.projectPreparation && isSessionTransitioning) ||
                   Boolean(session.projectPreparation && !projectComposer.allowed) ||
                   session.modelConfigSaving || projectComposer.busy || updatingContext

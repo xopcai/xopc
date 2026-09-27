@@ -1,6 +1,7 @@
 import type { Message } from '@/features/chat/messages/messages.types';
 import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages';
-import { waitForEndpointTurnClaim } from '@/features/endpoint-tools/turn-claim';
+import { SessionManager } from '@/features/chat/session/session-manager';
+import { sendSessionInput } from '@/features/chat/session/send-session-input';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { formatApiHttpError } from '@/lib/http-error-message';
 import { apiUrl } from '@/lib/url';
@@ -577,34 +578,11 @@ export async function startWorkflowConversation(options: {
   workflowName: string;
   editing?: boolean;
 }): Promise<string> {
-  const data = await fetchJson<{ session: { key: string } }>(apiUrl('/api/sessions'), {
-    method: 'POST',
-    body: JSON.stringify({
-      channel: 'webchat',
-      agentId: options.agentId,
-      projectId: options.projectId,
-    }),
-  });
-  const conversationId = data.session?.key?.trim();
-  if (!conversationId) throw new Error('Session creation did not return a conversation id');
+  const conversationId = (await new SessionManager().createSession({ agentId: options.agentId, projectId: options.projectId })).key;
   const content = options.editing
     ? `Please use the built-in workflow-authoring skill to update the saved workflow \`${options.workflowName}\`.\n\nRequested change:\n${options.prompt}`
     : `Please use the built-in workflow-authoring skill to create a workflow named \`${options.workflowName}\`.\n\nGoal:\n${options.prompt}`;
-  try {
-    const origin = await waitForEndpointTurnClaim();
-    await fetchJson(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/inputs`), {
-      method: 'POST',
-      body: JSON.stringify({
-        clientMessageId: crypto.randomUUID(),
-        delivery: 'next',
-        content,
-        origin,
-      }),
-    });
-  } catch (error) {
-    await fetchJson(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}`), { method: 'DELETE' }).catch(() => undefined);
-    throw error;
-  }
+  await sendSessionInput(conversationId, content);
   return conversationId;
 }
 

@@ -1,6 +1,7 @@
 import { readCurrentTranscriptId } from './session-instance-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import { turnOriginSchema, type TurnOrigin } from '@xopcai/endpoint-tools-protocol';
+import type { SessionPreparationView } from '@xopcai/gateway-contract';
 
 import type { AgentSourceContext, SourceContextRefSummary } from '../../agent/source-context/types.js';
 
@@ -40,6 +41,7 @@ export type SessionInput = {
 };
 
 export type SessionInputState = {
+  preparation?: SessionPreparationView;
   conversationId: string;
   revision: number;
   activeRunId?: string;
@@ -99,6 +101,8 @@ export function bumpSessionInputRevision(db: ReturnType<typeof getSqliteDatabase
 
 export function getSessionInputState(conversationId: string): SessionInputState {
   const db = getSqliteDatabase();
+  const preparation = db.prepare('SELECT operation_id AS operationId, revision, state, last_error AS lastError FROM session_preparations WHERE conversation_id=?')
+    .get(conversationId) as SessionPreparationView | undefined;
   const runtime = db.prepare(`SELECT revision, active_run_id, active_input_id
     FROM session_input_runtime WHERE conversation_id = ?`).get(conversationId) as
       { revision: number; active_run_id: string | null; active_input_id: string | null } | undefined;
@@ -107,6 +111,7 @@ export function getSessionInputState(conversationId: string): SessionInputState 
     .all(conversationId) as InputRow[];
   return {
     conversationId,
+    ...(preparation ? { preparation } : {}),
     revision: runtime?.revision ?? 0,
     activeRunId: runtime?.active_run_id ?? undefined,
     activeInputId: runtime?.active_input_id ?? undefined,
@@ -208,8 +213,11 @@ export function insertSessionInput(input: {
   });
 }
 
-export function claimNextSessionInput(conversationId: string, runId: string): SessionInput | undefined {
+export function claimNextSessionInput(conversationId: string, runId: string, expectedInputId?: string): SessionInput | undefined {
   return runSqliteWriteTransaction((db) => {
+    const preparation = db.prepare('SELECT state FROM session_preparations WHERE conversation_id=?').get(conversationId) as { state: string } | undefined;
+    if (preparation && preparation.state !== 'ready') return undefined;
+    if (db.prepare('SELECT 1 FROM session_tombstones WHERE conversation_id=?').get(conversationId)) return undefined;
     ensureRuntime(db, conversationId);
     const runtime = db.prepare(`SELECT active_run_id FROM session_input_runtime WHERE conversation_id = ?`)
       .get(conversationId) as { active_run_id: string | null };
@@ -222,6 +230,7 @@ export function claimNextSessionInput(conversationId: string, runId: string): Se
     const row = db.prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND effective_delivery = 'next'
       AND status = 'queued' ORDER BY position, created_at_ms, id LIMIT 1`).get(conversationId) as InputRow | undefined;
     if (!row) return undefined;
+    if (expectedInputId && row.id !== expectedInputId) return undefined;
     const now = Date.now();
     db.prepare(`UPDATE session_inputs SET status = 'running', run_id = ?, version = version + 1,
       updated_at_ms = ? WHERE id = ?`).run(runId, now, row.id);
@@ -232,7 +241,7 @@ export function claimNextSessionInput(conversationId: string, runId: string): Se
   });
 }
 
-export function finishSessionInputRun(conversationId: string, runId: string, status: 'completed' | 'failed' | 'cancelled' | 'suspended', error?: string): boolean {
+export function finishSessionInputRun(conversationId: string, runId: string, status: 'completed' | 'failed' | 'cancelled' | 'suspended' | 'interrupted', error?: string): boolean {
   return runSqliteWriteTransaction((db) => {
     const runtime = db.prepare(`SELECT active_input_id, active_run_id FROM session_input_runtime WHERE conversation_id = ?`)
       .get(conversationId) as { active_input_id: string | null; active_run_id: string | null } | undefined;

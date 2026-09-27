@@ -5,6 +5,13 @@ import type { MessageSubmission } from './message-submission';
 
 const PREFIX = 'chat.messageOutbox:v1:';
 const MAX_RECORDS_PER_SESSION = 50;
+const volatileScopes = new Set<string>();
+const volatileRecords = new Map<string, OutboxRecord[]>();
+
+export function markVolatileMessageOutbox(scope: string): void {
+  volatileScopes.add(scope);
+}
+export function isVolatileMessageOutbox(scope: string): boolean { return volatileScopes.has(scope); }
 
 export type OutboxRecord = {
   submission: MessageSubmission;
@@ -18,6 +25,7 @@ function storageKey(scope: string): string {
 }
 
 export function readMessageOutbox(scope: string): OutboxRecord[] {
+  if (volatileScopes.has(scope)) return structuredClone(volatileRecords.get(scope) ?? []);
   try {
     const parsed = JSON.parse(storage.getString(storageKey(scope)) ?? '[]') as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -38,6 +46,7 @@ export function readMessageOutbox(scope: string): OutboxRecord[] {
 }
 
 function writeMessageOutbox(scope: string, records: OutboxRecord[]): void {
+  if (volatileScopes.has(scope)) { volatileRecords.set(scope, structuredClone(records)); return; }
   if (records.length === 0) {
     storage.delete(storageKey(scope));
     return;

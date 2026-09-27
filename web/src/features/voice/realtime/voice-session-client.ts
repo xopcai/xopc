@@ -13,6 +13,7 @@ import {
 
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { SessionManager } from '@/features/chat/session/session-manager';
 
 interface VoiceSessionClientOptions {
   signal?: AbortSignal;
@@ -56,6 +57,7 @@ export class VoiceSessionClient {
   ) { this.receive = new VoiceReceiveState(session); }
 
   static async preflight(options: Pick<VoiceSessionClientOptions, 'purpose' | 'mode' | 'conversationId' | 'signal'>): Promise<void> {
+    if (options.purpose === 'conversation' && options.conversationId) await new SessionManager().materialize(options.conversationId, 'voice');
     await fetchJson(apiUrl('/api/voice/realtime/preflight'), {
       method: 'POST', signal: options.signal,
       body: JSON.stringify({ purpose: options.purpose, mode: options.mode, conversationId: options.conversationId,

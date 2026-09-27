@@ -11,6 +11,7 @@ vi.mock('../../api/client', () => ({
 }));
 
 const mockedApiFetch = vi.mocked(apiFetch);
+vi.mock('../../features/chat/local-session-drafts', () => ({ readLocalSessionDraft: () => undefined, patchLocalSessionDraft: () => false }));
 
 describe('chatModelDisplayName', () => {
   it('localizes cloud names without changing the selected model ID', () => {

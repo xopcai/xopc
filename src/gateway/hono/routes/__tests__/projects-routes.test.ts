@@ -79,72 +79,6 @@ describe('project association routes', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it.each(['local_checkout', 'managed_worktree'] as const)('binds an explicit %s before returning the new session', async (executionMode) => {
-    const repo = join(stateDir, 'repo');
-    mkdirSync(repo);
-    const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'pipe' });
-    git('init');
-    writeFileSync(join(repo, 'code.ts'), 'original');
-    git('add', 'code.ts');
-    git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'Initial');
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Code', workspaceRoot: repo, executionMode: 'local_checkout' });
-    const app = registerSessionRouteApp({
-      currentConfig: ConfigSchema.parse({}), projects,
-      sessions: { getSession: vi.fn(async (key: string) => ({ key, projectId: project.id })) } as unknown as GatewayService['sessions'],
-      sessionIndexInstance: { saveMessages: vi.fn(async (key: string) => { ensureSessionRecord(key, stateDir, { agentId: "main" }); }) } as unknown as GatewayService['sessionIndexInstance'],
-    });
-    const response = await app.request('/api/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId: project.id, executionMode }) });
-    expect(response.status).toBe(201);
-    const { session, environment } = await response.json();
-    expect(environment.kind).toBe(executionMode);
-    expect(environment.status).toBe('ready');
-    expect(new ExecutionEnvironmentStore().resolveBinding(session.key)?.environmentId).toBe(environment.id);
-    expect(projects.get(project.id)?.executionMode).toBe('local_checkout');
-    writeFileSync(join(environment.rootPath, 'code.ts'), 'edited');
-    expect(readFileSync(join(repo, 'code.ts'), 'utf8')).toBe(executionMode === 'local_checkout' ? 'edited' : 'original');
-  });
-
-  it('rejects explicit execution modes without a project instead of ignoring them', async () => {
-    const app = registerSessionRouteApp({ currentConfig: ConfigSchema.parse({}), projects: new ProjectService() });
-    const response = await app.request('/api/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ executionMode: 'managed_worktree' }) });
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({ error: 'An execution mode requires a project' });
-  });
-
-  it.each([true, false])('creates a workspace session with fixed-model initialization success=%s', async (success) => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Model workspace', workspaceRoot: stateDir });
-    const saveMessages = vi.fn(async (key: string) => { ensureSessionRecord(key, stateDir, { agentId: "main" }); });
-    const deleteSession = vi.fn(async () => ({ ok: true }));
-    const app = registerSessionRouteApp({
-      currentConfig: ConfigSchema.parse({}),
-      projects,
-      sessions: {
-        initializeChatModel: vi.fn(async () => success ? { ok: true } : { ok: false, error: 'Invalid model' }),
-        getSession: vi.fn(async (key: string) => ({ key })),
-        delete: deleteSession,
-      } as unknown as GatewayService['sessions'],
-      sessionIndexInstance: { saveMessages } as unknown as GatewayService['sessionIndexInstance'],
-    });
-    const response = await app.request('/api/sessions', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId: project.id, initialAgentConfig: { model: 'test/model' } }),
-    });
-    const key = saveMessages.mock.calls[0]![0];
-    if (success) {
-      expect(response.status).toBe(201);
-      expect(await response.json()).toMatchObject({
-        session: { key }, agentConfig: { fixedModel: true }, environment: { kind: 'local_checkout', rootPath: realpathSync(stateDir) },
-      });
-      expect(new ExecutionEnvironmentStore().resolveBinding(key)).toBeDefined();
-    } else {
-      expect(response.status).toBe(400);
-      expect(deleteSession).toHaveBeenCalledWith(key);
-      expect(new ExecutionEnvironmentStore().resolveBinding(key)).toBeUndefined();
-    }
-  });
-
   it('returns a structured conflict when creating with a missing workspace root', async () => {
     const projects = new ProjectService();
     const workspaceRoot = join(stateDir, 'missing-workspace');
@@ -538,128 +472,6 @@ describe('project association routes', () => {
     expect(patch).not.toHaveBeenCalled();
   });
 
-  it('creates project sessions with the project default agent when no agent is explicit', async () => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Agent Project', defaultAgentId: 'coder' });
-    const listSessions = vi.fn(async () => ({ items: [] }));
-    const app = registerSessionRouteApp({
-      currentConfig: ConfigSchema.parse({}),
-      projects,
-      sessions: {
-        listSessions,
-        getSession: vi.fn(async (key: string) => getSessionMetadata(key)),
-      } as unknown as GatewayService['sessions'],
-      sessionIndexInstance: {
-        saveMessages: vi.fn(async (conversationId: string) => {
-          ensureSessionRecord(conversationId, process.cwd(), { agentId: "main" });
-        }),
-      } as unknown as GatewayService['sessionIndexInstance'],
-    });
-
-    const res = await app.request('/api/sessions', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId: project.id }),
-    });
-
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { session: { key: string; routing?: { agentId?: string } } };
-    expect(body.session.key).toMatch(/^[0-9a-f-]{36}$/);
-    expect(body.session.routing?.agentId).toBe('coder');
-    expect(projects.listConversationIds(project.id)).toEqual([body.session.key]);
-    expect(listSessions).not.toHaveBeenCalled();
-  });
-
-  it('applies initial agent config before returning a created session', async () => {
-    const patchAgentConfig = vi.fn(async () => ({ ok: true as const }));
-    const getSession = vi.fn(async (key: string) => ({
-      key,
-      routing: { agentId: 'main' },
-    }));
-    const app = registerSessionRouteApp({
-      currentConfig: ConfigSchema.parse({}),
-      projects: {
-        get: vi.fn(),
-        attachSession: vi.fn(),
-      } as unknown as GatewayService['projects'],
-      sessions: {
-        patchAgentConfig,
-        getSession,
-      } as unknown as GatewayService['sessions'],
-      sessionIndexInstance: {
-        saveMessages: vi.fn(async (conversationId: string) => {
-          ensureSessionRecord(conversationId, process.cwd(), { agentId: "main" });
-        }),
-      } as unknown as GatewayService['sessionIndexInstance'],
-    });
-
-    const res = await app.request('/api/sessions', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        initialAgentConfig: { model: ' openai/gpt-test ', thinkingLevel: ' high ' },
-        temporary: true,
-      }),
-    });
-
-    expect(res.status).toBe(201);
-    expect(patchAgentConfig).toHaveBeenCalledOnce();
-    expect(patchAgentConfig).toHaveBeenCalledWith(expect.any(String), {
-      userContextMode: 'temporary',
-    });
-    expect(patchAgentConfig.mock.invocationCallOrder[0]).toBeLessThan(getSession.mock.invocationCallOrder[0]!);
-  });
-
-  it('creates a fresh project chat even when an empty shell already exists', async () => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Reusable Project', defaultAgentId: 'coder' });
-    const existingKey = "8b467115-80ec-46d7-8a43-60b366edeb57";
-    const saveMessages = vi.fn(async (conversationId: string) => {
-      ensureSessionRecord(conversationId, process.cwd(), { agentId: "main" });
-    });
-    const existingSession = {
-      key: existingKey,
-      messageCount: 0,
-      hiddenFromSessionList: true,
-      projectId: project.id,
-      routing: {
-        agentId: 'coder',
-        source: 'webchat',
-        accountId: 'default',
-        peerKind: 'direct',
-        peerId: 'chat_1783525363859',
-      },
-      customData: { genericNewChatShell: true },
-    };
-    const app = registerSessionRouteApp({
-      currentConfig: ConfigSchema.parse({}),
-      projects,
-      sessions: {
-        listSessions: vi.fn(async () => ({ items: [existingSession] })),
-        getSession: vi.fn(async (key: string) => ({
-          ...existingSession,
-          key,
-          routing: { ...existingSession.routing, peerId: key.split(':').at(-1) },
-        })),
-      } as unknown as GatewayService['sessions'],
-      sessionIndexInstance: {
-        saveMessages,
-      } as unknown as GatewayService['sessionIndexInstance'],
-    });
-
-    const res = await app.request('/api/sessions', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId: project.id }),
-    });
-
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { session: { key: string } };
-    expect(body.session.key).not.toBe(existingKey);
-    expect(saveMessages).toHaveBeenCalledOnce();
-    expect(projects.listConversationIds(project.id)).toEqual([body.session.key]);
-  });
-
   it.each(['webchat', 'automation', 'understanding'])('omits hidden %s sessions from project session lists', async (source) => {
     const hiddenKey = crypto.randomUUID();
     const visibleKey = "f6220a1c-2b77-40ac-8386-fd31474221a9";
@@ -674,7 +486,7 @@ describe('project association routes', () => {
               messageCount: 0,
               hiddenFromSessionList: true,
               routing: { peerId: source === 'webchat' ? 'chat_1783525363859' : 'automation-run' },
-              customData: source === 'understanding' ? { workDiscovery: true, genericNewChatShell: false }
+              customData: source === 'understanding' ? { workDiscovery: true }
                 : source === 'webchat' ? { genericNewChatShell: true } : { origin: 'automation' },
             }
           : {
@@ -693,59 +505,6 @@ describe('project association routes', () => {
     const body = (await res.json()) as { ok: boolean; sessions: Array<{ key: string }> };
     expect(body.ok).toBe(true);
     expect(body.sessions).toEqual([expect.objectContaining({ key: visibleKey })]);
-  });
-
-  it('does not reuse note-scoped empty sessions when creating a generic webchat session', async () => {
-    const noteKey = "96fa321e-e6e3-433e-81b4-aed6fe353d71";
-    const saveMessages = vi.fn(async (conversationId: string) => {
-      ensureSessionRecord(conversationId, process.cwd(), { agentId: "main" });
-    });
-    const app = registerSessionRouteApp({
-      currentConfig: ConfigSchema.parse({}),
-      projects: {
-        get: vi.fn(() => null),
-      } as unknown as GatewayService['projects'],
-      sessions: {
-        listSessions: vi.fn(async () => ({
-          items: [{
-            key: noteKey,
-            messageCount: 0,
-            sourceChannel: 'webchat',
-            sourceChatId: 'default:direct:note_abc_1783324340003',
-            routing: {
-              agentId: 'main',
-              source: 'webchat',
-              accountId: 'default',
-              peerKind: 'direct',
-              peerId: 'note_abc_1783324340003',
-            },
-            customData: {
-              sourceBinding: { kind: 'note', sourceId: 'abc', version: '1', attachedAt: 1 },
-            },
-          }],
-        })),
-        getSession: vi.fn(async (key: string) => ({ key, routing: { agentId: key.split(':')[1] } })),
-      } as unknown as GatewayService['sessions'],
-      sessionIndexInstance: {
-        saveMessages,
-      } as unknown as GatewayService['sessionIndexInstance'],
-    });
-
-    const res = await app.request('/api/sessions', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { session: { key: string } };
-    expect(body.session.key).not.toBe(noteKey);
-    expect(body.session.key).toMatch(/^[0-9a-f-]{36}$/);
-    expect(saveMessages).toHaveBeenCalledWith(
-      expect.stringMatching(/^[0-9a-f-]{36}$/),
-      [],
-      expect.any(Object),
-    );
   });
 
   it('does not detach a session that is no longer attached to the route project', async () => {

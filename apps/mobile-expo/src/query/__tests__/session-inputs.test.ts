@@ -3,6 +3,7 @@ import { apiFetch } from '../../api/client';
 import { cancelSessionInput, fetchSessionInputs, queuedMessages, sessionInputStateSchema, updateSessionInput } from '../session-inputs';
 
 vi.mock('../../api/client', () => ({ apiFetch: vi.fn(), formatApiHttpError: (status: number, _: string, message: string) => `${status}: ${message}` }));
+vi.mock('../../features/chat/local-session-drafts', () => ({ readLocalSessionDraft: vi.fn(() => undefined) }));
 const request = vi.mocked(apiFetch);
 const input = { id: 'input/one', clientMessageId: 'one', kind: 'message', status: 'queued', content: 'Continue', position: 1, version: 3, effectiveDelivery: 'next' };
 const state = { conversationId: 'chat/one', inputs: [input] };

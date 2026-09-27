@@ -1,6 +1,7 @@
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcDeviceCrypto } from '../service/deviceCrypto';
 import { XopcPayload } from '../model/realtime';
+import { localSessionStore } from '../service/localSessionStore';
 
 export interface XopcClarification {
   id: string; conversationId: string; kind: string; status: string; question: string; choices?: string[];
@@ -35,6 +36,7 @@ export class XopcChatPromptViewModel {
     if (!this.conversationId || this.busy) return;
     const request = ++this.request;
     try {
+      if (await localSessionStore.read(this.conversationId)) return;
       const result = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(this.conversationId) + '/clarification')) as XopcPayload<XopcClarificationSnapshot>;
       if (!result.payload) throw new Error('INVALID_CLARIFICATION');
       if (request !== this.request) return;

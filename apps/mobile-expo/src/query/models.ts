@@ -1,10 +1,13 @@
 import { mutationOptions, type QueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+import type { ModelThinkingCapabilities } from '@xopcai/gateway-contract';
 
 import { apiFetch, formatApiHttpError } from '../api/client';
 import { queryKeys } from './keys';
+import { readLocalSessionDraft, patchLocalSessionDraft } from '../features/chat/local-session-drafts';
 
 export type ChatModelOption = {
+  thinking?: ModelThinkingCapabilities;
   id: string;
   name?: string;
   displayNames?: Partial<Record<'zh-CN' | 'en', string>>;
@@ -45,7 +48,7 @@ function normalizeModelRow(raw: unknown): ChatModelOption | null {
   if (!id.trim()) return null;
   const parsed = modelRowSchema.safeParse({ ...row, id: id.trim() });
   if (!parsed.success) return { id: id.trim() };
-  return parsed.data;
+  return parsed.data as ChatModelOption;
 }
 
 function parseModelsPayload(raw: unknown): ChatModelsPayload | null {
@@ -95,16 +98,6 @@ export async function fetchChatModels(agentId?: string): Promise<ChatModelsPaylo
     ? `?agentId=${encodeURIComponent(agentId.trim().toLowerCase())}`
     : '';
   const res = await apiFetch(`/api/models${agentQ}`);
-  if (res.status === 404 || res.status === 405 || res.status === 501) {
-    const fallbackRes = await apiFetch(`/api/agent/models${agentQ}`);
-    if (!fallbackRes.ok) {
-      const body = (await fallbackRes.json().catch(() => ({}))) as { error?: { message?: string } };
-      throw new Error(formatApiHttpError(fallbackRes.status, fallbackRes.statusText, body.error?.message));
-    }
-    const raw = await fallbackRes.json().catch(() => null);
-    return parseModelsPayload(raw) ?? { defaultId: '', items: [] };
-  }
-
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
     throw new Error(formatApiHttpError(res.status, res.statusText, body.error?.message));
@@ -119,6 +112,7 @@ export async function setSessionModelRef(
   modelRef: string,
   taskId?: string,
 ): Promise<boolean> {
+  if (!taskId && patchLocalSessionDraft(conversationId, { model: modelRef.trim() })) return true;
   const path = taskId
     ? `/api/tasks/${encodeURIComponent(taskId)}/conversation/config`
     : `/api/sessions/${encodeURIComponent(conversationId)}/agent-config`;
@@ -163,6 +157,7 @@ export async function setSessionInitialAgentConfig(
   conversationId: string,
   config: { model?: string; thinkingLevel?: string },
 ): Promise<void> {
+  if (patchLocalSessionDraft(conversationId, config)) return;
   const res = await apiFetch(`/api/sessions/${encodeURIComponent(conversationId)}/agent-config`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -194,7 +189,21 @@ export async function fetchSessionAgentConfig(
   reasoningLevel: string;
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
+  configVersion?: number;
 }> {
+  const draft = readLocalSessionDraft(conversationId);
+  if (draft && !draft.creation.model && !draft.clientMessageId && !draft.materialization) {
+    const models = await fetchChatModels(draft.creation.agentId);
+    const latest = readLocalSessionDraft(conversationId);
+    if (latest && !latest.creation.model && !latest.clientMessageId && !latest.materialization && models.defaultId) {
+      const thinkingLevel = models.items.find(model => model.id === models.defaultId)?.thinking?.initialValue ?? 'off';
+      patchLocalSessionDraft(conversationId, { model: models.defaultId, thinkingLevel });
+      draft.creation.model = models.defaultId;
+      draft.creation.thinkingLevel = thinkingLevel;
+    } else if (latest) draft.creation = latest.creation;
+  }
+  if (draft) return { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel,
+    reasoningLevel: 'on', effectiveWorkspacePath: '', workingDirectoryLocked: Boolean(draft.creation.projectId) };
   const key = encodeURIComponent(conversationId);
   const res = await apiFetch(`/api/sessions/${key}/agent-config`);
   if (!res.ok) {
@@ -208,6 +217,7 @@ export async function fetchSessionAgentConfig(
   }
   const data = (await res.json().catch(() => ({}))) as {
     payload?: {
+      configVersion?: number;
       model?: string;
       thinkingLevel?: string;
       reasoningLevel?: string | null;
@@ -219,6 +229,7 @@ export async function fetchSessionAgentConfig(
     };
   };
   return {
+    configVersion: data.payload?.configVersion,
     model: typeof data.payload?.model === 'string' ? data.payload.model : '',
     thinkingLevel: data.payload?.thinkingLevel ?? '',
     reasoningLevel:

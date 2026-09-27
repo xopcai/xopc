@@ -59,6 +59,10 @@ async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
 }
 
 async function resolveSpace(options?: WorkspaceEditorRequestOptions): Promise<FileSpace> {
+  if (!options?.projectId && options?.conversationId) {
+    const { SessionManager } = await import('@/features/chat/session/session-manager');
+    await new SessionManager().materialize(options.conversationId, 'session_resources');
+  }
   const context = options?.projectId
     ? { kind: 'project', id: options.projectId }
     : options?.conversationId

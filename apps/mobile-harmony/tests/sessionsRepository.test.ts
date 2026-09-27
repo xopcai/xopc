@@ -5,6 +5,11 @@ vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySess
 vi.mock('../entry/src/main/ets/service/realtimeClient.ets', () => ({ realtimeClient: {} }));
 vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCrypto: class {} }));
 vi.mock('../entry/src/main/ets/service/secureStore.ets', () => ({ XopcSecureStore: class {} }));
+vi.mock('../entry/src/main/ets/service/transport.ets', () => ({ XopcHttpError: class extends Error { status: number = 500; } }));
+vi.mock('../entry/src/main/ets/service/localSessionStore.ets', () => ({ localSessionStore: {
+  read: vi.fn().mockResolvedValue(undefined), readCommand: vi.fn().mockResolvedValue(undefined),
+  save: vi.fn(), saveCommand: vi.fn(), clearCommand: vi.fn(), remove: vi.fn(),
+} }));
 import { XopcChatRepository } from '../entry/src/main/ets/repository/chatRepository.ets';
 describe('session manager Gateway requests', () => {
   beforeEach(() => { vi.resetAllMocks(); mock.request.mockResolvedValue(JSON.stringify({ items: [], total: 0, hasMore: false })); });

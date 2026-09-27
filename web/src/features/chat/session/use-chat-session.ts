@@ -24,6 +24,7 @@ import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-u
 import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 import { SessionManager, type SessionTimelineItem } from '@/features/chat/session/session-manager';
 import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
+import { isSessionModelReady } from './session-model-ready';
 import { resetChatViewState } from '@/features/chat/session/reset-chat-view-state';
 import { resolveChatConversationPhase } from '@/features/chat/session/chat-conversation-phase';
 import { useChatFollowUpClarify } from '@/features/chat/session/use-chat-follow-up-clarify';
@@ -93,7 +94,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
   const sessionName = sessionSlice?.name ?? null;
   const sessionModel = sessionSlice?.model ?? '';
   const modelRegistry = useSWR(CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, { revalidateOnFocus: false });
-  const modelConfigReady = sessionSlice?.configVersion !== undefined && Boolean(modelRegistry.data?.some((item) => item.id === sessionModel));
+  const modelConfigReady = isSessionModelReady(sessionSlice, modelRegistry.data);
   const modelConfigSaving = sessionSlice?.modelConfigSaving ?? false;
   const thinkingLevel = sessionSlice?.thinkingLevel ?? DEFAULT_THINKING;
   const reasoningLevel = sessionSlice?.reasoningLevel ?? 'on';

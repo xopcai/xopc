@@ -5,13 +5,14 @@ import useSWR from 'swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { readLocalSessionDraft } from '../session/local-session-drafts';
 
 export function useSessionContext(conversationId: string | null, open: boolean) {
   const token = useGatewayStore((state) => state.conversationId);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const result = useSWR(
     conversationId ? ['session-context', baseUrl, token, conversationId] : null,
-    async () => (await fetchJson<{ summary: SessionContextSummary }>(
+    async () => await readLocalSessionDraft(conversationId!) ? undefined : (await fetchJson<{ summary: SessionContextSummary }>(
       apiUrl(`/api/sessions/${encodeURIComponent(conversationId!)}/context-summary`),
     )).summary,
     { keepPreviousData: false, revalidateOnFocus: open, revalidateOnReconnect: open, shouldRetryOnError: false },

@@ -101,10 +101,10 @@ function formatFileSize(size?: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function ChatPanel({ gatewayId }: { gatewayId: string }) {
+export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId: string }) {
   const client = useMemo(() => new BrowserChatClient(), []);
   const [snapshot, setSnapshot] = useState(EMPTY);
-  const keyForSession = (conversationId?: string) => JSON.stringify([gatewayId, conversationId ?? 'new']);
+  const keyForSession = (conversationId?: string) => JSON.stringify([gatewayId, deviceId, conversationId ?? 'new']);
   const draftKey = keyForSession(snapshot.conversationId);
   const { store: drafts, draft: composerDraft, ready: draftReady, update: updateDraft } = useComposerDrafts(draftKey, cause => setError(String(cause)));
   const draft = composerDraft.text;

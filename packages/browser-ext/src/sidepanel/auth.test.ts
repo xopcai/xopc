@@ -89,6 +89,40 @@ describe('browser pairing recovery', () => {
 });
 
 describe('browser access recovery', () => {
+  it.each(['gatewayId', 'deviceId', 'gatewayPublicKey'] as const)('never retries an old request after %s changes', async (field) => {
+    const original = {
+      gatewayId: 'gateway-1', gatewayName: 'Workstation', gatewayUrl: 'https://gateway.example.com',
+      gatewayPublicKey: 'key', deviceId: 'device-1', refreshToken: 'refresh', accessToken: 'access',
+      accessTokenExpiresAt: Date.now() + 120_000,
+    };
+    let current = original;
+    vi.stubGlobal('chrome', { storage: { local: {
+      get: vi.fn(async () => ({ 'xopc.browser.profile': current })),
+    } } });
+    const fetch = vi.fn(async () => {
+      current = { ...original, [field]: 'changed', accessToken: 'new-access' };
+      return new Response('', { status: 401 });
+    });
+    vi.stubGlobal('fetch', fetch);
+    await expect(gatewayFetch('/api/sessions/session/inputs', { method: 'POST', body: 'private input' }))
+      .rejects.toThrow('Gateway identity changed');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a captured identity before sending to a different profile', async () => {
+    vi.stubGlobal('chrome', { storage: { local: {
+      get: vi.fn(async () => ({ 'xopc.browser.profile': {
+        gatewayId: 'new', gatewayUrl: 'https://new.example.com', deviceId: 'device', gatewayPublicKey: 'key',
+        refreshToken: 'refresh', accessToken: 'access', accessTokenExpiresAt: Date.now() + 120_000,
+      } })),
+    } } });
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    await expect(gatewayFetch('/api/status', {}, { gatewayId: 'old', deviceId: 'device', gatewayPublicKey: 'key' }))
+      .rejects.toThrow('Gateway identity changed');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('uses a concurrently refreshed profile after a 401 without restoring the stale refresh token', async () => {
     const oldProfile = {
       gatewayId: 'gateway-1', gatewayName: 'Workstation', gatewayUrl: 'https://gateway.example.com',

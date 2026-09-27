@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionInfo } from '@/features/chat/chat.types';
 import { openNewChatHandoff, resetNewChatHandoffInflightForTests } from '@/features/chat/session/new-chat-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
-import { resetWebchatEmptyShellCacheForTests } from '@/features/chat/session/webchat-empty-shell-cache';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 const createdSession: SessionInfo = {
@@ -60,7 +59,6 @@ describe('openNewChatHandoff', () => {
   beforeEach(() => {
     useGatewayStore.setState({ conversationId: 'test-token', baseUrl: 'http://gateway-a' });
     resetNewChatHandoffInflightForTests();
-    resetWebchatEmptyShellCacheForTests();
   });
 
   afterEach(() => {

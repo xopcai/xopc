@@ -8,6 +8,7 @@ import {
 } from '@xopcai/gateway-contract';
 
 import { apiFetch, formatApiHttpError } from '../api/client';
+import { materializeSession } from './session-materialization';
 
 async function apiError(response: Response): Promise<Error> {
   const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
@@ -33,6 +34,7 @@ export async function fetchDefaultFileSpace(): Promise<FileSpace> {
 }
 
 export async function fetchFileSpaceForContext(kind: FileContextKind, id: string): Promise<FileSpace> {
+  if (kind === 'session') await materializeSession(id, 'session_resources');
   const response = await apiFetch(`/api/files/contexts/${kind}/${encodeURIComponent(id)}`);
   if (!response.ok) throw await apiError(response);
   return FileSpaceSchema.parse((await response.json() as { space?: unknown }).space);

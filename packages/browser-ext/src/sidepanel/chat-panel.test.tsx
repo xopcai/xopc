@@ -49,11 +49,19 @@ beforeEach(async () => {
   vi.stubGlobal('chrome', { i18n: { getMessage: (key: string) => key }, storage: { session: { get: vi.fn().mockResolvedValue({}), remove: vi.fn().mockResolvedValue(undefined) } }, tabs: { onUpdated: event, onRemoved: event, onActivated: event } });
   HTMLElement.prototype.scrollTo = vi.fn();
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
-  await act(async () => { root.render(<ChatPanel gatewayId="gateway-one" />); });
+  await act(async () => { root.render(<ChatPanel gatewayId="gateway-one" deviceId="device-one" />); });
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 
 describe('browser composer interactions', () => {
+  it('isolates unsent drafts between pairing identities on the same gateway', async () => {
+    await act(async () => text('first device draft'));
+    await act(async () => root.render(<ChatPanel key="other-device" gatewayId="gateway-one" deviceId="device-two" />));
+    expect(container.querySelector('textarea')!.value).toBe('');
+    await act(async () => text('second device draft'));
+    await act(async () => root.render(<ChatPanel key="original-device" gatewayId="gateway-one" deviceId="device-one" />));
+    expect(container.querySelector('textarea')!.value).toBe('first device draft');
+  });
   it('does not send when Enter confirms IME composition', async () => {
     await act(async () => text('你好'));
     const input = container.querySelector('textarea')!;
@@ -152,9 +160,9 @@ describe('browser composer interactions', () => {
 
   it('attaches a context-menu selection to the restored chat', async () => {
     const pending = { tabId: 1, source: 'current_selection', context: { kind: 'browser_page', sourceId: crypto.randomUUID(), version: 'a'.repeat(64), title: 'Selected page', url: 'https://example.com/', documentId: 'doc', capturedAt: Date.now(), selection: 'selected text', truncated: false } };
-    await act(async () => mocks.store.update(JSON.stringify(['gateway-one', 'a']), (draft: any) => ({ ...draft, text: 'existing draft' })));
+    await act(async () => mocks.store.update(JSON.stringify(['gateway-one', 'device-one', 'a']), (draft: any) => ({ ...draft, text: 'existing draft' })));
     chrome.storage.session.get = vi.fn().mockResolvedValueOnce({ 'xopc.browser.pending-context': pending }).mockResolvedValue({});
-    await act(async () => root.render(<ChatPanel key="reopened" gatewayId="gateway-one" />));
+    await act(async () => root.render(<ChatPanel key="reopened" gatewayId="gateway-one" deviceId="device-one" />));
     expect(container.querySelector('.context-chip')?.textContent).toContain('Selected page');
     expect(container.querySelector('textarea')!.value).toBe('existing draft');
     expect(chrome.storage.session.remove).toHaveBeenCalledWith('xopc.browser.pending-context');

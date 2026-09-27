@@ -13,6 +13,7 @@ import { XopcNotesView } from './NotesView';
 export struct XopcNotesTabView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param activePage: boolean = false;
+  @Param bottomInset: number = 0;
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local model: XopcNoteViewModel = new XopcNoteViewModel();
   @Local files: XopcFilesViewModel = new XopcFilesViewModel();
@@ -113,28 +114,31 @@ export struct XopcNotesTabView {
               }
             }, (file: XopcFile): string => file.id)
           }
-        }.layoutWeight(1).width('100%').padding({ left: 20, right: 20, bottom: 24 }).scrollBar(BarState.Off)
+        }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
       }
-    }.width(this.contentWidth >= 840 ? 400 : '100%').height('100%')
-      .backgroundColor(this.contentWidth >= 840 ? this.colors.grouped : this.colors.surface)
+    }.id('notes-tab-list-pane').width(this.contentWidth >= 840 ? 400 : '100%').height('100%')
+      .backgroundColor(this.contentWidth >= 840 ? this.colors.grouped : Color.Transparent)
   }
 
   build() {
-    Row() {
-      this.listPane()
-      if (this.contentWidth >= 840) {
-        if (this.selectedId) {
-          XopcNotesView({ initialId: this.selectedId, embedded: true, onExit: (): void => {
-            this.selectedId = ''; void this.model.list();
-          }, onOpenConversation: (id: string): void => { this.onNavigate({ page: 'chat', itemId: id }); } })
-        } else {
-          Column({ space: 12 }) {
-            SymbolGlyph($r('sys.symbol.doc')).fontSize(42).fontColor([this.colors.tertiary])
-            Text($r('app.string.note_select_hint')).fontSize(16).fontColor(this.colors.secondary)
-          }.layoutWeight(1).height('100%').justifyContent(FlexAlign.Center)
+    Stack({ alignContent: Alignment.Top }) {
+      Row() {
+        this.listPane()
+        if (this.contentWidth >= 840) {
+          if (this.selectedId) {
+            XopcNotesView({ initialId: this.selectedId, embedded: true, onExit: (): void => {
+              this.selectedId = ''; void this.model.list();
+            }, onOpenConversation: (id: string): void => { this.onNavigate({ page: 'chat', itemId: id }); } })
+          } else {
+            Column({ space: 12 }) {
+              SymbolGlyph($r('sys.symbol.doc')).fontSize(42).fontColor([this.colors.tertiary])
+              Text($r('app.string.note_select_hint')).fontSize(16).fontColor(this.colors.secondary)
+            }.layoutWeight(1).height('100%').justifyContent(FlexAlign.Center)
+          }
         }
-      }
-    }.width('100%').height('100%').backgroundColor(this.colors.surface)
+      }.id('notes-tab-content-viewport').width('100%').height('100%')
+        .padding({ bottom: this.bottomInset }).clip(true)
+    }.id('notes-tab-root').width('100%').height('100%').backgroundColor(this.colors.surface)
       .onAreaChange((_previous: Area, current: Area): void => { this.contentWidth = Number(current.width); })
   }
 }

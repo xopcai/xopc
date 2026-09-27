@@ -72,7 +72,6 @@ export class SideChatPromotionService {
             peerId: chatId,
           },
           customData: {
-            genericNewChatShell: false,
             promotedFromSideChatId: sideChatId,
             promotedFromParentTranscriptId: snapshot.context.parentTranscriptId,
             sideChatContextHash: snapshot.context.contentHash,

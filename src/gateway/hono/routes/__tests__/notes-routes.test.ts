@@ -208,7 +208,6 @@ describe('notes routes', () => {
       expect.objectContaining({
         customData: expect.objectContaining({
           existing: true,
-          genericNewChatShell: false,
           sourceBinding: expect.objectContaining({ kind: 'note', sourceId: 'note-1', version: '2' }),
         }),
       }),
