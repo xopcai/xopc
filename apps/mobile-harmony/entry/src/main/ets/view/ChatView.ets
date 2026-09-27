@@ -12,7 +12,6 @@ import { common } from '@kit.AbilityKit';
 import { voiceCapture, XopcVoiceCapture } from '../service/voiceCapture';
 import { appSettings } from '../service/settings';
 import { pickChatAttachment } from '../service/chatAttachmentPicker';
-import { XopcChatDrawer } from './ChatDrawer';
 import { XopcChatOptions } from './ChatOptions';
 import { XopcChatOptionsViewModel } from '../viewmodel/chatOptionsViewModel';
 import { XopcMobileRoute, XopcHomeItem, XopcHomeAction } from '../model/home';
@@ -93,7 +92,7 @@ export struct XopcChatView {
   @Param embedded: boolean = false;
   @BuilderParam bottomDock: () => void = this.emptyDock;
   @Param attentionItems: XopcHomeItem[] = [];
-  @Event onOpenConversation: (id: string) => void = (_id: string): void => {};
+  @Event onConversationChange: (id: string) => void = (_id: string): void => {};
   @Event onAttentionRefresh: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local chat: XopcChatViewModel = new XopcChatViewModel();
@@ -102,7 +101,6 @@ export struct XopcChatView {
   @Local context: XopcChatContextViewModel = new XopcChatContextViewModel();
   @Local prompt: XopcChatPromptViewModel = new XopcChatPromptViewModel();
   @Local refs: XopcContextRef[] = [];
-  @Local drawerOpen: boolean = false;
   @Local panelOpen: boolean = false;
   @Local sheetOpen: boolean = false;
   @Local sheetMode: string = 'actions';
@@ -376,13 +374,8 @@ export struct XopcChatView {
   }
   private bindBack(): void { layoutState.dismissChatOverlay = (): boolean => { return this.dismissOverlay(); }; }
   private dismissOverlay(): boolean {
-    if (this.drawerOpen) { this.setDrawer(false); return true; }
     if (this.panelOpen) { this.setPanel(false); return true; }
     return false;
-  }
-  private setDrawer(open: boolean): void {
-    if (open) { this.palette.close(); this.editor.stopEditing(); this.setPanel(false); }
-    this.drawerOpen = open; layoutState.chatDrawerOpen = open;
   }
   private setPanel(open: boolean): void {
     if (open) { this.palette.close(); this.editor.stopEditing(); }
@@ -401,6 +394,7 @@ export struct XopcChatView {
   onHistoryReady(): void {
     const id = this.chat.selectedId + ':' + this.chat.agentId;
     if (this.visible && !this.chat.loading && this.chat.selectedId && this.optionsId !== id) {
+      this.onConversationChange(this.chat.selectedId);
       this.optionsId = id; this.options.load(this.chat.selectedId, this.chat.agentId); this.context.load(this.chat.selectedId); this.prompt.start(this.chat.selectedId);
     }
   }
@@ -409,14 +403,14 @@ export struct XopcChatView {
   @Monitor('activePage')
   onActivityChange(): void {
     this.visible = this.activePage;
-    if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.attention.dispose(); this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.stop(); this.setDrawer(false); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.chat.deactivate(); }
+    if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.attention.dispose(); this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.stop(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.chat.deactivate(); }
     else { this.attention.activate(); this.bindBack(); this.chat.activate(); this.onHistoryReady(); this.options.resume(); this.prompt.resume(); }
   }
   @Monitor('requestRevision', 'chat.sending')
   onTargetChange(): void {
     if (this.disposed || !this.requestedId || this.appliedRequestRevision === this.requestRevision || this.chat.sending) return;
     this.appliedRequestRevision = this.requestRevision;
-    this.dismissComposer(); this.setDrawer(false); this.sheetOpen = false;
+    this.dismissComposer(); this.sheetOpen = false;
     if (this.requestedId === this.chat.selectedId) return;
     this.saveDraft(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.stop(); this.showVoice = false;
     this.options.dispose(); this.context.dispose(); this.prompt.dispose();
@@ -433,7 +427,7 @@ export struct XopcChatView {
     this.focusComposerOnMount = true;
     this.focusMountedComposer();
   }
-  aboutToDisappear(): void { this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setDrawer(false); this.setPanel(false); this.prompt.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.disableContinuous(); this.attachments = []; }
+  aboutToDisappear(): void { this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.disableContinuous(); this.attachments = []; }
 
   private async attentionAction(action: XopcHomeAction): Promise<void> {
     if (action.type === 'open') {
@@ -599,7 +593,7 @@ export struct XopcChatView {
     if (!this.focusComposerOnMount) return;
     clearTimeout(this.composerFocusTimer);
     this.composerFocusTimer = setTimeout((): void => {
-      if (this.visible && !this.disposed && !this.showVoice && !this.sheetOpen && !this.drawerOpen && !this.panelOpen) {
+      if (this.visible && !this.disposed && !this.showVoice && !this.sheetOpen && !this.panelOpen) {
         try {
           this.getUIContext().getFocusController().requestFocus('chat-composer');
           this.editor.caretPosition(this.draft.length);
@@ -1147,10 +1141,6 @@ export struct XopcChatView {
     Column() {
       if (!this.embedded) {
         Row({ space: 12 }) {
-          Button() { SymbolGlyph($r('sys.symbol.line_3_horizontal')).fontSize(23).fontColor([this.colors.foreground]) }
-            .id('chat-open-drawer')
-            .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.history'))
-            .onClick((): void => { this.setDrawer(true); })
         Row() {
           Text(this.chat.title || $r('app.string.untitled'))
             .fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
@@ -1189,20 +1179,7 @@ export struct XopcChatView {
       }
       this.conversation()
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
-      .accessibilityLevel(this.drawerOpen ? 'no-hide-descendants' : 'auto')
       .bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight, dragBar: true, showClose: false, backgroundColor: this.colors.panel })
-    if (!this.drawerOpen && !this.embedded) {
-      Column() {}.id('chat-drawer-gesture-strip').width(24).height('100%').backgroundColor(Color.Transparent)
-        .onTouch((event: TouchEvent): void => { if (event.type === TouchType.Down) this.dismissComposer(); })
-        .gesture(PanGesture({ direction: PanDirection.Horizontal, distance: 16 })
-          .onActionEnd((event: GestureEvent): void => { if (event.offsetX > 32) this.setDrawer(true); }))
-    }
-    if (this.drawerOpen) {
-      XopcChatDrawer({ currentId: this.chat.selectedId, onClose: (): void => { this.setDrawer(false); },
-        onSession: (id: string): void => { this.onOpenConversation(id); },
-        onSearch: (): void => { this.setDrawer(false); this.onNavigate({ page: 'sessions', itemId: '' }); },
-        onNewChat: (): void => { this.newConversation(); } })
-    }
     }.width('100%').height('100%')
   }
 

@@ -380,7 +380,7 @@
     },
     {
       "name": "conversations",
-      "value": "会话"
+      "value": "对话"
     },
     {
       "name": "new_chat",
@@ -473,6 +473,10 @@
     {
       "name": "chat",
       "value": "聊天"
+    },
+    {
+      "name": "assistant",
+      "value": "助手"
     },
     {
       "name": "scan",
