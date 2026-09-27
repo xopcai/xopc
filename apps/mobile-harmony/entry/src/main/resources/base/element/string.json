@@ -234,7 +234,7 @@
     },
     {
       "name": "microphone_reason",
-      "value": "Record your voice when you choose voice input, then transcribe it into a draft."
+      "value": "Record only while you hold to speak, to send a voice message or transcribe a text draft."
     },
     {
       "name": "record_voice",
@@ -243,6 +243,14 @@
     {
       "name": "voice_hold_to_speak",
       "value": "Hold to speak"
+    },
+    {
+      "name": "voice_slide_cancel",
+      "value": "Slide here to cancel"
+    },
+    {
+      "name": "voice_slide_text",
+      "value": "Slide here to transcribe"
     },
     {
       "name": "voice_preparing",

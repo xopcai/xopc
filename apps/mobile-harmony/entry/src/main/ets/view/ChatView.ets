@@ -112,6 +112,8 @@ export struct XopcChatView {
   @Local draft: string = '';
   @Local showVoice: boolean = false;
   @Local voiceHeld: boolean = false;
+  @Local voiceFinishing: boolean = false;
+  @Local voiceRetryDestination: XopcVoiceRecordingDestination = 'send';
   @Local voiceDestination: XopcVoiceRecordingDestination = 'send';
   @Computed get expandedComposer(): boolean {
     return composerExpanded(this.draft, this.attachments.length, this.refs.length, !!this.palette.range);
@@ -180,6 +182,8 @@ export struct XopcChatView {
   private draftScope: string = '';
   private voiceStartX: number = 0;
   private voiceStartY: number = 0;
+  private voicePointerId: number = -1;
+  private voiceHoldGeneration: number = 0;
   private draftGeneration: number = 0;
   private draftTimer: number = -1;
   private intakeTimer: number = -1;
@@ -595,19 +599,20 @@ export struct XopcChatView {
   }
 
   private voiceTouchPoint(event: TouchEvent): TouchObject | undefined {
-    if (event.touches.length) return event.touches[0];
-    if (event.changedTouches.length) return event.changedTouches[0];
-    return undefined;
+    return event.changedTouches.find((point: TouchObject): boolean =>
+      !this.voiceHeld || point.id === this.voicePointerId);
   }
 
   private async beginVoiceHold(point: TouchObject): Promise<void> {
-    if (this.voiceHeld || this.chat.sending || this.chat.runId || this.voice.busy || this.voice.state !== 'idle') return;
+    if (this.voiceHeld || this.voiceFinishing || this.chat.sending || this.chat.runId || this.voice.busy || this.voice.state !== 'idle') return;
     const context = this.getUIContext().getHostContext();
     if (!context) return;
     this.voiceHeld = true; this.voiceDestination = 'send';
+    this.voicePointerId = point.id;
+    const generation = ++this.voiceHoldGeneration;
     this.voiceStartX = point.windowX; this.voiceStartY = point.windowY;
     await this.reader.stop();
-    if (!this.voiceHeld || !this.visible || this.disposed) return;
+    if (generation !== this.voiceHoldGeneration || !this.voiceHeld || !this.visible || this.disposed) return;
     await this.voice.start(context as common.UIAbilityContext);
   }
 
@@ -621,23 +626,32 @@ export struct XopcChatView {
     if (!this.voiceHeld) return;
     const destination: XopcVoiceRecordingDestination = forceCancel ? 'cancel' : this.voiceDestination;
     this.voiceHeld = false;
-    if (destination === 'cancel' || this.voice.state === 'preparing') {
-      await this.voice.cancel(); this.voiceDestination = 'send'; return;
-    }
-    if (this.voice.state === 'recording') await this.voice.stop();
-    if (this.voice.state === 'ready') {
-      if (destination === 'text') await this.transcribe();
-      else await this.sendVoice(false);
-    }
-    this.voiceDestination = 'send';
+    ++this.voiceHoldGeneration;
+    this.voiceRetryDestination = destination;
+    this.voiceFinishing = true;
+    try {
+      if (destination === 'cancel' || this.voice.state === 'preparing') {
+        await this.voice.cancel(); return;
+      }
+      if (this.voice.state === 'recording') await this.voice.stop();
+      await this.deliverVoiceRecording();
+    } finally { this.voiceFinishing = false; this.voiceDestination = 'send'; }
+  }
+
+  private async deliverVoiceRecording(): Promise<void> {
+    if (this.voice.state !== 'ready' || this.voice.busy) return;
+    if (this.voiceRetryDestination === 'text') await this.transcribe();
+    else await this.sendVoice(false);
+    // A tap is not a recoverable recording; return directly to hold-to-speak.
+    if (this.voice.error === 'RECORDING_TOO_SHORT') await this.voice.cancel();
   }
 
   private handleVoiceTouch(event: TouchEvent): void {
     const point = this.voiceTouchPoint(event);
     if (event.type === TouchType.Down && point) { this.beginVoiceHold(point); return; }
     if (event.type === TouchType.Move && point) { this.updateVoiceDestination(point); return; }
-    if (event.type === TouchType.Up) {
-      if (point) this.updateVoiceDestination(point);
+    if (event.type === TouchType.Up && point) {
+      this.updateVoiceDestination(point);
       this.finishVoiceHold(); return;
     }
     if (event.type === TouchType.Cancel) this.finishVoiceHold(true);
@@ -650,6 +664,7 @@ export struct XopcChatView {
   }
 
   private voiceHoldHint(): ResourceStr {
+    if (this.voiceFinishing || (!this.voiceHeld && this.voice.busy)) return $r('app.string.voice_working');
     if (this.voice.state === 'preparing') return $r('app.string.voice_preparing');
     if (this.voiceDestination === 'cancel') return $r('app.string.voice_release_cancel');
     if (this.voiceDestination === 'text') return $r('app.string.voice_release_text');
@@ -1064,73 +1079,26 @@ export struct XopcChatView {
       Row({ space: 4 }) {
         if (!this.expandedComposer) { this.voiceToggle() }
         if (this.showVoice || this.voice.state !== 'idle') {
-          Column({ space: 4 }) {
-            if (this.voiceHeld || this.voice.state === 'idle' || this.voice.state === 'preparing' || this.voice.state === 'recording') {
-              Column({ space: 4 }) {
-                if (this.voiceHeld || this.voice.state !== 'idle') {
-                  Row({ space: 8 }) {
-                    Row({ space: 4 }) {
-                      Text('↖').fontSize(16)
-                        .fontColor(this.voiceDestination === 'cancel' ? this.colors.danger : this.colors.secondary)
-                      Text($r('app.string.cancel')).fontSize(12).fontWeight(FontWeight.Medium)
-                        .fontColor(this.voiceDestination === 'cancel' ? this.colors.danger : this.colors.secondary)
-                    }.layoutWeight(1).height(36).justifyContent(FlexAlign.Center).borderRadius(12)
-                      .backgroundColor(this.voiceDestination === 'cancel' ? this.colors.grouped : Color.Transparent)
-                    Row({ space: 5 }) {
-                      if (this.voice.state === 'preparing') {
-                        LoadingProgress().width(16).height(16).color(this.colors.accent)
-                      } else {
-                        Row().width(7).height(7).borderRadius(4).backgroundColor(this.colors.danger)
-                      }
-                      Text(this.voice.state === 'recording' ? this.voiceDuration() : '--:--')
-                        .fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
-                    }.width(74).justifyContent(FlexAlign.Center)
-                    Row({ space: 4 }) {
-                      Text($r('app.string.transcribe')).fontSize(12).fontWeight(FontWeight.Medium)
-                        .fontColor(this.voiceDestination === 'text' ? this.colors.accent : this.colors.secondary)
-                      Text('↗').fontSize(16)
-                        .fontColor(this.voiceDestination === 'text' ? this.colors.accent : this.colors.secondary)
-                    }.layoutWeight(1).height(36).justifyContent(FlexAlign.Center).borderRadius(12)
-                      .backgroundColor(this.voiceDestination === 'text' ? this.colors.accentSoft : Color.Transparent)
-                  }.width('100%').height(40).padding({ left: 4, right: 4 })
-                }
-                Button({ type: ButtonType.Normal, stateEffect: false }) {
-                  Text(this.voiceHoldHint()).fontSize(14).fontWeight(FontWeight.Medium)
-                    .fontColor(this.voiceDestination === 'cancel' ? this.colors.danger : this.colors.foreground)
-                }.id('chat-voice-record').width('100%').height(44).padding(0).borderRadius(14)
-                  .backgroundColor(this.voiceHeld ? (this.voiceDestination === 'cancel' ? this.colors.grouped : this.colors.accentSoft) : this.colors.input)
-                  .enabled(this.voiceHeld || (!this.voice.busy && !this.chat.sending && !this.chat.runId))
-                  .accessibilityText($r('app.string.voice_hold_to_speak'))
-                  .onTouch((event: TouchEvent): void => { this.handleVoiceTouch(event); })
+          Column() {
+            if (this.voice.state === 'ready' && !this.voiceHeld && !this.voiceFinishing && !this.voice.busy) {
+              Row({ space: 8 }) {
+                Button($r('app.string.cancel')).id('chat-voice-cancel').height(44).layoutWeight(1)
+                  .backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
+                  .onClick((): void => { this.voice.cancel(); })
+                Button($r('app.string.retry')).id('chat-voice-retry').height(44).layoutWeight(1)
+                  .backgroundColor(this.colors.accentSoft).fontColor(this.colors.accent)
+                  .enabled(!this.chat.sending && !this.chat.loading && !this.chat.cachedHistory && this.chat.connection === 'connected')
+                  .onClick((): void => { this.deliverVoiceRecording(); })
               }.width('100%')
             } else {
-              Row({ space: 4 }) {
-                Text(this.voice.state === 'recording' ? this.voice.seconds.toString() + ' / 120 s' : $r('app.string.record_voice'))
-                  .fontSize(13).maxLines(1).layoutWeight(1).fontColor(this.colors.secondary)
-                Button('×', { type: ButtonType.Circle }).id('chat-voice-cancel').width(32).height(32).padding(0)
-                  .backgroundColor(Color.Transparent).fontColor(this.colors.secondary).accessibilityText($r('app.string.cancel'))
-                  .onClick((): void => { this.voice.cancel(); })
-              }.width('100%')
-              Row({ space: 4 }) {
-                if (this.voice.state === 'recording') {
-                  Button($r('app.string.stop_recording')).id('chat-voice-finish').layoutWeight(1).height(36).fontSize(13)
-                    .enabled(!this.voice.busy).onClick((): void => { this.voice.stop(); })
-                } else if (this.voice.state === 'ready') {
-                  Button($r('app.string.play_recording')).layoutWeight(1).height(36).fontSize(12).padding(4)
-                    .backgroundColor(this.colors.input).fontColor(this.colors.secondary)
-                    .enabled(!this.voice.busy).onClick((): void => { this.voice.play(); })
-                  Button($r('app.string.transcribe')).layoutWeight(1).height(36).fontSize(12).padding(4)
-                    .backgroundColor(this.colors.input).fontColor(this.colors.secondary)
-                    .enabled(!this.voice.busy).onClick((): void => { this.transcribe(); })
-                  Button($r('app.string.send')).id('chat-voice-send').layoutWeight(1).height(36).fontSize(12).padding(4)
-                    .backgroundColor(this.colors.foreground).fontColor(this.colors.panel)
-                    .enabled(!this.voice.busy && !this.chat.sending && !this.chat.loading && !this.chat.cachedHistory && this.chat.connection === 'connected')
-                    .onClick((): void => { this.sendVoice(); })
-                } else if (this.voice.state === 'playing') {
-                  Button($r('app.string.stop')).layoutWeight(1).height(36).fontSize(13)
-                    .enabled(!this.voice.busy).onClick((): void => { this.voice.stopPlayback(); })
-                } else { Text($r('app.string.voice_working')).height(36).fontSize(13).fontColor(this.colors.secondary) }
-              }.width('100%')
+              Button({ type: ButtonType.Normal, stateEffect: false }) {
+                Text(this.voiceHoldHint()).fontSize(15).fontWeight(FontWeight.Medium)
+                  .fontColor(this.voiceDestination === 'cancel' ? this.colors.danger : this.colors.foreground)
+              }.id('chat-voice-record').width('100%').height(44).padding(0).borderRadius(14)
+                .backgroundColor(this.voiceHeld ? this.colors.grouped : Color.Transparent)
+                .enabled(this.voiceHeld || (!this.voiceFinishing && !this.voice.busy && !this.chat.sending && !this.chat.runId))
+                .accessibilityText($r('app.string.voice_hold_to_speak'))
+                .onTouch((event: TouchEvent): void => { this.handleVoiceTouch(event); })
             }
           }.id('chat-voice-pad').layoutWeight(1)
         } else {
@@ -1166,7 +1134,38 @@ export struct XopcChatView {
     }.id('chat-bottom-region').width('100%')
       .margin({ top: 4, bottom: 0 })
       .onAreaChange((_previous: Area, current: Area): void => { this.bottomRegionHeight = Number(current.height); })
+    if (this.voiceHeld) { this.voiceGestureFeedback() }
     }.width('100%').layoutWeight(1)
+  }
+
+  @Builder
+  voiceGestureFeedback() {
+    Row({ space: 16 }) {
+      Stack() {
+        SymbolGlyph($r('sys.symbol.xmark')).fontSize(19)
+          .fontColor([this.voiceDestination === 'cancel' ? this.colors.danger : this.colors.secondary])
+      }.id('chat-voice-cancel-target').width(48).height(48).borderRadius(24)
+        .backgroundColor(this.voiceDestination === 'cancel' ? this.colors.input : Color.Transparent)
+        .border({ width: 1, color: this.voiceDestination === 'cancel' ? this.colors.danger : Color.Transparent })
+        .opacity(this.voiceDestination === 'text' ? 0.4 : 1)
+        .accessibilityText($r('app.string.voice_slide_cancel'))
+      Column({ space: 4 }) {
+        SymbolGlyph($r('sys.symbol.waveform')).fontSize(25).fontColor([this.colors.accent])
+        Text(this.voiceDuration()).fontSize(11).fontWeight(FontWeight.Medium)
+          .fontColor(this.colors.secondary)
+      }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+      Stack() {
+        SymbolGlyph($r('sys.symbol.text_alignleft')).fontSize(21)
+          .fontColor([this.voiceDestination === 'text' ? this.colors.accent : this.colors.secondary])
+      }.id('chat-voice-text-target').width(48).height(48).borderRadius(24)
+        .backgroundColor(this.voiceDestination === 'text' ? this.colors.accentSoft : Color.Transparent)
+        .opacity(this.voiceDestination === 'cancel' ? 0.4 : 1)
+        .accessibilityText($r('app.string.voice_slide_text'))
+    }.id('chat-voice-gesture-feedback').width('82%').constraintSize({ maxWidth: 340 }).height(80)
+      .padding({ left: 16, right: 16 }).borderRadius(40)
+      .backgroundColor(this.colors.panel).border({ width: 1, color: this.colors.border })
+      .margin({ bottom: this.bottomRegionHeight + 16 })
+      .hitTestBehavior(HitTestMode.None)
   }
 
   @Builder
