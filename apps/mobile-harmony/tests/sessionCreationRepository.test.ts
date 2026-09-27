@@ -85,7 +85,8 @@ describe('local-first session creation', () => {
     mock.request.mockRejectedValueOnce(new Error('NETWORK')).mockResolvedValueOnce(response('message-1'));
     const repository = new XopcChatRepository();
     await expect(repository.send('draft-1', 'hello', 'message-1')).rejects.toThrow('NETWORK');
-    await expect(repository.send('draft-1', 'hello', 'message-2')).resolves.toBe('run-1');
+    await expect(repository.send('draft-1', 'hello', 'message-2')).rejects.toThrow('INPUT_PENDING');
+    await expect(repository.send('draft-1', 'hello', 'message-1')).resolves.toBe('run-1');
     const commands = mock.request.mock.calls.map((call) => JSON.parse(call[2]));
     expect(commands.map((command) => command.clientMessageId)).toEqual(['message-1', 'message-1']);
     await expect(repository.send('draft-1', 'changed', 'message-3')).rejects.toThrow('FIRST_INPUT_PENDING');

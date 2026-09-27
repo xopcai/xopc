@@ -1,5 +1,6 @@
 {
   "string": [
+    { "name": "chat_retry_send", "value": "发送失败，点击重新发送此消息" },
     { "name": "chat_continuous_start", "value": "连续朗读新回复" },
     { "name": "chat_continuous_stop", "value": "停止连续朗读" },
     { "name": "chat_continuous_active", "value": "新回复将自动朗读" },
