@@ -17,7 +17,7 @@ export struct XopcChatStepsView {
   @Computed get steps(): XopcChatBlock[] { return chatActivities(this.row, this.reasoning); }
   @Computed get visibleSteps(): XopcChatBlock[] { return this.steps.filter((step: XopcChatBlock): boolean => step.kind !== 'thinking'); }
   @Computed get expanded(): boolean { return this.disclosure.get(this.scope + ':steps:' + this.row.id) ?? false; }
-  @Computed get active(): boolean { return !!this.row.live && this.steps.some((step: XopcChatBlock): boolean => !!step.active || step.call?.status === 'running'); }
+  @Computed get active(): boolean { return !!this.row.live; }
   @Computed get activeTool(): XopcChatTool | undefined {
     return this.steps.slice().reverse().find((step: XopcChatBlock): boolean => step.call?.status === 'running')?.call;
   }

@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
-import { finishAiUsageEvent, insertAiUsageEvent } from '../../../../storage/sqlite/ai-usage-repository.js';
+import {
+  finishAiUsageEvent,
+  insertAiUsageEvent,
+  summarizeAiUsageByConversations,
+} from '../../../../storage/sqlite/ai-usage-repository.js';
 import { registerUsageRoutes } from '../usage.js';
 
 describe('usage routes', () => {
@@ -16,6 +20,7 @@ describe('usage routes', () => {
     insertAiUsageEvent({
       id: 'call-1',
       traceId: 'trace-1',
+      conversationId: 'conversation-a',
       category: 'chat',
       operation: 'agent.answer',
       trigger: 'user',
@@ -55,5 +60,52 @@ describe('usage routes', () => {
   it('rejects invalid ranges and cursors', async () => {
     expect((await app.request('/api/usage/summary?from=200&to=100')).status).toBe(400);
     expect((await app.request('/api/usage/events?from=1&to=200&cursor=invalid')).status).toBe(400);
+  });
+
+  it('aggregates retained token and cost totals by conversation', () => {
+    expect(summarizeAiUsageByConversations(['conversation-a', 'conversation-missing'])).toEqual(new Map([
+      ['conversation-a', {
+        calls: 1,
+        unknownCostCalls: 0,
+        totalTokens: 15,
+        knownCostUsd: '0.000042',
+        costCompleteness: 'complete',
+      }],
+    ]));
+
+    insertAiUsageEvent({
+      id: 'call-unknown',
+      traceId: 'trace-unknown',
+      conversationId: 'conversation-a',
+      category: 'chat',
+      operation: 'agent.answer',
+      trigger: 'user',
+      reasonKey: 'usage.reason.agentAnswer',
+      provider: 'custom',
+      model: 'unpriced-model',
+      status: 'running',
+      startedAt: 160,
+      costSource: 'unknown',
+    });
+    finishAiUsageEvent('call-unknown', {
+      status: 'succeeded',
+      finishedAt: 180,
+      usage: {
+        input: 20,
+        output: 10,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 30,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+    });
+
+    expect(summarizeAiUsageByConversations(['conversation-a']).get('conversation-a')).toMatchObject({
+      calls: 2,
+      unknownCostCalls: 1,
+      totalTokens: 45,
+      knownCostUsd: '0.000042',
+      costCompleteness: 'partial',
+    });
   });
 });

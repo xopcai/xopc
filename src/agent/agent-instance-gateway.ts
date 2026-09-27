@@ -65,9 +65,6 @@ export interface AgentInstanceGateway {
     turnId: string,
   ): Promise<import('./context/coordinator.js').ExecutionContextPlan>;
 
-  /** Fire-and-forget maintenance of durable user understanding after a completed turn. */
-  scheduleUserUnderstandingMaintenance(conversationId: string, userPlainText: string, turnId: string): void;
-
   /** Bump the per-session "turns since memory review" counter. */
   beginBackgroundReviewUserTurn(conversationId: string): void;
 

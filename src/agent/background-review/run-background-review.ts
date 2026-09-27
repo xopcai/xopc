@@ -49,12 +49,6 @@ export interface RunUserModelReviewParams {
   getConfig: () => Config | undefined;
 }
 
-export interface RunTurnUserModelMaintenanceParams extends Omit<RunUserModelReviewParams, 'settings'> {
-  turnId: string;
-  userText: string;
-  maxHistoryMessages?: number;
-}
-
 function isReviewMessage(value: unknown): value is AgentMessage {
   if (!value || typeof value !== 'object') return false;
   const role = (value as { role?: unknown }).role;
@@ -273,29 +267,6 @@ async function executeReview(params: {
     finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'write_failed' });
     throw err;
   }
-}
-
-export function createTurnUserModelMaintenanceTask(
-  params: RunTurnUserModelMaintenanceParams,
-): () => Promise<UserModelCaptureResult> {
-  const evidence = loadEvidenceMessages(params.conversationId, params.maxHistoryMessages ?? 12);
-  return async () => {
-    if (!evidence.length) return emptyUserModelCaptureResult();
-    return executeReview({
-      conversationId: params.conversationId,
-      mainAgent: params.mainAgent,
-      workspaceId: params.workspaceId,
-      getConfig: params.getConfig,
-      evidence,
-      mode: 'turn',
-      extractorId: 'turn-semantics',
-      sourceRef: `session:${params.conversationId}:turn:${params.turnId}`,
-      contentForHash: params.userText,
-      availableAssertions: listAvailableAssertions(),
-      timeoutMs: 30_000,
-      turnId: params.turnId,
-    });
-  };
 }
 
 export function createBackgroundUserModelReviewTask(params: RunUserModelReviewParams): () => Promise<void> {

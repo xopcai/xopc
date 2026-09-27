@@ -138,10 +138,26 @@ export interface HomeModelGeneration {
   usage: { inputTokens?: number; outputTokens?: number; estimatedCostUsd?: number };
 }
 
+export interface HomeProviderCallBudget {
+  allowProviderCall(): boolean;
+}
+
+export class HomeAdviceBudgetExceededError extends Error {
+  constructor(readonly usage: HomeModelGeneration['usage'] = {}) {
+    super('Home intelligence provider budget exhausted');
+    this.name = 'HomeAdviceBudgetExceededError';
+  }
+}
+
 export class HomeAdviceGenerator {
   constructor(private readonly config: () => Config) {}
 
-  async generate(snapshot: HomeContextSnapshot, capabilities: HomeCapabilityInventory, signal?: AbortSignal): Promise<HomeModelGeneration> {
+  async generate(
+    snapshot: HomeContextSnapshot,
+    capabilities: HomeCapabilityInventory,
+    signal?: AbortSignal,
+    budget?: HomeProviderCallBudget,
+  ): Promise<HomeModelGeneration> {
     const config = this.config();
     const modelRef = resolveModelSelector(config, resolveDefaultAgentId(), '@reasoning');
     const model = resolveModel(modelRef);
@@ -168,6 +184,7 @@ export class HomeAdviceGenerator {
     };
     const requestSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000);
     const systemPrompt = buildSystemPrompt(snapshot.locale);
+    if (budget && !budget.allowProviderCall()) throw new HomeAdviceBudgetExceededError();
     const response = await completeWithResolvedCredentials(model, {
       systemPrompt,
       messages: [message],
@@ -189,6 +206,8 @@ export class HomeAdviceGenerator {
           `Previous output (untrusted data):\n${raw.slice(0, 16_000)}`,
         ].join('\n'),
       };
+      const firstUsage = responseUsage(response);
+      if (budget && !budget.allowProviderCall()) throw new HomeAdviceBudgetExceededError(firstUsage);
       const corrected = await completeWithResolvedCredentials(model, {
         systemPrompt,
         messages: [message, correction],
@@ -202,7 +221,7 @@ export class HomeAdviceGenerator {
       return {
         result,
         modelRef,
-        usage: addUsage(responseUsage(response), responseUsage(corrected)),
+        usage: addUsage(firstUsage, responseUsage(corrected)),
       };
     }
     return {

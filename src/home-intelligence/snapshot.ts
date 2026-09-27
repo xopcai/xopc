@@ -159,7 +159,16 @@ export class HomeSnapshotBuilder {
       .filter((item) => item.successCount > 0)
       .sort((left, right) => right.successCount - left.successCount || left.outcome.localeCompare(right.outcome))
       .slice(0, 20);
-    const stableContent = { locale: input.locale, projects, tasks, knowledge, recentSessions, successfulPatterns };
+    // Timestamps are evidence revisions, not advice-relevant content. Excluding them keeps
+    // routine persistence touches and session activity from invalidating Home advice.
+    const stableContent = {
+      locale: input.locale,
+      projects: projects.map(({ updatedAt: _updatedAt, ...project }) => project),
+      tasks: tasks.map(({ updatedAt: _updatedAt, ...task }) => task),
+      knowledge: knowledge.map(({ updatedAt: _updatedAt, ...item }) => item),
+      recentSessions: recentSessions.map(({ updatedAt: _updatedAt, ...session }) => session),
+      successfulPatterns,
+    };
     return {
       generatedAt: input.now,
       locale: input.locale,

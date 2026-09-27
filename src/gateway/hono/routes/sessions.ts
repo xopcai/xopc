@@ -23,6 +23,7 @@ import {
   SidebarLayoutConflictError,
   sortBySidebarLayout,
 } from '../../../storage/sqlite/sidebar-layout-repository.js';
+import { summarizeAiUsageByConversations } from '../../../storage/sqlite/ai-usage-repository.js';
 
 const log = createGatewayRouteLogger('Sessions');
 
@@ -316,7 +317,20 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       limit: query.limit ? parseInt(query.limit) : undefined,
       offset: query.offset ? parseInt(query.offset) : undefined,
     });
-    return c.json(result);
+    const usageByConversation = summarizeAiUsageByConversations(result.items.map((item) => item.key));
+    return c.json({
+      ...result,
+      items: result.items.map((item) => ({
+        ...item,
+        usage: usageByConversation.get(item.key) ?? {
+          calls: 0,
+          unknownCostCalls: 0,
+          totalTokens: 0,
+          knownCostUsd: '0',
+          costCompleteness: 'unknown' as const,
+        },
+      })),
+    });
   });
 
   // GET /api/sessions/stats - Get session stats (must be before /:key)

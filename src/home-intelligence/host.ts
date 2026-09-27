@@ -5,7 +5,7 @@ import type { HomeAdviceMetrics, HomeAdvisor, HomeOpportunityHistoryItem } from 
 import type { HomeOpportunityActionRequest, HomeOpportunityActionResponse, HomeOpportunityFeedbackRequest } from '@xopcai/gateway-contract';
 
 import { createLogger } from '../utils/logger.js';
-import type { HomeAdviceGenerator, HomeModelGeneration } from './generator.js';
+import { HomeAdviceBudgetExceededError, type HomeAdviceGenerator, type HomeModelGeneration } from './generator.js';
 import { HomeAdvicePolicy } from './policy.js';
 import {
   HomeIntelligenceRepository,
@@ -25,7 +25,17 @@ import { homePatternKey } from './strategy.js';
 const log = createLogger('HomeIntelligence');
 const POLL_INTERVAL_MS = 5_000;
 const GENERATION_LEASE_MS = 5 * 60_000;
-const DAILY_MODEL_GENERATION_BUDGET = 12;
+export const HOME_CONTEXT_REFRESH_COOLDOWN_MS = 30 * 60_000;
+export const DAILY_HOME_PROVIDER_CALL_BUDGET = 12;
+export const DAILY_HOME_TOKEN_BUDGET = 120_000;
+const HOME_USAGE_OPERATION = 'home.generate_advice';
+
+const CONTEXT_REFRESH_REASONS = new Set<HomeGenerationReason>([
+  'project_changed',
+  'task_changed',
+  'connector_changed',
+  'conversation_changed',
+]);
 
 function generationFingerprint(snapshotHash: string, capabilities: HomeCapabilityInventory): string {
   return createHash('sha256').update(JSON.stringify({
@@ -62,6 +72,8 @@ export class HomeIntelligenceHost {
   private stopped = false;
   private abortController = new AbortController();
   private localeHint: 'en' | 'zh';
+  private contextRefreshTimer?: NodeJS.Timeout;
+  private readonly pendingContextReasons = new Set<HomeGenerationReason>();
 
   constructor(db: DatabaseSync, private readonly deps: HomeIntelligenceHostDeps) {
     this.repository = new HomeIntelligenceRepository(db);
@@ -84,6 +96,9 @@ export class HomeIntelligenceHost {
     this.abortController = new AbortController();
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
+    if (this.contextRefreshTimer) clearTimeout(this.contextRefreshTimer);
+    this.contextRefreshTimer = undefined;
+    this.pendingContextReasons.clear();
   }
 
   getAdvisor(): HomeAdvisor {
@@ -104,6 +119,16 @@ export class HomeIntelligenceHost {
     if (this.deps.enabled?.() === false) return 'disabled';
     const now = this.now();
     if (locale) this.localeHint = locale.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+    if (CONTEXT_REFRESH_REASONS.has(reason)) {
+      const fingerprint = this.currentFingerprint(now);
+      if (this.repository.getLatestSnapshotHash(this.deps.principal) === fingerprint) return 'unchanged';
+      const lastRequestedAt = this.repository.getLatestContextRefreshRequestedAt(this.deps.principal);
+      if (lastRequestedAt !== undefined && now < lastRequestedAt + HOME_CONTEXT_REFRESH_COOLDOWN_MS) {
+        this.pendingContextReasons.add(reason);
+        this.scheduleContextRefresh(lastRequestedAt + HOME_CONTEXT_REFRESH_COOLDOWN_MS - now);
+        return 'cooldown';
+      }
+    }
     const bucket = Math.floor(now / (reason === 'manual_refresh' ? 1 : 5 * 60_000));
     const request = this.repository.enqueue(this.deps.principal, {
       idempotencyKey: idempotencyKey ?? `${reason}:${bucket}`,
@@ -112,6 +137,31 @@ export class HomeIntelligenceHost {
     });
     void this.tick();
     return request.generationId;
+  }
+
+  private currentFingerprint(now: number): string {
+    const successfulPatterns = this.repository.getSuccessfulPatterns(this.deps.principal);
+    const snapshot = this.deps.snapshot.build({ now, locale: this.localeHint, successfulPatterns });
+    return generationFingerprint(snapshot.hash, this.deps.capabilities());
+  }
+
+  private scheduleContextRefresh(delayMs: number): void {
+    if (this.contextRefreshTimer) return;
+    this.contextRefreshTimer = setTimeout(() => {
+      this.contextRefreshTimer = undefined;
+      if (this.stopped || this.pendingContextReasons.size === 0) return;
+      const reasons = [...this.pendingContextReasons];
+      this.pendingContextReasons.clear();
+      const now = this.now();
+      if (this.repository.getLatestSnapshotHash(this.deps.principal) === this.currentFingerprint(now)) return;
+      this.repository.enqueue(this.deps.principal, {
+        idempotencyKey: `context_refresh:${Math.floor(now / HOME_CONTEXT_REFRESH_COOLDOWN_MS)}`,
+        reasons,
+        requestedAt: now,
+      });
+      void this.tick();
+    }, Math.max(1, delayMs));
+    this.contextRefreshTimer.unref?.();
   }
 
   sourceChanged(input: { sourceInstanceId: string; revision: string; refresh: boolean }): void {
@@ -212,18 +262,19 @@ export class HomeIntelligenceHost {
       let generation: HomeModelGeneration | undefined;
       const startOfDay = new Date(startedAt);
       startOfDay.setHours(0, 0, 0, 0);
-      const modelGenerationAttempts = this.repository.countModelGenerationAttemptsSince(
-        this.deps.principal,
-        startOfDay.getTime(),
-        claim.generationId,
-      );
-      const manualRefresh = claim.reasons.includes('manual_refresh');
-      const result = modelGenerationAttempts >= DAILY_MODEL_GENERATION_BUDGET && !manualRefresh
+      const providerBudgetAvailable = () => {
+        const usage = this.repository.getProviderUsageSince(startOfDay.getTime(), HOME_USAGE_OPERATION);
+        return usage.calls < DAILY_HOME_PROVIDER_CALL_BUDGET
+          && usage.totalTokens < DAILY_HOME_TOKEN_BUDGET;
+      };
+      const result = !providerBudgetAvailable()
         ? { state: 'quiet' as const, reason: 'budget_exhausted' as const }
-        : previousHash === currentFingerprint && !manualRefresh
+        : previousHash === currentFingerprint && !claim.reasons.includes('manual_refresh')
           ? { state: 'quiet' as const, reason: 'no_change' as const }
           : await (async () => {
-            generation = await this.deps.generator.generate(snapshot, capabilities, this.abortController.signal);
+            generation = await this.deps.generator.generate(snapshot, capabilities, this.abortController.signal, {
+              allowProviderCall: providerBudgetAvailable,
+            });
             return new HomeAdvicePolicy(
               (requirements, options) => this.resolveCapabilityRequirements(
                 requirements,
@@ -262,6 +313,21 @@ export class HomeIntelligenceHost {
     } catch (error) {
       if (this.stopped) {
         this.repository.fail(claim, this.now(), 'cancelled', this.now());
+        return;
+      }
+      if (error instanceof HomeAdviceBudgetExceededError) {
+        const completedAt = this.now();
+        this.repository.complete(claim, {
+          result: { state: 'quiet', reason: 'budget_exhausted' },
+          snapshotHash: currentFingerprint ?? this.repository.getLatestSnapshotHash(this.deps.principal) ?? 'budget-exhausted',
+          evidenceIds: [],
+          inputTokens: error.usage.inputTokens,
+          outputTokens: error.usage.outputTokens,
+          estimatedCostUsd: error.usage.estimatedCostUsd,
+          outcomeReason: 'budget_exhausted',
+          completedAt,
+        });
+        this.deps.publish('home.advisor.updated', { state: 'quiet', reason: 'budget_exhausted' });
         return;
       }
       const message = error instanceof Error ? error.message : String(error);

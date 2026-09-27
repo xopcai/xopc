@@ -17,7 +17,6 @@ import type { ModelManager } from '../models/index.js';
 import type { SessionContext } from '../session/session-context.js';
 import type { AgentManager } from '../agent-manager.js';
 import { createLogger } from '../../utils/logger.js';
-import { extractAgentUserPlainText } from '../memory/user-message-text.js';
 import { abortEmbeddedRun } from '../embedded/runs.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
@@ -124,7 +123,6 @@ export class AgentOrchestrator {
       });
       setPendingTranscriptUserMessage(conversationId, userMessage);
 
-      const userPlainForMemory = extractAgentUserPlainText(userMessage);
       const turnId = randomUUID();
       const userContext = await this.agentManager.prepareUserTurnContext(
         userMessage,
@@ -159,7 +157,6 @@ export class AgentOrchestrator {
         }
       })();
 
-      this.agentManager.scheduleUserUnderstandingMaintenance(conversationId, userPlainForMemory, turnId);
       this.agentManager.scheduleBackgroundReviewAfterUserTurn(conversationId);
 
       if (turnResult.ok) {

@@ -69,6 +69,7 @@ export interface SessionMetadata {
   lastAccessedAt: string;
   messageCount: number;
   estimatedTokens: number;
+  usage?: SessionAiUsageSummary;
   compactedCount: number;
   sourceChannel: string;
   sourceChatId: string;
@@ -82,6 +83,14 @@ export interface SessionMetadata {
   transcriptId?: string;
   sessionStartedAt?: string;
   lastInteractionAt?: string;
+}
+
+export interface SessionAiUsageSummary {
+  calls: number;
+  unknownCostCalls: number;
+  totalTokens: number;
+  knownCostUsd: string;
+  costCompleteness: 'complete' | 'partial' | 'unknown';
 }
 
 export interface SessionTranscriptSummary {
@@ -298,6 +307,13 @@ export const sessionListItemSchema = z
     updatedAt: z.string(),
     sourceChannel: z.string().optional(),
     status: sessionStatusSchema.optional(),
+    usage: z.object({
+      calls: z.number().int().nonnegative(),
+      unknownCostCalls: z.number().int().nonnegative(),
+      totalTokens: z.number().int().nonnegative(),
+      knownCostUsd: z.string(),
+      costCompleteness: z.enum(['complete', 'partial', 'unknown']),
+    }).optional(),
     routing: sessionRoutingMetaSchema.optional(),
   })
   .passthrough();

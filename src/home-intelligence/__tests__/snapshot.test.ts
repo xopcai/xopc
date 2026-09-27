@@ -31,6 +31,20 @@ const connectedKnowledge = {
 } as KnowledgeItem;
 
 describe('HomeSnapshotBuilder', () => {
+  it('does not change the semantic hash for timestamp-only touches', () => {
+    const first = new HomeSnapshotBuilder({
+      projects: () => [{ ...project, updatedAt: 10 }],
+      tasks: () => [{ ...task, updatedAt: 11 }],
+      knowledge: () => [{ ...knowledge, updatedAt: 12 }],
+    }).build({ now: 1_000, locale: 'en' });
+    const second = new HomeSnapshotBuilder({
+      projects: () => [{ ...project, updatedAt: 20 }],
+      tasks: () => [{ ...task, updatedAt: 21 }],
+      knowledge: () => [{ ...knowledge, updatedAt: 22 }],
+    }).build({ now: 2_000, locale: 'en' });
+
+    expect(second.hash).toBe(first.hash);
+  });
   it('builds bounded evidence and a hash that changes only with source content', () => {
     const builder = new HomeSnapshotBuilder({
       projects: () => [project], tasks: () => [task], knowledge: () => [knowledge],
