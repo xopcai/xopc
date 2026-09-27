@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mock = vi.hoisted(() => ({
   request: vi.fn(), read: vi.fn(), save: vi.fn(), remove: vi.fn(), readCommand: vi.fn(),
-  saveCommand: vi.fn(), clearCommand: vi.fn(), uuid: vi.fn(), turnClaim: vi.fn(), scope: 'gateway:device',
+  saveCommand: vi.fn(), clearCommand: vi.fn(), uuid: vi.fn(), turnClaim: vi.fn(), assertConnection: vi.fn(), scope: 'gateway:device',
 }));
 
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: {
-  request: mock.request, currentProfile: () => undefined, connectionRevision: () => 0, assertConnection: () => {},
+  request: mock.request, currentProfile: () => undefined, connectionRevision: () => 0, assertConnection: mock.assertConnection,
 } }));
 vi.mock('../entry/src/main/ets/service/realtimeClient.ets', () => ({ realtimeClient: { turnClaim: mock.turnClaim } }));
 vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCrypto: class { uuid() { return mock.uuid(); } } }));
@@ -28,8 +28,89 @@ const response = (clientMessageId: string, activeRunId = 'run-1') => JSON.string
   receipt: { conversationId: 'draft-1', clientMessageId, transcriptId: 'transcript-1', lifecycle: 'ready' },
   session: { key: 'draft-1', transcriptId: 'transcript-1', messages: [] }, agentConfig: {}, inputState: { activeRunId },
 } });
+const timeout = () => Object.assign(new Error('request timed out'), { code: 2300028 });
+const httpError = (status: number) => Object.assign(new XopcHttpError(status), { status });
 
 describe('local-first session creation', () => {
+  it('recovers a lost acceptance without submitting the first input again', async () => {
+    mock.read.mockResolvedValue(draft());
+    mock.request.mockRejectedValueOnce(timeout()).mockResolvedValueOnce(response('message-1'));
+    await expect(new XopcChatRepository().send('draft-1', 'hello', 'message-1')).resolves.toBe('run-1');
+    expect(mock.request.mock.calls.map(call => call[1] ?? 'GET')).toEqual(['POST', 'GET']);
+    expect(mock.request.mock.calls[1][0]).toBe('/api/sessions/draft-1/input-receipts/message-1');
+    expect(mock.clearCommand).toHaveBeenCalledOnce();
+  });
+
+  it('recovers an existing-session append without creating a new conversation or message', async () => {
+    mock.request.mockResolvedValueOnce(JSON.stringify({ payload: { configVersion: 3 } }))
+      .mockRejectedValueOnce(timeout()).mockResolvedValueOnce(response('message-1'));
+    await expect(new XopcChatRepository().send('draft-1', 'hello', 'message-1', 'transcript-1')).resolves.toBe('run-1');
+    expect(JSON.parse(mock.request.mock.calls[1][2])).toMatchObject({
+      kind: 'append', clientMessageId: 'message-1', expectedTranscriptId: 'transcript-1', configVersion: 3,
+    });
+    expect(mock.request.mock.calls.filter(call => call[1] === 'POST')).toHaveLength(1);
+    expect(mock.remove).not.toHaveBeenCalled();
+  });
+
+  it('does not accept a mismatched receipt as successful delivery', async () => {
+    mock.read.mockResolvedValue(draft());
+    mock.request.mockRejectedValueOnce(timeout()).mockResolvedValueOnce(response('other-message'));
+    await expect(new XopcChatRepository().send('draft-1', 'hello', 'message-1')).rejects.toThrow('INVALID_INPUT_RESPONSE');
+    expect(mock.clearCommand).not.toHaveBeenCalled();
+  });
+
+  it('replays the same command only after a missing receipt, preserving attachments and references', async () => {
+    mock.read.mockResolvedValue(draft());
+    mock.request.mockRejectedValueOnce(timeout()).mockRejectedValueOnce(httpError(404)).mockResolvedValueOnce(response('message-1'));
+    const attachment = { type: 'image', name: 'photo.png', mimeType: 'image/png', size: 1, data: 'YQ==' };
+    await expect(new XopcChatRepository().send('draft-1', 'hello', 'message-1', '', [attachment], 'next',
+      [{ kind: 'note', sourceId: 'note-1' }])).resolves.toBe('run-1');
+    expect(mock.request.mock.calls[2]).toEqual(mock.request.mock.calls[0]);
+    expect(mock.uuid).not.toHaveBeenCalled();
+  });
+
+  it('keeps the original command after bounded retries are exhausted', async () => {
+    mock.read.mockResolvedValue(draft());
+    mock.request.mockRejectedValueOnce(timeout()).mockRejectedValueOnce(httpError(404))
+      .mockRejectedValueOnce(timeout()).mockRejectedValueOnce(httpError(404));
+    await expect(new XopcChatRepository().send('draft-1', 'hello', 'message-1')).rejects.toThrow('request timed out');
+    expect(mock.request).toHaveBeenCalledTimes(4);
+    expect(mock.clearCommand).not.toHaveBeenCalled();
+    expect(await mock.readCommand()).toMatchObject({ clientMessageId: 'message-1' });
+  });
+
+  it('also checks acceptance after the compensating POST loses its response', async () => {
+    mock.read.mockResolvedValue(draft());
+    mock.request.mockRejectedValueOnce(httpError(503)).mockRejectedValueOnce(httpError(404))
+      .mockRejectedValueOnce(timeout()).mockResolvedValueOnce(response('message-1'));
+    await expect(new XopcChatRepository().send('draft-1', 'hello', 'message-1')).resolves.toBe('run-1');
+    expect(mock.request).toHaveBeenCalledTimes(4);
+  });
+
+  it.each([401, 403, 409, 410, 429])('does not replay a non-transient HTTP %s rejection', async status => {
+    mock.read.mockResolvedValue(draft());
+    mock.request.mockRejectedValue(httpError(status));
+    await expect(new XopcChatRepository().send('draft-1', 'hello', 'message-1')).rejects.toThrow();
+    expect(mock.request).toHaveBeenCalledOnce();
+  });
+
+  it('does not replay when receipt lookup itself is unavailable', async () => {
+    mock.read.mockResolvedValue(draft());
+    mock.request.mockRejectedValue(timeout());
+    await expect(new XopcChatRepository().send('draft-1', 'hello', 'message-1')).rejects.toThrow();
+    expect(mock.request).toHaveBeenCalledTimes(2);
+    expect(mock.clearCommand).not.toHaveBeenCalled();
+  });
+
+  it('stops compensation when the gateway identity changes', async () => {
+    mock.read.mockResolvedValue(draft());
+    mock.request.mockImplementationOnce(async () => {
+      mock.assertConnection.mockImplementation(() => { throw new Error('OPERATION_CANCELLED'); });
+      throw timeout();
+    });
+    await expect(new XopcChatRepository().send('draft-1', 'hello', 'message-1')).rejects.toThrow('OPERATION_CANCELLED');
+    expect(mock.request).toHaveBeenCalledOnce();
+  });
   it('unfreezes a rejected first input and permits changing the model', async () => {
     const local = draft(); mock.read.mockResolvedValue(local);
     const error = new XopcHttpError(400, '');
