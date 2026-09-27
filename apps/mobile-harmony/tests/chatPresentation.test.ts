@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatPresentationRows } from '../entry/src/main/ets/common/chatPresentation.ets';
+import { chatPresentationRows, chatNeedsWideBubble } from '../entry/src/main/ets/common/chatPresentation.ets';
 import type { XopcChatRow } from '../entry/src/main/ets/model/chat.ets';
 
 const user: XopcChatRow = { id: 'u', role: 'user', text: 'prepare' };
@@ -9,6 +9,24 @@ const steps: XopcChatRow = { id: 'a', role: 'assistant', text: '', turnId: 't', 
 ] };
 
 describe('one continuous assistant response', () => {
+  it.each([true, false])('keeps narration readable with no final answer (live=%s)', live => {
+    const row: XopcChatRow = { id: 'progress', role: 'assistant', text: '', live,
+      blocks: [{ id: 'notice', kind: 'text', text: '我来帮你搜集今天的重要 AI 新闻', presentation: 'narration' }] };
+    expect(chatNeedsWideBubble(row)).toBe(true);
+    expect(chatNeedsWideBubble({ ...row, blocks: [...row.blocks!, { id: 'answer', kind: 'text', text: '好了', presentation: 'answer' }] })).toBe(true);
+  });
+  it('keeps ordinary short answers and empty running placeholders compact', () => {
+    expect(chatNeedsWideBubble({ id: 'a', role: 'assistant', text: '你好', blocks: [{ id: 'a', kind: 'text', text: '你好', presentation: 'answer' }] })).toBe(false);
+    expect(chatNeedsWideBubble({ id: 'a', role: 'assistant', text: '', live: true })).toBe(false);
+  });
+  it('preserves product deliveries through active snapshot presentation and gives them full width', () => {
+    const row: XopcChatRow = { id: 'a', role: 'assistant', text: '', deliveries: [
+      { version: 2, operation: 'created', primary: { kind: 'note', id: 'n', title: '新闻', capabilities: ['open'] } },
+    ] };
+    const presented = chatPresentationRows([row], undefined, 'r')[0];
+    expect(presented.deliveries).toEqual(row.deliveries);
+    expect(chatNeedsWideBubble(presented)).toBe(true);
+  });
   it('marks snapshot steps active instead of adding a second running bubble', () => {
     const rows = chatPresentationRows([user, steps], undefined, 'r');
     expect(rows).toHaveLength(2);
