@@ -1,0 +1,12 @@
+{
+  "platform": "ios",
+  "status": "completed",
+  "implementation": [
+    "Consumes the same shared task/project and automation information architecture",
+    "Consumes the same reference ordering and image thumbnail composer presentation",
+    "Preserves platform preview, editing, safe-area and accessibility behavior"
+  ],
+  "tests": "999 Vitest tests, TypeScript, ESLint and diff check passed",
+  "build": "Generic iOS Simulator xcodebuild passed",
+  "runtime": "App installed and process launched; UI verification blocked by the existing Secure storage unavailable simulator condition"
+}

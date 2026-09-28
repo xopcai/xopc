@@ -1,0 +1,13 @@
+{
+  "platform": "android",
+  "status": "completed",
+  "implementation": [
+    "Shared task/project search, filters, counts, contextual hierarchy and richer cards",
+    "Shared automation search and enabled/paused filters",
+    "User references below message text",
+    "Thumbnail-only image composer attachments"
+  ],
+  "tests": "999 Vitest tests, TypeScript, ESLint and diff check passed",
+  "build": "assembleDebug passed",
+  "runtime": "Debug APK installed and launched on a clean Android 15 emulator; pairing landing screen rendered"
+}

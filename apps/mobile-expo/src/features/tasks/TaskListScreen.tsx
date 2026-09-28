@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
-import { Button, Icon, Text } from 'react-native-paper';
+import { Button, Icon, Text, TextInput } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ListSkeleton } from '../../components/ListSkeleton';
@@ -23,6 +23,7 @@ import {
 } from './project-presentation';
 
 type WorkTab = 'projects' | 'tasks';
+type WorkFilter = 'all' | 'primary' | 'secondary';
 
 const TAB_INDEX: Record<WorkTab, number> = {
   projects: 0,
@@ -36,6 +37,9 @@ export function TaskListScreen() {
   const messages = useMessages();
   const labels = messages.tasksPage;
   const [tab, setTab] = useState<WorkTab>('projects');
+  const [search, setSearch] = useState('');
+  const [projectFilter, setProjectFilter] = useState<WorkFilter>('all');
+  const [taskFilter, setTaskFilter] = useState<WorkFilter>('all');
   const pagerRef = useRef<PagerView>(null);
   const tasks = useQuery({ queryKey: queryKeys.tasks, queryFn: () => fetchTasks(), enabled: configured });
   const projects = useQuery({ queryKey: queryKeys.projects, queryFn: fetchProjects, enabled: configured });
@@ -48,6 +52,22 @@ export function TaskListScreen() {
   const onPageSelected = useCallback((position: number) => {
     setTab(position === 0 ? 'projects' : 'tasks');
   }, []);
+
+  const filter = tab === 'projects' ? projectFilter : taskFilter;
+  const counts = useMemo(() => {
+    if (tab === 'projects') {
+      const items = projects.data ?? [];
+      return { all: items.length, primary: items.filter((item) => item.status !== 'archived').length,
+        secondary: items.filter((item) => item.status === 'archived').length };
+    }
+    const items = tasks.data ?? [];
+    return { all: items.length, primary: items.filter((item) => item.task.phase !== 'closed').length,
+      secondary: items.filter((item) => item.task.phase === 'closed').length };
+  }, [projects.data, tab, tasks.data]);
+  const setFilter = useCallback((next: WorkFilter) => {
+    if (tab === 'projects') setProjectFilter(next);
+    else setTaskFilter(next);
+  }, [tab]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
@@ -65,9 +85,29 @@ export function TaskListScreen() {
         <WorkLink icon="source-branch" label={messages.workflowsPage.title} onPress={() => router.push('/workflows')} />
         <WorkLink icon="clock-outline" label={messages.automationPage.title} onPress={() => router.push('/automation')} />
       </View>
+      <TextInput
+        mode="flat"
+        dense
+        value={search}
+        onChangeText={setSearch}
+        placeholder={labels.searchPlaceholder}
+        accessibilityLabel={labels.searchPlaceholder}
+        left={<TextInput.Icon icon="magnify" />}
+        right={search ? <TextInput.Icon icon="close" accessibilityLabel={labels.clearSearch} onPress={() => setSearch('')} /> : undefined}
+        underlineColor="transparent"
+        activeUnderlineColor="transparent"
+        style={[styles.search, { backgroundColor: colors.surface.input }]}
+      />
       <View style={[styles.tabBar, { backgroundColor: colors.surface.input }]}>
         <WorkTabButton label={labels.projectsTab} active={tab === 'projects'} onPress={() => selectTab('projects')} />
         <WorkTabButton label={labels.tasksTab} active={tab === 'tasks'} onPress={() => selectTab('tasks')} />
+      </View>
+      <View style={styles.filters} accessibilityRole="tablist">
+        <WorkFilterButton label={labels.allFilter} count={counts.all} active={filter === 'all'} onPress={() => setFilter('all')} />
+        <WorkFilterButton label={tab === 'projects' ? labels.activeFilter : labels.openFilter}
+          count={counts.primary} active={filter === 'primary'} onPress={() => setFilter('primary')} />
+        <WorkFilterButton label={tab === 'projects' ? labels.archivedFilter : labels.closedFilter}
+          count={counts.secondary} active={filter === 'secondary'} onPress={() => setFilter('secondary')} />
       </View>
       <PagerView
         ref={pagerRef}
@@ -76,10 +116,10 @@ export function TaskListScreen() {
         onPageSelected={(event) => onPageSelected(event.nativeEvent.position)}
       >
         <View key="projects" style={styles.page} collapsable={false}>
-          <ProjectsPage query={projects} />
+          <ProjectsPage query={projects} filter={projectFilter} search={search} />
         </View>
         <View key="tasks" style={styles.page} collapsable={false}>
-          <TasksPage query={tasks} />
+          <TasksPage query={tasks} filter={taskFilter} search={search} />
         </View>
       </PagerView>
     </View>
@@ -120,13 +160,40 @@ function WorkTabButton({ label, active, onPress }: { label: string; active: bool
   );
 }
 
+function WorkFilterButton({ label, count, active, onPress }: {
+  label: string;
+  count: number;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={[styles.filter, { backgroundColor: active ? colors.accent.soft : colors.surface.panel }]}
+    >
+      <Text style={[styles.filterLabel, { color: active ? colors.accent.primary : colors.text.secondary }]}>{label}</Text>
+      <Text style={[styles.filterCount, { color: active ? colors.accent.primary : colors.text.tertiary }]}>{count}</Text>
+    </Pressable>
+  );
+}
+
 type TasksQuery = ReturnType<typeof useQuery<TaskListItem[]>>;
 type ProjectsQuery = ReturnType<typeof useQuery<Project[]>>;
 
-function ProjectsPage({ query }: { query: ProjectsQuery }) {
+function ProjectsPage({ query, filter, search }: { query: ProjectsQuery; filter: WorkFilter; search: string }) {
   const insets = useSafeAreaInsets();
   const labels = useMessages().tasksPage;
-  const projects = useMemo(() => sortProjectPortfolio(query.data ?? []), [query.data]);
+  const projects = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return sortProjectPortfolio(query.data ?? []).filter((item) => {
+      const statusMatches = filter === 'all' || (filter === 'primary' ? item.status !== 'archived' : item.status === 'archived');
+      const searchMatches = !term || `${item.name} ${item.description ?? ''}`.toLocaleLowerCase().includes(term);
+      return statusMatches && searchMatches;
+    });
+  }, [filter, query.data, search]);
 
   if (query.isLoading) return <View style={styles.skeleton}><ListSkeleton count={6} /></View>;
   if (query.isError) {
@@ -137,7 +204,8 @@ function ProjectsPage({ query }: { query: ProjectsQuery }) {
     <FlatList
       data={projects}
       keyExtractor={(item) => item.id}
-      renderItem={({ item, index }) => <ProjectRow project={item} last={index === projects.length - 1} />}
+      renderItem={({ item }) => <ProjectRow project={item} />}
+      ListHeaderComponent={<WorkspaceIntro text={labels.projectsHint} count={projects.length} />}
       contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.xxl }]}
       refreshControl={<RefreshControl refreshing={query.isFetching} onRefresh={() => void query.refetch()} />}
       ListEmptyComponent={<EmptySection label={labels.projectsEmpty} />}
@@ -145,13 +213,17 @@ function ProjectsPage({ query }: { query: ProjectsQuery }) {
   );
 }
 
-function TasksPage({ query }: { query: TasksQuery }) {
+function TasksPage({ query, filter, search }: { query: TasksQuery; filter: WorkFilter; search: string }) {
   const insets = useSafeAreaInsets();
   const labels = useMessages().tasksPage;
-  const items = useMemo(
-    () => (query.data ?? []).filter((item) => item.task.phase !== 'closed'),
-    [query.data],
-  );
+  const items = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return (query.data ?? []).filter((item) => {
+      const statusMatches = filter === 'all' || (filter === 'primary' ? item.task.phase !== 'closed' : item.task.phase === 'closed');
+      const searchMatches = !term || `${item.task.title} ${item.task.body ?? ''} ${item.task.projectId ?? ''}`.toLocaleLowerCase().includes(term);
+      return statusMatches && searchMatches;
+    });
+  }, [filter, query.data, search]);
 
   if (query.isLoading) return <View style={styles.skeleton}><ListSkeleton count={7} /></View>;
   if (query.isError) {
@@ -162,7 +234,8 @@ function TasksPage({ query }: { query: TasksQuery }) {
     <FlatList
       data={items}
       keyExtractor={(item) => item.task.id}
-      renderItem={({ item, index }) => <TaskRow item={item} last={index === items.length - 1} />}
+      renderItem={({ item }) => <TaskRow item={item} />}
+      ListHeaderComponent={<WorkspaceIntro text={labels.tasksHint} count={items.length} />}
       contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.xxl }]}
       refreshControl={<RefreshControl refreshing={query.isFetching} onRefresh={() => void query.refetch()} />}
       ListEmptyComponent={<EmptySection label={labels.empty} />}
@@ -170,7 +243,18 @@ function TasksPage({ query }: { query: TasksQuery }) {
   );
 }
 
-function ProjectRow({ project, last }: { project: Project; last: boolean }) {
+function WorkspaceIntro({ text, count }: { text: string; count: number }) {
+  const { colors } = useTheme();
+  const labels = useMessages().tasksPage;
+  return (
+    <View style={[styles.intro, { backgroundColor: colors.accent.soft }]}>
+      <Text style={[styles.introText, { color: colors.text.primary }]}>{text}</Text>
+      <Text style={[styles.introCount, { color: colors.text.secondary }]}>{t(labels.visibleCount, { count })}</Text>
+    </View>
+  );
+}
+
+function ProjectRow({ project }: { project: Project }) {
   const router = useRouter();
   const { colors } = useTheme();
   const labels = useMessages().tasksPage;
@@ -198,8 +282,7 @@ function ProjectRow({ project, last }: { project: Project; last: boolean }) {
       onPress={() => router.push(`/projects/${project.id}`)}
       style={({ pressed }) => [styles.row, {
         backgroundColor: pressed ? colors.surface.pressed : colors.surface.panel,
-        borderBottomColor: colors.border.subtle,
-        borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
+        borderColor: colors.border.subtle,
       }]}
     >
       <View style={[styles.healthDot, { backgroundColor: healthColor }]} />
@@ -209,13 +292,14 @@ function ProjectRow({ project, last }: { project: Project; last: boolean }) {
           {relativeTime ? <Text style={[styles.rowTime, { color: colors.text.tertiary }]}>{relativeTime}</Text> : null}
         </View>
         <Text style={[styles.rowMeta, { color: counts.needsUser > 0 ? colors.semantic.warning : colors.text.secondary }]}>{status}</Text>
+        {project.description ? <Text numberOfLines={2} style={[styles.rowSummary, { color: colors.text.secondary }]}>{project.description}</Text> : null}
       </View>
       <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
     </Pressable>
   );
 }
 
-function TaskRow({ item, last }: { item: TaskListItem; last: boolean }) {
+function TaskRow({ item }: { item: TaskListItem }) {
   const router = useRouter();
   const { colors } = useTheme();
   const { tasksPage: labels, homePage } = useMessages();
@@ -235,8 +319,7 @@ function TaskRow({ item, last }: { item: TaskListItem; last: boolean }) {
       onPress={() => router.push(`/tasks/${item.task.id}`)}
       style={({ pressed }) => [styles.row, {
         backgroundColor: pressed ? colors.surface.pressed : colors.surface.panel,
-        borderBottomColor: colors.border.subtle,
-        borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
+        borderColor: colors.border.subtle,
       }]}
     >
       <Icon
@@ -249,6 +332,12 @@ function TaskRow({ item, last }: { item: TaskListItem; last: boolean }) {
         <Text style={[styles.rowMeta, { color: needsAttention ? colors.semantic.warning : colors.text.tertiary }]}>
           {needsAttention ? labels.needsYou : `${phaseLabel} · ${item.operationalState}`}
         </Text>
+        {item.task.body ? <Text numberOfLines={2} style={[styles.rowSummary, { color: colors.text.secondary }]}>{item.task.body}</Text> : null}
+        {item.task.projectId || item.task.priority ? <View style={styles.taskContext}>
+          {item.task.projectId ? <><Icon source="folder-outline" size={14} color={colors.text.tertiary} />
+            <Text numberOfLines={1} style={[styles.taskProject, { color: colors.text.tertiary }]}>{item.task.projectId}</Text></> : null}
+          {item.task.priority ? <Text style={[styles.priority, { color: colors.text.secondary, backgroundColor: colors.surface.input }]}>{item.task.priority}</Text> : null}
+        </View> : null}
       </View>
       <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
     </Pressable>
@@ -299,18 +388,31 @@ const styles = StyleSheet.create({
   tabButton: { flex: 1, minHeight: 44, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
   tabLabel: { ...typography.ui, fontWeight: '500' },
   tabLabelActive: { fontWeight: '600' },
+  filters: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
+  filter: { minHeight: 36, borderRadius: radii.full, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  filterLabel: { ...typography.caption, fontWeight: '600' },
+  filterCount: { ...typography.micro, fontWeight: '600' },
   toolLinks: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
   toolLink: { flex: 1, minHeight: 52, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   toolLinkLabel: { ...typography.label, flex: 1, fontWeight: '600' },
+  search: { height: 44, marginHorizontal: spacing.lg, marginBottom: spacing.sm, borderRadius: radii.full, overflow: 'hidden' },
   skeleton: { padding: spacing.lg },
   list: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, flexGrow: 1 },
-  row: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+  intro: { borderRadius: radii.lg, padding: spacing.md, gap: spacing.xs, marginBottom: spacing.md },
+  introText: { ...typography.label, fontWeight: '600' },
+  introCount: { ...typography.micro },
+  row: { minHeight: 82, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+    borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, marginBottom: spacing.sm },
   rowBody: { flex: 1, minWidth: 0, gap: spacing.xxs },
   rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rowTitle: { ...typography.ui, fontWeight: '600', flex: 1 },
   rowMeta: { ...typography.caption },
+  rowSummary: { ...typography.label, lineHeight: 19 },
   rowTime: { ...typography.micro },
   healthDot: { width: 8, height: 8, borderRadius: 4 },
+  taskContext: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xxs },
+  taskProject: { ...typography.micro, flex: 1 },
+  priority: { ...typography.micro, borderRadius: radii.full, paddingHorizontal: spacing.sm, paddingVertical: 2 },
   empty: { minHeight: 120, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   emptyText: { ...typography.label, textAlign: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.xl },
