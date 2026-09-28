@@ -376,6 +376,15 @@ describe('chat history isolation', () => {
     await vi.waitFor(() => expect(chat.loading).toBe(false));
     expect(chat.selectedId).toBe('main'); expect(mocks.create).not.toHaveBeenCalled(); chat.dispose();
   });
+  it('replaces a stale persisted main conversation that the Gateway no longer has', async () => {
+    mocks.mainConversation.mockResolvedValue('missing'); mocks.create.mockResolvedValue('replacement');
+    mocks.history.mockRejectedValueOnce(Object.assign(new Error('HTTP_404'), { status: 404 }))
+      .mockResolvedValueOnce(page('replacement', 'ready'));
+    const chat = new XopcChatViewModel(); chat.start();
+    await vi.waitFor(() => expect(chat.selectedId).toBe('replacement'));
+    expect(mocks.saveMainConversation).toHaveBeenCalledWith('');
+    expect(mocks.create).toHaveBeenCalledOnce(); expect(chat.rows[0].text).toBe('ready'); chat.dispose();
+  });
   it('does not create a replacement when local restoration fails', async () => {
     mocks.mainConversation.mockRejectedValue(new Error('STORE_UNAVAILABLE'));
     const chat = new XopcChatViewModel(); chat.start();

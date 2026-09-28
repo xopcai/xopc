@@ -388,6 +388,10 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // GET /api/sessions/:key/agent-config — resolved session agent settings (thinking, etc.)
   authenticated.get('/api/sessions/:key/agent-config', async (c) => {
     const key = c.req.param('key');
+    const session = await service.sessions.getSession(key);
+    if (!session) {
+      return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Session not found' } }, 404);
+    }
     const payload = await service.sessions.getFixedAgentConfig(key);
     return c.json({ ok: true, payload });
   });

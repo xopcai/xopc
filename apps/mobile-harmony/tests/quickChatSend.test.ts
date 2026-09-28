@@ -22,6 +22,7 @@ function home() {
   Object.assign(view, {
     quickDraft: 'hello', quickFiles: [], quickSending: false, quickPicking: false,
     chatRepository: { create: vi.fn(async () => 'conversation') }, switchToChat: vi.fn(),
+    setQuickPanel: vi.fn(),
     getUIContext: () => ({ getPromptAction: () => ({ showToast: vi.fn() }) }),
   });
   return { view, intake };

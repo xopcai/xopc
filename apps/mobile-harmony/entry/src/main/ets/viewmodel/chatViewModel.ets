@@ -17,6 +17,8 @@ interface XopcPendingChatSend {
   delivery: string;
 }
 
+interface XopcChatHttpFailure { status?: number; }
+
 @ObservedV2
 export class XopcChatViewModel {
   private static owner?: XopcChatViewModel;
@@ -162,9 +164,16 @@ export class XopcChatViewModel {
       if (this.disposed || selection !== this.selection) return;
       if (draft) return;
       this.restoreCachedHistory(id, selection);
-      await this.recover();
+      await this.recover(true);
     } catch (error) {
       if (!this.disposed && selection === this.selection) {
+        if (this.main && (error as XopcChatHttpFailure).status === 404) {
+          await this.repository.saveMainConversation('');
+          if (this.disposed || selection !== this.selection) return;
+          this.loading = false;
+          await this.create();
+          return;
+        }
         this.error = (error as Error).message;
         await this.restoreCachedHistory(id, selection);
       }
@@ -194,18 +203,21 @@ export class XopcChatViewModel {
     this.selectedId = ''; this.runId = ''; this.rows = []; this.loading = false; this.liveRow = undefined;
   }
 
-  private async recover(): Promise<void> {
+  private async recover(propagateMissing: boolean = false): Promise<void> {
     const id = this.selectedId; const selection = this.selection;
     if (!id) return;
     const request = ++this.recoveryRequest;
     this.snapshotMode = true;
     try {
-      await this.loadHistory(false);
+      await this.loadHistory(false, (): void => {}, propagateMissing);
       if (request !== this.recoveryRequest || selection !== this.selection || this.disposed) return;
       const run = await this.repository.activeRun(id);
       if (request !== this.recoveryRequest || selection !== this.selection || this.disposed) return;
       this.trackRun(run.active ? run.runId ?? '' : '');
-    } catch (error) { if (request === this.recoveryRequest && selection === this.selection && !this.disposed) this.error = (error as Error).message; }
+    } catch (error) {
+      if (request === this.recoveryRequest && selection === this.selection && !this.disposed) this.error = (error as Error).message;
+      if (propagateMissing && (error as XopcChatHttpFailure).status === 404) throw error as Error;
+    }
   }
 
   async retryHistory(): Promise<void> {
@@ -230,7 +242,7 @@ export class XopcChatViewModel {
       .catch((_error: Error): undefined => undefined);
   }
 
-  async loadHistory(older: boolean, beforePrepend: () => void = (): void => {}): Promise<void> {
+  async loadHistory(older: boolean, beforePrepend: () => void = (): void => {}, propagateMissing: boolean = false): Promise<void> {
     if (!this.selectedId || (older && (this.olderPending || !this.hasOlder))) return;
     if (older) this.olderPending = true;
     const request = ++this.historyRequest;
@@ -274,7 +286,10 @@ export class XopcChatViewModel {
         this.before = result.pagination.nextBeforeCursor ?? '';
         this.hasOlder = result.pagination.hasMore && this.before.length > 0;
       }
-    } catch (error) { if (selection === this.selection && request === this.historyRequest) this.error = (error as Error).message; }
+    } catch (error) {
+      if (selection === this.selection && request === this.historyRequest) this.error = (error as Error).message;
+      if (propagateMissing && (error as XopcChatHttpFailure).status === 404) throw error as Error;
+    }
     finally { if (older && selection === this.selection) this.olderPending = false; }
   }
 

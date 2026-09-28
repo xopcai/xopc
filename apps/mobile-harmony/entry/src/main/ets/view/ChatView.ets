@@ -92,6 +92,8 @@ export struct XopcChatView {
   @Param requestedId: string = '';
   @Param requestRevision: number = 0;
   @Param focusRevision: number = 0;
+  @Param requestedAction: string = '';
+  @Param actionRevision: number = 0;
   @Param intakeRevision: number = 0;
   @Param intakeText: string = '';
   @Param activePage: boolean = true;
@@ -201,6 +203,7 @@ export struct XopcChatView {
   private appliedFocusRevision: number = 0;
   private composerFocusAttempts: number = 0;
   private composerFocusTimer: number = -1;
+  private appliedActionRevision: number = 0;
   private messagesScroller: Scroller = new Scroller();
   private scrollTimer: number = -1;
   private layoutScrollAnimating: boolean = false;
@@ -536,6 +539,14 @@ export struct XopcChatView {
     this.appliedFocusRevision = this.focusRevision;
     this.focusComposerOnMount = true;
     this.focusMountedComposer();
+  }
+  @Monitor('actionRevision', 'chat.selectedId', 'chat.loading', 'restoringDraft', 'activePage')
+  onActionRequest(): void {
+    if (!this.actionRevision || this.appliedActionRevision === this.actionRevision || !this.requestedAction
+      || !this.activePage || this.restoringDraft || this.chat.loading || this.chat.selectedId !== this.requestedId) return;
+    this.appliedActionRevision = this.actionRevision;
+    this.setPanel(true);
+    this.chooseAction(this.requestedAction);
   }
   aboutToDisappear(): void { this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.disableContinuous(); this.attachments = []; }
 
