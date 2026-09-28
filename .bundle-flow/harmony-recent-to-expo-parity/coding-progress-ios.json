@@ -4,9 +4,10 @@
   "implementation": [
     "Consumes the same shared task/project and automation information architecture",
     "Consumes the same reference ordering and image thumbnail composer presentation",
-    "Preserves platform preview, editing, safe-area and accessibility behavior"
+    "Preserves platform preview, editing, safe-area and accessibility behavior",
+    "Consumes the aligned five-tab shell and shared cross-tab Chat Input handoff"
   ],
-  "tests": "999 Vitest tests, TypeScript, ESLint and diff check passed",
-  "build": "Generic iOS Simulator xcodebuild passed",
+  "tests": "1002 Vitest tests, TypeScript, ESLint and diff check passed",
+  "build": "Generic and isolated DerivedData iOS Simulator xcodebuild passed",
   "runtime": "App installed and process launched; UI verification blocked by the existing Secure storage unavailable simulator condition"
 }

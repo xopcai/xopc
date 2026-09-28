@@ -37,6 +37,7 @@ import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, radii, spacing, typograp
 import { useGatewayStore } from '../../stores/gateway-store';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { prefetchSessionChatEntry } from '../chat/session-history-prefetch';
+import { openRootChat } from '../chat/open-root-chat';
 
 import { RenameDialog } from './RenameDialog';
 import { SessionCard } from './SessionCard';
@@ -47,10 +48,10 @@ const PAGE_SIZE = 20;
 const sessionRowKey = (item: SessionListRow) => item.key;
 const sessionRowType = (item: SessionListRow) => item.type;
 
-export function SessionsScreen() {
+export function SessionsScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const router = useRouter();
   const { search: searchParam } = useLocalSearchParams<{ search?: string }>();
-  useDismissOnHardwareBack(router);
+  useDismissOnHardwareBack(router, { enabled: !embedded });
   const queryClient = useQueryClient();
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
   const language = usePreferencesStore((state) => state.language);
@@ -148,7 +149,8 @@ export function SessionsScreen() {
   const createSessionMutation = useMutation({
     mutationFn: () => createSession(),
     onSuccess: (conversationId) => {
-      router.push(`/chat/${conversationId}`);
+      if (embedded) openRootChat(router, conversationId);
+      else router.push(`/chat/${conversationId}`);
     },
     onError: (error) => {
       setSnackMsg(error instanceof Error ? error.message : m.notesPage.actionFailed);
@@ -234,13 +236,14 @@ export function SessionsScreen() {
     if (openingConversationIdRef.current) return;
     openingConversationIdRef.current = session.key;
     void primeSessionHistory(session.key).catch(() => undefined);
-    openChat(router, session.key);
+    if (embedded) openRootChat(router, session.key);
+    else openChat(router, session.key);
     if (openingResetTimerRef.current) clearTimeout(openingResetTimerRef.current);
     openingResetTimerRef.current = setTimeout(() => {
       openingConversationIdRef.current = '';
       openingResetTimerRef.current = null;
     }, 600);
-  }, [primeSessionHistory, router]);
+  }, [embedded, primeSessionHistory, router]);
 
   const handleSessionPress = useCallback((session: SessionListItem) => {
     if (selectionMode) {
@@ -439,7 +442,7 @@ export function SessionsScreen() {
       <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : sm.title}
         largeTitle={!selectionMode}
-        onBack={selectionMode ? exitSelectionMode : () => dismissOrRoot(router)}
+        onBack={selectionMode ? exitSelectionMode : embedded ? undefined : () => dismissOrRoot(router)}
         onSearchPress={!selectionMode && configured ? openSearch : undefined}
         searchPlaceholder={m.sessions.searchPlaceholder}
         rightActions={selectionMode ? undefined : [

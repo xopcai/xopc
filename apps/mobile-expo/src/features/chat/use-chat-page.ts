@@ -323,6 +323,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const composerDisabled =
     modelMutation.isPending ||
+    sessionAgentConfigQuery.isPending ||
     chatSession.sending ||
     !conversationId || bootstrap.creatingInitialSession;
 

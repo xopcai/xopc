@@ -6,6 +6,7 @@
       "current_phase": "verify",
       "completed_phases": ["analyse", "plan", "coding", "build"],
       "invalidated_phases": [],
+      "current_change_round": 1,
       "platforms": ["android", "ios"],
       "project_root": "/Users/micjoyce/develop/github/xopc"
     },

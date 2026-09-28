@@ -2,8 +2,9 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAttentionFeed } from '@/features/attention/use-attention-feed';
-import { CapsuleTabBar, CapsuleTabButton, CapsuleTabIcon, TAB_DOCK_HEIGHT, TAB_DOCK_INSET } from '@/features/navigation/CapsuleTabBar';
+import { CapsuleTabButton, CapsuleTabIcon, TAB_DOCK_HEIGHT, TAB_DOCK_INSET } from '@/features/navigation/CapsuleTabBar';
 import { ChatTabDockProvider } from '@/features/navigation/ChatTabDockContext';
+import { QuickChatTabBar } from '@/features/navigation/QuickChatTabBar';
 import { useMessages } from '@/i18n/messages';
 import { radii, spacing, typography, useTheme } from '@/theme';
 
@@ -15,7 +16,7 @@ export default function PrimaryTabs() {
   const count = attention.data?.needsUser.length ?? 0;
   return (
     <Tabs layout={props => <ChatTabDockProvider {...props} />}
-      tabBar={props => props.state.routes[props.state.index].name === '(chat)' ? null : <CapsuleTabBar {...props} />} screenOptions={{
+      tabBar={props => props.state.routes[props.state.index].name === '(chat)' ? null : <QuickChatTabBar {...props} />} screenOptions={{
       headerShown: false,
       tabBarActiveBackgroundColor: 'transparent',
       tabBarInactiveBackgroundColor: 'transparent',
@@ -39,6 +40,7 @@ export default function PrimaryTabs() {
       },
     }}>
       <Tabs.Screen name="(chat)" options={{ title: m.chat, tabBarIcon: ({ focused }) => <CapsuleTabIcon source="message-outline" focused={focused} /> }} />
+      <Tabs.Screen name="sessions" options={{ title: m.conversations, tabBarIcon: ({ focused }) => <CapsuleTabIcon source="message-text-outline" focused={focused} /> }} />
       <Tabs.Screen name="progress" options={{ title: m.progress, tabBarBadge: count || undefined, tabBarBadgeStyle: { backgroundColor: colors.accent.soft, color: colors.accent.primary }, tabBarIcon: ({ focused }) => <CapsuleTabIcon source="checkbox-marked-circle-outline" focused={focused} /> }} />
       <Tabs.Screen name="library" options={{ title: m.library, tabBarIcon: ({ focused }) => <CapsuleTabIcon source="layers-outline" focused={focused} /> }} />
       <Tabs.Screen name="settings" options={{ title: m.personal, tabBarIcon: ({ focused }) => <CapsuleTabIcon source="account-outline" focused={focused} /> }} />
