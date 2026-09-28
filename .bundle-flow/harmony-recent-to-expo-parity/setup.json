@@ -1,0 +1,7 @@
+{
+  "repositories": {
+    "android": { "path": "/Users/micjoyce/develop/github/xopc/apps/mobile-expo", "status": "ready" },
+    "ios": { "path": "/Users/micjoyce/develop/github/xopc/apps/mobile-expo", "status": "ready" },
+    "common": { "path": "/Users/micjoyce/develop/github/xopc", "status": "ready" }
+  }
+}
