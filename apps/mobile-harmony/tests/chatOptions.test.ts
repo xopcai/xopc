@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { agents: vi.fn(), models: vi.fn(), config: vi.fn(), setModel: vi.fn(), queue: vi.fn(), changeQueued: vi.fn(), rememberModel: vi.fn() };
+  return { agents: vi.fn(), models: vi.fn(), config: vi.fn(), draft: vi.fn(), setModel: vi.fn(), queue: vi.fn(), changeQueued: vi.fn(), rememberModel: vi.fn() };
 });
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {
-  agents = mock.agents; models = mock.models; config = mock.config; setModel = mock.setModel; queue = mock.queue; changeQueued = mock.changeQueued;
+  agents = mock.agents; models = mock.models; config = mock.config; draft = mock.draft; setModel = mock.setModel; queue = mock.queue; changeQueued = mock.changeQueued;
   rememberModel = mock.rememberModel;
 } }));
 import { XopcChatOptionsViewModel } from '../entry/src/main/ets/viewmodel/chatOptionsViewModel.ets';
@@ -13,7 +13,8 @@ describe('chat options and queue', () => {
   beforeEach(() => {
     vi.resetAllMocks(); vi.useFakeTimers(); mock.agents.mockResolvedValue({ agents: [{ id: 'main', name: 'Main' }], defaultId: 'main' });
     mock.models.mockResolvedValue({ models: [{ id: 'p/a', name: 'A' }, { id: 'p/b', name: 'B' }] });
-    mock.config.mockResolvedValue({ model: 'p/a' }); mock.queue.mockImplementation(async (id) => ({ conversationId: id, inputs: [] }));
+    mock.config.mockResolvedValue({ model: 'p/a' }); mock.draft.mockResolvedValue(undefined);
+    mock.queue.mockImplementation(async (id) => ({ conversationId: id, inputs: [] }));
   });
   afterEach(() => vi.useRealTimers());
   it('loads scoped models and does not change the displayed model after a failed save', async () => {
@@ -31,6 +32,13 @@ describe('chat options and queue', () => {
     const model = new XopcChatOptionsViewModel(); mock.config.mockResolvedValueOnce({ model: 'p/a', thinkingLevel: 'high' });
     await model.load('one', 'main'); expect(await model.selectModel('p/b')).toBe(true);
     expect(mock.rememberModel).toHaveBeenCalledWith('main', 'p/b', 'high'); model.dispose();
+  });
+  it('keeps the local draft config frozen while catalogs load instead of querying a nonexistent server session', async () => {
+    mock.draft.mockResolvedValueOnce({ conversationId: 'draft', createdAt: '2026-09-27T00:00:00.000Z', creation: {
+      agentId: 'main', projectId: null, execution: null, temporary: false, model: 'p/b', thinkingLevel: 'high',
+    } });
+    const model = new XopcChatOptionsViewModel(); await model.load('draft', 'main');
+    expect(mock.config).not.toHaveBeenCalled(); expect(model.modelId).toBe('p/b'); expect(model.error).toBe(''); model.dispose();
   });
   it('submits the queue version and refreshes after a conflict without pretending success', async () => {
     const model = new XopcChatOptionsViewModel(); await model.load('one'); mock.changeQueued.mockRejectedValue(new Error('HTTP_409'));

@@ -112,6 +112,16 @@ describe('chat bottom region composition', () => {
     expect(home).toContain(".id('home-quick-send')");
     expect(home).toContain(".id('home-quick-voice').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE)");
     expect(home).toContain(".id('home-quick-actions').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE)");
+    expect(home).toContain(".id('home-quick-action-panel').width('100%').height(196)");
+    expect(home).toContain("this.quickActionTile('photos', $r('app.string.chat_photos'), $r('sys.symbol.picture')");
+    expect(home).toContain("this.quickActionTile('reference-note', $r('app.string.chat_reference_note'), $r('sys.symbol.doc')");
+    expect(home).toContain("this.quickActionTile('voice-with-tools', $r('app.string.voice_call_action_assistant')");
+    const assistantActions = Array.from(chat.matchAll(/this\.actionTile\('([^']+)'/g), (match) => match[1]);
+    const secondaryActions = Array.from(home.matchAll(/this\.quickActionTile\('([^']+)'/g), (match) => match[1]);
+    expect(secondaryActions).toEqual(assistantActions);
+    expect(home).toContain("SymbolGlyph(this.quickPanelOpen ? $r('sys.symbol.xmark_circle') : $r('sys.symbol.plus_circle'))");
+    expect(home).not.toContain('showQuickAttachments');
+    expect(home).not.toContain("showActionSheet({ title: '', message: '', sheets:");
     expect(home).toContain(".id('home-quick-composer').layoutWeight(1).height(COMPOSER_INPUT_MIN)");
     expect(home).toContain('private async sendQuickDraft(): Promise<void>');
     expect(home).toContain('if ((!prompt && !this.quickFiles.length) || this.quickSending || this.quickPicking) return;');
@@ -119,6 +129,11 @@ describe('chat bottom region composition', () => {
     expect(home).toContain('finally { this.quickSending = false; }');
     expect(home).toContain('quickChatIntake.enqueue(id, prompt, this.quickFiles);');
     expect(home).toContain("this.switchToChat(id, '');");
+    expect(home.indexOf(".id('home-quick-actions')")).toBeLessThan(home.indexOf(".id('home-quick-send')"));
+    expect(home).toContain('requestedAction: this.requestedChatAction, actionRevision: this.chatActionRevision');
+    expect(chat).toContain("@Monitor('actionRevision', 'chat.selectedId', 'chat.loading', 'restoringDraft', 'activePage')");
+    expect(chat).toContain('this.setPanel(true);');
+    expect(chat).toContain('this.chooseAction(this.requestedAction);');
     expect(home).toContain('private activateTab(index: number): void');
     expect(home).toContain('.animationDuration(0)');
     expect(home).not.toContain('transitionToTab');

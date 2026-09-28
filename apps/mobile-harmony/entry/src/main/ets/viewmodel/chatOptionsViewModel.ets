@@ -1,4 +1,5 @@
-import { XopcChatModel, XopcChatAgent, XopcQueuedInput, XopcSessionPreparation } from '../model/chat';
+import { XopcAgentConfig, XopcChatModel, XopcChatAgent, XopcQueuedInput, XopcSessionPreparation } from '../model/chat';
+import { XopcLocalSession } from '../model/sessionCommand';
 import { XopcChatRepository } from '../repository/chatRepository';
 
 @ObservedV2
@@ -33,17 +34,22 @@ export class XopcChatOptionsViewModel {
     this.models = []; this.agents = []; this.modelId = ''; this.error = ''; this.loading = true;
     this.resume();
     try {
+      // Freeze draft identity before slower catalog requests. The first input may
+      // materialize the draft while those requests are in flight.
+      const draft: XopcLocalSession | undefined = await this.repository.draft(id);
+      if (generation !== this.generation) return;
       const agents = await this.repository.agents();
       if (generation !== this.generation) return;
       this.agents = agents.agents; this.agentId = agentId || agents.defaultId;
       const models = await this.repository.models(this.agentId);
       if (generation !== this.generation) return;
       this.models = models.models ?? models.items ?? [];
-      const config = await this.repository.config(id);
+      const config: XopcAgentConfig = draft ? { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel }
+        : await this.repository.config(id);
       if (generation !== this.generation) return;
       this.modelId = config.model || models.defaultId || this.models[0]?.id || '';
       this.thinkingLevel = config.thinkingLevel;
-      if (!config.model && this.modelId && await this.repository.draft(id)) {
+      if (!config.model && this.modelId && draft) {
         const selected = this.models.find((item: XopcChatModel): boolean => item.id === this.modelId);
         this.thinkingLevel = selected?.thinking?.initialValue ?? 'off';
         await this.repository.setModel(id, this.modelId, this.thinkingLevel);
