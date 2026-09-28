@@ -53,6 +53,9 @@ export struct XopcHomeView {
   @Local quickSending: boolean = false;
   @Local quickFiles: XopcChatAttachment[] = [];
   @Local quickPicking: boolean = false;
+  @Local quickPanelOpen: boolean = false;
+  @Local requestedChatAction: string = '';
+  @Local chatActionRevision: number = 0;
   @Local creationSheetOpen: boolean = false;
   @Local creationChatId: string = '';
   @Local creationChatDraft: string = '';
@@ -85,6 +88,7 @@ export struct XopcHomeView {
   }
   aboutToDisappear(): void {
     quickChatIntake.clear();
+    this.setQuickPanel(false);
     layoutState.dismissTabNavigation = undefined;
     notificationNavigation.onTarget = undefined; clearInterval(this.attentionTimer); this.attention.dispose();
     try { accessibility.offAnimationReduceStateChange(this.onMotionChange); } catch (_) {}
@@ -137,10 +141,12 @@ export struct XopcHomeView {
 
   private selectTab(index: number): void {
     this.returnToConversations = false;
+    this.setQuickPanel(false);
     this.activateTab(index);
   }
 
   private handleTabBack(): boolean {
+    if (this.quickPanelOpen) { this.setQuickPanel(false); return true; }
     if (this.tab !== 0 || !this.returnToConversations) return false;
     this.returnToConversations = false;
     this.activateTab(1);
@@ -165,6 +171,7 @@ export struct XopcHomeView {
     const prompt = this.quickDraft.trim();
     if ((!prompt && !this.quickFiles.length) || this.quickSending || this.quickPicking) return;
     this.quickSending = true;
+    this.setQuickPanel(false);
     try {
       const id = await this.chatRepository.create();
       quickChatIntake.enqueue(id, prompt, this.quickFiles);
@@ -176,25 +183,33 @@ export struct XopcHomeView {
     } finally { this.quickSending = false; }
   }
 
-  private async openQuickChat(): Promise<void> {
+  private async openQuickChat(action: string = ''): Promise<void> {
     if (this.quickSending) return;
     this.quickSending = true;
+    this.setQuickPanel(false);
     try {
       const id = await this.chatRepository.create();
-      this.switchToChat(id, '', true);
+      this.requestedChatAction = action;
+      if (action) this.chatActionRevision++;
+      this.switchToChat(id, '', !action);
     } catch (error) {
       this.getUIContext().getPromptAction().showToast({ message: (error as Error).message });
     } finally { this.quickSending = false; }
   }
 
-  private showQuickAttachments(): void {
-    const resources = this.getUIContext().getHostContext()?.resourceManager;
-    if (!resources || this.quickSending || this.quickPicking) return;
-    this.getUIContext().showActionSheet({ title: '', message: '', sheets: [
-      { title: resources.getStringSync($r('app.string.chat_photos').id), action: (): void => { this.pickQuickFile('photo'); } },
-      { title: resources.getStringSync($r('app.string.chat_camera').id), action: (): void => { this.pickQuickFile('camera'); } },
-      { title: resources.getStringSync($r('app.string.chat_local_files').id), action: (): void => { this.pickQuickFile('document'); } }
-    ] });
+  private setQuickPanel(open: boolean): void {
+    this.quickPanelOpen = open;
+    layoutState.chatActionsOpen = open;
+  }
+
+  private chooseQuickAction(id: string): void {
+    if (!this.quickPanelOpen || this.quickSending || this.quickPicking) return;
+    this.setQuickPanel(false);
+    if (id === 'photos') this.pickQuickFile('photo');
+    else if (id === 'camera') this.pickQuickFile('camera');
+    else if (id === 'document') this.pickQuickFile('document');
+    else if (id === 'new-chat') void this.openQuickChat();
+    else void this.openQuickChat(id);
   }
 
   private async pickQuickFile(kind: string): Promise<void> {
@@ -298,6 +313,49 @@ export struct XopcHomeView {
   }
 
   @Builder
+  quickActionTile(id: string, label: Resource, symbol: Resource, enabled: boolean) {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 6 }) {
+        Row() {
+          SymbolGlyph(symbol).fontSize(24).fontColor([this.colors.foreground])
+        }.width(48).height(48).justifyContent(FlexAlign.Center).alignItems(VerticalAlign.Center)
+          .borderRadius(14).backgroundColor(this.colors.input)
+        Text(label).fontSize(12).fontColor(this.colors.secondary).maxLines(2).textAlign(TextAlign.Center)
+      }.width('100%')
+    }.id('home-quick-action-' + id).width('25%').height(84).padding(2).backgroundColor(Color.Transparent)
+      .accessibilityText(label).enabled(enabled).onClick((): void => { this.chooseQuickAction(id); })
+  }
+
+  @Builder
+  quickActionPanel() {
+    Swiper() {
+      Column({ space: 4 }) {
+        Row() {
+          this.quickActionTile('photos', $r('app.string.chat_photos'), $r('sys.symbol.picture'), this.quickFiles.length < MAX_ATTACHMENTS)
+          this.quickActionTile('camera', $r('app.string.chat_camera'), $r('sys.symbol.camera'), this.quickFiles.length < MAX_ATTACHMENTS)
+          this.quickActionTile('document', $r('app.string.chat_local_files'), $r('sys.symbol.folder'), this.quickFiles.length < MAX_ATTACHMENTS)
+          this.quickActionTile('record-voice', $r('app.string.record_voice'), $r('sys.symbol.mic'), true)
+        }.width('100%')
+        Row() {
+          this.quickActionTile('reference-note', $r('app.string.chat_reference_note'), $r('sys.symbol.doc'), true)
+          this.quickActionTile('reference-task', $r('app.string.chat_reference_task'), $r('sys.symbol.checkmark_circle'), true)
+          this.quickActionTile('reference-file', $r('app.string.chat_reference_file'), $r('sys.symbol.folder'), true)
+          this.quickActionTile('new-chat', $r('app.string.new_chat'), $r('sys.symbol.square_and_pencil'), true)
+        }.width('100%')
+      }.width('100%').padding({ left: 6, right: 6, top: 4, bottom: 20 })
+      Column({ space: 4 }) {
+        Row() {
+          this.quickActionTile('voice-no-tools', $r('app.string.voice_call_action_natural'), $r('sys.symbol.waveform'), true)
+          this.quickActionTile('voice-with-tools', $r('app.string.voice_call_action_assistant'), $r('sys.symbol.speaker_wave_2'), true)
+        }.width('100%')
+      }.width('100%').padding({ left: 6, right: 6, top: 4, bottom: 20 })
+    }.id('home-quick-action-panel').width('100%').height(196).loop(false).autoPlay(false)
+      .indicator(new DotIndicator().itemWidth(6).itemHeight(6).selectedItemWidth(6).selectedItemHeight(6)
+        .color(this.colors.border).selectedColor(this.colors.secondary))
+      .backgroundColor(this.colors.panel).borderRadius(18).clip(true).margin({ bottom: 8 })
+  }
+
+  @Builder
   quickComposer() {
     Column() {
       if (this.quickFiles.length) {
@@ -328,7 +386,17 @@ export struct XopcHomeView {
           .fontSize(16).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
           .backgroundColor(Color.Transparent)
           .onChange((text: string): void => { this.quickDraft = text; })
+          .onEditChange((editing: boolean): void => { if (editing) this.setQuickPanel(false); })
           .onSubmit((_enterKey: EnterKeyType): void => { this.sendQuickDraft(); })
+        if (this.quickFiles.length < MAX_ATTACHMENTS) {
+          Button({ type: ButtonType.Circle }) {
+            SymbolGlyph(this.quickPanelOpen ? $r('sys.symbol.xmark_circle') : $r('sys.symbol.plus_circle'))
+              .fontSize(24).fontColor([this.colors.accent])
+          }.id('home-quick-actions').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
+            .backgroundColor(this.colors.input).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
+            .enabled(!this.quickSending && !this.quickPicking).accessibilityText($r('app.string.add_attachment'))
+            .onClick((): void => { this.setQuickPanel(!this.quickPanelOpen); })
+        }
         if (this.quickDraft.trim() || this.quickFiles.length) {
           Button({ type: ButtonType.Circle }) {
             if (this.quickSending) {
@@ -340,18 +408,6 @@ export struct XopcHomeView {
             .backgroundColor(this.colors.foreground).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
             .enabled(!this.quickSending && !this.quickPicking).accessibilityText($r('app.string.send'))
             .onClick((): void => { this.sendQuickDraft(); })
-        }
-        if (this.quickFiles.length < MAX_ATTACHMENTS) {
-          Button({ type: ButtonType.Circle }) {
-            if (this.quickSending) {
-              LoadingProgress().width(20).height(20).color(this.colors.accent)
-            } else {
-              SymbolGlyph($r('sys.symbol.plus_circle')).fontSize(24).fontColor([this.colors.accent])
-            }
-          }.id('home-quick-actions').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
-            .backgroundColor(this.colors.input).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
-            .enabled(!this.quickSending && !this.quickPicking).accessibilityText($r('app.string.add_attachment'))
-            .onClick((): void => { this.showQuickAttachments(); })
         }
       }.width('100%').padding({ left: 4, right: 4, top: 4, bottom: 4 })
     }.id('home-quick-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)
@@ -401,6 +457,7 @@ export struct XopcHomeView {
       Tabs({ barPosition: BarPosition.End, index: this.tab }) {
         TabContent() { XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
           focusRevision: this.chatFocusRevision,
+          requestedAction: this.requestedChatAction, actionRevision: this.chatActionRevision,
           intakeRevision: this.intake.chatRevision, intakeText: this.requestedChatDraft,
           bottomDock: this.chatDock,
           activePage: this.tab === 0 && !this.detailVisible, attentionItems: this.attention.needsUser, onAttentionRefresh: (): void => { this.attention.refresh(); },
@@ -424,6 +481,7 @@ export struct XopcHomeView {
         Column() {
           Column() {
             this.quickComposer()
+            if (this.quickPanelOpen) { this.quickActionPanel() }
             if (this.layout.isMainDockVisible(this.tab)) { this.dockItems() }
           }.id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)
             .borderRadius(24).clip(true)
