@@ -81,12 +81,12 @@ it('releases all dock space with the keyboard and restores it progressively', ()
   act(() => state.handlers.onEnd({ height: 0 }));
   expect(state.style().height).toBe(TAB_DOCK_HEIGHT + 24);
 });
-it('hides for root chat accessories but not for another tab', () => {
+it('hides for accessories on every primary tab', () => {
   mount();
   act(() => useChatChromeStore.getState().setActionPanelOpen(true));
   expect(state.style().height).toBe(0);
   mount('library');
-  expect(state.style().height).toBe(TAB_DOCK_HEIGHT + 24);
+  expect(state.style().height).toBe(0);
 });
 it('keeps tabs hidden throughout the accessory-to-keyboard handoff', () => {
   mount();

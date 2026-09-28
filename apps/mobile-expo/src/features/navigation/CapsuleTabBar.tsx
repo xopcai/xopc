@@ -30,7 +30,7 @@ export function CapsuleTabBar({ embedded = false, ...props }: BottomTabBarProps 
   const insets = useSafeAreaInsets();
   const keyboard = useReanimatedKeyboardAnimation();
   const panelOpen = useChatChromeStore(state => state.actionPanelOpen);
-  const panelVisible = props.state.routes[props.state.index].name === '(chat)' && panelOpen;
+  const panelVisible = panelOpen;
   const reducedMotion = useReducedMotion();
   const panelProgress = useSharedValue(panelVisible ? 1 : 0);
   const handoff = useSharedValue(0);
