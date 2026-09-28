@@ -70,7 +70,7 @@ describe('MessageBubble user edit action', () => {
     expect(container.querySelector<HTMLButtonElement>('button[aria-label="Edit in composer"]')?.disabled).toBe(true);
   });
 
-  it('keeps user actions beside the bubble without adding vertical footer height', () => {
+  it('keeps user actions below the bubble and aligned with its right edge', () => {
     act(() => {
       root.render(
         <MemoryRouter>
@@ -86,9 +86,10 @@ describe('MessageBubble user edit action', () => {
 
     const article = container.querySelector('article');
     const actions = container.querySelector('[data-user-message-actions]');
-    expect(actions?.parentElement).toBe(article);
-    expect(actions?.classList.contains('self-end')).toBe(true);
-    expect(actions?.classList.contains('mt-1.5')).toBe(false);
+    expect(actions?.parentElement).toBe(article?.firstElementChild);
+    expect(actions?.previousElementSibling?.classList.contains('chat-user-message')).toBe(true);
+    expect(actions?.classList.contains('justify-end')).toBe(true);
+    expect(actions?.classList.contains('mt-1')).toBe(true);
   });
 
   it('shows quiet delivery progress only after a slow-send threshold', () => {
