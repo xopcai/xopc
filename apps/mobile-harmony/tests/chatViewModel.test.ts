@@ -84,6 +84,7 @@ describe('chat history isolation', () => {
     expect(chat.rows[0].sendState).toBe('sending');
     reject(new Error('NETWORK')); expect(await pending).toBe(false);
     expect(chat.rows[0].sendState).toBe('failed');
+    expect(chat.error).toBe('NETWORK');
     await chat.loadHistory(false); expect(chat.rows).toHaveLength(1);
     expect(chat.rows[0].sendState).toBe('failed');
     chat.dispose();

@@ -577,9 +577,11 @@ export struct XopcChatView {
     this.sheetOpen = false; this.setPanel(false); await this.chat.create(agentId, projectId, executionMode);
   }
 
-  @Monitor('quickIntake.revision', 'chat.selectedId', 'chat.loading', 'chat.sending', 'chat.connection', 'restoringDraft', 'activePage')
+  @Monitor('quickIntake.revision', 'chat.selectedId', 'chat.loading', 'chat.sending', 'chat.connection', 'restoringDraft',
+    'options.loading', 'options.modelId', 'activePage')
   async sendQuickSubmission(): Promise<void> {
     if (!this.activePage || this.embedded || this.restoringDraft || this.chat.loading || this.chat.sending
+      || this.options.loading || !this.options.modelId
       || this.chat.selectedId !== this.requestedId || this.chat.connection !== 'connected') return;
     const profile = gatewaySession.currentProfile();
     const scope = JSON.stringify([profile?.gatewayId || '', profile?.deviceId || '', this.chat.selectedId]);
@@ -594,6 +596,10 @@ export struct XopcChatView {
 
   private async send(delivery: string = 'next'): Promise<void> {
     if (this.restoringDraft) return;
+    // A local-first conversation becomes visible before its model catalog is loaded.
+    // Do not create a doomed optimistic bubble during that short initialization window.
+    if (this.options.loading || this.options.saving) return;
+    if (!this.options.modelId) { this.chat.error = this.options.error || 'MODEL_UNAVAILABLE'; return; }
     const text = this.draft; const files = this.attachments; const refs = this.refs; const id = this.chat.selectedId;
     const sent = await this.chat.send(text, files, delivery, refs, (): void => {
       if (this.draft === text) this.draft = '';
@@ -803,7 +809,9 @@ export struct XopcChatView {
         }.id('chat-send').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
           .backgroundColor(this.colors.foreground).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
           .accessibilityText(this.chat.runId ? $r('app.string.chat_send_next') : $r('app.string.send'))
-          .enabled(!!this.chat.selectedId && !this.chat.loading && !this.chat.cachedHistory && !this.pickingAttachment && this.voice.state === 'idle' && !this.voice.busy && !this.chat.sending && !this.options.saving)
+          .enabled(!!this.chat.selectedId && !this.chat.loading && !this.chat.cachedHistory && !this.pickingAttachment
+            && this.voice.state === 'idle' && !this.voice.busy && !this.chat.sending
+            && !this.options.loading && !this.options.saving && !!this.options.modelId)
           .onClick((): void => { this.send(); })
       }
       if (this.chat.runId) {

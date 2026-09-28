@@ -18,7 +18,7 @@ describe('optimistic composer handoff', () => {
         enqueued(); return new Promise(resolve => { finish = resolve; });
       }) },
       palette: { close: vi.fn() }, saveDraft: vi.fn(), setPanel: vi.fn(), visible: true,
-      options: { refreshQueue: vi.fn() },
+      options: { loading: false, saving: false, modelId: 'provider/model', refreshQueue: vi.fn() },
     });
     const sending = view.send();
     expect(view.draft).toBe(''); expect(view.attachments).toEqual([]); expect(view.refs).toEqual([]);
@@ -30,8 +30,19 @@ describe('optimistic composer handoff', () => {
     const view = Object.assign(new Handler(), {
       restoringDraft: false, draft: 'keep', attachments: [], refs: [],
       chat: { selectedId: 'one', send: vi.fn(async () => false) },
+      options: { loading: false, saving: false, modelId: 'provider/model' },
     });
     await view.send(); expect(view.draft).toBe('keep');
+  });
+  it('keeps the first message intact until the local draft has a model', async () => {
+    const view = Object.assign(new Handler(), {
+      restoringDraft: false, draft: 'wait', attachments: [], refs: [],
+      chat: { selectedId: 'one', send: vi.fn(), error: '' },
+      options: { loading: true, saving: false, modelId: '', error: '' },
+    });
+    await view.send(); expect(view.chat.send).not.toHaveBeenCalled(); expect(view.draft).toBe('wait');
+    view.options.loading = false; await view.send();
+    expect(view.chat.send).not.toHaveBeenCalled(); expect(view.chat.error).toBe('MODEL_UNAVAILABLE');
   });
   it('places failed-send retry before the user bubble and keeps the composer editable', () => {
     expect(source.indexOf(".id('chat-message-retry-' + item.item.id)")).toBeLessThan(source.indexOf(".id('chat-user-bubble-' + item.item.id)"));

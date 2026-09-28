@@ -69,6 +69,7 @@ describe('secondary tab direct send', () => {
     Object.assign(view, {
       activePage: true, embedded: false, restoringDraft: true, requestedId: 'conversation',
       chat: { selectedId: 'conversation', connection: 'connected', sending: false, loading: false },
+      options: { loading: false, modelId: 'provider/model' },
       draftScope: JSON.stringify(['gateway', 'device', 'conversation']), quickIntake: intake,
       saveDraft: vi.fn(), send: vi.fn(async () => false),
     });
