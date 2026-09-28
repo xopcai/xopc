@@ -82,6 +82,32 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
       {items.map((att, index) => {
         const uri = thumbnailUri(att);
         const audio = isAudioAttachment(att);
+        if (uri) {
+          return (
+            <View key={att.id} style={[styles.imageChip, { backgroundColor: chipBg, borderColor: border }]}>
+              <Pressable
+                style={styles.imageOpen}
+                onPress={() => setPreview(attachmentToPreviewable(att))}
+                accessibilityRole="button"
+                accessibilityLabel={att.name}
+              >
+                <Image source={{ uri }} style={styles.imageThumbnail} resizeMode="cover" />
+              </Pressable>
+              {onReplace && editLabel && isEditableImageAttachment(att) ? (
+                <Pressable style={[styles.imageAction, styles.imageEdit, { backgroundColor: colors.surface.elevated }]}
+                  hitSlop={6} onPress={() => setEditing({ index, attachment: att })}
+                  accessibilityRole="button" accessibilityLabel={`${editLabel}: ${att.name}`}>
+                  <Icon source="pencil-outline" size={15} color={muted} />
+                </Pressable>
+              ) : null}
+              <Pressable style={[styles.imageAction, styles.imageRemove, { backgroundColor: colors.surface.elevated }]}
+                hitSlop={6} onPress={() => onRemove(index)} accessibilityRole="button"
+                accessibilityLabel={`${removeLabel}: ${att.name}`}>
+                <Icon source="close" size={15} color={muted} />
+              </Pressable>
+            </View>
+          );
+        }
         return (
           <View key={att.id} style={[styles.chip, { backgroundColor: chipBg }]}>
             <Pressable style={styles.open}
@@ -92,8 +118,7 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
                 }
                 setPreview(attachmentToPreviewable(att));
               }} accessibilityRole="button" accessibilityLabel={att.name}>
-              {uri ? <Image source={{ uri }} style={styles.thumbnail} resizeMode="cover" />
-                : <Icon source={audio ? 'microphone' : 'file-outline'} size={16} color={muted} />}
+              <Icon source={audio ? 'microphone' : 'file-outline'} size={16} color={muted} />
               <Text numberOfLines={1} style={[styles.label, { color: colors.text.primary }]}>{att.name}</Text>
             </Pressable>
             {onReplace && editLabel && isEditableImageAttachment(att) ? (
@@ -139,9 +164,14 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
 });
 
 const styles = StyleSheet.create({
+  imageChip: { width: 88, height: 88, flexShrink: 0, borderRadius: radii.md, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  imageOpen: { width: '100%', height: '100%' },
+  imageThumbnail: { width: '100%', height: '100%' },
+  imageAction: { position: 'absolute', width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  imageEdit: { left: 4, bottom: 4 },
+  imageRemove: { right: 4, top: 4 },
   chip: { minHeight: 44, maxWidth: 240, flexShrink: 0, flexDirection: 'row', alignItems: 'center', borderRadius: radii.full, paddingLeft: spacing.sm },
   open: { minHeight: 44, flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  thumbnail: { width: spacing.xxl, height: spacing.xxl, borderRadius: radii.sm },
   label: { ...typography.caption, flexShrink: 1 },
   action: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   audioBackdrop: {

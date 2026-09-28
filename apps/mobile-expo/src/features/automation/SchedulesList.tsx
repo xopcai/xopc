@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
-import { Button, Icon, IconButton, Menu, Text } from 'react-native-paper';
+import { Button, Icon, IconButton, Menu, Text, TextInput } from 'react-native-paper';
 
 import { AppToast } from '../../components/AppToast';
 import { ListSkeleton } from '../../components/ListSkeleton';
@@ -38,6 +38,8 @@ export function SchedulesList() {
   const locale = language === 'zh' ? 'zh-CN' : 'en-US';
   const [toast, setToast] = useState('');
   const [menuAutomationId, setMenuAutomationId] = useState<string>();
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'all' | 'enabled' | 'paused'>('all');
 
   const automationsQuery = useQuery({ queryKey: queryKeys.automations, queryFn: () => fetchAutomations(), enabled: configured });
   const metricsQuery = useQuery({ queryKey: queryKeys.automationMetrics, queryFn: fetchAutomationMetrics, enabled: configured });
@@ -67,6 +69,17 @@ export function SchedulesList() {
   });
 
   const automations = automationsQuery.data ?? [];
+  const filteredAutomations = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return automations.filter((item) => {
+      const statusMatches = filter === 'all' || (filter === 'enabled' ? item.enabled : !item.enabled);
+      const searchMatches = !term || `${item.name} ${item.description ?? ''} ${automationCronExpression(item)}`.toLocaleLowerCase().includes(term);
+      return statusMatches && searchMatches;
+    });
+  }, [automations, filter, search]);
+  const filterCounts = useMemo(() => ({ all: automations.length,
+    enabled: automations.filter((item) => item.enabled).length,
+    paused: automations.filter((item) => !item.enabled).length }), [automations]);
   const scheduleLabels = useMemo(() => ({
     every15Min: pm.every15Min,
     every30Min: pm.every30Min,
@@ -153,18 +166,38 @@ export function SchedulesList() {
   return (
     <>
       <FlatList
-        data={automations}
+        data={filteredAutomations}
         keyExtractor={(item) => item.id}
         renderItem={renderAutomation}
-        ListHeaderComponent={metrics ? (
-          <View style={[styles.briefing, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
+        ListHeaderComponent={<View style={styles.header}>
+          <TextInput mode="flat" dense value={search} onChangeText={setSearch} placeholder={pm.searchPlaceholder}
+            accessibilityLabel={pm.searchPlaceholder} left={<TextInput.Icon icon="magnify" />}
+            right={search ? <TextInput.Icon icon="close" accessibilityLabel={pm.clearSearch} onPress={() => setSearch('')} /> : undefined}
+            underlineColor="transparent" activeUnderlineColor="transparent"
+            style={[styles.search, { backgroundColor: colors.surface.input }]} />
+          <View style={styles.filters} accessibilityRole="tablist">
+            {(['all', 'enabled', 'paused'] as const).map((value) => {
+              const active = filter === value;
+              const label = value === 'all' ? pm.allFilter : value === 'enabled' ? pm.enabledFilter : pm.pausedFilter;
+              return <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: active }}
+                onPress={() => setFilter(value)} style={[styles.filter, { backgroundColor: active ? colors.accent.soft : colors.surface.panel }]}>
+                <Text style={[styles.filterLabel, { color: active ? colors.accent.primary : colors.text.secondary }]}>{label}</Text>
+                <Text style={[styles.filterCount, { color: active ? colors.accent.primary : colors.text.tertiary }]}>{filterCounts[value]}</Text>
+              </Pressable>;
+            })}
+          </View>
+          <View style={[styles.hint, { backgroundColor: colors.accent.soft }]}>
+            <Text style={[styles.hintText, { color: colors.text.primary }]}>{pm.workspaceHint}</Text>
+            <Text style={[styles.meta, { color: colors.text.secondary }]}>{t(pm.visibleCount, { count: filteredAutomations.length })}</Text>
+          </View>
+          {metrics ? <View style={[styles.briefing, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
             <View style={styles.briefingLine}>
               <Icon source="pulse" size={20} color={colors.accent.primary} />
               <Text style={[styles.briefingTitle, { color: colors.text.primary }]}>{t(pm.operationsSummary, { running: metrics.runningRuns, failed: metrics.failedLastHour })}</Text>
             </View>
             {metrics.nextRun ? <Text style={[styles.meta, { color: colors.text.secondary }]}>{t(pm.nextAutomation, { name: metrics.nextRun.name, time: formatAutomationDate(metrics.nextRun.runAtMs, locale) ?? '' })}</Text> : null}
-          </View>
-        ) : null}
+          </View> : null}
+        </View>}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={automationsQuery.isFetching && !automationsQuery.isLoading} onRefresh={refresh} />}
         ListEmptyComponent={<View style={styles.empty}><Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{pm.empty}</Text><Button mode="contained" icon="plus" onPress={() => router.push('/automation/form')}>{pm.createFirst}</Button></View>}
@@ -178,6 +211,14 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl, gap: spacing.sm },
   skeleton: { paddingHorizontal: spacing.xl },
   list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl, flexGrow: 1 },
+  header: { gap: spacing.sm, marginBottom: spacing.sm },
+  search: { height: 44, borderRadius: radii.full, overflow: 'hidden' },
+  filters: { flexDirection: 'row', gap: spacing.sm },
+  filter: { minHeight: 36, borderRadius: radii.full, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  filterLabel: { ...typography.caption, fontWeight: '600' },
+  filterCount: { ...typography.micro, fontWeight: '600' },
+  hint: { borderRadius: radii.lg, padding: spacing.md, gap: spacing.xs },
+  hintText: { ...typography.label, fontWeight: '600' },
   briefing: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, padding: spacing.md, gap: spacing.xs, marginBottom: spacing.md },
   briefingLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   briefingTitle: { ...typography.ui, fontWeight: '600', flex: 1 },

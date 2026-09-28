@@ -1,7 +1,8 @@
 export type XopcSection = 'tasks' | 'projects' | 'automations';
 export interface XopcWorkspaceItem {
   id: string; title: string; body: string; status: string; version: number;
-  projectId?: string; cron?: string; enabled?: boolean; editable: boolean; actions: string[]; automation?: XopcAutomation;
+  projectId?: string; priority?: string; updatedAt?: number; brief?: string; outcome?: string;
+  cron?: string; enabled?: boolean; editable: boolean; actions: string[]; automation?: XopcAutomation;
 }
 export interface XopcTask {
   id: string; title: string; body?: string; phase: string; version: number; projectId?: string; priority: string;

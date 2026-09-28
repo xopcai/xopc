@@ -7,12 +7,14 @@ export function taskItem(result: XopcTaskResult): XopcWorkspaceItem {
   const task = result.task;
   if (!task?.id || typeof task.title !== 'string' || !Number.isInteger(task.version)) throw new Error('INVALID_TASK');
   return { id: task.id, title: task.title, body: task.body ?? '', status: task.phase, version: task.version,
-    projectId: task.projectId, editable: true, actions: result.allowedCommands ?? [] };
+    projectId: task.projectId, priority: task.priority, updatedAt: task.updatedAt,
+    editable: true, actions: result.allowedCommands ?? [] };
 }
 export function projectItem(project: XopcProject): XopcWorkspaceItem {
   if (!project?.id || typeof project.name !== 'string') throw new Error('INVALID_PROJECT');
   return { id: project.id, title: project.name, body: project.description ?? '', status: project.status,
-    version: 0, editable: true, actions: ['pin', 'unpin', project.status === 'archived' ? 'activate' : 'archive'] };
+    version: 0, brief: project.brief, outcome: project.outcome, editable: true,
+    actions: ['pin', 'unpin', project.status === 'archived' ? 'activate' : 'archive'] };
 }
 export function automationItem(automation: XopcAutomation): XopcWorkspaceItem {
   if (!automation?.id || !automation.trigger || !automation.action) throw new Error('INVALID_AUTOMATION');
