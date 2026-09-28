@@ -386,9 +386,10 @@ export class XopcChatViewModel {
       this.trackRun(run);
       if (!run) await this.recover();
       return true;
-    } catch (_) {
+    } catch (error) {
       // A matching history row is authoritative even if the HTTP acknowledgement was lost.
       if (!this.outbox.has(input.row.id)) return true;
+      this.error = (error as Error).message;
       this.updateSendState(input, 'failed'); return false;
     }
     finally { this.sending = false; }
