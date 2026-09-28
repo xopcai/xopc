@@ -77,10 +77,11 @@ export class XopcChatRepository {
   }
   async create(projectId?: string | null, agentId?: string, executionMode?: string): Promise<string> {
     const scope = localSessionStore.scope();
-    const body: XopcCreateSession = { channel: 'webchat', projectId, agentId, executionMode };
+    const effectiveAgentId = agentId || 'main';
+    const body: XopcCreateSession = { channel: 'webchat', projectId, agentId: effectiveAgentId, executionMode };
     const gatewayId = gatewaySession.currentProfile()?.gatewayId;
-    if (gatewayId && agentId) {
-      const raw = await this.store.read('chat-model.' + gatewayId + '.' + agentId);
+    if (gatewayId) {
+      const raw = await this.store.read('chat-model.' + gatewayId + '.' + effectiveAgentId);
       if (raw) {
         try {
           const config = JSON.parse(raw) as XopcAgentConfig;
@@ -90,7 +91,7 @@ export class XopcChatRepository {
       }
     }
     const id = this.uuid();
-    const creation: XopcSessionCreation = { agentId: agentId || 'main', projectId: projectId || null,
+    const creation: XopcSessionCreation = { agentId: effectiveAgentId, projectId: projectId || null,
       execution: executionMode ? { mode: executionMode } : null, temporary: false,
       model: body.initialAgentConfig?.model || '', thinkingLevel: body.initialAgentConfig?.thinkingLevel || 'off' };
     await localSessionStore.save({ conversationId: id, creation, createdAt: new Date().toISOString() }, scope);
