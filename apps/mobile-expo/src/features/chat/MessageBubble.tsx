@@ -594,6 +594,30 @@ export const MessageBubble = memo(function MessageBubble({
                 style={[styles.userVoiceTail, { borderLeftColor: userBubbleColor }]}
               />
             ) : null}
+            {userAudio.length > 0 ? (
+              <View style={styles.userVoiceStack}>
+                {userAudio.map((block, i) => (
+                  <AudioMessageBlock
+                    key={`user-audio-${i}`}
+                    audio={block}
+                    conversationId={conversationId}
+                    align="end"
+                    variant="voice"
+                  />
+                ))}
+              </View>
+            ) : null}
+            {userText ? (
+              <Text
+                selectable
+                style={{
+                  color: colors.text.primary,
+                  ...typography.body,
+                }}
+              >
+                {userText}
+              </Text>
+            ) : null}
             {message.contextRefs?.length ? (
               <CompactResourceList
                 items={message.contextRefs}
@@ -621,40 +645,13 @@ export const MessageBubble = memo(function MessageBubble({
                     ]}
                   >
                     <Icon source={ref.kind === 'task' ? 'checkbox-marked-circle-outline' : 'note-text-outline'} size={18} color={colors.accent.primary} />
-                    <Text
-                      numberOfLines={1}
-                      style={[styles.noteReferenceTitle, { color: colors.text.primary }]}
-                    >
+                    <Text numberOfLines={1} style={[styles.noteReferenceTitle, { color: colors.text.primary }]}>
                       {ref.title}
                     </Text>
                     <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
                   </Pressable>
                 )}
               />
-            ) : null}
-            {userAudio.length > 0 ? (
-              <View style={styles.userVoiceStack}>
-                {userAudio.map((block, i) => (
-                  <AudioMessageBlock
-                    key={`user-audio-${i}`}
-                    audio={block}
-                    conversationId={conversationId}
-                    align="end"
-                    variant="voice"
-                  />
-                ))}
-              </View>
-            ) : null}
-            {userText ? (
-              <Text
-                selectable
-                style={{
-                  color: colors.text.primary,
-                  ...typography.body,
-                }}
-              >
-                {userText}
-              </Text>
             ) : null}
             {userAttachments.length ? (
               <AttachmentRenderer attachments={userAttachments} conversationId={conversationId} />

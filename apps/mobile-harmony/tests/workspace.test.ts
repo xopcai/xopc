@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TaskCreateRequestSchema } from '../../../packages/gateway-contract/src/tasks';
 import { CreateAutomationSchema } from '../../../src/automations/domain/validation';
-import { automationItem, newTask, scheduledAutomation, taskItem } from '../entry/src/main/ets/common/workspaceProtocol';
+import { automationItem, newTask, projectItem, scheduledAutomation, taskItem } from '../entry/src/main/ets/common/workspaceProtocol';
 import { historyRows } from '../entry/src/main/ets/common/chatProtocol';
 
 describe('Harmony workspace contracts', () => {
@@ -11,9 +11,17 @@ describe('Harmony workspace contracts', () => {
     expect(body.contract.acceptancePolicy).toBe('manual');
   });
   it('keeps task version and allowed commands for optimistic updates', () => {
-    expect(taskItem({ task: { id: 'task', title: 'Title', phase: 'ready', version: 8, priority: 'normal' }, allowedCommands: ['start'] }))
-      .toMatchObject({ version: 8, actions: ['start'], status: 'ready' });
+    expect(taskItem({ task: { id: 'task', title: 'Title', phase: 'ready', version: 8, priority: 'high',
+      projectId: 'mobile', updatedAt: 1_780_000_000_000 }, allowedCommands: ['start'] }))
+      .toMatchObject({ version: 8, actions: ['start'], status: 'ready', priority: 'high',
+        projectId: 'mobile', updatedAt: 1_780_000_000_000 });
     expect(() => taskItem({ task: null! })).toThrow('INVALID_TASK');
+  });
+  it('keeps project brief and outcome for mobile overview and detail cards', () => {
+    expect(projectItem({ id: 'project', name: 'Mobile', status: 'active', description: 'Ship the app',
+      brief: 'Harmony client', outcome: 'Stable release' }))
+      .toMatchObject({ title: 'Mobile', status: 'active', body: 'Ship the app', brief: 'Harmony client',
+        outcome: 'Stable release' });
   });
   it('only offers editing for scheduled agent automations', () => {
     const base = { id: 'automation', name: 'Daily', enabled: true, trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: '0 9 * * *' } }, action: { kind: 'agent', instruction: 'Summarize' } };
