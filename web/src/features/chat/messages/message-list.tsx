@@ -15,6 +15,7 @@ import type {
   WelcomeSuggestionSelection,
 } from '@/features/chat/welcome/welcome-suggestions';
 import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export const MessageList = memo(function MessageList({
@@ -134,7 +135,7 @@ export const MessageList = memo(function MessageList({
           <div
             key={key}
             id={`chat-message-${index}`}
-            className="scroll-mt-4"
+            className={cn('scroll-mt-4', index > 0 && list[index - 1]?.role === 'user' && !showTimeSeparator && '-mt-5')}
             data-chat-message-index={index}
             data-chat-message-row
             data-client-submission-id={msg.clientSubmissionId}
