@@ -5,6 +5,9 @@ const messageBubble = readFileSync(new URL('../MessageBubble.tsx', import.meta.u
 const attachmentStrip = readFileSync(new URL('../composer-attachment-strip.tsx', import.meta.url), 'utf8');
 const workScreen = readFileSync(new URL('../../tasks/TaskListScreen.tsx', import.meta.url), 'utf8');
 const automationScreen = readFileSync(new URL('../../automation/SchedulesList.tsx', import.meta.url), 'utf8');
+const primaryTabs = readFileSync(new URL('../../../../app/(tabs)/_layout.tsx', import.meta.url), 'utf8');
+const quickChatTabBar = readFileSync(new URL('../../navigation/QuickChatTabBar.tsx', import.meta.url), 'utf8');
+const chatPage = readFileSync(new URL('../use-chat-page.ts', import.meta.url), 'utf8');
 
 describe('recent Harmony mobile parity', () => {
   it('places user references after primary text and before attachments', () => {
@@ -27,5 +30,16 @@ describe('recent Harmony mobile parity', () => {
     expect(workScreen).toContain('labels.archivedFilter');
     expect(automationScreen).toContain("useState<'all' | 'enabled' | 'paused'>");
     expect(automationScreen).toContain('filteredAutomations');
+  });
+
+  it('matches the five-tab Harmony information architecture and shares one quick composer', () => {
+    for (const route of ['(chat)', 'sessions', 'progress', 'library', 'settings']) {
+      expect(primaryTabs).toContain(`name="${route}"`);
+    }
+    expect(primaryTabs).toContain('<QuickChatTabBar {...props} />');
+    expect(quickChatTabBar).toContain('<ChatComposer');
+    expect(quickChatTabBar).toContain('autoSend: true');
+    expect(quickChatTabBar).toContain('<CapsuleTabBar {...props} embedded />');
+    expect(chatPage).toContain('sessionAgentConfigQuery.isPending');
   });
 });

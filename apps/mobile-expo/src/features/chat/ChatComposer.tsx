@@ -23,6 +23,7 @@ import { detectAtMentionRange, formatWorkspacePath, replaceAtMention } from './a
 import { canSendComposerDraft, prepareComposerInput } from './composer-send-helpers';
 import {
   MAX_COMPOSER_CONTEXT_REFS,
+  type ComposerAttachment,
   type ComposerContextRef,
   type WireAttachment,
 } from './composer.types';
@@ -60,6 +61,22 @@ import {
 } from './composer-voice-call-options';
 
 type InputMode = 'text' | 'voice';
+
+function composerAttachmentFromWire(attachment: WireAttachment, index: number): ComposerAttachment {
+  const mimeType = attachment.mimeType ?? 'application/octet-stream';
+  return {
+    id: attachment.localUri ?? attachment.uri ?? attachment.workspaceRelativePath ?? `${attachment.name ?? 'attachment'}:${index}`,
+    type: mimeType.startsWith('image/') ? 'image' : mimeType.startsWith('audio/') ? 'audio' : 'document',
+    name: attachment.name ?? `attachment-${index + 1}`,
+    mimeType,
+    size: attachment.size ?? 0,
+    content: attachment.data ?? '',
+    uri: attachment.uri,
+    localUri: attachment.localUri,
+    workspaceRelativePath: attachment.workspaceRelativePath,
+    durationSeconds: attachment.durationSeconds,
+  };
+}
 
 export const ChatComposer = memo(function ChatComposer({
   conversationId,
@@ -303,14 +320,42 @@ export const ChatComposer = memo(function ChatComposer({
 
   const handoff = useComposerHandoff(state => state.pending);
   useFocusEffect(useCallback(() => {
-    if (!gatewayId || !conversationId || !handoff) return;
-    const text = useComposerHandoff.getState().consume(gatewayId, conversationId, mainConversation);
-    if (text) {
-      setMode('text');
-      setDraft(current => current ? `${current}\n\n${text}` : text);
-      requestAnimationFrame(() => inputRef.current?.focus());
+    if (!gatewayId || !conversationId || !handoff || disabled) return;
+    const payload = useComposerHandoff.getState().consume(gatewayId, conversationId, mainConversation);
+    if (!payload) return;
+    if (payload.voiceCallMode) {
+      onVoiceCallStart(payload.voiceCallMode);
+      return;
     }
-  }, [conversationId, gatewayId, handoff, mainConversation]));
+    const attachments = payload.attachments ?? [];
+    const composerAttachments = attachments.map(composerAttachmentFromWire);
+    const refs = payload.contextRefs ?? [];
+    if (payload.autoSend) {
+      void onSend(
+        payload.text,
+        attachments.length ? attachments : undefined,
+        refs.length ? refs : undefined,
+      ).then((accepted) => {
+        if (accepted) return;
+        updateDraft(payload.text);
+        att.restoreAttachments(composerAttachments);
+        onContextRefsChange(refs);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      }).catch(() => {
+        updateDraft(payload.text);
+        att.restoreAttachments(composerAttachments);
+        onContextRefsChange(refs);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      });
+      return;
+    }
+    setMode('text');
+    updateDraft(draftRef.current ? `${draftRef.current}\n\n${payload.text}` : payload.text);
+    if (attachments.length) att.restoreAttachments([...att.attachments, ...composerAttachments]);
+    if (refs.length) onContextRefsChange([...contextRefsRef.current, ...refs]);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [att.attachments, att.restoreAttachments, conversationId, disabled, gatewayId, handoff,
+    mainConversation, onContextRefsChange, onSend, onVoiceCallStart, updateDraft]));
 
   useEffect(() => {
     if (suggestionDraft == null || suggestionDraft === '') return;
