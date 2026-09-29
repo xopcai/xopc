@@ -28,6 +28,7 @@ export class XopcNoteViewModel {
   @Trace loadingMore: boolean = false;
   @Trace saving: boolean = false;
   @Trace openingConversation: boolean = false;
+  @Trace openingId: string = '';
   @Trace error: string = '';
   @Trace search: string = '';
   @Trace status: XopcNoteStatus | '' = '';
@@ -48,8 +49,10 @@ export class XopcNoteViewModel {
 
   async start(context: common.Context, initialId: string = '', initialStatus: XopcNoteStatus | '' = ''): Promise<void> {
     this.status = initialStatus;
+    if (initialId) this.openingId = initialId;
     try {
       await this.drafts.initialize(context);
+      if (initialId && this.openingId !== initialId) return;
       if (initialId) await this.open(initialId); else await this.list();
       void this.flushPending(initialId);
     } catch (error) { this.error = (error as Error).message; }
@@ -80,11 +83,14 @@ export class XopcNoteViewModel {
 
   async open(id: string): Promise<void> {
     if (this.loading) return;
+    this.openingId = id;
+    this.selected = undefined; this.draft = undefined; this.editing = false;
     if (id.startsWith(LOCAL_NOTE_PREFIX)) {
       const local = await this.drafts.load(id);
-      if (!local) { this.error = 'NOTE_DRAFT_NOT_FOUND'; return; }
+      if (!local) { this.error = 'NOTE_DRAFT_NOT_FOUND'; this.openingId = ''; return; }
       this.selected = undefined; this.draft = local; this.remoteConflict = undefined;
       this.editing = true; this.history = []; this.snapshot = undefined; this.aiPreview = undefined;
+      this.openingId = '';
       this.editorRevision++;
       return;
     }
@@ -106,7 +112,7 @@ export class XopcNoteViewModel {
       this.editing = false; this.history = []; this.snapshot = undefined; this.aiPreview = undefined;
       this.editorRevision++;
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
-    finally { if (generation === this.generation) this.loading = false; }
+    finally { if (generation === this.generation) { this.loading = false; this.openingId = ''; } }
   }
 
   create(): void {
@@ -389,8 +395,9 @@ export class XopcNoteViewModel {
   discardAiPreview(): void { this.aiPreview = undefined; }
 
   backToList(): void {
+    this.generation++; this.loading = false;
     this.cancelSaveTimer();
-    this.selected = undefined; this.draft = undefined; this.remoteConflict = undefined;
+    this.selected = undefined; this.draft = undefined; this.remoteConflict = undefined; this.openingId = '';
     this.editing = false; this.showingHistory = false; this.showingAi = false;
     void this.list();
   }

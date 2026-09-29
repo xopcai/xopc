@@ -19,6 +19,7 @@ export class XopcUserUnderstandingViewModel {
   @Trace saving: boolean = false;
   @Trace error: string = '';
   @Trace nextCursor: string = '';
+  @Trace openingId: string = '';
   private generation: number = 0;
   private requestRevision: number = 0;
   private searchTimer: number = -1;
@@ -77,14 +78,18 @@ export class XopcUserUnderstandingViewModel {
   }
 
   async open(id: string): Promise<void> {
+    const generation = this.generation;
+    this.openingId = id; this.selected = undefined; this.error = '';
     try {
       const result = JSON.parse(await gatewaySession.request('/api/user-model/assertions/' + encodeURIComponent(id))) as XopcUnderstandingItemResponse;
+      if (generation !== this.generation || this.openingId !== id) return;
       this.selected = result.assertion;
       this.error = '';
-    } catch (error) { this.error = (error as Error).message; }
+    } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
+    finally { if (generation === this.generation && this.openingId === id) this.openingId = ''; }
   }
 
-  close(): void { this.selected = undefined; }
+  close(): void { this.selected = undefined; this.openingId = ''; }
 
   async saveProfile(profile: XopcUnderstandingProfile): Promise<void> {
     this.saving = true;

@@ -4,8 +4,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
+import { Button, Icon, Text } from 'react-native-paper';
 
+import { BrandLoadingState } from '../../components/BrandLoadingState';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages, t } from '../../i18n/messages';
 import { openChat, useDismissOnHardwareBack } from '../../lib/navigation';
@@ -69,9 +70,7 @@ export function AgentDetailScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
         <NativeScreenHeader title={am.detailTitle} onBack={() => router.back()} />
-        <View style={styles.center}>
-          <ActivityIndicator size="large" />
-        </View>
+        <BrandLoadingState label={m.common.loading} />
       </View>
     );
   }

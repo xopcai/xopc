@@ -5,7 +5,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-n
 import { Button, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ListSkeleton } from '../../components/ListSkeleton';
+import { BrandLoadingState } from '../../components/BrandLoadingState';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import { openChat } from '../../lib/navigation';
@@ -22,7 +22,7 @@ export function TaskDetailScreen() {
   const { id = '' } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
   const queryClient = useQueryClient();
-  const { homePage: hm, tasksPage: labels, mobileExperience } = useMessages();
+  const { homePage: hm, tasksPage: labels, mobileExperience, common } = useMessages();
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const query = useQuery({ queryKey: queryKeys.task(id), queryFn: () => fetchTask(id), enabled: Boolean(id) });
   const agents = useQuery({ queryKey: queryKeys.agents, queryFn: fetchChatAgents });
@@ -80,7 +80,7 @@ export function TaskDetailScreen() {
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader title={labels.detailTitle} onBack={() => router.back()} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]} refreshControl={<RefreshControl refreshing={refreshMutation.isPending} onRefresh={() => { if (!refreshMutation.isPending) refreshMutation.mutate(); }} />}>
-        {query.isLoading ? <ListSkeleton count={4} /> : query.isError || !detail ? (
+        {query.isLoading ? <BrandLoadingState label={common.loading} /> : query.isError || !detail ? (
           <View style={styles.emptyState}>
             <Icon source="cloud-alert-outline" size={36} color={colors.semantic.error} />
             <Text style={[styles.empty, { color: colors.text.secondary }]}>{hm.taskLoadFailed}</Text>

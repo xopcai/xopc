@@ -14,6 +14,7 @@ export class XopcWorkspaceViewModel {
   @Trace body: string = '';
   @Trace cron: string = '';
   @Trace projectId: string = '';
+  @Trace openingId: string = '';
   private section: XopcSection = 'tasks';
   private repository: XopcWorkspaceRepository = new XopcWorkspaceRepository();
   private generation: number = 0;
@@ -38,14 +39,19 @@ export class XopcWorkspaceViewModel {
   }
   async open(id: string): Promise<void> {
     if (this.busy) return;
-    const generation = ++this.generation; this.busy = true; this.error = '';
+    const generation = ++this.generation; this.busy = true; this.error = ''; this.openingId = id;
+    this.selected = undefined; this.editing = false; this.runs = [];
     try {
       const item = await this.repository.detail(this.section, id);
       const runs = this.section === 'automations' ? await this.repository.runs(id) : [];
       if (generation !== this.generation) return;
       this.selected = item; this.editing = false; this.runs = runs; this.copyFields(item);
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
-    finally { if (generation === this.generation) this.busy = false; }
+    finally { if (generation === this.generation) { this.busy = false; this.openingId = ''; } }
+  }
+  cancelOpening(): void {
+    if (!this.openingId) return;
+    this.generation++; this.openingId = ''; this.busy = false; this.error = '';
   }
   private copyFields(item: XopcWorkspaceItem): void {
     this.title = item.title; this.body = item.body; this.cron = item.cron ?? ''; this.projectId = item.projectId ?? '';
@@ -56,7 +62,7 @@ export class XopcWorkspaceViewModel {
     const item: XopcWorkspaceItem = { id: '', title: '', body: '', status: '', version: 0, editable: true, actions: [], cron: '0 9 * * *' };
     this.selected = item; this.editing = true; this.copyFields(item); this.error = ''; this.runs = [];
   }
-  back(): void { if (!this.busy) { this.selected = undefined; this.editing = false; this.error = ''; this.list(''); } }
+  back(): void { if (!this.busy) { this.selected = undefined; this.editing = false; this.openingId = ''; this.error = ''; this.list(''); } }
   private idempotency(signature: string): string {
     if (signature !== this.mutationSignature || !this.mutationId) {
       this.mutationSignature = signature; this.mutationId = this.repository.uuid();

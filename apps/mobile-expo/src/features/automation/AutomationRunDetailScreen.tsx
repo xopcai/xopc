@@ -6,6 +6,7 @@ import { Button, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ListSkeleton } from '../../components/ListSkeleton';
+import { BrandLoadingState } from '../../components/BrandLoadingState';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import { openChat } from '../../lib/navigation';
@@ -70,7 +71,7 @@ export function AutomationRunDetailScreen() {
   });
 
   if (runQuery.isLoading) {
-    return <View style={[styles.screen, { backgroundColor: colors.surface.base }]}><NativeScreenHeader title={labels.title} onBack={() => router.back()} /><View style={styles.content}><ListSkeleton count={4} /></View></View>;
+    return <View style={[styles.screen, { backgroundColor: colors.surface.base }]}><NativeScreenHeader title={labels.title} onBack={() => router.back()} /><BrandLoadingState label={m.common.loading} /></View>;
   }
   const run = runQuery.data;
   if (runQuery.isError || !run) {

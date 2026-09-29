@@ -5,6 +5,7 @@ import { Alert, AppState, Keyboard, Pressable, StyleSheet, View } from 'react-na
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 
 import { AppToast } from '../../components/AppToast';
+import { BrandLoadingState } from '../../components/BrandLoadingState';
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
@@ -518,10 +519,7 @@ export function PageScreen() {
       />
 
       {showLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.accent.primary} />
-          <Text style={{ color: colors.text.tertiary }}>{m.common.loading}</Text>
-        </View>
+        <BrandLoadingState label={m.common.loading} />
       ) : showError ? (
         <View style={styles.center}>
           <Icon source="cloud-alert-outline" size={42} color={colors.text.tertiary} />

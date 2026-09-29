@@ -1,6 +1,6 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
-import { XopcHubRow, XopcListSkeleton, XopcEmptyHint, XopcSectionLabel } from './MobileComponents';
+import { XopcBrandLoading, XopcHubRow, XopcListSkeleton, XopcEmptyHint, XopcSectionLabel } from './MobileComponents';
 import { XopcMarkdownView } from './MarkdownView';
 
 interface XopcWorkflowSummary { id: string; title: string; status: string; goal?: string; }
@@ -24,6 +24,7 @@ export struct XopcWorkflowView {
   @Local busy: boolean = false;
   @Local error: string = '';
   @Local creatingChat: boolean = false;
+  @Local openingId: string = '';
   private generation: number = 0;
   private refreshTimer: number = -1;
   aboutToAppear(): void {
@@ -54,6 +55,7 @@ export struct XopcWorkflowView {
   private async load(runId: string = ''): Promise<void> {
     if (this.busy) return;
     this.busy = true; this.error = ''; const generation = ++this.generation;
+    if (runId && this.selected?.run.id !== runId) { this.openingId = runId; this.selected = undefined; }
     try {
       if (runId) {
         const result = JSON.parse(await gatewaySession.request('/api/workflows/runs/' + encodeURIComponent(runId))) as XopcWorkflowEnvelope;
@@ -72,7 +74,7 @@ export struct XopcWorkflowView {
           : message;
       }
     }
-    finally { if (generation === this.generation) this.busy = false; }
+    finally { if (generation === this.generation) { this.busy = false; this.openingId = ''; } }
   }
   private async cancelRun(): Promise<void> {
     const detail = this.selected;
@@ -93,9 +95,9 @@ export struct XopcWorkflowView {
     NavDestination() {
       Column() {
         Row() {
-          Text(this.selected ? $r('app.string.workflow_overview') : $r('app.string.recent_runs'))
+          Text(this.selected || this.openingId ? $r('app.string.workflow_overview') : $r('app.string.recent_runs'))
             .fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary).layoutWeight(1)
-          if (!this.selected) {
+          if (!this.selected && !this.openingId) {
             Button($r('app.string.new_workflow')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
               .enabled(!this.busy && !this.creatingChat).onClick((): void => { this.createWithChat(); })
           }
@@ -107,7 +109,8 @@ export struct XopcWorkflowView {
         Scroll() {
           Column() {
             if (this.error) { Text(this.error).fontColor(this.colors.danger).padding(12) }
-            if (this.busy) { XopcListSkeleton() }
+            if (this.openingId) { XopcBrandLoading() }
+            else if (this.busy && !this.runs.length) { XopcListSkeleton() }
             if (this.selected) {
               Column({ space: 10 }) {
                 Row({ space: 12 }) {
@@ -145,7 +148,7 @@ export struct XopcWorkflowView {
                   symbol: step.error ? $r('sys.symbol.exclamationmark_circle') : step.status === 'done' || step.status === 'succeeded'
                     ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.clock'), navigable: false })
               }, (step: XopcWorkflowStep): string => step.id + ':' + step.status)
-            } else {
+            } else if (!this.openingId) {
               if (!this.busy && !this.error && !this.runs.length) { XopcEmptyHint({ message: $r('app.string.empty_list') }) }
               ForEach(this.runs, (run: XopcWorkflowSummary) => {
                 XopcHubRow({ heading: run.title, summary: this.statusLabel(run.status),
