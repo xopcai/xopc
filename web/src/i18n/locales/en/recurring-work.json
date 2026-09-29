@@ -1,0 +1,45 @@
+{
+  "recurringWork": {
+    "title": "Take a recurring task off my plate",
+    "description": "Work out the right trigger, sources, and boundaries together. Try it once before deciding whether to keep it running.",
+    "designOnly": "Pick an activity to save a plan. Designing it will not start an automation.",
+    "start": "Design one",
+    "savedPlans": "Saved activity plans",
+    "empty": "No saved plans yet. Start with one task you find yourself repeating.",
+    "listError": "Saved plans could not be loaded.",
+    "showing": "Showing {start}–{end} of {total}",
+    "previous": "Previous",
+    "next": "Next",
+    "untitled": "Untitled activity",
+    "view": "View",
+    "continue": "Continue",
+    "prepare": "Prepare implementation",
+    "loadError": "Could not load this plan.",
+    "retry": "Retry",
+    "missing": "This activity plan is no longer available.",
+    "planStatus": "Design plan · check the linked runtime object for activation status",
+    "stage": {
+      "draft": "Needs more detail",
+      "ready": "Ready to prepare",
+      "configured": "Setup created",
+      "needs_review": "Needs review"
+    },
+    "nextStep": {
+      "draft": "Continue the conversation to resolve the next decision.",
+      "ready": "Review the trigger, sources, permissions, and notifications before enabling anything.",
+      "configured": "Open the linked setup or run in this plan to check its actual status and results.",
+      "needs_review": "Confirm this plan's state in the conversation before preparing implementation."
+    },
+    "beforeActivation": "Preparing implementation reviews the exact configuration and may test a safe run. Ongoing execution starts only after the required confirmation.",
+    "prepareImplementation": "Prepare implementation",
+    "continueDiscussion": "Continue discussion",
+    "editInNotes": "Edit in Notes",
+    "dialogTitle": "Activity plan",
+    "closeDialog": "Close activity plan",
+    "prompts": {
+      "start": "Help me find and design one recurring activity I could delegate. First use what you know about my tools and channels, suggest a few grounded candidates, and ask only the next material question with a recommended answer. Reply and write the plan in English unless I ask for another language.",
+      "continue": "Continue designing the recurring activity recorded in Note {noteId}. Read that Note first, preserve its confirmed decisions, and ask only the next material question with a recommended answer. Reply in English unless I ask for another language. Preserve the Note's existing language unless I ask to change it.",
+      "implement": "Read and revalidate the full current recurring activity specification in Note {noteId}, even if its status says ready. Prepare its implementation using the smallest existing xopc product capabilities. If a material question remains, return the plan to draft and ask it with a recommended answer. Otherwise prepare and validate the required drafts, show the exact trigger, sources, permissions, and notifications, try a safe first run where possible, and request any required confirmation only after the plan is reviewable. Update the same Note with verified outcomes. Reply in English unless I ask for another language; preserve the Note's existing language."
+    }
+  }
+}
