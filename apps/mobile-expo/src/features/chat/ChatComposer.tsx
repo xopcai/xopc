@@ -97,6 +97,8 @@ export const ChatComposer = memo(function ChatComposer({
   onNewChat,
   onVoiceCallStart,
   voiceCallUnavailable,
+  editingLabel,
+  onCancelEditing,
 }: {
   conversationId: string;
   actionsOpen: boolean;
@@ -117,6 +119,8 @@ export const ChatComposer = memo(function ChatComposer({
   onVoiceCallStart: (mode?: ComposerVoiceCallMode) => void;
   voiceCallMode?: ComposerVoiceCallMode;
   voiceCallUnavailable?: Partial<Record<ComposerVoiceCallMode, boolean>>;
+  editingLabel?: string;
+  onCancelEditing?: () => void;
 }) {
   const onCloseActions = useCallback(() => onActionsOpenChange(false), [onActionsOpenChange]);
   const m = useMessages();
@@ -188,7 +192,6 @@ export const ChatComposer = memo(function ChatComposer({
   const [snack, setSnack] = useState('');
   const restoredDraftConversationIdRef = useRef<string | null>(null);
   const skipDraftPersistConversationIdRef = useRef<string | null>(null);
-  const runBusy = streaming || disabled;
   const hasDraft = canSendComposerDraft(draft, att.attachments.length, contextRefs.length);
   /** Programmatic draft updates (palette, suggestions, restore) set cursor explicitly. */
   const updateDraft = useCallback(
@@ -235,7 +238,7 @@ export const ChatComposer = memo(function ChatComposer({
   const call = useVoiceCall();
   const callInChat = call.phase !== 'idle' && call.target?.conversationId === conversationId;
   const voice = useChatVoiceRecording({
-    conversationId, disabled: mode !== 'voice' || runBusy || call.phase !== 'idle',
+    conversationId, disabled: mode !== 'voice' || disabled || call.phase !== 'idle',
     onRecorded, onTranscribed, onRecordingDraft, onError: setSnack,
   });
   const voiceInteractionActive = voice.stage !== 'idle';
@@ -350,9 +353,11 @@ export const ChatComposer = memo(function ChatComposer({
       return;
     }
     setMode('text');
-    updateDraft(draftRef.current ? `${draftRef.current}\n\n${payload.text}` : payload.text);
-    if (attachments.length) att.restoreAttachments([...att.attachments, ...composerAttachments]);
-    if (refs.length) onContextRefsChange([...contextRefsRef.current, ...refs]);
+    updateDraft(payload.replace ? payload.text : draftRef.current ? `${draftRef.current}\n\n${payload.text}` : payload.text);
+    if (payload.replace) att.restoreAttachments(composerAttachments);
+    else if (attachments.length) att.restoreAttachments([...att.attachments, ...composerAttachments]);
+    if (payload.replace) onContextRefsChange(refs);
+    else if (refs.length) onContextRefsChange([...contextRefsRef.current, ...refs]);
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [att.attachments, att.restoreAttachments, conversationId, disabled, gatewayId, handoff,
     mainConversation, onContextRefsChange, onSend, onVoiceCallStart, updateDraft]));
@@ -495,7 +500,7 @@ export const ChatComposer = memo(function ChatComposer({
   const router = useRouter();
   const surface = colors.surface.elevated;
   const accent = colors.accent.primary;
-  const voiceToggleDisabled = disabled || streaming || voiceInteractionActive || call.phase !== 'idle';
+  const voiceToggleDisabled = disabled || voiceInteractionActive || call.phase !== 'idle';
   const toggleMode = useCallback(() => {
     if (voiceToggleDisabled) return;
     onCloseActions();
@@ -539,7 +544,7 @@ export const ChatComposer = memo(function ChatComposer({
     [cm.localFiles, cm.photos, cm.takePhoto, handleAttachmentPick],
   );
 
-  const attachmentPickDisabled = disabled || streaming || voiceInteractionActive || att.attachments.length >= att.maxAttachments;
+  const attachmentPickDisabled = disabled || voiceInteractionActive || att.attachments.length >= att.maxAttachments;
   const sheetItems = [
     ...captureItems.map(item => ({ ...item, disabled: attachmentPickDisabled })),
     ...(call.phase === 'idle' ? COMPOSER_VOICE_CALL_OPTIONS.map(option => ({
@@ -683,9 +688,14 @@ export const ChatComposer = memo(function ChatComposer({
         onCloseActions();
         return false;
       }}>
-      {streaming && hasDraft ? <View style={styles.deliveryHint}>
-        <Text style={[typography.caption, { color: colors.text.secondary, flex: 1 }]}>{m.mobileExperience.queueHint}</Text>
-        <Pressable accessibilityRole="button" disabled={!canSendIdle} onPress={() => handleSend('steer')} style={styles.steerButton}>
+      {editingLabel ? <View style={styles.deliveryHint}>
+        <Text numberOfLines={1} style={[typography.caption, { color: colors.text.secondary, flex: 1 }]}>{editingLabel}</Text>
+        <Pressable accessibilityRole="button" onPress={onCancelEditing} style={styles.steerButton}>
+          <Text style={[typography.caption, { color: colors.accent.primary }]}>{m.mobileExperience.cancel}</Text>
+        </Pressable>
+      </View> : streaming && hasDraft ? <View style={styles.deliveryHint}>
+        <Text style={[typography.caption, { color: colors.text.secondary, flex: 1 }]}>{att.attachments.length || contextRefs.length ? m.mobileExperience.richQueueHint : m.mobileExperience.queueHint}</Text>
+        <Pressable accessibilityRole="button" disabled={!canSendIdle || Boolean(att.attachments.length || contextRefs.length)} onPress={() => handleSend('steer')} style={styles.steerButton}>
           <Text style={[typography.caption, { color: colors.accent.primary }]}>{m.mobileExperience.steer}</Text>
         </Pressable>
       </View> : null}

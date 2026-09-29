@@ -838,8 +838,10 @@ export function parseSessionMessages(raw: Array<Record<string, unknown>>): Messa
     if (role === 'user' || role === 'user-with-attachments') {
       const roleTyped = role as Message['role'];
       const attachments = mergeWireAttachments(m.attachments, m.media);
+      const turnId = typeof m.turnId === 'string' && m.turnId.trim() ? m.turnId.trim() : undefined;
       out.push({
         id: wireMessageId(m),
+        turnId,
         clientMessageId: normalizeClientMessageId(m.metadata),
         role: roleTyped,
         content: applyStripToUserContent(roleTyped, normalizeContentBlocks(m.content)),

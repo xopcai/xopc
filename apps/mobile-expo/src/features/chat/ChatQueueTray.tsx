@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
@@ -12,7 +12,7 @@ import { acknowledgeLocalSessionInputs, localMessageScope, useLocalMessagesStore
 import { subscribeGatewayEvent } from '../gateway/gateway-event-bus';
 import { retrySessionPreparation } from '../../query/session-inputs';
 
-export function ChatQueueTray({ conversationId }: { conversationId: string }) {
+export function ChatQueueTray({ conversationId, onEdit }: { conversationId: string; onEdit: (input: SessionInput) => void }) {
   const gatewayId = useGatewayStore(s => s.activeGatewayId);
   const m = useMessages().mobileExperience;
   const { colors } = useTheme();
@@ -23,17 +23,16 @@ export function ChatQueueTray({ conversationId }: { conversationId: string }) {
     if (state.data) useLocalMessagesStore.getState().update(localMessageScope(gatewayId, conversationId, useGatewayStore.getState().getActiveProfile()?.deviceId ?? null), messages => acknowledgeLocalSessionInputs(messages, state.data.inputs));
   }, [conversationId, gatewayId, state.data]);
   const [visible, setVisible] = useState(false);
-  const [editing, setEditing] = useState<SessionInput | null>(null);
-  const [draft, setDraft] = useState('');
   useEffect(() => subscribeGatewayEvent('session.input-state', detail => {
     if (detail && typeof detail === 'object' && 'conversationId' in detail && detail.conversationId === conversationId) {
       void client.invalidateQueries({ queryKey: sessionInputsKey(gatewayId, conversationId) });
     }
   }), [client, gatewayId, conversationId]);
   const mutation = useMutation({
-    mutationFn: ({ input, content }: { input: SessionInput; content?: string }) => content === undefined ? cancelSessionInput(conversationId, input) : updateSessionInput(conversationId, input, content),
-    onSuccess: result => { client.setQueryData(key, result); setEditing(null); },
-    onError: () => setEditing(null),
+    mutationFn: ({ input, position }: { input: SessionInput; position?: number }) => position === undefined
+      ? cancelSessionInput(conversationId, input)
+      : updateSessionInput(conversationId, input, { position }),
+    onSuccess: result => { client.setQueryData(key, result); },
     onSettled: () => { void client.invalidateQueries({ queryKey: key }); },
   });
   const queue = queuedMessages(state.data);
@@ -49,7 +48,7 @@ export function ChatQueueTray({ conversationId }: { conversationId: string }) {
       <Text style={{ color: colors.text.secondary }}>{state.isError ? m.queueSyncFailed : `${m.queue} · ${queue.length}`}</Text>
       <Icon source="chevron-up" size={18} color={colors.text.secondary} />
     </Pressable>
-    <BottomSheetModal visible={visible} onDismiss={() => { setVisible(false); setEditing(null); mutation.reset(); }} title={m.queue} subtitle={m.queuedExplain} keyboardAvoiding>
+    <BottomSheetModal visible={visible} onDismiss={() => { setVisible(false); mutation.reset(); }} title={m.queue} subtitle={m.queuedExplain} keyboardAvoiding>
       <View style={styles.content}>
         {preparation && preparation.state !== 'ready' ? <View>
           <Text>{preparation.state === 'preparing' ? m.sessionPreparing : preparation.lastError ?? m.sessionPreparationFailed}</Text>
@@ -58,17 +57,29 @@ export function ChatQueueTray({ conversationId }: { conversationId: string }) {
         </View> : null}
         {state.isError ? <Button onPress={() => void state.refetch()}>{m.retry}</Button> : !queue.length ? <Text style={{ color: colors.text.secondary }}>{m.queueEmpty}</Text> : null}
         {mutation.isError ? <Text accessibilityRole="alert" style={{ color: colors.semantic.error }}>{m.queueError}</Text> : null}
-        {queue.map(input => <View key={input.id} style={[styles.row, { borderBottomColor: colors.border.subtle }]}>
-          {editing?.id === input.id ? <>
-            <TextInput accessibilityLabel={m.edit} multiline value={draft} onChangeText={setDraft} style={[styles.editor, { color: colors.text.primary, borderColor: colors.border.default }]} />
-            <View style={styles.actions}><Button disabled={mutation.isPending} onPress={() => setEditing(null)}>{m.cancel}</Button><Button disabled={mutation.isPending || !draft.trim()} onPress={() => mutation.mutate({ input: editing, content: draft })}>{m.save}</Button></View>
-          </> : <>
-            <Text style={[typography.body, { color: colors.text.primary }]}>{input.content || m.attachedContent}</Text>
-            <View style={styles.actions}><Button disabled={mutation.isPending} onPress={() => { setEditing(input); setDraft(input.content); mutation.reset(); }}>{m.edit}</Button><Button disabled={mutation.isPending} onPress={() => mutation.mutate({ input })}>{m.cancel}</Button></View>
-          </>}
-        </View>)}
+        {queue.map((input, index) => {
+          const image = input.attachments?.find(attachment => attachment.mimeType?.startsWith('image/'));
+          const imageUri = image?.data ? `data:${image.mimeType ?? 'image/jpeg'};base64,${image.data}` : image?.uri;
+          return <View key={input.id} style={[styles.row, { borderBottomColor: colors.border.subtle }]}>
+            <View style={styles.previewRow}>
+              {imageUri ? <Image source={{ uri: imageUri }} style={styles.thumbnail} resizeMode="cover" /> : input.attachments?.length ? <Icon source="paperclip" size={22} color={colors.text.secondary} /> : null}
+              <View style={styles.previewText}>
+                <Text numberOfLines={2} style={[typography.body, { color: colors.text.primary }]}>{input.content || m.attachedContent}</Text>
+                {input.attachments?.length || input.contextRefs?.length ? <Text style={{ color: colors.text.secondary }}>
+                  {[input.attachments?.length ? `📎 ${input.attachments.length}` : '', input.contextRefs?.length ? `@ ${input.contextRefs.length}` : ''].filter(Boolean).join(' · ')}
+                </Text> : null}
+              </View>
+            </View>
+            <View style={styles.actions}>
+              <Button compact disabled={mutation.isPending || index === 0} onPress={() => mutation.mutate({ input, position: index - 1 })}>↑</Button>
+              <Button compact disabled={mutation.isPending || index === queue.length - 1} onPress={() => mutation.mutate({ input, position: index + 1 })}>↓</Button>
+              <Button disabled={mutation.isPending} onPress={() => { setVisible(false); onEdit(input); }}>{m.edit}</Button>
+              <Button disabled={mutation.isPending} onPress={() => mutation.mutate({ input })}>{m.cancel}</Button>
+            </View>
+          </View>;
+        })}
       </View>
     </BottomSheetModal>
   </>;
 }
-const styles = StyleSheet.create({ trigger: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm }, content: { paddingHorizontal: spacing.lg }, row: { paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth }, actions: { flexDirection: 'row', justifyContent: 'flex-end' }, editor: { ...typography.body, minHeight: 100, borderWidth: 1, borderRadius: 12, padding: spacing.md } });
+const styles = StyleSheet.create({ trigger: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm }, content: { paddingHorizontal: spacing.lg }, row: { paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth }, previewRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm }, previewText: { flex: 1 }, thumbnail: { width: 48, height: 48, borderRadius: 10 }, actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' } });

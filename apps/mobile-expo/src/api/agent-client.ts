@@ -391,7 +391,7 @@ export class AgentMessageSender {
       }
     };
     assertCurrent();
-    const draft = input.taskId ? undefined : readLocalSessionDraft(input.conversationId);
+    const draft = input.taskId || input.replaceTurnId ? undefined : readLocalSessionDraft(input.conversationId);
     if (!(input.creation?.temporary || draft?.creation.temporary)) input.attachments = await persistSubmissionAttachments(input.attachments);
     assertCurrent();
     if (draft) {
@@ -423,15 +423,17 @@ export class AgentMessageSender {
     const content = { content: input.content,
       ...(input.attachments.length ? { attachments: input.attachments.map(({ localUri: _localUri, ...attachment }) => attachment) } : {}),
       ...(input.contextRefs.length ? { contextRefs: input.contextRefs } : {}) };
-    const command = input.taskId
+    const command = input.taskId || input.replaceTurnId
       ? { clientMessageId: input.clientMessageId, expectedTranscriptId: input.expectedTranscriptId, delivery: input.delivery, ...content, origin }
       : sessionInputCommandSchema.parse(input.creation
         ? { kind: 'start', clientMessageId: input.clientMessageId, creation: input.creation, input: content, origin }
         : { kind: 'append', clientMessageId: input.clientMessageId, expectedTranscriptId: input.expectedTranscriptId,
           configVersion: input.configVersion, delivery: input.delivery, input: content, origin });
-    upsertMessageOutbox(localMessageScope(input.gatewayId, input.conversationId, useGatewayStore.getState().getActiveProfile()?.deviceId ?? null), input, 'sending');
+    if (!input.replaceTurnId) upsertMessageOutbox(localMessageScope(input.gatewayId, input.conversationId, useGatewayStore.getState().getActiveProfile()?.deviceId ?? null), input, 'sending');
     const response = await apiFetch(input.taskId
       ? `/api/tasks/${encodeURIComponent(input.taskId)}/inputs`
+      : input.replaceTurnId
+        ? `/api/sessions/${encodeURIComponent(input.conversationId)}/turns/${encodeURIComponent(input.replaceTurnId)}/replace`
       : `/api/sessions/${encodeURIComponent(input.conversationId)}/inputs`, {
       method: 'POST',
       recoverRouteOnNetworkError: true,
@@ -450,7 +452,7 @@ export class AgentMessageSender {
     } | null;
     assertCurrent();
     if (!response.ok) {
-      if (!input.taskId && isSessionCommandRejected(response.status, json)) {
+      if (!input.taskId && !input.replaceTurnId && isSessionCommandRejected(response.status, json)) {
         if (draft?.clientMessageId === input.clientMessageId) {
           delete draft.clientMessageId;
           saveLocalSessionDraft(draft);
@@ -462,14 +464,14 @@ export class AgentMessageSender {
       throw new Error(formatApiHttpError(response.status, response.statusText, json?.error?.message));
     }
     assertCurrent();
-    if (!input.taskId) {
+    if (!input.taskId && !input.replaceTurnId) {
       const receipt = json?.payload?.receipt;
       if (!receipt || receipt.conversationId !== input.conversationId || receipt.clientMessageId !== input.clientMessageId) throw new Error('Invalid input receipt');
       if (json?.payload?.session?.transcriptId !== receipt.transcriptId) throw new Error('Conversation was reset; reload before sending');
       if (input.creation) writeCachedSessionDetail(input.gatewayId, input.conversationId, { key: input.conversationId, transcriptId: receipt.transcriptId, messages: [] });
       removeLocalSessionDraft(input.conversationId);
     }
-    const state = input.taskId ? json?.payload?.state : json?.payload?.inputState;
+    const state = input.taskId || input.replaceTurnId ? json?.payload?.state : json?.payload?.inputState;
     // Completed idempotent retries have no row in the active input list.
     if (!state || !Array.isArray(state.inputs)) {
       throw new Error('Network response was invalid');

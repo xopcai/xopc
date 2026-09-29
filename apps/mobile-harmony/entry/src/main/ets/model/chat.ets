@@ -87,11 +87,15 @@ export interface XopcChatAgents { defaultId: string; agents: XopcChatAgent[]; }
 export interface XopcAgentConfig { model?: string; thinkingLevel?: string; reasoningLevel?: string; effectiveWorkspacePath?: string; workingDirectoryLocked?: boolean; configVersion?: number; }
 export interface XopcQueuedInput {
   id: string; clientMessageId: string; content: string; version: number; position: number;
-  kind: string; status: string; effectiveDelivery: string;
+  kind: string; status: string; requestedDelivery: string; effectiveDelivery: string;
+  attachments?: XopcChatAttachment[]; contextRefs?: XopcQueuedContextRef[]; thinking?: string; error?: string;
 }
+export interface XopcQueuedContextRef { kind: string; sourceId: string; version: string; title?: string; }
 export interface XopcSessionPreparation { operationId: string; revision: number; state: string; lastError?: string; }
 export interface XopcQueueState { conversationId: string; activeRunId?: string; inputs: XopcQueuedInput[]; preparation?: XopcSessionPreparation; }
-export interface XopcQueueUpdate { version: number; content: string; }
+export interface XopcQueueUpdate {
+  content?: string; attachments?: XopcChatAttachment[]; contextRefs?: XopcContextRef[]; thinking?: string; position?: number;
+}
 export interface XopcContextRef { kind: string; sourceId: string; expectedVersion: string; title?: string; }
 export interface XopcContextWorkItem { id: string; title: string; phase?: string; }
 export interface XopcContextWork { project?: XopcContextWorkItem; task?: XopcContextWorkItem; }

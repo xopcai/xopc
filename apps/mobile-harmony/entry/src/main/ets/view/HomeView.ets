@@ -30,6 +30,7 @@ import { quickChatIntake } from '../service/quickChatIntake';
 import { pickChatAttachment } from '../service/chatAttachmentPicker';
 import { pickChatPhoto } from '../service/chatPhotoPicker';
 import { MAX_ATTACHMENTS } from '../common/attachments';
+import { XopcBrandLoading } from './MobileComponents';
 
 @ComponentV2
 export struct XopcHomeView {
@@ -63,6 +64,7 @@ export struct XopcHomeView {
   @Local creationChatRevision: number = 0;
   @Local creationHandoffPending: boolean = false;
   @Local returnToConversations: boolean = false;
+  @Local pendingChatId: string = '';
   @Local intake: XopcShareIntake = shareIntake;
   private chatRepository: XopcChatRepository = new XopcChatRepository();
   private readonly onMotionChange = (reduced: boolean): void => { layoutState.reduceMotion = reduced; };
@@ -184,6 +186,7 @@ export struct XopcHomeView {
 
   private openConversationFromList(id: string, focusComposer: boolean): void {
     this.returnToConversations = true;
+    this.pendingChatId = id === this.activeChatId ? '' : id;
     this.switchToChat(id, '', focusComposer);
   }
 
@@ -486,7 +489,10 @@ export struct XopcHomeView {
           bottomDock: this.chatDock,
           activePage: this.tab === 0 && !this.detailVisible, attentionItems: this.attention.needsUser, onAttentionRefresh: (): void => { this.attention.refresh(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
-          onConversationChange: (id: string): void => { this.activeChatId = id; } }) }
+          onConversationChange: (id: string): void => {
+            this.activeChatId = id;
+            if (this.pendingChatId === id) this.pendingChatId = '';
+          } }) }
         TabContent() { XopcSessionsView({ embedded: true, bottomInset: this.secondaryBottomRegionHeight, activePage: this.tab === 1 && !this.detailVisible,
           currentId: this.activeChatId, onOpen: (id: string): void => { this.openConversationFromList(id, false); },
           onNew: (id: string): void => { this.openConversationFromList(id, true); } }) }
@@ -501,6 +507,12 @@ export struct XopcHomeView {
         .width('100%').layoutWeight(1)
       }.id('home-tab-viewport').width('100%').height('100%')
         .clip(true)
+      if (this.tab === 0 && this.pendingChatId) {
+        Column() {
+          XopcBrandLoading({ reduceMotion: this.layout.reduceMotion })
+        }.id('chat-navigation-loading').width('100%').height('100%')
+          .justifyContent(FlexAlign.Center).backgroundColor(this.colors.surface)
+      }
       if (this.tab !== 0) {
         Column() {
           Column() {

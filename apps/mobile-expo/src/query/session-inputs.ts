@@ -2,6 +2,18 @@ import { z } from 'zod';
 import { apiFetch, formatApiHttpError } from '../api/client';
 import { sessionPreparationViewSchema, type SessionPreparationView } from '@xopcai/gateway-contract';
 import { readLocalSessionDraft } from '../features/chat/local-session-drafts';
+import type { ComposerContextRef, WireAttachment } from '../features/chat/composer.types';
+
+const queuedAttachmentSchema = z.object({
+  type: z.string(), mimeType: z.string().optional(), data: z.string().optional(), uri: z.string().optional(),
+  name: z.string().optional(), size: z.number().optional(), workspaceRelativePath: z.string().optional(),
+  durationSeconds: z.number().optional(),
+});
+
+const queuedContextRefSchema = z.object({
+  kind: z.enum(['note', 'task']), sourceId: z.string(), version: z.string(), title: z.string(),
+  refId: z.string().optional(),
+});
 
 export const sessionInputStateSchema = z.object({
   preparation: sessionPreparationViewSchema.optional(),
@@ -11,7 +23,9 @@ export const sessionInputStateSchema = z.object({
     id: z.string(), clientMessageId: z.string(), content: z.string(), version: z.number().int(), position: z.number(),
     kind: z.enum(['message', 'connection_resume', 'clarification_resume']),
     status: z.enum(['queued', 'running', 'injecting', 'completed', 'cancelled', 'failed', 'interrupted', 'suspended']),
-    effectiveDelivery: z.enum(['next', 'steer']),
+    requestedDelivery: z.enum(['next', 'steer']), effectiveDelivery: z.enum(['next', 'steer']),
+    attachments: z.array(queuedAttachmentSchema).optional(), contextRefs: z.array(queuedContextRefSchema).optional(),
+    thinking: z.string().optional(), error: z.string().optional(),
   })),
 });
 export type SessionInputState = z.infer<typeof sessionInputStateSchema>;
@@ -34,8 +48,13 @@ export async function retrySessionPreparation(conversationId: string, preparatio
   });
   if (!response.ok) throw new Error(formatApiHttpError(response.status, response.statusText));
 }
-export async function updateSessionInput(conversationId: string, input: Pick<SessionInput, 'id' | 'version'>, content: string) {
-  return readState(await apiFetch(`/api/sessions/${encodeURIComponent(conversationId)}/inputs/${encodeURIComponent(input.id)}`, { method: 'PATCH', body: JSON.stringify({ version: input.version, content }) }));
+export async function updateSessionInput(conversationId: string, input: Pick<SessionInput, 'id' | 'version'>, update: {
+  content?: string; attachments?: WireAttachment[]; contextRefs?: ComposerContextRef[]; thinking?: string; position?: number;
+}) {
+  const contextRefs = update.contextRefs?.map(({ kind, sourceId, expectedVersion }) => ({ kind, sourceId, expectedVersion }));
+  return readState(await apiFetch(`/api/sessions/${encodeURIComponent(conversationId)}/inputs/${encodeURIComponent(input.id)}`, {
+    method: 'PATCH', body: JSON.stringify({ ...update, contextRefs, version: input.version }),
+  }));
 }
 export async function cancelSessionInput(conversationId: string, input: Pick<SessionInput, 'id' | 'version'>) {
   return readState(await apiFetch(`/api/sessions/${encodeURIComponent(conversationId)}/inputs/${encodeURIComponent(input.id)}?version=${input.version}`, { method: 'DELETE' }));
