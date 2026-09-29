@@ -32,6 +32,7 @@ describe('bundled capability packs', () => {
 
     expect([...byName.keys()]).toEqual(expect.arrayContaining([
       'define-task',
+      'design-recurring-work',
       'pdf',
       'docx',
       'pptx',
@@ -45,6 +46,14 @@ describe('bundled capability packs', () => {
     expect(byName.get('define-task')?.toolConditions?.requiresTools).toEqual([
       'xopc_use',
       'tool_manual',
+    ]);
+    expect(byName.get('design-recurring-work')?.toolConditions?.requiresTools).toEqual([
+      'xopc_use',
+      'tool_manual',
+    ]);
+    expect(byName.get('design-recurring-work')?.metadata.xopc?.activatesCapabilities).toEqual([
+      'workflow-authoring',
+      'automation-authoring',
     ]);
     expect(byName.get('xlsx')?.toolConditions?.requiresTools).toEqual([
       'read_file',
