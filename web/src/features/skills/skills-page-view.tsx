@@ -170,6 +170,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
                       { value: 'installed', label: sk.filterInstalled },
                       { value: 'workspace', label: sk.filterWorkspace },
                       { value: 'global', label: sk.filterGlobal },
+                      { value: 'plugin', label: sk.filterPlugin },
                       { value: 'extra', label: sk.filterExtra },
                     ]}
                     allowEmpty={false}
