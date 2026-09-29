@@ -11,6 +11,7 @@ import {
   closeXopcDatabase,
   ensureSessionRecord,
   getSessionInputById,
+  insertSessionInput,
   loadTranscriptRowsForSession,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
@@ -150,6 +151,100 @@ describe('SessionInputCoordinator', () => {
     complete({ status: 'ok', summary: 'done' });
     await expect(coordinator.waitForCompletion(conversationId, 'steer-1')).resolves.toBeUndefined();
     expect(coordinator.snapshot(conversationId).inputs).toEqual([]);
+  });
+
+  it('allows a verified endpoint submission to steer an active run', async () => {
+    let complete!: (value: { status: string; summary: string }) => void;
+    const steer = vi.fn(async () => true);
+    const coordinator = new SessionInputCoordinator({
+      sessionExists: async () => true,
+      execute: () => new Promise<{ status: string; summary: string }>((resolve) => { complete = resolve; }),
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => undefined,
+      steer,
+      emit: () => {},
+    });
+
+    await coordinator.submit({ conversationId, clientMessageId: 'active', delivery: 'next', content: 'active', origin });
+    const steered = await coordinator.submit({
+      conversationId,
+      clientMessageId: 'endpoint-steer',
+      delivery: 'steer',
+      content: 'adjust',
+      origin: { type: 'endpoint', endpointId: 'mobile' },
+    });
+
+    expect(steered.ok && steered.effectiveDelivery).toBe('steer');
+    expect(steer).toHaveBeenCalledWith(conversationId, 'adjust');
+    complete({ status: 'ok', summary: 'done' });
+    await coordinator.waitForCompletion(conversationId, 'endpoint-steer');
+  });
+
+  it('dispatches an accepted endpoint command as steer', async () => {
+    let complete!: (value: { status: string; summary: string }) => void;
+    const steer = vi.fn(async () => true);
+    const coordinator = new SessionInputCoordinator({
+      sessionExists: async () => true,
+      execute: () => new Promise<{ status: string; summary: string }>((resolve) => { complete = resolve; }),
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => undefined,
+      steer,
+      emit: () => {},
+    });
+
+    await coordinator.submit({ conversationId, clientMessageId: 'active', delivery: 'next', content: 'active', origin });
+    const prepared = await coordinator.prepareInput({
+      conversationId,
+      clientMessageId: 'accepted-endpoint-steer',
+      delivery: 'steer',
+      content: 'adjust accepted command',
+      origin: { type: 'endpoint', endpointId: 'mobile' },
+    });
+    const row = insertSessionInput({
+      ...prepared,
+      id: crypto.randomUUID(),
+      conversationId,
+      clientMessageId: 'accepted-endpoint-steer',
+    });
+
+    await coordinator.dispatchAcceptedInput(conversationId, row.id);
+
+    expect(steer).toHaveBeenCalledWith(conversationId, 'adjust accepted command');
+    expect(getSessionInputById(conversationId, row.id)?.effectiveDelivery).toBe('steer');
+    expect(getSessionInputById(conversationId, row.id)?.status).toBe('injecting');
+    complete({ status: 'ok', summary: 'done' });
+    await coordinator.waitForCompletion(conversationId, 'accepted-endpoint-steer');
+  });
+
+  it('queues endpoint steer requests containing attachments', async () => {
+    let complete!: (value: { status: string; summary: string }) => void;
+    const execute = vi.fn(() => new Promise<{ status: string; summary: string }>((resolve) => { complete = resolve; }));
+    const steer = vi.fn(async () => true);
+    const coordinator = new SessionInputCoordinator({
+      sessionExists: async () => true,
+      execute,
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => undefined,
+      steer,
+      emit: () => {},
+    });
+
+    await coordinator.submit({ conversationId, clientMessageId: 'active', delivery: 'next', content: 'active', origin });
+    const queued = await coordinator.submit({
+      conversationId,
+      clientMessageId: 'endpoint-rich-steer',
+      delivery: 'steer',
+      content: 'see image',
+      attachments: [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
+      origin: { type: 'endpoint', endpointId: 'mobile' },
+    });
+
+    expect(queued.ok && queued.effectiveDelivery).toBe('next');
+    expect(steer).not.toHaveBeenCalled();
+    expect(coordinator.snapshot(conversationId).inputs.map(row => row.status)).toEqual(['running', 'queued']);
+    complete({ status: 'ok', summary: 'done' });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+    complete({ status: 'ok', summary: 'done' });
   });
 
   it('keeps the frozen Note snapshot when queued text is edited without changing its refs', async () => {

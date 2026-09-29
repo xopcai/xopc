@@ -10,6 +10,7 @@ const homeHubs = readFileSync(new URL('../entry/src/main/ets/view/HomeHubs.ets',
 const personal = readFileSync(new URL('../entry/src/main/ets/view/PersonalView.ets', import.meta.url), 'utf8');
 const english = readFileSync(new URL('../entry/src/main/resources/base/element/string.json', import.meta.url), 'utf8');
 const chinese = readFileSync(new URL('../entry/src/main/resources/zh_CN/element/string.json', import.meta.url), 'utf8');
+const mobileComponents = readFileSync(new URL('../entry/src/main/ets/view/MobileComponents.ets', import.meta.url), 'utf8');
 
 describe('chat bottom region composition', () => {
   it('animates session refresh only for an explicit pull gesture', () => {
@@ -43,12 +44,12 @@ describe('chat bottom region composition', () => {
 
   it('replaces the jump arrow with an animated brand logo while AI is responding', () => {
     expect(chat).toContain('if (this.chat.runId)');
-    expect(chat).toContain('XopcChatRunningLogo({ reduceMotion: this.layout.reduceMotion })');
-    expect(chat).toContain("Image($r('app.media.brand_logo_base'))");
-    expect(chat).toContain("Image($r('app.media.brand_logo_accent'))");
-    expect(chat).toContain('.rotate({ angle: this.accentAngle })');
-    expect(chat).toContain('.animation({ duration: this.reduceMotion ? 0 : 1450, curve: Curve.Linear,');
-    expect(chat).toContain('iterations: this.reduceMotion ? 1 : -1');
+    expect(chat).toContain('XopcBrandLoading({ compact: true, reduceMotion: this.layout.reduceMotion })');
+    expect(mobileComponents).toContain("Image($r('app.media.brand_logo_base'))");
+    expect(mobileComponents).toContain("Image($r('app.media.brand_logo_accent'))");
+    expect(mobileComponents).toContain('.rotate({ angle: this.accentAngle })');
+    expect(mobileComponents).toContain('.animation({ duration: this.reduceMotion ? 0 : 1450, curve: Curve.Linear,');
+    expect(mobileComponents).toContain('iterations: this.reduceMotion ? 1 : -1');
   });
   it('renders the navigation slot after the composer inside the shared surface', () => {
     const composer = chat.indexOf(".id('chat-composer-shell')");
@@ -277,7 +278,8 @@ describe('chat bottom region composition', () => {
     expect(feedback).not.toContain('Text(this.voiceHoldHint())');
     expect(feedback).not.toMatch(/\n\s+Text\(\$r\('app\.string\.voice_slide_/);
     expect(feedback).not.toContain("Text('↖')");
-    expect(feedback).toContain('.backgroundColor(this.colors.panel).border({ width: 1, color: this.colors.border })');
+    expect(feedback).toContain('.backgroundColor(this.colors.panel)');
+    expect(feedback).not.toContain('.border(');
     expect(feedback).toContain('.fontColor(this.colors.secondary)');
     expect(feedback).toContain('.fontColor([this.colors.accent])');
     expect(feedback).toContain("this.voiceDestination === 'text' ? this.colors.accentSoft : Color.Transparent");
@@ -329,5 +331,17 @@ describe('chat bottom region composition', () => {
     }
     expect(secondPage).toBeGreaterThan(0);
     expect(panel.indexOf("this.actionTile('voice-with-tools'")).toBeGreaterThan(secondPage);
+  });
+
+  it('keeps voice and rich follow-up capture available while an agent run is active', () => {
+    const voiceToggle = chat.slice(chat.indexOf('@Builder\n  voiceToggle()'), chat.indexOf('@Builder\n  composerRightActions()'));
+    const actionPanel = chat.slice(chat.indexOf('@Builder\n  actionPanel()'), chat.indexOf('\n  build()', chat.indexOf('@Builder\n  actionPanel()')));
+
+    expect(voiceToggle).not.toContain('!this.chat.runId');
+    for (const id of ['photos', 'camera', 'document', 'record-voice']) {
+      const action = actionPanel.split('\n').find(line => line.includes(`this.actionTile('${id}'`));
+      expect(action).toBeDefined();
+      expect(action).not.toContain('!this.chat.runId');
+    }
   });
 });

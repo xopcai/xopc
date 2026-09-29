@@ -193,6 +193,34 @@ describe('AgentMessageSender voice message', () => {
     expect(bodies[0]).toMatchObject({ delivery: 'steer', clientMessageId: input.clientMessageId });
   });
 
+  it('replaces the latest turn without creating an outbox command', async () => {
+    const turnToken = 'replacement-turn-token-1234567890';
+    publishMobileEndpointTurnClaim('mobile-test', turnToken);
+    testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({
+      payload: { state: { activeRunId: 'replacement-run', inputs: [] } },
+    }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
+
+    const input = submission({
+      replaceTurnId: 'turn-latest',
+      content: 'revised question',
+      attachments: [{ type: 'image', uri: 'media://inbound/revised.jpg', mimeType: 'image/jpeg' }],
+    });
+    await expect(new AgentMessageSender().sendMessage(input)).resolves.toEqual({ runId: 'replacement-run' });
+
+    expect(testState.apiFetch).toHaveBeenCalledWith(
+      '/api/sessions/session-a/turns/turn-latest/replace',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    const body = JSON.parse(String(testState.apiFetch.mock.calls[0]?.[1]?.body));
+    expect(body).toMatchObject({
+      clientMessageId: 'message-a',
+      content: 'revised question',
+      attachments: [{ type: 'image', uri: 'media://inbound/revised.jpg', mimeType: 'image/jpeg' }],
+      origin: { type: 'endpoint', endpointId: 'mobile-test', token: turnToken },
+    });
+    expect([...testState.memory.keys()].some(key => key.includes('outbox'))).toBe(false);
+  });
+
   it('submits frozen note context references', async () => {
     publishMobileEndpointTurnClaim('mobile-test', 'test-turn-token');
     testState.apiFetch.mockResolvedValue(accepted());

@@ -401,10 +401,11 @@ export function useChatFollowUpClarify(options: {
     if (!row?.text.trim() || row.attachments?.length || row.contextRefs?.length) return;
     setSteeringFollowUpId(id);
     try {
+      const origin = await waitForEndpointTurnClaim();
       const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientMessageId: crypto.randomUUID(), delivery: 'steer', content: row.text.trim() }),
+        body: JSON.stringify({ clientMessageId: crypto.randomUUID(), delivery: 'steer', content: row.text.trim(), origin }),
       });
       if (res.ok) {
         const json = await res.json().catch(() => null) as { payload?: { state?: unknown } } | null;
