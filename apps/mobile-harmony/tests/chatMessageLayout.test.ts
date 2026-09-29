@@ -5,7 +5,7 @@ const chat = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', imp
 const content = readFileSync(new URL('../entry/src/main/ets/view/ChatMessageContent.ets', import.meta.url), 'utf8');
 
 describe('chat message layout parity', () => {
-  it('renders user messages as compact right-aligned bubbles', () => {
+  it('renders user messages as compact right-positioned bubbles with left-aligned text', () => {
     const start = chat.indexOf("if (item.item.role === 'user')");
     const end = chat.indexOf("} else {", start);
     const userLayout = chat.slice(start, end);
@@ -70,8 +70,9 @@ describe('chat message layout parity', () => {
     const imageStrip = content.slice(imageStart, imageEnd);
 
     expect(userContent.indexOf('if (this.row.text)')).toBeLessThan(userContent.indexOf('ForEach(this.row.refs || []'));
-    expect(userContent).toContain(".width('100%').textAlign(TextAlign.End)");
-    expect(content).toContain(".fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.End)");
+    expect(userContent).toContain(".width('100%').textAlign(TextAlign.Start)");
+    expect(content).toContain(".fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.Start)");
+    expect(userContent).not.toContain('textAlign(TextAlign.End)');
     expect(content).toContain("if (this.row.role !== 'user')");
     expect(imageStrip).toContain(".id('chat-user-image-strip-' + this.row.id)");
     expect(content).toContain('@Computed get userImageThumbnailSize(): number { return this.imageMedia.length === 1 ? 168 : 112; }');
