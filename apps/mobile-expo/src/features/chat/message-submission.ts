@@ -10,6 +10,7 @@ export type MessageSubmission = {
   configVersion?: number;
   creation?: SessionCreation;
   taskId?: string;
+  replaceTurnId?: string;
   content: string;
   delivery: 'next' | 'steer';
   attachments: WireAttachment[];

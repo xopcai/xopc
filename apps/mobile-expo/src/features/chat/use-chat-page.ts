@@ -55,6 +55,7 @@ import { useChatSession } from './use-chat-session';
 import { useSessionHistory } from './use-session-history';
 import { confirmOutboxMessages } from './message-outbox';
 import { confirmLocalMessages, localMessageScope, useLocalMessagesStore } from './local-messages-store';
+import { useComposerHandoff } from './composer-handoff';
 
 export type UseChatPageOptions = {
   root?: boolean;
@@ -297,6 +298,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   // ── Derived UI state ─────────────────────────────────────
   const [composerSuggestion, setComposerSuggestion] = useState<string | undefined>(undefined);
+  const [editingUserTurnId, setEditingUserTurnId] = useState<string | null>(null);
 
   const welcomeModel = useMemo(
     () => buildMobileWelcomeModel({
@@ -349,9 +351,14 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       if (!hasContent) return false;
 
       if (!conversationId || bootstrap.creatingInitialSession) return false;
+      if (editingUserTurnId) {
+        const accepted = await chatSession.replaceLatestUserTurn(editingUserTurnId, text, attachments, contextRefs);
+        if (accepted) setEditingUserTurnId(null);
+        return accepted;
+      }
       return chatSession.send(text, attachments, contextRefs, delivery);
     },
-    [bootstrap.bootstrapError, bootstrap.creatingInitialSession, chatSession, conversationId, modelMutation.isPending],
+    [bootstrap.bootstrapError, bootstrap.creatingInitialSession, chatSession, conversationId, editingUserTurnId, modelMutation.isPending],
   );
 
   // ── Handlers ─────────────────────────────────────────────
@@ -516,13 +523,25 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     [m.chat.messageCopied, m.chat.messageCopyFailed, chatSession.setSnackMsg],
   );
 
-  const handleUserMessageEdit = useCallback(
-    (text: string) => {
-      setComposerSuggestion(text);
-      chatSession.setSnackMsg(m.chat.messageReadyToEdit);
-    },
-    [m.chat.messageReadyToEdit, chatSession.setSnackMsg],
-  );
+  const handleUserMessageEdit = useCallback((message: Message, latest: boolean) => {
+    const payload = buildUserResendPayload(message);
+    if (!payload || !activeGatewayId || !conversationId) return;
+    const replace = latest && Boolean(message.turnId) && !chatSession.runningRef.current;
+    setEditingUserTurnId(replace ? message.turnId! : null);
+    useComposerHandoff.getState().set({
+      gatewayId: activeGatewayId,
+      conversationId,
+      ...payload,
+      replace: true,
+    });
+    chatSession.setSnackMsg(replace ? m.chat.messageReadyToEdit : m.chat.messageReadyToReuse);
+  }, [activeGatewayId, chatSession, conversationId, m.chat.messageReadyToEdit, m.chat.messageReadyToReuse]);
+
+  const cancelUserMessageEdit = useCallback(() => {
+    setEditingUserTurnId(null);
+    if (!activeGatewayId || !conversationId) return;
+    useComposerHandoff.getState().set({ gatewayId: activeGatewayId, conversationId, text: '', attachments: [], contextRefs: [], replace: true });
+  }, [activeGatewayId, conversationId]);
 
   const handleUserMessageRetry = useCallback((message: Message) => {
     void chatSession.retryMessage(message);
@@ -638,6 +657,8 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     handleComposerSend,
     handleUserMessageCopy,
     handleUserMessageEdit,
+    editingUserTurnId,
+    cancelUserMessageEdit,
     handleUserMessageRetry,
     handleAssistantCopy,
     handleAssistantSaveToNote,

@@ -1,14 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { agents: vi.fn(), models: vi.fn(), config: vi.fn(), draft: vi.fn(), setModel: vi.fn(), queue: vi.fn(), changeQueued: vi.fn(), rememberModel: vi.fn() };
+  return { agents: vi.fn(), models: vi.fn(), config: vi.fn(), draft: vi.fn(), setModel: vi.fn(), queue: vi.fn(),
+    updateQueued: vi.fn(), cancelQueued: vi.fn(), retryPreparation: vi.fn(), rememberModel: vi.fn() };
 });
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {
-  agents = mock.agents; models = mock.models; config = mock.config; draft = mock.draft; setModel = mock.setModel; queue = mock.queue; changeQueued = mock.changeQueued;
+  agents = mock.agents; models = mock.models; config = mock.config; draft = mock.draft; setModel = mock.setModel; queue = mock.queue;
+  updateQueued = mock.updateQueued; cancelQueued = mock.cancelQueued; retryPreparation = mock.retryPreparation;
   rememberModel = mock.rememberModel;
 } }));
 import { XopcChatOptionsViewModel } from '../entry/src/main/ets/viewmodel/chatOptionsViewModel.ets';
-const input = (id: string, position: number, status = 'queued') => ({ id, clientMessageId: id, content: id, version: 4, position, kind: 'message', status, effectiveDelivery: 'next' });
+const input = (id: string, position: number, status = 'queued') => ({ id, clientMessageId: id, content: id, version: 4, position,
+  kind: 'message', status, requestedDelivery: 'next', effectiveDelivery: 'next' });
 describe('chat options and queue', () => {
   beforeEach(() => {
     vi.resetAllMocks(); vi.useFakeTimers(); mock.agents.mockResolvedValue({ agents: [{ id: 'main', name: 'Main' }], defaultId: 'main' });
@@ -41,9 +44,19 @@ describe('chat options and queue', () => {
     expect(mock.config).not.toHaveBeenCalled(); expect(model.modelId).toBe('p/b'); expect(model.error).toBe(''); model.dispose();
   });
   it('submits the queue version and refreshes after a conflict without pretending success', async () => {
-    const model = new XopcChatOptionsViewModel(); await model.load('one'); mock.changeQueued.mockRejectedValue(new Error('HTTP_409'));
-    const entry = input('one-input', 1); expect(await model.changeQueued(entry, 'edited')).toBe(false);
-    expect(mock.changeQueued).toHaveBeenCalledWith('one', entry, 'edited'); expect(model.queueError).toBe('HTTP_409'); model.dispose();
+    const model = new XopcChatOptionsViewModel(); await model.load('one'); mock.updateQueued.mockRejectedValue(new Error('HTTP_409'));
+    const entry = input('one-input', 1); const update = { content: 'edited' };
+    expect(await model.updateQueued(entry, update)).toBe(false);
+    expect(mock.updateQueued).toHaveBeenCalledWith('one', entry, update); expect(model.queueError).toBe('HTTP_409'); model.dispose();
+  });
+  it('updates a queued rich message without requiring text', async () => {
+    const model = new XopcChatOptionsViewModel(); await model.load('one');
+    const entry = input('one-input', 1); const update = { content: '', attachments: [{
+      type: 'image', name: 'photo.jpg', mimeType: 'image/jpeg', size: 10, data: 'bytes'
+    }] };
+    mock.updateQueued.mockResolvedValue({ conversationId: 'one', inputs: [{ ...entry, ...update, version: 5 }] });
+    expect(await model.updateQueued(entry, update)).toBe(true);
+    expect(model.queued[0].attachments?.[0].name).toBe('photo.jpg'); model.dispose();
   });
   it('rejects old conversation model/config results', async () => {
     let finish!: (value: unknown) => void; mock.config.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));

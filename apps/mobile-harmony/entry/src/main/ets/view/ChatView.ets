@@ -2,7 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { quickChatIntake, XopcQuickChatIntake } from '../service/quickChatIntake';
 import { XopcChatViewModel } from '../viewmodel/chatViewModel';
 import { XopcChatRow, XopcChatAttachment, XopcChatBlock, XopcContextRef, XopcReferenceItem, XopcChatAgent,
-  XopcHistoryMedia, XopcHostDirectory } from '../model/chat';
+  XopcHistoryMedia, XopcHostDirectory, XopcQueuedInput } from '../model/chat';
 import { XopcChatMessageContent } from './ChatMessageContent';
 import { chatAnswerText, chatAttachments } from '../common/chatRichContent';
 import { extractMarkdownCodeBlocks } from '../common/chatDisplay';
@@ -74,6 +74,8 @@ export struct XopcChatView {
   @Local sheetMode: string = 'actions';
   @Local referenceKind: string = 'note';
   @Local draft: string = '';
+  @Local editingQueuedId: string = '';
+  @Local editingTurnId: string = '';
   @Local showVoice: boolean = false;
   @Local voiceHeld: boolean = false;
   @Local voiceFinishing: boolean = false;
@@ -237,6 +239,7 @@ export struct XopcChatView {
     this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false; this.firstVisible = 0;
     const generation = ++this.draftGeneration;
     this.restoringDraft = true; this.draftScope = scope; this.draft = ''; this.refs = []; this.attachments = [];
+    this.editingQueuedId = ''; this.editingTurnId = '';
     try {
       const saved = await this.drafts.read(scope);
       if (generation !== this.draftGeneration) return;
@@ -341,7 +344,7 @@ export struct XopcChatView {
         await copyChatMessage(row.role === 'assistant' ? chatAnswerText(row) : row.text); this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copied') });
       } else if (action === 'copy-code') {
         await copyChatMessage(extractMarkdownCodeBlocks(chatAnswerText(row))); this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copied') });
-      } else if (action === 'edit') { this.draft = row.text; }
+      } else if (action === 'edit') { this.fillMessageDraft(row); }
       else if (action === 'read') {
         if (this.reader.sourceId === row.id && this.reader.state === 'loading') return;
         if (this.reader.sourceId === row.id && ['playing', 'paused'].includes(this.reader.state)) await this.reader.toggle();
@@ -364,6 +367,42 @@ export struct XopcChatView {
       }
     } catch (error) { if (this.visible) this.chat.error = (error as Error).message; }
     finally { this.savingNote = false; }
+  }
+
+  private fillMessageDraft(row: XopcChatRow): void {
+    this.editingQueuedId = '';
+    this.editingTurnId = !this.chat.runId && this.isLatestUser(row) ? row.turnId || '' : '';
+    this.draft = row.text;
+    this.attachments = (row.media || []).map((file: XopcHistoryMedia): XopcChatAttachment => ({
+      type: file.type, name: file.name, mimeType: file.mimeType, size: file.size, data: file.data || '', uri: file.uri,
+      workspaceRelativePath: file.workspaceRelativePath, duration: file.duration
+    }));
+    this.refs = (row.refs || []).slice();
+    this.showVoice = false; this.setPanel(false); this.cursor = this.draft.length;
+    this.focusComposerOnMount = true; this.focusMountedComposer(); this.saveDraft();
+  }
+
+  private isLatestUser(row: XopcChatRow): boolean {
+    for (let index = this.presentationRows.length - 1; index >= 0; index--) {
+      if (this.presentationRows[index].role === 'user') return this.presentationRows[index].id === row.id;
+    }
+    return false;
+  }
+
+  private editQueued(input: XopcQueuedInput): void {
+    this.editingTurnId = ''; this.editingQueuedId = input.id;
+    this.draft = input.content;
+    this.attachments = (input.attachments || []).slice();
+    this.refs = (input.contextRefs || []).map((ref): XopcContextRef => ({
+      kind: ref.kind, sourceId: ref.sourceId, expectedVersion: ref.version, title: ref.title
+    }));
+    this.sheetOpen = false; this.showVoice = false; this.setPanel(false); this.cursor = this.draft.length;
+    this.focusComposerOnMount = true; this.focusMountedComposer(); this.saveDraft();
+  }
+
+  private cancelEditing(): void {
+    this.editingQueuedId = ''; this.editingTurnId = ''; this.draft = ''; this.attachments = []; this.refs = [];
+    this.saveDraft();
   }
   private async fillProductDraft(text: string): Promise<void> {
     if (this.restoringDraft || !this.visible) return;
@@ -534,6 +573,7 @@ export struct XopcChatView {
       } catch (_) { return; }
     }
     this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.draft = ''; this.attachments = []; this.refs = [];
+    this.editingQueuedId = ''; this.editingTurnId = '';
     this.sheetOpen = false; this.setPanel(false); await this.chat.create(agentId, projectId, executionMode);
   }
 
@@ -566,6 +606,18 @@ export struct XopcChatView {
     if (this.options.loading || this.options.saving) return;
     if (!this.options.modelId) { this.chat.error = this.options.error || 'MODEL_UNAVAILABLE'; return; }
     const text = this.draft; const files = this.attachments; const refs = this.refs; const id = this.chat.selectedId;
+    if (this.editingQueuedId) {
+      const queued = this.options.queued.find((item: XopcQueuedInput): boolean => item.id === this.editingQueuedId);
+      if (!queued) { this.editingQueuedId = ''; return; }
+      const updated = await this.options.updateQueued(queued, { content: text, attachments: files, contextRefs: refs });
+      if (updated) this.cancelEditing();
+      return;
+    }
+    if (this.editingTurnId) {
+      const replaced = await this.chat.replaceLatest(this.editingTurnId, text, files, refs);
+      if (replaced) { this.cancelEditing(); this.options.refreshQueue(); }
+      return;
+    }
     const sent = await this.chat.send(text, files, delivery, refs, (): void => {
       if (this.draft === text) this.draft = '';
       if (this.attachments === files) this.attachments = [];
@@ -632,7 +684,7 @@ export struct XopcChatView {
   private openReference(kind: string): void { this.referenceKind = kind; this.openSheet('references'); }
 
   private toggleVoice(): void {
-    if (this.chat.sending || this.chat.runId || this.voice.busy || this.voice.state !== 'idle') return;
+    if (this.chat.sending || this.voice.busy || this.voice.state !== 'idle') return;
     this.setPanel(false); this.palette.close(); this.editor.stopEditing();
     this.focusComposerOnMount = this.showVoice; this.showVoice = !this.showVoice;
   }
@@ -643,7 +695,7 @@ export struct XopcChatView {
   }
 
   private async beginVoiceHold(point: TouchObject): Promise<void> {
-    if (this.voiceHeld || this.voiceFinishing || this.chat.sending || this.chat.runId || this.voice.busy || this.voice.state !== 'idle') return;
+    if (this.voiceHeld || this.voiceFinishing || this.chat.sending || this.voice.busy || this.voice.state !== 'idle') return;
     const context = this.getUIContext().getHostContext();
     if (!context) return;
     this.voiceHeld = true; this.voiceDestination = 'send';
@@ -751,7 +803,7 @@ export struct XopcChatView {
     }.id('chat-voice-toggle').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
       .backgroundColor(this.colors.input).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
       .accessibilityText(this.showVoice ? $r('app.string.chat_switch_keyboard') : $r('app.string.record_voice'))
-      .enabled(!this.chat.sending && !this.chat.runId && !this.voice.busy && this.voice.state === 'idle')
+      .enabled(!this.chat.sending && !this.voice.busy && this.voice.state === 'idle')
       .onClick((): void => { this.toggleVoice(); })
   }
 
@@ -803,7 +855,8 @@ export struct XopcChatView {
     Menu() {
       MenuItem({ content: $r('app.string.chat_copy') })
         .onClick((): void => { this.messageAction('copy', row); })
-      MenuItem({ content: $r('app.string.chat_edit') })
+      MenuItem({ content: !this.chat.runId && this.isLatestUser(row) && row.turnId
+        ? $r('app.string.chat_edit_latest') : $r('app.string.chat_reuse') })
         .onClick((): void => { this.messageAction('edit', row); })
     }
   }
@@ -997,11 +1050,22 @@ export struct XopcChatView {
         .height(44).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
         .onClick((): void => { this.options.refreshQueue(); this.openSheet('queue'); })
     }
+    if (this.editingQueuedId || this.editingTurnId) {
+      Row({ space: 8 }) {
+        Text(this.editingQueuedId ? $r('app.string.chat_editing_queued') : $r('app.string.chat_editing_latest'))
+          .fontSize(12).fontColor(this.colors.secondary).layoutWeight(1)
+        Button($r('app.string.cancel')).height(40).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
+          .onClick((): void => { this.cancelEditing(); })
+      }.padding({ left: 16, right: 16 }).width('100%')
+    }
     if (this.chat.runId && (this.draft.trim() || this.attachments.length || this.refs.length)) {
       Row({ space: 8 }) {
-        Text($r('app.string.chat_queue_hint')).fontSize(12).fontColor(this.colors.secondary).layoutWeight(1)
-        Button($r('app.string.chat_steer')).height(44).enabled(!this.chat.sending && !this.options.saving)
-          .backgroundColor(Color.Transparent).fontColor(this.colors.accent).onClick((): void => { this.send('steer'); })
+        Text(this.attachments.length || this.refs.length ? $r('app.string.chat_queue_rich_hint') : $r('app.string.chat_queue_hint'))
+          .fontSize(12).fontColor(this.colors.secondary).layoutWeight(1)
+        if (!this.attachments.length && !this.refs.length) {
+          Button($r('app.string.chat_steer')).height(44).enabled(!this.chat.sending && !this.options.saving)
+            .backgroundColor(Color.Transparent).fontColor(this.colors.accent).onClick((): void => { this.send('steer'); })
+        }
       }.padding({ left: 16, right: 16 })
     }
     if (this.refs.length) {
@@ -1149,7 +1213,6 @@ export struct XopcChatView {
         }.id('chat-composer-attachments').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
           .width('100%').height(this.attachments.some((file: XopcChatAttachment): boolean => file.mimeType.startsWith('image/')) ? 90 : 74)
           .align(Alignment.TopStart)
-        Divider().color(this.colors.border).strokeWidth(0.5).opacity(0.7)
       }
       Row({ space: 4 }) {
         if (!this.expandedComposer) { this.voiceToggle() }
@@ -1171,7 +1234,7 @@ export struct XopcChatView {
                   .fontColor(this.voiceDestination === 'cancel' ? this.colors.danger : this.colors.foreground)
               }.id('chat-voice-record').width('100%').height(44).padding(0).borderRadius(14)
                 .backgroundColor(this.voiceHeld ? this.colors.grouped : Color.Transparent)
-                .enabled(this.voiceHeld || (!this.voiceFinishing && !this.voice.busy && !this.chat.sending && !this.chat.runId))
+                .enabled(this.voiceHeld || (!this.voiceFinishing && !this.voice.busy && !this.chat.sending))
                 .accessibilityText($r('app.string.voice_hold_to_speak'))
                 .onTouch((event: TouchEvent): void => { this.handleVoiceTouch(event); })
             }
@@ -1221,7 +1284,6 @@ export struct XopcChatView {
           .fontColor([this.voiceDestination === 'cancel' ? this.colors.danger : this.colors.secondary])
       }.id('chat-voice-cancel-target').width(48).height(48).borderRadius(24)
         .backgroundColor(this.voiceDestination === 'cancel' ? this.colors.input : Color.Transparent)
-        .border({ width: 1, color: this.voiceDestination === 'cancel' ? this.colors.danger : Color.Transparent })
         .opacity(this.voiceDestination === 'text' ? 0.4 : 1)
         .accessibilityText($r('app.string.voice_slide_cancel'))
       Column({ space: 4 }) {
@@ -1238,7 +1300,7 @@ export struct XopcChatView {
         .accessibilityText($r('app.string.voice_slide_text'))
     }.id('chat-voice-gesture-feedback').width('82%').constraintSize({ maxWidth: 340 }).height(80)
       .padding({ left: 16, right: 16 }).borderRadius(40)
-      .backgroundColor(this.colors.panel).border({ width: 1, color: this.colors.border })
+      .backgroundColor(this.colors.panel)
       .margin({ bottom: this.bottomRegionHeight + 16 })
       .hitTestBehavior(HitTestMode.None)
   }
@@ -1281,10 +1343,10 @@ export struct XopcChatView {
     Swiper() {
       Column({ space: 4 }) {
         Row() {
-          this.actionTile('photos', $r('app.string.chat_photos'), $r('sys.symbol.picture'), !this.pickingAttachment && !this.chat.runId && this.attachments.length < MAX_ATTACHMENTS)
-          this.actionTile('camera', $r('app.string.chat_camera'), $r('sys.symbol.camera'), !this.pickingAttachment && !this.chat.runId && this.attachments.length < MAX_ATTACHMENTS)
-          this.actionTile('document', $r('app.string.chat_local_files'), $r('sys.symbol.folder'), !this.pickingAttachment && !this.chat.runId && this.attachments.length < MAX_ATTACHMENTS)
-          this.actionTile('record-voice', $r('app.string.record_voice'), $r('sys.symbol.mic'), !this.chat.runId && !this.voice.busy && this.voice.state === 'idle')
+          this.actionTile('photos', $r('app.string.chat_photos'), $r('sys.symbol.picture'), !this.pickingAttachment && this.attachments.length < MAX_ATTACHMENTS)
+          this.actionTile('camera', $r('app.string.chat_camera'), $r('sys.symbol.camera'), !this.pickingAttachment && this.attachments.length < MAX_ATTACHMENTS)
+          this.actionTile('document', $r('app.string.chat_local_files'), $r('sys.symbol.folder'), !this.pickingAttachment && this.attachments.length < MAX_ATTACHMENTS)
+          this.actionTile('record-voice', $r('app.string.record_voice'), $r('sys.symbol.mic'), !this.voice.busy && this.voice.state === 'idle')
         }.width('100%')
         Row() {
           this.actionTile('reference-note', $r('app.string.chat_reference_note'), $r('sys.symbol.doc'), this.refs.length < 5)
@@ -1452,6 +1514,7 @@ export struct XopcChatView {
       onMode: (mode: string): void => { this.sheetMode = mode; }, onClose: (): void => { this.sheetOpen = false; },
       onRetry: (): void => { this.options.load(this.chat.selectedId, this.chat.agentId); },
       onAgent: (id: string): void => { this.newConversation(id); }, onNewChat: (): void => { this.newConversation(); },
+      onEditQueued: (input: XopcQueuedInput): void => { this.editQueued(input); },
       onFiles: (): void => { this.sheetOpen = false; this.onNavigate({ page: 'session-files', itemId: this.chat.selectedId }); } })
     }
   }

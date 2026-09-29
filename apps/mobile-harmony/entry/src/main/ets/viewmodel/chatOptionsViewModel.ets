@@ -1,4 +1,4 @@
-import { XopcAgentConfig, XopcChatModel, XopcChatAgent, XopcQueuedInput, XopcSessionPreparation } from '../model/chat';
+import { XopcAgentConfig, XopcChatModel, XopcChatAgent, XopcQueuedInput, XopcSessionPreparation, XopcQueueState, XopcQueueUpdate } from '../model/chat';
 import { XopcLocalSession } from '../model/sessionCommand';
 import { XopcChatRepository } from '../repository/chatRepository';
 
@@ -80,20 +80,32 @@ export class XopcChatOptionsViewModel {
     try {
       const state = await this.repository.queue(id);
       if (request !== this.queueRequest) return;
-      this.queued = state.inputs.filter((item: XopcQueuedInput): boolean => item.kind === 'message' && item.status === 'queued')
-        .sort((a: XopcQueuedInput, b: XopcQueuedInput): number => a.position - b.position);
-      this.preparation = state.preparation;
-      this.queueError = state.preparation?.state === 'preparation_failed' ? state.preparation.lastError || 'SESSION_PREPARATION_FAILED' : '';
+      this.applyQueue(state);
     } catch (error) { if (request === this.queueRequest) this.queueError = (error as Error).message; }
   }
-  async changeQueued(input: XopcQueuedInput, content?: string): Promise<boolean> {
-    if (this.queueBusy || (content !== undefined && !content.trim())) return false;
+  private applyQueue(state: XopcQueueState): void {
+    this.queued = state.inputs.filter((item: XopcQueuedInput): boolean => item.kind === 'message' && item.status === 'queued')
+      .sort((a: XopcQueuedInput, b: XopcQueuedInput): number => a.position - b.position);
+    this.preparation = state.preparation;
+    this.queueError = state.preparation?.state === 'preparation_failed' ? state.preparation.lastError || 'SESSION_PREPARATION_FAILED' : '';
+  }
+  async updateQueued(input: XopcQueuedInput, update: XopcQueueUpdate): Promise<boolean> {
+    if (this.queueBusy) return false;
+    const hasPayload = !!update.content?.trim() || !!update.attachments?.length || !!update.contextRefs?.length;
+    if (update.position === undefined && !hasPayload) return false;
     this.queueBusy = true; const id = this.conversationId; const generation = this.generation; this.queueRequest++;
     try {
-      await this.repository.changeQueued(id, input, content);
+      const state = await this.repository.updateQueued(id, input, update);
       if (generation !== this.generation) return false;
-      await this.refreshQueue(); return true;
+      this.applyQueue(state); return true;
     } catch (error) { if (generation === this.generation) { await this.refreshQueue(); this.queueError = (error as Error).message; } return false; }
+    finally { this.queueBusy = false; }
+  }
+  async cancelQueued(input: XopcQueuedInput): Promise<void> {
+    if (this.queueBusy) return;
+    this.queueBusy = true; const generation = this.generation; this.queueRequest++;
+    try { const state = await this.repository.cancelQueued(this.conversationId, input); if (generation === this.generation) this.applyQueue(state); }
+    catch (error) { if (generation === this.generation) { await this.refreshQueue(); this.queueError = (error as Error).message; } }
     finally { this.queueBusy = false; }
   }
   async retryQueue(): Promise<void> {

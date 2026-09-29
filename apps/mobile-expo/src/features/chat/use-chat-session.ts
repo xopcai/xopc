@@ -115,6 +115,7 @@ export interface UseChatSessionReturn {
 
   // Actions
   send: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], delivery?: 'next' | 'steer') => Promise<boolean>;
+  replaceLatestUserTurn: (turnId: string, text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => Promise<boolean>;
   retryMessage: (message: Message) => Promise<void>;
   abort: () => void;
   cancelRecovery: () => void;
@@ -771,7 +772,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     const continuingRun = streamingRef.current;
     sendingRef.current = true;
     runBusyRef.current = true;
-    upsertMessageOutbox(targetScope, input, 'sending');
+    if (!input.replaceTurnId) upsertMessageOutbox(targetScope, input, 'sending');
     updateMessage('sending');
     if (!continuingRun) {
       activeMessageIdRef.current = input.clientMessageId;
@@ -783,19 +784,19 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     try {
       ({ runId } = await senderRef.current.sendMessage(input));
       updateMessage('confirming');
-      upsertMessageOutbox(targetScope, input, 'confirming');
+      if (!input.replaceTurnId) upsertMessageOutbox(targetScope, input, 'confirming');
       void queryClient.invalidateQueries({ queryKey: ['session-inputs', input.gatewayId, input.conversationId] });
     } catch (error) {
       const transient = isTransientNetworkError(error instanceof Error ? error.message : String(error));
       if (transient) {
         updateMessage('confirming');
-        upsertMessageOutbox(targetScope, input, 'confirming');
+        if (!input.replaceTurnId) upsertMessageOutbox(targetScope, input, 'confirming');
       } else {
         useLocalMessagesStore.getState().update(
           targetScope,
           messages => failLocalMessageIfSending(messages, input.clientMessageId),
         );
-        upsertMessageOutbox(targetScope, input, 'failed');
+        if (!input.replaceTurnId) upsertMessageOutbox(targetScope, input, 'failed');
       }
       if (isCurrent()) {
         sendingRef.current = false;
@@ -831,7 +832,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     });
   }, [buildCallbacks, clearStreamingMessage, finalizeMessage, m.chat.sendFailed, queryClient, reconcileSessionHead]);
 
-  const send = useCallback(async (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], delivery: 'next' | 'steer' = 'next'): Promise<boolean> => {
+  const send = useCallback(async (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], delivery: 'next' | 'steer' = 'next', replaceTurnId?: string): Promise<boolean> => {
     if (!canSendComposerDraft(text, attachments?.length ?? 0, contextRefs?.length ?? 0) || !conversationId || !activeGatewayId
       || sendingRef.current
       || readLocalMessages(scope).some(message => message.deliveryState === 'sending')) return false;
@@ -841,6 +842,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       conversationId,
       expectedTranscriptId: readCachedSessionDetail(activeGatewayId, conversationId)?.transcriptId,
       taskId,
+      replaceTurnId,
       content: text.trim(),
       delivery,
       attachments: capAttachments(attachments) ?? [],
@@ -858,6 +860,10 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     // The message now owns its content, including when submission failed.
     return true;
   }, [activeGatewayId, scope, conversationId, setOptimisticMessages, submitMessage, taskId]);
+
+  const replaceLatestUserTurn = useCallback((turnId: string, text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => (
+    send(text, attachments, contextRefs, 'next', turnId)
+  ), [send]);
 
   const retryMessage = useCallback(async (message: Message): Promise<void> => {
     const current = readLocalMessages(scope).find(row => row.id === message.id);
@@ -1216,6 +1222,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
     // Actions
     send,
+    replaceLatestUserTurn,
     retryMessage,
     abort,
     cancelRecovery: streamRecovery.cancelRecovery,

@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
   return { history: vi.fn(), list: vi.fn(), activeRun: vi.fn(), send: vi.fn(), uuid: vi.fn(),
+    replaceLatest: vi.fn(),
     create: vi.fn(), draft: vi.fn(), pendingInput: vi.fn(), reconcile: vi.fn(), mainConversation: vi.fn(), saveMainConversation: vi.fn(),
     subscribe: vi.fn(), unsubscribe: vi.fn(), cachedHistory: vi.fn(), rememberHistory: vi.fn() };
 });
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {
   history = mocks.history; list = mocks.list; activeRun = mocks.activeRun; send = mocks.send; uuid = mocks.uuid;
+  replaceLatest = mocks.replaceLatest;
   create = mocks.create; draft = mocks.draft; pendingInput = mocks.pendingInput; reconcile = mocks.reconcile;
   mainConversation = mocks.mainConversation; saveMainConversation = mocks.saveMainConversation;
   cachedHistory = mocks.cachedHistory; rememberHistory = mocks.rememberHistory;
@@ -260,6 +262,21 @@ describe('chat history isolation', () => {
     expect(mocks.mainConversation).not.toHaveBeenCalled(); expect(mocks.create).not.toHaveBeenCalled();
     chat.dispose();
   });
+  it('does not start a second recovery when an opening conversation becomes active', async () => {
+    let finishReconcile!: () => void;
+    mocks.reconcile.mockImplementationOnce(() => new Promise<void>(resolve => { finishReconcile = resolve; }));
+    mocks.history.mockResolvedValue(page('selected', 'ready'));
+    const chat = new XopcChatViewModel();
+    const opening = chat.open('selected');
+    await vi.waitFor(() => expect(mocks.reconcile).toHaveBeenCalledWith('selected'));
+    chat.activate();
+    await Promise.resolve();
+    expect(mocks.history).not.toHaveBeenCalled();
+    finishReconcile();
+    await opening;
+    expect(mocks.history).toHaveBeenCalledTimes(1);
+    chat.dispose();
+  });
   it('does not let startup restoration overwrite an explicit conversation selection', async () => {
     let finish!: (id: string) => void;
     mocks.mainConversation.mockImplementation(() => new Promise<string>(resolve => { finish = resolve; }));
@@ -430,6 +447,17 @@ describe('chat history isolation', () => {
     mocks.uuid.mockReturnValue('reference'); mocks.send.mockResolvedValue('run');
     expect(await chat.send('', [], 'next', [{ kind: 'task', sourceId: 't', expectedVersion: '2' }])).toBe(true);
     expect(chat.rows[0].refs).toEqual([{ kind: 'task', sourceId: 't', expectedVersion: '2' }]);
+  });
+  it('replaces the latest turn and reloads authoritative history', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    mocks.replaceLatest.mockResolvedValue('replacement-run');
+    mocks.history.mockResolvedValue({ session: { key: 'one', transcriptId: 't', messages: [
+      { id: 'replacement', role: 'user', turnId: 'replacement-run', content: 'revised' },
+    ] }, pagination: { hasMore: false } });
+    expect(await chat.replaceLatest('old-turn', 'revised')).toBe(true);
+    expect(mocks.replaceLatest).toHaveBeenCalledWith('one', 'old-turn', 'revised', [], []);
+    expect(chat.rows).toMatchObject([{ text: 'revised', turnId: 'replacement-run' }]);
+    expect(chat.runId).toBe('replacement-run'); chat.dispose();
   });
   it('shows an uploaded image immediately without adding its filename to message text', async () => {
     const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';

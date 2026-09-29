@@ -183,4 +183,36 @@ describe('local-first session creation', () => {
     expect(mock.request).toHaveBeenCalledWith('/api/sessions/draft-1/materialize', 'POST', expect.any(String));
     expect(mock.remove).toHaveBeenCalledWith('draft-1', 'gateway:device');
   });
+
+  it('normalizes rich queued updates to the Gateway wire contract', async () => {
+    mock.request.mockResolvedValue(JSON.stringify({ payload: { conversationId: 'session-1', inputs: [] } }));
+    const queued = { id: 'input-1', clientMessageId: 'message-1', content: 'old', version: 7, position: 0,
+      kind: 'message', status: 'queued', requestedDelivery: 'next', effectiveDelivery: 'next' };
+    await new XopcChatRepository().updateQueued('session-1', queued, {
+      content: '', attachments: [{ type: 'voice', name: 'voice.m4a', mimeType: 'audio/mp4', size: 2, data: 'YQ==', duration: 3 }],
+      contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: '4', title: 'Note' }],
+    });
+    expect(mock.request).toHaveBeenCalledWith('/api/sessions/session-1/inputs/input-1', 'PATCH', expect.any(String));
+    expect(JSON.parse(mock.request.mock.calls[0][2])).toEqual({
+      version: 7, content: '', attachments: [{ type: 'voice', name: 'voice.m4a', mimeType: 'audio/mp4', size: 2,
+        data: 'YQ==', durationSeconds: 3 }], contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: '4' }],
+    });
+  });
+
+  it('replaces the latest turn with a claimed rich input', async () => {
+    mock.uuid.mockReturnValue('replacement-message');
+    mock.request.mockResolvedValueOnce(JSON.stringify({ payload: { configVersion: 5 } }))
+      .mockResolvedValueOnce(JSON.stringify({ payload: { state: { activeRunId: 'replacement-run' } } }));
+    const runId = await new XopcChatRepository().replaceLatest('session-1', 'turn/1', 'revised', [{
+      type: 'image', name: 'photo.jpg', mimeType: 'image/jpeg', size: 3, data: 'YQ=='
+    }], [{ kind: 'task', sourceId: 'task-1', expectedVersion: '8', title: 'Task' }]);
+    expect(runId).toBe('replacement-run');
+    expect(mock.request.mock.calls[1][0]).toBe('/api/sessions/session-1/turns/turn%2F1/replace');
+    expect(JSON.parse(mock.request.mock.calls[1][2])).toMatchObject({
+      clientMessageId: 'replacement-message', configVersion: 5, content: 'revised', delivery: 'next',
+      origin: { type: 'endpoint', endpointId: 'phone', token: 'claim' },
+      attachments: [{ type: 'image', name: 'photo.jpg', mimeType: 'image/jpeg', size: 3, data: 'YQ==' }],
+      contextRefs: [{ kind: 'task', sourceId: 'task-1', expectedVersion: '8' }],
+    });
+  });
 });

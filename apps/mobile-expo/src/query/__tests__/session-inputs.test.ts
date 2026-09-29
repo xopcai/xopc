@@ -5,7 +5,7 @@ import { cancelSessionInput, fetchSessionInputs, queuedMessages, sessionInputSta
 vi.mock('../../api/client', () => ({ apiFetch: vi.fn(), formatApiHttpError: (status: number, _: string, message: string) => `${status}: ${message}` }));
 vi.mock('../../features/chat/local-session-drafts', () => ({ readLocalSessionDraft: vi.fn(() => undefined) }));
 const request = vi.mocked(apiFetch);
-const input = { id: 'input/one', clientMessageId: 'one', kind: 'message', status: 'queued', content: 'Continue', position: 1, version: 3, effectiveDelivery: 'next' };
+const input = { id: 'input/one', clientMessageId: 'one', kind: 'message', status: 'queued', content: 'Continue', position: 1, version: 3, requestedDelivery: 'next', effectiveDelivery: 'next' };
 const state = { conversationId: 'chat/one', inputs: [input] };
 beforeEach(() => request.mockReset());
 
@@ -24,10 +24,16 @@ it('validates server data instead of inventing an empty queue', async () => {
   request.mockResolvedValue(new Response(JSON.stringify({ payload: { conversationId: 'chat/one' } })));
   await expect(fetchSessionInputs('chat/one')).rejects.toThrow();
 });
-it('patches only content at the exact reviewed version, preserving attachments and references', async () => {
+it('patches rich content at the exact reviewed version', async () => {
   request.mockResolvedValue(new Response(JSON.stringify({ payload: state })));
-  await updateSessionInput('chat/one', { id: 'input/one', version: 3 }, 'Revised');
-  expect(request).toHaveBeenCalledWith('/api/sessions/chat%2Fone/inputs/input%2Fone', { method: 'PATCH', body: JSON.stringify({ version: 3, content: 'Revised' }) });
+  await updateSessionInput('chat/one', { id: 'input/one', version: 3 }, {
+    content: 'Revised', attachments: [{ type: 'image', data: 'abc' }],
+    contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: 'v1', title: 'Note' }],
+  });
+  expect(request).toHaveBeenCalledWith('/api/sessions/chat%2Fone/inputs/input%2Fone', { method: 'PATCH', body: JSON.stringify({
+    content: 'Revised', attachments: [{ type: 'image', data: 'abc' }],
+    contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: 'v1' }], version: 3,
+  }) });
 });
 it('cancels at the reviewed version and never silently retries a conflict', async () => {
   request.mockResolvedValue(new Response(JSON.stringify({ payload: state, error: { message: 'Input changed' } }), { status: 409 }));

@@ -119,7 +119,7 @@ export const MessageList = memo(function MessageList({
   suggestions?: string[];
   onSuggestionSend?: (text: string) => void;
   onUserMessageCopy?: (text: string) => void;
-  onUserMessageEdit?: (text: string) => void;
+  onUserMessageEdit?: (message: Message, latest: boolean) => void;
   onUserMessageRetry?: (message: Message) => void;
   onAssistantCopy?: (text: string) => void;
   onAssistantSaveToNote?: (text: string) => void;
@@ -135,6 +135,12 @@ export const MessageList = memo(function MessageList({
   const latestAssistantIndex = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index--) {
       if (messages[index].role === 'assistant') return index;
+    }
+    return -1;
+  }, [messages]);
+  const latestUserIndex = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index--) {
+      if (messages[index].role === 'user' || messages[index].role === 'user-with-attachments') return index;
     }
     return -1;
   }, [messages]);
@@ -210,7 +216,8 @@ export const MessageList = memo(function MessageList({
             progress={isStreamRow ? progress : null}
             conversationId={conversationId}
             onUserMessageCopy={onUserMessageCopy}
-            onUserMessageEdit={onUserMessageEdit}
+            onUserMessageEdit={onUserMessageEdit ? (message) => onUserMessageEdit(message, index === latestUserIndex) : undefined}
+            userMessageEditLabel={index === latestUserIndex ? chatMessages.messageEdit : chatMessages.messageReuse}
             onUserMessageRetry={item.deliveryState === 'failed' && onUserMessageRetry
               ? () => onUserMessageRetry(item)
               : undefined}
@@ -228,6 +235,7 @@ export const MessageList = memo(function MessageList({
     [
       lastMessageIndex,
       latestAssistantIndex,
+      latestUserIndex,
       reasoningLevel,
       onUserMessageCopy,
       onUserMessageEdit,
