@@ -11,6 +11,7 @@ import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { OnboardingLanguageSwitch } from '@/features/onboarding/onboarding-language-switch';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
 import { cn } from '@/lib/cn';
+import { isComputerUseAvailable } from '@/lib/electron-env';
 import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 import { AddProviderDialog } from '@/features/settings/models-hub/add-provider-dialog';
 import { useConnectedProviders } from '@/features/settings/models-hub/connected-providers-grid';
@@ -455,8 +456,12 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 </h1>
                 <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">
                   {language === 'zh'
-                    ? '聊天模型已经可用。图片生成、语音和电脑控制等能力可以稍后按需配置。'
-                    : 'Your chat model is ready. Image, voice, and computer-use capabilities can be configured later.'}
+                    ? isComputerUseAvailable()
+                      ? '聊天模型已经可用。图片生成、语音和电脑控制等能力可以稍后按需配置。'
+                      : '聊天模型已经可用。图片生成和语音等能力可以稍后按需配置。'
+                    : isComputerUseAvailable()
+                      ? 'Your chat model is ready. Image, voice, and computer-use capabilities can be configured later.'
+                      : 'Your chat model is ready. Image and voice capabilities can be configured later.'}
                 </p>
                 {state.connectedModelRef ? (
                   <div className="mt-8 rounded-xl bg-surface-hover/25 px-4 py-3">

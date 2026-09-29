@@ -8,6 +8,7 @@ import type {
   ToolPolicy,
 } from '@/features/settings/types/agent-gateway';
 import { cn } from '@/lib/cn';
+import { isComputerUseAvailable } from '@/lib/electron-env';
 
 type ToolFilter = 'all' | ToolPolicy['mode'];
 
@@ -35,7 +36,8 @@ export function AgentDefaultsToolsPanel({
     [builtinTools],
   );
   const allTools = useMemo(
-    () => [...new Set([...builtinTools.map((tool) => tool.id), ...Object.keys(draft.tools)])].sort(),
+    () => [...new Set([...builtinTools.map((tool) => tool.id), ...Object.keys(draft.tools)])]
+      .filter((id) => id !== 'computer_use' || isComputerUseAvailable()).sort(),
     [builtinTools, draft.tools],
   );
   const counts = useMemo(() => ({

@@ -9,6 +9,7 @@ import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/setti
 import { messages } from '@/i18n/messages';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { isComputerUseAvailable } from '@/lib/electron-env';
 import { useLocaleStore } from '@/stores/locale-store';
 import { ComputerModelSettings } from './computer-model-settings';
 
@@ -69,6 +70,7 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
     finally { setBusy(false); }
   };
   const saveEnabled = (enabled: boolean) => perform(async () => {
+    if (!isComputerUseAvailable()) return;
     await fetchJson(apiUrl('/api/config'), {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ computer: { enabled } }),
@@ -83,6 +85,7 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
   };
   const sessionStatus = desktop?.session?.status ?? 'idle';
   const sessionLabel = t.states[sessionStatus as keyof typeof t.states] ?? sessionStatus;
+  const controlEnabled = isComputerUseAvailable() && config?.computer?.enabled === true;
 
   return <SettingsPageFrame gap="gap-7">
     <SettingsPageHeader title={t.title} subtitle={t.subtitle}
@@ -110,11 +113,11 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
         <div role="alert" className="text-sm text-fg-muted">{String(loadError)} <Button onClick={() => { void perform(() => mutate()); }}>{t.retry}</Button></div> :
         <div className="flex flex-col gap-1 rounded-xl bg-surface-hover/20 p-1 [&>*]:rounded-lg [&>*]:bg-surface-base/45">
           <SettingRow icon={<MousePointer2 className="size-5" />} title={t.desktop} description={t.desktopDescription}>
-            <button type="button" role="switch" aria-label={t.desktop} aria-checked={config?.computer?.enabled === true}
-              disabled={busy} onClick={() => { void saveEnabled(config?.computer?.enabled !== true); }}
+            <button type="button" role="switch" aria-label={t.desktop} aria-checked={controlEnabled}
+              disabled={busy || !isComputerUseAvailable()} onClick={() => { void saveEnabled(config?.computer?.enabled !== true); }}
               className="touch-target flex items-center rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
-              <span className={`flex h-6 w-11 items-center rounded-full p-0.5 transition-colors ${config?.computer?.enabled ? 'bg-accent' : 'bg-fg-muted/30'}`}>
-                <span className={`size-5 rounded-full bg-white transition-transform ${config?.computer?.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+              <span className={`flex h-6 w-11 items-center rounded-full p-0.5 transition-colors ${controlEnabled ? 'bg-accent' : 'bg-fg-muted/30'}`}>
+                <span className={`size-5 rounded-full bg-white transition-transform ${controlEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
               </span>
             </button>
           </SettingRow>

@@ -6,6 +6,7 @@ import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path
 import { CHANNELS_HUB_PATH, channelDetailPath } from '@/features/settings/channels/channels-routes';
 import { capabilityPath } from '@/navigation/product-navigation';
 import { useSettingsModeStore } from '@/stores/settings-mode-store';
+import { isComputerUseAvailable } from '@/lib/electron-env';
 
 export type RouteHitSeed = {
   id: string;
@@ -31,7 +32,10 @@ const AGENT_SETTINGS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
 function buildAgentSettingsRouteSeeds(language: StoredLanguage, settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode']): RouteHitSeed[] {
   const m = messages(language);
   const subtitle = m.commandPalette.routes.agentsSubtitle;
-  return AGENT_SETTINGS_PALETTE_TABS.filter((tab) => isSettingsTabVisibleInMode(tab, settingsMode)).map((tab) => ({
+  return AGENT_SETTINGS_PALETTE_TABS.filter((tab) =>
+    isSettingsTabVisibleInMode(tab, settingsMode)
+    && (tab !== 'settingsComputerUse' || isComputerUseAvailable()),
+  ).map((tab) => ({
     id: `route:settings:agent:${tab}`,
     title: tabLabel(language, tab),
     subtitle,
