@@ -183,6 +183,33 @@ describe('runXopcEmbeddedTurn image input', () => {
     });
   });
 
+  it('restores images after the session projection replaces the prompt with persisted text', async () => {
+    const persistedUser = { role: 'user', content: 'Describe this image', turnId: 'run-image', timestamp: 1 };
+    const projectedContext = { messages: [persistedUser], tools: [] };
+    mocks.basePrepareRequest.mockResolvedValue({ context: projectedContext });
+    let providerMessages: AgentMessage[] = [];
+    mocks.prompt.mockImplementationOnce(async () => {
+      const prepared = await mocks.session.agent.prepareRequest({ context: projectedContext }, undefined);
+      providerMessages = prepared.context.messages;
+    });
+
+    await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0',
+      runId: 'run-image',
+      userMessage: persistedUser as AgentMessage,
+      model: { id: 'gpt-4o', provider: 'openai' } as any,
+      modelRef: 'openai/gpt-4o', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+      images: [{ type: 'image', data: 'aW1hZ2U=', mimeType: 'image/png' }],
+    });
+
+    expect(providerMessages[0]).toMatchObject({ content: [
+      { type: 'text', text: 'Describe this image' },
+      { type: 'image', data: 'aW1hZ2U=', mimeType: 'image/png' },
+    ] });
+    expect(persistedUser.content).toBe('Describe this image');
+  });
+
   it('installs and resets the authoritative turn policy on the embedded agent', async () => {
     const turnPolicy = {
       reset: vi.fn(),

@@ -39,6 +39,7 @@ import {
 } from '../orchestration/run-agent-turn-with-timeout.js';
 import { detectToolLoops, type RecentToolCall } from '../orchestration/loop-guard.js';
 import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygiene.js';
+import { restoreCurrentTurnImages } from './current-turn-images.js';
 import { acquireEmbeddedSessionRunner, evictEmbeddedSessionRunner } from './session-runner.js';
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
@@ -427,21 +428,29 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     const authoritativePrepareRequest: typeof session.agent.prepareRequest = async (request, signal) => {
       const prepared = await basePrepareRequest?.(request, signal) as AgentRequestUpdate | undefined;
       const currentContext = prepared?.context ?? request.context;
-      if (!useAuthoritativeProjection) return { ...prepared, context: currentContext };
+      const imagesForModel = resolvedModel.input?.includes('image') === false ? [] : params.images ?? [];
+      const restoreImages = (messages: AgentMessage[]) => restoreCurrentTurnImages(messages, imagesForModel, runId);
+      if (!useAuthoritativeProjection) return {
+        ...prepared,
+        context: { ...currentContext, messages: restoreImages(currentContext.messages as AgentMessage[]) },
+      };
       try {
         const messages = await transcriptRuntime.loadMessages();
         return {
           ...prepared,
           context: {
             ...currentContext,
-            messages: withRecoveredMessages(currentContext.messages, messages),
+            messages: restoreImages(withRecoveredMessages(currentContext.messages, messages)),
           },
         };
       } catch (error) {
         if (signal?.aborted || runAbortSignal.aborted) throw error;
         log.error({ err: error, conversationId, runId, phase: 'prepare_request' },
           'Failed to refresh the authoritative compacted projection');
-        return prepared;
+        return {
+          ...prepared,
+          context: { ...currentContext, messages: restoreImages(currentContext.messages as AgentMessage[]) },
+        };
       }
     };
     session.agent.prepareRequest = authoritativePrepareRequest;
