@@ -1,5 +1,5 @@
 export type MainTab = 'installed' | 'marketplace';
-export type SourceFilter = 'all' | 'builtin' | 'installed' | 'global' | 'workspace' | 'extra';
+export type SourceFilter = 'all' | 'builtin' | 'installed' | 'global' | 'workspace' | 'plugin' | 'extra';
 /** Installed catalog list: all skills, ready skills, or skills that need attention. */
 export type CatalogStatusFilter = 'all' | 'enabled' | 'disabled';
 
@@ -10,6 +10,7 @@ export const SOURCE_FILTER_SET = new Set<SourceFilter>([
   'installed',
   'global',
   'workspace',
+  'plugin',
   'extra',
 ]);
 export const CATALOG_STATUS_FILTER_SET = new Set<CatalogStatusFilter>(['all', 'enabled', 'disabled']);

@@ -312,7 +312,7 @@ export function AgentPluginDialog({
               {components.mcp.length ? <p className="mt-1 text-sm text-fg-muted">MCP: {components.mcp.map(server => server.name).join(', ')}</p> : null}
             </div>
             <div className="flex flex-wrap gap-2">
-              {components.skills.length ? <Button asChild variant="secondary"><Link to="/capabilities/skills?source=extra">{zh ? '管理技能' : 'Manage skills'}</Link></Button> : null}
+              {components.skills.length ? <Button asChild variant="secondary"><Link to="/capabilities/skills?source=plugin">{zh ? '管理技能' : 'Manage skills'}</Link></Button> : null}
               {components.mcp.length ? <Button asChild variant="secondary"><Link to="/capabilities/connectors?tab=connected">{zh ? '管理连接' : 'Manage connections'}</Link></Button> : null}
             </div>
           </div> : null}

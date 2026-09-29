@@ -78,7 +78,8 @@
     "noDisabledSkills": "当前列表中没有停用的技能。",
     "filterGlobal": "全局",
     "filterWorkspace": "工作区",
-    "filterExtra": "扩展",
+    "filterPlugin": "插件",
+    "filterExtra": "额外目录",
     "sectionUser": "已安装",
     "installCta": "手动安装",
     "installModalTitle": "安装技能",
@@ -114,7 +115,8 @@
       "agentsWorkspace": "Agents（工作区，只读）",
       "workspace": "工作区",
       "global": "全局",
-      "extra": "扩展"
+      "plugin": "插件",
+      "extra": "额外目录"
     },
     "col": {
       "name": "名称",
