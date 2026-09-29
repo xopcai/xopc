@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { getChatSkillsCached, type ChatSkillsPayload } from '@/features/chat/palette/command-palette-api';
+import { getSkills } from '@/features/skills/skill-api';
 import { SkillDiscoveryWelcome } from '@/features/skills/skill-discovery-welcome';
+import type { SkillCatalogEntry, SkillsPayload } from '@/features/skills/skill.types';
 import { useSkillsPage, type SkillsPageVm } from '@/features/skills/use-skills-page';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -21,6 +23,7 @@ vi.mock('@/features/skills/skill-api', () => ({
 let vm: SkillsPageVm;
 let destination: ReturnType<typeof useLocation>;
 function SkillsHarness() {
+  destination = useLocation();
   vm = useSkillsPage();
   return <div>{vm.actionFeedback?.message}</div>;
 }
@@ -32,6 +35,14 @@ const available: ChatSkillsPayload = {
   agentId: 'assistant', workspacePath: '/workspace', version: '1', loadedAt: 0,
   skills: [{ name: 'find-skills', description: '', enabled: true, availableForCurrentAgent: true, unavailableReason: null }],
 };
+const skillsPayload = (catalog: SkillCatalogEntry[] = []): SkillsPayload => ({
+  catalog,
+  managed: [],
+  version: '1',
+  loadedAt: 0,
+  diagnostics: [],
+  status: { version: '1', loadedAt: 0, reloadInProgress: false, reloadPending: false },
+});
 
 describe('skill discovery', () => {
   let container: HTMLDivElement;
@@ -42,6 +53,7 @@ describe('skill discovery', () => {
     useGatewayStore.setState({ conversationId: 'test-token' });
     vi.mocked(fetchChatAgents).mockResolvedValue({ defaultId: 'assistant', items: [{ id: 'assistant' }] });
     vi.mocked(getChatSkillsCached).mockResolvedValue(available);
+    vi.mocked(getSkills).mockResolvedValue(skillsPayload());
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
@@ -51,9 +63,9 @@ describe('skill discovery', () => {
     container.remove();
     useGatewayStore.setState({ conversationId: '' });
   });
-  async function renderPage() {
+  async function renderPage(initialEntry = '/capabilities/skills?q=meeting%20%26%20notes') {
     await act(async () => root.render(
-      <MemoryRouter initialEntries={['/capabilities/skills?q=meeting%20%26%20notes']}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <Routes>
           <Route path="/capabilities/skills" element={<SkillsHarness />} />
           <Route path="/chat/new" element={<Destination />} />
@@ -98,5 +110,40 @@ describe('skill discovery', () => {
     act(() => container.querySelector('button')!.click());
     expect(onPick).toHaveBeenCalledExactlyOnceWith(sk.findExamples[0]);
     expect(container.querySelector('a')?.getAttribute('href')).toBe('/capabilities/skills');
+  });
+
+  it('shows plugin skills for the plugin source deep link', async () => {
+    const entry = (name: string, source: SkillCatalogEntry['source'], origin: SkillCatalogEntry['origin']): SkillCatalogEntry => ({
+      directoryId: name,
+      name,
+      description: '',
+      source,
+      origin,
+      path: `/skills/${name}`,
+      managed: false,
+      writable: false,
+      enabled: true,
+      disableModelInvocation: false,
+    });
+    vi.mocked(getSkills).mockResolvedValue(skillsPayload([
+      entry('plugin-skill', 'global', 'plugin:sample'),
+      entry('global-skill', 'global', 'xopc-global'),
+      entry('extra-skill', 'extra', 'extra'),
+    ]));
+
+    await renderPage('/capabilities/skills?source=plugin');
+
+    expect(vm.catalogDisplayRows.map((row) => row.name)).toEqual(['plugin-skill']);
+  });
+
+  it('clears installed-only filters when switching to Discover', async () => {
+    await renderPage('/capabilities/skills?source=plugin&status=disabled');
+
+    await act(async () => vm.setMainTab('marketplace'));
+
+    const params = new URLSearchParams(destination.search);
+    expect(params.get('tab')).toBe('marketplace');
+    expect(params.has('source')).toBe(false);
+    expect(params.has('status')).toBe(false);
   });
 });

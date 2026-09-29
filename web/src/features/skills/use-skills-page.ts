@@ -112,6 +112,14 @@ export function useSkillsPage() {
   const [builtinCategoryFilter, setBuiltinCategoryFilter] = useState('');
   const [catalogStatusFilter, setCatalogStatusFilter] = useState<CatalogStatusFilter>(initialStatusFilter);
 
+  const selectMainTab = useCallback((tab: MainTab) => {
+    setMainTab(tab);
+    if (tab === 'marketplace') {
+      setSourceFilter('all');
+      setCatalogStatusFilter('all');
+    }
+  }, []);
+
   const [installOpen, setInstallOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [dropActive, setDropActive] = useState(false);
@@ -570,7 +578,7 @@ export function useSkillsPage() {
         else params.delete('q');
         if (mainTab === 'marketplace') params.set('tab', mainTab);
         else params.delete('tab');
-        if (sourceFilter !== 'all') params.set('source', sourceFilter);
+        if (mainTab === 'installed' && sourceFilter !== 'all') params.set('source', sourceFilter);
         else params.delete('source');
         if (mainTab === 'installed' && catalogStatusFilter !== 'all') {
           params.set('status', catalogStatusFilter);
@@ -814,6 +822,8 @@ export function useSkillsPage() {
     if (mainTab === 'installed' && sourceFilter !== 'all') {
       rows = sourceFilter === 'installed'
         ? rows.filter((r) => r.source !== 'builtin')
+        : sourceFilter === 'plugin'
+          ? rows.filter((r) => r.origin.startsWith('plugin:'))
         : rows.filter((r) => r.source === sourceFilter);
     }
 
@@ -943,6 +953,7 @@ export function useSkillsPage() {
   };
 
   const sourceLabel = (skill: SkillCatalogEntry): string => {
+    if (skill.origin.startsWith('plugin:')) return sk.source.plugin;
     if (skill.origin === 'agents-global') return sk.source.agentsGlobal;
     if (skill.origin === 'agents-workspace') return sk.source.agentsWorkspace;
     switch (skill.source) {
@@ -1131,7 +1142,7 @@ export function useSkillsPage() {
     actionFeedback,
     skillDiagnostics,
     mainTab,
-    setMainTab,
+    setMainTab: selectMainTab,
     sourceFilter,
     setSourceFilter,
     builtinCategoryFilter,
