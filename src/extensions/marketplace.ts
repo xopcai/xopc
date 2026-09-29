@@ -24,6 +24,7 @@ export interface RegistryEntry {
   homepage?: string;
   author?: string;
   branding?: { iconUrl: string; iconSha256: string };
+  localizations?: Partial<Record<'en' | 'zh-CN', { displayName: string; description?: string }>>;
   packageType?: 'plugin' | 'extension';
 }
 
@@ -95,6 +96,7 @@ async function fetchPackageCatalogFromStore(packageType: 'plugin' | 'extension')
         author?: { username?: string | null };
         publisher?: { verification?: 'community' | 'verified' };
         branding?: { iconUrl?: string; iconSha256?: string };
+        localizations?: Partial<Record<'en' | 'zh-CN', { displayName?: string; description?: string }>>;
       }>;
     };
     const items = Array.isArray(raw.items) ? raw.items : [];
@@ -103,9 +105,17 @@ async function fetchPackageCatalogFromStore(packageType: 'plugin' | 'extension')
       const name = typeof it.name === 'string' ? it.name.trim() : '';
       if (!name) continue;
       const author = it.author?.username ?? undefined;
+      const localizations = Object.fromEntries(
+        (['en', 'zh-CN'] as const).flatMap(locale => {
+          const value = it.localizations?.[locale];
+          return typeof value?.displayName === 'string' && value.displayName.trim()
+            ? [[locale, { displayName: value.displayName.trim(), ...(typeof value.description === 'string' && value.description.trim() ? { description: value.description.trim() } : {}) }]]
+            : [];
+        }),
+      ) as RegistryEntry['localizations'];
       extensions.push({
         id: name,
-        name: titleCaseSlug(name),
+        name: localizations?.en?.displayName ?? titleCaseSlug(name),
         description: typeof it.description === 'string' ? it.description : undefined,
         npmPackage: name,
         version: typeof it.latestVersion === 'string' ? it.latestVersion : undefined,
@@ -113,6 +123,7 @@ async function fetchPackageCatalogFromStore(packageType: 'plugin' | 'extension')
         ...(typeof it.branding?.iconUrl === 'string' && typeof it.branding.iconSha256 === 'string'
           ? { branding: { iconUrl: it.branding.iconUrl, iconSha256: it.branding.iconSha256 } }
           : {}),
+        ...(localizations && Object.keys(localizations).length ? { localizations } : {}),
         verified: it.publisher?.verification === 'verified' || author === 'xopcai',
         packageType,
       });
@@ -157,6 +168,7 @@ function matchesKeyword(entry: RegistryEntry, keyword: string): boolean {
     entry.id,
     entry.name,
     entry.description ?? '',
+    ...Object.values(entry.localizations ?? {}).flatMap(value => [value.displayName, value.description ?? '']),
     ...(entry.categories ?? []),
     ...(entry.tags ?? []),
     entry.npmPackage,

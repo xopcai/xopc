@@ -165,12 +165,15 @@ export function ExtensionMarketplacePanel({
             extensionsList.map((e) => {
               const kind = extensionInstallKind(extensions, e.id);
               const busy = rowBusy === e.id;
+              const localized = e.localizations?.[language.startsWith('zh') ? 'zh-CN' : 'en'];
+              const displayName = localized?.displayName ?? e.name;
+              const description = localized?.description ?? e.description;
               return (
                 <li key={e.id} className="list-none">
                   <div
                     role="button"
                     tabIndex={0}
-                    aria-label={`${e.name}, ${copy.marketplaceDetailTitle}`}
+                    aria-label={`${displayName}, ${copy.marketplaceDetailTitle}`}
                     onClick={() => dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
                     onKeyDown={(ev) => {
                       if (ev.key === 'Enter' || ev.key === ' ') {
@@ -190,7 +193,7 @@ export function ExtensionMarketplacePanel({
                     <CapabilityIcon iconUrl={e.branding?.iconUrl} fallback={Package} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-fg">{e.name}</h3>
+                        <div className="min-w-0"><h3 className="truncate font-semibold text-fg">{displayName}</h3>{displayName !== e.id ? <p className="truncate font-mono text-[10px] text-fg-subtle">{e.id}</p> : null}</div>
                         {e.verified ? (
                           <CheckCircle
                             className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400"
@@ -202,8 +205,8 @@ export function ExtensionMarketplacePanel({
                           <span className="text-xs text-fg-muted">{e.version}</span>
                         ) : null}
                       </div>
-                      {e.description ? (
-                        <p className="mt-1 line-clamp-2 text-sm text-fg-muted">{e.description}</p>
+                      {description ? (
+                        <p className="mt-1 line-clamp-2 text-sm text-fg-muted">{description}</p>
                       ) : null}
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {(e.categories ?? []).map((c) => (
