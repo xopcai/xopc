@@ -34,7 +34,7 @@ async function input(element: HTMLInputElement, value: string) {
   });
 }
 
-it('keeps the dialog open after install and offers immediate activation', async () => {
+it('installs and enables a reviewed local plugin in one continuation', async () => {
   const onClose = vi.fn();
   const installed = {
     id: 'plugin:sample', pluginId: 'sample', format: 'agent-plugin', name: 'sample', version: '1.0.0', source: 'agent-plugin', active: false,
@@ -45,16 +45,15 @@ it('keeps the dialog open after install and offers immediate activation', async 
     .mockResolvedValueOnce({ ok: true, payload: installed })
     .mockResolvedValueOnce({ ok: true, payload: { ...installed, active: true, activationEligible: true, readiness: 'ready' } });
   await render(<AgentPluginDialog initialSource="/tmp/plugin" onClose={onClose} />);
-  expect(document.body.textContent).not.toContain('Accept capabilities and install');
+  expect(document.body.textContent).not.toContain('Authorize and install');
   await click('Inspect package');
-  expect(document.body.textContent).toContain('content.skills:sample');
-  await click('Accept capabilities and install');
+  expect(document.body.textContent).toContain('Add skill: sample');
+  await click('Authorize and install');
   expect(mocks.request).toHaveBeenNthCalledWith(2, '/api/extensions/install', { method: 'POST', body: JSON.stringify({ source: '/tmp/plugin', reviewHash: 'reviewed-hash' }) });
+  expect(mocks.request).toHaveBeenNthCalledWith(3, '/api/extensions/agent-plugins/sample/activation', { method: 'POST', body: JSON.stringify({ enabled: true }) });
   expect(onClose).not.toHaveBeenCalled();
-  expect(document.body.textContent).toContain('Plugin installed. It is not enabled yet.');
+  expect(document.body.textContent).toContain('Plugin installed and enabled');
   expect(document.querySelector('a[href="/capabilities/skills?source=extra"]')).not.toBeNull();
-  await click('Enable plugin');
-  expect(mocks.request).toHaveBeenLastCalledWith('/api/extensions/agent-plugins/sample/activation', { method: 'POST', body: JSON.stringify({ enabled: true }) });
   expect(document.body.textContent).toContain('Disable');
   expect(document.body.textContent).not.toContain('Plugin installed. It is not enabled yet.');
 });
@@ -63,7 +62,69 @@ it('invalidates a reviewed plan when the source changes', async () => {
   await render(<AgentPluginDialog initialSource="/tmp/one" onClose={() => {}} />);
   await click('Inspect package');
   await input(document.querySelector('input')!, '/tmp/two');
-  expect(document.body.textContent).not.toContain('Accept capabilities and install');
+  expect(document.body.textContent).not.toContain('Authorize and install');
+});
+
+it('one-click installs and enables a verified content-only Store plugin', async () => {
+  const installed = {
+    id: 'plugin:brief', pluginId: 'brief', format: 'agent-plugin', name: 'brief', version: '1.0.0', source: 'agent-plugin', active: false,
+    activationEligible: false, readiness: 'setup_required', hasUi: false, components: { skills: [{ name: 'brief' }], mcp: [] }, diagnostics: [],
+  };
+  mocks.request
+    .mockResolvedValueOnce({ ok: true, payload: { manifest: { name: 'brief' }, reviewHash: 'brief-hash', capabilities: ['content.skills:brief'], addedCapabilities: ['content.skills:brief'], diagnostics: [], installed: false } })
+    .mockResolvedValueOnce({ ok: true, payload: installed })
+    .mockResolvedValueOnce({ ok: true, payload: { ...installed, active: true, activationEligible: true, readiness: 'ready' } });
+
+  await render(<AgentPluginDialog
+    initialSource="store:brief"
+    autoInstall
+    marketplace={{
+      id: 'brief', name: 'Brief', type: 'plugin', description: 'Create briefs', readme: null, downloads: 1,
+      author: { username: 'xopc', avatarUrl: null }, publisher: { verification: 'verified', sourceRepository: null },
+      latestVersion: { version: '1.0.0', changelog: null, publishedAt: '2026-09-30', riskTier: 'content' },
+      installability: { available: true },
+    }}
+    onClose={() => {}}
+  />);
+  await act(async () => {});
+
+  expect(mocks.request).toHaveBeenNthCalledWith(1, '/api/extensions/inspect', { method: 'POST', body: JSON.stringify({ source: 'store:brief' }) });
+  expect(mocks.request).toHaveBeenNthCalledWith(2, '/api/extensions/install', { method: 'POST', body: JSON.stringify({ source: 'store:brief', reviewHash: 'brief-hash' }) });
+  expect(mocks.request).toHaveBeenNthCalledWith(3, '/api/extensions/agent-plugins/brief/activation', { method: 'POST', body: JSON.stringify({ enabled: true }) });
+  expect(document.body.textContent).toContain('Plugin installed and enabled');
+  expect(document.body.textContent).not.toContain('Package source');
+});
+
+it('pauses one-click installation for authorization when a Store plugin can run local code', async () => {
+  const plan = { manifest: { name: 'tools' }, reviewHash: 'tools-hash', capabilities: ['runtime.mcp.stdio:data:{}'], addedCapabilities: ['runtime.mcp.stdio:data:{}'], diagnostics: [], installed: false };
+  const installed = {
+    id: 'plugin:tools', pluginId: 'tools', format: 'agent-plugin', name: 'tools', version: '1.0.0', source: 'agent-plugin', active: false,
+    activationEligible: false, readiness: 'setup_required', hasUi: false, components: { skills: [], mcp: [{ name: 'data', id: 'plugin/tools/data', type: 'stdio' }] }, diagnostics: [],
+  };
+  mocks.request
+    .mockResolvedValueOnce({ ok: true, payload: plan })
+    .mockResolvedValueOnce({ ok: true, payload: installed })
+    .mockResolvedValueOnce({ ok: true, payload: { ...installed, active: true, activationEligible: true } });
+
+  await render(<AgentPluginDialog
+    initialSource="store:tools"
+    autoInstall
+    marketplace={{
+      id: 'tools', name: 'Tools', type: 'plugin', description: 'Local tools', readme: null, downloads: 1,
+      author: { username: 'xopc', avatarUrl: null }, publisher: { verification: 'verified', sourceRepository: null },
+      latestVersion: { version: '1.0.0', changelog: null, publishedAt: '2026-09-30', riskTier: 'local-exec' },
+      installability: { available: true },
+    }}
+    onClose={() => {}}
+  />);
+  await act(async () => {});
+
+  expect(document.body.textContent).toContain('Your authorization is required');
+  expect(document.body.textContent).toContain('Run a local tool service: data');
+  expect(mocks.request).toHaveBeenCalledTimes(1);
+  await click('Authorize and install');
+  expect(mocks.request).toHaveBeenCalledTimes(3);
+  expect(document.body.textContent).toContain('Plugin installed and enabled');
 });
 it('supports native package picking and dropped plugin paths in the desktop app', async () => {
   const openDirectory = vi.fn().mockResolvedValue('/tmp/chosen-plugin');
