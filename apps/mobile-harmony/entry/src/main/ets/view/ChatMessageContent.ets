@@ -87,7 +87,7 @@ export struct XopcChatMessageContent {
             previewLineLimit: this.previewLines, onNavigate: this.onNavigate })
         } else {
         Text(this.previewText).fontSize(16).lineHeight(this.row.role === 'assistant' ? 23 : 25)
-          .fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.End)
+          .fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.Start)
           .maxLines(this.previewLines).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         Button() {
@@ -134,7 +134,7 @@ export struct XopcChatMessageContent {
         } else if (this.row.role === 'user') {
           if (this.row.text) {
             Text(this.row.text).fontSize(16).lineHeight(25).fontColor(this.colors.foreground)
-              .width('100%').textAlign(TextAlign.End)
+              .width('100%').textAlign(TextAlign.Start)
           }
           ForEach(this.row.refs || [], (ref: XopcContextRef) => {
             this.reference(ref)
