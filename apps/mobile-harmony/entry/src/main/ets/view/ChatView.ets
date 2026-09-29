@@ -414,10 +414,14 @@ export struct XopcChatView {
     this.focusComposerOnMount = true; this.focusMountedComposer();
   }
 
-  private userVoiceOnly(row: XopcChatRow): boolean {
+  private userVoiceMessage(row: XopcChatRow): boolean {
     const media = row.media || [];
-    return !row.text && !(row.refs?.length || 0) && media.length > 0
+    return !(row.refs?.length || 0) && media.length === 1
       && media.every((file: XopcHistoryMedia): boolean => file.mimeType.startsWith('audio/'));
+  }
+
+  private userVoiceOnly(row: XopcChatRow): boolean {
+    return !row.text && this.userVoiceMessage(row);
   }
 
   private textBubbleWidth(text: string, minimum: number, maximum: number): string {
@@ -430,8 +434,11 @@ export struct XopcChatView {
   }
 
   private userBubbleWidth(row: XopcChatRow): string {
-    if (this.userVoiceOnly(row)) return '92vp';
-    if ((row.media?.length || 0) > 0 || (row.refs?.length || 0) > 0) return '90%';
+    if (this.userVoiceOnly(row)) return '132vp';
+    if (this.userVoiceMessage(row)) return '180vp';
+    const payloadCount = (row.media?.length || 0) + (row.refs?.length || 0);
+    if (payloadCount > 1 || row.text.length > 18) return '90%';
+    if (payloadCount === 1) return '220vp';
     return this.textBubbleWidth(row.text, 44, 250);
   }
 

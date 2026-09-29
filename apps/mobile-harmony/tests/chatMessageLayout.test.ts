@@ -17,8 +17,10 @@ describe('chat message layout parity', () => {
     expect(userLayout).toContain(".alignItems(HorizontalAlign.End)");
     expect(userLayout).toContain('.backgroundColor(this.colors.accentSoft)');
     expect(userLayout).toContain('.borderRadius(18)');
-    expect(chat).toContain("if ((row.media?.length || 0) > 0 || (row.refs?.length || 0) > 0) return '90%'");
-    expect(chat).toContain("if (this.userVoiceOnly(row)) return '92vp'");
+    expect(chat).toContain("if (this.userVoiceOnly(row)) return '132vp'");
+    expect(chat).toContain("if (this.userVoiceMessage(row)) return '180vp'");
+    expect(chat).toContain("if (payloadCount > 1 || row.text.length > 18) return '90%'");
+    expect(chat).toContain("if (payloadCount === 1) return '220vp'");
     expect(chat).toContain("this.userVoiceOnly(item.item) ? { left: 4, right: 4, top: 0, bottom: 0 }");
     expect(chat).toContain("return width >= maximum ? '90%' : width + 'vp'");
   });
@@ -68,12 +70,20 @@ describe('chat message layout parity', () => {
     const imageStrip = content.slice(imageStart, imageEnd);
 
     expect(userContent.indexOf('if (this.row.text)')).toBeLessThan(userContent.indexOf('ForEach(this.row.refs || []'));
+    expect(userContent).toContain(".width('100%').textAlign(TextAlign.End)");
+    expect(content).toContain(".fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.End)");
     expect(content).toContain("if (this.row.role !== 'user')");
     expect(imageStrip).toContain(".id('chat-user-image-strip-' + this.row.id)");
-    expect(imageStrip).toContain('compactThumbnail: true, compactThumbnailWidth: 136, compactThumbnailHeight: 96');
+    expect(content).toContain('@Computed get userImageThumbnailSize(): number { return this.imageMedia.length === 1 ? 168 : 112; }');
+    expect(imageStrip).toContain('embedded: true, compactThumbnail: true, compactThumbnailWidth: this.userImageThumbnailSize');
+    expect(imageStrip).toContain('compactThumbnailHeight: this.userImageThumbnailSize');
     expect(imageStrip).toContain('compactThumbnailContain: true, compactMetadata: false, compactDisclosure: false');
     expect(imageStrip).toContain('imageGallery: this.imageMedia');
-    expect(imageStrip).toContain('.width(144).height(104)');
+    expect(imageStrip).toContain('.width(this.userImageThumbnailSize + 8).height(this.userImageThumbnailSize + 8)');
+    expect(imageStrip).toContain('.height(this.userImageThumbnailSize + 8)');
+    expect(imageStrip).toContain(".justifyContent(this.imageMedia.length === 1 ? FlexAlign.End : FlexAlign.Start)");
+    expect(content).toContain(".alignItems(this.row.role === 'user' ? HorizontalAlign.End : HorizontalAlign.Start)");
+    expect(content).toContain("if (this.row.role !== 'user')");
     expect(content).toContain("return this.row.role === 'user'");
     expect(content).toContain("filePreviewKind(file.name, file.mimeType) !== 'image'");
   });

@@ -396,14 +396,16 @@ export struct XopcChatMediaView {
               LoadingProgress().width(20).height(20).color(this.colors.foreground)
             } else {
               SymbolGlyph(this.audioPlayer.state === 'playing' ? $r('sys.symbol.stop_circle_fill') : $r('sys.symbol.speaker_wave_2'))
-                .fontSize(22).fontColor([this.error || this.audioPlayer.error ? this.colors.danger : this.colors.foreground])
+                .fontSize(24).fontColor([this.error || this.audioPlayer.error ? this.colors.danger : this.colors.foreground])
             }
+            SymbolGlyph($r('sys.symbol.waveform')).fontSize(30).fontColor([this.colors.secondary]).layoutWeight(1)
             if (this.inlineAudioDuration() > 0) {
               Text(Math.max(1, Math.ceil(this.inlineAudioDuration())).toString() + '″')
-                .fontSize(14).fontColor(this.colors.foreground)
+                .fontSize(13).fontColor(this.colors.secondary)
             }
-          }.width('100%').height(44).padding({ left: 8, right: 8 }).justifyContent(FlexAlign.Start)
-        }.id('chat-inline-voice-' + this.file.id).width('100%').height(44).padding(0)
+          }.width('100%').height(48).padding({ left: 10, right: 10 }).justifyContent(FlexAlign.Start)
+            .alignItems(VerticalAlign.Center)
+        }.id('chat-inline-voice-' + this.file.id).width('100%').height(48).padding(0)
           .backgroundColor(Color.Transparent).enabled(!this.busy && this.previewable())
           .accessibilityText(this.audioPlayer.state === 'playing' ? $r('app.string.stop') : $r('app.string.chat_media_play'))
           .onClick((): void => { this.toggleInlineAudio(); })
