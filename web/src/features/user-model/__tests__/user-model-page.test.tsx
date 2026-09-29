@@ -38,6 +38,7 @@ const { mutate, model } = vi.hoisted(() => ({
       { id: 'workspace-1', content: 'Workspace uses pnpm.', recordClass: 'memory', kind: 'workspace_fact', status: 'active', scope: { type: 'global' }, confidence: 1, importance: 0.7 },
     ],
     maintenance: { lastRun: null },
+    settings: { memoryEnabled: true, showMemoryReferences: true, sensitiveWritePolicy: 'confirm' },
     counts: { activeAssertions: 2, reviewAssertions: 1, activeGoals: 0, activePriorities: 0, activeKnowledge: 2 },
   },
 }));
@@ -105,8 +106,15 @@ describe('UserModelPage summary navigation', () => {
   });
 
   it('opens a filtered understanding view from each summary count', async () => {
-    const learned = container.querySelector<HTMLButtonElement>('[aria-label="Learned together: 1"]');
-    expect(learned).not.toBeNull();
+    const understandingTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+      .find((button) => button.textContent?.includes('What xopc knows'));
+    expect(understandingTab).toBeDefined();
+
+    await act(async () => understandingTab?.click());
+
+    const learned = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Learned together'));
+    expect(learned).toBeDefined();
 
     await act(async () => learned?.click());
 
@@ -213,21 +221,34 @@ describe('UserModelPage summary navigation', () => {
   });
 
   it('pushes tab changes into browser history and restores the previous tab on back', async () => {
-    const workMemoryTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-      .find((button) => button.textContent?.includes('Work memory'));
-    expect(workMemoryTab).toBeDefined();
+    const understandingTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+      .find((button) => button.textContent?.includes('What xopc knows'));
+    expect(understandingTab).toBeDefined();
 
-    await act(async () => workMemoryTab?.click());
+    await act(async () => understandingTab?.click());
     expect(container.querySelector('[data-testid="router-location"]')?.textContent)
-      .toBe('/user-model?tab=knowledge');
-    expect(workMemoryTab?.getAttribute('aria-selected')).toBe('true');
+      .toBe('/user-model?tab=understanding');
+    expect(understandingTab?.getAttribute('aria-selected')).toBe('true');
 
     const back = container.querySelector<HTMLButtonElement>('[data-testid="router-back"]');
     await act(async () => back?.click());
 
     expect(container.querySelector('[data-testid="router-location"]')?.textContent).toBe('/user-model');
     const overviewTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-      .find((button) => button.textContent?.includes('Your portrait'));
+      .find((button) => button.textContent?.includes('Overview'));
     expect(overviewTab?.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('shows data and privacy as the third primary view', async () => {
+    const privacyTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+      .find((button) => button.textContent?.includes('Data & privacy'));
+
+    await act(async () => privacyTab?.click());
+
+    expect(container.textContent).toContain('Your information, under your control');
+    expect(container.textContent).toContain('Import from another AI');
+    expect(container.textContent).toContain('Download my memory');
+    expect(container.querySelectorAll('[role="switch"]')).toHaveLength(2);
+    expect(container.textContent).not.toContain('Coming soon');
   });
 });

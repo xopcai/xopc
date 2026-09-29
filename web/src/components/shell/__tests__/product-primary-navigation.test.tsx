@@ -92,8 +92,18 @@ describe('product primary navigation', () => {
     renderAt('/capabilities/connectors', <MobilePrimaryNav />);
 
     const links = [...container.querySelectorAll('a')];
-    expect(links).toHaveLength(4);
+    expect(links).toHaveLength(5);
     expect(links[2]?.getAttribute('aria-current')).toBe('page');
+    expect(links[4]?.getAttribute('href')).toBe('/user-model');
+  });
+
+  it('keeps Me active as the fifth mobile destination', () => {
+    renderAt('/user-model', <MobilePrimaryNav />);
+
+    const links = [...container.querySelectorAll('a')];
+    expect(links).toHaveLength(5);
+    expect(links[4]?.textContent).toBe('Me');
+    expect(links[4]?.getAttribute('aria-current')).toBe('page');
   });
 
   it('appends installed extension pages that opt into sidebar navigation', () => {

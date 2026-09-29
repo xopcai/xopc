@@ -1,4 +1,4 @@
-import { fetchJson } from '@/lib/fetch';
+import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 export type Scope = { type: 'global' | 'agent' | 'workspace' | 'project' | 'session'; id?: string };
@@ -117,6 +117,11 @@ export type UserModelResponse = {
     lastCollectedAt?: number;
   }>;
   maintenance: { lastRun: { jobType: string; status: string; startedAt: number; finishedAt?: number } | null };
+  settings: {
+    memoryEnabled: boolean;
+    showMemoryReferences: boolean;
+    sensitiveWritePolicy: 'deny' | 'confirm' | 'allow';
+  };
   counts: {
     activeAssertions: number;
     reviewAssertions: number;
@@ -191,6 +196,12 @@ export function detectBrowserTimezone(): string {
 export function setAssertionStatus(id: string, status: AssertionStatus): Promise<unknown> {
   return fetchJson(apiUrl(`/api/user-model/assertions/${encodeURIComponent(id)}/status`), {
     method: 'PATCH', body: JSON.stringify({ status }),
+  });
+}
+
+export function setAssertionScope(id: string, scope: Scope): Promise<unknown> {
+  return fetchJson(apiUrl(`/api/user-model/assertions/${encodeURIComponent(id)}/scope`), {
+    method: 'PATCH', body: JSON.stringify({ scope }),
   });
 }
 
@@ -275,4 +286,25 @@ export function deleteAssertion(id: string): Promise<unknown> {
 
 export function deleteKnowledge(id: string): Promise<unknown> {
   return fetchJson(apiUrl(`/api/knowledge-memory/${encodeURIComponent(id)}`), { method: 'DELETE' });
+}
+
+export function updateMemorySettings(input: Partial<UserModelResponse['settings']>): Promise<unknown> {
+  return fetchJson(apiUrl('/api/user-model/settings'), {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function downloadUserModelExport(): Promise<void> {
+  const response = await apiFetch(apiUrl('/api/user-model/export'));
+  if (!response.ok) throw new Error(`Export failed (${response.status})`);
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? 'xopc-memory.json';
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }

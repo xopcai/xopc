@@ -710,6 +710,33 @@ export function setAssertionStatus(
   return getUserAssertion(assertionId)!;
 }
 
+/** Move an assertion and its version history to a different visibility scope. */
+export function setUserAssertionScope(
+  assertionId: string,
+  nextScope: AssertionSlot['scope'],
+): UserAssertion {
+  validateScope(nextScope);
+  return runSqliteWriteTransaction((db) => {
+    const current = getUserAssertion(assertionId);
+    if (!current) throw new Error(`User assertion not found: ${assertionId}`);
+    const slot = getAssertionSlot(current.slotId);
+    if (!slot) throw new Error(`Assertion slot not found: ${current.slotId}`);
+    const nextScopeId = nextScope.id?.trim() ?? null;
+    if (slot.scope.type === nextScope.type && (slot.scope.id ?? null) === nextScopeId) return current;
+
+    const conflict = db.prepare(`SELECT slot_id FROM user_assertion_slots
+      WHERE principal_id = ? AND subject_type = ? AND subject_id = ? AND predicate = ?
+        AND scope_type = ? AND COALESCE(scope_id, '') = COALESCE(?, '') AND slot_id != ?`)
+      .get(slot.principalId, slot.subject.type, slot.subject.id, slot.predicate,
+        nextScope.type, nextScopeId, slot.id) as { slot_id: string } | undefined;
+    if (conflict) throw new Error('An understanding with this scope already exists.');
+
+    db.prepare('UPDATE user_assertion_slots SET scope_type = ?, scope_id = ? WHERE slot_id = ?')
+      .run(nextScope.type, nextScopeId, slot.id);
+    return getUserAssertion(assertionId)!;
+  });
+}
+
 function assertionFingerprints(candidate: Pick<AssertionCandidate, 'principalId' | 'subject' | 'scope' | 'predicate' | 'cardinality' | 'normalizedValue' | 'statement'>): string[] {
   const principal = candidate.principalId ?? USER_MODEL_PRINCIPAL_ID;
   const scope = [principal, candidate.scope.type, candidate.scope.id ?? ''];

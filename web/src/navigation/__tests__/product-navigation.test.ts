@@ -7,12 +7,13 @@ import {
 } from '@/navigation/product-navigation';
 
 describe('product navigation', () => {
-  it('keeps four fixed product domains in the intended order', () => {
+  it('keeps five fixed product domains in the intended order', () => {
     expect(PRODUCT_DOMAINS.map((domain) => domain.id)).toEqual([
       'work',
       'automation',
       'capabilities',
       'apps',
+      'me',
     ]);
   });
 
@@ -51,6 +52,7 @@ describe('product navigation', () => {
     ['/extensions/example/page', null],
     ['/local-apps/example', 'apps'],
     ['/open', 'apps'],
+    ['/user-model', 'me'],
     ['/settings/overview', null],
   ] as const)('maps %s to %s', (pathname, domain) => {
     expect(productDomainAtPath(pathname)).toBe(domain);

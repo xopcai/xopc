@@ -58,6 +58,11 @@ export const MobileUserGoalSchema = z.object({
 export const MobileUserUnderstandingSummarySchema = z.object({
   profile: MobileUserProfileSchema,
   suggestedCallName: z.string(),
+  settings: z.object({
+    memoryEnabled: z.boolean(),
+    showMemoryReferences: z.boolean(),
+    sensitiveWritePolicy: z.enum(['deny', 'confirm', 'allow']),
+  }),
   counts: z.object({
     total: z.number().int().nonnegative(),
     explicit: z.number().int().nonnegative(),

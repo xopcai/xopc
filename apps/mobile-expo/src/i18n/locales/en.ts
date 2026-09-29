@@ -109,6 +109,16 @@ export const en = {
       "scope": "Scope", "recorded": "Recorded", "confidence": "Confidence", "edit": "Correct",
       "delete": "Delete", "deleteTitle": "Delete this understanding?", "deleteHint": "Original chats and files are not deleted.",
       "deleteConfirm": "Delete", "statement": "What should xopc understand?", "unknownSource": "System inference"
+    },
+    "memoryPrivacy": {
+      "title": "Memory & privacy", "entryTitle": "Manage memory and privacy", "entryHint": "Control what xopc remembers, references and exports.",
+      "heading": "Your information, under your control", "subtitle": "Choose what xopc may remember and how your information is used.",
+      "memoryUse": "Memory and use", "longTermMemory": "Long-term memory", "longTermMemoryHint": "Remember useful information so you do not have to repeat yourself.",
+      "references": "Memory references in answers", "referencesHint": "Show what personal context shaped an answer.",
+      "sensitive": "Sensitive information", "sensitiveHint": "Choose whether health, financial and similar information can be saved.",
+      "confirm": "Ask first", "deny": "Never save", "allow": "Allow",
+      "dataManagement": "Data management", "export": "Export my memory", "exportHint": "Share a readable, portable JSON archive.",
+      "manage": "Correct and forget", "manageHint": "Edit, limit or delete individual understandings.", "dataSharing": "Device and data-sharing privacy"
     }
 },
   recordings: {

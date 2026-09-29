@@ -1,4 +1,4 @@
-import { Boxes, BriefcaseBusiness, Layers3, Zap } from 'lucide-react';
+import { Boxes, BriefcaseBusiness, Layers3, UserRound, Zap } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
@@ -11,6 +11,7 @@ const DOMAIN_ICONS = {
   automation: Zap,
   capabilities: Layers3,
   apps: Boxes,
+  me: UserRound,
 } as const satisfies Record<ProductDomainId, typeof BriefcaseBusiness>;
 
 export function MobilePrimaryNav() {

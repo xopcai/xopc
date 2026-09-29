@@ -47,6 +47,7 @@ import {
   reconcileAssertion,
   getUserProfileSnapshot,
   setAssertionStatus,
+  setUserAssertionScope,
   setUserGoalStatus,
   updatePriorityWindow,
   updateUserGoal,
@@ -219,8 +220,18 @@ function decodeMobileCursor(value: string | undefined): [number, string] | undef
 
 export function registerUserModelRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const write = deps.strictRateLimitMiddleware;
-
-  authenticated.get('/api/user-model', (c) => {
+  const userContextConfig = () => deps.service.currentConfig.userContext;
+  const memorySettings = () => {
+    const userContext = userContextConfig();
+    return {
+      memoryEnabled: userContext.enabled
+        && userContext.userModel.enabled
+        && userContext.knowledgeMemory.enabled,
+      showMemoryReferences: userContext.userModel.showMemoryReferences,
+      sensitiveWritePolicy: userContext.userModel.sensitiveWritePolicy,
+    };
+  };
+  const snapshot = () => {
     const rawAssertions = listUserAssertions({
       statuses: ['active', 'candidate', 'needs_review', 'conflicted', 'stale'],
       limit: 1_000,
@@ -244,7 +255,7 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       ...(source.lastCollectedAt ? { lastCollectedAt: source.lastCollectedAt } : {}),
       consent: getActiveUnderstandingConsent(source.id),
     }));
-    return c.json({
+    return {
       assertions,
       assertionEdges: listUserAssertionEdges(assertions.map((item) => item.id)),
       observations: listUserModelObservations({ limit: 500 }),
@@ -257,6 +268,7 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       profile,
       sources,
       suggestedCallName: profile.callName || machineCallName(),
+      settings: memorySettings(),
       counts: {
         activeAssertions: assertions.filter((item) => item.status === 'active').length,
         reviewAssertions: assertions.filter((item) => item.status === 'needs_review' || item.status === 'conflicted').length,
@@ -264,7 +276,51 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
         activePriorities: priorities.filter((item) => item.status === 'active').length,
         activeKnowledge: knowledge.filter((item) => item.status === 'active').length,
       },
-    });
+    };
+  };
+
+  authenticated.get('/api/user-model', (c) => c.json(snapshot()));
+
+  authenticated.patch('/api/user-model/settings', write, async (c) => {
+    const input = await body(c);
+    const memoryEnabled = input?.memoryEnabled;
+    const showMemoryReferences = input?.showMemoryReferences;
+    const sensitiveWritePolicy = input?.sensitiveWritePolicy;
+    if (!input
+      || (memoryEnabled !== undefined && typeof memoryEnabled !== 'boolean')
+      || (showMemoryReferences !== undefined && typeof showMemoryReferences !== 'boolean')
+      || (sensitiveWritePolicy !== undefined && !['deny', 'confirm', 'allow'].includes(String(sensitiveWritePolicy)))
+      || (memoryEnabled === undefined && showMemoryReferences === undefined && sensitiveWritePolicy === undefined)) {
+      return c.json({ error: 'At least one valid memory setting is required' }, 400);
+    }
+    const nextConfig = structuredClone(deps.service.currentConfig);
+    if (typeof memoryEnabled === 'boolean') {
+      nextConfig.userContext.userModel.enabled = memoryEnabled;
+      nextConfig.userContext.knowledgeMemory.enabled = memoryEnabled;
+    }
+    if (typeof showMemoryReferences === 'boolean') {
+      nextConfig.userContext.userModel.showMemoryReferences = showMemoryReferences;
+    }
+    if (sensitiveWritePolicy === 'deny' || sensitiveWritePolicy === 'confirm' || sensitiveWritePolicy === 'allow') {
+      nextConfig.userContext.userModel.sensitiveWritePolicy = sensitiveWritePolicy;
+    }
+    const result = await deps.service.saveConfig(nextConfig);
+    return result.saved
+      ? c.json({ settings: memorySettings() })
+      : c.json({ error: result.error ?? 'Failed to save memory settings' }, 500);
+  });
+
+  authenticated.get('/api/user-model/export', (c) => {
+    const exportedAt = new Date().toISOString();
+    const payload = {
+      format: 'xopc-user-memory',
+      version: 1,
+      exportedAt,
+      data: snapshot(),
+    };
+    c.header('Content-Disposition', `attachment; filename="xopc-memory-${exportedAt.slice(0, 10)}.json"`);
+    c.header('Content-Type', 'application/json; charset=utf-8');
+    return c.body(`${JSON.stringify(payload, null, 2)}\n`);
   });
 
   authenticated.get('/api/user-model/mobile-summary', (c) => {
@@ -317,6 +373,7 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
         locale: profile.locale ?? '',
       },
       suggestedCallName: profile.callName || machineCallName(),
+      settings: memorySettings(),
       counts: {
         total: visible.length,
         explicit: visible.filter((item) => item.authority === 'user_explicit').length,
@@ -482,6 +539,17 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       }) });
     } catch (error) {
       return c.json({ error: errorMessage(error) }, 404);
+    }
+  });
+  authenticated.patch('/api/user-model/assertions/:id/scope', write, async (c) => {
+    const input = await body(c);
+    const nextScope = scope(input?.scope);
+    if (!nextScope) return c.json({ error: 'A valid scope is required' }, 400);
+    try {
+      const assertion = setUserAssertionScope(c.req.param('id'), nextScope);
+      return c.json({ assertion: assertionView(assertion) });
+    } catch (error) {
+      return c.json({ error: errorMessage(error) }, 400);
     }
   });
   authenticated.patch('/api/user-model/assertions/:id', write, async (c) => {
@@ -757,6 +825,9 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
   authenticated.get('/api/turns/:turnId/execution-context', (c) => {
     const audit = getExecutionContextAudit(c.req.param('turnId'));
     if (!audit) return c.json({ error: 'Execution context not found' }, 404);
+    if (!userContextConfig().userModel.showMemoryReferences) {
+      return c.json({ audit, resolvedItems: [] });
+    }
     const goals = new Map(listUserGoals().map((item) => [item.id, item]));
     const priorities = new Map(listPriorityWindows().map((item) => [item.id, item]));
     const resolvedItems = audit.items.flatMap((item) => {
