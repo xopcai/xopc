@@ -5,12 +5,12 @@ import AdmZip from 'adm-zip';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AgentPluginStore } from '../store.js';
 import { PLUGIN_SCHEMA, MCP_SCHEMA } from '../validation.js';
-import { isAgentPluginArchive } from '../sources.js';
+import { isAgentPluginArchive, withAgentPluginSource } from '../sources.js';
 import { SkillManager } from '../../../agent/skills/skill-manager.js';
 
 const roots: string[] = [];
 const temp = () => { const root = mkdtempSync(join(tmpdir(), 'xopc-plugin-store-')); roots.push(root); return root; };
-afterEach(() => { vi.unstubAllEnvs(); roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })); });
+afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })); });
 it('requires review, installs disabled, blocks tampering, and preserves data on update/removal', () => {
   const root = temp(); const store = new AgentPluginStore(temp());
   writeFileSync(join(root, 'plugin.json'), JSON.stringify({ $schema: PLUGIN_SCHEMA, name: 'sample' }));
@@ -48,6 +48,53 @@ it('prioritizes native metadata over the portable manifest', () => {
   expect(isAgentPluginArchive(zip.toBuffer())).toBe(true);
   zip.addFile('wrapper/package.json', Buffer.from(JSON.stringify({ xopc: { extension: './index.js' } })));
   expect(isAgentPluginArchive(zip.toBuffer())).toBe(false);
+});
+it('persists validated Store provenance in the install receipt', () => {
+  const root = temp(); const store = new AgentPluginStore(temp());
+  writeFileSync(join(root, 'plugin.json'), JSON.stringify({ $schema: PLUGIN_SCHEMA, name: 'provenance' }));
+  const provenance = {
+    kind: 'store' as const,
+    packageName: 'provenance',
+    packageType: 'plugin' as const,
+    version: '1.0.0',
+    sha256: 'a'.repeat(64),
+    publisherVerification: 'verified' as const,
+    sourceRepository: 'https://github.com/xopcai/xopc-plugins',
+    sourceCommit: 'abcdef1234567',
+    artifactFormat: 'agent-plugins@1.0.0',
+    riskTier: 'content' as const,
+  };
+  const installed = store.install(root, { reviewHash: store.inspect(root).reviewHash, provenance });
+  expect(installed.receipt.provenance).toEqual(provenance);
+  expect(JSON.parse(readFileSync(join(store.stateDir, 'plugin-receipts/provenance.json'), 'utf8'))).toMatchObject({ provenance });
+});
+it('resolves Store source provenance alongside a verified plugin archive', async () => {
+  vi.stubEnv('XOPC_EXTENSIONS_STORE_URL', 'https://store.example.com');
+  const zip = new AdmZip();
+  zip.addFile('plugin.json', Buffer.from(JSON.stringify({ $schema: PLUGIN_SCHEMA, name: 'store-plugin' })));
+  const archive = zip.toBuffer();
+  const { createHash } = await import('node:crypto');
+  const sha256 = createHash('sha256').update(archive).digest('hex');
+  vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.endsWith('/api/v1/packages/store-plugin')) return new Response(JSON.stringify({
+      id: 'store-plugin', name: 'store-plugin', type: 'plugin', description: 'Store plugin', readme: null, downloads: 0,
+      author: { username: 'xopcai', avatarUrl: null },
+      publisher: { verification: 'verified', sourceRepository: 'https://github.com/xopcai/xopc-plugins' },
+      latestVersion: { version: '1.0.0', changelog: null, publishedAt: new Date().toISOString(), downloadUrl: 'https://store.example.com/files/store-plugin.zip', sha256, sourceCommit: 'abcdef1234567', artifactFormat: 'agent-plugins@1.0.0', riskTier: 'content' },
+    }), { status: 200 });
+    if (url.endsWith('/files/store-plugin.zip')) return new Response(new Uint8Array(archive), { status: 200 });
+    return new Response('not found', { status: 404 });
+  }));
+
+  const resolved = await withAgentPluginSource('store:store-plugin', undefined, (local, provenance) => ({
+    plugin: new AgentPluginStore(temp()).inspect(local).manifest.name,
+    provenance,
+  }));
+  expect(resolved).toMatchObject({
+    plugin: 'store-plugin',
+    provenance: { kind: 'store', packageName: 'store-plugin', version: '1.0.0', sha256, publisherVerification: 'verified', riskTier: 'content' },
+  });
 });
 it('refreshes validated plugin Skills on activation without recursive discovery or symlink installation', () => {
   const source = temp(); const state = temp(); vi.stubEnv('XOPC_STATE_DIR', state);

@@ -361,7 +361,7 @@ export class GatewayMarketplaceService {
 
   // ── Extension marketplace ─────────────────────────────────────────────
 
-  /** xopc-store extension package preview (type must be `extension`). */
+  /** xopc-store portable Agent Plugin or native extension package preview. */
   async fetchExtensionPackageDetail(
     packageName: string,
   ): Promise<ExtensionMarketplacePackageDetailPayload> {
@@ -374,9 +374,9 @@ export class GatewayMarketplaceService {
     } = await import('../../agent/skills/marketplace/adapters/store/store-api-client.js');
     const base = resolveExtensionsStoreBaseUrl(this.opts.getConfig());
     const detail = await fetchMarketplacePackageDetail(base, packageName.trim());
-    if (detail.type !== 'extension') {
+    if (detail.type !== 'extension' && detail.type !== 'plugin') {
       throw new Error(
-        `Package "${packageName}" is not an extension (store type: ${detail.type}).`,
+        `Package "${packageName}" is not a plugin or extension (store type: ${detail.type}).`,
       );
     }
 
@@ -389,6 +389,7 @@ export class GatewayMarketplaceService {
         return { ...detail, format: 'agent-plugin', manifest: plan.manifest,
           installability: { available: true, sha256: resolved.sha256 } };
       }
+      if (detail.type === 'plugin') throw new Error('Store plugin artifact is not an Agent Plugins package');
       const {
         peekExtensionManifestFromStoreZip,
         peekExtensionPackageJsonFromStoreZip,

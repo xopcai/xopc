@@ -9,6 +9,7 @@ export function agentPluginInventoryRow(plugin: InstalledAgentPlugin) {
     active: plugin.receipt.enabled && plugin.readiness !== 'blocked', activationEligible: plugin.receipt.enabled,
     readiness: plugin.readiness, hasUi: false, hasConfigSchema: false,
     canRollback: !!plugin.receipt.previous,
+    ...(plugin.receipt.provenance ? { provenance: plugin.receipt.provenance } : {}),
     components: {
       skills: plugin.skills.map(skill => ({ name: skill.name })),
       mcp: Object.entries(plugin.servers).map(([name, server]) => ({ name, id: pluginServerId(plugin.id, name), type: server.type })),

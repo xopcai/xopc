@@ -22,7 +22,7 @@ export function registerAgentPluginRoutes(app: Hono, deps: AuthenticatedRouteDep
   app.post('/api/extensions/install', deps.strictRateLimitMiddleware, async c => {
     try {
       const body = sourceBody.parse(await c.req.json());
-      const plugin = await withAgentPluginSource(body.source, deps.service.currentConfig, source => store.install(source, { reviewHash: body.reviewHash, sourceLabel: body.source }));
+      const plugin = await withAgentPluginSource(body.source, deps.service.currentConfig, (source, provenance) => store.install(source, { reviewHash: body.reviewHash, sourceLabel: body.source, provenance }));
       await refresh();
       return c.json({ ok: true, payload: agentPluginInventoryRow(plugin) });
     } catch (error) { return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400); }
@@ -44,7 +44,7 @@ export function registerAgentPluginRoutes(app: Hono, deps: AuthenticatedRouteDep
   app.post('/api/extensions/agent-plugins/:id/update', deps.strictRateLimitMiddleware, async c => {
     try {
       const body = sourceBody.parse(await c.req.json());
-      const plugin = await withAgentPluginSource(body.source, deps.service.currentConfig, source => store.install(source, { reviewHash: body.reviewHash, replace: true, expectedId: c.req.param('id'), sourceLabel: body.source }));
+      const plugin = await withAgentPluginSource(body.source, deps.service.currentConfig, (source, provenance) => store.install(source, { reviewHash: body.reviewHash, replace: true, expectedId: c.req.param('id'), sourceLabel: body.source, provenance }));
       await refresh();
       return c.json({ ok: true, payload: agentPluginInventoryRow(plugin) });
     } catch (error) { return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400); }
