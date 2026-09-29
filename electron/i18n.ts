@@ -9,6 +9,8 @@ export type ElectronMenuMessages = {
     detail: string;
     cancel: string;
     quit: string;
+    closeDetail: string;
+    background: string;
   };
   file: {
     label: string;
@@ -98,6 +100,8 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       detail: 'Quitting now will interrupt the running work. Work already completed will be kept.',
       cancel: 'Keep Waiting',
       quit: 'Quit and Interrupt',
+      closeDetail: 'This work can continue in the background. Quitting will interrupt it.',
+      background: 'Continue in Background',
     },
     file: {
       label: 'File',
@@ -185,6 +189,8 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       detail: '现在退出会中断正在执行的任务，已经完成的内容会保留。',
       cancel: '继续等待',
       quit: '退出并中断',
+      closeDetail: '关闭窗口后任务可以在后台继续；退出应用会中断任务。',
+      background: '在后台继续',
     },
     file: {
       label: '文件',
