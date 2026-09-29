@@ -53,6 +53,60 @@ describe('user model routes', () => {
     expect(body.suggestedCallName).toBe(expected);
   });
 
+  it('returns a bounded mobile summary and filtered assertion pages', async () => {
+    for (const [predicate, authority, statement] of [
+      ['preference.response_style', 'user_explicit', 'Prefer concise answers.'],
+      ['routine.focus_time', 'system_inferred', 'Usually focuses in the morning.'],
+    ] as const) {
+      reconcileAssertion({
+        subject: { type: 'user', id: 'self' },
+        predicate,
+        cardinality: 'single',
+        scope: { type: 'global' },
+        kind: predicate.startsWith('routine') ? 'routine' : 'preference',
+        value: statement,
+        normalizedValue: statement.toLocaleLowerCase(),
+        statement,
+        authority,
+        confidence: 0.9,
+        inferredImportance: 0.8,
+        consequence: 'medium',
+        actionability: 0.8,
+        volatility: 'stable',
+        sensitivity: 'normal',
+        disclosurePolicy: 'referenceable',
+        observedAt: Date.now(),
+        createdBy: authority === 'user_explicit' ? 'user' : 'runtime',
+      });
+    }
+
+    const summaryResponse = await app.request('/api/user-model/mobile-summary');
+    expect(summaryResponse.status).toBe(200);
+    await expect(summaryResponse.json()).resolves.toMatchObject({
+      counts: { total: 2, explicit: 1, learned: 1, review: 0 },
+      recent: expect.arrayContaining([
+        expect.objectContaining({ statement: 'Prefer concise answers.' }),
+      ]),
+    });
+
+    const learnedResponse = await app.request('/api/user-model/assertions?view=mobile&filter=learned&limit=1');
+    expect(learnedResponse.status).toBe(200);
+    await expect(learnedResponse.json()).resolves.toMatchObject({
+      items: [expect.objectContaining({ authority: 'system_inferred' })],
+    });
+    const textSearch = await app.request('/api/user-model/assertions?view=mobile&q=concise');
+    expect(textSearch.status).toBe(200);
+    await expect(textSearch.json()).resolves.toMatchObject({
+      items: [expect.objectContaining({ statement: 'Prefer concise answers.' })],
+    });
+    const statusSearch = await app.request('/api/user-model/assertions?view=mobile&q=' + encodeURIComponent('逐渐学到'));
+    await expect(statusSearch.json()).resolves.toMatchObject({
+      items: [expect.objectContaining({ authority: 'system_inferred' })],
+    });
+    expect((await app.request('/api/user-model/assertions?view=mobile&filter=unknown')).status).toBe(400);
+    expect((await app.request('/api/user-model/assertions?view=mobile&cursor=broken')).status).toBe(400);
+  });
+
   it('creates typed assertions, goals, and bounded priorities', async () => {
     const assertionResponse = await app.request('/api/user-model/assertions', {
       method: 'POST',
@@ -206,8 +260,8 @@ describe('user model routes', () => {
       value: 'Plans the week on Mondays.',
       normalizedValue: 'plans the week on mondays',
       statement: 'Plans the week on Mondays.',
-      authority: 'system_inferred',
-      confidence: 0.8,
+      authority: 'user_explicit',
+      confidence: 1,
       inferredImportance: 0.6,
       consequence: 'low',
       actionability: 0.6,
@@ -215,6 +269,7 @@ describe('user model routes', () => {
       sensitivity: 'normal',
       disclosurePolicy: 'referenceable',
       observedAt: 1_500,
+      reviewAt: Date.now() + 86_400_000,
       createdBy: 'runtime',
     }, 1_500).assertion;
     linkAssertionEvidence(assertion.id, evidence.id, 'supports', 0.8, 1_500);
@@ -241,6 +296,10 @@ describe('user model routes', () => {
           observedAt: 1_500,
         }],
       }],
+    });
+    const mobileSearch = await app.request('/api/user-model/assertions?view=mobile&q=apple-notes');
+    await expect(mobileSearch.json()).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: assertion.id, sources: [expect.objectContaining({ label: 'apple-notes' })] })],
     });
   });
 

@@ -1,5 +1,11 @@
 import { userInfo } from 'node:os';
 
+import type {
+  MobileUnderstandingFilter,
+  MobileUnderstandingItem,
+  MobileUnderstandingPage,
+  MobileUserUnderstandingSummary,
+} from '@xopcai/gateway-contract';
 import type { Hono } from 'hono';
 
 import { getExecutionContextAudit, recordExecutionContextFeedback } from '../../../agent/context/audit.js';
@@ -106,6 +112,14 @@ const RULE_CATEGORIES = new Set<CollaborationRule['category']>([
   'communication', 'execution', 'boundary', 'routine', 'initiative',
 ]);
 const RULE_STATUSES = new Set<CollaborationRule['status']>(['active', 'disabled', 'archived']);
+const MOBILE_PROFILE_PREDICATES = new Set([
+  'identity.call_name',
+  'identity.role',
+  'identity.pronouns',
+  'preference.timezone',
+  'preference.locale',
+]);
+const MOBILE_ASSERTION_FILTERS = new Set<MobileUnderstandingFilter>(['all', 'explicit', 'learned', 'review']);
 
 function assertionView(
   assertion: NonNullable<ReturnType<typeof getUserAssertion>>,
@@ -124,6 +138,83 @@ function assertionView(
       ...(assertion.allowedAgentIds?.[0] ? { agentId: assertion.allowedAgentIds[0] } : {}),
     }),
   };
+}
+
+function mobileAssertionView(
+  assertion: NonNullable<ReturnType<typeof getUserAssertion>>,
+  sources = listUserAssertionSources([assertion.id]).get(assertion.id) ?? [],
+): MobileUnderstandingItem {
+  const view = assertionView(assertion, sources);
+  return {
+    id: view.id,
+    predicate: view.predicate,
+    statement: view.statement,
+    kind: view.kind,
+    status: view.status as MobileUnderstandingItem['status'],
+    authority: view.authority,
+    usable: view.usable,
+    confidence: view.confidence,
+    volatility: view.volatility,
+    layer: view.layer,
+    independentSourceCount: view.independentSourceCount,
+    observedAt: view.observedAt,
+    recordedAt: view.recordedAt,
+    ...(view.validTo === undefined ? {} : { validTo: view.validTo }),
+    scope: view.scope,
+    sources: view.sources,
+  };
+}
+
+function isMobileAssertion(
+  item: MobileUnderstandingItem,
+  filter: MobileUnderstandingFilter,
+): boolean {
+  if (item.scope.type !== 'global' || MOBILE_PROFILE_PREDICATES.has(item.predicate)) return false;
+  if (filter === 'review') return item.status === 'needs_review' || item.status === 'conflicted';
+  if (!item.usable) return false;
+  if (filter === 'explicit') return item.authority === 'user_explicit';
+  if (filter === 'learned') return item.authority !== 'user_explicit';
+  return true;
+}
+
+function normalizeMobileSearch(value: string | undefined, maxLength?: number): string {
+  const normalized = (value ?? '').normalize('NFKC').trim().toLocaleLowerCase();
+  return maxLength === undefined ? normalized : normalized.slice(0, maxLength);
+}
+
+function matchesMobileSearch(item: MobileUnderstandingItem, query: string): boolean {
+  if (!query) return true;
+  const statusAliases = item.status === 'needs_review' || item.status === 'conflicted'
+    ? 'needs review review 待确认 需要确认'
+    : item.status;
+  const authorityAliases = item.authority === 'user_explicit'
+    ? 'explicit user said 你明确说过 用户明确'
+    : 'learned inferred 逐渐学到 系统推断';
+  return normalizeMobileSearch([
+    item.statement,
+    item.predicate,
+    item.kind,
+    statusAliases,
+    authorityAliases,
+    item.scope.type,
+    item.scope.id ?? '',
+    ...item.sources.flatMap((source) => [source.label ?? '', source.kind, source.category ?? '']),
+  ].join(' ')).includes(query);
+}
+
+function encodeMobileCursor(item: Pick<MobileUnderstandingItem, 'recordedAt' | 'id'>): string {
+  return Buffer.from(JSON.stringify([item.recordedAt, item.id])).toString('base64url');
+}
+
+function decodeMobileCursor(value: string | undefined): [number, string] | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown;
+    return Array.isArray(parsed) && typeof parsed[0] === 'number' && typeof parsed[1] === 'string'
+      ? [parsed[0], parsed[1]] : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function registerUserModelRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -176,6 +267,81 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
     });
   });
 
+  authenticated.get('/api/user-model/mobile-summary', (c) => {
+    const rawAssertions = listUserAssertions({
+      statuses: ['active', 'candidate', 'needs_review', 'conflicted', 'stale'],
+      limit: 2_000,
+    });
+    const sourceMap = listUserAssertionSources(rawAssertions.map((item) => item.id));
+    const items = rawAssertions.map((item) => mobileAssertionView(item, sourceMap.get(item.id) ?? []));
+    const visible = items.filter((item) => isMobileAssertion(item, 'all'));
+    const review = items.filter((item) => isMobileAssertion(item, 'review'));
+    const profile = getUserProfileSnapshot();
+    const goals = listUserGoals();
+    const now = Date.now();
+    const primary = listPriorityWindows()
+      .filter((item) => item.status === 'active' && item.rank === 'primary' && item.validTo >= now)
+      .sort((left, right) => (right.declaredImportance ?? right.urgency) - (left.declaredImportance ?? left.urgency))[0];
+    const primaryGoal = primary?.targetType === 'goal'
+      ? goals.find((goal) => goal.id === primary.targetId)
+      : undefined;
+    const primaryTitle = primaryGoal?.title ?? (primary && !/^[0-9a-f]{8}-[0-9a-f-]{20,}$/i.test(primary.targetId)
+      ? primary.targetId : undefined);
+    const mobileGoals = goals
+      .filter((goal) => goal.status === 'active' || goal.status === 'paused' || goal.status === 'proposed')
+      .sort((left, right) => {
+        if (left.id === primaryGoal?.id) return -1;
+        if (right.id === primaryGoal?.id) return 1;
+        if (left.status === 'active' && right.status !== 'active') return -1;
+        if (right.status === 'active' && left.status !== 'active') return 1;
+        const leftTarget = left.targetAt ?? Number.MAX_SAFE_INTEGER;
+        const rightTarget = right.targetAt ?? Number.MAX_SAFE_INTEGER;
+        return leftTarget - rightTarget || right.updatedAt - left.updatedAt;
+      })
+      .slice(0, 5)
+      .map((goal) => ({
+        id: goal.id,
+        title: goal.title,
+        desiredOutcome: goal.desiredOutcome,
+        status: goal.status as 'proposed' | 'active' | 'paused',
+        ...(goal.targetAt === undefined ? {} : { targetAt: goal.targetAt }),
+        updatedAt: goal.updatedAt,
+        isPrimary: goal.id === primaryGoal?.id,
+      }));
+    const result: MobileUserUnderstandingSummary = {
+      profile: {
+        callName: profile.callName ?? '',
+        role: profile.role ?? '',
+        pronouns: profile.pronouns ?? '',
+        timezone: profile.timezone ?? '',
+        locale: profile.locale ?? '',
+      },
+      suggestedCallName: profile.callName || machineCallName(),
+      counts: {
+        total: visible.length,
+        explicit: visible.filter((item) => item.authority === 'user_explicit').length,
+        learned: visible.filter((item) => item.authority !== 'user_explicit').length,
+        review: review.length,
+        workMemory: listKnowledgeItems({ statuses: ['active'], recordClass: 'memory', limit: 2_000 }).length,
+      },
+      ...(primary && primaryTitle ? {
+        primaryFocus: {
+          id: primary.id,
+          title: primaryTitle,
+          ...(primaryGoal?.desiredOutcome ? { desiredOutcome: primaryGoal.desiredOutcome } : {}),
+          validTo: primary.validTo,
+        },
+      } : {}),
+      goals: mobileGoals,
+      recent: [...visible].sort((left, right) => right.recordedAt - left.recordedAt).slice(0, 3),
+      rules: listCollaborationRules()
+        .filter((rule) => rule.status === 'active')
+        .slice(0, 3)
+        .map((rule) => ({ id: rule.id, statement: rule.statement, category: rule.category })),
+    };
+    return c.json(result);
+  });
+
   authenticated.patch('/api/user-model/profile', write, async (c) => {
     const input = await body(c);
     if (!input) return c.json({ error: 'A profile patch is required' }, 400);
@@ -214,6 +380,34 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
   });
 
   authenticated.get('/api/user-model/assertions', (c) => {
+    if (c.req.query('view') === 'mobile') {
+      const filter = (c.req.query('filter') ?? 'all') as MobileUnderstandingFilter;
+      if (!MOBILE_ASSERTION_FILTERS.has(filter)) return c.json({ error: 'Invalid mobile assertion filter' }, 400);
+      const requestedLimit = Number(c.req.query('limit') ?? 20);
+      const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(50, Math.trunc(requestedLimit))) : 20;
+      const query = normalizeMobileSearch(c.req.query('q'), 100);
+      const cursorValue = c.req.query('cursor');
+      const cursor = decodeMobileCursor(cursorValue);
+      if (cursorValue && !cursor) return c.json({ error: 'Invalid cursor' }, 400);
+      const assertions = listUserAssertions({
+        statuses: ['active', 'candidate', 'needs_review', 'conflicted', 'stale'],
+        limit: 2_000,
+      });
+      const sourceMap = listUserAssertionSources(assertions.map((item) => item.id));
+      const filtered = assertions
+        .map((item) => mobileAssertionView(item, sourceMap.get(item.id) ?? []))
+        .filter((item) => isMobileAssertion(item, filter))
+        .filter((item) => matchesMobileSearch(item, query))
+        .sort((left, right) => right.recordedAt - left.recordedAt || right.id.localeCompare(left.id))
+        .filter((item) => !cursor || item.recordedAt < cursor[0]
+          || (item.recordedAt === cursor[0] && item.id.localeCompare(cursor[1]) < 0));
+      const items = filtered.slice(0, limit);
+      const result: MobileUnderstandingPage = {
+        items,
+        ...(filtered.length > limit && items.length ? { nextCursor: encodeMobileCursor(items[items.length - 1]!) } : {}),
+      };
+      return c.json(result);
+    }
     const requested = c.req.query('status')?.split(',').filter(Boolean) as AssertionStatus[] | undefined;
     if (requested?.some((status) => !ASSERTION_STATUSES.has(status))) return c.json({ error: 'Invalid assertion status' }, 400);
     const assertions = listUserAssertions({ ...(requested ? { statuses: requested } : {}), limit: 1_000 });
@@ -362,6 +556,36 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
     if (!GOAL_STATUSES.has(status)) return c.json({ error: 'Invalid goal status' }, 400);
     const goal = setUserGoalStatus(c.req.param('id'), status);
     return goal ? c.json({ goal }) : c.json({ error: 'Goal not found' }, 404);
+  });
+  authenticated.patch('/api/user-model/goals/:id', write, async (c) => {
+    const input = await body(c);
+    const current = listUserGoals().find((goal) => goal.id === c.req.param('id'));
+    if (!current) return c.json({ error: 'Goal not found' }, 404);
+    if (!input) return c.json({ error: 'A goal patch is required' }, 400);
+    const title = Object.hasOwn(input, 'title') ? input.title : current.title;
+    const desiredOutcome = Object.hasOwn(input, 'desiredOutcome') ? input.desiredOutcome : current.desiredOutcome;
+    const rawTargetAt = Object.hasOwn(input, 'targetAt') ? input.targetAt : current.targetAt;
+    const status = Object.hasOwn(input, 'status') ? input.status : current.status;
+    if (typeof title !== 'string' || typeof desiredOutcome !== 'string'
+      || (rawTargetAt !== undefined && rawTargetAt !== null && typeof rawTargetAt !== 'number')
+      || typeof status !== 'string' || !GOAL_STATUSES.has(status as UserGoalStatus)) {
+      return c.json({ error: 'Goal patch fields have invalid types' }, 400);
+    }
+    const targetAt: number | null | undefined = typeof rawTargetAt === 'number'
+      ? rawTargetAt : rawTargetAt === null ? null : undefined;
+    try {
+      const goal = runSqliteWriteTransaction(() => {
+        const updated = updateUserGoal(current.id, {
+          title,
+          desiredOutcome,
+          ...(targetAt === undefined ? {} : { targetAt }),
+        });
+        return status === current.status ? updated : setUserGoalStatus(current.id, status as UserGoalStatus);
+      });
+      return c.json({ goal });
+    } catch (error) {
+      return c.json({ error: errorMessage(error) }, 400);
+    }
   });
 
   authenticated.get('/api/user-model/rules', (c) => c.json({ rules: listCollaborationRules() }));

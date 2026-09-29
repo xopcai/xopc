@@ -119,7 +119,7 @@ export function setUserGoalStatus(id: string, status: UserGoalStatus, now = Date
 
 export function updateUserGoal(
   id: string,
-  input: { title: string; desiredOutcome: string; targetAt?: number },
+  input: { title: string; desiredOutcome: string; targetAt?: number | null },
   now = Date.now(),
 ): UserGoal | undefined {
   const current = listUserGoals().find((goal) => goal.id === id);
@@ -134,8 +134,9 @@ export function updateUserGoal(
     ) VALUES (?, ?, ?, ?, 'user', 'Goal edited by user.', ?)`).run(
       revisionId, id, title, desiredOutcome, now,
     );
+    const targetAt = input.targetAt === undefined ? current.targetAt ?? null : input.targetAt;
     db.prepare(`UPDATE user_goals SET current_revision_id = ?, target_at = ?, updated_at = ?
-      WHERE goal_id = ?`).run(revisionId, input.targetAt ?? current.targetAt ?? null, now, id);
+      WHERE goal_id = ?`).run(revisionId, targetAt, now, id);
   });
   return listUserGoals().find((goal) => goal.id === id);
 }

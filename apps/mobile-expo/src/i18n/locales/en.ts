@@ -69,7 +69,32 @@ export const en = {
     "save": "Save",
     "steer": "Send into current run",
     "sendNext": "Send next",
-    "queueError": "Could not update the queue. Refresh and try again."
+    "queueError": "Could not update the queue. Refresh and try again.",
+    "goals": {
+      "title": "Near-term goals", "add": "Add goal", "edit": "Edit goal", "manage": "Manage",
+      "help": "Keep the outcome concrete so xopc can plan and follow up over time.",
+      "empty": "No near-term goals yet.", "emptyHint": "Add what you want to achieve next so xopc can keep work moving.",
+      "titleLabel": "Goal", "outcomeLabel": "What does success look like?", "targetDate": "Target date (optional)",
+      "primary": "Current focus", "proposed": "Proposed", "active": "Active", "paused": "Paused",
+      "achieved": "Achieved", "abandoned": "Not pursuing", "due": "Due {{date}}",
+      "save": "Save", "cancel": "Cancel", "invalidDate": "Use a valid date in YYYY-MM-DD format.",
+      "saveFailed": "Could not save this goal. Try again."
+    },
+    "understanding": {
+      "title": "About you", "overview": "Overview", "understanding": "Understanding",
+      "subtitle": "What xopc uses to work with you across agents.", "editProfile": "Edit profile",
+      "basics": "Basics", "currentFocus": "Current focus", "noFocus": "No current focus set.",
+      "counts": "Understanding", "explicit": "You told xopc", "learned": "Learned", "needsReview": "Needs review",
+      "recent": "Recent understanding", "rules": "How we work together", "workMemory": "Work memory",
+      "workMemoryHint": "Facts, decisions and lessons stay in your Library.", "openLibrary": "Open Library",
+      "all": "All", "review": "Review", "empty": "No understanding here yet.", "loadMore": "Load more",
+      "summaryCount": "{{count}} understandings", "reviewCount": "{{count}} need review",
+      "callName": "Name", "role": "Role", "pronouns": "Pronouns", "timezone": "Time zone", "locale": "Language",
+      "save": "Save", "cancel": "Cancel", "details": "Understanding details", "source": "Source",
+      "scope": "Scope", "recorded": "Recorded", "confidence": "Confidence", "edit": "Correct",
+      "delete": "Delete", "deleteTitle": "Delete this understanding?", "deleteHint": "Original chats and files are not deleted.",
+      "deleteConfirm": "Delete", "statement": "What should xopc understand?", "unknownSource": "System inference"
+    }
 },
   recordings: {
     transcript: 'Transcript',
@@ -961,11 +986,11 @@ export const en = {
   // ── Settings screen ─────────────────────────────────────
   settings: {
     title: 'Settings',
-    sectionConnection: 'Connection',
+    sectionConnection: 'Connection and notifications',
     sectionPreferences: 'Preferences',
     sectionAi: 'Intelligence',
     sectionAutomation: 'Automation',
-    sectionSharing: 'Sharing',
+    sectionSharing: 'Data and sharing',
     sectionAbout: 'About',
     about: 'About',
     aboutDescription: 'Mobile client for the xopc gateway — chat, agents, and scheduled tasks.',

@@ -73,6 +73,13 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path.startsWith('/api/commands') || path.startsWith('/api/skills')) {
     return methodScope(method, 'agents.read', 'gateway.admin');
   }
+  if (path === '/api/user-model/refresh' || path.startsWith('/api/user-model/refresh/')) return 'gateway.admin';
+  if (path === '/api/user-model' || path.startsWith('/api/user-model/')) {
+    return methodScope(method, 'workspace.read', 'workspace.write');
+  }
+  if (path === '/api/knowledge-memory' || path.startsWith('/api/knowledge-memory/')) {
+    return methodScope(method, 'workspace.read', 'workspace.write');
+  }
   if (
     path === '/api/discussions' || path.startsWith('/api/discussions/') || path === '/api/discussion-capture/settings'
     || path.startsWith('/api/workspace')

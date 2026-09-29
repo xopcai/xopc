@@ -41,6 +41,8 @@ export const queryKeys = {
   note: (id: string) => ['note', id] as const,
   projects: ['projects'] as const,
   userProfile: (gatewayId: string) => ['user-profile', gatewayId] as const,
+  userUnderstanding: (gatewayId: string, filter: string) => ['user-understanding', gatewayId, filter] as const,
+  userUnderstandingItem: (gatewayId: string, id: string) => ['user-understanding', gatewayId, 'item', id] as const,
   project: (id: string) => ['project', id] as const,
   projectOperatingView: (id: string) => ['project', id, 'operating-view'] as const,
   projectSessions: (id: string) => ['project', id, 'sessions'] as const,
