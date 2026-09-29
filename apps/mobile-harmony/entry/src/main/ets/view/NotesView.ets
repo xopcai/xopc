@@ -6,7 +6,7 @@ import { XopcShareResult } from '../model/share';
 import { shareService } from '../service/shareService';
 import { XopcNoteViewModel } from '../viewmodel/noteViewModel';
 import { XopcMarkdownView } from './MarkdownView';
-import { XopcEmptyHint, XopcHubRow, XopcListSkeleton } from './MobileComponents';
+import { XopcBrandLoading, XopcEmptyHint, XopcHubRow, XopcListSkeleton } from './MobileComponents';
 import { XopcNativeNoteEditor } from './NativeNoteEditor';
 import { XopcShareResultView } from './ShareResultView';
 import { XopcVoiceCapture } from '../service/voiceCapture';
@@ -70,6 +70,7 @@ export struct XopcNotesView {
 
   private back(): void {
     if (this.model.editing) { void this.model.closeEditor(); return; }
+    if (this.model.openingId) { this.model.backToList(); return; }
     if (this.embedded) { this.onExit(); return; }
     if (this.model.selected || this.model.draft) { this.model.backToList(); return; }
     this.onExit();
@@ -152,12 +153,12 @@ export struct XopcNotesView {
       Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
         .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
         .accessibilityText($r('app.string.back')).onClick((): void => { this.back(); })
-      Text(this.model.selected || this.model.draft ? $r('app.string.notes') : $r('app.string.library'))
+      Text(this.model.selected || this.model.draft || this.model.openingId ? $r('app.string.notes') : $r('app.string.library'))
         .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
       if (this.model.draft) {
         Text(this.syncText()).fontSize(12).fontColor(this.model.draft.syncState === 'conflict' ? this.colors.danger : this.colors.secondary)
       }
-      if (!this.model.selected && !this.model.draft) {
+      if (!this.model.selected && !this.model.draft && !this.model.openingId) {
         Button() { SymbolGlyph($r('sys.symbol.plus')).fontSize(22).fontColor([this.colors.accent]) }
           .width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft).borderRadius(22)
           .accessibilityText($r('app.string.new_note')).onClick((): void => { this.model.create(); })
@@ -562,8 +563,8 @@ export struct XopcNotesView {
         if (this.model.error) {
           Text(this.model.error).fontSize(13).fontColor(this.colors.danger).width('100%').padding({ left: 20, right: 20, bottom: 8 })
         }
-        if (this.model.loading && !this.model.selected && !this.model.draft && this.initialId) {
-          Column() { XopcListSkeleton() }.padding(20).width('100%')
+        if (this.model.openingId) {
+          XopcBrandLoading()
         } else if (this.model.editing && this.model.draft) {
           this.editor()
         } else if (this.model.selected) {

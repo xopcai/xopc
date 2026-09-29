@@ -4,7 +4,7 @@ import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ListSkeleton } from '../../components/ListSkeleton';
+import { BrandLoadingState } from '../../components/BrandLoadingState';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import { dismissOrRoot } from '../../lib/navigation';
@@ -24,7 +24,8 @@ export function ProjectSkillsScreen() {
   const configured = useGatewayConfigured();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const labels = useMessages().tasksPage;
+  const messages = useMessages();
+  const labels = messages.tasksPage;
   const skills = useQuery({
     queryKey: queryKeys.projectSkills(projectId),
     queryFn: () => fetchProjectSkills(projectId),
@@ -34,7 +35,7 @@ export function ProjectSkillsScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader title={labels.projectSkillsTitle} onBack={() => dismissOrRoot(router)} />
-      {skills.isLoading ? <View style={styles.skeleton}><ListSkeleton count={6} /></View> : skills.isError || !skills.data ? (
+      {skills.isLoading ? <BrandLoadingState label={messages.common.loading} /> : skills.isError || !skills.data ? (
         <View style={styles.center}>
           <Icon source="alert-circle-outline" size={32} color={colors.semantic.error} />
           <Text style={[styles.body, { color: colors.semantic.error }]}>{labels.projectSkillsLoadFailed}</Text>

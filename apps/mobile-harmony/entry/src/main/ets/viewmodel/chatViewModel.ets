@@ -154,6 +154,7 @@ export class XopcChatViewModel {
       });
     }
     try {
+      void this.restoreCachedHistory(id, selection);
       const local = await this.repository.draft(id);
       if (this.disposed || selection !== this.selection) return;
       if (local) { this.agentId = local.creation.agentId; this.projectId = local.creation.projectId || ''; }
@@ -163,7 +164,6 @@ export class XopcChatViewModel {
       const draft = await this.repository.draft(id);
       if (this.disposed || selection !== this.selection) return;
       if (draft) return;
-      this.restoreCachedHistory(id, selection);
       await this.recover(true);
     } catch (error) {
       if (!this.disposed && selection === this.selection) {

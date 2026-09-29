@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { ListSkeleton } from '../../components/ListSkeleton';
+import { BrandLoadingState } from '../../components/BrandLoadingState';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { t, useMessages } from '../../i18n/messages';
 import { dismissOrRoot, openChat, openNoteDetail } from '../../lib/navigation';
@@ -190,7 +191,7 @@ export function ProjectOperatingScreen() {
   if (view.isLoading) return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader title={labels.projectsTitle} onBack={() => dismissOrRoot(router)} />
-      <View style={styles.skeleton}><ListSkeleton count={5} /></View>
+      <BrandLoadingState label={messages.common.loading} />
     </View>
   );
   if (view.isError || !view.data) return (

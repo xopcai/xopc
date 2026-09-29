@@ -1,7 +1,7 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcFilesViewModel } from '../viewmodel/filesViewModel';
 import { XopcFile, XopcFileSpace } from '../model/files';
-import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
+import { XopcBrandLoading, XopcHubRow, XopcListSkeleton } from './MobileComponents';
 import { createManagedShare } from '../service/chatMediaShare';
 import { XopcShareResult } from '../model/share';
 import { XopcShareResultView } from './ShareResultView';
@@ -178,7 +178,8 @@ export struct XopcFilesView {
           Text(this.model.error).fontSize(13).fontColor(this.colors.danger).width('100%')
             .padding({ left: 20, right: 20, bottom: 8 })
         }
-        this.fileList()
+        if (this.model.busy && !!this.initialId && !this.model.selected) { XopcBrandLoading() }
+        else { this.fileList() }
         if (this.model.selected) { this.fileDetail(this.model.selected) }
       }.height('100%').width('100%').backgroundColor(this.colors.surface)
         .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
