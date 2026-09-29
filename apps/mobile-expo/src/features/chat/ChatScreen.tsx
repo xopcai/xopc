@@ -11,6 +11,7 @@ import { ChatComposerDock } from './ChatComposerDock';
 import { ConnectionInterventionBanner } from '../gateway/ConnectionInterventionBanner';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_DEFAULT } from '../../constants/toast';
 import { queryKeys } from '../../query/keys';
+import { sessionInputsKey, updateSessionInput, type SessionInput } from '../../query/session-inputs';
 import { voiceStatusOptions } from '../../query/voice';
 import { usePreferencesStore } from '../../stores/preferences-store';
 
@@ -27,9 +28,10 @@ import { MessageList } from './MessageList';
 import { appendOlderSessionHistoryPage } from './session-message-parser';
 import { useChatPage } from './use-chat-page';
 import { useAutoReadAloud } from './use-auto-read-aloud';
-import type { ComposerContextRef } from './composer.types';
+import type { ComposerContextRef, WireAttachment } from './composer.types';
 import type { ComposerVoiceCallMode } from './composer-voice-call-options';
 import { dispatchMobileComposerAppend } from './mobile-composer-fill';
+import { useComposerHandoff } from './composer-handoff';
 import { useReadAloudStore } from '../voice/read-aloud-store';
 import { useVoiceCall, voiceCall } from '../voice/voice-call';
 import { useVoicePreferences } from '../voice/voice-preferences';
@@ -46,6 +48,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   const queryClient = useQueryClient();
   const page = useChatPage({ root });
   const [composerContextRefs, setComposerContextRefs] = useState<ComposerContextRef[]>([]);
+  const [editingQueuedInput, setEditingQueuedInput] = useState<SessionInput | null>(null);
   const navigationRef = useRef<ChatNavigationDrawerHandle>(null);
   const [detailActionsOpen, setDetailActionsOpen] = useState(false);
   const rootActionsOpen = useChatChromeStore(state => state.actionPanelOpen);
@@ -96,6 +99,8 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
     handleComposerSend,
     handleUserMessageCopy,
     handleUserMessageEdit,
+    editingUserTurnId,
+    cancelUserMessageEdit,
     handleUserMessageRetry,
     handleAssistantCopy,
     handleAssistantSaveToNote,
@@ -114,6 +119,50 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   const attentionItems = attentionQuery.data?.needsUser ?? [];
   const callAgent = agentsQuery.data?.items.find((agent) => agent.id === currentSessionAgentId);
   const voiceCallMode = preferredVoiceMode ?? voiceStatusQuery.data?.defaultMode;
+
+  const fillQueuedInput = useCallback((input: SessionInput) => {
+    if (!activeGatewayId || !conversationId) return;
+    cancelUserMessageEdit();
+    setEditingQueuedInput(input);
+    useComposerHandoff.getState().set({
+      gatewayId: activeGatewayId,
+      conversationId,
+      text: input.content,
+      attachments: input.attachments as WireAttachment[] | undefined,
+      contextRefs: input.contextRefs?.map(ref => ({
+        kind: ref.kind,
+        sourceId: ref.sourceId,
+        expectedVersion: ref.version,
+        title: ref.title,
+      })),
+      replace: true,
+    });
+  }, [activeGatewayId, cancelUserMessageEdit, conversationId]);
+
+  const cancelQueuedEdit = useCallback(() => {
+    setEditingQueuedInput(null);
+    if (!activeGatewayId || !conversationId) return;
+    useComposerHandoff.getState().set({ gatewayId: activeGatewayId, conversationId, text: '', attachments: [], contextRefs: [], replace: true });
+  }, [activeGatewayId, conversationId]);
+
+  const submitComposer = useCallback(async (
+    text: string,
+    attachments?: WireAttachment[],
+    contextRefs?: ComposerContextRef[],
+    delivery: 'next' | 'steer' = 'next',
+  ) => {
+    if (!editingQueuedInput) return handleComposerSend(text, attachments, contextRefs, delivery);
+    try {
+      const state = await updateSessionInput(conversationId, editingQueuedInput, {
+        content: text.trim(), attachments: attachments ?? [], contextRefs: contextRefs ?? [],
+      });
+      queryClient.setQueryData(sessionInputsKey(activeGatewayId, conversationId), state);
+      setEditingQueuedInput(null);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [activeGatewayId, conversationId, editingQueuedInput, handleComposerSend, queryClient]);
 
   useAutoReadAloud({
     language,
@@ -247,7 +296,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             welcomeStarters={welcomeModel.starters}
             onSuggestionSend={handleStarterPrefill}
             onUserMessageCopy={handleUserMessageCopy}
-            onUserMessageEdit={handleUserMessageEdit}
+            onUserMessageEdit={(message, latest) => { setEditingQueuedInput(null); handleUserMessageEdit(message, latest); }}
             onUserMessageRetry={handleUserMessageRetry}
             onAssistantCopy={handleAssistantCopy}
             onAssistantSaveToNote={handleAssistantSaveToNote}
@@ -271,7 +320,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             <ChatAttentionTray gatewayId={activeGatewayId} items={attentionItems} />
           ) : null}
           </View>
-          {conversationId ? <ChatQueueTray key={`${activeGatewayId}:${conversationId}`} conversationId={conversationId} /> : null}
+          {conversationId ? <ChatQueueTray key={`${activeGatewayId}:${conversationId}`} conversationId={conversationId} onEdit={fillQueuedInput} /> : null}
           <ChatComposer
             embedded={root}
             mainConversation={root}
@@ -287,7 +336,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             conversationId={conversationId}
             disabled={composerDisabled}
             streaming={chat.streaming}
-            onSend={handleComposerSend}
+            onSend={submitComposer}
             onAbort={chat.abort}
             placeholder={m.chat.inputPlaceholder}
             suggestionDraft={composerSuggestion}
@@ -301,6 +350,8 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
               natural: Boolean(voiceStatusQuery.data && !voiceStatusQuery.data.capabilities.natural.available),
               assistant: Boolean(voiceStatusQuery.data && !voiceStatusQuery.data.capabilities.assistant.available),
             }}
+            editingLabel={editingQueuedInput ? m.mobileExperience.editingQueued : editingUserTurnId ? m.chat.messageEdit : undefined}
+            onCancelEditing={editingQueuedInput ? cancelQueuedEdit : cancelUserMessageEdit}
           />
         </ChatComposerDock>
         </View>

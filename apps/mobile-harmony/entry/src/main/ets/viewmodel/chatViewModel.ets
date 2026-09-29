@@ -73,14 +73,14 @@ export class XopcChatViewModel {
     XopcChatViewModel.owner = this;
     realtimeClient.onState = (state: string): void => {
       this.connection = state;
-      if (state === 'connected' && this.selectedId) this.recover();
+      if (state === 'connected' && this.selectedId && !this.loading) this.recover();
     };
     realtimeClient.onEvent = (event: XopcEvent): void => { this.event(event); };
-    realtimeClient.onGap = (_topic: string): void => { this.recover(); };
+    realtimeClient.onGap = (_topic: string): void => { if (!this.loading) this.recover(); };
     try { realtimeClient.turnClaim(); this.connection = 'connected'; } catch (_) {}
     realtimeClient.start();
     realtimeClient.subscribe('gateway'); realtimeClient.subscribe('sessions');
-    if (this.selectedId) this.recover();
+    if (this.selectedId && !this.loading) this.recover();
   }
 
   deactivate(): void {
@@ -367,6 +367,26 @@ export class XopcChatViewModel {
     const input = this.outbox.get(id);
     if (!input || input.conversationId !== this.selectedId || input.row.sendState !== 'failed' || this.sending || this.disposed || this.loading || this.cachedHistory) return false;
     return this.deliver(input);
+  }
+
+  async replaceLatest(turnId: string, content: string, attachments: XopcChatAttachment[] = [], refs: XopcContextRef[] = []): Promise<boolean> {
+    if (this.disposed || this.loading || this.sending || this.cachedHistory || this.runId || !this.selectedId || !turnId
+      || (!content.trim() && !attachments.length && !refs.length)) return false;
+    this.sending = true; this.error = '';
+    const selection = this.selection;
+    try {
+      const run = await this.repository.replaceLatest(this.selectedId, turnId, content, attachments, refs);
+      if (selection !== this.selection) return false;
+      this.historyMessages = []; this.before = ''; this.hasOlder = false;
+      await this.loadHistory(false);
+      if (selection !== this.selection) return false;
+      this.trackRun(run);
+      if (!run) await this.recover();
+      return true;
+    } catch (error) {
+      if (selection === this.selection) this.error = (error as Error).message;
+      return false;
+    } finally { this.sending = false; }
   }
 
   private async deliver(input: XopcPendingChatSend): Promise<boolean> {

@@ -9,6 +9,7 @@ export type ComposerHandoff = {
   text: string;
   attachments?: WireAttachment[];
   contextRefs?: ComposerContextRef[];
+  replace?: boolean;
   autoSend?: boolean;
   voiceCallMode?: ComposerVoiceCallMode;
 };

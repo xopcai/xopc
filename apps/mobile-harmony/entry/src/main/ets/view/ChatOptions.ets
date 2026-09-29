@@ -14,12 +14,18 @@ export struct XopcChatOptions {
   @Event onContext: () => void = (): void => {};
   @Event onAgent: (id: string) => void = (_id: string): void => {};
   @Event onFiles: () => void = (): void => {};
+  @Event onEditQueued: (input: XopcQueuedInput) => void = (_input: XopcQueuedInput): void => {};
   @Event onNewChat: () => void = (): void => {};
   @Event onClose: () => void = (): void => {};
   @Event onRetry: () => void = (): void => {};
   @Local query: string = '';
-  @Local editing: string = '';
-  @Local editText: string = '';
+
+  private queueImage(item: XopcQueuedInput): string {
+    const image = item.attachments?.find((attachment): boolean => attachment.mimeType.startsWith('image/'));
+    if (!image) return '';
+    if (image.data) return 'data:' + image.mimeType + ';base64,' + image.data;
+    return image.uri?.startsWith('http') || image.uri?.startsWith('file:') || image.uri?.startsWith('data:') ? image.uri : '';
+  }
 
   build() {
     Column({ space: 8 }) {
@@ -60,24 +66,39 @@ export struct XopcChatOptions {
               }
             }
           }
-          ForEach(this.model.queued, (item: XopcQueuedInput) => {
+          ForEach(this.model.queued, (item: XopcQueuedInput, index: number) => {
             ListItem() {
               Column({ space: 8 }) {
-                if (this.editing === item.id) {
-                  TextArea({ text: this.editText }).constraintSize({ minHeight: 80, maxHeight: 180 })
-                    .onChange((value: string): void => { this.editText = value; })
-                  Row({ space: 8 }) {
-                    Button($r('app.string.cancel')).onClick((): void => { this.editing = ''; })
-                    Button($r('app.string.save')).enabled(!this.model.queueBusy && !!this.editText.trim())
-                      .onClick(async (): Promise<void> => { if (await this.model.changeQueued(item, this.editText)) this.editing = ''; })
+                Row({ space: 10 }) {
+                  if (this.queueImage(item)) {
+                    Image(this.queueImage(item)).width(52).height(52).borderRadius(10).objectFit(ImageFit.Cover)
+                      .sourceSize({ width: 104, height: 104 })
+                  } else if (item.attachments?.length) {
+                    SymbolGlyph($r('sys.symbol.paperclip')).fontSize(22).fontColor([this.colors.secondary])
+                      .width(52).height(52)
                   }
-                } else {
-                  Text(item.content || $r('app.string.add_attachment')).fontColor(this.colors.foreground).width('100%')
-                  Row({ space: 8 }) {
-                    Button($r('app.string.chat_edit')).enabled(!this.model.queueBusy).onClick((): void => { this.editing = item.id; this.editText = item.content; })
-                    Button($r('app.string.cancel')).enabled(!this.model.queueBusy).onClick((): void => { this.model.changeQueued(item); })
-                  }
-                }
+                  Column({ space: 4 }) {
+                    Text(item.content || $r('app.string.add_attachment')).fontColor(this.colors.foreground).width('100%')
+                      .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    if (item.attachments?.length || item.contextRefs?.length) {
+                      Text((item.attachments?.length ? '📎 ' + item.attachments.length : '')
+                        + (item.attachments?.length && item.contextRefs?.length ? '  ·  ' : '')
+                        + (item.contextRefs?.length ? '@ ' + item.contextRefs.length : ''))
+                        .fontSize(12).fontColor(this.colors.secondary)
+                    }
+                  }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                }.width('100%')
+                Row({ space: 4 }) {
+                  Button('↑').enabled(!this.model.queueBusy && index > 0).height(40).backgroundColor(Color.Transparent)
+                    .onClick((): void => { this.model.updateQueued(item, { position: index - 1 }); })
+                  Button('↓').enabled(!this.model.queueBusy && index < this.model.queued.length - 1).height(40).backgroundColor(Color.Transparent)
+                    .onClick((): void => { this.model.updateQueued(item, { position: index + 1 }); })
+                  Blank()
+                  Button($r('app.string.chat_edit')).enabled(!this.model.queueBusy).height(40).backgroundColor(Color.Transparent)
+                    .onClick((): void => { this.onEditQueued(item); })
+                  Button($r('app.string.cancel')).enabled(!this.model.queueBusy).height(40).backgroundColor(Color.Transparent)
+                    .onClick((): void => { this.model.cancelQueued(item); })
+                }.width('100%')
               }.width('100%').padding(12).borderRadius(12).backgroundColor(this.colors.grouped)
             }
           }, (item: XopcQueuedInput): string => item.id)

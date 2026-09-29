@@ -1,7 +1,7 @@
 import { gatewaySession } from '../service/gatewaySession';
 import { realtimeClient } from '../service/realtimeClient';
 import { XopcDeviceCrypto } from '../service/deviceCrypto';
-import { XopcPayload } from '../model/realtime';
+import { XopcPayload, XopcTurnClaim } from '../model/realtime';
 import { XopcSecureStore } from '../service/secureStore';
 import { chatHistoryCache } from '../service/chatHistoryCache';
 import { localSessionStore } from '../service/localSessionStore';
@@ -10,10 +10,18 @@ import { XopcLocalSession, XopcSessionCreation, XopcSessionCommand, XopcSessionC
 import {
   XopcSessionList, XopcSessionItem, XopcHistory, XopcCreateSession,
   XopcRun, XopcAbort, XopcRename, XopcChatAttachment,
-  XopcChatModels, XopcChatAgents, XopcAgentConfig, XopcQueueState, XopcQueuedInput, XopcQueueUpdate, XopcContextRef
+  XopcChatModels, XopcChatAgents, XopcAgentConfig, XopcQueueState, XopcQueuedInput, XopcQueueUpdate, XopcContextRef,
+  XopcInputResult
 } from '../model/chat';
 
 interface XopcPreparationRetry { operationId: string; expectedRevision: number; idempotencyKey: string; }
+interface XopcQueuePatchCommand {
+  version: number; content?: string; attachments?: XopcInputAttachment[]; contextRefs?: XopcContextRef[]; thinking?: string; position?: number;
+}
+interface XopcReplaceTurnCommand {
+  clientMessageId: string; content: string; attachments?: XopcInputAttachment[]; contextRefs?: XopcContextRef[];
+  configVersion?: number; delivery: string; origin: XopcTurnClaim;
+}
 interface XopcCommandFailure { error?: XopcCommandFailureCode; }
 interface XopcCommandFailureCode { code?: string; }
 interface XopcSendNetworkError { code?: number; }
@@ -292,13 +300,44 @@ export class XopcChatRepository {
     const body: XopcPreparationRetry = { operationId, expectedRevision: revision, idempotencyKey: operationId + ':' + revision.toString() };
     await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/preparation/retry', 'POST', JSON.stringify(body));
   }
-  async changeQueued(id: string, input: XopcQueuedInput, content?: string): Promise<XopcQueueState> {
+  async updateQueued(id: string, input: XopcQueuedInput, update: XopcQueueUpdate): Promise<XopcQueueState> {
     const path = '/api/sessions/' + encodeURIComponent(id) + '/inputs/' + encodeURIComponent(input.id);
-    const body: XopcQueueUpdate = { version: input.version, content: content ?? '' };
-    const result = JSON.parse(await gatewaySession.request(content === undefined ? path + '?version=' + input.version : path,
-      content === undefined ? 'DELETE' : 'PATCH', content === undefined ? undefined : JSON.stringify(body))) as XopcPayload<XopcQueueState>;
+    const body: XopcQueuePatchCommand = { version: input.version, content: update.content, thinking: update.thinking, position: update.position,
+      attachments: update.attachments?.map((item: XopcChatAttachment): XopcInputAttachment => ({
+        type: item.type, name: item.name, mimeType: item.mimeType, size: item.size, data: item.data,
+        workspaceRelativePath: item.workspaceRelativePath, uri: item.uri, durationSeconds: item.duration
+      })),
+      contextRefs: update.contextRefs?.map((ref: XopcContextRef): XopcContextRef => ({
+        kind: ref.kind, sourceId: ref.sourceId, expectedVersion: ref.expectedVersion
+      })) };
+    const result = JSON.parse(await gatewaySession.request(path, 'PATCH', JSON.stringify(body))) as XopcPayload<XopcQueueState>;
     if (result.payload?.conversationId !== id || !Array.isArray(result.payload.inputs)) throw new Error('INVALID_INPUT_STATE');
     return result.payload;
+  }
+  async cancelQueued(id: string, input: XopcQueuedInput): Promise<XopcQueueState> {
+    const path = '/api/sessions/' + encodeURIComponent(id) + '/inputs/' + encodeURIComponent(input.id) + '?version=' + input.version;
+    const result = JSON.parse(await gatewaySession.request(path, 'DELETE')) as XopcPayload<XopcQueueState>;
+    if (result.payload?.conversationId !== id || !Array.isArray(result.payload.inputs)) throw new Error('INVALID_INPUT_STATE');
+    return result.payload;
+  }
+  async replaceLatest(id: string, turnId: string, content: string, attachments: XopcChatAttachment[], refs: XopcContextRef[]): Promise<string> {
+    const connection = gatewaySession.connectionRevision();
+    const config = await this.config(id);
+    gatewaySession.assertConnection(connection);
+    const body: XopcReplaceTurnCommand = { clientMessageId: this.uuid(), content, delivery: 'next', origin: realtimeClient.turnClaim(),
+      configVersion: config.configVersion,
+      attachments: attachments.length ? attachments.map((item: XopcChatAttachment): XopcInputAttachment => ({
+        type: item.type, name: item.name, mimeType: item.mimeType, size: item.size, data: item.data,
+        workspaceRelativePath: item.workspaceRelativePath, uri: item.uri, durationSeconds: item.duration
+      })) : undefined,
+      contextRefs: refs.length ? refs.map((ref: XopcContextRef): XopcContextRef => ({
+        kind: ref.kind, sourceId: ref.sourceId, expectedVersion: ref.expectedVersion
+      })) : undefined };
+    const path = '/api/sessions/' + encodeURIComponent(id) + '/turns/' + encodeURIComponent(turnId) + '/replace';
+    const result = JSON.parse(await gatewaySession.request(path, 'POST', JSON.stringify(body))) as XopcPayload<XopcInputResult>;
+    gatewaySession.assertConnection(connection);
+    if (!result.payload?.state) throw new Error('INVALID_INPUT_RESPONSE');
+    return result.payload.state.activeRunId ?? '';
   }
   async abort(runId: string): Promise<void> {
     const body: XopcAbort = { runId };

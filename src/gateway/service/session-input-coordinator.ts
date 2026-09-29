@@ -129,7 +129,7 @@ export class SessionInputCoordinator {
     await this.runSubmissionExclusive(input.conversationId, async () => {
       const row = getSessionInputById(conversationId, inputId);
       const state = this.snapshot(input.conversationId);
-      if (!row || row.status !== 'queued' || row.origin.type === 'endpoint' || row.requestedDelivery !== 'steer'
+      if (!row || row.status !== 'queued' || row.requestedDelivery !== 'steer'
         || !state.activeRunId || row.attachments?.length || row.contextSnapshots?.length
         || (state.preparation && state.preparation.state !== 'ready')) return;
       setSessionInputStatus(row.id, 'injecting', { effectiveDelivery: 'steer', targetRunId: state.activeRunId });
@@ -282,8 +282,7 @@ export class SessionInputCoordinator {
       return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
     }
     const runtime = this.snapshot(conversationId);
-    const canSteer = input.origin.type !== 'endpoint'
-      && input.delivery === 'steer'
+    const canSteer = input.delivery === 'steer'
       && runtime.activeRunId !== undefined
       && !attachments?.length
       && !sourceContexts?.length;

@@ -3,6 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { parseSessionMessages } from '../session-message-parser';
 
 describe('session message parser identity', () => {
+  it('preserves the user turn id needed for latest-turn replacement', () => {
+    const messages = parseSessionMessages([{
+      id: 'user-1',
+      role: 'user',
+      turnId: 'turn-1',
+      content: 'original question',
+    }]);
+
+    expect(messages[0]).toMatchObject({ role: 'user', turnId: 'turn-1' });
+  });
+
   it('keeps legacy tool ids stable across history refreshes', () => {
     const wire = [{
       id: 'assistant-1',

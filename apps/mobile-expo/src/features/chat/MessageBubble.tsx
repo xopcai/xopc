@@ -280,6 +280,7 @@ export const MessageBubble = memo(function MessageBubble({
   conversationId,
   onUserMessageCopy,
   onUserMessageEdit,
+  userMessageEditLabel,
   onUserMessageRetry,
   onAssistantCopy,
   onAssistantSaveToNote,
@@ -293,7 +294,8 @@ export const MessageBubble = memo(function MessageBubble({
   progress?: ProgressState | null;
   conversationId?: string;
   onUserMessageCopy?: (text: string) => void;
-  onUserMessageEdit?: (text: string) => void;
+  onUserMessageEdit?: (message: Message) => void;
+  userMessageEditLabel?: string;
   onUserMessageRetry?: () => void;
   onAssistantCopy?: (text: string) => void;
   onAssistantSaveToNote?: (text: string) => void;
@@ -413,8 +415,8 @@ export const MessageBubble = memo(function MessageBubble({
     if (userText.trim() && onUserMessageEdit) {
       actions.push({
         icon: 'pencil-outline',
-        onPress: () => onUserMessageEdit(userText),
-        accessibilityLabel: m.chat.messageEdit,
+        onPress: () => onUserMessageEdit(message),
+        accessibilityLabel: userMessageEditLabel ?? m.chat.messageEdit,
       });
     }
     if (userText.trim() && onUserMessageCopy) {
@@ -433,6 +435,7 @@ export const MessageBubble = memo(function MessageBubble({
     onUserMessageCopy,
     onUserMessageRetry,
     m.chat.messageEdit,
+    userMessageEditLabel,
     m.chat.messageCopy,
     m.chat.messageRetry,
   ]);
