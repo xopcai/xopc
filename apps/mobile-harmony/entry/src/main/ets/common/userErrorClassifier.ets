@@ -17,7 +17,8 @@ export function classifyUserError(raw: string, context: XopcUserErrorContext = '
   if (value.includes('HTTP_404') || value.includes('NOT_FOUND') || value.includes('MISSING')) {
     return context === 'collection' ? 'unavailable' : 'missing';
   }
-  if (value.includes('HTTP_5') || value.includes('SERVICE_UNAVAILABLE') || value.includes('INTERNAL_SERVER')) return 'unavailable';
+  if (value.includes('HTTP_5') || value.includes('SERVICE_UNAVAILABLE') || value.includes('INTERNAL_SERVER') ||
+    value.includes('PROVIDER_ERROR') || value.includes('OMNI_')) return 'unavailable';
   if (value.includes('OFFLINE') || value.includes('NETWORK') || value.includes('TIMEOUT') ||
     value.includes('NO_VERIFIED_ROUTE') || value.includes('CONNECTION') || value.includes('SOCKET')) return 'offline';
   if (value.includes('INVALID') || value.includes('HTTP_400') || value.includes('VALIDATION')) return 'invalid';

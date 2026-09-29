@@ -97,6 +97,19 @@ describe('Omni voice engine', () => {
     await vi.waitFor(() => expect(test.received.filter(event => event.type === 'response.cancel')).toHaveLength(1));
   });
 
+  it('keeps a managed call alive when a cancellation rejection arrives after the next reply starts', async () => {
+    const test = await setup(undefined, true, true);
+    test.emit({ type: 'response.created', response: { id: 'first' } });
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'next-turn' });
+    await vi.waitFor(() => expect(test.received.filter((event) => event.type === 'response.cancel')).toHaveLength(1));
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'next-turn', transcript: 'Continue' });
+    test.emit({ type: 'response.created', response: { id: 'second' } });
+    test.emit({ type: 'error', error: { code: 'invalid_request_error', message: 'The voice provider rejected the request.' } });
+    test.emit({ type: 'response.done', response: { id: 'second', status: 'completed' } });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'second' })));
+    expect(test.send.mock.calls.some(([type]) => type === 'session.error')).toBe(false);
+  });
+
   it('withholds premature text and audio and discards both when the user continues', async () => {
     const test = await setup();
     test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'first' });

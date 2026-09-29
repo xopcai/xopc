@@ -10,6 +10,7 @@ describe('user-facing error classification', () => {
     expect(classifyUserError('HTTP_413')).toBe('too_large');
     expect(classifyUserError('HTTP_429')).toBe('rate_limited');
     expect(classifyUserError('HTTP_503')).toBe('unavailable');
+    expect(classifyUserError('OMNI_PROVIDER_ERROR')).toBe('unavailable');
     expect(classifyUserError('NETWORK_TIMEOUT')).toBe('offline');
     expect(classifyUserError('INVALID_API_PATH')).toBe('invalid');
   });
