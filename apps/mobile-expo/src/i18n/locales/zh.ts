@@ -111,6 +111,16 @@ export const zh: MessageBundle = {
       "scope": "适用范围", "recorded": "记录时间", "confidence": "可信度", "edit": "纠正",
       "delete": "删除", "deleteTitle": "删除这条理解？", "deleteHint": "原始对话和文件不会被删除。",
       "deleteConfirm": "删除", "statement": "xopc 应该怎样理解？", "unknownSource": "系统推断"
+    },
+    "memoryPrivacy": {
+      "title": "记忆与隐私", "entryTitle": "管理记忆与隐私", "entryHint": "控制 xopc 记住、引用和导出哪些信息。",
+      "heading": "你的信息，由你掌控", "subtitle": "决定 xopc 可以记住什么，以及如何使用你的信息。",
+      "memoryUse": "记忆与使用", "longTermMemory": "长期记忆", "longTermMemoryHint": "记住长期有用的信息，减少重复说明。",
+      "references": "回答中的记忆引用", "referencesHint": "显示哪些个人信息影响了本次回答。",
+      "sensitive": "敏感信息", "sensitiveHint": "控制健康、财务等信息是否可以保存。",
+      "confirm": "先询问", "deny": "不保存", "allow": "允许",
+      "dataManagement": "数据管理", "export": "导出我的记忆", "exportHint": "分享可阅读、可迁移的 JSON 数据包。",
+      "manage": "纠正与忘记", "manageHint": "修改、限制作用范围或删除单条理解。", "dataSharing": "设备与数据共享隐私"
     }
 },
   recordings: {

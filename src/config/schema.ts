@@ -1215,6 +1215,7 @@ export const ConfigSchema = z.object({
       enabled: true,
       writePolicy: 'allow',
       sensitiveWritePolicy: 'confirm',
+      showMemoryReferences: true,
       processingPolicy: 'remote_allowed',
       extraction: {
         reviewIntervalTurns: 10,

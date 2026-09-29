@@ -59,6 +59,7 @@ export function UnderstandingRow({
   onCancel,
   onDelete,
   onCorrect,
+  onScopeChange,
 }: {
   item: UserAssertion;
   language: UnderstandingLanguage;
@@ -70,6 +71,7 @@ export function UnderstandingRow({
   onCancel: () => void;
   onDelete: () => void;
   onCorrect: () => void;
+  onScopeChange?: (scope: UserAssertion['scope']) => void;
 }) {
   const inputId = useId();
   const zh = language === 'zh';
@@ -118,7 +120,7 @@ export function UnderstandingRow({
               </details>
             </div>
           </div>
-          <MemoryActions language={language} busy={busy} statement={item.statement} onEdit={onEdit} onDelete={onDelete} />
+          <MemoryActions language={language} busy={busy} statement={item.statement} scope={item.scope} onEdit={onEdit} onDelete={onDelete} onScopeChange={onScopeChange} />
         </div>
       )}
     </article>
