@@ -13,6 +13,7 @@ export type ExtensionMarketplaceItem = {
   homepage?: string;
   author?: string;
   branding?: { iconUrl: string; iconSha256: string };
+  localizations?: Partial<Record<'en' | 'zh-CN', { displayName: string; description?: string }>>;
   packageType?: 'plugin' | 'extension';
 };
 
@@ -34,6 +35,7 @@ export type ExtensionMarketplacePackageDetail = {
   type: string;
   description: string;
   branding?: { iconUrl: string; iconSha256: string };
+  localizations?: Partial<Record<'en' | 'zh-CN', { displayName: string; description?: string }>>;
   readme: string | null;
   downloads: number;
   author: { username: string; avatarUrl: string | null };
