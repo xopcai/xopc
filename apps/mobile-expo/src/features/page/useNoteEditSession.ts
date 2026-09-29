@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '../../query/keys';
+import { userFacingErrorMessage, type UserErrorCopy } from '../../lib/user-facing-error';
 import { noteToIndexEntry, upsertNoteInListCaches } from '../../query/note-list-cache';
 import { invalidateNoteLists } from '../../query/workspace-sync';
 import {
@@ -37,6 +38,7 @@ type UseNoteEditSessionArgs = {
   queryClient: QueryClient;
   ensureNoteTags: (tags: string[]) => void;
   setSnackMsg: Dispatch<SetStateAction<string>>;
+  errorCopy: UserErrorCopy;
   messages: {
     missing: string;
     savedOffline: string;
@@ -73,6 +75,7 @@ export function useNoteEditSession({
   queryClient,
   ensureNoteTags,
   setSnackMsg,
+  errorCopy,
   messages,
   onMissingNote,
 }: UseNoteEditSessionArgs) {
@@ -287,7 +290,7 @@ export function useNoteEditSession({
       } catch (error) {
         if (!isRetryableSaveError(error)) {
           setSaveState('failed');
-          setSnackMsg(error instanceof Error ? error.message : messages.savedOffline);
+          setSnackMsg(userFacingErrorMessage(error, errorCopy, 'save'));
           return;
         }
         dirtyRef.current = true;
@@ -304,7 +307,7 @@ export function useNoteEditSession({
       saveAgainRef.current = false;
       await flushSave();
     }
-  }, [id, messages.savedOffline, note, queryClient, setSnackMsg]);
+  }, [errorCopy, id, messages.savedOffline, note, queryClient, setSnackMsg]);
 
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);

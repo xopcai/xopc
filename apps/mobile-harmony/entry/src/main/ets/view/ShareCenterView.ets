@@ -3,6 +3,7 @@ import { XopcShareItem, XopcShareResult } from '../model/share';
 import { XopcShareViewModel } from '../viewmodel/shareViewModel';
 import { XopcListSkeleton } from './MobileComponents';
 import { XopcShareResultView } from './ShareResultView';
+import { userErrorMessage } from '../common/userError';
 
 const DAY_MS: number = 86400000;
 
@@ -72,7 +73,7 @@ export struct XopcShareCenterView {
         }.width('100%').padding(12)
         if (this.model.error) {
           Row({ space: 8 }) {
-            Text(this.model.error).fontSize(13).fontColor(this.colors.danger).layoutWeight(1)
+            Text(userErrorMessage(this.model.error, 'collection')).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1)
             Button($r('app.string.refresh')).enabled(!this.model.loading).onClick((): void => { this.model.load(); })
           }.padding({ left: 20, right: 20 })
         }

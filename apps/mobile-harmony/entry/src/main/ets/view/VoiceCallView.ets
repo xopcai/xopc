@@ -1,5 +1,6 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcVoiceCall } from '../service/voiceCall';
+import { userErrorMessage } from '../common/userError';
 
 @ComponentV2
 export struct XopcVoiceCallView {
@@ -96,7 +97,7 @@ export struct XopcVoiceCallView {
           Text(this.call.name || $r('app.string.voice_call_title')).fontSize(25).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).margin({ top: 18 })
           Text(this.status()).fontSize(15).fontColor(this.call.error ? this.colors.danger : this.colors.secondary).margin({ top: 8 })
           Text(this.elapsed()).fontSize(13).fontColor(this.colors.tertiary).margin({ top: 5 })
-          if (this.call.error) { Text(this.call.error).fontSize(12).fontColor(this.colors.danger).margin({ top: 8 }) }
+          if (this.call.error) { Text(userErrorMessage(this.call.error, 'generic')).fontSize(12).fontColor(this.colors.danger).margin({ top: 8 }) }
           if (this.call.clarification || this.call.approval) {
             Column() { this.intervention() }.width('100%').padding({ left: 18, right: 18, top: 20 })
           } else if (this.call.assistantText || this.call.userText) {

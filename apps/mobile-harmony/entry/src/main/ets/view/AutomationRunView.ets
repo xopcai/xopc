@@ -3,6 +3,7 @@ import { gatewaySession } from '../service/gatewaySession';
 import { XopcMobileRoute } from '../model/home';
 import { XopcHubRow, XopcListSkeleton, XopcSectionLabel } from './MobileComponents';
 import { XopcMarkdownView } from './MarkdownView';
+import { userErrorMessage } from '../common/userError';
 
 interface XopcRunDetail {
   id: string; automationId: string; automationName: string; status: string;
@@ -93,7 +94,7 @@ export struct XopcAutomationRunView {
         Scroll() {
           Column({ space: 12 }) {
             if (this.busy && !this.run) { XopcListSkeleton() }
-            if (this.error) { Text(this.error).fontColor(this.colors.danger) }
+            if (this.error) { Text(userErrorMessage(this.error, 'detail')).fontColor(this.colors.danger) }
             if (this.run) {
               Column({ space: 12 }) {
                 Row({ space: 12 }) {
@@ -106,7 +107,7 @@ export struct XopcAutomationRunView {
                   }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                 }.width('100%')
                 if (this.run.summary) { XopcMarkdownView({ content: this.run.summary }) }
-                if (this.run.error) { Text(this.run.error).fontSize(14).lineHeight(21).fontColor(this.colors.danger).width('100%') }
+                if (this.run.error) { Text(userErrorMessage(this.run.error, 'detail')).fontSize(14).lineHeight(21).fontColor(this.colors.danger).width('100%') }
                 if (this.active(this.run.status)) {
                   Button($r('app.string.cancel_run')).width('100%').constraintSize({ minHeight: 46 })
                     .backgroundColor(this.colors.input).fontColor(this.colors.danger).enabled(!this.busy)
@@ -132,7 +133,7 @@ export struct XopcAutomationRunView {
                 if (this.run) this.onNavigate({ page: 'automations', itemId: this.run.automationId });
               } })
               XopcSectionLabel({ heading: $r('app.string.timeline') })
-              if (this.eventError) { Text(this.eventError).fontColor(this.colors.danger) }
+              if (this.eventError) { Text(userErrorMessage(this.eventError, 'detail')).fontColor(this.colors.danger) }
               if (!this.eventError && !this.events.length) { Text($r('app.string.no_events')).fontColor(this.colors.tertiary).width('100%') }
               ForEach(this.events, (event: XopcRunEvent) => {
                 Row({ space: 12 }) {

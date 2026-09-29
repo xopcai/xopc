@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { useMessages, t } from '../../i18n/messages';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import {
   getWorkspaceSyncDeadLetters,
   retryWorkspaceSyncDeadLetter,
@@ -31,7 +32,7 @@ export function WorkspaceSyncStatusCard({ onChanged, onToast }: WorkspaceSyncSta
       await onChanged();
       onToast(flushed > 0 ? t(labels.synced, { count: flushed }) : labels.nothingToSync);
     } catch (error) {
-      onToast(error instanceof Error ? error.message : labels.syncFailed);
+      onToast(userFacingErrorMessage(error, m.mobileExperience.errors, 'save'));
     } finally {
       setBusy(false);
     }

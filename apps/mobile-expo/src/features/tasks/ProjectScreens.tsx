@@ -20,6 +20,7 @@ import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { t, useMessages } from '../../i18n/messages';
 import { dismissOrRoot } from '../../lib/navigation';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { fetchChatAgents } from '../../query/agents';
 import { queryKeys } from '../../query/keys';
 import { updateNote } from '../../query/notes';
@@ -240,7 +241,8 @@ export function CreateTaskScreen() {
 
       <View style={[styles.footer, { backgroundColor: colors.surface.base, borderTopColor: colors.border.subtle, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         {create.error || setupError ? (
-          <Text style={[styles.error, { color: colors.semantic.error }]}>{create.error?.message ?? setupError}</Text>
+          <Text style={[styles.error, { color: colors.semantic.error }]}>{create.error
+            ? userFacingErrorMessage(create.error, messages.mobileExperience.errors, 'save') : setupError}</Text>
         ) : null}
         <Pressable
           accessibilityRole="button"

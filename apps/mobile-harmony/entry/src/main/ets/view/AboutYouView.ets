@@ -3,6 +3,7 @@ import { XopcMobileRoute } from '../model/home';
 import { XopcUnderstandingItem, XopcUnderstandingProfile, XopcUnderstandingRule } from '../model/userUnderstanding';
 import { XopcUserUnderstandingViewModel } from '../viewmodel/userUnderstandingViewModel';
 import { XopcBrandLoading, XopcListSkeleton, XopcSectionLabel } from './MobileComponents';
+import { userErrorMessage } from '../common/userError';
 
 @ComponentV2
 export struct XopcAboutYouView {
@@ -18,6 +19,7 @@ export struct XopcAboutYouView {
   @Local pronouns: string = '';
   @Local timezone: string = '';
   @Local locale: string = '';
+  @Local customPronouns: boolean = false;
   @Local statement: string = '';
   @Event onExit: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
@@ -42,8 +44,78 @@ export struct XopcAboutYouView {
     this.role = profile.role;
     this.pronouns = profile.pronouns;
     this.timezone = profile.timezone;
-    this.locale = profile.locale;
+    this.locale = profile.locale.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+    this.customPronouns = this.pronouns !== '' && !this.pronounValues().includes(this.pronouns);
     this.editProfileOpen = true;
+  }
+
+  private pronounValues(): string[] {
+    return ['', this.text($r('app.string.about_you_pronouns_they')),
+      this.text($r('app.string.about_you_pronouns_she')), this.text($r('app.string.about_you_pronouns_he'))];
+  }
+
+  private pronounOptions(): SelectOption[] {
+    const options: SelectOption[] = [];
+    const values: string[] = this.pronounValues();
+    values.forEach((item: string, index: number): void => {
+      options.push({ value: index === 0 ? this.text($r('app.string.about_you_not_set')) : item });
+    });
+    options.push({ value: this.text($r('app.string.about_you_custom')) });
+    return options;
+  }
+
+  private pronounIndex(): number {
+    if (this.customPronouns) return this.pronounValues().length;
+    const index: number = this.pronounValues().indexOf(this.pronouns);
+    return index < 0 ? 0 : index;
+  }
+
+  private pronounLabel(): string {
+    if (this.customPronouns) return this.text($r('app.string.about_you_custom'));
+    return this.pronouns || this.text($r('app.string.about_you_not_set'));
+  }
+
+  private timezoneValues(): string[] {
+    const values: string[] = ['Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Tokyo', 'Asia/Singapore',
+      'Europe/London', 'Europe/Berlin', 'America/New_York', 'America/Los_Angeles', 'UTC'];
+    if (this.timezone && !values.includes(this.timezone)) values.unshift(this.timezone);
+    return values;
+  }
+
+  private timezoneOptions(): SelectOption[] {
+    const options: SelectOption[] = [];
+    this.timezoneValues().forEach((item: string): void => { options.push({ value: item }); });
+    return options;
+  }
+
+  private timezoneIndex(): number {
+    const index: number = this.timezoneValues().indexOf(this.timezone);
+    return index < 0 ? 0 : index;
+  }
+
+  private localeOptions(): SelectOption[] {
+    return [{ value: this.text($r('app.string.about_you_language_zh')) },
+      { value: this.text($r('app.string.about_you_language_en')) }];
+  }
+
+  private localeLabel(): ResourceStr {
+    return this.locale === 'zh' ? $r('app.string.about_you_language_zh') : $r('app.string.about_you_language_en');
+  }
+
+  private emptyTitle(): ResourceStr {
+    if (this.model.query.trim()) return $r('app.string.about_you_empty_search_title');
+    if (this.model.filter === 'explicit') return $r('app.string.about_you_empty_explicit_title');
+    if (this.model.filter === 'learned') return $r('app.string.about_you_empty_learned_title');
+    if (this.model.filter === 'review') return $r('app.string.about_you_empty_review_title');
+    return $r('app.string.about_you_empty_all_title');
+  }
+
+  private emptyHelp(): ResourceStr {
+    if (this.model.query.trim()) return $r('app.string.about_you_empty_search_help');
+    if (this.model.filter === 'explicit') return $r('app.string.about_you_empty_explicit_help');
+    if (this.model.filter === 'learned') return $r('app.string.about_you_empty_learned_help');
+    if (this.model.filter === 'review') return $r('app.string.about_you_empty_review_help');
+    return $r('app.string.about_you_empty_all_help');
   }
 
   private async saveProfile(): Promise<void> {
@@ -287,7 +359,18 @@ export struct XopcAboutYouView {
     Column() {
       if (this.model.loadingMore && !this.model.items.length) { XopcListSkeleton() }
       else if (!this.model.items.length) {
-        Text($r('app.string.about_you_empty')).fontSize(15).fontColor(this.colors.secondary).width('100%').padding({ top: 36 })
+        Column({ space: 10 }) {
+          Row({ space: 8 }) {
+            SymbolGlyph($r('sys.symbol.ellipsis_bubble')).fontSize(20).fontColor([this.colors.accent])
+            Text(this.emptyTitle()).fontSize(16).fontWeight(FontWeight.Medium)
+              .fontColor(this.colors.foreground).layoutWeight(1)
+          }.width('100%')
+          Text(this.emptyHelp()).fontSize(13).lineHeight(20).fontColor(this.colors.secondary).width('100%')
+          if (!this.model.query.trim()) {
+            Text($r('app.string.about_you_empty_action_hint')).fontSize(12).lineHeight(18)
+              .fontColor(this.colors.accent).width('100%')
+          }
+        }.width('100%').padding(18).borderRadius(16).backgroundColor(this.colors.panel)
       } else {
         ForEach(this.model.items, (item: XopcUnderstandingItem) => { this.understandingRow(item) },
           (item: XopcUnderstandingItem): string => item.id)
@@ -296,7 +379,7 @@ export struct XopcAboutYouView {
             .onClick((): void => { this.model.loadMore(); })
         }
       }
-    }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 32 }).alignItems(HorizontalAlign.Start)
+    }.width('100%').padding({ left: 20, right: 20, top: 16, bottom: 32 }).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -371,21 +454,85 @@ export struct XopcAboutYouView {
   }
 
   @Builder
+  private profileFieldLabel(label: ResourceStr, help: ResourceStr = '') {
+    Column({ space: 2 }) {
+      Text(label).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
+      if (help !== '') {
+        Text(help).fontSize(12).lineHeight(17).fontColor(this.colors.tertiary).width('100%')
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
   private profileEditor() {
-    Column({ space: 12 }) {
-      Text($r('app.string.about_you_edit_profile')).fontSize(21).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).width('100%')
-      TextInput({ text: this.callName, placeholder: $r('app.string.about_you_call_name') }).onChange((value: string): void => { this.callName = value; })
-      TextInput({ text: this.role, placeholder: $r('app.string.about_you_role') }).onChange((value: string): void => { this.role = value; })
-      TextInput({ text: this.pronouns, placeholder: $r('app.string.about_you_pronouns') }).onChange((value: string): void => { this.pronouns = value; })
-      TextInput({ text: this.timezone, placeholder: $r('app.string.about_you_timezone') }).onChange((value: string): void => { this.timezone = value; })
-      TextInput({ text: this.locale, placeholder: $r('app.string.about_you_locale') }).onChange((value: string): void => { this.locale = value; })
+    Column({ space: 16 }) {
+      Column({ space: 5 }) {
+        Text($r('app.string.about_you_edit_profile')).fontSize(21).fontWeight(FontWeight.Bold)
+          .fontColor(this.colors.foreground).width('100%')
+        Text($r('app.string.about_you_edit_profile_help')).fontSize(13).lineHeight(19)
+          .fontColor(this.colors.secondary).width('100%')
+      }.width('100%').alignItems(HorizontalAlign.Start)
+      Scroll() {
+        Column({ space: 16 }) {
+          Column({ space: 7 }) {
+            this.profileFieldLabel($r('app.string.about_you_call_name'))
+            TextInput({ text: this.callName, placeholder: $r('app.string.about_you_call_name_placeholder') })
+              .height(48).backgroundColor(this.colors.input).borderRadius(14)
+              .onChange((input: string): void => { this.callName = input; })
+          }.width('100%')
+          Column({ space: 7 }) {
+            this.profileFieldLabel($r('app.string.about_you_role'), $r('app.string.about_you_role_help'))
+            TextInput({ text: this.role, placeholder: $r('app.string.about_you_role_placeholder') })
+              .height(48).backgroundColor(this.colors.input).borderRadius(14)
+              .onChange((input: string): void => { this.role = input; })
+          }.width('100%')
+          Column({ space: 7 }) {
+            this.profileFieldLabel($r('app.string.about_you_pronouns'))
+            Select(this.pronounOptions()).selected(this.pronounIndex()).value(this.pronounLabel())
+              .width('100%').height(48).backgroundColor(this.colors.input).borderRadius(14)
+              .fontColor(this.colors.foreground).selectedOptionBgColor(this.colors.accentSoft)
+              .selectedOptionFontColor(this.colors.foreground).optionBgColor(this.colors.panel)
+              .optionFontColor(this.colors.foreground)
+              .onSelect((index: number, _selected?: string): void => {
+                const values: string[] = this.pronounValues();
+                this.customPronouns = index === values.length;
+                if (!this.customPronouns) this.pronouns = values[index] ?? '';
+              })
+            if (this.customPronouns) {
+              TextInput({ text: this.pronouns, placeholder: $r('app.string.about_you_pronouns_custom_placeholder') })
+                .height(48).backgroundColor(this.colors.input).borderRadius(14)
+                .onChange((input: string): void => { this.pronouns = input; })
+            }
+          }.width('100%')
+          Column({ space: 7 }) {
+            this.profileFieldLabel($r('app.string.about_you_timezone'), $r('app.string.about_you_timezone_help'))
+            Select(this.timezoneOptions()).selected(this.timezoneIndex())
+              .value(this.timezone || 'Asia/Shanghai').width('100%').height(48)
+              .backgroundColor(this.colors.input).borderRadius(14).fontColor(this.colors.foreground)
+              .selectedOptionBgColor(this.colors.accentSoft).selectedOptionFontColor(this.colors.foreground)
+              .optionBgColor(this.colors.panel).optionFontColor(this.colors.foreground)
+              .onSelect((index: number, _selected?: string): void => {
+                this.timezone = this.timezoneValues()[index] ?? 'Asia/Shanghai';
+              })
+          }.width('100%')
+          Column({ space: 7 }) {
+            this.profileFieldLabel($r('app.string.about_you_locale'), $r('app.string.about_you_locale_help'))
+            Select(this.localeOptions()).selected(this.locale === 'zh' ? 0 : 1).value(this.localeLabel())
+              .width('100%').height(48).backgroundColor(this.colors.input).borderRadius(14)
+              .fontColor(this.colors.foreground).selectedOptionBgColor(this.colors.accentSoft)
+              .selectedOptionFontColor(this.colors.foreground).optionBgColor(this.colors.panel)
+              .optionFontColor(this.colors.foreground)
+              .onSelect((index: number, _selected?: string): void => { this.locale = index === 0 ? 'zh' : 'en'; })
+          }.width('100%')
+        }.width('100%').alignItems(HorizontalAlign.Start).padding({ bottom: 8 })
+      }.layoutWeight(1).width('100%').scrollBar(BarState.Auto)
       Row({ space: 10 }) {
-        Button($r('app.string.cancel')).layoutWeight(1).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
+        Button($r('app.string.cancel')).layoutWeight(1).height(48).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
           .onClick((): void => { this.editProfileOpen = false; })
-        Button($r('app.string.save')).layoutWeight(1).backgroundColor(this.colors.accent).fontColor(Color.White)
+        Button($r('app.string.save')).layoutWeight(1).height(48).backgroundColor(this.colors.accent).fontColor(Color.White)
           .enabled(!this.model.saving).onClick((): void => { this.saveProfile(); })
       }.width('100%')
-    }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 24 }).backgroundColor(this.colors.panel)
+    }.width('100%').height('100%').padding({ left: 20, right: 20, top: 12, bottom: 24 }).backgroundColor(this.colors.panel)
   }
 
   build() {
@@ -405,7 +552,8 @@ export struct XopcAboutYouView {
               .backgroundColor(this.section === 1 ? this.colors.panel : Color.Transparent)
               .onClick((): void => { this.section = 1; if (!this.model.items.length) this.model.load('all'); })
           }.width('calc(100% - 40vp)').padding(3).borderRadius(20).backgroundColor(this.colors.grouped).margin({ bottom: 14 })
-          if (this.model.error) { Text(this.model.error).fontSize(12).fontColor(this.colors.danger).padding({ left: 20, right: 20, bottom: 8 }) }
+          if (this.model.error) { Text(userErrorMessage(this.model.error, 'collection')).fontSize(12)
+            .fontColor(this.colors.secondary).padding({ left: 20, right: 20, bottom: 8 }) }
           if (this.section === 1) {
             Column() {
               this.understandingFilters()

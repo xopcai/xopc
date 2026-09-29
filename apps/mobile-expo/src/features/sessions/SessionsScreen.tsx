@@ -17,6 +17,7 @@ import { useDelayedDelete } from '../../hooks/use-delayed-delete';
 import { useListSelection } from '../../hooks/use-list-selection';
 import { useMessages, t } from '../../i18n/messages';
 import { sessionDisplayName } from '../../lib/session-helpers';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
 import { dismissOrRoot, openChat, useDismissOnHardwareBack } from '../../lib/navigation';
 import { refreshSessionsList } from '../../query/infinite-list-sync';
@@ -153,7 +154,7 @@ export function SessionsScreen({ embedded = false }: { embedded?: boolean } = {}
       else router.push(`/chat/${conversationId}`);
     },
     onError: (error) => {
-      setSnackMsg(error instanceof Error ? error.message : m.notesPage.actionFailed);
+      setSnackMsg(userFacingErrorMessage(error, m.mobileExperience.errors, 'save'));
     },
   });
 
@@ -179,11 +180,7 @@ export function SessionsScreen({ embedded = false }: { embedded?: boolean } = {}
       setSnackMsg(allArchived ? sa.sessionUnarchived : sa.sessionArchived);
       exitSelectionMode();
     } catch (error) {
-      setSnackMsg(
-        error instanceof Error
-          ? error.message
-          : allArchived ? sa.failedToUnarchive : sa.failedToArchive,
-      );
+      setSnackMsg(userFacingErrorMessage(error, m.mobileExperience.errors, 'save'));
     }
   }, [exitSelectionMode, refreshList, sa, selectedIds, sessionByKey]);
 
@@ -207,7 +204,7 @@ export function SessionsScreen({ embedded = false }: { embedded?: boolean } = {}
       setSnackMsg(sa.sessionRenamed);
       exitSelectionMode();
     },
-    onError: (error) => setSnackMsg(error instanceof Error ? error.message : sa.failedToRename),
+    onError: (error) => setSnackMsg(userFacingErrorMessage(error, m.mobileExperience.errors, 'save')),
   });
 
   const batchDeleteMutation = useMutation({
@@ -220,7 +217,7 @@ export function SessionsScreen({ embedded = false }: { embedded?: boolean } = {}
       exitSelectionMode();
       setShowBatchDelete(false);
     },
-    onError: (error) => setSnackMsg(error instanceof Error ? error.message : sa.failedToDelete),
+    onError: (error) => setSnackMsg(userFacingErrorMessage(error, m.mobileExperience.errors, 'save')),
   });
 
   const primeSessionHistory = useCallback((conversationId: string): Promise<void> => {
@@ -278,17 +275,17 @@ export function SessionsScreen({ embedded = false }: { embedded?: boolean } = {}
             await deleteSession(session.key);
             await refreshList();
           },
-          (error) => setSnackMsg(error instanceof Error ? error.message : sa.failedToDelete),
+          (error) => setSnackMsg(userFacingErrorMessage(error, m.mobileExperience.errors, 'save')),
         );
         setSnackMsg(sa.sessionDeleted);
       }
     } catch (error) {
       if (action.key === 'delete') {
-        setSnackMsg(error instanceof Error ? error.message : sa.failedToDelete);
+        setSnackMsg(userFacingErrorMessage(error, m.mobileExperience.errors, 'save'));
       } else if (session.status === 'archived') {
-        setSnackMsg(error instanceof Error ? error.message : sa.failedToUnarchive);
+        setSnackMsg(userFacingErrorMessage(error, m.mobileExperience.errors, 'save'));
       } else {
-        setSnackMsg(error instanceof Error ? error.message : sa.failedToArchive);
+        setSnackMsg(userFacingErrorMessage(error, m.mobileExperience.errors, 'save'));
       }
     }
   }, [refreshList, sa, scheduleDelete]);

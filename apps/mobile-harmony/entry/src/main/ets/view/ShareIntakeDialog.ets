@@ -1,6 +1,7 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcShareIntake, shareIntake } from '../service/shareIntake';
 import { XopcIncomingShare } from '../model/share';
+import { userErrorMessage } from '../common/userError';
 
 function kindLabel(kind: string): ResourceStr {
   if (kind === 'url') return $r('app.string.share_intake_url');
@@ -62,7 +63,7 @@ export struct XopcShareIntakeDialog {
             Text(this.intake.pending.preview).fontSize(14).lineHeight(21).fontColor(this.colors.foreground).maxLines(7)
               .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
           }.width('100%').alignItems(HorizontalAlign.Start).padding(14).borderRadius(14).backgroundColor(this.colors.input)
-          if (this.error) { Text(this.error).fontSize(12).fontColor(this.colors.danger).width('100%') }
+          if (this.error) { Text(userErrorMessage(this.error, 'save')).fontSize(12).fontColor(this.colors.danger).width('100%') }
           Button($r('app.string.share_intake_save')).width('100%').height(50).enabled(!this.saving)
             .backgroundColor(this.colors.grouped).fontColor(this.colors.foreground).onClick((): void => { this.save(); })
           Button($r('app.string.share_intake_explore')).width('100%').height(50).enabled(!this.saving)

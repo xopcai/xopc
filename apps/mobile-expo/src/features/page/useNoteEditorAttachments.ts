@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 
 import { apiFetch } from '../../api/client';
+import { userFacingErrorMessage, type UserErrorCopy } from '../../lib/user-facing-error';
 import { uploadNoteMedia, type NoteAttachment } from '../../query/notes';
 import { AttachmentFileError, pickAttachmentFromSource, type AttachmentPickSource } from '../chat/attachment-file-io';
 import type { EditorAttachmentPickResult } from '../notes/editor/editor-protocol';
@@ -35,6 +36,7 @@ type UseNoteEditorAttachmentsArgs = {
   id: string | undefined;
   setSnackMsg: Dispatch<SetStateAction<string>>;
   displaySeed: AttachmentDisplaySeed;
+  errorCopy: UserErrorCopy;
   messages: {
     actionFailed: string;
     added: string;
@@ -47,6 +49,7 @@ export function useNoteEditorAttachments({
   id,
   setSnackMsg,
   displaySeed,
+  errorCopy,
   messages,
 }: UseNoteEditorAttachmentsArgs) {
   const [attachmentSrcMap, setAttachmentSrcMap] = useState<Record<string, string>>({});
@@ -145,10 +148,10 @@ export function useNoteEditorAttachments({
         setSnackMsg(source === 'camera' ? messages.cameraDenied : messages.permissionDenied);
         return null;
       }
-      setSnackMsg(error instanceof Error ? error.message : messages.actionFailed);
+      setSnackMsg(userFacingErrorMessage(error, errorCopy, 'media'));
       return null;
     }
-  }, [id, messages, setSnackMsg]);
+  }, [errorCopy, id, messages, setSnackMsg]);
 
   const handleCreateVoiceAttachment = useCallback(async (payload: VoiceCapturePayload): Promise<EditorAttachmentPickResult> => {
     if (!id) return null;
@@ -168,10 +171,10 @@ export function useNoteEditorAttachments({
         transcript: queued.transcript,
       };
     } catch (error) {
-      setSnackMsg(error instanceof Error ? error.message : messages.actionFailed);
+      setSnackMsg(userFacingErrorMessage(error, errorCopy, 'media'));
       return null;
     }
-  }, [id, messages.actionFailed, messages.added, setSnackMsg]);
+  }, [errorCopy, id, messages.added, setSnackMsg]);
 
   return {
     attachmentSrcMap,

@@ -5,6 +5,7 @@ import { Button, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { useMessages } from '../../i18n/messages';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { createNoteShare, type Note, type NoteShareLink } from '../../query/notes';
 import { queryKeys } from '../../query/keys';
 import { useRevokeShare } from '../../query/shares';
@@ -12,7 +13,8 @@ import { spacing, useTheme } from '../../theme';
 import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipboard';
 
 export function NoteShareSheet({ note, onDismiss }: { note: Note; onDismiss: () => void }) {
-  const pm = useMessages().notesPage;
+  const m = useMessages();
+  const pm = m.notesPage;
   const { colors } = useTheme();
   const queryClient = useQueryClient();
   const [link, setLink] = useState<NoteShareLink | null>(null);
@@ -57,7 +59,7 @@ export function NoteShareSheet({ note, onDismiss }: { note: Note; onDismiss: () 
         <Button disabled={busy} onPress={() => action.mutate('copy')}>{pm.copyShareLink}</Button>
         <Button textColor={colors.semantic.error} disabled={busy} onPress={() => action.mutate('revoke')}>{pm.revokeShareLink}</Button>
       </> : <Button mode="contained" disabled={busy} loading={create.isPending} onPress={() => { setFeedback(''); create.mutate(); }}>{pm.createShareLink}</Button>}
-      {error ? <Text accessibilityRole="alert" style={{ color: colors.semantic.error }}>{error.message}</Text> : null}
+      {error ? <Text accessibilityRole="alert" style={{ color: colors.semantic.error }}>{userFacingErrorMessage(error, m.mobileExperience.errors, 'save')}</Text> : null}
       {feedback ? <Text accessibilityLiveRegion="polite">{feedback}</Text> : null}
     </View>
   </BottomSheetModal>;

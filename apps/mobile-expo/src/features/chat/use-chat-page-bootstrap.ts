@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import type { ResolvedNewSessionSpec, SessionInitialAgentConfig } from '@xopcai/gateway-contract';
 
 import { openChat } from '../../lib/navigation';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { queryKeys } from '../../query/keys';
 import { fetchSessionResumeStatus } from '../../query/sessions';
 import { useGatewayStore } from '../../stores/gateway-store';
@@ -136,13 +137,13 @@ export function useChatPageBootstrap({
       })
       .catch(err => {
         if (!isCurrent(selection)) return;
-        setCreateError({ scope: scopeKey, message: err instanceof Error ? err.message : messages.sessions.bootstrapFailed });
+        setCreateError({ scope: scopeKey, message: userFacingErrorMessage(err, messages.mobileExperience.errors, 'save') });
       })
       .finally(() => {
         if (isCurrent(selection)) setCreating(null);
       });
   }, [commitSelection, focused, gatewayOnline, gatewayReady, initialAgentConfig, isCurrent,
-    messages.sessions.bootstrapFailed, newSessionSpec, router, scopeKey, selection, shouldNavigateToRoute, urlConversationId]);
+    messages.mobileExperience.errors, newSessionSpec, router, scopeKey, selection, shouldNavigateToRoute, urlConversationId]);
 
   useEffect(() => {
     if (shouldAutoBootstrap) startAutoSession();

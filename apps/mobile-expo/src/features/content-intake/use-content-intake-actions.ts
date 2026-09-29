@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { openNewChat } from '@/features/chat/open-new-chat';
 import { useMessages } from '@/i18n/messages';
 import { openChat } from '@/lib/navigation';
+import { userFacingErrorMessage } from '@/lib/user-facing-error';
 import { useEffectiveDefaultAgentId } from '@/query/agents';
 import { invalidateNoteLists } from '@/query/workspace-sync';
 import { captureWorkspaceText } from '@/sync/workspace-sync';
@@ -57,7 +58,7 @@ export function useContentIntakeActions(
         setToast(result.synced ? m.contentIntake.savedToNote : m.notesPage.savedOffline);
         return { status: 'saved', noteId: result.noteId };
       } catch (err) {
-        setToast(err instanceof Error ? err.message : m.notesPage.actionFailed);
+        setToast(userFacingErrorMessage(err, m.mobileExperience.errors, 'save'));
         return { status: 'ignored' };
       } finally {
         setSaving(false);
@@ -81,7 +82,7 @@ export function useContentIntakeActions(
           openChat(router, conversationId, { replace: options.chatNavigation === 'replace' });
         })
         .catch((err) => {
-          setToast(err instanceof Error ? err.message : m.sessions.bootstrapFailed);
+          setToast(userFacingErrorMessage(err, m.mobileExperience.errors, 'save'));
         });
     },
     [defaultAgentId, m.sessions.bootstrapFailed, onHandled, options.chatNavigation, router, saving],

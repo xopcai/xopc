@@ -1,4 +1,5 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { userErrorMessage } from '../common/userError';
 import { XopcPageHeader, XopcHubRow, XopcSectionLabel, XopcListSkeleton } from './MobileComponents';
 import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { XopcHomeAction, XopcHomeItem, XopcMobileRoute } from '../model/home';
@@ -145,7 +146,7 @@ export struct XopcProgressView {
                 }, (task: XopcTask): string => task.id + ':' + (task.updatedAt ?? 0))
               }
             }
-            if (this.model.actionError) { Text(this.model.actionError).fontColor(this.colors.danger).width('100%').padding(12) }
+            if (this.model.actionError) { Text(userErrorMessage(this.model.actionError, 'save')).fontColor(this.colors.danger).width('100%').padding(12) }
           }.width('100%').padding({ left: 20, right: 20, bottom: this.bottomInset }).alignItems(HorizontalAlign.Start)
         }.width('100%').height('100%').align(Alignment.Top).scrollBar(BarState.Off)
       }.layoutWeight(1).onRefreshing((): void => {

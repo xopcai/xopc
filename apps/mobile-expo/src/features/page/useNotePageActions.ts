@@ -4,6 +4,7 @@ import { Keyboard } from 'react-native';
 import type { QueryClient } from '@tanstack/react-query';
 
 import { openChat } from '../../lib/navigation';
+import { userFacingErrorMessage, type UserErrorCopy } from '../../lib/user-facing-error';
 import { queryKeys } from '../../query/keys';
 import { noteToIndexEntry, upsertNoteInListCaches } from '../../query/note-list-cache';
 import { invalidateNoteLists } from '../../query/workspace-sync';
@@ -21,6 +22,7 @@ type UseNotePageActionsArgs = {
   flushSave: () => Promise<void>;
   setSnackMsg: (message: string) => void;
   dismissMore: () => void;
+  errorCopy: UserErrorCopy;
   messages: {
     actionFailed: string;
     syncBeforeAction: string;
@@ -40,6 +42,7 @@ export function useNotePageActions({
   flushSave,
   setSnackMsg,
   dismissMore,
+  errorCopy,
   messages,
 }: UseNotePageActionsArgs) {
   const router = useRouter();
@@ -71,12 +74,12 @@ export function useNotePageActions({
       await queryClient.invalidateQueries({ queryKey: queryKeys.sessionContext(conversationId) });
       openChat(router, conversationId);
     } catch (error) {
-      setSnackMsg(error instanceof Error ? error.message : messages.actionFailed);
+      setSnackMsg(userFacingErrorMessage(error, errorCopy, 'save'));
     } finally {
       busyRef.current = false;
       setActionLoading(null);
     }
-  }, [prepareSavedNote, id, messages.actionFailed, note, queryClient, router, setSnackMsg]);
+  }, [prepareSavedNote, id, errorCopy, note, queryClient, router, setSnackMsg]);
 
   const handleShare = useCallback(async () => {
     if (!id || !note || busyRef.current) return;
@@ -87,12 +90,12 @@ export function useNotePageActions({
     try {
       setShareNote(await prepareSavedNote());
     } catch (error) {
-      setSnackMsg(error instanceof Error ? error.message : messages.actionFailed);
+      setSnackMsg(userFacingErrorMessage(error, errorCopy, 'save'));
     } finally {
       busyRef.current = false;
       setActionLoading(null);
     }
-  }, [dismissMore, id, note, prepareSavedNote, messages.actionFailed, setSnackMsg]);
+  }, [dismissMore, errorCopy, id, note, prepareSavedNote, setSnackMsg]);
 
   const handleSyncNow = useCallback(async () => {
     dismissMore();
@@ -104,9 +107,9 @@ export function useNotePageActions({
       await invalidateNoteLists(queryClient);
       setSnackMsg(messages.saved);
     } catch (error) {
-      setSnackMsg(error instanceof Error ? error.message : messages.actionFailed);
+      setSnackMsg(userFacingErrorMessage(error, errorCopy, 'save'));
     }
-  }, [dismissMore, flushEditorToDraft, flushSave, id, messages, queryClient, setSnackMsg]);
+  }, [dismissMore, errorCopy, flushEditorToDraft, flushSave, id, messages, queryClient, setSnackMsg]);
 
   const handleTogglePinned = useCallback(async () => {
     if (!id || !note || busyRef.current) return;
@@ -120,12 +123,12 @@ export function useNotePageActions({
       void invalidateNoteLists(queryClient);
       setSnackMsg(updated.pinned ? messages.pin : messages.unpin);
     } catch (error) {
-      setSnackMsg(error instanceof Error ? error.message : messages.actionFailed);
+      setSnackMsg(userFacingErrorMessage(error, errorCopy, 'save'));
     } finally {
       busyRef.current = false;
       setActionLoading(null);
     }
-  }, [flushSave, id, messages, note, queryClient, setSnackMsg]);
+  }, [errorCopy, flushSave, id, messages, note, queryClient, setSnackMsg]);
 
   return {
     actionLoading,

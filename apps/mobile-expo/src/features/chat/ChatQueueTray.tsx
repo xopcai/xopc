@@ -5,6 +5,7 @@ import { Button, Icon, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { useMessages } from '../../i18n/messages';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { cancelSessionInput, fetchSessionInputs, queuedMessages, sessionInputsKey, updateSessionInput, type SessionInput } from '../../query/session-inputs';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { spacing, typography, useTheme } from '../../theme';
@@ -53,7 +54,7 @@ export function ChatQueueTray({ conversationId, onEdit }: { conversationId: stri
         {preparation && preparation.state !== 'ready' ? <View>
           <Text>{preparation.state === 'preparing' ? m.sessionPreparing : preparation.lastError ?? m.sessionPreparationFailed}</Text>
           {preparation.state === 'preparation_failed' ? <Button disabled={retryPreparation.isPending} onPress={() => retryPreparation.mutate()}>{m.retry}</Button> : null}
-          {retryPreparation.isError ? <Text accessibilityRole="alert">{retryPreparation.error.message}</Text> : null}
+          {retryPreparation.isError ? <Text accessibilityRole="alert">{userFacingErrorMessage(retryPreparation.error, m.errors, 'save')}</Text> : null}
         </View> : null}
         {state.isError ? <Button onPress={() => void state.refetch()}>{m.retry}</Button> : !queue.length ? <Text style={{ color: colors.text.secondary }}>{m.queueEmpty}</Text> : null}
         {mutation.isError ? <Text accessibilityRole="alert" style={{ color: colors.semantic.error }}>{m.queueError}</Text> : null}
