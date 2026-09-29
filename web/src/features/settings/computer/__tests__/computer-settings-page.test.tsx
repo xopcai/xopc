@@ -61,7 +61,7 @@ it('offers native reenrollment even when computer control is disabled and keeps 
 });
 
 it('changes only computer enablement and links to existing browser and model settings', async () => {
-  window.electronAPI = undefined;
+  window.electronAPI = { platform: 'darwin', computer: { status: async () => ({ connected: false, permissions: { accessibility: false, screenRecording: 'unknown' } }) } } as any;
   const container = await renderPanel();
   const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!;
   expect(toggle.getAttribute('aria-checked')).toBe('false');
@@ -71,9 +71,18 @@ it('changes only computer enablement and links to existing browser and model set
   }));
   expect(container.querySelector('a[href="/settings/agent-browser"]')).not.toBeNull();
   expect(container.querySelector('a[href="/settings/capabilities/models?add=1"]')).not.toBeNull();
-  expect(container.textContent).toContain('网页控制台不能批准本机操作');
   expect(container.textContent).toContain('始终需要');
   expect(container.textContent).not.toContain('Excel');
+});
+
+it('disables computer control in the web console', async () => {
+  window.electronAPI = undefined;
+  const container = await renderPanel();
+  const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!;
+  expect(toggle.disabled).toBe(true);
+  expect(toggle.getAttribute('aria-checked')).toBe('false');
+  await act(async () => toggle.click());
+  expect(fetchJson).not.toHaveBeenCalled();
 });
 
 it('wires missing macOS permissions and keeps stop usable during a pending permission request', async () => {

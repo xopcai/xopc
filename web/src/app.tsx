@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import { AppShell } from '@/components/shell/app-shell';
+import { isComputerUseAvailable } from '@/lib/electron-env';
 import { RouteErrorFallback } from '@/components/errors/app-error-boundary';
 import { SettingsPageLayout } from '@/components/shell/settings-page-layout';
 import { SettingsSheet } from '@/components/shell/settings-sheet';
@@ -410,11 +411,11 @@ const router = createHashRouter([
           },
           {
             path: 'computer-use',
-            element: (
+            element: isComputerUseAvailable() ? (
               <Suspense fallback={<SettingsRouteFallback />}>
                 <ComputerSettingsPage />
               </Suspense>
-            ),
+            ) : <Navigate to="/settings/agent-browser" replace />,
           },
           {
             path: 'agent-browser',

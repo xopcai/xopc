@@ -19,7 +19,7 @@ import {
 } from '@/navigation';
 import type { SettingsShellNavGroup } from '@/navigation';
 import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode } from '@/navigation/settings-nav-visibility';
-import { isElectron } from '@/lib/electron-env';
+import { isComputerUseAvailable, isElectron } from '@/lib/electron-env';
 import { preloadRouteForPath } from '@/lib/route-preload';
 import { SETTINGS_SHEET_PORTAL_BODY_MQ } from '@/lib/settings-shell-dialog-layer';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -57,6 +57,7 @@ const mobileToolbarButtonClass = cn(
 
 function visibleSettingsNavTabs(group: SettingsShellNavGroup, settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode']) {
   return group.tabs.filter((tab) => {
+    if (tab === 'settingsComputerUse' && !isComputerUseAvailable()) return false;
     if (!isSettingsTabVisibleInMode(tab, settingsMode)) {
       return false;
     }
