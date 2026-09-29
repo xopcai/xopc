@@ -7,6 +7,7 @@ import { XopcFilesViewModel } from '../viewmodel/filesViewModel';
 import { XopcFile } from '../model/files';
 import { XopcEmptyHint, XopcListSkeleton, XopcPageHeader } from './MobileComponents';
 import { XopcNotesView } from './NotesView';
+import { userErrorMessage } from '../common/userError';
 
 /** Notes-first Library tab. Files remain a peer destination, not a competing default. */
 @ComponentV2
@@ -61,7 +62,8 @@ export struct XopcNotesTabView {
           .accessibilityText($r('app.string.files')).onClick((): void => { this.onNavigate({ page: 'files', itemId: '' }); })
       }.width('100%').padding({ left: 20, right: 20, bottom: 12 })
       if (this.model.error) {
-        Text(this.model.error).fontSize(13).fontColor(this.colors.danger).width('100%').padding({ left: 20, right: 20, bottom: 8 })
+        Text(userErrorMessage(this.model.error, 'collection')).fontSize(13).fontColor(this.colors.secondary)
+          .width('100%').padding({ left: 20, right: 20, bottom: 8 })
       }
       if (this.model.loading) {
         Column() { XopcListSkeleton() }.width('100%').padding({ left: 20, right: 20 })

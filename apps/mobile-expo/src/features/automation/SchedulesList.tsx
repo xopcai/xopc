@@ -9,6 +9,7 @@ import { AppToast } from '../../components/AppToast';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { TOAST_DURATION_DEFAULT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import {
   AUTOMATION_RUNS_LIMIT,
   automationCronExpression,
@@ -53,7 +54,7 @@ export function SchedulesList() {
         queryClient.invalidateQueries({ queryKey: queryKeys.automationMetrics }),
       ]);
     },
-    onError: (error) => setToast(error instanceof Error ? error.message : pm.actionFailed),
+    onError: (error) => setToast(userFacingErrorMessage(error, m.mobileExperience.errors, 'save')),
   });
   const runMutation = useMutation({
     mutationFn: (id: string) => runAutomationNow(id),
@@ -65,7 +66,7 @@ export function SchedulesList() {
         queryClient.invalidateQueries({ queryKey: queryKeys.automationRuns(AUTOMATION_RUNS_LIMIT) }),
       ]);
     },
-    onError: (error) => setToast(error instanceof Error ? error.message : pm.actionFailed),
+    onError: (error) => setToast(userFacingErrorMessage(error, m.mobileExperience.errors, 'save')),
   });
 
   const automations = automationsQuery.data ?? [];

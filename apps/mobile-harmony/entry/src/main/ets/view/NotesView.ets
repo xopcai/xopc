@@ -11,6 +11,7 @@ import { XopcNativeNoteEditor } from './NativeNoteEditor';
 import { XopcShareResultView } from './ShareResultView';
 import { XopcVoiceCapture } from '../service/voiceCapture';
 import { XopcChatMediaView } from './ChatMediaView';
+import { userErrorMessage } from '../common/userError';
 
 type XopcNoteSheet = 'history' | 'ai' | 'share' | 'tags' | 'more' | 'attachment' | 'voice';
 
@@ -514,7 +515,7 @@ export struct XopcNotesView {
       Text($r('app.string.note_record_audio')).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).width('100%')
       Text(this.voice.state === 'recording' ? this.voice.seconds.toString() + ' s' : $r('app.string.note_voice_ready'))
         .fontSize(26).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-      if (this.voice.error) { Text(this.voice.error).fontSize(13).fontColor(this.colors.danger).width('100%') }
+      if (this.voice.error) { Text(userErrorMessage(this.voice.error, 'save')).fontSize(13).fontColor(this.colors.danger).width('100%') }
       if (this.voice.state === 'recording') {
         Button($r('app.string.stop')).width('100%').height(46).enabled(!this.voice.busy)
           .onClick((): void => { void this.voice.stop(); })
@@ -542,7 +543,7 @@ export struct XopcNotesView {
   activeSheetContent() {
     Column() {
       if (this.model.error) {
-        Text(this.model.error).fontSize(13).fontColor(this.colors.danger)
+        Text(userErrorMessage(this.model.error, 'save')).fontSize(13).fontColor(this.colors.danger)
           .width('100%').padding({ left: 20, right: 20, bottom: 8 })
       }
       if (this.activeSheet === 'history') { this.historySheet() }
@@ -561,7 +562,8 @@ export struct XopcNotesView {
     Column() {
         this.header()
         if (this.model.error) {
-          Text(this.model.error).fontSize(13).fontColor(this.colors.danger).width('100%').padding({ left: 20, right: 20, bottom: 8 })
+          Text(userErrorMessage(this.model.error, 'collection')).fontSize(13).fontColor(this.colors.secondary)
+            .width('100%').padding({ left: 20, right: 20, bottom: 8 })
         }
         if (this.model.openingId) {
           XopcBrandLoading()

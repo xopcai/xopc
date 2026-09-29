@@ -16,6 +16,7 @@ import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { TOAST_DURATION_DEFAULT } from '../../constants/toast';
 import { useMessages } from '../../i18n/messages';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import {
   automationCronExpression,
   automationInstruction,
@@ -94,7 +95,7 @@ export function AutomationFormScreen() {
       router.back();
     },
     onError: (error) => {
-      setSnackbarMessage(error instanceof Error ? error.message : pm.saveFailed);
+      setSnackbarMessage(userFacingErrorMessage(error, m.mobileExperience.errors, 'save'));
     },
   });
 
@@ -105,7 +106,7 @@ export function AutomationFormScreen() {
       router.back();
     },
     onError: (error) => {
-      setSnackbarMessage(error instanceof Error ? error.message : pm.deleteFailed);
+      setSnackbarMessage(userFacingErrorMessage(error, m.mobileExperience.errors, 'save'));
     },
   });
 

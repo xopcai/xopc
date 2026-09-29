@@ -1,4 +1,5 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { userErrorMessage } from '../common/userError';
 import { quickChatIntake, XopcQuickChatIntake } from '../service/quickChatIntake';
 import { XopcChatViewModel } from '../viewmodel/chatViewModel';
 import { XopcChatRow, XopcChatAttachment, XopcChatBlock, XopcContextRef, XopcReferenceItem, XopcChatAgent,
@@ -1089,8 +1090,8 @@ export struct XopcChatView {
         }
       }.scrollable(ScrollDirection.Horizontal).width('92%').height(44)
     }
-    if (this.voice.error) { Text(this.voice.error).fontColor(this.colors.danger).padding(8) }
-    if (this.reader.error) { Text(this.reader.error).fontColor(this.colors.danger).padding(8) }
+    if (this.voice.error) { Text(userErrorMessage(this.voice.error, 'save')).fontColor(this.colors.danger).padding(8) }
+    if (this.reader.error) { Text(userErrorMessage(this.reader.error, 'generic')).fontColor(this.colors.danger).padding(8) }
     if (this.reader.continuousConversationId === this.chat.selectedId && this.chat.selectedId) {
       Row({ space: 8 }) {
         Text($r('app.string.chat_continuous_active')).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1)
@@ -1151,7 +1152,7 @@ export struct XopcChatView {
         if (this.palette.loading) {
           Column() {}.height(44).width('100%').borderRadius(12).backgroundColor(this.colors.grouped)
         }
-        if (this.palette.error) { Text(this.palette.error).fontColor(this.colors.danger).fontSize(12) }
+        if (this.palette.error) { Text(userErrorMessage(this.palette.error, 'collection')).fontColor(this.colors.danger).fontSize(12) }
         List({ space: 4 }) {
           ForEach(this.palette.items, (item: XopcPaletteItem) => {
             ListItem() {
@@ -1404,7 +1405,7 @@ export struct XopcChatView {
       }
       if (this.chat.error) {
         Row({ space: 8 }) {
-          Text(this.chat.error).fontSize(12).fontColor(this.colors.danger).layoutWeight(1).maxLines(3)
+          Text(userErrorMessage(this.chat.error, 'generic')).fontSize(12).fontColor(this.colors.secondary).layoutWeight(1).maxLines(3)
           Button($r('app.string.refresh')).height(44).onClick((): void => { this.chat.retryHistory(); })
         }.padding({ left: 16, right: 16 })
       }
@@ -1496,7 +1497,7 @@ export struct XopcChatView {
             ForEach(this.attention.ordered(this.attentionItems).slice(0, 3), (item: XopcHomeItem) => {
               XopcChatAttentionRow({ item, pending: this.attention.pending, onAction: (action: XopcHomeAction): void => { this.attentionAction(action); } })
             }, (item: XopcHomeItem): string => item.id + ':' + JSON.stringify(item))
-            if (this.attention.error) { Text(this.attention.error).fontColor(this.colors.danger).width('100%') }
+            if (this.attention.error) { Text(userErrorMessage(this.attention.error, 'save')).fontColor(this.colors.danger).width('100%') }
             Button($r('app.string.chat_attention_all')).height(48).width('100%').backgroundColor(Color.Transparent).fontColor(this.colors.accent)
               .onClick((): void => { this.sheetOpen = false; this.onNavigate({ page: 'progress', itemId: '' }); })
           }.width('100%')

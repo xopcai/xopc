@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ShareAutoRequest } from '../../api/share';
 import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { fetchFileContent } from '../../query/files';
 import { useReducedMotion } from '../../motion';
 import { radii, spacing, useTheme } from '../../theme';
@@ -198,10 +199,6 @@ function buildDownloadUrlForFile(
   return file.remoteUri ?? null;
 }
 
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
 export function FilePreviewModal({ visible, file, onClose, conversationId }: FilePreviewModalProps) {
   const router = useRouter();
   const reducedMotion = useReducedMotion();
@@ -232,7 +229,7 @@ export function FilePreviewModal({ visible, file, onClose, conversationId }: Fil
         if (!cancelled) setLoaded(next);
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setError(userFacingErrorMessage(e, m.mobileExperience.errors, 'media'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -278,7 +275,7 @@ export function FilePreviewModal({ visible, file, onClose, conversationId }: Fil
         return;
       }
     } catch (e) {
-      setDownloadError(t(cm.filePreviewDownloadFailed, { message: errorMessage(e) }));
+      setDownloadError(t(cm.filePreviewDownloadFailed, { message: userFacingErrorMessage(e, m.mobileExperience.errors, 'media') }));
     } finally {
       setDownloadPending(false);
     }

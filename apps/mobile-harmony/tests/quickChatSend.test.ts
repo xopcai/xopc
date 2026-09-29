@@ -18,7 +18,10 @@ function handler(file: string, start: string, end: string, deps: Record<string, 
 const file = { type: 'image', name: 'photo.png', mimeType: 'image/png', size: 5, data: 'encoded' };
 function home() {
   const intake = new XopcQuickChatIntake();
-  const view = handler('HomeView', '  private async sendQuickDraft(', '  private async openQuickChat(', { quickChatIntake: intake });
+  const view = handler('HomeView', '  private async sendQuickDraft(', '  private async openQuickChat(', {
+    quickChatIntake: intake,
+    userErrorMessage: (message: string) => message,
+  });
   Object.assign(view, {
     quickDraft: 'hello', quickFiles: [], quickSending: false, quickPicking: false,
     chatRepository: { create: vi.fn(async () => 'conversation') }, switchToChat: vi.fn(),

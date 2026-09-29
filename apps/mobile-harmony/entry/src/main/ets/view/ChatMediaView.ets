@@ -1,4 +1,5 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { userErrorMessage } from '../common/userError';
 import { image } from '@kit.ImageKit';
 import { common } from '@kit.AbilityKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
@@ -538,7 +539,8 @@ export struct XopcChatMediaView {
             .backgroundColor(this.colors.input).fontColor(this.colors.foreground).onClick((): void => { this.openPreview(); })
         }
       }
-      if (this.document.error) { Text(this.document.error).fontSize(13).fontColor(this.colors.danger).padding({ left: 16, right: 16 }) }
+      if (this.document.error) { Text(userErrorMessage(this.document.error, 'media')).fontSize(13)
+        .fontColor(this.colors.danger).padding({ left: 16, right: 16 }) }
       if (this.document.busy) { LoadingProgress().width(24).height(24).color(this.colors.secondary) }
       if (this.document.editing) {
         TextArea({ text: this.document.content }).id('file-preview-editor').width('100%').layoutWeight(1)

@@ -24,6 +24,7 @@ import {
   type MessagingCallbacks,
 } from '../../api/agent-client';
 import { queryKeys } from '../../query/keys';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { invalidateSessionLists } from '../../query/workspace-sync';
 import { fetchSessionActiveRun, fetchSessionMessagePage, type SessionMessagePage } from '../../query/sessions';
 import { useGatewayStore } from '../../stores/gateway-store';
@@ -801,7 +802,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       if (isCurrent()) {
         sendingRef.current = false;
         runBusyRef.current = streamingRef.current;
-        setSnackMsg(error instanceof Error ? error.message : m.chat.sendFailed);
+        setSnackMsg(userFacingErrorMessage(error, m.mobileExperience.errors, 'save'));
       }
       return;
     }
@@ -918,11 +919,11 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       clarificationAttemptRef.current = null;
       setClarifyPrompt(null);
     } catch (e) {
-      setClarifySubmitError(e instanceof Error ? e.message : String(e));
+      setClarifySubmitError(userFacingErrorMessage(e, m.mobileExperience.errors, 'save'));
     } finally {
       setClarifySubmitting(false);
     }
-  }, [clarifyPrompt, clarifySubmitting]);
+  }, [clarifyPrompt, clarifySubmitting, m.mobileExperience.errors]);
 
   const submitClarifyAnswer = useCallback((answer: string) => respondToClarification('answer', answer), [respondToClarification]);
   const letAgentDecideClarification = useCallback(() => respondToClarification('agent_decide'), [respondToClarification]);

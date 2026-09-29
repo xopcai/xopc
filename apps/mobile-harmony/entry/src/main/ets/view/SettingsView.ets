@@ -12,6 +12,7 @@ import { pushNotifications, XopcPushNotifications } from '../service/pushNotific
 import { XopcPageHeader, XopcHubRow, XopcSectionLabel } from './MobileComponents';
 import { connectionModel } from '../viewmodel/connectionViewModel';
 import { XopcMobileRoute } from '../model/home';
+import { userErrorMessage } from '../common/userError';
 
 @ComponentV2
 export struct XopcSettingsView {
@@ -165,9 +166,9 @@ export struct XopcSettingsView {
             Button($r('app.string.disable_push')).enabled(!this.push.busy).onClick((): void => { this.push.disable(); })
           }
         }
-        if (this.push.error) { Text(this.push.error).fontColor(this.colors.danger).fontSize(13) }
+        if (this.push.error) { Text(userErrorMessage(this.push.error, 'save')).fontColor(this.colors.danger).fontSize(13) }
           }
-          if (this.error) { Text(this.error).fontColor(this.colors.danger).margin({ top: 16 }) }
+          if (this.error) { Text(userErrorMessage(this.error, 'save')).fontColor(this.colors.danger).margin({ top: 16 }) }
         }.width('100%').padding({ left: 20, right: 20, bottom: 24 }).alignItems(HorizontalAlign.Start)
       }.layoutWeight(1).width('100%').align(Alignment.Top)
     }.width('100%').height('100%').backgroundColor(this.colors.surface)

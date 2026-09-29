@@ -2,7 +2,8 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcSessionsViewModel } from '../viewmodel/sessionsViewModel';
 import { XopcSessionItem, XopcSessionGroup } from '../model/chat';
 import { groupChatSessions, sessionAge } from '../common/sessionGroups';
-import { XopcListSkeleton } from './MobileComponents';
+import { XopcErrorState, XopcListSkeleton } from './MobileComponents';
+import { userErrorMessage } from '../common/userError';
 import { appSettings } from '../service/settings';
 import { XopcShareResult } from '../model/share';
 import { shareService } from '../service/shareService';
@@ -248,7 +249,7 @@ export struct XopcSessionsView {
       Text($r('app.string.sessions_rename')).fontSize(20).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
       TextInput({ text: this.renameText, placeholder: $r('app.string.name') }).id('sessions-rename-input')
         .onChange((text: string): void => { this.renameText = text; }).enabled(!this.sessions.busy)
-      if (this.sessions.actionError) { Text(this.sessions.actionError).fontColor(this.colors.danger).fontSize(13) }
+      if (this.sessions.actionError) { Text(userErrorMessage(this.sessions.actionError, 'save')).fontColor(this.colors.danger).fontSize(13) }
       Row({ space: 12 }) {
         Button($r('app.string.cancel')).layoutWeight(1).height(44).enabled(!this.sessions.busy)
           .onClick((): void => { this.renameOpen = false; })
@@ -338,15 +339,20 @@ export struct XopcSessionsView {
               .onClick((): void => { this.searchOpen = false; this.sessions.setSearch(''); })
           }.padding({ left: 20, right: 20, bottom: 8 })
         }
-        if (this.sessions.error || this.sessions.actionError) {
+        if ((this.sessions.error || this.sessions.actionError) && this.sessions.items.length) {
           Row({ space: 8 }) {
-            Text(this.sessions.actionError || this.sessions.error).fontSize(13).fontColor(this.colors.danger).layoutWeight(1).maxLines(3)
+            Text(userErrorMessage(this.sessions.actionError || this.sessions.error, 'collection')).fontSize(13)
+              .fontColor(this.colors.secondary).layoutWeight(1).maxLines(3)
             Button($r('app.string.refresh')).height(44).enabled(!this.sessions.busy).onClick((): void => { this.sessions.load(); })
-          }.padding({ left: 20, right: 20 })
+          }.padding({ left: 20, right: 20, top: 4, bottom: 4 }).backgroundColor(this.colors.panel)
         }
         Refresh({ refreshing: this.sessions.refreshing }) {
           List({ scroller: this.scroller }) {
             if (this.sessions.loading && !this.sessions.items.length) { ListItem() { XopcListSkeleton() } }
+            if (!this.sessions.loading && this.sessions.error && !this.sessions.items.length) {
+              ListItem() { XopcErrorState({ error: this.sessions.error, context: 'collection',
+                onAction: (): void => { this.sessions.load(); } }) }
+            }
             Repeat<XopcSessionDisplayRow>(this.rows).each((row: RepeatItem<XopcSessionDisplayRow>) => {
               ListItem() {
                 XopcSessionManagerRow({ entry: row.item, selecting: this.sessions.selecting,

@@ -6,6 +6,7 @@ import { KeyboardStickyView } from 'react-native-keyboard-controller';
 
 import { AppToast } from '../../components/AppToast';
 import { useMessages } from '../../i18n/messages';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { createSession } from '../../query/sessions';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { radii, spacing, useTheme } from '../../theme';
@@ -74,12 +75,12 @@ export function QuickChatTabBar(props: BottomTabBarProps) {
       if (!openRootChat(router, conversationId)) throw new Error(copy.quickChatOpenFailed);
       return true;
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : copy.quickChatOpenFailed);
+      setError(userFacingErrorMessage(reason, copy.errors, 'save'));
       return false;
     } finally {
       setSubmitting(false);
     }
-  }, [copy.quickChatOpenFailed, gatewayId, router, submitting]);
+  }, [copy.errors, copy.quickChatOpenFailed, gatewayId, router, submitting]);
 
   const handleSend = useCallback((
     text: string,
