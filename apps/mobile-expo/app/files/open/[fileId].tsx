@@ -3,22 +3,24 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { View } from 'react-native';
 
 import { NativeScreenHeader } from '@/components/NativeScreenHeader';
+import { BrandLoadingState } from '@/components/BrandLoadingState';
 import { FilePreviewModal } from '@/features/file-preview/FilePreviewModal';
-import { FileListSkeleton, FileLoadError } from '@/features/files/FilesScreen';
+import { FileLoadError } from '@/features/files/FilesScreen';
 import { useMessages } from '@/i18n/messages';
 import { fetchFileResource } from '@/query/files';
 import { useTheme } from '@/theme';
 
 export default function FileOpenRoute() {
   const router = useRouter();
-  const labels = useMessages().filesPage;
+  const messages = useMessages();
+  const labels = messages.filesPage;
   const { colors } = useTheme();
   const { fileId = '', conversationId } = useLocalSearchParams<{ fileId?: string; conversationId?: string }>();
   const file = useQuery({ queryKey: ['files', 'resource', fileId], queryFn: () => fetchFileResource(fileId), enabled: Boolean(fileId) });
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface.base }}>
       {!file.data ? <NativeScreenHeader title={labels.title} onBack={() => router.back()} /> : null}
-      {file.isLoading ? <FileListSkeleton /> : !file.data ? <FileLoadError error={file.error} onRetry={() => void file.refetch()} /> : null}
+      {file.isLoading ? <BrandLoadingState label={messages.common.loading} /> : !file.data ? <FileLoadError error={file.error} onRetry={() => void file.refetch()} /> : null}
       <FilePreviewModal
         visible={Boolean(file.data)}
         conversationId={conversationId}

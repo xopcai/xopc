@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { View } from 'react-native';
 
 import { NativeScreenHeader } from '@/components/NativeScreenHeader';
+import { BrandLoadingState } from '@/components/BrandLoadingState';
 import { FilePreviewModal, type PreviewableFile } from '@/features/file-preview/FilePreviewModal';
 import { useMessages } from '@/i18n/messages';
 import {
@@ -13,7 +14,7 @@ import {
 } from '@/query/files';
 import { useTheme } from '@/theme';
 
-import { FileListSkeleton, FileLoadError } from './FilesScreen';
+import { FileLoadError } from './FilesScreen';
 
 export function WorkspaceFileLinkScreen({
   path,
@@ -23,7 +24,8 @@ export function WorkspaceFileLinkScreen({
   conversationId?: string;
 }) {
   const router = useRouter();
-  const labels = useMessages().filesPage;
+  const messages = useMessages();
+  const labels = messages.filesPage;
   const { colors } = useTheme();
   const normalizedPath = path.trim();
   const normalizedConversationId = conversationId?.trim();
@@ -54,7 +56,7 @@ export function WorkspaceFileLinkScreen({
     <View style={{ flex: 1, backgroundColor: colors.surface.base }}>
       {!preview ? <NativeScreenHeader title={labels.title} onBack={() => router.back()} /> : null}
       {file.isLoading ? (
-        <FileListSkeleton />
+        <BrandLoadingState label={messages.common.loading} />
       ) : !preview ? (
         <FileLoadError error={error} onRetry={() => void file.refetch()} />
       ) : null}

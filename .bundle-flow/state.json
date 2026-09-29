@@ -1,6 +1,14 @@
 {
-  "active": "mobile-user-understanding",
+  "active": "mobile-instant-navigation-loading",
   "requirements": {
+    "mobile-instant-navigation-loading": {
+      "description": "移动端 Chat 缓存优先展示，并统一列表项进入详情后的即时导航与品牌加载反馈",
+      "current_phase": "complete",
+      "completed_phases": ["analyse", "plan", "coding", "build", "verify"],
+      "invalidated_phases": [],
+      "platforms": ["harmony", "android", "ios"],
+      "project_root": "/Users/micjoyce/develop/github/xopc"
+    },
     "mobile-user-understanding": {
       "description": "在 HarmonyOS、Android 和 iOS 的“我的”中提供可查看、纠正和删除的用户理解，并补齐轻量 Gateway 契约与移动端权限",
       "current_phase": "complete",
