@@ -3,6 +3,7 @@ import { XopcChatContextViewModel } from '../viewmodel/chatContextViewModel';
 import { XopcContextRef, XopcContextSource, XopcHostDirectory, XopcReferenceItem } from '../model/chat';
 import { XopcProject } from '../model/workspace';
 import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
+import { userErrorMessage } from '../common/userError';
 
 @ComponentV2
 export struct XopcChatContext {
@@ -66,7 +67,7 @@ export struct XopcChatContext {
         if (this.refs.length >= 5 && this.kind !== 'file') { Text($r('app.string.chat_ref_limit')).fontColor(this.colors.secondary) }
       }
       if (this.model.error) {
-        Text(this.model.error).fontColor(this.colors.danger)
+        Text(userErrorMessage(this.model.error, 'collection')).fontColor(this.colors.secondary)
         Button($r('app.string.refresh')).onClick((): void => { if (this.mode === 'context') this.onRetry(); else this.choose(this.mode); })
       }
       if (this.model.loading) { XopcListSkeleton() }

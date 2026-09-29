@@ -26,6 +26,7 @@ import { useListSelection } from '../../hooks/use-list-selection';
 
 import { useMessages, t } from '../../i18n/messages';
 import { dismissOrRoot, noteDetailRoute, useDismissOnHardwareBack } from '../../lib/navigation';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
 import {
   createBlankNote,
@@ -150,7 +151,7 @@ export function NotesScreen() {
       router.push(noteDetailRoute(result.note.id));
     },
     onError: (err) => {
-      setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
+      setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save'));
     },
   });
 
@@ -176,7 +177,7 @@ export function NotesScreen() {
       void updateNote(note.id, { pinned: action.key === 'pin' })
         .then((updated) => upsertNoteInListCaches(queryClient, noteToIndexEntry(updated)))
         .then(() => setSnackMsg(pm.updated))
-        .catch((err) => setSnackMsg(err instanceof Error ? err.message : pm.actionFailed));
+        .catch((err) => setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save')));
       return;
     }
 
@@ -184,7 +185,7 @@ export function NotesScreen() {
       void updateNote(note.id, { status: 'archived' })
         .then((updated) => upsertNoteInListCaches(queryClient, noteToIndexEntry(updated)))
         .then(() => setSnackMsg(pm.updated))
-        .catch((err) => setSnackMsg(err instanceof Error ? err.message : pm.actionFailed));
+        .catch((err) => setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save')));
       return;
     }
 
@@ -196,7 +197,7 @@ export function NotesScreen() {
           removeNoteFromListCaches(queryClient, note.id);
           await resetNoteListPagination(queryClient);
         },
-        (err) => setSnackMsg(err instanceof Error ? err.message : pm.actionFailed),
+        (err) => setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save')),
       );
       setSnackMsg(pm.deleted);
     }
@@ -234,7 +235,7 @@ export function NotesScreen() {
         setSnackMsg(successMsg);
         exitSelectionMode();
       } catch (err) {
-        setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
+        setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save'));
       }
     },
     [exitSelectionMode, pm.actionFailed, queryClient, selectedCount],
@@ -267,7 +268,7 @@ export function NotesScreen() {
       exitSelectionMode();
       setShowBatchDelete(false);
     } catch (err) {
-      setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
+      setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save'));
     }
   }, [exitSelectionMode, pm.actionFailed, pm.deleted, queryClient, selectedCount, selectedIds]);
 
@@ -281,7 +282,7 @@ export function NotesScreen() {
         exitSelectionMode();
         setBatchTagPicker(false);
       } catch (err) {
-        setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
+        setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save'));
       }
     },
     [exitSelectionMode, pm.actionFailed, pm.tagUpdated, queryClient, selectedCount, selectedIds],

@@ -15,6 +15,7 @@ import { XopcAboutYouView } from './AboutYouView';
 import { XopcShareIntakeDialog } from './ShareIntakeDialog';
 import { XopcIncomingShare } from '../model/share';
 import { XopcChatRepository } from '../repository/chatRepository';
+import { userErrorMessage } from '../common/userError';
 import { shareIntake, XopcShareIntake } from '../service/shareIntake';
 import { XopcMobileRoute } from '../model/home';
 import { pushNotifications } from '../service/pushNotifications';
@@ -121,7 +122,7 @@ export struct XopcHomeView {
       this.returnToConversations = false;
       this.switchToChat(id, '', true);
     } catch (error) {
-      this.getUIContext().getPromptAction().showToast({ message: (error as Error).message });
+      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
     }
   }
   private async exploreShare(value: XopcIncomingShare): Promise<boolean> {
@@ -129,7 +130,7 @@ export struct XopcHomeView {
       const id = await this.chatRepository.create();
       this.intake.targetChat(id, value.chatPrompt); this.switchToChat(id, value.chatPrompt);
       return true;
-    } catch (error) { this.getUIContext().getPromptAction().showToast({ message: (error as Error).message }); return false; }
+    } catch (error) { this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') }); return false; }
   }
 
   private creationPrompt(kind: string): string {
@@ -152,7 +153,7 @@ export struct XopcHomeView {
       this.intake.targetChat(id, prompt);
       this.creationSheetOpen = true;
     } catch (error) {
-      this.getUIContext().getPromptAction().showToast({ message: (error as Error).message });
+      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
     }
   }
 
@@ -202,7 +203,7 @@ export struct XopcHomeView {
       this.returnToConversations = false;
       this.switchToChat(id, '');
     } catch (error) {
-      this.getUIContext().getPromptAction().showToast({ message: (error as Error).message });
+      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
     } finally { this.quickSending = false; }
   }
 
@@ -216,7 +217,7 @@ export struct XopcHomeView {
       if (action) this.chatActionRevision++;
       this.switchToChat(id, '', !action);
     } catch (error) {
-      this.getUIContext().getPromptAction().showToast({ message: (error as Error).message });
+      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
     } finally { this.quickSending = false; }
   }
 
@@ -243,7 +244,7 @@ export struct XopcHomeView {
       const file = kind === 'document' ? await pickChatAttachment(context, this.quickFiles)
         : await pickChatPhoto(context, this.quickFiles, kind === 'camera');
       if (file) this.quickFiles = this.quickFiles.concat([file]);
-    } catch (error) { this.getUIContext().getPromptAction().showToast({ message: (error as Error).message }); }
+    } catch (error) { this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') }); }
     finally { this.quickPicking = false; }
   }
 

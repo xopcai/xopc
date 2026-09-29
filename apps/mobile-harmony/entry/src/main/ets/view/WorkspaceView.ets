@@ -4,6 +4,7 @@ import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
 import { XopcBrandLoading, XopcHubRow, XopcListSkeleton } from './MobileComponents';
 import { XopcMobileRoute } from '../model/home';
+import { userErrorMessage } from '../common/userError';
 
 @ComponentV2
 export struct XopcWorkspaceView {
@@ -536,7 +537,7 @@ export struct XopcWorkspaceView {
             .onClick((): void => { this.createWithChat(); })
         }
       }.width('100%').padding({ left: 12, right: 20, top: 10, bottom: 10 })
-      if (this.model.error) { Text(this.model.error).fontColor(this.colors.danger).padding(12) }
+      if (this.model.error) { Text(userErrorMessage(this.model.error, 'collection')).fontColor(this.colors.secondary).padding(12) }
       if (this.model.selected) { this.detail(this.model.selected) }
       else if (this.model.openingId) { XopcBrandLoading() }
       else { this.list() }

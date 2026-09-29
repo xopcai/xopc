@@ -14,6 +14,7 @@ import { BrandLoadingState } from '../../components/BrandLoadingState';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { t, useMessages } from '../../i18n/messages';
 import { dismissOrRoot, openChat, openNoteDetail } from '../../lib/navigation';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { fetchAutomations, runAutomationNow, setAutomationEnabled } from '../../query/automations';
 import { queryKeys } from '../../query/keys';
 import { fetchFileChildren, fetchFileSpaceForContext } from '../../query/files';
@@ -317,7 +318,8 @@ export function ProjectOperatingScreen() {
         <ProjectCreateAction icon="message-plus-outline" title={labels.createProjectChat} description={labels.createProjectChatHint} loading={createChat.isPending} disabled={createChat.isPending || createNote.isPending} onPress={() => createChat.mutate()} />
         <ProjectCreateAction icon="clipboard-plus-outline" title={labels.createProjectTask} description={labels.createProjectTaskHint} disabled={createChat.isPending || createNote.isPending} onPress={() => { setCreateMenuVisible(false); router.push(`/tasks/create?projectId=${projectId}`); }} />
         <ProjectCreateAction icon="note-plus-outline" title={labels.createProjectNote} description={labels.createProjectNoteHint} loading={createNote.isPending} disabled={createChat.isPending || createNote.isPending} onPress={() => createNote.mutate()} />
-        {createChat.error || createNote.error ? <Text style={[styles.createError, { color: colors.semantic.error }]}>{(createChat.error ?? createNote.error)?.message}</Text> : null}
+        {createChat.error || createNote.error ? <Text style={[styles.createError, { color: colors.semantic.error }]}>{userFacingErrorMessage(
+          createChat.error ?? createNote.error, messages.mobileExperience.errors, 'save')}</Text> : null}
       </BottomSheetModal>
       <BottomSheetModal visible={settingsVisible} onDismiss={() => setSettingsVisible(false)} title={labels.projectSettings} subtitle={labels.projectSettingsHint} maxHeight="48%">
         <ProjectCreateAction
@@ -336,7 +338,8 @@ export function ProjectOperatingScreen() {
           disabled={changePinned.isPending || changeArchived.isPending || details.isLoading}
           onPress={() => changeArchived.mutate(details.data?.status === 'archived')}
         />
-        {details.error || changePinned.error || changeArchived.error ? <Text style={[styles.createError, { color: colors.semantic.error }]}>{(details.error ?? changePinned.error ?? changeArchived.error)?.message}</Text> : null}
+        {details.error || changePinned.error || changeArchived.error ? <Text style={[styles.createError, { color: colors.semantic.error }]}>{userFacingErrorMessage(
+          details.error ?? changePinned.error ?? changeArchived.error, messages.mobileExperience.errors, 'save')}</Text> : null}
       </BottomSheetModal>
     </View>
   );

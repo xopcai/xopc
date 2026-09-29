@@ -1,5 +1,6 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatPromptViewModel } from '../viewmodel/chatPromptViewModel';
+import { userErrorMessage } from '../common/userError';
 
 @ComponentV2
 export struct XopcChatPrompt {
@@ -31,7 +32,7 @@ export struct XopcChatPrompt {
           Button($r('app.string.chat_agent_decide')).height(44).enabled(!this.model.busy).onClick((): void => { this.model.respond('agent_decide'); })
           Button($r('app.string.cancel')).height(44).enabled(!this.model.busy).onClick((): void => { this.model.respond('cancel'); })
         }
-        if (this.model.error) { Text(this.model.error).fontSize(12).fontColor(this.colors.danger) }
+        if (this.model.error) { Text(userErrorMessage(this.model.error, 'save')).fontSize(12).fontColor(this.colors.danger) }
       }
     }.padding(12).width('92%').borderRadius(16).backgroundColor(this.colors.grouped).margin({ bottom: 8 })
   }
