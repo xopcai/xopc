@@ -12,5 +12,11 @@ The skills in this directory are maintained as part of xopc.
   `documents/doc-coauthoring` are clean-room xopc instructions. They do not contain text,
   scripts, templates, or assets from the restricted reference materials reviewed during planning.
 
+## 2026-09 recurring work design
+
+- `engineering/design-recurring-work` was informed by Matt Pocock's public `loop-me` skill.
+  Its instructions were written for xopc's Note, Task, Scene, Workflow, and Automation model;
+  no third-party skill files are redistributed here.
+
 Before replacing an xopc skill with externally sourced material, confirm that its license permits
 copying, modification, and redistribution in the xopc npm package.
