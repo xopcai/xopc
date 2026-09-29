@@ -7,6 +7,7 @@ import useSWR, { SWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -21,6 +22,7 @@ import { MailSourcePicker } from './mail-source-picker';
 import { MailDeadlineEditor } from './mail-deadline-editor';
 import { CreateTaskExecution, TaskExecutionDetail, type TaskExecutionDetails } from './task-follow-up';
 import { useSceneRealtime } from './use-scene-realtime';
+import { RecurringWorkDiscovery, RecurringWorkPlanDetail } from './recurring-work-discovery';
 
 const fieldClass = 'min-h-11 w-full rounded-md border border-edge bg-surface-panel px-3 py-2 text-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:text-sm';
 const panelClass = 'min-w-0 rounded-xl border border-edge bg-surface-panel p-4 sm:p-6';
@@ -62,11 +64,14 @@ function SceneContent() {
   useSceneRealtime();
   const { activationId, templateKey } = useParams();
   const inbox = useMatch('/scenes/inbox');
-  const zh = useLocaleStore((state) => state.language) === 'zh';
+  const language = useLocaleStore((state) => state.language);
+  const zh = language === 'zh';
+  const recurringCopy = messages(language).recurringWork;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsButton = useRef<HTMLButtonElement>(null);
   const location = useLocation();
   const [params] = useSearchParams();
+  const planId = params.get('plan');
   const inboxReturn = activationId && location.state?.fromSceneInbox === true
     ? `/scenes/inbox${typeof location.state.inboxSearch === 'string' ? location.state.inboxSearch : ''}` : undefined;
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
@@ -97,14 +102,15 @@ function SceneContent() {
   }, [clearPageHeader, setPageHeader, zh]);
   return <>
     <main className="h-full overflow-y-auto bg-surface-panel"><div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+      <RecurringWorkDiscovery />
       <SceneList />
     </div></main>
-    {(activationId || templateKey || inbox) && <SceneDialog key={activationId ?? templateKey ?? 'inbox'}
-      titleText={inbox ? (params.has('digest') ? (zh ? '摘要中的成果' : 'Results in this digest') : (zh ? '关注成果' : 'Monitor results')) : activationId ? (zh ? '关注详情' : 'Monitor details') : (zh ? '了解并开启' : 'Explore and start')}
-      closeLabel={inbox ? (zh ? '关闭关注成果' : 'Close monitor results') : activationId ? (zh ? '关闭关注详情' : 'Close monitor details') : (zh ? '关闭关注设置' : 'Close monitor setup')}
+    {(planId || activationId || templateKey || inbox) && <SceneDialog key={planId ?? activationId ?? templateKey ?? 'inbox'}
+      titleText={planId ? recurringCopy.dialogTitle : inbox ? (params.has('digest') ? (zh ? '摘要中的成果' : 'Results in this digest') : (zh ? '关注成果' : 'Monitor results')) : activationId ? (zh ? '关注详情' : 'Monitor details') : (zh ? '了解并开启' : 'Explore and start')}
+      closeLabel={planId ? recurringCopy.closeDialog : inbox ? (zh ? '关闭关注成果' : 'Close monitor results') : activationId ? (zh ? '关闭关注详情' : 'Close monitor details') : (zh ? '关闭关注设置' : 'Close monitor setup')}
       backTo={inboxReturn} backLabel={zh ? '返回成果' : 'Back to results'}
-      restoreSelector={inbox ? '[data-scene-inbox]' : activationId ? `[data-scene-id="${CSS.escape(activationId)}"]` : `[data-scene-template="${CSS.escape(templateKey!)}"]`}>
-      {inbox ? <SceneInbox /> : activationId ? <SceneDetail id={activationId} /> : <CreateScene templateKey={templateKey!} />}
+      restoreSelector={planId ? `[data-plan-id="${CSS.escape(planId)}"]` : inbox ? '[data-scene-inbox]' : activationId ? `[data-scene-id="${CSS.escape(activationId)}"]` : `[data-scene-template="${CSS.escape(templateKey!)}"]`}>
+      {planId ? <RecurringWorkPlanDetail noteId={planId} projectId={params.get('projectId') ?? undefined} /> : inbox ? <SceneInbox /> : activationId ? <SceneDetail id={activationId} /> : <CreateScene templateKey={templateKey!} />}
     </SceneDialog>}
     <SceneControlsDialog zh={zh} open={settingsOpen} onOpenChange={setSettingsOpen} onCloseAutoFocus={() => settingsButton.current?.focus()} />
   </>;

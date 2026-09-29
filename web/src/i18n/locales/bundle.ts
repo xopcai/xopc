@@ -15,6 +15,7 @@ import enOnboarding from './en/onboarding.json' with { type: 'json' };
 import enProviders from './en/providers.json' with { type: 'json' };
 import enProjects from './en/projects.json' with { type: 'json' };
 import enRemoteAccess from './en/remote-access.json' with { type: 'json' };
+import enRecurringWork from './en/recurring-work.json' with { type: 'json' };
 import enSessions from './en/sessions.json' with { type: 'json' };
 import enUsage from './en/usage.json' with { type: 'json' };
 import enSettings from './en/settings.json' with { type: 'json' };
@@ -39,6 +40,7 @@ import zhOnboarding from './zh/onboarding.json' with { type: 'json' };
 import zhProviders from './zh/providers.json' with { type: 'json' };
 import zhProjects from './zh/projects.json' with { type: 'json' };
 import zhRemoteAccess from './zh/remote-access.json' with { type: 'json' };
+import zhRecurringWork from './zh/recurring-work.json' with { type: 'json' };
 import zhSessions from './zh/sessions.json' with { type: 'json' };
 import zhUsage from './zh/usage.json' with { type: 'json' };
 import zhSettings from './zh/settings.json' with { type: 'json' };
@@ -67,6 +69,7 @@ export const en = {
   ...enProviders,
   ...enProjects,
   ...enRemoteAccess,
+  ...enRecurringWork,
   ...enSessions,
   ...enUsage,
   ...enSettings,
@@ -96,6 +99,7 @@ export const zh = {
   ...zhProviders,
   ...zhProjects,
   ...zhRemoteAccess,
+  ...zhRecurringWork,
   ...zhSessions,
   ...zhUsage,
   ...zhSettings,
