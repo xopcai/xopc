@@ -6,6 +6,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/components/shell/about-dialog', () => ({ AboutDialog: () => null }));
+vi.mock('@/features/endpoint-tools/device-pairing-wizard', () => ({
+  DevicePairingWizard: () => <div data-testid="device-pairing-wizard" />,
+}));
 vi.mock('@/pages/settings-page', () => ({}));
 vi.mock('@/pages/sessions-page', () => ({}));
 vi.mock('@/pages/logs-page', () => ({}));
@@ -61,5 +64,35 @@ describe('sidebar menu surfaces', () => {
     const selectedOption = languageFlyout?.querySelector<HTMLButtonElement>('[aria-pressed="true"]');
     expect(selectedOption?.className).toContain('rounded-none');
     expect(selectedOption?.className).toContain('px-3');
+  });
+
+  it('opens device pairing from the app menu', async () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    unmount = () => root.unmount();
+
+    act(() => {
+      root.render(<MemoryRouter><SidebarFooter /></MemoryRouter>);
+    });
+
+    expect(container.querySelectorAll('button')).toHaveLength(1);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')?.click();
+    });
+
+    const appMenu = document.body.querySelector<HTMLElement>('[data-radix-popper-content-wrapper]')?.firstElementChild;
+    const connectDevice = Array.from(appMenu?.querySelectorAll('button') ?? []).find((button) =>
+      /Connect device|连接设备/.test(button.textContent ?? ''),
+    );
+    expect(connectDevice).toBeDefined();
+
+    await act(async () => {
+      connectDevice?.click();
+      await Promise.resolve();
+    });
+
+    expect(document.body.querySelector('[data-testid="device-pairing-wizard"]')).not.toBeNull();
   });
 });

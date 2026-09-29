@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover';
-import { MonitorSmartphone, Settings } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -42,12 +42,6 @@ export function SidebarFooter({
         collapsed ? 'items-center px-1 py-2' : 'p-3',
       )}
     >
-      <button type="button" onClick={() => setPairingOpen(true)}
-        className={cn('mb-2 flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg', collapsed && 'justify-center px-2')}
-        aria-label={m.endpointToolsSettings.deviceAccess.flow.title}>
-        <MonitorSmartphone className="size-4 shrink-0" />
-        {!collapsed ? m.endpointToolsSettings.deviceAccess.flow.title : null}
-      </button>
       {pairingOpen ? <Suspense fallback={null}><DevicePairingWizard open onOpenChange={setPairingOpen} /></Suspense> : null}
       <Popover.Root open={open} onOpenChange={setOpen}>
         {collapsed ? (
@@ -144,6 +138,10 @@ export function SidebarFooter({
               onSupportClick={() => {
                 setOpen(false);
                 openSupportReport();
+              }}
+              onDeviceConnectClick={() => {
+                setOpen(false);
+                setPairingOpen(true);
               }}
             />
           </Popover.Content>
