@@ -1,6 +1,7 @@
 import { webSocket } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { systemDateTime } from '@kit.BasicServicesKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { XopcVoiceAudioFrame, XopcVoiceClientPayload, XopcVoiceServerEvent, XopcVoiceSession } from '../model/voice';
 import {
   XOPC_VOICE_PROTOCOL_VERSION, XOPC_VOICE_PROXY_WS_PATH, xopcDecodeVoiceAudio, xopcEncodeVoiceUplink,
@@ -77,22 +78,26 @@ export class XopcVoiceCallTransport {
             if (!this.ready) throw new Error('PROTOCOL_ERROR');
             const frame = xopcDecodeVoiceAudio(value); this.receiveAudio(frame);
           }
-        } catch (_) {
+        } catch (error) {
+          hilog.warn(0x0000, 'XopcVoice', 'Voice frame rejected: %{public}s', (error as Error).message || 'PROTOCOL_ERROR');
           if (!settled) { settled = true; clearTimeout(timeout); reject(new Error('PROTOCOL_ERROR')); }
           else this.fail('PROTOCOL_ERROR', generation);
         }
       });
-      socket.on('close', (_error: BusinessError, _value: webSocket.CloseResult): void => {
+      socket.on('close', (_error: BusinessError, value: webSocket.CloseResult): void => {
         if (generation !== this.generation) return;
+        hilog.info(0x0000, 'XopcVoice', 'Voice socket closed: %{public}d', value.code);
         if (!settled) { settled = true; clearTimeout(timeout); reject(new Error('NETWORK')); }
         else if (!this.closed) this.fail('NETWORK', generation);
       });
-      socket.on('error', (_error: BusinessError): void => {
+      socket.on('error', (error: BusinessError): void => {
         if (generation !== this.generation) return;
+        hilog.warn(0x0000, 'XopcVoice', 'Voice socket failed: %{public}d', error.code);
         if (!settled) { settled = true; clearTimeout(timeout); reject(new Error('NETWORK')); }
         else this.fail('NETWORK', generation);
       });
-      socket.connect(url).catch((_error: Error): void => {
+      socket.connect(url).catch((error: Error): void => {
+        hilog.warn(0x0000, 'XopcVoice', 'Voice connection failed: %{public}s', error.message || 'NETWORK');
         if (!settled) { settled = true; clearTimeout(timeout); reject(new Error('NETWORK')); }
       });
     });
@@ -108,8 +113,15 @@ export class XopcVoiceCallTransport {
       this.lastPong = Date.now(); if (this.lastPing) this.callbacks.onRtt(this.lastPong - this.lastPing);
     }
     this.callbacks.onEvent(event);
-    if (event.type === 'session.error' && !event.payload.recoverable) this.fail(event.payload.code ?? 'SERVICE_UNAVAILABLE', this.generation);
-    else if (event.type === 'session.closed') this.fail(event.payload.reason ?? 'ended', this.generation);
+    if (event.type === 'session.error' && !event.payload.recoverable) {
+      const code = event.payload.code ?? 'SERVICE_UNAVAILABLE';
+      hilog.warn(0x0000, 'XopcVoice', 'Voice session failed: %{public}s', code);
+      this.fail(code, this.generation);
+    } else if (event.type === 'session.closed') {
+      const reason = event.payload.reason ?? 'ended';
+      hilog.info(0x0000, 'XopcVoice', 'Voice session ended: %{public}s', reason);
+      this.fail(reason, this.generation);
+    }
   }
 
   private receiveAudio(frame: XopcVoiceAudioFrame): void {
@@ -163,6 +175,7 @@ export class XopcVoiceCallTransport {
 
   private fail(reason: string, generation: number): void {
     if (generation !== this.generation || this.closed) return;
+    hilog.warn(0x0000, 'XopcVoice', 'Voice transport stopped: %{public}s', reason);
     this.closed = true; this.ready = false; clearInterval(this.heartbeatTimer); this.heartbeatTimer = -1;
     this.releaseSocket(); this.callbacks.onClose(reason);
   }

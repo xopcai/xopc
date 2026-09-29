@@ -2,6 +2,7 @@ import { abilityAccessCtrl, common, wantAgent } from '@kit.AbilityKit';
 import { audio } from '@kit.AudioKit';
 import { avSession } from '@kit.AVSessionKit';
 import { backgroundTaskManager } from '@kit.BackgroundTasksKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 
 export interface XopcVoiceAudioCallbacks {
   onInput: (bytes: Uint8Array) => void;
@@ -48,13 +49,15 @@ export class XopcVoiceCallAudio {
         capturerInfo: { source: audio.SourceType.SOURCE_TYPE_VOICE_COMMUNICATION, capturerFlags: 0 } });
       this.renderer.setInterruptModeSync(audio.InterruptMode.INDEPENDENT_MODE);
       this.renderer.on('audioInterrupt', (event: audio.InterruptEvent): void => {
-        if (generation === this.generation && event.hintType === audio.InterruptHint.INTERRUPT_HINT_STOP) callbacks.onFailure('AUDIO_INTERRUPTED');
+        if (generation === this.generation && event.hintType === audio.InterruptHint.INTERRUPT_HINT_STOP) {
+          hilog.warn(0x0000, 'XopcVoice', 'Voice playback interrupted'); callbacks.onFailure('AUDIO_INTERRUPTED');
+        }
       });
       this.renderer.on('outputDeviceChange', (devices: audio.AudioDeviceDescriptors): void => {
         if (generation === this.generation) callbacks.onRoute(this.routeName(devices));
       });
       this.capturer.on('audioInterrupt', (_event: audio.InterruptEvent): void => {
-        if (generation === this.generation) callbacks.onFailure('CAPTURE_INTERRUPTED');
+        if (generation === this.generation) { hilog.warn(0x0000, 'XopcVoice', 'Voice capture interrupted'); callbacks.onFailure('CAPTURE_INTERRUPTED'); }
       });
       await this.renderer.start();
       await this.capturer.start();
@@ -63,6 +66,7 @@ export class XopcVoiceCallAudio {
       callbacks.onRoute(this.routeName(await this.renderer.getCurrentOutputDevices()));
       this.captureLoop(generation);
     } catch (error) {
+      hilog.warn(0x0000, 'XopcVoice', 'Voice audio setup failed: %{public}s', (error as Error).message);
       await this.stop(); throw error as Error;
     }
   }
@@ -102,8 +106,11 @@ export class XopcVoiceCallAudio {
         this.detectSpeech(bytes);
         if (!this.muted && bytes.byteLength) this.callbacks?.onInput(bytes);
       }
-    } catch (_error) {
-      if (generation === this.generation && this.capturing) this.callbacks?.onFailure('CAPTURE_FAILED');
+    } catch (error) {
+      if (generation === this.generation && this.capturing) {
+        hilog.warn(0x0000, 'XopcVoice', 'Voice capture failed: %{public}s', (error as Error).message);
+        this.callbacks?.onFailure('CAPTURE_FAILED');
+      }
     }
   }
 
@@ -144,8 +151,11 @@ export class XopcVoiceCallAudio {
       if (generation !== this.generation || written <= 0) return;
       this.playedMs += Math.round(written / 48);
       this.callbacks?.onPlayed(responseId, this.playedMs);
-    }).catch((_error: Error): void => {
-      if (generation === this.generation) this.callbacks?.onFailure('PLAYBACK_FAILED');
+    }).catch((error: Error): void => {
+      if (generation === this.generation) {
+        hilog.warn(0x0000, 'XopcVoice', 'Voice playback failed: %{public}s', error.message);
+        this.callbacks?.onFailure('PLAYBACK_FAILED');
+      }
     });
   }
 
@@ -169,7 +179,8 @@ export class XopcVoiceCallAudio {
     const context = this.context; const session = this.session; const backgroundRunning = this.backgroundRunning;
     this.capturer = undefined; this.renderer = undefined; this.callbacks = undefined;
     this.context = undefined; this.session = undefined; this.backgroundRunning = false;
-    if (capturer) { try { await capturer.stop(); } catch (_error) {} try { await capturer.release(); } catch (_error) {} }
+    if (capturer) { try { capturer.off('audioInterrupt'); } catch (_error) {}
+      try { await capturer.stop(); } catch (_error) {} try { await capturer.release(); } catch (_error) {} }
     if (renderer) { try { renderer.off('audioInterrupt'); renderer.off('outputDeviceChange'); } catch (_error) {}
       try { await renderer.stop(); } catch (_error) {} try { await renderer.release(); } catch (_error) {} }
     if (session) { try { await session.setAVPlaybackState({ state: avSession.PlaybackState.PLAYBACK_STATE_STOP }); } catch (_error) {}

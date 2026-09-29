@@ -15,6 +15,7 @@ const MAX_QUEUED_AUDIO_BYTES = 24_000 * 2 * 60;
 const MAX_PENDING_INPUT_BYTES = 64 * 1024;
 const UPLOAD_TIMEOUT_MS = 10_000;
 const RESPONSE_START_TIMEOUT_MS = 30_000;
+const CANCELLATION_ERROR_GRACE_MS = 5_000;
 const FAILURE_MESSAGES: Record<string, string> = {
   OMNI_UPLOAD_TIMEOUT: 'The connection to the voice service stopped uploading audio. Check the network to your configured endpoint and reconnect.',
   OMNI_INPUT_RESET_TIMEOUT: 'The voice service did not acknowledge clearing microphone input. Reconnect to continue.',
@@ -81,7 +82,7 @@ export function createOmniVoiceEngine(options: {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const recorded = new Set<string>();
   let writes = Promise.resolve();
-  let cancellationPending = false;
+  let cancellationPendingUntil = 0;
   let inputQueue: Buffer[] = [];
   let queuedInputBytes = 0;
   let uploadingBytes = 0;
@@ -154,7 +155,7 @@ export function createOmniVoiceEngine(options: {
     }
     // The platform owns supplier cancellation semantics and deduplicates races with VAD.
     if ((reason === 'client_cancelled' || (reason === 'barge_in' && (options.route.route.managed || !options.bargeIn))) && response.generating && socket?.readyState === WebSocket.OPEN) {
-      cancellationPending = true;
+      cancellationPendingUntil = Date.now() + CANCELLATION_ERROR_GRACE_MS;
       send('response.cancel');
     }
     return true;
@@ -240,7 +241,15 @@ export function createOmniVoiceEngine(options: {
             const event = JSON.parse(raw.toString());
             if (event.type === 'error') {
               // Qwen may finish generation before a local cancellation reaches it.
-              if (!options.route.route.managed && cancellationPending && event.error?.type === 'invalid_request_error' && event.error?.message === 'Conversation has none active response') { cancellationPending = false; return; }
+              const lateCancellation = event.error?.type === 'invalid_request_error'
+                && event.error?.message === 'Conversation has none active response';
+              const managedLateCancellation = options.route.route.managed
+                && event.error?.code === 'invalid_request_error'
+                && event.error?.message === 'The voice provider rejected the request.';
+              if (Date.now() <= cancellationPendingUntil && (lateCancellation || managedLateCancellation)) {
+                cancellationPendingUntil = 0;
+                return;
+              }
               fail('OMNI_PROVIDER_ERROR'); return;
             }
             if (event.type === 'session.created') {
@@ -288,11 +297,10 @@ export function createOmniVoiceEngine(options: {
             } else if (event.type === 'response.created') {
               clearTimeout(responseStartTimer);
               if (muted || inputBlocked) {
-                cancellationPending = true;
+                cancellationPendingUntil = Date.now() + CANCELLATION_ERROR_GRACE_MS;
                 send('response.cancel');
                 return;
               }
-              cancellationPending = false;
               if (active) cancel('barge_in');
               const id = event.response?.id;
               if (typeof id !== 'string' || !id.length || id.length > 160) throw new Error('Invalid response ID');
