@@ -21,6 +21,7 @@ export * from './new-session.js';
 export * from './notifications.js';
 export * from './files.js';
 export * from './mobile-privacy.js';
+export * from './mobile-user-understanding.js';
 export * from './device-pairing.js';
 export * from './gateway-scopes.js';
 export * from './browser-page-context.js';

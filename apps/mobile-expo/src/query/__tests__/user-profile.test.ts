@@ -13,14 +13,24 @@ const mockedApiFetch = vi.mocked(apiFetch);
 describe('fetchUserProfileSummary', () => {
   beforeEach(() => mockedApiFetch.mockReset());
 
-  it('returns the compact profile fields used by the drawer', async () => {
+  it('returns the mobile understanding summary used by the personal surfaces', async () => {
     mockedApiFetch.mockResolvedValue(new Response(JSON.stringify({
-      profile: { callName: ' Mic ', role: ' Builder ' },
+      profile: { callName: 'Mic', role: 'Builder', pronouns: '', timezone: '', locale: '' },
       suggestedCallName: 'Fallback',
+      counts: { total: 2, explicit: 1, learned: 1, review: 0, workMemory: 3 },
+      goals: [],
+      recent: [],
+      rules: [],
     }), { status: 200 }));
 
     await expect(fetchUserProfileSummary()).resolves.toEqual({
-      callName: 'Mic', role: 'Builder', suggestedCallName: 'Fallback',
+      profile: { callName: 'Mic', role: 'Builder', pronouns: '', timezone: '', locale: '' },
+      suggestedCallName: 'Fallback',
+      counts: { total: 2, explicit: 1, learned: 1, review: 0, workMemory: 3 },
+      goals: [],
+      recent: [],
+      rules: [],
     });
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/user-model/mobile-summary');
   });
 });

@@ -11,6 +11,7 @@ import { XopcPersonalView } from './PersonalView';
 import { XopcWorkflowView } from './WorkflowView';
 import { XopcAutomationRunView } from './AutomationRunView';
 import { XopcShareCenterView } from './ShareCenterView';
+import { XopcAboutYouView } from './AboutYouView';
 import { XopcShareIntakeDialog } from './ShareIntakeDialog';
 import { XopcIncomingShare } from '../model/share';
 import { XopcChatRepository } from '../repository/chatRepository';
@@ -24,7 +25,7 @@ import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { XopcSection } from '../model/workspace';
 import { accessibility } from '@kit.AccessibilityKit';
 import { COMPOSER_INPUT_MIN, COMPOSER_TOOL_SIZE } from '../common/composerLayout';
-import { XopcChatAttachment } from '../model/chat';
+import { XopcChatAttachment, XopcContextRef } from '../model/chat';
 import { quickChatIntake } from '../service/quickChatIntake';
 import { pickChatAttachment } from '../service/chatAttachmentPicker';
 import { pickChatPhoto } from '../service/chatPhotoPicker';
@@ -94,6 +95,10 @@ export struct XopcHomeView {
     try { accessibility.offAnimationReduceStateChange(this.onMotionChange); } catch (_) {}
   }
   private navigate(route: XopcMobileRoute): void {
+    if (route.page === 'understanding-chat') {
+      void this.openUnderstandingChat(route);
+      return;
+    }
     if (route.page === 'chat') {
       this.returnToConversations = false;
       if (route.itemId) { this.requestedChatId = route.itemId; this.requestedChatDraft = ''; this.chatRequestRevision++; }
@@ -101,6 +106,21 @@ export struct XopcHomeView {
     }
     if (route.page === 'progress') { this.pathStack.clear(); this.activateTab(2); return; }
     this.pathStack.pushPath({ name: route.page, param: route });
+  }
+
+  private async openUnderstandingChat(route: XopcMobileRoute): Promise<void> {
+    try {
+      const id = await this.chatRepository.create();
+      const refs: XopcContextRef[] = route.itemId ? [{
+        kind: 'user_assertion', sourceId: route.itemId,
+        expectedVersion: route.version ?? '', title: route.title ?? ''
+      }] : [];
+      quickChatIntake.stage(id, route.prompt ?? '', refs);
+      this.returnToConversations = false;
+      this.switchToChat(id, '', true);
+    } catch (error) {
+      this.getUIContext().getPromptAction().showToast({ message: (error as Error).message });
+    }
   }
   private async exploreShare(value: XopcIncomingShare): Promise<boolean> {
     try {
@@ -264,12 +284,16 @@ export struct XopcHomeView {
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else if (page === 'sharing') {
       XopcShareCenterView({ onExit: (): void => { this.pathStack.pop(); } })
+    } else if (page === 'about-you') {
+      XopcAboutYouView({ initialId: (param as XopcMobileRoute).itemId, onExit: (): void => { this.pathStack.pop(); },
+        onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else {
       NavDestination() {
         if (page === 'settings') {
           XopcSettingsView({ initialSection: (param as XopcMobileRoute).itemId, useNavigation: true,
             onExit: (): void => { this.pathStack.pop(); },
             onOpenSection: (section: string): void => { this.navigate({ page: 'settings', itemId: section }); },
+            onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
             onDisconnected: (): void => { this.onDisconnected(); } })
         }
         else { Text($r('app.string.unsupported_route')).fontColor(this.colors.secondary).padding(20) }

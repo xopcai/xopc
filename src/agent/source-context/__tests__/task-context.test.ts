@@ -8,6 +8,8 @@ import { buildTaskAgentContext } from '../task-context.js';
 import { buildSessionAgentContext } from '../session-context.js';
 import { buildBrowserTabAgentContext } from '../browser-tab.js';
 import { buildFileAgentContext } from '../file-context.js';
+import { buildUserAssertionAgentContext } from '../user-assertion-context.js';
+import { reconcileAssertion } from '../../../user-model/index.js';
 import { decodeMcpResourceId, encodeMcpResourceId } from '../../mcp/mcp-resource-id.js';
 import { isSessionSourceBinding, parseTurnContextRefs } from '../types.js';
 import type { FileSpaceService } from '../../../files/file-service.js';
@@ -52,13 +54,31 @@ describe('task references', () => {
       { kind: 'session', sourceId: ' s ', expectedVersion: '4' },
       { kind: 'browser_tab', sourceId: ' b ', expectedVersion: '5' },
       { kind: 'mcp_resource', sourceId: ' m ', expectedVersion: '6' },
+      { kind: 'user_assertion', sourceId: ' a ', expectedVersion: '7' },
     ])).toEqual([
       { kind: 'file', sourceId: 'f', expectedVersion: '3' },
       { kind: 'session', sourceId: 's', expectedVersion: '4' },
       { kind: 'browser_tab', sourceId: 'b', expectedVersion: '5' },
       { kind: 'mcp_resource', sourceId: 'm', expectedVersion: '6' },
+      { kind: 'user_assertion', sourceId: 'a', expectedVersion: '7' },
     ]);
     expect(isSessionSourceBinding({ kind: 'task', sourceId: 't', version: '2', attachedAt: 1 })).toBe(false);
+  });
+
+  it('freezes a selected global user assertion as turn context', () => {
+    const assertion = reconcileAssertion({
+      subject: { type: 'user', id: 'self' }, predicate: 'preference.detail', cardinality: 'single',
+      scope: { type: 'global' }, kind: 'preference', value: 'concise', normalizedValue: 'concise',
+      statement: 'Prefer concise answers.', authority: 'user_explicit', confidence: 1,
+      inferredImportance: 0.8, consequence: 'medium', actionability: 0.8, volatility: 'stable',
+      sensitivity: 'normal', disclosurePolicy: 'referenceable', observedAt: 1_000, createdBy: 'user',
+    }, 1_000).assertion;
+    const context = buildUserAssertionAgentContext(assertion.id, String(assertion.recordedAt), 'main');
+    expect(context).toMatchObject({
+      kind: 'user_assertion', sourceId: assertion.id, title: 'Prefer concise answers.',
+    });
+    expect(context?.text).toContain('preference.detail');
+    expect(buildUserAssertionAgentContext(assertion.id, 'stale', 'main')).toBeNull();
   });
 
   it('freezes a bounded user and assistant transcript at the selected session version', () => {

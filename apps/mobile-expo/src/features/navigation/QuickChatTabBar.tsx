@@ -1,5 +1,5 @@
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
@@ -30,6 +30,7 @@ function placeholderForRoute(
 /** Shared quick intake for every non-Assistant primary tab. */
 export function QuickChatTabBar(props: BottomTabBarProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { colors, elevation } = useTheme();
   const copy = useMessages().mobileExperience;
   const gatewayId = useGatewayStore(state => state.activeGatewayId);
@@ -41,6 +42,7 @@ export function QuickChatTabBar(props: BottomTabBarProps) {
   const [error, setError] = useState('');
   const route = props.state.routes[props.state.index]?.name ?? 'sessions';
   const composerScope = `quick-chat:${gatewayId ?? 'disconnected'}`;
+  const showsComposer = ['/sessions', '/progress', '/library', '/settings'].includes(pathname);
 
   useEffect(() => {
     setActionsOpen(false);
@@ -95,7 +97,7 @@ export function QuickChatTabBar(props: BottomTabBarProps) {
           { backgroundColor: colors.surface.elevated, borderColor: colors.border.subtle },
         ]}
       >
-        <ChatComposer
+        {showsComposer ? <ChatComposer
           embedded
           conversationId={composerScope}
           actionsOpen={actionsOpen}
@@ -109,7 +111,7 @@ export function QuickChatTabBar(props: BottomTabBarProps) {
           onContextRefsChange={setContextRefs}
           onNewChat={() => { void createAndOpen(); }}
           onVoiceCallStart={(mode) => { void createAndOpen({ voiceCallMode: mode }); }}
-        />
+        /> : null}
         <CapsuleTabBar {...props} embedded />
       </View>
       <AppToast visible={Boolean(error)} onDismiss={() => setError('')} bottomLift={96}>{error}</AppToast>

@@ -91,7 +91,7 @@ describe('lazy route bundles', () => {
     for (const path of ['/api/user-model/refresh', '/api/user-model/refresh/batch-1', '/api/user-model/refresh/sources/run-1/collection']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('user-model-refresh');
     }
-    for (const path of ['/api/user-model/assertions', '/api/user-model/refresh-other']) {
+    for (const path of ['/api/user-model/assertions', '/api/user-model/mobile-summary', '/api/user-model/refresh-other']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('user-model');
     }
   });
