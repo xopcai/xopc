@@ -11,10 +11,20 @@ import { createLogger } from '../../utils/logger.js';
 import { computeExtensionDirectoryIntegrity } from '../lockfile.js';
 import { containedPath, inspectAgentPlugin, pluginName, type PluginInspection } from './validation.js';
 import { readPluginMcpHealth } from './health.js';
+import type { AgentPluginSourceProvenance } from './sources.js';
+
+const provenanceSchema = z.strictObject({
+  kind: z.literal('store'), packageName: pluginName, packageType: z.enum(['plugin', 'extension']),
+  version: z.string().min(1), sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  publisherVerification: z.enum(['community', 'verified']).optional(),
+  sourceRepository: z.string().url().optional(), sourceCommit: z.string().optional(),
+  artifactFormat: z.string().optional(), riskTier: z.enum(['content', 'network', 'local-exec']).optional(),
+});
 
 const receiptFields = z.object({
   id: pluginName, revision: z.string().uuid(), source: z.string(), installedAt: z.string(),
   enabled: z.boolean(), integrity: z.string(), capabilities: z.array(z.string()),
+  provenance: provenanceSchema.optional(),
 });
 const receiptSchema = receiptFields.extend({ previous: receiptFields.optional() });
 const log = createLogger('AgentPlugins');
@@ -101,7 +111,7 @@ export class AgentPluginStore {
     const reviewHash = createHash('sha256').update(JSON.stringify([integrity, inspection.capabilities])).digest('hex');
     return { ...inspection, integrity, reviewHash, addedCapabilities, installed: !!current };
   }
-  install(source: string, options: { reviewHash?: string; replace?: boolean; expectedId?: string; sourceLabel?: string } = {}): InstalledAgentPlugin {
+  install(source: string, options: { reviewHash?: string; replace?: boolean; expectedId?: string; sourceLabel?: string; provenance?: AgentPluginSourceProvenance } = {}): InstalledAgentPlugin {
     return this.mutate(() => this.withSource(source, root => {
       const plan = this.plan(root);
       const id = plan.manifest.name;
@@ -124,6 +134,7 @@ export class AgentPluginStore {
         const label = options.sourceLabel ?? source;
         this.write({ id, revision, source: /^(https:\/\/|store:)/.test(label) ? label : resolve(label), installedAt: new Date().toISOString(),
           enabled: current?.enabled ?? false, integrity, capabilities: installed.capabilities,
+          ...(options.provenance ? { provenance: provenanceSchema.parse(options.provenance) } : {}),
           previous: current ? receiptFields.parse(current) : undefined });
       } catch (error) {
         rmSync(target, { recursive: true, force: true });

@@ -32,7 +32,7 @@ export async function installAgentPluginFromCli(source: string, options: { yes?:
     if (!process.stdin.isTTY) throw new Error('Capability review requires --yes in non-interactive mode');
     if (!await confirm({ message: 'Install this Agent Plugin with these capabilities?', default: false })) return;
   }
-  const plugin = await withAgentPluginSource(source, cfg, local => store.install(local, { reviewHash: plan.reviewHash, replace: options.force, expectedId: options.expectedId, sourceLabel: source.startsWith('https://') || source.startsWith('store:') ? source : resolve(source) }));
+  const plugin = await withAgentPluginSource(source, cfg, (local, provenance) => store.install(local, { reviewHash: plan.reviewHash, replace: options.force, expectedId: options.expectedId, sourceLabel: source.startsWith('https://') || source.startsWith('store:') ? source : resolve(source), provenance }));
   console.log(`Installed plugin:${plugin.id} (${plugin.receipt.enabled ? 'enabled' : 'disabled'}).`);
   return plugin;
 }

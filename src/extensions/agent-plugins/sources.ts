@@ -5,6 +5,19 @@ import type { Config } from '../../config/schema.js';
 import { createPluginHttpFetch } from '../../agent/mcp/plugin-http-fetch.js';
 import AdmZip from 'adm-zip';
 
+export interface AgentPluginSourceProvenance {
+  kind: 'store';
+  packageName: string;
+  packageType: 'plugin' | 'extension';
+  version: string;
+  sha256: string;
+  publisherVerification?: 'community' | 'verified';
+  sourceRepository?: string;
+  sourceCommit?: string;
+  artifactFormat?: string;
+  riskTier?: 'content' | 'network' | 'local-exec';
+}
+
 export function isAgentPluginArchive(buffer: Buffer): boolean {
   const entries = new AdmZip(buffer).getEntries();
   const paths = entries.map(entry => entry.entryName.replace(/\/$/, ''));
@@ -28,18 +41,30 @@ export function withAgentPluginArchive<T>(buffer: Buffer, fn: (local: string) =>
 }
 
 /** Resolve remote artifacts only for explicit inspect/install requests, never during discovery. */
-export async function withAgentPluginSource<T>(source: string, config: Config | undefined, fn: (local: string) => T): Promise<T> {
+export async function withAgentPluginSource<T>(source: string, config: Config | undefined, fn: (local: string, provenance?: AgentPluginSourceProvenance) => T): Promise<T> {
   if (!source.startsWith('https://') && !source.startsWith('store:')) return fn(source);
   let buffer: Buffer;
+  let provenance: AgentPluginSourceProvenance | undefined;
   if (source.startsWith('store:')) {
-    const { resolveExtensionZipDownloadUrl, resolveExtensionsStoreBaseUrl, downloadExtensionStoreZipBuffer, verifyStoreArtifactSha256 } = await import('../../agent/skills/marketplace/adapters/store/store-api-client.js');
+    const { fetchMarketplacePackageDetail, resolveExtensionZipDownloadUrl, resolveExtensionsStoreBaseUrl, downloadExtensionStoreZipBuffer, verifyStoreArtifactSha256 } = await import('../../agent/skills/marketplace/adapters/store/store-api-client.js');
     const spec = source.slice(6);
     const match = /^([a-z0-9.-]+)(?:@([^/]+))?$/.exec(spec);
     if (!match) throw new Error('Expected store:<package>[@version]');
     const base = resolveExtensionsStoreBaseUrl(config);
+    const detail = await fetchMarketplacePackageDetail(base, match[1]);
+    if (detail.type !== 'plugin' && detail.type !== 'extension') throw new Error(`Store package has unsupported type: ${detail.type}`);
     const artifact = await resolveExtensionZipDownloadUrl(base, match[1], match[2]);
     buffer = await downloadExtensionStoreZipBuffer(base, artifact.downloadUrl);
     verifyStoreArtifactSha256(buffer, artifact.sha256);
+    provenance = {
+      kind: 'store', packageName: match[1], packageType: detail.type, version: artifact.version,
+      sha256: artifact.sha256!,
+      ...(detail.publisher?.verification ? { publisherVerification: detail.publisher.verification } : {}),
+      ...(detail.publisher?.sourceRepository ? { sourceRepository: detail.publisher.sourceRepository } : {}),
+      ...(artifact.sourceCommit ? { sourceCommit: artifact.sourceCommit } : {}),
+      ...(artifact.artifactFormat ? { artifactFormat: artifact.artifactFormat } : {}),
+      ...(artifact.riskTier ? { riskTier: artifact.riskTier } : {}),
+    };
   } else {
     const url = new URL(source);
     const response = await createPluginHttpFetch(url, {})(url, { signal: AbortSignal.timeout(30000) });
@@ -55,5 +80,5 @@ export async function withAgentPluginSource<T>(source: string, config: Config | 
     } finally { await reader.cancel(); }
     buffer = Buffer.concat(chunks);
   }
-  return withAgentPluginArchive(buffer, fn);
+  return withAgentPluginArchive(buffer, local => fn(local, provenance));
 }
