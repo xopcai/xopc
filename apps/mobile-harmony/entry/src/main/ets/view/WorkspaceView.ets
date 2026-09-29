@@ -2,7 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcSection, XopcWorkspaceItem, XopcAutomationRun } from '../model/workspace';
 import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
-import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
+import { XopcBrandLoading, XopcHubRow, XopcListSkeleton } from './MobileComponents';
 import { XopcMobileRoute } from '../model/home';
 
 @ComponentV2
@@ -30,6 +30,11 @@ export struct XopcWorkspaceView {
   aboutToDisappear(): void { this.model.dispose(); }
 
   private async goBack(): Promise<void> {
+    if (this.model.openingId) {
+      this.model.cancelOpening();
+      if (this.initialId) this.onExit();
+      return;
+    }
     if (this.model.editing) {
       const selected = this.model.selected;
       if (selected && (this.model.title !== selected.title || this.model.body !== selected.body || this.model.cron !== (selected.cron ?? '') || this.model.projectId !== (selected.projectId ?? ''))) {
@@ -521,9 +526,9 @@ export struct XopcWorkspaceView {
       Row({ space: 12 }) {
         Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
           .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back'))
-          .enabled(!this.model.busy).onClick((): void => { this.goBack(); })
+          .enabled(!this.model.busy || !!this.model.openingId).onClick((): void => { this.goBack(); })
         Text(this.heading).layoutWeight(1).fontSize(22).lineHeight(30).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-        if (!this.model.selected) {
+        if (!this.model.selected && !this.model.openingId) {
           Button({ type: ButtonType.Circle }) {
             SymbolGlyph($r('sys.symbol.plus')).fontSize(21).fontColor([this.colors.accent])
           }.width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
@@ -532,8 +537,12 @@ export struct XopcWorkspaceView {
         }
       }.width('100%').padding({ left: 12, right: 20, top: 10, bottom: 10 })
       if (this.model.error) { Text(this.model.error).fontColor(this.colors.danger).padding(12) }
-      if (this.model.selected) { this.detail(this.model.selected) } else { this.list() }
+      if (this.model.selected) { this.detail(this.model.selected) }
+      else if (this.model.openingId) { XopcBrandLoading() }
+      else { this.list() }
     }.height('100%').width('100%').backgroundColor(this.colors.surface)
-    }.hideTitleBar(true).onBackPressed((): boolean => { if (!this.model.busy) this.goBack(); return true; })
+    }.hideTitleBar(true).onBackPressed((): boolean => {
+      if (!this.model.busy || !!this.model.openingId) this.goBack(); return true;
+    })
   }
 }

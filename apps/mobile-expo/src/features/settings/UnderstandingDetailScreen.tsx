@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text, TextInput } from 'react-native-paper';
 
-import { ListSkeleton } from '../../components/ListSkeleton';
+import { BrandLoadingState } from '../../components/BrandLoadingState';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import { queryKeys } from '../../query/keys';
@@ -19,7 +19,8 @@ export function UnderstandingDetailScreen() {
   const client = useQueryClient();
   const gatewayId = useGatewayStore(s => s.activeGatewayId) ?? '';
   const { colors } = useTheme();
-  const copy = useMessages().mobileExperience.understanding;
+  const messages = useMessages();
+  const copy = messages.mobileExperience.understanding;
   const item = useQuery({ queryKey: queryKeys.userUnderstandingItem(gatewayId, id ?? ''), queryFn: () => fetchUnderstandingItem(id!), enabled: Boolean(id) });
   const [statement, setStatement] = useState('');
   const [editing, setEditing] = useState(false);
@@ -37,7 +38,7 @@ export function UnderstandingDetailScreen() {
   return <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
     <NativeScreenHeader title={copy.details} onBack={() => router.back()} />
     <ScrollView contentContainerStyle={styles.content}>
-      {item.isLoading ? <ListSkeleton count={4} /> : !item.data ? <Text style={{ color: colors.text.secondary }}>{copy.empty}</Text> : <>
+      {item.isLoading ? <BrandLoadingState label={messages.common.loading} /> : !item.data ? <Text style={{ color: colors.text.secondary }}>{copy.empty}</Text> : <>
         <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
           {editing ? <TextInput mode="outlined" multiline label={copy.statement} value={statement} onChangeText={setStatement} />
             : <Text style={[styles.statement, { color: colors.text.primary }]}>{item.data.statement}</Text>}

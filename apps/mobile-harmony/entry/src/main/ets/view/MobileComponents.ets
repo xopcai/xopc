@@ -1,4 +1,55 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+
+@ComponentV2
+export struct XopcBrandLoading {
+  @Local colors: XopcThemeColors = appThemeColors;
+  @Param compact: boolean = false;
+  @Param reduceMotion: boolean = false;
+  @Param label: ResourceStr = $r('app.string.loading');
+  @Local accentAngle: number = 0;
+  private animationTimer: number = -1;
+
+  aboutToAppear(): void { this.startAnimation(); }
+
+  aboutToDisappear(): void {
+    clearTimeout(this.animationTimer);
+    this.animationTimer = -1;
+  }
+
+  @Monitor('reduceMotion')
+  onReduceMotionChange(): void { this.startAnimation(); }
+
+  private startAnimation(): void {
+    clearTimeout(this.animationTimer);
+    this.animationTimer = -1;
+    this.accentAngle = 0;
+    if (this.reduceMotion) return;
+    this.animationTimer = setTimeout((): void => { this.accentAngle = 360; }, 0);
+  }
+
+  private labelText(): string {
+    if (typeof this.label === 'string') return this.label;
+    return this.getUIContext().getHostContext()?.resourceManager.getStringSync(this.label.id) ?? '';
+  }
+
+  build() {
+    Column({ space: this.compact ? 0 : 12 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Image($r('app.media.brand_logo_base')).width(this.compact ? 20 : 42).height(this.compact ? 20 : 42)
+          .objectFit(ImageFit.Contain)
+        Image($r('app.media.brand_logo_accent')).width(this.compact ? 20 : 42).height(this.compact ? 20 : 42)
+          .objectFit(ImageFit.Contain).rotate({ angle: this.accentAngle })
+          .animation({ duration: this.reduceMotion ? 0 : 1450, curve: Curve.Linear,
+            iterations: this.reduceMotion ? 1 : -1 })
+      }.width(this.compact ? 20 : 42).height(this.compact ? 20 : 42)
+      if (!this.compact) {
+        Text(this.label).fontSize(13).fontColor(this.colors.tertiary)
+      }
+    }.width(this.compact ? 20 : '100%').constraintSize({ minHeight: this.compact ? 20 : 220 })
+      .justifyContent(FlexAlign.Center).accessibilityText(this.labelText())
+  }
+}
+
 @ComponentV2
 export struct XopcPageHeader {
   @Local colors: XopcThemeColors = appThemeColors;

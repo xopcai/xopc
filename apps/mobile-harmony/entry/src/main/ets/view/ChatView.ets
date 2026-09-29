@@ -44,47 +44,7 @@ import { assistantAudioAutoplay } from '../service/assistantAudioAutoplay';
 import { editChatImageAttachment } from '../service/chatImageEditing';
 import { latestChatMessageId } from '../common/chatMessagePreview';
 import { chatPresentationRows, chatNeedsWideBubble } from '../common/chatPresentation';
-
-@ComponentV2
-struct XopcChatRunningLogo {
-  @Param reduceMotion: boolean = false;
-  @Local accentAngle: number = 0;
-  private animationTimer: number = -1;
-
-  aboutToAppear(): void {
-    this.startAnimation();
-  }
-
-  aboutToDisappear(): void {
-    clearTimeout(this.animationTimer);
-    this.animationTimer = -1;
-  }
-
-  @Monitor('reduceMotion')
-  onReduceMotionChange(): void {
-    this.startAnimation();
-  }
-
-  private startAnimation(): void {
-    clearTimeout(this.animationTimer);
-    this.animationTimer = -1;
-    this.accentAngle = 0;
-    if (this.reduceMotion) return;
-    this.animationTimer = setTimeout((): void => {
-      this.accentAngle = 360;
-    }, 0);
-  }
-
-  build() {
-    Stack({ alignContent: Alignment.Center }) {
-      Image($r('app.media.brand_logo_base')).width(20).height(20).objectFit(ImageFit.Contain)
-      Image($r('app.media.brand_logo_accent')).width(20).height(20).objectFit(ImageFit.Contain)
-        .rotate({ angle: this.accentAngle })
-        .animation({ duration: this.reduceMotion ? 0 : 1450, curve: Curve.Linear,
-          iterations: this.reduceMotion ? 1 : -1 })
-    }.width(20).height(20)
-  }
-}
+import { XopcBrandLoading } from './MobileComponents';
 
 @ComponentV2
 export struct XopcChatView {
@@ -999,7 +959,7 @@ export struct XopcChatView {
     if (!this.atBottom && this.showJumpBottom) {
       Button({ type: ButtonType.Circle }) {
         if (this.chat.runId) {
-          XopcChatRunningLogo({ reduceMotion: this.layout.reduceMotion })
+          XopcBrandLoading({ compact: true, reduceMotion: this.layout.reduceMotion })
         } else {
           Text('↓').fontSize(20).fontColor(this.colors.secondary)
         }

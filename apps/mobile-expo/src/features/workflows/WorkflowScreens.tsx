@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '../../components/AppToast';
 import { ListSkeleton } from '../../components/ListSkeleton';
+import { BrandLoadingState } from '../../components/BrandLoadingState';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import { dismissOrRoot } from '../../lib/navigation';
@@ -85,7 +86,8 @@ export function WorkflowRunDetailScreen() {
   const queryClient = useQueryClient();
   const { id = '', agentId: routeAgentId = '', projectId = '' } = useLocalSearchParams<{ id: string; agentId?: string; projectId?: string }>();
   const { colors } = useTheme();
-  const labels = useMessages().workflowsPage;
+  const messages = useMessages();
+  const labels = messages.workflowsPage;
   const [toastMessage, setToastMessage] = useState('');
   const agents = useQuery({ queryKey: queryKeys.agents, queryFn: fetchChatAgents });
   const projects = useQuery({ queryKey: queryKeys.projects, queryFn: fetchProjects, enabled: Boolean(projectId) });
@@ -137,7 +139,7 @@ export function WorkflowRunDetailScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader title={view?.run.title ?? labels.detailTitle} onBack={() => router.back()} />
-      {agents.isLoading || (projectId && projects.isLoading) || query.isLoading ? <ListSkeleton count={5} /> : agents.isError || projects.isError || query.isError || !view ? (
+      {agents.isLoading || (projectId && projects.isLoading) || query.isLoading ? <BrandLoadingState label={messages.common.loading} /> : agents.isError || projects.isError || query.isError || !view ? (
         <View style={styles.center}>
           <Text style={{ color: colors.semantic.error }}>{labels.detailLoadFailed}</Text>
           <Button onPress={() => void Promise.all([

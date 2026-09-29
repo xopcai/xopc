@@ -2,7 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcMobileRoute } from '../model/home';
 import { XopcUnderstandingItem, XopcUnderstandingProfile, XopcUnderstandingRule } from '../model/userUnderstanding';
 import { XopcUserUnderstandingViewModel } from '../viewmodel/userUnderstandingViewModel';
-import { XopcListSkeleton, XopcSectionLabel } from './MobileComponents';
+import { XopcBrandLoading, XopcListSkeleton, XopcSectionLabel } from './MobileComponents';
 
 @ComponentV2
 export struct XopcAboutYouView {
@@ -26,8 +26,13 @@ export struct XopcAboutYouView {
   aboutToDisappear(): void { this.model.dispose(); }
 
   private async loadInitial(): Promise<void> {
+    if (this.initialId) {
+      this.section = 1;
+      void this.model.refresh();
+      await this.model.open(this.initialId);
+      return;
+    }
     await this.model.refresh();
-    if (this.initialId) await this.model.open(this.initialId);
   }
 
   private openProfileEditor(): void {
@@ -386,6 +391,7 @@ export struct XopcAboutYouView {
   build() {
     NavDestination() {
       if (this.model.selected) { this.detail(this.model.selected) }
+      else if (this.model.openingId) { XopcBrandLoading() }
       else {
         Column() {
           this.mainHeader()
@@ -423,6 +429,7 @@ export struct XopcAboutYouView {
       }
     }.hideTitleBar(true).backgroundColor(this.colors.surface).onBackPressed((): boolean => {
       if (this.model.selected) { this.model.close(); return true; }
+      if (this.model.openingId) { this.model.close(); return true; }
       return false;
     }).bindSheet($$this.editProfileOpen, this.profileEditor, { height: SheetSize.LARGE, dragBar: true, backgroundColor: this.colors.panel })
   }
