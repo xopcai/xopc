@@ -7,6 +7,7 @@ import { buildFileAgentContext } from '../agent/source-context/file-context.js';
 import { buildSessionAgentContext } from '../agent/source-context/session-context.js';
 import { buildMcpResourceAgentContext } from '../agent/source-context/mcp-resource-context.js';
 import { buildBrowserTabAgentContext } from '../agent/source-context/browser-tab.js';
+import { buildUserAssertionAgentContext } from '../agent/source-context/user-assertion-context.js';
 import { RealtimeExtensionBrowserProvider } from '../browser/providers/realtime-extension.js';
 import { getBrowserTabBindingById } from '../storage/sqlite/browser-tab-binding-repository.js';
 import crypto from 'node:crypto';
@@ -549,6 +550,10 @@ export class GatewayService {
       getConfig: () => this.config,
       resolveTurnContext: async (ref, conversationId) => {
         if (ref.kind === 'task') return buildTaskAgentContext(new TaskRepository().get(ref.sourceId), ref.expectedVersion);
+        if (ref.kind === 'user_assertion') {
+          const metadata = await this.sessionIndex.getSessionMetadata(conversationId);
+          return buildUserAssertionAgentContext(ref.sourceId, ref.expectedVersion, metadata?.agentId);
+        }
         if (ref.kind === 'file') {
           const files = getGatewayFileSpaceService(this);
           const space = await files.forContext('session', conversationId).catch(() => null);

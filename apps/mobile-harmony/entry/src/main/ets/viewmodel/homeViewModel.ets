@@ -3,7 +3,22 @@ import { appSettings } from '../service/settings';
 import { XopcHomeAction, XopcHomeItem } from '../model/home';
 import { XopcTask, XopcTaskList, XopcAutomationMetrics } from '../model/workspace';
 import { parseHome, recentClosed, homeCommand } from '../common/homeProtocol';
-import { XopcDrawerProfile } from '../model/chat';
+import { XopcUnderstandingItem, XopcUnderstandingRule, XopcUnderstandingSummary, XopcUserGoal } from '../model/userUnderstanding';
+
+interface XopcGoalPatchRequest {
+  title: string;
+  desiredOutcome: string;
+  status: string;
+  targetAt?: number | null;
+}
+
+interface XopcGoalCreateScope { type: string; }
+interface XopcGoalCreateRequest {
+  title: string;
+  desiredOutcome: string;
+  scope: XopcGoalCreateScope;
+  targetAt?: number;
+}
 
 @ObservedV2
 export class XopcProgressViewModel {
@@ -73,8 +88,19 @@ export class XopcProgressViewModel {
 export class XopcPersonalViewModel {
   @Trace name: string = '';
   @Trace role: string = '';
+  @Trace understandingCount: number = 0;
+  @Trace explicitCount: number = 0;
+  @Trace learnedCount: number = 0;
+  @Trace reviewCount: number = 0;
+  @Trace workMemoryCount: number = 0;
+  @Trace focusTitle: string = '';
+  @Trace focusOutcome: string = '';
+  @Trace goals: XopcUserGoal[] = [];
+  @Trace recent: XopcUnderstandingItem[] = [];
+  @Trace rules: XopcUnderstandingRule[] = [];
   @Trace loading: boolean = true;
   @Trace error: string = '';
+  @Trace savingGoal: boolean = false;
   private generation: number = 0;
 
   dispose(): void { this.generation++; }
@@ -82,12 +108,53 @@ export class XopcPersonalViewModel {
     const generation = ++this.generation;
     this.loading = true;
     try {
-      const result = JSON.parse(await gatewaySession.request('/api/user-model')) as XopcDrawerProfile;
+      const result = JSON.parse(await gatewaySession.request('/api/user-model/mobile-summary')) as XopcUnderstandingSummary;
       if (generation !== this.generation) return;
-      this.name = result.profile?.callName?.trim() || result.suggestedCallName?.trim() || '';
-      this.role = result.profile?.role?.trim() || '';
+      this.name = result.profile.callName.trim() || result.suggestedCallName.trim() || '';
+      this.role = result.profile.role.trim() || '';
+      this.understandingCount = result.counts.total;
+      this.explicitCount = result.counts.explicit;
+      this.learnedCount = result.counts.learned;
+      this.reviewCount = result.counts.review;
+      this.workMemoryCount = result.counts.workMemory;
+      this.focusTitle = result.primaryFocus?.title ?? '';
+      this.focusOutcome = result.primaryFocus?.desiredOutcome ?? '';
+      this.goals = (result.goals ?? []).slice(0, 5);
+      this.recent = result.recent.slice(0, 3);
+      this.rules = result.rules.slice(0, 3);
       this.error = '';
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) this.loading = false; }
+  }
+
+  async saveGoal(id: string, title: string, desiredOutcome: string, status: string, targetAt?: number): Promise<boolean> {
+    if (this.savingGoal) return false;
+    this.savingGoal = true;
+    try {
+      if (id) {
+        const body: XopcGoalPatchRequest = {
+          title: title,
+          desiredOutcome: desiredOutcome,
+          status: status,
+          targetAt: targetAt ?? null
+        };
+        await gatewaySession.request('/api/user-model/goals/' + encodeURIComponent(id), 'PATCH', JSON.stringify(body));
+      } else {
+        const body: XopcGoalCreateRequest = {
+          title: title,
+          desiredOutcome: desiredOutcome,
+          scope: { type: 'global' }
+        };
+        if (targetAt !== undefined) body.targetAt = targetAt;
+        await gatewaySession.request('/api/user-model/goals', 'POST', JSON.stringify(body));
+      }
+      await this.refresh();
+      return true;
+    } catch (error) {
+      this.error = (error as Error).message;
+      return false;
+    } finally {
+      this.savingGoal = false;
+    }
   }
 }

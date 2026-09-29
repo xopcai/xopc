@@ -11,6 +11,7 @@ import { common } from '@kit.AbilityKit';
 import { pushNotifications, XopcPushNotifications } from '../service/pushNotifications';
 import { XopcPageHeader, XopcHubRow, XopcSectionLabel } from './MobileComponents';
 import { connectionModel } from '../viewmodel/connectionViewModel';
+import { XopcMobileRoute } from '../model/home';
 
 @ComponentV2
 export struct XopcSettingsView {
@@ -20,6 +21,7 @@ export struct XopcSettingsView {
   @Event onOpenSection: (section: string) => void = (_section: string): void => {};
   @Event onExit: () => void = (): void => {};
   @Event onDisconnected: () => void = (): void => {};
+  @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local preferences: XopcSettings = appSettings;
   @Local error: string = '';
   @Local push: XopcPushNotifications = pushNotifications;
@@ -88,12 +90,15 @@ export struct XopcSettingsView {
   @Builder
   rootSettings() {
     if (gatewaySession.currentProfile()) {
-      XopcSectionLabel({ heading: $r('app.string.connection') })
+      XopcSectionLabel({ heading: $r('app.string.settings_connection_notifications') })
       XopcHubRow({ heading: gatewaySession.currentProfile()?.name ?? 'Gateway', summary: $r('app.string.connection'),
         symbol: $r('sys.symbol.link'), onOpen: (): void => { this.openSection('connection'); } })
       XopcHubRow({ heading: $r('app.string.notifications'), summary: this.push.registered ? $r('app.string.push_registered') : $r('app.string.push_help'),
         symbol: $r('sys.symbol.bell'), onOpen: (): void => { this.openSection('notifications'); } })
     }
+    XopcSectionLabel({ heading: $r('app.string.settings_data_sharing') })
+    XopcHubRow({ heading: $r('app.string.share_center'), summary: $r('app.string.share_center_help'),
+      symbol: $r('sys.symbol.share'), onOpen: (): void => { this.onNavigate({ page: 'sharing', itemId: '' }); } })
     XopcSectionLabel({ heading: $r('app.string.preferences') })
     XopcHubRow({ heading: $r('app.string.language'), summary: this.languageLabel(),
       symbol: $r('sys.symbol.doc_text'), onOpen: (): void => { this.openSection('language'); } }).id('open-language')
