@@ -39,6 +39,7 @@ export struct XopcChatMessageContent {
   @Computed get imageMedia(): XopcHistoryMedia[] {
     return this.fileMedia.filter((file: XopcHistoryMedia): boolean => filePreviewKind(file.name, file.mimeType) === 'image');
   }
+  @Computed get userImageThumbnailSize(): number { return this.imageMedia.length === 1 ? 168 : 112; }
   @Computed get attachmentMedia(): XopcHistoryMedia[] {
     return this.row.role === 'user'
       ? this.fileMedia.filter((file: XopcHistoryMedia): boolean => filePreviewKind(file.name, file.mimeType) !== 'image')
@@ -86,7 +87,7 @@ export struct XopcChatMessageContent {
             previewLineLimit: this.previewLines, onNavigate: this.onNavigate })
         } else {
         Text(this.previewText).fontSize(16).lineHeight(this.row.role === 'assistant' ? 23 : 25)
-          .fontColor(this.colors.foreground).width('100%')
+          .fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.End)
           .maxLines(this.previewLines).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         Button() {
@@ -131,7 +132,10 @@ export struct XopcChatMessageContent {
           if (!this.body.length && !this.row.blocks && this.row.text) { XopcMarkdownView({ content: this.row.text,
             conversationId: this.conversationId, compactReading: true, onNavigate: this.onNavigate }) }
         } else if (this.row.role === 'user') {
-          if (this.row.text) { Text(this.row.text).fontSize(16).lineHeight(25).fontColor(this.colors.foreground) }
+          if (this.row.text) {
+            Text(this.row.text).fontSize(16).lineHeight(25).fontColor(this.colors.foreground)
+              .width('100%').textAlign(TextAlign.End)
+          }
           ForEach(this.row.refs || [], (ref: XopcContextRef) => {
             this.reference(ref)
           }, (ref: XopcContextRef): string => ref.kind + ':' + ref.sourceId)
@@ -151,17 +155,22 @@ export struct XopcChatMessageContent {
               Repeat<XopcHistoryMedia>(this.imageMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
                 Column() {
                   XopcChatMediaView({ file: item.item, conversationId: this.conversationId, compact: true,
-                    compactThumbnail: true, compactThumbnailWidth: 136, compactThumbnailHeight: 96,
+                    embedded: true, compactThumbnail: true, compactThumbnailWidth: this.userImageThumbnailSize,
+                    compactThumbnailHeight: this.userImageThumbnailSize,
                     compactThumbnailContain: true, compactMetadata: false, compactDisclosure: false,
                     imageGallery: this.imageMedia })
-                }.width(144).height(104).borderRadius(10).clip(true).backgroundColor(this.colors.grouped)
+                }.width(this.userImageThumbnailSize + 8).height(this.userImageThumbnailSize + 8)
+                  .borderRadius(12).clip(true).backgroundColor(this.colors.grouped)
               }).key((file: XopcHistoryMedia): string => file.id || file.uri)
-            }
+            }.width('100%').justifyContent(this.imageMedia.length === 1 ? FlexAlign.End : FlexAlign.Start)
           }.id('chat-user-image-strip-' + this.row.id).scrollable(ScrollDirection.Horizontal)
-            .scrollBar(BarState.Off).width('100%').height(104)
+            .scrollBar(BarState.Off).width('100%').height(this.userImageThumbnailSize + 8)
         }
         if (this.attachmentMedia.length) {
-          Text($r('app.string.chat_attachments_heading')).fontSize(12).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
+          if (this.row.role !== 'user') {
+            Text($r('app.string.chat_attachments_heading')).fontSize(12).fontWeight(FontWeight.Medium)
+              .fontColor(this.colors.secondary)
+          }
           Repeat<XopcHistoryMedia>(this.displayedMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
             XopcChatMediaView({ file: item.item, conversationId: this.conversationId, compact: true, imageGallery: this.imageMedia })
           }).key((file: XopcHistoryMedia): string => file.id || file.uri)
@@ -174,6 +183,6 @@ export struct XopcChatMessageContent {
         }
         if (this.row.role === 'assistant') { XopcChatResultTail({ row: this.row, conversationId: this.conversationId, onNavigate: this.onNavigate, onFillDraft: this.onFillDraft }) }
       }
-    }.width('100%').alignItems(HorizontalAlign.Start)
+    }.width('100%').alignItems(this.row.role === 'user' ? HorizontalAlign.End : HorizontalAlign.Start)
   }
 }
