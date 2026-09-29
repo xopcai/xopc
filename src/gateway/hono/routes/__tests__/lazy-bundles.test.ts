@@ -97,7 +97,14 @@ describe('lazy route bundles', () => {
   });
 
   it('maps memory editing and deletion without intercepting neighboring paths', () => {
-    for (const path of ['/api/user-model/assertions/id', '/api/knowledge-memory/id', '/api/knowledge-memory/id/review']) {
+    for (const path of [
+      '/api/user-model/export',
+      '/api/user-model/settings',
+      '/api/user-model/assertions/id',
+      '/api/user-model/assertions/id/scope',
+      '/api/knowledge-memory/id',
+      '/api/knowledge-memory/id/review',
+    ]) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('user-model');
     }
     for (const path of ['/api/user-model-other', '/api/knowledge-memory-other']) {

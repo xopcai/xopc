@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { ConfigSchema } from '../../../../config/schema.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
 import { writeKnowledgeItem } from '../../../../knowledge-memory/index.js';
 import { auth } from '../../middleware/auth.js';
@@ -18,6 +19,7 @@ describe('memory management through authenticated Gateway HTTP', () => {
     const app = new Hono();
     app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'memory-test-token', allowTailscale: false }) }));
     registerAuthenticatedLazyRouteFallback(app, {
+      service: { currentConfig: ConfigSchema.parse({}) },
       strictRateLimitMiddleware: async (_c, next) => next(),
     } as never);
     await new Promise<void>((resolve) => { server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 }, () => resolve()); });

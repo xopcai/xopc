@@ -42,7 +42,10 @@ vi.mock('../../../stores/gateway-store', () => {
   }) };
 });
 vi.mock('../../../stores/preferences-store', () => ({ usePreferencesStore: { getState: () => ({ language: 'en' }) } }));
-vi.mock('../../../i18n/messages', () => ({ useMessages: () => ({ chat: { sendFailed: 'Failed' } }) }));
+vi.mock('../../../i18n/messages', () => ({ useMessages: () => ({
+  chat: { sendFailed: 'Failed' },
+  mobileExperience: { errors: { unknown: 'Failed' } },
+}) }));
 vi.mock('../../gateway/use-gateway-health', () => ({ useGatewayHealth: () => ({ gatewayOnline: true }) }));
 vi.mock('../../gateway/session-detail-cache', () => ({ readCachedSessionDetail: () => ({ transcriptId: 'transcript' }) }));
 vi.mock('../../gateway/connection-log', () => ({ recordConnectionEvent: vi.fn() }));

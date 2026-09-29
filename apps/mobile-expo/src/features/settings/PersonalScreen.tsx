@@ -164,6 +164,23 @@ export function PersonalScreen() {
             {profile.data.rules.slice(0, 3).map(item => <UnderstandingRow key={item.id} statement={item.statement} status={understanding.rules} onPress={() => openUnderstandingItem(item.id)} />)}
           </View>
         </View> : null}
+
+        <View style={styles.section}>
+          <SectionHeading title={m.memoryPrivacy.title} />
+          <Pressable accessibilityRole="button" onPress={() => router.push('/settings/memory')} style={({ pressed }) => [
+            styles.privacyCard,
+            { backgroundColor: pressed ? colors.surface.pressed : colors.surface.panel, borderColor: colors.border.subtle },
+          ]}>
+            <View style={[styles.privacyIcon, { backgroundColor: colors.accent.soft }]}>
+              <Icon source="shield-account-outline" size={22} color={colors.accent.primary} />
+            </View>
+            <View style={styles.understandingCopy}>
+              <Text style={[styles.goalTitle, { color: colors.text.primary }]}>{m.memoryPrivacy.entryTitle}</Text>
+              <Text style={[styles.goalOutcome, { color: colors.text.secondary }]}>{m.memoryPrivacy.entryHint}</Text>
+            </View>
+            <Icon source="chevron-right" size={19} color={colors.text.tertiary} />
+          </Pressable>
+        </View>
       </ScrollView>
       <GoalEditorModal goal={editingGoal} visible={goalEditorOpen} onDismiss={() => setGoalEditorOpen(false)} />
     </View>
@@ -202,6 +219,8 @@ const styles = StyleSheet.create({
   memoryRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   memoryText: { ...typography.label },
   listCard: { borderRadius: radii.xl, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  privacyCard: { minHeight: 88, flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radii.xl, borderWidth: StyleSheet.hairlineWidth },
+  privacyIcon: { width: 44, height: 44, borderRadius: radii.lg, alignItems: 'center', justifyContent: 'center' },
   understandingRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   understandingCopy: { flex: 1, minWidth: 0 },
   understandingStatement: { ...typography.body },

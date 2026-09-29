@@ -50,7 +50,8 @@
       "work": "工作",
       "automation": "自动化",
       "capabilities": "能力",
-      "apps": "应用"
+      "apps": "应用",
+      "me": "我的"
     },
     "sections": {
       "work-overview": "工作台",
@@ -65,7 +66,8 @@
       "capabilities-connectors": "连接",
       "capabilities-channels": "消息通道",
       "capabilities-extensions": "扩展",
-      "apps-library": "应用工坊"
+      "apps-library": "应用工坊",
+      "me-overview": "我的"
     }
   },
   "token": {

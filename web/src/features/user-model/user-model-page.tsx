@@ -14,19 +14,22 @@ import {
   Handshake,
   Languages,
   Loader2,
+  LockKeyhole,
   MapPin,
-  MessageCircle,
   Pencil,
   Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
+  Upload,
+  Download,
   UserRound,
   UserRoundPen,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -48,9 +51,13 @@ import {
   deleteAssertion,
   deleteKnowledge,
   detectBrowserTimezone,
+  downloadUserModelExport,
   fetchUserModel,
   reviewKnowledgeItem,
+  setAssertionScope,
+  setAssertionStatus,
   setRuleStatus,
+  updateMemorySettings,
   updateUserProfile,
   updatePriority,
   type CollaborationRule,
@@ -64,22 +71,25 @@ import {
 } from './user-model-api';
 
 type Language = 'en' | 'zh';
-type View = 'overview' | 'understanding' | 'knowledge';
+type PrimaryView = 'overview' | 'understanding' | 'privacy';
+type View = PrimaryView;
+type MemorySection = 'personal' | 'work';
 type UnderstandingFilter = 'all' | 'explicit' | 'learned';
 type KnowledgeKindFilter = 'all' | KnowledgeItem['kind'];
 type RefreshFeedback = 'idle' | 'refreshing' | 'success' | 'error';
 
 function viewFromSearchParams(searchParams: URLSearchParams): View {
   const value = searchParams.get('tab');
-  return value === 'understanding' || value === 'knowledge' ? value : 'overview';
+  return value === 'understanding' || value === 'privacy' ? value : 'overview';
 }
 
 const copy = {
   en: {
-    pageTitle: 'You',
-    pageSubtitle: 'A living portrait shaped by you and xopc.',
-    overview: 'Your portrait',
-    understanding: 'Shared understanding',
+    pageTitle: 'Me',
+    pageSubtitle: 'Your information and how xopc understands you.',
+    overview: 'Overview',
+    understanding: 'What xopc knows',
+    privacy: 'Data & privacy',
     knowledge: 'Work memory',
     portraitEyebrow: 'YOU × XOPC',
     portraitIntro: 'Your explicit profile stays clear and editable. xopc builds a separate shared understanding through conversations and work.',
@@ -166,10 +176,11 @@ const copy = {
     actionFailed: 'The change could not be saved. Please try again.',
   },
   zh: {
-    pageTitle: '你',
-    pageSubtitle: '一份由你和 xopc 共同塑造、持续生长的画像。',
-    overview: '你的画像',
-    understanding: '共同理解',
+    pageTitle: '我的',
+    pageSubtitle: '管理个人信息，以及 xopc 对你的了解。',
+    overview: '总览',
+    understanding: '对我的了解',
+    privacy: '数据与隐私',
     knowledge: '工作记忆',
     portraitEyebrow: 'YOU × XOPC',
     portraitIntro: '你明确提供的基本信息会被清晰呈现并由你直接编辑；xopc 在对话与共事中形成的理解则单独维护。',
@@ -805,12 +816,15 @@ export function UserModelPage() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [understandingFilter, setUnderstandingFilter] = useState<UnderstandingFilter>('all');
+  const [memorySection, setMemorySection] = useState<MemorySection>('personal');
   const [knowledgeKindFilter, setKnowledgeKindFilter] = useState<KnowledgeKindFilter>('all');
   const [refreshFeedback, setRefreshFeedback] = useState<RefreshFeedback>('idle');
   const refreshResetTimer = useRef<number | undefined>(undefined);
 
   const setView = (nextView: View) => {
     if (nextView === view) return;
+    const main = document.getElementById('app-main-content');
+    if (typeof main?.scrollTo === 'function') main.scrollTo({ top: 0, behavior: 'auto' });
     setSearchParams((previous) => {
       const next = new URLSearchParams(previous);
       if (nextView === 'overview') next.delete('tab');
@@ -987,12 +1001,15 @@ export function UserModelPage() {
   }
 
   const assertions = data.assertions.filter((item) => (
-    item.usable && item.scope.type === 'global' && !profilePredicates.has(item.predicate)
+    item.usable && !profilePredicates.has(item.predicate)
   )).sort((a, b) => {
     const importanceA = a.declaredImportance ?? a.inferredImportance;
     const importanceB = b.declaredImportance ?? b.inferredImportance;
     return importanceB - importanceA || b.recordedAt - a.recordedAt;
   });
+  const reviewAssertions = data.assertions
+    .filter((item) => ['candidate', 'needs_review', 'conflicted'].includes(item.status))
+    .sort((a, b) => b.recordedAt - a.recordedAt);
   const profile = profileFromResponse(data);
   const displayName = profile.callName || (language === 'zh' ? '你' : 'You');
   const explicitCount = assertions.filter((item) => item.authority === 'user_explicit').length;
@@ -1029,6 +1046,32 @@ export function UserModelPage() {
     { key: 'insights', title: t.insights, icon: Sparkles, items: filteredAssertions.filter((item) => item.kind === 'derived_insight') },
   ];
   const visibleAssertionGroups = groupedAssertions.filter((group) => group.items.length > 0);
+  const understandingCategories = [
+    {
+      key: 'about', icon: UserRound,
+      label: language === 'zh' ? '关于我' : 'About me',
+      hint: language === 'zh' ? '身份、背景与能力' : 'Identity, background, and capabilities',
+      count: assertions.filter((item) => ['identity', 'capability'].includes(item.kind)).length,
+    },
+    {
+      key: 'preferences', icon: Compass,
+      label: language === 'zh' ? '偏好与习惯' : 'Preferences & habits',
+      hint: language === 'zh' ? '沟通方式与日常习惯' : 'Communication and routines',
+      count: assertions.filter((item) => ['preference', 'value', 'routine'].includes(item.kind)).length,
+    },
+    {
+      key: 'people', icon: Handshake,
+      label: language === 'zh' ? '重要的人' : 'Important people',
+      hint: language === 'zh' ? '与你有关的人和关系' : 'People and relationships',
+      count: assertions.filter((item) => item.kind === 'relationship').length,
+    },
+    {
+      key: 'goals', icon: Sparkles,
+      label: language === 'zh' ? '目标与计划' : 'Goals & plans',
+      hint: language === 'zh' ? '正在推进的长期目标' : 'Long-term outcomes in progress',
+      count: activeGoals.length,
+    },
+  ];
   const memoryCounts = knowledgeKindOrder
     .map((kind) => ({ kind, count: visibleKnowledge.filter((item) => item.kind === kind).length }))
     .filter((entry) => entry.count > 0);
@@ -1056,6 +1099,7 @@ export function UserModelPage() {
 
   const openUnderstanding = (filter: UnderstandingFilter) => {
     setUnderstandingFilter(filter);
+    setMemorySection('personal');
     setView('understanding');
   };
 
@@ -1063,7 +1107,8 @@ export function UserModelPage() {
     setKnowledgeKindFilter(kind);
     setQuery('');
     setKnowledgeLimit(24);
-    setView('knowledge');
+    setMemorySection('work');
+    setView('understanding');
   };
 
   const assertionRow = (item: UserAssertion) => (
@@ -1079,6 +1124,7 @@ export function UserModelPage() {
       onCancel={() => { setEditingId(undefined); setDraft(''); }}
       onDelete={() => void act(item.id, () => deleteAssertion(item.id))}
       onCorrect={() => saveCorrection(item)}
+      onScopeChange={(scope) => void act(item.id, () => setAssertionScope(item.id, scope))}
     />
   );
 
@@ -1092,20 +1138,29 @@ export function UserModelPage() {
       : t.maintenanceFailed;
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-8 px-4 py-7 sm:px-6 lg:px-8 lg:py-10">
-      <PageTabs
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-4 sm:space-y-8 sm:px-6 sm:py-7 lg:px-8 lg:py-10">
+      <PageTabs<PrimaryView>
         items={[
           { id: 'overview', label: t.overview, icon: Sparkles },
-          { id: 'understanding', label: t.understanding, icon: UserRound, count: assertions.length },
-          { id: 'knowledge', label: t.knowledge, icon: BookOpen, count: visibleKnowledge.length },
+          {
+            id: 'understanding',
+            label: <><span className="sm:hidden">{language === 'zh' ? '记忆' : 'Memory'}</span><span className="hidden sm:inline">{t.understanding}</span></>,
+            icon: UserRound,
+            count: assertions.length,
+          },
+          {
+            id: 'privacy',
+            label: <><span className="sm:hidden">{language === 'zh' ? '隐私' : 'Privacy'}</span><span className="hidden sm:inline">{t.privacy}</span></>,
+            icon: ShieldCheck,
+          },
         ]}
         activeTab={view}
         onChange={setView}
         ariaLabel={t.pageTitle}
         tabIdPrefix="understanding-tab"
         panelIdPrefix="understanding-panel"
-        className="w-fit max-w-full gap-1 rounded-full bg-surface-panel p-1 shadow-surface"
-        buttonClassName="rounded-full px-3.5 py-2"
+        className="w-full max-w-full gap-1 rounded-full bg-surface-panel p-1 shadow-surface sm:w-fit"
+        buttonClassName="min-w-0 flex-1 justify-center rounded-full px-2 py-2 sm:flex-none sm:px-3.5"
         selectedClassName="bg-surface-active text-fg"
         unselectedClassName="text-fg-muted hover:bg-surface-hover hover:text-fg"
       />
@@ -1119,25 +1174,28 @@ export function UserModelPage() {
       ) : null}
 
       {view === 'overview' ? (
-        <div id="understanding-panel-overview" role="tabpanel" aria-labelledby="understanding-tab-overview" className="space-y-10">
-          <section data-testid="overview-hero" className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:gap-12">
-            <div className="min-w-0 px-1 py-2">
+        <div id="understanding-panel-overview" role="tabpanel" aria-labelledby="understanding-tab-overview" className="space-y-8 sm:space-y-10">
+          <section data-testid="overview-hero" className="grid gap-5 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:gap-12">
+            <div className="min-w-0 px-1 sm:py-2">
                 <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.16em] text-accent-fg">
                   <Sparkles className="size-3.5" aria-hidden="true" />
                   <span>{t.portraitEyebrow}</span>
                 </div>
-                <div className="mt-5 flex flex-wrap items-center gap-5">
-                  <div className="flex size-20 shrink-0 items-center justify-center rounded-[1.4rem] bg-surface-active text-xl font-semibold text-fg">
+                <div className="mt-3 flex items-center gap-3 sm:mt-5 sm:flex-wrap sm:gap-5">
+                  <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-surface-active text-base font-semibold text-fg sm:size-20 sm:rounded-[1.4rem] sm:text-xl">
                     {initials(displayName)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-3xl font-semibold tracking-tight text-fg">{displayName}</h2>
+                    <h2 className="truncate text-xl font-semibold tracking-tight text-fg sm:text-3xl">{displayName}</h2>
                     <p className="mt-1 break-words text-sm text-fg-muted">{profile.role || t.notProvided}</p>
                   </div>
-                  <Button variant="ghost" className="shrink-0" onClick={() => setProfileOpen(true)}><UserRoundPen className="size-4" aria-hidden="true" />{t.editProfile}</Button>
+                  <Button variant="ghost" className="size-11 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-3" onClick={() => setProfileOpen(true)}>
+                    <UserRoundPen className="size-4" aria-hidden="true" />
+                    <span className="sr-only sm:not-sr-only">{t.editProfile}</span>
+                  </Button>
                 </div>
-                <p className="mt-5 max-w-2xl text-sm leading-6 text-fg-muted">{t.portraitIntro}</p>
-              <dl className="mt-7 grid gap-x-8 gap-y-5 sm:grid-cols-3">
+                <p className="mt-5 hidden max-w-2xl text-sm leading-6 text-fg-muted sm:block">{t.portraitIntro}</p>
+              <dl className="mt-7 hidden gap-x-8 gap-y-5 sm:grid sm:grid-cols-3">
                 {[
                   { icon: Languages, label: t.locale, value: profile.locale ? localeLabel(profile.locale, language) : t.notProvided },
                   { icon: MapPin, label: t.timezone, value: profile.timezone || t.notProvided },
@@ -1150,7 +1208,7 @@ export function UserModelPage() {
                 ))}
                 </dl>
             </div>
-            <aside data-testid="priority-panel" className="flex min-h-64 flex-col rounded-[1.4rem] bg-surface-panel p-6 shadow-surface">
+            <aside data-testid="priority-panel" className="flex min-h-0 flex-col rounded-[1.4rem] bg-surface-panel p-5 shadow-surface sm:min-h-64 sm:p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold tracking-wide text-fg-subtle">{t.importantNow}</p>
@@ -1183,7 +1241,7 @@ export function UserModelPage() {
                   </div>
                 )}
                 {otherGoals.length ? (
-                  <div className="mt-5 border-t border-edge-subtle pt-4">
+                  <div className="mt-5 hidden border-t border-edge-subtle pt-4 sm:block">
                     <p className="text-xs text-fg-subtle">{t.otherGoals}</p>
                     <div className="mt-2 space-y-2">{otherGoals.slice(0, 3).map((goal) => <p key={goal.id} className="text-sm text-fg">{goal.title}</p>)}</div>
                   </div>
@@ -1191,24 +1249,50 @@ export function UserModelPage() {
             </aside>
           </section>
 
-          <section aria-label={t.understanding} className="grid gap-2 sm:grid-cols-2">
-            {[
-              { filter: 'explicit' as const, icon: MessageCircle, label: t.explicit, hint: t.explicitHint, count: explicitCount },
-              { filter: 'learned' as const, icon: Brain, label: t.learned, hint: t.learnedHint, count: learnedCount },
-            ].map(({ filter, icon: Icon, label, hint, count }) => (
+          {reviewAssertions.length ? (
+            <section className="overflow-hidden rounded-2xl bg-accent-soft/70 shadow-surface" aria-label={language === 'zh' ? '需要你确认' : 'Needs your review'}>
+              <div className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-panel text-accent-fg"><Sparkles className="size-4" aria-hidden="true" /></span>
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '需要你确认' : 'Needs your review'}</h2>
+                    <p className="mt-0.5 truncate text-xs text-fg-muted">{language === 'zh' ? `还有 ${reviewAssertions.length} 条理解需要确认` : `${reviewAssertions.length} understanding items to review`}</p>
+                  </div>
+                </div>
+                <span className="rounded-full bg-surface-panel px-2.5 py-1 text-xs font-medium tabular-nums text-accent-fg">{reviewAssertions.length}</span>
+              </div>
+              <div className="border-t border-accent/10 bg-surface-panel px-5 py-4 sm:flex sm:items-center sm:gap-4 sm:px-6">
+                <p className="min-w-0 flex-1 text-sm leading-6 text-fg">{reviewAssertions[0].statement}</p>
+                <div className="mt-3 flex shrink-0 gap-2 sm:mt-0">
+                  <Button variant="ghost" className="min-h-11 flex-1 sm:flex-none" disabled={busy === reviewAssertions[0].id} onClick={() => void act(reviewAssertions[0].id, () => setAssertionStatus(reviewAssertions[0].id, 'rejected'))}>{language === 'zh' ? '不是' : 'No'}</Button>
+                  <Button variant="primary" className="min-h-11 flex-1 sm:flex-none" disabled={busy === reviewAssertions[0].id} onClick={() => void act(reviewAssertions[0].id, () => setAssertionStatus(reviewAssertions[0].id, 'active'))}>{language === 'zh' ? '是的' : 'That’s right'}</Button>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          <Section
+            title={language === 'zh' ? 'xopc 对我的了解' : 'What xopc knows about me'}
+            hint={language === 'zh' ? '你可以随时查看、修正或停止使用任何一条。' : 'Review, correct, or stop using anything at any time.'}
+            action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => setView('understanding')}>{t.seeAll}</Button>}
+          >
+            <div className="grid sm:grid-cols-2">
+              {understandingCategories.map(({ key, icon: Icon, label, hint, count }) => (
                 <button
-                  key={label}
+                  key={key}
                   type="button"
-                  className="group flex min-h-24 w-full cursor-pointer items-start gap-3 rounded-2xl px-4 py-4 text-left transition-colors hover:bg-surface-panel focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:px-5"
-                  onClick={() => openUnderstanding(filter)}
+                  className="group flex min-h-24 w-full items-center gap-4 border-t border-edge-subtle px-5 py-4 text-left first:border-t-0 hover:bg-surface-hover focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:[&:nth-child(-n+2)]:border-t-0 sm:[&:nth-child(even)]:border-l"
+                  onClick={() => openUnderstanding('all')}
                   aria-label={`${label}: ${count}`}
                 >
-                  <Icon className="mt-0.5 size-4 shrink-0 text-fg-subtle" aria-hidden="true" />
-                  <div className="min-w-0 flex-1"><p className="text-sm font-medium text-fg"><span className="mr-1.5 text-lg tabular-nums">{count}</span>{label}</p><p className="mt-0.5 text-xs text-fg-subtle">{hint}</p></div>
-                  <ChevronRight className="mt-1 size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg-muted motion-reduce:transform-none" aria-hidden="true" />
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-base text-fg-muted"><Icon className="size-4.5" aria-hidden="true" /></span>
+                  <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{label}</span><span className="mt-0.5 block truncate text-xs text-fg-subtle">{hint}</span></span>
+                  <span className="text-sm tabular-nums text-fg-muted">{count}</span>
+                  <ChevronRight className="size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                 </button>
-            ))}
-          </section>
+              ))}
+            </div>
+          </Section>
 
           <div className="grid items-start gap-10 lg:grid-cols-2 lg:gap-8">
             <Section
@@ -1253,7 +1337,7 @@ export function UserModelPage() {
           <Section
             title={t.workMemory}
             hint={t.workMemoryHint}
-            action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => setView('knowledge')}>{t.seeAll}</Button>}
+            action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => openKnowledge('all')}>{t.seeAll}</Button>}
           >
             {memoryCounts.length ? (
               <div data-testid="memory-summary-grid" className={`grid gap-3 bg-surface-base ${memoryGridClass}`}>
@@ -1281,6 +1365,17 @@ export function UserModelPage() {
 
       {view === 'understanding' ? (
         <div id="understanding-panel-understanding" role="tabpanel" aria-labelledby="understanding-tab-understanding" className="space-y-10">
+          <div className="flex w-full gap-1 rounded-xl bg-surface-panel p-1 sm:w-fit" role="group" aria-label={language === 'zh' ? '记忆分类' : 'Memory category'}>
+            {([
+              { id: 'personal', label: language === 'zh' ? '关于我' : 'About me', icon: UserRound, count: assertions.length },
+              { id: 'work', label: language === 'zh' ? '工作记忆' : 'Work memory', icon: BriefcaseBusiness, count: visibleKnowledge.length },
+            ] as const).map(({ id, label, icon: Icon, count }) => (
+              <button key={id} type="button" aria-pressed={memorySection === id} className={`touch-target flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors sm:flex-none ${memorySection === id ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg'}`} onClick={() => setMemorySection(id)}>
+                <Icon className="size-4" aria-hidden="true" />{label}<span className="text-xs tabular-nums text-fg-subtle">{count}</span>
+              </button>
+            ))}
+          </div>
+          {memorySection === 'personal' ? <>
           <div className="px-1 pt-1">
             <div className="flex items-start gap-3">
               <Brain className="mt-0.5 size-5 shrink-0 text-accent-fg" aria-hidden="true" />
@@ -1309,11 +1404,7 @@ export function UserModelPage() {
               <Empty icon={<Brain className="size-5" />}>{t.emptyGroup}</Empty>
             </div>
           )}
-        </div>
-      ) : null}
-
-      {view === 'knowledge' ? (
-        <div id="understanding-panel-knowledge" role="tabpanel" aria-labelledby="understanding-tab-knowledge" className="space-y-8">
+          </> : <div className="space-y-8">
           <div className="px-1 pt-1">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="max-w-2xl">
@@ -1396,6 +1487,65 @@ export function UserModelPage() {
               <Empty icon={<Search className="size-5" />}>{query.trim() ? t.noKnowledgeMatch : t.noKnowledge}</Empty>
             </div>
           )}
+          </div>}
+        </div>
+      ) : null}
+      {view === 'privacy' ? (
+        <div id="understanding-panel-privacy" role="tabpanel" aria-labelledby="understanding-tab-privacy" className="space-y-8">
+          <div className="px-1 pt-1">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-0.5 size-5 shrink-0 text-accent-fg" aria-hidden="true" />
+              <div>
+                <h2 className="font-semibold text-fg">{language === 'zh' ? '你的信息，由你掌控' : 'Your information, under your control'}</h2>
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-fg-muted">{language === 'zh' ? '决定 xopc 可以记住什么、从哪里了解你，以及如何迁移你的数据。' : 'Decide what xopc can remember, where it learns from, and how your data moves.'}</p>
+              </div>
+            </div>
+          </div>
+
+          <Section title={language === 'zh' ? '记忆与使用' : 'Memory & use'}>
+            <div className="divide-y divide-edge-subtle">
+              {[
+                { key: 'memory' as const, icon: Brain, title: language === 'zh' ? '长期记忆' : 'Long-term memory', detail: language === 'zh' ? '记住长期有用的信息，减少重复说明。' : 'Remember useful information so you do not have to repeat yourself.', enabled: data.settings.memoryEnabled },
+                { key: 'references' as const, icon: Sparkles, title: language === 'zh' ? '回答中的记忆引用' : 'Memory references in answers', detail: language === 'zh' ? '当个人信息影响回答时，显示本次参考内容。' : 'Show what personal context was referenced when it shapes an answer.', enabled: data.settings.showMemoryReferences },
+              ].map(({ key, icon: Icon, title, detail, enabled }) => (
+                <button key={key} type="button" role="switch" aria-checked={enabled} disabled={Boolean(busy)} className="flex min-h-20 w-full items-center gap-4 px-5 py-4 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:opacity-60 sm:px-6" onClick={() => void act(`setting:${key}`, () => updateMemorySettings(key === 'memory' ? { memoryEnabled: !enabled } : { showMemoryReferences: !enabled }))}>
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-base text-fg-muted"><Icon className="size-4.5" aria-hidden="true" /></span>
+                  <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{title}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{detail}</span></span>
+                  <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${enabled ? 'bg-accent' : 'bg-surface-active'}`} aria-hidden="true"><span className={`absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform ${enabled ? 'translate-x-5' : 'translate-x-0.5'}`} /></span>
+                </button>
+              ))}
+              <div className="flex min-h-20 items-center gap-4 px-5 py-4 sm:px-6">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-base text-fg-muted"><LockKeyhole className="size-4.5" aria-hidden="true" /></span>
+                <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{language === 'zh' ? '敏感信息' : 'Sensitive information'}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{language === 'zh' ? '控制健康、财务等信息是否可以保存。' : 'Control whether health, financial, and similar information can be saved.'}</span></span>
+                <Select aria-label={language === 'zh' ? '敏感信息策略' : 'Sensitive information policy'} value={data.settings.sensitiveWritePolicy} disabled={Boolean(busy)} onChange={(event) => void act('setting:sensitive', () => updateMemorySettings({ sensitiveWritePolicy: event.target.value as UserModelResponse['settings']['sensitiveWritePolicy'] }))}>
+                  <SelectOption value="confirm">{language === 'zh' ? '先询问' : 'Ask first'}</SelectOption>
+                  <SelectOption value="deny">{language === 'zh' ? '不保存' : 'Never save'}</SelectOption>
+                  <SelectOption value="allow">{language === 'zh' ? '允许' : 'Allow'}</SelectOption>
+                </Select>
+              </div>
+            </div>
+          </Section>
+
+          <Section title={language === 'zh' ? '数据管理' : 'Data management'}>
+            <div className="divide-y divide-edge-subtle">
+              <Link to="/settings/imports" className="flex min-h-20 items-center gap-4 px-5 py-4 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:px-6">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-base text-fg-muted"><Upload className="size-4.5" aria-hidden="true" /></span>
+                <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{language === 'zh' ? '从其他 AI 导入' : 'Import from another AI'}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{language === 'zh' ? '导入前预览新增、重复和冲突内容。' : 'Preview new, duplicate, and conflicting items before import.'}</span></span>
+                <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden="true" />
+              </Link>
+              <button type="button" disabled={Boolean(busy)} className="flex min-h-20 w-full items-center gap-4 px-5 py-4 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:opacity-60 sm:px-6" onClick={() => void act('export', downloadUserModelExport)}>
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-base text-fg-muted"><Download className="size-4.5" aria-hidden="true" /></span>
+                <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{language === 'zh' ? '下载我的记忆' : 'Download my memory'}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{language === 'zh' ? '导出为可阅读、可迁移的数据包。' : 'Export a readable, portable archive.'}</span></span>
+                <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden="true" />
+              </button>
+            </div>
+          </Section>
+
+          <section className="rounded-2xl bg-surface-panel px-5 py-5 sm:px-6">
+            <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '纠正与忘记' : 'Correct and forget'}</h2>
+            <p className="mt-1 text-xs leading-5 text-fg-muted">{language === 'zh' ? '在“记忆”中打开任意一条内容的菜单，即可修改、调整作用范围或彻底删除。' : 'Open any item in Memory to edit it, change where it applies, or delete it permanently.'}</p>
+            <Button variant="ghost" className="mt-3" onClick={() => { setMemorySection('personal'); setView('understanding'); }}>{language === 'zh' ? '管理记忆' : 'Manage memory'}</Button>
+          </section>
         </div>
       ) : null}
       <ProfileDialog

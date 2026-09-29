@@ -20,6 +20,7 @@ import {
   reconcileAssertion,
   resolveCurrentAssertion,
   type AssertionCandidate,
+  setUserAssertionScope,
 } from '../index.js';
 
 function candidate(overrides: Partial<AssertionCandidate> = {}): AssertionCandidate {
@@ -73,6 +74,21 @@ describe('user model foundation', () => {
       .toThrow('project user-model scope requires an id');
     expect(() => reconcileAssertion(candidate({ scope: { type: 'global', id: 'project-1' } })))
       .toThrow('Global user-model scope must not have an id');
+  });
+
+  it('moves an assertion slot and its history to an explicit scope', () => {
+    const first = reconcileAssertion(candidate(), 2_000).assertion;
+    const corrected = reconcileAssertion(candidate({
+      value: 'detailed',
+      normalizedValue: 'detailed',
+      statement: 'I prefer detailed responses.',
+      correctionOfAssertionId: first.id,
+    }), 3_000).assertion;
+
+    setUserAssertionScope(corrected.id, { type: 'agent', id: 'main' });
+
+    expect(getAssertionSlot(first.slotId)?.scope).toEqual({ type: 'agent', id: 'main' });
+    expect(getAssertionSlot(corrected.slotId)?.scope).toEqual({ type: 'agent', id: 'main' });
   });
 
   it('handles an explicit correction before duplicate detection', () => {

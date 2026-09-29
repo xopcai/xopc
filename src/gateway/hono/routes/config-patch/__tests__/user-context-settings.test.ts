@@ -10,6 +10,7 @@ describe('applyMiscPatch user context settings', () => {
       userContext: {
         userModel: {
           sensitiveWritePolicy: 'deny',
+          showMemoryReferences: false,
           maintenance: { timezone: 'Asia/Shanghai', dailyTime: '02:30', limit: 250 },
         },
       },
@@ -17,6 +18,7 @@ describe('applyMiscPatch user context settings', () => {
     expect(result.ok).toBe(true);
     expect(config.userContext.userModel).toMatchObject({
       sensitiveWritePolicy: 'deny',
+      showMemoryReferences: false,
       maintenance: { timezone: 'Asia/Shanghai', dailyTime: '02:30', limit: 250 },
     });
   });

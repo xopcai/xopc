@@ -50,7 +50,8 @@
       "work": "Work",
       "automation": "Automations",
       "capabilities": "Capabilities",
-      "apps": "Apps"
+      "apps": "Apps",
+      "me": "Me"
     },
     "sections": {
       "work-overview": "Workbench",
@@ -65,7 +66,8 @@
       "capabilities-connectors": "Connections",
       "capabilities-channels": "Channels",
       "capabilities-extensions": "Extensions",
-      "apps-library": "App Studio"
+      "apps-library": "App Studio",
+      "me-overview": "Me"
     }
   },
   "token": {
