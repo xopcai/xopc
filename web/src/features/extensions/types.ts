@@ -55,6 +55,11 @@ export type ExtensionApiRow = {
   readiness?: 'ready' | 'setup_required' | 'degraded' | 'blocked';
   components?: { skills: Array<{ name: string }>; mcp: Array<{ name: string; id: string; type: string }> };
   diagnostics?: Array<{ component: string; message: string }>;
+  provenance?: {
+    kind: 'store'; packageName: string; packageType: 'plugin' | 'extension'; version: string; sha256: string;
+    publisherVerification?: 'community' | 'verified'; sourceRepository?: string; sourceCommit?: string;
+    artifactFormat?: string; riskTier?: 'content' | 'network' | 'local-exec';
+  };
   id: string;
   name: string;
   description?: string;

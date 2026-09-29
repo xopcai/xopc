@@ -201,6 +201,12 @@ export function AgentPluginDialog({ extension, onClose, initialSource = '' }: { 
             <Button disabled={busy || currentExtension.readiness === 'blocked'} onClick={() => void run(() => setActivation(true))}>{zh ? '启用插件' : 'Enable plugin'}</Button>
           </div> : null}
           <p className="text-sm text-fg-muted">Agent Plugin · {currentExtension.version} · {currentExtension.readiness && ({ ready: zh ? '已就绪' : 'Ready', setup_required: zh ? '待连接' : 'Setup required', degraded: zh ? '部分不可用' : 'Partially available', blocked: zh ? '已阻止' : 'Blocked' })[currentExtension.readiness]}</p>
+          {currentExtension.provenance ? <p className="break-words text-xs text-fg-muted">
+            {currentExtension.provenance.publisherVerification === 'verified' ? (zh ? '已认证发布者' : 'Verified publisher') : (zh ? '社区发布者' : 'Community publisher')}
+            {' · '}{currentExtension.provenance.packageName}@{currentExtension.provenance.version}
+            {' · SHA-256 '}{currentExtension.provenance.sha256.slice(0, 12)}…
+            {currentExtension.provenance.riskTier ? ` · ${currentExtension.provenance.riskTier}` : ''}
+          </p> : null}
           <p className="text-sm">{currentExtension.description}</p>
           {currentExtension.activationEligible ? <Button disabled={busy} variant="secondary" onClick={() => void run(() => setActivation(false))}>{zh ? '停用' : 'Disable'}</Button> : null}
           {currentExtension.canRollback ? <Button disabled={busy} variant="secondary" onClick={() => void run(async () => { setCurrentExtension(await request<ExtensionApiRow>(`${base}/rollback`, 'POST')); await refresh(); })}>{zh ? '回滚上一版本' : 'Roll back'}</Button> : null}
