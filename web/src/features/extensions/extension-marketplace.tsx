@@ -29,7 +29,7 @@ function extensionInstallKind(
   extensions: ExtensionApiRow[],
   catalogId: string,
 ): 'absent' | 'bundled' | 'user' {
-  const row = extensions.find((x) => x.id === catalogId);
+  const row = extensions.find((x) => x.id === catalogId || x.pluginId === catalogId);
   if (!row) return 'absent';
   if (row.source === 'bundled') return 'bundled';
   return 'user';
@@ -38,6 +38,7 @@ function extensionInstallKind(
 type MarketplaceUi = {
   debounced: string;
   detailPkg: string | null;
+  quickInstallPkg: string | null;
   rowBusy: string | null;
   actionError: string | null;
   restartHint: string | null;
@@ -46,6 +47,7 @@ type MarketplaceUi = {
 const initialMarketplaceUi: MarketplaceUi = {
   debounced: '',
   detailPkg: null,
+  quickInstallPkg: null,
   rowBusy: null,
   actionError: null,
   restartHint: null,
@@ -65,7 +67,7 @@ export function ExtensionMarketplacePanel({
   const extensions = useExtensions();
   const { mutate } = useSWRConfig();
   const [ui, dispatch] = useReducer(uiPatchReducer<MarketplaceUi>, initialMarketplaceUi);
-  const { debounced, detailPkg, rowBusy, actionError, restartHint } = ui;
+  const { debounced, detailPkg, quickInstallPkg, rowBusy, actionError, restartHint } = ui;
   const listKey = hasToken ? `marketplace-${debounced}` : null;
 
   useEffect(() => {
@@ -233,7 +235,17 @@ export function ExtensionMarketplacePanel({
                           <span className="text-[11px] font-medium text-fg-muted">
                             {copy.marketplaceInstalled}
                           </span>
-                          <button
+                          {e.packageType === 'plugin' ? <button
+                            type="button"
+                            onClick={() => dispatch({ type: 'patch', patch: { detailPkg: e.id, quickInstallPkg: null } })}
+                            className={cn(
+                              'inline-flex items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
+                              'transition-colors active:scale-[0.98] active:bg-surface-hover/80',
+                              'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                            )}
+                          >
+                            {language.startsWith('zh') ? '管理' : 'Manage'}
+                          </button> : <button
                             type="button"
                             disabled={busy}
                             onClick={() => {
@@ -255,19 +267,26 @@ export function ExtensionMarketplacePanel({
                               <Trash2 className="size-3.5" strokeWidth={2} aria-hidden />
                             )}
                             {copy.marketplaceUninstall}
-                          </button>
+                          </button>}
                         </>
                       ) : (
                         <button
                           type="button"
-                          onClick={() => dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
+                          onClick={() => dispatch({
+                            type: 'patch',
+                            patch: e.packageType === 'plugin'
+                              ? { detailPkg: e.id, quickInstallPkg: e.id }
+                              : { detailPkg: e.id, quickInstallPkg: null },
+                          })}
                           className={cn(
                             'inline-flex w-full items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
                             'transition-[transform,background-color] active:scale-[0.98]',
                             'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                           )}
                         >
-                          {copy.marketplaceReview}
+                          {e.packageType === 'plugin'
+                            ? (language.startsWith('zh') ? '安装' : 'Install')
+                            : copy.marketplaceReview}
                         </button>
                       )}
                     </div>
@@ -282,9 +301,10 @@ export function ExtensionMarketplacePanel({
       {detailPkg ? (
         <ExtensionMarketplaceDetailDialog
           packageName={detailPkg}
+          autoInstall={quickInstallPkg === detailPkg}
           copy={copy}
           extensions={extensions}
-          onClose={() => dispatch({ type: 'patch', patch: { detailPkg: null } })}
+          onClose={() => dispatch({ type: 'patch', patch: { detailPkg: null, quickInstallPkg: null } })}
           onInstall={runInstall}
           onUninstall={runUninstall}
         />
@@ -295,6 +315,7 @@ export function ExtensionMarketplacePanel({
 
 function ExtensionMarketplaceDetailDialog({
   packageName,
+  autoInstall,
   copy,
   extensions,
   onClose,
@@ -302,6 +323,7 @@ function ExtensionMarketplaceDetailDialog({
   onUninstall,
 }: {
   packageName: string;
+  autoInstall: boolean;
   copy: MessageBundle['extensionsPage'];
   extensions: ExtensionApiRow[];
   onClose: () => void;
@@ -331,7 +353,11 @@ function ExtensionMarketplaceDetailDialog({
 
   if (data?.format === 'agent-plugin') return <AgentPluginDialog
     extension={extensions.find(extension => extension.pluginId === data.manifest?.name)}
-    initialSource={`store:${packageName}`} onClose={onClose} />;
+    initialSource={`store:${packageName}`}
+    marketplace={data}
+    autoInstall={autoInstall}
+    onClose={onClose}
+  />;
 
   return (
     <Dialog.Root defaultOpen onOpenChange={(o) => !o && onClose()}>
