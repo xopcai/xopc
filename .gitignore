@@ -74,6 +74,7 @@ docs/dependency-violations.html
 .docs-local
 
 .pi
+.bundle-flow/
 
 # Worktrees
 .worktrees/
