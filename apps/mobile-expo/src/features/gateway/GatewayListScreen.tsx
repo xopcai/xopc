@@ -6,6 +6,7 @@ import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 import { NativeScreenHeader } from '@/components/NativeScreenHeader';
 import { SettingsSection, useSettingsColors } from '@/features/settings/settings-ui';
 import { useMessages } from '@/i18n/messages';
+import { userFacingErrorMessage } from '@/lib/user-facing-error';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { gatewayProfileHost } from '@/stores/gateway-types';
 
@@ -26,10 +27,10 @@ export function GatewayListScreen() {
     setError('');
     void switchGatewayProfile(gatewayId)
       .then((result) => {
-        if (result.status === 'failed') setError(result.error.message);
+        if (result.status === 'failed') setError(userFacingErrorMessage(result.error, m.mobileExperience.errors, 'generic'));
       })
       .finally(() => setSwitchingId(null));
-  }, []);
+  }, [m.mobileExperience.errors]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>

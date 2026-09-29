@@ -20,6 +20,7 @@ import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
 import { useImmediateDelete } from '../../hooks/use-immediate-delete';
 import { useListSelection } from '../../hooks/use-list-selection';
 import { useMessages, t } from '../../i18n/messages';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { recordUsageEvent } from '../../product/usage-metrics';
 import { AttachmentFileError, pickAttachmentFromSource, type AttachmentPickSource } from '../chat/attachment-file-io';
 import type { ComposerAttachment } from '../chat/composer.types';
@@ -143,7 +144,7 @@ export function InboxScreen() {
       }
     },
     onError: (err) => {
-      setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
+      setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save'));
     },
   });
 
@@ -169,7 +170,7 @@ export function InboxScreen() {
       }
       exitSelectionMode();
     },
-    onError: (err) => setSnackMsg(err instanceof Error ? err.message : pm.actionFailed),
+    onError: (err) => setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save')),
   });
 
   const deleteMutation = useMutation({
@@ -179,7 +180,7 @@ export function InboxScreen() {
       exitSelectionMode();
       setShowBatchDelete(false);
     },
-    onError: (err) => setSnackMsg(err instanceof Error ? err.message : pm.actionFailed),
+    onError: (err) => setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save')),
   });
 
   const applyOrganizeSuggestion = useCallback(async (suggestion: InboxOrganizeSuggestion) => {
@@ -194,7 +195,7 @@ export function InboxScreen() {
       setSnackMsg(toastMessage);
     } catch (err) {
       await invalidateInbox();
-      setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
+      setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save'));
     } finally {
       setApplyingSuggestionId(undefined);
     }
@@ -209,7 +210,7 @@ export function InboxScreen() {
       setOrganizeUndo(undefined);
       setSnackMsg(im.aiOrganizeUndone);
     } catch (error) {
-      const toastMessage = error instanceof Error ? error.message : pm.actionFailed;
+      const toastMessage = userFacingErrorMessage(error, m.mobileExperience.errors, 'save');
       setOrganizeUndo((current) => current ? { ...current, toastMessage } : current);
       setSnackMsg(toastMessage);
     } finally {
@@ -275,7 +276,7 @@ export function InboxScreen() {
           await deleteNote(item.id);
           await invalidateInbox();
         },
-        (err) => setSnackMsg(err instanceof Error ? err.message : pm.actionFailed),
+        (err) => setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save')),
       );
       setSnackMsg(pm.deleted);
     }

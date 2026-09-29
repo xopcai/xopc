@@ -12,6 +12,7 @@ import { BrandLoadingState } from '../../components/BrandLoadingState';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import { dismissOrRoot } from '../../lib/navigation';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { fetchChatAgents } from '../../query/agents';
 import { queryKeys } from '../../query/keys';
 import { fetchProjects } from '../../query/projects';
@@ -159,7 +160,7 @@ export function WorkflowRunDetailScreen() {
               {labels.progress.replace('{{done}}', String(view.run.metrics.doneAgentCount)).replace('{{total}}', String(view.run.metrics.agentCount))}
             </Text>
             {view.run.goal ? <><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.goal}</Text><Text style={[styles.body, { color: colors.text.secondary }]}>{view.run.goal}</Text></> : null}
-            {view.run.error ? <Text style={[styles.body, { color: colors.semantic.error }]}>{view.run.error.message}</Text> : null}
+            {view.run.error ? <Text style={[styles.body, { color: colors.semantic.error }]}>{userFacingErrorMessage(view.run.error, messages.mobileExperience.errors, 'detail')}</Text> : null}
             {view.controls.canCancel ? <Button mode="outlined" loading={cancel.isPending} disabled={cancel.isPending} onPress={() => cancel.mutate()}>{labels.cancel}</Button> : null}
             {cancel.isError ? <Text style={[styles.meta, { color: colors.semantic.error }]}>{labels.cancelFailed}</Text> : null}
           </View>

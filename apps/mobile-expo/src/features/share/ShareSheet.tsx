@@ -29,6 +29,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { t, useMessages } from '../../i18n/messages';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { radii, spacing, typography, type ColorScheme } from '../../theme';
 import { useTheme } from '../../theme/useTheme';
 import { useCreateShare, useThumbnailReadiness, thumbnailUrlWithCacheBust } from '../../query/shares';
@@ -124,7 +125,7 @@ export const ShareSheet = memo(function ShareSheet({ visible, request, onClose }
         ) : error ? (
           <View style={styles.center}>
             <Text style={[styles.error, { color: palette.error }]}>
-              {t(m.share.createFailed, { message: error.message })}
+              {t(m.share.createFailed, { message: userFacingErrorMessage(error, m.mobileExperience.errors, 'save') })}
             </Text>
           </View>
         ) : data ? (

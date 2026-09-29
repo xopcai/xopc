@@ -6,6 +6,7 @@ import { Icon, Menu, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { useMessages } from '../../i18n/messages';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { queryKeys } from '../../query/keys';
 import { fetchProjectEnvironmentOptions, fetchProjects } from '../../query/projects';
 import { fetchHostDirectories } from '../../query/host-fs';
@@ -216,7 +217,7 @@ export const ChatContextControl = memo(function ChatContextControl({
                 queryClient.invalidateQueries({ queryKey: queryKeys.sessionContext(conversationId) }),
               ]);
               setDirectoryPath(undefined);
-            }).catch((error) => setDirectoryError(error instanceof Error ? error.message : String(error)))
+            }).catch((error) => setDirectoryError(userFacingErrorMessage(error, m.mobileExperience.errors, 'save')))
               .finally(() => setSavingDirectory(false));
           }}
           style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.accent.primary, opacity: savingDirectory || pressed ? 0.65 : 1 }]}

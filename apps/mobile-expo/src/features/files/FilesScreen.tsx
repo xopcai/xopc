@@ -12,6 +12,7 @@ import { ListItemMenu } from '../../components/ListItemMenu';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { LIST_DELAY_LONG_PRESS } from '../../constants/list-interaction';
 import { useMessages } from '../../i18n/messages';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import {
   fetchFileChildren,
   fetchFileSpaceForContext,
@@ -197,7 +198,7 @@ export function FileLoadError({ error, onRetry }: { error?: unknown; onRetry: ()
   const m = useMessages();
   return <View style={styles.empty}>
     <Text>{m.filesPage.loadFailed}</Text>
-    {error instanceof Error ? <Text style={styles.emptyHint}>{error.message}</Text> : null}
+    {error ? <Text style={styles.emptyHint}>{userFacingErrorMessage(error, m.mobileExperience.errors, 'collection')}</Text> : null}
     <Button onPress={onRetry}>{m.common.retry}</Button>
   </View>;
 }

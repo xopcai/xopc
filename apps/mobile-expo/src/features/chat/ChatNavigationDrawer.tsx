@@ -31,6 +31,7 @@ import { AppToast } from '../../components/AppToast';
 import { ListItemMenu, type ListItemAction } from '../../components/ListItemMenu';
 import { useMessages, t } from '../../i18n/messages';
 import { sessionDisplayName } from '../../lib/session-helpers';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
 import { refreshSessionsList } from '../../query/infinite-list-sync';
 import { queryKeys } from '../../query/keys';
@@ -195,12 +196,7 @@ export const ChatNavigationDrawer = memo(function ChatNavigationDrawer({
         onNewChat();
       }
     } catch (error) {
-      const fallback = action.key === 'pin' ? m.sessionActions.failedToPin
-        : action.key === 'unpin' ? m.sessionActions.failedToUnpin
-          : action.key === 'archive' ? m.sessionActions.failedToArchive
-            : action.key === 'unarchive' ? m.sessionActions.failedToUnarchive
-              : m.sessionActions.failedToDelete;
-      setSnackMsg(error instanceof Error ? error.message : fallback);
+      setSnackMsg(userFacingErrorMessage(error, m.mobileExperience.errors, 'save'));
     } finally {
       actionBusyRef.current = false;
       setActionSessionId('');

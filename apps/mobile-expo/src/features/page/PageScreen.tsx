@@ -10,6 +10,7 @@ import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
 import { dismissOrRoot, useDismissOnHardwareBack } from '../../lib/navigation';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { useTheme } from '../../theme';
 
 import { NoteShareSheet } from '../notes/NoteShareSheet';
@@ -115,6 +116,7 @@ export function PageScreen() {
     id,
     queryClient,
     setSnackMsg,
+    errorCopy: m.mobileExperience.errors,
     ensureNoteTags,
     messages: {
       missing: pm.missing,
@@ -132,6 +134,7 @@ export function PageScreen() {
     id,
     setSnackMsg,
     displaySeed: attachmentDisplaySeed,
+    errorCopy: m.mobileExperience.errors,
     messages: {
       actionFailed: pm.actionFailed,
       added: pm.editorAttachmentAdded,
@@ -264,6 +267,7 @@ export function PageScreen() {
     flushSave,
     setSnackMsg,
     dismissMore: () => setMoreVisible(false),
+    errorCopy: m.mobileExperience.errors,
     messages: {
       actionFailed: pm.actionFailed,
       syncBeforeAction: pm.syncBeforeAction,
@@ -292,7 +296,7 @@ export function PageScreen() {
       allowNextRemoveRef.current = true;
       dismissOrRoot(router);
     } catch (error) {
-      setSnackMsg(error instanceof Error ? error.message : pm.actionFailed);
+      setSnackMsg(userFacingErrorMessage(error, m.mobileExperience.errors, 'save'));
     } finally {
       deleteInFlightRef.current = false;
       setDeleting(false);
@@ -402,7 +406,7 @@ export function PageScreen() {
         },
       ]);
     } catch (error) {
-      setSnackMsg(error instanceof Error ? error.message : pm.actionFailed);
+      setSnackMsg(userFacingErrorMessage(error, m.mobileExperience.errors, 'save'));
     } finally {
       setAiLoadingKey(null);
     }
@@ -524,7 +528,7 @@ export function PageScreen() {
         <View style={styles.center}>
           <Icon source="cloud-alert-outline" size={42} color={colors.text.tertiary} />
           <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
-            {noteQuery.error instanceof Error ? noteQuery.error.message : pm.actionFailed}
+            {userFacingErrorMessage(noteQuery.error, m.mobileExperience.errors, 'detail')}
           </Text>
           <Button mode="contained-tonal" onPress={() => void noteQuery.refetch()}>{m.common.retry}</Button>
         </View>

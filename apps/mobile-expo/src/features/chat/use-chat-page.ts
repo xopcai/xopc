@@ -16,6 +16,7 @@ import {
 } from '@xopcai/gateway-contract';
 
 import { dismissOrRoot, openChat, useDismissOnHardwareBack } from '../../lib/navigation';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 
 import { useGatewayStore } from '../../stores/gateway-store';
 import { usePreferencesStore } from '../../stores/preferences-store';
@@ -381,7 +382,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
           });
         }
       })().catch((err) => {
-        chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
+        chatSession.setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save'));
       });
     },
     [
@@ -434,7 +435,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
           openChat(router, key, { replace: true, ...(routeTaskId ? { taskId: routeTaskId } : {}) });
         }
       })().catch((err) => {
-        chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
+        chatSession.setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save'));
       });
     },
     [activeGatewayId, root, queryClient, routeTaskId, router, chatSession, bootstrap, newSessionPreferences, rememberSelectedAgent, sessionContext.projectId],
@@ -459,7 +460,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       chatSession.activeConversationIdRef.current = key;
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsAll });
     })().catch((err) => {
-      chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
+      chatSession.setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save'));
     });
   }, [currentSessionAgentId, defaultAgentId, chatSession, bootstrap, newSessionPreferences, queryClient, sessionContext.projectId]);
 
@@ -489,7 +490,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       if (activeGatewayId) rememberLastChatScope(activeGatewayId, projectId);
       if (!root) openChat(router, key, { replace: true });
     })().catch((err) => {
-      chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
+      chatSession.setSnackMsg(userFacingErrorMessage(err, m.mobileExperience.errors, 'save'));
     });
   }, [activeGatewayId, bootstrap, chatSession, currentSessionAgentId, defaultAgentId, root, newSessionPreferences, queryClient, rememberLastChatScope, router]);
 
@@ -565,7 +566,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
           result.synced ? m.chat.messageSavedToNote : m.notesPage.savedOffline,
         ))
         .catch((error) => chatSession.setSnackMsg(
-          error instanceof Error ? error.message : m.notesPage.actionFailed,
+          userFacingErrorMessage(error, m.mobileExperience.errors, 'save'),
         ))
         .finally(() => {
           savingAssistantNoteRef.current = false;

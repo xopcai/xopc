@@ -1,4 +1,6 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { userErrorMessage, userErrorTitle } from '../common/userError';
+import { XopcUserErrorContext } from '../common/userErrorClassifier';
 
 @ComponentV2
 export struct XopcBrandLoading {
@@ -126,6 +128,31 @@ export struct XopcEmptyHint {
   build() {
     Text(this.message).fontSize(16).lineHeight(23).fontColor(this.colors.secondary)
       .width('100%').padding({ top: 12, bottom: 12 })
+  }
+}
+
+@ComponentV2
+export struct XopcErrorState {
+  @Local colors: XopcThemeColors = appThemeColors;
+  @Param error: string = '';
+  @Param context: XopcUserErrorContext = 'generic';
+  @Param compact: boolean = false;
+  @Param actionLabel: ResourceStr = $r('app.string.retry');
+  @Event onAction: () => void = (): void => {};
+
+  build() {
+    Column({ space: this.compact ? 6 : 10 }) {
+      SymbolGlyph($r('sys.symbol.exclamationmark_circle')).fontSize(this.compact ? 22 : 30)
+        .fontColor([this.colors.secondary])
+      Text(userErrorTitle(this.error, this.context)).fontSize(this.compact ? 15 : 18).fontWeight(FontWeight.Medium)
+        .fontColor(this.colors.foreground).textAlign(TextAlign.Center)
+      Text(userErrorMessage(this.error, this.context)).fontSize(13).lineHeight(19).fontColor(this.colors.secondary)
+        .textAlign(TextAlign.Center).constraintSize({ maxWidth: 320 })
+      Button(this.actionLabel).height(44).fontSize(14).fontColor(this.colors.foreground)
+        .backgroundColor(this.colors.input).margin({ top: 2 }).onClick((): void => { this.onAction(); })
+    }.width('100%').constraintSize({ minHeight: this.compact ? 120 : 220 })
+      .justifyContent(FlexAlign.Center).padding(this.compact ? 12 : 24)
+      .accessibilityGroup(true)
   }
 }
 

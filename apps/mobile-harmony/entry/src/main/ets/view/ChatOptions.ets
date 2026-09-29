@@ -3,6 +3,7 @@ import { XopcChatOptionsViewModel } from '../viewmodel/chatOptionsViewModel';
 import { XopcChatModel, XopcChatAgent, XopcQueuedInput } from '../model/chat';
 import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
 import { appSettings } from '../service/settings';
+import { userErrorMessage } from '../common/userError';
 
 @ComponentV2
 export struct XopcChatOptions {
@@ -41,7 +42,7 @@ export struct XopcChatOptions {
       }
       if (this.model.loading) { XopcListSkeleton() }
       if (this.model.error && this.mode !== 'queue') {
-        Text(this.model.error).fontColor(this.colors.danger)
+        Text(userErrorMessage(this.model.error, 'collection')).fontColor(this.colors.secondary)
         Button($r('app.string.refresh')).onClick((): void => { this.onRetry(); })
       }
       List({ space: this.mode === 'actions' ? 0 : 8 }) {
@@ -61,7 +62,7 @@ export struct XopcChatOptions {
           if (this.model.queueError) {
             ListItem() {
               Column({ space: 8 }) {
-                Text(this.model.queueError).fontColor(this.colors.danger)
+                Text(userErrorMessage(this.model.queueError, 'save')).fontColor(this.colors.danger)
                 Button($r('app.string.retry')).enabled(!this.model.queueBusy).onClick((): void => { this.model.retryQueue(); })
               }
             }

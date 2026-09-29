@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
+import { userFacingErrorMessage } from '../../lib/user-facing-error';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { spacing, useTheme } from '../../theme';
 import { reviewDataSharingConsent, revokeDataSharingConsent } from './data-sharing-consent';
@@ -28,7 +29,7 @@ export function PrivacyScreen({ onClose }: { onClose?: () => void } = {}) {
   const review = async () => {
     setBusy(true);
     try { await reviewDataSharingConsent(); }
-    catch (error) { Alert.alert(m.title, error instanceof Error ? error.message : m.consentRequired); }
+    catch (error) { Alert.alert(m.title, userFacingErrorMessage(error, messages.mobileExperience.errors, 'save')); }
     finally { setBusy(false); }
   };
 

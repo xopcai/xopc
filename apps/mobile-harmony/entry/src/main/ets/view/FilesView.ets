@@ -7,6 +7,7 @@ import { XopcShareResult } from '../model/share';
 import { XopcShareResultView } from './ShareResultView';
 import { XopcChatMediaView } from './ChatMediaView';
 import { managedFileMedia } from '../viewmodel/fileDocumentViewModel';
+import { userErrorMessage } from '../common/userError';
 
 @ComponentV2
 export struct XopcFilesView {
@@ -175,7 +176,8 @@ export struct XopcFilesView {
       Column() {
         this.header()
         if (this.model.error) {
-          Text(this.model.error).fontSize(13).fontColor(this.colors.danger).width('100%')
+          Text(userErrorMessage(this.model.error, this.model.items.length ? 'generic' : 'collection')).fontSize(13)
+            .fontColor(this.colors.secondary).width('100%')
             .padding({ left: 20, right: 20, bottom: 8 })
         }
         if (this.model.busy && !!this.initialId && !this.model.selected) { XopcBrandLoading() }

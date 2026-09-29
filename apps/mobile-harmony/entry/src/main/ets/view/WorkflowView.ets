@@ -2,6 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcBrandLoading, XopcHubRow, XopcListSkeleton, XopcEmptyHint, XopcSectionLabel } from './MobileComponents';
 import { XopcMarkdownView } from './MarkdownView';
+import { userErrorMessage } from '../common/userError';
 
 interface XopcWorkflowSummary { id: string; title: string; status: string; goal?: string; }
 interface XopcWorkflowPage { runs: XopcWorkflowSummary[]; }
@@ -67,12 +68,7 @@ export struct XopcWorkflowView {
         if (generation === this.generation) this.runs = result.runs;
       }
     } catch (error) {
-      if (generation === this.generation) {
-        const message = (error as Error).message;
-        this.error = message === 'HTTP_404'
-          ? this.getUIContext().getHostContext()?.resourceManager.getStringSync($r('app.string.workflow_run_unavailable').id) ?? message
-          : message;
-      }
+      if (generation === this.generation) this.error = (error as Error).message;
     }
     finally { if (generation === this.generation) { this.busy = false; this.openingId = ''; } }
   }
@@ -108,7 +104,7 @@ export struct XopcWorkflowView {
         }.width('100%').padding({ left: 20, right: 12 })
         Scroll() {
           Column() {
-            if (this.error) { Text(this.error).fontColor(this.colors.danger).padding(12) }
+            if (this.error) { Text(userErrorMessage(this.error, 'collection')).fontColor(this.colors.secondary).padding(12) }
             if (this.openingId) { XopcBrandLoading() }
             else if (this.busy && !this.runs.length) { XopcListSkeleton() }
             if (this.selected) {
