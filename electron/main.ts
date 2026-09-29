@@ -104,7 +104,7 @@ import {
   startTunnelStatusPolling,
   stopTunnelStatusPolling,
 } from './tunnel-main.js';
-import { createTray, destroyTray, updateTrayLanguage } from './tray.js';
+import { createTray, destroyTray, hasSystemTray, updateTrayLanguage } from './tray.js';
 import {
   startVoiceInputHotkey,
   stopVoiceInputHotkey,
@@ -1008,9 +1008,56 @@ function createWindow(): void {
     appendWindowLifecycleLog(win, 'did-finish-load');
   });
 
-  // Keep the gateway alive only when background operation has a visible tray owner.
+  const keepWindowsAppRunning = (): void => {
+    if (win.isDestroyed()) return;
+    if (hasSystemTray()) win.hide();
+    else win.minimize();
+  };
+  let windowsClosePending = false;
+
   win.on('close', (e) => {
     if (appIsQuitting) {
+      return;
+    }
+    if (process.platform === 'win32') {
+      e.preventDefault();
+      if (windowsClosePending) return;
+      windowsClosePending = true;
+      void (async () => {
+        try {
+          const impact = await getAppQuitImpact();
+          if (win.isDestroyed()) return;
+          if (!impact.shouldConfirm) {
+            keepWindowsAppRunning();
+            return;
+          }
+
+          const copy = currentMenuMessages().quitConfirmation;
+          const title = copy.title(impact.blockingCount, impact.taskTitle);
+          const result = await dialog.showMessageBox(win, {
+            type: 'warning',
+            title,
+            message: title,
+            detail: copy.closeDetail,
+            buttons: [copy.cancel, copy.background, copy.quit],
+            defaultId: 1,
+            cancelId: 0,
+            noLink: true,
+          });
+          if (win.isDestroyed()) return;
+          if (result.response === 1) keepWindowsAppRunning();
+          if (result.response === 2) {
+            bypassNextAppQuitConfirmation();
+            app.quit();
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          appendElectronStartupLog(`Windows window close check failed: ${message}`);
+          keepWindowsAppRunning();
+        } finally {
+          windowsClosePending = false;
+        }
+      })();
       return;
     }
     if (shouldKeepAppInBackground() && !(app.isPackaged && hasPendingInstall())) {
