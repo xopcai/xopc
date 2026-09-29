@@ -8,6 +8,7 @@ import {
   Palette,
   PawPrint,
   MessageSquareWarning,
+  MonitorSmartphone,
   Settings,
   Type,
 } from 'lucide-react';
@@ -72,11 +73,13 @@ export function SidebarAppMenu({
   onNavigate,
   onAboutClick,
   onSupportClick,
+  onDeviceConnectClick,
 }: {
   onNavigate?: () => void;
   /** Open About dialog; parent should close the app menu popover when handling this. */
   onAboutClick?: () => void;
   onSupportClick?: () => void;
+  onDeviceConnectClick?: () => void;
 }) {
   const [openFlyout, setOpenFlyout] = useState<FlyoutId | null>(null);
   const [petState, setPetState] = useState<DesktopPetState | null>(null);
@@ -264,6 +267,17 @@ export function SidebarAppMenu({
           <span className="min-w-0 flex-1 text-left">{petToggleLabel}</span>
         </button>
       ) : null}
+
+      <button
+        type="button"
+        className={rowClass}
+        onClick={() => onDeviceConnectClick?.()}
+        onMouseEnter={() => setOpenFlyout(null)}
+        onFocus={() => setOpenFlyout(null)}
+      >
+        <MonitorSmartphone className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
+        <span className="min-w-0 flex-1 text-left">{m.endpointToolsSettings.deviceAccess.flow.title}</span>
+      </button>
 
       <div className="my-2 h-px bg-edge-subtle" role="separator" />
 
