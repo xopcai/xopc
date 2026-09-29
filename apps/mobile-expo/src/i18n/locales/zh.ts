@@ -71,7 +71,32 @@ export const zh: MessageBundle = {
     "save": "保存",
     "steer": "补充到当前任务",
     "sendNext": "接着发送",
-    "queueError": "无法更新队列，请刷新后重试。"
+    "queueError": "无法更新队列，请刷新后重试。",
+    "goals": {
+      "title": "近期目标", "add": "添加目标", "edit": "编辑目标", "manage": "管理",
+      "help": "把期望结果写具体，xopc 才能持续规划、跟进并帮助你达成。",
+      "empty": "还没有近期目标。", "emptyHint": "添加下一步想达成的结果，让 xopc 持续推动进展。",
+      "titleLabel": "目标", "outcomeLabel": "怎样才算达成？", "targetDate": "目标日期（可选）",
+      "primary": "当前重点", "proposed": "待确认", "active": "推进中", "paused": "已暂停",
+      "achieved": "已达成", "abandoned": "不再推进", "due": "目标日期 {{date}}",
+      "save": "保存", "cancel": "取消", "invalidDate": "请输入 YYYY-MM-DD 格式的有效日期。",
+      "saveFailed": "目标保存失败，请重试。"
+    },
+    "understanding": {
+      "title": "关于你", "overview": "概览", "understanding": "理解",
+      "subtitle": "xopc 在所有智能体中用来与你协作的信息。", "editProfile": "编辑资料",
+      "basics": "基本资料", "currentFocus": "当前重点", "noFocus": "暂未设置当前重点。",
+      "counts": "理解概况", "explicit": "你明确说过", "learned": "逐渐学到", "needsReview": "需要确认",
+      "recent": "最近理解", "rules": "协作方式", "workMemory": "工作记忆",
+      "workMemoryHint": "事实、决定和经验统一保留在资料库。", "openLibrary": "打开资料库",
+      "all": "全部", "review": "待确认", "empty": "这里暂时没有理解。", "loadMore": "加载更多",
+      "summaryCount": "{{count}} 条理解", "reviewCount": "{{count}} 条待确认",
+      "callName": "称呼", "role": "角色", "pronouns": "代称", "timezone": "时区", "locale": "语言",
+      "save": "保存", "cancel": "取消", "details": "理解详情", "source": "来源",
+      "scope": "适用范围", "recorded": "记录时间", "confidence": "可信度", "edit": "纠正",
+      "delete": "删除", "deleteTitle": "删除这条理解？", "deleteHint": "原始对话和文件不会被删除。",
+      "deleteConfirm": "删除", "statement": "xopc 应该怎样理解？", "unknownSource": "系统推断"
+    }
 },
   recordings: {
     transcript: '录音文字',
@@ -961,11 +986,11 @@ export const zh: MessageBundle = {
   // ── 设置界面 ────────────────────────────────────────────
   settings: {
     title: '设置',
-    sectionConnection: '连接',
+    sectionConnection: '连接与通知',
     sectionPreferences: '偏好设置',
     sectionAi: '智能',
     sectionAutomation: '自动化',
-    sectionSharing: '分享',
+    sectionSharing: '数据与共享',
     sectionAbout: '关于',
     about: '关于',
     aboutDescription: 'xopc 网关移动端 — 对话、智能体与定时任务。',

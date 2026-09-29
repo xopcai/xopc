@@ -54,6 +54,17 @@ describe('gateway scopes', () => {
     expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, 'gateway.admin')).toBe(false);
   });
 
+  it('allows phones to inspect and correct understanding without running refresh jobs', () => {
+    expect(requiredGatewayScope('GET', '/api/user-model/mobile-summary')).toBe('workspace.read');
+    expect(requiredGatewayScope('GET', '/api/user-model/assertions?view=mobile')).toBe('workspace.read');
+    expect(requiredGatewayScope('PATCH', '/api/user-model/assertions/a')).toBe('workspace.write');
+    expect(requiredGatewayScope('DELETE', '/api/user-model/assertions/a')).toBe('workspace.write');
+    expect(requiredGatewayScope('POST', '/api/user-model/refresh')).toBe('gateway.admin');
+    expect(requiredGatewayScope('GET', '/api/user-model/refresh/status')).toBe('gateway.admin');
+    expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, 'workspace.read')).toBe(true);
+    expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, 'workspace.write')).toBe(true);
+  });
+
   it('fails closed for unclassified routes', () => {
     expect(requiredGatewayScope('GET', '/api/new-feature')).toBe('gateway.admin');
     expect(hasGatewayScope(['gateway.status'], 'gateway.admin')).toBe(false);

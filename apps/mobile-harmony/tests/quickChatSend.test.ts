@@ -35,7 +35,13 @@ describe('secondary tab direct send', () => {
     view.quickFiles = kind === 'text' ? [] : [file];
     await view.sendQuickDraft();
     expect(intake.consume('unrelated')).toBeUndefined();
-    expect(intake.consume('conversation')).toEqual({ conversationId: 'conversation', text: kind === 'attachment' ? '' : 'hello', files: kind === 'text' ? [] : [file] });
+    expect(intake.consume('conversation')).toEqual({
+      conversationId: 'conversation',
+      text: kind === 'attachment' ? '' : 'hello',
+      files: kind === 'text' ? [] : [file],
+      refs: [],
+      autoSend: true,
+    });
     expect(intake.consume('conversation')).toBeUndefined();
     expect(view.switchToChat).toHaveBeenCalledWith('conversation', '');
     expect(view.quickDraft).toBe('');
@@ -86,5 +92,29 @@ describe('secondary tab direct send', () => {
     expect(view.saveDraft).toHaveBeenCalledOnce();
     expect(view.draft).toBe('hello');
     expect(view.attachments).toEqual([file]);
+  });
+
+  it('stages understanding context for review without sending it', async () => {
+    const intake = new XopcQuickChatIntake();
+    const view = handler('ChatView', '  async sendQuickSubmission(', '  private async send(', {
+      gatewaySession: { currentProfile: () => ({ gatewayId: 'gateway', deviceId: 'device' }) },
+    });
+    Object.assign(view, {
+      activePage: true, embedded: false, restoringDraft: false, requestedId: 'conversation',
+      chat: { selectedId: 'conversation', connection: 'connected', sending: false, loading: false },
+      options: { loading: false, modelId: 'provider/model' },
+      draftScope: JSON.stringify(['gateway', 'device', 'conversation']), quickIntake: intake,
+      saveDraft: vi.fn(), send: vi.fn(), focusMountedComposer: vi.fn(),
+    });
+    const refs = [{
+      kind: 'user_assertion', sourceId: 'assertion', title: 'Prefers concise replies', expectedVersion: '42',
+    }];
+    intake.stage('conversation', 'I want to change this understanding to:', refs);
+    await view.sendQuickSubmission();
+    expect(view.draft).toBe('I want to change this understanding to:');
+    expect(view.refs).toEqual(refs);
+    expect(view.saveDraft).toHaveBeenCalledOnce();
+    expect(view.focusMountedComposer).toHaveBeenCalledOnce();
+    expect(view.send).not.toHaveBeenCalled();
   });
 });

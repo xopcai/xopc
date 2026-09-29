@@ -110,6 +110,22 @@ export function SettingsScreen() {
           ) : null}
         </SettingsSection>
 
+        <SettingsSection title={s.sectionSharing}>
+          <SettingsRow
+            icon="robot-outline"
+            iconColor={colors.accent}
+            label={m.agentsPage.title}
+            onPress={() => router.push('/ai/agents')}
+          />
+          <SettingsRow
+            icon="account-multiple-outline"
+            iconColor={colors.accent}
+            label={m.sharingPage.title}
+            isLast
+            onPress={() => router.push('/sharing')}
+          />
+        </SettingsSection>
+
         <SettingsSection title={s.sectionPreferences}>
           <SettingsRow
             icon="clipboard-text-outline"

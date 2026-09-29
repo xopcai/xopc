@@ -68,7 +68,7 @@ export struct XopcChatMessageContent {
     }.id('chat-reference-' + ref.kind + '-' + ref.sourceId).width('100%').height(40)
       .padding({ left: 10, right: 8 }).borderRadius(10).backgroundColor(this.colors.panel)
       .onClick((): void => {
-        this.onNavigate({ page: ref.kind === 'task' ? 'tasks' : 'notes', itemId: ref.sourceId });
+        this.onNavigate({ page: ref.kind === 'task' ? 'tasks' : ref.kind === 'user_assertion' ? 'about-you' : 'notes', itemId: ref.sourceId });
       })
   }
 

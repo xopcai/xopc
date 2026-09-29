@@ -40,6 +40,14 @@ describe('memory management through authenticated Gateway HTTP', () => {
     });
     expect(response.status).toBe(201);
     const { assertion } = await response.json();
+    const mobileSummary = await request('/api/user-model/mobile-summary');
+    expect(mobileSummary.status).toBe(200);
+    await expect(mobileSummary.json()).resolves.toMatchObject({ counts: { total: 1, explicit: 1 } });
+    const mobilePage = await request('/api/user-model/assertions?view=mobile&filter=explicit&limit=20');
+    expect(mobilePage.status).toBe(200);
+    await expect(mobilePage.json()).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: assertion.id, statement: 'Concise answers' })],
+    });
     const path = `/api/user-model/assertions/${assertion.id}`;
     expect((await fetch(`${origin}${path}`, { method: 'DELETE' })).status).toBe(401);
     const changed = await request(path, 'PATCH', { statement: 'Detailed answers' });
@@ -57,5 +65,30 @@ describe('memory management through authenticated Gateway HTTP', () => {
     expect(getLoadedLazyRouteBundleIdsForTests().authenticated).toContain('user-model');
     expect((await request('/api/user-model-other')).status).toBe(404);
     expect((await request('/api/knowledge-memory-other')).status).toBe(404);
+  });
+
+  it('creates and edits a recent goal through the mobile user-model routes', async () => {
+    const created = await request('/api/user-model/goals', 'POST', {
+      title: 'Ship goal editing', desiredOutcome: 'Mobile users can keep their near-term goals accurate.',
+      scope: { type: 'global' }, targetAt: 2_000,
+    });
+    expect(created.status).toBe(201);
+    const goal = (await created.json()).goal;
+
+    const summary = await request('/api/user-model/mobile-summary');
+    await expect(summary.json()).resolves.toMatchObject({
+      goals: [expect.objectContaining({ id: goal.id, title: 'Ship goal editing', status: 'active' })],
+    });
+
+    const changed = await request(`/api/user-model/goals/${goal.id}`, 'PATCH', {
+      title: 'Ship polished goal editing',
+      desiredOutcome: 'The goal is clear and paused while waiting for verification.',
+      targetAt: null,
+      status: 'paused',
+    });
+    expect(changed.status).toBe(200);
+    await expect(changed.json()).resolves.toMatchObject({
+      goal: { id: goal.id, title: 'Ship polished goal editing', status: 'paused' },
+    });
   });
 });

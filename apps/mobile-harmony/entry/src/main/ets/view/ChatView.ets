@@ -589,8 +589,13 @@ export struct XopcChatView {
     const submission = this.quickIntake.consume(this.chat.selectedId);
     if (!submission) return;
     // Claim before awaiting: repeated layout/connection notifications must not send twice.
-    this.draft = submission.text; this.attachments = submission.files; this.refs = [];
+    this.draft = submission.text; this.attachments = submission.files; this.refs = submission.refs;
     this.saveDraft();
+    if (!submission.autoSend) {
+      this.focusComposerOnMount = true;
+      this.focusMountedComposer();
+      return;
+    }
     await this.send();
   }
 

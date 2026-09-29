@@ -1,6 +1,14 @@
 {
-  "active": "harmony-recent-to-expo-parity",
+  "active": "mobile-user-understanding",
   "requirements": {
+    "mobile-user-understanding": {
+      "description": "在 HarmonyOS、Android 和 iOS 的“我的”中提供可查看、纠正和删除的用户理解，并补齐轻量 Gateway 契约与移动端权限",
+      "current_phase": "complete",
+      "completed_phases": ["analyse", "plan", "coding", "build", "verify"],
+      "invalidated_phases": [],
+      "platforms": ["gateway", "harmony", "android", "ios"],
+      "project_root": "/Users/micjoyce/develop/github/xopc"
+    },
     "harmony-recent-to-expo-parity": {
       "description": "审计近期 HarmonyOS 页面与功能调整，并将缺失能力对齐到共享的 Android/iOS Expo 客户端",
       "current_phase": "verify",
