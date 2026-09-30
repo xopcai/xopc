@@ -1,5 +1,5 @@
 /**
- * Extension marketplace catalog from xopc-store (`GET /api/v1/packages?type=extension`).
+ * Extension marketplace catalog from xopc-store (portable `plugin` and native `extension` packages).
  * Base URL: `XOPC_SKILLS_STORE_URL` → `gateway.skillsStoreBaseUrl` → `https://store.xopc.ai`.
  */
 
@@ -24,6 +24,7 @@ export interface RegistryEntry {
   homepage?: string;
   author?: string;
   branding?: { iconUrl: string; iconSha256: string };
+  packageType?: 'plugin' | 'extension';
 }
 
 export interface ExtensionRegistryFile {
@@ -77,9 +78,9 @@ function titleCaseSlug(slug: string): string {
     .join(' ');
 }
 
-async function fetchExtensionCatalogFromStore(): Promise<RegistryEntry[] | null> {
+async function fetchPackageCatalogFromStore(packageType: 'plugin' | 'extension'): Promise<RegistryEntry[] | null> {
   const base = normalizeStoreBaseUrl();
-  const listUrl = `${base}/api/v1/packages?type=extension&pageSize=200`;
+  const listUrl = `${base}/api/v1/packages?type=${packageType}&pageSize=200`;
   try {
     const res = await fetch(listUrl, { signal: AbortSignal.timeout(20_000) });
     if (!res.ok) {
@@ -112,6 +113,7 @@ async function fetchExtensionCatalogFromStore(): Promise<RegistryEntry[] | null>
           ? { branding: { iconUrl: it.branding.iconUrl, iconSha256: it.branding.iconSha256 } }
           : {}),
         verified: author === 'xopcai',
+        packageType,
       });
     }
     return extensions.length > 0 ? extensions : null;
@@ -128,7 +130,11 @@ export async function fetchRegistry(forceRefresh = false): Promise<ExtensionRegi
   }
 
   const storeBase = normalizeStoreBaseUrl();
-  const fromStore = await fetchExtensionCatalogFromStore();
+  const catalogs = await Promise.all([
+    fetchPackageCatalogFromStore('plugin'),
+    fetchPackageCatalogFromStore('extension'),
+  ]);
+  const fromStore = catalogs.flatMap(items => items ?? []);
   if (fromStore && fromStore.length > 0) {
     const data: ExtensionRegistryFile = { version: 1, extensions: fromStore };
     lastStale = data;
