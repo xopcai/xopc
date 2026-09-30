@@ -93,6 +93,7 @@ async function fetchPackageCatalogFromStore(packageType: 'plugin' | 'extension')
         description?: string | null;
         latestVersion?: string;
         author?: { username?: string | null };
+        publisher?: { verification?: 'community' | 'verified' };
         branding?: { iconUrl?: string; iconSha256?: string };
       }>;
     };
@@ -112,7 +113,7 @@ async function fetchPackageCatalogFromStore(packageType: 'plugin' | 'extension')
         ...(typeof it.branding?.iconUrl === 'string' && typeof it.branding.iconSha256 === 'string'
           ? { branding: { iconUrl: it.branding.iconUrl, iconSha256: it.branding.iconSha256 } }
           : {}),
-        verified: author === 'xopcai',
+        verified: it.publisher?.verification === 'verified' || author === 'xopcai',
         packageType,
       });
     }
