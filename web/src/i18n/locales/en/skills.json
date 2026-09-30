@@ -78,7 +78,8 @@
     "noDisabledSkills": "No disabled skills in this list.",
     "filterGlobal": "Global",
     "filterWorkspace": "Workspace",
-    "filterExtra": "Extra",
+    "filterPlugin": "Plugins",
+    "filterExtra": "Extra directories",
     "sectionUser": "Your skills",
     "installCta": "Install manually",
     "installModalTitle": "Install skill",
@@ -114,7 +115,8 @@
       "agentsWorkspace": "Agents (workspace, read-only)",
       "workspace": "Workspace",
       "global": "Global",
-      "extra": "Extra"
+      "plugin": "Plugin",
+      "extra": "Extra directory"
     },
     "col": {
       "name": "Name",

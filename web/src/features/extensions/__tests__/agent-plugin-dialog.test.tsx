@@ -53,7 +53,7 @@ it('installs and enables a reviewed local plugin in one continuation', async () 
   expect(mocks.request).toHaveBeenNthCalledWith(3, '/api/extensions/agent-plugins/sample/activation', { method: 'POST', body: JSON.stringify({ enabled: true }) });
   expect(onClose).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain('Plugin installed and enabled');
-  expect(document.querySelector('a[href="/capabilities/skills?source=extra"]')).not.toBeNull();
+  expect(document.querySelector('a[href="/capabilities/skills?source=plugin"]')).not.toBeNull();
   expect(document.body.textContent).toContain('Disable');
   expect(document.body.textContent).not.toContain('Plugin installed. It is not enabled yet.');
 });
