@@ -13,6 +13,7 @@ export type ExtensionMarketplaceItem = {
   homepage?: string;
   author?: string;
   branding?: { iconUrl: string; iconSha256: string };
+  packageType?: 'plugin' | 'extension';
 };
 
 export async function getExtensionMarketplaceItems(query = ''): Promise<ExtensionMarketplaceItem[]> {
@@ -36,10 +37,19 @@ export type ExtensionMarketplacePackageDetail = {
   readme: string | null;
   downloads: number;
   author: { username: string; avatarUrl: string | null };
+  publisher?: {
+    verification: 'community' | 'verified';
+    sourceRepository: string | null;
+  };
   latestVersion: {
     version: string;
     changelog: string | null;
     publishedAt: string;
+    riskTier?: 'content' | 'network' | 'local-exec';
+    componentIndex?: {
+      skills: string[];
+      mcpServers: Array<{ name: string; transport: string }>;
+    };
   };
   installability: {
     available: boolean;
