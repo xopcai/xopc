@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { ConfigSchema, type Config } from '../../../../config/schema.js';
 import {
   closeXopcDatabase,
   createContextEvidence,
@@ -20,13 +21,24 @@ import { registerUserModelRoutes } from '../user-model.js';
 describe('user model routes', () => {
   let root: string;
   let app: Hono;
+  let config: Config;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'xopc-user-model-routes-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(root, 'xopc.db') });
     app = new Hono();
+    config = ConfigSchema.parse({});
+    const service = {
+      currentConfig: config,
+      async saveConfig(nextConfig: Config) {
+        config = nextConfig;
+        service.currentConfig = nextConfig;
+        return { saved: true };
+      },
+    };
     registerUserModelRoutes(app, {
+      service,
       strictRateLimitMiddleware: async (_c, next) => next(),
     } as never);
   });
@@ -42,6 +54,11 @@ describe('user model routes', () => {
     const body = await response.json() as {
       profile: { callName?: string };
       suggestedCallName: string;
+      settings: {
+        memoryEnabled: boolean;
+        showMemoryReferences: boolean;
+        sensitiveWritePolicy: string;
+      };
     };
     const username = userInfo().username.trim();
     const expected = ['root', 'admin', 'administrator', 'user'].includes(username.toLocaleLowerCase())
@@ -51,6 +68,34 @@ describe('user model routes', () => {
     expect(response.status).toBe(200);
     expect(body.profile.callName).toBeUndefined();
     expect(body.suggestedCallName).toBe(expected);
+    expect(body).toMatchObject({
+      settings: {
+        memoryEnabled: true,
+        showMemoryReferences: true,
+        sensitiveWritePolicy: 'confirm',
+      },
+    });
+
+    const exported = await app.request('/api/user-model/export');
+    expect(exported.status).toBe(200);
+    expect(exported.headers.get('Content-Disposition')).toMatch(/^attachment; filename="xopc-memory-/);
+    await expect(exported.json()).resolves.toMatchObject({
+      format: 'xopc-user-memory',
+      version: 1,
+      data: { settings: { memoryEnabled: true } },
+    });
+
+    const updated = await app.request('/api/user-model/settings', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ memoryEnabled: false, showMemoryReferences: false, sensitiveWritePolicy: 'deny' }),
+    });
+    expect(updated.status).toBe(200);
+    await expect(updated.json()).resolves.toEqual({
+      settings: { memoryEnabled: false, showMemoryReferences: false, sensitiveWritePolicy: 'deny' },
+    });
+    expect(config.userContext.userModel.enabled).toBe(false);
+    expect(config.userContext.knowledgeMemory.enabled).toBe(false);
   });
 
   it('returns a bounded mobile summary and filtered assertion pages', async () => {
@@ -121,8 +166,19 @@ describe('user model routes', () => {
       }),
     });
     expect(assertionResponse.status).toBe(201);
-    await expect(assertionResponse.json()).resolves.toMatchObject({
+    const assertionResult = await assertionResponse.json() as { assertion: { id: string } };
+    expect(assertionResult).toMatchObject({
       action: 'created', assertion: { authority: 'user_explicit', status: 'active' },
+    });
+
+    const scopeResponse = await app.request(`/api/user-model/assertions/${assertionResult.assertion.id}/scope`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scope: { type: 'agent', id: 'main' } }),
+    });
+    expect(scopeResponse.status).toBe(200);
+    await expect(scopeResponse.json()).resolves.toMatchObject({
+      assertion: { id: assertionResult.assertion.id, scope: { type: 'agent', id: 'main' } },
     });
 
     const goalResponse = await app.request('/api/user-model/goals', {
@@ -184,7 +240,7 @@ describe('user model routes', () => {
     await expect(summary.json()).resolves.toMatchObject({
       assertions: [{
         predicate: 'preference.response_style',
-        scope: { type: 'global' },
+        scope: { type: 'agent', id: 'main' },
         statement: 'Prefer concise answers.',
       }],
       counts: { activeAssertions: 1, activeGoals: 1, activePriorities: 1 },

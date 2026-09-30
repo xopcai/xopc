@@ -70,7 +70,10 @@ beforeEach(() => {
   props = {
     scopeKey: 'a', urlConversationId: '', gatewayReady: true, gatewayOnline: true,
     newSessionSpec: { agentId: 'main', projectId: null },
-    messages: { sessions: { bootstrapFailed: 'Retry startup' } } as ChatBootstrapDeps['messages'],
+    messages: {
+      sessions: { bootstrapFailed: 'Retry startup' },
+      mobileExperience: { errors: { offline: 'offline' } },
+    } as ChatBootstrapDeps['messages'],
     activeConversationIdRef: { current: '' }, shouldNavigateToRoute: false,
   };
 });

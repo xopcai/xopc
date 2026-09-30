@@ -1,4 +1,4 @@
-export type ProductDomainId = 'work' | 'automation' | 'capabilities' | 'apps';
+export type ProductDomainId = 'work' | 'automation' | 'capabilities' | 'apps' | 'me';
 
 export type ProductSectionId =
   | 'work-overview'
@@ -13,7 +13,8 @@ export type ProductSectionId =
   | 'capabilities-connectors'
   | 'capabilities-channels'
   | 'capabilities-extensions'
-  | 'apps-library';
+  | 'apps-library'
+  | 'me-overview';
 
 type ProductSectionDefinition = {
   id: ProductSectionId;
@@ -57,11 +58,16 @@ const appSections = [
   { id: 'apps-library', domain: 'apps', path: '/local-apps' },
 ] as const satisfies readonly ProductSectionDefinition[];
 
+const meSections = [
+  { id: 'me-overview', domain: 'me', path: '/user-model' },
+] as const satisfies readonly ProductSectionDefinition[];
+
 export const PRODUCT_DOMAINS = [
   { id: 'work', path: '/', sections: workSections },
   { id: 'automation', path: '/scenes', sections: automationSections },
   { id: 'capabilities', path: '/capabilities/skills', sections: capabilitySections },
   { id: 'apps', path: '/local-apps', sections: appSections },
+  { id: 'me', path: '/user-model', sections: meSections },
 ] as const satisfies readonly ProductDomainDefinition[];
 
 function isPath(pathname: string, root: string): boolean {
@@ -81,6 +87,9 @@ export function productDomainAtPath(pathname: string): ProductDomainId | null {
   if (isPath(pathname, '/local-apps') || isPath(pathname, '/open')) {
     return 'apps';
   }
+  if (isPath(pathname, '/user-model')) {
+    return 'me';
+  }
   return null;
 }
 
@@ -93,6 +102,7 @@ export function productSectionAtLocation(pathname: string, _search = ''): Produc
   if (isPath(pathname, '/workflows')) return 'automation-workflows';
   if (isPath(pathname, '/browser-automations')) return 'automation-browser';
   if (isPath(pathname, '/local-apps') || isPath(pathname, '/open')) return 'apps-library';
+  if (isPath(pathname, '/user-model')) return 'me-overview';
   if (isPath(pathname, '/capabilities')) {
     const section = pathname.split('/')[2];
     const candidate = `capabilities-${section || 'skills'}` as ProductSectionId;

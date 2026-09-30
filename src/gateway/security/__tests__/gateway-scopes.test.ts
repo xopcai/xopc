@@ -58,6 +58,7 @@ describe('gateway scopes', () => {
     expect(requiredGatewayScope('GET', '/api/user-model/mobile-summary')).toBe('workspace.read');
     expect(requiredGatewayScope('GET', '/api/user-model/assertions?view=mobile')).toBe('workspace.read');
     expect(requiredGatewayScope('PATCH', '/api/user-model/assertions/a')).toBe('workspace.write');
+    expect(requiredGatewayScope('PATCH', '/api/user-model/settings')).toBe('workspace.write');
     expect(requiredGatewayScope('DELETE', '/api/user-model/assertions/a')).toBe('workspace.write');
     expect(requiredGatewayScope('POST', '/api/user-model/refresh')).toBe('gateway.admin');
     expect(requiredGatewayScope('GET', '/api/user-model/refresh/status')).toBe('gateway.admin');

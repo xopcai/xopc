@@ -77,4 +77,13 @@ export async function deleteUnderstanding(id: string): Promise<void> {
   await parsedJson(await apiFetch(`/api/user-model/assertions/${encodeURIComponent(id)}`, { method: 'DELETE' }));
 }
 
+export async function updateMemorySettings(
+  input: Partial<MobileUserUnderstandingSummary['settings']>,
+): Promise<void> {
+  await parsedJson(await apiFetch('/api/user-model/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  }));
+}
+
 export type { MobileUnderstandingFilter, MobileUnderstandingItem, MobileUserGoal, MobileUserUnderstandingSummary };
