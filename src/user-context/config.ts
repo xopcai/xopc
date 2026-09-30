@@ -62,6 +62,7 @@ export const UserModelConfigSchema = z
     enabled: z.boolean().default(true),
     writePolicy: z.enum(['deny', 'allow']).default('allow'),
     sensitiveWritePolicy: WritePolicySchema.default('confirm'),
+    showMemoryReferences: z.boolean().default(true),
     processingPolicy: z.enum(['local_only', 'remote_allowed']).default('remote_allowed'),
     extraction: z.object({
       reviewIntervalTurns: z.number().int().min(1).max(1_000).default(10),
@@ -99,6 +100,7 @@ export const UserModelConfigSchema = z
     enabled: true,
     writePolicy: 'allow',
     sensitiveWritePolicy: 'confirm',
+    showMemoryReferences: true,
     processingPolicy: 'remote_allowed',
     extraction: {
       reviewIntervalTurns: 10,
