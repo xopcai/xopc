@@ -6,6 +6,7 @@ import { collectConfiguredChannelIds } from '../extensions/activation-context.js
 import { ExtensionLoader } from '../extensions/index.js';
 import { registerExtensionCliProgram } from '../extensions/sdk/channel-helpers.js';
 import { createDefaultContext } from './registry.js';
+import { bootstrapApplicationStateSync } from '../bootstrap/application-state.js';
 
 function argvRequestsVersionOnly(argv: string[]): boolean {
   return argv.includes('--version') || argv.includes('-V');
@@ -20,6 +21,9 @@ export async function registerExtensionCliCommands(program: Command): Promise<vo
   }
 
   const ctx = createDefaultContext(process.argv, {});
+  // Command discovery runs before Commander's preAction hook. Initialize the
+  // Agent catalog before config validation discovers channel extensions.
+  bootstrapApplicationStateSync(ctx.configPath);
   const config = loadConfig(ctx.configPath);
   const workspace = getWorkspacePath(config) || ctx.workspacePath;
 
