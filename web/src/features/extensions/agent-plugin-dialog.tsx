@@ -153,6 +153,9 @@ export function AgentPluginDialog({
 }) {
   const language = useLocaleStore(s => s.language);
   const zh = language.startsWith('zh');
+  const marketplaceLocalization = marketplace?.localizations?.[zh ? 'zh-CN' : 'en'];
+  const marketplaceName = marketplaceLocalization?.displayName ?? marketplace?.name;
+  const marketplaceDescription = marketplaceLocalization?.description ?? marketplace?.description;
   const sourceInputId = useId();
   const { mutate } = useSWRConfig();
   const [currentExtension, setCurrentExtension] = useState(extension);
@@ -261,15 +264,15 @@ export function AgentPluginDialog({
   return <Dialog.Root defaultOpen onOpenChange={open => !open && onClose()}><Dialog.Portal>
     <Dialog.Overlay className="fixed inset-0 z-[130] bg-scrim" />
     <Dialog.Content className="fixed left-1/2 top-1/2 z-[131] flex h-[min(76vh,30rem)] w-[min(34rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover">
-      <div className="flex shrink-0 items-center justify-between border-b border-edge p-4"><Dialog.Title className="font-semibold">{currentExtension?.name ?? marketplace?.name ?? (zh ? '安装 Agent Plugin' : 'Install Agent Plugin')}</Dialog.Title><Button variant="ghost" onClick={onClose}>{zh ? '关闭' : 'Close'}</Button></div>
+      <div className="flex shrink-0 items-center justify-between border-b border-edge p-4"><Dialog.Title className="font-semibold">{currentExtension?.name ?? marketplaceName ?? (zh ? '安装 Agent Plugin' : 'Install Agent Plugin')}</Dialog.Title><Button variant="ghost" onClick={onClose}>{zh ? '关闭' : 'Close'}</Button></div>
       <Dialog.Description className="sr-only">{zh ? '安装、组件、账号连接和权限' : 'Installation, components, connections and permissions'}</Dialog.Description>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         {!currentExtension && storeSource ? <section className="space-y-4">
           <div className="flex items-start gap-3 rounded-xl border border-edge bg-surface-base p-4">
             <ShieldCheck className="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
             <div className="min-w-0">
-              <p className="font-medium text-fg">{marketplace?.name ?? plan?.manifest.name ?? source.slice('store:'.length)}</p>
-              {marketplace?.description ? <p className="mt-1 text-sm leading-relaxed text-fg-muted">{marketplace.description}</p> : null}
+              <p className="font-medium text-fg">{marketplaceName ?? plan?.manifest.name ?? source.slice('store:'.length)}</p>
+              {marketplaceDescription ? <p className="mt-1 text-sm leading-relaxed text-fg-muted">{marketplaceDescription}</p> : null}
               <p className="mt-2 text-xs text-fg-muted">
                 {marketplace?.publisher?.verification === 'verified'
                   ? (zh ? '已认证发布者 · 安装后自动启用' : 'Verified publisher · enabled automatically after installation')
