@@ -229,10 +229,17 @@ export interface MarketplacePackageDetail {
   readme: string | null;
   downloads: number;
   author: { username: string; avatarUrl: string | null };
+  publisher?: { verification: 'community' | 'verified'; sourceRepository: string | null };
   latestVersion: {
     version: string;
     changelog: string | null;
     publishedAt: string;
+    downloadUrl?: string;
+    sha256?: string | null;
+    sourceCommit?: string | null;
+    artifactFormat?: string;
+    riskTier?: 'content' | 'network' | 'local-exec';
+    componentIndex?: { skills: string[]; mcpServers: Array<{ name: string; transport: string }> };
   };
 }
 
@@ -385,9 +392,9 @@ export async function resolveExtensionZipDownloadUrl(
   const base = normalizeBaseUrl(storeBaseUrl);
   const enc = encodeURIComponent(packageName.trim());
   const meta = await fetchJson<StorePublishedPackageHead>(`${base}/api/v1/packages/${enc}`);
-  if (meta.type !== 'extension') {
+  if (meta.type !== 'extension' && meta.type !== 'plugin') {
     throw new Error(
-      `Package "${packageName}" has type "${meta.type}" (expected extension). ` +
+      `Package "${packageName}" has type "${meta.type}" (expected plugin or extension). ` +
         'Use `xopc skills install` for skills.',
     );
   }
