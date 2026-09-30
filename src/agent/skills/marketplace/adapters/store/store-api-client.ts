@@ -381,14 +381,27 @@ export interface StorePublishedPackageHead {
     checksum?: string;
     integrity?: string;
     sha256?: string;
+    sourceCommit?: string | null;
+    artifactFormat?: string;
+    riskTier?: 'content' | 'network' | 'local-exec';
   };
 }
+
+export type ResolvedExtensionStoreArtifact = {
+  downloadUrl: string;
+  version: string;
+  integrity?: string;
+  sha256?: string;
+  sourceCommit?: string;
+  artifactFormat?: string;
+  riskTier?: 'content' | 'network' | 'local-exec';
+};
 
 export async function resolveExtensionZipDownloadUrl(
   storeBaseUrl: string,
   packageName: string,
   version?: string,
-): Promise<{ downloadUrl: string; version: string; integrity?: string; sha256?: string }> {
+): Promise<ResolvedExtensionStoreArtifact> {
   const base = normalizeBaseUrl(storeBaseUrl);
   const enc = encodeURIComponent(packageName.trim());
   const meta = await fetchJson<StorePublishedPackageHead>(`${base}/api/v1/packages/${enc}`);
@@ -406,6 +419,9 @@ export async function resolveExtensionZipDownloadUrl(
       checksum?: string;
       integrity?: string;
       sha256?: string;
+      sourceCommit?: string | null;
+      artifactFormat?: string;
+      riskTier?: 'content' | 'network' | 'local-exec';
     }>(`${base}/api/v1/packages/${enc}/versions/${v}`);
     if (!detail.downloadUrl) {
       throw new Error('Store version has no download URL');
@@ -416,6 +432,9 @@ export async function resolveExtensionZipDownloadUrl(
       version: detail.version,
       integrity: detail.integrity ?? detail.checksum ?? detail.sha256,
       ...(detail.sha256 ? { sha256: detail.sha256 } : {}),
+      ...(detail.sourceCommit ? { sourceCommit: detail.sourceCommit } : {}),
+      ...(detail.artifactFormat ? { artifactFormat: detail.artifactFormat } : {}),
+      ...(detail.riskTier ? { riskTier: detail.riskTier } : {}),
     };
   }
   const lv = meta.latestVersion;
@@ -428,6 +447,9 @@ export async function resolveExtensionZipDownloadUrl(
     version: lv.version,
     integrity: lv.integrity ?? lv.checksum ?? lv.sha256,
     ...(lv.sha256 ? { sha256: lv.sha256 } : {}),
+    ...(lv.sourceCommit ? { sourceCommit: lv.sourceCommit } : {}),
+    ...(lv.artifactFormat ? { artifactFormat: lv.artifactFormat } : {}),
+    ...(lv.riskTier ? { riskTier: lv.riskTier } : {}),
   };
 }
 
