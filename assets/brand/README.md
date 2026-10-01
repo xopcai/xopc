@@ -18,21 +18,25 @@ generator creates every consumable asset under `docs/public`, `web/public`,
 Do not edit generated files by hand. Use `pnpm run assets:brand:check` in CI or before
 committing to confirm the repository has no stale brand assets.
 
-The generator uses three purpose-built compositions:
+The generator uses four purpose-built compositions:
 
 - **UI mark:** transparent two-colour artwork that adapts to light and dark surfaces.
-- **App icon:** full-bleed background for iOS, Android launchers, and PWA
-  installation; the mobile glyph stays within roughly 56% of the canvas so the
-  operating system can apply circular, squircle, or adaptive masks without
-  crowding the mark.
-- **Desktop / badge:** a transparent outer canvas with a rounded desktop tile or
-  compact badge, so Windows taskbar and browser toolbar icons remain legible.
+- **Apple app icon:** opaque light, dark, and genuinely grayscale tinted fallbacks
+  on a restrained frosted surface. Source layers under
+  `apps/mobile-expo/assets/apple-icon-layers/` keep the background, AI segment,
+  human segment, and monochrome mark separate for Icon Composer refinement.
+- **Android adaptive icon:** separate material background, transparent two-colour
+  foreground, and monochrome layer. The mark occupies roughly 56% of the 108dp
+  canvas (about 60dp), inside Android's 66dp safe zone.
+- **Desktop / badge:** platform-specific macOS, Windows, and Linux renders. Small
+  desktop sizes remove hairline decoration and enlarge the mark optically so it
+  remains legible in window chrome and taskbars.
 
-Harmony's flat launcher/start-window icon uses the same artwork at approximately
-84% of the canvas, matching Android's central 72dp viewport within its 108dp
-adaptive layer. This removes overscan padding from the flat export without
-changing Android/iOS assets or the approved in-app concept marks. Regenerate only
-Harmony resources with `node scripts/generate-brand-assets.mjs --target=harmony`.
+Harmony's flat launcher icon uses a dedicated optical scale of approximately 62%
+of the canvas with a quiet light-material surface. It intentionally does not copy
+Android adaptive-layer overscan, because Harmony consumes a flat launcher
+resource. Regenerate only Harmony resources with
+`node scripts/generate-brand-assets.mjs --target=harmony`.
 
 The role palette is deliberately compact:
 

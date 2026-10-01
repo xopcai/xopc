@@ -11,7 +11,12 @@ async function artworkBounds(png: Buffer) {
   for (let y = 0; y < info.height; y++) {
     for (let x = 0; x < info.width; x++) {
       const offset = (y * info.width + x) * 4;
-      if (data[offset + 3] < 128 || (data[offset] > 245 && data[offset + 1] > 245 && data[offset + 2] > 245)) continue;
+      const red = data[offset];
+      const green = data[offset + 1];
+      const blue = data[offset + 2];
+      const isAiSegment = red < 100 && green < 110 && blue < 130;
+      const isHumanSegment = blue > 150 && blue - red > 80 && blue - green > 30;
+      if (data[offset + 3] < 128 || (!isAiSegment && !isHumanSegment)) continue;
       left = Math.min(left, x); right = Math.max(right, x);
       top = Math.min(top, y); bottom = Math.max(bottom, y);
     }
@@ -20,15 +25,16 @@ async function artworkBounds(png: Buffer) {
 }
 
 describe('Harmony mobile brand assets', () => {
-  it('matches the Android adaptive viewport without baking its outer padding into the flat icon', async () => {
+  it('keeps a calm optical safe area in the flat launcher icon', async () => {
     const harmony = await artworkBounds(read('../AppScope/resources/base/media/app_icon.png'));
-    const android = await artworkBounds(read('../../mobile-expo/assets/adaptive-icon.png'));
     expect(harmony.canvas).toBe(1024);
-    expect(harmony.width / harmony.canvas).toBeCloseTo(android.width / android.canvas * 108 / 72, 2);
-    expect(harmony.height / harmony.canvas).toBeCloseTo(android.height / android.canvas * 108 / 72, 2);
+    expect(harmony.width / harmony.canvas).toBeGreaterThan(0.60);
+    expect(harmony.width / harmony.canvas).toBeLessThan(0.64);
+    expect(harmony.height / harmony.canvas).toBeGreaterThan(0.60);
+    expect(harmony.height / harmony.canvas).toBeLessThan(0.64);
     for (const padding of [harmony.left, harmony.top, 1023 - harmony.right, 1023 - harmony.bottom]) {
-      expect(padding / harmony.canvas).toBeGreaterThan(0.07);
-      expect(padding / harmony.canvas).toBeLessThan(0.10);
+      expect(padding / harmony.canvas).toBeGreaterThan(0.17);
+      expect(padding / harmony.canvas).toBeLessThan(0.21);
     }
     expect(existsSync(fileURLToPath(new URL('../AppScope/resources/base/media/app_icon.svg', import.meta.url))))
       .toBe(false);
@@ -52,6 +58,8 @@ describe('Harmony mobile brand assets', () => {
     const launcher = await sharp(read('../AppScope/resources/base/media/app_icon.png')).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const alpha = launcher.data.filter((_value, index) => index % 4 === 3);
     expect(alpha.every(value => value === 255)).toBe(true);
+    expect(read('../agc-locales/zh-CN/app-icon-1024.png'))
+      .toEqual(read('../AppScope/resources/base/media/app_icon.png'));
     expect(read('../entry/src/main/resources/base/media/brand_logo.svg').toString()).not.toContain('<rect');
     expect(read('../entry/src/main/resources/base/media/launch_logo.svg').toString())
       .toContain('viewBox="-256 -256 1536 1536"');

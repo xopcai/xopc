@@ -35,6 +35,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "monochromeImage": "./assets/adaptive-icon-monochrome.png",
+        "backgroundImage": "./assets/adaptive-icon-background.png",
         "backgroundColor": "#EEF1F8"
       },
       "predictiveBackGestureEnabled": false,
