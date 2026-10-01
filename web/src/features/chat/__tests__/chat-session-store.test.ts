@@ -99,6 +99,31 @@ describe('useChatSessionStore', () => {
     expect(snap?.streamingMsg?.content.some((c) => c.type === 'text' && c.text === 'hello')).toBe(true);
   });
 
+  it('keeps one assistant row from send acknowledgement through the first stream event', () => {
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...idleSlice,
+      sending: true,
+      streamingMsg: { role: 'assistant', content: [], renderKey: 'pending-response', pendingResponseStatus: 'sending' },
+    });
+    useChatSessionStore.getState().setPendingResponseStatus(conversationId, 'waiting');
+    expect(getChatSessionSnapshot(conversationId)?.streamingMsg?.pendingResponseStatus).toBe('waiting');
+
+    useChatSessionStore.getState().setSessionFlags(conversationId, { sending: false });
+    useChatSessionStore.getState().clearStreamingState(conversationId, { preservePendingResponse: true });
+    expect(getChatSessionSnapshot(conversationId)?.streamingMsg?.pendingResponseStatus).toBe('waiting');
+
+    useChatSessionStore.getState().mutateSessionStreaming(conversationId, (message) => {
+      message.content.push({ type: 'thinking', text: '', streaming: true });
+    });
+    const live = getChatSessionSnapshot(conversationId)?.streamingMsg;
+    expect(live?.renderKey).toBe('pending-response');
+    expect(live?.pendingResponseStatus).toBeUndefined();
+    expect(live?.content[0]?.type).toBe('thinking');
+
+    useChatSessionStore.getState().clearStreamingState(conversationId);
+    expect(getChatSessionSnapshot(conversationId)?.streamingMsg).toBeNull();
+  });
+
   it('appendAttachmentToCurrentAssistant updates the streaming assistant without creating a new bubble', () => {
     useChatSessionStore.getState().initSessionSnapshot(conversationId, {
       ...idleSlice,

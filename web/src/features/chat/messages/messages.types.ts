@@ -125,6 +125,8 @@ export interface Message {
   content: MessageContent[];
   /** Client-only delivery state for an optimistic user message. */
   deliveryStatus?: 'sending' | 'failed';
+  /** Client-only status shown before the first assistant stream event. */
+  pendingResponseStatus?: 'sending' | 'waiting';
   /** Client-only identity used to update one optimistic submission in place. */
   clientSubmissionId?: string;
   /** Client-only frozen page context retained only while an optimistic send can be retried. */

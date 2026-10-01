@@ -25,6 +25,7 @@ export const MessageList = memo(function MessageList({
   workspaceConversationId,
   projectId,
   streaming,
+  sending = false,
   progress,
   reasoningLevel,
   registerListContentRef,
@@ -55,6 +56,7 @@ export const MessageList = memo(function MessageList({
   workspaceConversationId?: string | null;
   projectId?: string | null;
   streaming: boolean;
+  sending?: boolean;
   progress: ProgressState | null;
   reasoningLevel: ReasoningLevel;
   /** Plain column root — observed by scroll viewport for tail-follow (Cursor-style, non-virtual). */
@@ -83,7 +85,7 @@ export const MessageList = memo(function MessageList({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
 
-  const showWelcome = list.length === 0 && !streaming;
+  const showWelcome = list.length === 0 && !streaming && !sending;
 
   if (showWelcome) {
     if (welcomeOverlay) {
@@ -124,7 +126,7 @@ export const MessageList = memo(function MessageList({
       <div ref={registerListContentRef} className="flex w-full min-w-0 flex-col gap-8 pb-8">
         {list.map((msg, index) => {
         const isLast = index === list.length - 1;
-        const isStreamRow = Boolean(streaming && isLast && msg.role === 'assistant');
+        const isStreamRow = Boolean((streaming || sending || msg.pendingResponseStatus) && isLast && msg.role === 'assistant');
         const isLastUserRow = isLastUserMessageInThread(list, index);
         const key = messageRowKey(msg, index);
         const showTimeSeparator = shouldShowChatTimeSeparator(

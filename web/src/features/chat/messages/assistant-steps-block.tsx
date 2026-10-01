@@ -50,6 +50,7 @@ import { routeWheelThroughVerticalScrollChain } from '@/features/chat/scroll/whe
 import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
+import { messages } from '@/i18n/messages';
 import { WorkflowCard, type WorkflowCardLabels } from '@/features/chat/workflow/workflow-card';
 import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
 
@@ -95,6 +96,7 @@ const StepRoundDurationText = memo(function StepRoundDurationText({
 /** One turn-level disclosure for narration, reasoning summaries, and tool execution. */
 export function AssistantStepsBlock({
   workLog,
+  pendingStatus,
   toolLabels,
   stepLabels,
   clusterLabels,
@@ -103,6 +105,7 @@ export function AssistantStepsBlock({
   workflowOptions,
 }: {
   workLog: AssistantTurnWorkLogPresentation;
+  pendingStatus?: 'sending' | 'waiting';
   toolLabels: { input: string; output: string; noOutput: string };
   stepLabels: {
     thoughts: string;
@@ -138,6 +141,14 @@ export function AssistantStepsBlock({
   workflowOptions: AssistantActivityWorkflowOptions;
 }) {
   const language = useLocaleStore((s) => s.language);
+  const [waitingLong, setWaitingLong] = useState(false);
+  useEffect(() => {
+    setWaitingLong(false);
+    if (pendingStatus !== 'waiting') return;
+    const id = window.setTimeout(() => setWaitingLong(true), 3000);
+    return () => window.clearTimeout(id);
+  }, [pendingStatus]);
+  const chatLabels = messages(language).chat;
   const showRawToolData = useDevViewStore((s) => s.showRawToolData);
   const visibleItems = useMemo(() => workLog.items.filter((item) => (
     item.type !== 'thinking' || showRawToolData
@@ -152,8 +163,13 @@ export function AssistantStepsBlock({
   const anyActive = workLog.active;
   const stepsDrawerOpen = workLog.expandedByDefault && anyActive;
   const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
+  const [autoExpanded, setAutoExpanded] = useState(stepsDrawerOpen);
+  useEffect(() => {
+    if (stepsDrawerOpen) setAutoExpanded(true);
+    else if (!anyActive) setAutoExpanded(false);
+  }, [stepsDrawerOpen, anyActive]);
 
-  const expanded = !workLog.compact && (userExpanded ?? stepsDrawerOpen);
+  const expanded = !workLog.compact && visibleItems.length > 0 && (userExpanded ?? autoExpanded);
   const effectiveStartedAt = workLog.startedAt ?? null;
   const completedDurationMs = workLog.durationMs ?? null;
   const friendlyTitleLabels = useMemo(() => ({
@@ -199,6 +215,13 @@ export function AssistantStepsBlock({
       (block) => semanticTitle(block, 'running'),
     );
   }, [anyActive, activityBlocks, clusterLabels, semanticTitle]);
+  const pendingLabel = pendingStatus === 'sending' ? chatLabels.sendingLabel
+    : pendingStatus === 'waiting' ? (waitingLong ? chatLabels.waitingLongLabel : chatLabels.waitingLabel) : null;
+  const fallbackLabel = activityBlocks.some((block) => block.type === 'thinking')
+    ? chatLabels.organizingLabel : stepLabels.workLogRunning;
+  const statusPhase = pendingStatus ?? (activityBlocks.some((block) => block.type === 'tool_use' && block.status === 'running')
+    ? 'tool' : activityBlocks.some((block) => block.type === 'thinking' && block.streaming)
+      ? 'thinking' : activityBlocks.length > 0 ? 'organizing' : 'working');
 
   if (stepCount === 0 && !anyActive) {
     return null;
@@ -229,8 +252,8 @@ export function AssistantStepsBlock({
 
   const headerMain = anyActive ? (
     <>
-      <span className="[overflow-wrap:anywhere]">
-        {streamingHeaderText ?? stepLabels.workLogRunning}
+      <span key={statusPhase} className="xopc-chat-status-label [overflow-wrap:anywhere]" role="status" aria-live="polite" aria-atomic="true">
+        {streamingHeaderText ?? pendingLabel ?? fallbackLabel}
       </span>
       <StepRoundDurationText
         active={anyActive}
@@ -261,22 +284,22 @@ export function AssistantStepsBlock({
   ) : null;
 
   const showDisclosure = !workLog.compact && stepCount > 0;
-  const Header = showDisclosure ? 'button' : 'div';
 
   return (
     <div
       className={cn(
         'my-1 min-w-0',
-        expanded ? 'w-full' : 'w-fit max-w-full',
+        anyActive || expanded ? 'w-full' : 'w-fit max-w-full',
       )}
     >
-      {anyActive || showDisclosure ? <Header
-        type={showDisclosure ? "button" : undefined}
+      {anyActive || showDisclosure ? <button
+        type="button"
+        disabled={!showDisclosure}
         className={cn(
           'flex min-h-11 w-fit max-w-full min-w-0 items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-fg-muted',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
         )}
-        onClick={showDisclosure ? () => setUserExpanded((current) => !(current ?? stepsDrawerOpen)) : undefined}
+        onClick={showDisclosure ? () => setUserExpanded((current) => !(current ?? autoExpanded)) : undefined}
         aria-expanded={showDisclosure ? expanded : undefined}
       >
         <div className="min-w-0 flex-1">
@@ -289,7 +312,7 @@ export function AssistantStepsBlock({
           className={cn('size-4 shrink-0 text-fg-muted transition-transform motion-reduce:transition-none', expanded && 'rotate-180')}
           aria-hidden
         /> : null}
-      </Header> : null}
+      </button> : null}
       {workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
         <StepRow key={block.id} block={block} toolLabels={toolLabels} stepLabels={timelineLabels}
           cardLabels={cardLabels} conversationId={conversationId} workflowOptions={workflowOptions} surfaceOnly />
