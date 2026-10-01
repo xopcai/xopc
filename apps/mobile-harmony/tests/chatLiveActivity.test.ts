@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { reduceChatStream } from '../entry/src/main/ets/common/chatStream.ets';
-import { chatLiveCompletedCount, chatLiveElapsedSeconds, reduceChatSnapshotActivity } from '../entry/src/main/ets/common/chatLiveActivity.ets';
+import { chatLiveCompletedCount, chatLiveElapsedSeconds, chatLiveNarration, reduceChatSnapshotActivity } from '../entry/src/main/ets/common/chatLiveActivity.ets';
 
 describe('live chat activity', () => {
   it('tracks real tool stages without retaining private arguments or thinking', () => {
@@ -39,5 +39,30 @@ describe('live chat activity', () => {
     expect(row.activity).toBe('responding');
     expect(row.text).toBe('');
     expect(JSON.stringify(row)).not.toContain('private');
+  });
+
+  it('surfaces completed public narration without leaking pending answer text', () => {
+    let row = reduceChatStream(undefined, 'assistant_delta', {
+      messageId: 'narration', delta: 'Checking the project structure', offset: 0,
+    }, 'run');
+    expect(chatLiveNarration(row)).toBe('');
+    row = reduceChatStream(row, 'assistant_message_end', {
+      messageId: 'narration', presentation: 'narration',
+    }, 'run');
+    expect(chatLiveNarration(row)).toBe('Checking the project structure');
+    row = reduceChatStream(row, 'assistant_delta', {
+      messageId: 'answer', delta: 'Here is the result', offset: 0,
+    }, 'run');
+    expect(chatLiveNarration(row)).toBe('');
+  });
+
+  it('does not replace an active tool status with assistant text', () => {
+    let row = reduceChatStream(undefined, 'tool_start', {
+      toolCallId: 'read-1', toolName: 'read_file',
+    }, 'run');
+    row = reduceChatStream(row, 'assistant_delta', {
+      messageId: 'narration', delta: 'Reading the relevant files', offset: 0,
+    }, 'run');
+    expect(row.activity).toBe('read');
   });
 });

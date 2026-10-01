@@ -276,54 +276,54 @@ function harmonyAppIconSvg() {
   const definitions = `
     <linearGradient id="harmony-surface" x1="92" y1="68" x2="934" y2="960" gradientUnits="userSpaceOnUse">
       <stop stop-color="#FFFFFF" />
-      <stop offset="0.5" stop-color="#ECF1F8" />
-      <stop offset="1" stop-color="#CFD9E8" />
+      <stop offset="0.5" stop-color="#EFF3F9" />
+      <stop offset="1" stop-color="#DDE5EF" />
     </linearGradient>
     <radialGradient id="harmony-bloom" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(752 202) rotate(132) scale(654)">
       <stop stop-color="#FFFFFF" />
-      <stop offset="0.5" stop-color="#A8B9E6" stop-opacity="0.38" />
+      <stop offset="0.5" stop-color="#A8B9E6" stop-opacity="0.28" />
       <stop offset="1" stop-color="#B8C5E6" stop-opacity="0" />
     </radialGradient>
     <radialGradient id="harmony-ambient" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(244 852) rotate(-48) scale(690)">
-      <stop stop-color="#7896CF" stop-opacity="0.34" />
+      <stop stop-color="#7896CF" stop-opacity="0.24" />
       <stop offset="1" stop-color="#829AD0" stop-opacity="0" />
     </radialGradient>
     <linearGradient id="harmony-glass-sheen" x1="188" y1="102" x2="838" y2="920" gradientUnits="userSpaceOnUse">
       <stop offset="0.22" stop-color="#FFFFFF" stop-opacity="0" />
-      <stop offset="0.43" stop-color="#FFFFFF" stop-opacity="0.5" />
-      <stop offset="0.56" stop-color="#FFFFFF" stop-opacity="0.16" />
+      <stop offset="0.43" stop-color="#FFFFFF" stop-opacity="0.32" />
+      <stop offset="0.56" stop-color="#FFFFFF" stop-opacity="0.1" />
       <stop offset="0.73" stop-color="#FFFFFF" stop-opacity="0" />
     </linearGradient>
     <radialGradient id="harmony-lens" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(438 420) rotate(49) scale(334)">
-      <stop stop-color="#FFFFFF" stop-opacity="0.96" />
-      <stop offset="0.58" stop-color="#EDF3FB" stop-opacity="0.84" />
-      <stop offset="1" stop-color="#AFC0D8" stop-opacity="0.72" />
+      <stop stop-color="#FFFFFF" stop-opacity="0.56" />
+      <stop offset="0.58" stop-color="#EDF3FB" stop-opacity="0.4" />
+      <stop offset="1" stop-color="#B8C6D9" stop-opacity="0.28" />
     </radialGradient>
     <radialGradient id="harmony-lens-glint" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(424 402) rotate(36) scale(176 112)">
-      <stop stop-color="#FFFFFF" stop-opacity="0.86" />
-      <stop offset="0.46" stop-color="#FFFFFF" stop-opacity="0.3" />
+      <stop stop-color="#FFFFFF" stop-opacity="0.34" />
+      <stop offset="0.46" stop-color="#FFFFFF" stop-opacity="0.1" />
       <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
     </radialGradient>
     <linearGradient id="harmony-ai" x1="326" y1="244" x2="704" y2="792" gradientUnits="userSpaceOnUse">
       <stop stop-color="#05070B" />
       <stop offset="0.48" stop-color="#1A2130" />
-      <stop offset="1" stop-color="#53627B" />
+      <stop offset="1" stop-color="#46546B" />
     </linearGradient>
     <linearGradient id="harmony-human" x1="548" y1="228" x2="790" y2="500" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#69BDFF" />
+      <stop stop-color="#52B0FF" />
       <stop offset="0.46" stop-color="#148DFF" />
-      <stop offset="1" stop-color="#0052BB" />
+      <stop offset="1" stop-color="#0059C7" />
     </linearGradient>
     <linearGradient id="harmony-highlight" x1="300" y1="210" x2="660" y2="690" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFFFFF" stop-opacity="0.52" />
-      <stop offset="0.4" stop-color="#FFFFFF" stop-opacity="0.1" />
+      <stop stop-color="#FFFFFF" stop-opacity="0.38" />
+      <stop offset="0.4" stop-color="#FFFFFF" stop-opacity="0.07" />
       <stop offset="0.66" stop-color="#FFFFFF" stop-opacity="0" />
     </linearGradient>
     <filter id="harmony-shadow" x="-30%" y="-30%" width="160%" height="170%">
-      <feDropShadow dx="0" dy="24" stdDeviation="26" flood-color="#26334D" flood-opacity="0.34" />
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#26334D" flood-opacity="0.2" />
     </filter>
     <filter id="harmony-lens-shadow" x="-30%" y="-30%" width="160%" height="170%">
-      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#4B6184" flood-opacity="0.22" />
+      <feDropShadow dx="0" dy="6" stdDeviation="16" flood-color="#4B6184" flood-opacity="0.08" />
     </filter>`;
   const body = `  <rect width="1024" height="1024" fill="url(#harmony-surface)" />
   <rect width="1024" height="1024" fill="url(#harmony-ambient)" />
@@ -331,12 +331,12 @@ function harmonyAppIconSvg() {
   <rect width="1024" height="1024" fill="url(#harmony-glass-sheen)" />
   <circle cx="512" cy="512" r="224" fill="url(#harmony-lens)" filter="url(#harmony-lens-shadow)" />
   <circle cx="512" cy="512" r="218" fill="url(#harmony-lens-glint)" />
-  <circle cx="512" cy="512" r="222" fill="none" stroke="#FFFFFF" stroke-opacity="0.72" stroke-width="4" />
-  <g filter="url(#harmony-shadow)">
-${markLayer({ ai: '#0C1423', human: '#004CA8' }, HARMONY_MARK_SCALE, 0, 10)}
+  <circle cx="512" cy="512" r="222" fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="2" />
+  <g filter="url(#harmony-shadow)" opacity="0.58">
+${markLayer({ ai: '#0C1423', human: '#004CA8' }, HARMONY_MARK_SCALE, 0, 6)}
   </g>
-  <g opacity="0.6">
-${markLayer({ ai: '#FFFFFF', human: '#B9E2FF' }, HARMONY_MARK_SCALE, 0, -5)}
+  <g opacity="0.3">
+${markLayer({ ai: '#FFFFFF', human: '#B9E2FF' }, HARMONY_MARK_SCALE, 0, -3)}
   </g>
 ${markLayer({ ai: 'url(#harmony-ai)', human: 'url(#harmony-human)' }, HARMONY_MARK_SCALE)}
 ${markLayer({ ai: 'url(#harmony-highlight)', human: 'url(#harmony-highlight)' }, HARMONY_MARK_SCALE)}`;
