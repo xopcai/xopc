@@ -93,6 +93,13 @@ export class ComputerBroker {
   private active(s: Session): void {
     if (this.session !== s || s.controller.signal.aborted || this.expired(s) || !this.host.isVisible()) throw new Error('COMPUTER_GRANT_REVOKED');
   }
+  /** Settings-only app catalog. It never returns window contents or task-bound refs. */
+  async listAppsForSettings(): Promise<Array<{ appId: string; name: string; running: boolean }>> {
+    if (this.busy || this.discovery || this.stopping || (this.session && this.session.status !== 'stopped')) throw new Error('COMPUTER_BUSY');
+    this.busy = true;
+    try { return await this.driver.discover('', AbortSignal.timeout(15_000)); }
+    finally { try { await this.driver.stop(); } finally { this.busy = false; } }
+  }
   async command(raw: ComputerCommand): Promise<BrokerResult> {
     const command = ComputerCommandSchema.parse(raw);
     if (command.op === 'discover') return this.discover(command);

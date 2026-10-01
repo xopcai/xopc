@@ -621,7 +621,7 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      ...(cfg?.computer.enabled && this.deps.endpointTools && this.deps.gatewayClarify
+      ...(cfg?.computer.enabled && this.deps.endpointTools
         ? [createComputerUseTool({
             runtime: this.ensureComputerRuntime(),
             context: () => {
@@ -630,7 +630,6 @@ export class AgentToolsFactory {
               if (!conversationId || !runId) throw new Error('Computer Use requires an active interactive run');
               return { conversationId, runId };
             },
-            requestClarification: this.deps.gatewayClarify.requestClarification,
           })]
         : []),
       ...(browserEnabled

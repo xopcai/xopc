@@ -13,13 +13,14 @@ import { COMPUTER_DESCRIPTOR, ComputerCommandSchema } from '@xopcai/computer-con
 import { ComputerBroker, type ComputerApproval } from '../../src/computer/broker.js';
 import { CuaComputerDriver } from './cua-driver.js';
 import { getElectronShellLanguage, showEndpointNotification } from '../ipc/system-settings-ipc.js';
-import { computerApprovalCopy, getComputerMessages } from './messages.js';
+import { getComputerMessages } from './messages.js';
 import { MIME_TYPE_BY_EXTENSION } from '../ipc/file-ipc.js';
 import { normalizeExternalHttpUrl } from '../external-url.js';
 import { assertGatewayCompatibility, GATEWAY_PROTOCOL_INCOMPATIBLE } from '../gateway-compatibility.js';
 import { writeTextAtomic } from '../../src/infra/write-file-atomic.js';
 import { uploadDesktopFrame } from './frame-upload.js';
 import { executeComputerCommand } from './execute-command.js';
+import { ComputerAccessPolicy } from './access-policy.js';
 
 type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: string };
 
@@ -49,6 +50,7 @@ export class DesktopEndpointHost {
   private reenrolling = false;
   private controlPaused = false;
   private readonly lifetime = new AbortController();
+  private readonly accessPolicy = new ComputerAccessPolicy();
   constructor(private readonly options: { connection(): { port: number; token: string } | undefined; window(): BrowserWindow | null }) {
     // Dev launches out/main/index.js directly, so app.getAppPath() is not the repository root.
     const binary = resolveComputerDriverPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, mainDir: import.meta.dirname });
@@ -74,12 +76,26 @@ export class DesktopEndpointHost {
   }
   private async approve(request: ComputerApproval, signal: AbortSignal): Promise<boolean> {
     if (!this.visible() || signal.aborted) return false;
-    const language = getElectronShellLanguage();
-    const t = getComputerMessages(language);
-    const response = await dialog.showMessageBox(this.options.window()!, { type: 'warning', title: t.title,
-      ...computerApprovalCopy(language, request),
-      buttons: [t.cancel, t.allow], defaultId: 0, cancelId: 0, noLink: true, signal });
-    return !signal.aborted && this.visible() && response.response === 1;
+    const appId = request.kind === 'session' ? request.appId : request.target.appId;
+    if (!await this.accessPolicy.allows(appId)) throw new Error('COMPUTER_APP_NOT_AUTHORIZED');
+    return !signal.aborted && this.visible();
+  }
+  async computerAccess() {
+    const authorizedAppIds = await this.accessPolicy.list();
+    const discovered = await this.broker.listAppsForSettings().catch(error => {
+      if (error instanceof Error && error.message === 'COMPUTER_BUSY') return [];
+      throw error;
+    });
+    const apps = [...discovered];
+    for (const appId of authorizedAppIds) if (!apps.some(item => item.appId === appId)) apps.push({ appId, name: appId, running: false });
+    return { authorizedAppIds, apps };
+  }
+  async setComputerAppAccess(appId: string, allowed: boolean) {
+    const apps = allowed ? await this.broker.listAppsForSettings() : [];
+    if (allowed && !apps.some(item => item.appId === appId)) throw new Error('COMPUTER_APP_NOT_FOUND');
+    const authorizedAppIds = await this.accessPolicy.set(appId, allowed);
+    if (!allowed && this.broker.snapshot().appId === appId) await this.broker.stop();
+    return { authorizedAppIds, apps };
   }
   async start(): Promise<void> {
     if (this.stopped || this.connecting || this.client || this.reenrollmentRequired) return;
