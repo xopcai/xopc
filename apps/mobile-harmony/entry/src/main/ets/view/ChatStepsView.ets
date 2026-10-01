@@ -2,7 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatRow, XopcChatBlock, XopcLiveActivityTool } from '../model/chat';
 import { XopcChatDisclosure } from '../common/chatDisclosure';
 import { XopcMobileRoute } from '../model/home';
-import { chatLiveCompletedCount, chatLiveElapsedSeconds } from '../common/chatLiveActivity';
+import { chatLiveCompletedCount, chatLiveElapsedSeconds, chatLiveNarration } from '../common/chatLiveActivity';
 
 @ComponentV2
 export struct XopcChatStepsView {
@@ -31,6 +31,7 @@ export struct XopcChatStepsView {
   aboutToDisappear(): void { clearInterval(this.clockTimer); this.clockTimer = -1; }
   @Computed get elapsedSeconds(): number { return chatLiveElapsedSeconds(this.runStartedAtMs, this.nowMs); }
   @Computed get completedCount(): number { return chatLiveCompletedCount(this.row); }
+  @Computed get narration(): string { return chatLiveNarration(this.row); }
   private statusLabel(): ResourceStr {
     if (this.connection !== 'connected') return $r('app.string.chat_activity_reconnecting');
     if (this.nowMs - (this.row.activityUpdatedAtMs || this.runStartedAtMs || this.nowMs) > 30000
@@ -45,7 +46,7 @@ export struct XopcChatStepsView {
       case 'write': return $r('app.string.chat_steps_writing');
       case 'edit': return $r('app.string.chat_steps_editing');
       case 'fetch': return $r('app.string.chat_steps_fetching');
-      case 'responding': return $r('app.string.chat_activity_responding');
+      case 'responding': return this.narration || $r('app.string.chat_activity_responding');
       case 'working':
       case 'other': return $r('app.string.chat_steps_working');
       default: return this.elapsedSeconds >= 2 ? $r('app.string.chat_steps_working')

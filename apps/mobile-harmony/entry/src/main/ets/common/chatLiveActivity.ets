@@ -1,4 +1,4 @@
-import { XopcChatRow, XopcLiveActivityTool, XopcStreamPayload } from '../model/chat';
+import { XopcChatBlock, XopcChatRow, XopcLiveActivityTool, XopcStreamPayload } from '../model/chat';
 import { chatToolDisplayKind } from './chatRichContent';
 
 /** Keep only bounded, user-readable activity metadata from the realtime stream. */
@@ -21,7 +21,7 @@ export function reduceChatLiveActivity(row: XopcChatRow, event: string, payload:
   } else if (event === 'thinking_delta') {
     if (!(row.activityTools || []).some((item: XopcLiveActivityTool): boolean => item.status === 'running')) row.activity = 'thinking';
   } else if (event === 'assistant_delta' && payload.delta) {
-    row.activity = 'responding';
+    if (!(row.activityTools || []).some((item: XopcLiveActivityTool): boolean => item.status === 'running')) row.activity = 'responding';
   } else if (event === 'progress') {
     const stage = (payload.stage || '').toLowerCase();
     row.activity = ['thinking', 'search', 'read', 'command', 'write', 'edit', 'fetch', 'responding'].includes(stage)
@@ -50,4 +50,18 @@ export function chatLiveCompletedCount(row: XopcChatRow): number {
 
 export function chatLiveElapsedSeconds(startedAtMs: number, nowMs: number): number {
   return startedAtMs > 0 ? Math.max(0, Math.floor((nowMs - startedAtMs) / 1000)) : 0;
+}
+
+/** Latest public narration for the fixed live status slot; never returns pending answer text or private thinking. */
+export function chatLiveNarration(row: XopcChatRow): string {
+  const blocks = row.blocks || [];
+  if (blocks.some((block: XopcChatBlock): boolean =>
+    block.kind === 'text' && block.presentation === 'pending' && !!block.text.trim())) return '';
+  for (let index = blocks.length - 1; index >= 0; index--) {
+    const block = blocks[index];
+    if (block.kind === 'text' && block.presentation === 'narration' && block.text.trim()) {
+      return block.text.replace(/\s+/g, ' ').trim().slice(0, 160);
+    }
+  }
+  return '';
 }
