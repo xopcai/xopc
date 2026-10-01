@@ -18,10 +18,13 @@ const markSource = readFileSync(sourcePath, 'utf8');
 const markRoot = markSource.match(/<svg\b[^>]*>/i)?.[0];
 const mark = markSource.match(/<svg[^>]*>([\s\S]*)<\/svg>/)?.[1]?.trim();
 const markViewBox = markRoot?.match(/\bviewBox=(["'])(.*?)\1/i)?.[2];
+const markSegments = mark?.match(/<circle\b[^>]*\/>/g);
 
-if (!mark || !markViewBox) {
+if (!mark || !markViewBox || markSegments?.length !== 2) {
   throw new Error(`Could not read SVG artwork from ${sourcePath}`);
 }
+
+const [aiMarkSegment, humanMarkSegment] = markSegments;
 
 const check = process.argv.includes('--check');
 const requestedTarget = process.argv.find((argument) => argument.startsWith('--target='))?.slice('--target='.length);
@@ -43,9 +46,11 @@ const SOURCE_HUMAN = '#007AFF';
 // The canonical mark occupies ~78% of its source canvas, so 0.72 yields a
 // visible footprint of ~56% with generous, optically balanced padding.
 const MOBILE_MARK_SCALE = 0.72;
-// Android displays the central 72dp of a 108dp adaptive layer. Match that
-// visible footprint in Harmony's flat icon instead of retaining the overscan.
-const HARMONY_MARK_SCALE = MOBILE_MARK_SCALE * 108 / 72;
+// Harmony uses a flat launcher resource rather than Android's overscanned
+// adaptive foreground. Give it its own optical scale so the mark keeps a calm
+// safe area after the launcher applies its mask.
+const HARMONY_MARK_SCALE = 0.80;
+const DESKTOP_MARK_SCALE = 0.78;
 
 const ROLE_LIGHT = { ai: AI_LIGHT, human: HUMAN_LIGHT };
 const ROLE_DARK = { ai: AI_DARK, human: HUMAN_DARK };
@@ -88,6 +93,17 @@ function markLayer(palette, scale = 1, offsetX = 0, offsetY = 0) {
   return `  <g transform="translate(${512 + offsetX} ${512 + offsetY}) scale(${scale}) translate(-512 -512)">\n    <svg width="1024" height="1024" viewBox="${markViewBox}">\n      ${recolouredMark}\n    </svg>\n  </g>`;
 }
 
+function segmentLayer(segment, colour, scale = 1, offsetX = 0, offsetY = 0) {
+  const recolouredSegment = segment
+    .replaceAll(SOURCE_HUMAN, colour)
+    .replaceAll('currentColor', colour);
+  return `  <g transform="translate(${512 + offsetX} ${512 + offsetY}) scale(${scale}) translate(-512 -512)">
+    <svg width="1024" height="1024" viewBox="${markViewBox}">
+      ${recolouredSegment}
+    </svg>
+  </g>`;
+}
+
 function uiMarkSvg(palette, scale = 1, offsetX = 0, offsetY = 0) {
   return document('', markLayer(palette, scale, offsetX, offsetY));
 }
@@ -107,35 +123,166 @@ ${markLayer(rolePalette, markScale, markOffsetX, markOffsetY)}`;
 }
 
 function mobileAppIconSvg(appearance) {
-  return appIconSvg(appearance, {
-    markScale: MOBILE_MARK_SCALE,
-  });
+  const isDark = appearance === 'dark';
+  const isTinted = appearance === 'tinted';
+  const definitions = isTinted
+    ? `
+    <linearGradient id="mobile-surface" x1="112" y1="88" x2="904" y2="936" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FAFAFA" />
+      <stop offset="1" stop-color="#E7E7E7" />
+    </linearGradient>
+    <radialGradient id="mobile-bloom" cx="0" cy="0" r="1" gradientTransform="translate(746 224) rotate(132) scale(620)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.86" />
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="mobile-mono" x1="330" y1="248" x2="704" y2="790" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111111" />
+      <stop offset="1" stop-color="#444444" />
+    </linearGradient>`
+    : isDark
+      ? `
+    <linearGradient id="mobile-surface" x1="104" y1="72" x2="920" y2="952" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#171A22" />
+      <stop offset="0.56" stop-color="#0D1016" />
+      <stop offset="1" stop-color="#05070B" />
+    </linearGradient>
+    <radialGradient id="mobile-bloom" cx="0" cy="0" r="1" gradientTransform="translate(754 210) rotate(132) scale(640)">
+      <stop stop-color="#52627C" stop-opacity="0.23" />
+      <stop offset="1" stop-color="#52627C" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="mobile-ai" x1="326" y1="244" x2="704" y2="792" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" />
+      <stop offset="1" stop-color="#D8DDE7" />
+    </linearGradient>
+    <linearGradient id="mobile-human" x1="548" y1="228" x2="790" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3CA5FF" />
+      <stop offset="1" stop-color="#0877F5" />
+    </linearGradient>`
+      : `
+    <linearGradient id="mobile-surface" x1="104" y1="72" x2="920" y2="952" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FCFDFF" />
+      <stop offset="0.56" stop-color="#F2F4F9" />
+      <stop offset="1" stop-color="#E7EAF2" />
+    </linearGradient>
+    <radialGradient id="mobile-bloom" cx="0" cy="0" r="1" gradientTransform="translate(754 210) rotate(132) scale(640)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.96" />
+      <stop offset="0.5" stop-color="#B9C6E8" stop-opacity="0.18" />
+      <stop offset="1" stop-color="#B9C6E8" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="mobile-ai" x1="326" y1="244" x2="704" y2="792" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111318" />
+      <stop offset="1" stop-color="#303746" />
+    </linearGradient>
+    <linearGradient id="mobile-human" x1="548" y1="228" x2="790" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#168DFF" />
+      <stop offset="1" stop-color="#0069E8" />
+    </linearGradient>`;
+  const palette = isTinted
+    ? { ai: 'url(#mobile-mono)', human: 'url(#mobile-mono)' }
+    : { ai: 'url(#mobile-ai)', human: 'url(#mobile-human)' };
+  const body = `  <rect width="1024" height="1024" fill="url(#mobile-surface)" />
+  <rect width="1024" height="1024" fill="url(#mobile-bloom)" />
+${markLayer(palette, MOBILE_MARK_SCALE)}`;
+  return document(definitions, body);
 }
 
 function mobileAdaptiveIconSvg(palette) {
-  return uiMarkSvg(palette, MOBILE_MARK_SCALE);
+  const definitions = `
+    <linearGradient id="adaptive-ai" x1="326" y1="244" x2="704" y2="792" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111318" />
+      <stop offset="1" stop-color="#303746" />
+    </linearGradient>
+    <linearGradient id="adaptive-human" x1="548" y1="228" x2="790" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#168DFF" />
+      <stop offset="1" stop-color="#0069E8" />
+    </linearGradient>`;
+  const rolePalette = typeof palette === 'string'
+    ? palette
+    : { ai: 'url(#adaptive-ai)', human: 'url(#adaptive-human)' };
+  return document(definitions, markLayer(rolePalette, MOBILE_MARK_SCALE));
 }
 
-function desktopIconSvg() {
+function adaptiveBackgroundSvg() {
+  const definitions = `
+    <linearGradient id="adaptive-surface" x1="92" y1="70" x2="930" y2="956" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FBFCFF" />
+      <stop offset="0.56" stop-color="#F0F3F9" />
+      <stop offset="1" stop-color="#E4E8F1" />
+    </linearGradient>
+    <radialGradient id="adaptive-bloom" cx="0" cy="0" r="1" gradientTransform="translate(760 214) rotate(132) scale(650)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.96" />
+      <stop offset="0.52" stop-color="#B8C5E6" stop-opacity="0.18" />
+      <stop offset="1" stop-color="#B8C5E6" stop-opacity="0" />
+    </radialGradient>`;
+  const body = `  <rect width="1024" height="1024" fill="url(#adaptive-surface)" />
+  <rect width="1024" height="1024" fill="url(#adaptive-bloom)" />`;
+  return document(definitions, body);
+}
+
+function harmonyAppIconSvg() {
+  const definitions = `
+    <linearGradient id="harmony-surface" x1="92" y1="68" x2="934" y2="960" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" />
+      <stop offset="0.56" stop-color="#F3F5FA" />
+      <stop offset="1" stop-color="#E8EBF3" />
+    </linearGradient>
+    <radialGradient id="harmony-bloom" cx="0" cy="0" r="1" gradientTransform="translate(752 202) rotate(132) scale(654)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.98" />
+      <stop offset="0.5" stop-color="#B8C5E6" stop-opacity="0.2" />
+      <stop offset="1" stop-color="#B8C5E6" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="harmony-ai" x1="326" y1="244" x2="704" y2="792" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111318" />
+      <stop offset="1" stop-color="#303746" />
+    </linearGradient>
+    <linearGradient id="harmony-human" x1="548" y1="228" x2="790" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#168DFF" />
+      <stop offset="1" stop-color="#0069E8" />
+    </linearGradient>`;
+  const body = `  <rect width="1024" height="1024" fill="url(#harmony-surface)" />
+  <rect width="1024" height="1024" fill="url(#harmony-bloom)" />
+${markLayer({ ai: 'url(#harmony-ai)', human: 'url(#harmony-human)' }, HARMONY_MARK_SCALE)}`;
+  return document(definitions, body);
+}
+
+function desktopIconSvg(platform = 'mac', size = 1024) {
+  const isMicro = size <= 48;
+  const plateInset = isMicro ? 48 : platform === 'mac' ? 56 : 64;
+  const plateSize = 1024 - plateInset * 2;
+  const plateRadius = isMicro ? 244 : platform === 'mac' ? 264 : 228;
+  const markScale = isMicro ? 0.86 : DESKTOP_MARK_SCALE;
   const definitions = `
     <linearGradient id="desktop-surface" x1="118" y1="98" x2="900" y2="930" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FBFCFF" />
-      <stop offset="0.52" stop-color="#EEF1F8" />
-      <stop offset="1" stop-color="#E6E8F3" />
+      <stop stop-color="#FCFDFF" />
+      <stop offset="0.52" stop-color="#EFF2F8" />
+      <stop offset="1" stop-color="#E4E8F1" />
     </linearGradient>
     <radialGradient id="desktop-bloom" cx="0" cy="0" r="1" gradientTransform="translate(760 250) rotate(130) scale(590)">
-      <stop stop-color="#FFFFFF" stop-opacity="0.78" />
-      <stop offset="0.48" stop-color="#AEB9EF" stop-opacity="0.22" />
-      <stop offset="1" stop-color="#AEB9EF" stop-opacity="0" />
+      <stop stop-color="#FFFFFF" stop-opacity="0.94" />
+      <stop offset="0.5" stop-color="#AEB9DF" stop-opacity="0.2" />
+      <stop offset="1" stop-color="#AEB9DF" stop-opacity="0" />
     </radialGradient>
-    <linearGradient id="desktop-mark" x1="362" y1="280" x2="690" y2="740" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#151A2C" />
-      <stop offset="1" stop-color="#46547E" />
+    <linearGradient id="desktop-ai" x1="326" y1="244" x2="704" y2="792" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111318" />
+      <stop offset="1" stop-color="#303746" />
+    </linearGradient>
+    <linearGradient id="desktop-human" x1="548" y1="228" x2="790" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#168DFF" />
+      <stop offset="1" stop-color="#0069E8" />
     </linearGradient>`;
-  const body = `  <rect x="64" y="64" width="896" height="896" rx="264" fill="url(#desktop-surface)" />
-  <rect x="64" y="64" width="896" height="896" rx="264" fill="url(#desktop-bloom)" />
-  <rect x="65" y="65" width="894" height="894" rx="263" fill="none" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="2" />
-${markLayer(ROLE_LIGHT, 0.82)}`;
+  const outline = isMicro
+    ? ''
+    : `
+  <rect x="${plateInset + 1}" y="${plateInset + 1}" width="${plateSize - 2}" height="${plateSize - 2}" rx="${plateRadius - 1}" fill="none" stroke="#FFFFFF" stroke-opacity="0.82" stroke-width="2" />`;
+  const bloom = isMicro
+    ? ''
+    : `
+  <rect x="${plateInset}" y="${plateInset}" width="${plateSize}" height="${plateSize}" rx="${plateRadius}" fill="url(#desktop-bloom)" />`;
+  const markPalette = isMicro
+    ? ROLE_LIGHT
+    : { ai: 'url(#desktop-ai)', human: 'url(#desktop-human)' };
+  const body = `  <rect x="${plateInset}" y="${plateInset}" width="${plateSize}" height="${plateSize}" rx="${plateRadius}" fill="url(#desktop-surface)" />${bloom}${outline}
+${markLayer(markPalette, markScale)}`;
   return document(definitions, body);
 }
 
@@ -166,15 +313,53 @@ function trayTemplateSvg() {
   return uiMarkSvg(DARK).replace('scale(1)', 'scale(0.9)');
 }
 
-function renderSvg(scene) {
+function appleIconLayerSvg(role, appearance = 'light') {
+  if (role === 'background') {
+    const isDark = appearance === 'dark';
+    const definitions = isDark
+      ? `
+    <linearGradient id="apple-layer-surface" x1="104" y1="72" x2="920" y2="952" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#171A22" />
+      <stop offset="0.56" stop-color="#0D1016" />
+      <stop offset="1" stop-color="#05070B" />
+    </linearGradient>`
+      : `
+    <linearGradient id="apple-layer-surface" x1="104" y1="72" x2="920" y2="952" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FCFDFF" />
+      <stop offset="0.56" stop-color="#F2F4F9" />
+      <stop offset="1" stop-color="#E7EAF2" />
+    </linearGradient>`;
+    return document(definitions, '  <rect width="1024" height="1024" fill="url(#apple-layer-surface)" />');
+  }
+  if (role === 'mono') return document('', markLayer('#FFFFFF', MOBILE_MARK_SCALE));
+  const isDark = appearance === 'dark';
+  const colour = role === 'ai'
+    ? (isDark ? AI_DARK : AI_LIGHT)
+    : (isDark ? HUMAN_DARK : HUMAN_LIGHT);
+  const segment = role === 'ai' ? aiMarkSegment : humanMarkSegment;
+  return document('', segmentLayer(segment, colour, MOBILE_MARK_SCALE));
+}
+
+function renderSvg(scene, size = 1024) {
   if (scene === 'app-dark') return appIconSvg('dark');
   if (scene === 'app-light') return appIconSvg('light');
   if (scene === 'mobile-app-dark') return mobileAppIconSvg('dark');
   if (scene === 'mobile-app-light') return mobileAppIconSvg('light');
+  if (scene === 'mobile-app-tinted') return mobileAppIconSvg('tinted');
   if (scene === 'mobile-adaptive-light') return mobileAdaptiveIconSvg(ROLE_LIGHT);
   if (scene === 'mobile-adaptive-monochrome') return mobileAdaptiveIconSvg(LIGHT);
-  if (scene === 'harmony-app-light') return appIconSvg('light', { markScale: HARMONY_MARK_SCALE });
-  if (scene === 'desktop') return desktopIconSvg();
+  if (scene === 'mobile-adaptive-background') return adaptiveBackgroundSvg();
+  if (scene === 'harmony-app-light') return harmonyAppIconSvg();
+  if (scene === 'desktop-mac') return desktopIconSvg('mac', size);
+  if (scene === 'desktop-windows') return desktopIconSvg('windows', size);
+  if (scene === 'desktop-linux') return desktopIconSvg('linux', size);
+  if (scene === 'apple-layer-background-light') return appleIconLayerSvg('background', 'light');
+  if (scene === 'apple-layer-background-dark') return appleIconLayerSvg('background', 'dark');
+  if (scene === 'apple-layer-ai-light') return appleIconLayerSvg('ai', 'light');
+  if (scene === 'apple-layer-ai-dark') return appleIconLayerSvg('ai', 'dark');
+  if (scene === 'apple-layer-human-light') return appleIconLayerSvg('human', 'light');
+  if (scene === 'apple-layer-human-dark') return appleIconLayerSvg('human', 'dark');
+  if (scene === 'apple-layer-mono') return appleIconLayerSvg('mono');
   if (scene === 'badge') return badgeSvg();
   if (scene === 'favicon') return faviconSvg();
   if (scene === 'tray-template') return trayTemplateSvg();
@@ -186,7 +371,7 @@ function renderSvg(scene) {
 }
 
 function renderPng(scene, size) {
-  const resvg = new Resvg(renderSvg(scene), {
+  const resvg = new Resvg(renderSvg(scene, size), {
     fitTo: { mode: 'width', value: size },
   });
   return Buffer.from(resvg.render().asPng());
@@ -245,7 +430,10 @@ const appDarkPngs = renderSet('app-dark');
 const appLightPngs = renderSet('app-light');
 const mobileAppDarkPngs = renderSet('mobile-app-dark');
 const mobileAppLightPngs = renderSet('mobile-app-light');
-const desktopPngs = renderSet('desktop');
+const mobileAppTintedPngs = renderSet('mobile-app-tinted');
+const desktopMacPngs = renderSet('desktop-mac');
+const desktopWindowsPngs = renderSet('desktop-windows');
+const desktopLinuxPngs = renderSet('desktop-linux');
 const badgePngs = renderSet('badge');
 const faviconPngs = renderSet('favicon');
 const uiLight = renderSvg('mark-light');
@@ -305,15 +493,28 @@ queue(
 queue('mobile', 'apps/mobile-expo/assets/icon.png', mobileAppLightPngs.get(1024));
 queue('mobile', 'apps/mobile-expo/assets/icon-light.png', mobileAppLightPngs.get(1024));
 queue('mobile', 'apps/mobile-expo/assets/icon-dark.png', mobileAppDarkPngs.get(1024));
-queue('mobile', 'apps/mobile-expo/assets/icon-tinted.png', mobileAppLightPngs.get(1024));
+queue('mobile', 'apps/mobile-expo/assets/icon-tinted.png', mobileAppTintedPngs.get(1024));
 queue('mobile', 'apps/mobile-expo/assets/adaptive-icon.png', renderPng('mobile-adaptive-light', 1024));
 queue('mobile', 'apps/mobile-expo/assets/adaptive-icon-monochrome.png', renderPng('mobile-adaptive-monochrome', 1024));
+queue('mobile', 'apps/mobile-expo/assets/adaptive-icon-background.png', renderPng('mobile-adaptive-background', 1024));
 queue('mobile', 'apps/mobile-expo/assets/favicon.png', badgePngs.get(48));
 queue('mobile', 'apps/mobile-expo/assets/splash-icon.png', renderPng('mark-dark-plain', 1024));
 queue('mobile', 'apps/mobile-expo/assets/splash-icon-dark.png', renderPng('mark-light-plain', 1024));
+for (const [name, scene] of [
+  ['background-light', 'apple-layer-background-light'],
+  ['background-dark', 'apple-layer-background-dark'],
+  ['ai-light', 'apple-layer-ai-light'],
+  ['ai-dark', 'apple-layer-ai-dark'],
+  ['human-light', 'apple-layer-human-light'],
+  ['human-dark', 'apple-layer-human-dark'],
+  ['mono', 'apple-layer-mono'],
+]) {
+  queue('mobile', `apps/mobile-expo/assets/apple-icon-layers/${name}.svg`, renderSvg(scene));
+}
 
 // Preserve the mobile artwork, compensating for Android's adaptive viewport.
 queue('harmony', 'apps/mobile-harmony/AppScope/resources/base/media/app_icon.png', renderPng('harmony-app-light', 1024));
+queue('harmony', 'apps/mobile-harmony/agc-locales/zh-CN/app-icon-1024.png', renderPng('harmony-app-light', 1024));
 for (const [appearance, qualifier] of [['light', 'base'], ['dark', 'dark']]) {
   queue('harmony', `apps/mobile-harmony/entry/src/main/resources/${qualifier}/media/brand_logo.svg`,
     readFileSync(join(root, `assets/brand/concepts/xopc-human-ai-loop-role-${appearance}.svg`)));
@@ -321,17 +522,20 @@ for (const [appearance, qualifier] of [['light', 'base'], ['dark', 'dark']]) {
 
 // Desktop packaging and tray assets. The macOS tray image is a template image: Electron
 // recolours it against the current menu-bar appearance after setTemplateImage(true).
-queue('electron', 'electron/resources/icon.png', desktopPngs.get(1024));
+queue('electron', 'electron/resources/icon.png', desktopLinuxPngs.get(1024));
 queue(
   'electron',
   'electron/resources/icon.ico',
-  makeIco([16, 32, 48, 64, 128, 256].map((size) => ({ size, data: desktopPngs.get(size) }))),
+  makeIco([16, 32, 48, 64, 128, 256].map((size) => ({ size, data: desktopWindowsPngs.get(size) }))),
 );
 queue(
   'electron',
   'electron/resources/icon.icns',
-  makeIcns([16, 32, 64, 128, 256, 512, 1024].map((size) => ({ size, data: desktopPngs.get(size) }))),
+  makeIcns([16, 32, 64, 128, 256, 512, 1024].map((size) => ({ size, data: desktopMacPngs.get(size) }))),
 );
+for (const size of [16, 24, 32, 48, 64, 128, 256, 512]) {
+  queue('electron', `electron/resources/icons/${size}x${size}.png`, renderPng('desktop-linux', size));
+}
 queue('electron', 'electron/resources/tray-iconTemplate.png', renderPng('tray-template', 36));
 queue('electron', 'electron/resources/tray-icon.png', badgePngs.get(32));
 queue('electron', 'electron/resources/tray-icon-win.png', badgePngs.get(32));

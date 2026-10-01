@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="apple-layer-surface" x1="104" y1="72" x2="920" y2="952" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#171A22" />
+      <stop offset="0.56" stop-color="#0D1016" />
+      <stop offset="1" stop-color="#05070B" />
+    </linearGradient></defs>
+  <rect width="1024" height="1024" fill="url(#apple-layer-surface)" />
+</svg>
