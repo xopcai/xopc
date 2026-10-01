@@ -61,18 +61,21 @@ export interface XopcRun { active: boolean; runId?: string; }
 export interface XopcAbort { runId: string; }
 export interface XopcRename { name: string; }
 export interface XopcStreamPayload { delta?: string; messageId?: string; message?: string; toolName?: string; status?: string;
+  stage?: string; toolCallId?: string;
   offset?: number; deliveries?: XopcProductDelivery[];
-  toolCallId?: string; args?: Object; result?: Object; details?: Object; textDelta?: string; presentation?: string;
+  args?: Object; result?: Object; details?: Object; textDelta?: string; presentation?: string;
   command?: string; cwd?: string; exitCode?: number; timedOut?: boolean; diff?: string; review?: XopcContentBlock;
   plan?: XopcPlanStep[]; explanation?: string; uri?: string; mimeType?: string; name?: string;
 }
 export interface XopcStreamEvent { type: string; runId: string; conversationId: string; payload: XopcStreamPayload; }
 export interface XopcChatTool { id: string; name: string; input?: Object; result?: string; isError?: boolean; status?: string; details?: Object; }
+export interface XopcLiveActivityTool { id: string; kind: string; status: string; }
 export interface XopcChatRow { id: string; role: string; text: string; thinking?: string; tools?: string; media?: XopcHistoryMedia[]; refs?: XopcContextRef[];
   deliveries?: XopcProductDelivery[];
   sendState?: string;
   toolCalls?: XopcChatTool[]; toolResultId?: string; toolResultError?: boolean; toolResultDetails?: Object;
   blocks?: XopcChatBlock[]; outcome?: XopcTurnOutcome; turnId?: string; live?: boolean; progress?: string; sourceIds?: string[];
+  activity?: string; activityTools?: XopcLiveActivityTool[]; activityUpdatedAtMs?: number; executionActivity?: boolean;
 }
 export interface XopcDrawerProfile { profile?: XopcProfileFields; suggestedCallName?: string; }
 export interface XopcProfileFields { callName?: string; role?: string; }

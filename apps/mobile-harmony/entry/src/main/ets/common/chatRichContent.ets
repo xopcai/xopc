@@ -220,6 +220,7 @@ export function mergeAssistantRows(rows: XopcChatRow[]): XopcChatRow[] {
       if (index < 0) blocks.push(block); else blocks[index] = block;
     }
     previous.blocks = blocks; previous.outcome = row.outcome || previous.outcome; previous.turnId = row.turnId || previous.turnId;
+    previous.executionActivity = previous.executionActivity || row.executionActivity;
     if (previous.deliveries || row.deliveries) previous.deliveries = (previous.deliveries || []).concat(row.deliveries || []);
     previous.sourceIds = Array.from(new Set<string>((previous.sourceIds || [previous.id]).concat(row.sourceIds)));
     const media = previous.media || [];

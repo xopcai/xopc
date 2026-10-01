@@ -6,6 +6,7 @@ import { XopcEvent } from '../model/realtime';
 import { historyRows } from '../common/chatProtocol';
 import { mergeAssistantRows, chatAttachments } from '../common/chatRichContent';
 import { reduceChatStream } from '../common/chatStream';
+import { reduceChatSnapshotActivity } from '../common/chatLiveActivity';
 import { XopcInputAttachment } from '../model/sessionCommand';
 
 interface XopcPendingChatSend {
@@ -35,10 +36,12 @@ export class XopcChatViewModel {
   @Trace error: string = '';
   @Trace connection: string = 'connecting';
   @Trace runId: string = '';
+  @Trace runStartedAtMs: number = 0;
   @Trace streaming: string = '';
   @Trace thinking: string = '';
   @Trace tool: string = '';
   @Trace liveRow?: XopcChatRow;
+  @Trace liveActivityRow?: XopcChatRow;
   @Trace hasMore: boolean = false;
   @Trace hasOlder: boolean = false;
   @Trace auxiliaryRevision: number = 0;
@@ -60,6 +63,9 @@ export class XopcChatViewModel {
   private listRequest: number = 0;
   private recoveryRequest: number = 0;
   private hasNetworkHistory: boolean = false;
+  private completedActivityRunId: string = '';
+  private executionInputIds: Set<string> = new Set<string>();
+  private executionAssistantIds: Set<string> = new Set<string>();
 
   start(initialId: string = '', main: boolean = !initialId): void {
     this.main = main;
@@ -142,8 +148,10 @@ export class XopcChatViewModel {
     this.prefetchKey = ''; this.prefetchedHistory = undefined;
     if (this.runId && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
     this.selection++; this.historyRequest++; this.olderPending = false;
-    this.selectedId = id; this.rows = []; this.runId = ''; this.streaming = ''; this.thinking = ''; this.tool = '';
-    this.liveRow = undefined; this.historyMessages = []; this.rows = this.pendingRows();
+    this.selectedId = id; this.rows = []; this.runId = ''; this.runStartedAtMs = 0; this.streaming = ''; this.thinking = ''; this.tool = '';
+    this.liveRow = undefined; this.liveActivityRow = undefined; this.historyMessages = []; this.rows = this.pendingRows();
+    this.completedActivityRunId = '';
+    this.executionInputIds.clear(); this.executionAssistantIds.clear();
     this.cachedHistory = false; this.hasNetworkHistory = false;
     this.transcriptId = undefined; this.title = ''; this.agentId = ''; this.projectId = ''; this.status = ''; this.hasOlder = false;
     this.before = ''; this.error = ''; this.loading = true;
@@ -200,7 +208,10 @@ export class XopcChatViewModel {
     this.prefetchKey = ''; this.prefetchedHistory = undefined;
     this.selection++; clearTimeout(this.refreshTimer); this.refreshTimer = -1;
     if (this.runId) realtimeClient.unsubscribe('run:' + this.runId);
-    this.selectedId = ''; this.runId = ''; this.rows = []; this.loading = false; this.liveRow = undefined;
+    this.selectedId = ''; this.runId = ''; this.runStartedAtMs = 0; this.rows = []; this.loading = false;
+    this.liveRow = undefined; this.liveActivityRow = undefined;
+    this.completedActivityRunId = '';
+    this.executionInputIds.clear(); this.executionAssistantIds.clear();
   }
 
   private async recover(propagateMissing: boolean = false): Promise<void> {
@@ -260,6 +271,9 @@ export class XopcChatViewModel {
       if (!older) { this.hasNetworkHistory = true; this.cachedHistory = false; }
       if (!older && !this.runId) this.repository.rememberHistory(this.selectedId, result).catch((_error: Error): void => {});
       const sameTranscript = !!this.transcriptId && this.transcriptId === result.session.transcriptId;
+      if (!older && this.transcriptId && !sameTranscript) {
+        this.executionInputIds.clear(); this.executionAssistantIds.clear();
+      }
       if (result.session.transcriptId) {
         this.outbox.forEach((input: XopcPendingChatSend, id: string): void => {
           if (input.conversationId === this.selectedId && input.transcriptId && input.transcriptId !== result.session.transcriptId) this.outbox.delete(id);
@@ -272,9 +286,40 @@ export class XopcChatViewModel {
         : preserveCursor ? this.historyMessages.slice(0, overlap).concat(result.session.messages) : result.session.messages);
       const combined: XopcHistory = { session: { key: result.session.key, messages: this.historyMessages }, pagination: result.pagination };
       const confirmed = mergeAssistantRows(historyRows(combined));
+      confirmed.forEach((row: XopcChatRow): void => {
+        if (this.executionAssistantIds.has(row.id)) row.executionActivity = true;
+      });
+      this.executionInputIds.forEach((inputId: string): void => {
+        const userIndex = confirmed.findIndex((row: XopcChatRow): boolean => row.role === 'user' && row.id === inputId);
+        if (userIndex < 0) return;
+        for (let index = userIndex + 1; index < confirmed.length && confirmed[index].role !== 'user'; index++) {
+          if (confirmed[index].role === 'assistant') {
+            confirmed[index].executionActivity = true;
+            this.executionAssistantIds.add(confirmed[index].id);
+            break;
+          }
+        }
+      });
+      if (!older && this.completedActivityRunId) {
+        let completedIndex = confirmed.findIndex((row: XopcChatRow): boolean =>
+          row.role === 'assistant' && row.turnId === this.completedActivityRunId);
+        if (completedIndex < 0) {
+          const lastUserIndex = confirmed.map((row: XopcChatRow): string => row.role).lastIndexOf('user');
+          for (let index = confirmed.length - 1; index > lastUserIndex; index--) {
+            if (confirmed[index].role === 'assistant') { completedIndex = index; break; }
+          }
+        }
+        if (completedIndex >= 0) {
+          confirmed[completedIndex].executionActivity = true;
+          this.executionAssistantIds.add(confirmed[completedIndex].id);
+          this.completedActivityRunId = '';
+        }
+      }
       confirmed.forEach((row: XopcChatRow): void => { if (row.role === 'user') this.outbox.delete(row.id); });
       this.rows = this.mergePendingRows(confirmed);
-      if (!older && this.snapshotMode) { this.liveRow = undefined; this.streaming = ''; this.thinking = ''; this.tool = ''; }
+      if (!older && this.snapshotMode && !this.completedActivityRunId) {
+        this.liveRow = undefined; this.streaming = ''; this.thinking = ''; this.tool = '';
+      }
       this.title = result.session.name ?? '';
       // A local draft can be reconciled between the initial identity read and this history read.
       // Compact history may omit agentId, so do not erase the authoritative draft identity.
@@ -295,6 +340,7 @@ export class XopcChatViewModel {
 
   private trackRun(id: string): void {
     if (this.runId && this.runId !== id && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
+    if (this.runId !== id) { this.runStartedAtMs = id ? Date.now() : 0; this.liveActivityRow = undefined; }
     this.runId = id;
     if (id && XopcChatViewModel.owner === this) realtimeClient.subscribe('run:' + id);
   }
@@ -391,6 +437,7 @@ export class XopcChatViewModel {
 
   private async deliver(input: XopcPendingChatSend): Promise<boolean> {
     this.sending = true; this.error = '';
+    this.executionInputIds.add(input.row.id);
     const selection = this.selection;
     this.updateSendState(input, 'sending');
     try {
@@ -402,13 +449,15 @@ export class XopcChatViewModel {
       this.historyRequest++; this.recoveryRequest++; this.olderPending = false;
       this.hasNetworkHistory = true;
       this.updateSendState(input, 'sent');
-      if (!alreadyRunning) { this.snapshotMode = false; this.streaming = ''; this.thinking = ''; this.tool = ''; this.liveRow = undefined; }
+      if (!alreadyRunning) { this.snapshotMode = false; this.streaming = ''; this.thinking = ''; this.tool = '';
+        this.liveRow = undefined; this.liveActivityRow = undefined; this.completedActivityRunId = ''; }
       this.trackRun(run);
       if (!run) await this.recover();
       return true;
     } catch (error) {
       // A matching history row is authoritative even if the HTTP acknowledgement was lost.
       if (!this.outbox.has(input.row.id)) return true;
+      this.executionInputIds.delete(input.row.id);
       this.error = (error as Error).message;
       this.updateSendState(input, 'failed'); return false;
     }
@@ -433,13 +482,17 @@ export class XopcChatViewModel {
       return;
     }
     if (event.event === 'run_end') {
-      if (this.liveRow) this.liveRow = reduceChatStream(this.liveRow, event.event, payload, this.runId);
+      this.completedActivityRunId = this.runId;
+      this.liveRow = reduceChatStream(this.liveRow || this.liveActivityRow, event.event, payload, this.runId);
       this.trackRun(''); this.streaming = ''; this.thinking = ''; this.tool = '';
       this.auxiliaryRevision++;
       this.snapshotMode = true;
       this.loadHistory(false);
     } else if (event.event === 'error') this.error = payload.message ?? 'RUN_FAILED';
     else if (this.snapshotMode) {
+      if (['thinking_delta', 'tool_start', 'tool_end', 'assistant_delta', 'progress'].includes(event.event)) {
+        this.liveActivityRow = reduceChatSnapshotActivity(this.liveActivityRow, event.event, payload, this.runId);
+      }
       if (this.refreshTimer === -1) this.refreshTimer = setTimeout((): void => {
         this.refreshTimer = -1; this.loadHistory(false);
       }, 750);

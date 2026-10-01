@@ -16,6 +16,8 @@ export struct XopcChatMessageContent {
   @Param row: XopcChatRow = { id: '', role: 'assistant', text: '' };
   @Param conversationId: string = '';
   @Param reasoning: string = 'on';
+  @Param runStartedAtMs: number = 0;
+  @Param connection: string = 'connected';
   @Param previewEligible: boolean = false;
   @Param disclosure: XopcChatDisclosure = new XopcChatDisclosure();
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
@@ -51,8 +53,11 @@ export struct XopcChatMessageContent {
       block.kind === 'review' || (block.kind === 'text' && block.presentation !== 'narration'));
   }
   @Computed get hasProgress(): boolean {
-    return (this.row.blocks || []).some((block: XopcChatBlock): boolean => block.kind === 'text' && block.presentation === 'narration')
-      || (!!this.row.live && !this.row.text);
+    return !!this.row.live || !!this.row.executionActivity
+      || (this.row.blocks || []).some((block: XopcChatBlock): boolean =>
+        (block.kind === 'text' && block.presentation === 'narration') || block.kind === 'thinking'
+          || block.kind === 'tool' || block.kind === 'plan' || block.kind === 'diff')
+      || (this.row.toolCalls || []).length > 0 || (this.row.activityTools || []).length > 0;
   }
 
   @Builder
@@ -76,7 +81,8 @@ export struct XopcChatMessageContent {
   build() {
     Column({ space: this.showPreview ? 2 : 8 }) {
       if (this.row.role === 'assistant' && this.hasProgress) {
-        XopcChatStepsView({ row: this.row, disclosure: this.disclosure, scope: this.conversationId })
+        XopcChatStepsView({ row: this.row, disclosure: this.disclosure, scope: this.conversationId,
+          runStartedAtMs: this.runStartedAtMs, connection: this.connection })
       }
       if (this.row.outcome?.status === 'failed') {
         Text($r('app.string.chat_response_failed')).fontSize(13).fontColor(this.colors.danger)
