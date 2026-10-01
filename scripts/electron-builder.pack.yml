@@ -134,7 +134,7 @@ nsis:
   buildUniversalInstaller: false
 
 linux:
-  icon: icon.png
+  icon: icons
   category: Utility
   target:
     - AppImage
