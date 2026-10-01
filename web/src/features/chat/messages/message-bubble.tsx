@@ -292,7 +292,7 @@ export const MessageBubble = memo(function MessageBubble({
     return message.contextRefs?.filter(ref => !ref.refId || !inlineIds.has(ref.refId));
   }, [message.contextRefs, message.userTurnDocument]);
 
-  const hasAssistantActivity = Boolean(assistantTurnView?.workLog.items.length);
+  const hasAssistantActivity = Boolean(assistantTurnView?.workLog.active || assistantTurnView?.workLog.items.length);
   const progressForMeta =
     reasoningHidden ||
     (isAssistant && hasAssistantActivity)
@@ -595,9 +595,10 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">
-            {assistantTurnView?.workLog.items.length ? (
+            {assistantTurnView && (assistantTurnView.workLog.active || assistantTurnView.workLog.items.length > 0) ? (
               <AssistantStepsBlock
                 workLog={assistantTurnView.workLog}
+                pendingStatus={message.pendingResponseStatus}
                 toolLabels={toolLabels}
                 stepLabels={stepLabels}
                 clusterLabels={clusterLabels}

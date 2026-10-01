@@ -164,11 +164,18 @@ export function useChatSessionStreaming(deps: {
     async (chatId: string, loadedMessages?: Message[]) => {
       if (!shouldApplyStreamUpdate(chatId)) return;
 
+      const responseAtLookup = store().sessions[chatId]?.streamingMsg;
       const runId = await resolveResumeRunId(chatId);
       if (!runId) {
+        const currentResponse = store().sessions[chatId]?.streamingMsg;
+        if (
+          currentResponse?.pendingResponseStatus ||
+          (currentResponse && currentResponse !== responseAtLookup) ||
+          chatRunManager.isStreamingFor(chatId)
+        ) return;
         const staleRunId = chatRunManager.getResumeRunId(chatId);
         if (staleRunId) chatRunManager.reconcileInactive(chatId, staleRunId);
-        store().clearStreamingState(chatId);
+        store().clearStreamingState(chatId, { preservePendingResponse: true });
         clearChatRunPresence(chatId);
         return;
       }
@@ -338,6 +345,7 @@ export function useChatSessionStreaming(deps: {
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
       const chatId = conversationId;
       const clientSubmissionId = crypto.randomUUID();
+      const pendingRenderKey = `assistant-stream:${chatId}:${clientSubmissionId}`;
       const storedMessages = getSessionMessages(chatId);
       const currentMessages = replaceClientSubmissionId
         ? storedMessages.filter((message) => message.clientSubmissionId !== replaceClientSubmissionId)
@@ -399,7 +407,13 @@ export function useChatSessionStreaming(deps: {
         }),
         messages: nextMessages,
         hasMore: existing?.hasMore ?? false,
-        streamingMsg: null,
+        streamingMsg: {
+          role: 'assistant',
+          content: [],
+          timestamp: Date.now(),
+          renderKey: pendingRenderKey,
+          pendingResponseStatus: 'sending',
+        },
         progress: null,
         sending: true,
         streaming: false,
@@ -442,6 +456,7 @@ export function useChatSessionStreaming(deps: {
           sendStreamCallbacks.onInputAccepted = () => {
             inputAccepted = true;
             updateDeliveryStatus('accepted');
+            store().setPendingResponseStatus(chatId, 'waiting');
             onInputAccepted();
           };
 
@@ -466,6 +481,10 @@ export function useChatSessionStreaming(deps: {
             if (replaceTurnId) void loadSessionById(chatId, 0);
           } else {
             clearChatRunPresence(chatId);
+            const pending = getChatSessionSnapshot(chatId)?.streamingMsg;
+            if (pending?.renderKey === pendingRenderKey && pending.pendingResponseStatus) {
+              store().clearStreamingState(chatId);
+            }
           }
         } finally {
           if (!inputAccepted) updateDeliveryStatus('failed');

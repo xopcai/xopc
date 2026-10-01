@@ -1261,6 +1261,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                     conversationId={session.decodedKey ?? session.conversationId}
                     projectId={scopedProject?.id}
                     streaming={stream.streaming}
+                    sending={stream.sending}
                     progress={stream.progress}
                     reasoningLevel={session.reasoningLevel}
                     registerListContentRef={registerListContentRef}

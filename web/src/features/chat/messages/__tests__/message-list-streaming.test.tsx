@@ -8,6 +8,7 @@ import type { Message } from '@/features/chat/messages/messages.types';
 
 type BubbleProps = {
   messageIndex?: number;
+  isStreaming?: boolean;
   suppressAssistantActions?: boolean;
   deleteRoundDisabled?: boolean;
 };
@@ -86,5 +87,22 @@ describe('MessageList streaming row props', () => {
     });
 
     expect(container.querySelector('[data-testid="trailing-content"]')?.textContent).toBe('Browser setup');
+  });
+
+  it('treats the pending assistant row as live before the first stream event', () => {
+    act(() => {
+      root.render(
+        <MessageList
+          messages={[...list.slice(0, -1), { role: 'assistant', content: [], pendingResponseStatus: 'waiting' }]}
+          streaming={false}
+          sending={false}
+          progress={null}
+          reasoningLevel="stream"
+          registerListContentRef={() => {}}
+        />,
+      );
+    });
+    expect(propsByMessageIndex.get(3)?.isStreaming).toBe(true);
+    expect(propsByMessageIndex.get(3)?.suppressAssistantActions).toBe(true);
   });
 });
