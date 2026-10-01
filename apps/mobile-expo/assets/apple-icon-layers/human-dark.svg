@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
-  <g transform="translate(512 512) scale(0.72) translate(-512 -512)">
+  <g transform="translate(512 512) scale(0.76) translate(-512 -512)">
     <svg width="1024" height="1024" viewBox="0 0 1024 1024">
       <circle cx="512" cy="512" r="330" stroke="#0A84FF" stroke-linecap="round" stroke-width="136" stroke-dasharray="354.790530 1718.660621" transform="rotate(284.2 512 512)" />
     </svg>

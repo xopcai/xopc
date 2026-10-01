@@ -43,13 +43,13 @@ const HUMAN_LIGHT = '#007AFF';
 const HUMAN_DARK = '#0A84FF';
 const SOURCE_HUMAN = '#007AFF';
 // Keep the mobile glyph inside the conservative iOS/Android launcher safe zone.
-// The canonical mark occupies ~78% of its source canvas, so 0.72 yields a
-// visible footprint of ~56% with generous, optically balanced padding.
-const MOBILE_MARK_SCALE = 0.72;
+// The canonical mark occupies ~78% of its source canvas, so 0.76 yields a
+// visible footprint of ~59% while remaining inside Android's 66dp safe zone.
+const MOBILE_MARK_SCALE = 0.76;
 // Harmony uses a flat launcher resource rather than Android's overscanned
 // adaptive foreground. Give it its own optical scale so the mark keeps a calm
 // safe area after the launcher applies its mask.
-const HARMONY_MARK_SCALE = 0.80;
+const HARMONY_MARK_SCALE = 0.86;
 const DESKTOP_MARK_SCALE = 0.78;
 
 const ROLE_LIGHT = { ai: AI_LIGHT, human: HUMAN_LIGHT };
@@ -128,73 +128,121 @@ function mobileAppIconSvg(appearance) {
   const definitions = isTinted
     ? `
     <linearGradient id="mobile-surface" x1="112" y1="88" x2="904" y2="936" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FAFAFA" />
-      <stop offset="1" stop-color="#E7E7E7" />
+      <stop stop-color="#FFFFFF" />
+      <stop offset="0.5" stop-color="#F1F1F1" />
+      <stop offset="1" stop-color="#DCDCDC" />
     </linearGradient>
     <radialGradient id="mobile-bloom" cx="0" cy="0" r="1" gradientTransform="translate(746 224) rotate(132) scale(620)">
-      <stop stop-color="#FFFFFF" stop-opacity="0.86" />
+      <stop stop-color="#FFFFFF" stop-opacity="0.98" />
       <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
     </radialGradient>
+    <radialGradient id="mobile-ambient" cx="0" cy="0" r="1" gradientTransform="translate(270 850) rotate(-48) scale(660)">
+      <stop stop-color="#8A8A8A" stop-opacity="0.18" />
+      <stop offset="1" stop-color="#8A8A8A" stop-opacity="0" />
+    </radialGradient>
     <linearGradient id="mobile-mono" x1="330" y1="248" x2="704" y2="790" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#111111" />
-      <stop offset="1" stop-color="#444444" />
-    </linearGradient>`
+      <stop stop-color="#080808" />
+      <stop offset="0.55" stop-color="#222222" />
+      <stop offset="1" stop-color="#525252" />
+    </linearGradient>
+    <linearGradient id="mobile-highlight" x1="300" y1="210" x2="660" y2="690" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.36" />
+      <stop offset="0.44" stop-color="#FFFFFF" stop-opacity="0.08" />
+      <stop offset="0.68" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+    <filter id="mobile-shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#111111" flood-opacity="0.16" />
+    </filter>`
     : isDark
       ? `
     <linearGradient id="mobile-surface" x1="104" y1="72" x2="920" y2="952" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#171A22" />
-      <stop offset="0.56" stop-color="#0D1016" />
-      <stop offset="1" stop-color="#05070B" />
+      <stop stop-color="#202634" />
+      <stop offset="0.52" stop-color="#0E121A" />
+      <stop offset="1" stop-color="#030509" />
     </linearGradient>
     <radialGradient id="mobile-bloom" cx="0" cy="0" r="1" gradientTransform="translate(754 210) rotate(132) scale(640)">
-      <stop stop-color="#52627C" stop-opacity="0.23" />
+      <stop stop-color="#7B91B5" stop-opacity="0.34" />
       <stop offset="1" stop-color="#52627C" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="mobile-ambient" cx="0" cy="0" r="1" gradientTransform="translate(236 854) rotate(-48) scale(700)">
+      <stop stop-color="#254A81" stop-opacity="0.22" />
+      <stop offset="1" stop-color="#254A81" stop-opacity="0" />
     </radialGradient>
     <linearGradient id="mobile-ai" x1="326" y1="244" x2="704" y2="792" gradientUnits="userSpaceOnUse">
       <stop stop-color="#FFFFFF" />
-      <stop offset="1" stop-color="#D8DDE7" />
+      <stop offset="0.52" stop-color="#EEF1F6" />
+      <stop offset="1" stop-color="#C8D0DD" />
     </linearGradient>
     <linearGradient id="mobile-human" x1="548" y1="228" x2="790" y2="500" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#3CA5FF" />
-      <stop offset="1" stop-color="#0877F5" />
-    </linearGradient>`
+      <stop stop-color="#55B2FF" />
+      <stop offset="0.48" stop-color="#168DFF" />
+      <stop offset="1" stop-color="#0065DE" />
+    </linearGradient>
+    <linearGradient id="mobile-highlight" x1="300" y1="210" x2="660" y2="690" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.34" />
+      <stop offset="0.42" stop-color="#FFFFFF" stop-opacity="0.06" />
+      <stop offset="0.66" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+    <filter id="mobile-shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#000000" flood-opacity="0.42" />
+    </filter>`
       : `
     <linearGradient id="mobile-surface" x1="104" y1="72" x2="920" y2="952" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FCFDFF" />
-      <stop offset="0.56" stop-color="#F2F4F9" />
-      <stop offset="1" stop-color="#E7EAF2" />
+      <stop stop-color="#FFFFFF" />
+      <stop offset="0.52" stop-color="#F0F3F9" />
+      <stop offset="1" stop-color="#DCE2ED" />
     </linearGradient>
     <radialGradient id="mobile-bloom" cx="0" cy="0" r="1" gradientTransform="translate(754 210) rotate(132) scale(640)">
-      <stop stop-color="#FFFFFF" stop-opacity="0.96" />
-      <stop offset="0.5" stop-color="#B9C6E8" stop-opacity="0.18" />
+      <stop stop-color="#FFFFFF" />
+      <stop offset="0.5" stop-color="#A8B9E6" stop-opacity="0.28" />
       <stop offset="1" stop-color="#B9C6E8" stop-opacity="0" />
     </radialGradient>
+    <radialGradient id="mobile-ambient" cx="0" cy="0" r="1" gradientTransform="translate(250 850) rotate(-48) scale(680)">
+      <stop stop-color="#829AD0" stop-opacity="0.24" />
+      <stop offset="1" stop-color="#829AD0" stop-opacity="0" />
+    </radialGradient>
     <linearGradient id="mobile-ai" x1="326" y1="244" x2="704" y2="792" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#111318" />
-      <stop offset="1" stop-color="#303746" />
+      <stop stop-color="#07090D" />
+      <stop offset="0.52" stop-color="#181D28" />
+      <stop offset="1" stop-color="#3D485E" />
     </linearGradient>
     <linearGradient id="mobile-human" x1="548" y1="228" x2="790" y2="500" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#168DFF" />
-      <stop offset="1" stop-color="#0069E8" />
-    </linearGradient>`;
+      <stop stop-color="#42A9FF" />
+      <stop offset="0.48" stop-color="#0C84FF" />
+      <stop offset="1" stop-color="#005DCE" />
+    </linearGradient>
+    <linearGradient id="mobile-highlight" x1="300" y1="210" x2="660" y2="690" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.32" />
+      <stop offset="0.42" stop-color="#FFFFFF" stop-opacity="0.06" />
+      <stop offset="0.66" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+    <filter id="mobile-shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#26334D" flood-opacity="0.24" />
+    </filter>`;
   const palette = isTinted
     ? { ai: 'url(#mobile-mono)', human: 'url(#mobile-mono)' }
     : { ai: 'url(#mobile-ai)', human: 'url(#mobile-human)' };
   const body = `  <rect width="1024" height="1024" fill="url(#mobile-surface)" />
+  <rect width="1024" height="1024" fill="url(#mobile-ambient)" />
   <rect width="1024" height="1024" fill="url(#mobile-bloom)" />
-${markLayer(palette, MOBILE_MARK_SCALE)}`;
+  <g filter="url(#mobile-shadow)">
+${markLayer(palette, MOBILE_MARK_SCALE)}
+  </g>
+${markLayer({ ai: 'url(#mobile-highlight)', human: 'url(#mobile-highlight)' }, MOBILE_MARK_SCALE)}`;
   return document(definitions, body);
 }
 
 function mobileAdaptiveIconSvg(palette) {
   const definitions = `
     <linearGradient id="adaptive-ai" x1="326" y1="244" x2="704" y2="792" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#111318" />
-      <stop offset="1" stop-color="#303746" />
+      <stop stop-color="#07090D" />
+      <stop offset="0.52" stop-color="#181D28" />
+      <stop offset="1" stop-color="#3D485E" />
     </linearGradient>
     <linearGradient id="adaptive-human" x1="548" y1="228" x2="790" y2="500" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#168DFF" />
-      <stop offset="1" stop-color="#0069E8" />
+      <stop stop-color="#42A9FF" />
+      <stop offset="0.48" stop-color="#0C84FF" />
+      <stop offset="1" stop-color="#005DCE" />
     </linearGradient>`;
   const rolePalette = typeof palette === 'string'
     ? palette
@@ -205,16 +253,21 @@ function mobileAdaptiveIconSvg(palette) {
 function adaptiveBackgroundSvg() {
   const definitions = `
     <linearGradient id="adaptive-surface" x1="92" y1="70" x2="930" y2="956" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FBFCFF" />
-      <stop offset="0.56" stop-color="#F0F3F9" />
-      <stop offset="1" stop-color="#E4E8F1" />
+      <stop stop-color="#FFFFFF" />
+      <stop offset="0.52" stop-color="#EEF2F8" />
+      <stop offset="1" stop-color="#DCE3EE" />
     </linearGradient>
     <radialGradient id="adaptive-bloom" cx="0" cy="0" r="1" gradientTransform="translate(760 214) rotate(132) scale(650)">
-      <stop stop-color="#FFFFFF" stop-opacity="0.96" />
-      <stop offset="0.52" stop-color="#B8C5E6" stop-opacity="0.18" />
+      <stop stop-color="#FFFFFF" />
+      <stop offset="0.5" stop-color="#A8B9E6" stop-opacity="0.3" />
       <stop offset="1" stop-color="#B8C5E6" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="adaptive-ambient" cx="0" cy="0" r="1" gradientTransform="translate(246 850) rotate(-48) scale(690)">
+      <stop stop-color="#829AD0" stop-opacity="0.26" />
+      <stop offset="1" stop-color="#829AD0" stop-opacity="0" />
     </radialGradient>`;
   const body = `  <rect width="1024" height="1024" fill="url(#adaptive-surface)" />
+  <rect width="1024" height="1024" fill="url(#adaptive-ambient)" />
   <rect width="1024" height="1024" fill="url(#adaptive-bloom)" />`;
   return document(definitions, body);
 }
@@ -223,25 +276,70 @@ function harmonyAppIconSvg() {
   const definitions = `
     <linearGradient id="harmony-surface" x1="92" y1="68" x2="934" y2="960" gradientUnits="userSpaceOnUse">
       <stop stop-color="#FFFFFF" />
-      <stop offset="0.56" stop-color="#F3F5FA" />
-      <stop offset="1" stop-color="#E8EBF3" />
+      <stop offset="0.5" stop-color="#ECF1F8" />
+      <stop offset="1" stop-color="#CFD9E8" />
     </linearGradient>
-    <radialGradient id="harmony-bloom" cx="0" cy="0" r="1" gradientTransform="translate(752 202) rotate(132) scale(654)">
-      <stop stop-color="#FFFFFF" stop-opacity="0.98" />
-      <stop offset="0.5" stop-color="#B8C5E6" stop-opacity="0.2" />
+    <radialGradient id="harmony-bloom" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(752 202) rotate(132) scale(654)">
+      <stop stop-color="#FFFFFF" />
+      <stop offset="0.5" stop-color="#A8B9E6" stop-opacity="0.38" />
       <stop offset="1" stop-color="#B8C5E6" stop-opacity="0" />
     </radialGradient>
+    <radialGradient id="harmony-ambient" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(244 852) rotate(-48) scale(690)">
+      <stop stop-color="#7896CF" stop-opacity="0.34" />
+      <stop offset="1" stop-color="#829AD0" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="harmony-glass-sheen" x1="188" y1="102" x2="838" y2="920" gradientUnits="userSpaceOnUse">
+      <stop offset="0.22" stop-color="#FFFFFF" stop-opacity="0" />
+      <stop offset="0.43" stop-color="#FFFFFF" stop-opacity="0.5" />
+      <stop offset="0.56" stop-color="#FFFFFF" stop-opacity="0.16" />
+      <stop offset="0.73" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+    <radialGradient id="harmony-lens" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(438 420) rotate(49) scale(334)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.96" />
+      <stop offset="0.58" stop-color="#EDF3FB" stop-opacity="0.84" />
+      <stop offset="1" stop-color="#AFC0D8" stop-opacity="0.72" />
+    </radialGradient>
+    <radialGradient id="harmony-lens-glint" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(424 402) rotate(36) scale(176 112)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.86" />
+      <stop offset="0.46" stop-color="#FFFFFF" stop-opacity="0.3" />
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
+    </radialGradient>
     <linearGradient id="harmony-ai" x1="326" y1="244" x2="704" y2="792" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#111318" />
-      <stop offset="1" stop-color="#303746" />
+      <stop stop-color="#05070B" />
+      <stop offset="0.48" stop-color="#1A2130" />
+      <stop offset="1" stop-color="#53627B" />
     </linearGradient>
     <linearGradient id="harmony-human" x1="548" y1="228" x2="790" y2="500" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#168DFF" />
-      <stop offset="1" stop-color="#0069E8" />
-    </linearGradient>`;
+      <stop stop-color="#69BDFF" />
+      <stop offset="0.46" stop-color="#148DFF" />
+      <stop offset="1" stop-color="#0052BB" />
+    </linearGradient>
+    <linearGradient id="harmony-highlight" x1="300" y1="210" x2="660" y2="690" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.52" />
+      <stop offset="0.4" stop-color="#FFFFFF" stop-opacity="0.1" />
+      <stop offset="0.66" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+    <filter id="harmony-shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="24" stdDeviation="26" flood-color="#26334D" flood-opacity="0.34" />
+    </filter>
+    <filter id="harmony-lens-shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#4B6184" flood-opacity="0.22" />
+    </filter>`;
   const body = `  <rect width="1024" height="1024" fill="url(#harmony-surface)" />
+  <rect width="1024" height="1024" fill="url(#harmony-ambient)" />
   <rect width="1024" height="1024" fill="url(#harmony-bloom)" />
-${markLayer({ ai: 'url(#harmony-ai)', human: 'url(#harmony-human)' }, HARMONY_MARK_SCALE)}`;
+  <rect width="1024" height="1024" fill="url(#harmony-glass-sheen)" />
+  <circle cx="512" cy="512" r="224" fill="url(#harmony-lens)" filter="url(#harmony-lens-shadow)" />
+  <circle cx="512" cy="512" r="218" fill="url(#harmony-lens-glint)" />
+  <circle cx="512" cy="512" r="222" fill="none" stroke="#FFFFFF" stroke-opacity="0.72" stroke-width="4" />
+  <g filter="url(#harmony-shadow)">
+${markLayer({ ai: '#0C1423', human: '#004CA8' }, HARMONY_MARK_SCALE, 0, 10)}
+  </g>
+  <g opacity="0.6">
+${markLayer({ ai: '#FFFFFF', human: '#B9E2FF' }, HARMONY_MARK_SCALE, 0, -5)}
+  </g>
+${markLayer({ ai: 'url(#harmony-ai)', human: 'url(#harmony-human)' }, HARMONY_MARK_SCALE)}
+${markLayer({ ai: 'url(#harmony-highlight)', human: 'url(#harmony-highlight)' }, HARMONY_MARK_SCALE)}`;
   return document(definitions, body);
 }
 

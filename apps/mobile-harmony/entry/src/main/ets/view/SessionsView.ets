@@ -59,27 +59,22 @@ struct XopcSessionManagerRow {
   }
   build() {
     if (this.entry.session) {
-      Row({ space: 10 }) {
+      Row({ space: 12 }) {
         if (this.selecting) {
           SymbolGlyph(this.selected ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.circle'))
             .fontSize(24).fontColor([this.selected ? this.colors.accent : this.colors.tertiary])
         }
-        SymbolGlyph($r('sys.symbol.message')).fontSize(24).fontColor([this.colors.secondary])
         Column({ space: 4 }) {
           Text(this.entry.session.displayName || this.entry.session.name || this.entry.session.title || $r('app.string.untitled'))
             .fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis }).opacity(this.entry.session.status === 'archived' ? 0.6 : 1)
-          Row({ space: 6 }) {
-            Text($r('app.string.sessions_message_count', this.entry.session.messageCount)).fontSize(12).fontColor(this.colors.tertiary)
-            if (this.entry.session.status === 'pinned' || this.entry.session.status === 'archived') {
-              Text(this.entry.session.status === 'pinned' ? $r('app.string.sessions_pinned') : $r('app.string.sessions_archived'))
-                .fontSize(12).fontColor(this.colors.secondary)
-            }
+          if (this.entry.session.status === 'pinned' || this.entry.session.status === 'archived') {
+            Text(this.entry.session.status === 'pinned' ? $r('app.string.sessions_pinned') : $r('app.string.sessions_archived'))
+              .fontSize(12).fontColor(this.colors.secondary)
           }
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         Text(this.time()).fontSize(12).fontColor(this.colors.tertiary).maxLines(1)
-        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
-      }.width('100%').constraintSize({ minHeight: 76 }).padding({ left: 14, right: 14, top: 12, bottom: 12 })
+      }.width('100%').constraintSize({ minHeight: 64 }).padding({ left: 16, right: 16, top: 12, bottom: 12 })
         .backgroundColor(this.selected || this.current ? this.colors.active : this.colors.panel)
         .borderRadius(16).margin({ bottom: 8 })
         .id('sessions-row-' + this.entry.session.key).accessibilitySelected(this.selected || this.current).enabled(!this.locked)
@@ -104,6 +99,8 @@ export struct XopcSessionsView {
   @Event onExit: () => void = (): void => {};
   @Event onOpen: (id: string) => void = (_id: string): void => {};
   @Event onNew: (id: string) => void = (_id: string): void => {};
+  @Event onDelete: (id: string) => void = (_id: string): void => {};
+  @Event onUndoDelete: (id: string) => void = (_id: string): void => {};
   @Local sessions: XopcSessionsViewModel = new XopcSessionsViewModel();
   @Local searchOpen: boolean = true;
   @Local renameOpen: boolean = false;
@@ -191,7 +188,7 @@ export struct XopcSessionsView {
     else if (action === 'rename') this.renameItem(item);
     else if (action === 'pin') this.sessions.act([item], item.status === 'pinned' ? 'unpin' : 'pin');
     else if (action === 'archive') this.sessions.act([item], 'archive');
-    else if (action === 'delete') this.sessions.scheduleDelete(item.key);
+    else if (action === 'delete') { this.sessions.scheduleDelete(item.key); this.onDelete(item.key); }
     else if (action === 'select') this.sessions.select(item.key);
   }
   private async shareSession(item: XopcSessionItem): Promise<void> {
@@ -214,7 +211,13 @@ export struct XopcSessionsView {
     this.getUIContext().showAlertDialog({ title: $r('app.string.delete'), message: $r('app.string.sessions_delete_confirm', targets.length),
       primaryButton: { value: $r('app.string.cancel'), action: (): void => {} },
       secondaryButton: { value: $r('app.string.delete'), fontColor: this.colors.danger,
-        action: (): void => { this.sessions.act(targets, 'delete'); } } });
+        action: (): void => { void this.deleteSelected(targets); } } });
+  }
+  private async deleteSelected(targets: XopcSessionItem[]): Promise<void> {
+    await this.sessions.act(targets, 'delete');
+    targets.forEach((item: XopcSessionItem): void => {
+      if (!this.sessions.items.some((remaining: XopcSessionItem): boolean => remaining.key === item.key)) this.onDelete(item.key);
+    });
   }
   @Builder
   sessionMenuSheet() {
@@ -357,7 +360,7 @@ export struct XopcSessionsView {
               ListItem() {
                 XopcSessionManagerRow({ entry: row.item, selecting: this.sessions.selecting,
                   selected: this.sessions.selected.includes(row.item.key), current: row.item.key === this.currentId,
-                  locked: this.sessions.busy || this.sessions.loading,
+                  locked: this.sessions.busy,
                   onOpen: (item: XopcSessionItem): void => { this.open(item); }, onMenu: (item: XopcSessionItem): void => { this.menu(item); } })
               }
             }).key((row: XopcSessionDisplayRow): string => row.key).virtualScroll({ totalCount: this.rows.length })
@@ -377,7 +380,9 @@ export struct XopcSessionsView {
         if (this.sessions.undoId) {
           Row() {
             Text($r('app.string.sessions_deleted')).fontColor(this.colors.foreground).layoutWeight(1)
-            Button($r('app.string.sessions_undo')).id('sessions-undo').height(44).onClick((): void => { this.sessions.undoDelete(); })
+            Button($r('app.string.sessions_undo')).id('sessions-undo').height(44).onClick((): void => {
+              const id = this.sessions.undoId; this.sessions.undoDelete(); this.onUndoDelete(id);
+            })
           }.padding(12).backgroundColor(this.colors.panel)
         }
         if (this.sessions.selecting) { this.batchBar() }

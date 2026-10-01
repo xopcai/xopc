@@ -26,7 +26,7 @@ import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { XopcSection } from '../model/workspace';
 import { accessibility } from '@kit.AccessibilityKit';
 import { COMPOSER_INPUT_MIN, COMPOSER_TOOL_SIZE } from '../common/composerLayout';
-import { XopcChatAttachment, XopcContextRef } from '../model/chat';
+import { XopcChatAttachment, XopcContextRef, XopcSessionItem } from '../model/chat';
 import { quickChatIntake } from '../service/quickChatIntake';
 import { pickChatAttachment } from '../service/chatAttachmentPicker';
 import { pickChatPhoto } from '../service/chatPhotoPicker';
@@ -68,6 +68,8 @@ export struct XopcHomeView {
   @Local pendingChatId: string = '';
   @Local intake: XopcShareIntake = shareIntake;
   private chatRepository: XopcChatRepository = new XopcChatRepository();
+  private deletedChatIds: Set<string> = new Set<string>();
+  private replacementRevision: number = 0;
   private readonly onMotionChange = (reduced: boolean): void => { layoutState.reduceMotion = reduced; };
   private attentionTimer: number = -1;
   private pathStack: NavPathStack = new NavPathStack();
@@ -103,6 +105,8 @@ export struct XopcHomeView {
       return;
     }
     if (route.page === 'chat') {
+      this.replacementRevision++;
+      this.pendingChatId = '';
       this.returnToConversations = false;
       if (route.itemId) { this.requestedChatId = route.itemId; this.requestedChatDraft = ''; this.chatRequestRevision++; }
       this.pathStack.clear(); this.activateTab(0); return;
@@ -177,6 +181,8 @@ export struct XopcHomeView {
   }
 
   private switchToChat(id: string, prompt: string, focusComposer: boolean = false): void {
+    this.replacementRevision++;
+    this.pendingChatId = '';
     this.requestedChatId = id;
     this.requestedChatDraft = prompt;
     this.chatRequestRevision++;
@@ -187,8 +193,39 @@ export struct XopcHomeView {
 
   private openConversationFromList(id: string, focusComposer: boolean): void {
     this.returnToConversations = true;
-    this.pendingChatId = id === this.activeChatId ? '' : id;
+    const pendingId = id === this.activeChatId ? '' : id;
     this.switchToChat(id, '', focusComposer);
+    this.pendingChatId = pendingId;
+  }
+
+  private async replaceDeletedChat(id: string): Promise<void> {
+    this.deletedChatIds.add(id);
+    if (id !== this.activeChatId && id !== this.requestedChatId) return;
+    const revision = ++this.replacementRevision;
+    this.pendingChatId = 'replacement:' + id;
+    try {
+      let offset = 0;
+      let latestId = '';
+      let hasMore = true;
+      while (hasMore && !latestId && revision === this.replacementRevision) {
+        const page = await this.chatRepository.list('', offset, 20, '');
+        latestId = page.items.find((item: XopcSessionItem): boolean => !this.deletedChatIds.has(item.key))?.key ?? '';
+        offset += page.items.length;
+        hasMore = page.hasMore && page.items.length > 0;
+      }
+      if (revision !== this.replacementRevision) return;
+      const replacement = latestId || await this.chatRepository.create();
+      if (revision !== this.replacementRevision) return;
+      this.requestedChatId = replacement;
+      this.requestedChatDraft = '';
+      this.pendingChatId = replacement;
+      this.chatRequestRevision++;
+    } catch (error) {
+      if (revision === this.replacementRevision) {
+        this.pendingChatId = '';
+        this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'collection') });
+      }
+    }
   }
 
   private async sendQuickDraft(): Promise<void> {
@@ -496,7 +533,12 @@ export struct XopcHomeView {
           } }) }
         TabContent() { XopcSessionsView({ embedded: true, bottomInset: this.secondaryBottomRegionHeight, activePage: this.tab === 1 && !this.detailVisible,
           currentId: this.activeChatId, onOpen: (id: string): void => { this.openConversationFromList(id, false); },
-          onNew: (id: string): void => { this.openConversationFromList(id, true); } }) }
+          onNew: (id: string): void => { this.openConversationFromList(id, true); },
+          onDelete: (id: string): void => { void this.replaceDeletedChat(id); },
+          onUndoDelete: (id: string): void => {
+            this.deletedChatIds.delete(id);
+            if (this.pendingChatId === 'replacement:' + id) { this.replacementRevision++; this.pendingChatId = ''; }
+          } }) }
         TabContent() { XopcProgressView({ bottomInset: this.secondaryBottomRegionHeight, activePage: this.tab === 2 && !this.detailVisible, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
         TabContent() { XopcNotesTabView({ activePage: this.tab === 3 && !this.detailVisible,
           bottomInset: this.secondaryBottomRegionHeight,
