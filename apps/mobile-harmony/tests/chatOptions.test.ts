@@ -27,9 +27,17 @@ describe('chat options and queue', () => {
     expect(model.modelId).toBe('p/a'); expect(model.error).toBe('save'); model.dispose();
   });
   it('filters and orders queued messages; never offers cancellation for running inputs', async () => {
-    mock.queue.mockResolvedValue({ conversationId: 'one', inputs: [input('b', 2), input('running', 0, 'running'), input('a', 1)] });
+    mock.queue.mockResolvedValue({ conversationId: 'one', activeRunId: 'run-1', inputs: [input('b', 2), input('running', 0, 'running'), input('a', 1)] });
     const model = new XopcChatOptionsViewModel(); await model.load('one');
     expect(model.queued.map(x => x.id)).toEqual(['a', 'b']); model.dispose();
+  });
+  it('hides the pending turn during preparation but keeps later follow-ups visible', async () => {
+    mock.queue.mockResolvedValue({ conversationId: 'one', preparation: { state: 'preparing' }, inputs: [input('later', 2), input('first', 1)] });
+    const model = new XopcChatOptionsViewModel(); await model.load('one');
+    expect(model.queued.map(x => x.id)).toEqual(['later']);
+    mock.queue.mockResolvedValue({ conversationId: 'one', preparation: { state: 'preparation_failed' }, inputs: [input('later', 2), input('first', 1)] });
+    await model.refreshQueue();
+    expect(model.queued.map(x => x.id)).toEqual(['first', 'later']); model.dispose();
   });
   it('remembers the selected model for this agent only after Gateway confirmation', async () => {
     const model = new XopcChatOptionsViewModel(); mock.config.mockResolvedValueOnce({ model: 'p/a', thinkingLevel: 'high' });
@@ -54,7 +62,7 @@ describe('chat options and queue', () => {
     const entry = input('one-input', 1); const update = { content: '', attachments: [{
       type: 'image', name: 'photo.jpg', mimeType: 'image/jpeg', size: 10, data: 'bytes'
     }] };
-    mock.updateQueued.mockResolvedValue({ conversationId: 'one', inputs: [{ ...entry, ...update, version: 5 }] });
+    mock.updateQueued.mockResolvedValue({ conversationId: 'one', activeRunId: 'run-1', inputs: [{ ...entry, ...update, version: 5 }] });
     expect(await model.updateQueued(entry, update)).toBe(true);
     expect(model.queued[0].attachments?.[0].name).toBe('photo.jpg'); model.dispose();
   });
