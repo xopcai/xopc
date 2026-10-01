@@ -1,3 +1,4 @@
+import { forwardRef, type ComponentProps } from 'react';
 import { Loader2, Pause, Play, RotateCcw, Volume2 } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
@@ -13,19 +14,22 @@ export type ReadAloudLabels = {
   retry: string;
 };
 
-export function ReadAloudButton({
-  input,
-  labels,
-  className,
-  showLabel = false,
-  disabled = false,
-}: {
+export const ReadAloudButton = forwardRef<HTMLButtonElement, {
   input: ReadAloudInput | (() => ReadAloudInput);
   labels: ReadAloudLabels;
   className?: string;
   showLabel?: boolean;
   disabled?: boolean;
-}) {
+  hideNativeTitle?: boolean;
+} & Omit<ComponentProps<'button'>, 'children' | 'onClick' | 'title' | 'aria-label'>>(function ReadAloudButton({
+  input,
+  labels,
+  className,
+  showLabel = false,
+  disabled = false,
+  hideNativeTitle = false,
+  ...buttonProps
+}, ref) {
   const resolvedInput = typeof input === 'function' ? input() : input;
   const source = useReadAloudStore((state) => state.source);
   const status = useReadAloudStore((state) => state.status);
@@ -44,10 +48,12 @@ export function ReadAloudButton({
 
   return (
     <button
+      {...buttonProps}
+      ref={ref}
       type="button"
       onClick={() => requestStart(typeof input === 'function' ? input() : input)}
       disabled={disabled || !resolvedInput.text.trim()}
-      title={label}
+      title={hideNativeTitle ? undefined : label}
       aria-label={label}
       aria-pressed={active && (activeStatus === 'playing' || activeStatus === 'paused')}
       className={cn(
@@ -73,4 +79,4 @@ export function ReadAloudButton({
       {showLabel ? <span>{label}</span> : null}
     </button>
   );
-}
+});
