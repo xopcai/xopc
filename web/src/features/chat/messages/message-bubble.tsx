@@ -25,6 +25,7 @@ import {
 } from '@/features/chat/messages/assistant-copy-utils';
 import { ChunkedContent } from '@/features/chat/messages/message-content-renderer';
 import { AssistantStepsBlock } from '@/features/chat/messages/assistant-steps-block';
+import { ChatActionTooltip, ChatActionTooltipProvider } from '@/features/chat/messages/chat-action-tooltip';
 import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/cn';
@@ -810,17 +811,18 @@ export const MessageBubble = memo(function MessageBubble({
         ) : null}
 
         {assistantActionsVisible && copyMarkdown ? (
+          <ChatActionTooltipProvider>
           <div
             className="mt-2 flex shrink-0 flex-wrap items-center gap-2 overflow-visible"
             onPointerEnter={loadResponseFeedback}
             onFocusCapture={loadResponseFeedback}
           >
+            <ChatActionTooltip label={copyFeedback === 'plain' ? m.chat.messageCopied : m.chat.messageCopyPlainText}>
             <button
               type="button"
               className={messageActionIconButton}
               onClick={handleCopyPlain}
               disabled={!copyPlainText}
-              title={copyFeedback === 'plain' ? m.chat.messageCopied : m.chat.messageCopyPlainText}
               aria-label={copyFeedback === 'plain' ? m.chat.messageCopied : m.chat.messageCopyPlainText}
             >
               {copyFeedback === 'plain' ? (
@@ -829,6 +831,8 @@ export const MessageBubble = memo(function MessageBubble({
                 <Copy className="size-4" strokeWidth={1.75} aria-hidden />
               )}
             </button>
+            </ChatActionTooltip>
+            <ChatActionTooltip label={m.chat.messageReadAloud}>
             <ReadAloudButton
               input={readAloudInput}
               labels={{
@@ -838,26 +842,29 @@ export const MessageBubble = memo(function MessageBubble({
                 resume: m.chat.messageReadAloudResume,
                 retry: m.chat.messageReadAloudRetry,
               }}
+              hideNativeTitle
             />
+            </ChatActionTooltip>
             {onForkAssistantTurn && message.turnId ? (
+              <ChatActionTooltip label={forkBusy ? m.chat.messageForkCreating : m.chat.messageForkFromHere}>
               <button
                 type="button"
                 className={messageActionIconButton}
                 onClick={handleForkAssistantTurn}
                 disabled={forkBusy}
-                title={forkBusy ? m.chat.messageForkCreating : m.chat.messageForkFromHere}
                 aria-label={forkBusy ? m.chat.messageForkCreating : m.chat.messageForkFromHere}
               >
                 <GitFork className="size-4" strokeWidth={1.75} aria-hidden />
               </button>
+              </ChatActionTooltip>
             ) : null}
             {onSaveAssistantAsNote ? (
+              <ChatActionTooltip label={assistantActionFeedback === 'create-note' ? m.chat.messageSavedToNote : m.chat.messageSaveToNote}>
               <button
                 type="button"
                 className={messageActionIconButton}
                 onClick={handleSaveAssistantAsNote}
                 disabled={assistantActionBusy !== null}
-                title={assistantActionFeedback === 'create-note' ? m.chat.messageSavedToNote : m.chat.messageSaveToNote}
                 aria-label={assistantActionFeedback === 'create-note' ? m.chat.messageSavedToNote : m.chat.messageSaveToNote}
               >
                 {assistantActionFeedback === 'create-note' ? (
@@ -866,9 +873,11 @@ export const MessageBubble = memo(function MessageBubble({
                   <FilePlus2 className="size-4" strokeWidth={1.75} aria-hidden />
                 )}
               </button>
+              </ChatActionTooltip>
             ) : null}
             {responseFeedbackEnabled && conversationId && message.timestamp ? (
               <>
+                <ChatActionTooltip label={m.chat.messageHelpful}>
                 <button
                   type="button"
                   className={cn(
@@ -877,12 +886,13 @@ export const MessageBubble = memo(function MessageBubble({
                   )}
                   onClick={() => handleResponseFeedback('helpful')}
                   disabled={responseFeedbackBusy}
-                  title={m.chat.messageHelpful}
                   aria-label={m.chat.messageHelpful}
                   aria-pressed={responseFeedback === 'helpful'}
                 >
                   <ThumbsUp className="size-4" strokeWidth={1.75} aria-hidden />
                 </button>
+                </ChatActionTooltip>
+                <ChatActionTooltip label={m.chat.messageNotHelpful}>
                 <button
                   type="button"
                   className={cn(
@@ -891,28 +901,29 @@ export const MessageBubble = memo(function MessageBubble({
                   )}
                   onClick={() => setResponseFeedbackPromptOpen((open) => !open)}
                   disabled={responseFeedbackBusy}
-                  title={m.chat.messageNotHelpful}
                   aria-label={m.chat.messageNotHelpful}
                   aria-pressed={responseFeedback === 'not_helpful'}
                 >
                   <ThumbsDown className="size-4" strokeWidth={1.75} aria-hidden />
                 </button>
+                </ChatActionTooltip>
                 {responseFeedbackError ? (
                   <span className="text-xs text-danger" role="status">{m.chat.messageFeedbackUnavailable}</span>
                 ) : null}
               </>
             ) : null}
             <Popover.Root>
+              <ChatActionTooltip label={m.chat.messageMoreActions}>
               <Popover.Trigger asChild>
                 <button
                   type="button"
                   className={messageActionIconButton}
-                  title={m.chat.messageMoreActions}
                   aria-label={m.chat.messageMoreActions}
                 >
                   <MoreHorizontal className="size-4" strokeWidth={1.75} aria-hidden />
                 </button>
               </Popover.Trigger>
+              </ChatActionTooltip>
               <Popover.Portal>
                 <Popover.Content
                   side="bottom"
@@ -988,6 +999,7 @@ export const MessageBubble = memo(function MessageBubble({
               </Popover.Portal>
             </Popover.Root>
           </div>
+          </ChatActionTooltipProvider>
         ) : null}
 
         {assistantActionsVisible && responsePersonalContext.length > 0 ? (
