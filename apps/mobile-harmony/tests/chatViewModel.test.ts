@@ -123,6 +123,19 @@ describe('chat history isolation', () => {
     expect(chat.rows).toHaveLength(1); expect(chat.rows[0].sendState).toBeUndefined();
     expect(await chat.retrySend('input-1')).toBe(false); chat.dispose();
   });
+  it('keeps the execution slot on a direct final history response and later refreshes', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    mocks.uuid.mockReturnValue('input-activity'); mocks.send.mockResolvedValue('run');
+    await chat.send('hello');
+    const result = { session: { key: 'one', transcriptId: 't', messages: [
+      { id: 'user-row', role: 'user', content: 'hello', metadata: { clientMessageId: 'input-activity' } },
+      { id: 'assistant-row', role: 'assistant', content: 'done' },
+    ] }, pagination: { hasMore: false } };
+    mocks.history.mockResolvedValue(result); await chat.loadHistory(false);
+    expect(chat.rows[1]).toMatchObject({ id: 'assistant-row', executionActivity: true });
+    await chat.loadHistory(false);
+    expect(chat.rows[1].executionActivity).toBe(true); chat.dispose();
+  });
 
   it('keeps failed messages when switching conversations and isolates retry targets', async () => {
     const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
@@ -489,7 +502,8 @@ describe('chat history isolation', () => {
     await vi.waitFor(() => expect(chat.error).toBe('OFFLINE'));
     expect(chat.liveRow?.live).toBe(false); expect(chat.liveRow?.text).toBe('answer'); expect(chat.liveRow?.blocks?.[0].presentation).toBe('answer');
     mocks.history.mockResolvedValueOnce(page('one', 'answer')); await chat.loadHistory(false);
-    expect(chat.liveRow).toBeUndefined(); expect(chat.rows[0].text).toBe('answer'); chat.dispose();
+    expect(chat.liveRow).toBeUndefined(); expect(chat.rows[0].text).toBe('answer');
+    expect(chat.rows[0].executionActivity).toBe(true); chat.dispose();
   });
   it('recovers ordered rich history on a gap without appending replayed deltas twice', async () => {
     vi.useFakeTimers();

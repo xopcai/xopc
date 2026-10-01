@@ -130,7 +130,7 @@ export struct XopcChatView {
     return latestChatMessageId(this.presentationRows);
   }
   @Computed get presentationRows(): XopcChatRow[] {
-    return chatPresentationRows(this.chat.rows, this.chat.liveRow, this.chat.runId);
+    return chatPresentationRows(this.chat.rows, this.chat.liveRow || this.chat.liveActivityRow, this.chat.runId);
   }
   @Computed get attachmentPreviews(): XopcHistoryMedia[] {
     return this.attachments.map((file: XopcChatAttachment, index: number): XopcHistoryMedia => {
@@ -269,7 +269,7 @@ export struct XopcChatView {
     this.focusComposerOnMount = true; this.focusMountedComposer();
   }
 
-  @Monitor('chat.rows', 'chat.liveRow', 'chat.streaming', 'chat.thinking', 'chat.tool', 'chat.loading')
+  @Monitor('chat.rows', 'chat.liveRow', 'chat.liveActivityRow', 'chat.streaming', 'chat.thinking', 'chat.tool', 'chat.loading')
   onMessageChange(): void {
     if (this.layoutScrollAnimating || !this.visible || (!this.atBottom && !this.initialScrollPending) || this.loadingOlder || (this.chat.loading && !this.chat.cachedHistory)) return;
     clearTimeout(this.scrollTimer);
@@ -443,8 +443,8 @@ export struct XopcChatView {
   }
 
   private assistantBubbleWidth(row: XopcChatRow): string {
+    if (row.live) return '90%';
     if (chatNeedsWideBubble(row)) return '90%';
-    if (row.live && !row.text && !row.blocks?.length) return this.textBubbleWidth(row.progress || '', 132, 272);
     return this.textBubbleWidth(chatAnswerText(row), 64, 272);
   }
 
@@ -980,6 +980,7 @@ export struct XopcChatView {
                 XopcChatMessageContent({ row: item.item, conversationId: this.chat.selectedId, disclosure: this.disclosure,
                   previewEligible: item.item.id !== this.latestMessageId,
                   onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
+                  runStartedAtMs: this.chat.runStartedAtMs, connection: this.chat.connection,
                   reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
                   onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
               }.id('chat-assistant-card-' + item.item.id).width(this.assistantBubbleWidth(item.item))

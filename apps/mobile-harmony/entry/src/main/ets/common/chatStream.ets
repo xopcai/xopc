@@ -1,16 +1,22 @@
-import { XopcChatRow, XopcChatBlock, XopcStreamPayload, XopcTurnOutcome, XopcProductDelivery } from '../model/chat';
+import { XopcChatRow, XopcChatBlock, XopcStreamPayload, XopcTurnOutcome, XopcProductDelivery, XopcLiveActivityTool } from '../model/chat';
 import { chatOutcome, chatReview, refreshChatRow } from './chatRichContent';
+import { reduceChatLiveActivity } from './chatLiveActivity';
 
 /** Compact events reuse the existing run topic, replay cursor and lifecycle. */
 export function reduceChatStream(previous: XopcChatRow | undefined, event: string, payload: XopcStreamPayload, runId: string): XopcChatRow {
   const row: XopcChatRow = previous ? { id: previous.id, role: previous.role, text: previous.text,
     refs: previous.refs, outcome: previous.outcome, turnId: previous.turnId, live: previous.live,
     progress: previous.progress, sourceIds: previous.sourceIds, deliveries: previous.deliveries,
+    activity: previous.activity, activityUpdatedAtMs: previous.activityUpdatedAtMs,
+    executionActivity: previous.executionActivity,
+    activityTools: previous.activityTools?.map((item: XopcLiveActivityTool): XopcLiveActivityTool => ({ id: item.id, kind: item.kind, status: item.status })),
     media: previous.media?.slice(), blocks: previous.blocks?.map((block: XopcChatBlock): XopcChatBlock => ({
       id: block.id, kind: block.kind, text: block.text, segmentId: block.segmentId, presentation: block.presentation,
       review: block.review })) }
-    : { id: 'live:' + runId, role: 'assistant', turnId: runId, text: '', blocks: [], live: true };
+    : { id: 'live:' + runId, role: 'assistant', turnId: runId, text: '', blocks: [], live: true, executionActivity: true };
+  row.executionActivity = true;
   const blocks = row.blocks || [];
+  reduceChatLiveActivity(row, event, payload);
   if (event === 'assistant_delta') {
     const segment = payload.messageId || runId;
     let target = blocks.find((block: XopcChatBlock): boolean => block.kind === 'text' && block.segmentId === segment);
@@ -42,7 +48,7 @@ export function reduceChatStream(previous: XopcChatRow | undefined, event: strin
     const review: XopcChatBlock = { id, kind: 'review', text: '', review: chatReview(payload.review) };
     if (index < 0) blocks.push(review); else blocks[index] = review;
   } else if (event === 'turn_outcome') row.outcome = chatOutcome(payload as Object as XopcTurnOutcome);
-  else if (event === 'progress') row.progress = payload.message || '';
+  else if (event === 'progress') row.progress = '';
   else if (event === 'run_end') {
     row.live = false; row.progress = '';
     blocks.forEach((block: XopcChatBlock): void => {
