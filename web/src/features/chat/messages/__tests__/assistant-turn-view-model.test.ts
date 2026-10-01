@@ -4,6 +4,15 @@ import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-
 import type { Message, ReasoningLevel } from '@/features/chat/messages/messages.types';
 
 describe('buildAssistantTurnViewModel', () => {
+  it('holds a status row before the first event and yields its place to an immediate answer', () => {
+    const empty = buildAssistantTurnViewModel({ message: { role: 'assistant', content: [] }, isStreaming: true, reasoningLevel: 'stream' });
+    expect(empty.workLog.active).toBe(true);
+    expect(empty.answer.showStreamingCursor).toBe(false);
+
+    const answer = buildAssistantTurnViewModel({ message: { role: 'assistant', content: [{ type: 'text', text: 'Hello', presentation: 'answer' }] }, isStreaming: true, reasoningLevel: 'stream' });
+    expect(answer.workLog.active).toBe(false);
+    expect(answer.answer.showStreamingCursor).toBe(true);
+  });
   it('keeps separate deliveries while deduplicating replayed tool calls', () => {
     const delivery = { version: 2, operation: 'updated', presentation: { kind: 'table', items: [], truncated: false } };
     const block = { type: 'tool_use' as const, id: 'query', name: 'xopc_use', status: 'done' as const, details: { delivery } };

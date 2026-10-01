@@ -95,7 +95,7 @@ type ChatSessionStoreActions = {
   ) => void;
   finalizeStreamingTurn: (conversationId: string, message: Message) => void;
   completeProgressiveRender: (conversationId: string, renderKey: string) => void;
-  clearStreamingState: (conversationId: string) => void;
+  clearStreamingState: (conversationId: string, options?: { preservePendingResponse?: boolean }) => void;
   clearSession: (conversationId: string) => void;
   getSessionSnapshot: (conversationId: string) => ChatSessionSlice | undefined;
   seedSessionIfEmpty: (
@@ -110,6 +110,7 @@ type ChatSessionStoreActions = {
     partial: Partial<Pick<ChatSessionSlice, 'sending' | 'streaming'>>,
   ) => void;
   setSessionProgress: (conversationId: string, progress: ProgressState | null) => void;
+  setPendingResponseStatus: (conversationId: string, status: 'sending' | 'waiting') => void;
   setSessionTaskPlan: (conversationId: string, taskPlan: TaskPlanState) => void;
   mutateSessionStreaming: (
     conversationId: string,
@@ -476,12 +477,13 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    clearStreamingState: (conversationId) => {
+    clearStreamingState: (conversationId, options) => {
       const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
         if (!current) return state;
+        if (options?.preservePendingResponse && current.streamingMsg?.pendingResponseStatus) return state;
         return {
           sessions: {
             ...state.sessions,
@@ -558,6 +560,21 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
+    setPendingResponseStatus: (conversationId, status) => {
+      const key = normalizeKey(conversationId);
+      if (!key) return;
+      set((state) => {
+        const current = state.sessions[key];
+        if (!current?.streamingMsg || current.streamingMsg.content.length > 0 || current.streaming) return state;
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: { ...current, streamingMsg: { ...current.streamingMsg, pendingResponseStatus: status } },
+          },
+        };
+      });
+    },
+
     setSessionTaskPlan: (conversationId, taskPlan) => {
       const key = normalizeKey(conversationId);
       if (!key) return;
@@ -588,6 +605,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
         const shell = ensureAssistantMessage(current.streamingMsg, timestamp);
         shell.renderKey ??= `assistant-stream:${key}:${timestamp}`;
         shell.progressiveRender = true;
+        delete shell.pendingResponseStatus;
         mutator(shell);
         return {
           sessions: {
