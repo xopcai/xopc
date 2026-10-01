@@ -78,3 +78,16 @@ export function projectPendingFollowUps(inputs: readonly unknown[]): PendingFoll
     }];
   });
 }
+
+export function projectVisiblePendingFollowUps(state: {
+  inputs: readonly unknown[];
+  activeRunId?: unknown;
+  preparation?: { state?: unknown };
+}): PendingFollowUp[] {
+  const rows = projectPendingFollowUps(state.inputs);
+  if (!state.activeRunId && state.preparation?.state !== 'preparation_failed') {
+    const primaryIndex = rows.findIndex((row) => row.status === 'queued');
+    if (primaryIndex >= 0) rows.splice(primaryIndex, 1);
+  }
+  return rows;
+}
