@@ -7,10 +7,14 @@
     "experimentalDescription": "Computer use is experimental. It may misread the screen or perform incorrect actions. Start with non-critical tasks, watch its progress, and check the results.",
     "control": "Control",
     "desktop": "Desktop applications",
-    "desktopDescription": "Observe and operate one application window using this device’s approval mode.",
-    "approvals": "Action approvals",
-    "approvalsDescription": "Each desktop task needs access to its selected app, and each modifying action needs a separate local confirmation.",
-    "approvalsRequired": "Always required",
+    "desktopDescription": "Observe and operate an application window authorized below.",
+    "appAccess": "Application access",
+    "appAccessDescription": "Authorize an app here once. The agent can then observe and operate it during tasks without a prompt for every step. Window pixels and text go to the computer use model for the task, including agent-specific overrides. The agent should still ask before sending, deleting, purchasing, or other consequential actions. Revoke access or stop control at any time.",
+    "searchApps": "Search applications",
+    "refreshApps": "Refresh apps",
+    "appListError": "Could not read local applications. Check desktop permissions and try again.",
+    "authorizeApp": "Authorize",
+    "revokeApp": "Revoke",
     "stoppedNotice": "Desktop operations stopped. Browser control is unaffected.",
     "pausedNotice": "Desktop control is paused. Automatic retries cannot resume it. Resume here, then start a new task.",
     "resume": "Resume desktop control",
@@ -52,7 +56,7 @@
     "manageModels": "Connect model service",
     "retry": "Retry",
     "nativeError": "Cannot read desktop status. Check the desktop application and try again.",
-    "safety": "OS permissions, single-window limits and sensitive-app restrictions still apply. Browser permissions are separate. Stop here or from the tray at any time; resume manually when ready.",
+    "safety": "App authorization, OS permissions, single-window limits and sensitive-app restrictions still apply. Browser permissions are separate. Stop here or from the tray at any time; resume manually when ready.",
     "states": { "idle": "No active session", "pending_authorization": "Waiting for local authorization", "ready": "Ready", "running": "Running", "pending_action": "Waiting for action approval", "paused": "Paused", "stopped": "Stopped" }
   }
 }

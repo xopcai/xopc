@@ -14,6 +14,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { ComputerModelSettings } from './computer-model-settings';
 
 type DesktopStatus = Awaited<ReturnType<NonNullable<NonNullable<Window['electronAPI']>['computer']>['status']>>;
+type ComputerAccess = Awaited<ReturnType<NonNullable<NonNullable<Window['electronAPI']>['computer']>['access']>>;
 
 function SettingRow({ icon, title, description, children }: {
   icon?: ReactNode; title: string; description?: ReactNode; children?: ReactNode;
@@ -42,6 +43,9 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
   const [notice, setNotice] = useState(false);
   const [desktop, setDesktop] = useState<DesktopStatus | null>(null);
   const [nativeError, setNativeError] = useState(false);
+  const [access, setAccess] = useState<ComputerAccess | null>(null);
+  const [accessError, setAccessError] = useState(false);
+  const [appSearch, setAppSearch] = useState('');
   const native = window.electronAPI?.platform === 'darwin' ? window.electronAPI.computer : undefined;
   const system = window.electronAPI?.platform === 'darwin' ? window.electronAPI.system : undefined;
   useEffect(() => {
@@ -61,6 +65,12 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
     void refresh();
     const timer = window.setInterval(() => { void refresh(); }, 2000);
     return () => { stopped = true; window.clearInterval(timer); };
+  }, [native]);
+  useEffect(() => {
+    if (!native?.access) return;
+    let cancelled = false;
+    void native.access().then(value => { if (!cancelled) { setAccess(value); setAccessError(false); } }).catch(() => { if (!cancelled) setAccessError(true); });
+    return () => { cancelled = true; };
   }, [native]);
 
   const perform = async (action: () => Promise<unknown>) => {
@@ -121,15 +131,34 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
               </span>
             </button>
           </SettingRow>
-          <SettingRow icon={<ShieldCheck className="size-5" />} title={t.approvals} description={t.approvalsDescription}>
-            <span className="rounded-md border border-edge px-2 py-1 text-xs text-fg-muted">{t.approvalsRequired}</span>
-          </SettingRow>
           <SettingRow icon={<Globe className="size-5" />} title={t.browser} description={<>{t.browserDescription}<span className="mt-1 block text-xs">{config?.browser?.enabled ? t.browserEnabled : t.browserDisabled}</span></>}>
             <Button asChild><Link to="/settings/agent-browser">{t.manage}</Link></Button>
           </SettingRow>
         </div>}
       <p className="text-xs leading-relaxed text-fg-muted">{t.safety} {t.lockedDescription}</p>
     </section>
+
+    {native?.access && <section aria-labelledby="computer-app-access-title" className="space-y-3">
+      <h2 id="computer-app-access-title" className="text-sm font-semibold text-fg">{t.appAccess}</h2>
+      <p className="text-sm leading-relaxed text-fg-muted">{t.appAccessDescription}</p>
+      <div className="flex gap-2">
+        <input aria-label={t.searchApps} value={appSearch} onChange={event => setAppSearch(event.target.value)} placeholder={t.searchApps}
+          className="min-w-0 flex-1 rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg" />
+        <Button disabled={busy} onClick={() => { void perform(async () => { setAccess(await native.access()); setAccessError(false); }); }}>{t.refreshApps}</Button>
+      </div>
+      {access ? <div className="max-h-72 overflow-y-auto rounded-xl border border-edge">
+        {access.apps.filter(item => `${item.name} ${item.appId}`.toLocaleLowerCase().includes(appSearch.toLocaleLowerCase())).map(item => {
+          const allowed = access.authorizedAppIds.includes(item.appId);
+          return <div key={item.appId} className="flex items-center justify-between gap-3 border-b border-edge-subtle p-3 last:border-b-0">
+            <div className="min-w-0"><p className="truncate text-sm font-medium text-fg">{item.name}</p><p className="truncate text-xs text-fg-muted">{item.appId}</p></div>
+            <Button disabled={busy} variant={allowed ? 'secondary' : 'primary'} onClick={() => { void perform(async () => {
+              const updated = await native.setAppAccess(item.appId, !allowed);
+              setAccess(current => current ? { ...current, authorizedAppIds: updated.authorizedAppIds } : current);
+            }); }}>{allowed ? t.revokeApp : t.authorizeApp}</Button>
+          </div>;
+        })}
+      </div> : accessError ? <p role="alert" className="text-sm text-danger">{t.appListError}</p> : <Skeleton className="h-28 w-full rounded-xl" />}
+    </section>}
 
     <section aria-labelledby="computer-permissions-title" className="space-y-3">
       <h2 id="computer-permissions-title" className="text-sm font-semibold text-fg">{t.permissions}</h2>
