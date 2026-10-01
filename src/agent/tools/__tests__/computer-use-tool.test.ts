@@ -5,10 +5,9 @@ import { ComputerOperationError } from '../../../computer/errors.js';
 describe('computer tool error signaling', () => {
   const setup = () => {
     const execute = vi.fn(), close = vi.fn();
-    const requestClarification = vi.fn();
     const tool = createComputerUseTool({ runtime: { execute, close } as any,
-      context: () => ({ conversationId: 'owner', runId: 'run' }), requestClarification });
-    return { execute, tool, requestClarification };
+      context: () => ({ conversationId: 'owner', runId: 'run' }) });
+    return { execute, close, tool };
   };
   it('throws structured failures because pi ignores returned isError flags', async () => {
     const f = setup();
@@ -17,13 +16,21 @@ describe('computer tool error signaling', () => {
     const error = await f.tool.execute('call', { op: 'discover', query: 'Example' }, undefined, undefined).catch(error => error);
     expect(JSON.parse(error.message)).toMatchObject({ errorCode: 'COMPUTER_WINDOW_AMBIGUOUS', windows: [{ title: 'Project' }] });
   });
-  it('does not claim stopped when local cancellation has no release acknowledgement', async () => {
+  it('resumes a held action without a chat continuation prompt', async () => {
     const f = setup();
     f.execute.mockResolvedValueOnce({ status: 'pending_action', pending: true, sessionId: 's' })
-      .mockResolvedValueOnce({ status: 'stop_unconfirmed', errorCode: 'COMPUTER_RELEASE_UNCONFIRMED', sessionId: 's' });
-    f.requestClarification.mockResolvedValue({ status: 'answered', answer: '停止电脑操作' });
-    await expect(f.tool.execute('call', { op: 'step', goal: 'Click' }, undefined, undefined)).rejects.toThrow('COMPUTER_RELEASE_UNCONFIRMED');
-    expect(f.execute).toHaveBeenLastCalledWith('owner', { op: 'close' });
+      .mockResolvedValueOnce({ status: 'ready', sessionId: 's', receipt: { dispatch: 'completed' } });
+    await expect(f.tool.execute('call', { op: 'step', goal: 'Click' }, undefined, undefined)).resolves.toMatchObject({ details: { status: 'ready' } });
+    expect(f.execute).toHaveBeenLastCalledWith('owner', { op: 'step', goal: 'Click' }, undefined);
+    expect(f.close).not.toHaveBeenCalled();
+  });
+  it('waits for settings authorization to finish without a chat clarification', async () => {
+    const f = setup();
+    f.execute.mockResolvedValueOnce({ status: 'pending_authorization', pending: true, sessionId: 's' })
+      .mockResolvedValueOnce({ status: 'ready', sessionId: 's', summary: 'Notes window' });
+    await expect(f.tool.execute('call', { op: 'open', appRef: 'app', mode: 'observe', prepare: false }, undefined, undefined))
+      .resolves.toMatchObject({ details: { status: 'ready', summary: 'Notes window' } });
+    expect(f.execute).toHaveBeenLastCalledWith('owner', { op: 'observe' }, undefined);
   });
   it('does not echo raw host errors, keys or exception payloads', async () => {
     const f = setup(); f.execute.mockRejectedValue(new Error('private upstream response'));

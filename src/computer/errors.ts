@@ -42,7 +42,7 @@ export function computerRecovery(code: string): string {
     case 'COMPUTER_RELEASE_UNCONFIRMED': return 'Desktop release was not confirmed. Do not switch to other tools. Stop desktop control locally or restore the endpoint connection, then call close again to confirm release.';
     case 'COMPUTER_MODEL_HTTP_429': return 'The configured model service is rate-limited. No input was dispatched from this model request. Check the service quota and retry only after it resets; do not automatically change providers.';
     case 'COMPUTER_MODEL_HTTP_409': return 'The pinned model deployment changed. No input was dispatched from this model request. Refresh the model catalog and reopen after reviewing the configured screenshot recipient.';
-    case 'COMPUTER_OBSERVATION_CHANGED': return 'No input was dispatched. Observe the changed window and re-plan with fresh evidence; the old approved action was discarded.';
+    case 'COMPUTER_OBSERVATION_CHANGED': return 'No input was dispatched. Observe the changed window and re-plan with fresh evidence; the old proposed action was discarded.';
     case 'COMPUTER_UI_UNSTABLE': return 'No input was dispatched by the unstable attempts. The window changed repeatedly during prediction. Wait for a local state change, then discover/open again; never replay old coordinates.';
     case 'COMPUTER_NO_PROGRESS': return 'Repeated inputs produced no observed progress. Inspect the actual outcome and change the plan; do not keep clicking or repeat a potentially submitted action.';
     case 'COMPUTER_INVALID_INPUT': return 'Read tool_manual(computer_use) and use only the fields documented for this operation. Start with discover; open requires appRef, mode and prepare.';
@@ -50,6 +50,7 @@ export function computerRecovery(code: string): string {
     case 'COMPUTER_READ_ONLY_MODEL_OUTPUT': return 'The GUI model did not provide a read-only answer. No input was executed. Report the limitation; do not retry as an action or change providers.';
     case 'COMPUTER_APP_REF_EXPIRED': return 'Discover the named app again, then use the returned appRef.';
     case 'COMPUTER_APP_NOT_FOUND': return 'Discover again. If absent, ask the user to install the app; do not guess an identifier.';
+    case 'COMPUTER_APP_NOT_AUTHORIZED': return 'This application has not been authorized in the local Computer Use settings. Tell the user where to configure access. Do not request a chat approval or try another control route.';
     case 'COMPUTER_APP_NOT_RUNNING': return 'Open with prepare=true only if the user requested launching the app; otherwise ask them to open it.';
     case 'COMPUTER_WINDOW_REQUIRED': return 'No visible target window. If the task permits bringing the app forward, open with prepare=true; otherwise ask the user to show the window. If preparation already failed, require a local state change before retrying.';
     case 'COMPUTER_WINDOW_AMBIGUOUS': return 'Choose a returned windowRef only when its title matches the task. Otherwise ask the user using window titles, not IDs.';

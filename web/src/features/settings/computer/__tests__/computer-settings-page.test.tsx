@@ -71,8 +71,28 @@ it('changes only computer enablement and links to existing browser and model set
   }));
   expect(container.querySelector('a[href="/settings/agent-browser"]')).not.toBeNull();
   expect(container.querySelector('a[href="/settings/capabilities/models?add=1"]')).not.toBeNull();
-  expect(container.textContent).toContain('始终需要');
+  expect(container.textContent).not.toContain('始终需要');
   expect(container.textContent).not.toContain('Excel');
+});
+
+it('authorizes an application from settings and can revoke it there', async () => {
+  const apps = [{ appId: 'com.example.Notes', name: 'Notes', running: true }];
+  let authorizedAppIds: string[] = [];
+  const setAppAccess = vi.fn(async (appId: string, allowed: boolean) => {
+    authorizedAppIds = allowed ? [appId] : [];
+    return { apps, authorizedAppIds };
+  });
+  window.electronAPI = { platform: 'darwin', computer: {
+    status: async () => ({ connected: true, permissions: { accessibility: true, screenRecording: 'granted' } }),
+    access: async () => ({ apps, authorizedAppIds }), setAppAccess,
+  } } as any;
+  const container = await renderPanel();
+  const button = (label: string) => [...container.querySelectorAll('button')].find(item => item.textContent === label)!;
+  expect(container.textContent).toContain('Notes');
+  await act(async () => button('授权').click());
+  expect(setAppAccess).toHaveBeenCalledWith('com.example.Notes', true);
+  await act(async () => button('撤销').click());
+  expect(setAppAccess).toHaveBeenCalledWith('com.example.Notes', false);
 });
 
 it('disables computer control in the web console', async () => {

@@ -24,7 +24,13 @@ vi.mock('node:fs/promises', () => ({
 vi.mock('../../../src/infra/write-file-atomic.js', () => ({ writeTextAtomic: state.atomicWrite }));
 vi.mock('../../ipc/system-settings-ipc.js', () => ({ showEndpointNotification: vi.fn(), getElectronShellLanguage: () => state.language }));
 vi.mock('../../ipc/file-ipc.js', () => ({ MIME_TYPE_BY_EXTENSION: {} }));
-vi.mock('../cua-driver.js', () => ({ CuaComputerDriver: class { async stop() {} } }));
+vi.mock('../cua-driver.js', () => ({ CuaComputerDriver: class {
+  async discover() { return [{ appId: 'com.example.Notes', name: 'Notes', running: true }]; }
+  async resolveTarget() { return { appId: 'com.example.Notes', pid: 1, processIdentity: '1:1', windowId: '1', width: 800, height: 600, geometryRevision: '1' }; }
+  async observe() { return { target: await this.resolveTarget(), summary: 'Notes', stateDigest: 'stable', focusedEditableRef: 'e1', image: new Uint8Array([1]), mimeType: 'image/png', imageWidth: 800, imageHeight: 600 }; }
+  async perform() {}
+  async stop() {}
+} }));
 vi.mock('../../gateway-compatibility.js', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../gateway-compatibility.js')>(),
   assertGatewayCompatibility: state.compatibility,
@@ -82,6 +88,30 @@ afterEach(async () => {
 });
 
 describe('local computer control', () => {
+  it('uses a settings grant for the app and revokes an active lease without action dialogs', async () => {
+    const desktop = host();
+    const initial = await desktop.computerAccess();
+    expect(initial).toMatchObject({ authorizedAppIds: [], apps: [{ appId: 'com.example.Notes' }] });
+    const discovered = await desktop.broker.command({ op: 'discover', sessionId: 'd', owner: 'owner', query: 'Notes' });
+    const open = () => desktop.broker.command({ op: 'open', sessionId: 's', owner: 'owner', appRef: discovered.apps![0].appRef,
+      mode: 'control', prepare: false, model: { modelRef: 'ali/gui', profile: 'gui-plus-2026-02-26', origin: 'https://example.com', runtimeLocation: 'local' } });
+    await open();
+    await vi.waitFor(() => expect(desktop.broker.snapshot().status).toBe('stopped'));
+    expect(desktop.broker.snapshot().errorCode).toBe('COMPUTER_APP_NOT_AUTHORIZED');
+    await desktop.setComputerAppAccess('com.example.Notes', true);
+    await open();
+    await vi.waitFor(() => expect(desktop.broker.snapshot().status).toBe('ready'));
+    const observed = await desktop.broker.command({ op: 'observe', sessionId: 's', owner: 'owner' });
+    const command = { op: 'act' as const, sessionId: 's', owner: 'owner', envelope: { actionId: 'a1', sessionId: 's',
+      observationId: observed.observation!.id, brokerEpoch: observed.brokerEpoch, generation: observed.generation,
+      grantId: observed.grantId!, deadlineAt: Date.now() + 60_000,
+      action: { kind: 'click' as const, point: { x: 10, y: 10 }, button: 'left' as const, count: 1 as const } } };
+    expect((await desktop.broker.command(command)).status).toBe('pending_action');
+    await vi.waitFor(async () => expect((await desktop.broker.command(command)).receipt?.dispatch).toBe('completed'));
+    expect(state.dialog).not.toHaveBeenCalled();
+    await desktop.setComputerAppAccess('com.example.Notes', false);
+    expect(desktop.broker.snapshot().status).toBe('stopped');
+  });
   it('reports incompatible gateways without registering or endlessly retrying', async () => {
     vi.useFakeTimers();
     state.compatibility.mockRejectedValue(new RealtimeConnectionError('GATEWAY_PROTOCOL_INCOMPATIBLE', false));
