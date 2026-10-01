@@ -170,7 +170,7 @@ export function buildAssistantTurnViewModel({
     answerContent,
     workLog: {
       items: workLogItems,
-      active: isStreaming && workLogItems.length > 0,
+      active: isStreaming && (workLogItems.length > 0 || !answerStarted),
       status: workLogStatus,
       compact: reasoningLevel === 'off',
       expandedByDefault:
@@ -181,7 +181,7 @@ export function buildAssistantTurnViewModel({
     answer: {
       started: answerStarted,
       showStreamingCursor:
-        isStreaming &&
+        isStreaming && answerStarted &&
         (workLogItems.length === 0 || state === 'answering'),
     },
     lifecycle: {
