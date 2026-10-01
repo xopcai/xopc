@@ -43,4 +43,18 @@ describe('Harmony chat tool concise mode', () => {
     expect(stepsView).toContain("block.kind === 'text' && block.presentation === 'narration'");
     expect(stepsView).not.toContain('XopcChatToolView');
   });
+
+  it('keeps one fixed-height execution slot across streaming and completion', () => {
+    const contentView = source('entry/src/main/ets/view/ChatMessageContent.ets');
+    const stepsView = source('entry/src/main/ets/view/ChatStepsView.ets');
+
+    expect(stepsView).toContain(".width('100%').height(36).padding(0)");
+    expect(stepsView).toContain('if (!this.row.live && this.steps.length && this.expanded)');
+    expect(stepsView).toContain('this.expanded ? this.steps.slice(-this.visibleCount) : []');
+    expect(stepsView).not.toContain('this.row.live ? this.steps.slice(-2)');
+    expect(contentView).toContain("block.kind === 'thinking'");
+    expect(contentView).toContain("block.kind === 'tool'");
+    expect(contentView).toContain('(this.row.activityTools || []).length > 0');
+    expect(contentView).toContain('!!this.row.executionActivity');
+  });
 });
