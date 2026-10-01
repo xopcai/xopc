@@ -84,8 +84,10 @@ export class XopcChatOptionsViewModel {
     } catch (error) { if (request === this.queueRequest) this.queueError = (error as Error).message; }
   }
   private applyQueue(state: XopcQueueState): void {
-    this.queued = state.inputs.filter((item: XopcQueuedInput): boolean => item.kind === 'message' && item.status === 'queued')
+    const queued = state.inputs.filter((item: XopcQueuedInput): boolean => item.kind === 'message' && item.status === 'queued')
       .sort((a: XopcQueuedInput, b: XopcQueuedInput): number => a.position - b.position);
+    // The first unclaimed input is the pending turn, not a follow-up.
+    this.queued = !state.activeRunId && state.preparation?.state !== 'preparation_failed' ? queued.slice(1) : queued;
     this.preparation = state.preparation;
     this.queueError = state.preparation?.state === 'preparation_failed' ? state.preparation.lastError || 'SESSION_PREPARATION_FAILED' : '';
   }

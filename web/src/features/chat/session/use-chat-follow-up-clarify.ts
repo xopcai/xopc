@@ -11,7 +11,7 @@ import type { ComposerContextRef } from '@/features/chat/composer/composer.types
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import {
   MAX_PENDING_FOLLOW_UPS,
-  projectPendingFollowUps,
+  projectVisiblePendingFollowUps,
   type PendingFollowUp,
 } from '@/features/chat/follow-up/pending-follow-up.types';
 import { apiFetch } from '@/lib/fetch';
@@ -126,10 +126,14 @@ export function useChatFollowUpClarify(options: {
 
   const applyState = useCallback((raw: unknown) => {
     if (!raw || typeof raw !== 'object') return;
-    const state = raw as { conversationId?: unknown; revision?: unknown; inputs?: unknown };
+    const state = raw as { conversationId?: unknown; revision?: unknown; activeRunId?: unknown; preparation?: { state?: unknown }; inputs?: unknown };
     if (state.conversationId !== conversationIdRef.current || typeof state.revision !== 'number' || !Array.isArray(state.inputs)) return;
     if (state.revision < revisionRef.current) return;
-    const rows = projectPendingFollowUps(state.inputs);
+    const rows = projectVisiblePendingFollowUps({
+      inputs: state.inputs as unknown[],
+      activeRunId: state.activeRunId,
+      preparation: state.preparation,
+    });
     revisionRef.current = state.revision;
     pendingFollowUpsRef.current = rows;
     setPendingFollowUps(rows);
