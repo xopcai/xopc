@@ -252,7 +252,13 @@ export function AssistantStepsBlock({
 
   const headerMain = anyActive ? (
     <>
-      <span key={statusPhase} className="xopc-chat-status-label [overflow-wrap:anywhere]" role="status" aria-live="polite" aria-atomic="true">
+      <span
+        className="xopc-chat-status-label inline-flex min-h-6 items-center [overflow-wrap:anywhere]"
+        data-status-phase={statusPhase}
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         {streamingHeaderText ?? pendingLabel ?? fallbackLabel}
       </span>
       <StepRoundDurationText
@@ -296,7 +302,8 @@ export function AssistantStepsBlock({
         type="button"
         disabled={!showDisclosure}
         className={cn(
-          'flex min-h-11 w-fit max-w-full min-w-0 items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-fg-muted',
+          'flex min-h-11 max-w-full min-w-0 items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-fg-muted',
+          anyActive ? 'w-full' : 'w-fit',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
         )}
         onClick={showDisclosure ? () => setUserExpanded((current) => !(current ?? autoExpanded)) : undefined}

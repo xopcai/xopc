@@ -85,6 +85,7 @@ describe('streaming assistant Markdown rendering', () => {
     progressiveRender = false,
     workLog?: AssistantTurnWorkLogPresentation,
     workspaceConversationId?: string,
+    pendingStatus?: 'sending' | 'waiting',
   ) {
     act(() => {
       root.render(
@@ -93,6 +94,7 @@ describe('streaming assistant Markdown rendering', () => {
             {workLog ? (
               <AssistantStepsBlock
                 workLog={workLog}
+                pendingStatus={pendingStatus}
                 toolLabels={emptyLabels}
                 stepLabels={stepLabels}
                 clusterLabels={clusterLabels}
@@ -116,6 +118,30 @@ describe('streaming assistant Markdown rendering', () => {
       );
     });
   }
+
+  it('updates waiting to thinking inside one stable activity row', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const waiting: AssistantTurnWorkLogPresentation = {
+      items: [], active: true, status: 'running', expandedByDefault: false, compact: false,
+      startedAt: 9_000,
+    };
+
+    render([], true, false, waiting, undefined, 'waiting');
+    const buttonBefore = container.querySelector<HTMLButtonElement>('button');
+    const statusBefore = container.querySelector<HTMLElement>('[data-status-phase="waiting"]');
+    expect(buttonBefore?.classList.contains('w-full')).toBe(true);
+    expect(statusBefore).not.toBeNull();
+
+    render([], true, false, {
+      ...waiting,
+      items: [{ type: 'thinking', text: 'Considering', streaming: true }],
+      expandedByDefault: true,
+    });
+
+    expect(container.querySelector('button')).toBe(buttonBefore);
+    expect(container.querySelector('[data-status-phase="thinking"]')).toBe(statusBefore);
+  });
 
   it('hides ordinary compact activity after completion and never offers a drawer', () => {
     const tool = { type: 'tool_use', id: 'r', name: 'read_file', status: 'done', input: { path: 'secret.txt' } } as const;
