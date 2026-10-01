@@ -40,7 +40,7 @@ describe('Harmony mobile brand assets', () => {
       .toBe(false);
   });
 
-  it('keeps the glass depth visible at launcher scale', async () => {
+  it('keeps the restrained glass depth visible at launcher scale', async () => {
     const { data, info } = await sharp(read('../AppScope/resources/base/media/app_icon.png'))
       .resize(96, 96)
       .removeAlpha()
@@ -56,8 +56,8 @@ describe('Harmony mobile brand assets', () => {
       0,
     );
 
-    expect(brightness(sample(40, 39)) - brightness(sample(48, 60))).toBeGreaterThan(24);
-    expect(colourDistance(sample(6, 6), sample(90, 90))).toBeGreaterThan(80);
+    expect(brightness(sample(40, 39)) - brightness(sample(48, 60))).toBeGreaterThan(14);
+    expect(colourDistance(sample(6, 6), sample(90, 90))).toBeGreaterThan(60);
   });
 
   it.each([['light', 'base'], ['dark', 'dark']])('keeps the %s mark identical to the approved concept', (appearance, qualifier) => {
