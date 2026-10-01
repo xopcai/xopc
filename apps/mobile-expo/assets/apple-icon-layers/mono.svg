@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
-  <g transform="translate(512 512) scale(0.72) translate(-512 -512)">
+  <g transform="translate(512 512) scale(0.76) translate(-512 -512)">
     <svg width="1024" height="1024" viewBox="0 0 1024 1024">
       <title id="title">xopc Human–AI Loop</title>
   <desc id="description">An 80-to-20 loop: AI handles execution while human intention and judgment remain in control.</desc>
