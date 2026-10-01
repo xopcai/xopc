@@ -1,5 +1,25 @@
 # Computer Use implementation ledger
 
+## Settings-based application authorization (2026-10-02)
+
+- A local, owner-editable application allowlist now lives in Computer Use settings.
+  It starts empty, persists in the desktop user-data directory, and is enforced by
+  the main-process broker before window capture and again before input. Revocation
+  stops the active session for that app. The existing OS, target, freshness, budget,
+  sensitive-app and emergency-stop guards still apply.
+- Routine authorized actions no longer show a native per-action dialog. The tool
+  automatically resumes its own held broker states instead of creating a chat
+  clarification solely to click Continue. Agent guidance asks about concrete
+  consequential effects only when the task has not already authorized them.
+- The native driver cannot reliably infer business risk from arbitrary GUI pixels.
+  Consequential-action confirmation currently relies on Agent judgment, and the
+  real-application acceptance matrix remains unrun. This is a deliberate product
+  tradeoff, not a new unattended-operation certification.
+- Verification: focused tool, broker, runtime, settings, access-policy and desktop
+  host tests passed; root/Web typechecks, Web production build, Electron
+  main/preload build and diff whitespace check passed. The real-application
+  acceptance matrix and signed native package were not run for this change.
+
 Status: core macOS preview implemented, platform gateway deployed, and controlled native click/text/stop paths verified. This is not a claim of Codex-quality general desktop automation or completion of the RFC's multi-platform and real-application quality gates.
 
 ## Production hardening implementation (2026-09-21)

@@ -1,6 +1,6 @@
 # Computer Use preview
 
-The current implementation is a locally approved, single-window macOS preview.
+The current implementation is a locally configured, single-window macOS preview.
 It combines a hosted GUI model with an application-owned Cua Driver; it does not
 deploy model weights. It is not yet certified for unattended work or general
 Codex-level task success.
@@ -10,7 +10,7 @@ Codex-level task success.
 1. Use a signed macOS xopc desktop build containing Cua Driver 0.28.2. A browser
    tab alone cannot grant native desktop control.
 2. In Settings → Integrations → Computer use (`#/settings/computer-use`), grant Accessibility and Screen
-   Recording to xopc, then enable computer control.
+   Recording to xopc, enable computer control, and authorize each application you want xopc to use.
 3. Select and save one compatible GUI model from the shared selector in either
    Computer use or Settings → Models. Both edit the same global default:
    - BYOK: `dashscope-cn/gui-plus-2026-02-26`, using your existing Alibaba Beijing
@@ -85,19 +85,21 @@ Enable the native runtime in `xopc.json`:
 
 Choose the inherited Computer Use model in **Settings → Agent defaults**, or set an explicit override in the Agent editor. Agent model selections are stored in SQLite rather than `xopc.json`.
 
-## Approval and stopping
+## Authorization and stopping
 
-By default, the first native dialog identifies the application, model and screenshot
-recipient. A separate native dialog approves each exact input action. Clicking
-Continue in chat only resumes the task; it never grants native permission.
-After action approval, the agent resumes the held action with `step`; `observe`
-is read-only and will not dispatch it.
+Application access is configured on the local Computer use settings page and
+persists until revoked. Only applications selected there can be opened by the
+desktop broker. Ordinary input actions in an authorized application continue
+without a native dialog or a chat continuation prompt. The Agent should ask the
+user only about a concrete consequential effect that the task has not already
+authorized, such as sending, publishing, deleting, or transmitting sensitive
+information. This decision currently depends on Agent judgment; arbitrary GUI
+actions are not reliably classified by the native driver. Use only applications
+and tasks for which that tradeoff is appropriate.
 
-There is no persistent approval bypass. xopc does not reliably classify the
-business risk of arbitrary GUI actions, so application access and each modifying
-action require a local decision. OS permissions, single-window targeting,
-freshness/budget limits and sensitive-app restrictions are enforced in addition
-to those approvals. Browser permissions remain separate.
+Revoking an application stops its active session. OS permissions, single-window
+targeting, freshness/budget limits and sensitive-app restrictions remain in
+force. Browser permissions are separate.
 
 Use **Stop computer control** in settings or the tray. Hiding/minimizing the
 xopc window, disconnecting, locking or suspending also revokes control. The
@@ -144,8 +146,7 @@ the current Gateway.
   preserves the revoked identity; you can retry from the same button. This does
   not grant Computer Use permissions.
 - The configured action budget applies to each input dispatched by `step`.
-  A held action reserves one slot; waiting for approval and resuming that exact
-  action do not consume additional slots.
+  A held action reserves one slot; internal resumption does not consume additional slots.
 - Routes and credentials are frozen per control session. Managed calls pin the
   platform deployment fingerprint; a changed deployment requires a new session.
 - For Chat Completions profiles, one malformed model action can trigger at most
@@ -155,7 +156,7 @@ the current Gateway.
 - No automatic provider fallback, HTTP retry or replay of an uncertain native
   input. A revoked grant fails closed. If a pre-dispatch check positively confirms
   no input and detects changed evidence, the runtime takes one fresh observation
-  and makes a new prediction. The old proposal/approval is discarded. Repeated
+  and makes a new prediction. The old proposal is discarded. Repeated
   changes stop with `COMPUTER_UI_UNSTABLE` rather than dispatching stale coordinates.
 - Failed opens release their sessions and provide an error code, recovery hint,
   and window candidates where appropriate. Tool failures are reported as errors,
@@ -171,8 +172,8 @@ Each session keeps the last six completed input previews in bounded memory. Chat
 Completions profiles receive those previews with the current window, not old
 screenshots. Native Responses sessions keep model state through
 `previous_response_id`; screenshots remain ephemeral. Ordered native action
-batches are serialized through the same one-action approval boundary. A changed
-goal, read-only observation, unconfirmed action, changed post-action window state,
+batches are serialized through the same one-action dispatch boundary. A changed
+goal, read-only observation, changed post-action window state,
 or already-satisfied completion condition discards the remaining batch before
 replanning.
 Repeated identical input on an unchanged observed state stops before a third

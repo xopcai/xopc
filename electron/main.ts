@@ -1197,6 +1197,12 @@ app.whenReady().then(async () => {
     }
   };
   ipcMain.handle('computer:status', (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.snapshot(); });
+  ipcMain.handle('computer:access', async (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.computerAccess(); });
+  ipcMain.handle('computer:set-app-access', async (event, appId: string, allowed: boolean) => {
+    assertMainComputerRenderer(event);
+    if (typeof appId !== 'string' || typeof allowed !== 'boolean') throw new Error('Invalid computer access request');
+    return desktopEndpointHost?.setComputerAppAccess(appId, allowed);
+  });
   ipcMain.handle('computer:stop', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.stopControl(); return { ok: true }; });
   ipcMain.handle('computer:resume', (event) => { assertMainComputerRenderer(event); desktopEndpointHost?.resumeControl(); return desktopEndpointHost?.snapshot(); });
   ipcMain.handle('computer:reenroll', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.reenroll(); return desktopEndpointHost?.snapshot(); });
