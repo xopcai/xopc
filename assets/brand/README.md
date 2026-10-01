@@ -26,16 +26,16 @@ The generator uses four purpose-built compositions:
   `apps/mobile-expo/assets/apple-icon-layers/` keep the background, AI segment,
   human segment, and monochrome mark separate for Icon Composer refinement.
 - **Android adaptive icon:** separate material background, transparent two-colour
-  foreground, and monochrome layer. The mark occupies roughly 56% of the 108dp
-  canvas (about 60dp), inside Android's 66dp safe zone.
+  foreground, and monochrome layer. The mark occupies roughly 59% of the 108dp
+  canvas (about 64dp), inside Android's 66dp safe zone.
 - **Desktop / badge:** platform-specific macOS, Windows, and Linux renders. Small
   desktop sizes remove hairline decoration and enlarge the mark optically so it
   remains legible in window chrome and taskbars.
 
-Harmony's flat launcher icon uses a dedicated optical scale of approximately 62%
-of the canvas with a quiet light-material surface. It intentionally does not copy
-Android adaptive-layer overscan, because Harmony consumes a flat launcher
-resource. Regenerate only Harmony resources with
+Harmony's flat launcher icon uses a dedicated optical scale of approximately 67%
+of the canvas with a liquid-glass lens, directional highlights, and a raised
+two-tone ring. It intentionally does not copy Android adaptive-layer overscan,
+because Harmony consumes a flat launcher resource. Regenerate only Harmony resources with
 `node scripts/generate-brand-assets.mjs --target=harmony`.
 
 The role palette is deliberately compact:

@@ -28,16 +28,36 @@ describe('Harmony mobile brand assets', () => {
   it('keeps a calm optical safe area in the flat launcher icon', async () => {
     const harmony = await artworkBounds(read('../AppScope/resources/base/media/app_icon.png'));
     expect(harmony.canvas).toBe(1024);
-    expect(harmony.width / harmony.canvas).toBeGreaterThan(0.60);
-    expect(harmony.width / harmony.canvas).toBeLessThan(0.64);
-    expect(harmony.height / harmony.canvas).toBeGreaterThan(0.60);
-    expect(harmony.height / harmony.canvas).toBeLessThan(0.64);
+    expect(harmony.width / harmony.canvas).toBeGreaterThan(0.65);
+    expect(harmony.width / harmony.canvas).toBeLessThan(0.69);
+    expect(harmony.height / harmony.canvas).toBeGreaterThan(0.65);
+    expect(harmony.height / harmony.canvas).toBeLessThan(0.69);
     for (const padding of [harmony.left, harmony.top, 1023 - harmony.right, 1023 - harmony.bottom]) {
-      expect(padding / harmony.canvas).toBeGreaterThan(0.17);
-      expect(padding / harmony.canvas).toBeLessThan(0.21);
+      expect(padding / harmony.canvas).toBeGreaterThan(0.14);
+      expect(padding / harmony.canvas).toBeLessThan(0.19);
     }
     expect(existsSync(fileURLToPath(new URL('../AppScope/resources/base/media/app_icon.svg', import.meta.url))))
       .toBe(false);
+  });
+
+  it('keeps the glass depth visible at launcher scale', async () => {
+    const { data, info } = await sharp(read('../AppScope/resources/base/media/app_icon.png'))
+      .resize(96, 96)
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const sample = (x: number, y: number): number[] => {
+      const offset = (y * info.width + x) * info.channels;
+      return Array.from(data.subarray(offset, offset + 3));
+    };
+    const brightness = (rgb: number[]): number => rgb.reduce((sum, channel) => sum + channel, 0) / 3;
+    const colourDistance = (first: number[], second: number[]): number => first.reduce(
+      (sum, channel, index) => sum + Math.abs(channel - second[index]),
+      0,
+    );
+
+    expect(brightness(sample(40, 39)) - brightness(sample(48, 60))).toBeGreaterThan(24);
+    expect(colourDistance(sample(6, 6), sample(90, 90))).toBeGreaterThan(80);
   });
 
   it.each([['light', 'base'], ['dark', 'dark']])('keeps the %s mark identical to the approved concept', (appearance, qualifier) => {

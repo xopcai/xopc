@@ -59,10 +59,10 @@ describe('mobile launcher brand assets', () => {
         bottom = Math.max(bottom, y);
       }
     }
-    expect((right - left + 1) / info.width).toBeGreaterThan(0.54);
-    expect((right - left + 1) / info.width).toBeLessThan(0.58);
-    expect((bottom - top + 1) / info.height).toBeGreaterThan(0.54);
-    expect((bottom - top + 1) / info.height).toBeLessThan(0.58);
+    expect((right - left + 1) / info.width).toBeGreaterThan(0.58);
+    expect((right - left + 1) / info.width).toBeLessThan(0.61);
+    expect((bottom - top + 1) / info.height).toBeGreaterThan(0.58);
+    expect((bottom - top + 1) / info.height).toBeLessThan(0.61);
   });
 
   it('binds Android to separate foreground, background, and monochrome layers', () => {
