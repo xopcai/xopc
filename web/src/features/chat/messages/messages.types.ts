@@ -121,8 +121,15 @@ export interface MessageContextRef {
 }
 
 export interface Message {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'task';
   content: MessageContent[];
+  /** Visible provenance for a background Task update; never model input. */
+  taskTrigger?: {
+    entryId: string;
+    taskId: string;
+    taskTitle: string;
+    kind: 'progress' | 'question' | 'result' | 'failure';
+  };
   /** Client-only delivery state for an optimistic user message. */
   deliveryStatus?: 'sending' | 'failed';
   /** Client-only status shown before the first assistant stream event. */
@@ -133,6 +140,8 @@ export interface Message {
   pendingAppContext?: AppContextEnvelope;
   /** Stable server run identifier used to attribute context and feedback. */
   turnId?: string;
+  /** Separates an unsolicited Agent update from the preceding assistant reply. */
+  startsNewBubble?: boolean;
   /** Client-only identity that survives live-to-persisted message reconciliation. */
   renderKey?: string;
   /** Client-only hint: reveal this live response progressively even if the transport already ended. */

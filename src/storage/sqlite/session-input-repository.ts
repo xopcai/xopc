@@ -132,6 +132,44 @@ export function listActiveSessionInputRuns(): Array<{ conversationId: string; ru
   return rows.map((row) => ({ conversationId: row.conversation_id, runId: row.active_run_id }));
 }
 
+export function listTaskUpdateRunIds(conversationId: string): Set<string> {
+  const rows = getSqliteDatabase().prepare(`SELECT run_id FROM session_inputs
+    WHERE conversation_id = ? AND run_id IS NOT NULL
+      AND json_extract(origin_json, '$.type') = 'system'
+      AND json_extract(origin_json, '$.source') = 'task_update'`)
+    .all(conversationId) as Array<{ run_id: string }>;
+  return new Set(rows.map((row) => row.run_id));
+}
+
+export type TaskUpdateTrigger = {
+  entryId: string;
+  taskId: string;
+  taskTitle: string;
+  kind: 'progress' | 'question' | 'result' | 'failure';
+};
+
+/** Safe, user-facing provenance for task update turns; worker text stays on the board. */
+export function listTaskUpdateTriggers(conversationId: string): Map<string, TaskUpdateTrigger> {
+  const rows = getSqliteDatabase().prepare(`SELECT input.run_id, entry.entry_id, entry.task_id,
+      task.title AS task_title, entry.kind
+    FROM session_inputs input
+    JOIN task_collaboration_entries entry ON entry.entry_id =
+      substr(input.client_message_id, length('task-main-update:') + 1, 36)
+    JOIN tasks task ON task.task_id = entry.task_id
+    WHERE input.conversation_id = ? AND input.run_id IS NOT NULL
+      AND input.client_message_id LIKE 'task-main-update:%'
+      AND json_extract(input.origin_json, '$.type') = 'system'
+      AND json_extract(input.origin_json, '$.source') = 'task_update'
+      AND entry.kind IN ('progress', 'question', 'result', 'failure')`)
+    .all(conversationId) as Array<{
+      run_id: string; entry_id: string; task_id: string; task_title: string;
+      kind: TaskUpdateTrigger['kind'];
+    }>;
+  return new Map(rows.map((row) => [row.run_id, {
+    entryId: row.entry_id, taskId: row.task_id, taskTitle: row.task_title, kind: row.kind,
+  }]));
+}
+
 /** Durable active runs with the claimed input metadata needed by runtime policy surfaces. */
 export function listActiveSessionInputExecutions(): Array<{
   conversationId: string;

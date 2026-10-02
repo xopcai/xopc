@@ -114,6 +114,8 @@
     { "name": "sessions_select", "value": "Select conversations" },
     { "name": "sessions_rename", "value": "Rename" },
     { "name": "sessions_selected", "value": "%d selected" },
+    { "name": "sessions_expand_tasks", "value": "Expand delegated tasks" },
+    { "name": "sessions_collapse_tasks", "value": "Collapse delegated tasks" },
     { "name": "sessions_message_count", "value": "%d messages" },
     { "name": "sessions_pinned", "value": "Pinned" },
     { "name": "sessions_archived", "value": "Archived" },

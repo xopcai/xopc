@@ -78,6 +78,8 @@ export class TurnCoordinator {
   reset(): void { this.invalidatePendingDecision(); this.parts.clear(); }
   restore(id: string, text: string): void { this.invalidatePendingDecision(); this.parts.set(id, { text, stopped: true }); }
 
+  isIdle(): boolean { return this.parts.size === 0 && this.timer === undefined; }
+
   private text(): string { return [...this.parts.values()].map(part => part.text ?? '').filter(Boolean).join(' '); }
   private invalidatePendingDecision(): void { this.decisionGeneration += 1; clearTimeout(this.timer); this.timer = undefined; }
 

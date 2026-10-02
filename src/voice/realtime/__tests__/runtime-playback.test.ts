@@ -46,7 +46,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     socket.send(JSON.stringify({ protocolVersion: VOICE_REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), sentAt: Date.now(), type, payload }));
   }
 
-  async function start(bargeIn = true, recordInterruption = async () => {}) {
+  async function start(bargeIn = true, recordInterruption = async () => {}, initialUserTurn = true) {
     abortStt = vi.fn();
     events = [];
     frames = [];
@@ -60,13 +60,15 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
       tools: { media: { audio: { enabled: true, provider: 'alibaba', providers: { alibaba: { apiKey: 'test-stt' } } } } },
       messages: { tts: { enabled: true, provider: 'alibaba', providers: { alibaba: { apiKey: 'test-tts', voice: 'Cherry' } } } },
     });
+    const delegate = vi.fn(async () => ({ taskId: 'voice-task', runId: 'voice-run',
+      events: (async function* () { yield { type: 'assistant_delta', payload: { delta: 'Hello.' } }; })() }));
     runtime = new VoiceRealtimeRuntime({
       getConfig: () => config,
       getSessionIdentity: async () => 'durable-session',
       sessionExists: async () => true,
       sessionBusy: () => false,
       agentBroker: {
-        delegate: async () => ({ taskId: 'voice-task', runId: 'voice-run', events: (async function* () { yield { type: 'assistant_delta', payload: { delta: 'Hello.' } }; })() }),
+        delegate,
         cancel: async () => true,
       },
       recordInterruption,
@@ -88,12 +90,36 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     await once(socket, 'open');
     send('session.start', { sessionId: session.sessionId, ticket: session.ticket });
     await vi.waitFor(() => expect(events.some((event) => event.type === 'session.ready')).toBe(true));
+    if (!initialUserTurn) return { delegate };
     onSttEvent({ type: 'transcript_final', utteranceId: 'u1', revision: 1, text: 'Hi' });
     await vi.waitFor(() => expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(96_000));
     const created = events.find((event) => event.type === 'response.created');
     if (created?.type !== 'response.created') throw new Error('Response was not created');
     responseId = created.payload.responseId;
+    return { delegate };
   }
+
+  it('delivers a background Task update through the live assistant call', async () => {
+    const { delegate } = await start(true, async () => {}, false);
+    const conversationId = 'agent:main:webchat:default:direct:voice';
+    expect(runtime.canOfferTaskUpdate(conversationId)).toBe(true);
+    const delivery = runtime.offerTaskUpdate({ conversationId, clientMessageId: 'task-main-update:entry-1',
+      content: 'Summarize the worker result' });
+    await vi.waitFor(() => expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(96_000));
+    const created = events.find((event) => event.type === 'response.created');
+    if (created?.type !== 'response.created') throw new Error('Task update response was not created');
+    responseId = created.payload.responseId;
+    expect(delegate).toHaveBeenCalledWith(expect.objectContaining({
+      clientMessageId: 'task-main-update:entry-1', origin: { type: 'system', source: 'task_update' },
+    }));
+    expect(runtime.canOfferTaskUpdate(conversationId)).toBe(false);
+    send('response.audio.played', { responseId, playedDurationMs: 2_000 });
+    await vi.waitFor(() => expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(192_000));
+    send('response.audio.played', { responseId, playedDurationMs: 4_000 });
+    await expect(delivery).resolves.toBe(true);
+    expect(events.some((event) => event.type === 'session.error')).toBe(false);
+    expect(runtime.canOfferTaskUpdate(conversationId)).toBe(true);
+  });
 
   async function roundTrip() {
     const pongs = events.filter((event) => event.type === 'session.pong').length;

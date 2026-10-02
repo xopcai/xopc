@@ -23,6 +23,10 @@ import { TaskHandoffService } from '../../../tasks/task-handoff-service.js';
 import { enqueueTaskChangedEvent } from '../../../tasks/task-change-events.js';
 import { TaskRepository } from '../../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
+import { TaskCollaborationRepository } from '../../../tasks/task-collaboration-repository.js';
+import { getTaskOrchestrationMetrics } from '../../../tasks/task-orchestration-metrics.js';
+import { hasGatewayScope } from '../../security/gateway-scopes.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { ProjectOperatingViewService } from '../../../tasks/project-operating-view-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { submitSessionInput } from './session-input-handler.js';
@@ -46,6 +50,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   const tasks = new TaskRepository();
   const runs = new TaskRunRepository();
   const conversations = new TaskConversationRepository();
+  const collaboration = new TaskCollaborationRepository();
   const conversationQuery = new TaskConversationQueryService(deps.service.sessions);
   const handoffs = new TaskHandoffService({
     sessionIndex: deps.service.sessionIndexInstance,
@@ -90,10 +95,67 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     catch (error) { return capabilityHttpError(c, error); }
   });
 
+  authenticated.get('/api/tasks/orchestration-metrics', async (c) => {
+    if (!hasGatewayScope(getGatewayPrincipal(c).scopes, 'tasks.read')) return c.json({ ok: false, error: 'Forbidden' }, 403);
+    const since = c.req.query('since') === undefined ? undefined : Number(c.req.query('since'));
+    if (since !== undefined && (!Number.isInteger(since) || since < 0)) {
+      return c.json({ ok: false, error: 'Invalid since timestamp' }, 400);
+    }
+    return c.json({ ok: true, metrics: getTaskOrchestrationMetrics(since) });
+  });
+
   authenticated.get('/api/tasks/:id', async (c) => {
     try {
       return c.json(await capabilities.call('xopc.tasks.get', { id: c.req.param('id') }, capabilityHttpContext(c)));
     } catch (error) { return capabilityHttpError(c, error); }
+  });
+
+  authenticated.get('/api/tasks/:id/collaboration', async (c) => {
+    if (!hasGatewayScope(getGatewayPrincipal(c).scopes, 'tasks.read')) return c.json({ ok: false, error: 'Forbidden' }, 403);
+    const taskId = c.req.param('id');
+    if (!tasks.get(taskId)) return c.json({ ok: false, error: 'Task not found' }, 404);
+    const afterSequence = Number(c.req.query('afterSequence') ?? 0);
+    const beforeSequence = c.req.query('beforeSequence') === undefined ? undefined : Number(c.req.query('beforeSequence'));
+    const limit = Number(c.req.query('limit') ?? 50);
+    if (!Number.isInteger(afterSequence) || afterSequence < 0 || !Number.isInteger(limit) || limit < 1
+      || (beforeSequence !== undefined && (!Number.isInteger(beforeSequence) || beforeSequence < 1))) {
+      return c.json({ ok: false, error: 'Invalid cursor or limit' }, 400);
+    }
+    return c.json({ ok: true, items: c.req.query('recent') === '1'
+      ? collaboration.recent(taskId, beforeSequence, limit)
+      : collaboration.list(taskId, afterSequence, limit) });
+  });
+
+  authenticated.post('/api/tasks/:id/collaboration', taskRateLimit, async (c) => {
+    const principal = getGatewayPrincipal(c);
+    if (!hasGatewayScope(principal.scopes, 'tasks.write')) return c.json({ ok: false, error: 'Forbidden' }, 403);
+    const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+    const kind = body?.kind;
+    const content = body?.body;
+    if ((kind !== 'instruction' && kind !== 'question' && kind !== 'answer')
+      || typeof content !== 'string' || !content.trim() || content.length > 8000) {
+      return c.json({ ok: false, error: 'Invalid collaboration message' }, 400);
+    }
+    const causationId = typeof body?.causationId === 'string' ? body.causationId : undefined;
+    if (kind === 'answer' && (!causationId || collaboration.get(causationId)?.taskId !== c.req.param('id')
+      || collaboration.get(causationId)?.kind !== 'question')) {
+      return c.json({ ok: false, error: 'Answer must reference a question on this Task' }, 400);
+    }
+    try {
+      const task = tasks.get(c.req.param('id'));
+      if (!task) return c.json({ ok: false, error: 'Task not found' }, 404);
+      if (task.phase === 'closed') {
+        return c.json({ ok: false, error: 'Task is closed' }, 409);
+      }
+      const entry = collaboration.append({ taskId: c.req.param('id'), authorKind: 'user',
+        authorId: principal.principalId, kind, body: content,
+        ...(causationId ? { causationId } : {}),
+        idempotencyKey: c.req.header('idempotency-key') ?? randomUUID(), deliverToWorker: true });
+      deps.service.dispatchTaskRuns();
+      return c.json({ ok: true, entry }, 201);
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 409);
+    }
   });
 
   authenticated.post('/api/tasks/:id/conversation', taskRateLimit, async (c) => {

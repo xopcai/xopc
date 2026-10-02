@@ -98,6 +98,7 @@ import {
 import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
 import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
 import { TaskRunDispatcher } from '../tasks/task-run-dispatcher.js';
+import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { TaskSignalService } from '../tasks/task-signal-service.js';
 import { createRuntimeBrowserAutomationService, type BrowserAutomationService } from '../browser/automations/index.js';
 
@@ -138,6 +139,10 @@ import {
 } from '../connectors/learning-coordinator.js';
 import { GatewaySceneHost } from './scenes/host.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
+import { TaskCollaborationDelivery } from '../tasks/task-collaboration-delivery.js';
+import { TaskMainUpdateDelivery } from '../tasks/task-main-update-delivery.js';
+import { TaskMainUpdateDecisionService } from '../tasks/task-main-update-decision-service.js';
+import { selectTaskMainUpdateAttempt, submitAndConfirmTaskMainUpdate } from '../tasks/task-main-update-input.js';
 import type { SceneAccess } from '../scenes/httpServices.js';
 import { createProductDispatcher } from '../capabilities/runtime/product.js';
 import { prepareAppContext, checkAppContextAccess } from './service/app-context-access.js';
@@ -817,7 +822,7 @@ export class GatewayService {
               return;
             }
           }
-          const clientMessageId = `task:${runId}`;
+          const clientMessageId = new TaskRunRepository().nextAgentInputClientMessageId(runId);
           const session = await this.sessionIndex.getSessionMetadata(conversationId);
           if (!session) throw new Error('Task session is unavailable');
           insertSessionInput({ id: crypto.randomUUID(), conversationId, clientMessageId, expectedTranscriptId: session.transcriptId,
@@ -853,6 +858,17 @@ export class GatewayService {
     this.projects.flushCommittedEffects();
     this._workDiscovery?.dispatchProjectUnderstanding();
     this.dispatchTaskEvents();
+    await new TaskCollaborationDelivery().drain(async (input) => {
+      const state = this.agentRunner.inputs.snapshot(input.conversationId);
+      const result = await this.agentRunner.submitSessionInput({
+        conversationId: input.conversationId,
+        clientMessageId: input.clientMessageId,
+        delivery: state.activeRunId ? 'steer' : 'next',
+        content: input.content,
+        origin: { type: 'system', source: 'workflow' },
+      });
+      return result.ok;
+    });
     this.createTaskRunDispatcher().dispatch();
     await this.createWorkflowRunService().dispatchTaskRuns();
   }, (err) => {
@@ -860,8 +876,48 @@ export class GatewayService {
     log.error({ err, errorMessage, phase: 'task_run_dispatch' }, `Task dispatch failed: ${errorMessage}`);
   });
 
+  private readonly taskMainUpdateDispatch = createBackgroundTask(async () => {
+    await new TaskMainUpdateDelivery().drain({
+      isAvailable: (conversationId) => {
+        const state = this.agentRunner.inputs.snapshot(conversationId);
+        return !state.activeRunId && state.inputs.every((item) => item.status === 'interrupted')
+          && (!this.voiceRealtime.hasConversation(conversationId)
+            || this.voiceRealtime.canOfferTaskUpdate(conversationId));
+      },
+      decide: (input) => new TaskMainUpdateDecisionService({
+        getModelRef: (conversationId) => this.ensureAgentService().getModelForSession(conversationId),
+        loadHistory: (conversationId) => this.sessionIndex.loadMessages(conversationId),
+      }).decide(input),
+      submitAndConfirm: (input) => {
+        if (this.voiceRealtime.hasConversation(input.conversationId)) {
+          const attempt = selectTaskMainUpdateAttempt(input.conversationId, input.clientMessageId, findSessionInput);
+          if (attempt.kind === 'completed') return Promise.resolve(true);
+          if (attempt.kind !== 'new' || !attempt.clientMessageId) return Promise.resolve(false);
+          return this.voiceRealtime.offerTaskUpdate({ ...input, clientMessageId: attempt.clientMessageId });
+        }
+        return submitAndConfirmTaskMainUpdate(input, {
+          findInput: findSessionInput,
+          submit: async (message) => {
+            const result = await this.agentRunner.submitSessionInput({
+              ...message,
+              delivery: 'next',
+              origin: { type: 'system', source: 'task_update' },
+            });
+            return result.ok;
+          },
+          waitForCompletion: (conversationId, clientMessageId) =>
+            this.agentRunner.inputs.waitForCompletion(conversationId, clientMessageId),
+        });
+      },
+    });
+  }, (err) => {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    log.error({ err, errorMessage, phase: 'task_main_update_dispatch' }, `Main Agent update dispatch failed: ${errorMessage}`);
+  });
+
   dispatchTaskRuns(): void {
     this.taskRunDispatch();
+    this.taskMainUpdateDispatch();
   }
 
   async ensureTaskConversation(
@@ -2173,7 +2229,8 @@ export class GatewayService {
     }
     if (event.type.startsWith('task.')) this.emit(event.type, event.payload);
     if (this.config.userContext.homeIntelligence.refreshOnContextChange
-      && (event.type.startsWith('task.') || event.type.startsWith('project.'))) {
+      && (event.type.startsWith('task.') && event.type !== 'task.collaboration_entry_added'
+        || event.type.startsWith('project.'))) {
       const payload = event.payload as Record<string, unknown>;
       const objectId = event.type.startsWith('task.') ? payload.taskId : payload.projectId;
       const revision = payload.version ?? payload.revision ?? 'unknown';

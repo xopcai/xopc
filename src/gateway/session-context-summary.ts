@@ -13,6 +13,8 @@ import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
 import { TaskRepository } from '../tasks/task-repository.js';
+import { TaskOriginRepository } from '../tasks/task-origin-repository.js';
+import { TaskCollaborationRepository } from '../tasks/task-collaboration-repository.js';
 import { createLogger } from '../utils/logger.js';
 import { hasGatewayScope, type GatewayScope } from './security/gateway-scopes.js';
 
@@ -89,6 +91,15 @@ export async function getSessionContextSummary(
       const task = taskId ? new TaskRepository().get(taskId) : undefined;
       if (task) summary.work.task = { id: task.id, title: task.title.slice(0, 240), phase: task.phase };
       else if (taskId) unavailable('work');
+      const delegated = new TaskOriginRepository().list(conversationId, 20);
+      const board = new TaskCollaborationRepository();
+      summary.work.delegatedTasks = delegated.items.map((item) => {
+        const latest = board.latest(item.id);
+        return { ...item, title: item.title.slice(0, 240),
+          ...(latest ? { latestUpdate: { kind: latest.kind, body: latest.body.slice(0, 400),
+            createdAt: latest.createdAt } } : {}) };
+      });
+      summary.work.delegatedTaskCount = delegated.total;
     } catch (err) { unavailable('work', err); }
   } else unavailable('work');
 

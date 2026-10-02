@@ -29,7 +29,7 @@ import type { ModelManager } from '../models/index.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
 import { resolveImageHandlingStrategy } from '../image/vision-detection.js';
-import { buildTaskExecutionDirective } from '../../tasks/task-context-assembler.js';
+import { buildDelegatedTaskDirective, buildTaskExecutionDirective } from '../../tasks/task-context-assembler.js';
 import { prependAgentContext } from '../context/prepend.js';
 
 export interface HydratePerTurnStateDeps {
@@ -187,7 +187,8 @@ export async function runDirectAgentTurn(
   );
   const userMessageForModel = prependAgentContext(
     sourceEnrichedMessage,
-    buildTaskExecutionDirective(input.conversationId),
+    [buildTaskExecutionDirective(input.conversationId), buildDelegatedTaskDirective(input.conversationId)]
+      .filter(Boolean).join('\n'),
   );
   const modelRef = deps.modelManager.getModelForSession(input.conversationId);
   const llmTurn = await hydrateUserTurnForLlm({

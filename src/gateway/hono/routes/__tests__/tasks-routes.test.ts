@@ -14,6 +14,7 @@ import {
 import { TaskConversationRepository } from '../../../../tasks/task-conversation-repository.js';
 import { TaskRepository } from '../../../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../../../tasks/task-run-repository.js';
+import { TaskCollaborationRepository } from '../../../../tasks/task-collaboration-repository.js';
 import { registerTaskRoutes } from '../tasks.js';
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 
@@ -67,6 +68,35 @@ describe('task routes', () => {
     expect(response.status).toBe(200);
     expect(abortAgentRun).toHaveBeenCalledWith('live-run');
     expect(new TaskRunRepository().listActiveWaits(task.id)[0]?.kind).toBe('paused');
+  });
+
+  it('accepts an authenticated task instruction and reads it back by sequence', async () => {
+    const task = new TaskRepository().create({ title: 'Collaborate', objective: 'Review options' });
+    const response = await app.request(`/api/tasks/${task.id}/collaboration`, { method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': 'route-instruction' },
+      body: JSON.stringify({ kind: 'instruction', body: 'Compare option B' }) });
+    expect(response.status).toBe(201);
+    expect(new TaskCollaborationRepository().pendingDeliveries()).toHaveLength(1);
+    const read = await app.request(`/api/tasks/${task.id}/collaboration?afterSequence=0`);
+    expect(read.status).toBe(200);
+    await expect(read.json()).resolves.toMatchObject({ ok: true,
+      items: [{ sequence: 1, body: 'Compare option B', deliveryStatus: 'pending' }] });
+    const duplicate = await app.request(`/api/tasks/${task.id}/collaboration`, { method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': 'route-instruction' },
+      body: JSON.stringify({ kind: 'instruction', body: 'Compare option B' }) });
+    expect(duplicate.status).toBe(201);
+    expect(new TaskCollaborationRepository().list(task.id)).toHaveLength(1);
+    const unrelatedAnswer = await app.request(`/api/tasks/${task.id}/collaboration`, { method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'answer', body: 'Yes', causationId: 'unknown' }) });
+    expect(unrelatedAnswer.status).toBe(400);
+  });
+
+  it('reports orchestration metrics on the authenticated task route', async () => {
+    const response = await app.request('/api/tasks/orchestration-metrics');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ok: true,
+      metrics: { delegatedTasks: 0, pendingDeliveries: 0, interruptedRuns: 0 } });
   });
 
   it.each(['/new', '/RESET prompt', '/restart', '/clear', '/archive'])(

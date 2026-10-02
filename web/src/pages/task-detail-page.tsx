@@ -22,6 +22,7 @@ import { DependencyPicker, type DependencyCandidate } from '@/features/tasks/dep
 import { taskChatHref, taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { cancelTaskRun, commandTask, deleteTask, handoffTask, submitTaskFeedback, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
 import { TaskResultEvidence } from '@/features/tasks/task-result-evidence';
+import { TaskCollaborationPanel } from '@/features/tasks/task-collaboration-panel';
 import { taskCopy } from '@/features/tasks/task-copy';
 import { hasTaskEditConflict, optimisticallyPatchTask, type TaskEditBase } from '@/features/tasks/task-detail-sync';
 import { useTaskDetail } from '@/features/tasks/use-task-detail';
@@ -766,6 +767,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
       {detail.attention.length > 0 ? <section className={cn('mb-4 rounded-xl border border-warning/20 bg-warning/10 p-4', recentlyChanged('attention') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h2><ul className="mt-2 space-y-1.5 text-sm leading-6 text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`} className="flex flex-wrap items-start justify-between gap-2"><span className="min-w-0 flex-1">{item.summary}</span>{item.kind === 'input_required' || item.kind === 'approval_required' ? <Link className="inline-flex min-h-11 items-center rounded-lg bg-surface-panel px-3 text-sm font-medium text-accent" to={taskChatHref(taskId)}>{language === 'zh' ? (item.kind === 'approval_required' ? '查看并决定' : '补充信息') : (item.kind === 'approval_required' ? 'Review decision' : 'Provide information')}</Link> : null}</li>)}</ul></section> : null}
 
       {detail.task.phase !== 'closed' && !pausedWait && detail.waits.filter(wait => (wait.kind === 'user_input' || (wait.kind === 'approval' && typeof wait.condition.capability === 'string')) && wait.condition.type !== 'connection').map(wait => <TaskInputCard key={wait.id} wait={wait} detail={detail} zh={language === 'zh'} onUpdated={updated => { void mutateDetail(updated, { revalidate: false }); }} />)}
+
+      <div className="mb-4"><TaskCollaborationPanel key={taskId} taskId={taskId} /></div>
 
       <div className="flex flex-col gap-4">
         <main className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface divide-y divide-edge-subtle">
