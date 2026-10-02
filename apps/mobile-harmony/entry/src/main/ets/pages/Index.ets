@@ -22,6 +22,8 @@ struct XopcIndex {
   @Local showHelp: boolean = false;
   @Local scanning: boolean = false;
   @Local contentHeight: number = 0;
+  @Local viewportWidth: number = 0;
+  @Local viewportHeight: number = 0;
   @Local call: XopcVoiceCall = voiceCall;
   @Local preferences: XopcSettings = appSettings;
   private invitationEditor: TextAreaController = new TextAreaController();
@@ -194,8 +196,11 @@ struct XopcIndex {
         .onAreaChange((_previous: Area, current: Area): void => { this.contentHeight = Number(current.height); })
     }
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
-    XopcVoiceCallView({ call: this.call })
+    XopcVoiceCallView({ call: this.call, viewportWidth: this.viewportWidth, viewportHeight: this.viewportHeight })
     }.width('100%').height('100%')
+      .onAreaChange((_previous: Area, current: Area): void => {
+        this.viewportWidth = Number(current.width); this.viewportHeight = Number(current.height);
+      })
     }
   }
 }

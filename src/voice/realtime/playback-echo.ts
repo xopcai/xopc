@@ -33,10 +33,15 @@ export function isLikelyPlaybackEcho(transcript: string, assistantText: string):
   const containsCjk = /\p{Script=Han}/u.test(heard);
   if (heard.length < (containsCjk ? 3 : 6)) return false;
   if (spoken.includes(heard)) return true;
+  // Keep the edit-distance fallback bounded for long model and ASR output.
+  if (heard.length > 200 || spoken.length > 8_000) return false;
 
   // Speaker echo is often finalized with one or two dropped/substituted
   // characters. Keep fuzzy matching limited to substantial utterances so
   // short, intentional interruptions such as "停一下" and "wait" survive.
+  if (containsCjk && heard.length >= 4 && heard.length <= 5) {
+    return closestSubstringEditDistance(heard, spoken) <= 1;
+  }
   if (heard.length < (containsCjk ? 6 : 10)) return false;
   const distance = closestSubstringEditDistance(heard, spoken);
   return distance / Array.from(heard).length <= 0.22;

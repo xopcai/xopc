@@ -5,6 +5,10 @@ export type ProductDeliveryEntry = {
   delivery: ProductDeliveryEnvelope;
 };
 
+function normalizedTaskTitle(title: string): string {
+  return title.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 export function isProductDeliveryVisibleResult(delivery: ProductDeliveryEnvelope): boolean {
   if (delivery.operation !== 'opened') return true;
   return delivery.presentation?.kind === 'diff'
@@ -67,7 +71,18 @@ export function productDeliveryReferences(
         : [{ key: `${key}:${index}:${referenceKey}`, delivery, reference }];
     });
   });
-  return [...new Map(references.map((item) => (
+  const byId = [...new Map(references.map((item) => (
     [`${item.reference.kind}:${item.reference.id}`, item] as const
   ))).values()];
+  const taskTitleKeys = new Map<string, string>();
+  for (const item of byId) {
+    if (item.reference.kind !== 'task') continue;
+    const title = normalizedTaskTitle(item.reference.title);
+    if (title) taskTitleKeys.set(title, item.reference.id);
+  }
+  return byId.filter((item) => {
+    if (item.reference.kind !== 'task') return true;
+    const title = normalizedTaskTitle(item.reference.title);
+    return !title || taskTitleKeys.get(title) === item.reference.id;
+  });
 }

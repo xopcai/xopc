@@ -92,12 +92,13 @@ Use environment variables or the credential controls in the UI; do not put real 
 | Text replies work but audio replies do not | TTS is enabled and its trigger matches the current message |
 | Telegram voice fails | Local Chat voice works first, then check the Telegram channel logs |
 | Long replies are cut off | Shorten the response or increase the configured text limit within provider limits |
+| A call reply stops while playing through speakers | Check voice interruption and response errors in Gateway logs. Verify microphone echo cancellation is available and try a headset to distinguish acoustic echo from an unexpected new response |
 
 Use **Settings → Logs** or `xopc logs tail` to find the first provider error. Never share recordings or credentials in a support report unless you intend to disclose their contents.
 
 ## Interaction and validation
 
-Calls allow a short continuation window before answering. The default response pacing now uses 1,200 ms of provider silence; common unfinished Chinese/English phrases get additional waiting time. Resuming speech discards a reply that has not yet been shown or played. Interrupting an already playing reply remains immediate when enabled. This is pause/continuation handling, not full semantic speech detection. The policy runs on the gateway and applies to mobile, web and desktop; deploy the updated gateway for connected clients to receive it.
+Calls allow a short continuation window before answering. The default response pacing uses 1,200 ms of provider silence; common unfinished Chinese/English phrases get additional waiting time. Resuming speech discards a reply that has not yet been shown or played. During audible playback, detected microphone activity first lowers the volume; a finalized user utterance can then interrupt when barge-in is enabled. Speech matching the current playback is ignored. Natural voice requests the next upstream reply only after the turn settles, so an unconfirmed detection cannot replace the current audio. With barge-in disabled, the next reply waits until playback is acknowledged. This is pause/continuation and playback-aware interruption handling, not full acoustic speaker identification. The policy runs on the gateway and applies to mobile, web and desktop; deploy the updated gateway for connected clients to receive it.
 
 **Stop reply** immediately clears playback and detaches the current voice rendering. A durable Agent task continues in the Chat; use the separate **Cancel task** action to abort it. Neither action sends a new message or undoes completed tool effects. Tool progress and explicit clarification/connector approval controls appear in the call. Ambient speech does not answer a pending clarification. Calls opened from a task retain its existing task status and detail link.
 

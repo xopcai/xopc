@@ -358,7 +358,12 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
           }
           if (event.type === 'input.speech_stopped') { speechStoppedAtRef.current = performance.now(); playerRef.current?.duck(false); }
           if (event.type === 'response.created') {
-            playerRef.current?.clear();
+            if (activeResponseIdRef.current) {
+              // A new response cannot own playback until the previous one has
+              // finished or the server explicitly cancelled it.
+              if (activeResponseIdRef.current !== event.payload.responseId) clientRef.current?.cancelResponse(event.payload.responseId);
+              return;
+            }
             activeResponseIdRef.current = event.payload.responseId;
             responseDoneRef.current = false;
             firstAudioRef.current = false;

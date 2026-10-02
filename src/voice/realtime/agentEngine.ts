@@ -484,9 +484,8 @@ export function createAgentVoiceEngine(options: {
       });
       if (claim.request.purpose === 'conversation') {
         if (activeResponse?.awaitingClarification) { turn.reset(); return; }
-        // Partial ASR hypotheses can be caused by ambient noise or playback and
-        // may disappear without a final transcript. Only committed speech may
-        // destructively cancel an in-flight Agent response.
+        // Partial ASR and VAD can be caused by the current playback. Only a
+        // finalized, non-echo utterance may cancel the response.
         if (claim.config.voice?.realtime?.bargeIn) cancelActiveResponse('barge_in');
         bufferFinal(event.utteranceId, text);
       }

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AssistantResultTail } from '@/features/chat/messages/assistant-result-tail';
 import type { AssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
+import { productDeliveryReferences } from '@/features/chat/product-delivery/product-delivery-model';
 import { useLocaleStore } from '@/stores/locale-store';
 
 function LocationProbe() {
@@ -31,6 +32,18 @@ function renderDelivery(delivery: ProductDeliveryEnvelope) {
 describe('AssistantResultTail product deliveries', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
+
+  it('shows only the latest task when one turn created duplicate tasks with the same title', () => {
+    const deliveries = [
+      { key: 'first', delivery: { version: 2, operation: 'started', primary: {
+        kind: 'task', id: 'old-task', title: 'Personal AI 最新产品方向调研', capabilities: ['open'],
+      } } },
+      { key: 'second', delivery: { version: 2, operation: 'started', primary: {
+        kind: 'task', id: 'new-task', title: 'Personal AI 最新产品方向调研', capabilities: ['open'],
+      } } },
+    ] satisfies AssistantTurnViewModel['deliveries'];
+    expect(productDeliveryReferences(deliveries).map(({ reference }) => reference.id)).toEqual(['new-task']);
+  });
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })

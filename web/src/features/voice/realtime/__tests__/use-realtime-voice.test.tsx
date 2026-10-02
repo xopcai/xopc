@@ -320,6 +320,21 @@ describe('useRealtimeVoice', () => {
     expect(voice.responsePhase).toBe('idle');
   });
 
+  it('keeps the current audio when an unexpected reply arrives before playback drains', async () => {
+    const played = await startResponse();
+    act(() => {
+      onEvent({ type: 'response.created', payload: { responseId: 'r2' } });
+      onAudio(new ArrayBuffer(24_000), 'r2');
+    });
+    expect(cancelResponse).toHaveBeenCalledWith('r2');
+    expect(mocks.playerClear).not.toHaveBeenCalled();
+    expect(mocks.playerEnqueue).toHaveBeenCalledOnce();
+    expect(voice.responsePhase).toBe('speaking');
+    mocks.pendingAudio = false;
+    act(played);
+    expect(acknowledgeAudio).toHaveBeenCalledWith('r1', 24_000);
+  });
+
   it('stops tail playback immediately and ignores late audio after manual interruption', async () => {
     const played = await startResponse();
     act(() => onEvent({ type: 'response.done', payload: { responseId: 'r1' } }));

@@ -50,7 +50,6 @@ export class XopcVoiceCall {
   private responseDone: boolean = false;
   private receivedMs: number = 0;
   private playedMs: number = 0;
-  private ducked: boolean = false;
   private approvalTimer: number = -1;
   private limitTimer: number = -1;
 
@@ -84,7 +83,6 @@ export class XopcVoiceCall {
       this.session = session;
       await voiceCallAudio.start(context, target.background, {
         onInput: (bytes: Uint8Array): void => { if (generation === this.generation) this.sendAudio(bytes); },
-        onSpeech: (active: boolean): void => { if (generation === this.generation) this.speech(active); },
         onPlayed: (id: string, milliseconds: number): void => { if (generation === this.generation) this.played(id, milliseconds); },
         onRoute: (route: string): void => { if (generation === this.generation) this.route = route; },
         onFailure: (reason: string): void => { if (generation === this.generation) { if (reason === 'ended') this.end(); else this.recover(reason); } }
@@ -146,16 +144,14 @@ export class XopcVoiceCall {
     if (this.responseDone && milliseconds >= this.receivedMs) this.finishResponse();
   }
 
-  private speech(active: boolean): void {
-    if (!this.session?.bargeIn || !this.responseId) return;
-    if (active && !this.ducked) { this.ducked = true; voiceCallAudio.setDucked(true); }
-    if (!active && this.ducked) { this.ducked = false; voiceCallAudio.setDucked(false); }
-  }
-
   private onEvent(event: XopcVoiceServerEvent): void {
     const payload = event.payload;
     if (event.type === 'input.transcript.final') this.userText = payload.text ?? '';
     else if (event.type === 'response.created') {
+      if (this.responseId && payload.responseId !== this.responseId) {
+        if (payload.responseId) this.transport?.send('response.stop_playback', { responseId: payload.responseId });
+        return;
+      }
       this.responseId = payload.responseId ?? ''; this.assistantText = ''; this.activity = ''; this.error = '';
       this.responseStage = 'thinking'; this.receivedMs = 0; this.playedMs = 0; this.responseDone = false;
     } else if (event.type === 'response.text.delta' && payload.responseId === this.responseId) {
@@ -178,8 +174,7 @@ export class XopcVoiceCall {
   }
 
   private finishResponse(): void {
-    this.responseId = ''; this.responseStage = ''; this.activity = ''; this.ducked = false;
-    voiceCallAudio.setDucked(false);
+    this.responseId = ''; this.responseStage = ''; this.activity = '';
   }
 
   async setMuted(value: boolean): Promise<void> {

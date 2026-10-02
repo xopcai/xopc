@@ -3,6 +3,7 @@ import WebSocket from 'ws';
 
 import { createLogger } from '../../utils/logger.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
+import { isLikelyPlaybackEcho } from './playback-echo.js';
 import { TurnCoordinator } from './turnPolicy.js';
 import { PcmFrameBuffer } from './pcmFrameBuffer.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
@@ -16,6 +17,7 @@ const MAX_PENDING_INPUT_BYTES = 64 * 1024;
 const UPLOAD_TIMEOUT_MS = 10_000;
 const RESPONSE_START_TIMEOUT_MS = 30_000;
 const CANCELLATION_ERROR_GRACE_MS = 5_000;
+const PLAYBACK_ECHO_TAIL_MS = 3_000;
 const FAILURE_MESSAGES: Record<string, string> = {
   OMNI_UPLOAD_TIMEOUT: 'The connection to the voice service stopped uploading audio. Check the network to your configured endpoint and reconnect.',
   OMNI_INPUT_RESET_TIMEOUT: 'The voice service did not acknowledge clearing microphone input. Reconnect to continue.',
@@ -78,6 +80,9 @@ export function createOmniVoiceEngine(options: {
   let failed = false;
   let platformRequestId: string | undefined;
   let active: ResponseState | undefined;
+  let recentPlayback: { text: string; expiresAt: number } | undefined;
+  let waitingForCancellation: string | undefined;
+  let responseCreateQueued = false;
   let rejectStart: ((error: Error) => void) | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const recorded = new Set<string>();
@@ -90,16 +95,22 @@ export function createOmniVoiceEngine(options: {
   let turnSettled = false;
   let responseStartTimer: ReturnType<typeof setTimeout> | undefined;
   const speaking = new Set<string>();
+  function maybeCreateResponse() {
+    if (!responseCreateQueued || active || waitingForCancellation || closed || failed || muted || inputBlocked) return;
+    responseCreateQueued = false;
+    clearTimeout(responseStartTimer);
+    responseStartTimer = setTimeout(() => fail('OMNI_RESPONSE_START_TIMEOUT'), RESPONSE_START_TIMEOUT_MS);
+    send('response.create');
+  }
   const turn = new TurnCoordinator(options.silenceDurationMs, (_text, decision, turnId) => {
     if (closed || failed || muted || inputBlocked) return;
     options.send('turn.decision', { turnId, disposition: decision.disposition, confidence: decision.confidence, source: decision.source, committed: true });
     options.send('turn.committed', { turnId });
     turnSettled = true;
-    if (active) publish(active);
-    else {
-      clearTimeout(responseStartTimer);
-      responseStartTimer = setTimeout(() => fail('OMNI_RESPONSE_START_TIMEOUT'), RESPONSE_START_TIMEOUT_MS);
-    }
+    const preparedReply = Boolean(active && !active.published);
+    if (active && !active.published) publish(active);
+    responseCreateQueued = !preparedReply;
+    maybeCreateResponse();
   });
   function publish(response: ResponseState) {
     if (response.published || active !== response) return;
@@ -153,8 +164,8 @@ export function createOmniVoiceEngine(options: {
       save({ itemId: response.id, role: 'assistant', text: response.text, interrupted: true });
       options.send('response.cancelled', { responseId: response.id, reason });
     }
-    // The platform owns supplier cancellation semantics and deduplicates races with VAD.
-    if ((reason === 'client_cancelled' || (reason === 'barge_in' && (options.route.route.managed || !options.bargeIn))) && response.generating && socket?.readyState === WebSocket.OPEN) {
+    if (reason !== 'session_closed' && response.generating && socket?.readyState === WebSocket.OPEN) {
+      waitingForCancellation = response.id;
       cancellationPendingUntil = Date.now() + CANCELLATION_ERROR_GRACE_MS;
       send('response.cancel');
     }
@@ -176,9 +187,11 @@ export function createOmniVoiceEngine(options: {
     await response.playback.drain(response.abort.signal);
     if (active !== response || closed) return;
     save({ itemId: response.id, role: 'assistant', text: response.text, interrupted: false });
+    if (response.audio && response.text) recentPlayback = { text: response.text, expiresAt: Date.now() + PLAYBACK_ECHO_TAIL_MS };
     options.send('response.audio.done', { responseId: response.id });
     options.send('response.done', { responseId: response.id, audio: response.audio, finishReason: response.audio ? 'completed' : 'text_only' });
     active = undefined;
+    maybeCreateResponse();
   };
   const stopReply = (response: ResponseState, code: string) => {
     if (closed || active !== response) return;
@@ -191,6 +204,7 @@ export function createOmniVoiceEngine(options: {
     failed = true;
     clearTimeout(responseStartTimer);
     turn.reset();
+    responseCreateQueued = false;
     log.warn({ sessionId: options.callId, platformRequestId, responseId: active?.id, code,
       provider: options.route.route.provider, upstreamHost: new URL(options.route.url).hostname,
       queuedInputBytes, uploadingBytes, bufferedAmount: socket?.bufferedAmount, ...details }, `Native voice conversation failed: ${code}`);
@@ -202,6 +216,7 @@ export function createOmniVoiceEngine(options: {
   function discardInput() {
     clearTimeout(responseStartTimer);
     turn.reset();
+    responseCreateQueued = false;
     speaking.clear();
     turnSettled = false;
     if (active && !active.published) cancel('client_cancelled');
@@ -248,6 +263,8 @@ export function createOmniVoiceEngine(options: {
                 && event.error?.message === 'The voice provider rejected the request.';
               if (Date.now() <= cancellationPendingUntil && (lateCancellation || managedLateCancellation)) {
                 cancellationPendingUntil = 0;
+                waitingForCancellation = undefined;
+                maybeCreateResponse();
                 return;
               }
               fail('OMNI_PROVIDER_ERROR'); return;
@@ -257,7 +274,7 @@ export function createOmniVoiceEngine(options: {
                 modalities: ['text', 'audio'], voice: options.route.voice,
                 instructions: options.route.instructions,
                 ...(!options.route.route.managed ? { input_audio_format: 'pcm', output_audio_format: 'pcm', input_audio_transcription: { model: 'gummy-realtime-v1' } } : {}),
-                turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: options.silenceDurationMs, create_response: true, interrupt_response: options.bargeIn },
+                turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: options.silenceDurationMs, create_response: false, interrupt_response: false },
               } });
             } else if (event.type === 'session.updated' && !ready) {
               if (options.route.route.managed && (event.session?.input_sample_rate !== 16000 || event.session?.output_sample_rate !== 24000)) throw new Error('Unsupported platform audio format');
@@ -274,7 +291,7 @@ export function createOmniVoiceEngine(options: {
               turnSettled = false;
               speaking.add(String(event.item_id));
               turn.start(String(event.item_id));
-              if (options.bargeIn || (active && !active.published)) cancel('barge_in');
+              if (active && !active.published) cancel('barge_in');
               options.send('input.speech_started', { utteranceId: String(event.item_id) });
             } else if (event.type === 'input_audio_buffer.speech_stopped') {
               if (muted || inputBlocked || discardedInputs.has(String(event.item_id)) || recorded.has(String(event.item_id))) return;
@@ -286,7 +303,20 @@ export function createOmniVoiceEngine(options: {
               if (muted || inputBlocked || discardedInputs.has(event.item_id) || recorded.has(event.item_id)) return;
               pendingInputs.delete(event.item_id);
               speaking.delete(event.item_id);
-              turn.final(event.item_id, event.transcript);
+              const text = event.transcript.trim();
+              const playbackText = active?.audio ? active.text
+                : recentPlayback && recentPlayback.expiresAt >= Date.now() ? recentPlayback.text : undefined;
+              if (playbackText && isLikelyPlaybackEcho(text, playbackText)) {
+                turn.final(event.item_id, '');
+                log.debug({ sessionId: options.callId, responseId: active?.id, transcriptCharacters: text.length }, 'Ignored native voice playback echo');
+                return;
+              }
+              if (text && active?.published && options.bargeIn) {
+                log.info({ sessionId: options.callId, responseId: active.id, utteranceId: event.item_id,
+                  transcriptCharacters: text.length }, 'Confirmed user speech interrupted native voice playback');
+                cancel('barge_in');
+              }
+              turn.final(event.item_id, text);
               save({ itemId: event.item_id, role: 'user', text: event.transcript, interrupted: false });
               options.send('input.transcript.final', { utteranceId: event.item_id, revision: 1, text: event.transcript });
             } else if (event.type === 'conversation.item.input_audio_transcription.failed') {
@@ -295,15 +325,23 @@ export function createOmniVoiceEngine(options: {
               discardInput();
               options.send('session.error', { code: 'INPUT_DROPPED', message: 'Could not transcribe this voice turn. Please repeat it.', recoverable: true });
             } else if (event.type === 'response.created') {
-              clearTimeout(responseStartTimer);
               if (muted || inputBlocked) {
                 cancellationPendingUntil = Date.now() + CANCELLATION_ERROR_GRACE_MS;
                 send('response.cancel');
                 return;
               }
-              if (active) cancel('barge_in');
+              if (active) {
+                // A provider-created reply must not replace audio still playing to the user.
+                log.warn({ sessionId: options.callId, responseId: active.id }, 'Ignored overlapping native voice reply');
+                cancellationPendingUntil = Date.now() + CANCELLATION_ERROR_GRACE_MS;
+                send('response.cancel');
+                return;
+              }
+              clearTimeout(responseStartTimer);
               const id = event.response?.id;
               if (typeof id !== 'string' || !id.length || id.length > 160) throw new Error('Invalid response ID');
+              responseCreateQueued = false;
+              waitingForCancellation = undefined;
               let release!: () => void;
               const settled = new Promise<void>((resolve) => { release = resolve; });
               active = { id, text: '', audio: false, generating: true, queuedBytes: 0, abort: new AbortController(), playback: new AudioPlaybackWindow(), tail: Promise.resolve(), published: false, settled, release, pcm: new PcmFrameBuffer() };
@@ -337,6 +375,9 @@ export function createOmniVoiceEngine(options: {
                 const response = active;
                 void finish(response).catch(() => { if (!response.abort.signal.aborted) stopReply(response, 'OMNI_PLAYBACK_FAILED'); });
               }
+            } else if (event.type === 'response.done' && event.response?.id === waitingForCancellation) {
+              waitingForCancellation = undefined;
+              maybeCreateResponse();
             }
           } catch { fail('OMNI_PROTOCOL_ERROR'); }
         });
