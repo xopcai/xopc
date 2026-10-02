@@ -1,5 +1,5 @@
 import { FileText, Folder, Search, X } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -53,6 +53,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
       ? decodeURIComponent(conversationIdParam)
       : null;
   const open = useWorkspacePanelStore((s) => s.open);
+  const wasOpenRef = useRef(open);
   const setOpen = useWorkspacePanelStore((s) => s.setOpen);
   const conversationIdOverride = useWorkspacePanelStore((s) => s.conversationIdOverride);
   const widthPx = useWorkspacePanelStore((s) => s.widthPx);
@@ -171,9 +172,11 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
   }, [pathname, setOpen]);
 
   useEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = open;
     if (!open) {
       reset();
-      setPreviewPath(null);
+      if (wasOpen) setPreviewPath(null);
       return;
     }
     setPreviewPath(null);
