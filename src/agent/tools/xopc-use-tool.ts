@@ -1002,7 +1002,22 @@ async function handleTask(
     const conversationId = trimString(args.conversationId) ?? originConversationId;
     const config = deps.getConfig?.();
     const projectService = deps.getProjectService?.();
-    const explicitAgentId = trimString(args.agentId);
+    const executor = args.executor && typeof args.executor === 'object' && !Array.isArray(args.executor)
+      ? args.executor as Record<string, unknown>
+      : undefined;
+    if (args.executor !== undefined && (!executor || executor.kind !== 'agent' || !trimString(executor.agentId))) {
+      return { ok: false, error: 'executor must be {kind:"agent",agentId:"..."}' };
+    }
+    if ((args.agentId !== undefined && !trimString(args.agentId))
+      || (args.delegateAgentId !== undefined && !trimString(args.delegateAgentId))) {
+      return { ok: false, error: 'agentId and delegateAgentId must be non-empty strings' };
+    }
+    const requestedAgentIds = [args.agentId, args.delegateAgentId, executor?.agentId]
+      .map(trimString).filter((value): value is string => Boolean(value));
+    if (new Set(requestedAgentIds.map((value) => value.toLowerCase())).size > 1) {
+      return { ok: false, error: 'agentId, delegateAgentId and executor.agentId must match when supplied together' };
+    }
+    const explicitAgentId = requestedAgentIds[0];
     const agentId = config && projectService
       ? resolveProjectAgentId({ config, projects: projectService, explicitAgentId, projectId })
       : explicitAgentId ?? (config ? getDefaultAgentId() : deps.getCurrentAgentId?.() ?? 'main');
@@ -1262,7 +1277,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Operate first-class xopc objects through one safe entry point. To delegate work for immediate execution: mode task, command create, args {objective, createMode:"start"}; omitting createMode creates a backlog task only. To start an existing Task: mode task, command command, args {taskId, type:"start", expectedVersion, commandArgs:{executor:{kind:"agent",agentId:"main"}}}. For delegated work, task delegated_tasks lists this conversation\'s tasks; task collaboration reads the shared board; task collaboration_post writes {taskId, kind, body, causationId?, idempotencyKey?}. Workers report progress or questions; the main Agent writes instructions and answers. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for Agents, scenes, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Operate first-class xopc objects through one safe entry point. To delegate work for immediate execution: mode task, command create, args {objective, createMode:"start", agentId:"researcher"}; omitting createMode creates a backlog task only. To start an existing Task: mode task, command command, args {taskId, type:"start", expectedVersion, commandArgs:{executor:{kind:"agent",agentId:"main"}}}. Inspect an existing Task and its run before creating another Task for the same objective. For delegated work, task delegated_tasks lists this conversation\'s tasks; task collaboration reads the shared board; task collaboration_post writes {taskId, kind, body, causationId?, idempotencyKey?}. Workers report progress or questions; the main Agent writes instructions and answers. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for Agents, scenes, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',

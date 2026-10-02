@@ -895,6 +895,35 @@ describe('xopc_use tool', () => {
     });
   });
 
+  it('honors task executor aliases instead of silently assigning the default Agent', async () => {
+    seedConversationFixtures();
+    const tool = createXopcUseTool({
+      getCurrentAgentId: () => 'main',
+      getCurrentConversationId: () => CONVERSATION_ID,
+      dispatchTaskRuns: vi.fn(),
+    });
+    for (const [index, agentArgs] of [
+      { agentId: 'researcher' },
+      { delegateAgentId: 'researcher' },
+      { executor: { kind: 'agent', agentId: 'researcher' } },
+    ].entries()) {
+      const created = parseToolJson(await tool.execute(`call-task-agent-${index}`, {
+        mode: 'task', command: 'create',
+        args: { objective: `Research ${index}`, createMode: 'start', ...agentArgs },
+      }));
+      expect(created).toMatchObject({ ok: true, task: { delegateAgentId: 'researcher' } });
+      const run = parseToolJson(await tool.execute(`call-task-agent-run-${index}`, {
+        mode: 'task_run', command: 'get', args: { runId: created.runId },
+      }));
+      expect(run.run.executorRef).toEqual({ agentId: 'researcher' });
+    }
+    const conflict = parseToolJson(await tool.execute('call-task-agent-conflict', {
+      mode: 'task', command: 'create',
+      args: { objective: 'Research conflict', agentId: 'main', delegateAgentId: 'researcher' },
+    }));
+    expect(conflict).toMatchObject({ ok: false, error: expect.stringContaining('must match') });
+  });
+
   it('updates task dependencies with optimistic concurrency', async () => {
     seedConversationFixtures();
     const tool = createXopcUseTool({

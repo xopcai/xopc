@@ -7,6 +7,7 @@ describe('realtime playback echo detection', () => {
     ['今天天气怎么样', '我查到了：今天天气怎么样？答案是晴天。'],
     ['THE RESULT IS READY', 'The result is ready. I can summarize it now.'],
     ['今天天汽怎么样答案晴天', '我查到了：今天天气怎么样？答案是晴天。'],
+    ['天气睛朗', '今天天气晴朗。'],
     ['the result is redy', 'The result is ready. I can summarize it now.'],
   ])('recognizes normalized speaker output: %s', (heard, spoken) => {
     expect(isLikelyPlaybackEcho(heard, spoken)).toBe(true);
