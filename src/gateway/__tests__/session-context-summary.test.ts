@@ -70,7 +70,12 @@ describe('session context summary', () => {
     new TaskRepository().create({ title: 'Unrelated task', objective: 'Other', projectId });
     getSqliteDatabase().exec('PRAGMA query_only = ON');
     const result = await getSessionContextSummary(config, conversationId, owner);
-    expect(result?.work).toEqual({ project: { id: projectId, title: 'Project' }, task: { id: task.id, title: task.title, phase: task.phase } });
+    expect(result?.work).toEqual({
+      project: { id: projectId, title: 'Project' },
+      task: { id: task.id, title: task.title, phase: task.phase },
+      delegatedTasks: [],
+      delegatedTaskCount: 0,
+    });
     expect(result?.sources).toEqual([{ kind: 'note', id: 'note-a', title: 'Title note-a', origins: [{ kind: 'session', version: 'v1' }, { kind: 'task' }] }]);
     expect(result?.environment).toEqual({ kind: 'local_checkout', rootPath: directory, available: true });
     expect(result?.unavailableSections).toEqual([]);
