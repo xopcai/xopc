@@ -18,6 +18,16 @@ function fixture(messages = [user('x'.repeat(650_000))]) {
 }
 
 describe('context recovery contract', () => {
+  it('does not apply the transcript byte limit to inline image transport data', () => {
+    const imageMessage = { role: 'user', content: [
+      { type: 'text', text: 'What is in this photo?' },
+      { type: 'image', data: 'a'.repeat(2_250_000), mimeType: 'image/jpeg' },
+    ], timestamp: 1 } as AgentMessage;
+    const assessed = assessContext({ messages: [imageMessage], contextWindow: 128_000 }, 2_000_000);
+    expect(assessed.fits).toBe(true);
+    expect(assessed.bytes).toBeLessThan(1_000);
+  });
+
   it('does not confuse the presence of a prunable result with fitting the budget', () => {
     const messages = [user('x'.repeat(600_000)), { role: 'toolResult', content: [{ type: 'text', text: 't'.repeat(2000) }] } as AgentMessage];
     const assessed = assessContext({ messages, contextWindow: 128_000, canCompact: false }, 2_000_000);

@@ -56,8 +56,35 @@ function stringifyForBudget(value: unknown): string {
   }
 }
 
+function isImageBlock(value: unknown): value is { type: 'image' | 'image_url'; mimeType?: unknown } {
+  return value !== null && typeof value === 'object'
+    && ((value as { type?: unknown }).type === 'image'
+      || (value as { type?: unknown }).type === 'image_url');
+}
+
+/** Image bytes are transport data, not text in the model context. */
+export function stringifyMessagesForBudget(messages: readonly AgentMessage[]): string {
+  return JSON.stringify(messages.map((message) => {
+    const content = readAgentMessageContent(message);
+    if (!Array.isArray(content) || !content.some(isImageBlock)) return message;
+    return { ...message, content: content.map((block) => isImageBlock(block)
+      ? { type: block.type, mimeType: block.mimeType }
+      : block) };
+  }));
+}
+
 export function estimateMessageTokens(message: AgentMessage): number {
-  return estimateTextTokens(stringifyForBudget(readAgentMessageContent(message))) + MESSAGE_OVERHEAD_TOKENS;
+  const content = readAgentMessageContent(message);
+  if (!Array.isArray(content)) {
+    return estimateTextTokens(stringifyForBudget(content)) + MESSAGE_OVERHEAD_TOKENS;
+  }
+  let tokens = MESSAGE_OVERHEAD_TOKENS;
+  for (const block of content) {
+    tokens += isImageBlock(block)
+      ? DEFAULT_IMAGE_TOKENS
+      : estimateTextTokens(stringifyForBudget(block));
+  }
+  return tokens;
 }
 
 export function estimateMessagesTokens(messages: readonly AgentMessage[]): number {
