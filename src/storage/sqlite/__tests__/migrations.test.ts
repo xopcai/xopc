@@ -343,6 +343,28 @@ describe('SQLite migrations', () => {
     }
   });
 
+  it('backfills durable main Agent ownership from existing delegated Tasks', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 227 });
+      const conversationId = '1ca1490a-8918-47e0-b03a-63dcc15d46e2';
+      db.prepare(`INSERT INTO sessions (conversation_id, agent_id, active_transcript_id,
+        created_at, updated_at, last_accessed_at) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(conversationId, 'main', 'transcript-1', 1, 1, 1);
+      db.prepare(`INSERT INTO tasks (task_id, title, phase, priority, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`).run('task-1', 'Research', 'active', 'normal', 'api', 1, 1);
+      db.prepare(`INSERT INTO task_origin_links (task_id, conversation_id, created_at)
+        VALUES (?, ?, ?)`).run('task-1', conversationId, 1);
+      applyPendingMigrations(db);
+      expect(db.prepare(`SELECT agent_id, origin_conversation_id FROM task_main_agent_links
+        WHERE task_id = ?`).get('task-1')).toEqual({ agent_id: 'main', origin_conversation_id: conversationId });
+      db.prepare('DELETE FROM sessions WHERE conversation_id = ?').run(conversationId);
+      expect(db.prepare('SELECT agent_id FROM task_main_agent_links WHERE task_id = ?').get('task-1'))
+        .toEqual({ agent_id: 'main' });
+    } finally { db.close(); }
+  });
+
   it('adds memory suppression and replaces approval notifications once', () => {
     const db = openEmptyDb();
     try {

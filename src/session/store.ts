@@ -35,6 +35,8 @@ import {
   listSessionMetadata,
   listSessionsByAgent,
   loadLlmMessagesForSession,
+  listTaskUpdateRunIds,
+  listTaskUpdateTriggers,
   loadCompactionSourceSnapshot,
   paginateTranscriptMessages,
   loadTranscriptHistoryRowsForSession,
@@ -374,6 +376,8 @@ export class SessionStore {
       const startIndex = Math.max(0, endIndex - page.rows.length);
       const history = transcriptRowsToClientHistory(page.rows, {
         rowNumberOffset: startIndex,
+        startsNewBubbleTurnIds: listTaskUpdateRunIds(key),
+        taskUpdateTriggers: listTaskUpdateTriggers(key),
       });
       const messages = (options.compact ? compactHistory(history) : history) as unknown as Message[];
       const session: SessionDetail = {
@@ -970,7 +974,10 @@ export class SessionStore {
   async findInSession(key: string, query: string, limit?: number): Promise<SessionFindResult | null> {
     const metadata = await this.getMetadata(key);
     if (!metadata) return null;
-    const messages = transcriptRowsToClientHistory(await this.loadTranscriptRows(key));
+    const messages = transcriptRowsToClientHistory(await this.loadTranscriptRows(key), {
+      startsNewBubbleTurnIds: listTaskUpdateRunIds(key),
+      taskUpdateTriggers: listTaskUpdateTriggers(key),
+    });
     return findSessionMessages(messages, query, limit);
   }
 

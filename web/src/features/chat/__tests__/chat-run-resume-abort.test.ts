@@ -305,6 +305,19 @@ describe('MessageSender terminal state', () => {
     }));
   });
 
+  it('passes task update provenance through a realtime run start', () => {
+    const sender = new MessageSender();
+    const onStreamStart = vi.fn();
+    const trigger = { entryId: 'entry-1', taskId: 'task-1', taskTitle: 'Check prices', kind: 'result' };
+    const dispatch = sender as unknown as {
+      _dispatchStreamEvent: (event: string, parsed: Record<string, unknown>,
+        callbacks: Partial<MessagingCallbacks>) => void;
+    };
+    dispatch._dispatchStreamEvent('run_start', { runId: 'task-run',
+      payload: { startsNewBubble: true, taskTrigger: trigger } }, { onStreamStart });
+    expect(onStreamStart).toHaveBeenCalledWith('task-run', true, trigger);
+  });
+
   afterEach(() => {
     clearEndpointTurnClaim();
   });

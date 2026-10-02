@@ -1,6 +1,6 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcSessionsViewModel } from '../viewmodel/sessionsViewModel';
-import { XopcSessionItem, XopcSessionGroup } from '../model/chat';
+import { XopcSessionItem, XopcSessionGroup, XopcSidebarTaskChild, XopcSidebarTaskGroup } from '../model/chat';
 import { groupChatSessions, sessionAge } from '../common/sessionGroups';
 import { XopcErrorState, XopcListSkeleton } from './MobileComponents';
 import { userErrorMessage } from '../common/userError';
@@ -13,8 +13,22 @@ interface XopcSessionDisplayRow {
   key: string;
   label: string;
   session?: XopcSessionItem;
+  task?: XopcSidebarTaskChild;
+  taskGroup?: XopcSidebarTaskGroup;
+  expanded?: boolean;
   first: boolean;
   last: boolean;
+}
+
+function xopcTaskStatus(task: XopcSidebarTaskChild): string {
+  const status = task.runStatus ?? task.phase;
+  if (appSettings.effectiveLanguage() === 'zh') {
+    if (status === 'running' || status === 'active' || status === 'verifying') return '进行中';
+    if (status === 'completed' || status === 'succeeded' || status === 'closed') return '已完成';
+    if (status === 'failed') return '失败';
+    if (status === 'backlog' || status === 'ready' || status === 'queued' || status === 'waiting') return '待开始';
+  }
+  return status;
 }
 
 function sessionGroupLabel(label: string): ResourceStr {
@@ -43,6 +57,8 @@ struct XopcSessionManagerRow {
   @Param locked: boolean = false;
   @Event onOpen: (item: XopcSessionItem) => void = (_item: XopcSessionItem): void => {};
   @Event onMenu: (item: XopcSessionItem) => void = (_item: XopcSessionItem): void => {};
+  @Event onToggle: (id: string) => void = (_id: string): void => {};
+  @Event onOpenTask: (id: string) => void = (_id: string): void => {};
 
   private time(): ResourceStr {
     const stamp = Date.parse(this.entry.session?.updatedAt ?? '');
@@ -58,8 +74,32 @@ struct XopcSessionManagerRow {
     return new Date(stamp).toLocaleDateString(appSettings.effectiveLanguage() === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric' });
   }
   build() {
-    if (this.entry.session) {
+    if (this.entry.task) {
+      Row({ space: 10 }) {
+        SymbolGlyph($r('sys.symbol.circle')).fontSize(10).fontColor([this.colors.accent])
+        Text(this.entry.task.title).fontSize(14).fontColor(this.colors.secondary).maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+        Text(xopcTaskStatus(this.entry.task)).fontSize(12).fontColor(this.colors.tertiary)
+      }.width('100%').constraintSize({ minHeight: 52 })
+        .padding({ left: 56, right: 16, top: 8, bottom: 8 })
+        .backgroundColor(this.colors.panel).borderRadius(12).margin({ bottom: 6 })
+        .id('sessions-task-' + this.entry.task.taskId)
+        .enabled(!this.locked && !!this.entry.task.activeConversationId)
+        .onClick((): void => {
+          if (this.entry.task?.activeConversationId) this.onOpenTask(this.entry.task.activeConversationId);
+        })
+    } else if (this.entry.session) {
       Row({ space: 12 }) {
+        if (this.entry.taskGroup && this.entry.taskGroup.total > 0 && !this.selecting) {
+          Button() {
+            SymbolGlyph(this.entry.expanded ? $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
+              .fontSize(16).fontColor([this.colors.secondary])
+          }.width(32).height(40).padding(0).backgroundColor(Color.Transparent)
+            .accessibilityText(this.entry.expanded ? $r('app.string.sessions_collapse_tasks') : $r('app.string.sessions_expand_tasks'))
+            .onClick((): void => { if (this.entry.session) this.onToggle(this.entry.session.key); })
+        } else if (!this.selecting) {
+          Row().width(32).height(40)
+        }
         if (this.selecting) {
           SymbolGlyph(this.selected ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.circle'))
             .fontSize(24).fontColor([this.selected ? this.colors.accent : this.colors.tertiary])
@@ -103,6 +143,8 @@ export struct XopcSessionsView {
   @Event onUndoDelete: (id: string) => void = (_id: string): void => {};
   @Local sessions: XopcSessionsViewModel = new XopcSessionsViewModel();
   @Local searchOpen: boolean = true;
+  @Local expandedTaskParents: string[] = [];
+  @Local collapsedTaskParents: string[] = [];
   @Local renameOpen: boolean = false;
   @Local menuOpen: boolean = false;
   @Local menuItem?: XopcSessionItem;
@@ -132,7 +174,16 @@ export struct XopcSessionsView {
       .forEach((group: XopcSessionGroup): void => {
         result.push({ key: 'section:' + group.id, label: group.label, first: false, last: false });
         group.items.forEach((item: XopcSessionItem, index: number): void => {
-          result.push({ key: item.key, label: '', session: item, first: index === 0, last: index === group.items.length - 1 });
+          const taskGroup = this.sessions.taskGroups[item.key];
+          const expanded = !this.collapsedTaskParents.includes(item.key) && (this.expandedTaskParents.includes(item.key)
+            || (taskGroup?.items.some((task: XopcSidebarTaskChild): boolean => task.activeConversationId === this.currentId) ?? false));
+          result.push({ key: item.key, label: '', session: item, taskGroup, expanded,
+            first: index === 0, last: index === group.items.length - 1 });
+          if (expanded && !this.sessions.selecting && !this.sessions.search.trim() && taskGroup) {
+            taskGroup.items.forEach((task: XopcSidebarTaskChild): void => {
+              result.push({ key: 'task:' + task.taskId, label: '', task, first: false, last: false });
+            });
+          }
         });
       });
     return result;
@@ -144,6 +195,25 @@ export struct XopcSessionsView {
       this.opening = true;
       this.getUIContext().getFocusController().clearFocus();
       this.onOpen(item.key);
+    }
+  }
+  private openTask(id: string): void {
+    if (!this.opening && !this.sessions.selecting) {
+      this.opening = true;
+      this.getUIContext().getFocusController().clearFocus();
+      this.onOpen(id);
+    }
+  }
+  private toggleTasks(id: string): void {
+    const group = this.sessions.taskGroups[id];
+    const active = group?.items.some((task: XopcSidebarTaskChild): boolean => task.activeConversationId === this.currentId) ?? false;
+    const expanded = !this.collapsedTaskParents.includes(id) && (this.expandedTaskParents.includes(id) || active);
+    if (expanded) {
+      this.expandedTaskParents = this.expandedTaskParents.filter((key: string): boolean => key !== id);
+      this.collapsedTaskParents = this.collapsedTaskParents.concat(id);
+    } else {
+      this.collapsedTaskParents = this.collapsedTaskParents.filter((key: string): boolean => key !== id);
+      if (!this.expandedTaskParents.includes(id)) this.expandedTaskParents = this.expandedTaskParents.concat(id);
     }
   }
   private async createConversation(): Promise<void> {
@@ -361,7 +431,9 @@ export struct XopcSessionsView {
                 XopcSessionManagerRow({ entry: row.item, selecting: this.sessions.selecting,
                   selected: this.sessions.selected.includes(row.item.key), current: row.item.key === this.currentId,
                   locked: this.sessions.busy,
-                  onOpen: (item: XopcSessionItem): void => { this.open(item); }, onMenu: (item: XopcSessionItem): void => { this.menu(item); } })
+                  onOpen: (item: XopcSessionItem): void => { this.open(item); }, onMenu: (item: XopcSessionItem): void => { this.menu(item); },
+                  onToggle: (id: string): void => { this.toggleTasks(id); },
+                  onOpenTask: (id: string): void => { this.openTask(id); } })
               }
             }).key((row: XopcSessionDisplayRow): string => row.key).virtualScroll({ totalCount: this.rows.length })
             if (!this.sessions.loading && !this.rows.length && !this.sessions.error) {

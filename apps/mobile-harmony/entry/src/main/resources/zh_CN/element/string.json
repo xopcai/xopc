@@ -114,6 +114,8 @@
     { "name": "sessions_select", "value": "多选会话" },
     { "name": "sessions_rename", "value": "重命名" },
     { "name": "sessions_selected", "value": "已选 %d 项" },
+    { "name": "sessions_expand_tasks", "value": "展开派发任务" },
+    { "name": "sessions_collapse_tasks", "value": "折叠派发任务" },
     { "name": "sessions_message_count", "value": "%d 条消息" },
     { "name": "sessions_pinned", "value": "已置顶" },
     { "name": "sessions_archived", "value": "已归档" },

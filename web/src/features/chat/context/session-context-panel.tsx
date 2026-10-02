@@ -42,9 +42,12 @@ export function SessionContextPanel({ conversationId, draftRefs = [], project, .
   const data = error ? undefined : cachedData;
   const currentProject = data?.work.project ?? (!conversationId && project ? { id: project.id, title: project.name } : undefined);
   const task = data?.work.task;
+  const delegatedTasks = data?.work.delegatedTasks ?? [];
   const sources = mergeContextSources(data?.sources ?? [], draftRefs);
   const environment = data?.environment;
-  const summary = [currentProject?.title, task?.title, sources.length ? `${copy.sources} ${sources.length}${data?.sourcesHasMore ? '+' : ''}` : null,
+  const summary = [currentProject?.title, task?.title,
+    delegatedTasks.length ? `${language === 'zh' ? '派出任务' : 'Delegated tasks'} ${data?.work.delegatedTaskCount ?? delegatedTasks.length}` : null,
+    sources.length ? `${copy.sources} ${sources.length}${data?.sourcesHasMore ? '+' : ''}` : null,
     environment?.kind === 'managed_worktree' ? 'Worktree' : null].filter(Boolean).join(' · ') || copy.title;
   const close = () => setOpen(false);
   const sourceNoteAvailable = sources.some((source) => !source.unavailable && source.origins.some((origin) => origin.kind === 'session'));
@@ -117,7 +120,15 @@ export function SessionContextPanel({ conversationId, draftRefs = [], project, .
                   {task ? <Link className={rowClass} to={taskDetailModalHref(returnTo, task.id)} onClick={close}>
                     <Target className="size-4 shrink-0" aria-hidden /><span className="truncate" title={task.title}>{task.title}</span><span className="ml-auto shrink-0 text-xs text-fg-muted">{task.phase}</span>
                   </Link> : null}
-                  {!currentProject && !task ? <p className="px-2 py-2 text-xs text-fg-muted">{error || data?.unavailableSections.includes('work') ? copy.unavailable : copy.emptyWork}</p> : null}
+                  {delegatedTasks.length ? <div className="pt-2">
+                    <p className="px-2 text-xs text-fg-subtle">{language === 'zh' ? '本对话派出的任务' : 'Tasks from this conversation'} · {data?.work.delegatedTaskCount}</p>
+                    {delegatedTasks.map((delegated) => <Link key={delegated.id} className={rowClass}
+                      to={taskDetailModalHref(returnTo, delegated.id)} onClick={close}>
+                      <Target className="size-4 shrink-0" aria-hidden /><span className="truncate" title={delegated.title}>{delegated.title}</span>
+                      <span className="ml-auto shrink-0 text-xs text-fg-muted">{delegated.runStatus ?? delegated.phase}</span>
+                    </Link>)}
+                  </div> : null}
+                  {!currentProject && !task && !delegatedTasks.length ? <p className="px-2 py-2 text-xs text-fg-muted">{error || data?.unavailableSections.includes('work') ? copy.unavailable : copy.emptyWork}</p> : null}
                   {currentProject && props.onLeaveProject ? <button type="button" className={actionClass} onClick={() => { close(); props.onLeaveProject?.(); }}>{props.leaveProjectLabel}</button> : null}
                 </section>
                 <section className="border-t border-edge-subtle pt-3">

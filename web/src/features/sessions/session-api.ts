@@ -28,7 +28,10 @@ import type {
   SessionStats,
 } from '@/features/sessions/session.types';
 
-const listSessionsInflight = new Map<string, Promise<PaginatedResult<SessionMetadata>>>();
+type SessionListPage = PaginatedResult<SessionMetadata> & {
+  childrenByConversationId?: GatewaySidebarChatListResponse['childrenByConversationId'];
+};
+const listSessionsInflight = new Map<string, Promise<SessionListPage>>();
 
 export type SidebarChatListProject = GatewaySidebarChatListProject<Project>;
 export type SidebarChatListResponse = GatewaySidebarChatListResponse<Project>;
@@ -37,7 +40,7 @@ export type SidebarChatListResponse = GatewaySidebarChatListResponse<Project>;
  * List sessions (paginated). Concurrent calls with the same query share one HTTP request so the
  * sidebar and chat initial fetch do not triple-fetch the first page on load.
  */
-export async function listSessions(query?: SessionListQuery): Promise<PaginatedResult<SessionMetadata>> {
+export async function listSessions(query?: SessionListQuery): Promise<SessionListPage> {
   const key = sessionListDedupeKey(query);
   const existing = listSessionsInflight.get(key);
   if (existing) return existing;
@@ -53,7 +56,7 @@ export async function listSessions(query?: SessionListQuery): Promise<PaginatedR
         typeof errorBody.error === 'string' ? errorBody.error : errorBody.error?.message;
       throw new Error(serverMessage ?? `HTTP ${res.status}`);
     }
-    return (await res.json()) as PaginatedResult<SessionMetadata>;
+    return (await res.json()) as SessionListPage;
   })().finally(() => {
     listSessionsInflight.delete(key);
   });

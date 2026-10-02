@@ -52,12 +52,17 @@ import type { LocalAppService } from '../../local-apps/index.js';
 import type { ChatPreviewService } from '../../chat-previews/index.js';
 import { getDefaultAgentId } from '../../routing/resolve-route.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
+import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import {
   defineTaskContract,
   TaskRepository,
   TaskRunRepository,
 } from '../../tasks/index.js';
 import { TaskDeletionService } from '../../tasks/task-deletion-service.js';
+import { TaskApplicationService } from '../../tasks/task-application-service.js';
+import { TaskOriginRepository } from '../../tasks/task-origin-repository.js';
+import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
+import { TaskCollaborationRepository, type TaskCollaborationKind } from '../../tasks/task-collaboration-repository.js';
 
 const XopcUseToolSchema = Type.Object({
   mode: Type.Union([
@@ -174,6 +179,20 @@ function finiteNumber(value: unknown): number | undefined {
 function stringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   return value.filter((item): item is string => typeof item === 'string');
+}
+
+function taskTextList(value: unknown): string[] | undefined {
+  const candidate = record(value)?.item ?? value;
+  if (typeof candidate === 'string') {
+    const trimmed = candidate.trim();
+    if (!trimmed) return undefined;
+    if (trimmed.startsWith('[')) {
+      try { return taskTextList(JSON.parse(trimmed)); } catch { return undefined; }
+    }
+    return [trimmed];
+  }
+  if (!Array.isArray(candidate) || candidate.some(item => typeof item !== 'string' || !item.trim())) return undefined;
+  return candidate.map(item => (item as string).trim());
 }
 
 
@@ -843,6 +862,73 @@ async function handleTask(
   const tasks = new TaskRepository();
   const runs = new TaskRunRepository();
   const deletion = new TaskDeletionService(tasks, runs);
+  if (command === 'delegated_tasks') {
+    const conversationId = deps.getCurrentConversationId?.();
+    if (!conversationId) return { ok: false, error: 'Current conversation is required' };
+    return { ok: true, ...new TaskOriginRepository().list(conversationId, finiteNumber(args.limit) ?? 20) };
+  }
+  if (command === 'collaboration' || command === 'collaboration_post') {
+    const taskId = trimString(args.taskId) ?? trimString(args.id);
+    const conversationId = deps.getCurrentConversationId?.();
+    if (!taskId || !conversationId) return { ok: false, error: 'Task and current conversation are required' };
+    const main = new TaskOriginRepository().owns(taskId, conversationId);
+    const active = new TaskConversationRepository().resolveActiveExecutionSession(conversationId);
+    const worker = active?.taskId === taskId && active.agentId === deps.getCurrentAgentId?.();
+    if (!main && !worker) return { ok: false, error: 'Current Agent conversation is not attached to this Task' };
+    const collaboration = new TaskCollaborationRepository();
+    if (command === 'collaboration') {
+      return { ok: true, entries: collaboration.list(taskId, finiteNumber(args.afterSequence) ?? 0,
+        finiteNumber(args.limit) ?? 50) };
+    }
+    const kind = trimString(args.kind) as TaskCollaborationKind | undefined;
+    const body = trimString(args.body);
+    if (!kind || !body || !['progress', 'question', 'answer', 'instruction', 'ack'].includes(kind)) {
+      return { ok: false, error: 'kind and body are required' };
+    }
+    if (worker && !['progress', 'question', 'ack'].includes(kind)
+      || main && !['question', 'answer', 'instruction'].includes(kind)) {
+      return { ok: false, error: 'Message kind is not allowed for this Agent role' };
+    }
+    if (main && tasks.get(taskId)?.phase === 'closed') return { ok: false, error: 'Task is closed' };
+    if (worker && kind === 'question' && !['running', 'verifying'].includes(runs.getActiveRoot(taskId)?.status ?? '')) {
+      return { ok: false, error: 'An active TaskRun is required before asking the owner' };
+    }
+    const causationId = trimString(args.causationId);
+    if ((kind === 'ack' || kind === 'answer') && !causationId) {
+      return { ok: false, error: 'causationId is required' };
+    }
+    if (causationId && (kind === 'ack' || kind === 'answer')) {
+      const cited = collaboration.get(causationId);
+      if (cited?.taskId !== taskId || (kind === 'answer' && cited?.kind !== 'question')
+        || (kind === 'ack' && cited?.deliveryStatus !== 'delivered')) {
+        return { ok: false, error: 'causationId must reference a relevant Task message' };
+      }
+    }
+    if (dryRun) return { ok: true, dryRun: true, action: 'collaboration_post', taskId, kind, body };
+    const entry = runSqliteWriteTransaction(() => {
+      const posted = collaboration.append({ taskId, authorKind: worker ? 'worker_agent' : 'main_agent',
+        authorId: deps.getCurrentAgentId?.() ?? 'main', kind, body,
+        ...(active?.runId ? { taskRunId: active.runId } : {}),
+        ...(causationId ? { causationId } : {}),
+        idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID(),
+        deliverToWorker: main && ['question', 'answer', 'instruction'].includes(kind),
+      });
+      if (kind === 'ack' && causationId) collaboration.markConfirmed(causationId);
+      if (worker && kind === 'question') {
+        const task = tasks.require(taskId);
+        const result = new TaskApplicationService().execute({ taskId, expectedVersion: task.version,
+          idempotencyKey: `collaboration-wait:${posted.id}`,
+          command: { type: 'add_wait', wait: { kind: 'external_event', reason: body,
+            condition: { collaborationEntryId: posted.id } } },
+          actor: { kind: 'agent', id: deps.getCurrentAgentId?.() ?? 'main' },
+        });
+        if (!result.ok) throw new Error('Could not pause TaskRun for collaboration question');
+      }
+      return posted;
+    });
+    deps.dispatchTaskRuns?.();
+    return { ok: true, entry, ...(worker && kind === 'question' ? { guidance: 'Pause this execution turn until the answer arrives.' } : {}) };
+  }
   const invokeRelation = (operation: string, input: unknown) => {
     const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`, surface: 'agent', scopes: ['tasks.write'],
       actor: { kind: 'agent', id: deps.getCurrentAgentId?.() ?? 'main' }, authorize: deps.authorizeCapability ?? (() => true) };
@@ -908,11 +994,12 @@ async function handleTask(
     const contract = { ...baseContract };
     for (const field of contractFields) {
       if (args[field] === undefined) continue;
-      const value = stringArray(args[field]);
-      if (!value) return { ok: false, error: `Invalid ${field}` };
+      const value = taskTextList(args[field]);
+      if (!value) return { ok: false, error: `Invalid ${field}: pass a flat list of strings or omit this optional field` };
       contract[field] = value;
     }
-    const conversationId = trimString(args.conversationId) ?? deps.getCurrentConversationId?.();
+    const originConversationId = deps.getCurrentConversationId?.();
+    const conversationId = trimString(args.conversationId) ?? originConversationId;
     const config = deps.getConfig?.();
     const projectService = deps.getProjectService?.();
     const explicitAgentId = trimString(args.agentId);
@@ -926,6 +1013,7 @@ async function handleTask(
       ...(dueAt === undefined ? {} : { dueAt }),
       ...(projectId ? { projectId } : {}),
       delegateAgentId: agentId,
+      ...(originConversationId ? { originConversationId } : {}),
       ...(locale ? { locale } : {}),
       contract: {
         ...contract,
@@ -951,6 +1039,7 @@ async function handleTask(
     }
     const capabilityContext: CapabilityContext = {
       principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`, surface: 'agent', scopes: ['tasks.write'],
+      conversationId: deps.getCurrentConversationId?.(),
       actor: { kind: 'agent', id: deps.getCurrentAgentId?.() ?? 'main' },
       authorize: deps.authorizeCapability ?? (() => true),
     };
@@ -1021,7 +1110,7 @@ async function handleTask(
     const commandType = enumValue(args.type, TASK_COMMANDS);
     const expectedVersion = finiteNumber(args.expectedVersion);
     if (!id) return { ok: false, error: 'taskId is required' };
-    if (!commandType) return { ok: false, error: 'Invalid task command type' };
+    if (!commandType) return { ok: false, error: 'Invalid task command type. To start a Task, use mode task, command command, args {taskId, type:"start", expectedVersion, commandArgs:{executor:{kind:"agent",agentId:"main"}}}.' };
     if (expectedVersion === undefined || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
       return { ok: false, error: 'expectedVersion is required' };
     }
@@ -1102,7 +1191,7 @@ async function handleTaskRun(
       { ...capabilities.describe(operation, caller), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() }));
   }
 
-  return { ok: false, error: `Unsupported task_run command: ${command}` };
+  return { ok: false, error: `Unsupported task_run command: ${command}. To start an existing Task, use mode task, command command, args {taskId, type:"start", expectedVersion, commandArgs:{executor:{kind:"agent",agentId:"main"}}}.` };
 }
 
 async function handleLocalApp(
@@ -1173,7 +1262,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Operate first-class xopc objects through one safe entry point. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for Agents, scenes, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Operate first-class xopc objects through one safe entry point. To delegate work for immediate execution: mode task, command create, args {objective, createMode:"start"}; omitting createMode creates a backlog task only. To start an existing Task: mode task, command command, args {taskId, type:"start", expectedVersion, commandArgs:{executor:{kind:"agent",agentId:"main"}}}. For delegated work, task delegated_tasks lists this conversation\'s tasks; task collaboration reads the shared board; task collaboration_post writes {taskId, kind, body, causationId?, idempotencyKey?}. Workers report progress or questions; the main Agent writes instructions and answers. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for Agents, scenes, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',

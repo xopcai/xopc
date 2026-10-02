@@ -21,6 +21,7 @@ export interface WireContentBlock {
 export interface WireMessage {
   role?: string;
   turnId?: string;
+  startsNewBubble?: boolean;
   content?: unknown;
   rawContent?: unknown;
   tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
@@ -38,6 +39,7 @@ export interface WireMessage {
   attachments?: unknown;
   usage?: unknown;
   metadata?: unknown;
+  taskTrigger?: unknown;
   timestamp?: string | number;
   tool_call_id?: string;
   toolCallId?: string;

@@ -159,6 +159,20 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
     )`);
   }
 
+  if (query.rootConversationsOnly && !query.search?.trim()) {
+    // A worker conversation belongs under its originating chat only while that
+    // parent can still be reached from the normal conversation list.
+    conditions.push(`NOT EXISTS (
+      SELECT 1 FROM task_sessions worker
+      JOIN task_origin_links origin ON origin.task_id = worker.task_id
+      JOIN sessions parent ON parent.conversation_id = origin.conversation_id
+      WHERE worker.conversation_id = s.conversation_id AND worker.role = 'execution'
+        AND parent.hidden_from_session_list = 0
+        AND (parent.updated_at >= ? OR parent.status = 'pinned' OR parent.conversation_id = ?)
+    )`);
+    params.push(query.updatedAfter ?? 0, query.includeConversationId ?? '');
+  }
+
   if (query.sessionTypes?.length) {
     conditions.push(`s.session_type IN (${query.sessionTypes.map(() => '?').join(', ')})`);
     params.push(...query.sessionTypes);

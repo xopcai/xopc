@@ -154,6 +154,7 @@ export interface SessionDetail extends SessionMetadata {
 
 /** Session list query parameters */
 export interface SessionListQuery extends SessionDiscoveryQuery {
+  rootConversationsOnly?: boolean;
   status?: SessionStatus | SessionStatus[];
   /** Single `sourceChannel`, or comma-separated list (e.g. `telegram,weixin`). */
   channel?: string;

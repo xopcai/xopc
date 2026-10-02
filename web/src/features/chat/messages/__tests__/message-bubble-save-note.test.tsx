@@ -26,7 +26,7 @@ describe('MessageBubble save as note action', () => {
     container.remove();
   });
 
-  it('saves the assistant Markdown from a single footer action', async () => {
+  it('saves the assistant Markdown from the more menu', async () => {
     const onSaveAssistantAsNote = vi.fn(async () => {});
     act(() => {
       root.render(
@@ -45,13 +45,16 @@ describe('MessageBubble save as note action', () => {
       );
     });
 
-    const saveButton = container.querySelector<HTMLButtonElement>('button[aria-label="Save as note"]');
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="More actions"]')?.click());
+    const saveButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Save as note'));
     expect(saveButton).not.toBeNull();
 
     await act(async () => saveButton?.click());
 
     expect(onSaveAssistantAsNote).toHaveBeenCalledOnce();
     expect(onSaveAssistantAsNote).toHaveBeenCalledWith('## Result\n\nKeep **this**.');
-    expect(container.querySelector('button[aria-label="Saved as note"]')).not.toBeNull();
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="More actions"]')?.click());
+    expect(document.body.textContent).toContain('Saved as note');
   });
 });

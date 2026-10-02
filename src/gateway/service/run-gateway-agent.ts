@@ -39,6 +39,7 @@ import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
 import type { UserTurnAttachment } from '../user-turn-input.js';
 import type { AgentSourceContext } from '../../agent/source-context/types.js';
 import { describeActiveExecution, type ActiveExecution } from './active-execution.js';
+import { listTaskUpdateTriggers } from '../../storage/sqlite/session-input-repository.js';
 const log = createLogger('Gateway:Service');
 
 export type RunGatewayAgentYield = ChatStreamEvent;
@@ -141,7 +142,10 @@ export async function *runGatewayAgent(
       fallbackObjective: message,
     });
   }
-  const mapper = new ChatStreamMapper({ runId, conversationId: streamConversationId, channel });
+  const mapper = new ChatStreamMapper({ runId, conversationId: streamConversationId, channel,
+    startsNewBubble: origin.type === 'system' && origin.source === 'task_update',
+    ...(origin.type === 'system' && origin.source === 'task_update' && webchatConversationId
+      ? { taskTrigger: listTaskUpdateTriggers(webchatConversationId).get(runId) } : {}) });
   let registeredActiveWebchatRun = false;
   const captureTaskEvent = (event: ChatStreamEvent): void => {
     if (event.type === 'task_plan_updated') {
