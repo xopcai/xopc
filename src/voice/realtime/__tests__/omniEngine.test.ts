@@ -97,6 +97,61 @@ describe('Omni voice engine', () => {
     await vi.waitFor(() => expect(test.received.filter(event => event.type === 'response.cancel')).toHaveLength(1));
   });
 
+  it('keeps native playback running when the microphone transcribes its own speech', async () => {
+    const test = await setup();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'user', transcript: '天气怎么样' });
+    await vi.waitFor(() => expect(test.received.some((event) => event.type === 'response.create')).toBe(true));
+    test.emit({ type: 'response.created', response: { id: 'reply' } });
+    test.emit({ type: 'response.audio_transcript.delta', response_id: 'reply', delta: '今天天气晴朗。' });
+    test.emit({ type: 'response.audio.delta', response_id: 'reply', delta: Buffer.alloc(24_000).toString('base64') });
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(25));
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'echo' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'echo' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'echo', transcript: '今天天气晴朗' });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(test.received.filter((event) => event.type === 'response.cancel')).toHaveLength(0);
+    expect(test.received.filter((event) => event.type === 'response.create')).toHaveLength(1);
+    expect(test.send.mock.calls.some(([type]) => type === 'response.cancelled')).toBe(false);
+    expect(test.record.mock.calls.some(([entry]) => entry.itemId === 'echo')).toBe(false);
+    test.emit({ type: 'response.done', response: { id: 'reply', status: 'completed' } });
+    engine.acknowledge('reply', 500);
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'reply' })));
+  });
+
+  it('cancels native speech only for a confirmed user interruption and starts the next reply', async () => {
+    const test = await setup();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'user', transcript: '你好' });
+    await vi.waitFor(() => expect(test.received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+    test.emit({ type: 'response.created', response: { id: 'reply' } });
+    test.emit({ type: 'response.audio_transcript.delta', response_id: 'reply', delta: '我正在为你解答。' });
+    test.emit({ type: 'response.audio.delta', response_id: 'reply', delta: Buffer.alloc(24_000).toString('base64') });
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(25));
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'interrupt' });
+    expect(test.received.filter((event) => event.type === 'response.cancel')).toHaveLength(0);
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'interrupt', transcript: '停一下' });
+    await vi.waitFor(() => expect(test.received.filter((event) => event.type === 'response.cancel')).toHaveLength(1));
+    expect(test.send).toHaveBeenCalledWith('response.cancelled', expect.objectContaining({ responseId: 'reply', reason: 'barge_in' }));
+    test.emit({ type: 'response.done', response: { id: 'reply', status: 'cancelled' } });
+    await vi.waitFor(() => expect(test.received.filter((event) => event.type === 'response.create')).toHaveLength(2));
+  });
+
+  it('queues a new native reply until the current audio has played when barge-in is disabled', async () => {
+    const test = await setup(undefined, false);
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'first', transcript: '你好' });
+    await vi.waitFor(() => expect(test.received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+    test.emit({ type: 'response.created', response: { id: 'reply' } });
+    test.emit({ type: 'response.audio.delta', response_id: 'reply', delta: Buffer.alloc(24_000).toString('base64') });
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(25));
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'second' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'second', transcript: '还有一个问题' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('turn.committed', expect.objectContaining({ turnId: 'second' })));
+    expect(test.received.filter((event) => event.type === 'response.create')).toHaveLength(1);
+    expect(test.send.mock.calls.some(([type]) => type === 'response.cancelled')).toBe(false);
+    test.emit({ type: 'response.done', response: { id: 'reply', status: 'completed' } });
+    engine.acknowledge('reply', 500);
+    await vi.waitFor(() => expect(test.received.filter((event) => event.type === 'response.create')).toHaveLength(2));
+  });
+
   it('keeps a managed call alive when a cancellation rejection arrives after the next reply starts', async () => {
     const test = await setup(undefined, true, true);
     test.emit({ type: 'response.created', response: { id: 'first' } });
@@ -289,7 +344,7 @@ describe('Omni voice engine', () => {
 
   it('configures native audio and sends PCM without invoking STT or Agent', async () => {
     const test = await setup();
-    expect(test.received[0]?.session).toMatchObject({ voice: 'Cherry', turn_detection: { interrupt_response: true }, modalities: ['text', 'audio'] });
+    expect(test.received[0]?.session).toMatchObject({ voice: 'Cherry', turn_detection: { create_response: false, interrupt_response: false }, modalities: ['text', 'audio'] });
     engine.appendAudio(new Uint8Array([0, 1]));
     await vi.waitFor(() => expect(test.received.at(-1)).toMatchObject({ type: 'input_audio_buffer.append', audio: 'AAE=' }));
     test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: 'Hello' });

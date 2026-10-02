@@ -158,9 +158,12 @@ describe('Agent voice interruption cleanup', () => {
     expect(test.send.mock.calls.filter(([type]) => type === 'response.cancelled')).toEqual([]);
   });
 
-  it('does not transcribe or cancel assistant playback echoed by the speaker', async () => {
+  it.each([
+    ['今天天气怎么样？答案是晴天。', '今天天气怎么样'],
+    ['今天天气晴朗。', '天气睛朗'],
+  ])('does not transcribe or cancel assistant playback echoed by the speaker: %s', async (spoken, echo) => {
     const runAgent = vi.fn(async function* () {
-      yield { type: 'assistant_delta' as const, payload: { delta: '今天天气怎么样？答案是晴天。' } };
+      yield { type: 'assistant_delta' as const, payload: { delta: spoken } };
     });
     const test = await setup(runAgent);
     mocks.speak.mockImplementationOnce(async () => ({
@@ -170,7 +173,7 @@ describe('Agent voice interruption cleanup', () => {
     test.final('first');
     await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalled());
     test.emit({ type: 'speech_started', utteranceId: 'echo' });
-    test.emit({ type: 'transcript_final', utteranceId: 'echo', revision: 1, text: '今天天气怎么样' });
+    test.emit({ type: 'transcript_final', utteranceId: 'echo', revision: 1, text: echo });
 
     expect(test.send.mock.calls.filter(([type, payload]) => type === 'input.transcript.final' && payload.utteranceId === 'echo')).toEqual([]);
     expect(test.send.mock.calls.filter(([type]) => type === 'response.cancelled')).toEqual([]);

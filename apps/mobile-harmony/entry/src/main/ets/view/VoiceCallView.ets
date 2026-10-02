@@ -6,12 +6,33 @@ import { userErrorMessage } from '../common/userError';
 export struct XopcVoiceCallView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Require @Param call: XopcVoiceCall;
+  @Param viewportWidth: number = 0;
+  @Param viewportHeight: number = 0;
   @Local now: number = Date.now();
   @Local answer: string = '';
+  @Local miniX: number = 16;
+  @Local miniY: number = 66;
   private timer: number = -1;
+  private dragStartX: number = 0;
+  private dragStartY: number = 0;
+  private lastDragAt: number = 0;
 
   aboutToAppear(): void { this.timer = setInterval((): void => { this.now = Date.now(); }, 1000); }
   aboutToDisappear(): void { clearInterval(this.timer); this.timer = -1; }
+
+  @Monitor('viewportWidth', 'viewportHeight')
+  onViewportChange(): void {
+    this.miniX = this.clampX(this.miniX);
+    this.miniY = this.clampY(this.miniY);
+  }
+
+  private clampX(value: number): number {
+    return Math.max(8, Math.min(value, this.viewportWidth > 0 ? Math.max(8, this.viewportWidth * 0.08 - 8) : value));
+  }
+
+  private clampY(value: number): number {
+    return Math.max(8, Math.min(value, this.viewportHeight > 0 ? Math.max(8, this.viewportHeight - 70) : value));
+  }
 
   private elapsed(): string {
     const seconds = Math.max(0, Math.floor((this.now - this.call.startedAt) / 1000));
@@ -134,8 +155,15 @@ export struct XopcVoiceCallView {
           Button() { SymbolGlyph($r('sys.symbol.xmark')).fontSize(18).fontColor([Color.White]) }
             .width(38).height(38).padding(0).backgroundColor(this.colors.danger).borderRadius(19).onClick((): void => { this.call.end(); })
         }.id('voice-call-mini').width('92%').height(62).padding({ left: 14, right: 10 }).backgroundColor(this.colors.panel)
-          .borderRadius(18).position({ x: '4%', y: 66 }).zIndex(60)
-          .onClick((): void => { this.call.expanded = true; })
+          .borderRadius(18).position({ x: this.miniX, y: this.miniY }).zIndex(60)
+          .gesture(PanGesture({ fingers: 1, direction: PanDirection.All, distance: 6 })
+            .onActionStart((_event: GestureEvent): void => { this.dragStartX = this.miniX; this.dragStartY = this.miniY; })
+            .onActionUpdate((event: GestureEvent): void => {
+              this.miniX = this.clampX(this.dragStartX + event.offsetX);
+              this.miniY = this.clampY(this.dragStartY + event.offsetY);
+            })
+            .onActionEnd((_event: GestureEvent): void => { this.lastDragAt = Date.now(); }))
+          .onClick((): void => { if (Date.now() - this.lastDragAt > 250) this.call.expanded = true; })
       }
     }
   }
