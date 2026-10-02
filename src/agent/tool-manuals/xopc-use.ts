@@ -265,8 +265,9 @@ For \`update\`, patch fields may be direct args or nested under \`args.patch\`. 
 
 ## Tasks
 
-Commands: \`list\`, \`get\`, \`create\`, \`update_dependencies\`, \`add_context\`,
-\`remove_context\`, \`command\`, and \`delete\`.
+Commands: \`list\`, \`get\`, \`create\`, \`delegated_tasks\`, \`collaboration\`,
+\`collaboration_post\`, \`update_dependencies\`, \`add_context\`, \`remove_context\`,
+\`command\`, and \`delete\`.
 
 Task phases are \`backlog\`, \`ready\`, \`active\`, \`review\`, and \`closed\`.
 Operational state is projected separately as \`idle\`, \`queued\`, \`running\`, \`waiting\`,
@@ -291,6 +292,13 @@ the user's intent is ambiguous.
 \`createMode\` defaults to \`capture\`, which creates a backlog Task without executing it.
 Use \`start\` only when immediate execution is intended.
 
+For an immediate delegated task, use the minimal call below. The objective can include the
+worker instructions and constraints; optional lists are unnecessary for a simple delegation.
+
+\`\`\`json
+{ "mode": "task", "command": "create", "args": { "objective": "Calculate the requested result and report progress", "createMode": "start" } }
+\`\`\`
+
 \`\`\`json
 {
   "mode": "task",
@@ -306,6 +314,24 @@ Use \`start\` only when immediate execution is intended.
     "dependsOnTaskIds": []
   }
 }
+\`\`\`
+
+### Main Agent and worker collaboration
+
+The user-facing Agent can call \`delegated_tasks\` to list Tasks created from this conversation,
+then \`collaboration\` with \`{ "taskId": "...", "afterSequence": 0 }\` to read the ordered board.
+Use the Task and TaskRun receipt as the final source of execution status.
+
+Use \`collaboration_post\` with \`taskId\`, \`kind\`, \`body\`, and a stable \`idempotencyKey\`.
+The main Agent may write \`instruction\`, \`question\`, or \`answer\`; answers include
+\`causationId\` of the worker's question. The worker may write \`progress\`, \`question\`,
+or \`ack\`; acknowledgements include \`causationId\` of the instruction. A worker question
+pauses the active TaskRun. After posting it, stop the execution turn and wait for an answer.
+An instruction is first recorded, then delivered to the worker conversation, and is only
+confirmed when the worker acknowledges it. Ordinary progress does not interrupt the user.
+
+\`\`\`json
+{ "mode": "task", "command": "collaboration_post", "args": { "taskId": "task_id", "kind": "progress", "body": "Completed source review", "idempotencyKey": "stable-key" } }
 \`\`\`
 
 ### Dependencies

@@ -189,7 +189,10 @@ export class TuiSessionSnapshot {
     parentId: string | null,
   ): TuiSessionSnapshotEntry {
     const type = message.kind ?? 'message';
-    const role = message.role;
+    const role = message.role === 'task' ? 'system' : message.role;
+    const content = message.taskTrigger
+      ? `Task update · ${message.taskTrigger.taskTitle} (${message.taskTrigger.kind})`
+      : message.content;
     const base = {
       id: message.id,
       parentId,
@@ -198,7 +201,7 @@ export class TuiSessionSnapshot {
       data: message.custom?.details,
       display: message.custom?.display,
       role,
-      content: message.content,
+      content,
       timestamp: message.timestamp,
       raw: message,
     };
@@ -207,7 +210,7 @@ export class TuiSessionSnapshot {
         ...base,
         message: {
           role,
-          content: message.content,
+          content,
           usage: {
             input: 0,
             output: 0,

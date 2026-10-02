@@ -473,7 +473,24 @@ describe('useRealtimeVoice', () => {
     act(() => root.render(<App showPage={false} />));
     expect(stop).not.toHaveBeenCalled();
     expect(track.stop).not.toHaveBeenCalled();
-    expect(document.querySelector('[role="region"]')?.textContent).toContain('Ada');
+    const miniCard = document.querySelector<HTMLElement>('[role="region"]')!;
+    expect(miniCard.textContent).toContain('Ada');
+    vi.spyOn(miniCard, 'getBoundingClientRect').mockReturnValue({ left: 600, top: 500, width: 240, height: 64 } as DOMRect);
+    const miniButton = miniCard.querySelector<HTMLButtonElement>('button')!;
+    miniButton.setPointerCapture = vi.fn();
+    const pointer = (type: string, x: number, y: number) => {
+      const event = new MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: y });
+      Object.defineProperty(event, 'pointerId', { value: 1 });
+      act(() => miniButton.dispatchEvent(event));
+    };
+    pointer('pointerdown', 620, 520);
+    pointer('pointermove', 400, 300);
+    pointer('pointerup', 400, 300);
+    expect(miniCard.style.left).toBe('380px');
+    expect(miniCard.style.top).toBe('280px');
+    await act(async () => miniButton.click());
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(stop).not.toHaveBeenCalled();
     await act(async () => document.querySelector<HTMLButtonElement>('[role="region"] button')!.click());
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     await click(labels.callEnd);

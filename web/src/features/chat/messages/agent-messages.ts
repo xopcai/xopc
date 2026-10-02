@@ -120,7 +120,8 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
     // A visible assistant reply can span multiple backend runs (for example,
     // connection/clarification resumes). The user row, not runId, is the
     // conversation bubble boundary.
-    if (prev?.role === 'assistant') {
+    if (prev?.role === 'assistant'
+      && !(m.startsNewBubble && prev.turnId !== m.turnId)) {
       prev.content = mergeAssistantContentFragments(prev.content, m.content);
       if (m.timestamp != null) prev.timestamp = m.timestamp;
       if (m.completedAt != null) prev.completedAt = m.completedAt;
@@ -268,6 +269,14 @@ export function sessionWireToUiMessages(raw: readonly unknown[]): Message[] {
       continue;
     }
 
+    if (role === 'task') {
+      const trigger = normalizeTaskTrigger(m.taskTrigger);
+      if (trigger) out.push({ role: 'task', content: [], taskTrigger: trigger,
+        ...(m.turnId ? { turnId: m.turnId } : {}),
+        timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp) });
+      continue;
+    }
+
     if (role === 'toolResult' || role === 'tool') {
       applyToolResultToLastAssistant(out, m);
       continue;
@@ -285,6 +294,15 @@ export function sessionWireToUiMessages(raw: readonly unknown[]): Message[] {
   }
 
   return mergeConsecutiveAssistantMessages(out);
+}
+
+export function normalizeTaskTrigger(value: unknown): NonNullable<Message['taskTrigger']> | null {
+  const row = asRecord(value);
+  if (!row || typeof row.entryId !== 'string' || typeof row.taskId !== 'string'
+    || typeof row.taskTitle !== 'string' || !row.taskTitle.trim()
+    || !['progress', 'question', 'result', 'failure'].includes(String(row.kind))) return null;
+  return { entryId: row.entryId, taskId: row.taskId, taskTitle: row.taskTitle,
+    kind: row.kind as NonNullable<Message['taskTrigger']>['kind'] };
 }
 
 function applyStripToUserContent(blocks: MessageContent[]): MessageContent[] {
@@ -377,6 +395,7 @@ function buildAssistantMessage(m: WireMessage): Message {
   return {
     role: 'assistant',
     ...(m.turnId ? { turnId: m.turnId } : {}),
+    ...(m.startsNewBubble ? { startsNewBubble: true } : {}),
     content,
     attachments: wireAttachmentsFromMessage(m),
     ...(outcome ? { outcome } : {}),

@@ -46,9 +46,9 @@ describe('MessageBubble fork action', () => {
       );
     });
 
-    const forkButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Fork conversation from here"]',
-    );
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="More actions"]')?.click());
+    const forkButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Fork conversation from here'));
     expect(forkButton).not.toBeNull();
     await act(async () => forkButton?.click());
     expect(onForkAssistantTurn).toHaveBeenCalledWith('turn-42');

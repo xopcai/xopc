@@ -8,6 +8,13 @@ function mapper() {
 }
 
 describe('ChatStreamMapper', () => {
+  it('includes safe task provenance on an unsolicited run start', () => {
+    const taskTrigger = { entryId: 'entry', taskId: 'task', taskTitle: 'Check prices', kind: 'result' as const };
+    const m = new ChatStreamMapper({ runId: 'task-run', conversationId: 'sk', channel: 'webchat',
+      startsNewBubble: true, taskTrigger });
+    expect(m.start()[0]).toMatchObject({ type: 'run_start',
+      payload: { startsNewBubble: true, taskTrigger } });
+  });
   it('forwards session configuration invalidation events', () => {
     const m = mapper();
     expect(m.map({ type: 'session_config_updated' })).toEqual([

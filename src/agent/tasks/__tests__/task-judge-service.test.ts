@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { parseTaskJudgeDecision, codingCompletionEvidence } from '../task-judge-service.js';
+import { parseTaskJudgeDecision, requestTaskJudgeDecision, codingCompletionEvidence } from '../task-judge-service.js';
 
 describe('parseTaskJudgeDecision', () => {
   it('keeps only unique in-range criterion indexes', () => {
@@ -22,6 +22,23 @@ describe('parseTaskJudgeDecision', () => {
 
   it('rejects responses without a JSON object', () => {
     expect(() => parseTaskJudgeDecision('completed', 1)).toThrow('invalid JSON');
+    expect(() => parseTaskJudgeDecision('{"needsUser":false}', 1)).toThrow('incomplete decision');
+  });
+
+  it('retries a malformed judge response once and uses the valid decision', async () => {
+    const complete = vi.fn()
+      .mockResolvedValueOnce('{"completedCriteria":[0],"needsUser":false,"reasons":["Done"')
+      .mockResolvedValueOnce('{"completedCriteria":[0],"needsUser":false,"reasons":["Verified"]}');
+    const decision = await requestTaskJudgeDecision(complete, 1);
+    expect(complete.mock.calls.map(([attempt]) => attempt)).toEqual([0, 1]);
+    expect(decision.completedCriteria).toEqual([0]);
+    expect(decision.judgment.reasons).toEqual(['Verified']);
+  });
+
+  it('does not invent completion when both judge responses are malformed', async () => {
+    const complete = vi.fn().mockResolvedValue('{"completedCriteria":[0],"needsUser":false');
+    await expect(requestTaskJudgeDecision(complete, 1)).rejects.toThrow();
+    expect(complete).toHaveBeenCalledTimes(2);
   });
 });
 

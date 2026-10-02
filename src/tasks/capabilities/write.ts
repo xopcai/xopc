@@ -40,8 +40,13 @@ export function registerTaskWriteCapabilities(dispatcher: CapabilityDispatcher, 
       const activation = input.activation.mode === 'start' && (!input.activation.executor || input.activation.executor.kind === 'agent')
         ? { ...input.activation, executor: { kind: 'agent' as const, agentId: agentId ?? 'main' } }
         : input.activation;
+      if (context.surface === 'agent' && input.originConversationId && input.originConversationId !== context.conversationId) {
+        throw new CapabilityError('FORBIDDEN', 'Task origin must be the active conversation');
+      }
       // Preserve the domain's established idempotency identity across upgrades.
-      return new TaskApplicationService().create({ ...input, delegateAgentId: agentId, activation, idempotencyKey: context.idempotencyKey }, context.actor);
+      return new TaskApplicationService().create({ ...input, originConversationId: context.surface === 'agent'
+        ? context.conversationId : input.originConversationId, delegateAgentId: agentId, activation,
+      idempotencyKey: context.idempotencyKey }, context.actor);
     },
     afterCommit(result) { if (result.ok) deps.wake?.(Boolean(result.runId)); },
   }));

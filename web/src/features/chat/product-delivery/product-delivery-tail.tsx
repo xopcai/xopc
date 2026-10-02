@@ -21,8 +21,12 @@ import {
   Workflow,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import useSWR from 'swr';
 
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
+import { fetchTask } from '@/features/tasks/home-api';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -105,6 +109,34 @@ function deliveryMeta(
   return `${kind} · ${state}`;
 }
 
+function taskDeliveryMeta(
+  delivery: ProductDeliveryEnvelope,
+  state: { phase?: string; resolution?: string; operationalState?: string; attention?: readonly unknown[] },
+  language: 'en' | 'zh',
+): string {
+  if (state.phase === 'closed') {
+    return state.resolution === 'done'
+      ? (language === 'zh' ? '已完成' : 'Completed')
+      : (language === 'zh' ? '已结束' : 'Closed');
+  }
+  if (state.attention?.length) return language === 'zh' ? '需要处理' : 'Needs attention';
+  if (state.operationalState === 'completed') return language === 'zh' ? '已完成' : 'Completed';
+  const labels: Record<string, { en: string; zh: string }> = {
+    queued: { en: 'Starting soon', zh: '即将开始' },
+    running: { en: 'In progress', zh: '正在进行' },
+    verifying: { en: 'Checking the result', zh: '正在核对结果' },
+    waiting: { en: 'Waiting', zh: '暂时等待' },
+    blocked: { en: 'Needs attention', zh: '需要处理' },
+  };
+  const knownState = state.operationalState && labels[state.operationalState]?.[language];
+  if (knownState) return knownState;
+  if (delivery.operation === 'completed') return language === 'zh' ? '已完成' : 'Completed';
+  if (delivery.operation === 'failed') return language === 'zh' ? '遇到问题' : 'Ran into a problem';
+  return delivery.operation === 'started'
+    ? (language === 'zh' ? '已交办' : 'Assigned')
+    : (language === 'zh' ? '待开始' : 'Ready to start');
+}
+
 function continuePrompt(reference: ProductReference, language: 'en' | 'zh'): string {
   return language === 'zh'
     ? `继续处理${KIND_LABELS[reference.kind].zh}「${reference.title}」（ID: ${reference.id}）：`
@@ -125,12 +157,33 @@ function DeliveryRow({
   const Icon = KIND_ICON[reference.kind];
   const route = productReferenceOpenRoute(reference);
   const canOpen = Boolean(route && reference.capabilities.includes('open'));
-  const canContinue = reference.kind !== 'note' && reference.capabilities.includes('continue_in_chat');
+  const canContinue = reference.kind !== 'note' && reference.kind !== 'task'
+    && reference.capabilities.includes('continue_in_chat');
   const isFailure = delivery.operation === 'failed';
-  const description = [
-    deliveryMeta(delivery, reference, language),
-    reference.summary?.trim(),
-  ].filter(Boolean).join(' · ');
+  const token = useGatewayStore((state) => state.conversationId);
+  const taskDetail = useSWR(reference.kind === 'task' ? ['task-delivery', reference.id, token] : null,
+    () => fetchTask(reference.id), { revalidateOnFocus: true });
+  useEffect(() => {
+    if (reference.kind !== 'task') return;
+    const refresh = (event: Event) => {
+      const taskId = (event as CustomEvent<{ taskId?: string }>).detail?.taskId;
+      if (!taskId || taskId === reference.id) void taskDetail.mutate();
+    };
+    window.addEventListener('task-changed-v2', refresh);
+    window.addEventListener('gateway-realtime-connected', refresh);
+    return () => {
+      window.removeEventListener('task-changed-v2', refresh);
+      window.removeEventListener('gateway-realtime-connected', refresh);
+    };
+  }, [reference.kind, reference.id, taskDetail.mutate]);
+  const description = reference.kind === 'task'
+    ? taskDeliveryMeta(delivery, {
+      phase: taskDetail.data?.task.phase,
+      resolution: taskDetail.data?.task.resolution,
+      operationalState: taskDetail.data?.operationalState ?? reference.status,
+      attention: taskDetail.data?.attention,
+    }, language)
+    : [deliveryMeta(delivery, reference, language), reference.summary?.trim()].filter(Boolean).join(' · ');
 
   const open = () => {
     if (route) navigate(withDetailReturnTo(route, `${location.pathname}${location.search}`));

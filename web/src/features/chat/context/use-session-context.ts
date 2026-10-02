@@ -26,7 +26,8 @@ export function useSessionContext(conversationId: string | null, open: boolean) 
       window.clearTimeout(timer);
       timer = window.setTimeout(() => { void mutate(); }, 150);
     };
-    const events = ['session-updated', 'run-completed', 'agent-run-ended', 'note-updated', 'task-changed-v2', 'gateway-realtime-connected'];
+    const events = ['session-updated', 'run-completed', 'agent-run-ended', 'note-updated', 'task-changed-v2',
+      'task-collaboration-entry-added', 'gateway-realtime-connected'];
     for (const event of events) window.addEventListener(event, refresh);
     return () => {
       window.clearTimeout(timer);

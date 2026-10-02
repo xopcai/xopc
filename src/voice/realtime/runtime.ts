@@ -197,6 +197,7 @@ export class VoiceRealtimeRuntime {
     principalId: string;
     socket: WebSocket;
     ticketKey: string;
+    engine?: VoiceEngine;
     shutdown: () => Promise<void>;
   }>();
   private closed = false;
@@ -350,6 +351,19 @@ export class VoiceRealtimeRuntime {
   hasConversation(conversationId: string): boolean {
     this.pruneTickets(Date.now());
     return this.conversationReservations.has(conversationId);
+  }
+
+  canOfferTaskUpdate(conversationId: string): boolean {
+    const sessionId = this.conversationReservations.get(conversationId);
+    const session = sessionId ? this.activeSessions.get(sessionId) : undefined;
+    return session?.engine?.canOfferTaskUpdate?.() === true;
+  }
+
+  async offerTaskUpdate(input: { conversationId: string; clientMessageId: string; content: string }): Promise<boolean> {
+    const sessionId = this.conversationReservations.get(input.conversationId);
+    const session = sessionId ? this.activeSessions.get(sessionId) : undefined;
+    if (!session?.engine?.canOfferTaskUpdate?.()) return false;
+    return session.engine.offerTaskUpdate?.(input) ?? false;
   }
 
   async cancelSession(sessionId: string, ticket: string, principalId: string): Promise<boolean> {
@@ -547,6 +561,8 @@ export class VoiceRealtimeRuntime {
         });
         await engine.start();
         if (closed) return;
+        const active = this.activeSessions.get(consumed.sessionId);
+        if (active?.socket === socket) active.engine = engine;
         ready = true;
         log.info({
           sessionId: consumed.sessionId,

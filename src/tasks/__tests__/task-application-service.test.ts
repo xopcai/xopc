@@ -23,6 +23,9 @@ import { buildTaskRunMessage } from '../task-run-dispatcher.js';
 import { getTaskExecutionBrief } from '../task-context-assembler.js';
 import { decisionFromTask } from '../home-query-service.js';
 import { TaskSignalService } from '../task-signal-service.js';
+import { TaskOriginRepository } from '../task-origin-repository.js';
+import { TaskCollaborationRepository } from '../task-collaboration-repository.js';
+import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 
 const contract = {
   objective: 'Ship the TaskRun boundary',
@@ -73,6 +76,21 @@ describe('TaskApplicationService', () => {
     verification: { status: 'passed' as const, checks: [{ criterion: 'tests pass', status: 'passed' as const, evidenceTitles: ['Tests'] }] }, remainingWork: [],
     needsUser: false, completionVerdict: 'achieved' as const,
   };
+
+  it('links a created task to its originating conversation once', () => {
+    const conversation = createConversation({ agentId: 'main' });
+    const input = {
+      idempotencyKey: 'origin-task', title: 'Background work', priority: 'normal' as const,
+      originConversationId: conversation.key, contract, dependencies: [], context: [], authorityGrants: [],
+      activation: { mode: 'capture' as const, phase: 'backlog' as const },
+    };
+    const service = new TaskApplicationService();
+    const first = service.create(input);
+    expect(first.ok).toBe(true);
+    expect(service.create(input)).toEqual(first);
+    expect(new TaskOriginRepository().list(conversation.key)).toMatchObject({ total: 1,
+      items: [{ id: first.ok ? first.model.task.id : undefined, title: 'Background work' }] });
+  });
 
   it('persists automation trigger context and includes it in the dispatched message', () => {
     const tasks = new TaskRepository();
@@ -147,6 +165,15 @@ describe('TaskApplicationService', () => {
       command: { type: 'close', resolution: 'cancelled' } });
     expect(service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt }))
       .toMatchObject({ ok: true, model: { task: { phase: 'closed', resolution: 'cancelled' }, attention: [] } });
+  });
+
+  it('records a final board result from the TaskRun receipt once', () => {
+    const { service, task, run } = createRunningTask('receipt-board');
+    expect(service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt }))
+      .toMatchObject({ ok: true });
+    expect(new TaskCollaborationRepository().list(task.id)).toMatchObject([
+      { kind: 'result', body: 'Result', taskRunId: run.id },
+    ]);
   });
 
   it.each([

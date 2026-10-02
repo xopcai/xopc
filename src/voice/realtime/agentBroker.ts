@@ -9,7 +9,8 @@ const MAX_TRACKED_TASKS = 256;
 export interface VoiceAgentEvent { type: string; payload?: Record<string, unknown> }
 export interface VoiceAgentTask { taskId: string; runId: string; events: AsyncIterable<VoiceAgentEvent> }
 export interface VoiceAgentBroker {
-  delegate(input: { conversationId: string; expectedTranscriptId: string; turnId: string; text: string; signal: AbortSignal }): Promise<VoiceAgentTask>;
+  delegate(input: { conversationId: string; expectedTranscriptId: string; turnId: string; text: string; signal: AbortSignal;
+    clientMessageId?: string; origin?: SubmitSessionInput['origin'] }): Promise<VoiceAgentTask>;
   cancel(taskId: string): Promise<boolean>;
 }
 
@@ -47,13 +48,19 @@ export class DurableVoiceAgentBroker implements VoiceAgentBroker {
   private readonly runByTask = new Map<string, string>();
   constructor(private readonly deps: BrokerDependencies) {}
 
-  async delegate(input: { conversationId: string; expectedTranscriptId: string; turnId: string; text: string; signal: AbortSignal }): Promise<VoiceAgentTask> {
-    const clientMessageId = `voice:${input.expectedTranscriptId}:${input.turnId}`;
-    const activeRunId = this.deps.snapshot(input.conversationId).activeRunId;
+  async delegate(input: { conversationId: string; expectedTranscriptId: string; turnId: string; text: string; signal: AbortSignal;
+    clientMessageId?: string; origin?: SubmitSessionInput['origin'] }): Promise<VoiceAgentTask> {
+    const clientMessageId = input.clientMessageId ?? `voice:${input.expectedTranscriptId}:${input.turnId}`;
+    const state = this.deps.snapshot(input.conversationId);
+    const activeRunId = state.activeRunId;
+    if (input.origin?.type === 'system' && input.origin.source === 'task_update'
+      && (activeRunId || state.inputs.some((item) => ['queued', 'running', 'injecting'].includes(item.status)))) {
+      throw new Error('Task update cannot overtake an active or queued voice turn');
+    }
     const activeRunCursor = activeRunId ? this.deps.currentSequence(`run:${activeRunId}`) : 0;
     const result = await this.deps.submit({ conversationId: input.conversationId, expectedTranscriptId: input.expectedTranscriptId,
       clientMessageId, delivery: activeRunId ? 'steer' : 'next', content: input.text,
-      origin: { type: 'channel', channel: 'voice' } });
+      origin: input.origin ?? { type: 'channel', channel: 'voice' } });
     if (result.ok === false) throw new Error(`Voice task submission failed: ${result.code}`);
 
     const deadline = Date.now() + RUN_ASSIGNMENT_TIMEOUT_MS;

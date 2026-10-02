@@ -14,6 +14,7 @@ const log = createLogger('Voice:Agent');
 const AGENT_TTS_MAX_SEGMENT_CHARACTERS = 180;
 const AGENT_TTS_MIN_SEGMENT_CHARACTERS = 24;
 const PLAYBACK_ECHO_TAIL_MS = 3_000;
+const TASK_UPDATE_QUIET_MS = 1_500;
 
 type SpeechOpening = Promise<{ result: SpeakStreamResult } | { error: unknown }>;
 
@@ -73,6 +74,8 @@ export function createAgentVoiceEngine(options: {
   let recentPlayback: { responseId: string; text: string; expiresAt: number } | undefined;
   const finalizedUtterances = new Set<string>();
   let pendingTurn: { turnId: string; text: string; cancelled: boolean } | undefined;
+  let taskUpdateQueued = false;
+  let lastUserSpeechAt = 0;
   const turn = new TurnCoordinator(claim.silenceDurationMs, (text, decision, turnId) => {
     if (closed || muted) return;
     log.info({ sessionId: claim.sessionId, turnId, disposition: decision.disposition, confidence: decision.confidence,
@@ -90,7 +93,7 @@ export function createAgentVoiceEngine(options: {
     pendingTurn = pending;
     conversationTail = conversationTail.then(() => {
       if (pendingTurn === pending) pendingTurn = undefined;
-      if (generation === inputGeneration && !pending.cancelled) return runAssistantTurn(text, turnId);
+      if (generation === inputGeneration && !pending.cancelled) return runAssistantTurn(text, turnId).then(() => {});
     }).finally(() => { if (generation === inputGeneration) queuedTurns -= 1; });
   });
   function cancelActiveResponse(reason: 'barge_in' | 'client_cancelled' | 'session_closed'): boolean {
@@ -248,8 +251,8 @@ export function createAgentVoiceEngine(options: {
     else startSpeechWorker(response);
   }
 
-  async function runAssistantTurn(text: string, turnId: string): Promise<void> {
-    if (!claim.tts || !claim.request.conversationId || !text.trim() || closed) return;
+  async function runAssistantTurn(text: string, turnId: string, updateClientMessageId?: string): Promise<boolean> {
+    if (!claim.tts || !claim.request.conversationId || !text.trim() || closed) return false;
     cancelActiveResponse('barge_in');
     const response: ActiveVoiceResponse = {
       id: `resp_${crypto.randomUUID()}`,
@@ -270,18 +273,21 @@ export function createAgentVoiceEngine(options: {
       awaitingClarification: false,
       pcm: new PcmFrameBuffer(),
     };
+    const taskUpdateExposed = () => Boolean(updateClientMessageId && response.text.trim());
     activeResponse = response;
     send('response.created', { responseId: response.id });
     try {
       await interruptionWrites;
-      if (response.abortController.signal.aborted || closed) return;
+      if (response.abortController.signal.aborted || closed) return taskUpdateExposed();
       if (!claim.conversationSessionId) throw new Error('Conversation identity is unavailable');
       const task = await options.runtime.agentBroker.delegate({ text, turnId, conversationId: claim.request.conversationId,
-        expectedTranscriptId: claim.conversationSessionId, signal: response.abortController.signal });
+        expectedTranscriptId: claim.conversationSessionId, signal: response.abortController.signal,
+        ...(updateClientMessageId ? { clientMessageId: updateClientMessageId,
+          origin: { type: 'system' as const, source: 'task_update' } } : {}) });
       response.taskId = task.taskId;
       send('task.created', { responseId: response.id, taskId: task.taskId });
       for await (const event of task.events) {
-        if (activeResponse !== response || response.abortController.signal.aborted) return;
+        if (activeResponse !== response || response.abortController.signal.aborted) return taskUpdateExposed();
         if (event.type === 'assistant_delta'
           || (event.type === 'tool_end' && event.payload?.toolName !== 'clarify')) {
           response.awaitingClarification = false;
@@ -330,7 +336,7 @@ export function createAgentVoiceEngine(options: {
           throw new Error(typeof event.payload?.message === 'string' ? event.payload.message : 'Agent response failed');
         }
       }
-      if (activeResponse !== response || response.abortController.signal.aborted || closed) return;
+      if (activeResponse !== response || response.abortController.signal.aborted || closed) return taskUpdateExposed();
       queuePhrases(response, response.segmenter.flush());
       send('response.text.done', { responseId: response.id });
       await waitForSpeech(response);
@@ -338,11 +344,11 @@ export function createAgentVoiceEngine(options: {
       const finalFrame = response.pcm.finish();
       if (finalFrame) {
         await response.playback.reserve(finalFrame.byteLength, response.abortController.signal);
-        if (activeResponse !== response || closed) return;
+        if (activeResponse !== response || closed) return taskUpdateExposed();
         options.sendAudio(response.id, finalFrame);
       }
       await response.playback.drain(response.abortController.signal);
-      if (activeResponse !== response || response.abortController.signal.aborted) return;
+      if (activeResponse !== response || response.abortController.signal.aborted) return taskUpdateExposed();
       if (response.audioStarted && response.audibleText) {
         recentPlayback = {
           responseId: response.id,
@@ -357,10 +363,15 @@ export function createAgentVoiceEngine(options: {
         audio: response.audioStarted,
       });
       activeResponse = undefined;
+      return !updateClientMessageId || taskUpdateExposed();
     } catch (error) {
-      if (response.abortController.signal.aborted || closed) return;
-      log.warn({ err: error, sessionId: claim.sessionId, responseId: response.id }, 'Realtime voice response failed');
-      send('session.error', { code: 'RESPONSE_FAILED', message: 'Voice response failed', recoverable: true });
+      if (response.abortController.signal.aborted || closed) return taskUpdateExposed();
+      log.warn({ err: error, sessionId: claim.sessionId, responseId: response.id,
+        ...(updateClientMessageId ? { clientMessageId: updateClientMessageId } : {}) },
+      updateClientMessageId ? 'Proactive voice task update deferred' : 'Realtime voice response failed');
+      if (!updateClientMessageId) {
+        send('session.error', { code: 'RESPONSE_FAILED', message: 'Voice response failed', recoverable: true });
+      }
       if (response.audioStarted) send('response.audio.done', { responseId: response.id });
       send('response.done', {
         responseId: response.id,
@@ -369,6 +380,7 @@ export function createAgentVoiceEngine(options: {
       });
       response.abortController.abort('provider_error');
       if (activeResponse === response) activeResponse = undefined;
+      return taskUpdateExposed();
     } finally {
       await waitForSpeech(response);
     }
@@ -413,6 +425,7 @@ export function createAgentVoiceEngine(options: {
     }
     if (muted || finalizedUtterances.has(event.utteranceId)) return;
     if (event.type === 'speech_started') {
+      lastUserSpeechAt = Date.now();
       if (claim.request.purpose === 'conversation') {
         if (pendingTurn) {
           pendingTurn.cancelled = true;
@@ -435,6 +448,7 @@ export function createAgentVoiceEngine(options: {
       });
     }
     if (event.type === 'transcript_final') {
+      lastUserSpeechAt = Date.now();
       const text = event.text.trim();
       if (!text) {
         if (claim.request.purpose === 'conversation') bufferFinal(event.utteranceId, '');
@@ -503,7 +517,27 @@ export function createAgentVoiceEngine(options: {
     return inputReset;
   }
 
+  function canOfferTaskUpdateInput(): boolean {
+    return claim.request.purpose === 'conversation' && Boolean(claim.tts)
+      && !closed && Boolean(sttSession) && !committing && !activeResponse
+      && !pendingTurn && queuedTurns === 0 && turn.isIdle()
+      && Date.now() - lastUserSpeechAt >= TASK_UPDATE_QUIET_MS;
+  }
+
   return {
+    canOfferTaskUpdate() {
+      return !taskUpdateQueued && canOfferTaskUpdateInput();
+    },
+    offerTaskUpdate(input) {
+      if (taskUpdateQueued || !canOfferTaskUpdateInput()) return Promise.resolve(false);
+      taskUpdateQueued = true;
+      const attempt = conversationTail.then(() => {
+        if (!canOfferTaskUpdateInput()) return false;
+        return runAssistantTurn(input.content, input.clientMessageId, input.clientMessageId);
+      });
+      conversationTail = attempt.then(() => {}, () => {});
+      return attempt.finally(() => { taskUpdateQueued = false; });
+    },
     async start() {
       const opened = await openSttSession(claim);
       if (closed || options.signal.aborted) {

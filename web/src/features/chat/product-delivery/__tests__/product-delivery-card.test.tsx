@@ -178,6 +178,23 @@ describe('AssistantResultTail product deliveries', () => {
     expect(container.querySelector('[data-turn-tail]')).not.toBeNull();
   });
 
+  it('presents a delegated task as one clear entry without raw runtime state or a second action', () => {
+    const delivery: ProductDeliveryEnvelope = {
+      version: 2,
+      operation: 'started',
+      primary: {
+        kind: 'task', id: 'task-1', title: 'Research products', status: 'idle',
+        capabilities: ['open', 'continue_in_chat'],
+      },
+    };
+    act(() => root.render(<MemoryRouter>{renderDelivery(delivery)}</MemoryRouter>));
+    expect(container.textContent).toContain('Research products');
+    expect(container.textContent).toContain('已交办');
+    expect(container.textContent).not.toContain('idle');
+    expect(container.textContent).not.toContain('继续');
+    expect(container.querySelectorAll('[data-product-delivery="task"] button')).toHaveLength(1);
+  });
+
   it('does not render a read-only object below the assistant message', () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 2,

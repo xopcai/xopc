@@ -137,6 +137,13 @@ export function appendHistoryToChatLog(
       return;
     }
 
+    if (hm.role === 'task' && hm.taskTrigger) {
+      chatLog.addSystem(`Task update · ${hm.taskTrigger.taskTitle} (${hm.taskTrigger.kind})`, {
+        displayIndex, historyIndex, role: 'system',
+      });
+      return;
+    }
+
     chatLog.finalizeAssistant(assistantHistoryMessage(hm.content), runId, {
       displayIndex,
       historyIndex,

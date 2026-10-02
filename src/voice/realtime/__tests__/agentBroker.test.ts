@@ -59,6 +59,22 @@ describe('DurableVoiceAgentBroker', () => {
     expect(types).toEqual(['stream_end']);
   });
 
+  it('keeps a task update hidden from user input and refuses to steer an active run', async () => {
+    const { broker, deps } = setup({ row: input({ status: 'completed' }) });
+    await broker.delegate({ conversationId: 'chat', expectedTranscriptId: 'session', turnId: 'entry-1',
+      text: 'Summarize result', signal: new AbortController().signal,
+      clientMessageId: 'task-main-update:entry-1', origin: { type: 'system', source: 'task_update' } });
+    expect(deps.submit).toHaveBeenCalledWith(expect.objectContaining({
+      clientMessageId: 'task-main-update:entry-1', origin: { type: 'system', source: 'task_update' },
+    }));
+    const active = setup({ activeRunId: 'run-1' });
+    await expect(active.broker.delegate({ conversationId: 'chat', expectedTranscriptId: 'session', turnId: 'entry-1',
+      text: 'Summarize result', signal: new AbortController().signal,
+      clientMessageId: 'task-main-update:entry-1', origin: { type: 'system', source: 'task_update' } }))
+      .rejects.toThrow(/cannot overtake/);
+    expect(active.deps.submit).not.toHaveBeenCalled();
+  });
+
   it('steers an active run and starts after the current event cursor', async () => {
     const { broker, deps } = setup({ activeRunId: 'run-1', row: input({ runId: undefined, targetRunId: 'run-1', effectiveDelivery: 'steer' }) });
     const task = await broker.delegate({ conversationId: 'chat', expectedTranscriptId: 'session', turnId: 'turn', text: 'hello', signal: new AbortController().signal });

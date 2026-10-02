@@ -110,6 +110,8 @@ export {
   insertSessionInput,
   listActiveSessionInputExecutions,
   listActiveSessionInputRuns,
+  listTaskUpdateRunIds,
+  listTaskUpdateTriggers,
   mutateQueuedSessionInput,
   recoverSessionInputState,
   setSessionInputStatus,
@@ -117,6 +119,7 @@ export {
   type SessionInputDelivery,
   type SessionInputPayload,
   type SessionInputState,
+  type TaskUpdateTrigger,
   type SessionInputStatus,
 } from './session-input-repository.js';
 export {

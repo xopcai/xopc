@@ -63,6 +63,15 @@ describe('store-backed chat display', () => {
     })]);
   });
 
+  it('keeps an unsolicited task update in its own live bubble', () => {
+    const previous: Message = { role: 'assistant', turnId: 'user-run',
+      content: [{ type: 'text', text: 'I am here.' }] };
+    const streaming: Message = { role: 'assistant', turnId: 'task-run', startsNewBubble: true,
+      content: [{ type: 'text', text: 'The task is complete.' }] };
+    expect(selectDisplayMessages({ viewConversationId: conversationId, conversationId,
+      messages: [previous], streamingMsg: streaming })).toEqual([previous, streaming]);
+  });
+
   it('does not merge a live assistant across a visible user boundary', () => {
     const messages: Message[] = [
       { role: 'assistant', turnId: 'run-1', content: [{ type: 'text', text: 'first' }] },
