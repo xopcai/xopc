@@ -114,8 +114,10 @@ describe('UnderstandingStatusButton', () => {
     root = createRoot(container);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => root.unmount());
+    // Radix restores focus on a timer after its dialogs unmount.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     container.remove();
     useUnderstandingActivityStore.getState().finish();
   });
