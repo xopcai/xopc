@@ -91,13 +91,13 @@ export function ConversationPlanDock({
   const triggerLabel = [stateText, activeItem?.title, changes].filter(Boolean).join(' · ');
 
   return (
-    <div className="flex w-full justify-center pb-2 pt-1">
+    <div className="mx-auto flex w-full max-w-80 justify-center pb-2 pt-1">
       <Popover.Root>
         <Popover.Trigger asChild>
           <button
             type="button"
             className={cn(
-              'inline-flex min-h-9 max-w-full items-center gap-2 rounded-pill border border-edge-subtle bg-surface-panel px-3 py-1.5 text-sm text-fg shadow-surface',
+              'inline-flex min-h-9 min-w-0 max-w-full items-center gap-2 rounded-pill border border-edge-subtle bg-surface-panel px-3 py-1.5 text-sm text-fg shadow-surface',
               interaction.transition,
               'hover:border-edge hover:bg-surface-hover/60',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
@@ -123,7 +123,7 @@ export function ConversationPlanDock({
             align="center"
             sideOffset={8}
             collisionPadding={16}
-            className="z-50 w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover outline-none"
+            className="z-[120] w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover outline-none"
           >
             <div className="flex items-center justify-between gap-3 border-b border-edge-subtle px-4 py-3">
               <div className="min-w-0">

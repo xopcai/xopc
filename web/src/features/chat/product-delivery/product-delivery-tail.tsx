@@ -27,12 +27,14 @@ import useSWR from 'swr';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { fetchTask } from '@/features/tasks/home-api';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { withDetailReturnTo } from '@/lib/navigation-return';
 import {
   productDeliveryReferences,
+  workspacePathFromFileResourceId,
   type ProductDeliveryEntry,
 } from './product-delivery-model';
 
@@ -147,16 +149,24 @@ function DeliveryRow({
   delivery,
   reference,
   language,
+  conversationId,
+  projectId,
 }: {
   delivery: ProductDeliveryEnvelope;
   reference: ProductReference;
   language: 'en' | 'zh';
+  conversationId?: string | null;
+  projectId?: string | null;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
   const Icon = KIND_ICON[reference.kind];
   const route = productReferenceOpenRoute(reference);
-  const canOpen = Boolean(route && reference.capabilities.includes('open'));
+  const filePath = reference.kind === 'file' && reference.capabilities.includes('preview')
+    ? workspacePathFromFileResourceId(reference.id) : null;
+  const canPreviewFile = Boolean(filePath && (conversationId?.trim() || projectId?.trim()));
+  const canOpen = canPreviewFile || Boolean(route && reference.capabilities.includes('open'));
   const canContinue = reference.kind !== 'note' && reference.kind !== 'task'
     && reference.capabilities.includes('continue_in_chat');
   const isFailure = delivery.operation === 'failed';
@@ -186,6 +196,10 @@ function DeliveryRow({
     : [deliveryMeta(delivery, reference, language), reference.summary?.trim()].filter(Boolean).join(' · ');
 
   const open = () => {
+    if (filePath && canPreviewFile) {
+      setPreviewPath(filePath, null, projectId, conversationId);
+      return;
+    }
     if (route) navigate(withDetailReturnTo(route, `${location.pathname}${location.search}`));
   };
 
@@ -248,9 +262,13 @@ type DeliveryReferenceEntry = ReturnType<typeof productDeliveryReferences>[numbe
 function FileDeliveryGroup({
   entries,
   language,
+  conversationId,
+  projectId,
 }: {
   entries: DeliveryReferenceEntry[];
   language: 'en' | 'zh';
+  conversationId?: string | null;
+  projectId?: string | null;
 }) {
   const label = messages(language).chat.turnOutcome.fileCount
     .replace('{{count}}', String(entries.length));
@@ -286,6 +304,8 @@ function FileDeliveryGroup({
               delivery={delivery}
               reference={reference}
               language={language}
+              conversationId={conversationId}
+              projectId={projectId}
             />
           ))}
         </ul>
@@ -298,10 +318,14 @@ export function ProductDeliveryRows({
   deliveries,
   language,
   excludedReferenceKeys,
+  conversationId,
+  projectId,
 }: {
   deliveries: ProductDeliveryEntry[];
   language: 'en' | 'zh';
   excludedReferenceKeys?: ReadonlySet<string>;
+  conversationId?: string | null;
+  projectId?: string | null;
 }) {
   const references = productDeliveryReferences(deliveries, excludedReferenceKeys);
   const fileReferences = references.filter(({ reference }) => reference.kind === 'file');
@@ -319,6 +343,8 @@ export function ProductDeliveryRows({
               delivery={delivery}
               reference={reference}
               language={language}
+              conversationId={conversationId}
+              projectId={projectId}
             />
           );
         }
@@ -328,6 +354,8 @@ export function ProductDeliveryRows({
             key="file-delivery-group"
             entries={fileReferences}
             language={language}
+            conversationId={conversationId}
+            projectId={projectId}
           />
         );
       })}

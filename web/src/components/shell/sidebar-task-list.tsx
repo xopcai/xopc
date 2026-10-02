@@ -67,6 +67,33 @@ import { useLocaleStore } from '@/stores/locale-store';
 const SessionDescriptionContext = createContext(false);
 const TaskGroupsContext = createContext<Record<string, SidebarTaskGroup>>({});
 
+const SidebarTaskChildRow = memo(function SidebarTaskChildRow({
+  child,
+  activeTaskId,
+  onNavigate,
+  sb,
+}: {
+  child: SidebarTaskGroup['items'][number];
+  activeTaskId?: string;
+  onNavigate?: () => void;
+  sb: ReturnType<typeof messages>['sidebar'];
+}) {
+  const runPresence = useChatRunPresenceStore((state) => (
+    child.activeConversationId ? state.runs[child.activeConversationId] : undefined
+  ));
+  return <Link
+    to={child.activeConversationId ? `/chat/task/${encodeURIComponent(child.taskId)}` : `/tasks/${encodeURIComponent(child.taskId)}`}
+    className={cn(
+      'ml-4 flex min-h-8 items-center gap-2 rounded-lg px-2 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg',
+      activeTaskId === child.taskId && 'bg-surface-active text-fg')}
+    onClick={() => onNavigate?.()}>
+    {runPresence?.unread ? <span className="size-1.5 shrink-0 rounded-full bg-accent"
+      aria-label={runPresence.status === 'failed' ? sb.taskSessionAgentFailed : sb.taskSessionAgentCompleted} /> : null}
+    <span className="min-w-0 flex-1 truncate">{child.title}</span>
+    <span className="shrink-0 text-xs text-fg-subtle">{sidebarTaskStatus(child.runStatus ?? child.phase, sb)}</span>
+  </Link>;
+});
+
 const PAGE_SIZE = 20;
 const PROJECT_LIMIT = 12;
 const PROJECT_PREVIEW_LIMIT = 5;
@@ -484,16 +511,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
       </div>
     </div>
     {showTaskChildren && tasksExpanded && taskGroup?.items.map((child) => (
-      <Link key={child.taskId}
-        to={child.activeConversationId ? `/chat/task/${encodeURIComponent(child.taskId)}` : `/tasks/${encodeURIComponent(child.taskId)}`}
-        className={cn(
-          'ml-4 flex min-h-8 items-center gap-2 rounded-lg px-2 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg',
-          activeTaskId === child.taskId && 'bg-surface-active text-fg')}
-        onClick={() => onNavigate?.()}>
-        <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
-        <span className="min-w-0 flex-1 truncate">{child.title}</span>
-        <span className="shrink-0 text-xs text-fg-subtle">{sidebarTaskStatus(child.runStatus ?? child.phase, sb)}</span>
-      </Link>
+      <SidebarTaskChildRow key={child.taskId} child={child} activeTaskId={activeTaskId} onNavigate={onNavigate} sb={sb} />
     ))}
     </div>
     </SidebarSortableItem>
