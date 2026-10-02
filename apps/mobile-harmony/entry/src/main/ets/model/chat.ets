@@ -78,6 +78,8 @@ export interface XopcStreamPayload { delta?: string; messageId?: string; message
 }
 export interface XopcStreamEvent { type: string; runId: string; conversationId: string; payload: XopcStreamPayload; }
 export interface XopcChatTool { id: string; name: string; input?: Object; result?: string; isError?: boolean; status?: string; details?: Object; }
+export interface XopcExecutionStep { id: string; kind: string; category?: string; text?: string; preview?: string; failure?: string; status?: string; }
+export interface XopcExecutionDetail { turnId: string; steps: XopcExecutionStep[]; }
 export interface XopcLiveActivityTool { id: string; kind: string; status: string; }
 export interface XopcChatRow { id: string; role: string; text: string; thinking?: string; tools?: string; media?: XopcHistoryMedia[]; refs?: XopcContextRef[];
   deliveries?: XopcProductDelivery[];

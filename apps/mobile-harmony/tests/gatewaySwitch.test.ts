@@ -34,7 +34,7 @@ function response(origin: string, path: string, _method: string, raw: string) {
     tokens: { accessToken: `token-${id}`, accessTokenExpiresAt: Date.now() + 120000,
       refreshToken: body.nextRefreshToken, refreshTokenExpiresAt: Date.now() + 3600000 },
   }) });
-  return JSON.stringify({ gateway: id });
+  return path === '/api/status' ? JSON.stringify({ status: 'healthy', version: '1.0' }) : JSON.stringify({ gateway: id });
 }
 describe('multi Gateway session isolation', () => {
   beforeEach(() => {
@@ -64,6 +64,14 @@ describe('multi Gateway session isolation', () => {
     expect(JSON.parse(mocks.records.get('gateway-catalog')!).activeGatewayId).toBe('a');
     expect(await session.request('/api/data')).toContain('"a"');
   });
+  it('probes an inactive Gateway without changing the active selection', async () => {
+    const session = new XopcGatewaySession(); await session.restore();
+    const result = await session.probeProfile('b');
+    expect(result.gatewayId).toBe('b'); expect(result.status).toBe('healthy');
+    expect(result.routeUrl).toBe('https://b.example.com');
+    expect(session.currentProfile()?.gatewayId).toBe('a');
+    expect(JSON.parse(mocks.records.get('gateway-catalog')!).activeGatewayId).toBe('a');
+  });
   it('rejects stale responses and does not replay an old mutation against B', async () => {
     const session = new XopcGatewaySession(); await session.restore(); await session.accessToken();
     let rejectOld!: (error: Error) => void;
@@ -76,14 +84,14 @@ describe('multi Gateway session isolation', () => {
     expect(mocks.request.mock.calls.filter(call => call[1] === '/api/mutate')).toHaveLength(1);
     expect(await session.accessToken()).toBe('token-b');
   });
-  it('serializes activation and blocks requests while the candidate is being verified', async () => {
+  it('serializes activation while the current Gateway remains usable during verification', async () => {
     const session = new XopcGatewaySession(); await session.restore();
     let finish!: () => void;
     mocks.request.mockImplementation((origin, path, method, raw) => path === '/api/status'
       ? new Promise<string>(resolve => { finish = () => resolve('{}'); }) : response(origin, path, method, raw));
     const switching = session.activate('b'); await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
     expect(session.currentProfile()?.gatewayId).toBe('a');
-    await expect(session.request('/api/data')).rejects.toThrow('GATEWAY_OPERATION_BUSY');
+    expect(await session.request('/api/data')).toContain('"a"');
     await expect(session.activate('a')).rejects.toThrow('GATEWAY_OPERATION_BUSY');
     finish(); await switching; expect(session.currentProfile()?.gatewayId).toBe('b');
   });
@@ -93,7 +101,7 @@ describe('multi Gateway session isolation', () => {
     expect(await session.accessToken()).toBe('token-b'); expect(mocks.clearKey).not.toHaveBeenCalled();
     expect(mocks.records.has(gatewayCredentialKey('a', 'refresh'))).toBe(false);
   });
-  it('cancels a request waiting for old authentication before it can send a mutation', async () => {
+  it('lets a request finish against the old Gateway before publishing the verified switch', async () => {
     const session = new XopcGatewaySession(); await session.restore();
     let finishRefresh!: () => void;
     mocks.request.mockImplementation((origin, path, method, raw) => {
@@ -103,10 +111,10 @@ describe('multi Gateway session isolation', () => {
       return response(origin, path, method, raw);
     });
     const mutation = session.request('/api/mutate', 'POST', '{}');
-    const rejected = expect(mutation).rejects.toThrow('OPERATION_CANCELLED');
     await vi.waitFor(() => expect(finishRefresh).toBeTypeOf('function'));
-    const switching = session.activate('b'); finishRefresh(); await switching; await rejected;
-    expect(mocks.request.mock.calls.some(call => call[1] === '/api/mutate')).toBe(false);
+    const switching = session.activate('b'); finishRefresh();
+    expect(await mutation).toContain('"a"'); await switching;
+    expect(mocks.request.mock.calls.filter(call => call[1] === '/api/mutate')).toHaveLength(1);
     expect(await session.accessToken()).toBe('token-b');
   });
 });

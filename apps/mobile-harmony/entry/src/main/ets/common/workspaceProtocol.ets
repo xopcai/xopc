@@ -19,7 +19,7 @@ export function projectItem(project: XopcProject): XopcWorkspaceItem {
 export function automationItem(automation: XopcAutomation): XopcWorkspaceItem {
   if (!automation?.id || !automation.trigger || !automation.action) throw new Error('INVALID_AUTOMATION');
   return { id: automation.id, title: automation.name, body: automation.action.instruction ?? '',
-    status: automation.enabled ? 'enabled' : 'paused', version: 0, enabled: automation.enabled,
+    status: automation.enabled ? 'enabled' : 'paused', version: 0, enabled: automation.enabled, projectId: automation.projectId,
     cron: automation.trigger.schedule?.expr ?? '', editable: automation.trigger.kind === 'schedule'
       && automation.trigger.schedule?.kind === 'cron' && automation.action.kind === 'agent',
     actions: ['run', automation.enabled ? 'pause' : 'resume', 'delete'], automation };
@@ -30,9 +30,10 @@ export function newTask(title: string, body: string, idempotencyKey: string, pro
       approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'manual', outputDestinations: [] },
     activation: { mode: 'capture', phase: 'backlog' } };
 }
-export function scheduledAutomation(title: string, body: string, cron: string, create: boolean, existing?: XopcAutomation): XopcAutomationWrite {
+export function scheduledAutomation(title: string, body: string, cron: string, create: boolean,
+  existing?: XopcAutomation, projectId?: string): XopcAutomationWrite {
   const result: XopcAutomationWrite = { name: title.trim(), trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: cron.trim() } },
-    action: { kind: 'agent', instruction: body.trim() } };
+    action: { kind: 'agent', instruction: body.trim() }, projectId: projectId || existing?.projectId };
   if (create) { result.enabled = true; result.conversationMode = 'new_session'; }
   else if (existing) {
     const original = JSON.parse(JSON.stringify(existing)) as XopcAutomation;

@@ -88,6 +88,23 @@ afterEach(async () => {
 });
 
 describe('local computer control', () => {
+  it('admits a discovered app in all-app mode and stops an unlisted active app when disabled', async () => {
+    const desktop = host();
+    expect((await desktop.setComputerAllAppAccess(true)).allowAllApps).toBe(true);
+    const discovered = await desktop.broker.command({ op: 'discover', sessionId: 'd', owner: 'owner', query: 'Notes' });
+    await desktop.broker.command({ op: 'open', sessionId: 's', owner: 'owner', appRef: discovered.apps![0].appRef,
+      mode: 'control', prepare: false, model: { modelRef: 'ali/gui', profile: 'gui-plus-2026-02-26', origin: 'https://example.com', runtimeLocation: 'local' } });
+    await vi.waitFor(() => expect(desktop.broker.snapshot().status).toBe('ready'));
+    expect((await desktop.computerAccess()).appsBusy).toBe(true);
+    expect((await desktop.setComputerAllAppAccess(false)).allowAllApps).toBe(false);
+    expect(desktop.broker.snapshot().status).toBe('stopped');
+  });
+  it('keeps local access settings available when app discovery fails', async () => {
+    const desktop = host();
+    vi.spyOn(desktop.broker, 'listAppsForSettings').mockRejectedValue(new Error('COMPUTER_DRIVER_OFFLINE'));
+    expect(await desktop.computerAccess()).toMatchObject({ allowAllApps: false, appsUnavailable: true, apps: [] });
+    expect(await desktop.setComputerAllAppAccess(true)).toMatchObject({ allowAllApps: true, appsUnavailable: true });
+  });
   it('uses a settings grant for the app and revokes an active lease without action dialogs', async () => {
     const desktop = host();
     const initial = await desktop.computerAccess();

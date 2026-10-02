@@ -6,6 +6,10 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('leaves the eagerly registered execution detail route to sessions', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/sessions/id/execution-detail')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/sessions/id/execution-detail-other')).toBeUndefined();
+  });
   it('maps usage routes without capturing neighboring paths', () => {
     for (const path of ['/api/usage/summary', '/api/usage/events', '/api/usage/events/id', '/api/usage/traces/trace']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('usage');

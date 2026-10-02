@@ -12,6 +12,8 @@ export struct XopcWorkspaceView {
   @Param section: XopcSection = 'tasks';
   @Param heading: ResourceStr = '';
   @Param initialId: string = '';
+  @Param createOnAppear: boolean = false;
+  @Param projectId: string = '';
   @Event onExit: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onCreateWithChat: (section: XopcSection) => Promise<void> = async (_section: XopcSection): Promise<void> => {};
@@ -22,7 +24,7 @@ export struct XopcWorkspaceView {
   @Local automationDefinitionExpanded: boolean = false;
   @Local creatingChat: boolean = false;
 
-  aboutToAppear(): void { this.model.start(this.section, this.initialId); }
+  aboutToAppear(): void { this.model.start(this.section, this.initialId, this.createOnAppear, this.projectId); }
   @Monitor('initialId')
   onTargetChange(): void {
     this.automationDefinitionExpanded = false;
@@ -48,7 +50,8 @@ export struct XopcWorkspaceView {
         } catch (_error) { return; }
       }
     }
-    if (this.model.selected && !this.initialId) this.model.back(); else this.onExit();
+    if (this.createOnAppear) this.onExit();
+    else if (this.model.selected && !this.initialId) this.model.back(); else this.onExit();
   }
 
   private label(action: string): ResourceStr {
@@ -237,7 +240,10 @@ export struct XopcWorkspaceView {
         }
       }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
     }.width('100%').padding(0).borderRadius(18).backgroundColor(this.colors.panel)
-      .onClick((): void => { this.automationDefinitionExpanded = false; this.model.open(item.id); })
+      .onClick((): void => {
+        if (this.section === 'projects') this.onNavigate({ page: 'project-detail', itemId: item.id });
+        else { this.automationDefinitionExpanded = false; this.model.open(item.id); }
+      })
   }
 
   @Builder
@@ -432,7 +438,10 @@ export struct XopcWorkspaceView {
         ListItem() {
           Button($r('app.string.save')).width('100%').height(48).backgroundColor(this.colors.accent)
             .fontColor(Color.White).enabled(!this.model.busy && !!this.model.title.trim())
-            .onClick((): void => { this.model.save(); })
+            .onClick(async (): Promise<void> => {
+              await this.model.save();
+              if (this.createOnAppear && !this.model.error) this.onExit();
+            })
         }
       } else {
         ListItem() {

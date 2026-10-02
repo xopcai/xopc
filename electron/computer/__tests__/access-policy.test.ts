@@ -27,4 +27,14 @@ describe('computer access policy', () => {
     state.files.set('/fixture/computer-access-policy.json', '{"authorizedAppIds":["com.example.Notes"]}');
     await expect(new ComputerAccessPolicy().allows('com.example.Notes')).rejects.toThrow();
   });
+
+  it('allows current and future apps in all-app mode and restores explicit grants when disabled', async () => {
+    const policy = new ComputerAccessPolicy();
+    await policy.set('com.example.Notes', true);
+    await policy.setAll(true);
+    expect(await new ComputerAccessPolicy().allows('com.example.Future')).toBe(true);
+    await policy.setAll(false);
+    expect(await new ComputerAccessPolicy().allows('com.example.Future')).toBe(false);
+    expect(await new ComputerAccessPolicy().allows('com.example.Notes')).toBe(true);
+  });
 });

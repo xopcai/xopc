@@ -11,7 +11,7 @@ import {
   XopcSessionList, XopcSessionItem, XopcHistory, XopcCreateSession,
   XopcRun, XopcAbort, XopcRename, XopcChatAttachment,
   XopcChatModels, XopcChatAgents, XopcAgentConfig, XopcQueueState, XopcQueuedInput, XopcQueueUpdate, XopcContextRef,
-  XopcInputResult
+  XopcInputResult, XopcExecutionDetail
 } from '../model/chat';
 
 interface XopcPreparationRetry { operationId: string; expectedRevision: number; idempotencyKey: string; }
@@ -25,6 +25,7 @@ interface XopcReplaceTurnCommand {
 interface XopcCommandFailure { error?: XopcCommandFailureCode; }
 interface XopcCommandFailureCode { code?: string; }
 interface XopcSendNetworkError { code?: number; }
+interface XopcExecutionDetailResponse { detail?: XopcExecutionDetail; }
 
 export class XopcChatRepository {
   private recoverableSend(error: Error): boolean {
@@ -180,6 +181,14 @@ export class XopcChatRepository {
       await chatHistoryCache.writePage(gatewayId, id, transcriptId, before, page);
     }
     return page;
+  }
+  async executionDetail(id: string, turnId: string): Promise<XopcExecutionDetail> {
+    const connection = gatewaySession.connectionRevision();
+    const response = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id)
+      + '/execution-detail?turnId=' + encodeURIComponent(turnId))) as XopcExecutionDetailResponse;
+    gatewaySession.assertConnection(connection);
+    if (!response.detail || response.detail.turnId !== turnId || !Array.isArray(response.detail.steps)) throw new Error('INVALID_EXECUTION_DETAIL');
+    return response.detail;
   }
   async cachedHistory(id: string): Promise<XopcHistory | undefined> {
     const revision = gatewaySession.connectionRevision();

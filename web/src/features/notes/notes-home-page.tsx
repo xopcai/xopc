@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Archive, ArrowLeft, ArrowRight, AudioLines, Bookmark, FileText, Folder, Inbox, Loader2, MoreHorizontal, NotebookText, Plus, Search, Sparkles, Star, Trash2 } from 'lucide-react';
+import { Archive, ArrowLeft, ArrowRight, AudioLines, Bookmark, ChevronDown, FileText, Folder, Inbox, Loader2, MoreHorizontal, NotebookText, Plus, Search, Sparkles, Star, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -42,6 +42,7 @@ export function NotesHomePage() {
   const [projectSearch, setProjectSearch] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [creatingBlank, setCreatingBlank] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
   const [pinning, setPinning] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<NoteIndexEntry | null>(null);
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
@@ -56,6 +57,7 @@ export function NotesHomePage() {
     token ? ['notes-home-projects', token] : null, listNoteProjects,
   );
   const projects = projectData?.items ?? [];
+  const activeProjects = projects.filter((project) => project.noteCount > 0).slice(0, 2);
   const selectedProject = projects.find((p) => p.id === projectId);
   const currentProjectLabel = selectedProject?.name ?? h.projectNotes;
   const notes = data?.items ?? [];
@@ -95,7 +97,7 @@ export function NotesHomePage() {
     if (blankBusy.current || !token) return;
     blankBusy.current = true;
     setCreatingBlank(true); setActionError(null);
-    blankRequest.current ??= { key: crypto.randomUUID(), projectId: destination || undefined };
+    blankRequest.current ??= { key: crypto.randomUUID(), projectId: projectId || undefined };
     try {
       const note = await createNote({ markdown: '', kind: 'thought', projectId: blankRequest.current.projectId }, blankRequest.current.key);
       blankRequest.current = null;
@@ -105,7 +107,7 @@ export function NotesHomePage() {
     } finally {
       blankBusy.current = false; setCreatingBlank(false);
     }
-  }, [destination, n.createBlankFailed, n.createBlankFailedHint, openNote, refresh, token]);
+  }, [projectId, n.createBlankFailed, n.createBlankFailedHint, openNote, refresh, token]);
 
   const setSearch = useCallback((value: string) => {
     setParams((current) => {
@@ -170,10 +172,6 @@ export function NotesHomePage() {
           <input ref={searchRef} type="search" value={search} onChange={(event) => setSearch(event.target.value)}
             aria-label={n.searchDialogTitle} placeholder={n.searchPlaceholder} className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-muted" />
         </label>
-        <button type="button" onClick={() => void createBlank()} disabled={creatingBlank} aria-label={h.blankNote}
-          className={cn(quietButton, 'border border-edge bg-surface-panel text-fg')}>
-          {creatingBlank ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}<span className="hidden sm:inline">{h.blankNote}</span>
-        </button>
       </div>,
     });
     return () => clearPageHeader();
@@ -200,6 +198,7 @@ export function NotesHomePage() {
     { id: 'archived', label: n.filterArchived, Icon: Archive },
   ];
   const scopeValue = projectId ? `project:${projectId}` : unassigned ? 'unassigned' : 'all';
+  const emptyHome = !loading && !error && total === 0 && !projectId && !unassigned && !search && view === 'all';
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 overflow-hidden bg-surface-panel">
@@ -220,42 +219,56 @@ export function NotesHomePage() {
       </aside>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-4 sm:px-6 sm:py-7 lg:px-8 lg:py-9">
-          <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-            <h2 className="min-w-0 break-words text-2xl font-semibold tracking-tight text-fg">{projectId ? currentProjectLabel : unassigned ? h.unassigned : h.homeTitle}</h2>
+          <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="min-w-0 break-words text-2xl font-semibold tracking-tight text-fg">{projectId ? currentProjectLabel : unassigned ? h.unassigned : emptyHome ? h.firstNoteTitle : h.continueTitle}</h2>
+              <p className="mt-1 text-sm text-fg-muted">{projectId ? h.projectDescription : emptyHome ? h.firstNoteDescription : h.continueDescription}</p>
+            </div>
             {projectId ? <button type="button" onClick={() => navigate(`/projects/${encodeURIComponent(projectId)}`)} className={cn(quietButton, 'text-xs')}>{h.openProject}<ArrowRight className="size-3.5" aria-hidden /></button> : null}
           </div>
           {actionError ? <p className="mb-4 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">{actionError}</p> : null}
-          <div className="order-3 mt-6 sm:order-none sm:mt-0"><NotesHomeComposer projects={projects} projectId={destination} onProjectChange={setDestination} onCreated={refresh} labels={n}
-            projectsLoading={projectsLoading} projectsError={Boolean(projectError)} /></div>
+          <section aria-label={h.startAction}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={() => {
+                setComposerOpen((open) => !open);
+                if (!composerOpen) window.requestAnimationFrame(() => document.getElementById('notes-home-prompt')?.focus());
+              }} aria-expanded={composerOpen} aria-controls="notes-home-agent-composer"
+                className={cn('touch-target flex min-h-20 items-center gap-3 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', composerOpen ? 'border-accent/60 bg-accent-soft' : 'border-edge bg-surface-panel hover:bg-surface-hover')}>
+                <Sparkles className="size-5 shrink-0 text-accent-fg" aria-hidden />
+                <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-fg">{h.agentAction}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{h.agentActionHint}</span></span>
+                <ChevronDown className={cn('size-4 shrink-0 text-fg-muted transition-transform', composerOpen && 'rotate-180')} aria-hidden />
+              </button>
+              <button type="button" onClick={() => void createBlank()} disabled={creatingBlank}
+                className="touch-target flex min-h-20 items-center gap-3 rounded-xl border border-edge bg-surface-panel p-4 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
+                {creatingBlank ? <Loader2 className="size-5 shrink-0 animate-spin text-fg-muted" aria-hidden /> : <Plus className="size-5 shrink-0 text-fg-muted" aria-hidden />}
+                <span><span className="block text-sm font-semibold text-fg">{h.blankNote}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{h.blankActionHint}</span></span>
+              </button>
+            </div>
+            <div id="notes-home-agent-composer" hidden={!composerOpen} className={cn('mt-3', !composerOpen && 'hidden')}><NotesHomeComposer projects={projects} projectId={destination} onProjectChange={setDestination} onCreated={refresh} labels={n}
+              projectsLoading={projectsLoading} projectsError={Boolean(projectError)} /></div>
+          </section>
           {projectError ? <div role="alert" className="mt-4 flex items-center gap-3 text-xs text-danger"><span>{h.projectsLoadFailed}</span><button type="button" onClick={() => void mutateProjects().catch(() => undefined)} className="underline">{h.retry}</button></div> : null}
-          {!projectId && !unassigned && (projectsLoading || projects.length > 0) ? (
-            <section className="order-4 mt-8 sm:order-none" aria-label={h.continueProjects}>
-              <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-fg">{h.continueProjects}</h3><button type="button" onClick={() => navigate('/projects')} className="text-xs text-fg-muted hover:text-fg">{h.allProjects}</button></div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {projectsLoading ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-28 w-full" />) : projects.slice(0, 3).map((project) => (
-                  <button key={project.id} type="button" onClick={() => chooseScope(project.id)} className="min-w-0 rounded-lg border border-edge bg-surface-panel p-3 text-left transition-colors sm:p-4 hover:bg-surface-base focus-visible:ring-2 focus-visible:ring-accent">
-                    <span className="flex items-center gap-2 text-sm font-medium text-fg"><Folder className="size-4 shrink-0" aria-hidden /><span className="truncate">{project.name}</span></span>
-                    {project.description ? <p className="mt-2 hidden line-clamp-1 text-xs text-fg-muted sm:block">{project.description}</p> : null}
-                    <span className="mt-2 flex flex-wrap items-center justify-between gap-1 text-xs text-fg-muted sm:mt-3"><span>{n.noteCount.replace('{{count}}', String(project.noteCount))}</span><span>{project.updatedAt ? formatRelativeTime(project.updatedAt, now, timeLabels) : h.emptyProject}</span></span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ) : null}
-          <section className="order-2 mt-2 pb-6 sm:order-none sm:mt-8" aria-label={h.recentNotes}>
+          {!emptyHome ? <section className="mt-8 pb-6" aria-label={h.recentNotes}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-fg">{projectId ? h.projectNotes : h.recentNotes}</h3>
-              <div className="w-48 max-w-full">
+              <h3 className="text-sm font-semibold text-fg">{view === 'favorites' ? h.favorites : view === 'archived' ? n.filterArchived : projectId ? h.projectNotes : h.recentNotes}</h3>
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" aria-pressed={view === 'agent'} onClick={() => chooseView(view === 'agent' ? 'all' : 'agent')}
+                  className={cn('touch-target rounded-md px-2 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent', view === 'agent' && 'bg-accent-soft text-accent-fg')}>
+                  {h.agentEdited}
+                </button>
+                <span className="hidden text-xs text-fg-muted xl:inline">{h.sortUpdated}</span>
+                <div className="w-48 max-w-full xl:hidden">
                 <PopoverSelect value={scopeValue} allowEmpty={false} ariaLabel={h.projects} placeholder={h.allNotes}
                   options={[{ value: 'all', label: h.allNotes }, { value: 'unassigned', label: h.unassigned }, ...projects.filter((p) => p.name.toLowerCase().includes(projectSearch.toLowerCase())).map((p) => ({ value: `project:${p.id}`, label: p.name }))]}
                   selectedLabel={projectId ? currentProjectLabel : unassigned ? h.unassigned : h.allNotes}
                   triggerClassName="h-8 bg-surface-panel text-xs" loading={projectsLoading}
                   searchPlaceholder={h.projectSearch} searchValue={projectSearch} onSearchChange={setProjectSearch}
                   onChange={(value) => chooseScope(value.startsWith('project:') ? value.slice(8) : '', value === 'unassigned' ? value : 'all')} />
+                </div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-x-5 border-b border-edge" aria-label={n.libraryTitle}>
-              {[{ id: 'all', label: n.filterAll }, { id: 'agent', label: h.agentEdited }, { id: 'favorites', label: h.favorites }, { id: 'archived', label: n.filterArchived }].map(({ id, label }) => (
+            <div className="flex flex-wrap items-center gap-x-5 border-b border-edge xl:hidden" aria-label={n.libraryTitle}>
+              {[{ id: 'all', label: n.filterAll }, { id: 'favorites', label: h.favorites }, { id: 'archived', label: n.filterArchived }].map(({ id, label }) => (
                 <button type="button" key={id} aria-pressed={view === id || (id === 'all' && view === 'unassigned')}
                   onClick={() => chooseView(id)}
                   className={cn('touch-target border-b-2 border-transparent py-3 text-xs text-fg-muted hover:text-fg', (view === id || (id === 'all' && view === 'unassigned')) && 'border-fg font-medium text-fg')}>
@@ -331,7 +344,21 @@ export function NotesHomePage() {
                 <button type="button" aria-label={h.nextPage} disabled={(page + 1) * NOTES_HOME_PAGE_SIZE >= total} className={quietButton} onClick={() => setParams((current) => { const next = new URLSearchParams(current); next.set('page', String(page + 1)); return next; })}><ArrowRight className="size-4" aria-hidden /></button>
               </div> : null}
             </div> : null}
-          </section>
+          </section> : null}
+          {!projectId && !unassigned && (projectsLoading || activeProjects.length > 0) ? (
+            <section className="mt-8" aria-label={h.continueProjects}>
+              <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-fg">{h.continueProjects}</h3><button type="button" onClick={() => navigate('/projects')} className="text-xs text-fg-muted hover:text-fg">{h.allProjects}</button></div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {projectsLoading ? [0, 1].map((i) => <Skeleton key={i} className="h-28 w-full" />) : activeProjects.map((project) => (
+                  <button key={project.id} type="button" onClick={() => chooseScope(project.id)} className="min-w-0 rounded-lg border border-edge bg-surface-panel p-3 text-left transition-colors sm:p-4 hover:bg-surface-base focus-visible:ring-2 focus-visible:ring-accent">
+                    <span className="flex items-center gap-2 text-sm font-medium text-fg"><Folder className="size-4 shrink-0" aria-hidden /><span className="truncate">{project.name}</span></span>
+                    {project.description ? <p className="mt-2 hidden line-clamp-1 text-xs text-fg-muted sm:block">{project.description}</p> : null}
+                    <span className="mt-2 flex flex-wrap items-center justify-between gap-1 text-xs text-fg-muted sm:mt-3"><span>{n.noteCount.replace('{{count}}', String(project.noteCount))}</span><span>{project.updatedAt ? formatRelativeTime(project.updatedAt, now, timeLabels) : h.emptyProject}</span></span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
       </div>
       <ConfirmDialog

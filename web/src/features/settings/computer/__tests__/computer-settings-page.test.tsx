@@ -31,8 +31,8 @@ async function renderPanel(zh = true) {
 }
 
 it.each([
-  { language: 'zh' as const, badge: '实验性', notice: '识别和操作可能出错', label: '电脑控制' },
-  { language: 'en' as const, badge: 'Experimental', notice: 'perform incorrect actions', label: 'Computer use' },
+  { language: 'zh' as const, badge: 'macOS · 实验性', notice: '请核对任务结果', label: '电脑控制' },
+  { language: 'en' as const, badge: 'macOS · Experimental', notice: 'Check the result', label: 'Computer use' },
 ])('labels computer use as experimental in $language without changing settings', async ({ language, badge, notice, label }) => {
   window.electronAPI = undefined;
   const container = await renderPanel(language === 'zh');
@@ -88,11 +88,67 @@ it('authorizes an application from settings and can revoke it there', async () =
   } } as any;
   const container = await renderPanel();
   const button = (label: string) => [...container.querySelectorAll('button')].find(item => item.textContent === label)!;
+  expect(container.textContent).toContain('还没有授权应用');
+  await act(async () => button('添加应用').click());
   expect(container.textContent).toContain('Notes');
   await act(async () => button('授权').click());
   expect(setAppAccess).toHaveBeenCalledWith('com.example.Notes', true);
+  expect(container.textContent).not.toContain('还没有授权应用');
   await act(async () => button('撤销').click());
   expect(setAppAccess).toHaveBeenCalledWith('com.example.Notes', false);
+});
+
+it('can allow all apps without depending on the app catalog', async () => {
+  let allowAllApps = false;
+  const setAllAppAccess = vi.fn(async (allowed: boolean) => ({ apps: [], authorizedAppIds: [], allowAllApps: allowed }));
+  window.electronAPI = { platform: 'darwin', computer: {
+    status: async () => ({ connected: true, permissions: { accessibility: true, screenRecording: 'granted' } }),
+    access: async () => ({ apps: [], authorizedAppIds: [], allowAllApps }), setAllAppAccess,
+  } } as any;
+  const container = await renderPanel();
+  const toggle = container.querySelector<HTMLButtonElement>('[role="switch"][aria-label="所有应用"]')!;
+  expect(toggle.getAttribute('aria-checked')).toBe('false');
+  await act(async () => toggle.click());
+  allowAllApps = true;
+  expect(setAllAppAccess).toHaveBeenCalledWith(true);
+  expect(toggle.getAttribute('aria-checked')).toBe('true');
+  expect(container.textContent).not.toContain('还没有授权应用');
+  await act(async () => toggle.click());
+  expect(setAllAppAccess).toHaveBeenCalledWith(false);
+});
+
+it('orders routine setup by control, app access and model, with granted permissions condensed', async () => {
+  window.electronAPI = { platform: 'darwin', computer: {
+    status: async () => ({ connected: true, permissions: { accessibility: true, screenRecording: 'granted' } }),
+    access: async () => ({ apps: [], authorizedAppIds: [], allowAllApps: false }),
+  } } as any;
+  const container = await renderPanel();
+  const headings = [...container.querySelectorAll('section h2')].map(item => item.textContent);
+  expect(headings).toEqual(['控制能力', '应用授权', '电脑控制模型', '本机权限', '其他控制']);
+  expect(container.textContent).toContain('辅助功能与屏幕录制已授权查看');
+  expect(container.textContent).not.toContain('桌面连接');
+});
+
+it('moves missing local permissions ahead of app access', async () => {
+  window.electronAPI = { platform: 'darwin', computer: {
+    status: async () => ({ connected: false, permissions: { accessibility: false, screenRecording: 'denied' } }),
+    access: async () => ({ apps: [], authorizedAppIds: [], allowAllApps: false }),
+  } } as any;
+  const container = await renderPanel();
+  const headings = [...container.querySelectorAll('section h2')].map(item => item.textContent);
+  expect(headings).toEqual(['控制能力', '本机权限', '应用授权', '电脑控制模型', '其他控制']);
+});
+
+it('shows that app discovery is busy during an active control task', async () => {
+  window.electronAPI = { platform: 'darwin', computer: {
+    status: async () => ({ connected: true, permissions: { accessibility: true, screenRecording: 'granted' } }),
+    access: async () => ({ apps: [], authorizedAppIds: [], allowAllApps: false, appsBusy: true }),
+  } } as any;
+  const container = await renderPanel();
+  const add = [...container.querySelectorAll('button')].find(button => button.textContent === '添加应用')!;
+  await act(async () => add.click());
+  expect(container.textContent).toContain('控制任务进行中，稍后刷新应用');
+  expect(container.textContent).not.toContain('没有找到应用');
 });
 
 it('disables computer control in the web console', async () => {
@@ -148,11 +204,11 @@ it('refreshes stop state immediately and requires explicit resume', async () => 
   window.electronAPI = { platform: 'darwin', computer: { status: async () => status(), stop: async () => { paused = true; return { ok: true }; }, resume } } as any;
   const container = await renderPanel();
   await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '停止桌面操作')!.click());
-  expect(container.textContent).toContain('桌面操作已停止');
-  expect(container.textContent).toContain('自动重试不会恢复');
+  expect(container.textContent).toContain('桌面控制已停止');
+  expect(container.textContent).toContain('桌面控制已暂停');
   await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '恢复桌面控制')!.click());
   expect(resume).toHaveBeenCalledOnce();
-  expect(container.textContent).not.toContain('自动重试不会恢复');
+  expect(container.textContent).not.toContain('桌面控制已暂停');
 });
 
 it('translates an existing stop notice when the app language changes', async () => {
@@ -162,10 +218,10 @@ it('translates an existing stop notice when the app language changes', async () 
   } } as any;
   const container = await renderPanel();
   await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '停止桌面操作')!.click());
-  expect(container.textContent).toContain('桌面操作已停止');
+  expect(container.textContent).toContain('桌面控制已停止');
   await act(async () => root!.render(<MemoryRouter><ComputerSettingsPanel zh={false} /></MemoryRouter>));
-  expect(container.textContent).toContain('Desktop operations stopped.');
-  expect(container.textContent).not.toContain('桌面操作已停止');
+  expect(container.textContent).toContain('Desktop control stopped.');
+  expect(container.textContent).not.toContain('桌面控制已停止');
 });
 
 async function changeModel(container: HTMLElement, value: string) {
@@ -185,7 +241,7 @@ it('saves the GUI model without replacing the latest chat model and other defaul
     ...latest.defaults,
     models: { ...latest.defaults.models, computerUse: { primary: 'dashscope-cn/gui-plus-2026-02-26', fallbacks: [] } },
   });
-  expect(container.textContent).toContain('模型已保存');
+  expect(container.textContent).toContain('新任务将使用此模型');
 });
 
 it('rejects invalid model references without writing defaults', async () => {
