@@ -1198,6 +1198,11 @@ app.whenReady().then(async () => {
   };
   ipcMain.handle('computer:status', (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.snapshot(); });
   ipcMain.handle('computer:access', async (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.computerAccess(); });
+  ipcMain.handle('computer:set-all-app-access', async (event, allowed: boolean) => {
+    assertMainComputerRenderer(event);
+    if (typeof allowed !== 'boolean') throw new Error('Invalid computer access request');
+    return desktopEndpointHost?.setComputerAllAppAccess(allowed);
+  });
   ipcMain.handle('computer:set-app-access', async (event, appId: string, allowed: boolean) => {
     assertMainComputerRenderer(event);
     if (typeof appId !== 'string' || typeof allowed !== 'boolean') throw new Error('Invalid computer access request');

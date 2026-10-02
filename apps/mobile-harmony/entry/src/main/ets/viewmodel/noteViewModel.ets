@@ -46,8 +46,10 @@ export class XopcNoteViewModel {
   private media: XopcNoteMediaService = new XopcNoteMediaService();
   private generation: number = 0;
   private saveTimer: number = -1;
+  private projectId: string = '';
 
-  async start(context: common.Context, initialId: string = '', initialStatus: XopcNoteStatus | '' = ''): Promise<void> {
+  async start(context: common.Context, initialId: string = '', initialStatus: XopcNoteStatus | '' = '', projectId: string = ''): Promise<void> {
+    this.projectId = projectId;
     this.status = initialStatus;
     if (initialId) this.openingId = initialId;
     try {
@@ -69,7 +71,7 @@ export class XopcNoteViewModel {
     if (more) this.loadingMore = true; else this.loading = true;
     this.error = '';
     try {
-      const result = await this.repository.list(this.search, this.status, more ? this.items.length : 0);
+      const result = await this.repository.list(this.search, this.status, more ? this.items.length : 0, this.projectId);
       if (generation !== this.generation) return;
       const remoteItems = more ? this.items.concat(result.items.filter((item: XopcNoteIndexEntry): boolean =>
         !this.items.some((current: XopcNoteIndexEntry): boolean => current.id === item.id))) : result.items;
@@ -115,13 +117,13 @@ export class XopcNoteViewModel {
     finally { if (generation === this.generation) { this.loading = false; this.openingId = ''; } }
   }
 
-  create(): void {
+  create(projectId: string = this.projectId): void {
     if (this.loading) return;
     const now = Date.now();
     const noteId = LOCAL_NOTE_PREFIX + this.crypto.uuid();
     this.selected = undefined;
     this.draft = {
-      noteId, title: '', markdown: '', baseRevision: 0, localVersion: 1, updatedAt: now,
+      noteId, projectId, title: '', markdown: '', baseRevision: 0, localVersion: 1, updatedAt: now,
       syncState: 'dirty', mutationId: this.crypto.uuid()
     };
     this.remoteConflict = undefined; this.editing = true; this.error = '';
@@ -424,6 +426,7 @@ export class XopcNoteViewModel {
   private draftFromNote(note: XopcNote): XopcNoteDraft {
     return {
       noteId: note.id, title: note.title ?? '', markdown: note.markdown,
+      projectId: note.projectId,
       baseRevision: note.remoteVersion ?? 1, localVersion: note.localVersion ?? 1,
       updatedAt: note.updatedAt, syncState: 'clean', mutationId: this.crypto.uuid()
     };
@@ -432,6 +435,7 @@ export class XopcNoteViewModel {
   private copyDraft(draft: XopcNoteDraft, change: XopcNoteDraftChange): XopcNoteDraft {
     return {
       noteId: change.noteId !== undefined ? change.noteId : draft.noteId,
+      projectId: draft.projectId,
       title: change.title !== undefined ? change.title : draft.title,
       markdown: change.markdown !== undefined ? change.markdown : draft.markdown,
       baseRevision: change.baseRevision !== undefined ? change.baseRevision : draft.baseRevision,
@@ -445,6 +449,7 @@ export class XopcNoteViewModel {
   private replaceIndex(note: XopcNote): void {
     const entry: XopcNoteIndexEntry = {
       id: note.id, title: note.title, kind: note.kind, status: note.status, createdAt: note.createdAt,
+      projectId: note.projectId,
       updatedAt: note.updatedAt, pinned: note.pinned, tags: note.tags,
       snippet: note.markdown.replace(/[#*_`>\-\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120),
       groupId: note.groupId, lastOpenedAt: note.lastOpenedAt, taskDone: note.taskMeta?.done, taskDueAt: note.taskMeta?.dueAt
@@ -455,6 +460,7 @@ export class XopcNoteViewModel {
   private async mergePendingDrafts(remoteItems: XopcNoteIndexEntry[]): Promise<XopcNoteIndexEntry[]> {
     const pending = await this.drafts.pending();
     const localEntries = pending.filter((draft: XopcNoteDraft): boolean => draft.noteId.startsWith(LOCAL_NOTE_PREFIX))
+      .filter((draft: XopcNoteDraft): boolean => !this.projectId || draft.projectId === this.projectId)
       .filter((draft: XopcNoteDraft): boolean => !this.search.trim()
         || (draft.title + '\n' + draft.markdown).toLowerCase().includes(this.search.trim().toLowerCase()))
       .filter((_draft: XopcNoteDraft): boolean => !this.status || this.status === 'inbox')

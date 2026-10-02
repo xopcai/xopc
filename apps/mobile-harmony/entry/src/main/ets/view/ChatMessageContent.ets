@@ -23,6 +23,7 @@ export struct XopcChatMessageContent {
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onFillDraft: (text: string) => void = (_text: string): void => {};
   @Event onShowMore: (row: XopcChatRow) => void = (_row: XopcChatRow): void => {};
+  @Event onShowExecution: (row: XopcChatRow) => void = (_row: XopcChatRow): void => {};
   @Computed get showPreview(): boolean { return this.previewEligible && chatMessageNeedsPreview(this.row); }
   @Computed get previewText(): string { return chatMessagePreviewText(this.row); }
   @Computed get previewMarkdown(): string { return chatAnswerText(this.row); }
@@ -81,8 +82,8 @@ export struct XopcChatMessageContent {
   build() {
     Column({ space: this.showPreview ? 2 : 8 }) {
       if (this.row.role === 'assistant' && this.hasProgress) {
-        XopcChatStepsView({ row: this.row, disclosure: this.disclosure, scope: this.conversationId,
-          runStartedAtMs: this.runStartedAtMs, connection: this.connection })
+        XopcChatStepsView({ row: this.row, runStartedAtMs: this.runStartedAtMs,
+          connection: this.connection, onShowDetail: this.onShowExecution })
       }
       if (this.row.outcome?.status === 'failed') {
         Text($r('app.string.chat_response_failed')).fontSize(13).fontColor(this.colors.danger)

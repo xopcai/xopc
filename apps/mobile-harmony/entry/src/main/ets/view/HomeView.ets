@@ -2,6 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatView } from './ChatView';
 import { XopcSessionsView } from './SessionsView';
 import { XopcWorkspaceView } from './WorkspaceView';
+import { XopcProjectSpaceView } from './ProjectSpaceView';
 import { XopcNotesView } from './NotesView';
 import { XopcNotesTabView } from './NotesTabView';
 import { XopcFilesView } from './FilesView';
@@ -306,12 +307,22 @@ export struct XopcHomeView {
         onNew: (id: string): void => { this.navigate({ page: 'chat', itemId: id }); } })
     } else if (page === 'notes' || page === 'inbox' || page === 'note-create') {
       XopcNotesView({ initialId: (param as XopcMobileRoute).itemId, initialStatus: page === 'inbox' ? 'inbox' : '',
-        createOnAppear: page === 'note-create', onExit: (): void => { this.pathStack.pop(); },
+        createOnAppear: page === 'note-create', projectId: (param as XopcMobileRoute).projectId ?? '',
+        onExit: (): void => { this.pathStack.pop(); },
         onOpenConversation: (id: string): void => { this.navigate({ page: 'chat', itemId: id }); } })
-    } else if (page === 'tasks' || page === 'projects' || page === 'automations') {
-      XopcWorkspaceView({ section: page === 'tasks' ? 'tasks' : page === 'projects' ? 'projects' : 'automations',
-        heading: page === 'tasks' ? $r('app.string.tasks') : page === 'projects' ? $r('app.string.projects') : $r('app.string.automations'),
+    } else if (page === 'project-detail' || (page === 'projects' && !!(param as XopcMobileRoute).itemId)) {
+      XopcProjectSpaceView({ projectId: (param as XopcMobileRoute).itemId,
+        onExit: (): void => { this.pathStack.pop(); },
+        onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+    } else if (page === 'tasks' || page === 'projects' || page === 'automations' || page === 'project-settings'
+      || page === 'task-create' || page === 'automation-create') {
+      XopcWorkspaceView({ section: page === 'tasks' || page === 'task-create' ? 'tasks'
+        : page === 'projects' || page === 'project-settings' ? 'projects' : 'automations',
+        heading: page === 'tasks' || page === 'task-create' ? $r('app.string.tasks')
+          : page === 'projects' || page === 'project-settings' ? $r('app.string.projects') : $r('app.string.automations'),
         initialId: (param as XopcMobileRoute).itemId, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
+        createOnAppear: page === 'task-create' || page === 'automation-create',
+        projectId: (param as XopcMobileRoute).projectId ?? '',
         onCreateWithChat: async (section: XopcSection): Promise<void> => { await this.openCreationChat(section); },
         onExit: (): void => { this.pathStack.pop(); } })
     } else if (page === 'files' || page === 'session-files') {

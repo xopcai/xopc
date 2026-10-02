@@ -1,7 +1,11 @@
 import { gatewaySession } from '../service/gatewaySession';
 import { realtimeClient } from '../service/realtimeClient';
-import { XopcProfile } from '../model/gateway';
+import { XopcGatewayProbe, XopcProfile } from '../model/gateway';
 import { pushNotifications } from '../service/pushNotifications';
+
+export interface XopcGatewayProbeState {
+  gatewayId: string; phase: string; result?: XopcGatewayProbe; error: string;
+}
 
 @ObservedV2
 export class XopcConnectionViewModel {
@@ -14,10 +18,38 @@ export class XopcConnectionViewModel {
   @Trace adding: boolean = false;
   @Trace profiles: XopcProfile[] = [];
   @Trace activeGatewayId: string = '';
+  @Trace probes: XopcGatewayProbeState[] = [];
+  private probeGeneration: number = 0;
+
+  probeState(gatewayId: string): XopcGatewayProbeState | undefined {
+    return this.probes.find((item: XopcGatewayProbeState): boolean => item.gatewayId === gatewayId);
+  }
+
+  private setProbe(state: XopcGatewayProbeState): void {
+    this.probes = this.probes.filter((item: XopcGatewayProbeState): boolean => item.gatewayId !== state.gatewayId).concat([state]);
+  }
+
+  async probeOne(gatewayId: string): Promise<void> {
+    if (!this.profiles.some((item: XopcProfile): boolean => item.gatewayId === gatewayId)
+      || this.probeState(gatewayId)?.phase === 'checking') return;
+    const generation = this.probeGeneration;
+    this.setProbe({ gatewayId, phase: 'checking', error: '' });
+    try {
+      const result = await gatewaySession.probeProfile(gatewayId);
+      if (generation === this.probeGeneration) this.setProbe({ gatewayId, phase: result.status === 'healthy' ? 'online' : 'degraded', result, error: '' });
+    } catch (error) {
+      if (generation === this.probeGeneration) this.setProbe({ gatewayId, phase: 'offline', error: (error as Error).message });
+    }
+  }
+
+  async probeAll(): Promise<void> {
+    await Promise.all(this.profiles.map((profile: XopcProfile): Promise<void> => this.probeOne(profile.gatewayId)));
+  }
 
   private syncProfiles(): void {
-    this.profiles = gatewaySession.savedProfiles();
     const profile = gatewaySession.currentProfile();
+    this.profiles = gatewaySession.savedProfiles().sort((left: XopcProfile, right: XopcProfile): number =>
+      left.gatewayId === profile?.gatewayId ? -1 : right.gatewayId === profile?.gatewayId ? 1 : 0);
     this.activeGatewayId = profile?.gatewayId ?? '';
     this.gatewayName = profile?.name ?? ''; this.connected = !!profile;
   }
@@ -25,13 +57,14 @@ export class XopcConnectionViewModel {
   openGateways(): void {
     if (this.busy || pushNotifications.busy) return;
     this.syncProfiles(); this.errorMessage = ''; this.managing = true;
-    realtimeClient.reset();
+    this.probeGeneration++; this.probes = [];
+    void this.probeAll();
   }
   closeGateways(): void {
     if (this.busy) return;
     this.managing = false; this.adding = false; this.errorMessage = '';
+    this.probeGeneration++;
     this.syncProfiles();
-    if (this.connected) realtimeClient.start();
   }
   addGateway(): void {
     if (this.busy) return;
@@ -42,11 +75,15 @@ export class XopcConnectionViewModel {
     if (this.busy || pushNotifications.busy) return;
     this.busy = true; this.errorMessage = '';
     try {
-      realtimeClient.reset(); pushNotifications.reset();
       await gatewaySession.activate(gatewayId);
+      this.probeGeneration++;
+      realtimeClient.reset(); pushNotifications.reset();
       this.syncProfiles(); this.managing = false;
       realtimeClient.start();
-    } catch (error) { this.errorMessage = (error as Error).message; }
+    } catch (error) {
+      this.errorMessage = (error as Error).message;
+      this.setProbe({ gatewayId, phase: 'offline', error: this.errorMessage });
+    }
     finally { this.busy = false; }
   }
 
@@ -62,11 +99,13 @@ export class XopcConnectionViewModel {
     if (this.busy || pushNotifications.busy) return;
     this.busy = true; this.errorMessage = '';
     try {
-      if (gatewayId === this.activeGatewayId) {
+      const wasActive = gatewayId === this.activeGatewayId;
+      if (wasActive) {
         if (pushNotifications.enabled && !await pushNotifications.disable()) throw new Error('PUSH_REMOVE_FAILED');
-        realtimeClient.reset(); pushNotifications.reset();
       }
       await gatewaySession.removeProfile(gatewayId); this.syncProfiles();
+      if (wasActive) { realtimeClient.reset(); pushNotifications.reset(); if (this.connected) realtimeClient.start(); }
+      this.probes = this.probes.filter((item: XopcGatewayProbeState): boolean => item.gatewayId !== gatewayId);
     } catch (error) { this.errorMessage = (error as Error).message; }
     finally { this.busy = false; }
   }

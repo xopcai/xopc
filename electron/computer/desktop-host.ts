@@ -82,13 +82,25 @@ export class DesktopEndpointHost {
   }
   async computerAccess() {
     const authorizedAppIds = await this.accessPolicy.list();
+    const allowAllApps = await this.accessPolicy.allAllowed();
+    let appsBusy = false;
+    let appsUnavailable = false;
     const discovered = await this.broker.listAppsForSettings().catch(error => {
-      if (error instanceof Error && error.message === 'COMPUTER_BUSY') return [];
-      throw error;
+      if (error instanceof Error && error.message === 'COMPUTER_BUSY') { appsBusy = true; return []; }
+      appsUnavailable = true;
+      return [];
     });
     const apps = [...discovered];
     for (const appId of authorizedAppIds) if (!apps.some(item => item.appId === appId)) apps.push({ appId, name: appId, running: false });
-    return { authorizedAppIds, apps };
+    return { authorizedAppIds, allowAllApps, appsBusy, appsUnavailable, apps };
+  }
+  async setComputerAllAppAccess(allowed: boolean) {
+    await this.accessPolicy.setAll(allowed);
+    if (!allowed) {
+      const appId = this.broker.snapshot().appId;
+      if (appId && !await this.accessPolicy.allows(appId)) await this.broker.stop();
+    }
+    return this.computerAccess();
   }
   async setComputerAppAccess(appId: string, allowed: boolean) {
     const apps = allowed ? await this.broker.listAppsForSettings() : [];

@@ -20,6 +20,7 @@ import { retireSessionMcpRuntimeForConversationId } from '../../agent/mcp/bundle
 import { SessionIndex } from '../../session/index.js';
 import type { ExportFormat, SessionListQuery } from '../../session/types.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
+import { publicExecutionDetail } from '../../session/execution-detail.js';
 import { buildSessionTimeline } from '../../session/transcript-outline.js';
 import type { SessionPatchBody } from '../../session/patch-metadata.js';
 import { collectMediaUrisFromValues, deleteMediaUris } from '../../media/session-references.js';
@@ -157,6 +158,13 @@ export class GatewaySessionsApi {
     },
   ) {
     return this.opts.sessionIndex.getSessionMessagePage(key, options);
+  }
+
+  async getExecutionDetail(key: string, turnId: string) {
+    const metadata = await this.opts.sessionIndex.getSessionMetadata(key);
+    if (!metadata) return null;
+    const rows = await this.opts.sessionIndex.getStore().loadTranscriptHistoryRows(key);
+    return publicExecutionDetail(transcriptRowsToClientHistory(rows), turnId);
   }
 
   async getTimeline(key: string) {

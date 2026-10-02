@@ -1,5 +1,5 @@
 import { MeetingImportButton } from '@/features/discussions/meeting-import-button';
-import { ArrowUp, AudioLines, CalendarDays, FileText, Folder, Loader2, Mic, Paperclip, ScanSearch, Sparkles, X } from 'lucide-react';
+import { ArrowUp, AudioLines, CalendarDays, ChevronDown, FileText, Folder, Loader2, Mic, Paperclip, ScanSearch, Sparkles, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -27,6 +27,7 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
   const navigate = useNavigate();
   const [text, setText] = useState('');
   const [template, setTemplate] = useState<TemplateId | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +67,7 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
 
   function startAnother() {
     pending.current = null;
-    setError(null); setText(''); setFiles([]); setTemplate(null);
+    setError(null); setText(''); setFiles([]); setTemplate(null); setTemplatesOpen(false);
     textInput.current?.focus();
   }
 
@@ -78,6 +79,7 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
           <label htmlFor="notes-home-prompt" className="flex items-center gap-2 text-xs font-medium text-accent-fg">
             <Sparkles className="size-4" aria-hidden />{h.askLabel}
           </label>
+          <p className="mt-1 text-xs leading-5 text-fg-muted">{h.agentResultHint}</p>
           {selectedTemplate ? (
             <div className="mt-3 flex items-start gap-2 rounded-lg bg-accent-soft px-3 py-2 text-xs leading-5 text-accent-fg">
               <p className="min-w-0 flex-1"><span className="font-medium">{selectedTemplate.label} · </span>{selectedTemplate.prompt.split('\n\n')[0]}</p>
@@ -132,8 +134,16 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
           <button type="button" onClick={startAnother} className="underline">{h.newRequest}</button>
         </div>
       </div> : null}
-      <div className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-1 text-xs text-fg-muted">
-        <span className="mr-1 py-2">{h.templates}</span>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+        <button type="button" disabled={locked} aria-expanded={templatesOpen} aria-controls="notes-home-templates"
+          onClick={() => setTemplatesOpen((open) => !open)} className="touch-target inline-flex items-center gap-1.5 rounded-md px-2 py-2 hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
+          {h.templates}<ChevronDown className={cn('size-3.5 transition-transform', templatesOpen && 'rotate-180')} aria-hidden />
+        </button>
+        <button type="button" disabled={busy} onClick={() => openDiscussionCapture()} className="touch-target ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-2 hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent">
+          <Mic className="size-3.5" aria-hidden />{h.recordDiscussion}
+        </button>
+      </div>
+      <div id="notes-home-templates" hidden={!templatesOpen} className={cn('mt-1 flex-wrap items-center gap-1 text-xs text-fg-muted', templatesOpen ? 'flex' : 'hidden')}>
         {(Object.keys(templateIcons) as TemplateId[]).map((id) => {
           const Icon = templateIcons[id];
           return <button key={id} type="button" disabled={locked} aria-pressed={template === id}
@@ -143,9 +153,6 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
           </button>;
         })}
         <MeetingImportButton />
-        <button type="button" disabled={busy} onClick={() => openDiscussionCapture()} className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-2 hover:bg-surface-hover">
-          <Mic className="size-3.5" aria-hidden />{h.recordDiscussion}
-        </button>
       </div>
     </section>
   );

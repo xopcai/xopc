@@ -21,9 +21,10 @@ export class XopcWorkspaceViewModel {
   private mutationId: string = '';
   private mutationSignature: string = '';
 
-  start(section: XopcSection, initialId: string = ''): void {
+  start(section: XopcSection, initialId: string = '', createOnAppear: boolean = false, projectId: string = ''): void {
     this.section = section;
-    if (initialId) this.open(initialId); else this.list('');
+    if (createOnAppear) this.create(projectId);
+    else if (initialId) this.open(initialId); else this.list('');
   }
   dispose(): void { this.generation++; }
   async list(search: string, more: boolean = false): Promise<void> {
@@ -57,10 +58,10 @@ export class XopcWorkspaceViewModel {
     this.title = item.title; this.body = item.body; this.cron = item.cron ?? ''; this.projectId = item.projectId ?? '';
     this.mutationId = ''; this.mutationSignature = '';
   }
-  create(): void {
+  create(projectId: string = ''): void {
     if (this.busy) return;
     const item: XopcWorkspaceItem = { id: '', title: '', body: '', status: '', version: 0, editable: true, actions: [], cron: '0 9 * * *' };
-    this.selected = item; this.editing = true; this.copyFields(item); this.error = ''; this.runs = [];
+    this.selected = item; this.editing = true; this.copyFields(item); this.projectId = projectId; this.error = ''; this.runs = [];
   }
   back(): void { if (!this.busy) { this.selected = undefined; this.editing = false; this.openingId = ''; this.error = ''; this.list(''); } }
   private idempotency(signature: string): string {

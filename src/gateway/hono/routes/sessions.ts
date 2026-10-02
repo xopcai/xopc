@@ -460,6 +460,17 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     });
   });
 
+  // GET /api/sessions/:key/execution-detail — public steps for one assistant turn.
+  authenticated.get('/api/sessions/:key/execution-detail', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.history');
+    if (blocked) return blocked;
+    const turnId = c.req.query('turnId')?.trim();
+    if (!turnId || turnId.length > 256) return c.json({ error: 'Invalid turn id' }, 400);
+    c.header('Cache-Control', 'no-store');
+    const detail = await service.sessions.getExecutionDetail(c.req.param('key'), turnId);
+    return detail ? c.json({ detail }) : c.json({ error: 'Execution detail not found' }, 404);
+  });
+
   // GET /api/sessions/:key/history — UI chat history page from the newest tail.
   authenticated.get('/api/sessions/:key/history', async (c) => {
     const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.history');
