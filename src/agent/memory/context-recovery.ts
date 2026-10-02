@@ -3,7 +3,7 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
 import { stripTrailingErrorAssistantMessages } from '../orchestration/llm-turn-retry.js';
-import { evaluateContextBudget, projectContextForModel, type ContextBudgetInput } from './context-budget.js';
+import { evaluateContextBudget, projectContextForModel, stringifyMessagesForBudget, type ContextBudgetInput } from './context-budget.js';
 import type {
   CompactionDiscardedAttempt,
   CompactionExecutionOptions,
@@ -23,7 +23,7 @@ export class ContextRecoveryError extends Error {
 /** Projection is ephemeral; the transcript remains the authoritative record. */
 export function assessContext(input: ContextBudgetInput, maxBytes: number) {
   const projection = projectContextForModel({ ...input, reason: 'normal' });
-  const bytes = Buffer.byteLength(JSON.stringify(projection.messages), 'utf8');
+  const bytes = Buffer.byteLength(stringifyMessagesForBudget(projection.messages), 'utf8');
   return {
     ...projection,
     bytes,
