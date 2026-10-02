@@ -1,4 +1,5 @@
 import type { ToolActivity, TurnOutcome } from '@xopcai/gateway-contract';
+import type { TaskUpdateTrigger } from '../../storage/sqlite/session-input-repository.js';
 
 export type ChatStreamStatus = 'success' | 'error' | 'cancelled' | 'suspended';
 
@@ -27,7 +28,9 @@ export interface ChatStreamEnvelope<TType extends string, TPayload> {
   payload: TPayload;
 }
 
-export type RunStartEvent = ChatStreamEnvelope<'run_start', { channel: string }>;
+export type RunStartEvent = ChatStreamEnvelope<'run_start', {
+  channel: string; startsNewBubble?: boolean; taskTrigger?: TaskUpdateTrigger;
+}>;
 export type UserMessageEvent = ChatStreamEnvelope<'user_message', { message: unknown }>;
 export type UserTranscriptEvent = ChatStreamEnvelope<'user_transcript', { text: string; media?: unknown }>;
 export type AssistantMessageStartEvent = ChatStreamEnvelope<'assistant_message_start', { messageId: string }>;

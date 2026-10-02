@@ -40,6 +40,7 @@ import { buildSpeakableText, detectSpeechLanguage } from '@/features/voice/read-
 import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { AssistantTurnTasks } from '@/features/chat/messages/assistant-turn-tasks';
+import { TaskTriggerCard } from '@/features/chat/messages/task-trigger-card';
 import { MessageContextAttachments } from '@/features/chat/messages/message-context-attachments';
 import {
   ResponseContextDialog,
@@ -48,7 +49,7 @@ import {
 import { withDetailReturnTo } from '@/lib/navigation-return';
 
 const messageActionIconButton = cn(
-  'inline-flex size-9 shrink-0 items-center justify-center rounded-lg',
+  'inline-flex size-11 shrink-0 items-center justify-center rounded-lg sm:size-9',
   'text-fg-muted transition-colors transition-transform duration-150 ease-out',
   'hover:bg-surface-hover hover:text-fg active:scale-95',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
@@ -78,6 +79,7 @@ const USER_MESSAGE_SENDING_EXIT_MS = 120;
 
 export const MessageBubble = memo(function MessageBubble({
   message,
+  followUpTrigger,
   authToken,
   conversationId,
   workspaceConversationId,
@@ -102,6 +104,7 @@ export const MessageBubble = memo(function MessageBubble({
   responseFeedbackEnabled = true,
 }: {
   message: Message;
+  followUpTrigger?: NonNullable<Message['taskTrigger']>;
   authToken?: string;
   conversationId?: string | null;
   workspaceConversationId?: string | null;
@@ -343,6 +346,7 @@ export const MessageBubble = memo(function MessageBubble({
     return extractUserMessagePlainText(message.content);
   }, [isUser, message.content, message.contextRefs, message.userTurnDocument]);
   const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | 'user' | null>(null);
+  const [moreActionsOpen, setMoreActionsOpen] = useState(false);
   const [assistantActionFeedback, setAssistantActionFeedback] = useState<'create-note' | 'save-source-note' | 'extract-task' | null>(null);
   const [assistantActionBusy, setAssistantActionBusy] = useState<'create-note' | 'save-source-note' | 'extract-task' | null>(null);
   const [forkBusy, setForkBusy] = useState(false);
@@ -536,6 +540,19 @@ export const MessageBubble = memo(function MessageBubble({
   }, [isUser, userCopyText]);
 
   const retryDisabled = deleteRoundDisabled || !userMessageCanRetry;
+  const assistantStepsBlock = assistantTurnView
+    && (assistantTurnView.workLog.active || assistantTurnView.workLog.items.length > 0)
+    ? <AssistantStepsBlock
+        workLog={assistantTurnView.workLog}
+        pendingStatus={message.pendingResponseStatus}
+        toolLabels={toolLabels}
+        stepLabels={stepLabels}
+        clusterLabels={clusterLabels}
+        cardLabels={cardLabels}
+        conversationId={conversationId}
+        workflowOptions={{ labels: workflowCardLabels(language) }}
+      />
+    : null;
 
   return (
     <article className={cn(
@@ -553,6 +570,8 @@ export const MessageBubble = memo(function MessageBubble({
         )}
       >
         <span className="sr-only">{roleLabel}</span>
+
+        {followUpTrigger ? <TaskTriggerCard trigger={followUpTrigger} /> : null}
 
         {isUser && showMeta ? (
           <div className="mb-2 flex w-full min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-0.5 text-xs">
@@ -595,18 +614,7 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">
-            {assistantTurnView && (assistantTurnView.workLog.active || assistantTurnView.workLog.items.length > 0) ? (
-              <AssistantStepsBlock
-                workLog={assistantTurnView.workLog}
-                pendingStatus={message.pendingResponseStatus}
-                toolLabels={toolLabels}
-                stepLabels={stepLabels}
-                clusterLabels={clusterLabels}
-                cardLabels={cardLabels}
-                conversationId={conversationId}
-                workflowOptions={{ labels: workflowCardLabels(language) }}
-              />
-            ) : null}
+            {!followUpTrigger ? assistantStepsBlock : null}
             {(displayForFlow?.length ?? 0) > 0 ? (
               <>
                 <div
@@ -656,6 +664,8 @@ export const MessageBubble = memo(function MessageBubble({
             ) : showStreamingCursor ? (
               <span className="inline-block h-3 w-0.5 animate-pulse bg-accent" />
             ) : null}
+
+            {followUpTrigger ? assistantStepsBlock : null}
 
             {assistantTurnView ? (
               <AssistantTurnTasks
@@ -814,9 +824,14 @@ export const MessageBubble = memo(function MessageBubble({
         {assistantActionsVisible && copyMarkdown ? (
           <ChatActionTooltipProvider>
           <div
-            className="mt-2 flex shrink-0 flex-wrap items-center gap-2 overflow-visible"
-            onPointerEnter={loadResponseFeedback}
-            onFocusCapture={loadResponseFeedback}
+            data-assistant-message-actions
+            className={cn(
+              'mt-1 flex min-h-9 shrink-0 items-center gap-1 overflow-visible transition-opacity duration-150 ease-out motion-reduce:transition-none',
+              'pointer-events-none opacity-0 group-hover/msg:pointer-events-auto group-hover/msg:opacity-100',
+              'group-focus-within/msg:pointer-events-auto group-focus-within/msg:opacity-100',
+              '[@media(hover:none)_and_(pointer:coarse)]:pointer-events-auto [@media(hover:none)_and_(pointer:coarse)]:opacity-100',
+              (moreActionsOpen || responseFeedbackPromptOpen || responseFeedbackError) && 'pointer-events-auto opacity-100',
+            )}
           >
             <ChatActionTooltip label={copyFeedback === 'plain' ? m.chat.messageCopied : m.chat.messageCopyPlainText}>
             <button
@@ -846,74 +861,10 @@ export const MessageBubble = memo(function MessageBubble({
               hideNativeTitle
             />
             </ChatActionTooltip>
-            {onForkAssistantTurn && message.turnId ? (
-              <ChatActionTooltip label={forkBusy ? m.chat.messageForkCreating : m.chat.messageForkFromHere}>
-              <button
-                type="button"
-                className={messageActionIconButton}
-                onClick={handleForkAssistantTurn}
-                disabled={forkBusy}
-                aria-label={forkBusy ? m.chat.messageForkCreating : m.chat.messageForkFromHere}
-              >
-                <GitFork className="size-4" strokeWidth={1.75} aria-hidden />
-              </button>
-              </ChatActionTooltip>
-            ) : null}
-            {onSaveAssistantAsNote ? (
-              <ChatActionTooltip label={assistantActionFeedback === 'create-note' ? m.chat.messageSavedToNote : m.chat.messageSaveToNote}>
-              <button
-                type="button"
-                className={messageActionIconButton}
-                onClick={handleSaveAssistantAsNote}
-                disabled={assistantActionBusy !== null}
-                aria-label={assistantActionFeedback === 'create-note' ? m.chat.messageSavedToNote : m.chat.messageSaveToNote}
-              >
-                {assistantActionFeedback === 'create-note' ? (
-                  <Check className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
-                ) : (
-                  <FilePlus2 className="size-4" strokeWidth={1.75} aria-hidden />
-                )}
-              </button>
-              </ChatActionTooltip>
-            ) : null}
-            {responseFeedbackEnabled && conversationId && message.timestamp ? (
-              <>
-                <ChatActionTooltip label={m.chat.messageHelpful}>
-                <button
-                  type="button"
-                  className={cn(
-                    messageActionIconButton,
-                    responseFeedback === 'helpful' && 'bg-surface-active text-fg',
-                  )}
-                  onClick={() => handleResponseFeedback('helpful')}
-                  disabled={responseFeedbackBusy}
-                  aria-label={m.chat.messageHelpful}
-                  aria-pressed={responseFeedback === 'helpful'}
-                >
-                  <ThumbsUp className="size-4" strokeWidth={1.75} aria-hidden />
-                </button>
-                </ChatActionTooltip>
-                <ChatActionTooltip label={m.chat.messageNotHelpful}>
-                <button
-                  type="button"
-                  className={cn(
-                    messageActionIconButton,
-                    responseFeedback === 'not_helpful' && 'bg-surface-active text-fg',
-                  )}
-                  onClick={() => setResponseFeedbackPromptOpen((open) => !open)}
-                  disabled={responseFeedbackBusy}
-                  aria-label={m.chat.messageNotHelpful}
-                  aria-pressed={responseFeedback === 'not_helpful'}
-                >
-                  <ThumbsDown className="size-4" strokeWidth={1.75} aria-hidden />
-                </button>
-                </ChatActionTooltip>
-                {responseFeedbackError ? (
-                  <span className="text-xs text-danger" role="status">{m.chat.messageFeedbackUnavailable}</span>
-                ) : null}
-              </>
-            ) : null}
-            <Popover.Root>
+            <Popover.Root open={moreActionsOpen} onOpenChange={(open) => {
+              setMoreActionsOpen(open);
+              if (open) loadResponseFeedback();
+            }}>
               <ChatActionTooltip label={m.chat.messageMoreActions}>
               <Popover.Trigger asChild>
                 <button
@@ -946,6 +897,50 @@ export const MessageBubble = memo(function MessageBubble({
                       {copyFeedback === 'markdown' ? m.chat.messageCopied : m.chat.messageCopyMarkdown}
                     </button>
                   </Popover.Close>
+                  {onForkAssistantTurn && message.turnId ? (
+                    <Popover.Close asChild>
+                      <button type="button" className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg"
+                        onClick={handleForkAssistantTurn} disabled={forkBusy}>
+                        <GitFork className="size-4" strokeWidth={1.75} aria-hidden />
+                        {forkBusy ? m.chat.messageForkCreating : m.chat.messageForkFromHere}
+                      </button>
+                    </Popover.Close>
+                  ) : null}
+                  {onSaveAssistantAsNote ? (
+                    <Popover.Close asChild>
+                      <button type="button" className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg"
+                        onClick={handleSaveAssistantAsNote} disabled={assistantActionBusy !== null}>
+                        {assistantActionFeedback === 'create-note'
+                          ? <Check className="size-4" strokeWidth={1.75} aria-hidden />
+                          : <FilePlus2 className="size-4" strokeWidth={1.75} aria-hidden />}
+                        {assistantActionFeedback === 'create-note' ? m.chat.messageSavedToNote : m.chat.messageSaveToNote}
+                      </button>
+                    </Popover.Close>
+                  ) : null}
+                  {responseFeedbackEnabled && conversationId && message.timestamp ? (
+                    <>
+                      <div className="my-1 border-t border-edge-subtle" role="separator" />
+                      <Popover.Close asChild>
+                        <button type="button" className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg"
+                          onClick={() => handleResponseFeedback('helpful')} disabled={responseFeedbackBusy}
+                          aria-pressed={responseFeedback === 'helpful'}>
+                          <ThumbsUp className="size-4" strokeWidth={1.75} aria-hidden />
+                          {m.chat.messageHelpful}
+                        </button>
+                      </Popover.Close>
+                      <Popover.Close asChild>
+                        <button type="button" className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg"
+                          onClick={() => setResponseFeedbackPromptOpen((open) => !open)} disabled={responseFeedbackBusy}
+                          aria-pressed={responseFeedback === 'not_helpful'}>
+                          <ThumbsDown className="size-4" strokeWidth={1.75} aria-hidden />
+                          {m.chat.messageNotHelpful}
+                        </button>
+                      </Popover.Close>
+                    </>
+                  ) : null}
+                  {responseFeedbackError ? (
+                    <p className="px-2.5 py-1 text-xs text-danger" role="status">{m.chat.messageFeedbackUnavailable}</p>
+                  ) : null}
                   {responsePersonalContext.length > 0 ? (
                     <Popover.Close asChild>
                       <button

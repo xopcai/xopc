@@ -52,18 +52,23 @@ export function parseTaskJudgeDecision(raw: string, criteriaCount: number): Task
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start < 0 || end <= start) throw new Error('Task judge returned invalid JSON');
-  const value = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
-  const completedCriteria = Array.isArray(value.completedCriteria)
-    ? [...new Set(value.completedCriteria
-      .filter((item): item is number => Number.isInteger(item))
-      .filter((item) => item >= 0 && item < criteriaCount))]
-    : [];
-  const reasons = Array.isArray(value.reasons)
-    ? value.reasons.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+  const value = JSON.parse(text.slice(start, end + 1)) as unknown;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Task judge returned invalid JSON object');
+  }
+  const decision = value as Record<string, unknown>;
+  if (!Array.isArray(decision.completedCriteria) || typeof decision.needsUser !== 'boolean') {
+    throw new Error('Task judge returned an incomplete decision');
+  }
+  const completedCriteria = [...new Set(decision.completedCriteria
+    .filter((item): item is number => Number.isInteger(item))
+    .filter((item) => item >= 0 && item < criteriaCount))];
+  const reasons = Array.isArray(decision.reasons)
+    ? decision.reasons.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
       .map((item) => item.trim()).slice(0, 5)
     : [];
-  const rejectedAlternatives = Array.isArray(value.rejectedAlternatives)
-    ? value.rejectedAlternatives.flatMap((item) => {
+  const rejectedAlternatives = Array.isArray(decision.rejectedAlternatives)
+    ? decision.rejectedAlternatives.flatMap((item) => {
         if (!item || typeof item !== 'object') return [];
         const candidate = item as Record<string, unknown>;
         return typeof candidate.option === 'string' && candidate.option.trim()
@@ -72,29 +77,45 @@ export function parseTaskJudgeDecision(raw: string, criteriaCount: number): Task
           : [];
       }).slice(0, 5)
     : [];
-  const nextAction = typeof value.nextAction === 'string' && value.nextAction.trim()
-    ? value.nextAction.trim()
+  const nextAction = typeof decision.nextAction === 'string' && decision.nextAction.trim()
+    ? decision.nextAction.trim()
     : undefined;
-  const recommendation = typeof value.recommendation === 'string' && value.recommendation.trim()
-    ? value.recommendation.trim()
+  const recommendation = typeof decision.recommendation === 'string' && decision.recommendation.trim()
+    ? decision.recommendation.trim()
     : nextAction ?? 'Continue gathering verifiable evidence.';
-  const confidence = typeof value.confidence === 'number' && Number.isFinite(value.confidence)
-    ? Math.max(0, Math.min(1, value.confidence))
+  const confidence = typeof decision.confidence === 'number' && Number.isFinite(decision.confidence)
+    ? Math.max(0, Math.min(1, decision.confidence))
     : 0.5;
   return {
     completedCriteria,
-    needsUser: value.needsUser === true,
+    needsUser: decision.needsUser,
     ...(nextAction ? { nextAction } : {}),
     judgment: {
       recommendation,
       reasons: reasons.length > 0 ? reasons : ['No verified completion evidence was found.'],
       rejectedAlternatives,
-      ...(typeof value.uncertainty === 'string' && value.uncertainty.trim()
-        ? { uncertainty: value.uncertainty.trim() }
+      ...(typeof decision.uncertainty === 'string' && decision.uncertainty.trim()
+        ? { uncertainty: decision.uncertainty.trim() }
         : {}),
       confidence,
     },
   };
+}
+
+export async function requestTaskJudgeDecision(
+  complete: (attempt: number) => Promise<string>,
+  criteriaCount: number,
+): Promise<TaskJudgeDecision> {
+  let parseError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const raw = await complete(attempt);
+    try {
+      return parseTaskJudgeDecision(raw, criteriaCount);
+    } catch (error) {
+      parseError = error;
+    }
+  }
+  throw parseError;
 }
 
 export function codingCompletionEvidence(rows: readonly TranscriptStoredRow[]): { allowed: boolean; workspace?: string; revision?: string; evidence?: unknown } {
@@ -171,7 +192,7 @@ export class TaskJudgeService {
       `Runtime coding evidence: ${JSON.stringify(proof)}`,
       'needsUser is true only when a specific decision, permission, credential, or missing fact must come from the user.',
       'Make one clear recommendation. Explain the decisive reasons, rejected alternatives, uncertainty, and calibrated confidence.',
-      'Return only JSON: {"completedCriteria":[0],"needsUser":false,"nextAction":"...","recommendation":"...","reasons":["..."],"rejectedAlternatives":[{"option":"...","reason":"..."}],"uncertainty":"...","confidence":0.8}.',
+      'Return only compact JSON, under 1000 characters: {"completedCriteria":[0],"needsUser":false,"nextAction":"...","recommendation":"...","reasons":["..."],"rejectedAlternatives":[],"uncertainty":"...","confidence":0.8}. Use short strings.',
       `Task:\n${task.contract.objective}`,
       `Acceptance criteria:\n${criteria.map((item, index) => `${index}. ${item}`).join('\n')}`,
       `Latest response:\n${payload.assistantPlainText.slice(-12_000)}`,
@@ -181,16 +202,22 @@ export class TaskJudgeService {
 
     try {
       const apiKey = await getApiKey(model.provider).catch(() => undefined);
-      const response = await completeWithResolvedCredentials(
-        model,
-        { messages: [request] },
-        { apiKey, maxTokens: 900, temperature: 0 },
-        undefined,
-        { operation: 'task.judge_result', conversationId: payload.conversationId, runId: run.id },
-      );
-      const modelError = getAssistantMessageErrorReason(response);
-      if (modelError) throw new Error(modelError);
-      const decision = parseTaskJudgeDecision(extractAssistantText(response.content), criteria.length);
+      const decision = await requestTaskJudgeDecision(async (attempt) => {
+        const retryRequest: UserMessage = attempt === 0 ? request : {
+          ...request,
+          content: `${prompt}\n\nThe first attempt did not parse. Return one complete, compact JSON object only. Keep every string short.`,
+        };
+        const response = await completeWithResolvedCredentials(
+          model,
+          { messages: [retryRequest] },
+          { apiKey, maxTokens: attempt === 0 ? 1600 : 2200, temperature: 0 },
+          undefined,
+          { operation: 'task.judge_result', conversationId: payload.conversationId, runId: run.id },
+        );
+        const modelError = getAssistantMessageErrorReason(response);
+        if (modelError) throw new Error(modelError);
+        return extractAssistantText(response.content);
+      }, criteria.length);
       if (!proof.allowed || (proof.workspace && (!proof.revision || await readWorkspaceRevision(proof.workspace) !== proof.revision))) {
         decision.completedCriteria = [];
         decision.judgment.reasons.unshift('Current workspace verification is missing, failed or stale.');

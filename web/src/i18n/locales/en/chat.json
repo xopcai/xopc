@@ -1,5 +1,10 @@
 {
   "chat": {
+    "taskTrigger": {
+      "about": "About",
+      "progress": "has an update", "question": "needs an answer",
+      "result": "has a new result", "failure": "ran into a problem", "openTask": "View details"
+    },
     "pageContext": {
       "label": "Page context", "capture": "Reference in a new chat", "preview": "Preview context",
       "remove": "Remove page context", "frozen": "Captured snapshot. Only included when you send this message.",

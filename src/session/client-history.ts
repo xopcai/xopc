@@ -1,6 +1,7 @@
 import { isUserTurnDocument, parseTurnOutcome, type TurnOutcome, type UserTurnDocument } from '@xopcai/gateway-contract';
 
 import type { Message } from './types.js';
+import type { TaskUpdateTrigger } from '../storage/sqlite/session-input-repository.js';
 import { stripRuntimeContextFromUserMessage } from './user-message-display.js';
 import type { TranscriptStoredRow } from './session-context-for-llm.js';
 import { buildTranscriptOutline } from './transcript-outline.js';
@@ -9,8 +10,11 @@ import { buildTranscriptOutline } from './transcript-outline.js';
 export interface ClientHistoryMessage {
   id?: string;
   turnId?: string;
-  role: 'user' | 'assistant' | 'system';
+  /** A background Agent turn starts a new visible assistant bubble without a visible user row. */
+  startsNewBubble?: boolean;
+  role: 'user' | 'assistant' | 'system' | 'task';
   content: string;
+  taskTrigger?: TaskUpdateTrigger;
   displayIndex?: number;
   rawContent?: string | unknown[];
   /** Persisted inbound attachment metadata used by chat clients to reload media. */
@@ -67,6 +71,18 @@ export interface ClientHistoryMessage {
     isError?: boolean;
     details?: unknown;
   }>;
+}
+
+function taskTriggerFromMetadata(metadata: unknown): TaskUpdateTrigger | undefined {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
+  const value = (metadata as { taskTrigger?: unknown }).taskTrigger;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const trigger = value as Record<string, unknown>;
+  if (typeof trigger.entryId !== 'string' || typeof trigger.taskId !== 'string'
+    || typeof trigger.taskTitle !== 'string' || !trigger.taskTitle.trim()
+    || !['progress', 'question', 'result', 'failure'].includes(String(trigger.kind))) return undefined;
+  return { entryId: trigger.entryId, taskId: trigger.taskId, taskTitle: trigger.taskTitle,
+    kind: trigger.kind as TaskUpdateTrigger['kind'] };
 }
 
 function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['metadata'] {
@@ -255,6 +271,13 @@ export function messagesToClientHistory(
 
   const results = collectToolResults(slice);
   const out: ClientHistoryMessage[] = [];
+  const hiddenTurnIds = new Set(slice.flatMap((message) =>
+    (message.metadata as { hiddenFromClient?: boolean } | undefined)?.hiddenFromClient === true
+      && typeof (message as unknown as { turnId?: unknown }).turnId === 'string'
+      ? [(message as unknown as { turnId: string }).turnId] : []));
+  const assistantTurnIds = new Set(slice.filter((message) => message.role === 'assistant')
+    .map((message) => (message as { turnId?: string }).turnId)
+    .filter((turnId): turnId is string => Boolean(turnId)));
 
   for (const m of slice) {
     if (m.role === 'tool' || m.role === 'toolResult') {
@@ -262,6 +285,14 @@ export function messagesToClientHistory(
     }
 
     if (m.role === 'user' || m.role === 'system') {
+      if ((m.metadata as { hiddenFromClient?: boolean } | undefined)?.hiddenFromClient === true) {
+        const turnId = (m as { turnId?: string }).turnId;
+        const trigger = turnId && assistantTurnIds.has(turnId)
+          ? taskTriggerFromMetadata(m.metadata) : undefined;
+        if (trigger) out.push({ role: 'task', turnId, content: '', taskTrigger: trigger,
+          timestamp: parseTimestamp(m.timestamp) });
+        continue;
+      }
       const text = flattenMessageContent(m.content);
       out.push({
         role: m.role,
@@ -289,6 +320,9 @@ export function messagesToClientHistory(
         ...(typeof (m as unknown as { turnId?: unknown }).turnId === 'string'
           ? { turnId: (m as unknown as { turnId: string }).turnId }
           : {}),
+        ...(typeof (m as unknown as { turnId?: unknown }).turnId === 'string'
+          && hiddenTurnIds.has((m as unknown as { turnId: string }).turnId)
+          ? { startsNewBubble: true } : {}),
         content: text,
         timestamp: parseTimestamp(m.timestamp),
         toolCalls,
@@ -563,7 +597,9 @@ function branchSummaryRowToClientHistory(row: TranscriptStoredRow): ClientHistor
  */
 export function transcriptRowsToClientHistory(
   rows: TranscriptStoredRow[],
-  opts?: { limit?: number; startRowNumber?: number; endRowNumber?: number; rowNumberOffset?: number },
+  opts?: { limit?: number; startRowNumber?: number; endRowNumber?: number; rowNumberOffset?: number;
+    startsNewBubbleTurnIds?: ReadonlySet<string>;
+    taskUpdateTriggers?: ReadonlyMap<string, TaskUpdateTrigger> },
 ): ClientHistoryMessage[] {
   const displayIndexByRowNumber = new Map(
     buildTranscriptOutline(rows)
@@ -591,6 +627,8 @@ export function transcriptRowsToClientHistory(
     .map(asHistoryMessageRow)
     .filter((row): row is HistoryMessageRow => row !== null);
   const results = collectHistoryToolResults(messages);
+  const assistantTurnIds = new Set(messages.filter((message) => message.role === 'assistant')
+    .map((message) => message.turnId).filter((turnId): turnId is string => Boolean(turnId)));
   const out: ClientHistoryMessage[] = [];
   const reviewTraceToolById = new Map<string, NonNullable<ClientHistoryMessage['toolCalls']>[number]>();
 
@@ -707,6 +745,15 @@ export function transcriptRowsToClientHistory(
     }
 
     if (messageRow.role === 'user' || messageRow.role === 'system') {
+      if ((messageRow.metadata as { hiddenFromClient?: boolean } | undefined)?.hiddenFromClient === true) {
+        const trigger = messageRow.turnId && assistantTurnIds.has(messageRow.turnId)
+          ? taskTriggerFromMetadata(messageRow.metadata)
+            ?? opts?.taskUpdateTriggers?.get(messageRow.turnId) : undefined;
+        if (trigger) out.push({ id, turnId: messageRow.turnId, role: 'task', kind: 'message',
+          content: '', taskTrigger: trigger, timestamp: parseTimestampValue(messageRow.timestamp),
+          ...(displayIndex !== undefined ? { displayIndex } : {}) });
+        continue;
+      }
       out.push({
         id,
         ...(messageRow.turnId ? { turnId: messageRow.turnId } : {}),
@@ -729,6 +776,8 @@ export function transcriptRowsToClientHistory(
     out.push({
       id,
       ...(messageRow.turnId ? { turnId: messageRow.turnId } : {}),
+      ...(messageRow.turnId && opts?.startsNewBubbleTurnIds?.has(messageRow.turnId)
+        ? { startsNewBubble: true } : {}),
       role: 'assistant',
       kind: 'message',
       content: flattenMessageContent(messageRow.content ?? ''),

@@ -5,15 +5,19 @@ import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 
 const log = createLogger('TaskRunDispatcher');
+const LEASE_MS = 60_000;
+const HEARTBEAT_MS = 15_000;
 
 export class TaskRunDispatcher {
   readonly #runs = new TaskRunRepository();
   readonly #tasks = new TaskRepository();
   readonly #application = new TaskApplicationService();
   readonly #draining = new Set<string>();
+  readonly #activeRunIds = new Set<string>();
 
   constructor(private readonly deps: {
     workerId: string;
+    maxConcurrency?: number;
     ensureSession: (taskId: string, runId: string, agentId?: string) => Promise<string>;
     runAgent: (runId: string, conversationId: string, message: string) => Promise<void>;
   }) {}
@@ -23,13 +27,41 @@ export class TaskRunDispatcher {
   }
 
   async drain(): Promise<void> {
-    if (this.#draining.has(this.deps.workerId)) return;
-    this.#draining.add(this.deps.workerId);
+    this.reconcileExpiredRuns();
+    const count = Math.max(1, Math.min(8, this.deps.maxConcurrency ?? 3));
+    await Promise.all(Array.from({ length: count }, (_, slot) => this.drainSlot(`${this.deps.workerId}:${slot}`)));
+  }
+
+  private reconcileExpiredRuns(): void {
+    for (const run of this.#runs.listExpiredLeasedRunning()) {
+      if (this.#activeRunIds.has(run.id)) continue;
+      try {
+        this.#application.completeRun({
+          runId: run.id, expectedRunVersion: run.version,
+          terminalCode: 'execution_interrupted',
+          terminalMessage: 'Task execution stopped before its result could be confirmed',
+          receipt: {
+            status: 'failed', summary: 'Execution interrupted; verify external effects before retrying',
+            changes: [], evidence: [], verification: { status: 'unverified', checks: [] },
+            remainingWork: ['Verify whether the previous execution made external changes'],
+            needsUser: true, completionVerdict: 'not_achieved',
+            failure: { code: 'execution_interrupted', phase: 'execution', recoveryAction: 'Inspect effects before retrying' },
+          },
+        });
+      } catch (error) {
+        log.warn({ err: error, runId: run.id }, 'Expired TaskRun reconciliation failed');
+      }
+    }
+  }
+
+  private async drainSlot(workerId: string): Promise<void> {
+    if (this.#draining.has(workerId)) return;
+    this.#draining.add(workerId);
     try {
       while (true) {
         const run = this.#runs.claimNext({
-          owner: this.deps.workerId,
-          leaseMs: 60_000,
+          owner: workerId,
+          leaseMs: LEASE_MS,
           executorKind: 'agent',
         });
         if (!run) return;
@@ -42,17 +74,26 @@ export class TaskRunDispatcher {
               expectedVersion: run.version,
               from: ['waiting'],
               to: 'running',
-              actor: { kind: 'system', id: this.deps.workerId },
+              actor: { kind: 'system', id: workerId },
             })
             : run;
           if (!executableRun) continue;
           const agentId = typeof run.executorRef.agentId === 'string' ? run.executorRef.agentId : undefined;
           const conversationId = await this.deps.ensureSession(task.id, run.id, agentId);
-          await this.deps.runAgent(
-            run.id,
-            conversationId,
-            buildTaskRunMessage(task.contract?.objective ?? task.title, run.trigger),
-          );
+          this.#activeRunIds.add(run.id);
+          const heartbeat = setInterval(() => {
+            if (!this.#runs.heartbeat({ runId: run.id, owner: workerId, leaseMs: LEASE_MS })) {
+              clearInterval(heartbeat);
+            }
+          }, HEARTBEAT_MS);
+          heartbeat.unref?.();
+          try {
+            await this.deps.runAgent(run.id, conversationId,
+              buildTaskRunMessage(task.contract?.objective ?? task.title, run.trigger));
+          } finally {
+            clearInterval(heartbeat);
+            this.#activeRunIds.delete(run.id);
+          }
         } catch (error) {
           const current = this.#runs.get(run.id);
           if (current && ['queued', 'running', 'waiting', 'verifying'].includes(current.status)) {
@@ -80,7 +121,7 @@ export class TaskRunDispatcher {
     } catch (error) {
       log.error({ err: error }, `TaskRun dispatch failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
-      this.#draining.delete(this.deps.workerId);
+      this.#draining.delete(workerId);
     }
   }
 }

@@ -22,7 +22,8 @@ export function describeActiveExecution(input: {
 }): ActiveExecution {
   const { origin } = input;
   const background = origin.type === 'system'
-    && (origin.source === 'automation' || origin.source === 'heartbeat' || origin.source === 'internal');
+    && (origin.source === 'automation' || origin.source === 'heartbeat'
+      || origin.source === 'internal' || origin.source === 'task_update');
   const kind = input.kind
     ?? (origin.type === 'system' && origin.source === 'automation'
       ? 'automation'

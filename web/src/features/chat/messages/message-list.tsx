@@ -2,6 +2,7 @@ import { memo, type ReactNode } from 'react';
 
 import { ChatWelcomeSpotlight } from '@/features/chat/chat-welcome-spotlight';
 import { MessageBubble } from '@/features/chat/messages/message-bubble';
+import { TaskTriggerCard } from '@/features/chat/messages/task-trigger-card';
 import { InlinePreviewSchedulerProvider } from '@/features/chat/product-delivery/inline-preview-scheduler';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages/messages.types';
 import { isLastUserMessageInThread } from '@/features/chat/messages/user-message-plain-text';
@@ -128,34 +129,49 @@ export const MessageList = memo(function MessageList({
         const isLast = index === list.length - 1;
         const isStreamRow = Boolean((streaming || sending || msg.pendingResponseStatus) && isLast && msg.role === 'assistant');
         const isLastUserRow = isLastUserMessageInThread(list, index);
+        const precedingTask = list[index - 1];
+        const followUpTrigger = msg.role === 'assistant'
+          && precedingTask?.role === 'task'
+          && Boolean(msg.turnId)
+          && precedingTask.turnId === msg.turnId
+          ? precedingTask.taskTrigger : undefined;
+        if (msg.role === 'task' && msg.taskTrigger
+          && list[index + 1]?.role === 'assistant'
+          && Boolean(msg.turnId)
+          && list[index + 1]?.turnId === msg.turnId) return null;
         const key = messageRowKey(msg, index);
+        const rowTimestamp = followUpTrigger ? precedingTask?.timestamp ?? msg.timestamp : msg.timestamp;
         const showTimeSeparator = shouldShowChatTimeSeparator(
-          msg.timestamp,
-          list[index - 1]?.timestamp,
+          rowTimestamp,
+          followUpTrigger ? list[index - 2]?.timestamp : precedingTask?.timestamp,
         );
         return (
           <div
             key={key}
             id={`chat-message-${index}`}
-            className={cn('scroll-mt-4', index > 0 && list[index - 1]?.role === 'user' && !showTimeSeparator && '-mt-5')}
+            className={cn('scroll-mt-4', index > 0
+              && (list[index - 1]?.role === 'user' || list[index - 1]?.role === 'task')
+              && !followUpTrigger && !showTimeSeparator && '-mt-5')}
             data-chat-message-index={index}
             data-chat-message-row
             data-client-submission-id={msg.clientSubmissionId}
             data-message-render-key={msg.renderKey}
           >
-            {showTimeSeparator && msg.timestamp ? (
+            {followUpTrigger ? <span id={`chat-message-${index - 1}`} className="block h-0 scroll-mt-4" aria-hidden /> : null}
+            {showTimeSeparator && rowTimestamp ? (
               <div className="mb-8 flex justify-center" data-chat-time-separator>
                 <time
                   suppressHydrationWarning
                   className="rounded-md px-2 py-1 text-xs tabular-nums text-fg-disabled"
-                  dateTime={new Date(msg.timestamp).toISOString()}
+                  dateTime={new Date(rowTimestamp).toISOString()}
                 >
-                  {formatChatTimeSeparator(msg.timestamp, now, language)}
+                  {formatChatTimeSeparator(rowTimestamp, now, language)}
                 </time>
               </div>
             ) : null}
-            <MessageBubble
+            {msg.role === 'task' && msg.taskTrigger ? <TaskTriggerCard trigger={msg.taskTrigger} /> : <MessageBubble
               message={msg}
+              followUpTrigger={followUpTrigger}
               authToken={authToken}
               conversationId={conversationId}
               workspaceConversationId={workspaceConversationId}
@@ -184,7 +200,7 @@ export const MessageList = memo(function MessageList({
                 && msg.deliveryStatus !== 'sending'
               }
               responseFeedbackEnabled={responseFeedbackEnabled}
-            />
+            />}
           </div>
         );
         })}

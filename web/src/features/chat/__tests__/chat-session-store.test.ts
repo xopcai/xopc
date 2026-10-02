@@ -402,6 +402,42 @@ describe('useChatSessionStore', () => {
     });
   });
 
+  it('separates a committed task update from the previous assistant run', () => {
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...idleSlice,
+      messages: [{ role: 'assistant', turnId: 'user-run',
+        content: [{ type: 'text', text: 'I am here.' }] }],
+      streamingMsg: { role: 'assistant', turnId: 'task-run', startsNewBubble: true,
+        content: [{ type: 'text', text: 'The task is complete.' }] },
+      sending: true, streaming: true,
+    });
+    useChatSessionStore.getState().finalizeStreamingTurn(conversationId, {
+      role: 'assistant', turnId: 'task-run', startsNewBubble: true,
+      content: [{ type: 'text', text: 'The task is complete.' }],
+    });
+    expect(getChatSessionSnapshot(conversationId)?.messages).toHaveLength(2);
+  });
+
+  it('keeps a task trigger between previous and new assistant turns', () => {
+    const trigger = { entryId: 'entry-1', taskId: 'task-1', taskTitle: 'Check prices', kind: 'result' as const };
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...idleSlice,
+      messages: [
+        { role: 'assistant', turnId: 'user-run', content: [{ type: 'text', text: 'Earlier reply' }] },
+        { role: 'task', turnId: 'task-run', content: [], taskTrigger: trigger },
+      ],
+      streamingMsg: { role: 'assistant', turnId: 'task-run', startsNewBubble: true,
+        content: [{ type: 'text', text: 'I checked it.' }] },
+      sending: true, streaming: true,
+    });
+    useChatSessionStore.getState().finalizeStreamingTurn(conversationId, {
+      role: 'assistant', turnId: 'task-run', startsNewBubble: true,
+      content: [{ type: 'text', text: 'I checked it.' }],
+    });
+    expect(getChatSessionSnapshot(conversationId)?.messages.map((message) => message.role))
+      .toEqual(['assistant', 'task', 'assistant']);
+  });
+
   it('keeps assistant replies separate when a user row defines a new bubble boundary', () => {
     useChatSessionStore.getState().initSessionSnapshot(conversationId, {
       ...idleSlice,

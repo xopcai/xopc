@@ -5,6 +5,7 @@ import type { EmbeddedStreamEvent } from '../../agent/embedded/types.js';
 import { productDeliveries } from '../../session/compact-history.js';
 import { createPetFeedback } from './pet-feedback.js';
 import type { ChatStreamEvent, ChatStreamStatus } from './protocol.js';
+import type { TaskUpdateTrigger } from '../../storage/sqlite/session-input-repository.js';
 
 export type RuntimeStreamEvent = EmbeddedStreamEvent | { type: string; [key: string]: unknown };
 
@@ -12,6 +13,8 @@ export interface ChatStreamMapperOptions {
   runId: string;
   conversationId: string;
   channel: string;
+  startsNewBubble?: boolean;
+  taskTrigger?: TaskUpdateTrigger;
 }
 
 type ToolResultEnvelope = { content?: unknown[]; details?: unknown; text?: string };
@@ -160,7 +163,9 @@ export class ChatStreamMapper {
   start(): ChatStreamEvent[] {
     if (this.started) return [];
     this.started = true;
-    return [this.make('run_start', { channel: this.opts.channel })];
+    return [this.make('run_start', { channel: this.opts.channel,
+      ...(this.opts.startsNewBubble ? { startsNewBubble: true } : {}),
+      ...(this.opts.taskTrigger ? { taskTrigger: this.opts.taskTrigger } : {}) })];
   }
 
   end(status: ChatStreamStatus, summary?: string): ChatStreamEvent[] {

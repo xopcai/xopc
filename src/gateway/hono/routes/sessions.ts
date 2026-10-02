@@ -1,5 +1,6 @@
 import { patchChatModelConfig } from './chat-model-config.js';
 
+import { createHash } from 'node:crypto';
 import type { Hono } from 'hono';
 import { SessionDiscoveryQuerySchema } from '@xopcai/gateway-contract';
 
@@ -24,6 +25,7 @@ import {
   sortBySidebarLayout,
 } from '../../../storage/sqlite/sidebar-layout-repository.js';
 import { summarizeAiUsageByConversations } from '../../../storage/sqlite/ai-usage-repository.js';
+import { listSidebarTaskGroups } from '../../../tasks/task-sidebar-hierarchy.js';
 
 const log = createGatewayRouteLogger('Sessions');
 
@@ -148,6 +150,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
           updatedAfter,
           includePinned: true,
           includeConversationId,
+          rootConversationsOnly: true,
           sortBy: 'updatedAt',
           sortOrder: 'desc',
         });
@@ -169,6 +172,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       updatedAfter,
       includePinned: true,
       includeConversationId,
+      rootConversationsOnly: true,
       sortBy: 'updatedAt',
       sortOrder: 'desc',
     });
@@ -185,6 +189,10 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       status: SessionStatus.PINNED,
       limit: 5000,
       offset: 0,
+      updatedAfter,
+      includePinned: true,
+      includeConversationId,
+      rootConversationsOnly: true,
       sortBy: 'updatedAt',
       sortOrder: 'desc',
     });
@@ -196,6 +204,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       ...projects.items.map((project) => getSidebarLayout(`project:${project.id}`)),
     ].map((layout) => [layout.containerId, { itemIds: layout.itemIds, revision: layout.revision }]));
 
+    const parentIds = [
+      ...projectItems.flatMap((entry) => entry.sessions.map((session) => session.key)),
+      ...inbox.items.map((session) => session.key),
+      ...pinned.map((session) => session.key),
+    ];
     return c.json({
       ok: true,
       projects: {
@@ -208,6 +221,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       inbox,
       pinned,
       layouts,
+      childrenByConversationId: listSidebarTaskGroups(parentIds),
     });
   });
 
@@ -314,12 +328,16 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       updatedAfter: query.updatedAfter ? parseInt(query.updatedAfter) : undefined,
       includePinned: query.includePinned === 'true',
       includeConversationId: query.includeConversationId,
+      rootConversationsOnly: query.rootConversationsOnly === 'true',
       limit: query.limit ? parseInt(query.limit) : undefined,
       offset: query.offset ? parseInt(query.offset) : undefined,
     });
     const usageByConversation = summarizeAiUsageByConversations(result.items.map((item) => item.key));
     return c.json({
       ...result,
+      ...(query.rootConversationsOnly === 'true'
+        ? { childrenByConversationId: listSidebarTaskGroups(result.items.map((item) => item.key)) }
+        : {}),
       items: result.items.map((item) => ({
         ...item,
         usage: usageByConversation.get(item.key) ?? {
@@ -475,7 +493,8 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
     const revision = result.pagination.revision;
     if (typeof revision === 'number') {
-      const etag = `"${result.session.transcriptId ?? key}:${revision}:${compact ? 'compact' : 'full'}:${before ?? offset}:${limit}"`;
+      const contentHash = createHash('sha256').update(JSON.stringify(result)).digest('base64url');
+      const etag = `"${result.session.transcriptId ?? key}:${revision}:${compact ? 'compact' : 'full'}:${before ?? offset}:${limit}:${contentHash}"`;
       c.header('ETag', etag);
       if (c.req.header('If-None-Match') === etag) return c.body(null, 304);
     }

@@ -19,4 +19,16 @@ describe('session compact history opt-in', () => {
     const unchanged = await app.request('/api/sessions/c/history?view=compact&limit=20', { headers: { 'If-None-Match': compact.headers.get('etag')! } });
     expect(unchanged.status).toBe(304);
   });
+
+  it('invalidates history cache when message presentation changes without a new transcript row', async () => {
+    const getMessagePage = vi.fn()
+      .mockResolvedValueOnce({ session: { transcriptId: 't', messages: [{ role: 'assistant', content: 'Done' }] }, pagination: { revision: 30 } })
+      .mockResolvedValueOnce({ session: { transcriptId: 't', messages: [{ role: 'assistant', content: 'Done', startsNewBubble: true }] }, pagination: { revision: 30 } });
+    const app = new Hono();
+    registerSessionsRoutes(app, { service: { isGatewayReady: () => true, sessions: { getMessagePage } } } as never);
+    const first = await app.request('/api/sessions/c/history');
+    const updated = await app.request('/api/sessions/c/history', { headers: { 'If-None-Match': first.headers.get('etag')! } });
+    expect(updated.status).toBe(200);
+    expect(updated.headers.get('etag')).not.toBe(first.headers.get('etag'));
+  });
 });

@@ -177,6 +177,12 @@ export interface TaskRunCreateInput {
 }
 
 export class TaskRunRepository {
+  nextAgentInputClientMessageId(runId: string): string {
+    const finished = getSqliteDatabase().prepare(`SELECT COUNT(*) AS count FROM session_inputs
+      WHERE task_run_id = ? AND status IN ('completed', 'suspended')`).get(runId) as { count: number };
+    return finished.count === 0 ? `task:${runId}` : `task:${runId}:resume:${finished.count}`;
+  }
+
   create(input: TaskRunCreateInput): TaskRun {
     const id = input.id ?? randomUUID();
     const rootRunId = input.parentRunId
@@ -352,11 +358,19 @@ export class TaskRunRepository {
   heartbeat(input: { runId: string; owner: string; leaseMs: number; now?: number }): TaskRun | undefined {
     const now = input.now ?? Date.now();
     const result = getSqliteDatabase().prepare(
-      `UPDATE task_runs SET heartbeat_at = ?, lease_expires_at = ?, version = version + 1
+      `UPDATE task_runs SET heartbeat_at = ?, lease_expires_at = ?
        WHERE run_id = ? AND lease_owner = ?
          AND status IN ('running', 'waiting', 'verifying')`,
     ).run(now, now + input.leaseMs, input.runId, input.owner);
     return result.changes === 0 ? undefined : this.get(input.runId);
+  }
+
+  listExpiredLeasedRunning(now = Date.now(), limit = 50): TaskRun[] {
+    const rows = getSqliteDatabase().prepare(`SELECT * FROM task_runs
+      WHERE status IN ('running', 'verifying') AND lease_owner IS NOT NULL
+        AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
+      ORDER BY lease_expires_at LIMIT ?`).all(now, Math.max(1, Math.min(200, Math.floor(limit)))) as TaskRunRow[];
+    return rows.map(fromRow);
   }
 
   finalize(input: {

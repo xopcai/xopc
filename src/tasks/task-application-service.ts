@@ -19,6 +19,8 @@ import { TaskDependencyService } from './task-dependency-service.js';
 import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
+import { TaskCollaborationRepository } from './task-collaboration-repository.js';
+import { TaskConversationRepository } from './task-conversation-repository.js';
 
 export type TaskApplicationResult =
   | { ok: true; model: TaskReadModel; runId?: string }
@@ -100,6 +102,16 @@ export class TaskApplicationService {
           assignment_epoch, status, updated_at
         ) VALUES (?, NULL, ?, 0, 'idle', ?)`,
       ).run(task.id, task.delegateAgentId ?? task.ownerId ?? null, task.createdAt);
+      if (input.originConversationId) {
+        const linked = db.prepare(`INSERT INTO task_origin_links (task_id, conversation_id, created_at)
+          SELECT ?, conversation_id, ? FROM sessions WHERE conversation_id = ?`).run(
+          task.id, task.createdAt, input.originConversationId,
+        );
+        if (linked.changes !== 1) throw new Error('Task origin conversation not found');
+        db.prepare(`INSERT INTO task_main_agent_links (task_id, agent_id, origin_conversation_id, created_at)
+          SELECT ?, agent_id, conversation_id, ? FROM sessions WHERE conversation_id = ?`)
+          .run(task.id, task.createdAt, input.originConversationId);
+      }
       let current = task;
       if (input.dependencies.length > 0) {
         current = this.#dependencies.replace({
@@ -399,10 +411,12 @@ export class TaskApplicationService {
         return { ok: false, reason: 'conflict', model: this.#projector.get(run.taskId) };
       }
       const task = this.#tasks.require(run.taskId);
+      const activeConversationId = new TaskConversationRepository().getState(task.id)?.activeConversationId;
       // Late and child receipts cannot override a user's pause/close decision
       // or certify a newer contract.
       if (run.parentRunId || task.phase === 'closed'
         || this.#runs.listActiveWaits(task.id).length > 0
+        || (run.conversationId && activeConversationId && run.conversationId !== activeConversationId)
         || run.contractVersion !== task.latestContractVersion) {
         enqueueTaskChangedEvent(db, {
           taskId: task.id, projectId: task.projectId, version: task.version,
@@ -411,6 +425,12 @@ export class TaskApplicationService {
         });
         return { ok: true, model: this.#projector.project(task) };
       }
+      new TaskCollaborationRepository().append({
+        taskId: run.taskId, taskRunId: run.id, authorKind: 'system', authorId: 'task-run',
+        kind: input.receipt.status === 'succeeded' ? 'result' : 'failure',
+        body: input.receipt.summary || (input.receipt.status === 'succeeded' ? 'TaskRun completed' : 'TaskRun failed'),
+        idempotencyKey: `task-run-receipt:${run.id}`,
+      });
       if (input.receipt.status !== 'succeeded') {
         const model = this.#projector.project(task);
         if (!input.suppressAttention) enqueueTaskAttentionRequiredEvent(db, {

@@ -11,6 +11,7 @@ type BubbleProps = {
   isStreaming?: boolean;
   suppressAssistantActions?: boolean;
   deleteRoundDisabled?: boolean;
+  followUpTrigger?: Message['taskTrigger'];
 };
 
 const { propsByMessageIndex } = vi.hoisted(() => ({
@@ -104,5 +105,24 @@ describe('MessageList streaming row props', () => {
     });
     expect(propsByMessageIndex.get(3)?.isStreaming).toBe(true);
     expect(propsByMessageIndex.get(3)?.suppressAssistantActions).toBe(true);
+  });
+
+  it('places a task update in the following assistant reply instead of a separate row', () => {
+    const trigger: NonNullable<Message['taskTrigger']> = {
+      entryId: 'entry-1', taskId: 'task-1', taskTitle: 'Research', kind: 'result',
+    };
+    act(() => root.render(<MessageList
+      messages={[
+        { role: 'assistant', content: [{ type: 'text', text: 'I will check.' }] },
+        { role: 'task', turnId: 'run-1', content: [], taskTrigger: trigger },
+        { role: 'assistant', turnId: 'run-1', content: [{ type: 'text', text: 'Here is the result.' }] },
+      ]}
+      streaming={false}
+      progress={null}
+      reasoningLevel="on"
+      registerListContentRef={() => {}}
+    />));
+    expect(container.querySelector('[data-chat-message-index="1"]')).toBeNull();
+    expect(propsByMessageIndex.get(2)?.followUpTrigger).toEqual(trigger);
   });
 });

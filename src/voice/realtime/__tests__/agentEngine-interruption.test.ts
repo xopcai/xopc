@@ -25,6 +25,11 @@ describe('Agent voice interruption cleanup', () => {
       outputFormat: 'pcm', release,
       audioStream: new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } }),
     }));
+    const delegate = vi.fn(async ({ text, conversationId, signal }) => ({
+      taskId: `task:${text}`,
+      runId: `run:${text}`,
+      events: runAgent(text, conversationId, signal),
+    }));
     engine = createAgentVoiceEngine({
       claim: {
         sessionId: 'call', conversationSessionId: 'stored-session',
@@ -37,11 +42,7 @@ describe('Agent voice interruption cleanup', () => {
       } as never,
       runtime: {
         agentBroker: {
-          delegate: async ({ text, conversationId, signal }) => ({
-            taskId: `task:${text}`,
-            runId: `run:${text}`,
-            events: runAgent(text, conversationId, signal),
-          }),
+          delegate,
           cancel: async () => true,
         },
         recordInterruption: async () => {},
@@ -49,8 +50,68 @@ describe('Agent voice interruption cleanup', () => {
       signal: new AbortController().signal, send, sendAudio, onClose: async () => {},
     });
     await engine.start();
-    return { send, sendAudio, release, emit, currentEmit: () => emit, final: (id: string) => emit({ type: 'transcript_final', utteranceId: id, revision: 1, text: id }) };
+    return { send, sendAudio, release, delegate, emit, currentEmit: () => emit, final: (id: string) => emit({ type: 'transcript_final', utteranceId: id, revision: 1, text: id }) };
   }
+
+  it('runs a task update through the active call as an independent system turn', async () => {
+    const test = await setup(async function* () {
+      yield { type: 'assistant_delta', payload: { delta: 'The worker has submitted a result.' } };
+      yield { type: 'run_end', payload: { status: 'success' } };
+    });
+    expect(engine.canOfferTaskUpdate?.()).toBe(true);
+    const completed = await engine.offerTaskUpdate?.({ clientMessageId: 'task-main-update:entry-1',
+      content: 'Summarize Task entry 1' });
+    expect(completed).toBe(true);
+    expect(test.delegate).toHaveBeenCalledWith(expect.objectContaining({
+      clientMessageId: 'task-main-update:entry-1',
+      origin: { type: 'system', source: 'task_update' },
+    }));
+    expect(test.send).toHaveBeenCalledWith('response.text.delta', expect.objectContaining({
+      delta: 'The worker has submitted a result.',
+    }));
+    expect(test.send).toHaveBeenCalledWith('response.done', expect.anything());
+    expect(engine.canOfferTaskUpdate?.()).toBe(true);
+  });
+
+  it('holds a task update while the user is speaking', async () => {
+    const test = await setup(async function* () {});
+    test.emit({ type: 'speech_started', utteranceId: 'user-1' });
+    expect(engine.canOfferTaskUpdate?.()).toBe(false);
+    expect(await engine.offerTaskUpdate?.({ clientMessageId: 'task-main-update:entry-2',
+      content: 'Summarize Task entry 2' })).toBe(false);
+    expect(test.delegate).not.toHaveBeenCalled();
+  });
+
+  it('defers an in-flight task update when a real user utterance arrives', async () => {
+    let started!: () => void;
+    const entered = new Promise<void>((resolve) => { started = resolve; });
+    const test = await setup(async function* (_text, _conversationId, signal) {
+      started();
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    const delivery = engine.offerTaskUpdate?.({ clientMessageId: 'task-main-update:entry-3',
+      content: 'Summarize Task entry 3' });
+    await entered;
+    test.emit({ type: 'speech_started', utteranceId: 'user-1' });
+    test.emit({ type: 'transcript_final', utteranceId: 'user-1', revision: 1, text: 'Wait' });
+    await expect(delivery).resolves.toBe(false);
+    expect(test.send.mock.calls.filter(([type]) => type === 'response.cancelled')).toHaveLength(1);
+    expect(test.send.mock.calls.filter(([type]) => type === 'session.error')).toEqual([]);
+  });
+
+  it('does not replay a task update after its text was already shown', async () => {
+    const test = await setup(async function* (_text, _conversationId, signal) {
+      yield { type: 'assistant_delta', payload: { delta: 'The worker found a blocking issue.' } };
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    const delivery = engine.offerTaskUpdate?.({ clientMessageId: 'task-main-update:entry-4',
+      content: 'Summarize Task entry 4' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.text.delta',
+      expect.objectContaining({ delta: 'The worker found a blocking issue.' })));
+    test.emit({ type: 'speech_started', utteranceId: 'user-1' });
+    test.emit({ type: 'transcript_final', utteranceId: 'user-1', revision: 1, text: 'Wait' });
+    await expect(delivery).resolves.toBe(true);
+  });
 
   it('serializes the next turn behind cancelled Agent cleanup and suppresses stale completion', async () => {
     let release!: () => void;

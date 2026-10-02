@@ -74,9 +74,10 @@ export class XopcChatRepository {
     const gatewayId = gatewaySession.currentProfile()?.gatewayId;
     if (gatewayId) await this.store.write('main-chat.' + gatewayId, id);
   }
-  async list(search: string = '', offset: number = 0, limit: number = 30, channel: string = 'webchat'): Promise<XopcSessionList> {
+  async list(search: string = '', offset: number = 0, limit: number = 30, channel: string = 'webchat', roots: boolean = false): Promise<XopcSessionList> {
     const result = JSON.parse(await gatewaySession.request('/api/sessions?limit=' + limit + '&offset=' + offset
       + (channel ? '&channel=' + encodeURIComponent(channel) : '')
+      + (roots ? '&rootConversationsOnly=true' : '')
       + '&sortBy=updatedAt&sortOrder=desc&search=' + encodeURIComponent(search.trim()))) as XopcSessionList;
     if (!Array.isArray(result.items) || typeof result.hasMore !== 'boolean') throw new Error('INVALID_SESSION_LIST');
     if (result.items.some((item: XopcSessionItem): boolean => !item || typeof item.key !== 'string' || !item.key

@@ -18,6 +18,7 @@ import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-
 import type { WireAttachment, WireContextRef } from '@/features/chat/composer/composer.types';
 import type { Message, ProgressState } from '@/features/chat/messages/messages.types';
 import { userMessageFromStreamPayload } from '@/features/chat/messages/user-message-from-stream';
+import { normalizeTaskTrigger } from '@/features/chat/messages/agent-messages';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/constants';
 import { dispatchPendingAgentRunChanged } from '@/features/chat/follow-up/pending-agent-run-events';
 import { apiFetch } from '@/lib/fetch';
@@ -241,7 +242,7 @@ export type TaskPlanState = {
 export type MessagingCallbacks = {
   /** The server durably accepted this input, before its run finishes. */
   onInputAccepted?: () => void;
-  onStreamStart: (turnId: string) => void;
+  onStreamStart: (turnId: string, startsNewBubble?: boolean, taskTrigger?: Message['taskTrigger']) => void;
   onReplayGap?: () => void | Promise<void>;
   onToken: (delta: string, messageId?: string, offset?: number) => void;
   onAssistantMessageEnd?: (
@@ -642,7 +643,8 @@ export class MessageSender {
           this._trackedRunId = parsed.runId;
           setPendingAgentRun(this._chatId, parsed.runId);
         }
-        if (typeof parsed.runId === 'string') cb?.onStreamStart(parsed.runId);
+        if (typeof parsed.runId === 'string') cb?.onStreamStart(parsed.runId, payload.startsNewBubble === true,
+          normalizeTaskTrigger(payload.taskTrigger) ?? undefined);
         break;
       case 'user_message': {
         const rawMessage = payload.message && typeof payload.message === 'object'

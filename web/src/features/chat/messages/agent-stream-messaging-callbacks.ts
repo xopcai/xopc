@@ -135,15 +135,20 @@ export function createAgentStreamMessagingCallbacks(opts: {
     onWorkflowRunStarted: () => {
       window.dispatchEvent(new CustomEvent('workflow-run-started-from-chat', { detail: { conversationId: chatId } }));
     },
-    onStreamStart: (turnId) => {
+    onStreamStart: (turnId, startsNewBubble, taskTrigger) => {
       markChatRunRunning(chatId);
       beforeAssistantDelta();
+      if (taskTrigger) store().updateSessionMessages(chatId, (messages) =>
+        messages.some((message) => message.role === 'task' && message.turnId === turnId)
+          ? messages
+          : [...messages, { role: 'task', content: [], taskTrigger, turnId, timestamp: Date.now() }]);
       store().updateSessionMessages(
         chatId,
         (messages) => claimLatestUnassignedUserTurn(messages, turnId),
       );
       store().mutateSessionStreaming(chatId, (message) => {
         message.turnId = turnId;
+        if (startsNewBubble) message.startsNewBubble = true;
       });
       store().setSessionFlags(chatId, { streaming: true });
     },

@@ -55,6 +55,7 @@ import {
   unpinSession,
 } from '@/features/sessions/session-api';
 import type { SessionMetadata } from '@/features/sessions/session.types';
+import type { SidebarTaskGroup } from '@xopcai/gateway-contract';
 import { messages } from '@/i18n/messages';
 import { formControlBorderFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
@@ -64,6 +65,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const SessionDescriptionContext = createContext(false);
+const TaskGroupsContext = createContext<Record<string, SidebarTaskGroup>>({});
 
 const PAGE_SIZE = 20;
 const PROJECT_LIMIT = 12;
@@ -184,15 +186,23 @@ function interpolate(template: string, params: Record<string, string | number>):
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
 }
 
+function sidebarTaskStatus(status: string, labels: ReturnType<typeof messages>['sidebar']): string {
+  if (status === 'running' || status === 'active' || status === 'verifying') return labels.delegatedTaskRunning;
+  if (status === 'completed' || status === 'succeeded' || status === 'closed') return labels.delegatedTaskCompleted;
+  if (status === 'failed') return labels.delegatedTaskFailed;
+  if (status === 'backlog' || status === 'ready' || status === 'queued' || status === 'waiting') return labels.delegatedTaskWaiting;
+  return status;
+}
+
 function sessionUpdatedAtMs(session: SessionMetadata): number {
   const timestamp = new Date(session.updatedAt).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function rowShellClass(isActive: boolean, indented: boolean): string {
+function rowShellClass(isActive: boolean): string {
   return cn(
     'group relative flex min-h-8 w-full min-w-0 items-center rounded-lg pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
-    indented ? 'pl-6' : 'pl-1.5',
+    'pl-6',
     'focus-within:outline-none',
     isActive
       ? 'bg-surface-active font-medium text-fg'
@@ -246,7 +256,6 @@ function SidebarTaskListSkeleton() {
 const SidebarTaskRow = memo(function SidebarTaskRow({
   session,
   isActive,
-  indented = false,
   onNavigate,
   mutate,
   onRequestRename,
@@ -257,11 +266,10 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   defaultUnnamedTitle,
   contextLabel,
   sort,
+  showTaskChildren = true,
 }: {
   session: SessionMetadata;
   isActive: boolean;
-  /** Keep nested titles indented while allowing the row background to span the full list width. */
-  indented?: boolean;
   contextLabel?: string;
   onNavigate?: () => void;
   mutate: () => void;
@@ -272,7 +280,15 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
   sort?: SidebarSortSpec;
+  showTaskChildren?: boolean;
 }) {
+  const taskGroup = useContext(TaskGroupsContext)[session.key];
+  const location = useLocation();
+  const activeTaskId = /^\/chat\/task\/([^/]+)$/.exec(location.pathname)?.[1];
+  const activeChild = taskGroup?.items.some((child) => child.taskId === activeTaskId
+    || child.activeConversationId === chatConversationIdFromPath(location.pathname)) ?? false;
+  const [tasksExpanded, setTasksExpanded] = useState(activeChild);
+  useEffect(() => { if (activeChild) setTasksExpanded(true); }, [activeChild]);
   const showDescription = useContext(SessionDescriptionContext);
   const identity = resolveSessionIdentity(session);
   const showIdentityIcon = identity.source !== 'workbench' || identity.purpose !== 'chat';
@@ -316,7 +332,16 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
 
   return (
     <SidebarSortableItem spec={sort}>
-    <div className={rowShellClass(isActive, indented)}>
+    <div>
+    <div className={rowShellClass(isActive)}>
+      {showTaskChildren && taskGroup?.total ? (
+        <button type="button" className="absolute left-0 flex size-6 items-center justify-center text-fg-subtle hover:text-fg"
+          aria-label={tasksExpanded ? sb.delegatedTasksCollapse : sb.delegatedTasksExpand}
+          aria-expanded={tasksExpanded}
+          onClick={() => setTasksExpanded((value) => !value)}>
+          <ChevronDown className={cn('size-3.5 transition-transform', !tasksExpanded && '-rotate-90')} aria-hidden />
+        </button>
+      ) : null}
       <Link
         to={`/chat/${encodeURIComponent(session.key)}`}
         className={cn(
@@ -457,6 +482,19 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           </Popover.Portal>
         </Popover.Root>
       </div>
+    </div>
+    {showTaskChildren && tasksExpanded && taskGroup?.items.map((child) => (
+      <Link key={child.taskId}
+        to={child.activeConversationId ? `/chat/task/${encodeURIComponent(child.taskId)}` : `/tasks/${encodeURIComponent(child.taskId)}`}
+        className={cn(
+          'ml-4 flex min-h-8 items-center gap-2 rounded-lg px-2 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg',
+          activeTaskId === child.taskId && 'bg-surface-active text-fg')}
+        onClick={() => onNavigate?.()}>
+        <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
+        <span className="min-w-0 flex-1 truncate">{child.title}</span>
+        <span className="shrink-0 text-xs text-fg-subtle">{sidebarTaskStatus(child.runStatus ?? child.phase, sb)}</span>
+      </Link>
+    ))}
     </div>
     </SidebarSortableItem>
   );
@@ -715,7 +753,6 @@ function SidebarProjectSection({
               key={session.key}
               session={session}
               isActive={activeConversationId === session.key}
-              indented
               onNavigate={onNavigate}
               mutate={mutate}
               onRequestRename={onRequestRename}
@@ -851,7 +888,6 @@ function SidebarInboxSection({
             key={session.key}
             session={session}
             isActive={activeConversationId === session.key}
-            indented
             onNavigate={onNavigate}
             mutate={mutate}
             onRequestRename={onRequestRename}
@@ -1022,6 +1058,7 @@ function SidebarTaskListContent({
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(() => new Set());
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
   const [projectSessionOverrides, setProjectSessionOverrides] = useState<Record<string, ProjectSessionOverride>>({});
+  const [extraTaskGroups, setExtraTaskGroups] = useState<Record<string, SidebarTaskGroup>>({});
   const [loadingProjectIds, setLoadingProjectIds] = useState<Set<string>>(() => new Set());
   const [inboxExtraItems, setInboxExtraItems] = useState<SessionMetadata[]>([]);
   const [inboxHasMoreOverride, setInboxHasMoreOverride] = useState<boolean | null>(null);
@@ -1092,6 +1129,11 @@ function SidebarTaskListContent({
     }));
     return orderSidebarItems(orderedGroups, pendingOrders.projects, (group) => group.project.id);
   }, [data, loadingProjectIds, pendingOrders, projectSessionOverrides]);
+  const taskGroups = useMemo((): Record<string, SidebarTaskGroup> => {
+    const groups: Record<string, SidebarTaskGroup> = {};
+    for (const page of data ?? []) Object.assign(groups, page.childrenByConversationId);
+    return { ...groups, ...extraTaskGroups };
+  }, [data, extraTaskGroups]);
 
   const firstInbox = data?.[0]?.inbox;
   const inboxItems = useMemo(() => {
@@ -1153,6 +1195,7 @@ function SidebarTaskListContent({
     setProjectSessionOverrides({});
     setInboxExtraItems([]);
     setInboxHasMoreOverride(null);
+    setExtraTaskGroups({});
     void mutate();
   }, [mutate]);
 
@@ -1220,11 +1263,13 @@ function SidebarTaskListContent({
     window.addEventListener('session-updated', onSessionUpdated);
     window.addEventListener('session-created', onSessionListRefresh);
     window.addEventListener('project-updated', onSessionListRefresh);
+    window.addEventListener('task-updated', onSessionListRefresh);
     window.addEventListener('session-transcript-updated', onSessionTranscriptUpdated);
     return () => {
       window.removeEventListener('session-updated', onSessionUpdated);
       window.removeEventListener('session-created', onSessionListRefresh);
       window.removeEventListener('project-updated', onSessionListRefresh);
+      window.removeEventListener('task-updated', onSessionListRefresh);
       window.removeEventListener('session-transcript-updated', onSessionTranscriptUpdated);
     };
   }, [token, refreshSidebar, visibleConversationIds]);
@@ -1356,7 +1401,9 @@ function SidebarTaskListContent({
           updatedAfter: sidebarUpdatedAfter,
           includePinned: true,
           includeConversationId: activeConversationId,
+          rootConversationsOnly: true,
         });
+        setExtraTaskGroups((prev) => ({ ...prev, ...result.childrenByConversationId }));
         setProjectSessionOverrides((prev) => {
           const existing = prev[projectId]?.sessions ?? group.sessions;
           const seen = new Set(existing.map((session) => session.key));
@@ -1414,7 +1461,9 @@ function SidebarTaskListContent({
           updatedAfter: sidebarUpdatedAfter,
           includePinned: true,
           includeConversationId: activeConversationId,
+          rootConversationsOnly: true,
         });
+        setExtraTaskGroups((prev) => ({ ...prev, ...result.childrenByConversationId }));
         setInboxExtraItems((prev) => {
           const seen = new Set([...(firstInbox?.items ?? []), ...prev].map((session) => session.key));
           const next = [...prev];
@@ -1499,6 +1548,7 @@ function SidebarTaskListContent({
 
   return (
     <SessionDescriptionContext value={discovery.filters.details}>
+    <TaskGroupsContext value={taskGroups}>
     <div className="flex min-h-0 flex-1 flex-col">
       <div
         ref={listScrollRef}
@@ -1572,7 +1622,7 @@ function SidebarTaskListContent({
                 {!discovery.items.length ? <p className="px-2 py-4 text-xs text-fg-muted">{filterLabels.empty}</p> : null}
                 <SessionDescriptionContext value={true}>
                   {discovery.items.map((session) => <SidebarTaskRow
-                    key={session.key} session={session} isActive={session.key === activeConversationId}
+                    key={session.key} session={session} isActive={session.key === activeConversationId} showTaskChildren={false}
                     contextLabel={session.projectId ? discovery.projects?.find((project) => project.id === session.projectId)?.name ?? projectGroups.find((group) => group.project.id === session.projectId)?.project.name ?? session.projectId : filterLabels.unassigned}
                     onNavigate={onNavigate} mutate={() => { discovery.refresh(); refreshSidebar(); }}
                     onRequestRename={openRename} onRequestDelete={setDeleteKey}
@@ -1928,6 +1978,7 @@ function SidebarTaskListContent({
         </Dialog.Portal>
       </Dialog.Root>
     </div>
+    </TaskGroupsContext>
     </SessionDescriptionContext>
   );
 }

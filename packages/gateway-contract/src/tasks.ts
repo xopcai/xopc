@@ -242,6 +242,7 @@ export const TaskCreateRequestSchema = z.object({
   dueAt: z.number().int().nonnegative().optional(),
   ownerId: z.string().trim().min(1).optional(),
   delegateAgentId: z.string().trim().min(1).optional(),
+  originConversationId: z.string().trim().min(1).optional(),
   locale: z.enum(['en', 'zh']).optional(),
   contract: TaskContractInputSchema,
   dependencies: z.array(z.string().trim().min(1)).default([]),

@@ -4,7 +4,16 @@ export interface XopcSessionItem {
   key: string; name?: string; title?: string; displayName?: string; messageCount: number;
   updatedAt: string; status?: string; projectId?: string; agentId?: string;
 }
-export interface XopcSessionList { items: XopcSessionItem[]; total: number; hasMore: boolean; }
+export interface XopcSidebarTaskChild {
+  taskId: string; title: string; phase: string; runStatus?: string; activeConversationId?: string;
+}
+export interface XopcSidebarTaskGroup {
+  total: number; activeCount: number; items: XopcSidebarTaskChild[];
+}
+export interface XopcSessionList {
+  items: XopcSessionItem[]; total: number; hasMore: boolean;
+  childrenByConversationId?: Record<string, XopcSidebarTaskGroup>;
+}
 export interface XopcContentBlock { type: string; text?: string; thinking?: string; name?: string; id?: string; input?: Object; args?: Object; arguments?: Object;
   segmentId?: string; presentation?: string; status?: string; result?: Object; details?: Object;
   source?: XopcImageSource; data?: string; mimeType?: string; uri?: string; workspaceRelativePath?: string;

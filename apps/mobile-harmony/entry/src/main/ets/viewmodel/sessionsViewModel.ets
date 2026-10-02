@@ -1,10 +1,11 @@
-import { XopcSessionItem } from '../model/chat';
+import { XopcSessionItem, XopcSidebarTaskGroup } from '../model/chat';
 import { XopcChatRepository } from '../repository/chatRepository';
 import { gatewaySession } from '../service/gatewaySession';
 
 @ObservedV2
 export class XopcSessionsViewModel {
   @Trace items: XopcSessionItem[] = [];
+  @Trace taskGroups: Record<string, XopcSidebarTaskGroup> = {};
   @Trace search: string = '';
   @Trace loading: boolean = false;
   @Trace refreshing: boolean = false;
@@ -48,7 +49,7 @@ export class XopcSessionsViewModel {
     this.loading = !more; this.loadingMore = more; this.error = '';
     this.refreshing = !more && userRefresh;
     try {
-      const page = await this.repository.list(this.search.trim(), offset, 20, '');
+      const page = await this.repository.list(this.search.trim(), offset, 20, '', !this.search.trim());
       if (generation !== this.generation || !this.current()) return;
       const retained = more ? [] : this.selectedItems();
       const seen: Set<string> = new Set<string>();
@@ -56,6 +57,16 @@ export class XopcSessionsViewModel {
         if (seen.has(item.key)) return false;
         seen.add(item.key); return true;
       });
+      const groups: Record<string, XopcSidebarTaskGroup> = {};
+      if (more) {
+        for (const key of Object.keys(this.taskGroups)) groups[key] = this.taskGroups[key];
+      }
+      if (page.childrenByConversationId) {
+        for (const key of Object.keys(page.childrenByConversationId)) {
+          groups[key] = page.childrenByConversationId[key];
+        }
+      }
+      this.taskGroups = groups;
       this.offset = offset + page.items.length;
       this.hasMore = page.hasMore && page.items.length > 0;
       // Selected rows outside the first page must survive a refresh after a partial batch failure.

@@ -1,11 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { AudioLines, Captions, Ellipsis, Mic, MicOff, Minimize2, Phone, PhoneOff } from 'lucide-react';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { TaskSessionBanner } from '@/features/chat/task/task-session-banner';
 import { VoiceCallWork } from './voice-call-work';
+import { VoiceDelegatedTasks } from './voice-delegated-tasks';
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -13,6 +14,13 @@ import { useVoicePreferencesStore } from '@/stores/voice-preferences-store';
 
 import { useRealtimeVoice } from './use-realtime-voice';
 import { VoiceCallContext, type VoiceCallTarget } from './voice-call-context';
+
+function clampMiniPosition(left: number, top: number, width: number, height: number) {
+  return {
+    left: Math.max(8, Math.min(left, window.innerWidth - width - 8)),
+    top: Math.max(8, Math.min(top, window.innerHeight - height - 8)),
+  };
+}
 
 export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const m = messages(useLocaleStore((state) => state.language)).chat;
@@ -24,6 +32,46 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const voice = useRealtimeVoice({ disabled: false, chat: m, onTranscript: () => {} });
   const starting = useRef(false);
   const startAttempt = useRef(0);
+  const miniCardRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; left: number; top: number; width: number; height: number; moved: boolean } | null>(null);
+  const suppressMiniClick = useRef(false);
+  const [miniPosition, setMiniPosition] = useState<{ left: number; top: number } | null>(null);
+  useEffect(() => {
+    const keepInView = () => {
+      const card = miniCardRef.current;
+      if (!card) return;
+      setMiniPosition((position) => position ? clampMiniPosition(position.left, position.top, card.offsetWidth, card.offsetHeight) : null);
+    };
+    window.addEventListener('resize', keepInView);
+    return () => window.removeEventListener('resize', keepInView);
+  }, []);
+  const startMiniDrag = (event: PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    suppressMiniClick.current = false;
+    const rect = miniCardRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, left: rect.left, top: rect.top, width: rect.width, height: rect.height, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const moveMiniDrag = (event: PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+    drag.moved = true;
+    setMiniPosition(clampMiniPosition(drag.left + dx, drag.top + dy, drag.width, drag.height));
+  };
+  const endMiniDrag = (event: PointerEvent<HTMLButtonElement>) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    suppressMiniClick.current = dragRef.current.moved;
+    dragRef.current = null;
+  };
+  const cancelMiniDrag = (event: PointerEvent<HTMLButtonElement>) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    suppressMiniClick.current = false;
+  };
   const active = voice.voiceActive && voice.phase !== 'error';
   const connected = voice.phase === 'recording';
   const start = (next: VoiceCallTarget) => {
@@ -57,14 +105,15 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     setTarget(null);
     setExpanded(false);
     setMore(false);
+    setMiniPosition(null);
   };
   const settingsPath = `/settings/capabilities/voice?returnTo=${encodeURIComponent(`/chat/${encodeURIComponent(target?.conversationId ?? '')}`)}`;
   const settingsLink = <Link to={settingsPath} onClick={() => setExpanded(false)} className="text-sm text-accent-fg hover:underline">{m.callSettings}</Link>;
 
   return <VoiceCallContext.Provider value={context}>
     {children}
-    {target && !expanded ? <div className="fixed bottom-5 right-5 z-50 flex max-w-[calc(100vw-2.5rem)] items-center gap-3 rounded-xl border border-edge bg-surface-panel p-3 shadow-float" role="region" aria-label={m.voiceConversation}>
-      <button type="button" onClick={() => setExpanded(true)} className="min-w-0 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+    {target && !expanded ? <div ref={miniCardRef} style={miniPosition ? { left: miniPosition.left, top: miniPosition.top, right: 'auto', bottom: 'auto' } : undefined} className="fixed bottom-5 right-5 z-50 flex max-w-[calc(100vw-2.5rem)] items-center gap-3 rounded-xl border border-edge bg-surface-panel p-3 shadow-float" role="region" aria-label={m.voiceConversation}>
+      <button type="button" onClick={() => { if (suppressMiniClick.current) { suppressMiniClick.current = false; return; } setExpanded(true); }} onPointerDown={startMiniDrag} onPointerMove={moveMiniDrag} onPointerUp={endMiniDrag} onPointerCancel={cancelMiniDrag} className="min-w-0 touch-none select-none rounded-lg text-left cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <span className="block truncate text-sm font-medium text-fg">{target.name}</span>
         <span className="block text-xs text-fg-muted">{status} · {voice.elapsedLabel}</span>
       </button>
@@ -89,6 +138,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
               {voice.responseText ? <div><span className="mb-1 block text-xs text-fg-subtle">{target?.name}</span><MarkdownView content={voice.responseText} compact codeCopy={false} renderMermaid={false} /></div> : null}
             </div> : null}
             {target?.taskId ? <TaskSessionBanner taskId={target.taskId} /> : null}
+            {connected && target ? <VoiceDelegatedTasks conversationId={target.conversationId} /> : null}
             {connected && target ? <VoiceCallWork key={target.conversationId} voice={voice} conversationId={target.conversationId} m={m} /> : null}
           </div>
           <footer className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-edge px-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3">

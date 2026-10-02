@@ -59,7 +59,7 @@ describe('native conversation manager', () => {
   it('queries all channels and advances raw offsets even when rows overlap', async () => {
     mock.list.mockResolvedValueOnce(page(['a', 'b'], true)).mockResolvedValueOnce(page(['b', 'c'], true)).mockResolvedValueOnce(page(['d']));
     const vm = new XopcSessionsViewModel(); await vm.load(); await vm.load(true); await vm.load(true);
-    expect(mock.list.mock.calls).toEqual([['', 0, 20, ''], ['', 2, 20, ''], ['', 4, 20, '']]);
+    expect(mock.list.mock.calls).toEqual([['', 0, 20, '', true], ['', 2, 20, '', true], ['', 4, 20, '', true]]);
     expect(vm.items.map(x => x.key)).toEqual(['a', 'b', 'c', 'd']); expect(vm.hasMore).toBe(false);
   });
   it('debounces search and ignores the old response during the debounce window', async () => {
@@ -67,12 +67,12 @@ describe('native conversation manager', () => {
     const vm = new XopcSessionsViewModel(); const loading = vm.load(); vm.setSearch('n'); vm.setSearch(' new ');
     old.resolve(page(['old'])); await loading; expect(vm.items).toEqual([]);
     await vi.advanceTimersByTimeAsync(249); expect(mock.list).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(1); expect(mock.list).toHaveBeenLastCalledWith('new', 0, 20, ''); expect(vm.loading).toBe(false);
+    await vi.advanceTimersByTimeAsync(1); expect(mock.list).toHaveBeenLastCalledWith('new', 0, 20, '', false); expect(vm.loading).toBe(false);
   });
   it('submit cancels pending debounce and clearing search resets the query', async () => {
     const vm = new XopcSessionsViewModel(); vm.setSearch('term'); await vm.load();
     await vi.advanceTimersByTimeAsync(250); expect(mock.list).toHaveBeenCalledOnce();
-    vm.setSearch(''); await vi.advanceTimersByTimeAsync(250); expect(mock.list).toHaveBeenLastCalledWith('', 0, 20, '');
+    vm.setSearch(''); await vi.advanceTimersByTimeAsync(250); expect(mock.list).toHaveBeenLastCalledWith('', 0, 20, '', true);
   });
   it('prevents duplicate pagination and stops after an empty page', async () => {
     const vm = new XopcSessionsViewModel(); mock.list.mockResolvedValueOnce(page(['a'], true)); await vm.load();
@@ -95,7 +95,7 @@ describe('native conversation manager', () => {
     mock.list.mockResolvedValueOnce(page(['later'], true)); await vm.load(true); vm.select('later');
     mock.list.mockResolvedValueOnce(page(['a'], true)); await vm.load();
     expect(vm.selectedItems().map(x => x.key)).toEqual(['later']);
-    await vm.load(true); expect(mock.list).toHaveBeenLastCalledWith('', 1, 20, '');
+    await vm.load(true); expect(mock.list).toHaveBeenLastCalledWith('', 1, 20, '', true);
   });
   it('keeps confirmed action results if the following read fails', async () => {
     const vm = new XopcSessionsViewModel(); await vm.load(); mock.list.mockRejectedValue(new Error('OFFLINE'));

@@ -873,6 +873,28 @@ describe('xopc_use tool', () => {
     ]));
   });
 
+  it('normalizes common model list wrappers when creating a task', async () => {
+    seedConversationFixtures();
+    const tool = createXopcUseTool({
+      getCurrentAgentId: () => 'main',
+      getCurrentConversationId: () => CONVERSATION_ID,
+    });
+    const created = parseToolJson(await tool.execute('call-task-wrapped-lists', {
+      mode: 'task', command: 'create', args: {
+        objective: 'Sum the requested numbers',
+        expectedOutputs: { item: 'A sum and formula' },
+        acceptanceCriteria: { item: ['The sum is correct'] },
+        constraints: '["Do not edit files"]',
+      },
+    }));
+    expect(created.ok).toBe(true);
+    expect(created.task.contract).toMatchObject({
+      expectedOutputs: ['A sum and formula'],
+      acceptanceCriteria: ['The sum is correct'],
+      constraints: ['Do not edit files'],
+    });
+  });
+
   it('updates task dependencies with optimistic concurrency', async () => {
     seedConversationFixtures();
     const tool = createXopcUseTool({

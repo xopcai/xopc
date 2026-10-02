@@ -7,6 +7,7 @@ import { parseUserTurnDocument, renderUserTurnDocument } from '@xopcai/gateway-c
 import { stripEnvelopeTimestampPrefix } from '../../channels/envelope-timestamp.js';
 import { getConnectionResumeInput } from '../../storage/sqlite/connection-wait-repository.js';
 import { getClarificationResumeInput } from '../../storage/sqlite/clarification-wait-repository.js';
+import { listTaskUpdateTriggers } from '../../storage/sqlite/session-input-repository.js';
 import type { Config } from '../../config/schema.js';
 import type { InboundAttachmentInput, MediaRef } from '../../channels/attachments/inbound-persist.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
@@ -274,6 +275,7 @@ export async function* runProcessDirectStreaming(
   const isConnectionResume = Boolean(input.runId && getConnectionResumeInput(conversationId, input.runId));
   const isClarificationResume = Boolean(input.runId && getClarificationResumeInput(conversationId, input.runId));
   const isInternalResume = isConnectionResume || isClarificationResume;
+  const isTaskUpdate = input.origin.type === 'system' && input.origin.source === 'task_update';
   const { channel, chatId } = await deps.resolveSessionEndpoint(conversationId);
   const context = deps.initDirectStreamingSession(conversationId, channel, chatId, input.origin);
 
@@ -492,7 +494,7 @@ export async function* runProcessDirectStreaming(
         conversationId,
         { suppressMediaPromptUris },
       );
-      const userMessage: TranscriptUserMessage = userTurnDocument
+      let userMessage: TranscriptUserMessage = userTurnDocument
         ? {
             ...builtUserMessage,
             metadata: {
@@ -501,8 +503,20 @@ export async function* runProcessDirectStreaming(
             },
           } as unknown as TranscriptUserMessage
         : builtUserMessage;
+      if (isTaskUpdate) {
+        const taskTrigger = input.runId
+          ? listTaskUpdateTriggers(conversationId).get(input.runId) : undefined;
+        userMessage = {
+          ...userMessage,
+          metadata: {
+            ...((userMessage as { metadata?: Record<string, unknown> }).metadata ?? {}),
+            hiddenFromClient: true,
+            ...(taskTrigger ? { taskTrigger } : {}),
+          },
+        } as unknown as TranscriptUserMessage;
+      }
 
-      if (channel === 'webchat' && !isInternalResume) {
+      if (channel === 'webchat' && !isInternalResume && !isTaskUpdate) {
         pushVisible({
           type: 'user_message',
           timestamp: userMessage.timestamp ?? Date.now(),

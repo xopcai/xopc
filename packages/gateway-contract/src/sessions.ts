@@ -19,6 +19,9 @@ export interface SessionContextSummary {
   work: {
     project?: { id: string; title: string };
     task?: { id: string; title: string; phase: string };
+    delegatedTasks?: Array<{ id: string; title: string; phase: string; runStatus?: string; updatedAt: number;
+      latestUpdate?: { kind: string; body: string; createdAt: number } }>;
+    delegatedTaskCount?: number;
   };
   sources: SessionContextSource[];
   sourcesHasMore: boolean;
@@ -122,6 +125,7 @@ export interface SessionListQuery extends SessionDiscoveryQuery {
   updatedAfter?: number;
   includePinned?: boolean;
   includeConversationId?: string;
+  rootConversationsOnly?: boolean;
   sessionTypes?: string[];
   sortBy?: string;
   sortOrder?: 'asc' | 'desc' | string;
@@ -239,12 +243,27 @@ export interface SidebarChatListProject<TProject = unknown> {
   sessionHasMore: boolean;
 }
 
+export interface SidebarTaskChild {
+  taskId: string;
+  title: string;
+  phase: string;
+  runStatus?: string;
+  activeConversationId?: string;
+}
+
+export interface SidebarTaskGroup {
+  total: number;
+  activeCount: number;
+  items: SidebarTaskChild[];
+}
+
 export interface SidebarChatListResponse<TProject = unknown> {
   ok: true;
   projects: PaginatedResult<SidebarChatListProject<TProject>>;
   inbox: PaginatedResult<SessionMetadata>;
   pinned: SessionMetadata[];
   layouts: Record<string, { itemIds: string[]; revision: number }>;
+  childrenByConversationId: Record<string, SidebarTaskGroup>;
 }
 
 export interface SessionMessagePage {
@@ -470,6 +489,17 @@ export const sidebarChatListResponseSchema = z
       itemIds: z.array(z.string()),
       revision: z.number().int().nonnegative(),
     })).default({}),
+    childrenByConversationId: z.record(z.string(), z.object({
+      total: z.number(),
+      activeCount: z.number(),
+      items: z.array(z.object({
+        taskId: z.string(),
+        title: z.string(),
+        phase: z.string(),
+        runStatus: z.string().optional(),
+        activeConversationId: z.string().optional(),
+      })),
+    })).default({}),
   })
   .passthrough();
 
@@ -546,6 +576,7 @@ export function buildSessionListQueryString(query?: SessionListQuery): string {
   if (query.updatedAfter != null) params.set('updatedAfter', String(query.updatedAfter));
   if (query.includePinned) params.set('includePinned', 'true');
   if (query.includeConversationId) params.set('includeConversationId', query.includeConversationId);
+  if (query.rootConversationsOnly) params.set('rootConversationsOnly', 'true');
   if (query.sessionTypes?.length) params.set('types', query.sessionTypes.join(','));
   if (query.sortBy) params.set('sortBy', query.sortBy);
   if (query.sortOrder) params.set('sortOrder', query.sortOrder);

@@ -5,6 +5,63 @@ import type { TranscriptStoredRow } from '../session-context-for-llm.js';
 import type { Message } from '../types.js';
 
 describe('messagesToClientHistory', () => {
+  it('hides internal task update triggers while keeping the Agent response', () => {
+    const out = messagesToClientHistory([
+      { role: 'user', content: 'Task update trigger', metadata: { hiddenFromClient: true } },
+      { role: 'assistant', content: 'The worker is halfway done.' },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.content).toBe('The worker is halfway done.');
+  });
+  it('marks a task update turn as a new bubble even when its trigger is hidden', () => {
+    const rows = [
+      { role: 'assistant', content: 'Reply to the user', turnId: 'user-run' },
+      { role: 'user', content: 'Task update trigger', turnId: 'task-run', metadata: { hiddenFromClient: true } },
+      { role: 'assistant', content: 'Task completed', turnId: 'task-run' },
+    ] as never[];
+    expect(transcriptRowsToClientHistory(rows, { startsNewBubbleTurnIds: new Set(['task-run']) }))
+      .toMatchObject([
+        { role: 'assistant', content: 'Reply to the user' },
+        { role: 'assistant', content: 'Task completed', startsNewBubble: true },
+      ]);
+  });
+  it('shows a safe task trigger before the Agent reply when provenance is available', () => {
+    const rows = [
+      { role: 'assistant', content: 'Earlier reply', turnId: 'earlier' },
+      { role: 'user', content: 'Private task prompt', turnId: 'task-run', timestamp: 20,
+        metadata: { hiddenFromClient: true } },
+      { role: 'assistant', content: 'I reviewed the result.', turnId: 'task-run' },
+    ] as never[];
+    const taskTrigger = { entryId: 'entry-1', taskId: 'task-1', taskTitle: 'Check prices', kind: 'result' as const };
+    const history = transcriptRowsToClientHistory(rows, {
+      startsNewBubbleTurnIds: new Set(['task-run']),
+      taskUpdateTriggers: new Map([['task-run', taskTrigger]]),
+    });
+    expect(history).toMatchObject([
+      { role: 'assistant', content: 'Earlier reply' },
+      { role: 'task', content: '', taskTrigger, turnId: 'task-run' },
+      { role: 'assistant', content: 'I reviewed the result.', startsNewBubble: true },
+    ]);
+    expect(JSON.stringify(history)).not.toContain('Private task prompt');
+  });
+
+  it('does not leave a task trigger without an Agent reply', () => {
+    const rows = [{ role: 'user', content: 'Private task prompt', turnId: 'failed-run',
+      metadata: { hiddenFromClient: true } }] as never[];
+    expect(transcriptRowsToClientHistory(rows, { taskUpdateTriggers: new Map([['failed-run',
+      { entryId: 'entry', taskId: 'task', taskTitle: 'Research', kind: 'progress' }]]) })).toEqual([]);
+  });
+  it('preserves the trigger title captured at turn time after the Task changes', () => {
+    const original = { entryId: 'entry', taskId: 'task', taskTitle: 'Original title', kind: 'result' as const };
+    const rows = [
+      { role: 'user', turnId: 'run', content: 'Private prompt',
+        metadata: { hiddenFromClient: true, taskTrigger: original } },
+      { role: 'assistant', turnId: 'run', content: 'Done' },
+    ] as never[];
+    const history = transcriptRowsToClientHistory(rows, { taskUpdateTriggers: new Map([['run',
+      { ...original, taskTitle: 'Renamed title' }]]) });
+    expect(history[0]?.taskTrigger?.taskTitle).toBe('Original title');
+  });
   it('renders native voice text without exposing internal interruption annotations', () => {
     const rows = [{ role: 'custom', customType: 'voice_omni_transcript', content: 'Hello', timestamp: 1, details: { role: 'assistant', interrupted: true } }] as TranscriptStoredRow[];
     expect(transcriptRowsToClientHistory(rows)[0]).toMatchObject({ role: 'assistant', kind: 'message', content: 'Hello', rawContent: 'Hello' });

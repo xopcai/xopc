@@ -39,6 +39,7 @@ export function GatewayRealtimeBridge() {
     const refresh = (kind: 'note' | 'task' | 'project', id?: string) => {
       void mutate(key => isResourceCacheKey(key, kind));
       if (kind === 'project') window.dispatchEvent(new CustomEvent('project-resource-changed', { detail: { id } }));
+      if (kind === 'task') window.dispatchEvent(new CustomEvent('task-updated', { detail: { id } }));
     };
     const consume = createResourceChangeConsumer(change => {
       if (change.kind !== 'note' && change.kind !== 'task' && change.kind !== 'project') return;
