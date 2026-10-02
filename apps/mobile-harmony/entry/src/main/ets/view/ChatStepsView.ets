@@ -1,20 +1,14 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { XopcChatRow, XopcChatBlock, XopcLiveActivityTool } from '../model/chat';
-import { XopcChatDisclosure } from '../common/chatDisclosure';
-import { XopcMobileRoute } from '../model/home';
+import { XopcChatRow, XopcLiveActivityTool } from '../model/chat';
 import { chatLiveCompletedCount, chatLiveElapsedSeconds, chatLiveNarration } from '../common/chatLiveActivity';
 
 @ComponentV2
 export struct XopcChatStepsView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param row: XopcChatRow = { id: '', role: 'assistant', text: '' };
-  @Param reasoning: string = 'on';
-  @Param disclosure: XopcChatDisclosure = new XopcChatDisclosure();
-  @Param scope: string = '';
   @Param runStartedAtMs: number = 0;
   @Param connection: string = 'connected';
-  @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
-  @Local visibleCount: number = 20;
+  @Event onShowDetail: (row: XopcChatRow) => void = (_row: XopcChatRow): void => {};
   @Local nowMs: number = Date.now();
   private clockTimer: number = -1;
   private syncClock(): void {
@@ -53,12 +47,6 @@ export struct XopcChatStepsView {
         : $r('app.string.chat_activity_preparing');
     }
   }
-  @Computed get steps(): XopcChatBlock[] {
-    return (this.row.blocks || []).filter((block: XopcChatBlock): boolean =>
-      block.kind === 'text' && block.presentation === 'narration' && !!block.text.trim());
-  }
-  @Computed get expanded(): boolean { return this.disclosure.get(this.scope + ':steps:' + this.row.id) ?? false; }
-  @Computed get visibleSteps(): XopcChatBlock[] { return this.expanded ? this.steps.slice(-this.visibleCount) : []; }
   build() {
     Column({ space: 6 }) {
       Button({ type: ButtonType.Normal }) {
@@ -80,31 +68,13 @@ export struct XopcChatStepsView {
             Text($r('app.string.chat_activity_elapsed', this.elapsedSeconds.toString()))
               .fontSize(12).fontColor(this.colors.tertiary).flexShrink(0)
           }
-          if (!this.row.live && this.steps.length) {
-            if (this.expanded) {
-              SymbolGlyph($r('sys.symbol.chevron_up')).fontSize(12).fontColor([this.colors.tertiary])
-            } else {
-              SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(12).fontColor([this.colors.tertiary])
-            }
-          }
+          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(12).fontColor([this.colors.tertiary])
         }.width('100%').height('100%').alignItems(VerticalAlign.Center)
       }.id('chat-steps-' + this.row.id).width('100%').height(36).padding(0)
         .backgroundColor(Color.Transparent)
         .onClick((): void => {
-          if (!this.row.live && this.steps.length) {
-            this.disclosure.set(this.scope + ':steps:' + this.row.id, !this.expanded);
-          }
+          this.onShowDetail(this.row);
         })
-      if (!this.row.live && this.steps.length && this.expanded) {
-        if (this.steps.length > this.visibleCount) {
-          Button($r('app.string.chat_view_more')).height(36).fontSize(13).fontColor(this.colors.accent)
-            .backgroundColor(Color.Transparent).onClick((): void => { this.visibleCount += 20; })
-        }
-        Repeat<XopcChatBlock>(this.visibleSteps).each((item: RepeatItem<XopcChatBlock>) => {
-          Text(item.item.text).fontSize(13).lineHeight(19).fontColor(this.colors.secondary)
-            .width('100%').padding(10).backgroundColor(this.colors.grouped).borderRadius(10)
-        }).key((step: XopcChatBlock): string => step.id)
-      }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 }

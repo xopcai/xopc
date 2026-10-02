@@ -37,10 +37,10 @@ describe('Harmony chat tool concise mode', () => {
 
     expect(contentView).toContain("block.presentation !== 'narration'");
     expect(richContent).toContain("block.presentation === 'pending' || block.presentation === 'narration'");
-    expect(stepsView).toContain("?? false");
+    expect(stepsView).toContain('this.onShowDetail(this.row)');
     expect(stepsView).not.toContain("this.reasoning === 'stream' && !!this.row.live");
     expect(stepsView).not.toContain("Text('●')");
-    expect(stepsView).toContain("block.kind === 'text' && block.presentation === 'narration'");
+    expect(contentView).toContain('onShowDetail: this.onShowExecution');
     expect(stepsView).not.toContain('XopcChatToolView');
   });
 
@@ -49,8 +49,7 @@ describe('Harmony chat tool concise mode', () => {
     const stepsView = source('entry/src/main/ets/view/ChatStepsView.ets');
 
     expect(stepsView).toContain(".width('100%').height(36).padding(0)");
-    expect(stepsView).toContain('if (!this.row.live && this.steps.length && this.expanded)');
-    expect(stepsView).toContain('this.expanded ? this.steps.slice(-this.visibleCount) : []');
+    expect(stepsView).toContain('this.onShowDetail(this.row)');
     expect(stepsView).not.toContain('this.row.live ? this.steps.slice(-2)');
     expect(contentView).toContain("block.kind === 'thinking'");
     expect(contentView).toContain("block.kind === 'tool'");

@@ -84,7 +84,7 @@ const SidebarTaskChildRow = memo(function SidebarTaskChildRow({
   return <Link
     to={child.activeConversationId ? `/chat/task/${encodeURIComponent(child.taskId)}` : `/tasks/${encodeURIComponent(child.taskId)}`}
     className={cn(
-      'ml-4 flex min-h-8 items-center gap-2 rounded-lg px-2 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg',
+      'ml-8 flex min-h-8 items-center gap-2 rounded-lg px-2 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg',
       activeTaskId === child.taskId && 'bg-surface-active text-fg')}
     onClick={() => onNavigate?.()}>
     {runPresence?.unread ? <span className="size-1.5 shrink-0 rounded-full bg-accent"

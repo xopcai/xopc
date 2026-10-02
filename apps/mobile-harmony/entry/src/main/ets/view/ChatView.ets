@@ -3,8 +3,10 @@ import { userErrorMessage } from '../common/userError';
 import { quickChatIntake, XopcQuickChatIntake } from '../service/quickChatIntake';
 import { XopcChatViewModel } from '../viewmodel/chatViewModel';
 import { XopcChatRow, XopcChatAttachment, XopcChatBlock, XopcContextRef, XopcReferenceItem, XopcChatAgent,
-  XopcHistoryMedia, XopcHostDirectory, XopcQueuedInput } from '../model/chat';
+  XopcHistoryMedia, XopcHostDirectory, XopcQueuedInput, XopcExecutionDetail } from '../model/chat';
 import { XopcChatMessageContent } from './ChatMessageContent';
+import { XopcChatExecutionDetailView } from './ChatExecutionDetailView';
+import { XopcChatRepository } from '../repository/chatRepository';
 import { chatAnswerText, chatAttachments } from '../common/chatRichContent';
 import { extractMarkdownCodeBlocks } from '../common/chatDisplay';
 import { XopcChatMediaView } from './ChatMediaView';
@@ -126,6 +128,20 @@ export struct XopcChatView {
   @Local imageEditorError: string = '';
   @Local messageDetailOpen: boolean = false;
   @Local messageDetailRow: XopcChatRow = { id: '', role: 'assistant', text: '' };
+  @Local executionOpen: boolean = false;
+  @Local executionRow: XopcChatRow = { id: '', role: 'assistant', text: '' };
+  @Local executionDetail: XopcExecutionDetail = { turnId: '', steps: [] };
+  @Local executionLoading: boolean = false;
+  @Local executionError: string = '';
+  private executionRepository: XopcChatRepository = new XopcChatRepository();
+  private executionSessionId: string = '';
+  private executionTimer: number = -1;
+  private executionRequest: number = 0;
+  private executionSettledPolls: number = 0;
+  @Computed get activeExecutionRow(): XopcChatRow {
+    return this.presentationRows.find((row: XopcChatRow): boolean => row.id === this.executionRow.id
+      || (!!row.turnId && row.turnId === this.executionRow.turnId)) || this.executionRow;
+  }
   @Computed get latestMessageId(): string {
     return latestChatMessageId(this.presentationRows);
   }
@@ -453,6 +469,53 @@ export struct XopcChatView {
     this.messageDetailOpen = true;
   }
 
+  private openExecutionDetail(row: XopcChatRow): void {
+    this.closeExecutionDetail();
+    this.executionRow = row;
+    this.executionSessionId = this.chat.selectedId;
+    this.executionSettledPolls = 0;
+    this.executionDetail = { turnId: row.turnId || row.id, steps: [] };
+    this.executionError = '';
+    this.executionOpen = true;
+    this.refreshExecutionDetail();
+    this.executionTimer = setInterval((): void => {
+      if (!this.executionOpen || this.executionSessionId !== this.chat.selectedId) {
+        this.closeExecutionDetail(); return;
+      }
+      this.refreshExecutionDetail();
+      if (!this.activeExecutionRow.live && ++this.executionSettledPolls >= 3) {
+        clearInterval(this.executionTimer); this.executionTimer = -1;
+      }
+    }, 3000);
+  }
+
+  private async refreshExecutionDetail(): Promise<void> {
+    if (!this.executionOpen || this.executionLoading) return;
+    const request = ++this.executionRequest;
+    const sessionId = this.executionSessionId;
+    const turnId = this.executionDetail.turnId;
+    this.executionLoading = true;
+    try {
+      const detail = await this.executionRepository.executionDetail(sessionId, turnId);
+      if (this.executionOpen && request === this.executionRequest && this.executionSessionId === sessionId) {
+        this.executionDetail = detail; this.executionError = '';
+      }
+    } catch (_) {
+      if (this.executionOpen && request === this.executionRequest && this.executionSessionId === sessionId) {
+        this.executionError = this.activeExecutionRow.live ? '' : 'UNAVAILABLE';
+      }
+    } finally {
+      if (request === this.executionRequest) this.executionLoading = false;
+    }
+  }
+
+  private closeExecutionDetail(): void {
+    this.executionOpen = false;
+    this.executionRequest++;
+    this.executionLoading = false;
+    if (this.executionTimer !== -1) { clearInterval(this.executionTimer); this.executionTimer = -1; }
+  }
+
   private navigateFromMessageDetail(route: XopcMobileRoute): void {
     this.messageDetailOpen = false;
     this.onNavigate(route);
@@ -555,7 +618,7 @@ export struct XopcChatView {
     this.setPanel(true);
     this.chooseAction(this.requestedAction);
   }
-  aboutToDisappear(): void { this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.disableContinuous(); this.attachments = []; }
+  aboutToDisappear(): void { this.closeExecutionDetail(); this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.disableContinuous(); this.attachments = []; }
 
   private async attentionAction(action: XopcHomeAction): Promise<void> {
     if (action.type === 'open') {
@@ -980,6 +1043,7 @@ export struct XopcChatView {
                 XopcChatMessageContent({ row: item.item, conversationId: this.chat.selectedId, disclosure: this.disclosure,
                   previewEligible: item.item.id !== this.latestMessageId,
                   onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
+                  onShowExecution: (row: XopcChatRow): void => { this.openExecutionDetail(row); },
                   runStartedAtMs: this.chat.runStartedAtMs, connection: this.chat.connection,
                   reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
                   onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
@@ -1425,6 +1489,26 @@ export struct XopcChatView {
         backgroundColor: this.colors.panel, onDisappear: (): void => { this.imageEditorError = ''; } })
       .bindSheet($$this.messageDetailOpen, this.messageDetailSheet, { height: '94%', dragBar: false,
         showClose: false, backgroundColor: this.colors.panel })
+      .bindSheet($$this.executionOpen, this.executionDetailSheet, { height: '92%', dragBar: false,
+        showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => { this.closeExecutionDetail(); } })
+  }
+
+  @Builder
+  executionDetailSheet() {
+    Column() {
+      Row({ space: 12 }) {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.xmark')).fontSize(20).fontColor([this.colors.foreground])
+        }.id('chat-execution-detail-close').width(44).height(44).padding(0).backgroundColor(this.colors.input)
+          .accessibilityText($r('app.string.chat_close')).onClick((): void => { this.closeExecutionDetail(); })
+        Text($r('app.string.chat_steps')).fontSize(20).fontWeight(FontWeight.Medium)
+          .fontColor(this.colors.foreground).layoutWeight(1)
+      }.width('100%').padding({ left: 16, right: 16, top: 10, bottom: 12 }).alignItems(VerticalAlign.Center)
+      Column().width('100%').height(1).backgroundColor(this.colors.border)
+      XopcChatExecutionDetailView({ detail: this.executionDetail, row: this.activeExecutionRow,
+        loading: this.executionLoading, error: this.executionError,
+        onRetry: (): void => { this.refreshExecutionDetail(); } })
+    }.id('chat-execution-detail').width('100%').height('100%').backgroundColor(this.colors.panel)
   }
 
   @Builder
@@ -1446,6 +1530,7 @@ export struct XopcChatView {
         Column() {
           XopcChatMessageContent({ row: this.messageDetailRow, conversationId: this.chat.selectedId,
             disclosure: this.disclosure, reasoning: this.context.config?.reasoningLevel || 'on',
+            onShowExecution: (row: XopcChatRow): void => { this.messageDetailOpen = false; this.openExecutionDetail(row); },
             onNavigate: (route: XopcMobileRoute): void => { this.navigateFromMessageDetail(route); },
             onFillDraft: (text: string): void => { this.fillDraftFromMessageDetail(text); } })
         }.width('100%').padding({ left: 16, right: 16, top: 20, bottom: 32 }).alignItems(HorizontalAlign.Start)

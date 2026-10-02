@@ -49,6 +49,7 @@ export interface XopcNoteTaskMeta {
 export interface XopcNote {
   /** Stable note identifier. */
   id: string;
+  projectId?: string;
   /** Optional explicit title. */
   title?: string;
   /** Semantic note kind. */
@@ -85,6 +86,7 @@ export interface XopcNote {
 export interface XopcNoteIndexEntry {
   /** Stable note identifier. */
   id: string;
+  projectId?: string;
   /** Optional explicit title. */
   title?: string;
   /** Semantic note kind. */
@@ -153,6 +155,7 @@ export interface XopcNoteConversationResult {
 export interface XopcNoteDraft {
   /** Note identifier or local placeholder identifier. */
   noteId: string;
+  projectId?: string;
   /** Editable title. */
   title: string;
   /** Editable canonical Markdown. */

@@ -7,10 +7,12 @@ import { XopcTransferAuth } from '../model/files';
 import { XopcGatewayProfiles, gatewayCredentialKey } from './gatewayProfiles';
 import { decodeBase64Url, formatMobilePairingInvitation, pairingProof, readMobilePairingInvitation, validateRoutes } from '../common/protocol';
 import {
-  XopcInvitation, XopcPairingBody, XopcPairingJournal, XopcPairingResponse, XopcProfile,
+  XopcInvitation, XopcPairingBody, XopcPairingJournal, XopcPairingResponse, XopcProfile, XopcGatewayProbe,
   XopcSignedEnvelope, XopcProbeBody, XopcProbeProof, XopcRefreshAttempt, XopcRefreshBody,
   XopcRefreshProof, XopcNonceBody, XopcIdentityProof, XopcTokens
 } from '../model/gateway';
+
+interface XopcStatusPayload { status: string; version?: string; }
 
 export class XopcGatewaySession {
   private store: XopcSecureStore;
@@ -25,6 +27,7 @@ export class XopcGatewaySession {
   private foreground: boolean = true;
   private profiles: XopcGatewayProfiles;
   private changing: boolean = false;
+  private switching: boolean = false;
 
   constructor(store: XopcSecureStore = new XopcSecureStore(), crypto: XopcDeviceCrypto = new XopcDeviceCrypto(),
     transport: XopcTransport = new XopcTransport()) {
@@ -56,32 +59,54 @@ export class XopcGatewaySession {
   }
   savedProfiles(): XopcProfile[] { return this.profiles.list(); }
 
+  async probeProfile(gatewayId: string): Promise<XopcGatewayProbe> {
+    const target = this.profiles.list().find((item: XopcProfile): boolean => item.gatewayId === gatewayId);
+    if (!target) throw new Error('NOT_PAIRED');
+    const session = this.profile?.gatewayId === gatewayId ? this : new XopcGatewaySession(this.store, this.crypto, this.transport);
+    if (session !== this) session.profile = {
+      gatewayId: target.gatewayId, name: target.name, gatewayPublicKey: target.gatewayPublicKey,
+      deviceId: target.deviceId, routes: target.routes.slice(), activeRouteId: target.activeRouteId
+    };
+    const started = Date.now();
+    const raw = await session.request('/api/status');
+    const payload = JSON.parse(raw) as XopcStatusPayload;
+    if (typeof payload.status !== 'string') throw new Error('INVALID_GATEWAY_STATUS');
+    return {
+      gatewayId, status: payload.status, latencyMs: Date.now() - started,
+      routeUrl: session.activeOrigin(), checkedAt: Date.now(), version: payload.version ?? ''
+    };
+  }
+
   async activate(gatewayId: string): Promise<void> {
-    if (this.changing || this.pairingTask) throw new Error('GATEWAY_OPERATION_BUSY');
+    if (this.changing || this.switching || this.pairingTask) throw new Error('GATEWAY_OPERATION_BUSY');
     if (this.profile?.gatewayId === gatewayId) return;
     const target = this.profiles.list().find((item: XopcProfile): boolean => item.gatewayId === gatewayId);
     if (!target) throw new Error('NOT_PAIRED');
-    this.changing = true; ++this.generation;
+    this.switching = true;
     try {
-      if (this.refreshTask) { try { await this.refreshTask; } catch (_) {} }
       // Verify in an isolated session. Failed switches never publish the candidate profile or token.
       const candidate = new XopcGatewaySession(this.store, this.crypto, this.transport);
-      candidate.profile = target;
+      candidate.profile = {
+        gatewayId: target.gatewayId, name: target.name, gatewayPublicKey: target.gatewayPublicKey,
+        deviceId: target.deviceId, routes: target.routes.slice(), activeRouteId: target.activeRouteId
+      };
       await candidate.request('/api/status');
+      if (this.refreshTask) { try { await this.refreshTask; } catch (_) {} }
+      this.changing = true; ++this.generation;
       await this.profiles.activate(gatewayId);
-      this.profile = target; this.tokens = candidate.tokens; this.verifiedUntil.clear();
-    } finally { this.changing = false; }
+      this.profile = candidate.profile; this.tokens = candidate.tokens; this.verifiedUntil.clear();
+    } finally { this.changing = false; this.switching = false; }
   }
 
   async renameProfile(gatewayId: string, name: string): Promise<void> {
-    if (this.changing || this.pairingTask) throw new Error('GATEWAY_OPERATION_BUSY');
+    if (this.changing || this.switching || this.pairingTask) throw new Error('GATEWAY_OPERATION_BUSY');
     this.changing = true;
     try { await this.profiles.rename(gatewayId, name); this.profile = this.profiles.active(); }
     finally { this.changing = false; }
   }
 
   async removeProfile(gatewayId: string): Promise<void> {
-    if (this.changing || this.pairingTask) throw new Error('GATEWAY_OPERATION_BUSY');
+    if (this.changing || this.switching || this.pairingTask) throw new Error('GATEWAY_OPERATION_BUSY');
     this.changing = true; ++this.generation;
     try {
       if (this.refreshTask) { try { await this.refreshTask; } catch (_) {} }
@@ -96,7 +121,7 @@ export class XopcGatewaySession {
 
   async pair(link: string, progress: (code: string) => void): Promise<XopcProfile> {
     if (this.pairingTask) return this.pairingTask;
-    if (this.changing) throw new Error('GATEWAY_OPERATION_BUSY');
+    if (this.changing || this.switching) throw new Error('GATEWAY_OPERATION_BUSY');
     this.changing = true;
     const generation = ++this.generation;
     this.pairingTask = this.pairInternal(link, progress, generation);

@@ -262,7 +262,10 @@ export class CuaComputerDriver implements ComputerDriver {
       }
     }
     if (!window && windows.length > 1) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
-    if (window && options.prepare) {
+    // A user may already have brought the sole visible window forward. Avoid a
+    // second activation request, which macOS can refuse even for an approved app.
+    const alreadyFrontmost = matches[0].active && window?.isOnScreen && visible.length === 1;
+    if (window && options.prepare && !alreadyFrontmost) {
       signal.throwIfAborted();
       if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
       await this.callUntyped('bring_to_front', { pid, window_id: this.jsonWindowId(window.windowId) }, signal);

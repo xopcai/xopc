@@ -53,6 +53,7 @@ export function computerRecovery(code: string): string {
     case 'COMPUTER_APP_NOT_AUTHORIZED': return 'This application has not been authorized in the local Computer Use settings. Tell the user where to configure access. Do not request a chat approval or try another control route.';
     case 'COMPUTER_APP_NOT_RUNNING': return 'Open with prepare=true only if the user requested launching the app; otherwise ask them to open it.';
     case 'COMPUTER_WINDOW_REQUIRED': return 'No visible target window. If the task permits bringing the app forward, open with prepare=true; otherwise ask the user to show the window. If preparation already failed, require a local state change before retrying.';
+    case 'COMPUTER_DRIVER_BRING_TO_FRONT_REFUSED': return 'The native driver refused to activate the app window. Ask the user to bring the intended window to the foreground locally, then discover and open it with prepare=false. Do not repeat prepare=true or use another control route.';
     case 'COMPUTER_WINDOW_AMBIGUOUS': return 'Choose a returned windowRef only when its title matches the task. Otherwise ask the user using window titles, not IDs.';
     case 'COMPUTER_WINDOW_CHANGED': return 'The selected window no longer exists. Discover and open again; never reuse its coordinates.';
     case 'COMPUTER_READ_ONLY': return 'This session is read-only. Do not retry an action or reopen in control mode without user authorization.';

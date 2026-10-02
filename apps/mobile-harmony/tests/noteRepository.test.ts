@@ -27,4 +27,15 @@ describe('Harmony note conversation repository', () => {
     }));
     await expect(new XopcNoteRepository().openConversation('note-1')).rejects.toThrow('INVALID_NOTE_CONVERSATION');
   });
+
+  it('keeps note reads and new note creation inside the selected project', async () => {
+    const repository = new XopcNoteRepository();
+    mocks.request.mockResolvedValueOnce(JSON.stringify({ items: [] }))
+      .mockResolvedValueOnce(JSON.stringify({ note: { id: 'new', markdown: '', projectId: 'project 1' } }));
+    await repository.list('', '', 0, 'project 1');
+    await repository.create({ noteId: 'local:1', projectId: 'project 1', title: 'Idea', markdown: '',
+      baseRevision: 0, localVersion: 1, updatedAt: 1, syncState: 'dirty', mutationId: 'mutation' });
+    expect(mocks.request.mock.calls[0][0]).toContain('projectId=project%201');
+    expect(JSON.parse(mocks.request.mock.calls[1][2]).projectId).toBe('project 1');
+  });
 });

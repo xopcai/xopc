@@ -6,7 +6,8 @@ const NOTE_DATABASE = 'xopc-notes.db';
 const NOTE_DRAFT_TABLE = 'note_drafts';
 const CREATE_NOTE_DRAFT_TABLE = 'CREATE TABLE IF NOT EXISTS note_drafts ('
   + 'note_id TEXT PRIMARY KEY, title TEXT NOT NULL, markdown TEXT NOT NULL, base_revision INTEGER NOT NULL, '
-  + 'local_version INTEGER NOT NULL, updated_at INTEGER NOT NULL, sync_state TEXT NOT NULL, mutation_id TEXT NOT NULL)';
+  + 'local_version INTEGER NOT NULL, updated_at INTEGER NOT NULL, sync_state TEXT NOT NULL, mutation_id TEXT NOT NULL, '
+  + 'project_id TEXT)';
 
 /** Encrypted local draft store. It is the single durability boundary for unsynchronized note edits. */
 export class XopcNoteDraftStore {
@@ -18,6 +19,10 @@ export class XopcNoteDraftStore {
       name: NOTE_DATABASE, securityLevel: relationalStore.SecurityLevel.S2, encrypt: true
     });
     await this.store.executeSql(CREATE_NOTE_DRAFT_TABLE);
+    try { await this.store.executeSql('ALTER TABLE note_drafts ADD COLUMN project_id TEXT'); }
+    catch (error) {
+      if (!(error as Error).message.toLowerCase().includes('duplicate column')) throw error as Error;
+    }
   }
 
   async save(draft: XopcNoteDraft): Promise<void> {
@@ -25,7 +30,8 @@ export class XopcNoteDraftStore {
     const values: relationalStore.ValuesBucket = {
       note_id: draft.noteId, title: draft.title, markdown: draft.markdown,
       base_revision: draft.baseRevision, local_version: draft.localVersion,
-      updated_at: draft.updatedAt, sync_state: draft.syncState, mutation_id: draft.mutationId
+      updated_at: draft.updatedAt, sync_state: draft.syncState, mutation_id: draft.mutationId,
+      project_id: draft.projectId ?? null
     };
     store.insert(NOTE_DRAFT_TABLE, values, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE);
   }
@@ -39,6 +45,7 @@ export class XopcNoteDraftStore {
       const state = result.getString(result.getColumnIndex('sync_state')) as XopcNoteSyncState;
       return {
         noteId: result.getString(result.getColumnIndex('note_id')),
+        projectId: result.getString(result.getColumnIndex('project_id')) || undefined,
         title: result.getString(result.getColumnIndex('title')),
         markdown: result.getString(result.getColumnIndex('markdown')),
         baseRevision: result.getLong(result.getColumnIndex('base_revision')),
@@ -58,6 +65,7 @@ export class XopcNoteDraftStore {
       while (result.goToNextRow()) {
         drafts.push({
           noteId: result.getString(result.getColumnIndex('note_id')),
+          projectId: result.getString(result.getColumnIndex('project_id')) || undefined,
           title: result.getString(result.getColumnIndex('title')),
           markdown: result.getString(result.getColumnIndex('markdown')),
           baseRevision: result.getLong(result.getColumnIndex('base_revision')),

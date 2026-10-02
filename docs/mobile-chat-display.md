@@ -1,7 +1,7 @@
 # Compact mobile chat transport
 
 The unpublished separate chat-view implementation was backed up in Git stash and removed.
-No display-cache table, migration, new HTTP endpoint, new realtime topic, run registry, or snapshot protocol is required.
+The compact chat path needs no display-cache table, migration, new realtime topic, run registry, or snapshot protocol.
 
 ## Boundaries
 
@@ -10,6 +10,7 @@ No display-cache table, migration, new HTTP endpoint, new realtime topic, run re
 - Harmony subscribes to the existing `run:<id>` with `view: compact`. The socket filters live and replay frames before serialization, preserving original sequence numbers and gap recovery.
 - Default HTTP and realtime subscribers retain full history/events. Typed product deliveries are an additive tool-end field extracted before large tool-result truncation.
 - Raw thinking, tool arguments, tool results, commands and diffs are not sent to compact subscribers. Public assistant narration supplies short progress; it is not a summary of private reasoning.
+- Tapping the Harmony execution summary opens a sheet and requests `/api/sessions/:key/execution-detail?turnId=...` for that turn. The authenticated, uncached response contains ordered public narration, thinking presence, semantic tool categories, bounded previews for search queries and file reads, page URLs without query strings, tool status, and redacted structured failure summaries. It omits raw reasoning, commands and tool output. While a turn runs, the sheet also uses compact realtime activity for the current status.
 - Text deltas are delivered immediately. While presentation is unknown, text is displayed incrementally; message-end classification moves narration into a separate compact progress block. Final answers are not buffered server-side.
 - Confirmation requests, terminal outcomes, failures, reviews, media and product deliveries remain available. Failed outcomes have an inline message instead of an empty card.
 - Existing optimistic input IDs, retry behavior, history prefetch and recovery are reused. No second synchronization path is introduced.

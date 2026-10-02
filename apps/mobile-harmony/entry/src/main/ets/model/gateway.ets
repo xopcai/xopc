@@ -34,6 +34,9 @@ export interface XopcProfile {
   gatewayId: string; name: string; gatewayPublicKey: string; deviceId: string;
   routes: XopcRoute[]; activeRouteId: string;
 }
+export interface XopcGatewayProbe {
+  gatewayId: string; status: string; latencyMs: number; routeUrl: string; checkedAt: number; version: string;
+}
 export interface XopcPairingJournal {
   invitation: XopcInvitation; requestId: string; idempotencyKey: string;
   initialRefreshToken: string; device: XopcDevice; origin: string;

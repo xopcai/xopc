@@ -42,24 +42,26 @@ export function ComputerModelSettings({ zh }: { zh: boolean }) {
     <h2 className="text-sm font-semibold text-fg">{t.model}</h2>
     {!defaults.data && !defaults.error ? <Skeleton className="h-52 w-full rounded-xl" /> : defaults.error ?
       <div role="alert" className="text-sm text-danger">{String(defaults.error)}<Button onClick={() => { void defaults.mutate().catch(() => {}); }}>{t.retry}</Button></div> :
-      <div className="space-y-4 rounded-xl bg-surface-hover/25 p-4 sm:p-5">
-        <p className="text-sm text-fg-muted">{t.modelDescription}</p>
-        <p className="text-xs leading-relaxed text-fg-muted">{t.modelScope}</p>
-        {registry.isLoading ? <Skeleton className="h-10 w-full rounded-lg" /> : <ModelSelector
-          value={model} onChange={value => { setModel(value); setSavedNotice(false); }} disabled={busy}
-          capabilitiesFilter="computer-use" models={registry.data ?? []} modelsError={registry.error}
-          placeholder={t.selectModel} searchPlaceholder={t.searchModel} noMatches={t.noModels}
-          registryEmptyHint={t.noModels} allowEmpty emptyLabel={t.noModel} ariaLabel={t.modelLabel}
-          className="w-full" contentAlign="start" />}
-        {!compatible && !registry.isLoading && !registry.error && <p role="status" className="text-sm text-warning">{t.modelUnavailable}</p>}
-        {registry.error && <p role="alert" className="text-sm text-danger">{String(registry.error)}<Button onClick={() => { void registry.mutate().catch(() => {}); }}>{t.retry}</Button></p>}
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="rounded-2xl border border-edge bg-surface-panel p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            {registry.isLoading ? <Skeleton className="h-11 w-full rounded-lg" /> : <ModelSelector
+              value={model} onChange={value => { setModel(value); setSavedNotice(false); }} disabled={busy}
+              capabilitiesFilter="computer-use" models={registry.data ?? []} modelsError={registry.error}
+              placeholder={t.selectModel} searchPlaceholder={t.searchModel} noMatches={t.noModels}
+              registryEmptyHint={t.noModels} allowEmpty emptyLabel={t.noModel} ariaLabel={t.modelLabel}
+              className="w-full" contentAlign="start" />}
+          </div>
           <Button variant="primary" disabled={busy || model === saved || !compatible || Boolean(registry.error) || registry.isLoading} onClick={() => { void save(); }}>{t.saveModel}</Button>
-          <Button asChild variant="ghost"><Link to="/settings/capabilities/models?add=1">{t.manageModels}</Link></Button>
-          {savedNotice && <span role="status" className="text-xs text-fg-muted">{t.modelSaved}</span>}
         </div>
-        {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-fg-muted">
+          <span>{t.modelDataUse}</span>
+          <Button asChild variant="ghost" className="h-auto p-0 text-xs"><Link to="/settings/capabilities/models?add=1">{t.manageModels}</Link></Button>
+          {savedNotice && <span role="status">{t.modelSaved}</span>}
+        </div>
+        {!compatible && !registry.isLoading && !registry.error && <p role="status" className="mt-3 text-sm text-warning">{t.modelUnavailable}</p>}
+        {registry.error && <p role="alert" className="mt-3 text-sm text-danger">{String(registry.error)}<Button onClick={() => { void registry.mutate().catch(() => {}); }}>{t.retry}</Button></p>}
+        {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
       </div>}
-    <p className="text-xs leading-relaxed text-fg-muted">{t.modelPrivacy}</p>
   </section>;
 }

@@ -594,7 +594,8 @@ export interface ElectronUnderstandingSourcesAPI {
 export interface ElectronAPI {
   computer?: {
     status(): Promise<{ connected: boolean; controlPaused: boolean; claim?: { type: 'endpoint'; endpointId: string; token: string }; error?: string; reenrollmentRequired?: boolean; session?: { status: string; errorCode?: string; appId?: string }; permissions: { accessibility: boolean; screenRecording: string } }>;
-    access(): Promise<{ authorizedAppIds: string[]; apps: Array<{ appId: string; name: string; running: boolean }> }>;
+    access(): Promise<{ authorizedAppIds: string[]; allowAllApps: boolean; appsBusy: boolean; appsUnavailable: boolean; apps: Array<{ appId: string; name: string; running: boolean }> }>;
+    setAllAppAccess(allowed: boolean): Promise<{ authorizedAppIds: string[]; allowAllApps: boolean; appsBusy: boolean; appsUnavailable: boolean; apps: Array<{ appId: string; name: string; running: boolean }> }>;
     setAppAccess(appId: string, allowed: boolean): Promise<{ authorizedAppIds: string[]; apps: Array<{ appId: string; name: string; running: boolean }> }>;
     stop(): Promise<{ ok: boolean }>;
     reenroll(): Promise<Awaited<ReturnType<NonNullable<ElectronAPI['computer']>['status']>>>;
