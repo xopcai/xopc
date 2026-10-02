@@ -339,6 +339,8 @@ export function AssistantResultTail({
               deliveries={visibleDeliveries}
               language={language}
               excludedReferenceKeys={supersededFileReferences}
+              conversationId={conversationId}
+              projectId={projectId}
             />
             {attachments.length > 1 ? (
               <ResultAttachmentGroup

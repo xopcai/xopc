@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { CapabilityHeaderActionChange } from '@/features/capabilities/capability-header-actions';
 import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
@@ -29,6 +30,9 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 const capabilityPagePadding = 'px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4';
 const capabilityPageWidth = 'max-w-7xl';
+type PendingConfirmation =
+  | { kind: 'discard'; destination: string }
+  | { kind: 'delete'; agentId: string; displayName: string };
 
 function AgentsSkeleton() {
   return (
@@ -61,6 +65,7 @@ export function AgentsSettingsPanel({
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
   const [manualDraft, setManualDraft] = useState<ManualAgentDraft>({
     open: false,
     name: '',
@@ -153,8 +158,6 @@ export function AgentsSettingsPanel({
   }, [headerContribution, onHeaderActionChange]);
 
   const deleteAgent = async (agent: GatewayAgentRow) => {
-    const displayName = agentListDisplayName(agent, agentsMessages);
-    if (!window.confirm(zh ? `删除 ${displayName}？此操作无法撤销。` : `Delete ${displayName}? This cannot be undone.`)) return;
     setBusy(true);
     setActionError(null);
     try {
@@ -180,15 +183,33 @@ export function AgentsSettingsPanel({
   };
 
   const closeAgent = () => {
-    if (editorDirtyRef.current && !window.confirm(zh ? '放弃未保存的更改？' : 'Discard unsaved changes?')) return;
+    if (editorDirtyRef.current) {
+      setPendingConfirmation({ kind: 'discard', destination: AGENTS_APP_LIST_PATH });
+      return;
+    }
     editorDirtyRef.current = false;
     navigate(AGENTS_APP_LIST_PATH);
   };
 
   const openDefaults = () => {
-    if (editorDirtyRef.current && !window.confirm(zh ? '放弃未保存的更改？' : 'Discard unsaved changes?')) return;
+    if (editorDirtyRef.current) {
+      setPendingConfirmation({ kind: 'discard', destination: '/settings/agent-defaults' });
+      return;
+    }
     editorDirtyRef.current = false;
     navigate('/settings/agent-defaults');
+  };
+
+  const confirmPendingAction = () => {
+    if (!pendingConfirmation) return;
+    setPendingConfirmation(null);
+    if (pendingConfirmation.kind === 'discard') {
+      editorDirtyRef.current = false;
+      navigate(pendingConfirmation.destination);
+      return;
+    }
+    const agent = data?.agents.find((candidate) => candidate.id === pendingConfirmation.agentId);
+    if (agent) void deleteAgent(agent);
   };
 
   const handleEditorDirty = useCallback((dirty: boolean) => {
@@ -237,7 +258,11 @@ export function AgentsSettingsPanel({
             onClose={closeAgent}
             onOpenDefaults={openDefaults}
             onChat={() => startChat(selected.id)}
-            onDelete={() => void deleteAgent(selected)}
+            onDelete={() => setPendingConfirmation({
+              kind: 'delete',
+              agentId: selected.id,
+              displayName: agentListDisplayName(selected, agentsMessages),
+            })}
           />
         </AgentsEditorModal>
       ) : null}
@@ -255,6 +280,27 @@ export function AgentsSettingsPanel({
           setManualDraft((current) => ({ ...current, open }));
           if (!open) setManualError(null);
         }}
+      />
+
+      <ConfirmDialog
+        open={pendingConfirmation !== null}
+        title={pendingConfirmation?.kind === 'delete'
+          ? (zh ? '删除智能体？' : 'Delete agent?')
+          : (zh ? '放弃未保存的更改？' : 'Discard unsaved changes?')}
+        description={pendingConfirmation?.kind === 'delete'
+          ? (zh
+            ? `删除 ${pendingConfirmation.displayName}？此操作无法撤销。`
+            : `Delete ${pendingConfirmation.displayName}? This cannot be undone.`)
+          : (zh ? '当前更改尚未保存，离开后将丢失。' : 'Your changes have not been saved. Leaving will discard them.')}
+        confirmLabel={pendingConfirmation?.kind === 'delete'
+          ? (zh ? '删除' : 'Delete')
+          : (zh ? '放弃并离开' : 'Discard and leave')}
+        cancelLabel={zh ? '继续编辑' : 'Keep editing'}
+        destructive
+        overlayClassName="z-[100]"
+        contentClassName="z-[101]"
+        onConfirm={confirmPendingAction}
+        onCancel={() => setPendingConfirmation(null)}
       />
 
     </SettingsPageFrame>

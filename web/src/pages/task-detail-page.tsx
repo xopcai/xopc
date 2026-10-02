@@ -5,7 +5,6 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, CalendarClock, Circle, CircleCheck, CircleX, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -257,7 +256,6 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     conversationLoading,
     conversationError,
   } = useTaskDetail(taskId);
-  const [pageActionsContainer, setPageActionsContainer] = useState<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingOperations, setPendingOperations] = useState<ReadonlySet<TaskPendingOperation>>(() => new Set());
   const [dependencyCandidates, setDependencyCandidates] = useState<DependencyCandidate[]>([]);
@@ -578,11 +576,11 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     if (presentation === 'modal') return;
     setPageHeader({
       startExtra: <Link to={returnPath} className="flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover" aria-label={copy.backToWork}><ArrowLeft className="size-4" /></Link>,
-      main: detail ? <div className="min-w-0"><p className="truncate text-sm font-semibold text-fg">{projectName ? `${projectName} / ${copy.taskLabel}` : copy.taskLabel}</p><p className="text-xs text-fg-muted">{copy.detailStatuses[detailStatusKey(detail)]}</p></div> : null,
-      end: <div ref={setPageActionsContainer} className="flex min-w-0 items-center justify-end" />,
+      main: detail ? <p className="truncate text-sm font-semibold text-fg">{projectName ? `${projectName} / ${copy.taskLabel}` : copy.taskLabel}</p> : null,
+      end: null,
     });
     return clearPageHeader;
-  }, [clearPageHeader, copy.backToWork, copy.detailStatuses, copy.taskLabel, detail, presentation, projectName, returnPath, setPageHeader]);
+  }, [clearPageHeader, copy.backToWork, copy.taskLabel, detail, presentation, projectName, returnPath, setPageHeader]);
 
   if (loadError && !detail) return <div className={presentation === 'modal' ? 'p-5 text-sm text-danger' : 'mx-auto max-w-3xl p-6 text-sm text-danger'}>{copy.taskNotFound}</div>;
   if (!detail) return <div className={presentation === 'modal' ? 'p-5' : 'mx-auto max-w-4xl p-4 sm:p-6'}><DetailSkeleton /></div>;
@@ -629,14 +627,14 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const deleteBlocked = activeRun !== undefined;
   const automationHref = `/automations?action=create&taskId=${encodeURIComponent(detail.task.id)}${detail.task.projectId ? `&projectId=${encodeURIComponent(detail.task.projectId)}` : ''}`;
   const taskActions = (
-    <div className="flex flex-wrap gap-2">
-      {canSchedule ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'mark_ready' })}><Play className="size-4" />{copy.scheduleTask}</Button> : null}
-      {pausedWait && detail.allowedCommands.includes('resolve_wait') ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'resolve_wait', waitId: pausedWait.id })}><Play className="size-4" />{copy.resumeTask}</Button> : null}
-      {!activeWait && canStart && conversationAgentId ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'start', executor: { kind: 'agent', agentId: conversationAgentId } })}><Play className="size-4" />{copy.runTask}</Button> : null}
-      {detail.task.phase !== 'closed' ? <Button asChild variant="secondary"><Link to={automationHref}><CalendarClock className="size-4" />{copy.scheduleRecurringTask}</Link></Button> : null}
-      {canApprove ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'close', resolution: 'done' })}><CircleCheck className="size-4" />{copy.approveTask}</Button> : null}
-      {canReopen ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'reopen', phase: 'ready' })}><Play className="size-4" />{copy.reopenTask}</Button> : null}
-      {!pausedWait && canPause ? <Button variant="secondary" className="border-0 bg-surface-hover shadow-none" disabled={commandPending} onClick={() => void execute({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}><Pause className="size-4" />{copy.pauseTask}</Button> : null}
+    <div className="flex flex-wrap items-center gap-2">
+      {canSchedule ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'mark_ready' })}><Play className="size-4" />{copy.scheduleTask}</Button> : null}
+      {pausedWait && detail.allowedCommands.includes('resolve_wait') ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'resolve_wait', waitId: pausedWait.id })}><Play className="size-4" />{copy.resumeTask}</Button> : null}
+      {!activeWait && canStart && conversationAgentId ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'start', executor: { kind: 'agent', agentId: conversationAgentId } })}><Play className="size-4" />{copy.runTask}</Button> : null}
+      {canApprove ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'close', resolution: 'done' })}><CircleCheck className="size-4" />{copy.approveTask}</Button> : null}
+      {canReopen ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'reopen', phase: 'ready' })}><Play className="size-4" />{copy.reopenTask}</Button> : null}
+      {!pausedWait && canPause ? <Button variant="ghost" className="min-h-9 px-3 py-1.5 text-xs" disabled={commandPending} onClick={() => void execute({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}><Pause className="size-4" />{copy.pauseTask}</Button> : null}
+      {detail.task.phase !== 'closed' ? <Button asChild variant="ghost" className="min-h-9 px-3 py-1.5 text-xs"><Link to={automationHref}><CalendarClock className="size-4" />{copy.scheduleRecurringTask}</Link></Button> : null}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button type="button" variant="ghost" className="size-9 p-0" disabled={commandPending || deletePending} aria-label={copy.moreActions}><MoreHorizontal className="size-4" aria-hidden /></Button>
@@ -673,9 +671,9 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   );
 
   const headerActions = (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      <PageContextCaptureButton resource={{ kind: 'task', id: detail.task.id, revision: String(detail.task.version) }} disabled={editingTitle || editingDescription || pendingOperations.size > 0} />
+    <div className="flex flex-wrap items-center gap-2">
       {taskActions}
+      <PageContextCaptureButton resource={{ kind: 'task', id: detail.task.id, revision: String(detail.task.version) }} disabled={editingTitle || editingDescription || pendingOperations.size > 0} />
       {conversationConversationId && presentation !== 'modal' ? (
         <>
           <Button
@@ -706,19 +704,15 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   return (
     <div
       ref={splitPaneRef}
-      className={`${presentation === 'modal' ? 'flex h-full min-h-0 flex-col lg:flex-row' : 'flex min-h-[calc(100dvh-8rem)] flex-col overflow-hidden lg:flex-row'} ${resizingPanels ? 'lg:cursor-col-resize lg:select-none' : ''}`}
+      className={`${presentation === 'modal' ? 'flex h-full min-h-0 flex-col' : 'flex min-h-[calc(100dvh-8rem)] flex-col overflow-hidden'} ${resizingPanels ? 'lg:cursor-col-resize lg:select-none' : ''}`}
       style={{ '--task-chat-panel-width': `${chatPanelPercent}%` } as CSSProperties}
     >
-      {presentation === 'page' && pageActionsContainer ? createPortal(headerActions, pageActionsContainer) : null}
-      <section className="task-detail-scroll min-w-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6">
-      <header className={cn('px-4 pb-5', recentlyChanged('title') && 'task-detail-live-update')}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      <header className={cn('shrink-0 border-b border-edge-subtle bg-surface-panel px-5 py-4 sm:px-6', recentlyChanged('title') && 'task-detail-live-update')}>
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
               {projectName ? <span className="inline-flex items-center gap-1.5"><FolderKanban className="size-3.5" aria-hidden />{projectName}</span> : null}
-              <span>/</span><span>{copy.taskLabel}</span>
-              <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', detailStatusTone(statusKey))}>{statusLabel}</span>
-              <span className="text-fg-subtle">{copy.updatedAt.replace('{{date}}', formatMediumDateTime(detail.task.updatedAt, language))}</span>
+              {projectName ? <span aria-hidden="true">/</span> : null}<span>{copy.taskLabel}</span>
               {recentChange ? (
                 <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg" role="status">
                   {recentChange.source === 'agent'
@@ -745,11 +739,11 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
                     queueMicrotask(() => { skipTitleSaveRef.current = false; });
                   }
                 }}
-                className="mt-3 w-full max-w-3xl rounded-lg bg-surface-hover px-3 py-2 text-2xl font-semibold leading-8 text-fg outline-none ring-2 ring-accent/30 focus:ring-accent/60"
+                className="mt-2 w-full max-w-3xl rounded-lg bg-surface-hover px-3 py-2 text-xl font-semibold leading-7 text-fg outline-none ring-2 ring-accent/30 focus:ring-accent/60"
               />
             ) : (
-              <button type="button" className="mt-3 block max-w-3xl rounded-lg text-left outline-none hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { titleEditBaseRef.current = { value: detail.task.title, version: detail.task.version }; setEditConflict(null); setTitleDraft(detail.task.title); setEditingTitle(true); }}>
-                <h1 className="text-2xl font-semibold leading-8 text-fg">{detail.task.title}</h1>
+              <button type="button" className="mt-2 block max-w-full rounded-lg text-left outline-none hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { titleEditBaseRef.current = { value: detail.task.title, version: detail.task.version }; setEditConflict(null); setTitleDraft(detail.task.title); setEditingTitle(true); }}>
+                <h1 className="break-words text-xl font-semibold leading-7 text-fg">{detail.task.title}</h1>
               </button>
             )}
             {editConflict === 'title' ? (
@@ -760,9 +754,21 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
               </div>
             ) : null}
           </div>
+          <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-medium', detailStatusTone(statusKey))}>{statusLabel}</span>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-fg-muted">
+          <span className="inline-flex min-w-0 items-center gap-2">
+            {conversationAgentId ? <AgentAvatarDisplay agentId={conversationAgentId} avatar={conversationAgent?.avatar} size={20} className="shrink-0" /> : null}
+            <span className="truncate">{copy.executorLabel} · {conversationAgent?.name ?? conversationAgentId ?? copy.unassigned}</span>
+          </span>
+          <span className="text-fg-subtle">{copy.updatedAt.replace('{{date}}', formatMediumDateTime(detail.task.updatedAt, language))}</span>
+        </div>
+        <div className="mt-4 border-t border-edge-subtle pt-3">{headerActions}</div>
         {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
       </header>
+
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <section className="task-detail-scroll min-w-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6">
 
       {detail.attention.length > 0 ? <section className={cn('mb-4 rounded-xl border border-warning/20 bg-warning/10 p-4', recentlyChanged('attention') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h2><ul className="mt-2 space-y-1.5 text-sm leading-6 text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`} className="flex flex-wrap items-start justify-between gap-2"><span className="min-w-0 flex-1">{item.summary}</span>{item.kind === 'input_required' || item.kind === 'approval_required' ? <Link className="inline-flex min-h-11 items-center rounded-lg bg-surface-panel px-3 text-sm font-medium text-accent" to={taskChatHref(taskId)}>{language === 'zh' ? (item.kind === 'approval_required' ? '查看并决定' : '补充信息') : (item.kind === 'approval_required' ? 'Review decision' : 'Provide information')}</Link> : null}</li>)}</ul></section> : null}
 
@@ -865,14 +871,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
       </div>
 
       <aside className="flex min-h-[34rem] min-w-0 flex-col bg-surface-panel lg:min-h-0 lg:w-[var(--task-chat-panel-width)] lg:shrink-0">
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 bg-surface-inset px-4 py-3.5">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2.5">
-              {conversationAgentId ? <AgentAvatarDisplay agentId={conversationAgentId} avatar={conversationAgent?.avatar} size={28} className="shrink-0" /> : null}
-              <div className="min-w-0"><p className="truncate text-sm font-medium text-fg">{language === 'zh' ? 'Agent 执行与对话' : 'Agent execution and chat'}</p><p className="mt-0.5 truncate text-xs text-fg-muted">{conversationAgent?.name ?? conversationAgentId ?? copy.unassigned} · {statusLabel}</p></div>
-            </div>
-          </div>
-          {presentation === 'modal' ? headerActions : null}
+        <div className="flex shrink-0 items-center border-b border-edge-subtle px-4 py-3">
+          <h2 className="text-sm font-medium text-fg-muted">{language === 'zh' ? '执行对话' : 'Execution chat'}</h2>
         </div>
         {conversationConversationId ? (
           <div className="min-h-0 flex-1"><ChatPage embedded conversationId={conversationConversationId} taskId={taskId} /></div>
@@ -890,6 +890,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
           </div>
         )}
       </aside>
+      </div>
       <ConfirmDialog
         open={deleteDialogOpen}
         title={copy.deleteTaskTitle}
