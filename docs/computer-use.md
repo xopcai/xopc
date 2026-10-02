@@ -10,7 +10,7 @@ Codex-level task success.
 1. Use a signed macOS xopc desktop build containing Cua Driver 0.28.2. A browser
    tab alone cannot grant native desktop control.
 2. In Settings → Integrations → Computer use (`#/settings/computer-use`), grant Accessibility and Screen
-   Recording to xopc, enable computer control, and authorize each application you want xopc to use.
+   Recording to xopc and enable computer control. Allow individual applications or turn on Any app.
 3. Select and save one compatible GUI model from the shared selector in either
    Computer use or Settings → Models. Both edit the same global default:
    - BYOK: `dashscope-cn/gui-plus-2026-02-26`, using your existing Alibaba Beijing
@@ -88,8 +88,10 @@ Choose the inherited Computer Use model in **Settings → Agent defaults**, or s
 ## Authorization and stopping
 
 Application access is configured on the local Computer use settings page and
-persists until revoked. Only applications selected there can be opened by the
-desktop broker. Ordinary input actions in an authorized application continue
+persists until revoked. Any app mode admits current and future discoverable apps;
+when off, only individually selected applications can be opened by the desktop broker.
+Turning Any app off restores the previous individual grants and stops a current
+session if its app is no longer allowed. Ordinary input actions in an authorized application continue
 without a native dialog or a chat continuation prompt. The Agent should ask the
 user only about a concrete consequential effect that the task has not already
 authorized, such as sending, publishing, deleting, or transmitting sensitive
@@ -97,7 +99,7 @@ information. This decision currently depends on Agent judgment; arbitrary GUI
 actions are not reliably classified by the native driver. Use only applications
 and tasks for which that tradeoff is appropriate.
 
-Revoking an application stops its active session. OS permissions, single-window
+Revoking an application stops its active session. Any app does not override OS permissions, single-window
 targeting, freshness/budget limits and sensitive-app restrictions remain in
 force. Browser permissions are separate.
 

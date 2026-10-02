@@ -37,6 +37,7 @@ describe('Harmony workspace contracts', () => {
   });
   it('creates valid scheduled automations', () => {
     expect(CreateAutomationSchema.safeParse(scheduledAutomation('Daily', 'Summarize', '0 9 * * *', true)).success).toBe(true);
+    expect(scheduledAutomation('Daily', 'Summarize', '0 9 * * *', true, undefined, 'project-1').projectId).toBe('project-1');
   });
   it('preserves advanced action fields and cron time zone without mutating the loaded record', () => {
     const original = { id: 'a', name: 'Daily', enabled: false,

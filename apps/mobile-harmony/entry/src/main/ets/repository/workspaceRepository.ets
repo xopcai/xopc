@@ -49,7 +49,7 @@ export class XopcWorkspaceRepository {
       const patch: XopcProjectWrite = { name: item.title.trim(), description: item.body }; body = JSON.stringify(patch);
     } else if (section === 'automations') {
       if (!item.editable) throw new Error('AUTOMATION_NOT_MOBILE_EDITABLE');
-      body = JSON.stringify(scheduledAutomation(item.title, item.body, item.cron ?? '', create, item.automation));
+      body = JSON.stringify(scheduledAutomation(item.title, item.body, item.cron ?? '', create, item.automation, item.projectId));
     } else throw new Error('INVALID_WORKSPACE_SECTION');
     await gatewaySession.request(path, create ? 'POST' : 'PATCH', body);
   }

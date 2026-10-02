@@ -22,6 +22,7 @@ export struct XopcNotesView {
   @Param initialId: string = '';
   @Param initialStatus: XopcNoteStatus | '' = '';
   @Param createOnAppear: boolean = false;
+  @Param projectId: string = '';
   @Param embedded: boolean = false;
   @Event onExit: () => void = (): void => {};
   @Event onOpenConversation: (id: string) => void = (_id: string): void => {};
@@ -39,8 +40,8 @@ export struct XopcNotesView {
   }
 
   private async start(context: common.Context): Promise<void> {
-    await this.model.start(context, this.initialId, this.initialStatus);
-    if (this.createOnAppear && !this.model.draft) this.model.create();
+    await this.model.start(context, this.initialId, this.initialStatus, this.projectId);
+    if (this.createOnAppear && !this.model.draft) this.model.create(this.projectId);
   }
 
   aboutToDisappear(): void { void this.model.saveNow(); this.model.dispose(); void this.voice.cancel(); }

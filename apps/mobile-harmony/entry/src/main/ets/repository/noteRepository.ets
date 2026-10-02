@@ -9,10 +9,11 @@ import { XopcHttpError } from '../service/transport';
 
 /** Gateway-backed note operations. Local draft persistence intentionally lives in a separate service. */
 export class XopcNoteRepository {
-  async list(search: string, status: XopcNoteStatus | '', offset: number = 0): Promise<XopcNoteList> {
+  async list(search: string, status: XopcNoteStatus | '', offset: number = 0, projectId: string = ''): Promise<XopcNoteList> {
     const query = encodeURIComponent(search.trim());
     const path = '/api/notes?limit=30&offset=' + offset + '&sortBy=updatedAt&sortOrder=desc&search=' + query
-      + (status ? '&status=' + encodeURIComponent(status) : '');
+      + (status ? '&status=' + encodeURIComponent(status) : '')
+      + (projectId ? '&projectId=' + encodeURIComponent(projectId) : '');
     const result = JSON.parse(await gatewaySession.request(path)) as XopcNoteList;
     if (!Array.isArray(result.items)) throw new Error('INVALID_NOTE_LIST');
     result.items.forEach((item: XopcNoteIndexEntry): void => {
@@ -37,7 +38,8 @@ export class XopcNoteRepository {
 
   async create(draft: XopcNoteDraft): Promise<XopcNote> {
     const body = JSON.stringify({
-      title: draft.title.trim(), markdown: draft.markdown, kind: 'thought', channel: 'app', platform: 'harmonyos'
+      title: draft.title.trim(), markdown: draft.markdown, kind: 'thought', channel: 'app', platform: 'harmonyos',
+      projectId: draft.projectId
     });
     const raw = await gatewaySession.request('/api/notes', 'POST', body, draft.mutationId);
     const result = JSON.parse(raw) as XopcNoteResult;

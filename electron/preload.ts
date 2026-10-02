@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   computer: {
     status: () => ipcRenderer.invoke('computer:status'),
     access: () => ipcRenderer.invoke('computer:access'),
+    setAllAppAccess: (allowed: boolean) => ipcRenderer.invoke('computer:set-all-app-access', allowed),
     setAppAccess: (appId: string, allowed: boolean) => ipcRenderer.invoke('computer:set-app-access', appId, allowed),
     stop: () => ipcRenderer.invoke('computer:stop'),
     reenroll: () => ipcRenderer.invoke('computer:reenroll'),

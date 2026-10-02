@@ -9,7 +9,7 @@ export interface XopcTask {
   closedAt?: number; updatedAt?: number; resolution?: string;
 }
 export interface XopcTaskResult { task: XopcTask; allowedCommands?: string[]; }
-export interface XopcTaskList { items: XopcTaskResult[]; }
+export interface XopcTaskList { items: XopcTaskResult[]; total?: number; }
 export interface XopcTaskContract {
   objective: string; expectedOutputs: string[]; acceptanceCriteria: string[]; constraints: string[];
   approvalRequired: string[]; assumptions: string[]; risks: string[]; acceptancePolicy: string; outputDestinations: Object[];
@@ -35,9 +35,9 @@ export interface XopcAutomationState {
 }
 export interface XopcAutomation {
   id: string; name: string; description?: string; enabled: boolean; trigger: XopcTrigger; action: XopcAutomationAction;
-  conversationMode?: string; state?: XopcAutomationState;
+  conversationMode?: string; state?: XopcAutomationState; projectId?: string;
 }
-export interface XopcAutomationWrite { name: string; trigger: XopcTrigger; action: XopcAutomationAction; enabled?: boolean; conversationMode?: string; }
+export interface XopcAutomationWrite { name: string; trigger: XopcTrigger; action: XopcAutomationAction; enabled?: boolean; conversationMode?: string; projectId?: string; }
 export interface XopcAutomationList { automations: XopcAutomation[]; }
 export interface XopcAutomationResult { automation: XopcAutomation; }
 export interface XopcAutomationRun {
