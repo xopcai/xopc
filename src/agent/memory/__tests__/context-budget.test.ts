@@ -30,6 +30,21 @@ function assistant(timestamp: number): AgentMessage {
 }
 
 describe('context budget', () => {
+  it('counts a large image as an image while retaining surrounding text pressure', () => {
+    const image = { type: 'image', data: 'a'.repeat(2_250_000), mimeType: 'image/jpeg' };
+    const message = { role: 'user', content: [
+      { type: 'text', text: 'Describe this photo' }, image,
+    ], timestamp: 1 } as AgentMessage;
+    const evaluation = evaluateContextBudget({ messages: [message], contextWindow: 128_000 });
+    expect(evaluation.estimatedTokens).toBeLessThan(2_000);
+    expect(evaluation.route).toBe('fits');
+
+    const withLongText = evaluateContextBudget({ messages: [{ ...message, content: [
+      { type: 'text', text: 'x'.repeat(600_000) }, image,
+    ] } as AgentMessage], contextWindow: 128_000 });
+    expect(withLongText.estimatedTokens).toBeGreaterThan(withLongText.hardLimitTokens);
+  });
+
   it('includes system prompt, current user input, and tool schemas in preflight pressure', () => {
     const messages = [{ role: 'user', content: 'x'.repeat(2_400), timestamp: 1 }] as AgentMessage[];
     const evaluation = evaluateContextBudget({
