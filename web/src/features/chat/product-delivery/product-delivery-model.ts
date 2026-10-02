@@ -5,6 +5,22 @@ export type ProductDeliveryEntry = {
   delivery: ProductDeliveryEnvelope;
 };
 
+export function workspacePathFromFileResourceId(id: string): string | null {
+  const separator = id.indexOf('.');
+  if (separator <= 0) return null;
+  const encoded = id.slice(separator + 1);
+  if (!/^[A-Za-z0-9_-]+$/.test(encoded)) return null;
+  try {
+    const bytes = Uint8Array.from(atob(encoded.replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0));
+    const path = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return path && !path.startsWith('/') && !path.includes('\\')
+      && path.split('/').every((segment) => segment !== '.' && segment !== '..' && segment !== '')
+      ? path : null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizedTaskTitle(title: string): string {
   return title.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
 }

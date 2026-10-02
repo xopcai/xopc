@@ -180,9 +180,12 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     }
   }, [attachmentHandoffId, chatConversationId]);
   const markChatRunViewed = useChatRunPresenceStore((state) => state.markViewed);
+  const chatRunUnread = useChatRunPresenceStore((state) => (
+    chatConversationId ? state.runs[chatConversationId]?.unread : false
+  ));
   useEffect(() => {
-    if (chatConversationId) markChatRunViewed(chatConversationId);
-  }, [chatConversationId, markChatRunViewed]);
+    if (chatConversationId && chatRunUnread) markChatRunViewed(chatConversationId);
+  }, [chatConversationId, chatRunUnread, markChatRunViewed]);
   const { data: sessionMetadata } = useChatSessionMetadata(chatConversationId);
   const handleForkAssistantTurn = useCallback(async (lastTurnId: string) => {
     if (!chatConversationId) return;

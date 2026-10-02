@@ -10,13 +10,14 @@ import { AssistantResultTail } from '@/features/chat/messages/assistant-result-t
 import type { AssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
 import { productDeliveryReferences } from '@/features/chat/product-delivery/product-delivery-model';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 function LocationProbe() {
   const location = useLocation();
   return <output data-testid="location">{`${location.pathname}${location.search}`}</output>;
 }
 
-function renderDelivery(delivery: ProductDeliveryEnvelope) {
+function renderDelivery(delivery: ProductDeliveryEnvelope, conversationId?: string) {
   const view: AssistantTurnViewModel = {
     answerContent: [],
     workLog: { items: [], active: false, status: 'completed', expandedByDefault: false, compact: false },
@@ -26,7 +27,7 @@ function renderDelivery(delivery: ProductDeliveryEnvelope) {
     deliveries: [{ key: 'delivery-1', delivery }],
     sources: [],
   };
-  return <AssistantResultTail view={view} />;
+  return <AssistantResultTail view={view} conversationId={conversationId} />;
 }
 
 describe('AssistantResultTail product deliveries', () => {
@@ -52,6 +53,7 @@ describe('AssistantResultTail product deliveries', () => {
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
+    useWorkspacePreviewStore.getState().setPath(null);
   });
 
   afterEach(() => {
@@ -206,6 +208,23 @@ describe('AssistantResultTail product deliveries', () => {
     expect(container.textContent).not.toContain('idle');
     expect(container.textContent).not.toContain('继续');
     expect(container.querySelectorAll('[data-product-delivery="task"] button')).toHaveLength(1);
+  });
+
+  it('opens a generated Markdown file in the workspace preview', () => {
+    const fileId = `space.${btoa('reports/personal-ai-2026-report.md').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
+    act(() => root.render(<MemoryRouter>{renderDelivery({
+      version: 2,
+      operation: 'updated',
+      primary: { kind: 'file', id: fileId, title: 'personal-ai-2026-report.md', capabilities: ['preview'] },
+    }, 'worker-session')}</MemoryRouter>));
+
+    const button = container.querySelector<HTMLButtonElement>('[data-product-delivery="file"] button');
+    expect(button?.disabled).toBe(false);
+    act(() => button?.click());
+    expect(useWorkspacePreviewStore.getState()).toMatchObject({
+      path: 'reports/personal-ai-2026-report.md',
+      conversationId: 'worker-session',
+    });
   });
 
   it('does not render a read-only object below the assistant message', () => {
