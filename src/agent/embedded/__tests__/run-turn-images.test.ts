@@ -378,6 +378,27 @@ describe('runXopcEmbeddedTurn image input', () => {
     expect(mocks.baseStreamFn).not.toHaveBeenCalled();
   });
 
+  it('allows an image larger than the transcript byte limit through provider preflight', async () => {
+    await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'run-large-image',
+      userMessage: { role: 'user', content: 'Describe this photo', timestamp: 1 },
+      model: { id: 'test', provider: 'test', contextWindow: 128_000 } as any,
+      modelRef: 'test/test', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+    mocks.baseStreamFn.mockClear();
+    const image = { type: 'image', data: 'a'.repeat(2_250_000), mimeType: 'image/jpeg' };
+    mocks.session.agent.streamFunction(
+      { id: 'test', provider: 'test', contextWindow: 128_000 },
+      { systemPrompt: 'system', messages: [{ role: 'user', content: [
+        { type: 'text', text: 'Describe this photo' }, image,
+      ] }], tools: [] },
+      {},
+    );
+    expect(mocks.baseStreamFn).toHaveBeenCalledOnce();
+    expect(mocks.baseStreamFn.mock.calls[0]?.[1].messages[0].content[1]).toBe(image);
+  });
+
   it('compacts between a tool result and the next provider request', async () => {
     const original = [
       { role: 'user', content: 'x'.repeat(20_000), timestamp: 1 },
