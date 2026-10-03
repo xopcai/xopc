@@ -2,6 +2,8 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 
 import { OnboardingCard } from '@/features/onboarding/onboarding-card';
+import { SidebarFooter } from '@/components/shell/sidebar-footer';
+import { UserModelPage } from '@/features/user-model/user-model-page';
 import { WorkDiscoveryPage } from '@/features/work-discovery/work-discovery-page';
 import { useLocaleStore } from '@/stores/locale-store';
 import type { ColorScheme } from '@/stores/theme-store';
@@ -9,11 +11,11 @@ import type { ColorScheme } from '@/stores/theme-store';
 import '@fontsource-variable/figtree';
 import '@/styles/globals.css';
 
-type VisualStage = 'setup' | 'work';
+type VisualStage = 'setup' | 'work' | 'profile';
 type VisualMode = 'light' | 'dark';
 
 const params = new URLSearchParams(window.location.search);
-const stage: VisualStage = params.get('stage') === 'work' ? 'work' : 'setup';
+const stage: VisualStage = params.get('stage') === 'profile' ? 'profile' : params.get('stage') === 'work' ? 'work' : 'setup';
 const mode: VisualMode = params.get('mode') === 'dark' ? 'dark' : 'light';
 const requestedTheme = params.get('theme');
 const theme: ColorScheme = requestedTheme === 'emerald' || requestedTheme === 'clay' || requestedTheme === 'dawn' || requestedTheme === 'porcelain'
@@ -41,6 +43,7 @@ window.fetch = async (input) => {
       priorities: [],
       rules: [],
       knowledge: [],
+      settings: { memoryEnabled: true, showMemoryReferences: true, sensitiveWritePolicy: 'confirm' },
       maintenance: { lastRun: null },
       counts: {
         activeAssertions: 0,
@@ -58,6 +61,10 @@ window.fetch = async (input) => {
 };
 
 export function VisualFixture() {
+  if (stage === 'profile') return <div className="flex h-dvh bg-surface-base text-fg">
+    <aside className="flex w-60 shrink-0 flex-col justify-end border-r border-edge max-sm:w-14"><SidebarFooter collapsed={window.innerWidth < 640} /></aside>
+    <main className="min-w-0 flex-1 overflow-auto"><UserModelPage /></main>
+  </div>;
   return (
     <div className="h-dvh w-dvw overflow-hidden" data-visual-stage={stage}>
       {stage === 'setup' ? (

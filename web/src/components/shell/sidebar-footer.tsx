@@ -4,7 +4,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { AboutDialog } from '@/components/shell/about-dialog';
-import { BrandLogo } from '@/components/shell/brand-logo';
+import { Loopi } from '@/components/brand/loopi';
 import { SidebarAppMenu } from '@/components/shell/sidebar-app-menu';
 import { openSupportReport } from '@/features/support/support-report-events';
 import { messages } from '@/i18n/messages';
@@ -53,7 +53,7 @@ export function SidebarFooter({
               title={m.nav.profile}
               aria-label={m.nav.profile}
             >
-              <BrandLogo className="size-10" alt={m.appBrand} />
+              <Loopi variant="avatar" className="size-10" />
             </Link>
             <Popover.Trigger asChild>
               <button
@@ -87,7 +87,7 @@ export function SidebarFooter({
               title={m.nav.profile}
               aria-label={m.nav.profile}
             >
-              <BrandLogo className="size-8" alt={m.appBrand} />
+              <Loopi variant="avatar" className="size-10" />
             </Link>
             <Popover.Trigger asChild>
               <button

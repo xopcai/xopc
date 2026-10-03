@@ -1,7 +1,7 @@
 import { CheckCircle2, ChevronRight, ExternalLink, LoaderCircle, ShieldCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 
-import { AnimatedLoopLogo } from '@/components/brand/animated-loop-logo';
+import { Loopi } from '@/components/brand/loopi';
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
@@ -324,17 +324,12 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
       <main className="xopc-onboarding-scroll relative z-10 grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(18rem,0.8fr)_minmax(30rem,1.2fr)]">
         <section className="xopc-onboarding-visual relative hidden min-h-0 items-center justify-center overflow-hidden lg:flex">
-          <div className="xopc-onboarding-mark relative flex size-64 items-center justify-center" aria-hidden>
-            <span className="xopc-onboarding-mark-halo absolute inset-[10%] rounded-full" />
-            <span className="xopc-onboarding-mark-trace absolute inset-[13%] rounded-full" />
-            <span className="xopc-onboarding-mark-core relative flex size-36 items-center justify-center">
-              <AnimatedLoopLogo className="relative z-10 size-28 lg:size-32" />
-            </span>
-          </div>
+          <Loopi className="size-72 text-fg-muted" interactive language={language} mood={error ? 'care' : busy ? 'work' : step === 'success' ? 'done' : step === 'callName' ? 'listen' : 'decision'} />
         </section>
 
         <section className="app-main-surface xopc-onboarding-scroll flex min-h-[30rem] items-center overflow-y-auto bg-surface-panel px-5 py-8 sm:px-10 lg:min-h-0 lg:px-[clamp(3rem,6vw,6rem)]">
           <div className="xopc-onboarding-stage w-full max-w-[30rem]" key={step}>
+            <div className="mb-3 lg:hidden"><Loopi className="size-20" mood={error ? 'care' : busy ? 'work' : step === 'success' ? 'done' : 'listen'} /></div>
             {step === 'callName' ? (
               <div className="flex min-h-[30rem] flex-col">
                 <p className="text-xs font-medium tracking-wide text-accent-fg">{o.title}</p>
