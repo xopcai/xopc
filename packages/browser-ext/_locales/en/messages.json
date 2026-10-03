@@ -165,8 +165,9 @@
     "placeholders": { "host": { "content": "$1" } }
   },
   "errorSelectText": { "message": "Select text on the page first" },
-  "errorNoReadableContent": { "message": "This page has no readable content" },
-  "errorReadPage": { "message": "Could not read this page" },
+  "errorNoReadableContent": { "message": "No readable text was found. Select text or attach a screenshot instead." },
+  "errorReadPage": { "message": "Chrome returned no page data. Reload the tab and try again, or attach a screenshot." },
+  "attachScreenshotInstead": { "message": "Attach screenshot" },
   "errorPageChangedReading": { "message": "The page changed while xopc was reading it. Try again." },
   "errorPageChangedConnecting": { "message": "The page changed while xopc was connecting to it. Try again." },
   "errorIdentifyPage": { "message": "Could not identify this page" },

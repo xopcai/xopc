@@ -57,6 +57,8 @@ For example: “I know basic JavaScript. Using this article, explain what proble
 2. Select **＋**, then the selected-text option (**选中的文本** in the screenshots). Check that the source label identifies the selection.
 3. Ask a specific question, such as: “Explain this passage using a restaurant-ordering example, and point out where the analogy breaks down.”
 
+You can also right-click selected text and choose **Ask xopc about “…”**. The selection is attached to the side-panel draft, including when the panel is already open. This route uses Chrome's selected text directly, so it does not need to read the page to recover the selection.
+
 ![A passage selected in MDN on the left, with the selection attached to an explanation question draft in xopc on the right](./assets/browser-extension/selection-context.jpg)
 
 *Attaching a selection shares the selected text. Attach the current page as well when your question needs the surrounding context.*
@@ -134,14 +136,17 @@ Installing the extension does not give xopc permanent access to every page.
 | Action | Permission behavior |
 | --- | --- |
 | Chat without page context | Does not read the current page |
-| Attach current page or selection | Requests access to that page's origin when needed |
+| Attach current page or selection from the side panel | Requests access to that page's origin when needed |
+| Ask about selected text from the context menu | Uses Chrome's selection without requesting page access |
 | Mention another tab | Requests access to the selected tab's origin when needed |
 | Attach/control the current tab | Creates an explicit Session-to-tab binding and applies Gateway browser policy |
 | High-impact action | Still follows configured approval policy even when site access is granted |
 
 The manifest contains optional HTTP/HTTPS host permissions so Chrome can grant one origin at a time. You do not need to select **On all sites** for normal use. Chrome internal pages, the Chrome Web Store, extension pages, and other restricted schemes cannot be read or controlled.
 
-Page text is captured only after an explicit action. Password fields, one-time codes, payment fields, forms, scripts, hidden content, and embedded frames are excluded from the basic page snapshot. Captured page content is treated as untrusted input and cannot grant itself additional permissions.
+Page text is captured only after an explicit action. Password fields, one-time codes, payment fields, forms, scripts, and hidden content are excluded from the basic page snapshot. If the main page has no text, xopc tries a permitted embedded frame. A selected passage can come from a permitted frame or an ordinary text field. Captured page content is treated as untrusted input and cannot grant itself additional permissions.
+
+If Chrome returns no readable page text, the side panel offers **Attach screenshot**. This captures only the visible tab after you select it; it does not extract a full PDF, video transcript, or hidden content.
 
 ## Updates
 

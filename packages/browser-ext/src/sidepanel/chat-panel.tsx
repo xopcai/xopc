@@ -136,6 +136,7 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
   const [menuOpen, setMenuOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [error, setError] = useState('');
+  const [screenshotFallbackError, setScreenshotFallbackError] = useState('');
   const [copiedMessageId, setCopiedMessageId] = useState('');
   const [clarificationAnswer, setClarificationAnswer] = useState('');
   const [clarificationSubmitting, setClarificationSubmitting] = useState(false);
@@ -176,20 +177,36 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
 
   useEffect(() => {
     let active = true;
+    let readyForPending = false;
+    const applied = new Set<string>();
     const unsubscribe = client.subscribe(setSnapshot);
+    const attachPending = async (pending: AttachedPageContext | undefined) => {
+      if (!pending || !active || !readyForPending || applied.has(pending.context.sourceId)) return;
+      applied.add(pending.context.sourceId);
+      try {
+        const key = keyForSession(client.currentConversationId);
+        await drafts.load(key);
+        if (!active) return;
+        drafts.update(key, current => ({ ...current, pages: appendPageContext(current.pages, pending) }));
+        await chrome.storage.session.remove(PENDING_CONTEXT_KEY);
+      } catch (cause) {
+        applied.delete(pending.context.sourceId);
+        if (active) setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    };
+    const onStorageChanged = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === 'session') void attachPending(changes[PENDING_CONTEXT_KEY]?.newValue as AttachedPageContext | undefined);
+    };
+    chrome.storage.onChanged.addListener(onStorageChanged);
     void client.start().then(async () => {
       if (!active) return;
+      readyForPending = true;
       const stored = await chrome.storage.session.get(PENDING_CONTEXT_KEY);
-      const pending = stored[PENDING_CONTEXT_KEY] as AttachedPageContext | undefined;
-      if (!pending || !active) return;
-      const key = keyForSession(client.currentConversationId);
-      await drafts.load(key);
-      if (!active) return;
-      drafts.update(key, current => ({ ...current, pages: appendPageContext(current.pages, pending) }));
-      await chrome.storage.session.remove(PENDING_CONTEXT_KEY);
+      await attachPending(stored[PENDING_CONTEXT_KEY] as AttachedPageContext | undefined);
     }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); });
     return () => {
       active = false;
+      chrome.storage.onChanged.removeListener(onStorageChanged);
       unsubscribe();
       client.stop();
     };
@@ -403,6 +420,7 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
     attachmentTask.current = true;
     setProcessing(true);
     setError('');
+    setScreenshotFallbackError('');
     try {
       const tabId = await activeTabId();
       if (tabId === undefined) throw new Error(t('errorNoActivePage'));
@@ -413,7 +431,9 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
       });
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setError(message);
+      setScreenshotFallbackError(mode === 'page' ? message : '');
       return false;
     } finally { attachmentTask.current = false; setProcessing(false); }
   }
@@ -699,7 +719,10 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
         {processing ? <div className="composer-notice" role="status">{t('processingAttachments')}</div> : null}
         {snapshot.queuedInputs?.map(input => <QueuedInput key={`${snapshot.conversationId}:${input.id}`} input={input} onSave={(content, version) => client.editInput(input.id, version, content)} onCancel={() => client.cancelInput(input.id, input.version)} />)}
         {snapshot.pendingDelivery ? <div className="composer-notice" role="status">{t('queuedMessageNotice')}</div> : null}
-        {error || (!connectionProblem && snapshot.error) ? <div className="composer-error" role="alert"><AlertIcon />{error || snapshot.error}</div> : null}
+        {error || (!connectionProblem && snapshot.error) ? <div className="composer-error" role="alert">
+          <AlertIcon /><span>{error || snapshot.error}</span>
+          {error && error === screenshotFallbackError ? <button type="button" disabled={processing} onClick={() => { setScreenshotFallbackError(''); void addScreenshot(); }}>{t('attachScreenshotInstead')}</button> : null}
+        </div> : null}
         {pageContexts.length || attachments.length ? <div className="composer-contexts">
           {pageContexts.map(pageContext => (
             <div key={pageContext.context.sourceId} className={`context-chip${pageContext.stale ? ' stale' : ''}`}>
