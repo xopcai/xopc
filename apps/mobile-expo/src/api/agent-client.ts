@@ -166,7 +166,8 @@ export async function refineVoiceTranscript(text: string): Promise<string> {
   return json.payload.text;
 }
 
-export async function fetchClarificationSnapshot(conversationId: string): Promise<ClarificationWaitSnapshot> {
+export async function fetchClarificationSnapshot(conversationId: string): Promise<ClarificationWaitSnapshot | null> {
+  if (readLocalSessionDraft(conversationId)) return null;
   const res = await apiFetch(`/api/sessions/${encodeURIComponent(conversationId)}/clarification`);
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };

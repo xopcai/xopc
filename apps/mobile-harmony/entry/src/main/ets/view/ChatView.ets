@@ -53,6 +53,7 @@ import { XopcBrandLoading } from './MobileComponents';
 export struct XopcChatView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param requestedId: string = '';
+  @Param taskId: string = '';
   @Param requestRevision: number = 0;
   @Param focusRevision: number = 0;
   @Param requestedAction: string = '';
@@ -552,6 +553,7 @@ export struct XopcChatView {
     this.visible = this.activePage;
     if (this.visible) { this.bindBack(); this.attention.activate(); }
     this.appliedRequestRevision = this.requestRevision;
+    this.chat.taskId = this.taskId;
     this.chat.start(this.requestedId, true);
   }
   private bindBack(): void { layoutState.dismissChatOverlay = (): boolean => { return this.dismissOverlay(); }; }
@@ -593,6 +595,7 @@ export struct XopcChatView {
   onTargetChange(): void {
     if (this.disposed || !this.requestedId || this.appliedRequestRevision === this.requestRevision || this.chat.sending) return;
     this.appliedRequestRevision = this.requestRevision;
+    this.chat.taskId = this.taskId;
     this.dismissComposer(); this.sheetOpen = false;
     if (this.requestedId === this.chat.selectedId) return;
     this.saveDraft(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.stop(); this.showVoice = false;
@@ -645,7 +648,7 @@ export struct XopcChatView {
     }
     this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.draft = ''; this.attachments = []; this.refs = [];
     this.editingQueuedId = ''; this.editingTurnId = '';
-    this.sheetOpen = false; this.setPanel(false); await this.chat.create(agentId, projectId, executionMode);
+    this.sheetOpen = false; this.setPanel(false); this.chat.taskId = ''; await this.chat.create(agentId, projectId, executionMode);
   }
 
   @Monitor('quickIntake.revision', 'chat.selectedId', 'chat.loading', 'chat.sending', 'chat.connection', 'restoringDraft',

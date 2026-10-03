@@ -1,19 +1,19 @@
 export function sessionContextCopy(language: string) {
   return language === 'zh' ? {
-    title: '会话上下文', work: '当前工作', sources: '关联资料', environment: '执行环境',
-    emptyWork: '未关联项目或执行任务', emptySources: '未关联资料', emptyEnvironment: '会话创建后显示',
-    session: '会话来源', task: '任务关联', draft: '待发送', untitled: '未命名 Note',
-    unavailable: '不可用或无权访问', failed: '部分信息暂不可用，请刷新重试', refresh: '刷新',
-    more: '仅显示前 20 项，更多资料请打开任务查看', local: 'Local · 本地目录', worktree: 'Local · Worktree',
-    detached: '游离 HEAD', unavailableEnvironment: '目录不存在或环境尚未就绪', copyEnvironmentPath: '复制环境路径', copied: '已复制',
-    hint: '关联资料不代表模型已读取；待发送资料仅用于下一条消息。',
+    title: '会话信息', work: '当前工作', sources: '关联来源', environment: '运行位置',
+    independent: '独立会话', delegatedTasks: '派出任务', expand: '显示更多', collapse: '收起',
+    session: '会话关联', task: '任务关联', recent: '最近引用', draft: '待发送', untitled: '未命名 Note', untitledSource: '未命名来源',
+    unavailable: '暂无法查看', partialUnavailable: '部分信息暂无法查看', refresh: '重试', more: '仅显示前 20 项',
+    local: '本地目录', worktree: 'Worktree', detached: '游离 HEAD',
+    unavailableEnvironment: '运行目录不可用', newEnvironment: '在另一环境新建会话',
+    copyEnvironmentPath: '复制环境路径', copied: '已复制',
   } : {
-    title: 'Session context', work: 'Current work', sources: 'Sources', environment: 'Environment',
-    emptyWork: 'No project or execution task', emptySources: 'No linked sources', emptyEnvironment: 'Available after the session is created',
-    session: 'Session source', task: 'Task reference', draft: 'Pending send', untitled: 'Untitled Note',
-    unavailable: 'Unavailable or restricted', failed: 'Some details are unavailable. Refresh to retry.', refresh: 'Refresh',
-    more: 'Showing the first 20 sources. Open the task for more.', local: 'Local · Directory', worktree: 'Local · Worktree',
-    detached: 'Detached HEAD', unavailableEnvironment: 'Directory missing or environment not ready', copyEnvironmentPath: 'Copy environment path', copied: 'Copied',
-    hint: 'Linked sources do not mean the model has read them. Pending sources apply to the next message.',
+    title: 'Session info', work: 'Current work', sources: 'Related sources', environment: 'Run location',
+    independent: 'Independent chat', delegatedTasks: 'Delegated tasks', expand: 'Show more', collapse: 'Show less',
+    session: 'Linked to chat', task: 'Linked to task', recent: 'Recently used', draft: 'Pending send', untitled: 'Untitled Note', untitledSource: 'Untitled source',
+    unavailable: 'Temporarily unavailable', partialUnavailable: 'Some details are unavailable', refresh: 'Retry', more: 'Showing the first 20 items',
+    local: 'Local directory', worktree: 'Worktree', detached: 'Detached HEAD',
+    unavailableEnvironment: 'Run directory unavailable', newEnvironment: 'New chat in another environment',
+    copyEnvironmentPath: 'Copy environment path', copied: 'Copied',
   };
 }

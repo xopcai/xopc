@@ -2,6 +2,8 @@ import useSWR from 'swr';
 import type { SessionIdentityInput } from '@xopcai/gateway-contract';
 
 import { getSessionDetail } from '@/features/sessions/session-api';
+import { readLocalSessionDraft } from '@/features/chat/session/local-session-drafts';
+import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export interface ChatSessionMetadata {
@@ -19,10 +21,12 @@ export interface ChatSessionMetadata {
 export function useChatSessionMetadata(conversationId: string | null | undefined) {
   const token = useGatewayStore((s) => s.conversationId);
   const trimmedKey = conversationId?.trim() || null;
+  const localDraft = useChatSessionStore((s) => trimmedKey ? s.sessions[trimmedKey]?.localDraft : undefined);
 
   return useSWR(
-    token && trimmedKey ? ['chat-session-meta', trimmedKey, token] : null,
-    async (): Promise<ChatSessionMetadata> => {
+    token && trimmedKey && !localDraft ? ['chat-session-meta', trimmedKey, token, localDraft === false ? 'persisted' : 'unknown'] : null,
+    async (): Promise<ChatSessionMetadata | undefined> => {
+      if (await readLocalSessionDraft(trimmedKey!)) return undefined;
       const detail = await getSessionDetail(trimmedKey!);
       const rawRunId = detail.customData?.workflowRunId;
       const workflowRunId =

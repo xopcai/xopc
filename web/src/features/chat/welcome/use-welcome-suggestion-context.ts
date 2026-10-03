@@ -10,6 +10,7 @@ import {
   type ProjectKind,
 } from '@/features/projects/api';
 import { getSessionDetail } from '@/features/sessions/session-api';
+import { readLocalSessionDraft } from '@/features/chat/session/local-session-drafts';
 import type { TaskDetail } from '@/features/tasks/home-api';
 import type { WorkflowRunView } from '@/features/workflows/workflow-api';
 
@@ -268,8 +269,10 @@ export function useWelcomeSuggestionContext({
       let degraded = sourceContextFailed;
       let projectId: string | null = null;
       try {
-        const detail = await getSessionDetail(conversationId);
-        projectId = (detail as { projectId?: string | null }).projectId?.trim() || null;
+        const draft = await readLocalSessionDraft(conversationId);
+        projectId = draft
+          ? draft.creation.projectId?.trim() || null
+          : (await getSessionDetail(conversationId)).projectId?.trim() || null;
       } catch {
         degraded = true;
       }

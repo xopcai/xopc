@@ -215,4 +215,23 @@ describe('local-first session creation', () => {
       contextRefs: [{ kind: 'task', sourceId: 'task-1', expectedVersion: '8' }],
     });
   });
+
+  it('opens and sends to the task conversation with the task input wire format', async () => {
+    const repository = new XopcChatRepository();
+    mock.request.mockResolvedValueOnce(JSON.stringify({ ok: true, conversationId: 'task-chat', created: false }));
+    await expect(repository.ensureTaskConversation('task/1')).resolves.toBe('task-chat');
+    expect(mock.request.mock.calls[0][0]).toBe('/api/tasks/task%2F1/conversation');
+    mock.request.mockResolvedValueOnce(JSON.stringify({ payload: { configVersion: 4 } }))
+      .mockResolvedValueOnce(JSON.stringify({ ok: true, payload: {
+        conversationId: 'task-chat', state: { activeRunId: 'task-run' }
+      } }));
+    await expect(repository.send('task-chat', 'continue task', 'message-1', 'transcript-1', [], 'next', [], 'task/1'))
+      .resolves.toBe('task-run');
+    expect(mock.request.mock.calls[2][0]).toBe('/api/tasks/task%2F1/inputs');
+    expect(JSON.parse(mock.request.mock.calls[2][2])).toMatchObject({
+      clientMessageId: 'message-1', expectedTranscriptId: 'transcript-1', configVersion: 4,
+      content: 'continue task', delivery: 'next', origin: { type: 'endpoint', endpointId: 'phone', token: 'claim' }
+    });
+    expect(JSON.parse(mock.request.mock.calls[2][2])).not.toHaveProperty('kind');
+  });
 });

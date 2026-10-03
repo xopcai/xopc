@@ -508,6 +508,17 @@ export struct XopcWorkspaceView {
               .fontColor(this.colors.foreground).onClick((): void => { this.model.editing = true; })
           }
         }
+        if (this.section === 'tasks' && item.id) {
+          ListItem() {
+            Button() {
+              Row({ space: 10 }) {
+                SymbolGlyph($r('sys.symbol.message')).fontSize(20).fontColor([Color.White])
+                Text($r('app.string.task_open_conversation')).fontSize(16).fontWeight(FontWeight.Medium).fontColor(Color.White)
+              }
+            }.width('100%').height(50).backgroundColor(this.colors.accent).borderRadius(15)
+              .onClick((): void => { this.onNavigate({ page: 'task-chat', itemId: item.id, title: item.title, projectId: item.projectId }); })
+          }
+        }
         if (this.section === 'tasks' && item.actions.includes('start')) {
           ListItem() {
             TextInput({ text: this.agentId, placeholder: $r('app.string.agent_id') })

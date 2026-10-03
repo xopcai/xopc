@@ -3,7 +3,9 @@ import type { XopcTurnClaim } from './realtime';
 export interface XopcSessionItem {
   key: string; name?: string; title?: string; displayName?: string; messageCount: number;
   updatedAt: string; status?: string; projectId?: string; agentId?: string;
+  customData?: XopcSessionCustomData;
 }
+export interface XopcSessionCustomData { origin?: string; }
 export interface XopcSidebarTaskChild {
   taskId: string; title: string; phase: string; runStatus?: string; activeConversationId?: string;
 }

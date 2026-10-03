@@ -17,6 +17,7 @@ import { ProjectEnvironmentPicker } from '@/features/chat/composer/project-envir
 import { useProjectSessionComposer } from '@/features/chat/composer/use-project-session-composer';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import type {
+  ComposerAttachmentSummary,
   ComposerContextRef,
   ComposerSendHandler,
 } from '@/features/chat/composer/composer.types';
@@ -583,6 +584,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const loadedProject = useChatProjectScope(chatConversationId, searchParams.get('projectId'));
   const scopedProject = session.projectPreparation?.project ?? loadedProject;
   const [composerContextRefs, setComposerContextRefs] = useState<ComposerContextRef[]>([]);
+  const [composerAttachmentSummaries, setComposerAttachmentSummaries] = useState<ComposerAttachmentSummary[]>([]);
   const contextGatewayUrl = useGatewayStore(state => state.baseUrl);
   const pageContextKey = chatConversationId ? pageContextDraftKey(contextGatewayUrl, token, chatConversationId) : null;
   const pageContextDraft = pageContextDrafts.store(state => pageContextKey ? state.drafts[pageContextKey] : undefined);
@@ -596,6 +598,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       return;
     }
     setComposerContextRefs([]);
+    setComposerAttachmentSummaries([]);
   }, [chatConversationId]);
   useEffect(() => {
     let cancelled = false;
@@ -1041,11 +1044,16 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const headerContext = useMemo(() => ({
     project: scopedProject,
     draftRefs: composerContextRefs,
+    draftAttachments: composerAttachmentSummaries,
+    draftPage: pageContextDraft ? {
+      id: `${pageContextDraft.envelope.tabId}:${pageContextDraft.envelope.sequence}`,
+      title: pageContextDraft.title || (language === 'zh' ? '当前页面' : 'Current page'),
+    } : undefined,
     onLeaveProject: updatingContext || projectComposer.busy ? undefined : handleRemoveProject,
     leaveProjectLabel: m.chat.scopeRemoveProject,
     onDraftSourceNote: sourceNoteId ? handleDraftSourceNoteDigest : undefined,
     draftSourceNoteLabel: m.chat.sourceNoteDigestAction,
-  }), [updatingContext, projectComposer.busy, scopedProject, composerContextRefs, handleRemoveProject, m.chat.scopeRemoveProject, sourceNoteId, handleDraftSourceNoteDigest, m.chat.sourceNoteDigestAction]);
+  }), [updatingContext, projectComposer.busy, scopedProject, composerContextRefs, composerAttachmentSummaries, pageContextDraft, language, handleRemoveProject, m.chat.scopeRemoveProject, sourceNoteId, handleDraftSourceNoteDigest, m.chat.sourceNoteDigestAction]);
 
   if (!auth.hasToken) {
     return (
@@ -1405,6 +1413,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 pageContextPreview={pageContextDraft && pageContextKey ? <PageContextPreview draft={pageContextDraft} disabled={stream.sending} waiting={stream.streaming}
                   onRemove={() => pageContextDrafts.remove(pageContextKey, pageContextDraft)} /> : undefined}
                 setContextRefs={setComposerContextRefs}
+                onDraftAttachmentsChange={setComposerAttachmentSummaries}
                 disabled={isLoadingHistory || projectComposer.busy || updatingContext}
                 sendDisabled={
                   !session.modelConfigReady || (!session.projectPreparation && isSessionTransitioning) ||

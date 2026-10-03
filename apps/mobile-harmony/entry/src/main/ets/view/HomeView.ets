@@ -101,6 +101,8 @@ export struct XopcHomeView {
     try { accessibility.offAnimationReduceStateChange(this.onMotionChange); } catch (_) {}
   }
   private navigate(route: XopcMobileRoute): void {
+    if (route.page === 'project-new-chat') { void this.openProjectChat(route.projectId ?? ''); return; }
+    if (route.page === 'task-chat') { void this.openTaskChat(route); return; }
     if (route.page === 'understanding-chat') {
       void this.openUnderstandingChat(route);
       return;
@@ -114,6 +116,30 @@ export struct XopcHomeView {
     }
     if (route.page === 'progress') { this.pathStack.clear(); this.activateTab(2); return; }
     this.pathStack.pushPath({ name: route.page, param: route });
+  }
+
+  private async openProjectChat(projectId: string): Promise<void> {
+    if (!projectId) return;
+    try {
+      const id = await this.chatRepository.create(projectId);
+      this.navigate({ page: 'chat', itemId: id });
+    } catch (error) {
+      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
+    }
+  }
+
+  private async openTaskChat(route: XopcMobileRoute): Promise<void> {
+    const taskId = route.itemId;
+    if (!taskId) return;
+    try {
+      const id = await this.chatRepository.ensureTaskConversation(taskId);
+      const target: XopcMobileRoute = {
+        page: 'task-conversation', itemId: taskId, title: route.title, prompt: id, projectId: route.projectId
+      };
+      this.pathStack.pushPath({ name: 'task-conversation', param: target });
+    } catch (error) {
+      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
+    }
   }
 
   private async openUnderstandingChat(route: XopcMobileRoute): Promise<void> {
@@ -314,6 +340,24 @@ export struct XopcHomeView {
       XopcProjectSpaceView({ projectId: (param as XopcMobileRoute).itemId,
         onExit: (): void => { this.pathStack.pop(); },
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+    } else if (page === 'task-conversation') {
+      NavDestination() {
+        Column() {
+          Row({ space: 8 }) {
+            Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
+              .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+              .accessibilityText($r('app.string.back')).onClick((): void => { this.pathStack.pop(); })
+            Text((param as XopcMobileRoute).title || $r('app.string.task_open_conversation'))
+              .fontSize(18).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+              .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }.width('100%').padding({ left: 8, right: 20, top: 8, bottom: 4 })
+          Column() {
+            XopcChatView({ requestedId: (param as XopcMobileRoute).prompt ?? '',
+              taskId: (param as XopcMobileRoute).itemId, activePage: true, embedded: true,
+              onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+          }.layoutWeight(1).width('100%')
+        }.width('100%').height('100%').backgroundColor(this.colors.surface)
+      }.hideTitleBar(true).onBackPressed((): boolean => { this.pathStack.pop(); return true; })
     } else if (page === 'tasks' || page === 'projects' || page === 'automations' || page === 'project-settings'
       || page === 'task-create' || page === 'automation-create') {
       XopcWorkspaceView({ section: page === 'tasks' || page === 'task-create' ? 'tasks'

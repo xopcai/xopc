@@ -248,7 +248,8 @@ export async function fetchSessionMessagePage(
   return parseSessionMessagePage(await res.json());
 }
 
-export async function fetchSessionContextSummary(key: string): Promise<SessionContextSummary> {
+export async function fetchSessionContextSummary(key: string): Promise<SessionContextSummary | null> {
+  if (readLocalSessionDraft(key)) return null;
   const res = await apiFetch(`/api/sessions/${encodeURIComponent(key)}/context-summary`);
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
   const body = await res.json() as { summary?: SessionContextSummary };
