@@ -49,6 +49,8 @@ import { latestChatMessageId } from '../common/chatMessagePreview';
 import { chatPresentationRows, chatNeedsWideBubble } from '../common/chatPresentation';
 import { XopcBrandLoading } from './MobileComponents';
 
+interface XopcAssistantSheetAction { title: string; action: () => void; }
+
 @ComponentV2
 export struct XopcChatView {
   @Local colors: XopcThemeColors = appThemeColors;
@@ -935,16 +937,19 @@ export struct XopcChatView {
     }
   }
 
-  @Builder
-  assistantMessageMoreMenu(row: XopcChatRow) {
-    Menu() {
-      MenuItem({ content: $r('app.string.chat_regenerate') })
-        .enabled(!this.chat.runId && !this.chat.sending).onClick((): void => { this.messageAction('regenerate', row); })
-      if (extractMarkdownCodeBlocks(chatAnswerText(row))) {
-        MenuItem({ content: $r('app.string.chat_copy_code') })
-          .onClick((): void => { this.messageAction('copy-code', row); })
-      }
+  private assistantMessageMore(row: XopcChatRow): void {
+    const context = this.getUIContext().getHostContext();
+    const label = (resource: Resource): string => context?.resourceManager.getStringSync(resource.id) ?? '';
+    const sheets: XopcAssistantSheetAction[] = [
+      { title: label($r('app.string.chat_message_detail')), action: (): void => { this.openMessageDetail(row); } }
+    ];
+    if (!this.chat.runId && !this.chat.sending) {
+      sheets.push({ title: label($r('app.string.chat_regenerate')), action: (): void => { this.messageAction('regenerate', row); } });
     }
+    if (extractMarkdownCodeBlocks(chatAnswerText(row))) {
+      sheets.push({ title: label($r('app.string.chat_copy_code')), action: (): void => { this.messageAction('copy-code', row); } });
+    }
+    this.getUIContext().showActionSheet({ title: $r('app.string.more'), message: '', sheets });
   }
 
   @Builder
@@ -978,7 +983,7 @@ export struct XopcChatView {
       Button({ type: ButtonType.Circle }) {
         SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(19).fontColor([this.colors.tertiary])
       }.id('chat-assistant-more-' + row.id).width(40).height(40).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.more')).bindMenu(this.assistantMessageMoreMenu(row))
+        .accessibilityText($r('app.string.more')).onClick((): void => { this.assistantMessageMore(row); })
     }.width('100%').padding({ left: 8 }).justifyContent(FlexAlign.Start)
   }
 
@@ -1483,13 +1488,15 @@ export struct XopcChatView {
         }.padding({ left: 16, right: 16 })
       }
       this.conversation()
+      Column().id('chat-image-editor-sheet-host').width('100%').height(0)
+        .bindSheet($$this.imageEditorOpen, this.imageEditorSheet, { height: '75%', dragBar: false,
+          backgroundColor: this.colors.panel, onDisappear: (): void => { this.imageEditorError = ''; } })
+      Column().id('chat-message-detail-sheet-host').width('100%').height(0)
+        .bindSheet($$this.messageDetailOpen, this.messageDetailSheet, { height: '94%', dragBar: false,
+          showClose: false, backgroundColor: this.colors.panel })
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight, dragBar: true, showClose: false, backgroundColor: this.colors.panel })
     }.width('100%').height('100%')
-      .bindSheet($$this.imageEditorOpen, this.imageEditorSheet, { height: '75%', dragBar: false,
-        backgroundColor: this.colors.panel, onDisappear: (): void => { this.imageEditorError = ''; } })
-      .bindSheet($$this.messageDetailOpen, this.messageDetailSheet, { height: '94%', dragBar: false,
-        showClose: false, backgroundColor: this.colors.panel })
       .bindSheet($$this.executionOpen, this.executionDetailSheet, { height: '92%', dragBar: false,
         showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => { this.closeExecutionDetail(); } })
   }

@@ -15,6 +15,26 @@ import { XopcMobileRoute } from '../model/home';
 import { userErrorMessage } from '../common/userError';
 
 @ComponentV2
+struct XopcPreferenceOption {
+  @Local colors: XopcThemeColors = appThemeColors;
+  @Param label: ResourceStr = '';
+  @Param selected: boolean = false;
+  @Param optionId: string = '';
+  @Event onSelect: () => void = (): void => {};
+
+  build() {
+    Button({ type: ButtonType.Normal }) {
+      Row() {
+        Text(this.label).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
+        if (this.selected) { SymbolGlyph($r('sys.symbol.checkmark')).fontSize(20).fontColor([this.colors.accent]) }
+      }.width('100%').height(56).padding({ left: 16, right: 16 })
+    }.id(this.optionId).width('100%').padding(0).borderRadius(14)
+      .backgroundColor(this.selected ? this.colors.accentSoft : this.colors.panel).margin({ bottom: 8 })
+      .onClick(this.onSelect)
+  }
+}
+
+@ComponentV2
 export struct XopcSettingsView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param initialSection: string = '';
@@ -24,24 +44,39 @@ export struct XopcSettingsView {
   @Event onDisconnected: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local preferences: XopcSettings = appSettings;
+  @Local selectedLanguage: string = '';
+  @Local selectedTheme: string = 'system';
+  @Local selectedScheme: XopcColorScheme = 'default';
   @Local error: string = '';
   @Local push: XopcPushNotifications = pushNotifications;
   @Local section: string = '';
-  aboutToAppear(): void { this.section = this.initialSection; }
+  aboutToAppear(): void {
+    this.section = this.initialSection;
+    this.selectedLanguage = this.preferences.language;
+    this.selectedTheme = this.preferences.theme;
+    this.selectedScheme = this.preferences.colorScheme;
+  }
   private openSection(section: string): void {
     if (section === 'connection') { connectionModel.openGateways(); return; }
     if (this.useNavigation) this.onOpenSection(section); else this.section = section;
   }
 
   private languageLabel(): ResourceStr {
-    return this.preferences.language === 'zh-CN' ? '中文' : this.preferences.language === 'en-US' ? 'English' : $r('app.string.system');
+    return this.selectedLanguage === 'zh-CN' ? '中文' : this.selectedLanguage === 'en-US' ? 'English' : $r('app.string.system');
   }
   private themeLabel(): ResourceStr {
-    return this.preferences.theme === 'dark' ? $r('app.string.dark') : this.preferences.theme === 'light' ? $r('app.string.light') : $r('app.string.system');
+    return this.selectedTheme === 'dark' ? $r('app.string.dark') : this.selectedTheme === 'light' ? $r('app.string.light') : $r('app.string.system');
   }
 
-  private async choose(language: string, theme: string, colorScheme: string = this.preferences.colorScheme): Promise<void> {
-    try { const context = this.getUIContext().getHostContext(); if (context) await this.preferences.update(context, language, theme, colorScheme); }
+  private async choose(language: string, theme: string, colorScheme: XopcColorScheme = this.selectedScheme): Promise<void> {
+    try {
+      const context = this.getUIContext().getHostContext();
+      if (!context) return;
+      this.selectedLanguage = language;
+      this.selectedTheme = theme;
+      this.selectedScheme = colorScheme;
+      await this.preferences.update(context, language, theme, colorScheme);
+    }
     catch (error) { this.error = (error as Error).message; }
   }
 
@@ -66,28 +101,17 @@ export struct XopcSettingsView {
         }.width('100%').borderRadius(8).clip(true)
         Row() {
           Text(label).fontSize(13).fontWeight(FontWeight.Medium)
-            .fontColor(this.preferences.colorScheme === scheme ? this.colors.accent : this.colors.secondary)
+            .fontColor(this.selectedScheme === scheme ? this.colors.accent : this.colors.secondary)
             .layoutWeight(1)
-          if (this.preferences.colorScheme === scheme) {
+          if (this.selectedScheme === scheme) {
             SymbolGlyph($r('sys.symbol.checkmark')).fontSize(16).fontColor([this.colors.accent])
           }
         }.width('100%')
       }.width('100%').alignItems(HorizontalAlign.Start)
     }.id(id).width('100%').height(84).padding(8).borderRadius(12)
-      .backgroundColor(this.preferences.colorScheme === scheme ? this.colors.accentSoft : this.colors.panel)
-      .onClick((): void => { this.choose(this.preferences.language, this.preferences.theme, scheme); })
+      .backgroundColor(this.selectedScheme === scheme ? this.colors.accentSoft : this.colors.panel)
+      .onClick((): void => { this.choose(this.selectedLanguage, this.selectedTheme, scheme); })
   }
-  @Builder
-  option(label: ResourceStr, selected: boolean, id: string, action: () => void) {
-    Button({ type: ButtonType.Normal }) {
-      Row() {
-        Text(label).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
-        if (selected) { SymbolGlyph($r('sys.symbol.checkmark')).fontSize(20).fontColor([this.colors.accent]) }
-      }.width('100%').height(56).padding({ left: 16, right: 16 })
-    }.id(id).width('100%').padding(0).borderRadius(14)
-      .backgroundColor(selected ? this.colors.accentSoft : this.colors.panel).margin({ bottom: 8 }).onClick(action)
-  }
-
   @Builder
   rootSettings() {
     if (gatewaySession.currentProfile()) {
@@ -134,15 +158,21 @@ export struct XopcSettingsView {
         Column() {
           if (!this.section) { this.rootSettings() }
           else if (this.section === 'language') {
-            this.option($r('app.string.system'), !this.preferences.language, 'language-system', (): void => { this.choose('', this.preferences.theme); })
-            this.option('中文', this.preferences.language === 'zh-CN', 'language-zh', (): void => { this.choose('zh-CN', this.preferences.theme); })
-            this.option('English', this.preferences.language === 'en-US', 'language-en', (): void => { this.choose('en-US', this.preferences.theme); })
+            XopcPreferenceOption({ label: $r('app.string.system'), selected: !this.selectedLanguage,
+              optionId: 'language-system', onSelect: (): void => { this.choose('', this.selectedTheme); } })
+            XopcPreferenceOption({ label: '中文', selected: this.selectedLanguage === 'zh-CN',
+              optionId: 'language-zh', onSelect: (): void => { this.choose('zh-CN', this.selectedTheme); } })
+            XopcPreferenceOption({ label: 'English', selected: this.selectedLanguage === 'en-US',
+              optionId: 'language-en', onSelect: (): void => { this.choose('en-US', this.selectedTheme); } })
           } else if (this.section === 'appearance') {
             Text($r('app.string.display_mode')).fontSize(13).fontWeight(FontWeight.Medium)
               .fontColor(this.colors.secondary).margin({ top: 4, bottom: 4 })
-            this.option($r('app.string.system'), this.preferences.theme === 'system', 'theme-system', (): void => { this.choose(this.preferences.language, 'system'); })
-            this.option($r('app.string.light'), this.preferences.theme === 'light', 'theme-light', (): void => { this.choose(this.preferences.language, 'light'); })
-            this.option($r('app.string.dark'), this.preferences.theme === 'dark', 'theme-dark', (): void => { this.choose(this.preferences.language, 'dark'); })
+            XopcPreferenceOption({ label: $r('app.string.system'), selected: this.selectedTheme === 'system',
+              optionId: 'theme-system', onSelect: (): void => { this.choose(this.selectedLanguage, 'system'); } })
+            XopcPreferenceOption({ label: $r('app.string.light'), selected: this.selectedTheme === 'light',
+              optionId: 'theme-light', onSelect: (): void => { this.choose(this.selectedLanguage, 'light'); } })
+            XopcPreferenceOption({ label: $r('app.string.dark'), selected: this.selectedTheme === 'dark',
+              optionId: 'theme-dark', onSelect: (): void => { this.choose(this.selectedLanguage, 'dark'); } })
             Text($r('app.string.color_scheme')).fontSize(13).fontWeight(FontWeight.Medium)
               .fontColor(this.colors.secondary).margin({ top: 24, bottom: 12 })
             Grid() {

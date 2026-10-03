@@ -1,10 +1,13 @@
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
+import { preferences } from '@kit.ArkData';
 import { XopcSecureStore } from './secureStore';
 import { i18n, resourceManager } from '@kit.LocalizationKit';
 import { CustomTheme } from '@kit.ArkUI';
 import { appThemeColors, normalizeXopcColorScheme, XopcColorScheme, xopcCustomTheme } from '../common/themePalette';
 
 interface XopcPreferences { language: string; theme: string; colorScheme?: string; }
+const PREFERENCES_STORE: string = 'xopc-display';
+const PREFERENCES_KEY: string = 'preferences';
 
 @ObservedV2
 export class XopcSettings {
@@ -20,7 +23,12 @@ export class XopcSettings {
   }
 
   async restore(context: common.Context): Promise<void> {
-    const raw = await this.store.read('preferences');
+    const data = await preferences.getPreferences(context, PREFERENCES_STORE);
+    let raw = await data.get(PREFERENCES_KEY, '') as string;
+    if (!raw) {
+      try { raw = await this.store.read(PREFERENCES_KEY) ?? ''; }
+      catch (_error) { raw = ''; }
+    }
     if (raw) {
       const saved = JSON.parse(raw) as XopcPreferences;
       this.language = ['zh-CN', 'en-US'].includes(saved.language) ? saved.language : '';
@@ -35,8 +43,10 @@ export class XopcSettings {
       || !['default', 'porcelain', 'dawn', 'emerald', 'clay'].includes(colorScheme)) throw new Error('INVALID_PREFERENCE');
     const normalizedScheme = normalizeXopcColorScheme(colorScheme);
     const saved: XopcPreferences = { language, theme, colorScheme: normalizedScheme };
-    await this.store.write('preferences', JSON.stringify(saved));
     this.language = language; this.theme = theme; this.colorScheme = normalizedScheme; this.apply(context);
+    const data = await preferences.getPreferences(context, PREFERENCES_STORE);
+    await data.put(PREFERENCES_KEY, JSON.stringify(saved));
+    await data.flush();
   }
   private apply(context: common.Context): void {
     const application = context.getApplicationContext();
