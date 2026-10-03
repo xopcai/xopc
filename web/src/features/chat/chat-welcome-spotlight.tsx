@@ -16,7 +16,7 @@ import * as Popover from '@radix-ui/react-popover';
 import { memo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { BrandLogo } from '@/components/shell/brand-logo';
+import { Loopi } from '@/components/brand/loopi';
 import { Skeleton } from '@/components/ui/skeleton';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import type {
@@ -151,7 +151,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
           ? 'pt-3 [@media(max-height:800px)]:pt-1'
           : 'pt-14 sm:pt-16 [@media(max-height:800px)]:pt-6 sm:[@media(max-height:800px)]:pt-7',
       )}>
-        <BrandLogo className="size-11 shrink-0 sm:size-12" aria-hidden />
+        <Loopi className={compact ? 'size-16' : 'size-20 sm:size-24'} interactive language={language} mood="listen" />
         {s.contextLabel ? (
           <div
             className="max-w-full truncate rounded-full border border-edge-subtle bg-surface-base px-2.5 py-1 text-xs text-fg-muted sm:max-w-md"
@@ -342,7 +342,7 @@ export const ChatWelcomeSpotlightSkeleton = memo(function ChatWelcomeSpotlightSk
   return (
     <div className={cn('flex flex-col gap-3.5 pb-2', compact ? 'pt-1' : 'pt-6 sm:gap-4 sm:pb-3 sm:pt-8')} aria-busy="true">
       <div className={cn('flex flex-col items-center gap-1.5 px-1 text-center sm:gap-2', compact ? 'pt-3' : 'pt-14 sm:pt-16')}>
-        <BrandLogo className="size-11 shrink-0 opacity-80 sm:size-12" aria-hidden />
+        <Loopi className={compact ? 'size-16' : 'size-20 sm:size-24'} mood="idle" />
         <Skeleton className={cn('h-5 w-44 max-w-full', skeletonClassName)} />
         <Skeleton className={cn('h-4 w-[min(100%,24rem)]', skeletonClassName)} />
         <div className="flex min-h-7 items-center">

@@ -102,6 +102,12 @@ describe('MessageList welcome state', () => {
     });
 
     expect(container.textContent).toContain('今天想推进什么？');
+    expect(container.querySelector('[data-loopi="ceramic-v3"]')).not.toBeNull();
+    expect(container.querySelector('.loopi-pause')).toBeNull();
+    const companion = container.querySelector<HTMLButtonElement>('.loopi-touch');
+    expect(companion?.type).toBe('button');
+    act(() => companion?.click());
+    expect(onPickWelcomePrompt).not.toHaveBeenCalled();
     expect(container.textContent).toContain('办公输出');
     expect(container.textContent).toContain('写作润色');
     expect(container.textContent).toContain('学习新主题');
