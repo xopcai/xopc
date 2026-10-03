@@ -22,7 +22,10 @@ export interface XopcTaskPatch { expectedVersion: number; title: string; body: s
 export interface XopcTaskCommand { type: string; phase?: string; resolution?: string; executor?: XopcExecutor; }
 export interface XopcExecutor { kind: string; agentId: string; }
 export interface XopcTaskCommandBody { idempotencyKey: string; expectedVersion: number; command: XopcTaskCommand; }
-export interface XopcProject { id: string; name: string; description?: string; status: string; brief?: string; outcome?: string; }
+export interface XopcProject {
+  id: string; name: string; description?: string; status: string; brief?: string; outcome?: string;
+  defaultAgentId?: string; workspaceRoot?: string; executionMode?: string;
+}
 export interface XopcProjectList { items: XopcProject[]; }
 export interface XopcProjectResult { project: XopcProject; }
 export interface XopcProjectWrite { name?: string; description?: string; status?: string; }
