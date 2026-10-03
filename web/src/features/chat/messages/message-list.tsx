@@ -19,6 +19,8 @@ import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
+const ignoreWelcomePrompt = (_selection: WelcomeSuggestionSelection): void => {};
+
 export const MessageList = memo(function MessageList({
   messages: list,
   authToken,
@@ -32,9 +34,6 @@ export const MessageList = memo(function MessageList({
   registerListContentRef,
   onPickWelcomePrompt,
   welcomeSpotlight,
-  onRetryWelcomeContext,
-  onRefreshWelcomeExploration,
-  onSelectWelcomeProject,
   welcomeOverlay,
   compactWelcome = false,
   onDeleteRound,
@@ -64,9 +63,6 @@ export const MessageList = memo(function MessageList({
   registerListContentRef: (el: HTMLDivElement | null) => void;
   onPickWelcomePrompt?: (selection: WelcomeSuggestionSelection) => void;
   welcomeSpotlight?: WelcomeSpotlightModel;
-  onRetryWelcomeContext?: () => void;
-  onRefreshWelcomeExploration?: () => void;
-  onSelectWelcomeProject?: (projectId: string) => Promise<void> | void;
   welcomeOverlay?: ReactNode;
   compactWelcome?: boolean;
   onDeleteRound?: (messageIndex: number) => void;
@@ -92,30 +88,17 @@ export const MessageList = memo(function MessageList({
     if (welcomeOverlay) {
       return <div className="pb-1.5">{welcomeOverlay}</div>;
     }
-    if (onPickWelcomePrompt && welcomeSpotlight) {
-      return (
-        <div className="pb-1.5">
-          <ChatWelcomeSpotlight
-            spotlight={welcomeSpotlight}
-            projectId={projectId}
-            onPickPrompt={onPickWelcomePrompt}
-            onRetryContext={onRetryWelcomeContext}
-            onRefreshExploration={onRefreshWelcomeExploration}
-            onSelectProject={onSelectWelcomeProject}
-            compact={compactWelcome}
-          />
-        </div>
-      );
-    }
     return (
-      <div className="flex flex-col gap-10 pb-8">
-        <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-          <div className="text-4xl" aria-hidden>
-            🤖
-          </div>
-          <div className="text-xl font-semibold tracking-tight text-fg">{m.chat.welcomeTitle}</div>
-          <div className="max-w-sm text-sm leading-relaxed text-fg-muted">{m.chat.welcomeDescription}</div>
-        </div>
+      <div className="pb-1.5">
+        <ChatWelcomeSpotlight
+          spotlight={welcomeSpotlight ?? {
+            headline: m.chat.welcomeSpotlight.headline,
+            contextKind: 'empty',
+            contextStatus: 'ready',
+          }}
+          onPickPrompt={onPickWelcomePrompt ?? ignoreWelcomePrompt}
+          compact={compactWelcome}
+        />
       </div>
     );
   }

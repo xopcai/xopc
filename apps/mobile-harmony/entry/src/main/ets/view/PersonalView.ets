@@ -3,9 +3,11 @@ import { XopcMobileRoute } from '../model/home';
 import { XopcUnderstandingItem, XopcUnderstandingRule, XopcUserGoal } from '../model/userUnderstanding';
 import { XopcPersonalViewModel } from '../viewmodel/homeViewModel';
 import { XopcListSkeleton, XopcPageHeader, XopcSectionLabel } from './MobileComponents';
+import { XopcLoopi } from './Loopi';
 
 @ComponentV2
 export struct XopcPersonalView {
+  @Param activePage: boolean = true;
   @Param bottomInset: number = 0;
   @Local colors: XopcThemeColors = appThemeColors;
   @Local model: XopcPersonalViewModel = new XopcPersonalViewModel();
@@ -212,7 +214,10 @@ export struct XopcPersonalView {
                 }
               }
             }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([this.colors.tertiary])
+            Column({ space: 4 }) {
+              XopcLoopi({ extent: 44, activePage: this.activePage && !this.goalEditorOpen }).id('personal-loopi')
+              SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(12).fontColor([this.colors.tertiary])
+            }.width(44)
           }.width('100%').padding(20).borderRadius(22).backgroundColor(this.colors.panel)
             .onClick((): void => { this.onNavigate({ page: 'about-you', itemId: '' }); })
 

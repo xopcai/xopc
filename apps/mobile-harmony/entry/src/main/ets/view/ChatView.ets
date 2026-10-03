@@ -2,7 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
 import { quickChatIntake, XopcQuickChatIntake } from '../service/quickChatIntake';
 import { XopcChatViewModel } from '../viewmodel/chatViewModel';
-import { XopcChatRow, XopcChatAttachment, XopcChatBlock, XopcContextRef, XopcReferenceItem, XopcChatAgent,
+import { XopcChatRow, XopcChatAttachment, XopcChatBlock, XopcContextRef, XopcReferenceItem,
   XopcHistoryMedia, XopcHostDirectory, XopcQueuedInput, XopcExecutionDetail } from '../model/chat';
 import { XopcChatMessageContent } from './ChatMessageContent';
 import { XopcChatExecutionDetailView } from './ChatExecutionDetailView';
@@ -988,10 +988,8 @@ export struct XopcChatView {
     Column() {
     if (this.chat.loading && !this.chat.rows.length) { this.skeleton() }
     if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId) {
-      XopcChatWelcome({ scope: this.context.summary, workspace: this.context.config?.effectiveWorkspacePath || '',
-        agent: this.options.agents.find((agent: XopcChatAgent): boolean => agent.id === this.options.agentId), agentId: this.options.agentId || this.chat.agentId,
-        language: appSettings.effectiveLanguage(), contextPending: this.context.loading || this.options.loading,
-        contextError: !!this.context.error, onRetryContext: (): void => { this.context.load(this.chat.selectedId); },
+      XopcChatWelcome({ activePage: this.activePage, scope: this.context.summary, language: appSettings.effectiveLanguage(),
+        contextPending: this.context.loading || this.options.loading,
         onDismissComposer: (): void => { this.dismissComposer(); },
         onChoose: (text: string): void => {
           if (this.restoringDraft) return;

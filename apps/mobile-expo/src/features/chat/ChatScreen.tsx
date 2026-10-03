@@ -292,7 +292,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             onAtBottomChange={(isAtBottom) => { chat.messageListAtBottomRef.current = isAtBottom; }}
             conversationId={conversationId}
             welcomeTitle={welcomeModel.headline}
-            welcomeSubtitle={welcomeModel.tagline}
+            welcomeSubtitle=""
             welcomeStarters={welcomeModel.starters}
             onSuggestionSend={handleStarterPrefill}
             onUserMessageCopy={handleUserMessageCopy}

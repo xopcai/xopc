@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Button, Icon, IconButton, Text } from 'react-native-paper';
 
+import { XopcLogo } from '../../components/XopcLogo';
 import { ChatKeyboardScrollView } from './ChatKeyboardScrollView';
 import { useMessages } from '../../i18n/messages';
 import { typography, useTheme } from '../../theme';
@@ -48,33 +49,6 @@ function useDelayedLoadingIndicator(loading: boolean): boolean {
   }, [loading]);
 
   return visible;
-}
-
-function starterIconSource(icon: string): string {
-  switch (icon) {
-    case 'code':
-      return 'code-tags';
-    case 'review':
-      return 'clipboard-check-outline';
-    case 'note':
-      return 'notebook-outline';
-    case 'task':
-      return 'format-list-checks';
-    case 'target':
-      return 'target';
-    case 'search':
-      return 'magnify';
-    case 'folder':
-      return 'folder-outline';
-    case 'content':
-      return 'text-box-edit-outline';
-    case 'documents':
-      return 'file-document-outline';
-    case 'globe':
-      return 'web';
-    default:
-      return 'creation-outline';
-  }
 }
 
 export const MessageList = memo(function MessageList({
@@ -292,12 +266,15 @@ export const MessageList = memo(function MessageList({
         showsVerticalScrollIndicator={false}
       >
         {listHeader}
+        <View style={styles.welcomeLogo}><XopcLogo size={108} /></View>
         <Text variant="titleMedium" style={[styles.emptyTitle, { color: colors.text.primary }]}>
           {welcomeTitle ?? chatMessages.welcomeTitle}
         </Text>
-        <Text variant="bodySmall" style={[styles.emptySubtitle, { color: colors.text.secondary }]}>
-          {welcomeSubtitle ?? chatMessages.welcomeSubtitle}
-        </Text>
+        {(welcomeSubtitle ?? chatMessages.welcomeSubtitle) ? (
+          <Text variant="bodySmall" style={[styles.emptySubtitle, { color: colors.text.secondary }]}>
+            {welcomeSubtitle ?? chatMessages.welcomeSubtitle}
+          </Text>
+        ) : null}
         {starters.length > 0 ? (
           <View style={styles.starterColumn}>
             {starters.map((starter) => (
@@ -313,14 +290,11 @@ export const MessageList = memo(function MessageList({
                 onPress={() => onSuggestionSend?.(starter.prompt)}
                 accessibilityRole="button"
               >
-                <View style={[styles.starterIcon, { backgroundColor: colors.accent.selectionBg }]}>
-                  <Icon source={starterIconSource(starter.icon)} size={18} color={colors.accent.primary} />
-                </View>
                 <View style={styles.starterText}>
                   <Text
                     variant="bodyMedium"
                     style={[styles.starterTitle, { color: colors.text.primary }]}
-                    numberOfLines={1}
+                    numberOfLines={2}
                   >
                     {starter.title}
                   </Text>
@@ -332,6 +306,7 @@ export const MessageList = memo(function MessageList({
                     {starter.description}
                   </Text>
                 </View>
+                <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
               </Pressable>
             ))}
           </View>
@@ -442,6 +417,9 @@ const styles = StyleSheet.create({
     ...typography.heading,
     textAlign: 'center',
   },
+  welcomeLogo: {
+    marginBottom: 8,
+  },
   emptySubtitle: {
     ...typography.label,
     textAlign: 'center',
@@ -473,21 +451,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   starterRow: {
-    minHeight: 60,
-    borderRadius: 16,
+    minHeight: 68,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12,
     paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-  },
-  starterIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
   },
   starterText: {
     flex: 1,
