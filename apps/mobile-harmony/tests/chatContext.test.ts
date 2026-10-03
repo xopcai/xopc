@@ -10,10 +10,25 @@ const summary = (id: string) => ({ summary: { conversationId: id, work: {}, sour
 describe('chat context', () => {
   beforeEach(() => { vi.resetAllMocks(); mock.read.mockResolvedValue(undefined); });
   it('uses a local draft without requesting a missing Gateway session', async () => {
-    mock.read.mockResolvedValue({ creation: { model: 'test/model', thinkingLevel: 'off' } });
+    mock.read.mockResolvedValue({ creation: { model: 'test/model', thinkingLevel: 'off', projectId: null, execution: null } });
     const model = new XopcChatContextViewModel(); await model.load('draft');
     expect(model.config).toMatchObject({ model: 'test/model', thinkingLevel: 'off' });
+    expect(model.summary).toMatchObject({ conversationId: 'draft', work: {} });
     expect(mock.request).not.toHaveBeenCalled();
+  });
+  it('restores project and environment context for a local project draft', async () => {
+    mock.read.mockResolvedValue({ creation: { model: 'test/model', thinkingLevel: 'off', projectId: 'project one',
+      execution: { mode: 'managed_worktree' } } });
+    mock.request.mockResolvedValueOnce(JSON.stringify({ project: { id: 'project one', name: 'Project One', status: 'active',
+      workspaceRoot: '/workspace', executionMode: 'managed_worktree' } }))
+      .mockResolvedValueOnce(JSON.stringify({ options: { localAvailable: true } }));
+    const model = new XopcChatContextViewModel(); await model.load('draft'); await model.choices('environment');
+    expect(model.summary).toMatchObject({ work: { project: { id: 'project one', title: 'Project One' } },
+      environment: { kind: 'managed_worktree', rootPath: '/workspace', available: true } });
+    expect(model.environment).toEqual({ localAvailable: true });
+    expect(mock.request.mock.calls.map((call) => call[0])).toEqual([
+      '/api/projects/project%20one', '/api/projects/project%20one/environment-options'
+    ]);
   });
   it('does not apply another conversation summary', async () => {
     mock.request.mockResolvedValue(JSON.stringify(summary('other'))); const model = new XopcChatContextViewModel(); await model.load('one');

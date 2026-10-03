@@ -2,7 +2,7 @@ import { gatewaySession } from '../service/gatewaySession';
 import { XopcChatRepository } from '../repository/chatRepository';
 import { localSessionStore } from '../service/localSessionStore';
 import { XopcPayload } from '../model/realtime';
-import { XopcProject, XopcProjectList, XopcTaskList } from '../model/workspace';
+import { XopcProject, XopcProjectList, XopcProjectResult, XopcTaskList } from '../model/workspace';
 import { XopcNoteIndexEntry, XopcNoteList } from '../model/note';
 import { XopcFileSpaceResult, XopcFiles } from '../model/files';
 import { XopcContextSummary, XopcContextResult, XopcEnvironmentOptions, XopcEnvironmentResult,
@@ -27,7 +27,20 @@ export class XopcChatContextViewModel {
     const generation = ++this.generation; this.loading = true; this.error = '';
     try {
       const draft = await localSessionStore.read(id);
-      if (draft) { this.config = { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel, workingDirectoryLocked: true }; return; }
+      if (draft) {
+        this.config = { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel, workingDirectoryLocked: true };
+        const projectId = draft.creation.projectId || '';
+        const summary: XopcContextSummary = { conversationId: id, work: {}, sources: [], sourcesHasMore: false, unavailableSections: [] };
+        if (projectId) {
+          const result = JSON.parse(await gatewaySession.request('/api/projects/' + encodeURIComponent(projectId))) as XopcProjectResult;
+          if (!result.project?.id || typeof result.project.name !== 'string') throw new Error('INVALID_PROJECT');
+          summary.work.project = { id: result.project.id, title: result.project.name };
+          if (draft.creation.execution) summary.environment = { kind: draft.creation.execution.mode,
+            rootPath: result.project.workspaceRoot || '', available: !!result.project.workspaceRoot };
+        }
+        if (generation === this.generation) this.summary = summary;
+        return;
+      }
       const result = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/context-summary')) as XopcContextResult;
       if (!result.summary || result.summary.conversationId !== id) throw new Error('INVALID_CONTEXT');
       if (generation !== this.generation) return;
@@ -41,7 +54,7 @@ export class XopcChatContextViewModel {
     const generation = ++this.generation; this.loading = true; this.error = '';
     try {
       if (mode === 'project') {
-        const result = JSON.parse(await gatewaySession.request('/api/projects')) as XopcProjectList;
+        const result = JSON.parse(await gatewaySession.request('/api/projects?limit=100&sortBy=updatedAt&sortOrder=desc')) as XopcProjectList;
         if (!Array.isArray(result.items)) throw new Error('INVALID_PROJECTS');
         if (generation === this.generation) this.projects = result.items.filter((item: XopcProject): boolean => item.status !== 'archived');
       } else if (this.summary?.work.project) {
