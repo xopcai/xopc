@@ -32,8 +32,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
-import { Button } from '@/components/ui/button';
 import { Loopi } from '@/components/brand/loopi';
+import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { PopoverSelect, Select, SelectOption, type PopoverSelectOption } from '@/components/ui/popover-select';
@@ -44,7 +44,6 @@ import { UnderstandingStatusButton } from '@/features/work-discovery/understandi
 
 import { MemoryActions } from './memory-actions';
 import { UnderstandingRow } from './understanding-row';
-import { groupUnderstandingByDate } from './understanding-row.utils';
 import {
   correctAssertion,
   createRuleFromSuggestion,
@@ -87,13 +86,10 @@ function viewFromSearchParams(searchParams: URLSearchParams): View {
 const copy = {
   en: {
     pageTitle: 'Me',
-    pageSubtitle: 'Your information and how xopc understands you.',
     overview: 'Overview',
     understanding: 'What xopc knows',
     privacy: 'Data & privacy',
     knowledge: 'Work memory',
-    portraitEyebrow: 'YOU × XOPC',
-    portraitIntro: 'Your explicit profile stays clear and editable. xopc builds a separate shared understanding through conversations and work.',
     editProfile: 'Edit basics',
     callName: 'What should xopc call you?',
     callNamePlaceholder: 'For example: Alex, Joyce, or Dr. Chen',
@@ -130,20 +126,12 @@ const copy = {
     endPriority: 'End focus',
     endingPriority: 'Ending…',
     priorityHint: 'This is used to keep xopc aligned with what deserves attention now.',
-    noPriority: 'No current priority has been set.',
     otherGoals: 'Other active outcomes',
     howWeWork: 'How we work together',
-    howWeWorkHint: 'Your standing instructions for how I should communicate and act.',
     noRules: 'No collaboration preferences yet.',
-    recent: 'Recently formed understanding',
-    recentHint: 'Recent understanding from our work. You can edit any item.',
     seeAll: 'See all',
     workMemory: 'What I remember from the work',
-    workMemoryHint: 'Project facts, decisions, lessons, and open questions stay separate from facts about you.',
     items: 'items',
-    maintenanceReady: 'Memory upkeep is enabled and waiting for its first run.',
-    maintenanceComplete: 'Memory was last organized',
-    maintenanceFailed: 'The latest memory upkeep needs attention',
     refresh: 'Refresh',
     refreshing: 'Refreshing…',
     refreshComplete: 'Refreshed',
@@ -178,13 +166,10 @@ const copy = {
   },
   zh: {
     pageTitle: '我的',
-    pageSubtitle: '管理个人信息，以及 xopc 对你的了解。',
     overview: '总览',
     understanding: '对我的了解',
     privacy: '数据与隐私',
     knowledge: '工作记忆',
-    portraitEyebrow: 'YOU × XOPC',
-    portraitIntro: '你明确提供的基本信息会被清晰呈现并由你直接编辑；xopc 在对话与共事中形成的理解则单独维护。',
     editProfile: '编辑基本信息',
     callName: '希望 xopc 如何称呼你？',
     callNamePlaceholder: '例如：Mic、Joyce、张老师',
@@ -221,20 +206,12 @@ const copy = {
     endPriority: '结束关注',
     endingPriority: '正在结束…',
     priorityHint: '这项内容会帮助 xopc 在协作中优先关注当前最重要的事情。',
-    noPriority: '还没有设置当前优先事项。',
     otherGoals: '其他进行中的目标',
     howWeWork: '我们怎样协作',
-    howWeWorkHint: '你对沟通方式和执行行为的长期约定。',
     noRules: '还没有形成协作偏好。',
-    recent: '最近形成的理解',
-    recentHint: '最近在协作中形成的认识，你可以随时修改。',
     seeAll: '查看全部',
     workMemory: '我在工作中记住的',
-    workMemoryHint: '项目事实、决定、经验和待解问题，与“关于你”的理解分别管理。',
     items: '条',
-    maintenanceReady: '记忆整理已经启用，正在等待首次运行。',
-    maintenanceComplete: '最近一次记忆整理于',
-    maintenanceFailed: '最近一次记忆整理需要处理',
     refresh: '刷新',
     refreshing: '正在刷新…',
     refreshComplete: '已刷新',
@@ -352,10 +329,6 @@ function localeLabel(locale: string, language: Language): string {
     'ja-JP': { en: 'Japanese', zh: '日语' },
   };
   return labels[locale]?.[language] ?? locale;
-}
-
-function initials(name: string): string {
-  return Array.from(name.trim()).slice(0, 2).join('').toLocaleUpperCase();
 }
 
 function validUntil(value: number, language: Language): string {
@@ -869,7 +842,7 @@ export function UserModelPage() {
   useEffect(() => {
     setPageHeader({
       startExtra: null,
-      main: <div><h1 className="text-base font-semibold text-fg">{t.pageTitle}</h1><p className="hidden text-xs text-fg-muted sm:block">{t.pageSubtitle}</p></div>,
+      main: <h1 className="text-base font-semibold text-fg">{t.pageTitle}</h1>,
       end: (
         <div className="flex items-center gap-2">
           <UnderstandingStatusButton />
@@ -983,7 +956,7 @@ export function UserModelPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-7xl space-y-5 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+      <div className="mx-auto w-full max-w-7xl space-y-5 px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4">
         <Skeleton className="h-10 w-72 rounded-xl" />
         <Skeleton className="h-72 rounded-xl" />
         <div className="grid gap-5 lg:grid-cols-2"><Skeleton className="h-80 rounded-xl" /><Skeleton className="h-80 rounded-xl" /></div>
@@ -1030,7 +1003,6 @@ export function UserModelPage() {
   const otherGoals = activeGoals.filter((goal) => primaryPriority?.targetType !== 'goal' || goal.id !== primaryPriority.targetId);
   const collaborationRules = data.rules.filter((rule) => rule.status !== 'archived');
   const ruleSuggestions = data.ruleSuggestions ?? [];
-  const recentAssertions = [...assertions].sort((a, b) => b.recordedAt - a.recordedAt);
   const visibleKnowledge = data.knowledge.filter((item) => item.status !== 'archived' && item.status !== 'rejected');
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const kindFilteredKnowledge = visibleKnowledge.filter((item) => (
@@ -1079,11 +1051,7 @@ export function UserModelPage() {
   const overviewMemoryCounts = memoryCounts.slice(0, 4);
   const memoryGridClass = overviewMemoryCounts.length === 1
     ? 'grid-cols-1'
-    : overviewMemoryCounts.length === 2
-      ? 'sm:grid-cols-2'
-      : overviewMemoryCounts.length === 3
-        ? 'sm:grid-cols-3'
-        : 'sm:grid-cols-2 lg:grid-cols-4';
+    : 'sm:grid-cols-2';
   const limitedKnowledge = searchedKnowledge.slice(0, knowledgeLimit);
   const knowledgeGroups = knowledgeKindOrder
     .map((kind) => ({
@@ -1129,24 +1097,8 @@ export function UserModelPage() {
     />
   );
 
-  const maintenanceAt = data.maintenance.lastRun
-    ? formatDate(data.maintenance.lastRun.finishedAt ?? data.maintenance.lastRun.startedAt, language, true)
-    : null;
-  const maintenanceText = !data.maintenance.lastRun
-    ? t.maintenanceReady
-    : data.maintenance.lastRun.status === 'completed'
-      ? `${t.maintenanceComplete} ${maintenanceAt}`
-      : t.maintenanceFailed;
-
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-4 sm:space-y-8 sm:px-6 sm:py-7 lg:px-8 lg:py-10">
-      <div className="flex items-center gap-3 sm:gap-5">
-        <Loopi className="size-20 sm:size-24" mood={actionError ? 'care' : refreshBusy || busy ? 'work' : view === 'privacy' ? 'idle' : 'listen'} />
-        <div className="min-w-0">
-          <p className="text-base font-medium text-fg sm:text-lg">{language === 'zh' ? '慢慢了解你，才能更好地帮你。' : 'Getting to know you. Helping in your own way.'}</p>
-          <p className="mt-1 text-sm leading-6 text-fg-muted">{language === 'zh' ? '我来记住小事，重要的判断始终由你决定。' : 'I’ll remember the little things. The important decisions stay yours.'}</p>
-        </div>
-      </div>
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-4 pt-3 sm:space-y-8 sm:px-6 sm:pb-7 lg:px-8 lg:pb-10 lg:pt-4">
       <PageTabs<PrimaryView>
         items={[
           { id: 'overview', label: t.overview, icon: Sparkles },
@@ -1185,25 +1137,21 @@ export function UserModelPage() {
         <div id="understanding-panel-overview" role="tabpanel" aria-labelledby="understanding-tab-overview" className="space-y-8 sm:space-y-10">
           <section data-testid="overview-hero" className="grid gap-5 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:gap-12">
             <div className="min-w-0 px-1 sm:py-2">
-                <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.16em] text-accent-fg">
-                  <Sparkles className="size-3.5" aria-hidden="true" />
-                  <span>{t.portraitEyebrow}</span>
+              <div className="flex items-center gap-3 sm:flex-wrap sm:gap-5">
+                <Loopi
+                  className="size-16 sm:size-20"
+                  mood={actionError ? 'care' : refreshBusy || busy ? 'work' : 'listen'}
+                />
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-xl font-semibold tracking-tight text-fg sm:text-3xl">{displayName}</h2>
+                  <p className="mt-1 break-words text-sm text-fg-muted">{profile.role || t.notProvided}</p>
                 </div>
-                <div className="mt-3 flex items-center gap-3 sm:mt-5 sm:flex-wrap sm:gap-5">
-                  <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-surface-active text-base font-semibold text-fg sm:size-20 sm:rounded-[1.4rem] sm:text-xl">
-                    {initials(displayName)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-xl font-semibold tracking-tight text-fg sm:text-3xl">{displayName}</h2>
-                    <p className="mt-1 break-words text-sm text-fg-muted">{profile.role || t.notProvided}</p>
-                  </div>
-                  <Button variant="ghost" className="size-11 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-3" onClick={() => setProfileOpen(true)}>
-                    <UserRoundPen className="size-4" aria-hidden="true" />
-                    <span className="sr-only sm:not-sr-only">{t.editProfile}</span>
-                  </Button>
-                </div>
-                <p className="mt-5 hidden max-w-2xl text-sm leading-6 text-fg-muted sm:block">{t.portraitIntro}</p>
-              <dl className="mt-7 hidden gap-x-8 gap-y-5 sm:grid sm:grid-cols-3">
+                <Button variant="ghost" className="size-11 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-3" onClick={() => setProfileOpen(true)}>
+                  <UserRoundPen className="size-4" aria-hidden="true" />
+                  <span className="sr-only sm:not-sr-only">{t.editProfile}</span>
+                </Button>
+              </div>
+              <dl className="mt-6 hidden gap-x-8 gap-y-5 sm:grid sm:grid-cols-3">
                 {[
                   { icon: Languages, label: t.locale, value: profile.locale ? localeLabel(profile.locale, language) : t.notProvided },
                   { icon: MapPin, label: t.timezone, value: profile.timezone || t.notProvided },
@@ -1214,7 +1162,7 @@ export function UserModelPage() {
                     <dd className="mt-1.5 truncate text-sm font-medium text-fg">{value}</dd>
                   </div>
                 ))}
-                </dl>
+              </dl>
             </div>
             <aside data-testid="priority-panel" className="flex min-h-0 flex-col rounded-[1.4rem] bg-surface-panel p-5 shadow-surface sm:min-h-64 sm:p-6">
                 <div className="flex items-start justify-between gap-3">
@@ -1240,10 +1188,9 @@ export function UserModelPage() {
                     {primaryPriority ? <p className="mt-auto flex items-center gap-1.5 pt-4 text-xs text-fg-subtle"><CalendarDays className="size-3.5" aria-hidden="true" />{validUntil(primaryPriority.validTo, language)}</p> : null}
                   </>
                 ) : (
-                  <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center text-sm text-fg-muted">
+                  <div className="flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center text-sm text-fg-muted">
                     <BriefcaseBusiness className="size-5 text-fg-subtle" />
-                    <span>{t.noPriority}</span>
-                    <Button variant="primary" className="mt-2" onClick={() => setPriorityOpen(true)}>
+                    <Button variant="primary" onClick={() => setPriorityOpen(true)}>
                       <Plus className="size-4" aria-hidden="true" />{t.addPriority}
                     </Button>
                   </div>
@@ -1264,7 +1211,6 @@ export function UserModelPage() {
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-panel text-accent-fg"><Sparkles className="size-4" aria-hidden="true" /></span>
                   <div className="min-w-0">
                     <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '需要你确认' : 'Needs your review'}</h2>
-                    <p className="mt-0.5 truncate text-xs text-fg-muted">{language === 'zh' ? `还有 ${reviewAssertions.length} 条理解需要确认` : `${reviewAssertions.length} understanding items to review`}</p>
                   </div>
                 </div>
                 <span className="rounded-full bg-surface-panel px-2.5 py-1 text-xs font-medium tabular-nums text-accent-fg">{reviewAssertions.length}</span>
@@ -1281,7 +1227,6 @@ export function UserModelPage() {
 
           <Section
             title={language === 'zh' ? 'xopc 对我的了解' : 'What xopc knows about me'}
-            hint={language === 'zh' ? '你可以随时查看、修正或停止使用任何一条。' : 'Review, correct, or stop using anything at any time.'}
             action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => setView('understanding')}>{t.seeAll}</Button>}
           >
             <div className="grid sm:grid-cols-2">
@@ -1302,23 +1247,8 @@ export function UserModelPage() {
             </div>
           </Section>
 
-          <div className="grid items-start gap-10 lg:grid-cols-2 lg:gap-8">
-            <Section
-              title={t.recent}
-              hint={t.recentHint}
-              action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => setView('understanding')}>{t.seeAll}</Button>}
-            >
-              {recentAssertions.length
-                ? <div>{groupUnderstandingByDate(recentAssertions.slice(0, 3), language).map(({ label, items }) => (
-                    <div key={label}>
-                      <h3 className="px-5 pb-1 pt-4 text-xs font-medium text-fg-muted">{label}</h3>
-                      <div>{items.map(assertionRow)}</div>
-                    </div>
-                  ))}</div>
-                : <Empty icon={<Brain className="size-5" />}>{t.emptyGroup}</Empty>}
-            </Section>
-
-            <Section title={t.howWeWork} hint={t.howWeWorkHint}>
+          <div className="grid items-start gap-8 lg:grid-cols-2">
+            <Section title={t.howWeWork} className="min-w-0">
               {collaborationRules.length || ruleSuggestions.length ? <>
                 {collaborationRules.slice(0, 3).map((rule) => (
                 <RuleRow
@@ -1340,34 +1270,29 @@ export function UserModelPage() {
                 ))}
               </> : <Empty icon={<Handshake className="size-5" />}>{t.noRules}</Empty>}
             </Section>
+            <Section
+              title={t.workMemory}
+              className="min-w-0"
+              action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => openKnowledge('all')}>{t.seeAll}</Button>}
+            >
+              {memoryCounts.length ? (
+                <div data-testid="memory-summary-grid" className={`grid gap-3 bg-surface-base ${memoryGridClass}`}>
+                  {overviewMemoryCounts.map(({ kind, count }) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      className="group flex min-h-28 cursor-pointer items-start justify-between rounded-2xl bg-surface-panel px-5 py-5 text-left transition-colors hover:bg-surface-hover focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      onClick={() => openKnowledge(kind)}
+                      aria-label={`${knowledgeKindLabel(kind, language)}: ${count}`}
+                    >
+                      <span><span className="block text-2xl font-semibold tabular-nums text-fg">{count}</span><span className="mt-1 block text-sm text-fg-muted">{knowledgeKindLabel(kind, language)}</span></span>
+                      <ChevronRight className="mt-1 size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg-muted motion-reduce:transform-none" aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              ) : <Empty icon={<Database className="size-5" />}>{t.noKnowledge}</Empty>}
+            </Section>
           </div>
-
-          <Section
-            title={t.workMemory}
-            hint={t.workMemoryHint}
-            action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => openKnowledge('all')}>{t.seeAll}</Button>}
-          >
-            {memoryCounts.length ? (
-              <div data-testid="memory-summary-grid" className={`grid gap-3 bg-surface-base ${memoryGridClass}`}>
-                {overviewMemoryCounts.map(({ kind, count }) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    className="group flex min-h-28 cursor-pointer items-start justify-between rounded-2xl bg-surface-panel px-5 py-5 text-left transition-colors hover:bg-surface-hover focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    onClick={() => openKnowledge(kind)}
-                    aria-label={`${knowledgeKindLabel(kind, language)}: ${count}`}
-                  >
-                    <span><span className="block text-2xl font-semibold tabular-nums text-fg">{count}</span><span className="mt-1 block text-sm text-fg-muted">{knowledgeKindLabel(kind, language)}</span></span>
-                    <ChevronRight className="mt-1 size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg-muted motion-reduce:transform-none" aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
-            ) : <Empty icon={<Database className="size-5" />}>{t.noKnowledge}</Empty>}
-          </Section>
-
-          <footer className="flex items-center gap-4 px-1 pb-2 text-xs text-fg-subtle">
-            <span className="inline-flex items-center gap-2"><RefreshCw className="size-3.5" aria-hidden="true" />{maintenanceText}</span>
-          </footer>
         </div>
       ) : null}
 

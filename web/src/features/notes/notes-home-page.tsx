@@ -218,7 +218,7 @@ export function NotesHomePage() {
         <button type="button" onClick={() => navigate('/projects')} className={cn(quietButton, 'mt-2 justify-start px-2 text-xs')}>{h.allProjects}<ArrowRight className="ml-auto size-3" aria-hidden /></button>
       </aside>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
-        <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-4 sm:px-6 sm:py-7 lg:px-8 lg:py-9">
+        <div className="mx-auto flex w-full max-w-7xl flex-col px-4 pb-4 pt-3 sm:px-6 sm:pb-7 lg:px-8 lg:pb-9 lg:pt-4">
           <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="min-w-0 break-words text-2xl font-semibold tracking-tight text-fg">{projectId ? currentProjectLabel : unassigned ? h.unassigned : emptyHome ? h.firstNoteTitle : h.continueTitle}</h2>

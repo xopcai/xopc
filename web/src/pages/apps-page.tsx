@@ -199,7 +199,7 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className={cn(
         'mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8',
-        embedded ? 'pb-7 pt-3 lg:pb-9 lg:pt-4' : 'py-7 lg:py-9',
+        'pb-7 pt-3 lg:pb-9 lg:pt-4',
       )}>
         <div className="mb-6 border-b border-edge-subtle pb-3">
           <PageTabs
@@ -619,7 +619,7 @@ function ContributionBadge({
 function ExtensionsPageSkeleton() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <div className="w-full px-3 py-8 sm:px-5 xl:px-6">
+      <div className="w-full px-3 pb-8 pt-3 sm:px-5 lg:pt-4 xl:px-6">
         <div className="mb-6 h-8 w-40 max-w-full animate-pulse rounded-md bg-surface-hover" />
         <div className="mb-2 h-4 w-full max-w-md animate-pulse rounded bg-surface-hover" />
         <div className="mb-5 h-9 w-full max-w-lg animate-pulse rounded-full bg-surface-hover" />

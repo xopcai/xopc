@@ -29,7 +29,7 @@ export function LocalAppsPage() {
   }, [clearPageHeader, setPageHeader, zh]);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto bg-surface-panel px-3 py-8 sm:px-5 xl:px-6">
+    <div className="min-h-0 flex-1 overflow-y-auto bg-surface-panel px-3 pb-8 pt-3 sm:px-5 lg:pt-4 xl:px-6">
       <div className="mx-auto max-w-6xl">
         <div className="mb-7 max-w-2xl">
           <h2 className="text-2xl font-semibold tracking-tight text-fg">{zh ? '创建属于你的 XOPC 应用' : 'Build your own apps for XOPC'}</h2>
