@@ -27,11 +27,25 @@ describe('xopcDeepLinkToRoute', () => {
     )).toBe('/settings/remote-access?tab=public');
   });
 
+  it('maps a website prompt to a new chat draft without auto-sending it', () => {
+    expect(xopcDeepLinkToRoute(
+      'xopc://chat/new?draft=%E5%B8%AE%E6%88%91%E6%95%B4%E7%90%86%E4%B8%8B%E4%B8%80%E6%AD%A5&autoSend=1',
+    )).toBe(
+      '/chat/new?draft=%E5%B8%AE%E6%88%91%E6%95%B4%E7%90%86%E4%B8%8B%E4%B8%80%E6%AD%A5&projectScope=none',
+    );
+  });
+
   it('rejects malformed and unsupported links', () => {
     expect(xopcDeepLinkToRoute('xopc://open?kind=local_app')).toBeNull();
     expect(xopcDeepLinkToRoute('xopc://open?kind=unknown&id=item-1')).toBeNull();
     expect(xopcDeepLinkToRoute('xopc://open?kind=file&id=file-1')).toBeNull();
     expect(xopcDeepLinkToRoute('xopc://unknown/path')).toBeNull();
+    expect(xopcDeepLinkToRoute('xopc://chat/new')).toBeNull();
+    expect(xopcDeepLinkToRoute('xopc://chat/existing?draft=hello')).toBeNull();
+    expect(xopcDeepLinkToRoute('xopc://user:secret@chat/new?draft=hello')).toBeNull();
+    expect(xopcDeepLinkToRoute('xopc://chat/new?draft=hello#fragment')).toBeNull();
+    expect(xopcDeepLinkToRoute(`xopc://chat/new?draft=${encodeURIComponent('x'.repeat(4_097))}`)).toBeNull();
+    expect(xopcDeepLinkToRoute(`xopc://chat/new?draft=${encodeURIComponent('hello\u0000world')}`)).toBeNull();
     expect(xopcDeepLinkToRoute('xopc://cloud/model-connected')).toBeNull();
     expect(xopcDeepLinkToRoute('xopc://cloud/tunnel-connected')).toBeNull();
     expect(xopcDeepLinkToRoute(

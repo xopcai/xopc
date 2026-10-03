@@ -19,10 +19,13 @@ export struct XopcNotesTabView {
   @Param activePage: boolean = false;
   @Param bottomInset: number = 0;
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
+  @Event onStartVoice: () => void = (): void => {};
   @Local model: XopcNoteViewModel = new XopcNoteViewModel();
   @Local files: XopcFilesViewModel = new XopcFilesViewModel();
   @Local contentWidth: number = 0;
   @Local selectedId: string = '';
+  @Local creationSheetOpen: boolean = false;
+  @Local pendingCreation: string = '';
   private initialized: boolean = false;
 
   aboutToAppear(): void { this.updateActivity(); }
@@ -37,6 +40,42 @@ export struct XopcNotesTabView {
   private openNote(id: string): void {
     if (this.contentWidth >= 840) this.selectedId = id;
     else this.onNavigate({ page: 'notes', itemId: id });
+  }
+
+  private finishCreationSheet(): void {
+    const action = this.pendingCreation;
+    this.pendingCreation = '';
+    if (action === 'text') this.onNavigate({ page: 'note-create', itemId: '' });
+    else if (action === 'voice') this.onStartVoice();
+  }
+
+  @Builder
+  creationSheet() {
+    Column({ space: 10 }) {
+      Text($r('app.string.new_note')).fontSize(20).fontWeight(FontWeight.Bold)
+        .fontColor(this.colors.foreground).width('100%').padding({ bottom: 6 })
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 14 }) {
+          SymbolGlyph($r('sys.symbol.doc')).fontSize(22).fontColor([this.colors.accent])
+          Text($r('app.string.note_text_option')).fontSize(16).fontWeight(FontWeight.Medium)
+            .fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
+          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
+        }.width('100%').height(56).padding({ left: 16, right: 16 })
+      }.id('notes-create-text').width('100%').padding(0).borderRadius(16).backgroundColor(this.colors.input)
+        .onClick((): void => { this.pendingCreation = 'text'; this.creationSheetOpen = false; })
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 14 }) {
+          SymbolGlyph($r('sys.symbol.mic')).fontSize(22).fontColor([this.colors.danger])
+          Column({ space: 2 }) {
+            Text($r('app.string.note_voice_option')).fontSize(16).fontWeight(FontWeight.Medium)
+              .fontColor(this.colors.foreground)
+            Text($r('app.string.capture_start_hint')).fontSize(12).fontColor(this.colors.secondary)
+          }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
+        }.width('100%').height(64).padding({ left: 16, right: 16 })
+      }.id('notes-create-voice').width('100%').padding(0).borderRadius(16).backgroundColor(this.colors.input)
+        .onClick((): void => { this.pendingCreation = 'voice'; this.creationSheetOpen = false; })
+    }.width('100%').padding({ left: 20, right: 20, top: 10, bottom: 16 })
   }
 
   private async finishCapture(): Promise<void> {
@@ -162,7 +201,7 @@ export struct XopcNotesTabView {
   listPane() {
     Column() {
       XopcPageHeader({ heading: $r('app.string.notes'), actionLabel: $r('app.string.new_note'),
-        actionIcon: $r('sys.symbol.plus'), onAction: (): void => { this.onNavigate({ page: 'note-create', itemId: '' }); } })
+        actionIcon: $r('sys.symbol.plus'), onAction: (): void => { this.creationSheetOpen = true; } })
       Row({ space: 8 }) {
         TextInput({ text: this.model.search, placeholder: $r('app.string.search_notes') }).layoutWeight(1).height(44)
           .backgroundColor(this.colors.input).borderRadius(14).onChange((value: string): void => { this.model.search = value; })
@@ -180,7 +219,7 @@ export struct XopcNotesTabView {
       } else if (!this.model.items.length && !this.files.items.length) {
         Column() { XopcEmptyHint({ message: $r('app.string.no_notes') }) }.width('100%').padding({ left: 20, right: 20 })
       } else {
-        List({ space: 8 }) {
+        List({ space: 12 }) {
           ForEach(this.model.items, (item: XopcNoteIndexEntry) => {
             ListItem() {
               Button({ type: ButtonType.Normal }) {
@@ -194,10 +233,15 @@ export struct XopcNotesTabView {
                     Text(item.snippet ?? '').fontSize(14).lineHeight(20).fontColor(this.colors.secondary)
                       .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
                     Text(new Date(item.updatedAt).toLocaleString()).fontSize(12).fontColor(this.colors.tertiary).width('100%')
+                    if (item.tags?.length) {
+                      Text(item.tags.slice(0, 2).map((tag: string): string => '#' + tag).join('  '))
+                        .fontSize(12).fontColor(this.colors.accent).maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                    }
                   }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                   SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
-                }.width('100%').padding({ left: 16, right: 14, top: 14, bottom: 14 })
-              }.width('100%').padding(0).borderRadius(16).backgroundColor(this.colors.panel)
+                }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
+              }.width('100%').constraintSize({ minHeight: 96 }).padding(0).borderRadius(16).backgroundColor(this.colors.panel)
                 .onClick((): void => { this.openNote(item.id); })
             }
           }, (item: XopcNoteIndexEntry): string => item.id + ':' + item.updatedAt)
@@ -257,5 +301,9 @@ export struct XopcNotesTabView {
       }
     }.id('notes-tab-root').width('100%').height('100%').backgroundColor(this.colors.surface)
       .onAreaChange((_previous: Area, current: Area): void => { this.contentWidth = Number(current.width); })
+      .bindSheet($$this.creationSheetOpen, this.creationSheet, {
+        height: 244, dragBar: true, showClose: false, backgroundColor: this.colors.surface,
+        onDisappear: (): void => { this.finishCreationSheet(); }
+      })
   }
 }

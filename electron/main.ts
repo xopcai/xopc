@@ -329,7 +329,7 @@ if (process.defaultApp) {
 function handleDeepLink(url: string): boolean {
   const target = xopcDeepLinkTarget(url);
   if (!target) {
-    console.warn(`[main] Invalid deep link URL: ${url}`);
+    console.warn('[main] Invalid xopc deep link');
     return false;
   }
   if (

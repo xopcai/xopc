@@ -6,12 +6,21 @@ function source(path: string): string {
 }
 
 describe('HarmonyOS voice note surface', () => {
-  it('keeps recording one tap away in the Notes tab and exposes the active mini bar globally', () => {
+  it('keeps the composer on Notes alongside creation actions and recording status', () => {
     const home = source('../entry/src/main/ets/view/HomeView.ets');
+    const notes = source('../entry/src/main/ets/view/NotesTabView.ets');
     expect(home).toContain("this.tabItem(3, $r('app.string.notes')");
-    expect(home).toContain(".id('note-capture-start')");
+    expect(home).not.toContain(".id('note-capture-start')");
+    expect(home).not.toContain('if (this.tab !== 3) {');
+    expect(home).toContain('this.quickComposer()');
+    expect(home).toContain(".id('note-capture-mini')");
     expect(home).toContain("if (this.capture.active) { this.noteCaptureBar() }");
+    expect(home).toContain('onStartVoice: (): void => { void this.startNoteCapture(); }');
     expect(home).toContain('await this.capture.start(context)');
+    expect(notes).toContain(".id('notes-create-text')");
+    expect(notes).toContain(".id('notes-create-voice')");
+    expect(notes).toContain('this.creationSheetOpen = true');
+    expect(notes).toContain('onDisappear: (): void => { this.finishCreationSheet(); }');
   });
 
   it('renders live transcript, pause, marker, finish and retry states', () => {

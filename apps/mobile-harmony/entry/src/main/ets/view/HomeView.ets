@@ -74,6 +74,7 @@ export struct XopcHomeView {
   @Local pendingChatId: string = '';
   @Local intake: XopcShareIntake = shareIntake;
   private chatRepository: XopcChatRepository = new XopcChatRepository();
+  private quickEditor: TextInputController = new TextInputController();
   private deletedChatIds: Set<string> = new Set<string>();
   private replacementRevision: number = 0;
   private readonly onMotionChange = (reduced: boolean): void => { layoutState.reduceMotion = reduced; };
@@ -319,6 +320,10 @@ export struct XopcHomeView {
   }
 
   private setQuickPanel(open: boolean): void {
+    if (open) {
+      this.quickEditor.stopEditing();
+      this.getUIContext().getFocusController().clearFocus();
+    }
     this.quickPanelOpen = open;
     layoutState.chatActionsOpen = open;
   }
@@ -478,24 +483,14 @@ export struct XopcHomeView {
           Text(xopcFormatCaptureTime(this.capture.elapsedMs)).fontSize(15).fontWeight(FontWeight.Medium)
             .fontColor(this.colors.foreground)
           Text(this.capture.phase === 'organizing' || this.capture.phase === 'stopping'
-            ? $r('app.string.capture_saving') : $r('app.string.capture_live'))
+            ? $r('app.string.capture_saving') : this.capture.phase === 'paused'
+              ? $r('app.string.capture_paused') : $r('app.string.capture_live'))
             .fontSize(14).fontColor(this.colors.secondary).layoutWeight(1)
           SymbolGlyph($r('sys.symbol.chevron_up')).fontSize(14).fontColor([this.colors.tertiary])
         }.width('100%').height(48).padding({ left: 16, right: 14 })
       }.id('note-capture-mini').width('100%').height(48).padding(0).backgroundColor(this.colors.input)
-        .borderRadius(16).onClick((): void => { this.selectTab(3); })
-    } else {
-      Button({ type: ButtonType.Normal }) {
-        Row({ space: 10 }) {
-          Row() {
-            SymbolGlyph($r('sys.symbol.mic_fill')).fontSize(20).fontColor([this.colors.panel])
-          }.width(36).height(36).borderRadius(18).justifyContent(FlexAlign.Center).backgroundColor(this.colors.danger)
-          Text($r('app.string.capture_start')).fontSize(16).fontWeight(FontWeight.Medium)
-            .fontColor(this.colors.foreground).layoutWeight(1)
-          Text($r('app.string.capture_start_hint')).fontSize(13).fontColor(this.colors.secondary)
-        }.width('100%').height(52).padding({ left: 8, right: 14 })
-      }.id('note-capture-start').width('100%').height(52).padding(0).backgroundColor(this.colors.input)
-        .borderRadius(18).onClick((): void => { void this.startNoteCapture(); })
+        .borderRadius(16).accessibilityText($r('app.string.capture_open_details'))
+        .onClick((): void => { this.selectTab(3); })
     }
   }
 
@@ -566,7 +561,7 @@ export struct XopcHomeView {
           .backgroundColor(this.colors.input).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
           .accessibilityText($r('app.string.assistant')).enabled(!this.quickSending)
           .onClick((): void => { void this.openQuickChat(); })
-        TextInput({ text: this.quickDraft, placeholder: this.quickComposerPlaceholder })
+        TextInput({ text: this.quickDraft, placeholder: this.quickComposerPlaceholder, controller: this.quickEditor })
           .id('home-quick-composer').layoutWeight(1).height(COMPOSER_INPUT_MIN).maxLength(4000)
           .padding({ left: 4, right: 4 }).enterKeyType(EnterKeyType.Send)
           .enabled(!this.quickSending && !this.quickPicking).lineHeight(20)
@@ -665,6 +660,7 @@ export struct XopcHomeView {
         TabContent() { XopcProgressView({ bottomInset: this.secondaryBottomRegionHeight, activePage: this.tab === 2 && !this.detailVisible, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
         TabContent() { XopcNotesTabView({ activePage: this.tab === 3 && !this.detailVisible,
           bottomInset: this.secondaryBottomRegionHeight,
+          onStartVoice: (): void => { void this.startNoteCapture(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
         TabContent() { XopcPersonalView({ activePage: this.tab === 4 && !this.detailVisible, bottomInset: this.secondaryBottomRegionHeight, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
       }.scrollable(false).barHeight(0).barMode(BarMode.Fixed)
@@ -682,9 +678,7 @@ export struct XopcHomeView {
       if (this.tab !== 0) {
         Column() {
           Column() {
-            if (this.tab === 3) {
-              if (!this.capture.active) { this.noteCaptureBar() }
-            } else if (this.capture.active) {
+            if (this.capture.active) {
               this.noteCaptureBar()
             } else {
               this.quickComposer()
