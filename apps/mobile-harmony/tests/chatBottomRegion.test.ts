@@ -80,7 +80,7 @@ describe('chat bottom region composition', () => {
     expect(home).toContain(".width('100%').height('100%')");
   });
 
-  it('keeps one stable rounded glass navigation surface across every tab', () => {
+  it('keeps one consistent rounded navigation surface across every tab', () => {
     expect(home).toContain('bottomDock: this.chatDock');
     expect(home).toContain('@LocalBuilder\n  chatDock()');
     expect(home).toContain('this.tab === 0 && this.layout.isMainDockVisible(0)');
@@ -94,8 +94,8 @@ describe('chat bottom region composition', () => {
     expect(chat).not.toContain("}.id('chat-bottom-region').width('100%').backgroundColor");
     expect(home).toContain(".id('secondary-bottom-region').width('100%')");
     expect(home).not.toContain("}.id('secondary-bottom-region').width('100%').backgroundColor");
-    expect(chat).toContain(".id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(Color.Transparent)");
-    expect(chat).toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR).borderRadius(24).clip(true)');
+    expect(chat).toContain(".id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)");
+    expect(chat).not.toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR)');
     expect(chat).toContain('.borderRadius(24).clip(true)');
     expect(home).toContain(".id('main-tab-dock').width('100%')");
     expect(home).not.toContain("}.id('main-tab-dock').width('100%').backgroundColor");

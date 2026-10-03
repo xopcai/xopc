@@ -201,7 +201,7 @@ export struct XopcNotesView {
       } else if (!this.model.items.length) {
         XopcEmptyHint({ message: $r('app.string.no_notes') })
       } else {
-        List({ space: 2 }) {
+        List({ space: 12 }) {
           ForEach(this.model.items, (item: XopcNoteIndexEntry) => {
             ListItem() {
               Button({ type: ButtonType.Normal }) {
@@ -217,16 +217,20 @@ export struct XopcNotesView {
                     Row({ space: 8 }) {
                       Text(new Date(item.updatedAt).toLocaleDateString()).fontSize(12).fontColor(this.colors.tertiary)
                       Text(this.statusLabel(item.status)).fontSize(12).fontColor(this.colors.tertiary)
-                      if (item.tags?.length) { Text(item.tags.slice(0, 2).map((tag: string): string => '#' + tag).join(' ')).fontSize(12).fontColor(this.colors.accent) }
                     }.width('100%')
+                    if (item.tags?.length) {
+                      Text(item.tags.slice(0, 2).map((tag: string): string => '#' + tag).join('  '))
+                        .fontSize(12).fontColor(this.colors.accent).maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                    }
                   }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                   SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
                   if (this.model.selecting) {
                     SymbolGlyph(this.model.selectedIds.includes(item.id) ? $r('sys.symbol.checkmark_circle_fill')
                       : $r('sys.symbol.circle')).fontSize(21).fontColor([this.colors.accent])
                   }
-                }.width('100%').padding({ left: 16, right: 14, top: 14, bottom: 14 })
-              }.width('100%').padding(0).borderRadius(16).backgroundColor(this.colors.panel)
+                }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
+              }.width('100%').constraintSize({ minHeight: 96 }).padding(0).borderRadius(16).backgroundColor(this.colors.panel)
                 .onClick((): void => { if (this.model.selecting) this.model.toggleSelection(item.id); else void this.model.open(item.id); })
                 .gesture(LongPressGesture({ duration: 350, repeat: false }).onAction((): void => { this.model.toggleSelection(item.id); }))
             }
@@ -355,7 +359,9 @@ export struct XopcNotesView {
                     Row({ space: 6 }) {
                       ForEach(this.model.selected.tags, (tag: string) => {
                         Text('#' + tag).fontSize(12).fontColor(this.colors.accent)
-                          .height(30).padding({ left: 10, right: 10 }).borderRadius(15).backgroundColor(this.colors.accentSoft)
+                          .height(30).constraintSize({ maxWidth: 200 }).maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis })
+                          .padding({ left: 10, right: 10 }).borderRadius(15).backgroundColor(this.colors.accentSoft)
                       }, (tag: string): string => tag)
                     }
                   }.layoutWeight(1).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
