@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
+import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
@@ -46,6 +47,7 @@ describe('ChatPageHeaderRegistration', () => {
       dispatchEvent: () => false,
     });
     usePageHeaderStore.setState(emptyHeader);
+    useLocaleStore.setState({ language: 'en' });
     useTerminalPanelStore.setState({
       openByConversationId: {},
       tabsByConversationId: {},
@@ -130,12 +132,12 @@ describe('ChatPageHeaderRegistration', () => {
         );
       });
 
-      expect(container.querySelectorAll('[aria-label="Session context"]')).toHaveLength(1);
+      expect(container.querySelectorAll('[aria-label="Session info"]')).toHaveLength(1);
       expect(container.querySelectorAll('[aria-label="Project Files: xopc"]')).toHaveLength(1);
       expect(document.querySelector('[role="dialog"]')).toBeNull();
       act(() => container.querySelector<HTMLButtonElement>('[aria-label="Project Files: xopc"]')!.click());
       expect(useWorkspacePanelStore.getState().conversationIdOverride).toBe(conversationId);
-      act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session context"]')!.click());
+      act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session info"]')!.click());
       expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     }
   });
