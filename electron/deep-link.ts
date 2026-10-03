@@ -9,6 +9,9 @@ export interface XopcDeepLinkTarget {
   focusOnlyWhenReady?: boolean;
 }
 
+const MAX_CHAT_DRAFT_LENGTH = 4_096;
+const UNSAFE_CHAT_DRAFT_CHARACTERS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
+
 export function xopcDeepLinkTarget(value: string): XopcDeepLinkTarget | null {
   try {
     const url = new URL(value);
@@ -28,6 +31,18 @@ export function xopcDeepLinkTarget(value: string): XopcDeepLinkTarget | null {
     if (url.hostname === 'settings') {
       const path = url.pathname === '/' ? '' : url.pathname;
       return { route: `/settings${path}${url.search}${url.hash}` };
+    }
+
+    if (url.hostname === 'chat' && url.pathname === '/new') {
+      if (url.username || url.password || url.port || url.hash) return null;
+      const draft = url.searchParams.get('draft')?.trim();
+      if (
+        !draft ||
+        draft.length > MAX_CHAT_DRAFT_LENGTH ||
+        UNSAFE_CHAT_DRAFT_CHARACTERS.test(draft)
+      ) return null;
+      const params = new URLSearchParams({ draft, projectScope: 'none' });
+      return { route: `/chat/new?${params.toString()}` };
     }
 
     if (

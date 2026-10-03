@@ -564,7 +564,11 @@ export struct XopcChatView {
     return false;
   }
   private setPanel(open: boolean): void {
-    if (open) { this.palette.close(); this.editor.stopEditing(); }
+    if (open) {
+      this.palette.close();
+      this.editor.stopEditing();
+      this.getUIContext().getFocusController().clearFocus();
+    }
     this.panelOpen = open; layoutState.chatActionsOpen = open;
   }
   private dismissComposer(): void {
@@ -1346,8 +1350,8 @@ export struct XopcChatView {
       .borderRadius(18).clip(true).margin({ bottom: 8, top: 8 })
     if (this.panelOpen) { this.actionPanel() }
     this.bottomDock()
-    }.id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(Color.Transparent)
-      .backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR).borderRadius(24).clip(true)
+    }.id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)
+      .borderRadius(24).clip(true)
     }.id('chat-bottom-region').width('100%')
       .margin({ top: 4, bottom: 0 })
       .onAreaChange((_previous: Area, current: Area): void => { this.bottomRegionHeight = Number(current.height); })
