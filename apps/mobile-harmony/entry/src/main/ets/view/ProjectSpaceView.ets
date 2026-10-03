@@ -2,6 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcMobileRoute } from '../model/home';
 import { XopcNoteIndexEntry } from '../model/note';
 import { XopcWorkspaceItem } from '../model/workspace';
+import { XopcSessionItem } from '../model/chat';
 import { XopcProjectSpaceViewModel } from '../viewmodel/projectSpaceViewModel';
 import { XopcListSkeleton } from './MobileComponents';
 
@@ -73,6 +74,24 @@ export struct XopcProjectSpaceView {
   }
 
   @Builder
+  sessionCard(item: XopcSessionItem) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 12 }) {
+        SymbolGlyph($r('sys.symbol.message')).fontSize(21).fontColor([this.colors.accent])
+        Column({ space: 4 }) {
+          Text(item.displayName || item.name || item.title || $r('app.string.untitled'))
+            .fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+          Text($r('app.string.project_session_messages', item.messageCount ?? 0))
+            .fontSize(12).fontColor(this.colors.secondary)
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
+      }.width('100%').padding(15)
+    }.width('100%').padding(0).borderRadius(15).backgroundColor(this.colors.panel)
+      .onClick((): void => { this.go('chat', item.key); })
+  }
+
+  @Builder
   noteCard(item: XopcNoteIndexEntry) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 12 }) {
@@ -133,6 +152,7 @@ export struct XopcProjectSpaceView {
         Scroll() {
           Row({ space: 8 }) {
             this.tabChip('overview', $r('app.string.project_overview'), 0)
+            this.tabChip('sessions', $r('app.string.conversations'), this.model.sessions.length)
             this.tabChip('tasks', $r('app.string.tasks'), this.model.tasksTotal)
             this.tabChip('notes', $r('app.string.notes'), this.model.notesTotal)
             this.tabChip('automations', $r('app.string.automations'), this.model.automations.length)
@@ -165,6 +185,19 @@ export struct XopcProjectSpaceView {
           }
           if (this.model.loading && !this.model.project) {
             ListItem() { XopcListSkeleton() }
+          }
+          if (this.tab === 'overview' || this.tab === 'sessions') {
+            ListItem() { this.sectionHeader($r('app.string.conversations'), this.model.sessions.length, 'project-new-chat') }
+            if (this.model.sessionsError) {
+              ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
+            } else if (this.model.loading && !this.model.sessions.length) {
+              ListItem() { XopcListSkeleton() }
+            } else if (!this.model.sessions.length) {
+              ListItem() { Text($r('app.string.project_no_sessions')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
+            }
+            ForEach(this.tab === 'overview' ? this.model.sessions.slice(0, 3) : this.model.sessions, (item: XopcSessionItem) => {
+              ListItem() { this.sessionCard(item) }
+            }, (item: XopcSessionItem): string => item.key)
           }
           if (this.tab === 'overview' || this.tab === 'tasks') {
             ListItem() { this.sectionHeader($r('app.string.tasks'), this.model.tasksTotal, 'task-create') }

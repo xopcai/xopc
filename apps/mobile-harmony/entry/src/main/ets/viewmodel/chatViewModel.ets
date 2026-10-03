@@ -29,6 +29,7 @@ export class XopcChatViewModel {
   @Trace title: string = '';
   @Trace agentId: string = '';
   @Trace projectId: string = '';
+  @Trace taskId: string = '';
   @Trace status: string = '';
   @Trace loading: boolean = false;
   @Trace cachedHistory: boolean = false;
@@ -156,7 +157,7 @@ export class XopcChatViewModel {
     this.transcriptId = undefined; this.title = ''; this.agentId = ''; this.projectId = ''; this.status = ''; this.hasOlder = false;
     this.before = ''; this.error = ''; this.loading = true;
     const selection = this.selection;
-    if (this.main) {
+    if (this.main && !this.taskId) {
       this.repository.saveMainConversation(id).catch((_error: Error): void => {
         if (!this.disposed && selection === this.selection) this.error = 'CHAT_SELECTION_SAVE_FAILED';
       });
@@ -443,7 +444,8 @@ export class XopcChatViewModel {
     try {
       if (this.connection !== 'connected') throw new Error('OFFLINE');
       const alreadyRunning = !!this.runId;
-      const run = await this.repository.send(input.conversationId, input.row.text, input.row.id, input.transcriptId, input.attachments, input.delivery, input.refs);
+      const run = await this.repository.send(input.conversationId, input.row.text, input.row.id, input.transcriptId,
+        input.attachments, input.delivery, input.refs, this.taskId);
       if (selection !== this.selection) return false;
       // In-flight reads predate this acceptance and must not roll back the visible input or run.
       this.historyRequest++; this.recoveryRequest++; this.olderPending = false;

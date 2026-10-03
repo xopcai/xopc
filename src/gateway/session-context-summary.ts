@@ -9,7 +9,7 @@ import { runExec } from '../infra/exec.js';
 import { ProjectStore } from '../projects/project-store.js';
 import { effectiveWorkspacePathForSession } from '../session/session-workspace.js';
 import { getSessionConfig } from '../storage/sqlite/config-repository.js';
-import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
+import { getCurrentTranscriptId, getSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
 import { TaskRepository } from '../tasks/task-repository.js';
@@ -20,6 +20,79 @@ import { hasGatewayScope, type GatewayScope } from './security/gateway-scopes.js
 
 const log = createLogger('SessionContextSummary');
 const SOURCE_LIMIT = 20;
+const RECENT_SOURCE_KINDS = new Set(['note', 'file', 'session', 'browser_tab', 'mcp_resource', 'browser_page', 'app_context']);
+
+function parseRecentSources(value: string | null): SessionContextSummary['sources'] {
+  if (!value) return [];
+  let rows: unknown;
+  try { rows = JSON.parse(value); } catch { return []; }
+  if (!Array.isArray(rows)) return [];
+  return rows.slice(0, SOURCE_LIMIT + 1).flatMap((value): SessionContextSummary['sources'] => {
+    if (!value || typeof value !== 'object') return [];
+    const row = value as Record<string, unknown>;
+    if (!RECENT_SOURCE_KINDS.has(String(row.kind)) || typeof row.sourceId !== 'string' || !row.sourceId) return [];
+    return [{
+      kind: row.kind as SessionContextSummary['sources'][number]['kind'], id: row.sourceId,
+      ...(typeof row.title === 'string' ? { title: row.title.slice(0, 240) } : {}),
+      ...(row.fileKind === 'file' || row.fileKind === 'directory' ? { fileKind: row.fileKind } : {}),
+      origins: [{ kind: 'recent' }],
+    }];
+  });
+}
+
+function parseRecentAttachments(value: string | null): SessionContextSummary['sources'] {
+  if (!value) return [];
+  let rows: unknown;
+  try { rows = JSON.parse(value); } catch { return []; }
+  if (!Array.isArray(rows)) return [];
+  return rows.slice(0, SOURCE_LIMIT + 1).flatMap((value): SessionContextSummary['sources'] => {
+    if (!value || typeof value !== 'object') return [];
+    const row = value as Record<string, unknown>;
+    const id = typeof row.uri === 'string' ? row.uri : typeof row.id === 'string' ? row.id : undefined;
+    if (!id || !id.startsWith('media://')) return [];
+    return [{ kind: 'attachment', id,
+      ...(typeof row.name === 'string' ? { title: row.name.slice(0, 240) } : {}),
+      origins: [{ kind: 'recent' }],
+    }];
+  });
+}
+
+/** Reads only reference metadata from the latest visible user turn and current queued input. */
+function readRecentSources(conversationId: string): SessionContextSummary['sources'] {
+  const transcriptId = getCurrentTranscriptId(conversationId);
+  if (!transcriptId) return [];
+  const db = getSqliteDatabase();
+  const transcript = db.prepare(`SELECT
+      (SELECT json_group_array(json_object(
+        'kind', json_extract(value, '$.kind'), 'sourceId', json_extract(value, '$.sourceId'),
+        'title', json_extract(value, '$.title'), 'fileKind', json_extract(value, '$.fileKind')
+      )) FROM json_each(json_extract(entry.payload_json, '$.metadata.sourceContexts'))
+        WHERE CAST(key AS INTEGER) < ?) AS refs,
+      (SELECT json_group_array(json_object(
+        'uri', json_extract(value, '$.uri'), 'name', json_extract(value, '$.name')
+      )) FROM json_each(json_extract(entry.payload_json, '$.media'))
+        WHERE CAST(key AS INTEGER) < ?) AS attachments
+    FROM transcript_entries entry
+    WHERE transcript_id = ? AND entry_kind = 'message' AND role = 'user'
+      AND json_extract(payload_json, '$.metadata.hiddenFromClient') IS NOT 1
+    ORDER BY seq DESC LIMIT 1`).get(SOURCE_LIMIT + 1, SOURCE_LIMIT + 1, transcriptId) as { refs: string | null; attachments: string | null } | undefined;
+  const pending = db.prepare(`SELECT
+      (SELECT json_group_array(json_object(
+        'kind', json_extract(value, '$.kind'), 'sourceId', json_extract(value, '$.sourceId'),
+        'title', json_extract(value, '$.title'), 'fileKind', json_extract(value, '$.fileKind')
+      )) FROM json_each(input.context_refs_json)
+        WHERE CAST(key AS INTEGER) < ?) AS refs,
+      (SELECT json_group_array(json_object(
+        'uri', json_extract(value, '$.uri'), 'name', json_extract(value, '$.name')
+      )) FROM json_each(input.attachments_json)
+        WHERE CAST(key AS INTEGER) < ?) AS attachments
+    FROM session_inputs input WHERE conversation_id = ? AND expected_transcript_id = ?
+      AND kind = 'message' AND status IN ('queued', 'running', 'injecting', 'interrupted')
+      AND json_extract(origin_json, '$.type') != 'system'
+    ORDER BY created_at_ms DESC LIMIT 1`).get(SOURCE_LIMIT + 1, SOURCE_LIMIT + 1, conversationId, transcriptId) as { refs: string | null; attachments: string | null } | undefined;
+  const latest = pending ?? transcript;
+  return latest ? [...parseRecentSources(latest.refs), ...parseRecentAttachments(latest.attachments)] : [];
+}
 
 async function readEnvironment(config: Config, conversationId: string, projectId?: string): Promise<SessionContextSummary['environment']> {
   const bound = getExecutionEnvironmentForSession(conversationId);
@@ -129,10 +202,35 @@ export async function getSessionContextSummary(
         kind: 'note', id: row.note_id,
         ...(row.found_id ? { title: row.title ?? undefined } : { unavailable: true }),
         origins: [
-          ...(row.from_session ? [{ kind: 'session' as const, version: source?.version }] : []),
+          ...(row.from_session ? [{ kind: 'session' as const }] : []),
           ...(row.from_task ? [{ kind: 'task' as const }] : []),
         ],
       }));
+      const sources = new Map(summary.sources.map((source) => [`${source.kind}:${source.id}`, source]));
+      const noteTitle = getSqliteDatabase().prepare(`SELECT substr(title, 1, 240) AS title
+        FROM notes WHERE note_id = ? AND status != 'trashed'`);
+      for (const recent of readRecentSources(conversationId)) {
+        const key = `${recent.kind}:${recent.id}`;
+        const existing = sources.get(key);
+        if (existing) {
+          if (!existing.origins.some((origin) => origin.kind === 'recent')) existing.origins.push({ kind: 'recent' });
+          continue;
+        }
+        if (recent.kind === 'note') {
+          const found = noteTitle.get(recent.id) as { title: string } | undefined;
+          if (found) recent.title = found.title;
+          else {
+            delete recent.title;
+            recent.unavailable = true;
+          }
+        }
+        sources.set(key, recent);
+      }
+      summary.sourcesHasMore ||= sources.size > SOURCE_LIMIT;
+      const priority = (item: SessionContextSummary['sources'][number]) =>
+        item.origins.some((origin) => origin.kind === 'session') ? 0
+          : item.origins.some((origin) => origin.kind === 'recent') ? 1 : 2;
+      summary.sources = [...sources.values()].sort((a, b) => priority(a) - priority(b)).slice(0, SOURCE_LIMIT);
     } catch (err) { unavailable('sources', err); }
     try {
       summary.environment = await readEnvironment(config, conversationId, metadata.projectId);

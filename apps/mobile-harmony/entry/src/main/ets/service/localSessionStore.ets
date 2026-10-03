@@ -29,6 +29,17 @@ export class XopcLocalSessionStore {
       return JSON.parse(result.getString(0)) as XopcLocalSession;
     } finally { result.close(); }
   }
+  async listProject(projectId: string, scope: string = this.scope()): Promise<XopcLocalSession[]> {
+    const result = await this.required().querySql('SELECT payload FROM drafts WHERE scope=?', [scope]);
+    const drafts: XopcLocalSession[] = [];
+    try {
+      while (result.goToNextRow()) {
+        const draft = JSON.parse(result.getString(0)) as XopcLocalSession;
+        if (draft.creation.projectId === projectId) drafts.push(draft);
+      }
+    } finally { result.close(); }
+    return drafts;
+  }
   async save(draft: XopcLocalSession, scope: string): Promise<void> {
     const row: relationalStore.ValuesBucket = { scope, id: draft.conversationId, payload: JSON.stringify(draft) };
     return this.required().insert('drafts', row, relationalStore.ConflictResolution.ON_CONFLICT_REPLACE)

@@ -80,6 +80,7 @@ import {
   AgentStreamReplayExpiredError,
   refineVoiceTranscript,
   transcribeVoice,
+  fetchClarificationSnapshot,
 } from '../agent-client';
 import { readUriAsBase64 } from '../../features/chat/attachment-file-io';
 import {
@@ -89,6 +90,26 @@ import {
 
 import type { MessageSubmission } from '../../features/chat/message-submission';
 import { saveLocalSessionDraft, readLocalSessionDraft, patchLocalSessionDraft } from '../../features/chat/local-session-drafts';
+
+describe('draft clarification state', () => {
+  beforeEach(() => { testState.apiFetch.mockReset(); testState.memory.clear(); });
+
+  it('does not request clarification until the session is persisted', async () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    saveLocalSessionDraft({ conversationId: id, createdAt: new Date().toISOString(), creation: {
+      agentId: 'main', model: 'test/model', thinkingLevel: 'off', projectId: null, temporary: false, execution: null,
+    } });
+    expect(await fetchClarificationSnapshot(id)).toBeNull();
+    expect(testState.apiFetch).not.toHaveBeenCalled();
+
+    testState.memory.clear();
+    testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({ ok: true, payload: {
+      transcriptId: 'transcript', revision: 1, serverTime: 1, clarification: null,
+    } }), { status: 200 }));
+    expect(await fetchClarificationSnapshot(id)).toMatchObject({ transcriptId: 'transcript' });
+    expect(testState.apiFetch).toHaveBeenCalledWith(`/api/sessions/${id}/clarification`);
+  });
+});
 
 function submission(overrides: Partial<MessageSubmission> = {}): MessageSubmission {
   return {

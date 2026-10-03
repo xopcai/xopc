@@ -1,14 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => {
-  Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined }); return { request: vi.fn() };
+  Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined }); return { request: vi.fn(), read: vi.fn() };
 });
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mock.request } }));
-vi.mock('../entry/src/main/ets/service/localSessionStore.ets', () => ({ localSessionStore: { read: vi.fn().mockResolvedValue(undefined) } }));
+vi.mock('../entry/src/main/ets/service/localSessionStore.ets', () => ({ localSessionStore: { read: mock.read } }));
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class { materialize = vi.fn(); } }));
 import { XopcChatContextViewModel } from '../entry/src/main/ets/viewmodel/chatContextViewModel.ets';
 const summary = (id: string) => ({ summary: { conversationId: id, work: {}, sources: [], sourcesHasMore: false, unavailableSections: [] } });
 describe('chat context', () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => { vi.resetAllMocks(); mock.read.mockResolvedValue(undefined); });
+  it('uses a local draft without requesting a missing Gateway session', async () => {
+    mock.read.mockResolvedValue({ creation: { model: 'test/model', thinkingLevel: 'off' } });
+    const model = new XopcChatContextViewModel(); await model.load('draft');
+    expect(model.config).toMatchObject({ model: 'test/model', thinkingLevel: 'off' });
+    expect(mock.request).not.toHaveBeenCalled();
+  });
   it('does not apply another conversation summary', async () => {
     mock.request.mockResolvedValue(JSON.stringify(summary('other'))); const model = new XopcChatContextViewModel(); await model.load('one');
     expect(model.summary).toBeUndefined(); expect(model.error).toBe('INVALID_CONTEXT');

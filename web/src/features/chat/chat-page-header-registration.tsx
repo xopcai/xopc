@@ -48,7 +48,7 @@ type ChatPageHeaderRegistrationProps = {
   showContextControls?: boolean;
   onFindOpen?: () => void;
   projectId?: string | null;
-  context?: Pick<SessionContextPanelProps, 'draftRefs' | 'project' | 'onLeaveProject' | 'leaveProjectLabel' | 'onDraftSourceNote' | 'draftSourceNoteLabel'>;
+  context?: Pick<SessionContextPanelProps, 'draftRefs' | 'draftAttachments' | 'draftPage' | 'project' | 'onLeaveProject' | 'leaveProjectLabel' | 'onDraftSourceNote' | 'draftSourceNoteLabel'>;
 };
 
 /**
