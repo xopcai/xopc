@@ -227,15 +227,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     const agent = agents.find((a) => a.id === sessionAgentId);
     return agent ? agentDisplayName(agent, m.agentsPage) : sessionAgentId;
   }, [agentsQuery.data, currentSessionAgentId, localDefaultAgentId, m.agentsPage]);
-  const welcomeAgentId = useMemo(
-    () => currentSessionAgentId || resolveEffectiveDefaultAgentId(agentsQuery.data, localDefaultAgentId),
-    [agentsQuery.data, currentSessionAgentId, localDefaultAgentId],
-  );
-  const welcomeAgent = useMemo(
-    () => (agentsQuery.data?.items ?? []).find((agent) => agent.id === welcomeAgentId),
-    [agentsQuery.data?.items, welcomeAgentId],
-  );
-
   const modelName = useMemo(() => {
     const models = modelsQuery.data?.items ?? [];
     if (!models.length) return m.chat.modelPickerSelect;
@@ -304,18 +295,12 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const welcomeModel = useMemo(
     () => buildMobileWelcomeModel({
       messages: m,
-      agent: welcomeAgent,
-      agentId: welcomeAgentId,
-      effectiveWorkspacePath: sessionAgentConfigQuery.data?.effectiveWorkspacePath,
       project: welcomeProjectQuery.data,
       projectOperating: welcomeProjectOperatingQuery.data,
       task: welcomeTaskQuery.data,
     }),
     [
       m,
-      sessionAgentConfigQuery.data?.effectiveWorkspacePath,
-      welcomeAgent,
-      welcomeAgentId,
       welcomeProjectOperatingQuery.data,
       welcomeProjectQuery.data,
       welcomeTaskQuery.data,

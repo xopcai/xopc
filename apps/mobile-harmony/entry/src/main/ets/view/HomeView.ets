@@ -9,6 +9,7 @@ import { XopcFilesView } from './FilesView';
 import { XopcSettingsView } from './SettingsView';
 import { XopcProgressView } from './HomeHubs';
 import { XopcPersonalView } from './PersonalView';
+import { XopcLoopi } from './Loopi';
 import { XopcWorkflowView } from './WorkflowView';
 import { XopcAutomationRunView } from './AutomationRunView';
 import { XopcShareCenterView } from './ShareCenterView';
@@ -435,7 +436,11 @@ export struct XopcHomeView {
     Column({ space: 3 }) {
       Stack({ alignContent: Alignment.TopEnd }) {
         Row() {
-          SymbolGlyph(icon).fontSize(22).fontColor([this.tab === index ? this.colors.accent : this.colors.secondary])
+          if (index === 0) {
+            XopcLoopi({ extent: 28, compact: true, activePage: this.tab === 0 && !this.detailVisible }).id('assistant-tab-loopi')
+          } else {
+            SymbolGlyph(icon).fontSize(22).fontColor([this.tab === index ? this.colors.accent : this.colors.secondary])
+          }
         }.width(42).height(28).justifyContent(FlexAlign.Center).borderRadius(16)
           .backgroundColor(this.tab === index ? this.colors.active : Color.Transparent)
         if (index === 2 && this.attention.needsUser.length) {
@@ -661,7 +666,7 @@ export struct XopcHomeView {
         TabContent() { XopcNotesTabView({ activePage: this.tab === 3 && !this.detailVisible,
           bottomInset: this.secondaryBottomRegionHeight,
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
-        TabContent() { XopcPersonalView({ bottomInset: this.secondaryBottomRegionHeight, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
+        TabContent() { XopcPersonalView({ activePage: this.tab === 4 && !this.detailVisible, bottomInset: this.secondaryBottomRegionHeight, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
       }.scrollable(false).barHeight(0).barMode(BarMode.Fixed)
         .animationDuration(0)
         .onChange((index: number): void => { this.tab = index; })

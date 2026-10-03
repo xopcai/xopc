@@ -22,7 +22,6 @@ import type {
   ComposerSendHandler,
 } from '@/features/chat/composer/composer.types';
 import { useChatProjectScope } from '@/features/chat/scope/use-chat-project-scope';
-import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotlight';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatRealtimeStatus } from '@/features/chat/agent-selection/chat-realtime-status';
 import { ConversationPlanDock } from '@/features/chat/messages/conversation-plan-dock';
@@ -57,13 +56,8 @@ import { WorkflowSessionBanner } from '@/features/chat/workflow/workflow-session
 import { useWelcomeSuggestionContext } from '@/features/chat/welcome/use-welcome-suggestion-context';
 import {
   buildWelcomeSpotlight,
-  type WelcomeSpotlightModel,
   type WelcomeSuggestionSelection,
 } from '@/features/chat/welcome/welcome-suggestions';
-import {
-  readWelcomeSuggestionAffinity,
-  recordWelcomeSuggestionMetric,
-} from '@/features/chat/welcome/welcome-suggestion-metrics';
 import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
 import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constants';
 import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-workflow-run-links';
@@ -107,19 +101,6 @@ type EditingUserTurn = {
   turnId: string;
 };
 
-function welcomePromptWasUsed(original: string, sent: string): boolean {
-  const source = original.replace(/\s+/g, '').toLocaleLowerCase();
-  const target = sent.replace(/\s+/g, '').toLocaleLowerCase();
-  if (!source || !target) return false;
-  if (source === target) return true;
-  const sampleLength = Math.min(18, Math.max(8, Math.floor(source.length * 0.16)));
-  return target.includes(source.slice(0, sampleLength));
-}
-
-function welcomeExplorationDaySeed(date = new Date()): string {
-  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-}
-
 export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId }: {
   embedded?: boolean;
   conversationId?: string;
@@ -136,18 +117,12 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const routeComposerSeedMarkerRef = useRef<string | null>(null);
 
   const welcomeDraftSeq = useRef(0);
-  const pendingWelcomeSelectionRef = useRef<WelcomeSuggestionSelection | null>(null);
-  const welcomeImpressionRef = useRef('');
-  const activeWelcomeSpotlightRef = useRef<WelcomeSpotlightModel | null>(null);
   const pendingSourceNoteSaveRef = useRef<PendingSourceNoteSave | null>(null);
   const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
-  const [welcomeAffinity, setWelcomeAffinity] = useState<Record<string, number>>({});
-  const [welcomeExplorationOffset, setWelcomeExplorationOffset] = useState(0);
   const [sourceNoteLoadedTitle, setSourceNoteLoadedTitle] = useState<string | null>(null);
   const [sourceNoteSaveDraft, setSourceNoteSaveDraft] = useState<SourceNoteSaveDraft | null>(null);
   const [sourceNoteSaveSubmitting, setSourceNoteSaveSubmitting] = useState(false);
   const [sourceNoteSaveError, setSourceNoteSaveError] = useState<string | null>(null);
-  const [showWelcomeSkeleton, setShowWelcomeSkeleton] = useState(false);
   const [editingUserTurn, setEditingUserTurn] = useState<EditingUserTurn | null>(null);
 
   const taskId = boundTaskId?.trim() || null;
@@ -498,38 +473,12 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
 
   useEffect(() => {
     setWelcomeDraftSeed(null);
-    pendingWelcomeSelectionRef.current = null;
-    welcomeImpressionRef.current = '';
-    setWelcomeAffinity({});
   }, [session.conversationId]);
 
   const onPickWelcomePrompt = useCallback((selection: WelcomeSuggestionSelection) => {
-    pendingWelcomeSelectionRef.current = selection;
-    recordWelcomeSuggestionMetric({
-      type: 'pick',
-      suggestionId: selection.suggestionId,
-      categoryId: selection.categoryId,
-      contextKind: selection.contextKind,
-      agentId: agents.displayAgentId,
-    });
     welcomeDraftSeq.current += 1;
     setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text: selection.prompt });
-  }, [agents.displayAgentId]);
-  const refreshWelcomeExploration = useCallback(() => {
-    const spotlight = activeWelcomeSpotlightRef.current;
-    const exploration = spotlight?.categories.find((category) => category.scope === 'explore');
-    const scenario = exploration?.scenarios[0];
-    if (spotlight && exploration && scenario) {
-      recordWelcomeSuggestionMetric({
-        type: 'skip',
-        suggestionId: scenario.id ?? `${exploration.id}:0`,
-        categoryId: exploration.id,
-        contextKind: spotlight.contextKind,
-        agentId: agents.displayAgentId,
-      });
-    }
-    setWelcomeExplorationOffset((value) => value + 1);
-  }, [agents.displayAgentId]);
+  }, []);
   const canChangeWorkingDirectory = Boolean(
     session.conversationId &&
     !session.showSessionLoading &&
@@ -628,17 +577,15 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       !session.showSessionLoading &&
       !session.sessionRoutePending,
     conversationId: chatConversationId,
-    sourceNoteId,
-    sourceNoteTitle,
-    effectiveWorkspacePath: session.effectiveWorkspacePath,
-    workingDirectoryLocked:
+    suppressProjectContext: Boolean(
+      sourceNoteId ||
+      launchFile ||
       session.workspaceSource === 'execution_environment' ||
       session.workspaceSource === 'session_override' ||
-      session.workspaceSource === 'agent_workspace',
+      session.workspaceSource === 'agent_workspace'
+    ),
     task: taskDetail,
-    file: launchFile,
     workflow: workflowRunView,
-    sessionManager: session.sessionManager,
   });
   const welcomeAgent = useMemo(
     () =>
@@ -647,67 +594,28 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       },
     [agents.chatAgents?.items, agents.displayAgentId],
   );
-  useEffect(() => {
-    setWelcomeAffinity(
-      readWelcomeSuggestionAffinity(welcomeContextState.context.kind, agents.displayAgentId),
-    );
-  }, [agents.displayAgentId, welcomeContextState.context.kind]);
   const welcomeSpotlight = useMemo(
     () =>
-      buildWelcomeSpotlight(welcomeContextState.context, m.chat.welcomeSpotlight, welcomeAgent, {
-        affinity: welcomeAffinity,
+      buildWelcomeSpotlight(welcomeContextState.context, m.chat.welcomeSpotlight, {
         contextStatus: welcomeContextState.status,
-        explorationSeed: welcomeExplorationDaySeed(),
-        explorationOffset: welcomeExplorationOffset,
       }),
     [
       m.chat.welcomeSpotlight,
-      welcomeAffinity,
-      welcomeAgent,
       welcomeContextState.context,
       welcomeContextState.status,
-      welcomeExplorationOffset,
     ],
   );
-  const welcomeContextLoading = welcomeContextState.status === 'loading';
-  const activeWelcomeSpotlight = welcomeContextLoading ? undefined : welcomeSpotlight;
-  activeWelcomeSpotlightRef.current = activeWelcomeSpotlight ?? null;
-  useEffect(() => {
-    if (!welcomeContextLoading) {
-      setShowWelcomeSkeleton(false);
-      return undefined;
-    }
-    const timeout = window.setTimeout(() => setShowWelcomeSkeleton(true), 180);
-    return () => window.clearTimeout(timeout);
-  }, [welcomeContextLoading]);
-  const primaryWelcomeSelection = useMemo<WelcomeSuggestionSelection | null>(
+  const welcomeSelection = useMemo<WelcomeSuggestionSelection | null>(
     () =>
-      activeWelcomeSpotlight
+      welcomeSpotlight.recommendation
         ? {
-            suggestionId: activeWelcomeSpotlight.primaryRecommendation.id,
-            categoryId: activeWelcomeSpotlight.primaryRecommendation.categoryId,
-            contextKind: activeWelcomeSpotlight.contextKind,
-            prompt: activeWelcomeSpotlight.primaryRecommendation.prompt,
+            suggestionId: welcomeSpotlight.recommendation.id,
+            contextKind: welcomeSpotlight.contextKind,
+            prompt: welcomeSpotlight.recommendation.prompt,
           }
         : null,
-    [activeWelcomeSpotlight],
+    [welcomeSpotlight],
   );
-
-  useEffect(() => {
-    if (msgSlice.items.length > 0 || stream.streaming) return;
-    if (!activeWelcomeSpotlight) return;
-    const recommendation = activeWelcomeSpotlight.primaryRecommendation;
-    const impressionKey = `${chatConversationId ?? 'new'}:${activeWelcomeSpotlight.contextStatus}:${recommendation.id}`;
-    if (welcomeImpressionRef.current === impressionKey) return;
-    welcomeImpressionRef.current = impressionKey;
-    recordWelcomeSuggestionMetric({
-      type: 'impression',
-      suggestionId: recommendation.id,
-      categoryId: recommendation.categoryId,
-      contextKind: activeWelcomeSpotlight.contextKind,
-      agentId: agents.displayAgentId,
-    });
-  }, [activeWelcomeSpotlight, agents.displayAgentId, chatConversationId, msgSlice.items.length, stream.streaming]);
 
   const handleComposerSend = useCallback(
     (...args: Parameters<ComposerSendHandler>) => {
@@ -716,19 +624,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
         useChatSessionStore.getState().setShellError(m.chat.pageContext.pending);
         return false;
       }
-      const selection = pendingWelcomeSelectionRef.current;
-      if (selection && welcomePromptWasUsed(selection.prompt, text)) {
-        recordWelcomeSuggestionMetric({
-          type: 'send',
-          suggestionId: selection.suggestionId,
-          categoryId: selection.categoryId,
-          contextKind: selection.contextKind,
-          agentId: agents.displayAgentId,
-          edited: selection.prompt.trim() !== text.trim(),
-          characterDelta: text.length - selection.prompt.length,
-        });
-      }
-      pendingWelcomeSelectionRef.current = null;
       if (editingUserTurn) {
         setEditingUserTurn(null);
         return stream.replaceLatestUserTurn(
@@ -756,7 +651,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       if (pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
       return true;
     },
-    [agents.displayAgentId, editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage, pageContextDraft, pageContextKey, m.chat.pageContext.pending],
+    [editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage, pageContextDraft, pageContextKey, m.chat.pageContext.pending],
   );
 
   const projectComposer = useProjectSessionComposer({
@@ -1030,7 +925,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   }, [chatConversationId, isSessionTransitioning, m.chat.composerContext.changeFailed, updatingContext, projectComposer.busy, session.createNewSession, session.projectPreparation, session.userContextMode, stream.sending, stream.streaming, navigate, agents.displayAgentId]);
 
   const handleRemoveProject = useCallback(() => handleProjectChange(null), [handleProjectChange]);
-  const selectWelcomeProject = useCallback((projectId: string) => handleProjectChange(projectId), [handleProjectChange]);
   const handleComposerWorkspaceChange = useCallback(async (path: string) => {
     if (updatingContext || isSessionTransitioning || stream.sending || stream.streaming || !canChangeWorkingDirectory) return;
     setUpdatingContext(true);
@@ -1277,7 +1171,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                     reasoningLevel={session.reasoningLevel}
                     registerListContentRef={registerListContentRef}
                     onPickWelcomePrompt={onPickWelcomePrompt}
-                    welcomeSpotlight={activeWelcomeSpotlight}
+                    welcomeSpotlight={welcomeSpotlight}
                     welcomeOverlay={
                       agentSetup ? (
                         <AgentSetupWelcome
@@ -1296,18 +1190,9 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                             welcomeDraftSeq.current += 1;
                             setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text: buildComposerDraftSeed('find-skills', text)! });
                           }} />
-                      ) : welcomeContextLoading ? (
-                        <ChatWelcomeSpotlightSkeleton showSkeleton={showWelcomeSkeleton} compact={embedded} />
                       ) : undefined
                     }
                     compactWelcome={embedded}
-                    onRetryWelcomeContext={welcomeContextState.retry}
-                    onRefreshWelcomeExploration={
-                      activeWelcomeSpotlight?.categories.some((category) => category.scope === 'explore')
-                        ? refreshWelcomeExploration
-                        : undefined
-                    }
-                    onSelectWelcomeProject={selectWelcomeProject}
                     onDeleteRound={taskId ? undefined : stream.deleteMessageRound}
                     onRetryUserMessageRound={taskId ? undefined : stream.retryUserMessageRound}
                     deleteRoundDisabled={stream.streaming || stream.sending}
@@ -1425,7 +1310,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 conversationId={session.conversationId}
                 prepareContextSession={session.projectPreparation ? projectComposer.prepareSession : undefined}
                 welcomeDraftSeed={welcomeDraftSeed}
-                welcomeSuggestion={!skillDiscovery && compactWelcomeLayout ? primaryWelcomeSelection : null}
+                welcomeSuggestion={!skillDiscovery && compactWelcomeLayout ? welcomeSelection : null}
                 onAcceptWelcomeSuggestion={onPickWelcomePrompt}
                 thinkingLevel={session.thinkingLevel}
                 modelSupportsThinking={session.modelSupportsThinking}

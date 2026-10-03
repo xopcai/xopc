@@ -1,101 +1,47 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import type { SessionManager } from '@/features/chat/session/session-manager';
-import type { WelcomeSuggestionContext, WelcomeSuggestionContextStatus } from '@/features/chat/welcome/welcome-suggestions';
-import {
-  fetchProject,
-  fetchProjectOperatingView,
-  inferProjectDefaults,
-  type Project,
-  type ProjectKind,
-} from '@/features/projects/api';
-import { getSessionDetail } from '@/features/sessions/session-api';
 import { readLocalSessionDraft } from '@/features/chat/session/local-session-drafts';
+import type { WelcomeSuggestionContext, WelcomeSuggestionContextStatus } from '@/features/chat/welcome/welcome-suggestions';
+import { fetchProject, fetchProjectOperatingView } from '@/features/projects/api';
+import { getSessionDetail } from '@/features/sessions/session-api';
 import type { TaskDetail } from '@/features/tasks/home-api';
 import type { WorkflowRunView } from '@/features/workflows/workflow-api';
-
-type ProjectWithKind = Project & {
-  kind?: ProjectKind;
-  projectKind?: ProjectKind;
-};
 
 type UseWelcomeSuggestionContextOptions = {
   enabled: boolean;
   conversationId?: string | null;
-  sourceNoteId?: string | null;
-  sourceNoteTitle?: string | null;
   sourceContextPending?: boolean;
   sourceContextFailed?: boolean;
-  effectiveWorkspacePath?: string | null;
-  workingDirectoryLocked?: boolean;
+  suppressProjectContext?: boolean;
   task?: TaskDetail | null;
-  file?: Pick<File, 'name' | 'type'> | null;
   workflow?: WorkflowRunView | null;
-  sessionManager: SessionManager;
 };
 
 export type WelcomeSuggestionContextState = {
   context: WelcomeSuggestionContext;
   status: WelcomeSuggestionContextStatus;
-  retry: () => void;
 };
 
-type InternalWelcomeSuggestionContextState = Omit<WelcomeSuggestionContextState, 'retry'> & {
+type InternalWelcomeSuggestionContextState = WelcomeSuggestionContextState & {
   key: string;
 };
 
-function projectKindFromWire(project: ProjectWithKind, inferredKind: ProjectKind | null): ProjectKind {
-  return project.kind ?? project.projectKind ?? inferredKind ?? 'general';
-}
-
-function projectWorkspace(project: Project): string | undefined {
-  return project.effectiveWorkspaceRoot || project.workspaceRoot || undefined;
-}
-
-async function inferWorkspaceSuggestionContext(path: string): Promise<WelcomeSuggestionContext> {
-  const result = await inferProjectDefaults({ workspaceRoot: path });
-  return result.inference.kind === 'coding'
-    ? { kind: 'codingWorkspace', path }
-    : { kind: 'workingDirectory', path };
-}
-
-function contextStateKey({
-  attempt,
-  enabled,
-  conversationId,
-  sourceNoteId,
-  sourceNoteTitle,
-  sourceContextPending,
-  sourceContextFailed,
-  effectiveWorkspacePath,
-  workingDirectoryLocked,
-  task,
-  file,
-  workflow,
-}: UseWelcomeSuggestionContextOptions & { attempt: number }): string {
-  if (!enabled) return 'disabled';
-  if (sourceContextPending) return `pending:${conversationId ?? ''}`;
-  if (task) return `task:${task.task.id}:${task.task.version}`;
-  if (file) return `file:${file.name}:${file.type}`;
-  if (workflow) return `workflow:${workflow.run.id}:${workflow.run.status}`;
-  if (sourceNoteId) return `note:${sourceNoteId}:${sourceNoteTitle?.trim() ?? ''}`;
-  if (workingDirectoryLocked && effectiveWorkspacePath?.trim()) {
-    return `workspace:${conversationId ?? ''}:${effectiveWorkspacePath.trim()}`;
+function contextStateKey(options: UseWelcomeSuggestionContextOptions): string {
+  if (!options.enabled) return 'disabled';
+  if (options.sourceContextPending) return `pending:${options.conversationId ?? ''}`;
+  if (options.task) return `task:${options.task.task.id}:${options.task.task.version}`;
+  if (options.workflow) return `workflow:${options.workflow.run.id}:${options.workflow.run.status}`;
+  if (options.suppressProjectContext) return `suppressed:${options.conversationId ?? ''}`;
+  if (options.conversationId) {
+    return `session:${options.conversationId}:failed:${options.sourceContextFailed ? '1' : '0'}`;
   }
-  if (conversationId) return `session:${conversationId}:attempt:${attempt}:failed:${sourceContextFailed ? '1' : '0'}`;
   return 'empty';
 }
 
-function immediateContextState(
-  options: UseWelcomeSuggestionContextOptions & { attempt: number },
-): InternalWelcomeSuggestionContextState {
+function immediateContextState(options: UseWelcomeSuggestionContextOptions): InternalWelcomeSuggestionContextState {
   const key = contextStateKey(options);
-  if (!options.enabled) {
-    return { key, context: { kind: 'empty' }, status: 'ready' };
-  }
-  if (options.sourceContextPending) {
-    return { key, context: { kind: 'empty' }, status: 'loading' };
-  }
+  if (!options.enabled) return { key, context: { kind: 'empty' }, status: 'ready' };
+  if (options.sourceContextPending) return { key, context: { kind: 'empty' }, status: 'loading' };
   if (options.task) {
     const latestReceipt = options.task.receipts[0];
     return {
@@ -113,13 +59,6 @@ function immediateContextState(
       status: 'ready',
     };
   }
-  if (options.file) {
-    return {
-      key,
-      context: { kind: 'file', fileName: options.file.name },
-      status: 'ready',
-    };
-  }
   if (options.workflow) {
     const run = options.workflow.run;
     return {
@@ -134,139 +73,60 @@ function immediateContextState(
       status: 'ready',
     };
   }
-  if (options.sourceNoteId) {
+  if (options.suppressProjectContext) {
     return {
       key,
-      context: {
-        kind: 'note',
-        noteId: options.sourceNoteId,
-        title: options.sourceNoteTitle?.trim() || 'Untitled note',
-      },
-      status: 'ready',
-    };
-  }
-  const effectiveWorkspacePath = options.effectiveWorkspacePath?.trim();
-  if (options.workingDirectoryLocked && effectiveWorkspacePath) {
-    return {
-      key,
-      context: { kind: 'workingDirectory', path: effectiveWorkspacePath },
+      context: { kind: 'empty' },
       status: options.sourceContextFailed ? 'degraded' : 'ready',
     };
   }
-  if (options.conversationId) {
-    return { key, context: { kind: 'empty' }, status: 'loading' };
-  }
-  return { key, context: { kind: 'empty' }, status: 'ready' };
+  return {
+    key,
+    context: { kind: 'empty' },
+    status: options.conversationId ? 'loading' : 'ready',
+  };
 }
 
-export function useWelcomeSuggestionContext({
-  enabled,
-  conversationId,
-  sourceNoteId,
-  sourceNoteTitle,
-  sourceContextPending = false,
-  sourceContextFailed = false,
-  effectiveWorkspacePath,
-  workingDirectoryLocked = false,
-  task,
-  file,
-  workflow,
-  sessionManager,
-}: UseWelcomeSuggestionContextOptions): WelcomeSuggestionContextState {
-  const [attempt, setAttempt] = useState(0);
-  const currentOptions = {
-    attempt,
+export function useWelcomeSuggestionContext(options: UseWelcomeSuggestionContextOptions): WelcomeSuggestionContextState {
+  const {
     enabled,
     conversationId,
-    sourceNoteId,
-    sourceNoteTitle,
     sourceContextPending,
     sourceContextFailed,
-    effectiveWorkspacePath,
-    workingDirectoryLocked,
+    suppressProjectContext,
     task,
-    file,
     workflow,
-    sessionManager,
-  };
-  const currentKey = contextStateKey(currentOptions);
-  const [state, setState] = useState<InternalWelcomeSuggestionContextState>(() =>
-    immediateContextState(currentOptions),
-  );
-  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  } = options;
+  const currentKey = contextStateKey(options);
+  const [state, setState] = useState<InternalWelcomeSuggestionContextState>(() => immediateContextState(options));
 
   useEffect(() => {
     let cancelled = false;
-    if (!enabled) {
-      setState({ key: currentKey, context: { kind: 'empty' }, status: 'ready' });
+    const currentOptions: UseWelcomeSuggestionContextOptions = {
+      enabled,
+      conversationId,
+      sourceContextPending,
+      sourceContextFailed,
+      suppressProjectContext,
+      task,
+      workflow,
+    };
+    const immediate = immediateContextState(currentOptions);
+    if (
+      !enabled ||
+      sourceContextPending ||
+      task ||
+      workflow ||
+      suppressProjectContext ||
+      !conversationId
+    ) {
+      setState(immediate);
       return undefined;
     }
 
-    if (sourceContextPending) {
-      setState({ key: currentKey, context: { kind: 'empty' }, status: 'loading' });
-      return undefined;
-    }
-
-    if (task) {
-      setState(immediateContextState(currentOptions));
-      return undefined;
-    }
-
-    if (file || workflow) {
-      setState(immediateContextState(currentOptions));
-      return undefined;
-    }
-
-    if (sourceNoteId) {
-      setState({
-        key: currentKey,
-        context: {
-          kind: 'note',
-          noteId: sourceNoteId,
-          title: sourceNoteTitle?.trim() || 'Untitled note',
-        },
-        status: 'ready',
-      });
-      return undefined;
-    }
-
-    const syncWorkspacePath = workingDirectoryLocked ? effectiveWorkspacePath?.trim() : undefined;
-    if (syncWorkspacePath) {
-      setState({
-        key: currentKey,
-        context: { kind: 'workingDirectory', path: syncWorkspacePath },
-        status: sourceContextFailed ? 'degraded' : 'ready',
-      });
-      void (async () => {
-        try {
-          const context = await inferWorkspaceSuggestionContext(syncWorkspacePath);
-          if (!cancelled) {
-            setState({ key: currentKey, context, status: sourceContextFailed ? 'degraded' : 'ready' });
-          }
-        } catch {
-          if (!cancelled) {
-            setState({
-              key: currentKey,
-              context: { kind: 'workingDirectory', path: syncWorkspacePath },
-              status: 'degraded',
-            });
-          }
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    if (!conversationId) {
-      setState({ key: currentKey, context: { kind: 'empty' }, status: 'ready' });
-      return undefined;
-    }
-
-    setState({ key: currentKey, context: { kind: 'empty' }, status: 'loading' });
-
+    setState(immediate);
     void (async () => {
-      let degraded = sourceContextFailed;
+      let degraded = Boolean(sourceContextFailed);
       let projectId: string | null = null;
       try {
         const draft = await readLocalSessionDraft(conversationId);
@@ -277,89 +137,49 @@ export function useWelcomeSuggestionContext({
         degraded = true;
       }
 
-      if (projectId) {
-        try {
-          const [projectResult, operatingResult] = await Promise.allSettled([
-            fetchProject(projectId),
-            fetchProjectOperatingView(projectId),
-          ]);
-          if (projectResult.status === 'rejected') throw projectResult.reason;
-          const project = projectResult.value as ProjectWithKind;
-          const operating = operatingResult.status === 'fulfilled' ? operatingResult.value : null;
-          if (!operating) degraded = true;
-          let inferredKind: ProjectKind | null = project.kind ?? project.projectKind ?? null;
-          if (!inferredKind) {
-            try {
-              const result = await inferProjectDefaults({
-                name: project.name,
-                description: project.description,
-                workspaceRoot: project.effectiveWorkspaceRoot ?? project.workspaceRoot,
-              });
-              inferredKind = result.inference.kind;
-            } catch {
-              degraded = true;
-              inferredKind = 'general';
-            }
-          }
-          if (cancelled) return;
-          const kind = projectKindFromWire(project, inferredKind);
-          const blocker = operating?.blockers[0];
-          const failedResult = operating?.digest.health === 'attention'
-            ? operating.recentResults.find(
-                ({ receipt }) => receipt.status === 'failed' || receipt.verification.status === 'failed',
-              )
-            : undefined;
-          const continuation = {
-            recommendedAction: operating?.digest.recommendedAction,
-            blockedReason: blocker?.detail ?? blocker?.title,
-            recentFailure:
-              failedResult?.receipt.failure?.recoveryAction ?? failedResult?.receipt.summary,
-          };
+      if (!projectId) {
+        if (!cancelled) {
           setState({
             key: currentKey,
-            context:
-              kind === 'coding'
-                ? {
-                    kind: 'codingProject',
-                    projectId,
-                    projectName: project.name,
-                    workspaceRoot: projectWorkspace(project),
-                    ...continuation,
-                  }
-                : { kind: 'generalProject', projectId, projectName: project.name, ...continuation },
+            context: { kind: 'empty' },
             status: degraded ? 'degraded' : 'ready',
           });
-          return;
-        } catch {
-          degraded = true;
         }
+        return;
       }
 
       try {
-        const config = await sessionManager.loadSessionAgentConfig(conversationId);
-        const path = config.workingDirectoryLocked ? config.effectiveWorkspacePath.trim() : '';
-        if (cancelled) return;
-        if (path) {
-          let context: WelcomeSuggestionContext = { kind: 'workingDirectory', path };
-          try {
-            context = await inferWorkspaceSuggestionContext(path);
-          } catch {
-            degraded = true;
-          }
-          if (cancelled) return;
+        const [projectResult, operatingResult] = await Promise.allSettled([
+          fetchProject(projectId),
+          fetchProjectOperatingView(projectId),
+        ]);
+        if (projectResult.status === 'rejected') throw projectResult.reason;
+        const operating = operatingResult.status === 'fulfilled' ? operatingResult.value : null;
+        if (!operating) degraded = true;
+        const blocker = operating?.blockers[0];
+        const failedResult = operating?.digest.health === 'attention'
+          ? operating.recentResults.find(
+              ({ receipt }) => receipt.status === 'failed' || receipt.verification.status === 'failed',
+            )
+          : undefined;
+        if (!cancelled) {
           setState({
             key: currentKey,
-            context,
+            context: {
+              kind: 'project',
+              projectId,
+              projectName: projectResult.value.name,
+              recommendedAction: operating?.digest.recommendedAction,
+              blockedReason: blocker?.detail ?? blocker?.title,
+              recentFailure: failedResult?.receipt.failure?.recoveryAction ?? failedResult?.receipt.summary,
+            },
             status: degraded ? 'degraded' : 'ready',
           });
-          return;
         }
       } catch {
-        degraded = true;
-      }
-
-      if (!cancelled) {
-        setState({ key: currentKey, context: { kind: 'empty' }, status: degraded ? 'degraded' : 'ready' });
+        if (!cancelled) {
+          setState({ key: currentKey, context: { kind: 'empty' }, status: 'degraded' });
+        }
       }
     })();
 
@@ -367,23 +187,16 @@ export function useWelcomeSuggestionContext({
       cancelled = true;
     };
   }, [
-    attempt,
+    conversationId,
     currentKey,
     enabled,
-    conversationId,
-    sessionManager,
     sourceContextFailed,
     sourceContextPending,
-    effectiveWorkspacePath,
-    workingDirectoryLocked,
+    suppressProjectContext,
     task,
-    file,
     workflow,
-    sourceNoteId,
-    sourceNoteTitle,
   ]);
 
-  const visibleState = state.key === currentKey ? state : immediateContextState(currentOptions);
-
-  return { context: visibleState.context, status: visibleState.status, retry };
+  const visibleState = state.key === currentKey ? state : immediateContextState(options);
+  return { context: visibleState.context, status: visibleState.status };
 }

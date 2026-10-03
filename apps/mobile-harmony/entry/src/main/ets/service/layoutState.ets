@@ -1,5 +1,6 @@
 @ObservedV2
 export class XopcLayoutState {
+  @Trace foreground: boolean = true;
   @Trace keyboardVisible: boolean = false;
   @Trace chatActionsOpen: boolean = false;
   @Trace reduceMotion: boolean = true;

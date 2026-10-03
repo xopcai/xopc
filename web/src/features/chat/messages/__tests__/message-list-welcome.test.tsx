@@ -2,7 +2,6 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/features/chat/messages/message-bubble', () => ({
@@ -12,14 +11,6 @@ vi.mock('@/features/chat/messages/message-bubble', () => ({
 import { MessageList } from '@/features/chat/messages/message-list';
 import { buildWelcomeSpotlight } from '@/features/chat/welcome/welcome-suggestions';
 import { messages } from '@/i18n/messages';
-import { useGatewayStore } from '@/stores/gateway-store';
-
-vi.mock('@/features/projects/api', () => ({
-  fetchProjects: vi.fn().mockResolvedValue({ items: [{ id: 'project-1', name: 'Project' }] }),
-}));
-vi.mock('@/features/work-discovery/api', () => ({
-  fetchWorkDiscoveryOnboarding: vi.fn().mockResolvedValue(null),
-}));
 
 describe('MessageList welcome state', () => {
   let container: HTMLDivElement;
@@ -37,104 +28,59 @@ describe('MessageList welcome state', () => {
     container.remove();
   });
 
-  it('hides project selection when a project is selected before welcome context loads', async () => {
-    const previousToken = useGatewayStore.getState().conversationId;
-    useGatewayStore.setState({ conversationId: 'test' });
-    const welcomeSpotlight = buildWelcomeSpotlight({ kind: 'empty' }, messages('zh').chat.welcomeSpotlight, { id: 'main' });
-    const render = async (projectId?: string) => act(async () => {
-      root.render(
-        <MemoryRouter>
-          <MessageList
-            messages={[]}
-            streaming={false}
-            progress={null}
-            reasoningLevel="stream"
-            registerListContentRef={() => {}}
-            onPickWelcomePrompt={() => {}}
-            onSelectWelcomeProject={() => {}}
-            welcomeSpotlight={welcomeSpotlight}
-            projectId={projectId}
-          />
-        </MemoryRouter>,
-      );
-    });
-    try {
-      await render();
-      expect(container.textContent).toContain(messages('en').onboarding.workDiscovery.selectProject);
-      await render('project-1');
-      expect(container.textContent).not.toContain(messages('en').onboarding.workDiscovery.selectProject);
-      expect(container.textContent).toContain('办公输出');
-      await render();
-      expect(container.textContent).toContain(messages('en').onboarding.workDiscovery.selectProject);
-    } finally {
-      await act(async () => useGatewayStore.setState({ conversationId: previousToken }));
-    }
-  });
-
-  it('renders three flat, directly actionable suggestions for an empty non-streaming chat', () => {
-    const copy = messages('zh').chat.welcomeSpotlight;
-    const welcomeSpotlight = buildWelcomeSpotlight({ kind: 'empty' }, copy, { id: 'main' });
-    const workCategory = welcomeSpotlight.categories.find((category) => category.id === 'work');
-    if (workCategory) {
-      workCategory.scenarios.push(
-        { id: 'work:extra-1', prompt: '帮我整理一份项目同步材料。' },
-        { id: 'work:extra-2', prompt: '帮我准备一次复盘会议。' },
-      );
-    }
-    const onPickWelcomePrompt = vi.fn();
-    const onRefreshWelcomeExploration = vi.fn();
-
+  function renderWelcome(spotlight: ReturnType<typeof buildWelcomeSpotlight>, onPick = vi.fn()) {
     act(() => {
       root.render(
-        <MemoryRouter>
-          <MessageList
-            messages={[]}
-            streaming={false}
-            progress={null}
-            reasoningLevel="stream"
-            registerListContentRef={() => {}}
-            onPickWelcomePrompt={onPickWelcomePrompt}
-            onRefreshWelcomeExploration={onRefreshWelcomeExploration}
-            welcomeSpotlight={welcomeSpotlight}
-          />
-        </MemoryRouter>,
+        <MessageList
+          messages={[]}
+          streaming={false}
+          progress={null}
+          reasoningLevel="stream"
+          registerListContentRef={() => {}}
+          onPickWelcomePrompt={onPick}
+          welcomeSpotlight={spotlight}
+        />,
       );
     });
+    return onPick;
+  }
+
+  it('renders a quiet empty state without generic suggestions', () => {
+    const spotlight = buildWelcomeSpotlight({ kind: 'empty' }, messages('zh').chat.welcomeSpotlight);
+
+    renderWelcome(spotlight);
 
     expect(container.textContent).toContain('今天想推进什么？');
+    expect(container.textContent).not.toContain('办公输出');
+    expect(container.textContent).not.toContain('写作润色');
     expect(container.querySelector('[data-loopi="ceramic-v3"]')).not.toBeNull();
-    expect(container.querySelector('.loopi-pause')).toBeNull();
-    const companion = container.querySelector<HTMLButtonElement>('.loopi-touch');
-    expect(companion?.type).toBe('button');
-    act(() => companion?.click());
-    expect(onPickWelcomePrompt).not.toHaveBeenCalled();
-    expect(container.textContent).toContain('办公输出');
-    expect(container.textContent).toContain('写作润色');
-    expect(container.textContent).toContain('学习新主题');
-    expect(container.textContent).not.toContain('建议下一步');
-    expect(container.textContent).not.toContain(welcomeSpotlight.primaryRecommendation.prompt);
+    expect(container.innerHTML).toContain('sm:size-32');
+    expect(container.innerHTML).toContain('sm:pt-28');
+    expect(container.innerHTML).toContain('max-height:800px)]:pt-8');
+  });
 
-    const refreshExplorationButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="换一个探索方向"]',
-    );
-    expect(refreshExplorationButton).toBeTruthy();
-    expect(
-      refreshExplorationButton?.closest('[data-welcome-suggestion-scope="explore"]'),
-    ).toBeTruthy();
-    act(() => refreshExplorationButton?.click());
-    expect(onRefreshWelcomeExploration).toHaveBeenCalledOnce();
+  it('shows one explainable action when the next step is explicit', () => {
+    const spotlight = buildWelcomeSpotlight({
+      kind: 'project',
+      projectId: 'project-1',
+      projectName: 'xopc',
+      recentFailure: '类型检查失败',
+    }, messages('zh').chat.welcomeSpotlight);
+    const onPick = renderWelcome(spotlight);
 
-    const workSuggestionButton = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('办公输出'),
+    expect(container.textContent).toContain('解决最近的失败：类型检查失败');
+    expect(container.textContent).toContain('xopc 项目 · 最近一次失败');
+    const recommendation = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+      button.textContent?.includes('类型检查失败'),
     );
-    expect(workSuggestionButton).toBeTruthy();
-    expect(container.querySelector('[role="region"]')).toBeNull();
-    act(() => workSuggestionButton?.click());
-    expect(onPickWelcomePrompt).toHaveBeenCalledWith(
-      expect.objectContaining({
-        categoryId: 'work',
-        prompt: expect.stringContaining('简短周报'),
-      }),
-    );
+    expect(recommendation).toBeTruthy();
+
+    act(() => recommendation?.click());
+
+    expect(onPick).toHaveBeenCalledWith({
+      suggestionId: 'project-failure',
+      contextKind: 'project',
+      prompt: expect.stringContaining('类型检查失败'),
+    });
   });
 });
