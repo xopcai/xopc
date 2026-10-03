@@ -539,7 +539,7 @@ export function HomePage() {
     : backgroundCount > 0 ? interpolate(t.home.clearIntro, { count: backgroundCount }) : t.home.idleIntro;
 
   return (
-    <main className="mx-auto flex w-full max-w-[920px] flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+    <main className="mx-auto flex w-full max-w-[920px] flex-1 flex-col px-4 pb-8 pt-3 sm:px-6 lg:px-8 lg:pb-12 lg:pt-4">
       <input
         ref={attachments.fileInputRef}
         type="file"

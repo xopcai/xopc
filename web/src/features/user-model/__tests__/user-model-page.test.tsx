@@ -154,6 +154,23 @@ describe('UserModelPage summary navigation', () => {
     expect(priority?.className).toContain('bg-surface-panel');
   });
 
+  it('keeps the overview focused on identity, actions, and summaries', () => {
+    expect(container.textContent).not.toContain('Getting to know you. Helping in your own way.');
+    expect(container.textContent).not.toContain('Your explicit profile stays clear and editable.');
+    expect(container.textContent).not.toContain('Recently formed understanding');
+    expect(container.textContent).not.toContain('No current priority has been set.');
+    expect(container.textContent).toContain('Set current focus');
+    expect(container.textContent).toContain('Needs your review');
+    expect(container.textContent).toContain('What xopc knows about me');
+  });
+
+  it('uses the animated Loopi brand mark for the profile identity', () => {
+    const mark = container.querySelector('[data-testid="overview-hero"] [data-loopi="ceramic-v3"]');
+    expect(mark).not.toBeNull();
+    expect(mark?.getAttribute('data-mood')).toBe('listen');
+    expect(container.textContent).not.toContain('MI');
+  });
+
   it('renders the primary tabs as a capsule control', () => {
     const tabs = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
     expect(tabs).toHaveLength(3);
