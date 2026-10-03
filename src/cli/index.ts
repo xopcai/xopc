@@ -52,12 +52,14 @@ function buildProgram(ctx: CLIContext): Command {
   // Hook to capture parsed options before each command runs. Mutate the
   // shared object in place — `parsedOpts` is a `const` import from
   // `./context.js` so command modules see updates through the same reference.
-  program.hook('preAction', (thisCommand) => {
-    const next = thisCommand.opts() as Record<string, unknown>;
+  program.hook('preAction', (hookOwner, actionCommand) => {
+    const next = hookOwner.opts() as Record<string, unknown>;
     for (const k of Object.keys(parsedOpts)) {
       delete (parsedOpts as Record<string, unknown>)[k];
     }
     Object.assign(parsedOpts, next);
+    // Backup must inspect the database before any startup migration or write.
+    if (actionCommand?.name() === 'backup' || actionCommand?.parent?.name() === 'backup') return;
     bootstrapApplicationStateSync(ctx.configPath);
   });
 

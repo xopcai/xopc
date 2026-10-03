@@ -19,6 +19,7 @@ export type CommandLoader = () => Promise<unknown>;
 export const REGISTRY_COMMAND_MODULES: Record<string, CommandLoader> = {
   init: () => import('./commands/init.js'),
   profile: () => import('./commands/profile.js'),
+  backup: () => import('./commands/backup.js'),
   setup: () => import('./commands/setup.js'),
   onboard: () => import('./commands/onboard.js'),
   agent: () => import('./commands/agent.js'),

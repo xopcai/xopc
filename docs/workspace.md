@@ -40,7 +40,16 @@ Profiles may use directories such as `~/.xopc-work`. Environment variables and c
 
 ## Back up
 
-For a consistent full backup:
+For an encrypted offline state-directory backup, follow [Back up and restore xopc](./backup.md):
+
+```bash
+xopc backup create --output /secure/xopc-backup --passphrase-file /secure/passphrase
+xopc backup verify /secure/xopc-backup --passphrase-file /secure/passphrase
+```
+
+Stop the Gateway first. This command covers the active state directory and refuses known external workspace, config, or credential paths. It does not yet perform automatic cloud migration.
+
+For a manual backup that also includes external paths:
 
 1. stop or pause active Agent runs and Automations;
 2. stop the Gateway service;
