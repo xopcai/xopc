@@ -6,6 +6,7 @@ import { voiceCapture } from './voiceCapture';
 import { chatReadAloud } from './chatReadAloud';
 import { voiceCallAudio } from './voiceCallAudio';
 import { XopcVoiceCallTransport, XopcVoiceSendResult } from './voiceCallTransport';
+import { xopcVoiceShouldReconnect } from '../common/voiceRecovery';
 import {
   XopcVoiceApproval, XopcVoiceApprovalsPayload, XopcVoiceAudioFrame, XopcVoiceCallTarget, XopcVoiceClarification,
   XopcVoiceServerEvent, XopcVoiceSession, XopcVoiceSessionRequest, XopcVoiceStatus, XopcVoicePayload
@@ -46,6 +47,7 @@ export class XopcVoiceCall {
   private generation: number = 0;
   private reconnectTimer: number = -1;
   private reconnectAttempt: number = 0;
+  private connectedAt: number = 0;
   private queueTimer: number = -1;
   private responseDone: boolean = false;
   private receivedMs: number = 0;
@@ -99,7 +101,7 @@ export class XopcVoiceCall {
       await transport.connect(auth.origin, session);
       if (generation !== this.generation) return;
       transport.send('input.mute', { muted: this.muted });
-      this.phase = 'connected'; this.reconnectAttempt = 0;
+      this.phase = 'connected'; this.connectedAt = Date.now();
       clearTimeout(this.limitTimer);
       this.limitTimer = setTimeout((): void => { if (generation === this.generation) this.pause('TIME_LIMIT'); }, session.limits.maxSessionMs);
       if (this.mode === 'assistant') { this.loadApproval(); this.approvalTimer = setInterval((): void => { this.loadApproval(); }, 3000); }
@@ -231,9 +233,10 @@ export class XopcVoiceCall {
   }
 
   private recover(reason: string): void {
-    if (!['NETWORK', 'route_lost', 'CAPTURE_FAILED', 'PLAYBACK_FAILED', 'CAPTURE_INTERRUPTED'].includes(reason)) {
+    if (!xopcVoiceShouldReconnect(reason)) {
       this.pause(reason); return;
     }
+    if (this.connectedAt && Date.now() - this.connectedAt >= 30000) this.reconnectAttempt = 0;
     this.pause(reason, true);
   }
 

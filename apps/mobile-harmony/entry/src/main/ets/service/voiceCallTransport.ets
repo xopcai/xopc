@@ -32,9 +32,11 @@ export class XopcVoiceCallTransport {
   private audioSeq: number = 0;
   private inputSeq: number = 0;
   private inputStarted: boolean = false;
+  private inputMuted: boolean = true;
   private utteranceId: string = '';
   private remainder: Uint8Array = new Uint8Array(0);
   private pendingBytes: number = 0;
+  private audioSendQueue: Promise<void> = Promise.resolve();
   private heartbeatTimer: number = -1;
   private lastPong: number = 0;
   private lastPing: number = 0;
@@ -47,7 +49,7 @@ export class XopcVoiceCallTransport {
     await this.close();
     const generation = ++this.generation;
     this.closed = false; this.ready = false; this.session = session; this.eventSeq = 0; this.audioSeq = 0;
-    this.rotateUtterance(); this.lastPong = Date.now();
+    this.inputMuted = true; this.rotateUtterance(); this.lastPong = Date.now();
     const direct = origin.replace(/^https:/, 'wss:') + session.websocketPath;
     const proxy = origin.replace(/^https:/, 'wss:') + XOPC_VOICE_PROXY_WS_PATH;
     try { await this.open(direct, generation); }
@@ -133,7 +135,10 @@ export class XopcVoiceCallTransport {
   send(type: string, payload: XopcVoiceClientPayload): void {
     if (!this.socket || this.closed) return;
     this.socket.send(xopcVoiceClientMessage(type, payload)).catch((_error: Error): void => { this.fail('NETWORK', this.generation); });
-    if (type === 'input.mute' && payload.muted === false) this.rotateUtterance();
+    if (type === 'input.mute' && typeof payload.muted === 'boolean') {
+      if (this.inputMuted && !payload.muted) this.rotateUtterance();
+      this.inputMuted = payload.muted;
+    }
   }
 
   audio(bytes: Uint8Array): XopcVoiceSendResult {
@@ -150,8 +155,17 @@ export class XopcVoiceCallTransport {
         audioSeq: ++this.inputSeq, capturedAtMonotonicMs: systemDateTime.getUptime(systemDateTime.TimeType.STARTUP, false),
         start: !this.inputStarted, end: false, audio });
       this.inputStarted = true; this.pendingBytes += data.byteLength;
-      this.socket.send(data).then((_sent: boolean): void => { this.pendingBytes = Math.max(0, this.pendingBytes - data.byteLength); })
-        .catch((_error: Error): void => { this.pendingBytes = Math.max(0, this.pendingBytes - data.byteLength); this.fail('NETWORK', this.generation); });
+      const socket = this.socket; const generation = this.generation;
+      this.audioSendQueue = this.audioSendQueue.then(async (): Promise<void> => {
+        if (generation !== this.generation || this.closed || this.socket !== socket) {
+          return;
+        }
+        try { await socket.send(data); }
+        catch (_error) { this.fail('NETWORK', generation); }
+        finally {
+          if (generation === this.generation) this.pendingBytes = Math.max(0, this.pendingBytes - data.byteLength);
+        }
+      });
     }
     this.remainder = pending.slice(offset);
     const queueAgeMs = this.pendingBytes / 32;
@@ -189,6 +203,7 @@ export class XopcVoiceCallTransport {
 
   async close(): Promise<void> {
     ++this.generation; this.closed = true; this.ready = false; this.session = undefined;
-    clearInterval(this.heartbeatTimer); this.heartbeatTimer = -1; this.pendingBytes = 0; await this.releaseSocket();
+    this.inputMuted = true; clearInterval(this.heartbeatTimer); this.heartbeatTimer = -1;
+    this.pendingBytes = 0; this.audioSendQueue = Promise.resolve(); await this.releaseSocket();
   }
 }
