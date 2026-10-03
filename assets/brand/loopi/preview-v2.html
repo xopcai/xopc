@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loopi · 小环角色实验室</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f8f9fc;color:#222936;font:16px/1.7 system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:40px 24px}header{display:flex;justify-content:space-between;align-items:center}.tag{font-size:12px;letter-spacing:.1em;color:#687589}h1{font-size:clamp(32px,5vw,56px);line-height:1.2;letter-spacing:-.04em;margin:30px 0 16px}p{color:#637084}button{font:inherit;border:1px solid #dbe2ec;background:white;color:#303c50;padding:9px 17px;border-radius:24px;cursor:pointer}button:focus-visible,a:focus-visible{outline:3px solid #007aff;outline-offset:4px}button[aria-pressed=true],.primary{background:#007aff;color:white;border-color:#007aff}.hero{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:36px;margin:24px 0}.stage{position:relative;aspect-ratio:1;display:grid;place-items:center;background:radial-gradient(ellipse,#e5edff,transparent 68%);border-radius:40px}.character{width:100%;animation:float 4s ease-in-out infinite;transform-origin:50% 65%}.stage[data-state=listen] .character{animation:listen 4s ease-in-out infinite}.stage[data-state=work] .character{animation:work 2.4s ease-in-out infinite}.stage[data-state=decision] .character{animation:none;transform:rotate(-3deg)}.stage[data-state=done] .character{animation:done .7s ease-out 1}.paused .character{animation-play-state:paused!important}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.copy{min-height:180px}#line{font-size:24px;color:#28384e;margin-bottom:8px}#detail{min-height:55px}.day{width:72px;height:72px;transform:rotate(-90deg)}.day circle{fill:none;stroke-width:9}.day .ai{stroke:#303a4a;stroke-dasharray:0 251.327;transition:stroke-dasharray 1.2s ease}.daybox{display:flex;align-items:center;gap:16px;border-top:1px solid #e1e7f0;padding-top:20px}.small{font-size:12px;color:#758298}.board{margin:64px 0}.board img{width:100%;border-radius:24px;border:1px solid #e8ebf1}.board h2{font-size:22px}footer{padding:32px 0;color:#758298;font-size:13px}a{color:#007aff}#approve[hidden]{display:none}@keyframes float{50%{transform:translateY(-7px) rotate(1deg)}}@keyframes listen{50%{transform:translateY(-3px) rotate(-3deg)}}@keyframes work{50%{transform:translateY(-4px) rotate(2deg)}}@keyframes done{35%{transform:translateY(-20px) scale(1.025)}70%{transform:translateY(2px) scale(.99)}}@media(max-width:700px){.hero{grid-template-columns:1fr;gap:0}.stage{max-width:380px;width:100%;margin:auto;order:-1}main{padding:24px 18px}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.character{transform:none!important}}
+</style>
+<main>
+<header><strong>xopc / Loopi</strong><span class="tag">CHARACTER LAB · 02</span></header>
+<section class="hero">
+<div><span class="tag">你的日常，多一点轻松</span><h1>小环在忙，<br>生活留给你。</h1><p>一点机灵，一点可爱。帮你推进事情，也认真等你做决定。</p>
+<div class="controls"><button id="website" aria-pressed="true">官网循环</button><button id="onboard" aria-pressed="false">Onboarding</button><button id="pause" aria-pressed="false">暂停</button></div>
+<div class="copy" aria-live="polite"><p id="line"></p><p id="detail"></p><button id="approve" class="primary" hidden>好，按这个方向继续</button></div>
+<div class="daybox"><svg class="day" viewBox="0 0 100 100" role="img" aria-label="人和 AI 协作理念示意"><circle cx="50" cy="50" r="40" stroke="#007aff"/><circle class="ai" cx="50" cy="50" r="40"/></svg><div>你定方向，小环帮忙推进。<br><span class="small">80/20 是愿景示意，非实时进度或效率承诺。</span></div></div>
+</div>
+<div class="stage" data-state="idle"><img class="character" src="hero.png" alt="小环：灰蓝圆环环抱白色微笑核心"></div>
+</section>
+<div class="controls" aria-label="角色动作预览"><button data-preview="idle">待机</button><button data-preview="listen">倾听</button><button data-preview="work">工作</button><button data-preview="decision">等你决定</button><button data-preview="done">完成</button></div>
+<p class="small">动态样稿展示整体动作；面部表情见下方设计板。正式版将分层制作眼睛、核心和圆环。</p>
+<section class="board"><h2>01 / 造型与转面</h2><img src="turnaround.png" alt="小环正面、四分之三、侧面、背面设计板" loading="lazy"></section>
+<section class="board"><h2>02 / 八种情绪</h2><p>打招呼、倾听、专注、好奇、等你决定、完成、安慰、休息。</p><img src="expressions.png" alt="八种角色表情概念" loading="lazy"></section>
+<section class="board"><h2>03 / 一天的故事</h2><img src="storyboard.png" alt="从独自处理到 AI 帮忙，再到享受生活的六格分镜" loading="lazy"><p class="small">分镜修订：确认勾号放在用户点击之后；结尾角色保留灰蓝配色。交互样稿的 Onboarding 已按真实点击停顿。</p></section>
+<footer>设计评审稿 · <a href="README.md">造型与动效规范</a> · <a href="prompts.md">生成提示词</a></footer>
+</main>
+<script>
+const states=[
+ ['idle','一天，有很多事等着你。','从小事到大计划，总想都照顾好。',0],
+ ['listen','交给我一点吧。','告诉我想做什么，我帮你把下一步理清楚。',.25],
+ ['work','我来把事情往前推。','整理、准备、跟进，让你少操一点心。',.8],
+ ['decision','这一步，听你的。','重要的选择留给你，我在这里等。',.8],
+ ['done','搞定，给生活留点空。','去散步、见朋友，或者什么也不做。',.8]
+];
+const stage=document.querySelector('.stage'),line=document.querySelector('#line'),detail=document.querySelector('#detail'),arc=document.querySelector('.ai'),approve=document.querySelector('#approve'),pause=document.querySelector('#pause');
+const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+let mode='website',index=0,paused=reduced.matches,timer;
+function render(s=states[index]){
+ stage.dataset.state=s[0];line.textContent=s[1];detail.textContent=s[2];
+ arc.style.strokeDasharray=(251.327*s[3])+' 251.327';
+ approve.hidden=!(mode==='onboard'&&s[0]==='decision');
+ pause.textContent=paused?'播放':'暂停';pause.setAttribute('aria-pressed',String(paused));
+ document.body.classList.toggle('paused',paused);
+}
+function schedule(){
+ clearTimeout(timer);
+ if(paused||document.hidden||(mode==='onboard'&&(index===3||index===4)))return;
+ timer=setTimeout(()=>{index=(index+1)%states.length;render();schedule()},3000);
+}
+function setMode(next){mode=next;index=0;document.querySelector('#website').setAttribute('aria-pressed',String(mode==='website'));document.querySelector('#onboard').setAttribute('aria-pressed',String(mode==='onboard'));render();schedule()}
+document.querySelector('#website').onclick=()=>setMode('website');
+document.querySelector('#onboard').onclick=()=>setMode('onboard');
+pause.onclick=()=>{paused=!paused;render();schedule()};
+approve.onclick=()=>{index=4;render();schedule();document.querySelector('#onboard').focus()};
+document.querySelectorAll('[data-preview]').forEach(button=>button.onclick=()=>{paused=true;index=states.findIndex(s=>s[0]===button.dataset.preview);render();schedule()});
+document.addEventListener('visibilitychange',schedule);
+reduced.addEventListener('change',event=>{if(event.matches){paused=true;render();schedule()}});
+render();schedule();
+</script>
+</html>
