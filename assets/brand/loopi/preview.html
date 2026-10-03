@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loopi — 给生活留点空</title>
+<link rel="stylesheet" href="preview.css"><script src="preview.js" defer></script>
+</head>
+<body><main>
+<header class="masthead"><a class="wordmark" href="#home">xopc<span> / 小环</span></a><span class="edition">角色实验室 · 03</span></header>
+<section class="hero" id="home">
+<div class="intro">
+<p class="eyebrow"><span class="status-dot"></span> A LITTLE HELP. A LITTLE MORE LIFE.</p>
+<h1>事情在推进。<br>你可以<span class="serif">松口气。</span></h1>
+<p class="description">有点机灵，也有点可爱。<br>小环帮你照顾琐事，把重要的选择留给你。</p>
+<div class="mode-control" aria-label="演示方式"><button data-mode="free" aria-pressed="true">和小环玩一下</button><button data-mode="website" aria-pressed="false">官网循环</button><button data-mode="onboard" aria-pressed="false">初次见面</button></div>
+<div class="state-copy" aria-live="polite" aria-atomic="true"><p id="line">嘿，我在这里。</p><p id="detail">移近一点，我会看向你。也可以轻轻点我一下。</p></div>
+<div class="action-row"><button id="next" class="primary" hidden>下一步</button><button id="approve" class="primary" hidden>好，继续吧</button><button id="restart" hidden>再认识一次</button></div>
+<p class="quiet-note" id="mode-note">视线跟随 · 轻触回应 · 自然眨眼</p>
+</div>
+<div class="playground">
+<div class="stage-top"><span>LOOPI / 陶瓷小环</span><button id="pause" aria-pressed="false">暂停动态</button></div>
+<button class="stage" id="stage" aria-label="轻轻点一下小环，它会眨眼回应">
+<svg id="loopi" viewBox="0 0 400 400" aria-hidden="true">
+<defs>
+<linearGradient id="ceramic" x1="100" y1="65" x2="280" y2="330" gradientUnits="userSpaceOnUse"><stop stop-color="#41494C"/><stop offset=".48" stop-color="#30383C"/><stop offset="1" stop-color="#3B4449"/></linearGradient>
+<linearGradient id="enamel" x1="230" y1="63" x2="326" y2="170" gradientUnits="userSpaceOnUse"><stop stop-color="#6C9FF6"/><stop offset="1" stop-color="#387DE5"/></linearGradient>
+<linearGradient id="porcelain" x1="180" y1="127" x2="218" y2="247" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFEF9"/><stop offset=".65" stop-color="#F6F3EB"/><stop offset="1" stop-color="#EAE6DC"/></linearGradient>
+<linearGradient id="edge" x1="170" y1="50" x2="224" y2="310" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF" stop-opacity=".36"/><stop offset=".46" stop-color="#FFFFFF" stop-opacity=".04"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+<filter id="soft-shadow" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#39473E" flood-opacity=".09"/></filter>
+<filter id="floor-blur" x="-40%" y="-300%" width="180%" height="700%"><feGaussianBlur stdDeviation="5"/></filter>
+</defs>
+<ellipse id="floor" cx="200" cy="349" rx="73" ry="6" fill="#546455" opacity=".10" filter="url(#floor-blur)"/>
+<g id="ring-motion">
+<g fill="none" stroke-width="35" stroke-linecap="round" transform="translate(0 3)" opacity=".95"><path class="ai-arc" stroke="#232C30"/><path class="human-arc" stroke="#2866C4"/></g>
+<g fill="none" stroke-width="35" stroke-linecap="round" filter="url(#soft-shadow)"><path class="ai-arc" stroke="url(#ceramic)"/><path class="human-arc" stroke="url(#enamel)"/></g>
+<g fill="none" stroke-width="1.2" stroke-linecap="round" opacity=".75"><path id="ai-edge" stroke="url(#edge)"/><path id="human-edge" stroke="#D9E8FF" opacity=".5"/></g>
+<path id="blue-cue" fill="none" stroke="#9ABFFF" stroke-width="2" stroke-linecap="round" opacity="0"/>
+</g>
+<g id="core-position"><g id="core-shape">
+<path d="M130 190 C130 153 156 131 200 131 C244 131 270 153 270 190 C270 229 244 250 200 250 C156 250 130 229 130 190Z" fill="#DCDDD3" opacity=".5" transform="translate(0 2)"/>
+<path d="M130 190 C130 153 156 131 200 131 C244 131 270 153 270 190 C270 229 244 250 200 250 C156 250 130 229 130 190Z" fill="url(#porcelain)" stroke="#FFFFFF" stroke-opacity=".8" stroke-width="1" filter="url(#soft-shadow)"/>
+</g><g id="face">
+<g id="cheeks" opacity="0"><ellipse cx="168" cy="207" rx="8" ry="3.5" fill="#E8B8A5"/><ellipse cx="232" cy="207" rx="8" ry="3.5" fill="#E8B8A5"/></g>
+<g id="eye-left"><ellipse class="eye-fill" cx="179" cy="188" rx="4.4" ry="6.2" fill="#293236"/><circle class="eye-glint" cx="180" cy="186" r=".9" fill="#FFFEFA"/><path class="eye-curve" d="M174 188 Q179 181 184 188" fill="none" stroke="#293236" stroke-width="2.8" stroke-linecap="round" opacity="0"/></g>
+<g id="eye-right"><ellipse class="eye-fill" cx="221" cy="188" rx="4.4" ry="6.2" fill="#293236"/><circle class="eye-glint" cx="222" cy="186" r=".9" fill="#FFFEFA"/><path class="eye-curve" d="M216 188 Q221 181 226 188" fill="none" stroke="#293236" stroke-width="2.8" stroke-linecap="round" opacity="0"/></g>
+<path id="mouth" d="M193 207 Q200 213 207 207" fill="none" stroke="#293236" stroke-width="2.5" stroke-linecap="round"/>
+</g></g>
+</svg>
+</button>
+<div class="stage-bottom"><span id="state-label">自在待机</span><span>轻轻点我 ↗</span></div>
+</div>
+</section>
+<section class="emotions-section">
+<div class="section-heading"><div><span class="eyebrow">LITTLE EXPRESSIONS</span><h2>有情绪，也有分寸。</h2></div><p>点一个表情，看看小环怎么回应。</p></div>
+<div class="emotion-grid" id="emotions"></div>
+</section>
+<section class="story-section">
+<div class="story-copy"><span class="eyebrow">YOU LEAD. LOOPI HELPS.</span><h2>从忙碌的一天，<br>到自己的时间。</h2><p>圆环里的灰色慢慢接过琐事。<br>蓝色的那一小段，始终由你决定。</p><p class="quiet-note">80/20 是协作愿景示意，不代表任务进度或效率承诺。</p></div>
+<div class="story-track"><div class="day-display"><svg viewBox="0 0 100 100" aria-label="人和 AI 分工理念示意" role="img"><circle cx="50" cy="50" r="38" fill="none" stroke="#548BE7" stroke-width="9"/><circle id="day-ai" cx="50" cy="50" r="38" fill="none" stroke="#364045" stroke-width="9" transform="rotate(-90 50 50)" stroke-dasharray="0 238.761"/></svg><span id="story-title">先告诉我，你想做什么。</span></div><div class="story-steps"><span data-step="0" class="active">说给我听</span><span data-step="1">帮你推进</span><span data-step="2">由你决定</span><span data-step="3">享受生活</span></div></div>
+</section>
+<details class="research"><summary>这次为什么这样改？ <span>造型发散与研究依据 ↗</span></summary>
+<p>薄陶瓷、磨砂玻璃、层叠纸片三条路线中，选择薄陶瓷：平整正面、浅侧边和少量高光，给表情留下注意力。</p>
+<img src="material-directions.png" alt="薄陶瓷、磨砂玻璃、纸片三种材质方向探索" loading="lazy">
+<p>生成板仅用于材质发散。可交互角色使用独立 SVG 图层重新绘制，保留圆环缺口与灰蓝身份。眼睛、嘴、脸部核心、外圈分别驱动；脸部没有旋转，双眼基线始终水平。</p>
+<p>参考：<a href="https://blog.duolingo.com/world-character-visemes/">Duolingo 的表情与状态衔接</a> · <a href="https://rive.app/features">Rive 的分层混合</a> · <a href="https://developer.apple.com/design/human-interface-guidelines/motion">Apple 的动态反馈规范</a></p>
+</details>
+<footer><span>xopc · 小环 / 设计样稿 v3</span><nav><a href="README.md">设计说明</a><a href="research-v3.md">研究与取舍</a><a href="preview-v2.html">上一版存档</a></nav></footer>
+</main></body></html>
