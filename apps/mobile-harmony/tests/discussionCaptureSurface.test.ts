@@ -17,10 +17,21 @@ describe('HarmonyOS voice note surface', () => {
   it('renders live transcript, pause, marker, finish and retry states', () => {
     const notes = source('../entry/src/main/ets/view/NotesTabView.ets');
     expect(notes).toContain(".id('notes-live-capture')");
-    expect(notes).toContain('this.capture.transcript');
+    expect(notes).toContain('this.capture.visibleTranscript');
+    expect(notes).toContain('.textAlign(TextAlign.Center)');
     expect(notes).toContain('this.capture.togglePause()');
     expect(notes).toContain('this.capture.mark()');
     expect(notes).toContain('void this.finishCapture()');
+  });
+
+  it('uses realtime dictation with durable chunked transcription as fallback', () => {
+    const capture = source('../entry/src/main/ets/service/discussionCapture.ets');
+    const realtime = source('../entry/src/main/ets/service/discussionLiveTranscription.ets');
+    expect(capture).toContain('this.live?.audio(copy)');
+    expect(capture).toContain('!this.realtimeActive');
+    expect(realtime).toContain("purpose: 'dictation'");
+    expect(realtime).toContain("event.type !== 'input.transcript.delta'");
+    expect(realtime).toContain("transport?.send('input.commit', {})");
   });
 
   it('uses the durable discussion capture protocol for live and full recording chunks', () => {

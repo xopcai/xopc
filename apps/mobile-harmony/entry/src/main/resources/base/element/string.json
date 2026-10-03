@@ -216,6 +216,7 @@
     { "name": "capture_title", "value": "Voice note" },
     { "name": "capture_live", "value": "Recording" },
     { "name": "capture_listening", "value": "Start speaking…" },
+    { "name": "capture_listening_hint", "value": "Your words will appear here as you speak" },
     { "name": "capture_transcribing", "value": "Transcribing…" },
     { "name": "capture_paused", "value": "Paused" },
     { "name": "capture_marker", "value": "Mark" },
