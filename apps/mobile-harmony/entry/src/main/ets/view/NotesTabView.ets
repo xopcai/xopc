@@ -65,42 +65,58 @@ export struct XopcNotesTabView {
   capturePane() {
     Column() {
       Row() {
-        Column({ space: 3 }) {
-          Text($r('app.string.capture_title')).fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-          Row({ space: 7 }) {
-            Row() {}.width(8).height(8).borderRadius(4).backgroundColor(this.colors.danger)
-            Text(xopcFormatCaptureTime(this.capture.elapsedMs)).fontSize(14).fontColor(this.colors.secondary)
-          }
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-      }.width('100%').padding({ left: 20, right: 20, top: 18, bottom: 12 })
-      Row({ space: 4 }) {
-        ForEach([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], (index: number) => {
-          Row() {}.width(4).height(8 + Math.max(0.08, this.capture.level) * (12 + (index % 5) * 5))
-            .borderRadius(2).backgroundColor(index % 3 === 0 ? this.colors.danger : this.colors.border)
-        }, (index: number): string => index.toString())
-      }.height(54).width('100%').justifyContent(FlexAlign.Center)
-      Scroll() {
-        Column() {
-          if (this.capture.transcript) {
-            Text(this.capture.transcript).fontSize(18).lineHeight(29).fontColor(this.colors.foreground).width('100%')
-          } else {
+        Text($r('app.string.capture_title')).fontSize(22).fontWeight(FontWeight.Bold)
+          .fontColor(this.colors.foreground).layoutWeight(1)
+        Row({ space: 7 }) {
+          Row() {}.width(7).height(7).borderRadius(4).backgroundColor(this.colors.danger)
+          Text(xopcFormatCaptureTime(this.capture.elapsedMs)).fontSize(14).fontWeight(FontWeight.Medium)
+            .fontColor(this.colors.secondary)
+        }.height(34).padding({ left: 12, right: 12 }).borderRadius(17).backgroundColor(this.colors.input)
+      }.width('100%').padding({ left: 20, right: 20, top: 18, bottom: 8 }).alignItems(VerticalAlign.Center)
+      Column() {
+        Row({ space: 4 }) {
+          ForEach([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], (index: number) => {
+            Row() {}.width(4).height(7 + Math.max(0.08, this.capture.level) * (10 + (index % 5) * 5))
+              .borderRadius(2).backgroundColor(this.capture.phase === 'paused' ? this.colors.border : this.colors.danger)
+              .opacity(index % 3 === 0 ? 1 : 0.55)
+          }, (index: number): string => index.toString())
+        }.height(56).width('100%').justifyContent(FlexAlign.Center)
+        if (this.capture.visibleTranscript) {
+          Scroll() {
+            Column({ space: 12 }) {
+              Text(this.capture.visibleTranscript).fontSize(19).lineHeight(31).fontColor(this.colors.foreground)
+                .textAlign(TextAlign.Start).width('100%')
+              if (!this.capture.realtimeActive && this.capture.transcriptPending) {
+                Row({ space: 7 }) {
+                  LoadingProgress().width(13).height(13).color(this.colors.secondary)
+                  Text($r('app.string.capture_transcribing')).fontSize(13).fontColor(this.colors.secondary)
+                }.width('100%')
+              }
+              if (this.capture.markers.length) {
+                Text($r('app.string.capture_markers', this.capture.markers.length)).fontSize(13)
+                  .fontColor(this.colors.accent).width('100%').textAlign(TextAlign.Start)
+              }
+              if (this.capture.error) {
+                Text($r('app.string.capture_transcript_delayed')).fontSize(13).fontColor(this.colors.secondary)
+                  .width('100%').textAlign(TextAlign.Start)
+              }
+            }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 24, right: 24, top: 10, bottom: 24 })
+          }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
+        } else {
+          Column({ space: 8 }) {
             Text(this.capture.phase === 'paused' ? $r('app.string.capture_paused') : $r('app.string.capture_listening'))
-              .fontSize(18).lineHeight(28).fontColor(this.colors.tertiary).width('100%')
-          }
-          if (this.capture.transcriptPending) {
-            Text($r('app.string.capture_transcribing')).fontSize(13).fontColor(this.colors.secondary)
-              .margin({ top: 12 }).width('100%')
-          }
-          if (this.capture.markers.length) {
-            Text($r('app.string.capture_markers', this.capture.markers.length)).fontSize(13)
-              .fontColor(this.colors.accent).margin({ top: 12 }).width('100%')
-          }
-          if (this.capture.error) {
-            Text($r('app.string.capture_transcript_delayed')).fontSize(13).fontColor(this.colors.secondary)
-              .margin({ top: 12 }).width('100%')
-          }
-        }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 24, right: 24, top: 14, bottom: 24 })
-      }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
+              .fontSize(20).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+              .width('100%').textAlign(TextAlign.Center)
+            Text($r('app.string.capture_listening_hint')).fontSize(14).lineHeight(21).fontColor(this.colors.tertiary)
+              .width('100%').textAlign(TextAlign.Center)
+            if (!this.capture.realtimeActive && this.capture.transcriptPending) {
+              Text($r('app.string.capture_transcribing')).fontSize(13).fontColor(this.colors.secondary)
+                .margin({ top: 8 }).width('100%').textAlign(TextAlign.Center)
+            }
+          }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+            .padding({ left: 32, right: 32, bottom: 42 })
+        }
+      }.layoutWeight(1).width('100%')
       if (this.capture.phase === 'recording' || this.capture.phase === 'paused') {
         Row() {
           this.captureControl($r('app.string.capture_marker'), $r('sys.symbol.bookmark'), (): void => { this.capture.mark(); })
@@ -126,7 +142,8 @@ export struct XopcNotesTabView {
           Text($r('app.string.capture_saving')).fontSize(15).fontColor(this.colors.secondary)
         }.height(64 + this.bottomInset).padding({ bottom: this.bottomInset })
       }
-    }.id('notes-live-capture').width('100%').height('100%').backgroundColor(this.colors.surface)
+    }.id('notes-live-capture').width('100%').height('100%').alignItems(HorizontalAlign.Center)
+      .backgroundColor(this.colors.surface)
   }
 
   @Monitor('activePage')

@@ -9,8 +9,9 @@ import { xopcAudioLevel, xopcPcm16Wav, xopcPcmDurationMs } from '../common/discu
 import { XopcDiscussionCapturePhase, XopcDiscussionRecordingManifest,
   XopcDiscussionTranscript } from '../model/discussionCapture';
 import { XopcDiscussionCaptureRepository } from '../repository/discussionCaptureRepository';
+import { XopcDiscussionLiveTranscription } from './discussionLiveTranscription';
 
-const XOPC_CAPTURE_SEGMENT_BYTES: number = 160000;
+const XOPC_CAPTURE_SEGMENT_BYTES: number = 96000;
 const XOPC_CAPTURE_MAX_MS: number = 120 * 60 * 1000;
 
 interface XopcPendingCaptureChunk {
@@ -27,6 +28,8 @@ export class XopcDiscussionCapture {
   @Trace elapsedMs: number = 0;
   @Trace level: number = 0;
   @Trace transcript: string = '';
+  @Trace realtimeTranscript: string = '';
+  @Trace realtimeActive: boolean = false;
   @Trace transcriptPending: boolean = false;
   @Trace error: string = '';
   @Trace noteId: string = '';
@@ -49,6 +52,13 @@ export class XopcDiscussionCapture {
   private limitTimer: number = -1;
   private capturing: boolean = false;
   private backgroundRunning: boolean = false;
+  private live?: XopcDiscussionLiveTranscription;
+
+  get visibleTranscript(): string {
+    const realtime = this.realtimeTranscript.trim(); const durable = this.transcript.trim();
+    if (this.realtimeActive) return realtime || durable;
+    return durable.length >= realtime.length ? durable : realtime;
+  }
 
   get active(): boolean {
     return this.phase === 'starting' || this.phase === 'recording' || this.phase === 'paused' ||
@@ -65,7 +75,8 @@ export class XopcDiscussionCapture {
   async start(context: common.UIAbilityContext): Promise<void> {
     if (this.phase !== 'idle' && this.phase !== 'completed' && this.phase !== 'error') return;
     const generation = ++this.generation;
-    this.phase = 'starting'; this.error = ''; this.transcript = ''; this.noteId = ''; this.markers = [];
+    this.phase = 'starting'; this.error = ''; this.transcript = ''; this.realtimeTranscript = '';
+    this.realtimeActive = false; this.noteId = ''; this.markers = [];
     this.elapsedMs = 0; this.level = 0; this.sequence = 0; this.capturedBytes = 0; this.pcmBytes = 0;
     this.pcmParts = []; this.pending = []; this.context = context; this.discussionId = '';
     try {
@@ -89,6 +100,7 @@ export class XopcDiscussionCapture {
       await this.startBackground(context, generation);
       if (generation !== this.generation) return;
       this.capturing = true; this.phase = 'recording'; this.startTimers(generation);
+      this.startRealtime(generation);
       this.captureTask = this.captureLoop(generation);
     } catch (caught) {
       if (generation === this.generation) { this.error = (caught as Error).message; this.phase = 'error'; }
@@ -114,6 +126,7 @@ export class XopcDiscussionCapture {
     if (this.phase !== 'recording' && this.phase !== 'paused' && this.phase !== 'error') return this.noteId;
     if (!this.discussionId) return this.noteId;
     this.phase = 'stopping'; this.clearTimers(); this.capturing = false; this.level = 0;
+    this.live?.commit();
     const capturer = this.capturer;
     if (capturer) { try { await capturer.stop(); } catch (_error) {} }
     try { await this.captureTask; } catch (_error) {}
@@ -124,7 +137,8 @@ export class XopcDiscussionCapture {
       for (const chunk of retry) await this.uploadChunk(chunk);
     }
     if (this.pending.length) {
-      this.error = 'CAPTURE_UPLOAD_PENDING'; this.phase = 'error'; await this.releaseAudio(); return this.noteId;
+      this.error = 'CAPTURE_UPLOAD_PENDING'; this.phase = 'error';
+      await this.releaseAudio(); await this.releaseRealtime('surface_closed'); return this.noteId;
     }
     this.phase = 'organizing';
     const manifest: XopcDiscussionRecordingManifest = { lastSequence: this.sequence - 1, chunkCount: this.sequence,
@@ -134,21 +148,24 @@ export class XopcDiscussionCapture {
       await this.refreshTranscript(); this.phase = 'completed';
     } catch (caught) { this.error = (caught as Error).message; this.phase = 'error'; }
     await this.releaseAudio();
+    await this.releaseRealtime('user_finished');
     return this.noteId;
   }
 
   async discard(): Promise<void> {
     ++this.generation; this.capturing = false; this.clearTimers();
-    await this.releaseAudio();
+    await this.releaseAudio(); await this.releaseRealtime('surface_closed');
     if (this.discussionId) { try { await this.repository.cancel(this.discussionId); } catch (_error) {} }
     for (const chunk of this.pending) { try { await fs.unlink(chunk.path); } catch (_error) {} }
     this.pending = []; this.pcmParts = []; this.pcmBytes = 0; this.discussionId = ''; this.noteId = ''; this.context = undefined;
-    this.phase = 'idle'; this.error = ''; this.transcript = ''; this.elapsedMs = 0; this.level = 0; this.markers = [];
+    this.phase = 'idle'; this.error = ''; this.transcript = ''; this.realtimeTranscript = ''; this.realtimeActive = false;
+    this.elapsedMs = 0; this.level = 0; this.markers = [];
   }
 
   reset(): void {
     if (this.active) return;
-    this.phase = 'idle'; this.error = ''; this.transcript = ''; this.noteId = ''; this.elapsedMs = 0;
+    this.phase = 'idle'; this.error = ''; this.transcript = ''; this.realtimeTranscript = ''; this.realtimeActive = false;
+    this.noteId = ''; this.elapsedMs = 0;
     this.level = 0; this.markers = []; this.discussionId = ''; this.context = undefined;
   }
 
@@ -164,6 +181,7 @@ export class XopcDiscussionCapture {
         if (this.phase === 'paused' || !bytes.byteLength) continue;
         const copy = bytes.slice();
         this.pcmParts.push(copy); this.pcmBytes += copy.byteLength; this.capturedBytes += copy.byteLength;
+        this.live?.audio(copy);
         this.level = xopcAudioLevel(copy);
         if (this.pcmBytes >= XOPC_CAPTURE_SEGMENT_BYTES) this.flushChunk();
       }
@@ -222,7 +240,8 @@ export class XopcDiscussionCapture {
     this.clockTimer = setInterval((): void => {
       if (generation === this.generation) this.elapsedMs = xopcPcmDurationMs(this.capturedBytes);
     }, 250);
-    this.pollTimer = setInterval((): void => { if (generation === this.generation) void this.refreshTranscript(); }, 1200);
+    this.pollTimer = setInterval((): void => { if (generation === this.generation && !this.realtimeActive)
+      void this.refreshTranscript(); }, 800);
     this.limitTimer = setTimeout((): void => { if (generation === this.generation) void this.stop(); }, XOPC_CAPTURE_MAX_MS);
   }
 
@@ -252,7 +271,22 @@ export class XopcDiscussionCapture {
   }
 
   private async fail(reason: string): Promise<void> {
-    this.error = reason; this.phase = 'error'; this.capturing = false; this.clearTimers(); await this.releaseAudio();
+    this.error = reason; this.phase = 'error'; this.capturing = false; this.clearTimers();
+    await this.releaseAudio(); await this.releaseRealtime('surface_closed');
+  }
+
+  private startRealtime(generation: number): void {
+    const live = new XopcDiscussionLiveTranscription({
+      onTranscript: (text: string): void => { if (generation === this.generation) this.realtimeTranscript = text; },
+      onAvailability: (available: boolean): void => { if (generation === this.generation) this.realtimeActive = available; }
+    });
+    this.live = live;
+    void live.start();
+  }
+
+  private async releaseRealtime(reason: 'user_finished' | 'surface_closed'): Promise<void> {
+    const live = this.live; this.live = undefined; this.realtimeActive = false;
+    await live?.close(reason);
   }
 
   private async releaseAudio(): Promise<void> {

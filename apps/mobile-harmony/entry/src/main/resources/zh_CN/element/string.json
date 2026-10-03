@@ -216,6 +216,7 @@
     { "name": "capture_title", "value": "语音快记" },
     { "name": "capture_live", "value": "正在录音" },
     { "name": "capture_listening", "value": "开始说话…" },
+    { "name": "capture_listening_hint", "value": "说话时，文字会实时显示在这里" },
     { "name": "capture_transcribing", "value": "正在转写…" },
     { "name": "capture_paused", "value": "已暂停" },
     { "name": "capture_marker", "value": "标记" },

@@ -59,8 +59,9 @@ export interface XopcVoiceSession {
 
 export interface XopcVoiceSessionRequest {
   purpose: string;
-  conversationId: string;
-  mode: string;
+  conversationId?: string;
+  mode?: string;
+  language?: string;
   supportedProtocolVersions: number[];
   mediaPreferences: string[];
 }
@@ -87,6 +88,8 @@ export interface XopcVoiceEventPayload {
   toolName?: string;
   status?: string;
   text?: string;
+  utteranceId?: string;
+  revision?: number;
   delta?: string;
   audio?: boolean;
   finishReason?: string;
