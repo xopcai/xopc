@@ -4,6 +4,7 @@ import { XopcUnderstandingItem, XopcUnderstandingProfile, XopcUnderstandingRule 
 import { XopcUserUnderstandingViewModel } from '../viewmodel/userUnderstandingViewModel';
 import { XopcBrandLoading, XopcListSkeleton, XopcSectionLabel } from './MobileComponents';
 import { userErrorMessage } from '../common/userError';
+import { XopcLoopi } from './Loopi';
 
 @ComponentV2
 export struct XopcAboutYouView {
@@ -11,6 +12,7 @@ export struct XopcAboutYouView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Local model: XopcUserUnderstandingViewModel = new XopcUserUnderstandingViewModel();
   @Local section: number = 0;
+  @Local pageVisible: boolean = false;
   @Local searchOpen: boolean = false;
   @Local editProfileOpen: boolean = false;
   @Local editingStatement: boolean = false;
@@ -542,6 +544,9 @@ export struct XopcAboutYouView {
       else {
         Column() {
           this.mainHeader()
+          XopcLoopi({ extent: 64, activePage: this.pageVisible && !this.editProfileOpen && !this.searchOpen,
+            mood: this.model.error ? 'care' : this.model.loading || this.model.saving ? 'work' : 'listen' })
+            .id('about-you-loopi').margin({ bottom: 8 })
           Row() {
             Button($r('app.string.about_you_overview')).layoutWeight(1).height(36).fontSize(13)
               .fontColor(this.section === 0 ? this.colors.foreground : this.colors.secondary)
@@ -575,7 +580,10 @@ export struct XopcAboutYouView {
           }
         }.width('100%').height('100%')
       }
-    }.hideTitleBar(true).backgroundColor(this.colors.surface).onBackPressed((): boolean => {
+    }.hideTitleBar(true).backgroundColor(this.colors.surface)
+      .onShown((): void => { this.pageVisible = true; })
+      .onHidden((): void => { this.pageVisible = false; })
+      .onBackPressed((): boolean => {
       if (this.model.selected) { this.model.close(); return true; }
       if (this.model.openingId) { this.model.close(); return true; }
       return false;

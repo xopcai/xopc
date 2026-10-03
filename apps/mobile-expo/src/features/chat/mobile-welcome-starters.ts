@@ -1,66 +1,37 @@
 import {
   buildWelcomeSpotlight,
+  type ProjectOperatingView,
   type WelcomeSpotlightCopy,
-  type WelcomeSuggestionAgent,
   type WelcomeSuggestionContext,
 } from '@xopcai/gateway-contract';
-import type { ProjectOperatingView } from '@xopcai/gateway-contract';
 
 import type { MessageBundle } from '../../i18n/messages';
-import type { ChatAgentOption } from '../../query/agents';
 import type { ProjectDetails } from '../../query/projects';
 import type { TaskDetail } from '../../query/tasks';
-import { agentDisplayDescription, agentDisplayName } from '../ai/agent-presentation';
 
 export type MobileWelcomeStarter = {
   id: string;
   title: string;
   description: string;
   prompt: string;
-  icon: string;
 };
 
 export type MobileWelcomeModel = {
   headline: string;
-  tagline: string;
   starters: MobileWelcomeStarter[];
 };
 
-function agentForWelcome(
-  agent: ChatAgentOption | undefined,
-  fallbackId: string,
-  messages: MessageBundle['agentsPage'],
-): WelcomeSuggestionAgent {
-  return {
-    id: agent?.id ?? fallbackId,
-    name: agent ? agentDisplayName(agent, messages) : undefined,
-    description: agent ? agentDisplayDescription(agent, messages) : undefined,
-    skills: agent?.skills.allowlist ?? [],
-  };
-}
-
-function starterId(categoryId: string, index: number): string {
-  return `${categoryId}:${index}`;
-}
-
 export function buildMobileWelcomeModel({
   messages,
-  agent,
-  agentId,
-  effectiveWorkspacePath,
   project,
   projectOperating,
   task,
 }: {
   messages: MessageBundle;
-  agent?: ChatAgentOption;
-  agentId: string;
-  effectiveWorkspacePath?: string | null;
   project?: ProjectDetails | null;
   projectOperating?: ProjectOperatingView | null;
   task?: TaskDetail | null;
 }): MobileWelcomeModel {
-  const path = effectiveWorkspacePath?.trim();
   const latestTaskReceipt = task?.receipts[0];
   const projectBlocker = projectOperating?.blockers[0];
   const failedProjectResult = projectOperating?.digest.health === 'attention'
@@ -81,7 +52,7 @@ export function buildMobileWelcomeModel({
       }
     : project
       ? {
-          kind: 'generalProject',
+          kind: 'project',
           projectId: project.id,
           projectName: project.name,
           recommendedAction: projectOperating?.digest.recommendedAction,
@@ -89,32 +60,21 @@ export function buildMobileWelcomeModel({
           recentFailure:
             failedProjectResult?.receipt.failure?.recoveryAction ?? failedProjectResult?.receipt.summary,
         }
-      : path
-        ? { kind: 'workingDirectory', path }
-        : { kind: 'empty' };
+      : { kind: 'empty' };
   const spotlight = buildWelcomeSpotlight(
     context,
     messages.chat.welcomeSpotlight as WelcomeSpotlightCopy,
-    agentForWelcome(agent, agentId || 'main', messages.agentsPage),
-    {
-      affinity: context.kind === 'empty' ? { 'explore-ai-news:0': 35 } : undefined,
-      explorationSeed: new Date().toISOString().slice(0, 10),
-    },
   );
-  const starters = spotlight.categories.flatMap((category) => {
-    const scenario = category.scenarios[0];
-    if (!scenario?.prompt.trim()) return [];
-    return [{
-      id: scenario.id ?? starterId(category.id, 0),
-      title: category.title,
-      description: category.description,
-      prompt: scenario.prompt,
-      icon: category.icon,
-    }];
-  });
+  const recommendation = spotlight.recommendation;
   return {
     headline: spotlight.headline,
-    tagline: spotlight.tagline,
-    starters: starters.slice(0, 3),
+    starters: recommendation
+      ? [{
+          id: recommendation.id,
+          title: recommendation.title,
+          description: recommendation.reason,
+          prompt: recommendation.prompt,
+        }]
+      : [],
   };
 }

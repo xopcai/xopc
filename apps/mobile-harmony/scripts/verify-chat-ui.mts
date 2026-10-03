@@ -51,7 +51,7 @@ process.on('uncaughtException', error => {
 });
 command('shell', 'aa', 'start', '-a', 'EntryAbility', '-b', 'ai.xopc.mobile');
 await delay(1200);
-let nodes = await until('root', nodes => nodes.some(item => item.id === 'chat-message-list' || item.id?.startsWith('chat-starter-')));
+let nodes = await until('root', nodes => nodes.some(item => item.id === 'chat-message-list' || item.id === 'chat-welcome'));
 node(nodes, 'main-tab-dock');
 assert.equal(node(nodes, 'chat-composer').text, '', 'Leave the existing draft untouched; this test requires an empty composer.');
 assert(!nodes.some(item => item.id === 'chat-stop'), 'Do not interfere with an active conversation run.');
@@ -88,7 +88,7 @@ assert.equal(node(nodes, 'chat-composer').text, '');
 passed.push('compact/expanded dimensions, send visibility, stable input focus, voice/keyboard switch and empty-draft cleanup');
 const starters = nodes.filter(item => item.id?.startsWith('chat-starter-'));
 if (starters.length) {
-  assert.equal(starters.length, 3, 'Welcome should contain three editable starters');
+  assert.equal(starters.length, 1, 'Welcome should contain at most one explicit recommendation');
   click(starters[0]); nodes = await tree('starter-prefill');
   assert(node(nodes, 'chat-composer').text.trim().length > 0, 'Starter did not prefill the composer');
   assert(!nodes.some(item => item.id === 'chat-stop'), 'Starter must not automatically send');
@@ -98,8 +98,8 @@ if (starters.length) {
   command('shell', 'uitest', 'uiInput', 'keyEvent', '2055');
   command('shell', 'uitest', 'uiInput', 'keyEvent', 'Back'); nodes = await tree('starter-cleared');
   assert.equal(node(nodes, 'chat-composer').text, '', 'Starter test draft cleanup failed');
-  passed.push('three context starters prefill without sending; local draft cleared');
-} else skipped.push('welcome starters: main conversation is not empty');
+  passed.push('one explicit recommendation prefills without sending; local draft cleared');
+} else skipped.push('welcome recommendation: no explicit next action is available');
 click(node(nodes, 'chat-open-drawer')); nodes = await tree('drawer'); node(nodes, 'chat-drawer');
 assert(!nodes.some(item => item.id === 'main-tab-dock')); await screen('drawer');
 click(node(nodes, 'chat-drawer-collapse')); nodes = await tree('closed-drawer'); node(nodes, 'main-tab-dock'); passed.push('drawer opens/closes and hides dock');

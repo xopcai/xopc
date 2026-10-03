@@ -38,8 +38,8 @@ export default class EntryAbility extends UIAbility {
   onCreate(want: Want): void { this.receiveWant(want); }
   onNewWant(want: Want): void { this.receiveWant(want); }
   onConfigurationUpdate(configuration: Configuration): void { appSettings.syncSystemColorMode(configuration.colorMode); }
-  onForeground(): void { gatewaySession.setForeground(true); voiceCall.onForeground(); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
-  onBackground(): void { gatewaySession.setForeground(false); voiceCall.onBackground(); realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
+  onForeground(): void { layoutState.foreground = true; gatewaySession.setForeground(true); voiceCall.onForeground(); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
+  onBackground(): void { layoutState.foreground = false; gatewaySession.setForeground(false); voiceCall.onBackground(); realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
   onDestroy(): void { voiceCall.end(); realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.disableContinuous(); }
   onWindowStageCreate(stage: window.WindowStage): void {
     this.restoreAndLoad(stage);

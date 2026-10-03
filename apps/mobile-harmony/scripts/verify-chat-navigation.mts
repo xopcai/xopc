@@ -47,7 +47,7 @@ async function screen(name: string): Promise<void> {
 }
 const passed: string[] = [];
 try {
-  let nodes = await until('root', items => main(items) && items.some(item => item.id?.startsWith('chat-starter-') || item.type === 'ListItem'));
+  let nodes = await until('root', items => main(items) && items.some(item => item.id === 'chat-welcome' || item.type === 'ListItem'));
   assert.equal(node(nodes, 'chat-composer').text, '', 'Leave existing drafts untouched; requires an empty main draft.');
   assert(!nodes.some(item => item.id === 'chat-stop'), 'Do not interfere with an active run.');
   click(node(nodes, 'chat-open-drawer'));
