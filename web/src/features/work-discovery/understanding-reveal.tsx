@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, GitBranch, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Loopi } from '@/components/brand/loopi';
 import { cn } from '@/lib/cn';
 
 import type { WorkDiscoveryRun } from './api';
@@ -101,6 +102,7 @@ export function UnderstandingReveal({
   return (
     <section className="xopc-understanding-reveal flex min-h-full flex-1 flex-col" aria-live="polite">
         <div className="xopc-reveal-scene mx-auto flex w-full max-w-[40rem] flex-1 flex-col justify-center py-6 text-center sm:py-10">
+          <Loopi className="mx-auto mb-3 size-28" mood={error ? 'care' : busy || conversationStarting ? 'work' : correctionOpen ? 'listen' : 'decision'} />
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{t.eyebrow}</p>
           <h1 className="mx-auto mt-4 max-w-[34rem] text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-[2.25rem]">{t.summaryTitle}</h1>
           <div className="xopc-understanding-hero-card relative mt-8 overflow-hidden rounded-xl border border-edge bg-surface-panel px-6 py-7 text-left shadow-surface sm:px-8">

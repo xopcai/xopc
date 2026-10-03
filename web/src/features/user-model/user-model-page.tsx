@@ -33,6 +33,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { Loopi } from '@/components/brand/loopi';
 import { DatePicker } from '@/components/ui/date-picker';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { PopoverSelect, Select, SelectOption, type PopoverSelectOption } from '@/components/ui/popover-select';
@@ -1139,6 +1140,13 @@ export function UserModelPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-4 sm:space-y-8 sm:px-6 sm:py-7 lg:px-8 lg:py-10">
+      <div className="flex items-center gap-3 sm:gap-5">
+        <Loopi className="size-20 sm:size-24" mood={actionError ? 'care' : refreshBusy || busy ? 'work' : view === 'privacy' ? 'idle' : 'listen'} />
+        <div className="min-w-0">
+          <p className="text-base font-medium text-fg sm:text-lg">{language === 'zh' ? '慢慢了解你，才能更好地帮你。' : 'Getting to know you. Helping in your own way.'}</p>
+          <p className="mt-1 text-sm leading-6 text-fg-muted">{language === 'zh' ? '我来记住小事，重要的判断始终由你决定。' : 'I’ll remember the little things. The important decisions stay yours.'}</p>
+        </div>
+      </div>
       <PageTabs<PrimaryView>
         items={[
           { id: 'overview', label: t.overview, icon: Sparkles },

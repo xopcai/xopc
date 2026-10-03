@@ -13,7 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-import { AnimatedLoopLogo } from '@/components/brand/animated-loop-logo';
+import { Loopi } from '@/components/brand/loopi';
 
 export type UnderstandingSignalKind =
   | 'folder'
@@ -65,10 +65,7 @@ export function UnderstandingSourceConvergence({
   return (
     <div className="xopc-source-convergence mx-auto mt-9 w-full max-w-[34rem] overflow-hidden rounded-xl border border-edge bg-surface-panel px-5 py-6 shadow-surface sm:px-6" role="img" aria-label={ariaLabel}>
       <div className="flex flex-col items-center text-center" aria-hidden>
-        <div className="xopc-source-convergence-core relative flex size-16 items-center justify-center">
-          <span className="xopc-source-convergence-core-glow absolute -inset-5 rounded-full" />
-          <AnimatedLoopLogo className="relative size-12" />
-        </div>
+        <Loopi className="size-24" mood="work" />
         <span className="mt-3 text-[11px] font-semibold tracking-[0.16em] text-fg-muted">{centerLabel}</span>
       </div>
 
