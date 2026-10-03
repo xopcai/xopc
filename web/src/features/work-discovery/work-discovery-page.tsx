@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Clock3, FileText, FolderOpen, Loader2, ShieldCheck, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { AnimatedLoopLogo } from '@/components/brand/animated-loop-logo';
+import { Loopi } from '@/components/brand/loopi';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
@@ -571,10 +571,7 @@ export function WorkDiscoveryPage({
         : `app-main-surface mx-auto my-4 flex w-[calc(100%_-_2rem)] ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[40rem]'} flex-1 flex-col rounded-xl bg-surface-panel px-5 py-10 shadow-surface sm:px-8 sm:py-16`}>
         {pageState === 'intro' ? (
           <div className={cn('flex items-center justify-center', embedded ? 'mb-7 sm:mb-9' : 'mb-10')}>
-            <div className="xopc-discovery-logo relative flex size-16 items-center justify-center">
-              <span className="xopc-discovery-logo-glow absolute -inset-5 rounded-full" aria-hidden />
-              <AnimatedLoopLogo className="relative size-12" />
-            </div>
+            <Loopi className="size-28" mood="curious" />
           </div>
         ) : null}
 
