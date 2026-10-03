@@ -147,6 +147,18 @@ describe('local-first session creation', () => {
     expect(mock.request).not.toHaveBeenCalled();
   });
 
+  it('inherits the project agent and execution environment before the first send', async () => {
+    mock.request.mockResolvedValue(JSON.stringify({ project: { id: 'project-1', name: 'Project', status: 'active',
+      defaultAgentId: 'coder', workspaceRoot: '/workspace', executionMode: 'managed_worktree' } }));
+    const id = await new XopcChatRepository().create('project-1');
+    expect(id).toBe('draft-1');
+    expect(mock.request).toHaveBeenCalledWith('/api/projects/project-1');
+    expect(mock.save).toHaveBeenCalledWith(expect.objectContaining({ creation: {
+      agentId: 'coder', projectId: 'project-1', execution: { mode: 'managed_worktree' }, temporary: false,
+      model: '', thinkingLevel: 'off',
+    } }), 'gateway:device');
+  });
+
   it('atomically starts the persisted draft with its first input', async () => {
     const local = draft(); mock.read.mockResolvedValue(local); mock.request.mockResolvedValue(response('message-1'));
     const runId = await new XopcChatRepository().send('draft-1', 'hello', 'message-1');

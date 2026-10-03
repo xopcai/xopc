@@ -13,6 +13,7 @@ import {
   XopcChatModels, XopcChatAgents, XopcAgentConfig, XopcQueueState, XopcQueuedInput, XopcQueueUpdate, XopcContextRef,
   XopcInputResult, XopcExecutionDetail
 } from '../model/chat';
+import { XopcProjectResult } from '../model/workspace';
 
 interface XopcPreparationRetry { operationId: string; expectedRevision: number; idempotencyKey: string; }
 interface XopcQueuePatchCommand {
@@ -98,8 +99,16 @@ export class XopcChatRepository {
   }
   async create(projectId?: string | null, agentId?: string, executionMode?: string): Promise<string> {
     const scope = localSessionStore.scope();
-    const effectiveAgentId = agentId || 'main';
-    const body: XopcCreateSession = { channel: 'webchat', projectId, agentId: effectiveAgentId, executionMode };
+    let effectiveAgentId = agentId || '';
+    let effectiveExecutionMode = executionMode;
+    if (projectId && (!effectiveAgentId || !effectiveExecutionMode)) {
+      const result = JSON.parse(await gatewaySession.request('/api/projects/' + encodeURIComponent(projectId))) as XopcProjectResult;
+      if (!result.project?.id || typeof result.project.name !== 'string') throw new Error('INVALID_PROJECT');
+      if (!effectiveAgentId) effectiveAgentId = result.project.defaultAgentId || '';
+      if (!effectiveExecutionMode && result.project.workspaceRoot) effectiveExecutionMode = result.project.executionMode || 'local_checkout';
+    }
+    effectiveAgentId = effectiveAgentId || 'main';
+    const body: XopcCreateSession = { channel: 'webchat', projectId, agentId: effectiveAgentId, executionMode: effectiveExecutionMode };
     const gatewayId = gatewaySession.currentProfile()?.gatewayId;
     if (gatewayId) {
       const raw = await this.store.read('chat-model.' + gatewayId + '.' + effectiveAgentId);
@@ -113,7 +122,7 @@ export class XopcChatRepository {
     }
     const id = this.uuid();
     const creation: XopcSessionCreation = { agentId: effectiveAgentId, projectId: projectId || null,
-      execution: executionMode ? { mode: executionMode } : null, temporary: false,
+      execution: effectiveExecutionMode ? { mode: effectiveExecutionMode } : null, temporary: false,
       model: body.initialAgentConfig?.model || '', thinkingLevel: body.initialAgentConfig?.thinkingLevel || 'off' };
     await localSessionStore.save({ conversationId: id, creation, createdAt: new Date().toISOString() }, scope);
     return id;
