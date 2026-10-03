@@ -19,20 +19,23 @@ describe('chat message interactions', () => {
     expect(content).toContain(".accessibilityText($r('app.string.chat_view_more'))");
   });
 
-  it('shows common assistant actions and reserves the more menu for secondary actions', () => {
+  it('shows common assistant actions and opens secondary actions on tap', () => {
     const actionsStart = chat.indexOf('assistantMessageActions(row: XopcChatRow)');
     const actionsEnd = chat.indexOf('@Builder\n  conversation()', actionsStart);
     const actions = chat.slice(actionsStart, actionsEnd);
     for (const label of ['chat_copy', 'chat_save_note', 'chat_read_aloud']) {
       expect(actions).toContain(`app.string.${label}`);
     }
-    const menuStart = chat.indexOf('assistantMessageMoreMenu(row: XopcChatRow)');
+    const menuStart = chat.indexOf('assistantMessageMore(row: XopcChatRow)');
     const menuEnd = chat.indexOf('@Builder\n  assistantMessageActions', menuStart);
     const menu = chat.slice(menuStart, menuEnd);
+    expect(menu).toContain('showActionSheet');
+    expect(menu).toContain('app.string.chat_message_detail');
     expect(menu).toContain('app.string.chat_regenerate');
     expect(menu).toContain('app.string.chat_copy_code');
     expect(menu).not.toContain('app.string.chat_copy)');
     expect(menu).not.toContain('app.string.chat_save_note');
+    expect(actions).toContain('.onClick((): void => { this.assistantMessageMore(row); })');
     expect(chat).not.toContain('.bindContextMenu(chatAnswerText(item.item)');
   });
 
