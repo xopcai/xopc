@@ -165,8 +165,9 @@
     "placeholders": { "host": { "content": "$1" } }
   },
   "errorSelectText": { "message": "请先在页面上选择文本" },
-  "errorNoReadableContent": { "message": "此页面没有可读内容" },
-  "errorReadPage": { "message": "无法读取此页面" },
+  "errorNoReadableContent": { "message": "未找到可读文本。可选择文本或附加截图。" },
+  "errorReadPage": { "message": "Chrome 未返回页面数据。请刷新标签页后重试，或附加截图。" },
+  "attachScreenshotInstead": { "message": "附加截图" },
   "errorPageChangedReading": { "message": "xopc 读取页面时页面发生了变化，请重试。" },
   "errorPageChangedConnecting": { "message": "xopc 连接页面时页面发生了变化，请重试。" },
   "errorIdentifyPage": { "message": "无法识别此页面" },

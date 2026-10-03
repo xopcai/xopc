@@ -25,6 +25,27 @@ type RawPageSnapshot = {
   text?: string;
 };
 
+async function buildPageContext(raw: RawPageSnapshot, pageUrl: string): Promise<BrowserPageContextInput> {
+  const url = sanitizedUrl(pageUrl);
+  const selected = raw.selection ? truncateUtf8(raw.selection, MAX_BROWSER_SELECTION_BYTES) : undefined;
+  const page = raw.text ? truncateUtf8(raw.text, MAX_BROWSER_PAGE_TEXT_BYTES) : undefined;
+  const canonical = {
+    title: raw.title.trim() || new URL(url).hostname,
+    url,
+    capturedAt: Date.now(),
+    documentId: await sha256(`${url}\n${raw.timeOrigin}`),
+    selection: selected?.value,
+    text: page?.value,
+  };
+  return {
+    kind: 'browser_page',
+    sourceId: crypto.randomUUID(),
+    version: await sha256(JSON.stringify(canonical)),
+    ...canonical,
+    truncated: selected?.truncated === true || page?.truncated === true,
+  };
+}
+
 function truncateUtf8(value: string, maxBytes: number): { value: string; truncated: boolean } {
   const encoder = new TextEncoder();
   if (encoder.encode(value).byteLength <= maxBytes) return { value, truncated: false };
@@ -108,17 +129,20 @@ async function sha256(value: string): Promise<string> {
 
 function extractPage(
   mode: CaptureMode,
-  messages: { selectText: string; noReadableContent: string },
 ): RawPageSnapshot {
   const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
-  const selection = normalize(window.getSelection()?.toString() ?? '');
   if (mode === 'selection') {
-    if (!selection) throw new Error(messages.selectText);
+    const focused = document.activeElement;
+    const fieldSelection = focused instanceof HTMLTextAreaElement
+      || (focused instanceof HTMLInputElement && ['text', 'search', 'url', 'email', 'tel'].includes(focused.type))
+      ? focused.value.slice(focused.selectionStart ?? 0, focused.selectionEnd ?? 0)
+      : '';
+    const selection = normalize(fieldSelection || window.getSelection()?.toString() || '');
     return { title: document.title, url: location.href, timeOrigin: performance.timeOrigin, selection };
   }
 
   const source = document.querySelector('article, main') ?? document.body;
-  if (!source) throw new Error(messages.noReadableContent);
+  if (!source) return { title: document.title, url: location.href, timeOrigin: performance.timeOrigin };
   const clone = source.cloneNode(true) as HTMLElement;
   clone.querySelectorAll([
     'script', 'style', 'noscript', 'template', 'iframe', 'svg', 'canvas',
@@ -126,8 +150,21 @@ function extractPage(
     '[hidden]', '[aria-hidden="true"]', '[inert]',
   ].join(',')).forEach((element) => element.remove());
   const text = normalize(clone.innerText || clone.textContent || '');
-  if (!text) throw new Error(messages.noReadableContent);
   return { title: document.title, url: location.href, timeOrigin: performance.timeOrigin, text };
+}
+
+export async function captureContextMenuSelection(
+  tabId: number,
+  selectionText: string,
+  pageUrl?: string,
+): Promise<BrowserPageContextInput> {
+  const tab = await chrome.tabs.get(tabId);
+  if (!tab.url) throw new Error(t('errorTabUnavailable'));
+  const url = sanitizedUrl(tab.url);
+  if (pageUrl && sanitizedUrl(pageUrl) !== url) throw new Error(t('errorPageChangedReading'));
+  const selection = selectionText.replace(/\s+/g, ' ').trim();
+  if (!selection) throw new Error(t('errorSelectText'));
+  return buildPageContext({ title: tab.title ?? '', url, timeOrigin: Date.now(), selection }, url);
 }
 
 export async function captureTabPage(tabId: number, mode: CaptureMode): Promise<BrowserPageContextInput> {
@@ -135,38 +172,23 @@ export async function captureTabPage(tabId: number, mode: CaptureMode): Promise<
   if (!tab.url) throw new Error(t('errorTabUnavailable'));
   sanitizedUrl(tab.url);
   const result = await chrome.scripting.executeScript({
-    target: { tabId },
+    target: { tabId, allFrames: true },
     func: extractPage,
-    args: [mode, {
-      selectText: t('errorSelectText'),
-      noReadableContent: t('errorNoReadableContent'),
-    }],
+    args: [mode],
   });
-  const raw = result[0]?.result as RawPageSnapshot | undefined;
-  if (!raw) throw new Error(t('errorReadPage'));
-  const url = sanitizedUrl(raw.url);
-  if (new URL(url).origin !== new URL(sanitizedUrl(tab.url)).origin) {
+  const main = result[0]?.result as RawPageSnapshot | undefined;
+  if (!main) throw new Error(t('errorReadPage'));
+  const currentTab = await chrome.tabs.get(tabId);
+  if (!currentTab.url || sanitizedUrl(main.url) !== sanitizedUrl(tab.url)
+    || sanitizedUrl(main.url) !== sanitizedUrl(currentTab.url)) {
     throw new Error(t('errorPageChangedReading'));
   }
-  const selected = raw.selection
-    ? truncateUtf8(raw.selection, MAX_BROWSER_SELECTION_BYTES)
-    : undefined;
-  const page = raw.text ? truncateUtf8(raw.text, MAX_BROWSER_PAGE_TEXT_BYTES) : undefined;
-  const canonical = {
-    title: raw.title.trim() || new URL(url).hostname,
-    url,
-    capturedAt: Date.now(),
-    documentId: await sha256(`${url}\n${raw.timeOrigin}`),
-    selection: selected?.value,
-    text: page?.value,
-  };
-  return {
-    kind: 'browser_page',
-    sourceId: crypto.randomUUID(),
-    version: await sha256(JSON.stringify(canonical)),
-    ...canonical,
-    truncated: selected?.truncated === true || page?.truncated === true,
-  };
+  const content = result.map(item => item.result as RawPageSnapshot | undefined)
+    .find(item => mode === 'selection' ? item?.selection : item?.text);
+  if (!content?.selection && !content?.text) {
+    throw new Error(t(mode === 'selection' ? 'errorSelectText' : 'errorNoReadableContent'));
+  }
+  return buildPageContext({ ...main, selection: content.selection, text: content.text }, main.url);
 }
 
 export async function captureTabWithPermission(

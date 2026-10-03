@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   send: vi.fn(), listener: undefined as undefined | ((value: any) => void), snapshot: {} as any,
   capture: vi.fn(), activeTab: vi.fn(), screenshot: vi.fn(), store: undefined as any,
+  storageChanged: undefined as undefined | ((changes: Record<string, any>, area: string) => void),
 }));
 vi.mock('./chat-client', () => ({ BrowserChatClient: class {
   subscribe(listener: (value: unknown) => void) { mocks.listener = listener; listener(mocks.snapshot); return () => {}; }
@@ -46,7 +47,7 @@ beforeEach(async () => {
   mocks.store = new ComposerDrafts(vi.fn(), vi.fn().mockResolvedValue(undefined));
   mocks.snapshot = { connection: 'connected', endpointReady: true, sessionLoading: false, submitting: false, stopping: false, pendingDelivery: false, conversationId: 'a', sessions: [], messages: [], models: [] };
   const event = { addListener: vi.fn(), removeListener: vi.fn() };
-  vi.stubGlobal('chrome', { i18n: { getMessage: (key: string) => key }, storage: { session: { get: vi.fn().mockResolvedValue({}), remove: vi.fn().mockResolvedValue(undefined) } }, tabs: { onUpdated: event, onRemoved: event, onActivated: event } });
+  vi.stubGlobal('chrome', { i18n: { getMessage: (key: string) => key }, storage: { session: { get: vi.fn().mockResolvedValue({}), remove: vi.fn().mockResolvedValue(undefined) }, onChanged: { addListener: vi.fn((listener: typeof mocks.storageChanged) => { mocks.storageChanged = listener; }), removeListener: vi.fn() } }, tabs: { onUpdated: event, onRemoved: event, onActivated: event } });
   HTMLElement.prototype.scrollTo = vi.fn();
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   await act(async () => { root.render(<ChatPanel gatewayId="gateway-one" deviceId="device-one" />); });
@@ -166,6 +167,28 @@ describe('browser composer interactions', () => {
     expect(container.querySelector('.context-chip')?.textContent).toContain('Selected page');
     expect(container.querySelector('textarea')!.value).toBe('existing draft');
     expect(chrome.storage.session.remove).toHaveBeenCalledWith('xopc.browser.pending-context');
+  });
+
+  it('attaches a context-menu selection while the side panel is already open', async () => {
+    const pending = { tabId: 1, source: 'current_selection', context: { kind: 'browser_page', sourceId: crypto.randomUUID(), version: 'a'.repeat(64), title: 'Selected page', url: 'https://example.com/', documentId: 'doc', capturedAt: Date.now(), selection: 'selected text', truncated: false } };
+
+    await act(async () => mocks.storageChanged?.({ 'xopc.browser.pending-context': { newValue: pending } }, 'session'));
+
+    expect(container.querySelector('.context-chip')?.textContent).toContain('Selected page');
+    expect(chrome.storage.session.remove).toHaveBeenCalledWith('xopc.browser.pending-context');
+  });
+
+  it('offers an explicit screenshot when page text cannot be read', async () => {
+    mocks.activeTab.mockResolvedValue(1);
+    mocks.capture.mockRejectedValue(new Error('No readable text was found'));
+    mocks.screenshot.mockResolvedValue({ type: 'image', mimeType: 'image/png', name: 'page.png', size: 3, data: 'AAAA' });
+
+    await act(async () => button('addContext').click());
+    await act(async () => Array.from(container.querySelectorAll('button')).find(item => item.textContent?.includes('currentPage'))!.click());
+    expect(container.querySelector('.composer-error')?.textContent).toContain('attachScreenshotInstead');
+
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('.composer-error button'))[0].click());
+    expect(container.querySelector('.attachment-chip')?.textContent).toContain('page.png');
   });
 
 });

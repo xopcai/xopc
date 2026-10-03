@@ -292,6 +292,8 @@ svg { display: block; }
 .file-input { display: none; }
 .composer-error { display: flex; align-items: flex-start; gap: 6px; margin: 0 2px 7px; border-radius: 8px; padding: 7px 8px; background: var(--danger-soft); color: var(--danger); font-size: 10px; line-height: 1.4; }
 .composer-error svg { width: 13px; height: 13px; flex: 0 0 auto; }
+.composer-error span { flex: 1; }
+.composer-error button { border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
 .composer-notice { margin: 0 2px 7px; border-radius: 8px; padding: 7px 8px; background: var(--warning-soft); color: color-mix(in srgb, var(--warning) 72%, var(--fg)); font-size: 10px; line-height: 1.4; }
 
 .tab-mention-menu { position: absolute; z-index: 13; left: 0; right: 0; bottom: calc(100% + 8px); max-height: min(45vh, 320px); overflow-y: auto; border: 1px solid var(--edge-strong); border-radius: 12px; background: var(--surface-panel); padding: 5px; box-shadow: var(--shadow-popover); }
