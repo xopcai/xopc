@@ -180,7 +180,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const refreshClarification = useCallback(async (targetConversationId: string) => {
     const snapshot = await fetchClarificationSnapshot(targetConversationId);
     if (activeConversationIdRef.current !== targetConversationId) return;
-    const wait = snapshot.clarification;
+    const wait = snapshot?.clarification;
     setClarifyPrompt(wait?.status === 'open' ? {
       requestId: wait.id,
       kind: wait.kind,
@@ -787,6 +787,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       updateMessage('confirming');
       if (!input.replaceTurnId) upsertMessageOutbox(targetScope, input, 'confirming');
       void queryClient.invalidateQueries({ queryKey: ['session-inputs', input.gatewayId, input.conversationId] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessionContext(input.conversationId) });
     } catch (error) {
       const transient = isTransientNetworkError(error instanceof Error ? error.message : String(error));
       if (transient) {

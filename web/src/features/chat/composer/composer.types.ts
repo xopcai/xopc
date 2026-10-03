@@ -32,6 +32,11 @@ export interface ComposerContextRef {
   fileKind?: 'file' | 'directory';
 }
 
+export interface ComposerAttachmentSummary {
+  id: string;
+  title: string;
+}
+
 export type WireContextRef = Pick<ComposerContextRef, 'refId' | 'kind' | 'sourceId' | 'expectedVersion'>;
 
 export interface ComposerDispatchReceipt {

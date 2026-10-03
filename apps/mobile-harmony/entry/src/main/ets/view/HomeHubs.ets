@@ -108,7 +108,6 @@ export struct XopcProgressView {
             }.width('100%')
             Row({ space: 12 }) {
               this.workTool($r('app.string.automations'), $r('sys.symbol.clock'), 'automations')
-              this.workTool($r('app.string.workflows'), $r('sys.symbol.arrow_clockwise'), 'workflows')
             }.width('100%').margin({ top: 12 })
             if (this.model.loading) { XopcListSkeleton() }
             else {

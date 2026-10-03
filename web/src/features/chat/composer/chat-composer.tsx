@@ -34,6 +34,7 @@ import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-u
 import {
   interpolate,
   MAX_COMPOSER_CONTEXT_REFS,
+  type ComposerAttachmentSummary,
   type ComposerContextRef,
   type ComposerSendHandler,
   type WireAttachment,
@@ -100,6 +101,7 @@ export const ChatComposer = memo(function ChatComposer({
   pageContextPreview,
   contextRefs,
   setContextRefs,
+  onDraftAttachmentsChange,
   thinkingLevel,
   modelSupportsThinking,
   onThinkingChange,
@@ -143,6 +145,7 @@ export const ChatComposer = memo(function ChatComposer({
   pageContextPreview?: ReactNode;
   contextRefs: ComposerContextRef[];
   setContextRefs: Dispatch<SetStateAction<ComposerContextRef[]>>;
+  onDraftAttachmentsChange?: (attachments: ComposerAttachmentSummary[]) => void;
   welcomeDraftSeed?: { id: number; text: string } | null;
   welcomeSuggestion?: WelcomeSuggestionSelection | null;
   onAcceptWelcomeSuggestion?: (selection: WelcomeSuggestionSelection) => void;
@@ -244,7 +247,13 @@ export const ChatComposer = memo(function ChatComposer({
       .finally(() => setWorkspaceTrustSaving(false));
   }, [m.chat.commandPalette, conversationId, workspaceTrustSaving]);
 
-  const att = useComposerAttachments({ chat: m.chat });
+  const att = useComposerAttachments({
+    chat: m.chat,
+    onAttachmentsChange: (attachments) => onDraftAttachmentsChange?.(attachments.map((attachment, index) => ({
+      id: attachment.uri || attachment.id || `draft:${index}:${attachment.name}`,
+      title: attachment.name,
+    }))),
+  });
   const contextRefsRef = useRef(contextRefs);
   contextRefsRef.current = contextRefs;
   const resolveContextRef = useCallback((refId: string) => {

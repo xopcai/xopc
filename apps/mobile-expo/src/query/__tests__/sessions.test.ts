@@ -6,6 +6,7 @@ import {
   fetchSessionResumeStatus,
   fetchSessionActiveRun,
   fetchSessionMessagePage,
+  fetchSessionContextSummary,
   fetchSessionsList,
 } from '../sessions';
 import { sessionDisplayName } from '../../lib/session-helpers';
@@ -38,10 +39,27 @@ vi.mock('../../stores/preferences-store', () => ({
 }));
 
 const mockedApiFetch = vi.mocked(apiFetch);
-const localDrafts = vi.hoisted(() => ({ create: vi.fn(() => 'local-uuid') }));
+const localDrafts = vi.hoisted(() => ({ create: vi.fn(() => 'local-uuid'), read: vi.fn(() => undefined as { conversationId: string } | undefined) }));
 vi.mock('../../features/chat/local-session-drafts', () => ({
-  createLocalSessionDraft: localDrafts.create, readLocalSessionDraft: () => undefined, removeLocalSessionDraft: vi.fn(),
+  createLocalSessionDraft: localDrafts.create, readLocalSessionDraft: localDrafts.read, removeLocalSessionDraft: vi.fn(),
 }));
+
+describe('session context summary', () => {
+  beforeEach(() => {
+    mockedApiFetch.mockReset();
+    localDrafts.read.mockReset();
+  });
+
+  it('waits for a draft to be persisted before requesting its summary', async () => {
+    localDrafts.read.mockReturnValueOnce({ conversationId: 'draft' });
+    expect(await fetchSessionContextSummary('draft')).toBeNull();
+    expect(mockedApiFetch).not.toHaveBeenCalled();
+
+    mockedApiFetch.mockResolvedValue({ ok: true, json: async () => ({ summary: { conversationId: 'draft' } }) } as Response);
+    expect(await fetchSessionContextSummary('draft')).toEqual({ conversationId: 'draft' });
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/sessions/draft/context-summary');
+  });
+});
 
 describe('restored session validation', () => {
   beforeEach(() => { mockedApiFetch.mockReset(); });

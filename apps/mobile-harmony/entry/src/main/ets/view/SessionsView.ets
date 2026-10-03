@@ -97,8 +97,6 @@ struct XopcSessionManagerRow {
           }.width(32).height(40).padding(0).backgroundColor(Color.Transparent)
             .accessibilityText(this.entry.expanded ? $r('app.string.sessions_collapse_tasks') : $r('app.string.sessions_expand_tasks'))
             .onClick((): void => { if (this.entry.session) this.onToggle(this.entry.session.key); })
-        } else if (!this.selecting) {
-          Row().width(32).height(40)
         }
         if (this.selecting) {
           SymbolGlyph(this.selected ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.circle'))

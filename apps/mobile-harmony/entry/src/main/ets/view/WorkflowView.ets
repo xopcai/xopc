@@ -3,6 +3,7 @@ import { gatewaySession } from '../service/gatewaySession';
 import { XopcBrandLoading, XopcHubRow, XopcListSkeleton, XopcEmptyHint, XopcSectionLabel } from './MobileComponents';
 import { XopcMarkdownView } from './MarkdownView';
 import { userErrorMessage } from '../common/userError';
+import { classifyUserError } from '../common/userErrorClassifier';
 
 interface XopcWorkflowSummary { id: string; title: string; status: string; goal?: string; }
 interface XopcWorkflowPage { runs: XopcWorkflowSummary[]; }
@@ -91,9 +92,9 @@ export struct XopcWorkflowView {
     NavDestination() {
       Column() {
         Row() {
-          Text(this.selected || this.openingId ? $r('app.string.workflow_overview') : $r('app.string.recent_runs'))
+          Text(this.selected || this.openingId || this.initialId ? $r('app.string.workflow_overview') : $r('app.string.recent_runs'))
             .fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary).layoutWeight(1)
-          if (!this.selected && !this.openingId) {
+          if (!this.selected && !this.openingId && !this.initialId) {
             Button($r('app.string.new_workflow')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
               .enabled(!this.busy && !this.creatingChat).onClick((): void => { this.createWithChat(); })
           }
@@ -104,7 +105,11 @@ export struct XopcWorkflowView {
         }.width('100%').padding({ left: 20, right: 12 })
         Scroll() {
           Column() {
-            if (this.error) { Text(userErrorMessage(this.error, 'collection')).fontColor(this.colors.secondary).padding(12) }
+            if (this.error) {
+              Text(classifyUserError(this.error, 'detail') === 'missing'
+                ? $r('app.string.workflow_run_unavailable') : userErrorMessage(this.error, 'detail'))
+                .fontColor(this.colors.secondary).padding(12)
+            }
             if (this.openingId) { XopcBrandLoading() }
             else if (this.busy && !this.runs.length) { XopcListSkeleton() }
             if (this.selected) {
@@ -144,7 +149,7 @@ export struct XopcWorkflowView {
                   symbol: step.error ? $r('sys.symbol.exclamationmark_circle') : step.status === 'done' || step.status === 'succeeded'
                     ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.clock'), navigable: false })
               }, (step: XopcWorkflowStep): string => step.id + ':' + step.status)
-            } else if (!this.openingId) {
+            } else if (!this.openingId && !this.initialId) {
               if (!this.busy && !this.error && !this.runs.length) { XopcEmptyHint({ message: $r('app.string.empty_list') }) }
               ForEach(this.runs, (run: XopcWorkflowSummary) => {
                 XopcHubRow({ heading: run.title, summary: this.statusLabel(run.status),
