@@ -616,7 +616,7 @@ export class VoiceRealtimeRuntime {
         }
         const previous = inputSequences.get(frame.utteranceId) ?? 0;
         if (frame.audioSeq <= previous) return;
-        if (frame.audioSeq !== previous + 1 || inputSequences.size >= 256) {
+        if (frame.audioSeq !== previous + 1 || (!inputSequences.has(frame.utteranceId) && inputSequences.size >= 256)) {
           send('session.error', { code: 'INVALID_AUDIO', message: 'Invalid audio sequence', recoverable: false });
           void shutdown('invalid_audio', true);
           return;
