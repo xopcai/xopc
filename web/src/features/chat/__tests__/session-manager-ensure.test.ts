@@ -201,6 +201,22 @@ describe('SessionManager.loadSession', () => {
 describe('SessionManager.loadTimeline', () => {
   beforeEach(() => {
     mockedApiFetchWithStartupRetry.mockReset();
+    drafts.read.mockReset();
+  });
+
+  it('keeps a local draft timeline empty until the session is persisted', async () => {
+    const conversationId = '2b2f86c0-3819-4874-9d79-e75bbff18f71';
+    drafts.read.mockResolvedValue({ conversationId });
+
+    expect(await new SessionManager().loadTimeline(conversationId)).toEqual([]);
+    expect(mockedApiFetchWithStartupRetry).not.toHaveBeenCalled();
+
+    drafts.read.mockResolvedValue(undefined);
+    mockedApiFetchWithStartupRetry.mockResolvedValueOnce(jsonResponse({ ok: true, items: [] }));
+    expect(await new SessionManager().loadTimeline(conversationId)).toEqual([]);
+    expect(mockedApiFetchWithStartupRetry).toHaveBeenCalledWith(
+      expect.stringContaining(`/api/sessions/${conversationId}/timeline`),
+    );
   });
 
   it('rejects timeline responses that do not match the current contract', async () => {

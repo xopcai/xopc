@@ -8,11 +8,14 @@ import { XopcFile } from '../model/files';
 import { XopcEmptyHint, XopcListSkeleton, XopcPageHeader } from './MobileComponents';
 import { XopcNotesView } from './NotesView';
 import { userErrorMessage } from '../common/userError';
+import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
+import { xopcFormatCaptureTime } from '../common/discussionAudio';
 
-/** Notes-first Library tab. Files remain a peer destination, not a competing default. */
+/** Notes tab. Files remain a peer destination, not a competing default. */
 @ComponentV2
 export struct XopcNotesTabView {
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local capture: XopcDiscussionCapture = discussionCapture;
   @Param activePage: boolean = false;
   @Param bottomInset: number = 0;
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
@@ -34,6 +37,96 @@ export struct XopcNotesTabView {
   private openNote(id: string): void {
     if (this.contentWidth >= 840) this.selectedId = id;
     else this.onNavigate({ page: 'notes', itemId: id });
+  }
+
+  private async finishCapture(): Promise<void> {
+    const noteId = await this.capture.stop();
+    if (!noteId || this.capture.phase === 'error') return;
+    this.capture.reset();
+    void this.model.list();
+    this.onNavigate({ page: 'notes', itemId: noteId });
+  }
+
+  @Builder
+  captureControl(label: ResourceStr, symbol: Resource, action: () => void, primary: boolean = false) {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 5 }) {
+        Row() {
+          SymbolGlyph(symbol).fontSize(primary ? 22 : 20)
+            .fontColor([primary ? this.colors.panel : this.colors.foreground])
+        }.width(primary ? 52 : 44).height(primary ? 52 : 44).borderRadius(primary ? 26 : 22)
+          .justifyContent(FlexAlign.Center).backgroundColor(primary ? this.colors.danger : this.colors.input)
+        Text(label).fontSize(12).fontColor(this.colors.secondary)
+      }
+    }.height(76).padding(0).backgroundColor(Color.Transparent).onClick(action)
+  }
+
+  @Builder
+  capturePane() {
+    Column() {
+      Row() {
+        Column({ space: 3 }) {
+          Text($r('app.string.capture_title')).fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+          Row({ space: 7 }) {
+            Row() {}.width(8).height(8).borderRadius(4).backgroundColor(this.colors.danger)
+            Text(xopcFormatCaptureTime(this.capture.elapsedMs)).fontSize(14).fontColor(this.colors.secondary)
+          }
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+      }.width('100%').padding({ left: 20, right: 20, top: 18, bottom: 12 })
+      Row({ space: 4 }) {
+        ForEach([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], (index: number) => {
+          Row() {}.width(4).height(8 + Math.max(0.08, this.capture.level) * (12 + (index % 5) * 5))
+            .borderRadius(2).backgroundColor(index % 3 === 0 ? this.colors.danger : this.colors.border)
+        }, (index: number): string => index.toString())
+      }.height(54).width('100%').justifyContent(FlexAlign.Center)
+      Scroll() {
+        Column() {
+          if (this.capture.transcript) {
+            Text(this.capture.transcript).fontSize(18).lineHeight(29).fontColor(this.colors.foreground).width('100%')
+          } else {
+            Text(this.capture.phase === 'paused' ? $r('app.string.capture_paused') : $r('app.string.capture_listening'))
+              .fontSize(18).lineHeight(28).fontColor(this.colors.tertiary).width('100%')
+          }
+          if (this.capture.transcriptPending) {
+            Text($r('app.string.capture_transcribing')).fontSize(13).fontColor(this.colors.secondary)
+              .margin({ top: 12 }).width('100%')
+          }
+          if (this.capture.markers.length) {
+            Text($r('app.string.capture_markers', this.capture.markers.length)).fontSize(13)
+              .fontColor(this.colors.accent).margin({ top: 12 }).width('100%')
+          }
+          if (this.capture.error) {
+            Text($r('app.string.capture_transcript_delayed')).fontSize(13).fontColor(this.colors.secondary)
+              .margin({ top: 12 }).width('100%')
+          }
+        }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 24, right: 24, top: 14, bottom: 24 })
+      }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
+      if (this.capture.phase === 'recording' || this.capture.phase === 'paused') {
+        Row() {
+          this.captureControl($r('app.string.capture_marker'), $r('sys.symbol.bookmark'), (): void => { this.capture.mark(); })
+          Blank().layoutWeight(1)
+          this.captureControl(this.capture.phase === 'paused' ? $r('app.string.resume') : $r('app.string.pause'),
+            this.capture.phase === 'paused' ? $r('sys.symbol.play_fill') : $r('sys.symbol.pause_fill'),
+            (): void => { this.capture.togglePause(); })
+          Blank().layoutWeight(1)
+          this.captureControl($r('app.string.capture_finish'), $r('sys.symbol.stop_circle_fill'), (): void => { void this.finishCapture(); }, true)
+        }.width('100%').padding({ left: 28, right: 28, top: 8, bottom: this.bottomInset + 12 })
+      } else if (this.capture.phase === 'error') {
+        Row({ space: 10 }) {
+          Button($r('app.string.capture_discard')).layoutWeight(1).height(48).borderRadius(14)
+            .backgroundColor(this.colors.input).fontColor(this.colors.secondary)
+            .onClick((): void => { void this.capture.discard(); })
+          Button($r('app.string.retry')).layoutWeight(1).height(48).borderRadius(14)
+            .backgroundColor(this.colors.foreground).fontColor(this.colors.panel)
+            .onClick((): void => { void this.finishCapture(); })
+        }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: this.bottomInset + 12 })
+      } else {
+        Row({ space: 10 }) {
+          LoadingProgress().width(18).height(18).color(this.colors.accent)
+          Text($r('app.string.capture_saving')).fontSize(15).fontColor(this.colors.secondary)
+        }.height(64 + this.bottomInset).padding({ bottom: this.bottomInset })
+      }
+    }.id('notes-live-capture').width('100%').height('100%').backgroundColor(this.colors.surface)
   }
 
   @Monitor('activePage')
@@ -125,7 +218,10 @@ export struct XopcNotesTabView {
 
   build() {
     Stack({ alignContent: Alignment.Top }) {
-      Row() {
+      if (this.capture.active) {
+        this.capturePane()
+      } else {
+        Row() {
         this.listPane()
         if (this.contentWidth >= 840) {
           if (this.selectedId) {
@@ -139,8 +235,9 @@ export struct XopcNotesTabView {
             }.layoutWeight(1).height('100%').justifyContent(FlexAlign.Center)
           }
         }
-      }.id('notes-tab-content-viewport').width('100%').height('100%')
-        .clip(true)
+        }.id('notes-tab-content-viewport').width('100%').height('100%')
+          .clip(true)
+      }
     }.id('notes-tab-root').width('100%').height('100%').backgroundColor(this.colors.surface)
       .onAreaChange((_previous: Area, current: Area): void => { this.contentWidth = Number(current.width); })
   }

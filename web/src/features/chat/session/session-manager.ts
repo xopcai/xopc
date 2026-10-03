@@ -366,6 +366,10 @@ export class SessionManager {
   }
 
   async loadTimeline(conversationId: string, taskId?: string): Promise<SessionTimelineItem[]> {
+    if (!taskId) {
+      await this.reconcileDraft(conversationId);
+      if (await readLocalSessionDraft(conversationId)) return [];
+    }
     const cacheKey = taskId ?? conversationId;
     const existing = _timelineInflight.get(cacheKey);
     if (existing) return existing;

@@ -33,10 +33,14 @@ import { pickChatAttachment } from '../service/chatAttachmentPicker';
 import { pickChatPhoto } from '../service/chatPhotoPicker';
 import { MAX_ATTACHMENTS } from '../common/attachments';
 import { XopcBrandLoading } from './MobileComponents';
+import { common } from '@kit.AbilityKit';
+import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
+import { xopcFormatCaptureTime } from '../common/discussionAudio';
 
 @ComponentV2
 export struct XopcHomeView {
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local capture: XopcDiscussionCapture = discussionCapture;
   @Local tab: number = 0;
   @Computed get quickComposerPlaceholder(): ResourceStr {
     return this.tab === 2 ? $r('app.string.quick_chat_progress_placeholder')
@@ -197,6 +201,34 @@ export struct XopcHomeView {
     this.returnToConversations = false;
     this.setQuickPanel(false);
     this.activateTab(index);
+  }
+
+  private async startNoteCapture(): Promise<void> {
+    this.selectTab(3);
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    try {
+      await this.capture.start(context);
+    } catch (caught) {
+      const message = (caught as Error).message;
+      if (!message.startsWith('CONSENT_REQUIRED:')) {
+        this.getUIContext().getPromptAction().showToast({ message: userErrorMessage(message, 'save') });
+        return;
+      }
+      const version = Number(message.split(':')[1]);
+      try {
+        const result = await this.getUIContext().getPromptAction().showDialog({
+          title: $r('app.string.capture_consent_title'), message: $r('app.string.capture_consent_message'),
+          buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
+            { text: $r('app.string.capture_consent_continue'), color: this.colors.accent }]
+        });
+        if (result.index !== 1) { this.capture.reset(); return; }
+        await this.capture.acknowledge(version);
+        this.capture.reset();
+        await this.capture.start(context);
+      } catch (error) {
+        this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
+      }
+    }
   }
 
   private handleTabBack(): boolean {
@@ -427,9 +459,39 @@ export struct XopcHomeView {
       this.tabItem(0, $r('app.string.assistant'), $r('sys.symbol.ellipsis_bubble'))
       this.tabItem(1, $r('app.string.conversations'), $r('sys.symbol.message'))
       this.tabItem(2, $r('app.string.progress'), $r('sys.symbol.checkmark_circle'))
-      this.tabItem(3, $r('app.string.library'), $r('sys.symbol.square_stack_3d'))
+      this.tabItem(3, $r('app.string.notes'), $r('sys.symbol.doc'))
       this.tabItem(4, $r('app.string.personal'), $r('sys.symbol.person'))
     }.width('100%').height(52).padding(4)
+  }
+
+  @Builder
+  noteCaptureBar() {
+    if (this.capture.active) {
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 10 }) {
+          Row() {}.width(9).height(9).borderRadius(5).backgroundColor(this.colors.danger)
+          Text(xopcFormatCaptureTime(this.capture.elapsedMs)).fontSize(15).fontWeight(FontWeight.Medium)
+            .fontColor(this.colors.foreground)
+          Text(this.capture.phase === 'organizing' || this.capture.phase === 'stopping'
+            ? $r('app.string.capture_saving') : $r('app.string.capture_live'))
+            .fontSize(14).fontColor(this.colors.secondary).layoutWeight(1)
+          SymbolGlyph($r('sys.symbol.chevron_up')).fontSize(14).fontColor([this.colors.tertiary])
+        }.width('100%').height(48).padding({ left: 16, right: 14 })
+      }.id('note-capture-mini').width('100%').height(48).padding(0).backgroundColor(this.colors.input)
+        .borderRadius(16).onClick((): void => { this.selectTab(3); })
+    } else {
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 10 }) {
+          Row() {
+            SymbolGlyph($r('sys.symbol.mic_fill')).fontSize(20).fontColor([this.colors.panel])
+          }.width(36).height(36).borderRadius(18).justifyContent(FlexAlign.Center).backgroundColor(this.colors.danger)
+          Text($r('app.string.capture_start')).fontSize(16).fontWeight(FontWeight.Medium)
+            .fontColor(this.colors.foreground).layoutWeight(1)
+          Text($r('app.string.capture_start_hint')).fontSize(13).fontColor(this.colors.secondary)
+        }.width('100%').height(52).padding({ left: 8, right: 14 })
+      }.id('note-capture-start').width('100%').height(52).padding(0).backgroundColor(this.colors.input)
+        .borderRadius(18).onClick((): void => { void this.startNoteCapture(); })
+    }
   }
 
   @Builder
@@ -564,6 +626,7 @@ export struct XopcHomeView {
   chatDock() {
     if (this.tab === 0 && this.layout.isMainDockVisible(0)) {
       Column() {
+        if (this.capture.active) { this.noteCaptureBar() }
         this.dockItems()
       }.id('main-tab-dock').width('100%')
     }
@@ -614,8 +677,14 @@ export struct XopcHomeView {
       if (this.tab !== 0) {
         Column() {
           Column() {
-            this.quickComposer()
-            if (this.quickPanelOpen) { this.quickActionPanel() }
+            if (this.tab === 3) {
+              if (!this.capture.active) { this.noteCaptureBar() }
+            } else if (this.capture.active) {
+              this.noteCaptureBar()
+            } else {
+              this.quickComposer()
+              if (this.quickPanelOpen) { this.quickActionPanel() }
+            }
             if (this.layout.isMainDockVisible(this.tab)) { this.dockItems() }
           }.id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)
             .borderRadius(24).clip(true)
