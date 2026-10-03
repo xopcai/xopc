@@ -4,13 +4,14 @@ import type { SessionDiscoveryQuery } from './session-identity.js';
 
 export type SessionStatus = 'active' | 'idle' | 'archived' | 'pinned';
 
-/** Current associations, not a record of what a model has read. */
+/** Current associations and the latest explicit references, not a record of what a model has read. */
 export interface SessionContextSource {
-  kind: 'note';
+  kind: 'note' | 'file' | 'session' | 'browser_tab' | 'mcp_resource' | 'attachment' | 'browser_page' | 'app_context';
   id: string;
   title?: string;
   unavailable?: boolean;
-  origins: Array<{ kind: 'session' | 'task'; version?: string }>;
+  fileKind?: 'file' | 'directory';
+  origins: Array<{ kind: 'session' | 'task' | 'recent' }>;
 }
 
 export interface SessionContextSummary {

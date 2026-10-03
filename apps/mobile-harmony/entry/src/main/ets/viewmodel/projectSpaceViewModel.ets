@@ -1,6 +1,7 @@
 import { XopcProject, XopcWorkspaceItem } from '../model/workspace';
 import { XopcNoteIndexEntry } from '../model/note';
 import { XopcProjectSpaceRepository } from '../repository/projectSpaceRepository';
+import { XopcSessionItem } from '../model/chat';
 
 @ObservedV2
 export class XopcProjectSpaceViewModel {
@@ -8,6 +9,7 @@ export class XopcProjectSpaceViewModel {
   @Trace tasks: XopcWorkspaceItem[] = [];
   @Trace notes: XopcNoteIndexEntry[] = [];
   @Trace automations: XopcWorkspaceItem[] = [];
+  @Trace sessions: XopcSessionItem[] = [];
   @Trace tasksTotal: number = 0;
   @Trace notesTotal: number = 0;
   @Trace loadingTasksMore: boolean = false;
@@ -17,6 +19,7 @@ export class XopcProjectSpaceViewModel {
   @Trace tasksError: boolean = false;
   @Trace notesError: boolean = false;
   @Trace automationsError: boolean = false;
+  @Trace sessionsError: boolean = false;
   private repository: XopcProjectSpaceRepository = new XopcProjectSpaceRepository();
   private generation: number = 0;
   private loadedProjectId: string = '';
@@ -28,14 +31,15 @@ export class XopcProjectSpaceViewModel {
     if (this.loadedProjectId !== id) this.project = undefined;
     this.loadedProjectId = id;
     this.loading = true; this.error = '';
-    this.tasks = []; this.notes = []; this.automations = []; this.tasksTotal = 0; this.notesTotal = 0;
+    this.tasks = []; this.notes = []; this.automations = []; this.sessions = []; this.tasksTotal = 0; this.notesTotal = 0;
     this.loadingTasksMore = false; this.loadingNotesMore = false;
-    this.tasksError = false; this.notesError = false; this.automationsError = false;
+    this.tasksError = false; this.notesError = false; this.automationsError = false; this.sessionsError = false;
     try {
       const project = await this.repository.project(id);
       if (generation !== this.generation) return;
       this.project = project;
-      await Promise.all([this.loadTasks(id, generation), this.loadNotes(id, generation), this.loadAutomations(id, generation)]);
+      await Promise.all([this.loadTasks(id, generation), this.loadNotes(id, generation), this.loadAutomations(id, generation),
+        this.loadSessions(id, generation)]);
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) this.loading = false; }
   }
@@ -59,6 +63,11 @@ export class XopcProjectSpaceViewModel {
   private async loadAutomations(id: string, generation: number): Promise<void> {
     try { const items = await this.repository.automations(id); if (generation === this.generation) this.automations = items; }
     catch (_) { if (generation === this.generation) this.automationsError = true; }
+  }
+
+  private async loadSessions(id: string, generation: number): Promise<void> {
+    try { const items = await this.repository.sessions(id); if (generation === this.generation) this.sessions = items; }
+    catch (_) { if (generation === this.generation) this.sessionsError = true; }
   }
 
   async moreTasks(id: string): Promise<void> {

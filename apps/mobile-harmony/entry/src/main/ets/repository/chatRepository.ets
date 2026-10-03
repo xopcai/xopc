@@ -26,8 +26,18 @@ interface XopcCommandFailure { error?: XopcCommandFailureCode; }
 interface XopcCommandFailureCode { code?: string; }
 interface XopcSendNetworkError { code?: number; }
 interface XopcExecutionDetailResponse { detail?: XopcExecutionDetail; }
+interface XopcTaskConversationResult { ok: boolean; conversationId: string; }
+interface XopcTaskInputState { activeRunId?: string; }
+interface XopcTaskInputPayload { conversationId?: string; state?: XopcTaskInputState; }
+interface XopcTaskInputResponse { ok: boolean; payload?: XopcTaskInputPayload; }
 
 export class XopcChatRepository {
+  async ensureTaskConversation(taskId: string): Promise<string> {
+    const result = JSON.parse(await gatewaySession.request('/api/tasks/' + encodeURIComponent(taskId)
+      + '/conversation', 'POST')) as XopcTaskConversationResult;
+    if (!result.ok || !result.conversationId) throw new Error('INVALID_TASK_CONVERSATION');
+    return result.conversationId;
+  }
   private recoverableSend(error: Error): boolean {
     if (error instanceof XopcHttpError) return error.status === 408 || error.status >= 500;
     return [2300006, 2300007, 2300028, 2300052, 2300055, 2300056].includes((error as XopcSendNetworkError).code ?? 0);
@@ -45,7 +55,8 @@ export class XopcChatRepository {
         if (!this.recoverableSend(error as Error)) throw error as Error;
         // A timeout is not a rejection. Check durable acceptance before replaying the same identity.
         try {
-          return await gatewaySession.request(path + '/input-receipts/' + encodeURIComponent(body.clientMessageId));
+          return await gatewaySession.request('/api/sessions/' + encodeURIComponent(id)
+            + '/input-receipts/' + encodeURIComponent(body.clientMessageId));
         } catch (receiptError) {
           gatewaySession.assertConnection(connection);
           if (!(receiptError instanceof XopcHttpError) || receiptError.status !== 404 || attempt === 1) throw error as Error;
@@ -207,7 +218,8 @@ export class XopcChatRepository {
     if (!result.payload || typeof result.payload.active !== 'boolean') throw new Error('INVALID_RUN');
     return result.payload;
   }
-  async send(id: string, content: string, clientMessageId: string, transcriptId?: string, attachments: XopcChatAttachment[] = [], delivery: string = 'next', refs: XopcContextRef[] = []): Promise<string> {
+  async send(id: string, content: string, clientMessageId: string, transcriptId?: string, attachments: XopcChatAttachment[] = [], delivery: string = 'next', refs: XopcContextRef[] = [], taskId: string = ''): Promise<string> {
+    if (taskId) return this.sendTask(taskId, id, content, clientMessageId, transcriptId, attachments, delivery, refs);
     const scope = localSessionStore.scope();
     const connection = gatewaySession.connectionRevision();
     const draft = await this.draft(id);
@@ -258,6 +270,26 @@ export class XopcChatRepository {
     await localSessionStore.clearCommand(id, scope);
     if (draft) await localSessionStore.remove(id, scope);
     return result.payload.inputState.activeRunId ?? '';
+  }
+  private async sendTask(taskId: string, id: string, content: string, clientMessageId: string,
+    transcriptId: string | undefined, attachments: XopcChatAttachment[], delivery: string,
+    refs: XopcContextRef[]): Promise<string> {
+    const connection = gatewaySession.connectionRevision();
+    const config = await this.config(id);
+    gatewaySession.assertConnection(connection);
+    const result = JSON.parse(await gatewaySession.request('/api/tasks/' + encodeURIComponent(taskId) + '/inputs', 'POST',
+      JSON.stringify({ clientMessageId, expectedTranscriptId: transcriptId, configVersion: config.configVersion,
+        delivery, content, origin: realtimeClient.turnClaim(),
+        attachments: attachments.length ? attachments.map((item: XopcChatAttachment): XopcInputAttachment => ({
+          type: item.type, name: item.name, mimeType: item.mimeType, size: item.size, data: item.data,
+          workspaceRelativePath: item.workspaceRelativePath, uri: item.uri, durationSeconds: item.duration
+        })) : undefined,
+        contextRefs: refs.length ? refs.map((ref: XopcContextRef): XopcContextRef => ({
+          kind: ref.kind, sourceId: ref.sourceId, expectedVersion: ref.expectedVersion
+        })) : undefined }))) as XopcTaskInputResponse;
+    gatewaySession.assertConnection(connection);
+    if (!result.ok || result.payload?.conversationId !== id) throw new Error('INVALID_TASK_INPUT_RESPONSE');
+    return result.payload.state?.activeRunId ?? '';
   }
   uuid(): string { return this.crypto.uuid(); }
   async models(agentId: string): Promise<XopcChatModels> {

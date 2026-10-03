@@ -12,9 +12,11 @@ import { LocalWorktreeManager } from '../../execution-environments/local-worktre
 import { ExecutionEnvironmentStore } from '../../execution-environments/store.js';
 import { ProjectStore } from '../../projects/project-store.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/connection.js';
-import { ensureSessionRecord } from '../../storage/sqlite/session-repository.js';
+import { ensureSessionRecord, getCurrentTranscriptId, resetSessionRecord } from '../../storage/sqlite/session-repository.js';
+import { insertSessionInput } from '../../storage/sqlite/session-input-repository.js';
 import { upsertNoteRecord } from '../../storage/sqlite/notes-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { TaskContextRepository } from '../../tasks/task-context-repository.js';
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
@@ -76,7 +78,7 @@ describe('session context summary', () => {
       delegatedTasks: [],
       delegatedTaskCount: 0,
     });
-    expect(result?.sources).toEqual([{ kind: 'note', id: 'note-a', title: 'Title note-a', origins: [{ kind: 'session', version: 'v1' }, { kind: 'task' }] }]);
+    expect(result?.sources).toEqual([{ kind: 'note', id: 'note-a', title: 'Title note-a', origins: [{ kind: 'session' }, { kind: 'task' }] }]);
     expect(result?.environment).toEqual({ kind: 'local_checkout', rootPath: directory, available: true });
     expect(result?.unavailableSections).toEqual([]);
     expect(JSON.stringify(result)).not.toMatch(/PRIVATE|Unrelated/);
@@ -100,10 +102,62 @@ describe('session context summary', () => {
   it('bounds the source list and reports overflow', async () => {
     const task = activeTask();
     for (let i = 0; i < 30; i++) link(task.id, `source-${i}`);
+    appendTranscriptEntry(conversationId, {
+      role: 'user', content: 'Latest', metadata: { sourceContexts: [
+        { kind: 'file', sourceId: 'latest-file', version: '1', title: 'latest.ts' },
+      ] },
+    } as Parameters<typeof appendTranscriptEntry>[1]);
     const result = await getSessionContextSummary(config, conversationId, owner);
     expect(result?.sources).toHaveLength(20);
     expect(result?.sourcesHasMore).toBe(true);
     expect(result?.sources[0]?.id).toBe('note-a');
+    expect(result?.sources[1]?.id).toBe('latest-file');
+  });
+
+  it('shows only the latest visible turn sources and never trusts a stale Note title', async () => {
+    appendTranscriptEntry(conversationId, {
+      role: 'user', content: [{ type: 'text', text: 'Review these sources' }], timestamp: Date.now(),
+      metadata: { sourceContexts: [
+        { kind: 'note', sourceId: 'note-a', version: 'v1', title: 'STALE NOTE TITLE' },
+        { kind: 'file', sourceId: 'file-1', version: 'v1', title: 'src/example.ts', fileKind: 'file', content: 'PRIVATE SOURCE BODY' },
+        { kind: 'mcp_resource', sourceId: 'resource-1', version: 'v1', title: 'Issue #42' },
+      ] },
+      media: [{ uri: 'media://inbound/photo.png', name: 'photo.png', type: 'image', data: 'PRIVATE MEDIA BODY' }],
+    } as Parameters<typeof appendTranscriptEntry>[1]);
+    const result = await getSessionContextSummary(config, conversationId, owner);
+    expect(result?.sources).toEqual([
+      { kind: 'note', id: 'note-a', title: 'Title note-a', origins: [{ kind: 'session' }, { kind: 'recent' }] },
+      { kind: 'file', id: 'file-1', title: 'src/example.ts', fileKind: 'file', origins: [{ kind: 'recent' }] },
+      { kind: 'mcp_resource', id: 'resource-1', title: 'Issue #42', origins: [{ kind: 'recent' }] },
+      { kind: 'attachment', id: 'media://inbound/photo.png', title: 'photo.png', origins: [{ kind: 'recent' }] },
+    ]);
+    expect(JSON.stringify(result)).not.toContain('PRIVATE');
+    appendTranscriptEntry(conversationId, {
+      role: 'user', content: [{ type: 'text', text: 'Next turn' }], timestamp: Date.now(),
+    } as Parameters<typeof appendTranscriptEntry>[1]);
+    expect((await getSessionContextSummary(config, conversationId, owner))?.sources).toEqual([
+      { kind: 'note', id: 'note-a', title: 'Title note-a', origins: [{ kind: 'session' }] },
+    ]);
+  });
+
+  it('uses the current queued input, then clears recent sources after transcript reset', async () => {
+    appendTranscriptEntry(conversationId, {
+      role: 'user', content: 'Earlier', metadata: { sourceContexts: [
+        { kind: 'file', sourceId: 'old-file', version: '1', title: 'old.ts' },
+      ] },
+    } as Parameters<typeof appendTranscriptEntry>[1]);
+    insertSessionInput({
+      id: 'queued-context', conversationId, clientMessageId: 'queued-context-client',
+      expectedTranscriptId: getCurrentTranscriptId(conversationId)!,
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'Next',
+      origin: { type: 'endpoint', endpointId: 'test' },
+      contextRefs: [{ kind: 'session', sourceId: 'other-session', version: '1', title: 'Other chat' }],
+    });
+    expect((await getSessionContextSummary(config, conversationId, owner))?.sources.map((source) => source.id))
+      .toEqual(['note-a', 'other-session']);
+    resetSessionRecord(conversationId, directory);
+    expect((await getSessionContextSummary(config, conversationId, owner))?.sources.map((source) => source.id))
+      .toEqual(['note-a']);
   });
 
   it('omits cross-resource data when the device only has sessions.read', async () => {

@@ -2,11 +2,27 @@ import { gatewaySession } from '../service/gatewaySession';
 import { XopcProject, XopcProjectResult, XopcTaskList, XopcAutomationList, XopcWorkspaceItem } from '../model/workspace';
 import { XopcNoteIndexEntry, XopcNoteList } from '../model/note';
 import { taskItem, automationItem } from '../common/workspaceProtocol';
+import { XopcSessionItem } from '../model/chat';
+import { localSessionStore } from '../service/localSessionStore';
+import { XopcLocalSession } from '../model/sessionCommand';
+
+interface XopcProjectSessionsResult { ok: boolean; sessions: XopcSessionItem[]; }
 
 export interface XopcProjectTaskPage { items: XopcWorkspaceItem[]; total: number; }
 export interface XopcProjectNotePage { items: XopcNoteIndexEntry[]; total: number; }
 
 export class XopcProjectSpaceRepository {
+  async sessions(id: string): Promise<XopcSessionItem[]> {
+    const result = JSON.parse(await gatewaySession.request('/api/projects/' + encodeURIComponent(id)
+      + '/sessions?limit=100')) as XopcProjectSessionsResult;
+    if (!result.ok || !Array.isArray(result.sessions)) throw new Error('INVALID_PROJECT_SESSIONS');
+    const server = result.sessions.filter((item: XopcSessionItem): boolean => !!item.key && item.customData?.origin !== 'task');
+    const drafts = await localSessionStore.listProject(id);
+    const local = drafts.filter((draft: XopcLocalSession): boolean => !server.some((item: XopcSessionItem): boolean => item.key === draft.conversationId))
+      .map((draft: XopcLocalSession): XopcSessionItem => ({ key: draft.conversationId, messageCount: 0,
+        updatedAt: draft.createdAt, projectId: id, status: 'draft' }));
+    return local.concat(server);
+  }
   async project(id: string): Promise<XopcProject> {
     const result = JSON.parse(await gatewaySession.request('/api/projects/' + encodeURIComponent(id))) as XopcProjectResult;
     if (!result.project?.id || typeof result.project.name !== 'string') throw new Error('INVALID_PROJECT');

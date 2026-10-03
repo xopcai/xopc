@@ -10,14 +10,16 @@ import {
   type WelcomeSuggestionContextState,
 } from '@/features/chat/welcome/use-welcome-suggestion-context';
 
-const { getSessionDetail, fetchProject, fetchProjectOperatingView, inferProjectDefaults } = vi.hoisted(() => ({
+const { getSessionDetail, readLocalSessionDraft, fetchProject, fetchProjectOperatingView, inferProjectDefaults } = vi.hoisted(() => ({
   getSessionDetail: vi.fn(),
+  readLocalSessionDraft: vi.fn(),
   fetchProject: vi.fn(),
   fetchProjectOperatingView: vi.fn(),
   inferProjectDefaults: vi.fn(),
 }));
 
 vi.mock('@/features/sessions/session-api', () => ({ getSessionDetail }));
+vi.mock('@/features/chat/session/local-session-drafts', () => ({ readLocalSessionDraft }));
 vi.mock('@/features/projects/api', () => ({ fetchProject, fetchProjectOperatingView, inferProjectDefaults }));
 
 function Probe({
@@ -51,6 +53,7 @@ describe('useWelcomeSuggestionContext', () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.clearAllMocks();
+    readLocalSessionDraft.mockResolvedValue(undefined);
     inferProjectDefaults.mockResolvedValue({ inference: { kind: 'general' } });
     fetchProjectOperatingView.mockResolvedValue({
       blockers: [],
@@ -94,6 +97,21 @@ describe('useWelcomeSuggestionContext', () => {
     expect(states).toContain('loading:empty');
     expect(container.textContent).toBe('ready:codingProject');
     expect(sessionManager.loadSessionAgentConfig).not.toHaveBeenCalled();
+  });
+
+  it('uses the local draft project without requesting a session that does not exist yet', async () => {
+    readLocalSessionDraft.mockResolvedValue({ creation: { projectId: 'p1' } });
+    fetchProject.mockResolvedValue({ id: 'p1', name: 'xopc', kind: 'coding' });
+    const sessionManager = { loadSessionAgentConfig: vi.fn() } as unknown as SessionManager;
+
+    await act(async () => {
+      root.render(<Probe sessionManager={sessionManager} onState={() => {}} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toBe('ready:codingProject');
+    expect(getSessionDetail).not.toHaveBeenCalled();
   });
 
   it('returns loading immediately when the session key changes', async () => {

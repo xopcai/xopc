@@ -22,7 +22,7 @@ describe('session context panel', () => {
   let cache: Map<string, State<SessionContextSummary>>;
   const summary = (conversationId: string): SessionContextSummary => ({
     conversationId, observedAt: new Date().toISOString(), work: { project: { id: conversationId, title: `Project ${conversationId}` } },
-    sources: [{ kind: 'note', id: 'note-a', title: 'Source note', origins: [{ kind: 'session', version: 'v1' }] }],
+    sources: [{ kind: 'note', id: 'note-a', title: 'Source note', origins: [{ kind: 'session' }] }],
     sourcesHasMore: false, unavailableSections: [],
     environment: { kind: 'managed_worktree', rootPath: '/tmp/worktree', available: true, detached: true, headSha: '1234567890' },
   });
@@ -32,7 +32,7 @@ describe('session context panel', () => {
       <SessionContextPanel key={merged.conversationId ?? 'new'} {...merged} />
     </MemoryRouter></SWRConfig>));
   };
-  const toggle = async () => { await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Session context"]')!.click()); };
+  const toggle = async () => { await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Session info"]')!.click()); };
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -45,10 +45,35 @@ describe('session context panel', () => {
   });
   afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks(); });
 
-  it('merges notes without discarding source and draft versions', () => {
+  it('merges the same Note while keeping its durable relation and pending state', () => {
     expect(mergeContextSources(summary('one').sources, [{ kind: 'note', sourceId: 'note-a', title: 'Draft', expectedVersion: 'v2' }])).toEqual([
-      { ...summary('one').sources[0], drafts: [{ kind: 'note', sourceId: 'note-a', title: 'Draft', expectedVersion: 'v2' }] },
+      { ...summary('one').sources[0], pending: true },
     ]);
+  });
+
+  it('keeps different source kinds with the same id distinct', () => {
+    expect(mergeContextSources(summary('one').sources, [
+      { kind: 'file', sourceId: 'note-a', title: 'note-a.ts', expectedVersion: 'v1' },
+    ]).map(({ kind, id, pending }) => [kind, id, pending])).toEqual([
+      ['note', 'note-a', false], ['file', 'note-a', true],
+    ]);
+  });
+
+  it('shows files, chats, MCP resources, and unsent attachments without implying a lasting link', async () => {
+    vi.mocked(fetchJson).mockResolvedValue({ summary: { ...summary('one'), sources: [
+      { kind: 'file', id: 'file-1', title: 'src/example.ts', fileKind: 'file', origins: [{ kind: 'recent' }] },
+      { kind: 'session', id: 'other-chat', title: 'Other chat', origins: [{ kind: 'recent' }] },
+      { kind: 'mcp_resource', id: 'issue-42', title: 'Issue #42', origins: [{ kind: 'recent' }] },
+    ] } });
+    await render({ draftAttachments: [{ id: 'draft-image', title: 'screenshot.png' }] });
+    await toggle();
+    expect(document.body.textContent).toContain('Recently used');
+    expect(document.body.textContent).toContain('src/example.ts');
+    expect(document.querySelector('a[href="/chat/other-chat"]')).not.toBeNull();
+    expect(document.querySelector('a[href*="issue-42"]')).toBeNull();
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-expanded="false"]')!.click());
+    expect(document.body.textContent).toContain('screenshot.png');
+    expect(document.body.textContent).toContain('Pending send');
   });
 
   it('shows draft context before session creation without requesting a missing session', async () => {
@@ -56,7 +81,7 @@ describe('session context panel', () => {
     await toggle();
     expect(fetchJson).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain('Draft project');
-    expect(document.body.textContent).toContain('Pending send · v2');
+    expect(document.body.textContent).toContain('Pending send');
     expect(document.querySelector('a[href*="draft-note"]')).not.toBeNull();
   });
 
@@ -64,9 +89,9 @@ describe('session context panel', () => {
     await render({ draftRefs: [{ kind: 'note', sourceId: 'note-a', title: 'Draft source', expectedVersion: 'v2' }] });
     await toggle();
     expect(document.querySelectorAll('a[href*="notes/note-a"]')).toHaveLength(1);
-    expect(document.body.textContent).toContain('Session source · v1 / Pending send · v2');
-    expect(document.body.textContent).toContain('Detached HEAD 12345678');
-    expect(document.body.textContent).toContain('Linked sources do not mean');
+    expect(document.body.textContent).toContain('Linked to chat · Pending send');
+    expect(document.body.textContent).toContain('Detached HEAD · 12345678');
+    expect(document.body.textContent).not.toContain('Linked sources do not mean');
     expect(document.querySelector('a[href*="projects/one"]')).not.toBeNull();
     expect(document.querySelector('[aria-label="Copy environment path"]')).not.toBeNull();
   });
@@ -108,7 +133,7 @@ describe('session context panel', () => {
     await render({ draftRefs: [{ kind: 'note', sourceId: 'note-a', title: 'Stale draft', expectedVersion: 'v1' }] });
     await toggle();
     expect(document.body.textContent).not.toContain('Stale draft');
-    expect(document.body.textContent).toContain('Unavailable or restricted');
+    expect(document.body.textContent).toContain('Temporarily unavailable');
     expect(document.querySelector('a[href*="notes/note-a"]')).toBeNull();
   });
 
@@ -116,10 +141,13 @@ describe('session context panel', () => {
     await render(); await toggle();
     expect(document.body.textContent).toContain('Project one');
     vi.mocked(fetchJson).mockRejectedValue(new Error('Forbidden'));
-    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Refresh"]')!.click());
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('run-completed'));
+      await new Promise((resolve) => setTimeout(resolve, 180));
+    });
     expect(document.body.textContent).not.toContain('Project one');
     expect(document.body.textContent).not.toContain('Source note');
-    expect(document.body.textContent).toContain('Some details are unavailable');
+    expect(document.body.textContent).toContain('Temporarily unavailable');
   });
 
   it('keeps new-project context closed and never displays an environment picker in the header', async () => {

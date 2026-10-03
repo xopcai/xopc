@@ -3,12 +3,16 @@ import useSWR from 'swr';
 import type { ConnectionWaitSnapshot } from '@xopcai/gateway-contract';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { readLocalSessionDraft } from '@/features/chat/session/local-session-drafts';
+import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { closeOAuthAuthorizationWindow, openOAuthAuthorizationUrl, reserveOAuthAuthorizationWindow } from '@/features/settings/oauth-authorization-window';
 
 export type ConnectionActionName = 'install_complete' | 'connect' | 'check' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source' | 'submit_callback';
 export function useConnectionWait(conversationId: string) {
   const path = `/api/sessions/${encodeURIComponent(conversationId)}/connection-wait`;
-  const { data, mutate, isLoading } = useSWR(path, async path => {
+  const localDraft = useChatSessionStore((s) => s.sessions[conversationId]?.localDraft);
+  const { data, mutate, isLoading } = useSWR(localDraft ? null : [path, localDraft === false ? 'persisted' : 'unknown'], async () => {
+    if (await readLocalSessionDraft(conversationId)) return null;
     const response = await fetchJson<{ payload: ConnectionWaitSnapshot }>(apiUrl(path));
     return response.payload;
   }, { refreshInterval: snapshot => snapshot?.wait ? 5_000 : 0, revalidateOnFocus: true });
