@@ -61,6 +61,7 @@ features:
 | 连接外部服务 | [连接器](./connectors/index.md) |
 | 连接 XOPC Cloud 或企业独立部署平台 | [XOPC Platform](./platform.md) |
 | 离开主机时访问 xopc | [远程访问](./remote-access.md) |
+| 备份或恢复实例 | [备份与恢复 xopc](./backup.md) |
 | 了解本地存储与备份 | [数据和文件位置](./workspace.md) |
 | 修复设置问题 | [故障排查](./how-to/diagnose-broken-setup.md) |
 

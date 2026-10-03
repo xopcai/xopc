@@ -211,6 +211,22 @@
     { "name": "note_tags_placeholder", "value": "Tags separated by commas" },
     { "name": "note_done", "value": "Done" },
     { "name": "note_record_audio", "value": "Record audio" },
+    { "name": "capture_start", "value": "Record a voice note" },
+    { "name": "capture_start_hint", "value": "Live transcript" },
+    { "name": "capture_title", "value": "Voice note" },
+    { "name": "capture_live", "value": "Recording" },
+    { "name": "capture_listening", "value": "Start speaking…" },
+    { "name": "capture_transcribing", "value": "Transcribing…" },
+    { "name": "capture_paused", "value": "Paused" },
+    { "name": "capture_marker", "value": "Mark" },
+    { "name": "capture_markers", "value": "%d marks" },
+    { "name": "capture_finish", "value": "Finish" },
+    { "name": "capture_discard", "value": "Discard" },
+    { "name": "capture_saving", "value": "Saving…" },
+    { "name": "capture_transcript_delayed", "value": "Recording continues. Transcript will catch up when the connection recovers." },
+    { "name": "capture_consent_title", "value": "Record this conversation?" },
+    { "name": "capture_consent_message", "value": "Make sure everyone agrees before you record." },
+    { "name": "capture_consent_continue", "value": "Start recording" },
     { "name": "note_attach_recording", "value": "Attach recording" },
     { "name": "note_voice_ready", "value": "Recording ready" },
     { "name": "note_select_hint", "value": "Select a note to read or edit" },
@@ -638,7 +654,7 @@
     },
     {
       "name": "library",
-      "value": "Library"
+      "value": "Notes"
     },
     {
       "name": "personal",

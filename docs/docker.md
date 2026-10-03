@@ -136,6 +136,8 @@ You can also configure providers in the web console. Keep API keys out of shell 
 
 ## Update
 
+Back up the persistent state volume before changing image versions. Stop the Gateway container, then run the [offline backup command](./backup.md) in a one-off CLI container with a separate persistent mount for the encrypted output and passphrase. Keep the output outside `/home/node/.xopc`.
+
 Pull the new image and recreate the container. Data remains in `xopc-data`:
 
 ```bash
