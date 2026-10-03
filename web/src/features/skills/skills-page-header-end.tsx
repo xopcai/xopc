@@ -37,7 +37,7 @@ export const SkillsHeaderOverflow = memo(function SkillsHeaderOverflow({
         </Button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="end" sideOffset={6} className="z-50 min-w-52 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover">
+        <DropdownMenu.Content align="end" sideOffset={6} className="z-50 min-w-52 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover">
           <DropdownMenu.Item asChild>
             <Link to="/settings/imports" className={itemClassName}>
               <Download className="size-4 text-fg-muted" aria-hidden />

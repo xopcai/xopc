@@ -22,7 +22,7 @@ import {
   readProfile,
   registerBrowserEndpoint,
 } from './sidepanel/auth';
-import { captureTabWithPermission, PENDING_CONTEXT_KEY } from './sidepanel/page-context';
+import { captureContextMenuSelection, PENDING_CONTEXT_KEY } from './sidepanel/page-context';
 
 const log = createLogger('Background');
 const BACKGROUND_CLIENT_ID_KEY = 'xopc.browser.background-client-id';
@@ -181,11 +181,13 @@ chrome.runtime.onMessage.addListener((message: BrowserRuntimeMessage, sender, se
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId !== 'xopc-ask-selection' || !tab?.id) return;
   const tabId = tab.id;
-  void captureTabWithPermission(tabId, 'selection').then(async (context) => {
+  void chrome.sidePanel.open({ tabId }).catch((error) => log.warn('Could not open the side panel', {
+    error: error instanceof Error ? error.message : String(error),
+  }));
+  void captureContextMenuSelection(tabId, info.selectionText ?? '', info.pageUrl).then(async (context) => {
     await chrome.storage.session.set({
       [PENDING_CONTEXT_KEY]: { context, tabId, source: 'current_selection' },
     });
-    await chrome.sidePanel.open({ tabId });
   }).catch((error) => log.warn('Could not attach selected page text', {
     error: error instanceof Error ? error.message : String(error),
   }));
