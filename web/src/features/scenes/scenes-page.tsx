@@ -101,7 +101,7 @@ function SceneContent() {
     return () => clearPageHeader();
   }, [clearPageHeader, setPageHeader, zh]);
   return <>
-    <main className="h-full overflow-y-auto bg-surface-panel"><div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+    <main className="h-full overflow-y-auto bg-surface-panel"><div className="mx-auto w-full max-w-7xl space-y-6 px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4">
       <RecurringWorkDiscovery />
       <SceneList />
     </div></main>

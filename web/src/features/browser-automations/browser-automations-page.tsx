@@ -126,15 +126,15 @@ export function BrowserAutomationsPage() {
   };
 
   if (automations === null) {
-    return <div className="flex min-h-0 flex-1 flex-col bg-surface-panel p-4 sm:p-6"><div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]"><Skeleton className="h-[420px] rounded-xl" /><Skeleton className="h-[420px] rounded-xl" /></div></div>;
+    return <div className="flex min-h-0 flex-1 flex-col bg-surface-panel px-4 pb-4 pt-3 sm:px-6 sm:pb-6 lg:pt-4"><div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]"><Skeleton className="h-[420px] rounded-xl" /><Skeleton className="h-[420px] rounded-xl" /></div></div>;
   }
 
   if (automations.length === 0) {
-    return <div className="flex min-h-0 flex-1 flex-col bg-surface-panel p-4 sm:p-6"><div className="m-auto max-w-md py-12 text-center"><Bot className="mx-auto size-10 text-accent" /><h2 className="mt-4 text-lg font-semibold text-fg">{text.emptyTitle}</h2><p className="mt-2 text-sm leading-6 text-fg-muted">{text.emptyBody}</p><Button className="mt-5" onClick={() => openAssistant(text.createPrompt)}><Bot className="size-4" />{text.create}</Button></div></div>;
+    return <div className="flex min-h-0 flex-1 flex-col bg-surface-panel px-4 pb-4 pt-3 sm:px-6 sm:pb-6 lg:pt-4"><div className="m-auto max-w-md py-12 text-center"><Bot className="mx-auto size-10 text-accent" /><h2 className="mt-4 text-lg font-semibold text-fg">{text.emptyTitle}</h2><p className="mt-2 text-sm leading-6 text-fg-muted">{text.emptyBody}</p><Button className="mt-5" onClick={() => openAssistant(text.createPrompt)}><Bot className="size-4" />{text.create}</Button></div></div>;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-surface-panel p-4 sm:p-6">
+    <div className="flex min-h-0 flex-1 flex-col bg-surface-panel px-4 pb-4 pt-3 sm:px-6 sm:pb-6 lg:pt-4">
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="min-h-0 overflow-y-auto rounded-xl border border-edge bg-surface-base p-2">
           {automations.map((automation) => <button key={automation.id} onClick={() => setSelectedId(automation.id)} className={`mb-1 w-full rounded-lg p-3 text-left ${selectedId === automation.id ? 'bg-accent-soft text-accent-fg' : 'hover:bg-surface-hover'}`}><span className="block truncate text-sm font-medium">{automation.name}</span><span className="mt-1 flex items-center gap-1.5 text-xs text-fg-muted">{automation.enabled ? <CirclePlay className="size-3.5 text-emerald-600" /> : <CirclePause className="size-3.5" />}{automation.enabled ? text.enabled : text.paused}</span></button>)}

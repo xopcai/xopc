@@ -266,7 +266,7 @@ export function WorkflowDetailPage() {
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-surface-panel">
-      <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6">
+      <div className="mx-auto w-full max-w-6xl px-4 pb-5 pt-3 sm:px-6 lg:pt-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <p className="max-w-3xl text-sm leading-6 text-fg-muted">{localized.description}</p>
           <div className="flex rounded-lg bg-surface-base p-1" role="tablist" aria-label={language === 'zh' ? '工作流视图' : 'Workflow view'}>

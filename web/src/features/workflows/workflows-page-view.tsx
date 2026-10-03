@@ -151,7 +151,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-surface-panel">
-      <div className="mx-auto flex min-h-full w-full max-w-[96rem] flex-col px-3 py-5 sm:px-5 xl:px-6">
+      <div className="mx-auto flex min-h-full w-full max-w-[96rem] flex-col px-3 pb-5 pt-3 sm:px-5 lg:pt-4 xl:px-6">
         <nav
           className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
           aria-label={labels.pageTabsAria}
