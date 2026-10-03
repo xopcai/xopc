@@ -211,6 +211,22 @@
     { "name": "note_tags_placeholder", "value": "多个标签用逗号分隔" },
     { "name": "note_done", "value": "完成" },
     { "name": "note_record_audio", "value": "录制语音" },
+    { "name": "capture_start", "value": "录一条语音笔记" },
+    { "name": "capture_start_hint", "value": "实时转写" },
+    { "name": "capture_title", "value": "语音快记" },
+    { "name": "capture_live", "value": "正在录音" },
+    { "name": "capture_listening", "value": "开始说话…" },
+    { "name": "capture_transcribing", "value": "正在转写…" },
+    { "name": "capture_paused", "value": "已暂停" },
+    { "name": "capture_marker", "value": "标记" },
+    { "name": "capture_markers", "value": "%d 个标记" },
+    { "name": "capture_finish", "value": "完成" },
+    { "name": "capture_discard", "value": "放弃" },
+    { "name": "capture_saving", "value": "正在保存…" },
+    { "name": "capture_transcript_delayed", "value": "录音仍在继续，网络恢复后会补齐转写。" },
+    { "name": "capture_consent_title", "value": "录制这段对话？" },
+    { "name": "capture_consent_message", "value": "开始前请确认参与者都已同意。" },
+    { "name": "capture_consent_continue", "value": "开始录音" },
     { "name": "note_attach_recording", "value": "添加录音" },
     { "name": "note_voice_ready", "value": "录音已就绪" },
     { "name": "note_select_hint", "value": "选择一条笔记进行阅读或编辑" },
@@ -638,7 +654,7 @@
     },
     {
       "name": "library",
-      "value": "资料库"
+      "value": "笔记"
     },
     {
       "name": "personal",

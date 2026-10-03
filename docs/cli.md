@@ -19,6 +19,7 @@ Global options such as `--config <path>` and `--workspace <path>` select a diffe
 | `init` | Initialize state, configuration, and the Agent workspace |
 | `setup` | Create the base configuration and workspace |
 | `profile` | Manage separate xopc state profiles |
+| `backup` | Create, verify, and restore encrypted offline state backups |
 | `onboard` | Run the guided first-time setup |
 | `channels` | Configure messaging channels and pairing |
 | `auth` | Manage authentication credentials |
@@ -79,11 +80,16 @@ xopc platform connect https://xopc.example.com
 xopc config validate
 xopc doctor
 xopc logs tail
+
+# Offline backup after stopping the Gateway
+xopc backup create --output /secure/xopc-backup --passphrase-file /secure/passphrase
 ```
 
 To make XOPC Sessions searchable in ctx, see [Export history to ctx](./ctx-history.md).
 
 Platform connection, discovery, and runtime registration are documented in [XOPC Platform](./platform.md).
+
+Backup prerequisites, verification, and restoration are documented in [Back up and restore xopc](./backup.md).
 
 ## Profiles and paths
 

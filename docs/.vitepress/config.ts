@@ -122,6 +122,7 @@ export default defineConfig({
               { text: 'Chrome extension', link: '/browser-extension' },
               { text: 'Remote access', link: '/remote-access' },
               { text: 'Heartbeat', link: '/heartbeat' },
+              { text: 'Back up and restore', link: '/backup' },
               { text: 'Updates', link: '/update' }
             ]
           },
@@ -233,6 +234,7 @@ export default defineConfig({
               { text: 'Chrome 浏览器扩展', link: '/zh/browser-extension' },
               { text: '远程访问', link: '/zh/remote-access' },
               { text: '心跳检查', link: '/zh/heartbeat' },
+              { text: '备份与恢复', link: '/zh/backup' },
               { text: '更新', link: '/zh/update' }
             ]
           },

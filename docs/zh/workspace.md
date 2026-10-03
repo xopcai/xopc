@@ -40,7 +40,16 @@ Profile 可能使用 `~/.xopc-work` 等目录。环境变量和命令行参数�
 
 ## 备份
 
-为了获得一致的完整备份：
+离线加密备份的完整步骤见[备份与恢复 xopc](./backup.md)：
+
+```bash
+xopc backup create --output /secure/xopc-backup --passphrase-file /secure/passphrase
+xopc backup verify /secure/xopc-backup --passphrase-file /secure/passphrase
+```
+
+先停止 Gateway。本命令覆盖当前状态目录；发现已知的外部工作区、配置或凭据路径时会拒绝执行。目前尚不提供自动上云迁移。
+
+若需手动备份外部路径，为保证数据一致性：
 
 1. 停止或暂停进行中的 Agent 运行和 Automation；
 2. 停止 Gateway 服务；
@@ -51,6 +60,8 @@ Profile 可能使用 `~/.xopc-work` 等目录。环境变量和命令行参数�
 备份中包含凭据和私人对话。必须加密、限制访问并设置保留时间。
 
 恢复前保留当前状态副本，使用兼容 xopc 版本，并确认文件所有权正确。不要手动合并 SQLite 文件。
+
+SQLite 是结构化应用数据的权威来源；附件、Agent Profile 和工作区仍是文件。仅备份数据库不足以完整恢复。客户端尚未发送到 Gateway 的草稿和离线操作不在服务器备份中。在线数据库应与 Gateway 位于同一台主机的本地持久存储上，不要通过 SMB/NFS 共享数据库文件。
 
 ## 安全手动编辑
 

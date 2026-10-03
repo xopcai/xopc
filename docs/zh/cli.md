@@ -19,6 +19,7 @@ xopc --version
 | `init` | 初始化状态、配置和 Agent 工作区 |
 | `setup` | 创建基础配置和工作区 |
 | `profile` | 管理独立 xopc 状态 Profile |
+| `backup` | 创建、校验和恢复离线加密状态备份 |
 | `onboard` | 运行首次设置向导 |
 | `channels` | 配置消息通道和配对 |
 | `auth` | 管理认证凭据 |
@@ -76,11 +77,16 @@ xopc platform connect https://xopc.example.com
 xopc config validate
 xopc doctor
 xopc logs tail
+
+# 停止 Gateway 后创建离线备份
+xopc backup create --output /secure/xopc-backup --passphrase-file /secure/passphrase
 ```
 
 如需在 ctx 中搜索 XOPC Session，请参阅[导出历史到 ctx](./ctx-history.md)。
 
 平台连接、Discovery 与 runtime 注册见 [XOPC Platform](./platform.md)。
+
+备份前准备、校验与恢复见[备份与恢复 xopc](./backup.md)。
 
 ## Profile 与路径
 
