@@ -76,6 +76,7 @@
     "welcomeDescription": "输入问题、任务或文件处理需求，开始对话。",
     "welcomeSpotlight": {
       "headline": "今天想推进什么？",
+      "projectHeadline": "想在「{{projectName}}」里做什么？",
       "acceptSuggestionHint": "按 Tab 填入建议",
       "recommendations": {
         "projectBlocked": {

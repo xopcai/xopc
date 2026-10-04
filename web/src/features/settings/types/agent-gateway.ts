@@ -43,6 +43,7 @@ export type AgentOverride = {
   models?: AgentModelsOverride;
   skills?: SkillOverride;
   tools?: Record<string, ToolPolicy>;
+  toolAllowlist?: string[];
   workflows?: AgentDefaults['workflows'];
   runtime?: AgentDefaults['runtime'];
 };
@@ -51,6 +52,7 @@ export type EffectiveAgentConfig = Omit<AgentOverride, 'models' | 'skills' | 'to
   models: AgentModelsDefaults;
   skills: SkillDefaults;
   tools: Record<string, ToolPolicy>;
+  toolAllowlist?: string[];
   workflows: AgentDefaults['workflows'];
   runtime: AgentDefaults['runtime'];
 };

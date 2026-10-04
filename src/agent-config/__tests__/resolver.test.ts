@@ -86,6 +86,16 @@ describe('resolveEffectiveAgentConfig', () => {
     expect(result.sources['tools.exec_command.mode']).toBe('agent');
   });
 
+  it('carries an Agent tool allowlist without changing inherited tool policies', () => {
+    const result = resolveEffectiveAgentConfig({
+      defaults,
+      agent: agent({ toolAllowlist: ['xopc_use', 'tool_manual'] }),
+    });
+    expect(result.config.toolAllowlist).toEqual(['xopc_use', 'tool_manual']);
+    expect(result.config.tools).toEqual(defaults.tools);
+    expect(result.sources.toolAllowlist).toBe('agent');
+  });
+
   it('does not mutate the declared defaults or agent override', () => {
     const localAgent = agent({ skills: { mode: 'replace', include: ['coding'] } });
     const defaultsBefore = structuredClone(defaults);

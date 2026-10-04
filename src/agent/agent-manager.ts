@@ -674,9 +674,11 @@ export class AgentManager implements AgentInstanceGateway {
     this.getOrCreateAgent(conversationId);
     const inst = this.agents.get(conversationId);
     if (!inst) return run();
+    if (inst.effectiveProfile.skillsAllowlist?.length === 0) return run();
 
     const activatedTools = this.toolsFactory.createCapabilityTools(requested, {
       disabledTools: inst.effectiveProfile.tools.denied,
+      toolAllowlist: inst.effectiveProfile.config.toolAllowlist,
     });
     const existingNames = new Set(inst.registeredToolNames);
     const newTools = activatedTools.filter((tool) => !existingNames.has(tool.name));
@@ -885,6 +887,7 @@ export class AgentManager implements AgentInstanceGateway {
       profileMarkdownRoot: resolveAgentProfileDir(profile.agentId),
       agentId: profile.agentId,
       disabledTools: profile.tools.denied,
+      toolAllowlist: profile.config.toolAllowlist,
       getMemoryManager: () => rt.memoryManager,
       getSkillManager: () => rt.skillManager,
     }).map((tool) => tool.name);
@@ -1165,7 +1168,11 @@ export class AgentManager implements AgentInstanceGateway {
     const targetPath = this.getResolvedWorkspaceForSession(conversationId);
     const existing = this.agents.get(conversationId);
     if (existing) {
-      if (existing.resolvedWorkspacePath !== targetPath) {
+      const currentConfig = resolveEffectiveAgentProfileForSession(conversationId).config;
+      if (!existing.agent.state.isStreaming && (
+        existing.resolvedWorkspacePath !== targetPath
+        || JSON.stringify(existing.effectiveProfile.config) !== JSON.stringify(currentConfig)
+      )) {
         this.removeAgent(conversationId);
       } else {
         this.refreshDynamicContextIfChanged(existing);
@@ -1441,6 +1448,7 @@ export class AgentManager implements AgentInstanceGateway {
       agentId: profile.agentId,
       conversationId,
       disabledTools: profile.tools.denied,
+      toolAllowlist: profile.config.toolAllowlist,
       getPrimaryModel: () => (agent?.state.model as Model<Api> | undefined) ?? model,
       getParentTools: () => agent?.state.tools ?? [],
       createDelegationPolicy: () => this.createAgentTurnPolicy(conversationId),

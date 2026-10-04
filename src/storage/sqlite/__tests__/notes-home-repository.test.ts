@@ -27,6 +27,18 @@ function link(id: string, noteId: string, projectId: string) {
 }
 
 describe('notes home read model', () => {
+  it('paginates the default mobile list in updated order and keeps the full total', () => {
+    note('old', { createdAt: 1, updatedAt: 10 });
+    note('middle', { createdAt: 3, updatedAt: 20 });
+    note('new', { createdAt: 2, updatedAt: 30 });
+    const first = listNoteRecords({ limit: 2, sortBy: 'updatedAt', sortOrder: 'desc' });
+    const second = listNoteRecords({ limit: 2, offset: 2, sortBy: 'updatedAt', sortOrder: 'desc' });
+    expect(first).toMatchObject({ total: 3, hasMore: true });
+    expect(first.items.map((item) => item.id)).toEqual(['new', 'middle']);
+    expect(second).toMatchObject({ total: 3, hasMore: false });
+    expect(second.items.map((item) => item.id)).toEqual(['old']);
+  });
+
   it('returns current project names, deduplicates links and counts notes independently of list pagination', () => {
     note('n1'); note('n2', { updatedAt: 30 }); note('trash', { status: 'trashed', updatedAt: 100 });
     link('l1', 'n1', 'p1'); link('l2', 'n1', 'p1'); link('l3', 'n1', 'p2'); link('l4', 'n2', 'p1'); link('l5', 'trash', 'p1');

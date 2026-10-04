@@ -188,6 +188,8 @@ export interface CreateCoreToolsOptions {
   profileMarkdownRoot?: string;
   /** Tool `name` values to omit (e.g. `exec_command`, `extensions` for extension tools). */
   disabledTools?: Set<string>;
+  /** Optional Agent-level allowlist of tool names. */
+  toolAllowlist?: readonly string[];
   /** Optional primary model for image tool heuristics. */
   getPrimaryModel?: () => Model<Api>;
   getMemoryManager?: () => MemoryManager;
@@ -336,6 +338,7 @@ export class AgentToolsFactory {
     const getMemMgr = options?.getMemoryManager ?? this.deps.getMemoryManager;
     const getSkillMgr = options?.getSkillManager;
     const disabled = options?.disabledTools;
+    const allowed = options?.toolAllowlist ? new Set(options.toolAllowlist) : undefined;
 
     const primary = getPrimary?.();
     const modelHasVision = primary?.input?.includes('image') ?? false;
@@ -695,6 +698,7 @@ export class AgentToolsFactory {
                   getPrimaryModel: () => childOpts.model,
                   agentId: options?.agentId ?? childOpts.agentId,
                   conversationId: childOpts.browserConversationId,
+                  toolAllowlist: options?.toolAllowlist,
                   disabledTools: new Set([
                     ...(disabled ?? []),
                     EXTERNAL_TOOL_NAMES.search,
@@ -718,7 +722,8 @@ export class AgentToolsFactory {
           ? resolveEffectiveAgentConfigForSession(currentConversationId())
           : resolveEffectiveAgentConfigForAgent(resolvedAgentId)).config.tools : undefined;
         if (policies?.data_batch?.mode === 'deny') return [];
-        return filterToolsByDisabledSet(core, disabled).filter(tool => policies?.[tool.name]?.mode !== 'deny');
+        return filterToolsByDisabledSet(core, disabled)
+          .filter(tool => (!allowed || allowed.has(tool.name)) && policies?.[tool.name]?.mode !== 'deny');
       };
       core.push(createDataBatchTool(workspace, () => new Set(dataTools().map(tool => tool.name)), {
         getTools: dataTools,
@@ -726,18 +731,19 @@ export class AgentToolsFactory {
         allowHostGit: () => getCommandIsolation()?.mode !== 'docker',
       }));
     }
-    return filterToolsByDisabledSet(core, disabled);
+    return filterToolsByDisabledSet(core, disabled).filter((tool) => !allowed || allowed.has(tool.name));
   }
 
   createCapabilityTools(
     capabilityNames: readonly string[],
-    options?: Pick<CreateCoreToolsOptions, 'disabledTools'>,
+    options?: Pick<CreateCoreToolsOptions, 'disabledTools' | 'toolAllowlist'>,
   ): AgentTool<any, any>[] {
     const disabled = options?.disabledTools;
+    const allowed = options?.toolAllowlist ? new Set(options.toolAllowlist) : undefined;
     const raw: AgentTool<any, any>[] = [];
     const toolNames = new Set<string>();
     for (const toolName of getAgentCapabilityToolNames(capabilityNames)) {
-      if (disabled?.has(toolName) || toolNames.has(toolName)) continue;
+      if (disabled?.has(toolName) || (allowed && !allowed.has(toolName)) || toolNames.has(toolName)) continue;
       toolNames.add(toolName);
       if (toolName === 'create_desktop_pet') raw.push(createDesktopPetTool() as AgentTool<any, any>);
     }

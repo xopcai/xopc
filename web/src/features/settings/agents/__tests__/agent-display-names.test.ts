@@ -12,6 +12,7 @@ describe('agent display names', () => {
     const zh = messages('zh').agentsSettings;
     const agents = [
       ['main', 'Smart Assistant', '智能助手'],
+      ['conductor', 'Conductor', '指挥家'],
       ['coder', 'Coding Expert', '编程专家'],
       ['writer', 'Writing Assistant', '写作助手'],
       ['researcher', 'Research Assistant', '研究助手'],
@@ -26,10 +27,18 @@ describe('agent display names', () => {
   });
 
   it('recognizes legacy seeded names and descriptions', () => {
+    const en = messages('en').agentsSettings;
     const zh = messages('zh').agentsSettings;
 
     expect(agentListDisplayName({ id: 'main', name: 'Main' }, zh)).toBe('智能助手');
     expect(agentListDisplayName({ id: 'coder', name: 'Coder' }, zh)).toBe('编程专家');
+    expect(agentListDisplayName({ id: 'conductor', name: 'Conductor' }, zh)).toBe('指挥家');
+    expect(agentListDisplayDescription({ id: 'conductor' }, zh)).toBe(
+      '与你保持对话，安排专长智能体协作，并在有进展时告诉你。',
+    );
+    expect(agentListDisplayDescription({ id: 'conductor' }, en)).toBe(
+      'Coordinates specialist agents and keeps you updated as work progresses.',
+    );
     expect(
       agentListDisplayDescription(
         {
@@ -49,6 +58,8 @@ describe('agent display names', () => {
     expect(agentListDisplayDescription({ id: 'coder', description: 'Knows our monorepo.' }, en)).toBe(
       'Knows our monorepo.',
     );
+    expect(agentListDisplayName({ id: 'conductor', name: 'My Coordinator' }, en)).toBe('My Coordinator');
+    expect(agentListDisplayDescription({ id: 'conductor', description: 'My description.' }, en)).toBe('My description.');
     expect(agentListDisplayName({ id: 'ops' }, en)).toBe('ops');
     expect(agentListDisplayDescription({ id: 'ops' }, en)).toBe('');
   });

@@ -60,11 +60,12 @@ export async function createGatewayAgent(body: {
 
 export async function updateGatewayAgent(
   agentId: string,
-  patch: Partial<Omit<AgentOverride, 'id' | 'enabled' | 'workspace' | 'models' | 'skills' | 'tools' | 'workflows' | 'runtime'>> & {
+  patch: Partial<Omit<AgentOverride, 'id' | 'enabled' | 'workspace' | 'models' | 'skills' | 'tools' | 'toolAllowlist' | 'workflows' | 'runtime'>> & {
     workspace?: string | null;
     models?: AgentModelsOverride | null;
     skills?: SkillOverride | null;
     tools?: Record<string, ToolPolicy> | null;
+    toolAllowlist?: string[] | null;
     workflows?: AgentOverride['workflows'] | null;
     runtime?: AgentOverride['runtime'] | null;
     setDefault?: boolean;

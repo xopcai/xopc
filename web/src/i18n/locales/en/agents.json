@@ -411,6 +411,10 @@
         "name": "Smart Assistant",
         "description": "Your personal intelligent assistant for questions, everyday tasks, and conversation."
       },
+      "conductor": {
+        "name": "Conductor",
+        "description": "Coordinates specialist agents and keeps you updated as work progresses."
+      },
       "coding": {
         "name": "Coding Expert",
         "description": "Build, debug, refactor, and test software."

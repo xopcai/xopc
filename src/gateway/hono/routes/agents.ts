@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 
 import {
   AgentModelsOverrideSchema,
+  AgentEntrySchema,
   AgentProfileSchema,
   RuntimePolicySchema,
   SkillOverrideSchema,
@@ -131,6 +132,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       'models',
       'skills',
       'tools',
+      'toolAllowlist',
       'workflows',
       'runtime',
       'setDefault',
@@ -156,6 +158,14 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       } else {
         return c.json({ ok: false, error: { message: 'tools must be an object or null' } }, 400);
       }
+    }
+    const toolAllowlistPatch = body.toolAllowlist === null
+      ? null
+      : Object.hasOwn(body, 'toolAllowlist')
+        ? AgentEntrySchema.shape.toolAllowlist.safeParse(body.toolAllowlist)
+        : undefined;
+    if (toolAllowlistPatch && toolAllowlistPatch !== null && !toolAllowlistPatch.success) {
+      return c.json({ ok: false, error: { message: `toolAllowlist ${toolAllowlistPatch.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
     }
     const modelsPatch = Object.hasOwn(body, 'models') ? parsePatchModels(body.models) : undefined;
     if (isParseError(modelsPatch)) {
@@ -203,6 +213,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       setDefault: body.setDefault === true,
       ...(skillsPatch !== undefined ? { skills: skillsPatch === null ? null : skillsPatch.data } : {}),
       ...(toolsPatch !== undefined ? { tools: toolsPatch } : {}),
+      ...(toolAllowlistPatch !== undefined ? { toolAllowlist: toolAllowlistPatch === null ? null : toolAllowlistPatch.data } : {}),
       ...(workflowsPatch !== undefined ? { workflows: workflowsPatch === null ? null : workflowsPatch.data } : {}),
       ...(runtimePatch !== undefined ? { runtime: runtimePatch === null ? null : runtimePatch.data } : {}),
     });

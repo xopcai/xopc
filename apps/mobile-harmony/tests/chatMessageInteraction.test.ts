@@ -29,7 +29,9 @@ describe('chat message interactions', () => {
     const menuStart = chat.indexOf('assistantMessageMore(row: XopcChatRow)');
     const menuEnd = chat.indexOf('@Builder\n  assistantMessageActions', menuStart);
     const menu = chat.slice(menuStart, menuEnd);
-    expect(menu).toContain('showActionSheet');
+    expect(menu).not.toContain('showActionSheet');
+    expect(menu).toContain(".id('chat-assistant-menu')");
+    expect(chat).toContain('height: 112 + this.assistantMenuActionCount * 56');
     expect(menu).toContain('app.string.chat_message_detail');
     expect(menu).toContain('app.string.chat_regenerate');
     expect(menu).toContain('app.string.chat_copy_code');

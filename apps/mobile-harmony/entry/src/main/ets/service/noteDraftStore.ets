@@ -15,14 +15,28 @@ export class XopcNoteDraftStore {
 
   async initialize(context: common.Context): Promise<void> {
     if (this.store) return;
-    this.store = await relationalStore.getRdbStore(context, {
+    const store = await relationalStore.getRdbStore(context, {
       name: NOTE_DATABASE, securityLevel: relationalStore.SecurityLevel.S2, encrypt: true
     });
-    await this.store.executeSql(CREATE_NOTE_DRAFT_TABLE);
-    try { await this.store.executeSql('ALTER TABLE note_drafts ADD COLUMN project_id TEXT'); }
-    catch (error) {
-      if (!(error as Error).message.toLowerCase().includes('duplicate column')) throw error as Error;
+    await store.executeSql(CREATE_NOTE_DRAFT_TABLE);
+    if (!await this.hasProjectIdColumn(store)) {
+      try { await store.executeSql('ALTER TABLE note_drafts ADD COLUMN project_id TEXT'); }
+      catch (error) {
+        if (!await this.hasProjectIdColumn(store)) throw error as Error;
+      }
     }
+    this.store = store;
+  }
+
+  private async hasProjectIdColumn(store: relationalStore.RdbStore): Promise<boolean> {
+    const result = await store.querySql('PRAGMA table_info(note_drafts)');
+    try {
+      const nameColumn = result.getColumnIndex('name');
+      while (result.goToNextRow()) {
+        if (result.getString(nameColumn) === 'project_id') return true;
+      }
+      return false;
+    } finally { result.close(); }
   }
 
   async save(draft: XopcNoteDraft): Promise<void> {

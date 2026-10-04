@@ -211,12 +211,17 @@ export struct XopcNotesTabView {
           .accessibilityText($r('app.string.files')).onClick((): void => { this.onNavigate({ page: 'files', itemId: '' }); })
       }.width('100%').padding({ left: 20, right: 20, bottom: 12 })
       if (this.model.error) {
-        Text(userErrorMessage(this.model.error, 'collection')).fontSize(13).fontColor(this.colors.secondary)
-          .width('100%').padding({ left: 20, right: 20, bottom: 8 })
+        Row({ space: 12 }) {
+          Text(userErrorMessage(this.model.error, 'collection')).fontSize(13).fontColor(this.colors.secondary)
+            .layoutWeight(1)
+          Button($r('app.string.retry')).fontSize(13).fontColor(this.colors.accent)
+            .backgroundColor(Color.Transparent).padding(0).height(36)
+            .onClick((): void => { void this.model.list(); })
+        }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
       }
-      if (this.model.loading) {
+      if (this.model.loading && !this.model.items.length && !this.files.items.length) {
         Column() { XopcListSkeleton() }.width('100%').padding({ left: 20, right: 20 })
-      } else if (!this.model.items.length && !this.files.items.length) {
+      } else if (!this.model.items.length && !this.files.items.length && !this.model.error) {
         Column() { XopcEmptyHint({ message: $r('app.string.no_notes') }) }.width('100%').padding({ left: 20, right: 20 })
       } else {
         List({ space: 12 }) {
