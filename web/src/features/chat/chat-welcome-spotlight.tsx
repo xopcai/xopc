@@ -28,7 +28,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
         'flex flex-col items-center px-3 text-center',
         compact
           ? 'gap-4 pb-3 pt-5'
-          : 'gap-5 pb-6 pt-24 sm:pt-28 [@media(max-height:800px)]:pt-8',
+          : 'gap-5 pb-6 pt-32 sm:pt-36 [@media(max-height:800px)]:pt-12',
       )}
     >
       <Loopi

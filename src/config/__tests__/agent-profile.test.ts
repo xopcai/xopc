@@ -1,5 +1,6 @@
 import { ensureSessionRecord as ensureFixtureConversation } from '../../storage/sqlite/session-repository.js';
 import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -65,5 +66,19 @@ describe('agent profile', () => {
     ).toBe('coder');
     expect(() => resolveEffectiveAgentProfileForSession('invalid')).toThrow();
     expect(resolveEffectiveAgentProfileForSession(undefined).agentId).toBe('main');
+  });
+
+  it('keeps main as the default while conductor speaks directly with the user', () => {
+    new AgentCatalogRepository().create({
+      id: 'conductor',
+      profile: { name: '指挥家', instructions: '你是用户唯一直接交流的主协调 Agent。' },
+      skills: { mode: 'replace', include: [] },
+      toolAllowlist: ['xopc_use', 'tool_manual'],
+    }, { ready: true });
+    expect(resolveEffectiveAgentProfile('main').customInstructions).toBeUndefined();
+    const conductor = resolveEffectiveAgentProfile('conductor');
+    expect(conductor.skillsAllowlist).toEqual([]);
+    expect(conductor.config.toolAllowlist).toEqual(['xopc_use', 'tool_manual']);
+    expect(conductor.customInstructions).toBe('你是用户唯一直接交流的主协调 Agent。');
   });
 });

@@ -202,6 +202,7 @@ export type UpdateAgentBody = {
   setDefault?: boolean;
   skills?: SkillOverride | null;
   tools?: AgentEntry['tools'] | null;
+  toolAllowlist?: AgentEntry['toolAllowlist'] | null;
   workflows?: AgentEntry['workflows'] | null;
   runtime?: AgentEntry['runtime'] | null;
 };
@@ -220,6 +221,7 @@ export async function updateGatewayAgent(
   if (body.models !== undefined) patch.models = body.models ?? undefined;
   if (body.skills !== undefined) patch.skills = body.skills ?? undefined;
   if (body.tools !== undefined) patch.tools = body.tools ?? undefined;
+  if (body.toolAllowlist !== undefined) patch.toolAllowlist = body.toolAllowlist ?? undefined;
   if (body.workflows !== undefined) patch.workflows = body.workflows ?? undefined;
   if (body.runtime !== undefined) patch.runtime = body.runtime ?? undefined;
   try {

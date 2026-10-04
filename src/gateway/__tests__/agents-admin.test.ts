@@ -106,4 +106,23 @@ describe('agents admin', () => {
     expect(result.agents[0]?.override.models).toBeUndefined();
     expect(result.agents[0]?.effective.models.chat.primary).toBe('openai/gpt-5');
   });
+
+  it('returns the tool scope used at runtime for restricted agents', async () => {
+    new AgentCatalogRepository().create({
+      id: 'coordinator',
+      toolAllowlist: ['xopc_use', 'knowledge_search'],
+    }, { ready: true });
+    const result = await listGatewayAgents();
+    const coordinator = result.agents.find((agent) => agent.id === 'coordinator');
+    expect(coordinator?.override.toolAllowlist).toEqual(['xopc_use', 'knowledge_search']);
+    expect(coordinator?.effective.toolAllowlist).toEqual(['xopc_use', 'knowledge_search']);
+    expect(coordinator?.effective.tools.exec_command?.mode).toBe('ask');
+    const updated = await updateGatewayAgent('coordinator', {
+      toolAllowlist: ['xopc_use', 'knowledge_search', 'exec_command'],
+    });
+    expect(updated.ok).toBe(true);
+    expect(new AgentCatalogRepository().get('coordinator')?.toolAllowlist).toEqual([
+      'xopc_use', 'knowledge_search', 'exec_command',
+    ]);
+  });
 });

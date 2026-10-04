@@ -24,7 +24,10 @@ describe('buildWelcomeSpotlight', () => {
       projectName: 'Launch',
     };
 
-    expect(build(context).recommendation).toBeUndefined();
+    const spotlight = build(context);
+
+    expect(spotlight.headline).toBe('想在「Launch」里做什么？');
+    expect(spotlight.recommendation).toBeUndefined();
   });
 
   it('prioritizes a project blocker over other continuation signals', () => {

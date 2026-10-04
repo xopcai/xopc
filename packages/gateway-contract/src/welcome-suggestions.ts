@@ -56,6 +56,7 @@ type WelcomeRecommendationTemplate = {
 
 export type WelcomeSpotlightCopy = {
   headline: string;
+  projectHeadline?: string;
   acceptSuggestionHint?: string;
   recommendations: {
     projectBlocked: WelcomeRecommendationTemplate;
@@ -191,7 +192,9 @@ export function buildWelcomeSpotlight(
 ): WelcomeSpotlightModel {
   const contextStatus = options.contextStatus ?? 'ready';
   return {
-    headline: copy.headline,
+    headline: context.kind === 'project' && copy.projectHeadline
+      ? fillTemplate(copy.projectHeadline, { projectName: context.projectName })
+      : copy.headline,
     contextKind: context.kind,
     contextStatus,
     recommendation: contextStatus === 'ready' ? buildRecommendation(context, copy) : undefined,

@@ -13,6 +13,7 @@ import {
   resolveAgentCapabilityCatalog,
 } from '../../capabilities/index.js';
 import { runWithEmbeddedExecutionSession } from '../../embedded/execution-context.js';
+import { STARTER_AGENTS } from '../../starter-agents.js';
 import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
 import { AgentToolsFactory } from '../factory.js';
 
@@ -28,6 +29,34 @@ describe('AgentToolsFactory', () => {
     const batch = factory.createCoreTools({ disabledTools: new Set(['read_file']) }).find(tool => tool.name === 'data_batch')!;
     const result = await batch.execute('denied', { operations: [{ id: 'r', kind: 'file_read', path: 'x' }] });
     expect(result.details).toMatchObject({ sourceRequests: 0, status: 'failed' });
+  });
+  it('applies an Agent tool allowlist to core and dynamic tools', () => {
+    const factory = new AgentToolsFactory({
+      workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,
+      dispatchTaskRuns: () => {},
+    });
+    const toolAllowlist = ['xopc_use', 'tool_manual'];
+    const names = factory.createCoreTools({ toolAllowlist }).map((tool) => tool.name);
+    expect(names).toContain('xopc_use');
+    expect(names).toContain('tool_manual');
+    expect(names).not.toContain('exec_command');
+    expect(names).not.toContain('data_batch');
+    expect(names).toHaveLength(2);
+    expect(factory.createCapabilityTools(['desktop-pet-authoring'], { toolAllowlist })).toEqual([]);
+  });
+  it('provides Conductor with focused reads without file writes or shell access', () => {
+    const factory = new AgentToolsFactory({
+      workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,
+      dispatchTaskRuns: () => {},
+    });
+    const toolAllowlist = STARTER_AGENTS.find((agent) => agent.id === 'conductor')?.toolAllowlist;
+    const names = factory.createCoreTools({ toolAllowlist }).map((tool) => tool.name);
+    expect(names).toEqual(expect.arrayContaining([
+      'xopc_use', 'tool_manual',
+      'knowledge_search', 'knowledge_get', 'user_context_search', 'user_context_get',
+      'find', 'grep', 'read_file',
+    ]));
+    expect(names).not.toEqual(expect.arrayContaining(['write_file', 'apply_patch', 'exec_command', 'knowledge_write']));
   });
   it('routes heartbeat notifications through final-result delivery even with explicit destinations', async () => {
     const conversationId = createConversation({ agentId: 'main', sourceChannel: 'heartbeat', sessionType: 'heartbeat' }).key;

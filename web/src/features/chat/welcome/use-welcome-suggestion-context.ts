@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { readLocalSessionDraft } from '@/features/chat/session/local-session-drafts';
 import type { WelcomeSuggestionContext, WelcomeSuggestionContextStatus } from '@/features/chat/welcome/welcome-suggestions';
-import { fetchProject, fetchProjectOperatingView } from '@/features/projects/api';
+import { fetchProject, fetchProjectOperatingView, type Project } from '@/features/projects/api';
 import { getSessionDetail } from '@/features/sessions/session-api';
 import type { TaskDetail } from '@/features/tasks/home-api';
 import type { WorkflowRunView } from '@/features/workflows/workflow-api';
@@ -13,6 +13,7 @@ type UseWelcomeSuggestionContextOptions = {
   sourceContextPending?: boolean;
   sourceContextFailed?: boolean;
   suppressProjectContext?: boolean;
+  project?: Pick<Project, 'id' | 'name'> | null;
   task?: TaskDetail | null;
   workflow?: WorkflowRunView | null;
 };
@@ -32,6 +33,7 @@ function contextStateKey(options: UseWelcomeSuggestionContextOptions): string {
   if (options.task) return `task:${options.task.task.id}:${options.task.task.version}`;
   if (options.workflow) return `workflow:${options.workflow.run.id}:${options.workflow.run.status}`;
   if (options.suppressProjectContext) return `suppressed:${options.conversationId ?? ''}`;
+  if (options.project) return `project:${options.project.id}:${options.project.name}`;
   if (options.conversationId) {
     return `session:${options.conversationId}:failed:${options.sourceContextFailed ? '1' : '0'}`;
   }
@@ -80,6 +82,17 @@ function immediateContextState(options: UseWelcomeSuggestionContextOptions): Int
       status: options.sourceContextFailed ? 'degraded' : 'ready',
     };
   }
+  if (options.project) {
+    return {
+      key,
+      context: {
+        kind: 'project',
+        projectId: options.project.id,
+        projectName: options.project.name,
+      },
+      status: 'ready',
+    };
+  }
   return {
     key,
     context: { kind: 'empty' },
@@ -94,6 +107,7 @@ export function useWelcomeSuggestionContext(options: UseWelcomeSuggestionContext
     sourceContextPending,
     sourceContextFailed,
     suppressProjectContext,
+    project,
     task,
     workflow,
   } = options;
@@ -108,6 +122,7 @@ export function useWelcomeSuggestionContext(options: UseWelcomeSuggestionContext
       sourceContextPending,
       sourceContextFailed,
       suppressProjectContext,
+      project,
       task,
       workflow,
     };
@@ -127,14 +142,16 @@ export function useWelcomeSuggestionContext(options: UseWelcomeSuggestionContext
     setState(immediate);
     void (async () => {
       let degraded = Boolean(sourceContextFailed);
-      let projectId: string | null = null;
-      try {
-        const draft = await readLocalSessionDraft(conversationId);
-        projectId = draft
-          ? draft.creation.projectId?.trim() || null
-          : (await getSessionDetail(conversationId)).projectId?.trim() || null;
-      } catch {
-        degraded = true;
+      let projectId: string | null = project?.id ?? null;
+      if (!projectId) {
+        try {
+          const draft = await readLocalSessionDraft(conversationId);
+          projectId = draft
+            ? draft.creation.projectId?.trim() || null
+            : (await getSessionDetail(conversationId)).projectId?.trim() || null;
+        } catch {
+          degraded = true;
+        }
       }
 
       if (!projectId) {
@@ -150,7 +167,7 @@ export function useWelcomeSuggestionContext(options: UseWelcomeSuggestionContext
 
       try {
         const [projectResult, operatingResult] = await Promise.allSettled([
-          fetchProject(projectId),
+          project ? Promise.resolve(project) : fetchProject(projectId),
           fetchProjectOperatingView(projectId),
         ]);
         if (projectResult.status === 'rejected') throw projectResult.reason;
@@ -193,6 +210,7 @@ export function useWelcomeSuggestionContext(options: UseWelcomeSuggestionContext
     sourceContextFailed,
     sourceContextPending,
     suppressProjectContext,
+    project,
     task,
     workflow,
   ]);
