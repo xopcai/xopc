@@ -55,6 +55,55 @@ describe('chat read aloud lifecycle', () => {
     expect(reader.continuousConversationId).toBe(''); expect(reader.state).toBe('playing');
     expect(player.release).not.toHaveBeenCalled(); expect(mock.stopBackground).not.toHaveBeenCalled();
   });
+  it('prefetches the next sentence during playback and reuses it at the boundary', async () => {
+    await reader.speak(context, 'First. Second.', 'one', 'en');
+    expect(mock.request).toHaveBeenCalledOnce();
+    events.get('stateChange')?.('prepared');
+    await vi.waitFor(() => expect(mock.request).toHaveBeenCalledTimes(2));
+    events.get('stateChange')?.('playing');
+    expect(reader.state).toBe('playing');
+    events.get('stateChange')?.('completed');
+    await vi.waitFor(() => expect(mock.createPlayer).toHaveBeenCalledTimes(2));
+    expect(mock.request).toHaveBeenCalledTimes(2);
+  });
+  it('waits for an in-flight prefetch without starting a duplicate request', async () => {
+    let resolve!: (value: unknown) => void;
+    mock.request.mockResolvedValueOnce({ responseCode: 200, result: new ArrayBuffer(8) });
+    mock.request.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    await reader.speak(context, 'First. Second.', 'one', 'en');
+    events.get('stateChange')?.('playing');
+    await vi.waitFor(() => expect(mock.request).toHaveBeenCalledTimes(2));
+    events.get('stateChange')?.('completed');
+    await Promise.resolve();
+    expect(mock.request).toHaveBeenCalledTimes(2);
+    resolve({ responseCode: 200, result: new ArrayBuffer(8) });
+    await vi.waitFor(() => expect(mock.createPlayer).toHaveBeenCalledTimes(2));
+    expect(mock.request).toHaveBeenCalledTimes(2);
+  });
+  it('retries a failed prefetch when the next sentence is needed', async () => {
+    mock.request.mockResolvedValueOnce({ responseCode: 200, result: new ArrayBuffer(8) });
+    mock.request.mockRejectedValueOnce(new Error('Temporary network failure'));
+    await reader.speak(context, 'First. Second.', 'one', 'en');
+    events.get('stateChange')?.('playing');
+    await vi.waitFor(() => expect(mock.request).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(reader.state).toBe('playing'));
+    events.get('stateChange')?.('completed');
+    await vi.waitFor(() => expect(mock.createPlayer).toHaveBeenCalledTimes(2));
+    expect(mock.request).toHaveBeenCalledTimes(3);
+  });
+  it('does not use a late prefetched sentence after playback stops', async () => {
+    let resolve!: (value: unknown) => void;
+    mock.request.mockResolvedValueOnce({ responseCode: 200, result: new ArrayBuffer(8) });
+    mock.request.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    await reader.speak(context, 'First. Second.', 'one', 'en');
+    events.get('stateChange')?.('playing');
+    await vi.waitFor(() => expect(mock.request).toHaveBeenCalledTimes(2));
+    await reader.stop();
+    resolve({ responseCode: 200, result: new ArrayBuffer(8) });
+    await Promise.resolve(); await Promise.resolve();
+    expect(reader.state).toBe('idle');
+    expect(mock.createPlayer).toHaveBeenCalledOnce();
+  });
   it('does not create a player after navigation cancels an in-flight request', async () => {
     let resolve!: (value: unknown) => void; mock.request.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
     const speech = reader.speak(context, 'Hello', 'one', 'zh'); await vi.waitFor(() => expect(mock.request).toHaveBeenCalledOnce());

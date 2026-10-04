@@ -21,6 +21,11 @@ export class XopcChatReadAloud {
   @Trace continuousConversationId: string = '';
   private generation: number = 0;
   private request?: http.HttpRequest;
+  private prefetchRequest?: http.HttpRequest;
+  private prefetchPromise?: Promise<ArrayBuffer>;
+  private prefetchIndex: number = -1;
+  private prefetchedIndex: number = -1;
+  private prefetchedBytes?: ArrayBuffer;
   private player?: media.AVPlayer;
   private file?: fs.File;
   private path: string = '';
@@ -70,23 +75,78 @@ export class XopcChatReadAloud {
     this.session?.setAVPlaybackState({ state, speed: 1, position: { elapsedTime: this.position, updateTime: Date.now() } })
       .catch((_error: Error): void => {});
   }
+  private async requestChunk(index: number, generation: number, prefetch: boolean): Promise<ArrayBuffer> {
+    const auth = await gatewaySession.transferAuth();
+    if (generation !== this.generation) throw new Error('STALE_SPEECH');
+    const request = http.createHttp();
+    if (prefetch) this.prefetchRequest = request;
+    else this.request = request;
+    const body: XopcSpeechBody = { text: this.chunks[index], language: this.language };
+    const headers: XopcSpeechHeaders = { Authorization: 'Bearer ' + auth.token, 'Content-Type': 'application/json' };
+    try {
+      const response = await request.request(auth.origin + '/api/voice/speech', { method: http.RequestMethod.POST, header: headers,
+        extraData: JSON.stringify(body), expectDataType: http.HttpDataType.ARRAY_BUFFER, maxRedirects: 0,
+        maxLimit: 16 * 1024 * 1024, connectTimeout: 8000, readTimeout: 60000, usingCache: false });
+      if (response.responseCode !== 200) throw new Error('SPEECH_HTTP_' + response.responseCode);
+      const bytes = response.result as ArrayBuffer;
+      if (!bytes.byteLength) throw new Error('EMPTY_SPEECH');
+      if (generation !== this.generation) throw new Error('STALE_SPEECH');
+      return bytes;
+    } finally {
+      request.destroy();
+      if (this.request === request) this.request = undefined;
+      if (this.prefetchRequest === request) this.prefetchRequest = undefined;
+    }
+  }
+  private prefetchNext(generation: number): void {
+    const index = this.chunkIndex + 1;
+    if (generation !== this.generation || index >= this.chunks.length || this.prefetchIndex === index) return;
+    this.prefetchIndex = index;
+    const pending = this.requestChunk(index, generation, true);
+    this.prefetchPromise = pending;
+    void pending.then((bytes: ArrayBuffer): void => {
+      if (generation === this.generation && this.prefetchIndex === index) {
+        this.prefetchedIndex = index;
+        this.prefetchedBytes = bytes;
+      }
+    }).catch((_error: Error): void => {
+      if (generation === this.generation && this.prefetchIndex === index) {
+        this.prefetchIndex = -1;
+        this.prefetchPromise = undefined;
+      }
+    });
+  }
+  private async bytesForChunk(index: number, generation: number): Promise<ArrayBuffer> {
+    if (this.prefetchedIndex === index && this.prefetchedBytes) {
+      const bytes = this.prefetchedBytes;
+      this.prefetchedBytes = undefined;
+      this.prefetchedIndex = -1;
+      this.prefetchIndex = -1;
+      this.prefetchPromise = undefined;
+      return bytes;
+    }
+    if (this.prefetchIndex === index && this.prefetchPromise) {
+      try {
+        const bytes = await this.prefetchPromise;
+        if (generation !== this.generation) throw new Error('STALE_SPEECH');
+        this.prefetchedBytes = undefined;
+        this.prefetchedIndex = -1;
+        this.prefetchIndex = -1;
+        this.prefetchPromise = undefined;
+        return bytes;
+      } catch (_error) {
+        if (generation !== this.generation) throw new Error('STALE_SPEECH');
+        this.prefetchIndex = -1;
+        this.prefetchPromise = undefined;
+      }
+    }
+    return this.requestChunk(index, generation, false);
+  }
   private async next(generation: number): Promise<void> {
     if (generation !== this.generation || !this.context || this.chunkIndex >= this.chunks.length) { if (generation === this.generation) this.stop(); return; }
     this.state = 'loading'; this.position = 0; this.duration = 0;
     try {
-      const auth = await gatewaySession.transferAuth(); if (generation !== this.generation) return;
-      const request = http.createHttp(); this.request = request;
-      const body: XopcSpeechBody = { text: this.chunks[this.chunkIndex], language: this.language };
-      const headers: XopcSpeechHeaders = { Authorization: 'Bearer ' + auth.token, 'Content-Type': 'application/json' };
-      let bytes: ArrayBuffer;
-      try {
-        const response = await request.request(auth.origin + '/api/voice/speech', { method: http.RequestMethod.POST, header: headers,
-          extraData: JSON.stringify(body), expectDataType: http.HttpDataType.ARRAY_BUFFER, maxRedirects: 0,
-          maxLimit: 16 * 1024 * 1024, connectTimeout: 8000, readTimeout: 60000, usingCache: false });
-        if (response.responseCode !== 200) throw new Error('SPEECH_HTTP_' + response.responseCode);
-        bytes = response.result as ArrayBuffer;
-        if (!bytes.byteLength) throw new Error('EMPTY_SPEECH');
-      } finally { request.destroy(); if (this.request === request) this.request = undefined; }
+      const bytes = await this.bytesForChunk(this.chunkIndex, generation);
       if (generation !== this.generation) return;
       const path = this.context.cacheDir + '/xopc-speech-' + util.generateRandomUUID() + '.audio';
       const file = await fs.open(path, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE);
@@ -100,8 +160,8 @@ export class XopcChatReadAloud {
       player.on('stateChange', (state: string): void => {
         if (generation !== this.generation || this.player !== player) return;
         if (state === 'initialized') player.prepare().catch((error: Error): void => { this.fail(error, generation); });
-        else if (state === 'prepared') { this.duration = player.duration; player.play().catch((error: Error): void => { this.fail(error, generation); }); }
-        else if (state === 'playing') { this.state = state; this.updatePlaybackSession(avSession.PlaybackState.PLAYBACK_STATE_PLAY); }
+        else if (state === 'prepared') { this.duration = player.duration; this.prefetchNext(generation); player.play().catch((error: Error): void => { this.fail(error, generation); }); }
+        else if (state === 'playing') { this.state = state; this.updatePlaybackSession(avSession.PlaybackState.PLAYBACK_STATE_PLAY); this.prefetchNext(generation); }
         else if (state === 'paused') { this.state = state; this.updatePlaybackSession(avSession.PlaybackState.PLAYBACK_STATE_PAUSE); }
         else if (state === 'completed') this.advance(generation);
       });
@@ -133,6 +193,9 @@ export class XopcChatReadAloud {
   }
   async stop(): Promise<void> {
     this.generation++; this.request?.destroy(); this.request = undefined;
+    this.prefetchRequest?.destroy(); this.prefetchRequest = undefined;
+    this.prefetchPromise = undefined; this.prefetchIndex = -1;
+    this.prefetchedBytes = undefined; this.prefetchedIndex = -1;
     this.state = 'idle'; this.sourceId = ''; await this.releaseOutput(); await this.releasePlaybackSession();
   }
   private async releasePlaybackSession(): Promise<void> {
