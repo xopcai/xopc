@@ -76,6 +76,7 @@
     "welcomeDescription": "Send a message to get started",
     "welcomeSpotlight": {
       "headline": "What do you want to move forward?",
+      "projectHeadline": "What should we work on in {{projectName}}?",
       "acceptSuggestionHint": "Press Tab to use suggestion",
       "recommendations": {
         "projectBlocked": {

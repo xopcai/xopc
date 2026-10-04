@@ -571,7 +571,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const welcomeContextState = useWelcomeSuggestionContext({
     enabled:
       auth.hasToken &&
-      Boolean(chatConversationId) &&
+      Boolean(chatConversationId || scopedProject) &&
       !agentSetup &&
       msgSlice.items.length === 0 &&
       !session.showSessionLoading &&
@@ -584,6 +584,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       session.workspaceSource === 'session_override' ||
       session.workspaceSource === 'agent_workspace'
     ),
+    project: scopedProject,
     task: taskDetail,
     workflow: workflowRunView,
   });

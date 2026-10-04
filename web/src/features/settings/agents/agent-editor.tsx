@@ -165,8 +165,11 @@ export function AgentEditor({
 
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const allTools = useMemo(
-    () => [...new Set([...toolIds, ...Object.keys(agent.effective.tools), ...Object.keys(draft.tools ?? {})])].sort(),
-    [agent.effective.tools, draft.tools, toolIds],
+    () => [...new Set([
+      ...toolIds, ...Object.keys(agent.effective.tools), ...Object.keys(draft.tools ?? {}),
+      ...(draft.toolAllowlist ?? []),
+    ])].sort(),
+    [agent.effective.tools, draft.toolAllowlist, draft.tools, toolIds],
   );
   const overrideLabels = [
     draft.models ? (zh ? '模型' : 'Models') : null,
@@ -174,6 +177,10 @@ export function AgentEditor({
     draft.tools ? (zh ? '工具权限' : 'Tool access') : null,
     draft.runtime || draft.workflows ? (zh ? '运行限制' : 'Runtime') : null,
   ].filter((label): label is string => Boolean(label));
+  const toolAllowlist = draft.toolAllowlist;
+  const availableToolCount = toolAllowlist
+    ? allTools.filter((id) => toolAllowlist.includes(id) && agent.effective.tools[id]?.mode !== 'deny').length
+    : null;
   const deniedToolCount = Object.values(agent.effective.tools).filter((policy) => policy.mode === 'deny').length;
   const skillSummary = agent.effective.skills.mode === 'selected'
     ? (zh ? `${agent.effective.skills.include.length} 个已选技能` : `${agent.effective.skills.include.length} selected skills`)
@@ -206,6 +213,7 @@ export function AgentEditor({
         models: draft.models ?? null,
         skills: draft.skills ?? null,
         tools: draft.tools ?? null,
+        toolAllowlist: draft.toolAllowlist ?? null,
         workflows: draft.workflows ?? null,
         runtime: draft.runtime ?? null,
       });
@@ -236,6 +244,21 @@ export function AgentEditor({
     if (mode === 'inherit') delete tools[id];
     else tools[id] = { ...tools[id], mode };
     setDraft({ ...draft, tools: Object.keys(tools).length > 0 ? tools : undefined });
+  };
+
+  const setToolAvailable = (id: string, available: boolean) => {
+    const toolAllowlist = new Set(draft.toolAllowlist ?? []);
+    if (available) toolAllowlist.add(id);
+    else toolAllowlist.delete(id);
+    const tools = { ...(draft.tools ?? {}) };
+    if (available && (tools[id]?.mode === 'deny' || agent.effective.tools[id]?.mode === 'deny')) {
+      tools[id] = { ...tools[id], mode: 'allow' };
+    }
+    setDraft({
+      ...draft,
+      toolAllowlist: [...toolAllowlist],
+      tools: Object.keys(tools).length > 0 ? tools : undefined,
+    });
   };
 
   const setIntent = (intent: ModelIntent, route: ModelRoute | null | undefined) => {
@@ -314,7 +337,7 @@ export function AgentEditor({
               <div className="grid gap-3 sm:grid-cols-2">
                 <SummaryCard label={zh ? '对话模型' : 'Chat model'} value={agent.effective.models.chat.primary} detail={draft.models?.chat ? (zh ? '单独设置' : 'Agent override') : (zh ? '继承全局' : 'Inherited globally')} />
                 <SummaryCard label={zh ? '技能' : 'Skills'} value={skillSummary} detail={draft.skills ? (zh ? '单独设置' : 'Agent override') : (zh ? '继承全局' : 'Inherited globally')} />
-                <SummaryCard label={zh ? '工具权限' : 'Tool access'} value={deniedToolCount > 0 ? (zh ? `${deniedToolCount} 个禁用` : `${deniedToolCount} denied`) : (zh ? '全部可用' : 'All available')} detail={draft.tools ? (zh ? `${Object.keys(draft.tools).length} 个本地覆盖` : `${Object.keys(draft.tools).length} local overrides`) : (zh ? '继承全局' : 'Inherited globally')} />
+                <SummaryCard label={zh ? '工具权限' : 'Tool access'} value={availableToolCount !== null ? (zh ? `${availableToolCount} 个已开放` : `${availableToolCount} in scope`) : deniedToolCount > 0 ? (zh ? `${deniedToolCount} 个禁用` : `${deniedToolCount} denied`) : (zh ? '全部可用' : 'All available')} detail={toolAllowlist ? (zh ? '受智能体工具范围限制' : 'Limited by agent tool scope') : draft.tools ? (zh ? `${Object.keys(draft.tools).length} 个本地覆盖` : `${Object.keys(draft.tools).length} local overrides`) : (zh ? '继承全局' : 'Inherited globally')} />
                 <SummaryCard label={zh ? '工作区' : 'Workspace'} value={agent.effective.workspace} detail={draft.workspace ? (zh ? '单独设置' : 'Agent specific') : (zh ? '自动工作区' : 'Automatic workspace')} />
               </div>
               {!agent.isDefault ? <Button onClick={() => void makeDefault()} disabled={saving}>{zh ? '设为默认智能体' : 'Make default agent'}</Button> : null}
@@ -449,11 +472,15 @@ export function AgentEditor({
 
               <section>
                 <div className="mb-3 flex items-center justify-between"><h4 className="text-sm font-semibold text-fg">{zh ? '工具权限' : 'Tool permissions'}</h4>{draft.tools ? <Button variant="ghost" onClick={() => setDraft({ ...draft, tools: undefined })}><RotateCcw className="size-4" />{zh ? '全部继承' : 'Inherit all'}</Button> : null}</div>
+                {toolAllowlist ? <p className="mb-3 text-xs text-fg-muted">{zh ? '此智能体使用限定的工具范围。可在下方启用或移除工具，保存后从下一轮对话生效。' : 'This agent uses a limited tool set. Add or remove tools below; changes apply from the next conversation turn.'}</p> : null}
                 <div className="divide-y divide-edge overflow-hidden rounded-2xl border border-edge bg-surface-base">
                   {allTools.map((id) => {
+                    if (toolAllowlist && !toolAllowlist.includes(id)) {
+                      return <div key={id} className="flex items-center justify-between gap-3 px-4 py-3"><div><code className="text-xs text-fg-muted">{id}</code><p className="mt-1 text-[11px] text-fg-muted">{zh ? '未开放' : 'Unavailable'}</p></div><Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => setToolAvailable(id, true)}>{zh ? '启用' : 'Enable'}</Button></div>;
+                    }
                     const local = draft.tools?.[id]?.mode;
                     const effective = agent.effective.tools[id]?.mode ?? 'allow';
-                    return <div key={id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div><code className="text-xs text-fg">{id}</code><p className="mt-1 text-[11px] text-fg-muted">{local ? (zh ? '单独设置' : 'Agent override') : `${zh ? '继承' : 'Inherits'} ${toolModeLabels[effective]}`}</p></div><div className="flex rounded-xl bg-surface-hover p-1">{(['inherit', 'allow', 'ask', 'deny'] as const).map((mode) => <button key={mode} type="button" onClick={() => setTool(id, mode)} className={cn('rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors', (mode === 'inherit' ? !local : local === mode) ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg')}>{toolModeLabels[mode]}</button>)}</div></div>;
+                    return <div key={id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div><code className="text-xs text-fg">{id}</code><p className="mt-1 text-[11px] text-fg-muted">{local ? (zh ? '单独设置' : 'Agent override') : `${zh ? '继承' : 'Inherits'} ${toolModeLabels[effective]}`}</p></div><div className="flex flex-wrap items-center gap-2"><div className="flex rounded-xl bg-surface-hover p-1">{(['inherit', 'allow', 'ask', 'deny'] as const).map((mode) => <button key={mode} type="button" onClick={() => setTool(id, mode)} className={cn('rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors', (mode === 'inherit' ? !local : local === mode) ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg')}>{toolModeLabels[mode]}</button>)}</div>{toolAllowlist ? <Button variant="ghost" className="px-2 py-1.5 text-xs" onClick={() => setToolAvailable(id, false)}>{zh ? '移除' : 'Remove'}</Button> : null}</div></div>;
                   })}
                 </div>
               </section>

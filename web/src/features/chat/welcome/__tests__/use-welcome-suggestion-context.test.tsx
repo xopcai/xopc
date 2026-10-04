@@ -23,16 +23,19 @@ vi.mock('@/features/projects/api', () => ({ fetchProject, fetchProjectOperatingV
 function Probe({
   conversationId = 'agent:main:webchat:test',
   suppressProjectContext = false,
+  project,
   onState,
 }: {
   conversationId?: string;
   suppressProjectContext?: boolean;
+  project?: { id: string; name: string };
   onState: (state: WelcomeSuggestionContextState) => void;
 }) {
   const state = useWelcomeSuggestionContext({
     enabled: true,
     conversationId,
     suppressProjectContext,
+    project,
   });
   onState(state);
   return <div>{`${state.status}:${state.context.kind}`}</div>;
@@ -88,6 +91,56 @@ describe('useWelcomeSuggestionContext', () => {
 
     expect(container.textContent).toBe('ready:project');
     expect(getSessionDetail).not.toHaveBeenCalled();
+  });
+
+  it('uses the selected project before a new session exists', () => {
+    let latest!: WelcomeSuggestionContextState;
+
+    act(() => {
+      root.render(
+        <Probe
+          conversationId=""
+          project={{ id: 'p1', name: 'xopc-plugins' }}
+          onState={(state) => { latest = state; }}
+        />,
+      );
+    });
+
+    expect(latest).toEqual({
+      context: { kind: 'project', projectId: 'p1', projectName: 'xopc-plugins' },
+      status: 'ready',
+    });
+    expect(readLocalSessionDraft).not.toHaveBeenCalled();
+    expect(getSessionDetail).not.toHaveBeenCalled();
+  });
+
+  it('enriches a selected project after the session exists', async () => {
+    fetchProjectOperatingView.mockResolvedValue({
+      blockers: [{ title: 'Release blocked', detail: 'CI is failing' }],
+      recentResults: [],
+      digest: { health: 'attention', summary: 'Needs attention' },
+    });
+    let latest!: WelcomeSuggestionContextState;
+
+    await act(async () => {
+      root.render(
+        <Probe
+          project={{ id: 'p1', name: 'xopc-plugins' }}
+          onState={(state) => { latest = state; }}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(latest.context).toMatchObject({
+      kind: 'project',
+      projectId: 'p1',
+      projectName: 'xopc-plugins',
+      blockedReason: 'CI is failing',
+    });
+    expect(fetchProject).not.toHaveBeenCalled();
+    expect(fetchProjectOperatingView).toHaveBeenCalledWith('p1');
   });
 
   it('publishes only explicit project signals', async () => {

@@ -28,5 +28,6 @@ export function buildWorkflowChildTools(childOptions: BuildChildToolsOptions): A
     agentId: childOptions.agentId,
     conversationId: childOptions.browserConversationId,
     disabledTools: profile?.tools.denied,
+    toolAllowlist: profile?.config.toolAllowlist,
   });
 }

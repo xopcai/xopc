@@ -151,6 +151,7 @@ export function resolveEffectiveAgentConfig(params: {
   const workspace = agent.workspace ?? params.defaultWorkspace?.(agent.id) ?? `~/.xopc/workspace/${agent.id}`;
   sources.workspace = agent.workspace ? 'agent' : 'system';
   if (agent.profile) markObjectSources(agent.profile, 'agent', 'profile', sources);
+  if (agent.toolAllowlist) sources.toolAllowlist = 'agent';
 
   return {
     config: EffectiveAgentConfigSchema.parse({
@@ -161,6 +162,7 @@ export function resolveEffectiveAgentConfig(params: {
       models,
       skills,
       tools,
+      ...(agent.toolAllowlist ? { toolAllowlist: [...agent.toolAllowlist] } : {}),
       workflows,
       runtime,
     }),

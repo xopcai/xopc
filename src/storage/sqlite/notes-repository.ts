@@ -284,9 +284,7 @@ export function listNoteRecords(
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const rows = db
-    .prepare(
-      `SELECT note_id, title, kind, status, payload_json, created_at, updated_at,
+  const select = `SELECT note_id, title, kind, status, payload_json, created_at, updated_at,
               pinned, tags_json, snippet, cover_attachment_id, voice_attachment_id,
               voice_duration_sec, attachment_names_json, group_id, last_opened_at,
               task_done, task_due_at, heading_count, task_count, unchecked_task_count, link_count,
@@ -298,9 +296,23 @@ export function listNoteRecords(
                   AND l.to_kind = 'project' AND l.relation = 'belongs_to'
                 ORDER BY p.name, p.project_id
               )) AS projects_json
-       FROM notes ${where}`,
-    )
-    .all(...params) as NoteRow[];
+       FROM notes ${where}`;
+  const offset = query.offset || 0;
+  const limit = Math.min(query.limit || 50, 200);
+
+  if (!query.tag && !query.search?.trim()) {
+    const sortColumn = query.sortBy === 'updatedAt' ? 'updated_at'
+      : query.sortBy === 'lastOpenedAt' ? 'last_opened_at' : 'created_at';
+    const sortExpression = sortColumn === 'last_opened_at' ? 'COALESCE(last_opened_at, 0)' : sortColumn;
+    const sortDirection = query.sortOrder === 'asc' ? 'ASC' : 'DESC';
+    const total = (db.prepare(`SELECT COUNT(*) AS total FROM notes ${where}`).get(...params) as { total: number }).total;
+    const rows = db.prepare(`${select} ORDER BY ${sortExpression} ${sortDirection}, note_id LIMIT ? OFFSET ?`)
+      .all(...params, limit, offset) as NoteRow[];
+    const items = rows.map(rowToIndexEntry);
+    return { items, total, limit, offset, hasMore: offset + items.length < total };
+  }
+
+  const rows = db.prepare(select).all(...params) as NoteRow[];
 
   let entries = rows.map(rowToIndexEntry);
 
@@ -339,8 +351,6 @@ export function listNoteRecords(
   });
 
   const total = entries.length;
-  const offset = query.offset || 0;
-  const limit = Math.min(query.limit || 50, 200);
   const items = entries.slice(offset, offset + limit);
   const hasMore = offset + items.length < total;
 

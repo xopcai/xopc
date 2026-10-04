@@ -24,6 +24,14 @@ const BUILT_IN_AGENT_PRESENTATIONS: Readonly<Record<string, BuiltInAgentPresenta
       'Your personal intelligent assistant for answering questions, handling everyday tasks, and chatting with you anytime.',
     ],
   },
+  conductor: {
+    key: 'conductor',
+    defaultNames: ['conductor', 'Conductor'],
+    defaultDescriptions: [
+      'Talks with the user, delegates complex work to specialist Agents, and delivers verified results.',
+      'User-facing coordination Agent for task planning, delegation, progress, verification, and reporting to the user.',
+    ],
+  },
   coder: {
     key: 'coding',
     defaultNames: ['coder', 'Coder', 'Coding Expert'],

@@ -55,8 +55,8 @@ describe('MessageList welcome state', () => {
     expect(container.textContent).not.toContain('写作润色');
     expect(container.querySelector('[data-loopi="ceramic-v3"]')).not.toBeNull();
     expect(container.innerHTML).toContain('sm:size-32');
-    expect(container.innerHTML).toContain('sm:pt-28');
-    expect(container.innerHTML).toContain('max-height:800px)]:pt-8');
+    expect(container.innerHTML).toContain('sm:pt-36');
+    expect(container.innerHTML).toContain('max-height:800px)]:pt-12');
   });
 
   it('shows one explainable action when the next step is explicit', () => {

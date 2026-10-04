@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { deriveNoteTitle } from '../common/noteMarkdown';
 import { reconcileNoteSave, XopcNoteSaveReconciliation } from '../common/noteSync';
 import {
@@ -47,17 +48,27 @@ export class XopcNoteViewModel {
   private generation: number = 0;
   private saveTimer: number = -1;
   private projectId: string = '';
+  private draftsReady?: Promise<void>;
 
   async start(context: common.Context, initialId: string = '', initialStatus: XopcNoteStatus | '' = '', projectId: string = ''): Promise<void> {
     this.projectId = projectId;
     this.status = initialStatus;
     if (initialId) this.openingId = initialId;
     try {
-      await this.drafts.initialize(context);
+      this.draftsReady = this.drafts.initialize(context);
       if (initialId && this.openingId !== initialId) return;
-      if (initialId) await this.open(initialId); else await this.list();
+      if (initialId) {
+        await this.draftsReady;
+        await this.open(initialId);
+      } else {
+        await this.list();
+        await this.draftsReady;
+      }
       void this.flushPending(initialId);
-    } catch (error) { this.error = (error as Error).message; }
+    } catch (error) {
+      this.error = (error as Error).message;
+      hilog.warn(0x0000, 'XopcNotes', 'Notes startup failed: %{public}s', this.error);
+    }
   }
 
   dispose(): void {
@@ -71,13 +82,20 @@ export class XopcNoteViewModel {
     if (more) this.loadingMore = true; else this.loading = true;
     this.error = '';
     try {
-      const result = await this.repository.list(this.search, this.status, more ? this.items.length : 0, this.projectId);
+      const remoteRequest = this.repository.list(this.search, this.status, more ? this.items.length : 0, this.projectId);
+      if (this.draftsReady) await Promise.all([this.draftsReady, remoteRequest]);
+      const result = await remoteRequest;
       if (generation !== this.generation) return;
       const remoteItems = more ? this.items.concat(result.items.filter((item: XopcNoteIndexEntry): boolean =>
         !this.items.some((current: XopcNoteIndexEntry): boolean => current.id === item.id))) : result.items;
       this.items = more ? remoteItems : await this.mergePendingDrafts(remoteItems);
       this.hasMore = result.hasMore ?? false;
-    } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
+    } catch (error) {
+      if (generation === this.generation) {
+        this.error = (error as Error).message;
+        hilog.warn(0x0000, 'XopcNotes', 'Notes list failed: %{public}s', this.error);
+      }
+    }
     finally {
       if (generation === this.generation) { this.loading = false; this.loadingMore = false; }
     }

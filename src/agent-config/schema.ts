@@ -147,6 +147,7 @@ export const AgentEntrySchema = z.object({
   models: AgentModelsOverrideSchema.optional(),
   skills: SkillOverrideSchema.optional(),
   tools: ToolPoliciesSchema.optional(),
+  toolAllowlist: z.array(z.string().min(1)).optional(),
   workflows: WorkflowPolicySchema.optional(),
   runtime: RuntimePolicySchema.optional(),
 }).strict();
@@ -162,6 +163,7 @@ export const EffectiveAgentConfigSchema = z.object({
   models: AgentModelsDefaultsSchema,
   skills: SkillDefaultsSchema,
   tools: ToolPoliciesSchema,
+  toolAllowlist: z.array(z.string().min(1)).optional(),
   workflows: WorkflowPolicySchema,
   runtime: RuntimePolicySchema,
 }).strict();

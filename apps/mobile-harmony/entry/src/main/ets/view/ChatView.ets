@@ -49,8 +49,6 @@ import { latestChatMessageId } from '../common/chatMessagePreview';
 import { chatPresentationRows, chatNeedsWideBubble } from '../common/chatPresentation';
 import { XopcBrandLoading } from './MobileComponents';
 
-interface XopcAssistantSheetAction { title: string; action: () => void; }
-
 @ComponentV2
 export struct XopcChatView {
   @Local colors: XopcThemeColors = appThemeColors;
@@ -131,6 +129,15 @@ export struct XopcChatView {
   @Local imageEditorError: string = '';
   @Local messageDetailOpen: boolean = false;
   @Local messageDetailRow: XopcChatRow = { id: '', role: 'assistant', text: '' };
+  @Local assistantMenuOpen: boolean = false;
+  @Local assistantMenuRow: XopcChatRow = { id: '', role: 'assistant', text: '' };
+  private pendingAssistantMenuAction: string = '';
+  @Computed get assistantMenuHasCode(): boolean {
+    return !!extractMarkdownCodeBlocks(chatAnswerText(this.assistantMenuRow));
+  }
+  @Computed get assistantMenuActionCount(): number {
+    return 1 + (!this.chat.runId && !this.chat.sending ? 1 : 0) + (this.assistantMenuHasCode ? 1 : 0);
+  }
   @Local executionOpen: boolean = false;
   @Local executionRow: XopcChatRow = { id: '', role: 'assistant', text: '' };
   @Local executionDetail: XopcExecutionDetail = { turnId: '', steps: [] };
@@ -942,18 +949,67 @@ export struct XopcChatView {
   }
 
   private assistantMessageMore(row: XopcChatRow): void {
-    const context = this.getUIContext().getHostContext();
-    const label = (resource: Resource): string => context?.resourceManager.getStringSync(resource.id) ?? '';
-    const sheets: XopcAssistantSheetAction[] = [
-      { title: label($r('app.string.chat_message_detail')), action: (): void => { this.openMessageDetail(row); } }
-    ];
-    if (!this.chat.runId && !this.chat.sending) {
-      sheets.push({ title: label($r('app.string.chat_regenerate')), action: (): void => { this.messageAction('regenerate', row); } });
-    }
-    if (extractMarkdownCodeBlocks(chatAnswerText(row))) {
-      sheets.push({ title: label($r('app.string.chat_copy_code')), action: (): void => { this.messageAction('copy-code', row); } });
-    }
-    this.getUIContext().showActionSheet({ title: $r('app.string.more'), message: '', sheets });
+    this.assistantMenuRow = row;
+    this.pendingAssistantMenuAction = '';
+    this.assistantMenuOpen = true;
+  }
+
+  private chooseAssistantMenuAction(action: string): void {
+    this.pendingAssistantMenuAction = action;
+    this.assistantMenuOpen = false;
+  }
+
+  private finishAssistantMenu(): void {
+    const action = this.pendingAssistantMenuAction;
+    this.pendingAssistantMenuAction = '';
+    if (action === 'detail') this.openMessageDetail(this.assistantMenuRow);
+    else if (action) void this.messageAction(action, this.assistantMenuRow);
+  }
+
+  @Builder
+  assistantMessageMenuSheet() {
+    Column({ space: 8 }) {
+      Row() {
+        Text($r('app.string.more')).fontSize(20).fontWeight(FontWeight.Medium)
+          .fontColor(this.colors.foreground).layoutWeight(1)
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.xmark')).fontSize(16).fontColor([this.colors.secondary])
+        }.width(36).height(36).padding(0).backgroundColor(this.colors.input)
+          .accessibilityText($r('app.string.chat_close'))
+          .onClick((): void => { this.assistantMenuOpen = false; })
+      }.width('100%').height(44).alignItems(VerticalAlign.Center).margin({ bottom: 4 })
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 14 }) {
+          SymbolGlyph($r('sys.symbol.doc_text')).fontSize(21).fontColor([this.colors.accent])
+          Text($r('app.string.chat_message_detail')).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
+          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
+        }.width('100%').padding({ left: 16, right: 16 })
+      }.id('chat-assistant-menu-detail').width('100%').height(56).padding(0)
+        .borderRadius(14).backgroundColor(this.colors.input)
+        .onClick((): void => { this.chooseAssistantMenuAction('detail'); })
+      if (!this.chat.runId && !this.chat.sending) {
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 14 }) {
+            SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(21).fontColor([this.colors.accent])
+            Text($r('app.string.chat_regenerate')).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
+            SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
+          }.width('100%').padding({ left: 16, right: 16 })
+        }.id('chat-assistant-menu-regenerate').width('100%').height(56).padding(0)
+          .borderRadius(14).backgroundColor(this.colors.input)
+          .onClick((): void => { this.chooseAssistantMenuAction('regenerate'); })
+      }
+      if (this.assistantMenuHasCode) {
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 14 }) {
+            SymbolGlyph($r('sys.symbol.doc_plaintext')).fontSize(21).fontColor([this.colors.accent])
+            Text($r('app.string.chat_copy_code')).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
+            SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
+          }.width('100%').padding({ left: 16, right: 16 })
+        }.id('chat-assistant-menu-copy-code').width('100%').height(56).padding(0)
+          .borderRadius(14).backgroundColor(this.colors.input)
+          .onClick((): void => { this.chooseAssistantMenuAction('copy-code'); })
+      }
+    }.id('chat-assistant-menu').width('100%').padding({ left: 20, right: 20, top: 8, bottom: 16 })
   }
 
   @Builder
@@ -1498,6 +1554,12 @@ export struct XopcChatView {
       Column().id('chat-message-detail-sheet-host').width('100%').height(0)
         .bindSheet($$this.messageDetailOpen, this.messageDetailSheet, { height: '94%', dragBar: false,
           showClose: false, backgroundColor: this.colors.panel })
+      Column().id('chat-assistant-menu-sheet-host').width('100%').height(0)
+        .bindSheet($$this.assistantMenuOpen, this.assistantMessageMenuSheet, {
+          height: 112 + this.assistantMenuActionCount * 56,
+          dragBar: true, showClose: false, backgroundColor: this.colors.panel,
+          onDisappear: (): void => { this.finishAssistantMenu(); }
+        })
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight, dragBar: true, showClose: false, backgroundColor: this.colors.panel })
     }.width('100%').height('100%')
