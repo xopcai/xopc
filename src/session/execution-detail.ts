@@ -18,6 +18,11 @@ export interface PublicExecutionDetail {
 
 function toolCategory(name: string, args?: unknown): string {
   const key = name.split('__').pop()?.toLowerCase().replace(/-/g, '_') ?? '';
+  if (key === 'run' && args && typeof args === 'object' && !Array.isArray(args)) {
+    const input = args as Record<string, unknown>;
+    if (Array.isArray(input.search_query)) return 'search';
+    if (Array.isArray(input.open)) return 'fetch';
+  }
   if (key === 'skill_view' || key === 'tool_manual') return key;
   if (key === 'xopc_use') {
     let input = args;
@@ -51,6 +56,19 @@ function publicInputPreview(name: string, args: unknown): string | undefined {
   if (!args || typeof args !== 'object' || Array.isArray(args)) return undefined;
   const input = args as Record<string, unknown>;
   const category = toolCategory(name, args);
+  if (category === 'search' && Array.isArray(input.search_query)) {
+    const first = input.search_query[0];
+    if (first && typeof first === 'object' && !Array.isArray(first) && typeof first.q === 'string') {
+      return redactSensitiveOutput(first.q.trim().slice(0, 160));
+    }
+  }
+  if (category === 'fetch' && Array.isArray(input.open)) {
+    const first = input.open[0];
+    if (first && typeof first === 'object' && !Array.isArray(first) && typeof first.ref_id === 'string') {
+      try { const url = new URL(first.ref_id); return `${url.origin}${url.pathname}`.slice(0, 160); }
+      catch { /* A tool-local reference is not a public URL. */ }
+    }
+  }
   const keys = category === 'search' ? ['query']
     : category === 'read' ? ['path', 'file_path']
     : category === 'fetch' ? ['url'] : [];

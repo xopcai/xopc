@@ -30,4 +30,19 @@ describe('public execution detail', () => {
     }], 'turn-2');
     expect(detail?.steps[0].preview).toBe('https://example.com/page');
   });
+
+  it('shows bounded web search terms and opened URLs without query credentials', () => {
+    const detail = publicExecutionDetail([{ id: 'm3', turnId: 'turn-3', role: 'assistant', content: '',
+      toolCalls: [
+        { id: 'search', name: 'web__run', args: { search_query: [{ q: 'Alibaba Qwen revenue' }] }, result: 'private result' },
+        { id: 'open', name: 'web__run', args: { open: [{ ref_id: 'https://example.com/report?token=secret' }] }, result: 'private page' },
+      ],
+    }], 'turn-3');
+    expect(detail?.steps).toMatchObject([
+      { category: 'search', preview: 'Alibaba Qwen revenue', status: 'done' },
+      { category: 'fetch', preview: 'https://example.com/report', status: 'done' },
+    ]);
+    expect(JSON.stringify(detail)).not.toContain('private');
+    expect(JSON.stringify(detail)).not.toContain('token=secret');
+  });
 });
