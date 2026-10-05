@@ -94,7 +94,7 @@ struct AssistantComposer: View {
                     .frame(width: 40, height: 44)
             }
             .disabled(!hasConversation)
-            .accessibilityLabel("语音对话")
+            .accessibilityLabel("语音输入")
 
             TextField(placeholder, text: $draft, axis: .vertical)
                 .focused($isComposerFocused)

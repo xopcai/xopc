@@ -1,5 +1,9 @@
 import Foundation
 
+private struct VoiceTranscription: Decodable {
+    let text: String
+}
+
 private struct RealtimeVoiceCancellation: Encodable {
     let sessionId: String
     let ticket: String
@@ -23,6 +27,48 @@ private struct RealtimeVoiceApprovalDecision: Encodable {
 }
 
 extension GatewayClient {
+    func transcribeVoice(_ audio: RecordedAudio, language: String?) async throws -> String {
+        let boundary = "xopc-\(UUID().uuidString)"
+        var body = Data()
+        body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"audio\"; filename=\"recording.wav\"\r\nContent-Type: \(audio.mimeType)\r\n\r\n".utf8))
+        body.append(audio.data)
+        body.append(Data("\r\n".utf8))
+        if let language, !language.isEmpty {
+            body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\n\(language)\r\n".utf8))
+        }
+        body.append(Data("--\(boundary)--\r\n".utf8))
+
+        var request = URLRequest(url: try makeURL(path: "/api/voice/transcriptions", queryItems: []))
+        request.httpMethod = "POST"
+        request.httpBody = body
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if !configuration.token.isEmpty {
+            request.setValue("Bearer \(configuration.token)", forHTTPHeaderField: "Authorization")
+        }
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw GatewayClientError.transport
+        }
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GatewayClientError.invalidResponse
+        }
+        let envelope = try decoder.decode(GatewayEnvelope<VoiceTranscription>.self, from: data)
+        guard (200 ..< 300).contains(httpResponse.statusCode) else {
+            throw GatewayClientError.http(statusCode: httpResponse.statusCode, message: envelope.error?.message)
+        }
+        guard envelope.isSuccessful, let text = envelope.payload?.text.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            throw GatewayClientError.server(envelope.error?.message ?? "没有识别出文字，请重试或发送语音")
+        }
+        return text
+    }
+
     func fetchRealtimeVoiceStatus() async throws -> RealtimeVoiceStatus {
         let result: VoicePayload<RealtimeVoiceStatus> = try await request(path: "/api/voice/realtime/status")
         return result.payload

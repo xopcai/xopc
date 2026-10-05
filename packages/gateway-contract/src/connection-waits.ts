@@ -71,6 +71,7 @@ export type ConnectionWait = {
 
 export type ConnectionNeedView = ConnectionNeed & {
   phase: 'install' | 'connect' | 'authorizing' | 'reconnect' | 'choose_account' | 'ready' | 'blocked';
+  authorizationMode: 'browser' | 'desktop';
   accounts: Array<{ id: string; label: string }>;
   alternatives?: Array<{ candidateRef: string; label: string }>;
   reason?: string;

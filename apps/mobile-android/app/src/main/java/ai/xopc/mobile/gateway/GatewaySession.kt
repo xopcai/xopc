@@ -65,6 +65,30 @@ class GatewaySession(
   }
 
   @Synchronized
+  fun requestBytes(path: String): ByteArray {
+    val current = profile ?: throw IllegalStateException("NOT_PAIRED")
+    var access = token()
+    var last: Exception = IllegalStateException("NO_VERIFIED_ROUTE")
+    for (route in current.routes.sortedBy { if (it.id == current.activeRouteId) 0 else 1 }) {
+      try {
+        verifyRoute(current, route)
+        return try {
+          http.requestBytes(route.url, path, access)
+        } catch (error: GatewayHttpException) {
+          if (error.status != 401) throw error
+          accessToken = null
+          access = token()
+          http.requestBytes(route.url, path, access)
+        }
+      } catch (error: Exception) {
+        last = error
+        if (error is GatewayHttpException && error.status < 500) throw error
+      }
+    }
+    throw last
+  }
+
+  @Synchronized
   fun token(): String {
     val current = profile ?: throw IllegalStateException("NOT_PAIRED")
     val now = System.currentTimeMillis()

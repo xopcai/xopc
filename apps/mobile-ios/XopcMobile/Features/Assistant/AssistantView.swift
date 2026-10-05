@@ -4,6 +4,7 @@ import SwiftUI
 // swiftlint:disable:next type_body_length
 struct AssistantView<Dock: View>: View {
     let configuration: GatewayConfiguration
+    let isActive: Bool
     let realtimeVoiceCall: RealtimeVoiceCall
     let conversation: ConversationSelection?
     let quickChatHandoff: QuickChatHandoff?
@@ -109,12 +110,15 @@ struct AssistantView<Dock: View>: View {
             }
         }
         .sheet(isPresented: $showingVoiceRecorder) {
-            VoiceAttachmentRecorderView { attachment in
+            VoiceAttachmentRecorderView(configuration: configuration) { attachment in
                 guard attachments.count < AttachmentPolicy.maximumCount else {
                     attachmentError = "最多添加 \(AttachmentPolicy.maximumCount) 个附件"
                     return
                 }
                 attachments.append(attachment)
+            } onTranscribed: { text in
+                let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                draft = existing.isEmpty ? text : "\(existing) \(text)"
             }
         }
     }
@@ -271,10 +275,8 @@ struct AssistantView<Dock: View>: View {
 
     private var welcome: some View {
         VStack(spacing: 14) {
-            Image(systemName: "sparkles")
-                .font(.system(.largeTitle, design: .rounded, weight: .semibold))
-                .foregroundStyle(.blue)
-                .accessibilityHidden(true)
+            LoopiIcon(size: 108, active: isActive, interactive: true)
+                .accessibilityIdentifier("chat-welcome-loopi")
             welcomeTitle
                 .font(.title2.weight(.semibold))
                 .multilineTextAlignment(.center)

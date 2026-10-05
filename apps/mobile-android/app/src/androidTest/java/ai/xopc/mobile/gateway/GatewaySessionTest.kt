@@ -26,6 +26,18 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GatewaySessionTest {
+  @Test fun compactHistoryMarksUserMediaAndReferencesAsNonTextForReuse() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val history = ConversationRepository.parseHistory(id,
+      """{"session":{"key":"$id","messages":[
+        {"id":"plain","role":"user","content":"Plain"},
+        {"id":"photo","role":"user","content":"Photo","media":[{"name":"a.jpg"}]},
+        {"id":"ref","role":"user","content":"Reference","metadata":{"sourceContexts":[{"sourceId":"n1"}]}},
+        {"id":"image","role":"user","content":"","rawContent":[{"type":"image"}]}
+      ]}}""")
+    assertEquals(listOf(false, true, true, true), history.messages.map { it.hasNonTextContent })
+    assertEquals(4, history.messages.size)
+  }
   private val gatewayId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
   private val pairingId = UUID.fromString("11111111-2222-3333-4444-555555555555")
   private val signingKey = Ed25519PrivateKeyParameters(ByteArray(32) { (it + 1).toByte() }, 0)

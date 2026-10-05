@@ -30,6 +30,17 @@ class ConversationRepositoryTest {
     assertEquals("turn-1", history.messages.last().turnId)
   }
 
+  @Test fun compactHistoryKeepsReferencesMediaDeliverablesAndOpenTargets() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val raw = """{"session":{"key":"$id","messages":[{"id":"u1","role":"user","content":"Review this","media":[{"id":"m1","name":"brief.txt","type":"document","mimeType":"text/plain","size":5,"uri":"data:text/plain;base64,aGVsbG8="}],"metadata":{"sourceContexts":[{"kind":"note","sourceId":"note-1","version":"3","title":"Brief"}]}},{"id":"a1","role":"assistant","turnId":"turn-1","content":"Done","deliveries":[{"version":2,"operation":"created","primary":{"kind":"task","id":"task-1","title":"Ship","capabilities":["open"]}}],"metadata":{"turnOutcome":{"version":1,"outcomeId":"out-1","runId":"run-1","turnId":"turn-1","status":"succeeded","summary":"Created report","deliverables":[{"artifactId":"artifact-1","title":"report.md","kind":"document","mimeType":"text/markdown","sizeBytes":6,"availability":"available","location":"artifact_store","capabilities":["preview"],"uri":"media://outbound/report.md"}],"evidence":[],"createdAt":"2026-10-05T00:00:00Z"}}}]}}"""
+    val messages = ConversationRepository.parseHistory(id, raw).messages
+    assertEquals("Brief", messages.first().references.single().title)
+    assertEquals("brief.txt", messages.first().media.single().name)
+    assertEquals("task-1", messages.last().targets.single().id)
+    assertEquals("report.md", messages.last().outcome?.artifacts?.single()?.title)
+    assertEquals(true, messages.all { it.hasNonTextContent })
+  }
+
   @Test fun executionDetailUsesOnlyBoundedPublicProjection() {
     val detail = ConversationRepository.parseExecutionDetail("turn-1", """{"detail":{"turnId":"turn-1","steps":[{"id":"a","kind":"thinking"},{"id":"b","kind":"tool","category":"search","preview":"weather report","status":"done"},{"id":"c","kind":"tool","category":"search","preview":"latest forecast","status":"done"}]}}""")
     assertEquals("weather report", detail.steps[1].preview)

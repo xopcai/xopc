@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="48 38 304 304">
+  <defs><radialGradient id="ivory" cx="0" cy="0" r="1" gradientTransform="translate(173 153) rotate(52) scale(136 118)" gradientUnits="userSpaceOnUse"><stop stop-color="#fffef9"/><stop offset=".62" stop-color="#f9f6ef"/><stop offset="1" stop-color="#dddAd2"/></radialGradient></defs>
+  <path d="M130 190 C130 153 156 131 200 131 C244 131 270 153 270 190 C270 229 244 250 200 250 C156 250 130 229 130 190Z" fill="#667078" opacity=".2" transform="translate(0 6)"/>
+  <path d="M130 190 C130 153 156 131 200 131 C244 131 270 153 270 190 C270 229 244 250 200 250 C156 250 130 229 130 190Z" fill="url(#ivory)" stroke="#fffef9" stroke-opacity=".75" stroke-width="1.2"/>
+  <path d="M143 171 C155 143 176 135 201 135 C223 135 244 145 256 165" fill="none" stroke="#ffffff" stroke-opacity=".35" stroke-width="2" stroke-linecap="round"/>
+  <g fill="#eac1ae" opacity=".5"><ellipse cx="168" cy="207" rx="8" ry="3.2"/><ellipse cx="232" cy="207" rx="8" ry="3.2"/></g>
+  <path d="M193 207 Q200 215 207 207" fill="none" stroke="#293438" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

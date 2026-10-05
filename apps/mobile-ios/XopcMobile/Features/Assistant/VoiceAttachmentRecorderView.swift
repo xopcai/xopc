@@ -4,10 +4,16 @@ import SwiftUI
 import UIKit
 
 struct VoiceAttachmentRecorderView: View {
+    let configuration: GatewayConfiguration
     let onComplete: (MessageAttachment) -> Void
+    let onTranscribed: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @State private var recorder = VoiceRecorder()
+    @State private var recordedAudio: RecordedAudio?
+    @State private var isTranscribing = false
+    @State private var transcriptionError: String?
 
     var body: some View {
         NavigationStack {
@@ -18,8 +24,17 @@ struct VoiceAttachmentRecorderView: View {
                     .accessibilityHidden(true)
                 Text(recorder.duration, format: .number.precision(.fractionLength(1))) + Text(" 秒")
                     .font(.title.monospacedDigit())
-                Text(recorder.statusText)
+                Text(recordedAudio == nil ? recorder.statusText : "录音已完成，可转为文字或发送语音")
                     .foregroundStyle(.secondary)
+                if isTranscribing {
+                    ProgressView("正在转为文字…")
+                }
+                if let transcriptionError {
+                    Text(transcriptionError)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                }
                 if recorder.hasRecoverableInterruption {
                     Text("录音被系统中断，已自动暂停。可以继续录音或保存当前内容。")
                         .font(.footnote)
@@ -28,7 +43,16 @@ struct VoiceAttachmentRecorderView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack(spacing: 16) {
-                    if recorder.isRecording {
+                    if recordedAudio != nil {
+                        Button("转为文字", systemImage: "text.cursor") {
+                            Task { await transcribe() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isTranscribing)
+                        Button("发送语音", systemImage: "waveform") { attachAudio() }
+                            .buttonStyle(.bordered)
+                            .disabled(isTranscribing)
+                    } else if recorder.isRecording {
                         Button {
                             recorder.togglePause()
                         } label: {
@@ -41,7 +65,7 @@ struct VoiceAttachmentRecorderView: View {
                             }
                         }
                         .buttonStyle(.bordered)
-                        Button("完成", systemImage: "checkmark") { complete() }
+                        Button("完成", systemImage: "checkmark") { finishRecording() }
                             .buttonStyle(.borderedProminent)
                     } else {
                         Button("开始录音", systemImage: "mic.fill") { Task { await recorder.start() } }
@@ -72,13 +96,42 @@ struct VoiceAttachmentRecorderView: View {
                 recorder.handleAudioInterruption($0)
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+        .interactiveDismissDisabled(isTranscribing)
     }
 
-    private func complete() {
-        guard let attachment = recorder.finishAttachment() else { return }
+    private func finishRecording() {
+        recordedAudio = recorder.finishRecording()
+    }
+
+    private func attachAudio() {
+        guard let audio = recordedAudio else { return }
+        let attachment = MessageAttachment(
+            type: "audio",
+            name: audio.fileName,
+            mimeType: audio.mimeType,
+            size: audio.data.count,
+            data: audio.data.base64EncodedString()
+        )
         onComplete(attachment)
         dismiss()
+    }
+
+    @MainActor private func transcribe() async {
+        guard let recordedAudio, !isTranscribing else { return }
+        isTranscribing = true
+        transcriptionError = nil
+        defer { isTranscribing = false }
+        do {
+            let language = locale.language.languageCode?.identifier
+            let text = try await GatewayClient(configuration: configuration)
+                .transcribeVoice(recordedAudio, language: language)
+            onTranscribed(text)
+            dismiss()
+        } catch is CancellationError {
+        } catch {
+            transcriptionError = error.localizedDescription
+        }
     }
 }
 

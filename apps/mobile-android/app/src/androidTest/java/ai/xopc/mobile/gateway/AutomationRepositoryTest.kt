@@ -37,6 +37,15 @@ class AutomationRepositoryTest {
     assertEquals(true, unmanaged.canDelete)
   }
 
+  @Test fun parsesAutomationMetricsAndUpcomingRun() {
+    val metrics = AutomationRepository.parseMetrics("""{"totalAutomations":3,
+      "enabledAutomations":2,"runningRuns":1,"failedLastHour":0,
+      "nextRun":{"automationId":"auto-1","name":"Morning brief","runAtMs":2000}}""")
+    assertEquals(3, metrics.totalAutomations)
+    assertEquals("auto-1", metrics.nextRun?.automationId)
+    assertEquals(2000L, metrics.nextRun?.runAtMs)
+  }
+
   @Test fun managedAutomationCannotExposeForbiddenActions() {
     val restricted = automation.replace("\"enabled\"],\"runnable\":true", "],\"runnable\":false")
     val item = AutomationRepository.parseList("""{"automations":[$restricted]}""").single()

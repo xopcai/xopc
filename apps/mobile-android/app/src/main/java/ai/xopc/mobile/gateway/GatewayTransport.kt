@@ -12,6 +12,8 @@ interface GatewayHttp {
   fun request(origin: String, path: String, method: String = "GET", body: String = "", bearer: String = ""): String
   fun requestWithHeaders(origin: String, path: String, method: String, body: String, bearer: String,
     headers: Map<String, String>): String = request(origin, path, method, body, bearer)
+  fun requestBytes(origin: String, path: String, bearer: String = ""): ByteArray =
+    request(origin, path, "GET", "", bearer).toByteArray(Charsets.UTF_8)
 }
 
 /** HTTPS-only transport for Gateway API calls; the caller must verify signed identity proofs. */
@@ -60,6 +62,23 @@ class GatewayTransport : GatewayHttp {
     }
   }
 
+  override fun requestBytes(origin: String, path: String, bearer: String): ByteArray {
+    val url = URL(PairingProtocol.secureOrigin(origin) + apiPath(path))
+    val connection = url.openConnection() as HttpsURLConnection
+    try {
+      connection.requestMethod = "GET"
+      connection.instanceFollowRedirects = false
+      connection.connectTimeout = 8_000
+      connection.readTimeout = 30_000
+      if (bearer.isNotEmpty()) connection.setRequestProperty("Authorization", "Bearer $bearer")
+      val status = connection.responseCode
+      if (status !in 200..299) throw GatewayHttpException(status)
+      return connection.inputStream.use(::readMediaBounded)
+    } finally {
+      connection.disconnect()
+    }
+  }
+
   companion object {
     private const val MAX_BYTES = 5 * 1024 * 1024
     private val pathPattern = Regex("^/api/[A-Za-z0-9_./%-]+(?:\\?[A-Za-z0-9_&=%+.-]*)?$")
@@ -79,6 +98,18 @@ class GatewayTransport : GatewayHttp {
         val count = input.read(chunk)
         if (count < 0) break
         require(output.size() + count <= MAX_BYTES) { "RESPONSE_TOO_LARGE" }
+        output.write(chunk, 0, count)
+      }
+      return output.toByteArray()
+    }
+
+    private fun readMediaBounded(input: InputStream): ByteArray {
+      val output = java.io.ByteArrayOutputStream()
+      val chunk = ByteArray(8192)
+      while (true) {
+        val count = input.read(chunk)
+        if (count < 0) break
+        require(output.size() + count <= 16 * 1024 * 1024) { "RESPONSE_TOO_LARGE" }
         output.write(chunk, 0, count)
       }
       return output.toByteArray()

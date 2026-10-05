@@ -48,88 +48,100 @@ private struct VoiceNoteCaptureView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Image(systemName: recorder.isRecording || draft != nil ? "waveform.circle.fill" : "mic.circle")
-                    .font(.system(size: 76))
-                    .foregroundStyle(recorder.isRecording ? .red : .blue)
-                    .accessibilityHidden(true)
-                if let draft {
-                    Text(draft.duration, format: .number.precision(.fractionLength(1))) + Text(" 秒")
-                        .font(.title.monospacedDigit())
-                    Text(draft.noteID == nil
-                        ? LocalizedStringKey("录音已保存在此设备，等待上传")
-                        : LocalizedStringKey("录音仍保存在此设备，等待服务器确认保存"))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button(draft.noteID == nil ? LocalizedStringKey("继续保存") : LocalizedStringKey("继续处理"), systemImage: "arrow.clockwise") {
-                        Task { await save() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isSaving)
-                    Button("丢弃这段录音", role: .destructive) { showingDiscardConfirmation = true }
-                        .disabled(isSaving)
-                } else if unsavedAudio != nil {
-                    Text("录音尚未写入本地存储，请重试")
-                        .foregroundStyle(.secondary)
-                    Button("重试保存", systemImage: "arrow.clockwise") { Task { await save() } }
+            ScrollView {
+                VStack(spacing: 24) {
+                    Image(systemName: recorder.isRecording || draft != nil ? "waveform.circle.fill" : "mic.circle")
+                        .font(.system(size: 76))
+                        .foregroundStyle(recorder.isRecording ? .red : .blue)
+                        .accessibilityHidden(true)
+                    if let draft {
+                        Text(draft.duration, format: .number.precision(.fractionLength(1))) + Text(" 秒")
+                            .font(.title.monospacedDigit())
+                        Text(draft.noteID == nil
+                            ? LocalizedStringKey("录音已保存在此设备，等待上传")
+                            : LocalizedStringKey("录音仍保存在此设备，等待服务器确认保存"))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button(draft.noteID == nil ? LocalizedStringKey("继续保存") : LocalizedStringKey("继续处理"), systemImage: "arrow.clockwise") {
+                            Task { await save() }
+                        }
                         .buttonStyle(.borderedProminent)
                         .disabled(isSaving)
-                } else if recorder.isRecording {
-                    Text(recorder.duration, format: .number.precision(.fractionLength(1))) + Text(" 秒")
-                        .font(.title.monospacedDigit())
-                    Text(recorder.statusText).foregroundStyle(.secondary)
-                    HStack {
-                        Button {
-                            recorder.togglePause()
-                        } label: {
-                            Label {
-                                Text(recorder.isPaused
-                                    ? LocalizedStringResource("继续")
-                                    : LocalizedStringResource("暂停"))
-                            } icon: {
-                                Image(systemName: recorder.isPaused ? "play.fill" : "pause.fill")
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        Button("保存", systemImage: "checkmark") { Task { await save() } }
+                        Button("丢弃这段录音", role: .destructive) { showingDiscardConfirmation = true }
+                            .disabled(isSaving)
+                    } else if unsavedAudio != nil {
+                        Text("录音尚未写入本地存储，请重试")
+                            .foregroundStyle(.secondary)
+                        Button("重试保存", systemImage: "arrow.clockwise") { Task { await save() } }
                             .buttonStyle(.borderedProminent)
                             .disabled(isSaving)
-                    }
-                } else if isLoadingDraft {
-                    ProgressView("正在检查未完成的录音…")
-                } else if draftLoadFailed {
-                    Text("无法读取此前保存的录音，请保留应用数据。")
-                        .foregroundStyle(.secondary)
-                    Button("重新检查", systemImage: "arrow.clockwise") { Task { await restoreDraft() } }
-                } else {
-                    Text(recorder.statusText).foregroundStyle(.secondary)
-                    Button("开始录音", systemImage: "mic.fill") { Task { await prepareRecording() } }
+                    } else if recorder.isRecording {
+                        Text(recorder.duration, format: .number.precision(.fractionLength(1))) + Text(" 秒")
+                            .font(.title.monospacedDigit())
+                        recorderStatusText
+                        HStack {
+                            Button {
+                                recorder.togglePause()
+                            } label: {
+                                Label {
+                                    Text(recorder.isPaused
+                                        ? LocalizedStringResource("继续")
+                                        : LocalizedStringResource("暂停"))
+                                } icon: {
+                                    Image(systemName: recorder.isPaused ? "play.fill" : "pause.fill")
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            Button("保存", systemImage: "checkmark") { Task { await save() } }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(isSaving)
+                        }
+                    } else if isLoadingDraft {
+                        ProgressView("正在检查未完成的录音…")
+                    } else if draftLoadFailed {
+                        Text("无法读取此前保存的录音，请保留应用数据。")
+                            .foregroundStyle(.secondary)
+                        Button("重新检查", systemImage: "arrow.clockwise") { Task { await restoreDraft() } }
+                    } else {
+                        recorderStatusText
+                        Button { Task { await prepareRecording() } } label: {
+                            Label {
+                                Text("开始录音")
+                                    .lineLimit(nil)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } icon: {
+                                Image(systemName: "mic.fill")
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                        }
                         .buttonStyle(.borderedProminent)
+                    }
+                    if recorder.hasRecoverableInterruption {
+                        Text("录音被系统中断，已自动暂停。可以继续录音或保存当前内容。")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if recorder.isMicrophonePermissionDenied {
+                        Text("未获得麦克风权限，请在系统设置中允许访问。")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                        MicrophonePermissionSettingsButton()
+                    } else if let message = recorder.errorMessage ?? saveError {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                if recorder.hasRecoverableInterruption {
-                    Text("录音被系统中断，已自动暂停。可以继续录音或保存当前内容。")
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if recorder.isMicrophonePermissionDenied {
-                    Text("未获得麦克风权限，请在系统设置中允许访问。")
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                    MicrophonePermissionSettingsButton()
-                } else if let message = recorder.errorMessage ?? saveError {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                .padding()
+                .frame(maxWidth: .infinity, minHeight: 360)
             }
-            .padding()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("语音笔记")
             .navigationBarTitleDisplayMode(.inline)
@@ -153,7 +165,7 @@ private struct VoiceNoteCaptureView: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents(voiceNoteDetents)
         .interactiveDismissDisabled(recorder.isRecording || unsavedAudio != nil)
         .task { await restoreDraft() }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) {
@@ -187,6 +199,18 @@ private struct VoiceNoteCaptureView: View {
                 pendingConsentVersion = nil
             }
         })
+    }
+
+    private var voiceNoteDetents: Set<PresentationDetent> {
+        [.large]
+    }
+
+    private var recorderStatusText: some View {
+        Text(recorder.statusText)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.vertical, 12)
     }
 
     @MainActor private func prepareRecording() async {
@@ -273,21 +297,33 @@ struct DiscussionProcessingSection: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("语音记录", systemImage: "waveform")
                 .font(.headline)
-            HStack(spacing: 10) {
-                if detail.isProcessing {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Image(systemName: detail.discussion.status == "needs_attention" ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                        .foregroundStyle(detail.discussion.status == "needs_attention" ? .orange : .green)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    if detail.isProcessing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: detail.discussion.status == "needs_attention" ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            .foregroundStyle(detail.discussion.status == "needs_attention" ? .orange : .green)
+                    }
+                    Text(detail.statusTitle)
+                        .font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(detail.statusTitle).font(.headline)
-                    Text(detail.statusDetail).font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
+                Text(detail.statusDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 if detail.discussion.status == "needs_attention" {
-                    Button(retryUsesLocalAudio ? LocalizedStringKey("重新上传本地录音") : LocalizedStringKey("重试"), action: onRetry)
-                        .disabled(isRetrying)
+                    Button(action: onRetry) {
+                        Text(retryUsesLocalAudio
+                            ? LocalizedStringResource("重新上传本地录音")
+                            : LocalizedStringResource("重试"))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isRetrying)
                 }
             }
             .padding()
@@ -296,7 +332,7 @@ struct DiscussionProcessingSection: View {
             if let organization = detail.organization?.organization {
                 DiscussionSummarySection(organization: organization)
             }
-            if !detail.transcript.segments.isEmpty || !detail.transcript.text.isEmpty {
+            if showsTranscriptSection {
                 Button {
                     transcriptExpanded.toggle()
                 } label: {
@@ -306,7 +342,7 @@ struct DiscussionProcessingSection: View {
                         Image(systemName: transcriptExpanded ? "chevron.up" : "chevron.down")
                             .foregroundStyle(.secondary)
                     }
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
@@ -337,8 +373,14 @@ struct DiscussionProcessingSection: View {
                         if detail.transcript.segments.count > visibleSegments {
                             Button("加载更多") { visibleSegments += 20 }
                         }
-                    } else {
+                    } else if !detail.transcript.text.isEmpty {
                         Text(detail.transcript.text).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(Color.secondary.opacity(0.08), in: .rect(cornerRadius: 12))
+                    } else {
+                        Text(transcriptPlaceholder)
+                            .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(12)
                             .background(Color.secondary.opacity(0.08), in: .rect(cornerRadius: 12))
@@ -351,6 +393,19 @@ struct DiscussionProcessingSection: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var showsTranscriptSection: Bool {
+        !detail.transcript.segments.isEmpty
+            || !detail.transcript.text.isEmpty
+            || detail.isProcessing
+            || detail.discussion.status == "needs_attention"
+    }
+
+    private var transcriptPlaceholder: LocalizedStringResource {
+        detail.discussion.status == "needs_attention"
+            ? "转写暂不可用，重试后可继续生成。"
+            : "等待转写…"
     }
 
     private static func captureTime(_ milliseconds: Int64) -> String {

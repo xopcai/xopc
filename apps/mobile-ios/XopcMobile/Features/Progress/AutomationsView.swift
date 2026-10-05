@@ -202,6 +202,7 @@ struct AutomationDetailView: View {
     let onOpenConversation: (String, String, String) -> Void
 
     @Environment(\.locale) private var locale
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var automation: AutomationRecord?
     @State private var runs: [AutomationRunRecord] = []
     @State private var runsError: String?
@@ -217,38 +218,31 @@ struct AutomationDetailView: View {
                 List {
                     Section {
                         VStack(alignment: .leading, spacing: 18) {
-                            HStack(alignment: .top, spacing: 14) {
-                                Image(systemName: "clock")
-                                    .font(.title2)
-                                    .foregroundStyle(.blue)
-                                    .frame(width: 48, height: 48)
-                                    .background(Color.blue.opacity(0.1), in: .circle)
-                                    .accessibilityHidden(true)
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(automation.name).font(.title2.bold())
-                                    Text(automation.enabled
-                                        ? LocalizedStringResource("已启用")
-                                        : LocalizedStringResource("已暂停"))
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                            Group {
+                                if dynamicTypeSize.isAccessibilitySize {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        automationIcon
+                                        automationIdentity(automation)
+                                    }
+                                } else {
+                                    HStack(alignment: .top, spacing: 14) {
+                                        automationIcon
+                                        automationIdentity(automation)
+                                    }
                                 }
                             }
-                            HStack(spacing: 12) {
-                                Button { Task { await run() } } label: {
-                                    Text("立即运行").frame(maxWidth: .infinity)
+                            Group {
+                                if dynamicTypeSize.isAccessibilitySize {
+                                    VStack(spacing: 12) {
+                                        runButton
+                                        enabledButton(automation)
+                                    }
+                                } else {
+                                    HStack(spacing: 12) {
+                                        runButton
+                                        enabledButton(automation)
+                                    }
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(isWorking)
-                                Button {
-                                    Task { await setEnabled(!automation.enabled) }
-                                } label: {
-                                    Text(automation.enabled
-                                        ? LocalizedStringResource("暂停")
-                                        : LocalizedStringResource("启用"))
-                                        .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.bordered)
-                                .disabled(isWorking)
                             }
                         }
                         .padding(.vertical, 8)
@@ -345,6 +339,53 @@ struct AutomationDetailView: View {
                 ProgressView().padding().background(.regularMaterial, in: .circle)
             }
         }
+    }
+
+    private var automationIcon: some View {
+        Image(systemName: "clock")
+            .font(.title2)
+            .foregroundStyle(.blue)
+            .frame(width: 48, height: 48)
+            .background(Color.blue.opacity(0.1), in: .circle)
+            .accessibilityHidden(true)
+    }
+
+    private func automationIdentity(_ automation: AutomationRecord) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(automation.name)
+                .font(.title2.bold())
+                .fixedSize(horizontal: false, vertical: true)
+            Text(automation.enabled
+                ? LocalizedStringResource("已启用")
+                : LocalizedStringResource("已暂停"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var runButton: some View {
+        Button { Task { await run() } } label: {
+            Text("立即运行")
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 48)
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(isWorking)
+    }
+
+    private func enabledButton(_ automation: AutomationRecord) -> some View {
+        Button {
+            Task { await setEnabled(!automation.enabled) }
+        } label: {
+            Text(automation.enabled
+                ? LocalizedStringResource("暂停")
+                : LocalizedStringResource("启用"))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 48)
+        }
+        .buttonStyle(.bordered)
+        .disabled(isWorking)
     }
 
     @MainActor private func load() async {

@@ -7,6 +7,8 @@ import ai.xopc.mobile.gateway.NoteMetadataPatch
 import ai.xopc.mobile.gateway.NoteHistoryEntry
 import ai.xopc.mobile.gateway.NoteSnapshot
 import ai.xopc.mobile.gateway.NoteShare
+import ai.xopc.mobile.gateway.ManagedFile
+import ai.xopc.mobile.gateway.ManagedFileSpace
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,6 +17,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -65,6 +68,7 @@ class NotesScreenTest {
     composeTestRule.onNodeWithTag("notes-search").performTextInput("idea")
     composeTestRule.onNodeWithTag("notes-refresh").performClick()
     assertEquals("idea", submitted)
+    composeTestRule.onNodeWithTag("notes-filter-menu").performClick()
     composeTestRule.onNodeWithTag("notes-filter-inbox").performClick()
     assertEquals("inbox", status)
     composeTestRule.onNodeWithTag("note-note-1").performClick()
@@ -231,6 +235,7 @@ class NotesScreenTest {
         onCreatedHandled = { state = state.copy(createdNoteId = null) })
     }
     composeTestRule.onNodeWithTag("notes-new").performClick()
+    composeTestRule.onNodeWithTag("notes-create-text").performClick()
     composeTestRule.runOnIdle { state = state.copy(draft = local.copy(id = remote.id,
       baseRemoteVersion = 1), selectedId = remote.id, detail = remote,
       draftSyncedVersion = local.version) }
@@ -249,6 +254,7 @@ class NotesScreenTest {
         onSaveDraft = { saves++ })
     }
     composeTestRule.onNodeWithTag("notes-new").performClick()
+    composeTestRule.onNodeWithTag("notes-create-text").performClick()
     composeTestRule.onNodeWithTag("notes-back").performClick()
     assertEquals(1, saves)
     composeTestRule.onNodeWithTag("notes-draft-body").assertExists()
@@ -298,6 +304,7 @@ class NotesScreenTest {
         }, { saved++ })
     }
     composeTestRule.onNodeWithTag("notes-new").assertIsEnabled().performClick()
+    composeTestRule.onNodeWithTag("notes-create-text").performClick()
     composeTestRule.onNodeWithTag("notes-draft-title").performTextInput("Idea")
     composeTestRule.onNodeWithTag("notes-draft-body").performTextInput("Body")
     composeTestRule.onNodeWithTag("notes-draft-save").performClick()
@@ -305,5 +312,58 @@ class NotesScreenTest {
     assertEquals("Idea", title)
     assertEquals("Body", body)
     assertEquals(1, saved)
+  }
+
+  @Test fun markdownToolbarSupportsUndoAndRedo() {
+    var draft by mutableStateOf(NoteDraft("local-00000000-0000-0000-0000-000000000081", "Idea", "Body",
+      "00000000-0000-0000-0000-000000000082", 1))
+    composeTestRule.setContent {
+      NoteDraftContent(NotesUiState(draft = draft), { title, markdown ->
+        draft = draft.copy(title = title, markdown = markdown, version = draft.version + 1)
+      }, {})
+    }
+    composeTestRule.onNodeWithTag("notes-draft-body").performTextReplacement("Body updated")
+    assertEquals("Body updated", draft.markdown)
+    composeTestRule.onNodeWithTag("notes-undo").performClick()
+    assertEquals("Body", draft.markdown)
+    composeTestRule.onNodeWithTag("notes-redo").performClick()
+    assertEquals("Body updated", draft.markdown)
+  }
+
+  @Test fun createSheetExposesTextAndVoiceWithoutStartingEitherAutomatically() {
+    var started = 0
+    var voice = 0
+    composeTestRule.setContent {
+      NotesScreen(NotesUiState(gatewayId = "test"),
+        androidx.compose.foundation.layout.PaddingValues(), { _, _ -> }, {}, {},
+        onNew = { started++ }, onStartVoice = { voice++ })
+    }
+    composeTestRule.onNodeWithTag("notes-new").performClick()
+    assertEquals(0, started)
+    assertEquals(0, voice)
+    composeTestRule.onNodeWithTag("notes-create-voice").performClick()
+    assertEquals(1, voice)
+  }
+
+  @Test fun fileSearchResultOpensPreviewThroughFilesSurface() {
+    val file = ManagedFile("space.abc", "space", "readme.txt", "readme.txt",
+      "file", "text/plain", 4)
+    var query = ""
+    composeTestRule.setContent {
+      NotesScreen(NotesUiState(gatewayId = "test", search = query),
+        androidx.compose.foundation.layout.PaddingValues(), { text, _ -> query = text }, {}, {},
+        onNoteFileSpaces = { listOf(ManagedFileSpace("space", "Workspace", false)) },
+        onNoteFiles = { _, _, search -> if (search.isNotEmpty()) listOf(file) else emptyList() },
+        onNoteFileText = { "test" })
+    }
+    composeTestRule.onNodeWithTag("notes-search").performTextInput("readme")
+    composeTestRule.waitUntil(5_000) {
+      composeTestRule.onAllNodesWithTag("notes-file-${file.id}").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithTag("notes-file-${file.id}").performClick()
+    composeTestRule.waitUntil(5_000) {
+      composeTestRule.onAllNodesWithTag("notes-file-preview").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithText("test").assertExists()
   }
 }

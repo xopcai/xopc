@@ -366,6 +366,7 @@ private struct TasksView: View {
                             symbol: "checklist"
                         )
                     }
+                    .accessibilityIdentifier("task-\(item.task.id)")
                 }
             }
         }
@@ -439,6 +440,7 @@ private struct ProjectsView: View {
                             symbol: "folder"
                         )
                     }
+                    .accessibilityIdentifier("project-\(project.id)")
                 }
             }
         }
