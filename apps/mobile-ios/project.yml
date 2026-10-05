@@ -21,7 +21,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.xopc.xopc
-        MARKETING_VERSION: 0.0.79
+        MARKETING_VERSION: 0.0.80
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
         INFOPLIST_KEY_CFBundleDisplayName: xopc

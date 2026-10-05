@@ -24,8 +24,8 @@ android {
         applicationId = "ai.xopc.xopc"
         minSdk = 26
         targetSdk = 36
-        versionCode = 79
-        versionName = "0.0.79"
+        versionCode = 80
+        versionName = "0.0.80"
     }
 
     val releaseSigning = if (missingReleaseSigningKeys.isEmpty()) {
