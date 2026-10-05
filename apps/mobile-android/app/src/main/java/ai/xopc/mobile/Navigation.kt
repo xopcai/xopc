@@ -122,6 +122,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onOpenExecution = gateway::openExecution, onRetryExecution = gateway::retryExecution,
             onCloseExecution = gateway::closeExecution,
             onSaveMessageAsNote = gateway::saveMessageAsNote,
+            onReuseMessage = gateway::reuseMessage,
             onMessageNoteFeedbackHandled = gateway::messageNoteFeedbackHandled,
             modifier = Modifier.safeDrawingPadding())
         }
