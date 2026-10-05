@@ -213,6 +213,10 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info_path")" = "ai.xopc.xopc"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$info_path")" = "$IOS_VERSION"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_path")" = "$IOS_BUILD_NUMBER"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :UISupportedInterfaceOrientations:0' "$info_path")" = "UIInterfaceOrientationPortrait"
+          for orientation in UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight; do
+            /usr/libexec/PlistBuddy -c 'Print :UISupportedInterfaceOrientations~ipad' "$info_path" | grep -F "$orientation"
+          done
           test -f "$app_path/PrivacyInfo.xcprivacy"
 
       - name: Upload signed IPA artifact
