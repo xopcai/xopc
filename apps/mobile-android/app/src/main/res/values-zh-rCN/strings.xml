@@ -142,6 +142,7 @@
     <string name="assistant_attachment_remove">移除</string>
     <string name="assistant_copy">复制</string>
     <string name="assistant_copy_code">复制代码</string>
+    <string name="assistant_reuse">复用</string>
     <string name="assistant_save_note">保存为笔记</string>
     <string name="assistant_saved_note">已保存到笔记</string>
     <string name="assistant_save_note_error">保存到笔记失败，请重试</string>

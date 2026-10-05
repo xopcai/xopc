@@ -142,6 +142,7 @@
     <string name="assistant_attachment_remove">Remove</string>
     <string name="assistant_copy">Copy</string>
     <string name="assistant_copy_code">Copy code</string>
+    <string name="assistant_reuse">Reuse</string>
     <string name="assistant_save_note">Save as note</string>
     <string name="assistant_saved_note">Saved to Notes</string>
     <string name="assistant_save_note_error">Could not save to Notes. Try again.</string>
