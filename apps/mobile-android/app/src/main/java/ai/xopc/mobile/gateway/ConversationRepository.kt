@@ -29,7 +29,8 @@ data class TaskWelcomeInfo(val taskTitle: String, val phase: String, val operati
 data class ProjectWelcomeInfo(val projectName: String, val blockedReason: String?,
   val recentFailure: String?, val recommendedAction: String?)
 
-data class ConversationMessage(val id: String, val role: String, val text: String, val turnId: String? = null)
+data class ConversationMessage(val id: String, val role: String, val text: String, val turnId: String? = null,
+  val hasNonTextContent: Boolean = false)
 data class ConversationHistory(val conversationId: String, val transcriptId: String?, val messages: List<ConversationMessage>,
   val agentId: String? = null)
 data class ExecutionStep(val id: String, val kind: String, val category: String, val text: String,
@@ -770,9 +771,15 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         }.joinToString("\n")
         else -> ""
       }
-      if (text.isBlank()) null else
+      val raw = item.optJSONArray("rawContent")
+      val hasNonTextContent = (item.optJSONArray("media")?.length() ?: 0) > 0 ||
+        (item.optJSONObject("metadata")?.optJSONArray("sourceContexts")?.length() ?: 0) > 0 ||
+        (raw != null && (0 until raw.length()).any { part ->
+          raw.optJSONObject(part)?.optString("type")?.let { it != "text" } == true
+        })
+      if (text.isBlank() && !hasNonTextContent) null else
         ConversationMessage(item.optString("id").ifBlank { item.optString("messageId").ifBlank { "$index" } }, role, text,
-          item.optString("turnId").takeIf(String::isNotBlank))
+          item.optString("turnId").takeIf(String::isNotBlank), hasNonTextContent)
     }
 
     private fun encode(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")

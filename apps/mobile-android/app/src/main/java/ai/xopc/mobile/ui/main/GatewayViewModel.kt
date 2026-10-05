@@ -2629,6 +2629,17 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  fun reuseMessage(messageId: String): Boolean {
+    val current = mutableState.value
+    val message = current.messages.firstOrNull { it.id == messageId && it.role == "user" } ?: return false
+    if (message.text.isBlank() || message.hasNonTextContent || current.selectedConversationId == null ||
+      current.sending || current.pendingInput != null || current.attachmentLoading ||
+      current.draftAttachments.isNotEmpty() || current.draftRefs.isNotEmpty() ||
+      current.pendingDeleteId == current.selectedConversationId) return false
+    changeDraft(message.text)
+    return true
+  }
+
   fun addDraftAttachment(gatewayId: String, conversationId: String, uri: Uri) =
     importDraftAttachment(gatewayId, conversationId, uri, captured = false)
 
