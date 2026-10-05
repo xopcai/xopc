@@ -1,5 +1,7 @@
 # iOS App Store release readiness
 
+> Historical Expo submission record. New iOS builds and TestFlight uploads use the native SwiftUI project and `.github/workflows/mobile-ios-testflight.yml`; see [the native mobile release guide](./mobile-build-release.md). Commands below that reference `apps/mobile-expo` are retained only as evidence for the previous submission and must not be used for a new release.
+
 Updated: 2026-09-05. Version 1.0 received a Guideline 2.1 information request. Apple requires a physical-device screen recording and six product/business-model answers before review can continue.
 
 ## Changes prepared in this release

@@ -156,6 +156,100 @@ final class ParityAcceptanceUITests: XCTestCase {
         capture("assistant-keyboard-after-add-panel")
     }
 
+    func testAssistantActionPanelAccessibilityAudit() throws {
+        app.buttons["新对话"].tap()
+        let add = app.buttons["添加附件或引用"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        add.tap()
+        XCTAssertTrue(app.collectionViews["assistant-action-panel"].waitForExistence(timeout: 5))
+
+        try app.performAccessibilityAudit(for: [
+            .elementDetection,
+            .hitRegion,
+            .sufficientElementDescription,
+            .textClipped,
+            .trait
+        ], logAccessibilityIssue)
+        capture("assistant-action-panel-accessibility-audit")
+    }
+
+    func testPrimaryTabsAccessibilityAudit() throws {
+        for tab in ["助手", "对话", "进展", "笔记", "我的"] {
+            openTab(tab)
+            XCTAssertTrue(app.navigationBars[tab].waitForExistence(timeout: 8), "Missing page: \(tab)")
+            try app.performAccessibilityAudit(for: [
+                .elementDetection,
+                .hitRegion,
+                .sufficientElementDescription,
+                .textClipped,
+                .trait
+            ])
+        }
+        capture("primary-tabs-accessibility-audit")
+    }
+
+    func testProgressDestinationsAccessibilityAudit() throws {
+        openTab("进展")
+        for destination in ["任务", "项目", "自动化"] {
+            let link = app.buttons[destination]
+            XCTAssertTrue(link.waitForExistence(timeout: 8), "Missing destination: \(destination)")
+            link.tap()
+            XCTAssertTrue(app.navigationBars[destination].waitForExistence(timeout: 8), "Missing page: \(destination)")
+            try app.performAccessibilityAudit(for: [
+                .elementDetection,
+                .hitRegion,
+                .sufficientElementDescription,
+                .textClipped,
+                .trait
+            ])
+            navigateBack()
+        }
+        capture("progress-destinations-accessibility-audit")
+    }
+
+    func testConversationDetailAccessibilityAudit() throws {
+        openTab("对话")
+        XCTAssertTrue(openCell(at: 3))
+        XCTAssertTrue(app.descendants(matching: .any)["assistant-chat-composer"].waitForExistence(timeout: 8))
+        try app.performAccessibilityAudit(for: [
+            .elementDetection,
+            .hitRegion,
+            .sufficientElementDescription,
+            .textClipped,
+            .trait
+        ], logAccessibilityIssue)
+        capture("conversation-detail-accessibility-audit")
+    }
+
+    func testAutomationDetailsAccessibilityAudit() throws {
+        openTab("进展")
+        app.buttons["自动化"].tap()
+        let automation = app.buttons["automation-system-memory-temporal-sweep"]
+        XCTAssertTrue(automation.waitForExistence(timeout: 10))
+        automation.tap()
+        XCTAssertTrue(app.staticTexts["最近运行"].waitForExistence(timeout: 10))
+        try app.performAccessibilityAudit(for: [
+            .elementDetection,
+            .hitRegion,
+            .sufficientElementDescription,
+            .textClipped,
+            .trait
+        ], logAccessibilityIssue)
+
+        let run = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "automation-run-")).firstMatch
+        XCTAssertTrue(run.waitForExistence(timeout: 10))
+        run.tap()
+        XCTAssertTrue(app.staticTexts["时间线"].waitForExistence(timeout: 10))
+        try app.performAccessibilityAudit(for: [
+            .elementDetection,
+            .hitRegion,
+            .sufficientElementDescription,
+            .textClipped,
+            .trait
+        ], logAccessibilityIssue)
+        capture("automation-details-accessibility-audit")
+    }
+
     func testExistingAutomationRunShowsTimeline() {
         openTab("进展")
         app.buttons["自动化"].tap()
@@ -391,6 +485,79 @@ final class ParityAcceptanceUITests: XCTestCase {
         }
         app.buttons["voice-call-end"].tap()
         XCTAssertFalse(app.buttons["voice-call-minimize"].waitForExistence(timeout: 3))
+    }
+
+    func testEnglishAssistantReferencesAndVoiceControls() {
+        relaunchInEnglish()
+        app.buttons["home-tab-conversations"].tap()
+        XCTAssertTrue(openCell(at: 3))
+
+        app.buttons["Add Attachments or References"].tap()
+        XCTAssertTrue(app.buttons["Reference Note"].waitForExistence(timeout: 5))
+        app.buttons["Reference Note"].tap()
+        XCTAssertTrue(app.navigationBars["Add Reference"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.searchFields["Search Notes"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.segmentedControls.buttons["Notes"].exists)
+        app.segmentedControls.buttons["Tasks"].tap()
+        XCTAssertTrue(app.searchFields["Search Tasks"].waitForExistence(timeout: 5))
+        app.segmentedControls.buttons["Files"].tap()
+        XCTAssertTrue(app.searchFields["Search Files"].waitForExistence(timeout: 5))
+        capture("english-reference-picker")
+        app.buttons["Cancel"].tap()
+
+        app.buttons["Add Attachments or References"].tap()
+        let panel = app.collectionViews["assistant-action-panel"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        panel.swipeLeft()
+        let voice = app.buttons["Voice Assistant"]
+        XCTAssertTrue(voice.waitForExistence(timeout: 5))
+        voice.tap()
+        XCTAssertTrue(app.buttons["voice-call-minimize"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Voice Assistant"].exists)
+        XCTAssertTrue(app.staticTexts["Listening"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["Mute"].exists)
+        XCTAssertTrue(app.buttons["Speaker"].exists)
+        XCTAssertTrue(app.buttons["End"].exists)
+        capture("english-voice-assistant")
+        app.buttons["voice-call-minimize"].tap()
+        XCTAssertTrue(app.buttons["Return to Voice Call"].waitForExistence(timeout: 5))
+        app.buttons["Return to Voice Call"].tap()
+        app.buttons["voice-call-end"].tap()
+        XCTAssertFalse(app.buttons["voice-call-minimize"].waitForExistence(timeout: 3))
+    }
+
+    func testEnglishNotesAndAutomationEditors() {
+        relaunchInEnglish()
+        app.buttons["home-tab-notes"].tap()
+        let newNote = app.buttons["New Note"]
+        XCTAssertTrue(newNote.waitForExistence(timeout: 8))
+        newNote.tap()
+        app.buttons["Text Note"].tap()
+        XCTAssertTrue(app.navigationBars["New Note"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Unsaved"].exists)
+        XCTAssertTrue(app.buttons["Add Attachment"].exists)
+        capture("english-note-editor")
+        app.buttons["Cancel"].tap()
+
+        newNote.tap()
+        app.buttons["Voice Note"].tap()
+        XCTAssertTrue(app.navigationBars["Voice Note"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Start Recording"].exists)
+        capture("english-voice-note")
+        app.buttons["Cancel"].tap()
+
+        app.buttons["home-tab-progress"].tap()
+        let automations = app.buttons["Automations"]
+        XCTAssertTrue(automations.waitForExistence(timeout: 8))
+        automations.tap()
+        let newAutomation = app.buttons["New Automation"]
+        XCTAssertTrue(newAutomation.waitForExistence(timeout: 8))
+        newAutomation.tap()
+        XCTAssertTrue(app.navigationBars["New Automation"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["Cron Expression"].exists)
+        XCTAssertTrue(app.switches["Enable after creation"].exists)
+        capture("english-automation-editor")
+        app.buttons["Cancel"].tap()
     }
 
     func testHomeDockQuickComposerAndTabAlignment() {
@@ -1026,6 +1193,20 @@ final class ParityAcceptanceUITests: XCTestCase {
         button.tap()
     }
 
+    private func relaunchInEnglish() {
+        app.terminate()
+        app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        if let token = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_TOKEN"] {
+            app.launchEnvironment["XOPC_E2E_GATEWAY_TOKEN"] = token
+        }
+        app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "english"
+        app.launchEnvironment["XOPC_UI_TEST_SYNTHETIC_AUDIO"] = "1"
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = "http://127.0.0.1:18790"
+        app.launch()
+        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
+    }
+
     private func checkAutomationCreation() {
         app.buttons["新建自动化"].tap()
         XCTAssertTrue(app.textFields["Cron 表达式"].waitForExistence(timeout: 5))
@@ -1210,6 +1391,14 @@ final class ParityAcceptanceUITests: XCTestCase {
         let note = try XCTUnwrap(payload["note"] as? [String: Any])
         let attachments = note["attachments"] as? [[String: Any]] ?? []
         return attachments.compactMap { $0["fileName"] as? String }
+    }
+
+    private func logAccessibilityIssue(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
+        print("Accessibility audit: \(issue.compactDescription) — \(issue.detailedDescription)")
+        if let element = issue.element {
+            print(element.debugDescription)
+        }
+        return false
     }
 
     private func capture(_ name: String) {

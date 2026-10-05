@@ -44,7 +44,7 @@ struct AssistantView<Dock: View>: View {
                 bottomDock(composer, isActionPanelExpanded)
             }
         }
-        .navigationTitle(conversation?.title ?? "助手")
+        .navigationTitle(conversationNavigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
         .task(id: configuration) {
@@ -159,6 +159,14 @@ struct AssistantView<Dock: View>: View {
     private var messageTimeline: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
+                if showsConversationTitleInTimeline, let conversation {
+                    Text(verbatim: conversation.title)
+                        .font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                        .accessibilityAddTraits(.isHeader)
+                }
                 contextSummary
                 if let errorMessage = state.errorMessage {
                     ErrorBanner(message: errorMessage)
@@ -176,7 +184,7 @@ struct AssistantView<Dock: View>: View {
                 }
                 if state.isRunActive {
                     AssistantActivityView(
-                        label: state.activityLabel ?? "助手正在处理",
+                        label: state.activityLabel ?? AppLocalization.string("助手正在处理", locale: locale),
                         items: state.executionActivity,
                         runID: state.runID,
                         onOpen: {
@@ -196,6 +204,18 @@ struct AssistantView<Dock: View>: View {
         .defaultScrollAnchor(.bottom)
     }
 
+    private var conversationNavigationTitle: String {
+        guard let title = conversation?.title, !showsConversationTitleInTimeline else {
+            return AppLocalization.string("助手", locale: locale)
+        }
+        return title
+    }
+
+    private var showsConversationTitleInTimeline: Bool {
+        guard let title = conversation?.title else { return false }
+        return title.count > 14
+    }
+
     private var contextSummary: some View {
         ConversationContextButton(
             configuration: configuration,
@@ -209,7 +229,9 @@ struct AssistantView<Dock: View>: View {
             Image(systemName: "speaker.wave.2.fill")
                 .foregroundStyle(.blue)
             VStack(alignment: .leading, spacing: 2) {
-                Text(readAloud.state == .failed ? "朗读失败" : "正在朗读")
+                Text(readAloud.state == .failed
+                    ? LocalizedStringResource("朗读失败")
+                    : LocalizedStringResource("正在朗读"))
                     .font(.subheadline.weight(.semibold))
                 if let error = readAloud.errorMessage {
                     Text(error).font(.caption).foregroundStyle(.red).lineLimit(2)
@@ -220,8 +242,16 @@ struct AssistantView<Dock: View>: View {
             }
             Spacer(minLength: 8)
             if readAloud.state == .playing || readAloud.state == .paused {
-                Button(readAloud.state == .playing ? "暂停朗读" : "继续朗读", systemImage: readAloud.state == .playing ? "pause.fill" : "play.fill") {
+                Button {
                     readAloud.toggle(id: readAloud.sourceID ?? "", text: "", locale: locale, gateway: GatewayClient(configuration: configuration))
+                } label: {
+                    Label {
+                        Text(readAloud.state == .playing
+                            ? LocalizedStringResource("暂停朗读")
+                            : LocalizedStringResource("继续朗读"))
+                    } icon: {
+                        Image(systemName: readAloud.state == .playing ? "pause.fill" : "play.fill")
+                    }
                 }
                 .labelStyle(.iconOnly)
                 .accessibilityIdentifier("chat-read-aloud-toggle")
@@ -338,7 +368,10 @@ struct AssistantView<Dock: View>: View {
                     }
                 }
             } label: {
-                Label(state.selectedAgent?.displayName ?? "选择助手", systemImage: "person.crop.circle")
+                Label(
+                    state.selectedAgent?.displayName ?? AppLocalization.string("选择助手", locale: locale),
+                    systemImage: "person.crop.circle"
+                )
             }
             .accessibilityLabel(AppLocalization.resolve(
                 "当前助手：\(state.selectedAgent?.displayName ?? AppLocalization.string("未选择", locale: locale))",

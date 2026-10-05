@@ -134,7 +134,8 @@ struct AutomationRunDetailView: View {
                 }
             }
         }
-        .navigationTitle(displayedRun?.automationName ?? "自动化运行")
+        .navigationTitle(displayedRun?.automationName
+            ?? AppLocalization.string("自动化运行", locale: AppLocalization.selectedLocale))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: "\(runID):\(pollRevision)") { await poll() }
         .refreshable { await load() }
@@ -229,7 +230,12 @@ struct AutomationRunDetailView: View {
         defer { isWorking = false }
         do {
             let history = try await GatewayClient(configuration: configuration).fetchHistory(conversationID: id)
-            onOpenConversation(id, displayedRun?.automationName ?? "自动化运行", history.session.agentId ?? "main")
+            onOpenConversation(
+                id,
+                displayedRun?.automationName
+                    ?? AppLocalization.string("自动化运行", locale: AppLocalization.selectedLocale),
+                history.session.agentId ?? "main"
+            )
         } catch {
             actionError = error.localizedDescription
         }

@@ -28,7 +28,9 @@ struct ProgressHubView: View {
                             Text("\(pendingCount) 项待处理 · \(activeCount) 项进行中")
                                 .font(.headline)
                         } else {
-                            Text(isLoading ? "正在读取工作状态…" : "工作状态暂不可用")
+                            Text(isLoading
+                                ? LocalizedStringResource("正在读取工作状态…")
+                                : LocalizedStringResource("工作状态暂不可用"))
                                 .font(.headline)
                         }
                         Text("需要你处理的事，以及正在推进的工作。")
@@ -48,7 +50,7 @@ struct ProgressHubView: View {
                     TasksView(configuration: configuration, onOpenConversation: onOpenConversation)
                         .navigationTitle("任务")
                 } label: {
-                    Label("任务", systemImage: "checkmark.circle")
+                    ProgressHubDestinationLabel(title: "任务", systemImage: "checkmark.circle")
                 }
                 NavigationLink {
                     ProjectsView(
@@ -58,13 +60,13 @@ struct ProgressHubView: View {
                     )
                     .navigationTitle("项目")
                 } label: {
-                    Label("项目", systemImage: "folder")
+                    ProgressHubDestinationLabel(title: "项目", systemImage: "folder")
                 }
                 NavigationLink {
                     AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation)
                         .navigationTitle("自动化")
                 } label: {
-                    Label("自动化", systemImage: "clock")
+                    ProgressHubDestinationLabel(title: "自动化", systemImage: "clock")
                 }
             }
             if let home, !home.needsUser.isEmpty {
@@ -102,7 +104,9 @@ struct ProgressHubView: View {
                             TaskDetailView(configuration: configuration, taskID: item.id, onOpenConversation: onOpenConversation)
                         } label: {
                             ProgressRow(title: item.task.title, subtitle: item.task.body,
-                                        state: item.task.resolution ?? "已关闭", date: item.task.updatedAt.millisecondsDate,
+                                        state: item.task.resolution
+                                            ?? AppLocalization.string("已关闭", locale: locale),
+                                        date: item.task.updatedAt.millisecondsDate,
                                         symbol: "checkmark.circle")
                         }
                     }
@@ -122,20 +126,21 @@ struct ProgressHubView: View {
         .refreshable { await load() }
         .task(id: configuration) { await load() }
         .onChange(of: locale.identifier) { Task { await load() } }
-        .confirmationDialog(pendingAction?.label ?? "确认操作", isPresented: Binding(
-            get: { pendingAction != nil },
-            set: {
-                if !$0 {
-                    pendingAction = nil
+        .confirmationDialog(pendingAction?.label
+            ?? AppLocalization.string("确认操作", locale: locale), isPresented: Binding(
+                get: { pendingAction != nil },
+                set: {
+                    if !$0 {
+                        pendingAction = nil
+                    }
                 }
-            }
-        )) {
-            Button("确认") {
-                guard let action = pendingAction else { return }
-                pendingAction = nil
-                Task { await perform(action) }
-            }
-            Button("取消", role: .cancel) { pendingAction = nil }
+            )) {
+                Button("确认") {
+                    guard let action = pendingAction else { return }
+                    pendingAction = nil
+                    Task { await perform(action) }
+                }
+                Button("取消", role: .cancel) { pendingAction = nil }
         } message: {
             Text("此操作会更新 Gateway 中的工作状态。")
         }
@@ -238,6 +243,24 @@ struct ProgressHubView: View {
         case .chat:
             EmptyView()
         }
+    }
+}
+
+private struct ProgressHubDestinationLabel: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .frame(width: 24)
+                .accessibilityHidden(true)
+            Text(title)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+        }
+        .padding(.vertical, 8)
     }
 }
 

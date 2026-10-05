@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 struct VoiceNoteFlowView: View {
@@ -79,8 +80,16 @@ private struct VoiceNoteCaptureView: View {
                         .font(.title.monospacedDigit())
                     Text(recorder.statusText).foregroundStyle(.secondary)
                     HStack {
-                        Button(recorder.isPaused ? "继续" : "暂停", systemImage: recorder.isPaused ? "play.fill" : "pause.fill") {
+                        Button {
                             recorder.togglePause()
+                        } label: {
+                            Label {
+                                Text(recorder.isPaused
+                                    ? LocalizedStringResource("继续")
+                                    : LocalizedStringResource("暂停"))
+                            } icon: {
+                                Image(systemName: recorder.isPaused ? "play.fill" : "pause.fill")
+                            }
                         }
                         .buttonStyle(.bordered)
                         Button("保存", systemImage: "checkmark") { Task { await save() } }
@@ -97,6 +106,13 @@ private struct VoiceNoteCaptureView: View {
                     Text(recorder.statusText).foregroundStyle(.secondary)
                     Button("开始录音", systemImage: "mic.fill") { Task { await prepareRecording() } }
                         .buttonStyle(.borderedProminent)
+                }
+                if recorder.hasRecoverableInterruption {
+                    Text("录音被系统中断，已自动暂停。可以继续录音或保存当前内容。")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if recorder.isMicrophonePermissionDenied {
                     Text("未获得麦克风权限，请在系统设置中允许访问。")
@@ -119,13 +135,15 @@ private struct VoiceNoteCaptureView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(draft == nil ? "取消" : "关闭") {
+                    Button {
                         if unsavedAudio != nil || recorder.isRecording {
                             showingUnsavedConfirmation = true
                         } else {
                             recorder.cancel()
                             dismiss()
                         }
+                    } label: {
+                        Text(draft == nil ? LocalizedStringResource("取消") : LocalizedStringResource("关闭"))
                     }
                 }
             }
@@ -138,6 +156,9 @@ private struct VoiceNoteCaptureView: View {
         .presentationDetents([.medium, .large])
         .interactiveDismissDisabled(recorder.isRecording || unsavedAudio != nil)
         .task { await restoreDraft() }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) {
+            recorder.handleAudioInterruption($0)
+        }
         .alert("录音与转写", isPresented: consentBinding) {
             Button("同意并开始") { Task { await acknowledgeAndStart() } }
             Button("取消", role: .cancel) { pendingConsentVersion = nil }
@@ -305,7 +326,8 @@ struct DiscussionProcessingSection: View {
                                     }
                                 }
                                 .font(.caption)
-                                Text(segment.displayText?.nonEmptyTranscript ?? segment.rawText?.nonEmptyTranscript ?? "等待转写…")
+                                Text(segment.displayText?.nonEmptyTranscript ?? segment.rawText?.nonEmptyTranscript
+                                    ?? AppLocalization.string("等待转写…", locale: AppLocalization.selectedLocale))
                                     .textSelection(.enabled)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)

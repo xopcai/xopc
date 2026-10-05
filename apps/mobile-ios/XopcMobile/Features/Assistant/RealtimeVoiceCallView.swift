@@ -15,7 +15,7 @@ struct RealtimeVoiceCallView: View {
                     .background(Color(uiColor: .secondarySystemGroupedBackground), in: .circle)
                     .accessibilityIdentifier("voice-call-minimize")
                 Spacer()
-                Text(LocalizedStringKey(call.mode.title))
+                Text(call.mode.title)
                     .font(.caption.weight(.medium))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
@@ -71,7 +71,7 @@ struct RealtimeVoiceCallView: View {
 
             Spacer(minLength: 24)
             if !call.responseID.isEmpty || !call.taskID.isEmpty {
-                Button(call.taskID.isEmpty ? "停止回复" : "取消任务") {
+                Button {
                     Task {
                         if call.taskID.isEmpty {
                             await call.stopReply()
@@ -79,6 +79,8 @@ struct RealtimeVoiceCallView: View {
                             await call.cancelTask()
                         }
                     }
+                } label: {
+                    Text(call.taskID.isEmpty ? LocalizedStringResource("停止回复") : LocalizedStringResource("取消任务"))
                 }
                 .buttonStyle(.bordered)
                 .padding(.bottom, 24)
@@ -162,7 +164,11 @@ struct RealtimeVoiceCallView: View {
     }
 
     private func control(
-        _ title: String, image: String, active: Bool, destructive: Bool = false, action: @escaping () -> Void
+        _ title: LocalizedStringResource,
+        image: String,
+        active: Bool,
+        destructive: Bool = false,
+        action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             VStack(spacing: 7) {
@@ -179,7 +185,7 @@ struct RealtimeVoiceCallView: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title)
+        .accessibilityLabel(Text(title))
     }
 
     private func clarificationCard(_ clarification: RealtimeVoiceCall.Clarification) -> some View {
@@ -195,8 +201,13 @@ struct RealtimeVoiceCallView: View {
                     }
                 }
             }
-            TextField(clarification.suggestedAnswer.isEmpty ? "输入回答" : clarification.suggestedAnswer, text: $answer)
-                .textFieldStyle(.roundedBorder)
+            TextField(
+                clarification.suggestedAnswer.isEmpty
+                    ? AppLocalization.string("输入回答", locale: locale)
+                    : clarification.suggestedAnswer,
+                text: $answer
+            )
+            .textFieldStyle(.roundedBorder)
             HStack {
                 Button("交给助手决定") { Task { await call.submitClarification(action: "agent_decide") } }
                     .buttonStyle(.bordered)

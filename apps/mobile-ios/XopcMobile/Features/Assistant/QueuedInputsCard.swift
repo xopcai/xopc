@@ -22,7 +22,9 @@ struct QueuedInputsCard: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(input.payloadDescription)
                                 .font(.subheadline)
-                            Text(input.effectiveDelivery == "steer" ? "引导当前回答" : "下一条")
+                            Text(input.effectiveDelivery == "steer"
+                                ? LocalizedStringResource("引导当前回答")
+                                : LocalizedStringResource("下一条"))
                                 .font(.caption2.weight(.medium))
                                 .foregroundStyle(.secondary)
                         }

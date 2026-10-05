@@ -31,6 +31,26 @@ class GatewaySessionTest {
   private val signingKey = Ed25519PrivateKeyParameters(ByteArray(32) { (it + 1).toByte() }, 0)
   private val origin = "https://gateway.example"
 
+  @Test fun assistantMessageQuickCaptureUsesHarmonyNoteContractAndStableMutationKey() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val store = AndroidSecureStore(context, "message_note_credentials_test_v1",
+      "xopc.gateway.credentials.message.note.test.v1")
+    clear(store)
+    try {
+      val fake = FakeGateway()
+      val session = GatewaySession(context, fake,
+        DeviceIdentity("xopc.gateway.device.message.note.p256.test.v1"), store)
+      session.pair(invitation()) {}
+      val notes = NoteRepository(session)
+      val mutationId = "12345678-1234-1234-1234-123456789abc"
+      assertEquals("note-captured", notes.quickCaptureMessage("Answer to keep", mutationId))
+      assertEquals(listOf("/api/notes/quick-capture"), fake.noteCapturePaths)
+      assertThrows(IllegalArgumentException::class.java) {
+        notes.quickCaptureMessage("   ", mutationId)
+      }
+    } finally { clear(store) }
+  }
+
   @Test fun shareCenterReadsAndConfirmsExtendAndRevokeWithGatewayShape() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val store = AndroidSecureStore(context, "share_center_credentials_test_v1",
@@ -506,6 +526,33 @@ class GatewaySessionTest {
           ConversationRepository(restored, context).composerDraft(creationDraft.conversationId))
         assertEquals(0, fake.inputPostCount)
         repository.discardDraft(creationDraft.conversationId)
+        repository.saveQuickDraft("Quick handoff")
+        val quickAttachment = ChatAttachmentStore(context).addBytes(gatewayId.toString(),
+          "00000000-0000-0000-0000-000000000000", "quick.txt", "text/plain",
+          "snapshot".toByteArray())
+        val handoffDraft = repository.stageQuickDraft("main", "Quick handoff")
+        newDraftId = handoffDraft.conversationId
+        val afterHandoff = ConversationRepository(restored, context)
+        assertEquals("Quick handoff", afterHandoff.composerDraft(handoffDraft.conversationId))
+        assertEquals(listOf(quickAttachment), afterHandoff.composerAttachments(handoffDraft.conversationId))
+        assertEquals(emptyList<ChatAttachment>(), afterHandoff.quickAttachments())
+        assertEquals("", afterHandoff.quickDraft())
+        assertEquals(handoffDraft.conversationId, restored.mainConversationId())
+        assertNull(afterHandoff.recoverQuickHandoff())
+        assertEquals(0, fake.inputPostCount)
+        repository.discardDraft(handoffDraft.conversationId)
+        val interrupted = repository.createDraft("main")
+        newDraftId = interrupted.conversationId
+        repository.saveQuickDraft("Resume once")
+        pendingStore.write("quick-handoff.$gatewayId", JSONObject()
+          .put("conversationId", interrupted.conversationId).put("content", "Resume once").toString())
+        val resumed = ConversationRepository(restored, context).recoverQuickHandoff()
+        assertEquals(interrupted.conversationId, resumed?.conversationId)
+        assertEquals("Resume once", repository.composerDraft(interrupted.conversationId))
+        assertEquals(interrupted.conversationId, restored.mainConversationId())
+        assertNull(repository.recoverQuickHandoff())
+        assertEquals("", repository.quickDraft())
+        repository.discardDraft(interrupted.conversationId)
         val quickDraft = repository.createDraft("main")
         newDraftId = quickDraft.conversationId
         repository.saveComposerDraft(quickDraft.conversationId, "Quick topic")
@@ -642,6 +689,7 @@ class GatewaySessionTest {
     val automationEditMethods = mutableListOf<String>()
     val noteReadPaths = mutableListOf<String>()
     val noteCreatePaths = mutableListOf<String>()
+    val noteCapturePaths = mutableListOf<String>()
     val noteSyncIds = mutableListOf<String>()
     val noteMetadataFields = mutableListOf<String>()
     val noteHistoryPaths = mutableListOf<String>()
@@ -665,6 +713,8 @@ class GatewaySessionTest {
         "11111111-2222-3333-4444-555555555555", headers["Idempotency-Key"])
       if (path == "/api/notes" && method == "POST") assertEquals(
         "44444444-5555-6666-7777-888888888888", headers["Idempotency-Key"])
+      if (path == "/api/notes/quick-capture" && method == "POST") assertEquals(
+        "12345678-1234-1234-1234-123456789abc", headers["Idempotency-Key"])
       if (path == "/api/notes/note-1" && method == "DELETE") assertEquals(
         "55555555-6666-7777-8888-999999999999", headers["Idempotency-Key"])
       if (path == "/api/automations/auto-1" && method in setOf("PATCH", "DELETE")) {
@@ -899,6 +949,13 @@ class GatewaySessionTest {
           """{"note":{"id":"note-created","title":"New idea","markdown":"Body",
             "kind":"thought","status":"inbox","createdAt":1000,"updatedAt":2000,
             "remoteVersion":1}}"""
+        }
+        path == "/api/notes/quick-capture" && method == "POST" -> {
+          noteCapturePaths += path
+          assertEquals("Answer to keep", input.getString("text"))
+          assertEquals("app", input.getString("channel"))
+          assertEquals("android", input.getString("platform"))
+          """{"note":{"id":"note-captured"}}"""
         }
         path == "/api/notes/sync" && method == "POST" -> {
           val id = input.getString("noteId")

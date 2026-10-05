@@ -110,6 +110,46 @@ class ChatAttachmentStore(context: Context) {
     return array
   }
 
+  /** Re-encrypts the quick composer snapshots under the newly created conversation atomically. */
+  @Synchronized
+  fun moveAll(gatewayId: String, fromConversationId: String,
+    toConversationId: String): List<ChatAttachment> {
+    checkScope(gatewayId, fromConversationId)
+    checkScope(gatewayId, toConversationId)
+    if (fromConversationId == toConversationId) return list(gatewayId, toConversationId)
+    val db = database.writableDatabase
+    data class Row(val id: String, val metadata: ByteArray, val payload: ByteArray, val createdAt: Long)
+    val source = ArrayList<Row>()
+    db.query(TABLE, arrayOf("attachment_id", "metadata", "payload", "created_at"),
+      "gateway_id=? AND conversation_id=?", arrayOf(gatewayId, fromConversationId),
+      null, null, "created_at ASC, attachment_id ASC").use { rows ->
+      while (rows.moveToNext()) source += Row(rows.getString(0), rows.getBlob(1),
+        rows.getBlob(2), rows.getLong(3))
+    }
+    if (source.isEmpty()) return list(gatewayId, toConversationId)
+    require(list(gatewayId, toConversationId).isEmpty()) { "ATTACHMENT_TARGET_NOT_EMPTY" }
+    db.beginTransactionNonExclusive()
+    try {
+      source.forEach { row ->
+        val metadata = decrypt(gatewayId, fromConversationId, row.id, "metadata", row.metadata)
+        require(parseMetadata(JSONObject(metadata.toString(Charsets.UTF_8))).id == row.id) {
+          "MISMATCHED_ATTACHMENT"
+        }
+        val payload = decrypt(gatewayId, fromConversationId, row.id, "payload", row.payload)
+        val values = ContentValues().apply {
+          put("gateway_id", gatewayId); put("conversation_id", toConversationId)
+          put("attachment_id", row.id); put("created_at", row.createdAt)
+          put("metadata", encrypt(gatewayId, toConversationId, row.id, "metadata", metadata))
+          put("payload", encrypt(gatewayId, toConversationId, row.id, "payload", payload))
+        }
+        db.insertOrThrow(TABLE, null, values)
+      }
+      db.delete(TABLE, "gateway_id=? AND conversation_id=?", arrayOf(gatewayId, fromConversationId))
+      db.setTransactionSuccessful()
+    } finally { db.endTransaction() }
+    return list(gatewayId, toConversationId)
+  }
+
   @Synchronized
   fun remove(gatewayId: String, conversationId: String, id: String) {
     checkScope(gatewayId, conversationId); checkId(id)

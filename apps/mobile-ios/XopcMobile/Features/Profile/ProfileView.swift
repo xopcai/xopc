@@ -103,8 +103,16 @@ private struct UserUnderstandingView: View {
                 }
             }
             Section("隐私") {
-                LabeledContent("记忆", value: summary.settings.memoryEnabled ? "已开启" : "已关闭")
-                LabeledContent("显示记忆引用", value: summary.settings.showMemoryReferences ? "是" : "否")
+                LabeledContent("记忆") {
+                    Text(summary.settings.memoryEnabled
+                        ? LocalizedStringResource("已开启")
+                        : LocalizedStringResource("已关闭"))
+                }
+                LabeledContent("显示记忆引用") {
+                    Text(summary.settings.showMemoryReferences
+                        ? LocalizedStringResource("是")
+                        : LocalizedStringResource("否"))
+                }
                 LabeledContent("敏感写入策略", value: summary.settings.sensitiveWritePolicy)
             }
         }

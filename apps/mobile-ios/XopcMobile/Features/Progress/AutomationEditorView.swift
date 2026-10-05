@@ -39,10 +39,16 @@ struct AutomationEditorView: View {
                     Text("使用五段 Cron 表达式，例如 0 9 * * 1 表示每周一 09:00。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                    Toggle(existing == nil ? "创建后启用" : "启用自动化", isOn: $isEnabled)
+                    Toggle(isOn: $isEnabled) {
+                        Text(existing == nil
+                            ? LocalizedStringResource("创建后启用")
+                            : LocalizedStringResource("启用自动化"))
+                    }
                 }
             }
-            .navigationTitle(existing == nil ? "新建自动化" : "编辑自动化")
+            .navigationTitle(existing == nil
+                ? LocalizedStringResource("新建自动化")
+                : LocalizedStringResource("编辑自动化"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }

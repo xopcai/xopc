@@ -16,9 +16,11 @@ struct RealtimeVoiceDownlinkFrame: Equatable, Sendable {
 enum RealtimeVoiceProtocol {
     static let version = 3
     static let maxFrameBytes = 64 * 1024
-    private static let magic: UInt32 = 0x584F5033
+    private static let magic: UInt32 = 0x584F_5033
     private static let headerBytes = 32
 
+    // The wire header fields stay explicit so their serialized order remains reviewable.
+    // swiftlint:disable:next function_parameter_count
     static func encodeUplink(
         connectionEpoch: UInt32,
         utteranceID: String,

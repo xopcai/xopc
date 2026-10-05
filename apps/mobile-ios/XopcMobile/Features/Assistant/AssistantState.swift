@@ -101,7 +101,7 @@ final class AssistantState {
         isSending = true
         errorMessage = nil
         executionActivity = []
-        activityLabel = "正在准备"
+        activityLabel = AppLocalization.resolve("正在准备")
         let optimisticID = "local-\(UUID().uuidString)"
         let optimisticText = content.isEmpty
             ? Self.payloadSummary(attachments: attachments, references: references)
@@ -196,7 +196,7 @@ final class AssistantState {
 
     func apply(_ event: RunStreamEvent, runID: String) {
         if event.name == "error" {
-            errorMessage = event.errorMessage ?? "助手执行失败"
+            errorMessage = event.errorMessage ?? AppLocalization.resolve("助手执行失败")
             return
         }
         updateActivity(with: event)
@@ -263,7 +263,7 @@ final class AssistantState {
                 return
             }
         }
-        errorMessage = "助手执行时间过长，请稍后刷新"
+        errorMessage = AppLocalization.resolve("助手执行时间过长，请稍后刷新")
     }
 }
 
@@ -335,7 +335,7 @@ extension AssistantState {
             )
             self.clarification = nil
             isSending = true
-            activityLabel = "正在继续"
+            activityLabel = AppLocalization.resolve("正在继续")
             runID = await findActiveRun(in: conversation, using: gateway)
             await followRun(of: conversation, using: gateway)
             isSending = false
@@ -354,8 +354,8 @@ private extension AssistantState {
     func updateActivity(with event: RunStreamEvent) {
         switch event.name {
         case "thinking_delta":
-            activityLabel = "正在思考"
-            appendActivity(id: "thinking", title: "分析问题", status: "running")
+            activityLabel = AppLocalization.resolve("正在思考")
+            appendActivity(id: "thinking", title: AppLocalization.resolve("分析问题"), status: "running")
         case "tool_start":
             let title = event.toolName.map { AppLocalization.resolve("正在使用 \($0)") }
                 ?? AppLocalization.resolve("正在使用工具")
@@ -365,11 +365,13 @@ private extension AssistantState {
             if let index = executionActivity.lastIndex(where: { $0.status == "running" }) {
                 executionActivity[index].status = event.status == "error" ? "error" : "done"
             }
-            activityLabel = event.status == "error" ? "工具执行失败" : "继续处理"
+            activityLabel = event.status == "error"
+                ? AppLocalization.resolve("工具执行失败")
+                : AppLocalization.resolve("继续处理")
         case "progress":
-            activityLabel = event.stage ?? event.errorMessage ?? "正在处理"
+            activityLabel = event.stage ?? event.errorMessage ?? AppLocalization.resolve("正在处理")
         case "assistant_delta":
-            activityLabel = "正在回答"
+            activityLabel = AppLocalization.resolve("正在回答")
         case "run_end":
             activityLabel = nil
         default:

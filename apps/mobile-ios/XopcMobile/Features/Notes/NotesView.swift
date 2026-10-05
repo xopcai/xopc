@@ -15,6 +15,9 @@ struct NotesView: View {
 
     var body: some View {
         List {
+            notesSearchField
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             if pendingVoiceNote != nil || pendingVoiceNoteLoadFailed {
                 Button {
                     presentedSheet = .voice
@@ -36,7 +39,7 @@ struct NotesView: View {
                 loadingRows
             } else if notes.isEmpty {
                 ContentUnavailableView(
-                    search.isEmpty ? "暂无笔记" : "没有匹配的笔记",
+                    emptyTitle,
                     systemImage: "note.text",
                     description: Text("新建一条文字笔记，或调整筛选条件。")
                 )
@@ -54,8 +57,6 @@ struct NotesView: View {
             }
         }
         .navigationTitle("笔记")
-        .searchable(text: $search, prompt: "搜索笔记")
-        .onSubmit(of: .search) { Task { await load() } }
         .refreshable { await load() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -101,6 +102,22 @@ struct NotesView: View {
         } message: { Text(error ?? "未知错误") }
     }
 
+    private var notesSearchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField("搜索笔记", text: $search)
+                .textFieldStyle(.plain)
+                .submitLabel(.search)
+                .onSubmit { Task { await load() } }
+                .accessibilityIdentifier("notes-search-field")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+    }
+
     private var statusPicker: some View {
         Picker("状态", selection: $status) {
             Text("全部").tag("")
@@ -110,6 +127,10 @@ struct NotesView: View {
         }
         .pickerStyle(.segmented)
         .listRowSeparator(.hidden)
+    }
+
+    private var emptyTitle: LocalizedStringResource {
+        search.isEmpty ? "暂无笔记" : "没有匹配的笔记"
     }
 
     private var pendingVoiceTitle: LocalizedStringKey {
@@ -193,16 +214,22 @@ struct NoteRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Label(note.displayTitle, systemImage: note.kind == "voice" ? "waveform" : "note.text")
+                Image(systemName: note.kind == "voice" ? "waveform" : "note.text")
+                    .foregroundStyle(.blue)
+                    .accessibilityHidden(true)
+                Text(note.displayTitle)
                     .font(.headline)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
             if let snippet = note.snippet, !snippet.isEmpty {
-                Text(snippet).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                Text(snippet)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Group {
                 if dynamicTypeSize.isAccessibilitySize {
@@ -215,7 +242,9 @@ struct NoteRow: View {
             .foregroundStyle(.tertiary)
             if let tags = note.tags, !tags.isEmpty {
                 Text(tags.prefix(3).map { "#\($0)" }.joined(separator: "  "))
-                    .font(.caption).foregroundStyle(.blue).lineLimit(1)
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.vertical, 5)

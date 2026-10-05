@@ -17,8 +17,9 @@ struct WireMessage: Decodable, Sendable {
             TimelineDetail(
                 id: "\(call.id)-result",
                 kind: "tool",
-                title: "\(call.name) · \(call.isError == true ? "失败" : "完成")",
-                text: call.result?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "已执行"
+                title: "\(call.name) · \(AppLocalization.resolve(call.isError == true ? "失败" : "完成"))",
+                text: call.result?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+                    ?? AppLocalization.resolve("已执行")
             )
         } ?? []
         return rawDetails + toolResults
@@ -86,8 +87,8 @@ private extension [MessageBlock] {
                 return TimelineDetail(
                     id: block.id ?? "tool-\(index)",
                     kind: "tool",
-                    title: block.name ?? "工具调用",
-                    text: block.status ?? "已执行"
+                    title: block.name ?? AppLocalization.resolve("工具调用"),
+                    text: block.status ?? AppLocalization.resolve("已执行")
                 )
             default: return nil
             }

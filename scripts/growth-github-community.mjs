@@ -30,7 +30,7 @@ Useful links:
 - Website: https://xopc.ai
 - GitHub: https://github.com/xopcai/xopc
 - First 5 Minutes: https://xopcai.github.io/xopc/first-5-minutes
-- Mobile app: https://github.com/xopcai/xopc/tree/main/apps/mobile-expo
+- Mobile apps: https://github.com/xopcai/xopc/blob/main/docs/design/release/mobile-build-release.md
 
 If xopc is useful or the direction feels worth supporting, a GitHub star helps more developers find it.`,
   },
@@ -63,7 +63,7 @@ Links:
 - Website: https://xopc.ai
 - GitHub: https://github.com/xopcai/xopc
 - Docs: https://xopcai.github.io/xopc/
-- Mobile app: https://github.com/xopcai/xopc/tree/main/apps/mobile-expo`,
+- Mobile apps: https://github.com/xopcai/xopc/blob/main/docs/design/release/mobile-build-release.md`,
   },
   {
     categoryCandidates: ['Q&A', 'Q and A', 'General'],
@@ -267,9 +267,9 @@ Record a short clip showing:
     labels: ['good first issue', 'help wanted', 'type:docs', 'area:gateway', 'priority:P3'],
     body: `## Context
 
-xopc has a mobile client in the main repository:
+xopc has native Android and iOS clients in the main repository:
 
-https://github.com/xopcai/xopc/tree/main/apps/mobile-expo
+https://github.com/xopcai/xopc/blob/main/docs/design/release/mobile-build-release.md
 
 A short pairing clip would make the mobile story easier to understand in launch posts.
 
@@ -293,7 +293,7 @@ Record a short clip showing:
 
 - Mobile app docs: https://xopcai.github.io/xopc/mobile-app
 - Main repo: https://github.com/xopcai/xopc
-- Mobile app source: https://github.com/xopcai/xopc/tree/main/apps/mobile-expo`,
+- Mobile app source: https://github.com/xopcai/xopc/blob/main/docs/design/release/mobile-build-release.md`,
   },
 ];
 

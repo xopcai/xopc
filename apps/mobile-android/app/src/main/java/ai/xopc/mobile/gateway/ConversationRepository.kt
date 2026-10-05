@@ -64,6 +64,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       "pending-input.$gatewayId.", "draft.$gatewayId.").forEach(store::removeMatchingPrefix)
     store.remove("draft-index.$gatewayId")
     store.remove("quick-composer.$gatewayId")
+    store.remove("quick-handoff.$gatewayId")
     attachmentStore?.removeGateway(gatewayId)
   }
 
@@ -112,6 +113,61 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     val store = pendingStore ?: throw IllegalStateException("NO_SECURE_STORE")
     val key = "quick-composer.$gatewayId"
     if (content.isEmpty()) store.remove(key) else store.write(key, content)
+  }
+
+  fun quickAttachments(): List<ChatAttachment> {
+    val gatewayId = gateway.currentProfile()?.gatewayId ?: return emptyList()
+    return attachmentStore?.list(gatewayId, QUICK_ATTACHMENT_SCOPE) ?: emptyList()
+  }
+
+  fun addQuickAttachment(gatewayId: String, uri: Uri): ChatAttachment {
+    require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
+    return (attachmentStore ?: throw IllegalStateException("NO_ATTACHMENT_STORE"))
+      .import(gatewayId, QUICK_ATTACHMENT_SCOPE, uri)
+  }
+
+  fun removeQuickAttachment(gatewayId: String, attachmentId: String) {
+    require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
+    attachmentStore?.remove(gatewayId, QUICK_ATTACHMENT_SCOPE, attachmentId)
+  }
+
+  /** Finishes a previously interrupted quick-composer handoff before another draft can be created. */
+  @Synchronized
+  fun recoverQuickHandoff(): LocalConversationDraft? {
+    val gatewayId = gateway.currentProfile()?.gatewayId ?: return null
+    val store = pendingStore ?: return null
+    val key = "quick-handoff.$gatewayId"
+    val raw = store.read(key) ?: return null
+    val record = JSONObject(raw)
+    val id = record.getString("conversationId")
+    val content = record.getString("content")
+    require(runCatching { UUID.fromString(id) }.isSuccess && content.length <= 4_000) {
+      "INVALID_QUICK_HANDOFF"
+    }
+    val draft = draft(id)
+    if (draft == null) { store.remove(key); return null }
+    saveComposerDraft(id, content)
+    (attachmentStore ?: throw IllegalStateException("NO_ATTACHMENT_STORE"))
+      .moveAll(gatewayId, QUICK_ATTACHMENT_SCOPE, id)
+    saveQuickDraft("")
+    gateway.saveMainConversationId(id)
+    store.remove(key)
+    return draft
+  }
+
+  /** Creates one local conversation and durably hands it the quick text and attachment snapshots. */
+  @Synchronized
+  fun stageQuickDraft(agentId: String, content: String): LocalConversationDraft {
+    recoverQuickHandoff()?.let { return it }
+    require(content.length <= 4_000 && (content.isNotBlank() || quickAttachments().isNotEmpty())) {
+      "EMPTY_QUICK_INPUT"
+    }
+    val gatewayId = gateway.currentProfile()?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
+    val store = pendingStore ?: throw IllegalStateException("NO_SECURE_STORE")
+    val draft = createDraft(agentId)
+    store.write("quick-handoff.$gatewayId", JSONObject().put("conversationId", draft.conversationId)
+      .put("content", content).toString())
+    return recoverQuickHandoff() ?: throw IllegalStateException("QUICK_HANDOFF_FAILED")
   }
 
   fun pendingInput(conversationId: String): PendingInput? {
@@ -477,6 +533,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       .wirePayloads(gatewayId, conversationId, attachments)
 
   companion object {
+    const val QUICK_ATTACHMENT_SCOPE = "00000000-0000-0000-0000-000000000000"
     fun parseAgents(raw: String): AgentCatalog {
       val root = JSONObject(raw)
       require(root.optBoolean("ok")) { "INVALID_AGENTS" }

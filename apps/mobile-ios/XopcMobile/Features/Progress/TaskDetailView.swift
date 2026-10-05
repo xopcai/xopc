@@ -40,7 +40,8 @@ struct TaskDetailView: View {
                         .padding(.vertical, 10)
                     }
                     Section("说明") {
-                        Text(detail.task.body.flatMap { $0.isEmpty ? nil : $0 } ?? "暂无说明")
+                        Text(detail.task.body.flatMap { $0.isEmpty ? nil : $0 }
+                            ?? AppLocalization.string("暂无说明", locale: AppLocalization.selectedLocale))
                             .foregroundStyle(detail.task.body?.isEmpty == false ? .primary : .secondary)
                     }
                     if let objective = detail.task.contract?.objective, !objective.isEmpty, objective != detail.task.title {

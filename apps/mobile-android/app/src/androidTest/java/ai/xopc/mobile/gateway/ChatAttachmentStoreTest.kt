@@ -5,13 +5,119 @@ import android.content.ContentValues
 import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
 import android.content.Context
+import android.content.Intent
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
+import java.io.File
 import java.util.Base64
 import java.util.UUID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatAttachmentStoreTest {
+  @Test fun galleryContractRequestsOnlyOneImageWithoutLibraryPermission() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val intent = ActivityResultContracts.PickVisualMedia().createIntent(context,
+      PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    assertEquals("image/*", intent.type)
+    assertTrue(intent.action == MediaStore.ACTION_PICK_IMAGES || intent.action == Intent.ACTION_OPEN_DOCUMENT)
+  }
+
+  @Test fun cameraContractGrantsOnlyItsOutputUriTemporarily() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val uri = CameraCaptureStore.create(context)
+    try {
+      val intent = CameraTakePictureContract().createIntent(context, uri)
+      assertEquals(MediaStore.ACTION_IMAGE_CAPTURE, intent.action)
+      assertEquals(uri, intent.clipData?.getItemAt(0)?.uri)
+      assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+        intent.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION))
+      assertEquals(0, intent.flags and Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+      assertEquals(0, intent.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+    } finally { CameraCaptureStore.discard(context, uri) }
+  }
+
+  @Test fun selectedGalleryImageIsSnapshottedWithoutKeepingItsUriGrant() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val gatewayId = UUID.randomUUID().toString()
+    val conversationId = UUID.randomUUID().toString()
+    val store = ChatAttachmentStore(context)
+    val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+      ContentValues().apply {
+        put(MediaStore.MediaColumns.DISPLAY_NAME, "xopc-photo-test-${UUID.randomUUID()}.jpg")
+        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+        put(MediaStore.MediaColumns.IS_PENDING, 1)
+      }) ?: throw AssertionError("Test provider did not create an image")
+    try {
+      context.contentResolver.openOutputStream(uri)!!.use { it.write(byteArrayOf(4, 5, 6)) }
+      context.contentResolver.update(uri, ContentValues().apply {
+        put(MediaStore.MediaColumns.IS_PENDING, 0)
+      }, null, null)
+      val item = store.import(gatewayId, conversationId, uri)
+      assertEquals("image", item.type)
+      assertEquals("image/jpeg", item.mimeType)
+      context.contentResolver.delete(uri, null, null)
+      val payload = ChatAttachmentStore(context).wirePayloads(gatewayId, conversationId, listOf(item))
+        .getJSONObject(0)
+      assertEquals(listOf(4, 5, 6), Base64.getDecoder().decode(payload.getString("data"))
+        .map { it.toInt() })
+    } finally {
+      runCatching { context.contentResolver.delete(uri, null, null) }
+      store.removeGateway(gatewayId)
+    }
+  }
+
+  @Test fun cameraOutputUsesOnlyPrivateCaptureCacheAndIsRemovedAfterSnapshot() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val gatewayId = UUID.randomUUID().toString()
+    val conversationId = UUID.randomUUID().toString()
+    val store = ChatAttachmentStore(context)
+    val uri = CameraCaptureStore.create(context)
+    try {
+      assertEquals("content", uri.scheme)
+      assertEquals("${context.packageName}.camera-capture", uri.authority)
+      assertThrows(IllegalArgumentException::class.java) {
+        FileProvider.getUriForFile(context, "${context.packageName}.camera-capture",
+          File(context.cacheDir, "outside-capture.jpg"))
+      }
+      context.contentResolver.openOutputStream(uri)!!.use { it.write(byteArrayOf(1, 2, 3)) }
+      val item = store.import(gatewayId, conversationId, uri)
+      assertEquals("image", item.type)
+      CameraCaptureStore.discard(context, uri)
+      assertThrows(Exception::class.java) { context.contentResolver.openInputStream(uri)!!.close() }
+      val wire = store.wirePayloads(gatewayId, conversationId, listOf(item)).getJSONObject(0)
+      assertEquals(listOf(1, 2, 3), Base64.getDecoder().decode(wire.getString("data"))
+        .map { it.toInt() })
+    } finally {
+      CameraCaptureStore.discard(context, uri)
+      store.removeGateway(gatewayId)
+    }
+  }
+
+  @Test fun quickSnapshotsMoveToNewConversationAndRemainEncryptedAndScoped() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val gatewayId = UUID.randomUUID().toString()
+    val quickScope = "00000000-0000-0000-0000-000000000000"
+    val conversationId = UUID.randomUUID().toString()
+    val store = ChatAttachmentStore(context)
+    try {
+      val item = store.addBytes(gatewayId, quickScope, "handoff.txt", "text/plain",
+        "retained".toByteArray())
+      assertEquals(listOf(item), store.moveAll(gatewayId, quickScope, conversationId))
+      assertEquals(emptyList<ChatAttachment>(), store.list(gatewayId, quickScope))
+      assertEquals(listOf(item), ChatAttachmentStore(context).list(gatewayId, conversationId))
+      assertEquals(listOf(item), store.moveAll(gatewayId, quickScope, conversationId))
+      val wire = store.wirePayloads(gatewayId, conversationId, listOf(item)).getJSONObject(0)
+      assertEquals("retained", String(Base64.getDecoder().decode(wire.getString("data"))))
+      assertThrows(IllegalArgumentException::class.java) {
+        store.wirePayloads(gatewayId, quickScope, listOf(item))
+      }
+    } finally { store.removeGateway(gatewayId) }
+  }
+
   @Test fun encryptedSnapshotSurvivesRecreationAndIsScopedToItsConversation() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val gatewayId = UUID.randomUUID().toString()

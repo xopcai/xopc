@@ -7,6 +7,7 @@ struct ReferencePickerView: View {
     let onSelect: (ContextReference) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @State private var kind: ContextReferenceKind
     @State private var query = ""
     @State private var items: [ReferenceItem] = []
@@ -59,7 +60,7 @@ struct ReferencePickerView: View {
             }
             .navigationTitle("添加引用")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: "搜索\(kind.title)")
+            .searchable(text: $query, prompt: searchPrompt)
             .safeAreaInset(edge: .top) {
                 Picker("引用类型", selection: $kind) {
                     ForEach(availableKinds, id: \.self) { item in
@@ -88,6 +89,12 @@ struct ReferencePickerView: View {
 
     private var selectedIDs: Set<String> {
         Set(selectedReferences.map(\.id))
+    }
+
+    private var searchPrompt: Text {
+        let format = AppLocalization.string("搜索%@", locale: locale)
+        let kindTitle = AppLocalization.resolve(kind.title, locale: locale)
+        return Text(verbatim: String(format: format, locale: locale, kindTitle))
     }
 
     private var availableKinds: [ContextReferenceKind] {
