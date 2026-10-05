@@ -37,14 +37,31 @@ struct ConversationsView: View {
                     ContentUnavailableView.search(text: state.searchText)
                 } else {
                     List {
-                        ForEach(ConversationDateSection.group(state.visibleConversations, locale: locale)) { section in
-                            Section {
-                                ForEach(section.conversations) { conversation in
-                                    conversationButton(for: conversation)
+                        if state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            ForEach(ConversationDateSection.group(state.visibleConversations, locale: locale)) { section in
+                                Section {
+                                    ForEach(section.conversations) { conversation in
+                                        conversationListRow(conversation)
+                                    }
+                                } header: {
+                                    Text(section.title)
                                 }
-                            } header: {
-                                Text(section.title)
                             }
+                        } else {
+                            ForEach(state.visibleConversations) { conversation in
+                                conversationListRow(conversation)
+                            }
+                        }
+                        if state.isLoadingMore {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .listRowSeparator(.hidden)
+                        } else if state.errorMessage != nil, state.hasMore {
+                            Button("加载更多对话") {
+                                Task { await state.loadMore(using: GatewayClient(configuration: configuration)) }
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .listRowSeparator(.hidden)
                         }
                     }
                     .listStyle(.plain)
@@ -69,7 +86,11 @@ struct ConversationsView: View {
                 .accessibilityLabel("连接设置")
             }
         }
-        .task(id: configuration) {
+        .task(id: ConversationSearchKey(configuration: configuration, query: state.searchText)) {
+            if !state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+            guard !Task.isCancelled else { return }
             await state.load(using: GatewayClient(configuration: configuration))
         }
         .alert("重命名对话", isPresented: renamePresented) {
@@ -137,6 +158,14 @@ struct ConversationsView: View {
         }
     }
 
+    private func conversationListRow(_ conversation: ConversationSummary) -> some View {
+        conversationButton(for: conversation)
+            .onAppear {
+                guard conversation.id == state.visibleConversations.last?.id else { return }
+                Task { await state.loadMore(using: GatewayClient(configuration: configuration)) }
+            }
+    }
+
     private func reload() {
         Task {
             await state.load(using: GatewayClient(configuration: configuration))
@@ -192,6 +221,11 @@ struct ConversationsView: View {
             await state.delete(target, using: GatewayClient(configuration: configuration))
         }
     }
+}
+
+private struct ConversationSearchKey: Hashable {
+    let configuration: GatewayConfiguration
+    let query: String
 }
 
 struct ConversationDateSection: Identifiable {

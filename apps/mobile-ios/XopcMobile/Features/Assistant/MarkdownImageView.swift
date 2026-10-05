@@ -6,6 +6,7 @@ struct MarkdownImageView: View {
     let source: String
     let configuration: GatewayConfiguration
     let conversationID: String?
+    var compact = false
 
     @Environment(\.displayScale) private var displayScale
     @Environment(\.locale) private var locale
@@ -27,8 +28,9 @@ struct MarkdownImageView: View {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFit()
-                        .frame(maxWidth: 360, maxHeight: 300)
-                        .frame(minWidth: 96, minHeight: 72)
+                        .frame(width: compact ? 108 : nil, height: compact ? 108 : nil)
+                        .frame(maxWidth: compact ? 108 : 360, maxHeight: compact ? 108 : 300)
+                        .frame(minWidth: compact ? 108 : 96, minHeight: compact ? 108 : 72)
                         .clipShape(.rect(cornerRadius: 10))
                 }
                 .buttonStyle(.plain)
@@ -37,7 +39,7 @@ struct MarkdownImageView: View {
             } else if isLoading {
                 Label("正在加载图片…", systemImage: "photo")
                     .foregroundStyle(.secondary)
-                    .frame(minHeight: 72)
+                    .frame(minWidth: compact ? 108 : nil, minHeight: compact ? 108 : 72)
             } else if failed {
                 HStack {
                     Label("图片无法显示", systemImage: "photo.badge.exclamationmark")
@@ -45,7 +47,7 @@ struct MarkdownImageView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(minHeight: 72)
+                .frame(minWidth: compact ? 108 : nil, minHeight: compact ? 108 : 72)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

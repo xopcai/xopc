@@ -4,7 +4,9 @@ extension AssistantState {
     static func timeline(from messages: [WireMessage]) -> [TimelineMessage] {
         messages.enumerated().compactMap { index, message in
             let text = message.content.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            let attachmentNames = message.attachments?.compactMap(\.name) ?? []
+            var seenMedia = Set<String>()
+            let attachments = ((message.media ?? []) + (message.attachments ?? []))
+                .filter { seenMedia.insert($0.id).inserted }
             let references = message.metadata?.sourceContexts?.compactMap { source -> ContextReference? in
                 guard let kind = ContextReferenceKind(rawValue: source.kind) else { return nil }
                 let title = source.title?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -16,7 +18,7 @@ extension AssistantState {
                 )
             } ?? []
             let details = message.details
-            guard !text.isEmpty || !attachmentNames.isEmpty || !references.isEmpty || !details.isEmpty,
+            guard !text.isEmpty || !attachments.isEmpty || !references.isEmpty || !details.isEmpty,
                   message.role == "user" || message.role == "assistant"
             else {
                 return nil
@@ -29,7 +31,7 @@ extension AssistantState {
                 turnId: message.turnId,
                 markdownParts: message.role == "assistant" ? MarkdownBlock.parse(text).map(MarkdownPart.init) : [],
                 details: details,
-                attachments: message.attachments ?? [],
+                attachments: attachments,
                 references: references
             )
         }

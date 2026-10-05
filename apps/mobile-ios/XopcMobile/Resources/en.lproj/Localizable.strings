@@ -714,4 +714,7 @@
 "正在转为文字…" = "Transcribing…";
 "转为文字" = "Transcribe";
 "发送语音" = "Send Audio";
+"播放语音" = "Play Voice Message";
+"停止播放语音" = "Stop Voice Message";
+"正在加载语音…" = "Loading Voice Message…";
 "没有识别出文字，请重试或发送语音" = "No speech was recognized. Try again or send the audio.";

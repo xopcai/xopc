@@ -97,6 +97,35 @@ class GatewaySessionTest {
     } finally { clear(store) }
   }
 
+  @Test fun conversationShareRequiresPreviewAndSendsHarmonySnapshotFingerprint() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val store = AndroidSecureStore(context, "conversation_share_credentials_test_v1",
+      "xopc.gateway.credentials.conversation.share.test.v1")
+    clear(store)
+    try {
+      val fake = FakeGateway()
+      val session = GatewaySession(context, fake,
+        DeviceIdentity("xopc.gateway.device.conversation.share.p256.test.v1"), store)
+      session.pair(invitation()) {}
+      val repository = ConversationRepository(session, context)
+      val id = "11111111-2222-3333-4444-555555555555"
+      val preview = repository.sharePreview(id)
+      assertEquals(2, preview.messageCount)
+      assertEquals(1, preview.attachmentCount)
+      assertEquals(0, fake.sessionShareWrites)
+      val result = repository.share(preview)
+      assertEquals("share-session-1", result.id)
+      assertEquals("https://share.example/s/session", result.url)
+      assertEquals(1, fake.sessionShareReads)
+      assertEquals(1, fake.sessionShareWrites)
+      assertThrows(IllegalArgumentException::class.java) {
+        ConversationRepository.parseConversationShare(preview,
+          """{"ok":true,"payload":{"id":"bad","kind":"session","shareUrl":"javascript:bad",
+            "reachability":"public","expiresAt":"2030-01-01T00:00:00Z"}}""")
+      }
+    } finally { clear(store) }
+  }
+
   @Test fun personalGoalWritesFollowHarmonyRequestShapeAndConfirmIdentity() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val store = AndroidSecureStore(context, "goal_credentials_test_v1", "xopc.gateway.credentials.goal.test.v1")
@@ -715,6 +744,8 @@ class GatewaySessionTest {
     val goalWrites = mutableListOf<String>()
     val assertionReadPaths = mutableListOf<String>()
     val assertionWrites = mutableListOf<String>()
+    var sessionShareReads = 0
+    var sessionShareWrites = 0
     var profileWrites = 0
     private var deviceKey: DevicePublicKey? = null
     override fun requestWithHeaders(origin: String, path: String, method: String, body: String,
@@ -1089,6 +1120,25 @@ class GatewaySessionTest {
             "transcriptId":"transcript-task","messages":[]}}"""
         path == "/api/sessions/bbbbbbbb-cccc-dddd-eeee-ffffffffffff/agent-config" && method == "GET" ->
           """{"ok":true,"payload":{"model":"test/one","configVersion":13}}"""
+        path == "/api/sessions/11111111-2222-3333-4444-555555555555/share-preview" && method == "GET" -> {
+          sessionShareReads++
+          """{"ok":true,"payload":{"transcriptId":"transcript-share","cutoffSeq":9,
+            "metadataUpdatedAt":"2026-10-05T00:00:00Z","title":"A chat","messageCount":2,
+            "attachmentCandidates":[{"id":"attachment-1"}]}}"""
+        }
+        path == "/api/sessions/11111111-2222-3333-4444-555555555555/shares" && method == "POST" -> {
+          sessionShareWrites++
+          assertEquals("transcript-share", input.getString("expectedTranscriptId"))
+          assertEquals(9L, input.getLong("expectedCutoffSeq"))
+          assertEquals("2026-10-05T00:00:00Z", input.getString("expectedMetadataUpdatedAt"))
+          assertEquals(86_400_000L, input.getLong("ttlMs"))
+          assertEquals(true, input.isNull("maxViews"))
+          assertEquals(true, input.getBoolean("includeToolActivities"))
+          assertEquals(false, input.has("attachmentIds"))
+          """{"ok":true,"payload":{"id":"share-session-1","kind":"session",
+            "shareUrl":"https://share.example/s/session","reachability":"public",
+            "expiresAt":"2030-01-01T00:00:00Z"}}"""
+        }
         path == "/api/tasks/task-2/inputs" && method == "POST" -> {
           taskInputPostCount++
           assertEquals("Task instruction", input.getString("content"))

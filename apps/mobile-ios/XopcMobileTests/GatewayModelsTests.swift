@@ -289,12 +289,30 @@ struct GatewayModelsTests {
         #expect(references.first?["sourceId"] as? String == "note-1")
         #expect(references.first?["expectedVersion"] as? String == "42")
     }
+}
 
+@MainActor
+extension GatewayModelsTests {
     @Test func encodesVersionedQueuedInputUpdate() throws {
         let data = try JSONEncoder().encode(QueuedInputUpdateCommand(version: 7, content: "Updated"))
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
         #expect(object["version"] as? Int == 7)
         #expect(object["content"] as? String == "Updated")
+    }
+
+    @Test func conversationsSearchAndPaginateOnServer() async {
+        let state = ConversationsState()
+        await state.load(using: GatewayStub())
+        #expect(state.visibleConversations.map(\.id) == ["conversation-1"])
+        #expect(state.hasMore)
+        await state.loadMore(using: GatewayStub())
+        #expect(state.visibleConversations.map(\.id) == ["conversation-1", "conversation-2"])
+
+        state.searchText = "design"
+        await state.load(using: GatewayStub())
+
+        #expect(state.visibleConversations.map(\.id) == ["conversation-2"])
+        #expect(!state.hasMore)
     }
 }

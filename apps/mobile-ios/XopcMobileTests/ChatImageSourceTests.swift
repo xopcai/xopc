@@ -47,4 +47,28 @@ struct ChatImageSourceTests {
         #expect(source?.request(configuration: configuration)?.url == nil)
         #expect(ChatImageSource.resolve("data:text/html;base64,aGVsbG8=", conversationID: nil) == nil)
     }
+
+    @MainActor @Test func chatHistoryRestoresImageAndVoiceOnlyMessages() throws {
+        let data = Data(#"""
+        [
+          {"id":"photo","role":"user","content":"","media":[{"id":"image-1","type":"image","name":"trip.png","mimeType":"image/png","size":128,"uri":"media://inbound/trip.png"}]},
+          {"id":"voice","role":"user","content":"","media":[{"id":"audio-1","type":"audio","name":"voice.m4a","mimeType":"audio/mp4","size":256,"uri":"media://inbound/voice.m4a","duration":4.2}]}
+        ]
+        """#.utf8)
+        let wire = try JSONDecoder().decode([WireMessage].self, from: data)
+        let timeline = AssistantState.timeline(from: wire)
+
+        #expect(timeline.count == 2)
+        #expect(timeline[0].attachments.first?.isImage == true)
+        #expect(timeline[0].attachments.first?.uri == "media://inbound/trip.png")
+        #expect(timeline[1].attachments.first?.isAudio == true)
+        #expect(timeline[1].attachments.first?.duration == 4.2)
+    }
+
+    @Test func legacyStringRawContentDoesNotDiscardHistory() throws {
+        let data = Data(#"{"id":"legacy","role":"assistant","content":"Done","rawContent":"Done"}"#.utf8)
+        let message = try JSONDecoder().decode(WireMessage.self, from: data)
+        #expect(message.content.text == "Done")
+        #expect(message.details.isEmpty)
+    }
 }
