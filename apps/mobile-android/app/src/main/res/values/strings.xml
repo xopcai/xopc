@@ -138,9 +138,13 @@
     <string name="assistant_message_more">More</string>
     <string name="assistant_message_detail">Message details</string>
     <string name="assistant_attachment_error">Could not add or remove this file. Check that it is readable and within the 10 MB per-file and 20 MB total limits.</string>
+    <string name="camera_capture_error">Could not open the camera. Try again or choose a photo.</string>
     <string name="assistant_attachment_remove">Remove</string>
     <string name="assistant_copy">Copy</string>
     <string name="assistant_copy_code">Copy code</string>
+    <string name="assistant_save_note">Save as note</string>
+    <string name="assistant_saved_note">Saved to Notes</string>
+    <string name="assistant_save_note_error">Could not save to Notes. Try again.</string>
     <string name="assistant_copied">Copied</string>
     <string name="assistant_execution">Execution process</string>
     <string name="assistant_execution_empty">No execution steps for this message.</string>

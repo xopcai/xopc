@@ -98,6 +98,7 @@
 "执行过程" = "Execution";
 "执行步骤" = "Execution Steps";
 "查看执行步骤" = "View Execution Steps";
+"请先打开已有对话" = "Open an existing chat first";
 "步骤" = "Steps";
 "步骤详情" = "Step Details";
 "思考过程" = "Reasoning";
@@ -316,6 +317,7 @@
 "暂停播放" = "Pause Playback";
 "未获得麦克风权限，请在系统设置中允许访问。" = "Microphone access is disabled. Allow it in Settings.";
 "打开设置" = "Open Settings";
+"录音被系统中断，已自动暂停。可以继续录音或保存当前内容。" = "Recording was interrupted and paused. You can resume or save what was recorded.";
 "无法读取录音文件" = "Unable to read the recording file";
 "文件名称" = "File Name";
 "文件夹" = "Folder";
@@ -616,6 +618,7 @@
 "助手正在执行，步骤出现后会自动更新" = "The assistant is working. Steps will update automatically.";
 "共 %lld 步 · 完成 %lld 步" = "%lld Steps · %lld Completed";
 "%lld 次" = "%lld Times";
+"1 次" = "1 Time";
 "连接成功，读取到 %lld 个助手" = "Connected. Found %lld assistants.";
 "正在使用 %@" = "Using %@";
 "错误：%@" = "Error: %@";

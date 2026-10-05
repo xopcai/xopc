@@ -6,11 +6,15 @@ on:
     branches: [main, master]
     paths:
       - "apps/mobile-android/**"
+      - "scripts/apps/mobile-native/**"
+      - "package.json"
       - ".github/workflows/mobile-android-ci.yml"
   pull_request:
     branches: [main, master]
     paths:
       - "apps/mobile-android/**"
+      - "scripts/apps/mobile-native/**"
+      - "package.json"
       - ".github/workflows/mobile-android-ci.yml"
 
 permissions:
@@ -37,4 +41,3 @@ jobs:
       - name: Test and build native Android
         working-directory: apps/mobile-android
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug
-

@@ -22,7 +22,8 @@ struct NoteSummary: Decodable, Identifiable, Hashable, Sendable {
     let attachmentNames: [String]?
 
     var displayTitle: String {
-        title?.trimmedNonEmpty ?? snippet?.trimmedNonEmpty ?? "未命名笔记"
+        title?.trimmedNonEmpty ?? snippet?.trimmedNonEmpty
+            ?? AppLocalization.string("未命名笔记", locale: AppLocalization.selectedLocale)
     }
 }
 

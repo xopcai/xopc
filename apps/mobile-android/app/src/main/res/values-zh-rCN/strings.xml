@@ -138,9 +138,13 @@
     <string name="assistant_message_more">更多</string>
     <string name="assistant_message_detail">消息详情</string>
     <string name="assistant_attachment_error">无法添加或移除此文件。请确认文件可读取，且单个文件不超过 10 MB、总大小不超过 20 MB。</string>
+    <string name="camera_capture_error">无法打开相机。请重试或选择照片。</string>
     <string name="assistant_attachment_remove">移除</string>
     <string name="assistant_copy">复制</string>
     <string name="assistant_copy_code">复制代码</string>
+    <string name="assistant_save_note">保存为笔记</string>
+    <string name="assistant_saved_note">已保存到笔记</string>
+    <string name="assistant_save_note_error">保存到笔记失败，请重试</string>
     <string name="assistant_copied">已复制</string>
     <string name="assistant_execution">执行过程</string>
     <string name="assistant_execution_empty">这条消息没有执行步骤。</string>

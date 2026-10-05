@@ -28,15 +28,18 @@ struct AutomationsView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .frame(minHeight: 44)
+                .frame(minHeight: 48)
                 .background(Color(.secondarySystemGroupedBackground), in: .capsule)
-                Button("刷新", systemImage: "arrow.clockwise") {
+                Button {
                     isSearchFocused = false
                     Task { await load() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 48, height: 48)
+                        .contentShape(.circle)
                 }
-                .labelStyle(.iconOnly)
-                .frame(width: 44, height: 44)
                 .background(Color(.secondarySystemGroupedBackground), in: .circle)
+                .accessibilityLabel("刷新")
             }
             .listRowBackground(Color.clear)
             HStack(spacing: 8) {
@@ -120,7 +123,7 @@ struct AutomationsView: View {
                 Text(title).font(.subheadline.weight(.medium))
                 Text(count, format: .number).font(.caption)
             }
-            .frame(minHeight: 44)
+            .frame(minHeight: 48)
             .padding(.horizontal, 12)
             .background(filter == value ? Color.blue.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: .capsule)
         }
@@ -223,7 +226,9 @@ struct AutomationDetailView: View {
                                     .accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text(automation.name).font(.title2.bold())
-                                    Text(automation.enabled ? "已启用" : "已暂停")
+                                    Text(automation.enabled
+                                        ? LocalizedStringResource("已启用")
+                                        : LocalizedStringResource("已暂停"))
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
                                 }
@@ -237,7 +242,10 @@ struct AutomationDetailView: View {
                                 Button {
                                     Task { await setEnabled(!automation.enabled) }
                                 } label: {
-                                    Text(automation.enabled ? "暂停" : "启用").frame(maxWidth: .infinity)
+                                    Text(automation.enabled
+                                        ? LocalizedStringResource("暂停")
+                                        : LocalizedStringResource("启用"))
+                                        .frame(maxWidth: .infinity)
                                 }
                                 .buttonStyle(.bordered)
                                 .disabled(isWorking)
@@ -249,12 +257,18 @@ struct AutomationDetailView: View {
                         let schedule = automation.trigger.schedule
                         let plan = schedule?.cronExpression ?? schedule?.onceAt
                             ?? schedule?.everyMs.map { Duration.milliseconds($0).formatted() } ?? "—"
-                        LabeledContent("计划", value: plan)
+                        AutomationDetailValueRow("计划") {
+                            Text(verbatim: plan)
+                        }
                         if let next = automation.state?.nextRunAtMs {
-                            LabeledContent("下次运行") { Text(next.millisecondsDate, format: .dateTime.month().day().hour().minute()) }
+                            AutomationDetailValueRow("下次运行") {
+                                Text(next.millisecondsDate, format: .dateTime.month().day().hour().minute())
+                            }
                         }
                         if let last = automation.state?.lastRunAtMs {
-                            LabeledContent("上次运行") { Text(last.millisecondsDate, format: .dateTime.month().day().hour().minute()) }
+                            AutomationDetailValueRow("上次运行") {
+                                Text(last.millisecondsDate, format: .dateTime.month().day().hour().minute())
+                            }
                         }
                         if let instruction = automation.action.instruction ?? automation.action.goal ?? automation.description {
                             AutomationInstructionView(instruction: instruction)
@@ -268,7 +282,9 @@ struct AutomationDetailView: View {
                     }
                     if let status = automation.state?.lastRunStatus {
                         Section("运行状态") {
-                            LabeledContent("结果") { Text(LocalizedStringKey(status)) }
+                            AutomationDetailValueRow("结果") {
+                                Text(LocalizedStringKey(status))
+                            }
                         }
                     }
                     Section("最近运行") {
@@ -365,6 +381,39 @@ struct AutomationDetailView: View {
             await load()
             openedRunID = runID
         } catch { actionError = error.localizedDescription }
+    }
+}
+
+private struct AutomationDetailValueRow<Value: View>: View {
+    let label: LocalizedStringKey
+    @ViewBuilder let value: Value
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    init(_ label: LocalizedStringKey, @ViewBuilder value: () -> Value) {
+        self.label = label
+        self.value = value()
+    }
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(label)
+                    value.foregroundStyle(.secondary)
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(label)
+                    Spacer(minLength: 12)
+                    value
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -44,9 +44,13 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onToggleArchive = gateway::toggleArchive,
             onScheduleDelete = gateway::scheduleDelete, onUndoDelete = gateway::undoDelete,
             onQuickDraftChange = gateway::changeQuickDraft, onQuickSubmit = gateway::submitQuickDraft,
+            onAddQuickAttachment = gateway::addQuickAttachment,
+            onAddCapturedQuickAttachment = gateway::addCapturedQuickAttachment,
+            onRemoveQuickAttachment = gateway::removeQuickAttachment,
             onQuickNavigationHandled = gateway::quickNavigationHandled,
             onDraftChange = gateway::changeDraft, onSendMessage = gateway::sendMessage,
             onAddDraftAttachment = gateway::addDraftAttachment,
+            onAddCapturedDraftAttachment = gateway::addCapturedDraftAttachment,
             onRemoveDraftAttachment = gateway::removeDraftAttachment,
             onRemoveDraftRef = gateway::removeDraftRef,
             onLoadReferences = gateway::loadReferences, onAddDraftRef = gateway::addDraftRef,
@@ -117,6 +121,8 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onSubmitProgressTaskSearch = gateway::submitProgressTaskSearch,
             onOpenExecution = gateway::openExecution, onRetryExecution = gateway::retryExecution,
             onCloseExecution = gateway::closeExecution,
+            onSaveMessageAsNote = gateway::saveMessageAsNote,
+            onMessageNoteFeedbackHandled = gateway::messageNoteFeedbackHandled,
             modifier = Modifier.safeDrawingPadding())
         }
       },

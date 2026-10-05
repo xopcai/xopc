@@ -46,6 +46,7 @@ final class AppState {
             try? store.save(configuration)
             return configuration
         }
+
     #endif
 
     func updateGateway(baseURL: URL, token: String) {

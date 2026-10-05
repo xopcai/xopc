@@ -64,7 +64,9 @@ struct NoteEditorView: View {
             .padding(.horizontal, 20)
             .frame(maxWidth: 720, maxHeight: .infinity)
             .frame(maxWidth: .infinity)
-            .navigationTitle(existing == nil ? "新建笔记" : "编辑笔记")
+            .navigationTitle(existing == nil
+                ? LocalizedStringResource("新建笔记")
+                : LocalizedStringResource("编辑笔记"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -112,7 +114,9 @@ struct NoteEditorView: View {
                 Button("放弃并关闭", role: .destructive) { dismiss() }
                 Button("继续编辑") { confirmsDiscard = false }
             } message: {
-                Text(persistedNote == nil ? "未保存的编辑内容和附件会丢失。" : "未保存的编辑内容和待上传附件会丢失；已保存的笔记仍保留。")
+                Text(persistedNote == nil
+                    ? LocalizedStringResource("未保存的编辑内容和附件会丢失。")
+                    : LocalizedStringResource("未保存的编辑内容和待上传附件会丢失；已保存的笔记仍保留。"))
             }
         }
     }

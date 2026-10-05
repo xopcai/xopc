@@ -10,10 +10,13 @@ struct ClarificationCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(
-                clarification.kind == "approval" ? "需要确认" : "助手需要补充信息",
-                systemImage: clarification.kind == "approval" ? "checkmark.shield" : "questionmark.bubble"
-            )
+            Label {
+                Text(clarification.kind == "approval"
+                    ? LocalizedStringResource("需要确认")
+                    : LocalizedStringResource("助手需要补充信息"))
+            } icon: {
+                Image(systemName: clarification.kind == "approval" ? "checkmark.shield" : "questionmark.bubble")
+            }
             .font(.headline)
             .foregroundStyle(.blue)
 

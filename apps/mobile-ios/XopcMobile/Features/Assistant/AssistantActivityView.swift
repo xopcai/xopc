@@ -5,6 +5,7 @@ struct AssistantActivityView: View {
     let items: [ExecutionActivityItem]
     let runID: String?
     let onOpen: () -> Void
+    @Environment(\.locale) private var locale
 
     var body: some View {
         Button(action: onOpen) {
@@ -30,7 +31,7 @@ struct AssistantActivityView: View {
         .buttonStyle(.plain)
         .disabled(items.isEmpty && runID == nil)
         .accessibilityLabel(label)
-        .accessibilityHint(items.isEmpty && runID == nil ? "" : "查看执行步骤")
+        .accessibilityHint(items.isEmpty && runID == nil ? "" : AppLocalization.string("查看执行步骤", locale: locale))
         .accessibilityIdentifier("assistant-execution-activity")
     }
 }

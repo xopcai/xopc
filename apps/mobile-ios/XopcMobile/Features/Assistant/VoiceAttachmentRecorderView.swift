@@ -20,10 +20,25 @@ struct VoiceAttachmentRecorderView: View {
                     .font(.title.monospacedDigit())
                 Text(recorder.statusText)
                     .foregroundStyle(.secondary)
+                if recorder.hasRecoverableInterruption {
+                    Text("录音被系统中断，已自动暂停。可以继续录音或保存当前内容。")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 HStack(spacing: 16) {
                     if recorder.isRecording {
-                        Button(recorder.isPaused ? "继续" : "暂停", systemImage: recorder.isPaused ? "play.fill" : "pause.fill") {
+                        Button {
                             recorder.togglePause()
+                        } label: {
+                            Label {
+                                Text(recorder.isPaused
+                                    ? LocalizedStringResource("继续")
+                                    : LocalizedStringResource("暂停"))
+                            } icon: {
+                                Image(systemName: recorder.isPaused ? "play.fill" : "pause.fill")
+                            }
                         }
                         .buttonStyle(.bordered)
                         Button("完成", systemImage: "checkmark") { complete() }
@@ -53,6 +68,9 @@ struct VoiceAttachmentRecorderView: View {
                 }
             }
             .onDisappear { recorder.cancel() }
+            .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) {
+                recorder.handleAudioInterruption($0)
+            }
         }
         .presentationDetents([.medium])
     }
@@ -70,6 +88,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
     private(set) var isRecording = false
     private(set) var isPaused = false
     private(set) var isMicrophonePermissionDenied = false
+    private(set) var hasRecoverableInterruption = false
     private(set) var duration = 0.0
     private(set) var errorMessage: String?
 
@@ -95,6 +114,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             return
         }
         isMicrophonePermissionDenied = false
+        hasRecoverableInterruption = false
         do {
             let url = FileManager.default.temporaryDirectory
                 .appending(path: "xopc-voice-\(UUID().uuidString).wav")
@@ -116,6 +136,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.duration = recorder.currentTime }
             }
+            scheduleInterruptionForUITest()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -125,6 +146,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         guard let recorder else { return }
         if isPaused {
             recorder.record()
+            hasRecoverableInterruption = false
         } else {
             recorder.pause()
         }
@@ -150,7 +172,8 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             errorMessage = "无法读取录音文件"
             return nil
         }
-        let data = CanonicalWav.normalizedPCM16Mono(recordedData)
+        let data = spokenAudioForUITest()
+            ?? CanonicalWav.normalizedPCM16Mono(recordedData)
             ?? syntheticAudioForUITest()
         guard let data else {
             errorMessage = "录音未包含可用音频"
@@ -177,11 +200,42 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         }
         isRecording = false
         isPaused = false
+        hasRecoverableInterruption = false
+    }
+
+    func handleAudioInterruption(_ notification: Notification) {
+        guard isRecording, !isPaused,
+              let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              rawType == AVAudioSession.InterruptionType.began.rawValue
+        else { return }
+        recorder?.pause()
+        isPaused = true
+        hasRecoverableInterruption = true
     }
 
     private func syntheticAudioForUITest() -> Data? {
         guard ProcessInfo.processInfo.environment["XOPC_UI_TEST_SYNTHETIC_AUDIO"] == "1" else { return nil }
         return CanonicalWav.silence(duration: max(duration, 1.2))
+    }
+
+    private func spokenAudioForUITest() -> Data? {
+        guard let encoded = ProcessInfo.processInfo.environment["XOPC_UI_TEST_SPOKEN_AUDIO_BASE64"],
+              let source = Data(base64Encoded: encoded)
+        else { return nil }
+        return CanonicalWav.normalizedPCM16Mono(source)
+    }
+
+    private func scheduleInterruptionForUITest() {
+        guard ProcessInfo.processInfo.environment["XOPC_UI_TEST_AUDIO_INTERRUPTION"] == "1" else { return }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard self?.isRecording == true else { return }
+            NotificationCenter.default.post(
+                name: AVAudioSession.interruptionNotification,
+                object: AVAudioSession.sharedInstance(),
+                userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.began.rawValue]
+            )
+        }
     }
 }
 

@@ -13,7 +13,13 @@ struct NoteAudioPlayerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button(action: togglePlayback) {
-                Label(player?.isPlaying == true ? "暂停播放" : "播放录音", systemImage: player?.isPlaying == true ? "pause.circle.fill" : "play.circle.fill")
+                Label {
+                    Text(player?.isPlaying == true
+                        ? LocalizedStringResource("暂停播放")
+                        : LocalizedStringResource("播放录音"))
+                } icon: {
+                    Image(systemName: player?.isPlaying == true ? "pause.circle.fill" : "play.circle.fill")
+                }
             }
             .disabled(isLoading)
             HStack(spacing: 8) {

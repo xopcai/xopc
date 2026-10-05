@@ -38,7 +38,7 @@ struct GatewayModelsTests {
 
         let page = try JSONDecoder().decode(ConversationPage.self, from: data)
 
-        #expect(page.items.first?.displayName == "新对话")
+        #expect(page.items.first?.displayName == AppLocalization.string("新对话", locale: AppLocalization.selectedLocale))
         #expect(page.items.first?.id == "conversation-1")
         #expect(page.hasMore == false)
     }

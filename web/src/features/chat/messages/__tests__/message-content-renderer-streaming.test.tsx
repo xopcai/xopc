@@ -131,7 +131,11 @@ describe('streaming assistant Markdown rendering', () => {
     const buttonBefore = container.querySelector<HTMLButtonElement>('button');
     const statusBefore = container.querySelector<HTMLElement>('[data-status-phase="waiting"]');
     expect(buttonBefore?.classList.contains('w-full')).toBe(true);
+    expect(buttonBefore?.classList.contains('h-11')).toBe(true);
+    expect(buttonBefore?.classList.contains('min-h-11')).toBe(false);
     expect(statusBefore).not.toBeNull();
+    expect(statusBefore?.classList.contains('truncate')).toBe(true);
+    expect(statusBefore?.classList.contains('whitespace-nowrap')).toBe(true);
 
     render([], true, false, {
       ...waiting,
@@ -141,6 +145,7 @@ describe('streaming assistant Markdown rendering', () => {
 
     expect(container.querySelector('button')).toBe(buttonBefore);
     expect(container.querySelector('[data-status-phase="thinking"]')).toBe(statusBefore);
+    expect(container.querySelector('[data-status-phase="thinking"]')?.classList.contains('truncate')).toBe(true);
   });
 
   it('hides ordinary compact activity after completion and never offers a drawer', () => {

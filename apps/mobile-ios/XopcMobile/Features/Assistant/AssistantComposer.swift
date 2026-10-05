@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AssistantComposer: View {
     @Environment(\.locale) private var locale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @Binding var draft: String
     @Binding var attachments: [MessageAttachment]
@@ -55,7 +56,7 @@ struct AssistantComposer: View {
                         onRealtimeVoice(mode)
                     }
                 )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
         .padding(.horizontal, 8)
@@ -69,10 +70,12 @@ struct AssistantComposer: View {
 
     private var activeRunActions: some View {
         HStack(spacing: 8) {
-            Text(canSteer ? "发送可加入待处理，也可立即引导当前回答" : "附件和引用会加入待处理消息")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(LocalizedStringKey(
+                canSteer ? "发送可加入待处理，也可立即引导当前回答" : "附件和引用会加入待处理消息"
+            ))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
             if canSteer {
                 Button("引导当前回答", action: onSteer)
                     .font(.caption.weight(.semibold))
@@ -116,7 +119,7 @@ struct AssistantComposer: View {
 
             Button {
                 isComposerFocused = false
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(panelAnimation) {
                     isActionPanelExpanded.toggle()
                 }
             } label: {
@@ -125,7 +128,10 @@ struct AssistantComposer: View {
                     .frame(width: 40, height: 44)
             }
             .disabled(!hasConversation)
-            .accessibilityLabel(isActionPanelExpanded ? "关闭添加面板" : "添加附件或引用")
+            .accessibilityLabel(AppLocalization.string(
+                isActionPanelExpanded ? "关闭添加面板" : "添加附件或引用",
+                locale: locale
+            ))
 
             if hasPayload {
                 Button(action: onSend) {
@@ -134,7 +140,7 @@ struct AssistantComposer: View {
                         .frame(width: 40, height: 44)
                 }
                 .disabled(!sendEnabled)
-                .accessibilityLabel(isRunActive ? "加入待处理" : "发送")
+                .accessibilityLabel(AppLocalization.string(isRunActive ? "加入待处理" : "发送", locale: locale))
                 .accessibilityIdentifier("assistant-chat-send")
             }
         }
@@ -201,7 +207,7 @@ struct AssistantComposer: View {
     }
 
     private func selectAction(_ action: AssistantAction) {
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(panelAnimation) {
             isActionPanelExpanded = false
         }
         switch action {
@@ -220,6 +226,10 @@ struct AssistantComposer: View {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !attachments.isEmpty
             || !references.isEmpty
+    }
+
+    private var panelAnimation: Animation? {
+        reduceMotion ? nil : .easeInOut(duration: 0.2)
     }
 
     private var canSteer: Bool {
@@ -293,12 +303,14 @@ private struct AssistantActionPanel: View {
                     Button {
                         onSelect(action)
                     } label: {
-                        tile(title: action.title, image: action.systemImage)
+                        tile(title: Text(action.title), image: action.systemImage)
                     }
                     .buttonStyle(.plain)
                     .disabled(action == .fileReference && !canReferenceFiles)
                     .accessibilityLabel(action.title)
-                    .accessibilityHint(action == .fileReference && !canReferenceFiles ? "发送第一条消息后可引用文件" : "")
+                    .accessibilityHint(action == .fileReference && !canReferenceFiles
+                        ? AppLocalization.string("发送第一条消息后可引用文件", locale: AppLocalization.selectedLocale)
+                        : "")
                 }
             }
             .padding(.horizontal, 8)
@@ -307,12 +319,14 @@ private struct AssistantActionPanel: View {
             HStack(alignment: .top, spacing: 8) {
                 ForEach(RealtimeVoiceMode.allCases, id: \.self) { mode in
                     Button { onRealtimeVoice(mode) } label: {
-                        tile(title: LocalizedStringKey(mode.title), image: mode == .natural ? "waveform" : "speaker.wave.2")
+                        tile(title: Text(mode.title), image: mode == .natural ? "waveform" : "speaker.wave.2")
                     }
                     .buttonStyle(.plain)
                     .disabled(!canStartRealtimeVoice)
-                    .accessibilityLabel(mode.title)
-                    .accessibilityHint(canStartRealtimeVoice ? "" : "请先打开已有对话")
+                    .accessibilityLabel(Text(mode.title))
+                    .accessibilityHint(canStartRealtimeVoice
+                        ? ""
+                        : AppLocalization.string("请先打开已有对话", locale: AppLocalization.selectedLocale))
                     .frame(maxWidth: .infinity)
                 }
                 ForEach(0 ..< 2, id: \.self) { _ in Color.clear.frame(maxWidth: .infinity) }
@@ -327,13 +341,13 @@ private struct AssistantActionPanel: View {
         .accessibilityIdentifier("assistant-action-panel")
     }
 
-    private func tile(title: LocalizedStringKey, image: String) -> some View {
+    private func tile(title: Text, image: String) -> some View {
         VStack(spacing: 7) {
             Image(systemName: image)
                 .font(.system(size: 23, weight: .regular))
                 .frame(width: 54, height: 54)
                 .background(Color(uiColor: .systemGray5), in: .rect(cornerRadius: 15))
-            Text(title)
+            title
                 .font(.caption)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
         }

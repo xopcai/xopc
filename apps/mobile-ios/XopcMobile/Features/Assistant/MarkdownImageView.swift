@@ -8,6 +8,7 @@ struct MarkdownImageView: View {
     let conversationID: String?
 
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.locale) private var locale
     @State private var image: UIImage?
     @State private var isLoading = true
     @State private var failed = false
@@ -27,10 +28,12 @@ struct MarkdownImageView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(maxWidth: 360, maxHeight: 300)
+                        .frame(minWidth: 96, minHeight: 72)
                         .clipShape(.rect(cornerRadius: 10))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(alt.isEmpty ? "预览图片" : "预览图片：\(alt)")
+                .accessibilityLabel(previewAccessibilityLabel)
+                .accessibilityIdentifier("markdown-image-preview")
             } else if isLoading {
                 Label("正在加载图片…", systemImage: "photo")
                     .foregroundStyle(.secondary)
@@ -53,10 +56,10 @@ struct MarkdownImageView: View {
                     if let image {
                         Image(uiImage: image).resizable().scaledToFit()
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .accessibilityLabel(alt.isEmpty ? "图片" : alt)
+                            .accessibilityLabel(alt.isEmpty ? AppLocalization.string("图片", locale: locale) : alt)
                     }
                 }
-                .navigationTitle(alt.isEmpty ? "图片" : alt)
+                .navigationTitle(alt.isEmpty ? AppLocalization.string("图片", locale: locale) : alt)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -65,6 +68,15 @@ struct MarkdownImageView: View {
                 }
             }
         }
+    }
+
+    private var previewAccessibilityLabel: String {
+        guard !alt.isEmpty else { return AppLocalization.string("预览图片", locale: locale) }
+        return String(
+            format: AppLocalization.string("预览图片：%@", locale: locale),
+            locale: locale,
+            alt
+        )
     }
 
     @MainActor

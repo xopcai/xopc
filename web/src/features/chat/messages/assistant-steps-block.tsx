@@ -222,6 +222,7 @@ export function AssistantStepsBlock({
   const statusPhase = pendingStatus ?? (activityBlocks.some((block) => block.type === 'tool_use' && block.status === 'running')
     ? 'tool' : activityBlocks.some((block) => block.type === 'thinking' && block.streaming)
       ? 'thinking' : activityBlocks.length > 0 ? 'organizing' : 'working');
+  const activeHeaderLabel = streamingHeaderText ?? pendingLabel ?? fallbackLabel;
 
   if (stepCount === 0 && !anyActive) {
     return null;
@@ -253,20 +254,20 @@ export function AssistantStepsBlock({
   const headerMain = anyActive ? (
     <>
       <span
-        className="xopc-chat-status-label inline-flex min-h-6 items-center [overflow-wrap:anywhere]"
+        className="block min-w-0 flex-1 truncate whitespace-nowrap"
         data-status-phase={statusPhase}
         role="status"
         aria-live="polite"
         aria-atomic="true"
       >
-        {streamingHeaderText ?? pendingLabel ?? fallbackLabel}
+        {activeHeaderLabel}
       </span>
       <StepRoundDurationText
         active={anyActive}
         startedAt={effectiveStartedAt}
         frozenMs={null}
         language={language}
-        className="ml-1.5 tabular-nums text-fg-muted"
+        className="ml-1.5 w-[8ch] shrink-0 whitespace-nowrap text-right tabular-nums text-fg-muted"
       />
     </>
   ) : (
@@ -302,15 +303,16 @@ export function AssistantStepsBlock({
         type="button"
         disabled={!showDisclosure}
         className={cn(
-          'flex min-h-11 max-w-full min-w-0 items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-fg-muted',
+          'flex max-w-full min-w-0 items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-fg-muted',
+          anyActive ? 'h-11' : 'min-h-11',
           anyActive ? 'w-full' : 'w-fit',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
         )}
         onClick={showDisclosure ? () => setUserExpanded((current) => !(current ?? autoExpanded)) : undefined}
         aria-expanded={showDisclosure ? expanded : undefined}
       >
-        <div className="min-w-0 flex-1">
-          <span className="inline-flex max-w-full flex-wrap items-baseline">
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <span className="flex h-6 w-full min-w-0 items-center">
             {headerMain}
           </span>
         </div>
