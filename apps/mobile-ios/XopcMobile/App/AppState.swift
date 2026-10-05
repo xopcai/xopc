@@ -123,6 +123,13 @@ final class AppState {
         selectedTab = .assistant
     }
 
+    func startScopedConversation(project: ProjectRecord?, executionMode: String?, agentId: String) {
+        selectedConversation = project.map {
+            .projectDraft(project: $0, executionMode: executionMode, agentId: agentId)
+        } ?? .draft(agentId: agentId)
+        selectedTab = .assistant
+    }
+
     func showConversations() {
         selectedTab = .conversations
     }

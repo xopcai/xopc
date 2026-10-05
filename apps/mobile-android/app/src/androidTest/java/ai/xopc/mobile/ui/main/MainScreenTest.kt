@@ -1616,6 +1616,33 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("conversations-share-system").assertExists()
   }
 
+  @Test fun conversationSelectionBatchesOnlySelectedRowsAndConfirmsDelete() {
+    val first = "11111111-2222-3333-4444-555555555555"
+    val second = "22222222-3333-4444-5555-666666666666"
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    var opened = 0
+    var batchIds = emptyList<String>()
+    var batchAction = ""
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Conversations, onSelectTab = {},
+        connection = ConnectionUiState(profile = profile, conversations = listOf(
+          ConversationSummary(first, "First chat", Instant.now().toString(), 2, "main"),
+          ConversationSummary(second, "Second chat", Instant.now().toString(), 2, "main"))),
+        onSelectConversation = { opened++ },
+        onBatchConversations = { ids, action -> batchIds = ids; batchAction = action })
+    }
+    composeTestRule.onNodeWithTag("conversation-row-$first").performTouchInput { longClick() }
+    composeTestRule.onNodeWithTag("select-conversation-$first").performClick()
+    composeTestRule.onNodeWithTag("conversation-row-$second").performClick()
+    composeTestRule.onNodeWithTag("conversations-batch-delete").performClick()
+    composeTestRule.runOnIdle { assert(opened == 0 && batchIds.isEmpty()) }
+    composeTestRule.onNodeWithTag("conversations-batch-delete-confirm").performClick()
+    composeTestRule.runOnIdle {
+      assert(batchIds == listOf(first, second))
+      assert(batchAction == "delete")
+    }
+  }
+
   @Test fun longPressOpensConversationActionsWithoutOpeningChat() {
     val id = "11111111-2222-3333-4444-555555555555"
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
@@ -1969,6 +1996,24 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-save-note-action").assertIsNotEnabled()
   }
 
+  @Test fun assistantMessageRegenerateUsesItsPrecedingTextTurn() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    var regenerated = ""
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(profile = profile, selectedConversationId = id,
+          realtimeStatus = "connected", messages = listOf(
+            ConversationMessage("user-1", "user", "Explain this"),
+            ConversationMessage("answer-1", "assistant", "First answer"))),
+        onRegenerateMessage = { regenerated = it; true })
+    }
+    composeTestRule.onNodeWithTag("message-more-answer-1").performClick()
+    composeTestRule.onNodeWithTag("message-regenerate-action").assertIsEnabled().performClick()
+    composeTestRule.runOnIdle { assertEquals("answer-1", regenerated) }
+    composeTestRule.onNodeWithTag("message-regenerate-action").assertDoesNotExist()
+  }
+
   @Test fun userMessageReuseFillsEditableDraftWithoutSending() {
     val id = "11111111-2222-3333-4444-555555555555"
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
@@ -2037,6 +2082,27 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
     composeTestRule.onNodeWithTag("assistant-action-camera").assertIsEnabled().performClick()
     assertEquals("camera", picked)
+  }
+
+  @Test fun assistantDraftImageOpensPreviewAndCanBeRemoved() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val item = ChatAttachment("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "image",
+      "photo.png", "image/png", 42)
+    val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = id,
+      draftAttachments = listOf(item)))
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value,
+        onPreviewDraftImage = { _, _ -> Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888) },
+        onRemoveDraftAttachment = { state.value = state.value.copy(draftAttachments = emptyList()) })
+    }
+    composeTestRule.onNodeWithTag("assistant-attachment-thumbnail-${item.id}",
+      useUnmergedTree = true).assertExists()
+    composeTestRule.onNodeWithTag("assistant-attachment-${item.id}").performClick()
+    composeTestRule.onNodeWithTag("assistant-attachment-preview-image").assertExists()
+    composeTestRule.onNodeWithTag("assistant-attachment-preview").performTouchInput { swipeDown() }
+    composeTestRule.onNodeWithTag("assistant-attachment-remove-${item.id}").performClick()
+    composeTestRule.onNodeWithTag("assistant-attachment-${item.id}").assertDoesNotExist()
   }
 
   @Test

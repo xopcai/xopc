@@ -156,9 +156,12 @@
     <string name="assistant_attachment_error">Could not add or remove this file. Check that it is readable and within the 10 MB per-file and 20 MB total limits.</string>
     <string name="camera_capture_error">Could not open the camera. Try again or choose a photo.</string>
     <string name="assistant_attachment_remove">Remove</string>
+    <string name="assistant_attachment_preview_unavailable">Image preview unavailable</string>
+    <string name="assistant_attachment_preview">Preview image</string>
     <string name="assistant_copy">Copy</string>
     <string name="assistant_copy_code">Copy code</string>
     <string name="assistant_reuse">Reuse</string>
+    <string name="assistant_regenerate">Regenerate</string>
     <string name="connection_wait_title">Connection needed</string>
     <string name="connection_wait_resuming">Resuming work</string>
     <string name="connection_wait_details">Details</string>
@@ -228,6 +231,10 @@
     <string name="conversations_undo">Undo</string>
     <string name="conversations_pending_delete">Conversation removed. Undo within 5 seconds.</string>
     <string name="conversations_delete_error">Could not delete the conversation. It has been restored to the list.</string>
+    <string name="conversations_select">Select</string>
+    <string name="conversations_selected">%1$d selected</string>
+    <string name="conversations_batch_delete_confirm">Delete %1$d selected conversations? This cannot be undone.</string>
+    <string name="conversations_batch_failed">%1$d conversations could not be changed. They remain selected for retry.</string>
     <string name="quick_composer_hint">Start a new conversation</string>
     <string name="quick_progress_hint">Ask about progress or move work forward</string>
     <string name="quick_notes_hint">Find, organize, or reference your library</string>

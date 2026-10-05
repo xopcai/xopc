@@ -1,5 +1,70 @@
 import SwiftUI
 
+struct AssistantSessionActionsView: View {
+    let configuration: GatewayConfiguration
+    let conversation: ConversationSelection?
+    let state: AssistantState
+    let onConversationUpdated: (ConversationSelection) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var showingAssistantSettings = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("会话") {
+                    NavigationLink {
+                        ConversationContextView(
+                            summary: state.contextSummary,
+                            isLoading: state.isLoadingContext,
+                            errorMessage: state.contextError,
+                            isDraft: conversation?.isDraft ?? true,
+                            onRetry: reloadContext
+                        )
+                    } label: {
+                        Label("当前上下文", systemImage: "scope")
+                    }
+
+                    if let conversation {
+                        LabeledContent("助手", value: conversation.agentId)
+                        if !conversation.isDraft {
+                            Button {
+                                showingAssistantSettings = true
+                            } label: {
+                                Label("会话设置", systemImage: "slider.horizontal.3")
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("会话信息与设置")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+            .sheet(isPresented: $showingAssistantSettings) {
+                if let conversation {
+                    AssistantOptionsView(
+                        configuration: configuration,
+                        conversation: conversation,
+                        onSave: onConversationUpdated
+                    )
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func reloadContext() {
+        guard let conversation, !conversation.isDraft else { return }
+        Task {
+            await state.loadContext(for: conversation, using: GatewayClient(configuration: configuration))
+        }
+    }
+}
+
 struct AssistantOptionsView: View {
     let configuration: GatewayConfiguration
     let conversation: ConversationSelection

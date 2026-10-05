@@ -1,6 +1,8 @@
 package ai.xopc.mobile.gateway
 
 import android.net.Uri
+import android.graphics.Bitmap
+import java.io.ByteArrayOutputStream
 import android.content.ContentValues
 import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
@@ -18,6 +20,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatAttachmentStoreTest {
+  @Test fun imagePreviewUsesEncryptedSnapshotAndConversationScope() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val gatewayId = UUID.randomUUID().toString()
+    val conversationId = UUID.randomUUID().toString()
+    val store = ChatAttachmentStore(context)
+    val image = Bitmap.createBitmap(32, 24, Bitmap.Config.ARGB_8888)
+    val bytes = ByteArrayOutputStream().also { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
+      .toByteArray()
+    try {
+      val item = store.addBytes(gatewayId, conversationId, "photo.png", "image/png", bytes)
+      val preview = ChatAttachmentStore(context).previewImage(gatewayId, conversationId, item)
+      assertEquals(32, preview?.width)
+      assertEquals(24, preview?.height)
+      assertEquals(null, store.previewImage(gatewayId, UUID.randomUUID().toString(), item))
+      store.remove(gatewayId, conversationId, item.id)
+      assertEquals(null, store.previewImage(gatewayId, conversationId, item))
+    } finally { store.removeGateway(gatewayId) }
+  }
+
   @Test fun galleryContractRequestsOnlyOneImageWithoutLibraryPermission() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val intent = ActivityResultContracts.PickVisualMedia().createIntent(context,

@@ -57,6 +57,7 @@ import ai.xopc.mobile.gateway.RealtimeClient
 import ai.xopc.mobile.gateway.RunStreamEvent
 import android.app.Application
 import android.net.Uri
+import android.graphics.Bitmap
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -254,6 +255,9 @@ data class ConnectionUiState(
   val pendingDeleteId: String? = null,
   val deleteCommitting: Boolean = false,
   val deleteActionError: Boolean = false,
+  val batchConversationBusy: Boolean = false,
+  val batchConversationFailedIds: List<String> = emptyList(),
+  val batchConversationRevision: Int = 0,
   val historyLoading: Boolean = false,
   val chatError: Boolean = false,
   val realtimeStatus: String = "offline",
@@ -2039,6 +2043,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     return current.gatewayBusy || current.pairing || current.sending || current.quickSending ||
       current.attachmentLoading || current.quickAttachmentLoading ||
       current.creatingConversation || current.modelSaving || current.deleteCommitting ||
+      current.batchConversationBusy ||
       current.personal.savingGoal || current.personal.savingProfile ||
       current.personal.assertionSaving || current.notes.draftSaving ||
       current.shares.busyId != null ||
@@ -2792,8 +2797,31 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     return true
   }
 
+  fun regenerateMessage(messageId: String): Boolean {
+    val current = mutableState.value
+    val assistantIndex = current.messages.indexOfFirst { it.id == messageId && it.role == "assistant" }
+    if (assistantIndex <= 0 || current.activeRunId != null || current.sending ||
+      current.pendingInput != null || current.realtimeStatus != "connected") return false
+    val source = current.messages.subList(0, assistantIndex).lastOrNull { it.role == "user" } ?: return false
+    if (source.text.isBlank() || source.hasNonTextContent || source.text.length > 32_000) return false
+    val id = current.selectedConversationId ?: return false
+    return sendContent(id, source.text, refsOverride = emptyList(), attachmentsOverride = emptyList(),
+      preserveDraft = true)
+  }
+
   fun addDraftAttachment(gatewayId: String, conversationId: String, uri: Uri) =
     importDraftAttachment(gatewayId, conversationId, uri, captured = false)
+
+  suspend fun previewDraftImage(conversationId: String, item: ChatAttachment): Bitmap? {
+    if (mutableState.value.selectedConversationId != conversationId ||
+      mutableState.value.profile == null) return null
+    return withContext(Dispatchers.IO) { conversations.composerImagePreview(conversationId, item) }
+  }
+
+  suspend fun previewQuickImage(item: ChatAttachment): Bitmap? {
+    if (mutableState.value.profile == null) return null
+    return withContext(Dispatchers.IO) { conversations.quickImagePreview(item) }
+  }
 
   fun addCapturedDraftAttachment(gatewayId: String, conversationId: String, uri: Uri) =
     importDraftAttachment(gatewayId, conversationId, uri, captured = true)
@@ -3229,6 +3257,66 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  fun batchConversations(ids: List<String>, action: String) {
+    if (action !in setOf("pin", "archive", "delete")) return
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: return
+    if (current.batchConversationBusy || current.pendingDeleteId != null || current.deleteCommitting ||
+      current.pinningConversationId != null || current.archivingConversationId != null ||
+      current.renamingConversation || current.sending) return
+    val targets = ids.distinct().mapNotNull { id ->
+      current.conversations.firstOrNull { it.id == id && !it.isLocalDraft }
+    }
+    if (targets.isEmpty() || (action == "delete" && targets.any {
+      it.id == current.selectedConversationId && (current.activeRunId != null || current.pendingInput != null)
+    })) return
+    mutableState.update { it.copy(batchConversationBusy = true, batchConversationFailedIds = emptyList()) }
+    viewModelScope.launch {
+      val failed = mutableListOf<String>()
+      val completed = mutableListOf<String>()
+      try {
+        for (item in targets) {
+          if (mutableState.value.profile?.gatewayId != gatewayId) break
+          try {
+            runInterruptible(Dispatchers.IO) {
+              when (action) {
+                "pin" -> if (item.status != "pinned") conversations.setPinned(item.id, true)
+                "archive" -> conversations.setArchived(item.id, item.status != "archived")
+                else -> conversations.delete(item.id)
+              }
+            }
+            completed += item.id
+          } catch (error: CancellationException) { throw error }
+          catch (_: Exception) { failed += item.id }
+        }
+        if (mutableState.value.profile?.gatewayId == gatewayId) {
+          if (action == "delete" && mutableState.value.selectedConversationId in completed) {
+            val selectedId = mutableState.value.selectedConversationId!!
+            runCatching { runInterruptible(Dispatchers.IO) { session.clearMainConversationId(selectedId) } }
+            realtime.watchRun(null)
+            mutableState.update { it.copy(selectedConversationId = null, messages = emptyList(),
+              draftText = "", draftRefs = emptyList(), draftAttachments = emptyList(),
+              activeRunId = null, liveText = "", pendingInput = null) }
+          }
+          mutableState.update { state -> state.copy(
+            conversations = state.conversations.filterNot { it.id in completed && action == "delete" }
+              .map { row -> if (row.id !in completed) row else row.copy(status = when (action) {
+                "pin" -> "pinned"
+                "archive" -> if (row.status == "archived") "active" else "archived"
+                else -> row.status
+              }) },
+            batchConversationBusy = false, batchConversationFailedIds = failed,
+            batchConversationRevision = state.batchConversationRevision + 1) }
+          // Keep failed rows from later pages visible until the user retries or changes the list.
+          if (failed.isEmpty()) loadConversations()
+        }
+      } catch (error: CancellationException) {
+        mutableState.update { it.copy(batchConversationBusy = false) }
+        throw error
+      }
+    }
+  }
+
   fun scheduleDelete(id: String) {
     val current = mutableState.value
     val item = current.conversations.firstOrNull { it.id == id && !it.isLocalDraft } ?: return
@@ -3332,9 +3420,11 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     sendContent(id, pending.content)
   }
 
-  private fun sendContent(id: String, content: String, modelPrepared: Boolean = false): Boolean {
-    val refs = mutableState.value.pendingInput?.contextRefs ?: mutableState.value.draftRefs
-    val attachments = mutableState.value.pendingInput?.attachments ?: mutableState.value.draftAttachments
+  private fun sendContent(id: String, content: String, modelPrepared: Boolean = false,
+    refsOverride: List<ConversationContextRef>? = null,
+    attachmentsOverride: List<ChatAttachment>? = null, preserveDraft: Boolean = false): Boolean {
+    val refs = refsOverride ?: mutableState.value.pendingInput?.contextRefs ?: mutableState.value.draftRefs
+    val attachments = attachmentsOverride ?: mutableState.value.pendingInput?.attachments ?: mutableState.value.draftAttachments
     if ((content.isBlank() && refs.isEmpty() && attachments.isEmpty()) ||
       mutableState.value.selectedConversationId != id || mutableState.value.sending ||
       mutableState.value.attachmentLoading ||
@@ -3353,7 +3443,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           else conversations.send(id, content, realtime.turnClaim(), refs, attachments)
         }
         if (mutableState.value.selectedConversationId == id) {
-          val clearDraft = mutableState.value.draftText == content
+          val clearDraft = !preserveDraft && mutableState.value.draftText == content
           if (clearDraft) runInterruptible(Dispatchers.IO) { conversations.saveComposerDraft(id, "") }
           mutableState.update { it.copy(sending = false, draftText = if (clearDraft) "" else it.draftText,
             draftRefs = if (clearDraft && it.draftRefs.map { ref -> ref.copy(title = "") } ==

@@ -108,6 +108,35 @@ extension GatewayClient {
         }
     }
 
+    func fetchProjectEnvironmentOptions(projectID: String) async throws -> ProjectEnvironmentOptions {
+        let response: ProjectEnvironmentOptionsResponse = try await request(
+            path: "/api/projects/\(projectID)/environment-options"
+        )
+        guard response.ok else { throw GatewayClientError.invalidResponse }
+        return response.options
+    }
+
+    func listHostDirectories(path: String) async throws -> HostDirectories {
+        let envelope: GatewayEnvelope<HostDirectories> = try await request(
+            path: "/api/host/fs/list",
+            queryItems: path.isEmpty ? [] : [URLQueryItem(name: "path", value: path)]
+        )
+        guard envelope.isSuccessful, let directories = envelope.payload else {
+            throw GatewayClientError.server(envelope.error?.message ?? "无法读取工作目录")
+        }
+        return directories
+    }
+
+    func setSessionWorkingDirectory(conversationID: String, path: String) async throws {
+        let body = try encoder.encode(WorkingDirectoryCommand(workingDirectory: path))
+        let envelope: GatewayEnvelope<SessionAgentConfiguration> = try await request(
+            path: "/api/sessions/\(conversationID)/agent-config", method: "PATCH", body: body
+        )
+        guard envelope.isSuccessful else {
+            throw GatewayClientError.server(envelope.error?.message ?? "无法更新工作目录")
+        }
+    }
+
     func renameConversation(id: String, name: String) async throws {
         let body = try encoder.encode(RenameConversationCommand(name: name))
         let _: IgnoredResponse = try await request(
