@@ -13,7 +13,7 @@ be. The time and attention this returns to life are part of the product promise.
 
 Run `pnpm run assets:brand` from the repository root after changing that source. The
 generator creates every consumable asset under `docs/public`, `web/public`,
-`apps/mobile-expo/assets`, `electron/resources`, and `packages/browser-ext/icons`.
+`electron/resources`, `packages/browser-ext/icons`, and the HarmonyOS resource catalogs.
 
 Do not edit generated files by hand. Use `pnpm run assets:brand:check` in CI or before
 committing to confirm the repository has no stale brand assets.
@@ -21,13 +21,8 @@ committing to confirm the repository has no stale brand assets.
 The generator uses four purpose-built compositions:
 
 - **UI mark:** transparent two-colour artwork that adapts to light and dark surfaces.
-- **Apple app icon:** opaque light, dark, and genuinely grayscale tinted fallbacks
-  on a restrained frosted surface. Source layers under
-  `apps/mobile-expo/assets/apple-icon-layers/` keep the background, AI segment,
-  human segment, and monochrome mark separate for Icon Composer refinement.
-- **Android adaptive icon:** separate material background, transparent two-colour
-  foreground, and monochrome layer. The mark occupies roughly 59% of the 108dp
-  canvas (about 64dp), inside Android's 66dp safe zone.
+- **HarmonyOS app icon:** a native flat launcher resource with a platform-specific
+  optical scale and safe area.
 - **Desktop / badge:** platform-specific macOS, Windows, and Linux renders. Small
   desktop sizes remove hairline decoration and enlarge the mark optically so it
   remains legible in window chrome and taskbars.

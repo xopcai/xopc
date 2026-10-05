@@ -11,16 +11,16 @@
 | `features/recordings/recordings.ts` | MMKV 列表、JS 命令互斥、前台对账 | JS 成为状态消费者；系统操作不等待 JS 存活 |
 | `widgets/ReadAloudLiveActivity.tsx` | 自定义朗读活动卡，与系统媒体控制并存 | 默认只保留系统媒体控制；去除默认重复展示 |
 | `features/voice/read-aloud-store.ts` | JS 管理分块播放及系统媒体控件 | 在使用现有播放器前提下验证后台续段，补全回放时间轴 |
-| `features/notifications/mobile-notifications.ts` | Expo push 注册至 `/api/devices/me/push` | 复用结果通知基础设施；ActivityKit token 另行管理 |
+| `features/notifications/mobile-notifications.ts` | retired cross-platform client push 注册至 `/api/devices/me/push` | 复用结果通知基础设施；ActivityKit token 另行管理 |
 | `src/discussions/` | 持久录音 job、转写、总结及状态 | 复用业务状态，增加必要的结果通知与订阅映射 |
 
-已核对安装的 `expo-widgets/ios/Widgets/AppIntent.swift`：`LiveActivityUserInteraction.perform()` 发送 WidgetsEvents 事件，没有直接调用录音引擎。因此只增加 `addUserInteractionListener` 不足以保证 JS 挂起 / 重建时的录音控制。
+历史 Widget 原型的 `LiveActivityUserInteraction.perform()` 只发送事件，没有直接调用录音引擎。因此仅增加事件监听不足以保证应用挂起或重建时的录音控制。
 
 ## 2. 架构边界
 
 ```mermaid
 flowchart TB
-  UI[React Native 页面] --> Command[原生命令入口]
+  UI[retired cross-platform client 页面] --> Command[原生命令入口]
   Lock[iOS App Intent / Android 系统操作] --> Command
   Command --> Owner[当前录音或通话控制器]
   Owner --> Journal[原生状态文件与音频回执]
@@ -35,7 +35,7 @@ flowchart TB
 
 - 本地声音以原生控制器和文件 journal 为权威；远端处理以 Discussion 数据库为权威。
 - 卡片投影只读取状态。显示计时、删除卡片均不得改变声音是否在录。
-- 单一录音控制器属于应用原生进程，不属于页面或 Expo Module 实例；模块和 App Intent 获取同一个对象。扩展进程不创建第二个录音器、不直接读取音频文件。
+- 单一录音控制器属于应用原生进程，不属于页面或 retired cross-platform client Module 实例；模块和 App Intent 获取同一个对象。扩展进程不创建第二个录音器、不直接读取音频文件。
 - 复用现有麦克风占用规则，原生补最终互斥；JS `Symbol` 只能协调运行中的 JS，不能承担系统入口权限。
 - 保留现有真实浏览器 / 手机音频格式，不引入任何旧接口适配。只有新控制路径验证后，才删除被替代的无参 stop 回调和重复卡片逻辑。
 
@@ -97,13 +97,13 @@ type RecordingCommand = {
 
 ### 5.1 录音卡原生实现
 
-采用 ActivityKit + WidgetKit SwiftUI 原生录音活动与 App Intents；在现有 Expo 工程通过项目 config plugin 管理 target / 源文件 / capabilities，不手工修改生成的 Xcode 工程。
+采用 ActivityKit + WidgetKit SwiftUI 原生录音活动与 App Intents；直接在原生 iOS 工程管理 target、源文件和 capabilities。
 
 - App 和扩展共享最小 Attributes / ContentState 定义；原生命令实现位于 App 可执行上下文。App Intent 调同一录音控制器，不能在 Widget 扩展启动音频引擎。
 - Activity 内容只放投影：不放音频、转写、凭证。静态和动态载荷总计控制在 4 KB 内 [T1]。
-- 避免直接修改 expo-widgets 依赖源码。现有 QuickEntryWidget 保留；专用录音 Widget target 需独立命名和配置，检查签名、部署下限、扩展数量及 target membership。
+- 专用录音 Widget target 需在原生 iOS 工程中独立命名和配置，并检查签名、部署下限、扩展数量及 target membership。
 - 小型状态快照可经 App Group 共享；音频保留应用私有目录。App Group 中的深链仅含不透明 ID；设备凭证留在已有安全存储。
-- iOS 16.1+ 的 Live Activity 展示与 iOS 17+ 的交互按钮分开 availability 检查；应用实际最低版本还须服从 Expo / RN 工程要求。旧展示能力只提供返回入口，不保留另一套录音业务逻辑。
+- iOS 16.1+ 的 Live Activity 展示与 iOS 17+ 的交互按钮分开 availability 检查；应用实际最低版本服从原生 iOS 工程配置。旧展示能力只提供返回入口，不保留另一套录音业务逻辑。
 - 优先评估 `AudioRecordingIntent` 对录音动作的适用性；其系统要求包括录音期间保持 Live Activity [T2]。准确可用版本以编译 SDK 声明及真机矩阵为准，不能仅凭 `LiveActivityIntent` 名称承诺允许任意后台开麦。
 - Live Activity 被关闭、未授权或显示受限时，不反复请求；App 内明确当前录音状态。不是通过无声播放来维持活动卡。
 
@@ -111,7 +111,7 @@ type RecordingCommand = {
 
 录音结束请求 end；ActivityKit 活动有最长生命周期与结束后展示上限，不把它当作无限期后台任务面板 [T1]。本产品的两小时录音上限短于系统八小时活动上限。暂停撤卡、用户移除、启动清理过期活动均与声音停止操作分开。
 
-未来 APNs 更新仅用于已由用户关注的远端处理，不用于远程开始录音。Activity push token 不等于现有 Expo push token；不能把现有 Expo token 放进 ActivityKit 推送接口。
+未来 APNs 更新仅用于已由用户关注的远端处理，不用于远程开始录音。Activity push token 不等于现有 retired cross-platform client push token；不能把现有 retired cross-platform client token 放进 ActivityKit 推送接口。
 
 ## 6. Android 实现
 
@@ -177,7 +177,7 @@ type RecordingCommand = {
 
 - T1 [Apple：Displaying live data with Live Activities](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities) — 生命周期、4 KB、后台更新边界。
 - T2 [Apple：AudioRecordingIntent](https://developer.apple.com/documentation/appintents/audiorecordingintent)；[LiveActivityIntent](https://developer.apple.com/documentation/appintents/liveactivityintent) — 系统动作与应用进程；需核对目标 SDK 可用版本。
-- T3 [Apple：交互式 Widget / Live Activity](https://developer.apple.com/documentation/widgetkit/adding-interactivity-to-widgets-and-live-activities)；[Expo SDK 56 Widgets](https://docs.expo.dev/versions/v56.0.0/sdk/widgets/) — 支持面与交互入口。
+- T3 [Apple：交互式 Widget / Live Activity](https://developer.apple.com/documentation/widgetkit/adding-interactivity-to-widgets-and-live-activities) — 支持面与交互入口。
 - T4 [Android：Live Update notifications](https://developer.android.com/develop/ui/views/notifications/live-update) — 用户主动、持续且时间敏感的场景，标准样式、资格与 OEM 差异。
 - T5 [Android：MediaSessionService](https://developer.android.com/reference/androidx/media3/session/MediaSessionService) — 媒体会话与服务生命周期。
 - T6 [Android：前台服务类型](https://developer.android.com/develop/background-work/services/fgs/service-types)；[后台启动限制](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start)。

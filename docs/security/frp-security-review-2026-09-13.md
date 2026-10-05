@@ -8,7 +8,7 @@
 
 - xopc：`8323c54b3bfa33d5596d36c8ec318e1392e7ab24` 的工作区；原有未提交 UI/文档修改未改动。
 - xopc-platform：`ecb3fb34402d5e707611c292055bbef55b33d140`。
-- 检查 Broker 注册/续期/FRP 插件、Nginx/frps 部署模板、Gateway 隧道生命周期/HTTP 鉴权/设备认证、Expo 手机客户端、Web 凭据保存。
+- 检查 Broker 注册/续期/FRP 插件、Nginx/frps 部署模板、Gateway 隧道生命周期/HTTP 鉴权/设备认证、retired cross-platform client 手机客户端、Web 凭据保存。
 - Codebase graph 工具当前未提供，使用源码检索。上游行为核对到 FRP v0.62.1 源码，不把最新版本默认值直接套到旧版本。
 - 没有通过 SSH 读取生产生效配置、访问日志、服务用户、云安全组、数据库或现有租户列表。
 
@@ -56,7 +56,7 @@ FRP v0.62.1 [NewClientTLSConfig](https://raw.githubusercontent.com/fatedier/frp/
 
 Web 后果尤其明确：[storage.ts](https://github.com/xopcai/xopc/blob/8323c54b3bfa33d5596d36c8ec318e1392e7ab24/web/src/lib/storage.ts#L6) 把长期 Gateway token 存入该 origin 的 `localStorage`。新租户能在相同 HTTPS origin 提供自己的 HTML/JS；原用户再次打开旧链接，新页面就能读取 `xopc.token`。这是同一 origin 的正常浏览器行为，不需要攻破证书或浏览器。获得 owner token 后，原 Gateway 再次可达时可用其管理员权限访问。
 
-手机同样存在绑定缺口：[apiFetch](https://github.com/xopcai/xopc/blob/8323c54b3bfa33d5596d36c8ec318e1392e7ab24/apps/mobile-expo/src/api/client.ts#L84) 向保存的 route 直接发送 Bearer token 和请求内容；[refreshCredentialsForProfile](https://github.com/xopcai/xopc/blob/8323c54b3bfa33d5596d36c8ec318e1392e7ab24/apps/mobile-expo/src/features/gateway/device-auth-session.ts#L46) 直接发送 refresh 请求，响应也不验证 Gateway 公钥签名。相比之下，[初次配对](https://github.com/xopcai/xopc/blob/8323c54b3bfa33d5596d36c8ec318e1392e7ab24/apps/mobile-expo/src/features/gateway/pair-gateway.ts#L86) 才校验 Gateway 身份。
+手机同样存在绑定缺口：[apiFetch](https://github.com/xopcai/xopc/blob/8323c54b3bfa33d5596d36c8ec318e1392e7ab24/retired mobile client/src/api/client.ts#L84) 向保存的 route 直接发送 Bearer token 和请求内容；[refreshCredentialsForProfile](https://github.com/xopcai/xopc/blob/8323c54b3bfa33d5596d36c8ec318e1392e7ab24/retired mobile client/src/features/gateway/device-auth-session.ts#L46) 直接发送 refresh 请求，响应也不验证 Gateway 公钥签名。相比之下，[初次配对](https://github.com/xopcai/xopc/blob/8323c54b3bfa33d5596d36c8ec318e1392e7ab24/retired mobile client/src/features/gateway/pair-gateway.ts#L86) 才校验 Gateway 身份。
 
 新租户可接收旧手机提交的数据、尚未过期的 access token 和 refresh 请求，并伪造普通 API 结果。不能据此声称“拿到 refresh token 就能永久登录”：refresh 需要设备私钥签名；窃取的完整有效签名请求还有短时重放风险。access token 默认寿命为 15 分钟，单独窃取后仍受过期和设备撤销约束。
 

@@ -24,7 +24,7 @@ Gateway 与 Web 已构建并通过现有重启 API 切换到新代码。浏览�
 
 移动端：全量 lint/typecheck、854 项移动端测试和 17 项 stream-client 测试通过；Android APK 已完成原生编译、签名与上传，原生策略标记检查通过，签名与线上 Android App Links association 一致，线上文件 SHA-256 与本地验证产物一致（`321a6544c8f2d78c515b2f71e3f3463545cf80ea87900e5ad1de9b4ed32a210e`）：[下载 Android APK](https://frp.xopc.ai/bin/xopc-android-0.0.54-security-20260913.apk)。iOS **0.0.54（202609131856）** 已完成归档、导出、3 个 bundle / 15 份隐私清单检查、原生策略检查和 Apple 校验，并成功上传 [TestFlight](https://appstoreconnect.apple.com/apps/6772332549/testflight/ios)。上传 delivery UUID：`d8edd6d3-05ec-4def-b2de-5786af16a020`。上传后首次查询尚未列出 build，等待 Apple 处理；上传成功不等于已向测试人员开放。旧手机安装包不支持新的签名 refresh 响应，须安装新原生包；仅刷新页面或 OTA JS 不足以升级原生上传保护。iOS 上传所用证书身份未变；使用 Apple 上已存在的 9 月 3 日有效 Associated Domains profile 替换本地旧 profile 引用，旧配置已备份。临时签名 Keychain 已清理。
 
-安装包检查发现 Expo 56 默认使用预编译原生模块，最初 APK 未包含文件系统源码补丁，已被发布检查拒绝。现显式配置 `expo.autolinking.buildFromSource=["expo-file-system"]`，同时在 Android 和 iOS 发布脚本中强制检查原生二进制内的上传策略标记；不以 JS bundle 内存在同名字符串代替原生检查。
+历史安装包检查曾发现旧客户端默认使用预编译文件系统模块，导致最初 APK 未包含上传重定向补丁，发布检查因此拒绝该产物。当前原生客户端必须在各自网络层直接验证重定向策略；不能用脚本包中的同名字符串替代二进制检查。
 
 ## 回退约束
 
@@ -35,9 +35,9 @@ B0 加密协议实验、B1/B2 均未部署；当前平台仍终结 HTTPS，不�
 
 ## 部署过程中补齐的发布防护
 
-- `expo-file-system` 两个平台强制源码编译，禁止预编译原生模块绕过补丁。
+- 原生 Android/iOS 网络实现必须拒绝不安全的上传重定向，并由整包检查验证。
 - Android APK/AAB、iOS release 和直接 IPA 上传入口均检查原生上传策略标记；最初缺补丁的 APK 被检查拒绝，没有分发。
 - iOS archive 默认遵循工程签名配置，避免自动签名工程被默认强加 Distribution identity；手动分发配置仍由现有插件和 profile 决定。
-- RN/Hermes 官方依赖经传输加速后，全部从本机独立获取官方 SHA-256 并核对；构建日志限制为当前用户可读。
+- 旧客户端运行时依赖经传输加速后，全部从本机独立获取官方 SHA-256 并核对；构建日志限制为当前用户可读。
 
 最终生产检查：Nginx / frps active、Broker online，切换后无进程重启，健康检查通过。手机真机上的语音、后台切换和弱网性能未在本次部署中验收；iOS 上传仍应保持前台。端到端加密未上线。

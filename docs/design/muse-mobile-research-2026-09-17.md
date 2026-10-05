@@ -12,7 +12,7 @@ XOPC 有条件做出更成熟、漂亮的 AI 移动体验。优先级应是：�
 
 - **O：直接观察**：用户提供的 Muse 手机截图；官方设计文章中的活动、目标、审批截图；官方产品视频页面与部分播放画面。
 - **D：官方描述**：Meta 产品页、设计文章、安全架构文章和官方演示的文字说明。能力宣称不等于实际可靠性或用户满意度。
-- **C：代码事实**：阅读 `apps/mobile-expo` 的路由、聊天、输入、成果、文件、进展、动效和主题；Web 仅用于区分端之间的现状。图谱工具在本会话不可用，使用文件检索回退。
+- **C：代码事实**：阅读 `retired mobile client` 的路由、聊天、输入、成果、文件、进展、动效和主题；Web 仅用于区分端之间的现状。图谱工具在本会话不可用，使用文件检索回退。
 - **P：提案/假设**：本文的导航方案、动效参数、指标目标、优先级和概念界面，均是给 XOPC 的建议。
 - 未登录 Muse 执行真实任务，未测量其触觉、帧率、键盘行为、弹簧曲线、断网恢复或通知到达率。演示视频播放可访问，但未完成可重复的逐帧时序测量。
 - 未在 XOPC 原生真机完成体验测试；代码能证明结构与条件，不能证明卡顿、易用性或最终视觉质量。
@@ -237,17 +237,17 @@ XOPC 当前 `ChatComposer` 将 `streaming || disabled` 视为 `runBusy`；普通
 
 相对路径均从仓库根开始：
 
-- `apps/mobile-expo/app/index.tsx`
-- `apps/mobile-expo/src/features/chat/{ChatScreen,ChatHeader,ChatNavigationDrawer,ChatComposer,MessageBubble,AssistantStepsBlock,AssistantDeliverablesCard,ProductDeliveryCard,HtmlPreviewPane}.tsx`
-- `apps/mobile-expo/src/features/chat/{chat-root-session,product-delivery,styles}.ts`
-- `apps/mobile-expo/src/features/attention/{AttentionScreen,ChatAttentionTray}.tsx`
-- `apps/mobile-expo/src/features/attention/use-attention-feed.ts`
-- `apps/mobile-expo/src/features/tasks/TaskListScreen.tsx`
-- `apps/mobile-expo/src/features/files/FilesScreen.tsx`
-- `apps/mobile-expo/src/features/file-preview/FilePreviewModal.tsx`
-- `apps/mobile-expo/src/components/BottomSheetModal.tsx`
-- `apps/mobile-expo/src/motion/{tokens,use-reduced-motion}.ts`
-- `apps/mobile-expo/src/theme/tokens.ts`
+- `retired mobile client/app/index.tsx`
+- `retired mobile client/src/features/chat/{ChatScreen,ChatHeader,ChatNavigationDrawer,ChatComposer,MessageBubble,AssistantStepsBlock,AssistantDeliverablesCard,ProductDeliveryCard,HtmlPreviewPane}.tsx`
+- `retired mobile client/src/features/chat/{chat-root-session,product-delivery,styles}.ts`
+- `retired mobile client/src/features/attention/{AttentionScreen,ChatAttentionTray}.tsx`
+- `retired mobile client/src/features/attention/use-attention-feed.ts`
+- `retired mobile client/src/features/tasks/TaskListScreen.tsx`
+- `retired mobile client/src/features/files/FilesScreen.tsx`
+- `retired mobile client/src/features/file-preview/FilePreviewModal.tsx`
+- `retired mobile client/src/components/BottomSheetModal.tsx`
+- `retired mobile client/src/motion/{tokens,use-reduced-motion}.ts`
+- `retired mobile client/src/theme/tokens.ts`
 - `web/src/components/shell/mobile-primary-nav.tsx`（仅 Web；不可代表原生导航）
 
 ## 外部来源
@@ -257,6 +257,5 @@ XOPC 当前 `ChatComposer` 将 `streaming || disabled` 视为 `runBusy`；普通
 - [S3：Meta Muse 产品与 FAQ](https://ai.meta.com/muse/)：后台工作与授权选择的官方描述。
 - [S4：How We Built Safety Into Muse](https://research.meta.ai/blog/security-and-safety-for-ai-agents-our-approach-with-muse)：接管、审批和安全实现边界；2026-09-08。
 - [S5：Apple HIG — Tab bars](https://developer.apple.com/design/human-interface-guidelines/tab-bars)：稳定导航目的地与平台约定。
-- [S6：Reanimated — Accessibility](https://docs.swmansion.com/react-native-reanimated/docs/guides/accessibility/)：减少动态效果语义。
 
 动态视觉尚需补充的实测：Muse 的键盘展开、从卡片到详情再返回、Tab 切换、活动/审批面板拖动，以及减少动态效果下的真实行为。没有这部分数据，也可以先执行上述基于代码与信息架构的改进；不能把未知动效包装为竞品结论。

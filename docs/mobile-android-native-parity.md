@@ -1,6 +1,6 @@
 # Native Android parity with HarmonyOS
 
-Status: in progress. Baseline: the current `apps/mobile-harmony/entry/src/main/ets/` implementation, not the older four-tab Expo design. Android uses the same five top-level destinations: Assistant, Conversations, Progress, Notes, Me.
+Status: in progress. Baseline: the current `apps/mobile-harmony/entry/src/main/ets/` implementation, not the older four-tab retired cross-platform client design. Android uses the same five top-level destinations: Assistant, Conversations, Progress, Notes, Me.
 
 ## Principles
 

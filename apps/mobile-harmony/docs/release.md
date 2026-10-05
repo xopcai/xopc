@@ -47,7 +47,7 @@
 
 ## 5. 停止与回退
 
-- 保持旧 iOS/Android/Expo 的协议和推送渠道兼容。新增 HarmonyOS Provider 不能将华为 token 发到 Expo。
+- 保持 Gateway 设备协议兼容。HarmonyOS Provider 仅接收华为 token；原生 iOS/Android 推送待各自 Provider 接入后再启用。
 - 推送出问题可先在客户端关闭通知并撤销对应 Gateway 注册；保留无推送的核心工作路径。
 - 客户端回退按平台允许的版本升级策略分发修复版本，不假设可直接降级安装。
 - Gateway schema 179 扩展平台约束并保留外键引用。升级前按运维流程制作一致性备份；**不**在已有新数据的数据库上直接运行逆向表重建或回装旧 schema。恢复备份会丢失备份后的写入，必须单独确认。

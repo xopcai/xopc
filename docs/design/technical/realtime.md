@@ -52,4 +52,4 @@ Session inputs enter a durable mobile outbox before the first HTTP attempt. The 
 - Ticket route: `src/gateway/hono/routes/realtime.ts`
 - Endpoint runtime: `src/endpoint-tools/`
 - Web integration: `web/src/features/gateway/gateway-realtime.ts`
-- Mobile integration: `apps/mobile-expo/src/features/gateway/use-gateway-realtime.ts`
+- Mobile integration: `retired mobile client/src/features/gateway/use-gateway-realtime.ts`

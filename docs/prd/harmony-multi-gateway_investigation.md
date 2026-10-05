@@ -5,18 +5,18 @@
 
 ## 1. 需求背景
 
-以 apps/mobile-expo 的现有实现为交互和行为基准，让鸿蒙保存多个 Gateway，并切换当前活动 Gateway。不是同时聚合多个 Gateway 的聊天和任务。
+以 retired mobile client 的现有实现为交互和行为基准，让鸿蒙保存多个 Gateway，并切换当前活动 Gateway。不是同时聚合多个 Gateway 的聊天和任务。
 
 ## 2. 涉及模块
 
-- Expo 参考：src/stores/gateway-store.ts、gateway-types.ts，src/features/gateway/GatewayListScreen.tsx、gateway-switch-service.ts。
+- retired cross-platform client 参考：src/stores/gateway-store.ts、gateway-types.ts，src/features/gateway/GatewayListScreen.tsx、gateway-switch-service.ts。
 - 鸿蒙连接：entry/src/main/ets/service/gatewaySession.ets、model/gateway.ets、viewmodel/connectionViewModel.ets。
 - 鸿蒙入口：pages/Index.ets、view/HomeView.ets、PersonalView.ets、SettingsView.ets、ChatDrawer.ets。
 - 联动：realtimeClient、聊天草稿、页面 ViewModel、文件传输、推送及通知导航。
 
 ## 3. 现有能力盘点
 
-- Expo 已有 profiles + activeGatewayId，支持保存、重命名、移除及激活；切换验证 /api/status，失败回退，并有并发尝试序号。
+- retired cross-platform client 已有 profiles + activeGatewayId，支持保存、重命名、移除及激活；切换验证 /api/status，失败回退，并有并发尝试序号。
 - 鸿蒙已有 HTTPS 路由校验、Gateway 身份验证、刷新令牌轮换日志、请求 generation 防护，可以扩展而不重写协议。
 - 鸿蒙仍使用单份 profile、refresh、refresh-attempt；disconnect 会清除设备密钥，不能用作切换操作。
 - 已有扫码和手工邀请链接入口，应复用，添加 Gateway 不能要求先移除旧连接。
@@ -36,17 +36,17 @@
 
 ## 6. 初步方案方向
 
-推荐：保存多份配置、一个活动连接，沿用 Expo 的切换验证与失败回退。设置页提供管理，聊天抽屉提供快捷切换。
+推荐：保存多份配置、一个活动连接，沿用 retired cross-platform client 的切换验证与失败回退。设置页提供管理，聊天抽屉提供快捷切换。
 
 不推荐：仅替换 URL，无法保证凭据与页面隔离；同时连接并聚合多个 Gateway 超出本次对齐范围。
 
 ## 7. 待方案论证的问题
 
-请确认按 Expo 基准交付：多份配置、单活动连接；添加、切换、重命名、移除；旧配对无损迁移；手机布局优先。UI 以现有 Expo 源码为依据，不另创设计。
+请确认按 retired cross-platform client 基准交付：多份配置、单活动连接；添加、切换、重命名、移除；旧配对无损迁移；手机布局优先。UI 以现有 retired cross-platform client 源码为依据，不另创设计。
 
 ## 8. 方案论证结论
 
-用户确认采用 Expo 的多配置、单活动连接模式，并明确要求使用本地 hvigor/CodeLinter/hdc，不配置全局 MCP。
+用户确认采用 retired cross-platform client 的多配置、单活动连接模式，并明确要求使用本地 hvigor/CodeLinter/hdc，不配置全局 MCP。
 
 ## 9. 已记录问题
 

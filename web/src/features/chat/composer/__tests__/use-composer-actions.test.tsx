@@ -66,8 +66,8 @@ describe('composer acceptance preserves drafts', () => {
       getContextRefs: () => [{
         kind: 'file',
         fileKind: 'directory',
-        sourceId: 'apps/mobile-expo',
-        title: 'mobile-expo',
+        sourceId: 'apps/mobile-ios',
+        title: 'mobile-ios',
         expectedVersion: '42',
       }],
       onSend,
@@ -79,7 +79,7 @@ describe('composer acceptance preserves drafts', () => {
       '',
       undefined,
       'off',
-      [expect.objectContaining({ kind: 'file', fileKind: 'directory', sourceId: 'apps/mobile-expo' })],
+      [expect.objectContaining({ kind: 'file', fileKind: 'directory', sourceId: 'apps/mobile-ios' })],
       { onDispatched: expect.any(Function) },
     );
   });

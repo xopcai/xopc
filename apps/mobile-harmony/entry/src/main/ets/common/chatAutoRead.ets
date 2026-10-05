@@ -14,7 +14,7 @@ export function latestChatAutoRead(rows: XopcChatRow[], conversationId: string):
   return undefined;
 }
 
-// Same completion-edge contract as Expo use-auto-read-aloud: never replay a history load.
+// Same completion-edge contract as retired cross-platform client use-auto-read-aloud: never replay a history load.
 export function advanceChatAutoRead(previous: XopcAutoReadState | undefined, conversationId: string, enabled: boolean,
   streaming: boolean, candidate?: XopcAutoReadCandidate): XopcAutoReadResult {
   if (!previous || previous.conversationId !== conversationId) {

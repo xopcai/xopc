@@ -44,7 +44,6 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:web": "pnpm -C web run build",
     "dev:web": "pnpm -C web run dev",
-    "dev:mobile:expo": "pnpm -C apps/mobile-expo start",
     "android:mobile": "pnpm run mobile:android:build",
     "ios:mobile": "pnpm run mobile:ios:build",
     "mobile:android:build": "cd apps/mobile-android && ./gradlew :app:assembleDebug",
