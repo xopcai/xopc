@@ -422,26 +422,35 @@ private struct AutomationInstructionView: View {
 
     @State private var isExpanded = false
 
+    private let previewLimit = 240
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(instruction)
-                .lineLimit(isExpanded ? nil : 6)
+            Text(verbatim: displayedInstruction)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
                 .accessibilityIdentifier("automation-definition-body")
-            Button {
-                isExpanded.toggle()
-            } label: {
-                if isExpanded {
-                    Text("收起完整内容")
-                } else {
-                    Text("展开完整内容")
+            if instruction.count > previewLimit {
+                Button {
+                    isExpanded.toggle()
+                } label: {
+                    if isExpanded {
+                        Text("收起完整内容")
+                    } else {
+                        Text("展开完整内容")
+                    }
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(.blue)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .accessibilityIdentifier("automation-definition-toggle")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.blue)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .accessibilityIdentifier("automation-definition-toggle")
         }
+    }
+
+    private var displayedInstruction: String {
+        guard !isExpanded, instruction.count > previewLimit else { return instruction }
+        return String(instruction.prefix(previewLimit)).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
     }
 }
