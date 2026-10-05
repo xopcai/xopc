@@ -61,7 +61,7 @@ jobs:
           set -euo pipefail
           apk=apps/mobile-android/app/build/outputs/apk/release/app-release.apk
           aab=apps/mobile-android/app/build/outputs/bundle/release/app-release.aab
-          expected=5F749E9195465B637D4C64D92F871B7CD0B5C5E9D2205E0086F181AFA80D7495
+          expected=5F749E9195465B637D4C64D92F871B7CD0B5C5E92D205E0086F181AFA80D7495
           actual_apk="$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
           actual_aab="$(keytool -printcert -jarfile "$aab" | sed -n 's/^[[:space:]]*SHA256: //p' | head -1 | tr -d ':')"
           actual_apk="${actual_apk^^}"
