@@ -46,9 +46,28 @@ struct RealtimeVoiceProtocolTests {
     }
 
     @Test func validatesVersionThreeEventsAndSessionFormats() throws {
-        let event = Data(#"{"protocolVersion":3,"eventId":"event-1","seq":1,"type":"session.ready","sessionId":"session-1","payload":{"connectionEpoch":2,"heartbeatIntervalMs":15000,"route":{"engine":"omni"}}}"#.utf8)
+        let event = Data(
+            #"""
+            {
+              "protocolVersion": 3, "eventId": "event-1", "seq": 1,
+              "type": "session.ready", "sessionId": "session-1",
+              "payload": { "connectionEpoch": 2, "heartbeatIntervalMs": 15000, "route": { "engine": "omni" } }
+            }
+            """#.utf8
+        )
         #expect(try RealtimeVoiceProtocol.decodeEvent(event).type == "session.ready")
-        let session = Data(#"{"sessionId":"session-1","ticket":"secret","websocketPath":"/api/voice/realtime/v3/ws","protocolVersion":3,"connectionEpoch":2,"inputFormat":{"encoding":"pcm_s16le","sampleRate":16000,"channels":1},"media":{"transport":"websocket-pcm","codec":"pcm_s16le","frameDurationMs":20},"limits":{"maxBinaryFrameBytes":65536,"maxSessionMs":300000,"idleTimeoutMs":30000},"route":{"engine":"omni"}}"#.utf8)
+        let session = Data(
+            #"""
+            {
+              "sessionId": "session-1", "ticket": "secret", "websocketPath": "/api/voice/realtime/v3/ws",
+              "protocolVersion": 3, "connectionEpoch": 2,
+              "inputFormat": { "encoding": "pcm_s16le", "sampleRate": 16000, "channels": 1 },
+              "media": { "transport": "websocket-pcm", "codec": "pcm_s16le", "frameDurationMs": 20 },
+              "limits": { "maxBinaryFrameBytes": 65536, "maxSessionMs": 300000, "idleTimeoutMs": 30000 },
+              "route": { "engine": "omni" }
+            }
+            """#.utf8
+        )
         #expect(try JSONDecoder().decode(RealtimeVoiceSession.self, from: session).supportsNativePCM)
         #expect(throws: RealtimeVoiceProtocolError.self) {
             try RealtimeVoiceProtocol.decodeEvent(Data(#"{"protocolVersion":2}"#.utf8))
@@ -56,22 +75,34 @@ struct RealtimeVoiceProtocolTests {
     }
 
     @Test func transportUsesSecureRoutesExceptDebugLoopback() throws {
-        let session = try JSONDecoder().decode(RealtimeVoiceSession.self, from: Data(#"{"sessionId":"s","ticket":"t","websocketPath":"/api/voice/realtime/v3/ws","protocolVersion":3,"connectionEpoch":1,"inputFormat":{"encoding":"pcm_s16le","sampleRate":16000,"channels":1},"media":{"transport":"websocket-pcm","codec":"pcm_s16le","frameDurationMs":20},"limits":{"maxBinaryFrameBytes":65536,"maxSessionMs":300000,"idleTimeoutMs":30000},"route":{"engine":"omni"}}"#.utf8))
+        let sessionData = Data(
+            #"""
+            {
+              "sessionId": "s", "ticket": "t", "websocketPath": "/api/voice/realtime/v3/ws",
+              "protocolVersion": 3, "connectionEpoch": 1,
+              "inputFormat": { "encoding": "pcm_s16le", "sampleRate": 16000, "channels": 1 },
+              "media": { "transport": "websocket-pcm", "codec": "pcm_s16le", "frameDurationMs": 20 },
+              "limits": { "maxBinaryFrameBytes": 65536, "maxSessionMs": 300000, "idleTimeoutMs": 30000 },
+              "route": { "engine": "omni" }
+            }
+            """#.utf8
+        )
+        let session = try JSONDecoder().decode(RealtimeVoiceSession.self, from: sessionData)
         let secure = try RealtimeVoiceTransport.webSocketRoutes(
-            origin: URL(string: "https://gateway.example.com")!, session: session
+            origin: #require(URL(string: "https://gateway.example.com")), session: session
         )
         #expect(secure.first?.scheme == "wss")
         #expect(secure.last?.query == "transport=voice-v3")
         #expect(throws: RealtimeVoiceTransportError.self) {
             try RealtimeVoiceTransport.webSocketRoutes(
-                origin: URL(string: "http://gateway.example.com")!, session: session
+                origin: #require(URL(string: "http://gateway.example.com")), session: session
             )
         }
         #if DEBUG
-        let loopback = try RealtimeVoiceTransport.webSocketRoutes(
-            origin: URL(string: "http://127.0.0.1:18790")!, session: session
-        )
-        #expect(loopback.first?.scheme == "ws")
+            let loopback = try RealtimeVoiceTransport.webSocketRoutes(
+                origin: #require(URL(string: "http://127.0.0.1:18790")), session: session
+            )
+            #expect(loopback.first?.scheme == "ws")
         #endif
     }
 }

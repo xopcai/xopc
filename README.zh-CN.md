@@ -167,7 +167,7 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 | **TUI** | `xopc` 或 `xopc tui`（远程：`xopc tui --url …`） | 全键盘、流式输出，最快终端路径 |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | 脚本、最小终端环境 |
 | **网页** | `xopc gateway` → 打开控制台地址 | 聊天、设置、日志 |
-| **手机** | [移动端 App](./apps/mobile-expo) + 网关扫码配对（[移动端 App](https://xopcai.github.io/xopc/zh/mobile-app)、[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 在 iOS/Android 上继续对话，记录文字、语音、图片和附件；Agent 仍运行在你的电脑或本地环境里 |
+| **手机** | [原生 Android 与 iOS App](./docs/design/release/mobile-build-release.md) + 网关扫码配对（[移动端 App](https://xopcai.github.io/xopc/zh/mobile-app)、[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 在 iOS/Android 上继续对话，记录文字、语音、图片和附件；Agent 仍运行在你的电脑或本地环境里 |
 | **即时通讯** | 配置 `channels.*` 并启动网关 | Telegram、微信、飞书/Lark |
 
 ---
@@ -261,7 +261,7 @@ xopc extensions dev ./my-extension
 
 **它和普通聊天 UI 有什么区别？** — 聊天只是入口。xopc 会把对你的理解、长期目标、项目、Task、决定和执行记录保留下来，让同一个助手可以跨越时间和入口继续工作。
 
-**能在手机或即时通讯里用吗？** — 可以。用 [移动端 App](./apps/mobile-expo) 扫码连接，或配置 Telegram、微信、飞书/Lark。
+**能在手机或即时通讯里用吗？** — 可以。用 [原生移动端 App](./docs/design/release/mobile-build-release.md) 扫码连接，或配置 Telegram、微信、飞书/Lark。
 
 **还有问题？** — 去 [GitHub Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a) 提问。
 

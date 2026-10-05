@@ -7,6 +7,8 @@ import android.net.Uri
 import android.widget.Toast
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ConversationSummary
+import ai.xopc.mobile.gateway.CameraCaptureStore
+import ai.xopc.mobile.gateway.CameraTakePictureContract
 import ai.xopc.mobile.gateway.ExecutionDetail
 import ai.xopc.mobile.gateway.TaskWelcomeInfo
 import ai.xopc.mobile.gateway.ProjectWelcomeInfo
@@ -15,6 +17,7 @@ import ai.xopc.mobile.gateway.NoteMetadataPatch
 import ai.xopc.mobile.gateway.PersonalAssertion
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.combinedClickable
@@ -275,9 +278,13 @@ fun MainScreen(
   onUndoDelete: () -> Unit = {},
   onQuickDraftChange: (String) -> Unit = {},
   onQuickSubmit: () -> Unit = {},
+  onAddQuickAttachment: (String, Uri) -> Unit = { _, _ -> },
+  onAddCapturedQuickAttachment: (String, Uri) -> Unit = { _, _ -> },
+  onRemoveQuickAttachment: (String) -> Unit = {},
   onQuickNavigationHandled: (String) -> Unit = {},
   onDraftChange: (String) -> Unit = {},
   onAddDraftAttachment: (String, String, Uri) -> Unit = { _, _, _ -> },
+  onAddCapturedDraftAttachment: (String, String, Uri) -> Unit = { _, _, _ -> },
   onRemoveDraftAttachment: (String) -> Unit = {},
   onRemoveDraftRef: (String, String) -> Unit = { _, _ -> },
   onLoadReferences: (String, String) -> Unit = { _, _ -> },
@@ -317,6 +324,8 @@ fun MainScreen(
   onOpenExecution: (String) -> Unit = {},
   onRetryExecution: () -> Unit = {},
   onCloseExecution: () -> Unit = {},
+  onSaveMessageAsNote: (String) -> Unit = {},
+  onMessageNoteFeedbackHandled: (MessageNoteFeedback) -> Unit = {},
   onLoadNotes: (String, String) -> Unit = { _, _ -> },
   onLoadMoreNotes: () -> Unit = {},
   onOpenNote: (String) -> Unit = {},
@@ -363,16 +372,68 @@ fun MainScreen(
 ) {
   val context = LocalContext.current
   val latestAddAttachment by rememberUpdatedState(onAddDraftAttachment)
+  val latestAddQuickAttachment by rememberUpdatedState(onAddQuickAttachment)
+  val latestAddCapturedAttachment by rememberUpdatedState(onAddCapturedDraftAttachment)
+  val latestAddCapturedQuickAttachment by rememberUpdatedState(onAddCapturedQuickAttachment)
   var pickerGatewayId by rememberSaveable { mutableStateOf<String?>(null) }
   var pickerConversationId by rememberSaveable { mutableStateOf<String?>(null) }
-  val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+  var pickerQuick by rememberSaveable { mutableStateOf(false) }
+  val handlePickedUri: (Uri?) -> Unit = { uri ->
     val gatewayId = pickerGatewayId
     val conversationId = pickerConversationId
+    val quick = pickerQuick
     pickerGatewayId = null
     pickerConversationId = null
-    if (uri != null && gatewayId != null && conversationId != null &&
-      connection.profile?.gatewayId == gatewayId && connection.selectedConversationId == conversationId) {
-      latestAddAttachment(gatewayId, conversationId, uri)
+    pickerQuick = false
+    if (uri != null && gatewayId != null && connection.profile?.gatewayId == gatewayId) {
+      if (quick) latestAddQuickAttachment(gatewayId, uri)
+      else if (conversationId != null && connection.selectedConversationId == conversationId)
+        latestAddAttachment(gatewayId, conversationId, uri)
+    }
+  }
+  val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+    handlePickedUri(it)
+  }
+  val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
+    handlePickedUri(it)
+  }
+  var cameraUri by rememberSaveable { mutableStateOf<String?>(null) }
+  var cameraGatewayId by rememberSaveable { mutableStateOf<String?>(null) }
+  var cameraConversationId by rememberSaveable { mutableStateOf<String?>(null) }
+  var cameraQuick by rememberSaveable { mutableStateOf(false) }
+  val cameraPicker = rememberLauncherForActivityResult(CameraTakePictureContract()) { saved ->
+    val uri = cameraUri?.let(Uri::parse)
+    val gatewayId = cameraGatewayId
+    val conversationId = cameraConversationId
+    val quick = cameraQuick
+    cameraUri = null
+    cameraGatewayId = null
+    cameraConversationId = null
+    cameraQuick = false
+    if (uri != null) {
+      if (saved && gatewayId != null && connection.profile?.gatewayId == gatewayId &&
+        (quick || conversationId == connection.selectedConversationId)) {
+        if (quick) latestAddCapturedQuickAttachment(gatewayId, uri)
+        else if (conversationId != null) latestAddCapturedAttachment(gatewayId, conversationId, uri)
+      } else CameraCaptureStore.discard(context, uri)
+    }
+  }
+  val launchCamera: (String, String?, Boolean) -> Unit = { gatewayId, conversationId, quick ->
+    var uri: Uri? = null
+    try {
+      uri = CameraCaptureStore.create(context)
+      cameraUri = uri.toString()
+      cameraGatewayId = gatewayId
+      cameraConversationId = conversationId
+      cameraQuick = quick
+      cameraPicker.launch(uri)
+    } catch (_: Exception) {
+      uri?.let { CameraCaptureStore.discard(context, it) }
+      cameraUri = null
+      cameraGatewayId = null
+      cameraConversationId = null
+      cameraQuick = false
+      Toast.makeText(context, R.string.camera_capture_error, Toast.LENGTH_SHORT).show()
     }
   }
   var selectedTab by rememberSaveable { mutableStateOf(HomeTab.Assistant) }
@@ -382,6 +443,12 @@ fun MainScreen(
       selectedTab = HomeTab.Assistant
       onQuickNavigationHandled(id)
     }
+  }
+  LaunchedEffect(connection.messageNoteFeedback) {
+    val feedback = connection.messageNoteFeedback ?: return@LaunchedEffect
+    Toast.makeText(context, if (feedback.saved) R.string.assistant_saved_note
+      else R.string.assistant_save_note_error, Toast.LENGTH_SHORT).show()
+    onMessageNoteFeedbackHandled(feedback)
   }
   MainContent(selectedTab = selectedTab, onSelectTab = { selectedTab = it }, connection = connection,
     onPair = onPair, onConversationSearchChange = onConversationSearchChange,
@@ -396,14 +463,35 @@ fun MainScreen(
     onToggleArchive = onToggleArchive,
     onScheduleDelete = onScheduleDelete, onUndoDelete = onUndoDelete,
     onQuickDraftChange = onQuickDraftChange, onQuickSubmit = onQuickSubmit,
+    onRemoveQuickAttachment = onRemoveQuickAttachment,
+    onPickQuickAttachment = { kind ->
+      val gatewayId = connection.profile?.gatewayId
+      if (gatewayId != null) {
+        if (kind == "camera") launchCamera(gatewayId, null, true)
+        else {
+          pickerGatewayId = gatewayId
+          pickerConversationId = null
+          pickerQuick = true
+          if (kind == "photos") photoPicker.launch(PickVisualMediaRequest(
+            ActivityResultContracts.PickVisualMedia.ImageOnly))
+          else documentPicker.launch(arrayOf("*/*"))
+        }
+      }
+    },
     onDraftChange = onDraftChange, onRemoveDraftRef = onRemoveDraftRef,
     onPickDraftAttachment = { kind ->
       val gatewayId = connection.profile?.gatewayId
       val conversationId = connection.selectedConversationId
       if (gatewayId != null && conversationId != null) {
-        pickerGatewayId = gatewayId
-        pickerConversationId = conversationId
-        documentPicker.launch(arrayOf(if (kind == "photos") "image/*" else "*/*"))
+        if (kind == "camera") launchCamera(gatewayId, conversationId, false)
+        else {
+          pickerGatewayId = gatewayId
+          pickerConversationId = conversationId
+          pickerQuick = false
+          if (kind == "photos") photoPicker.launch(PickVisualMediaRequest(
+            ActivityResultContracts.PickVisualMedia.ImageOnly))
+          else documentPicker.launch(arrayOf("*/*"))
+        }
       }
     },
     onRemoveDraftAttachment = onRemoveDraftAttachment,
@@ -435,6 +523,7 @@ fun MainScreen(
     onSubmitProgressTaskSearch = onSubmitProgressTaskSearch,
     onOpenExecution = onOpenExecution, onRetryExecution = onRetryExecution,
     onCloseExecution = onCloseExecution,
+    onSaveMessageAsNote = onSaveMessageAsNote,
     onCopyMessageText = { value ->
       (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
         .setPrimaryClip(ClipData.newPlainText(context.getString(R.string.assistant_copy), value))
@@ -496,6 +585,8 @@ internal fun MainContent(
   onUndoDelete: () -> Unit = {},
   onQuickDraftChange: (String) -> Unit = {},
   onQuickSubmit: () -> Unit = {},
+  onPickQuickAttachment: (String) -> Unit = {},
+  onRemoveQuickAttachment: (String) -> Unit = {},
   onDraftChange: (String) -> Unit = {},
   onPickDraftAttachment: (String) -> Unit = {},
   onRemoveDraftAttachment: (String) -> Unit = {},
@@ -537,6 +628,7 @@ internal fun MainContent(
   onOpenExecution: (String) -> Unit = {},
   onRetryExecution: () -> Unit = {},
   onCloseExecution: () -> Unit = {},
+  onSaveMessageAsNote: (String) -> Unit = {},
   onCopyMessageText: (String) -> Unit = {},
   onLoadNotes: (String, String) -> Unit = { _, _ -> },
   onLoadMoreNotes: () -> Unit = {},
@@ -653,7 +745,7 @@ internal fun MainContent(
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(24.dp))
             .testTag("secondary-bottom-surface")) {
             QuickComposer(connection, selectedTab, onQuickDraftChange, onQuickSubmit,
-              quickActionsOpen, { quickActionsOpen = it }, onOpenChat = {
+              quickActionsOpen, { quickActionsOpen = it }, onRemoveQuickAttachment, onOpenChat = {
                 quickActionsOpen = false
                 onCreateConversation()
                 onSelectTab(HomeTab.Assistant)
@@ -665,6 +757,12 @@ internal fun MainContent(
                 fadeOut(animationSpec = tween(180)), label = "quick-actions") {
               AssistantActionPanel(canCreate = !connection.creatingConversation && !connection.quickSending,
                 canReference = !connection.creatingConversation && !connection.quickSending,
+                canPick = !connection.quickSending && !connection.quickAttachmentLoading &&
+                  connection.quickAttachments.size < 10,
+                onPick = { kind ->
+                  quickActionsOpen = false
+                  onPickQuickAttachment(kind)
+                },
                 onOpenReference = { kind ->
                   quickActionsOpen = false
                   onCreateReferenceConversation(kind)
@@ -697,7 +795,7 @@ internal fun MainContent(
           onSendMessage, onRetryPendingInput, onStopRun,
           onReloadModels, onSelectModel, onReloadAgents, onSwitchAgent, onReloadContext,
           onOpenExecution, onRetryExecution, onCloseExecution,
-          onCopyMessageText,
+          onCopyMessageText, onSaveMessageAsNote,
           assistantActionsOpen, { assistantActionsOpen = it })
         else ConversationsScreen(connection, insets, onConversationSearchChange, onLoadMoreConversations, {
           onCreateConversation()
@@ -807,10 +905,12 @@ internal fun MainContent(
 @Composable
 private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
   onChange: (String) -> Unit, onSubmit: () -> Unit,
-  actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit, onOpenChat: () -> Unit) {
+  actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit,
+  onRemoveAttachment: (String) -> Unit, onOpenChat: () -> Unit) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
-  val canSend = connection.quickDraftText.isNotBlank() && !connection.quickSending &&
+  val hasPayload = connection.quickDraftText.isNotBlank() || connection.quickAttachments.isNotEmpty()
+  val canSend = hasPayload && !connection.quickSending && !connection.quickAttachmentLoading &&
     !connection.creatingConversation && !connection.sending && connection.realtimeStatus == "connected"
   val placeholder = when (tab) {
     HomeTab.Progress -> R.string.quick_progress_hint
@@ -822,6 +922,20 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
   val sendLabel = stringResource(R.string.quick_send)
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
     if (connection.quickError) Text(stringResource(R.string.quick_send_error), color = MaterialTheme.colorScheme.error)
+    if (connection.quickAttachmentError) Text(stringResource(R.string.assistant_attachment_error),
+      color = MaterialTheme.colorScheme.error)
+    connection.quickAttachments.forEach { item ->
+      Row(modifier = Modifier.fillMaxWidth().testTag("quick-attachment-${item.id}"),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(item.name, modifier = Modifier.weight(1f), maxLines = 1,
+          overflow = TextOverflow.Ellipsis)
+        TextButton(onClick = { onRemoveAttachment(item.id) },
+          enabled = !connection.quickSending && !connection.quickAttachmentLoading,
+          modifier = Modifier.testTag("quick-attachment-remove-${item.id}")) {
+          Text(stringResource(R.string.assistant_attachment_remove))
+        }
+      }
+    }
     Row(modifier = Modifier.fillMaxWidth()
       .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(18.dp))
       .padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -858,7 +972,7 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
         modifier = Modifier.size(48.dp).testTag("quick-actions-toggle")) {
         Text(if (actionsOpen) "×" else "+", style = MaterialTheme.typography.headlineMedium)
       }
-      if (connection.quickDraftText.isNotBlank()) {
+      if (hasPayload) {
         IconButton(onClick = onSubmit, enabled = canSend,
           modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.onSurface, CircleShape)
             .semantics { contentDescription = sendLabel }.testTag("quick-send")) {
@@ -902,10 +1016,10 @@ private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () ->
             row.forEach { (label, icon, id) ->
               val enabled = (id == "new-chat" && canCreate) ||
                 (id in setOf("reference-note", "reference-task") && canReference) ||
-                (id in setOf("photos", "local-files") && canPick)
+                (id in setOf("photos", "camera", "local-files") && canPick)
               TextButton(onClick = {
                 if (id == "new-chat") onCreateConversation()
-                else if (id in setOf("photos", "local-files")) onPick(id)
+                else if (id in setOf("photos", "camera", "local-files")) onPick(id)
                 else onOpenReference(if (id == "reference-note") "note" else "task")
               }, enabled = enabled,
                 modifier = Modifier.weight(1f).height(84.dp).testTag("$tagPrefix-action-$id"),
@@ -995,6 +1109,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onReloadContext: () -> Unit, onOpenExecution: (String) -> Unit,
   onRetryExecution: () -> Unit, onCloseExecution: () -> Unit,
   onCopyMessageText: (String) -> Unit,
+  onSaveMessageAsNote: (String) -> Unit,
   actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -1360,6 +1475,13 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         onCopyMessageText(actionsMessage.text)
       }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-copy-action")) {
         Text(stringResource(R.string.assistant_copy), modifier = Modifier.fillMaxWidth())
+      }
+      if (actionsMessage.text.isNotBlank()) TextButton(onClick = {
+        messageActionsId = null
+        onSaveMessageAsNote(actionsMessage.id)
+      }, enabled = connection.savingMessageNoteId == null,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-save-note-action")) {
+        Text(stringResource(R.string.assistant_save_note), modifier = Modifier.fillMaxWidth())
       }
       if (codeText.isNotEmpty()) TextButton(onClick = {
         messageActionsId = null

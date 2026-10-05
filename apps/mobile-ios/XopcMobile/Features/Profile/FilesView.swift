@@ -18,7 +18,7 @@ struct FilesView: View {
                     .listRowBackground(Color.clear)
                 Button("重试") { Task { await load() } }
             } else if items.isEmpty {
-                ContentUnavailableView(search.isEmpty ? "暂无文件" : "没有匹配文件", systemImage: "folder", description: Text("可在 Gateway 工作区中添加文件。"))
+                ContentUnavailableView(emptyTitle, systemImage: "folder", description: Text("可在 Gateway 工作区中添加文件。"))
                     .listRowBackground(Color.clear)
             } else {
                 ForEach(items) { item in
@@ -35,7 +35,7 @@ struct FilesView: View {
                 }
             }
         }
-        .navigationTitle(space?.title ?? "文件")
+        .navigationTitle(space?.title ?? AppLocalization.string("文件", locale: AppLocalization.selectedLocale))
         .toolbar {
             Button("刷新", systemImage: "arrow.clockwise") { Task { await load() } }
                 .disabled(isLoading)
@@ -50,6 +50,10 @@ struct FilesView: View {
         .refreshable { await load() }
         .task { await load() }
         .alert("无法读取文件", isPresented: errorBinding) { Button("重试") { Task { await load() } }; Button("取消", role: .cancel) {} } message: { Text(error ?? "未知错误") }
+    }
+
+    private var emptyTitle: LocalizedStringResource {
+        search.isEmpty ? "暂无文件" : "没有匹配文件"
     }
 
     private var errorBinding: Binding<Bool> {
@@ -147,8 +151,13 @@ private struct FileRow: View {
         Label {
             VStack(alignment: .leading, spacing: 3) {
                 Text(file.name).lineLimit(1)
-                HStack { Text(file.kind == "directory" ? "文件夹" : ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file)); Text(file.modifiedAt.millisecondsDate, format: .dateTime.month().day()) }
-                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Text(file.kind == "directory"
+                        ? AppLocalization.string("文件夹", locale: AppLocalization.selectedLocale)
+                        : ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
+                    Text(file.modifiedAt.millisecondsDate, format: .dateTime.month().day())
+                }
+                .font(.caption).foregroundStyle(.secondary)
             }
         } icon: {
             Image(systemName: file.kind == "directory" ? "folder.fill" : file.mimeType.hasPrefix("image/") ? "photo" : "doc.text")

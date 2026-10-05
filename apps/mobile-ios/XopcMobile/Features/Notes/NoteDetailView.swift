@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+// swiftlint:disable:next type_body_length
 struct NoteDetailView: View {
     let configuration: GatewayConfiguration
     let noteID: String
@@ -26,8 +27,11 @@ struct NoteDetailView: View {
             } else if let note {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        Text(note.title?.isEmpty == false ? note.title! : "未命名笔记")
-                            .font(.title.bold())
+                        if let title = note.title, !title.isEmpty {
+                            Text(verbatim: title).font(.title.bold())
+                        } else {
+                            Text("未命名笔记").font(.title.bold())
+                        }
                         if note.pinned == true {
                             Label("已置顶", systemImage: "pin.fill")
                                 .font(.caption)
@@ -39,9 +43,15 @@ struct NoteDetailView: View {
                         }
                         .font(.caption).foregroundStyle(.secondary)
                         if !note.markdown.isEmpty || note.kind != "voice" {
-                            Text(.init(note.markdown.isEmpty ? "暂无正文" : note.markdown))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
+                            Group {
+                                if note.markdown.isEmpty {
+                                    Text("暂无正文")
+                                } else {
+                                    Text(.init(note.markdown))
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
                         }
                         if let discussion {
                             DiscussionProcessingSection(
@@ -70,7 +80,11 @@ struct NoteDetailView: View {
                     .padding()
                 }
             } else {
-                ContentUnavailableView("无法打开笔记", systemImage: "exclamationmark.triangle", description: Text(error ?? "笔记不存在"))
+                ContentUnavailableView(
+                    "无法打开笔记",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(error ?? AppLocalization.string("笔记不存在", locale: AppLocalization.selectedLocale))
+                )
             }
         }
         .navigationTitle("笔记")
@@ -87,15 +101,28 @@ struct NoteDetailView: View {
                     Button("添加附件", systemImage: "paperclip") { isImportingFile = true }
                         .disabled(isUploadingFile)
                     Menu("更多", systemImage: "ellipsis.circle") {
-                        Button(note.pinned == true ? "取消置顶" : "置顶", systemImage: "pin") {
+                        Button {
                             Task { await mutate(note, pinned: note.pinned != true) }
+                        } label: {
+                            Label {
+                                Text(note.pinned == true
+                                    ? LocalizedStringResource("取消置顶")
+                                    : LocalizedStringResource("置顶"))
+                            } icon: {
+                                Image(systemName: "pin")
+                            }
                         }
-                        Button(
-                            note.status == "archived" ? "移回收件箱" : "归档",
-                            systemImage: note.status == "archived" ? "tray.and.arrow.up" : "archivebox"
-                        ) {
+                        Button {
                             Task {
                                 await mutate(note, status: note.status == "archived" ? "inbox" : "archived")
+                            }
+                        } label: {
+                            Label {
+                                Text(note.status == "archived"
+                                    ? LocalizedStringResource("移回收件箱")
+                                    : LocalizedStringResource("归档"))
+                            } icon: {
+                                Image(systemName: note.status == "archived" ? "tray.and.arrow.up" : "archivebox")
                             }
                         }
                         Button("删除", systemImage: "trash", role: .destructive) { confirmsDelete = true }
@@ -117,7 +144,7 @@ struct NoteDetailView: View {
         })) {
             Button("刷新") { Task { await load(); await monitorDiscussion() } }
             Button("好", role: .cancel) {}
-        } message: { Text(error ?? "未知错误") }
+        } message: { Text(error ?? AppLocalization.string("未知错误", locale: AppLocalization.selectedLocale)) }
         .confirmationDialog("删除这条笔记？", isPresented: $confirmsDelete, titleVisibility: .visible) {
             Button("删除", role: .destructive) { Task { await remove() } }
             Button("取消", role: .cancel) {}

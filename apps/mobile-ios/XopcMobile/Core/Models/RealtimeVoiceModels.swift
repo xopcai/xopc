@@ -26,7 +26,7 @@ enum RealtimeVoiceMode: String, CaseIterable, Sendable {
     case natural
     case assistant
 
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
         case .natural: "实时语音"
         case .assistant: "语音助手"

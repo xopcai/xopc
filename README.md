@@ -167,7 +167,7 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 | **TUI** | `xopc` or `xopc tui` (remote: `xopc tui --url …`) | Full keyboard, streaming, fastest terminal path |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | Scripts and minimal TTY |
 | **Web** | `xopc gateway` → open console URL | Chat, settings, logs in the browser |
-| **Mobile** | [mobile app](./apps/mobile-expo) + QR gateway pairing ([mobile app](https://xopcai.github.io/xopc/mobile-app), [remote access](https://xopcai.github.io/xopc/remote-access)) | Chat, record notes, and capture ideas from iOS/Android while the agent keeps running on your computer |
+| **Mobile** | [native Android and iOS apps](./docs/design/release/mobile-build-release.md) + QR gateway pairing ([mobile app](https://xopcai.github.io/xopc/mobile-app), [remote access](https://xopcai.github.io/xopc/remote-access)) | Chat, record notes, and capture ideas from iOS/Android while the agent keeps running on your computer |
 | **Messengers** | `channels.*` + gateway | Telegram, WeChat, Feishu/Lark |
 
 ---
@@ -261,7 +261,7 @@ Read the [community guide](https://xopcai.github.io/xopc/community) and [Code of
 
 **How is this different from another chat UI?** — Chat is only one surface. xopc preserves understanding, long-term goals, projects, tasks, decisions, and run history so the same assistant can continue working across time and surfaces.
 
-**Can I use it from my phone or messengers?** — Yes. Pair the [mobile app](./apps/mobile-expo) by QR code, or configure Telegram, WeChat, or Feishu/Lark via the gateway.
+**Can I use it from my phone or messengers?** — Yes. Pair the [native mobile app](./docs/design/release/mobile-build-release.md) by QR code, or configure Telegram, WeChat, or Feishu/Lark via the gateway.
 
 **Have a question?** — Ask on [GitHub Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a).
 

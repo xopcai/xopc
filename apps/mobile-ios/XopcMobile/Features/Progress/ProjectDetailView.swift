@@ -43,7 +43,8 @@ struct ProjectDetailView: View {
                                         Text(health).font(.caption).foregroundStyle(.secondary)
                                     }
                                 }
-                                Text(project.brief ?? project.description ?? "暂无项目说明")
+                                Text(project.brief ?? project.description
+                                    ?? AppLocalization.string("暂无项目说明", locale: AppLocalization.selectedLocale))
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .padding(.vertical, 8)
@@ -72,7 +73,7 @@ struct ProjectDetailView: View {
                 ProgressView("正在读取项目…")
             }
         }
-        .navigationTitle(project?.name ?? "项目详情")
+        .navigationTitle(project?.name ?? AppLocalization.string("项目详情", locale: AppLocalization.selectedLocale))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .sheet(item: $creationSheet, onDismiss: { Task { await load() } }) { sheet in
@@ -148,7 +149,7 @@ struct ProjectDetailView: View {
                                              onOpenConversation: onOpenConversation)
                     } label: {
                         ProgressRow(title: automation.name, subtitle: automation.description,
-                                    state: automation.enabled ? "已启用" : "已暂停",
+                                    state: AppLocalization.resolve(automation.enabled ? "已启用" : "已暂停"),
                                     date: automation.updatedAtMs.millisecondsDate,
                                     symbol: "clock.arrow.trianglehead.counterclockwise.rotate.90")
                     }

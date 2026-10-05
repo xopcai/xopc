@@ -90,7 +90,9 @@ struct ConversationSummary: Decodable, Equatable, Identifiable, Sendable {
 
     var displayName: String {
         let candidate = name?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return candidate?.isEmpty == false ? candidate! : "新对话"
+        return candidate?.isEmpty == false
+            ? candidate!
+            : AppLocalization.string("新对话", locale: AppLocalization.selectedLocale)
     }
 }
 

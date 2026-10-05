@@ -114,7 +114,7 @@ enum ContextReferenceKind: String, CaseIterable, Sendable {
     case task
     case file
 
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
         case .note: "笔记"
         case .task: "任务"

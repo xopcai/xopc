@@ -231,7 +231,11 @@ private struct GatewayProfileDetailView: View {
             Section("Gateway") {
                 LabeledContent("名称", value: profile.name)
                 LabeledContent("地址", value: profile.baseURL.absoluteString)
-                LabeledContent("使用状态", value: isActive ? "当前使用" : "未使用")
+                LabeledContent("使用状态") {
+                    Text(isActive
+                        ? LocalizedStringResource("当前使用")
+                        : LocalizedStringResource("未使用"))
+                }
                 Button("重命名", systemImage: "pencil", action: onRename)
             }
             Section("连接") {

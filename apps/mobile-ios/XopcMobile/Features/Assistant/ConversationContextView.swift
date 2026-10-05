@@ -6,6 +6,7 @@ struct ConversationContextView: View {
     let errorMessage: String?
     let isDraft: Bool
     let onRetry: () -> Void
+    @Environment(\.locale) private var locale
 
     var body: some View {
         List {
@@ -47,7 +48,7 @@ struct ConversationContextView: View {
         Section("工作范围") {
             ContextRow(
                 icon: "folder",
-                title: summary.work.project?.title ?? "未关联项目",
+                title: summary.work.project?.title ?? AppLocalization.string("未关联项目", locale: locale),
                 detail: summary.work.project?.id
             )
             if let task = summary.work.task {
@@ -62,7 +63,9 @@ struct ConversationContextView: View {
             Section("执行环境") {
                 ContextRow(
                     icon: environment.kind == "managed_worktree" ? "arrow.triangle.branch" : "desktopcomputer",
-                    title: environment.kind == "managed_worktree" ? "Worktree" : "本地目录",
+                    title: environment.kind == "managed_worktree"
+                        ? "Worktree"
+                        : AppLocalization.string("本地目录", locale: locale),
                     detail: environment.rootPath
                 )
                 if let branch = environment.branch {
@@ -86,7 +89,9 @@ struct ConversationContextView: View {
                     ContextRow(
                         icon: source.unavailable == true ? "doc.badge.ellipsis" : "doc.text",
                         title: source.title ?? source.id,
-                        detail: source.unavailable == true ? "来源不可用" : nil
+                        detail: source.unavailable == true
+                            ? AppLocalization.string("来源不可用", locale: locale)
+                            : nil
                     )
                 }
                 if summary.sourcesHasMore {

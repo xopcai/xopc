@@ -8,6 +8,7 @@ import ai.xopc.mobile.gateway.ConversationRepository
 import ai.xopc.mobile.gateway.ConversationSummary
 import ai.xopc.mobile.gateway.ConversationContextRef
 import ai.xopc.mobile.gateway.ChatAttachment
+import ai.xopc.mobile.gateway.CameraCaptureStore
 import ai.xopc.mobile.gateway.LocalConversationDraft
 import ai.xopc.mobile.gateway.ConversationMessage
 import ai.xopc.mobile.gateway.ExecutionDetail
@@ -218,6 +219,8 @@ data class ConnectionUiState(
   val executionDetail: ExecutionDetail? = null,
   val executionLoading: Boolean = false,
   val executionError: Boolean = false,
+  val savingMessageNoteId: String? = null,
+  val messageNoteFeedback: MessageNoteFeedback? = null,
   val conversationsLoading: Boolean = false,
   val conversationsLoadingMore: Boolean = false,
   val conversationsHasMore: Boolean = false,
@@ -248,6 +251,9 @@ data class ConnectionUiState(
   val attachmentError: Boolean = false,
   val referencePicker: ReferencePickerUiState = ReferencePickerUiState(),
   val quickDraftText: String = "",
+  val quickAttachments: List<ChatAttachment> = emptyList(),
+  val quickAttachmentLoading: Boolean = false,
+  val quickAttachmentError: Boolean = false,
   val quickSending: Boolean = false,
   val quickError: Boolean = false,
   val quickOpenedConversationId: String? = null,
@@ -282,6 +288,8 @@ data class ConnectionUiState(
   val personal: PersonalUiState = PersonalUiState(),
 )
 
+data class MessageNoteFeedback(val messageId: String, val saved: Boolean)
+
 data class ReferencePickerItem(val kind: String, val id: String, val title: String,
   val description: String, val version: String)
 data class ReferencePickerUiState(val gatewayId: String? = null, val conversationId: String? = null,
@@ -300,6 +308,9 @@ private data class PendingNoteDeletion(val gatewayId: String, val id: String,
 private data class RestoredComposer(val draft: LocalConversationDraft?, val text: String,
   val refs: List<ConversationContextRef>, val attachments: List<ChatAttachment>,
   val pending: PendingInput?)
+
+private data class RestoredGateway(val profile: GatewayProfile?, val conversationId: String?,
+  val quickDraft: String, val quickAttachments: List<ChatAttachment>, val recoveredId: String?)
 
 class GatewayViewModel(application: Application) : AndroidViewModel(application) {
   private val session = GatewaySession(application)
@@ -371,6 +382,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private var draftWriteJob: Job? = null
   private var refWriteJob: Job? = null
   private var quickDraftWriteJob: Job? = null
+  private var quickAttachmentJob: Job? = null
   private var deleteJob: Job? = null
   private val draftWriteLock = Mutex()
 
@@ -1971,6 +1983,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private fun gatewayMutationBusy(): Boolean {
     val current = mutableState.value
     return current.gatewayBusy || current.pairing || current.sending || current.quickSending ||
+      current.attachmentLoading || current.quickAttachmentLoading ||
       current.creatingConversation || current.modelSaving || current.deleteCommitting ||
       current.personal.savingGoal || current.personal.savingProfile ||
       current.personal.assertionSaving || current.notes.draftSaving ||
@@ -1985,6 +1998,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     draftWriteJob?.cancelAndJoin()
     refWriteJob?.cancelAndJoin()
     quickDraftWriteJob?.cancelAndJoin()
+    quickAttachmentJob?.join()
     noteDraftJob?.cancelAndJoin()
     noteAutoSaveJob?.cancelAndJoin()
     val current = mutableState.value
@@ -2021,10 +2035,15 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private suspend fun adoptGateway(profile: GatewayProfile?) {
     gatewayProbeGeneration++
     val profiles = withContext(Dispatchers.IO) { session.savedProfiles() }
-    val selectedId = withContext(Dispatchers.IO) { session.mainConversationId() }
+    val recovered = if (profile == null) null else withContext(Dispatchers.IO) { conversations.recoverQuickHandoff() }
+    val selectedId = recovered?.conversationId ?: withContext(Dispatchers.IO) { session.mainConversationId() }
     val quickDraft = if (profile == null) "" else withContext(Dispatchers.IO) { conversations.quickDraft() }
+    val quickAttachments = if (profile == null) emptyList() else withContext(Dispatchers.IO) {
+      conversations.quickAttachments()
+    }
     mutableState.value = ConnectionUiState(profile = profile, gatewayProfiles = profiles,
-      quickDraftText = quickDraft)
+      quickDraftText = quickDraft, quickAttachments = quickAttachments,
+      quickOpenedConversationId = recovered?.conversationId)
     if (profile != null) {
       connectRealtime()
       loadConversations()
@@ -2154,13 +2173,19 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     mutableState.update { it.copy(restoring = true, error = null) }
     viewModelScope.launch {
       try {
-        val (profile, selectedConversationId, quickDraftText) = runInterruptible(Dispatchers.IO) {
+        val (profile, selectedConversationId, quickDraftText, quickAttachments, recoveredId) = runInterruptible(Dispatchers.IO) {
           val restored = session.restore { code -> mutableState.update { it.copy(confirmationCode = code) } }
-          Triple(restored, session.mainConversationId(), if (restored != null) conversations.quickDraft() else "")
+          val recovered = if (restored != null) conversations.recoverQuickHandoff() else null
+          RestoredGateway(restored, recovered?.conversationId ?: session.mainConversationId(),
+            if (restored != null) conversations.quickDraft() else "",
+            if (restored != null) conversations.quickAttachments() else emptyList<ChatAttachment>(),
+            recovered?.conversationId)
         }
         val profiles = runInterruptible(Dispatchers.IO) { session.savedProfiles() }
         mutableState.update { it.copy(profile = profile, gatewayProfiles = profiles,
-          restoring = false, quickDraftText = quickDraftText) }
+          restoring = false, quickDraftText = quickDraftText,
+          quickAttachments = quickAttachments,
+          quickOpenedConversationId = recoveredId) }
         if (profile != null) {
           connectRealtime()
           loadConversations()
@@ -2353,6 +2378,37 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     mutableState.update { it.copy(executionMessageId = messageId, executionDetail = null,
       executionLoading = false, executionError = false) }
     loadExecution(conversationId, messageId, turnId)
+  }
+
+  fun saveMessageAsNote(messageId: String) {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: return
+    val conversationId = current.selectedConversationId ?: return
+    val message = current.messages.firstOrNull { it.id == messageId && it.role == "assistant" } ?: return
+    if (current.savingMessageNoteId != null || message.text.isBlank()) return
+    val text = message.text
+    val mutationId = UUID.nameUUIDFromBytes(
+      "$gatewayId:$conversationId:$messageId:$text".toByteArray(Charsets.UTF_8)).toString()
+    mutableState.update { it.copy(savingMessageNoteId = messageId, messageNoteFeedback = null) }
+    viewModelScope.launch {
+      val saved = try {
+        runInterruptible(Dispatchers.IO) { noteRepository.quickCaptureMessage(text, mutationId) }
+        true
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) { false }
+      mutableState.update { state ->
+        if (state.savingMessageNoteId != messageId) state
+        else state.copy(savingMessageNoteId = null,
+          messageNoteFeedback = if (state.profile?.gatewayId == gatewayId &&
+            state.selectedConversationId == conversationId) MessageNoteFeedback(messageId, saved) else null)
+      }
+    }
+  }
+
+  fun messageNoteFeedbackHandled(feedback: MessageNoteFeedback) {
+    mutableState.update { state ->
+      if (state.messageNoteFeedback == feedback) state.copy(messageNoteFeedback = null) else state
+    }
   }
 
   fun retryExecution() {
@@ -2573,10 +2629,20 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
-  fun addDraftAttachment(gatewayId: String, conversationId: String, uri: Uri) {
+  fun addDraftAttachment(gatewayId: String, conversationId: String, uri: Uri) =
+    importDraftAttachment(gatewayId, conversationId, uri, captured = false)
+
+  fun addCapturedDraftAttachment(gatewayId: String, conversationId: String, uri: Uri) =
+    importDraftAttachment(gatewayId, conversationId, uri, captured = true)
+
+  private fun importDraftAttachment(gatewayId: String, conversationId: String, uri: Uri,
+    captured: Boolean) {
     val current = mutableState.value
     if (current.profile?.gatewayId != gatewayId || current.selectedConversationId != conversationId ||
-      current.attachmentLoading || current.sending || current.pendingInput != null) return
+      current.attachmentLoading || current.sending || current.pendingInput != null) {
+      if (captured) CameraCaptureStore.discard(getApplication(), uri)
+      return
+    }
     mutableState.update { it.copy(attachmentLoading = true, attachmentError = false) }
     viewModelScope.launch {
       try {
@@ -2596,6 +2662,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           mutableState.value.selectedConversationId == conversationId) mutableState.update {
           it.copy(attachmentLoading = false, attachmentError = true)
         }
+      } finally {
+        if (captured) CameraCaptureStore.discard(getApplication(), uri)
       }
     }
   }
@@ -2772,10 +2840,69 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  fun addQuickAttachment(gatewayId: String, uri: Uri) =
+    importQuickAttachment(gatewayId, uri, captured = false)
+
+  fun addCapturedQuickAttachment(gatewayId: String, uri: Uri) =
+    importQuickAttachment(gatewayId, uri, captured = true)
+
+  private fun importQuickAttachment(gatewayId: String, uri: Uri, captured: Boolean) {
+    val current = mutableState.value
+    if (current.profile?.gatewayId != gatewayId || current.quickAttachmentLoading ||
+      current.quickSending || current.quickAttachments.size >= 10) {
+      if (captured) CameraCaptureStore.discard(getApplication(), uri)
+      return
+    }
+    mutableState.update { it.copy(quickAttachmentLoading = true, quickAttachmentError = false) }
+    quickAttachmentJob = viewModelScope.launch {
+      try {
+        val items = runInterruptible(Dispatchers.IO) {
+          conversations.addQuickAttachment(gatewayId, uri)
+          conversations.quickAttachments()
+        }
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(quickAttachments = items, quickAttachmentLoading = false)
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(quickAttachmentLoading = false, quickAttachmentError = true)
+        }
+      } finally {
+        if (captured) CameraCaptureStore.discard(getApplication(), uri)
+      }
+    }
+  }
+
+  fun removeQuickAttachment(id: String) {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: return
+    if (current.quickAttachmentLoading || current.quickSending ||
+      current.quickAttachments.none { it.id == id }) return
+    mutableState.update { it.copy(quickAttachmentLoading = true, quickAttachmentError = false) }
+    quickAttachmentJob = viewModelScope.launch {
+      try {
+        val items = runInterruptible(Dispatchers.IO) {
+          conversations.removeQuickAttachment(gatewayId, id)
+          conversations.quickAttachments()
+        }
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(quickAttachments = items, quickAttachmentLoading = false)
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(quickAttachmentLoading = false, quickAttachmentError = true)
+        }
+      }
+    }
+  }
+
   fun submitQuickDraft() {
     val current = mutableState.value
     val content = current.quickDraftText.trim()
-    if (current.profile == null || content.isEmpty() || current.quickSending || current.creatingConversation ||
+    if (current.profile == null || (content.isEmpty() && current.quickAttachments.isEmpty()) ||
+      current.quickAttachmentLoading || current.quickSending || current.creatingConversation ||
       current.sending || current.realtimeStatus != "connected") return
     mutableState.update { it.copy(quickSending = true, quickError = false) }
     viewModelScope.launch {
@@ -2784,16 +2911,15 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
         quickDraftWriteJob?.cancelAndJoin()
         val draft = runInterruptible(Dispatchers.IO) {
           conversations.saveQuickDraft(content)
-          val created = conversations.createDraft(current.defaultAgentId)
-          conversations.saveComposerDraft(created.conversationId, content)
-          conversations.saveQuickDraft("")
+          val created = conversations.stageQuickDraft(current.defaultAgentId, content)
           stagedId = created.conversationId
           conversations.prepareDraftModel(created.conversationId)
         }
         mutableState.update { it.copy(quickDraftText = "", quickSending = false,
-          quickOpenedConversationId = draft.conversationId) }
+          quickAttachments = emptyList(), quickOpenedConversationId = draft.conversationId) }
         selectConversation(draft.conversationId)
-        mutableState.update { it.copy(draftText = content, draftModelReady = true) }
+        historyJob?.join()
+        mutableState.update { it.copy(draftModelReady = true) }
         loadConversations()
         if (!sendContent(draft.conversationId, content, modelPrepared = true)) {
           mutableState.update { it.copy(sendError = true) }
@@ -2803,6 +2929,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       } catch (_: Exception) {
         mutableState.update { it.copy(quickSending = false, quickError = true,
           quickDraftText = if (stagedId != null) "" else it.quickDraftText,
+          quickAttachments = if (stagedId != null) emptyList() else it.quickAttachments,
           quickOpenedConversationId = stagedId ?: it.quickOpenedConversationId) }
         stagedId?.let(::selectConversation)
         loadConversations()

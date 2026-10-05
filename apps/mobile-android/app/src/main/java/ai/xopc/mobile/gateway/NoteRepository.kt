@@ -44,6 +44,16 @@ class NoteRepository(private val gateway: GatewaySession) {
     return parseDetail(row.getString("id"), result)
   }
 
+  fun quickCaptureMessage(text: String, mutationId: String): String {
+    require(text.isNotBlank() && text.length <= 2_000_000 &&
+      text.toByteArray(Charsets.UTF_8).size <= 4_500_000) { "INVALID_NOTE_CAPTURE" }
+    require(mutationId.matches(Regex("[0-9a-fA-F-]{36}"))) { "INVALID_NOTE_MUTATION_ID" }
+    val body = JSONObject().put("text", text).put("channel", "app").put("platform", "android")
+    val result = gateway.request("/api/notes/quick-capture", "POST", body.toString(),
+      mapOf("Idempotency-Key" to mutationId))
+    return JSONObject(result).getJSONObject("note").getString("id").also(::requireValidId)
+  }
+
   fun sync(draft: NoteDraft): NoteSyncResult {
     requireValidId(draft.id)
     require(!draft.id.startsWith("local-") && draft.baseRemoteVersion > 0) { "INVALID_NOTE_SYNC" }

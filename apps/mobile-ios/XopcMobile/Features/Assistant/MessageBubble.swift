@@ -40,8 +40,16 @@ struct MessageBubble: View {
                     .contentShape(.rect)
                     .accessibilityIdentifier("chat-save-note-\(message.id)")
                     if !ChatSpeechText.chunks(from: message.text).isEmpty {
-                        Button(readAloud.sourceID == message.id && readAloud.state == .playing ? "暂停朗读" : "朗读", systemImage: "speaker.wave.2") {
+                        Button {
                             readAloud.toggle(id: message.id, text: message.text, locale: locale, gateway: GatewayClient(configuration: configuration))
+                        } label: {
+                            Label {
+                                Text(readAloud.sourceID == message.id && readAloud.state == .playing
+                                    ? LocalizedStringResource("暂停朗读")
+                                    : LocalizedStringResource("朗读"))
+                            } icon: {
+                                Image(systemName: "speaker.wave.2")
+                            }
                         }
                         .frame(width: 40, height: 40)
                         .contentShape(.rect)
@@ -122,7 +130,7 @@ struct MessageBubble: View {
                         .padding(.horizontal, 10)
                         .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
                         .background(.background, in: .rect(cornerRadius: 10))
-                        .accessibilityLabel("引用\(reference.kind.title)：\(reference.title)")
+                        .accessibilityLabel(referenceAccessibilityLabel(reference))
                 }
             }
         }
@@ -134,7 +142,7 @@ struct MessageBubble: View {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(message.attachments) { attachment in
                     Label(
-                        attachment.name ?? "附件",
+                        attachment.name ?? AppLocalization.string("附件", locale: locale),
                         systemImage: attachment.mimeType?.hasPrefix("image/") == true ? "photo" : "doc"
                     )
                     .font(.caption)
@@ -145,6 +153,16 @@ struct MessageBubble: View {
                 }
             }
         }
+    }
+
+    private func referenceAccessibilityLabel(_ reference: ContextReference) -> String {
+        let format = AppLocalization.string("引用%@：%@", locale: locale)
+        return String(
+            format: format,
+            locale: locale,
+            AppLocalization.resolve(reference.kind.title, locale: locale),
+            reference.title
+        )
     }
 
     @MainActor

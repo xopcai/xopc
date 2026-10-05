@@ -37,8 +37,11 @@ struct MessageDetailView: View {
                     if !message.markdownParts.isEmpty {
                         MarkdownBodyView(parts: message.markdownParts, configuration: configuration, conversationID: conversationID)
                             .padding(.vertical, 22)
+                    } else if message.text.isEmpty {
+                        Text("无文本内容")
+                            .padding(.vertical, 22)
                     } else {
-                        Text(message.text.isEmpty ? "无文本内容" : message.text)
+                        Text(verbatim: message.text)
                             .textSelection(.enabled)
                             .padding(.vertical, 22)
                     }
@@ -57,16 +60,23 @@ struct MessageDetailView: View {
                         Text("附件").font(.headline).padding(.top, 18)
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(message.attachments) { attachment in
-                                Label(attachment.name ?? "附件", systemImage: "paperclip")
+                                Label(
+                                    attachment.name ?? AppLocalization.string("附件", locale: AppLocalization.selectedLocale),
+                                    systemImage: "paperclip"
+                                )
                             }
                         }
                         .padding(.vertical, 14)
                     }
                     Divider()
                     HStack {
-                        Text(message.role == "assistant" ? "AI 回复" : "我的消息")
+                        Text(message.role == "assistant"
+                            ? LocalizedStringResource("AI 回复")
+                            : LocalizedStringResource("我的消息"))
                         Spacer()
-                        Text(message.isPending ? "发送中" : "已完成")
+                        Text(message.isPending
+                            ? LocalizedStringResource("发送中")
+                            : LocalizedStringResource("已完成"))
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -143,7 +153,7 @@ struct ExecutionProcessView: View {
                 if detail != nil, !groups.isEmpty {
                     HStack(spacing: 8) {
                         Image(systemName: isLive ? "circle.dotted" : hasUnresolvedSteps ? "exclamationmark.circle" : "checkmark.circle")
-                        Text(isLive ? "执行中" : hasUnresolvedSteps ? "执行已结束" : "已完成").fontWeight(.medium)
+                        Text(executionStatusTitle).fontWeight(.medium)
                         Spacer(minLength: 8)
                         Text("共 \(toolCount) 步 · 完成 \(completedCount) 步")
                             .font(.caption).foregroundStyle(.secondary)
@@ -201,6 +211,13 @@ struct ExecutionProcessView: View {
         groups.contains { ["error", "stopped"].contains($0.status) }
     }
 
+    private var executionStatusTitle: LocalizedStringResource {
+        if isLive {
+            return "执行中"
+        }
+        return hasUnresolvedSteps ? "执行已结束" : "已完成"
+    }
+
     @MainActor private func poll() async {
         var settledPolls = 0
         while !Task.isCancelled {
@@ -243,6 +260,20 @@ private struct ExecutionToolGroupView: View {
         ExecutionCategory.title(group.category)
     }
 
+    private var accessibilityLabel: String {
+        let locale = AppLocalization.selectedLocale
+        let count = if group.steps.count == 1 {
+            AppLocalization.string("1 次", locale: locale)
+        } else {
+            String(
+                format: AppLocalization.string("%lld 次", locale: locale),
+                locale: locale,
+                Int64(group.steps.count)
+            )
+        }
+        return "\(title), \(count)"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
@@ -283,7 +314,7 @@ private struct ExecutionToolGroupView: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(title)，\(group.steps.count) 次")
+            .accessibilityLabel(accessibilityLabel)
             if group.steps.count == 1, let failure = group.steps[0].failure {
                 Text(failure).font(.caption).foregroundStyle(.red)
                     .textSelection(.enabled).padding(.leading, 46)

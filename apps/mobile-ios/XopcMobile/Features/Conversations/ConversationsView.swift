@@ -14,43 +14,50 @@ struct ConversationsView: View {
     @State private var deleteTarget: ConversationSummary?
 
     var body: some View {
-        Group {
-            if state.isLoading, state.conversations.isEmpty {
-                ProgressView("正在读取对话…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage = state.errorMessage, state.conversations.isEmpty {
-                ContentUnavailableView {
-                    Label("无法读取对话", systemImage: "network.slash")
-                } description: {
-                    Text(errorMessage)
-                } actions: {
-                    Button("连接设置", action: onOpenSettings)
-                    Button("重试") { reload() }
-                }
-            } else if state.visibleConversations.isEmpty {
-                ContentUnavailableView.search(text: state.searchText)
-            } else {
-                List {
-                    ForEach(ConversationDateSection.group(state.visibleConversations, locale: locale)) { section in
-                        Section {
-                            ForEach(section.conversations) { conversation in
-                                conversationButton(for: conversation)
+        VStack(spacing: 0) {
+            conversationSearchField
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+
+            Group {
+                if state.isLoading, state.conversations.isEmpty {
+                    ProgressView("正在读取对话…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let errorMessage = state.errorMessage, state.conversations.isEmpty {
+                    ContentUnavailableView {
+                        Label("无法读取对话", systemImage: "network.slash")
+                    } description: {
+                        Text(errorMessage)
+                    } actions: {
+                        Button("连接设置", action: onOpenSettings)
+                        Button("重试") { reload() }
+                    }
+                } else if state.visibleConversations.isEmpty {
+                    ContentUnavailableView.search(text: state.searchText)
+                } else {
+                    List {
+                        ForEach(ConversationDateSection.group(state.visibleConversations, locale: locale)) { section in
+                            Section {
+                                ForEach(section.conversations) { conversation in
+                                    conversationButton(for: conversation)
+                                }
+                            } header: {
+                                Text(section.title)
                             }
-                        } header: {
-                            Text(section.title)
                         }
                     }
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .background(Color(uiColor: .systemGroupedBackground))
-                .refreshable {
-                    await state.load(using: GatewayClient(configuration: configuration))
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(Color(uiColor: .systemGroupedBackground))
+                    .refreshable {
+                        await state.load(using: GatewayClient(configuration: configuration))
+                    }
                 }
             }
         }
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("对话")
-        .searchable(text: $state.searchText, prompt: "搜索对话")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("新建对话", systemImage: "plus", action: onStartNew)
@@ -79,6 +86,21 @@ struct ConversationsView: View {
         }
     }
 
+    private var conversationSearchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField("搜索对话", text: $state.searchText)
+                .textFieldStyle(.plain)
+                .submitLabel(.search)
+                .accessibilityIdentifier("conversations-search-field")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+    }
+
     private func conversationButton(for conversation: ConversationSummary) -> some View {
         Button {
             onSelect(conversation)
@@ -102,10 +124,15 @@ struct ConversationsView: View {
                 renameText = conversation.displayName
                 renameTarget = conversation
             }
-            Button(
-                conversation.status == "pinned" ? "取消置顶" : "置顶",
-                systemImage: conversation.status == "pinned" ? "pin.slash" : "pin"
-            ) { togglePin(conversation) }
+            Button { togglePin(conversation) } label: {
+                Label {
+                    Text(conversation.status == "pinned"
+                        ? LocalizedStringResource("取消置顶")
+                        : LocalizedStringResource("置顶"))
+                } icon: {
+                    Image(systemName: conversation.status == "pinned" ? "pin.slash" : "pin")
+                }
+            }
             Button("归档", systemImage: "archivebox") { archive(conversation) }
         }
     }
@@ -210,8 +237,6 @@ struct ConversationDateSection: Identifiable {
 private struct ConversationRow: View {
     let conversation: ConversationSummary
 
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: conversation.status == "pinned" ? "pin.fill" : "bubble.left")
@@ -222,7 +247,7 @@ private struct ConversationRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(conversation.displayName)
                     .font(.headline)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("\(conversation.agentId) · \(conversation.messageCount) 条消息 · \(String(conversation.updatedAt.prefix(10)))")
                     .font(.caption)
                     .foregroundStyle(.secondary)

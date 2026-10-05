@@ -1,0 +1,55 @@
+name: Mobile iOS CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - "apps/mobile-ios/**"
+      - "scripts/apps/mobile-native/**"
+      - "package.json"
+      - ".github/workflows/mobile-ios-ci.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "apps/mobile-ios/**"
+      - "scripts/apps/mobile-native/**"
+      - "package.json"
+      - ".github/workflows/mobile-ios-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-ios-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install native iOS tools
+        run: brew install xcodegen swiftformat swiftlint
+      - name: Check formatting
+        working-directory: apps/mobile-ios
+        run: swiftformat XopcMobile XopcMobileTests XopcMobileUITests --lint
+      - name: Check Swift code
+        working-directory: apps/mobile-ios
+        run: swiftlint lint --strict --config .swiftlint.yml
+      - name: Generate Xcode project
+        working-directory: apps/mobile-ios
+        run: xcodegen generate
+      - name: Verify generated project is committed
+        run: git diff --exit-code -- apps/mobile-ios/XopcMobile.xcodeproj/project.pbxproj
+      - name: Run unit tests
+        working-directory: apps/mobile-ios
+        run: |
+          xcodebuild \
+            -project XopcMobile.xcodeproj \
+            -scheme XopcMobile \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -only-testing:XopcMobileTests \
+            CODE_SIGNING_ALLOWED=NO \
+            test

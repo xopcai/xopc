@@ -30,6 +30,7 @@ private struct MarkdownPartView: View {
                 .font(headingFont(level))
                 .fontWeight(.semibold)
                 .padding(.top, level <= 2 ? 8 : 3)
+                .accessibilityAddTraits(.isHeader)
         case let .bullet(level, text):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("•").accessibilityHidden(true)
@@ -60,12 +61,14 @@ private struct MarkdownPartView: View {
                     .padding(12)
             }
             .background(Color.secondary.opacity(0.09), in: .rect(cornerRadius: 10))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("markdown-code")
         case let .image(alt, source):
             MarkdownImageView(alt: alt, source: source, configuration: configuration, conversationID: conversationID)
         case let .table(rows, alignments):
             ScrollView(.horizontal) {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(rows) { row in
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { rowIndex, row in
                         HStack(alignment: .top, spacing: 0) {
                             ForEach(Array(row.cells.enumerated()), id: \.element.id) { columnIndex, cell in
                                 inline(cell.text)
@@ -76,9 +79,12 @@ private struct MarkdownPartView: View {
                         }
                         .background(row.isHeader ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.06))
                         .clipShape(.rect(cornerRadius: 6))
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("markdown-table-row-\(rowIndex)")
                     }
                 }
             }
+            .accessibilityIdentifier("markdown-table")
         case .divider:
             Divider().padding(.vertical, 4)
         }

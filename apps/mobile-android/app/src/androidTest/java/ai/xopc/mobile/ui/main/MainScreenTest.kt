@@ -1,5 +1,10 @@
 package ai.xopc.mobile.ui.main
 
+import android.accessibilityservice.AccessibilityService
+import android.content.ContentValues
+import android.graphics.Bitmap
+import android.provider.MediaStore
+import android.view.accessibility.AccessibilityNodeInfo
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ConversationSummary
 import ai.xopc.mobile.gateway.GatewayProfile
@@ -29,6 +34,9 @@ import ai.xopc.mobile.gateway.PersonalGoal
 import ai.xopc.mobile.gateway.PersonalAssertion
 import ai.xopc.mobile.gateway.ConversationContextRef
 import ai.xopc.mobile.gateway.ChatAttachment
+import ai.xopc.mobile.gateway.ChatAttachmentStore
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 import ai.xopc.mobile.gateway.ShareItem
 import java.time.Instant
 import androidx.activity.ComponentActivity
@@ -52,12 +60,226 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.runtime.mutableStateOf
 import androidx.test.espresso.Espresso
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
 import org.junit.Assert.assertEquals
 
 class MainScreenTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+
+  @Test fun photoActionOpensSystemPickerAndCancelReturnsWithoutAddingAnAttachment() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val conversationId = "11111111-2222-3333-4444-555555555555"
+    var added = 0
+    composeTestRule.setContent {
+      MainScreen(connection = ConnectionUiState(profile = profile,
+        selectedConversationId = conversationId, realtimeStatus = "connected"),
+        onAddDraftAttachment = { _, _, _ -> added++ })
+    }
+    val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+    val ownPackage = composeTestRule.activity.packageName
+    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
+    composeTestRule.onNodeWithTag("assistant-action-photos").performClick()
+    try {
+      composeTestRule.waitUntil(10_000) {
+        val foreground = automation.rootInActiveWindow?.packageName?.toString()
+        foreground != null && foreground != ownPackage
+      }
+    } finally {
+      automation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+    }
+    composeTestRule.waitUntil(10_000) {
+      automation.rootInActiveWindow?.packageName?.toString() == ownPackage
+    }
+    composeTestRule.onNodeWithTag("assistant-input").assertExists()
+    assertEquals(0, added)
+  }
+
+  @Test fun systemPhotoSelectionReturnsToTheSameConversationAndSnapshotsTheImage() {
+    val context = composeTestRule.activity
+    val gatewayId = UUID.randomUUID().toString()
+    val conversationId = UUID.randomUUID().toString()
+    val name = "xopc-picker-e2e-${UUID.randomUUID()}.jpg"
+    val source = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+      ContentValues().apply {
+        put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+        put(MediaStore.MediaColumns.IS_PENDING, 1)
+      }) ?: throw AssertionError("Test image creation failed")
+    val store = ChatAttachmentStore(context)
+    try {
+      context.contentResolver.openOutputStream(source)!!.use { output ->
+        Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888).compress(Bitmap.CompressFormat.JPEG, 90, output)
+      }
+      context.contentResolver.update(source, ContentValues().apply {
+        put(MediaStore.MediaColumns.IS_PENDING, 0)
+      }, null, null)
+      val expectedBytes = context.contentResolver.openInputStream(source)!!.use { it.readBytes() }
+      val captured = AtomicReference<ChatAttachment?>()
+      val returnedConversationId = AtomicReference<String?>()
+      composeTestRule.setContent {
+        MainScreen(connection = ConnectionUiState(profile = GatewayProfile(gatewayId,
+          "Test", "key", "device", emptyList(), ""), selectedConversationId = conversationId,
+          realtimeStatus = "connected"),
+          onAddDraftAttachment = { returnedGatewayId, returnedId, uri ->
+            assertEquals(gatewayId, returnedGatewayId)
+            returnedConversationId.set(returnedId)
+            captured.set(store.import(returnedGatewayId, returnedId, uri))
+          })
+      }
+      val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+      composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
+      composeTestRule.onNodeWithTag("assistant-action-photos").performClick()
+      composeTestRule.waitUntil(10_000) {
+        val foreground = automation.rootInActiveWindow?.packageName?.toString()
+        foreground != null && foreground != context.packageName
+      }
+      fun findPhotoItem(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+        if (node.isClickable && node.className == "android.widget.FrameLayout") {
+          fun hasThumbnail(child: AccessibilityNodeInfo?): Boolean {
+            if (child == null) return false
+            if (child.viewIdResourceName?.endsWith(":id/icon_thumbnail") == true) return true
+            return (0 until child.childCount).any { hasThumbnail(child.getChild(it)) }
+          }
+          if (hasThumbnail(node)) return node
+        }
+        for (index in 0 until node.childCount) {
+          findPhotoItem(node.getChild(index))?.let { return it }
+        }
+        return null
+      }
+      try {
+        composeTestRule.waitUntil(10_000) { findPhotoItem(automation.rootInActiveWindow) != null }
+        val item = findPhotoItem(automation.rootInActiveWindow)
+        check(item?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) { "PHOTO_PICKER_ITEM_UNAVAILABLE" }
+        composeTestRule.waitUntil(10_000) { captured.get() != null }
+      } finally {
+        if (captured.get() == null) automation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+      }
+      assertEquals(conversationId, returnedConversationId.get())
+      assertEquals("image", captured.get()?.type)
+      assertEquals(listOf(captured.get()), store.list(gatewayId, conversationId))
+      val payload = store.wirePayloads(gatewayId, conversationId, listOf(captured.get()!!))
+      assert(expectedBytes.contentEquals(java.util.Base64.getDecoder().decode(
+        payload.getJSONObject(0).getString("data"))))
+    } finally {
+      runCatching { context.contentResolver.delete(source, null, null) }
+      store.removeGateway(gatewayId)
+    }
+  }
+
+  @Test fun cameraCancelReturnsToConversationWithoutAttachment() {
+    val profile = GatewayProfile(UUID.randomUUID().toString(), "Test", "key", "device", emptyList(), "")
+    val conversationId = UUID.randomUUID().toString()
+    var added = 0
+    composeTestRule.setContent {
+      MainScreen(connection = ConnectionUiState(profile = profile,
+        selectedConversationId = conversationId, realtimeStatus = "connected"),
+        onAddCapturedDraftAttachment = { _, _, _ -> added++ })
+    }
+    val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+    val ownPackage = composeTestRule.activity.packageName
+    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
+    composeTestRule.onNodeWithTag("assistant-action-camera").performClick()
+    try {
+      composeTestRule.waitUntil(10_000) {
+        automation.rootInActiveWindow?.packageName?.toString() == "com.android.camera2"
+      }
+    } finally {
+      automation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+    }
+    composeTestRule.waitUntil(10_000) {
+      automation.rootInActiveWindow?.packageName?.toString() == ownPackage
+    }
+    composeTestRule.onNodeWithTag("assistant-input").assertExists()
+    assertEquals(0, added)
+  }
+
+  @Test fun cameraShutterReturnsToTheSameConversationAndSnapshotsPhoto() {
+    val context = composeTestRule.activity
+    val gatewayId = UUID.randomUUID().toString()
+    val conversationId = UUID.randomUUID().toString()
+    val store = ChatAttachmentStore(context)
+    val captured = AtomicReference<ChatAttachment?>()
+    val returnedConversationId = AtomicReference<String?>()
+    try {
+      composeTestRule.setContent {
+        MainScreen(connection = ConnectionUiState(profile = GatewayProfile(gatewayId,
+          "Test", "key", "device", emptyList(), ""), selectedConversationId = conversationId,
+          realtimeStatus = "connected"),
+          onAddCapturedDraftAttachment = { returnedGatewayId, returnedId, uri ->
+            assertEquals(gatewayId, returnedGatewayId)
+            returnedConversationId.set(returnedId)
+            captured.set(store.import(returnedGatewayId, returnedId, uri))
+          })
+      }
+      val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+      composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
+      composeTestRule.onNodeWithTag("assistant-action-camera").performClick()
+      composeTestRule.waitUntil(10_000) {
+        automation.rootInActiveWindow?.packageName?.toString() == "com.android.camera2"
+      }
+      fun findShutter(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+        if (node.isClickable && (node.viewIdResourceName?.contains("shutter") == true ||
+          node.contentDescription?.toString()?.contains("shutter", ignoreCase = true) == true)) return node
+        for (index in 0 until node.childCount) {
+          findShutter(node.getChild(index))?.let { return it }
+        }
+        return null
+      }
+      try {
+        composeTestRule.waitUntil(10_000) { findShutter(automation.rootInActiveWindow) != null }
+      } catch (error: androidx.compose.ui.test.ComposeTimeoutException) {
+        val nodes = mutableListOf<String>()
+        fun inspect(node: AccessibilityNodeInfo?) {
+          if (node == null || nodes.size >= 80) return
+          nodes += "${node.className}:${node.viewIdResourceName}:${node.contentDescription}:${node.isClickable}"
+          for (index in 0 until node.childCount) inspect(node.getChild(index))
+        }
+        inspect(automation.rootInActiveWindow)
+        throw AssertionError("Camera shutter not exposed: $nodes", error)
+      }
+      try {
+        check(findShutter(automation.rootInActiveWindow)?.performAction(
+          AccessibilityNodeInfo.ACTION_CLICK) == true) { "CAMERA_SHUTTER_UNAVAILABLE" }
+        fun findDone(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+          if (node == null) return null
+          if (node.viewIdResourceName == "com.android.camera2:id/done_button") return node
+          for (index in 0 until node.childCount) {
+            findDone(node.getChild(index))?.let { return it }
+          }
+          return null
+        }
+        composeTestRule.waitUntil(10_000) { findDone(automation.rootInActiveWindow) != null }
+        check(findDone(automation.rootInActiveWindow)?.performAction(
+          AccessibilityNodeInfo.ACTION_CLICK) == true) { "CAMERA_CONFIRM_UNAVAILABLE" }
+        try {
+          composeTestRule.waitUntil(15_000) { captured.get() != null }
+        } catch (error: androidx.compose.ui.test.ComposeTimeoutException) {
+          val nodes = mutableListOf<String>()
+          fun inspect(node: AccessibilityNodeInfo?) {
+            if (node == null || nodes.size >= 80) return
+            nodes += "${node.className}:${node.viewIdResourceName}:${node.contentDescription}:${node.text}:${node.isClickable}"
+            for (index in 0 until node.childCount) inspect(node.getChild(index))
+          }
+          inspect(automation.rootInActiveWindow)
+          throw AssertionError("Camera after shutter: ${automation.rootInActiveWindow?.packageName}: $nodes", error)
+        }
+      } finally {
+        if (captured.get() == null) automation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+      }
+      assertEquals(conversationId, returnedConversationId.get())
+      assertEquals("image", captured.get()?.type)
+      assertEquals(listOf(captured.get()), store.list(gatewayId, conversationId))
+      val payload = store.wirePayloads(gatewayId, conversationId, listOf(captured.get()!!))
+      assert(payload.getJSONObject(0).getString("data").isNotEmpty())
+    } finally {
+      store.removeGateway(gatewayId)
+    }
+  }
 
   @Test fun progressDockBadgeTracksCurrentGatewayAttention() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
@@ -907,6 +1129,33 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("quick-send").assertIsNotEnabled()
   }
 
+  @Test fun quickAttachmentCanBePickedRemovedAndSentWithoutText() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val item = ChatAttachment("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "document",
+      "brief.txt", "text/plain", 3)
+    var picked = ""
+    var removed = ""
+    var sent = 0
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Progress, onSelectTab = {},
+        connection = ConnectionUiState(profile = profile, realtimeStatus = "connected",
+          quickAttachments = listOf(item)),
+        onPickQuickAttachment = { picked = it }, onRemoveQuickAttachment = { removed = it },
+        onQuickSubmit = { sent++ })
+    }
+    composeTestRule.onNodeWithTag("quick-attachment-${item.id}").assertExists()
+    composeTestRule.onNodeWithTag("quick-send").assertIsEnabled().performClick()
+    assertEquals(1, sent)
+    composeTestRule.onNodeWithTag("quick-attachment-remove-${item.id}").performClick()
+    assertEquals(item.id, removed)
+    composeTestRule.onNodeWithTag("quick-actions-toggle").performClick()
+    composeTestRule.onNodeWithTag("quick-action-photos").assertIsEnabled().performClick()
+    assertEquals("photos", picked)
+    composeTestRule.onNodeWithTag("quick-actions-toggle").performClick()
+    composeTestRule.onNodeWithTag("quick-action-camera").assertIsEnabled().performClick()
+    assertEquals("camera", picked)
+  }
+
   @Test fun quickActionsReplaceDockAndKeyboardFocusClosesActions() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     var newChats = 0
@@ -1282,6 +1531,25 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-copy-code-action").assertDoesNotExist()
   }
 
+  @Test fun assistantMessageMenuSavesOnlyNonblankAnswerAndClosesOnSelection() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = id,
+      messages = listOf(ConversationMessage("answer-1", "assistant", "Useful answer"))))
+    val saved = mutableListOf<String>()
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value,
+        onSaveMessageAsNote = { saved += it })
+    }
+    composeTestRule.onNodeWithTag("message-more-answer-1").performClick()
+    composeTestRule.onNodeWithTag("message-save-note-action").assertIsEnabled().performClick()
+    composeTestRule.runOnIdle { assertEquals(listOf("answer-1"), saved) }
+    composeTestRule.onNodeWithTag("message-save-note-action").assertDoesNotExist()
+    composeTestRule.runOnIdle { state.value = state.value.copy(savingMessageNoteId = "answer-1") }
+    composeTestRule.onNodeWithTag("message-more-answer-1").performClick()
+    composeTestRule.onNodeWithTag("message-save-note-action").assertIsNotEnabled()
+  }
+
   @Test fun assistantAttachmentActionStagesAndCanSendWithoutText() {
     val id = "11111111-2222-3333-4444-555555555555"
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
@@ -1305,6 +1573,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
     composeTestRule.onNodeWithTag("assistant-action-photos").assertIsEnabled().performClick()
     assertEquals("photos", picked)
+    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
+    composeTestRule.onNodeWithTag("assistant-action-camera").assertIsEnabled().performClick()
+    assertEquals("camera", picked)
   }
 
   @Test
