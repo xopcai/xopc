@@ -2,6 +2,8 @@ package ai.xopc.mobile.gateway
 
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.net.Uri
@@ -108,6 +110,33 @@ class ChatAttachmentStore(context: Context) {
       }
     }
     return array
+  }
+
+  /** Decode a bounded preview from the encrypted snapshot, without retaining a picker URI. */
+  @Synchronized
+  fun previewImage(gatewayId: String, conversationId: String, item: ChatAttachment): Bitmap? {
+    checkScope(gatewayId, conversationId); checkId(item.id)
+    if (item.type != "image" || !item.mimeType.startsWith("image/")) return null
+    database.readableDatabase.query(TABLE, arrayOf("metadata", "payload"),
+      "gateway_id=? AND conversation_id=? AND attachment_id=?",
+      arrayOf(gatewayId, conversationId, item.id), null, null, null).use { rows ->
+      if (!rows.moveToFirst()) return null
+      val saved = parseMetadata(JSONObject(decrypt(gatewayId, conversationId, item.id,
+        "metadata", rows.getBlob(0)).toString(Charsets.UTF_8)))
+      require(saved == item) { "MISMATCHED_ATTACHMENT" }
+      val bytes = decrypt(gatewayId, conversationId, item.id, "payload", rows.getBlob(1))
+      require(bytes.size == item.size && bytes.size <= MAX_BYTES) { "INVALID_ATTACHMENT_DATA" }
+      val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+      BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+      if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+      var sample = 1
+      while (bounds.outWidth / sample > 1_024 || bounds.outHeight / sample > 1_024) sample *= 2
+      val options = BitmapFactory.Options().apply {
+        inSampleSize = sample
+        inPreferredConfig = Bitmap.Config.RGB_565
+      }
+      return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+    }
   }
 
   /** Re-encrypts the quick composer snapshots under the newly created conversation atomically. */

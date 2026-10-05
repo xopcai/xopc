@@ -1,13 +1,49 @@
 {
   "app": {
-    "signingConfigs": [],
-    "products": [{
-      "name": "default",
-      "compatibleSdkVersion": "6.1.0(23)",
-      "targetSdkVersion": "26.0.0",
-      "runtimeOS": "HarmonyOS"
-    }],
-    "buildModeSet": [{ "name": "debug" }, { "name": "release" }]
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "/Users/micjoyce/.ohos/config/default_mobile-harmony_xcEdgOG-GBWg_QUWMX1LUwbRSYV-OvLWxBaPWzhNVHg=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B2F7EEEFC0A3A846665E9B5EC4111AE3F3F1A9F6AF85B1DC8CDC52116B2CA475FB87965A6617AA8",
+          "profile": "/Users/micjoyce/.ohos/config/default_mobile-harmony_xcEdgOG-GBWg_QUWMX1LUwbRSYV-OvLWxBaPWzhNVHg=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "/Users/micjoyce/.ohos/config/default_mobile-harmony_xcEdgOG-GBWg_QUWMX1LUwbRSYV-OvLWxBaPWzhNVHg=.p12",
+          "storePassword": "0000001B29C8C517E6058B6FFBBF2F86A19BD9505DD8DF5D69FDCD9D68546C5A7FF8CC289626252BFB56A0"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "compatibleSdkVersion": "6.1.0(23)",
+        "targetSdkVersion": "26.0.0",
+        "runtimeOS": "HarmonyOS"
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug"
+      },
+      {
+        "name": "release"
+      }
+    ]
   },
-  "modules": [{ "name": "entry", "srcPath": "./entry", "targets": [{ "name": "default", "applyToProducts": ["default"] }] }]
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
 }

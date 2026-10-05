@@ -718,3 +718,5 @@
 "停止播放语音" = "Stop Voice Message";
 "正在加载语音…" = "Loading Voice Message…";
 "没有识别出文字，请重试或发送语音" = "No speech was recognized. Try again or send the audio.";
+"会话信息与设置" = "Session Info & Settings";
+"会话设置" = "Session Settings";

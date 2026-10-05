@@ -113,8 +113,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   var fileSpaces by remember(state.gatewayId) { mutableStateOf<List<ManagedFileSpace>>(emptyList()) }
   var fileItems by remember(state.gatewayId) { mutableStateOf<List<ManagedFile>>(emptyList()) }
   var searchFiles by remember(state.gatewayId) { mutableStateOf<List<ManagedFile>>(emptyList()) }
-  var fileText by remember(state.gatewayId) { mutableStateOf<String?>(null) }
-  var fileImage by remember(state.gatewayId) { mutableStateOf<ByteArray?>(null) }
+  var fileContent by remember(state.gatewayId) { mutableStateOf<ByteArray?>(null) }
   var filesLoading by remember(state.gatewayId) { mutableStateOf(false) }
   var filesError by remember(state.gatewayId) { mutableStateOf(false) }
   LaunchedEffect(selectedId, editorOpen, fileBrowserOpen) {
@@ -138,13 +137,11 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     filesLoading = false
   }
   LaunchedEffect(selectedFile?.id) {
-    fileText = null
-    fileImage = null
+    fileContent = null
     val file = selectedFile ?: return@LaunchedEffect
-    if (file.mimeType.startsWith("text/") || file.mimeType in setOf("application/json", "application/xml")) {
-      fileText = runCatching { onNoteFileText(file.id) }.getOrNull()
-    } else if (file.mimeType.startsWith("image/") && file.mimeType != "image/svg+xml") {
-      fileImage = runCatching { onNoteFileContent(file.id) }.getOrNull()
+    if (previewFileKind(file.name, file.mimeType) != PreviewFileKind.BINARY ||
+      isBitmapPreview(file.name, file.mimeType)) {
+      fileContent = runCatching { onNoteFileContent(file.id) }.getOrNull()
     }
   }
   var moreOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
@@ -234,7 +231,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         Text("+", style = MaterialTheme.typography.headlineLarge)
       }
     }
-    if (fileBrowserOpen) NotesFilesContent(fileSpaces, fileItems, selectedFile, fileText, fileImage,
+    if (fileBrowserOpen) NotesFilesContent(fileSpaces, fileItems, selectedFile, fileContent,
       filesLoading, filesError, { fileRefreshRevision++ }, { space ->
         selectedFile = null; filePath = ""; fileSpaceId = space.id
       }, { file ->
@@ -589,31 +586,39 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
       verticalAlignment = Alignment.CenterVertically) {
-      BasicTextField(search, { onSearchChange(it.take(4096)) },
-        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
-          .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
-          .padding(horizontal = 14.dp, vertical = 13.dp).testTag("notes-search"),
-        singleLine = true, textStyle = MaterialTheme.typography.bodyLarge.copy(
-          color = MaterialTheme.colorScheme.onSurface),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
-        decorationBox = { inner -> Box {
-          if (search.isEmpty()) Text(stringResource(R.string.notes_search),
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-          inner()
-        } })
+      Row(modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+        .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)),
+        verticalAlignment = Alignment.CenterVertically) {
+        BasicTextField(search, { onSearchChange(it.take(4096)) },
+          modifier = Modifier.weight(1f).padding(start = 14.dp).testTag("notes-search"),
+          singleLine = true, textStyle = MaterialTheme.typography.bodyLarge.copy(
+            color = MaterialTheme.colorScheme.onSurface),
+          keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+          keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+          decorationBox = { inner -> Box {
+            if (search.isEmpty()) Text(stringResource(R.string.notes_search),
+              color = MaterialTheme.colorScheme.onSurfaceVariant)
+            inner()
+          } })
+        IconButton(onClick = onSubmit, enabled = !state.loading,
+          modifier = Modifier.size(48.dp).testTag("notes-refresh")) {
+          Icon(painterResource(R.drawable.action_search), stringResource(R.string.notes_search))
+        }
+      }
       IconButton(onClick = { onOpenFiles?.invoke() }, enabled = onOpenFiles != null,
         modifier = Modifier.size(48.dp)
           .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
           .testTag("notes-files")) {
         Icon(painterResource(R.drawable.action_folder), stringResource(R.string.notes_files))
       }
-    }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-      TextButton(onClick = onSubmit, enabled = !state.loading,
-        modifier = Modifier.testTag("notes-refresh")) { Text(stringResource(R.string.progress_refresh)) }
-      TextButton(onClick = { filtersOpen = !filtersOpen },
-        modifier = Modifier.testTag("notes-filter-menu")) { Text(stringResource(R.string.notes_filter)) }
+      IconButton(onClick = { filtersOpen = !filtersOpen },
+        modifier = Modifier.size(48.dp)
+          .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
+          .testTag("notes-filter-menu")) {
+        Icon(painterResource(R.drawable.action_filter), stringResource(R.string.notes_filter),
+          tint = if (filtersOpen || state.status.isNotEmpty()) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant)
+      }
     }
     if (filtersOpen) Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
       horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -661,7 +666,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
 
 @Composable
 private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<ManagedFile>,
-  selected: ManagedFile?, preview: String?, image: ByteArray?, loading: Boolean, error: Boolean,
+  selected: ManagedFile?, content: ByteArray?, loading: Boolean, error: Boolean,
   onRetry: () -> Unit, onOpenSpace: (ManagedFileSpace) -> Unit,
   onOpenFile: (ManagedFile) -> Unit, modifier: Modifier = Modifier) {
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -674,7 +679,8 @@ private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<Manage
         modifier = Modifier.testTag("notes-file-title"))
       Text(selected.relativePath, style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
-      val bitmap = remember(image) { image?.let { bytes ->
+      val bitmap = remember(content) { content?.takeIf { isBitmapPreview(selected.name, selected.mimeType) }
+        ?.let { bytes ->
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         var sample = 1
@@ -685,9 +691,8 @@ private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<Manage
       if (bitmap != null) Image(bitmap.asImageBitmap(), selected.name,
         modifier = Modifier.fillMaxWidth().weight(1f).testTag("notes-file-image"),
         contentScale = ContentScale.Fit)
-      else if (preview != null) Text(preview, modifier = Modifier.fillMaxWidth().weight(1f)
-        .verticalScroll(rememberScrollState()).testTag("notes-file-preview"),
-        style = MaterialTheme.typography.bodyMedium)
+      else if (content != null) FilePreviewContent(selected.name, selected.mimeType, content,
+        modifier = Modifier.fillMaxWidth().weight(1f).testTag("notes-file-preview"))
       else Text(stringResource(R.string.notes_file_preview_unavailable),
         color = MaterialTheme.colorScheme.onSurfaceVariant)
     } else LazyColumn(modifier = Modifier.weight(1f),

@@ -2,6 +2,7 @@ package ai.xopc.mobile.gateway
 
 import android.content.Context
 import android.net.Uri
+import android.graphics.Bitmap
 import android.util.Base64
 import java.net.URLEncoder
 import java.time.Instant
@@ -95,6 +96,16 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
   fun composerAttachments(conversationId: String): List<ChatAttachment> {
     val gatewayId = gateway.currentProfile()?.gatewayId ?: return emptyList()
     return attachmentStore?.list(gatewayId, conversationId) ?: emptyList()
+  }
+
+  fun composerImagePreview(conversationId: String, item: ChatAttachment): Bitmap? {
+    val gatewayId = gateway.currentProfile()?.gatewayId ?: return null
+    return attachmentStore?.previewImage(gatewayId, conversationId, item)
+  }
+
+  fun quickImagePreview(item: ChatAttachment): Bitmap? {
+    val gatewayId = gateway.currentProfile()?.gatewayId ?: return null
+    return attachmentStore?.previewImage(gatewayId, QUICK_ATTACHMENT_SCOPE, item)
   }
 
   fun addComposerAttachment(gatewayId: String, conversationId: String, uri: Uri): ChatAttachment {
@@ -892,33 +903,70 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       return ExecutionDetail(turnId, steps)
     }
 
-    private fun parseMessages(messages: JSONArray): List<ConversationMessage> = (0 until messages.length()).mapNotNull { index ->
-      val item = messages.getJSONObject(index)
-      val role = item.optString("role")
-      if (role !in setOf("user", "assistant")) return@mapNotNull null
-      val content = item.opt("content")
-      val text = when (content) {
-        is String -> content
-        is JSONArray -> (0 until content.length()).mapNotNull { part ->
-          content.optJSONObject(part)?.takeIf { it.optString("type") == "text" }?.optString("text")
-        }.joinToString("\n")
-        else -> ""
+    private fun parseMessages(messages: JSONArray): List<ConversationMessage> {
+      val parsed = (0 until messages.length()).mapNotNull { index ->
+        val item = messages.getJSONObject(index)
+        val role = item.optString("role")
+        if (role !in setOf("user", "assistant")) return@mapNotNull null
+        val content = item.opt("content")
+        val raw = item.optJSONArray("rawContent")
+        val textContent = raw ?: (content as? JSONArray)
+        val hasToolCall = (0 until (textContent?.length() ?: 0)).any { part ->
+          textContent?.optJSONObject(part)?.optString("type") in setOf("toolCall", "tool_use", "tool_call")
+        }
+        val narration = role == "assistant" && (0 until (textContent?.length() ?: 0)).any { part ->
+          textContent?.optJSONObject(part)?.optString("presentation") == "narration"
+        }
+        val text = when {
+          role == "assistant" && textContent != null -> (0 until textContent.length()).mapNotNull { part ->
+            textContent.optJSONObject(part)?.takeIf { block ->
+              block.optString("type") == "text" &&
+                block.optString("presentation") != "narration" &&
+                block.optString("presentation") != "pending" &&
+                (block.has("presentation") || !hasToolCall)
+            }?.optString("text")
+          }.joinToString("\n")
+          content is String -> content
+          content is JSONArray -> (0 until content.length()).mapNotNull { part ->
+            content.optJSONObject(part)?.takeIf { it.optString("type") == "text" }?.optString("text")
+          }.joinToString("\n")
+          else -> ""
+        }
+        val media = parseMessageMedia(item.optJSONArray("media"))
+        val metadata = item.optJSONObject("metadata")
+        val references = parseMessageReferences(metadata?.optJSONArray("sourceContexts"))
+        val outcome = parseMessageOutcome(metadata?.optJSONObject("turnOutcome"))
+        val targets = parseMessageTargets(item.optJSONArray("deliveries"))
+        val hasNonTextContent = narration || hasToolCall || (item.optJSONArray("media")?.length() ?: 0) > 0 ||
+          (metadata?.optJSONArray("sourceContexts")?.length() ?: 0) > 0 ||
+          outcome != null || targets.isNotEmpty() ||
+          (raw != null && (0 until raw.length()).any { part ->
+            raw.optJSONObject(part)?.optString("type")?.let { it != "text" } == true
+          })
+        if (text.isBlank() && !hasNonTextContent) null else
+          ConversationMessage(item.optString("id").ifBlank { item.optString("messageId").ifBlank { "$index" } }, role, text,
+            item.optString("turnId").takeIf(String::isNotBlank), hasNonTextContent, media, references, targets, outcome)
       }
-      val raw = item.optJSONArray("rawContent")
-      val media = parseMessageMedia(item.optJSONArray("media"))
-      val metadata = item.optJSONObject("metadata")
-      val references = parseMessageReferences(metadata?.optJSONArray("sourceContexts"))
-      val outcome = parseMessageOutcome(metadata?.optJSONObject("turnOutcome"))
-      val targets = parseMessageTargets(item.optJSONArray("deliveries"))
-      val hasNonTextContent = (item.optJSONArray("media")?.length() ?: 0) > 0 ||
-        (metadata?.optJSONArray("sourceContexts")?.length() ?: 0) > 0 ||
-        outcome != null || targets.isNotEmpty() ||
-        (raw != null && (0 until raw.length()).any { part ->
-          raw.optJSONObject(part)?.optString("type")?.let { it != "text" } == true
-        })
-      if (text.isBlank() && !hasNonTextContent) null else
-        ConversationMessage(item.optString("id").ifBlank { item.optString("messageId").ifBlank { "$index" } }, role, text,
-          item.optString("turnId").takeIf(String::isNotBlank), hasNonTextContent, media, references, targets, outcome)
+      val grouped = mutableListOf<ConversationMessage>()
+      parsed.forEach { message ->
+        val previous = grouped.lastOrNull()
+        if (message.role != "assistant" || previous?.role != "assistant" ||
+          (message.turnId != null && previous.turnId != null && message.turnId != previous.turnId)) {
+          grouped += message
+        } else {
+          grouped[grouped.lastIndex] = previous.copy(
+            id = message.id,
+            text = listOf(previous.text, message.text).filter(String::isNotBlank).joinToString("\n"),
+            turnId = message.turnId ?: previous.turnId,
+            hasNonTextContent = previous.hasNonTextContent || message.hasNonTextContent,
+            media = (previous.media + message.media).distinctBy { it.id to it.uri },
+            references = (previous.references + message.references).distinctBy { it.kind to it.sourceId },
+            targets = (previous.targets + message.targets).distinctBy { it.kind to it.id },
+            outcome = message.outcome ?: previous.outcome,
+          )
+        }
+      }
+      return grouped
     }
 
     private fun parseMessageMedia(rows: JSONArray?): List<ConversationMedia> {

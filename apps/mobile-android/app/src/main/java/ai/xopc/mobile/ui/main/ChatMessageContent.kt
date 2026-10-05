@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Card
@@ -215,7 +216,7 @@ private fun MessageReferences(items: List<ConversationReference>, onOpen: (Conve
 }
 
 @Composable
-private fun RichMessageText(text: String, onOpenLink: (String) -> Unit, onCopy: (String) -> Unit) {
+internal fun RichMessageText(text: String, onOpenLink: (String) -> Unit, onCopy: (String) -> Unit) {
   val fences = Regex("```([A-Za-z0-9_-]*)\\r?\\n?([\\s\\S]*?)```")
   var cursor = 0
   fences.findAll(text).forEach { match ->
@@ -443,6 +444,9 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
     } else if (payload == null) {
       Text(stringResource(R.string.message_preview_unavailable), color = MaterialTheme.colorScheme.error,
         modifier = Modifier.testTag("message-media-preview-error"))
+    } else if (previewFileKind(activeMedia.name, activeMedia.mimeType) == PreviewFileKind.SVG) {
+      FilePreviewContent(activeMedia.name, activeMedia.mimeType, payload,
+        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp))
     } else if (mediaPreviewKind(activeMedia) == "image") {
       val bitmap = BitmapFactory.decodeByteArray(payload, 0, payload.size)
       if (bitmap != null) androidx.compose.foundation.Image(bitmap.asImageBitmap(), activeMedia.name,
@@ -463,10 +467,9 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
       }
     } else if (mediaPreviewKind(activeMedia) == "audio") {
       AudioMessagePreview(payload, activeMedia)
-    } else if (mediaPreviewKind(activeMedia) == "text") {
-      SelectionContainer { Text(payload.toString(Charsets.UTF_8).take(64_000),
-        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).testTag("message-media-preview-text"),
-        fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
+    } else if (previewFileKind(activeMedia.name, activeMedia.mimeType) != PreviewFileKind.BINARY) {
+      FilePreviewContent(activeMedia.name, activeMedia.mimeType, payload,
+        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp))
     } else {
       BinaryMessagePreview(payload, activeMedia)
     }

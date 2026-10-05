@@ -79,12 +79,6 @@ struct ConversationsView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("新建对话", systemImage: "plus", action: onStartNew)
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: onOpenSettings) {
-                    Image(systemName: "gearshape")
-                }
-                .accessibilityLabel("连接设置")
-            }
         }
         .task(id: ConversationSearchKey(configuration: configuration, query: state.searchText)) {
             if !state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
