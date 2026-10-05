@@ -17,10 +17,13 @@ struct NoteAudioPlayerView: View {
                     Text(player?.isPlaying == true
                         ? LocalizedStringResource("暂停播放")
                         : LocalizedStringResource("播放录音"))
+                        .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: player?.isPlaying == true ? "pause.circle.fill" : "play.circle.fill")
                 }
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
             }
+            .buttonStyle(.bordered)
             .disabled(isLoading)
             HStack(spacing: 8) {
                 Text(displayFileName)
@@ -37,8 +40,11 @@ struct NoteAudioPlayerView: View {
     }
 
     private var displayFileName: String {
-        guard attachment.fileName == "语音消息.wav" else { return attachment.fileName }
-        return AppLocalization.string("语音消息.wav", locale: AppLocalization.selectedLocale)
+        if attachment.fileName == "语音消息.wav" {
+            return AppLocalization.string("语音记录", locale: AppLocalization.selectedLocale)
+        }
+        let name = URL(fileURLWithPath: attachment.fileName).deletingPathExtension().lastPathComponent
+        return name.isEmpty ? AppLocalization.string("语音记录", locale: AppLocalization.selectedLocale) : name
     }
 
     private func togglePlayback() {

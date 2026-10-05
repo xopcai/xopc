@@ -11,6 +11,7 @@ import ai.xopc.mobile.gateway.ChatAttachment
 import ai.xopc.mobile.gateway.CameraCaptureStore
 import ai.xopc.mobile.gateway.LocalConversationDraft
 import ai.xopc.mobile.gateway.ConversationMessage
+import ai.xopc.mobile.gateway.ConversationMedia
 import ai.xopc.mobile.gateway.ExecutionDetail
 import ai.xopc.mobile.gateway.PendingInput
 import ai.xopc.mobile.gateway.ConversationModel
@@ -24,10 +25,14 @@ import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.ProgressTask
 import ai.xopc.mobile.gateway.ProgressProject
 import ai.xopc.mobile.gateway.AutomationRepository
+import ai.xopc.mobile.gateway.AutomationMetrics
 import ai.xopc.mobile.gateway.AutomationSummary
 import ai.xopc.mobile.gateway.AutomationRunSummary
 import ai.xopc.mobile.gateway.AutomationRunEvent
 import ai.xopc.mobile.gateway.NoteRepository
+import ai.xopc.mobile.gateway.FileRepository
+import ai.xopc.mobile.gateway.ManagedFile
+import ai.xopc.mobile.gateway.ManagedFileSpace
 import ai.xopc.mobile.gateway.NoteSummary
 import ai.xopc.mobile.gateway.NoteDetail
 import ai.xopc.mobile.gateway.NoteSyncResult
@@ -107,6 +112,7 @@ data class ProgressUiState(
   val createSavedRevision: Int = 0,
   val taskChatBusy: Boolean = false,
   val taskChatError: Boolean = false,
+  val automationMetrics: AutomationMetrics? = null,
   val automations: AutomationUiState = AutomationUiState(),
 )
 data class AutomationUiState(
@@ -318,6 +324,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private val progressRepository = ProgressRepository(session)
   private val automationRepository = AutomationRepository(session)
   private val noteRepository = NoteRepository(session)
+  private val fileRepository = FileRepository(session)
   private val shareRepository = ShareRepository(session)
   private val personalRepository = PersonalRepository(session)
   private val noteDraftStore = NoteDraftStore(application)
@@ -341,6 +348,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private var referenceRevision = 0
   private var progressJob: Job? = null
   private var progressHomeJob: Job? = null
+  private var progressMetricsJob: Job? = null
   private var progressMoreJob: Job? = null
   private var progressDetailJob: Job? = null
   private var progressCommandJob: Job? = null
@@ -574,6 +582,21 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
         }
       }
     }
+  }
+
+  suspend fun noteFileSpaces(): List<ManagedFileSpace> = withContext(Dispatchers.IO) {
+    fileRepository.spaces()
+  }
+
+  suspend fun noteFiles(spaceId: String? = null, path: String = "", search: String = ""):
+    List<ManagedFile> = withContext(Dispatchers.IO) { fileRepository.list(spaceId, path, search) }
+
+  suspend fun noteFileText(id: String): String = withContext(Dispatchers.IO) {
+    fileRepository.text(id)
+  }
+
+  suspend fun noteFileContent(id: String): ByteArray = withContext(Dispatchers.IO) {
+    fileRepository.content(id)
   }
 
   fun loadNotes(search: String = mutableState.value.notes.search,
@@ -1314,6 +1337,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   fun refreshProgressHome() {
     val gatewayId = mutableState.value.profile?.gatewayId ?: return
     progressHomeJob?.cancel()
+    progressMetricsJob?.cancel()
     val revision = ++progressHomeRevision
     mutableState.update { state ->
       val previous = state.progress.takeIf { it.gatewayId == gatewayId } ?: ProgressUiState(gatewayId = gatewayId)
@@ -1334,6 +1358,19 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       }
       if (revision == progressHomeRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
         it.copy(progress = it.progress.copy(homeLoading = false))
+      }
+    }
+    progressMetricsJob = viewModelScope.launch {
+      try {
+        val metrics = runInterruptible(Dispatchers.IO) { automationRepository.metrics() }
+        if (revision == progressHomeRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(progress = it.progress.copy(automationMetrics = metrics))
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (revision == progressHomeRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(progress = it.progress.copy(automationMetrics = null))
+        }
       }
     }
   }
@@ -2014,7 +2051,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       }
     }
     val readers = listOf(searchJob, historyJob, executionJob, runStateJob, modelJob, agentJob,
-      contextJob, referenceJob, progressJob, progressHomeJob, progressMoreJob, progressDetailJob,
+      contextJob, referenceJob, progressJob, progressHomeJob, progressMetricsJob, progressMoreJob, progressDetailJob,
       projectsJob, projectDetailJob, automationJob, notesJob, sharesJob, noteDetailJob, noteHistoryJob,
       noteSnapshotJob, personalJob, personalListJob, personalDetailJob)
     readers.forEach { it?.cancel() }
@@ -2427,6 +2464,9 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       executionLoading = false, executionError = false) }
   }
 
+  suspend fun readMessageMedia(conversationId: String, media: ConversationMedia): ByteArray =
+    withContext(Dispatchers.IO) { conversations.readMessageMedia(conversationId, media) }
+
   private fun loadExecution(conversationId: String, messageId: String, turnId: String) {
     executionJob?.cancel()
     val revision = ++executionRevision
@@ -2632,7 +2672,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   fun reuseMessage(messageId: String): Boolean {
     val current = mutableState.value
     val message = current.messages.firstOrNull { it.id == messageId && it.role == "user" } ?: return false
-    if (message.text.isBlank() || message.hasNonTextContent || current.selectedConversationId == null ||
+    if (message.text.isBlank() || message.text.length > 32_000 || message.hasNonTextContent ||
+      current.selectedConversationId == null ||
       current.sending || current.pendingInput != null || current.attachmentLoading ||
       current.draftAttachments.isNotEmpty() || current.draftRefs.isNotEmpty() ||
       current.pendingDeleteId == current.selectedConversationId) return false

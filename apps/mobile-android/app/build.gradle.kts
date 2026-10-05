@@ -79,6 +79,9 @@ dependencies {
   implementation(libs.bouncycastle)
   implementation(libs.okhttp)
   implementation(libs.zxing.core)
+  implementation(libs.androidx.camera.camera2)
+  implementation(libs.androidx.camera.lifecycle)
+  implementation(libs.androidx.camera.view)
 
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)

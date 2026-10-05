@@ -3,6 +3,20 @@ import Testing
 @testable import XopcMobile
 
 struct GatewayModelsTests {
+    @Test func decodesFileSpacesForNotesLibrary() throws {
+        let data = Data(#"""
+        { "spaces": [{
+          "id": "workspace", "title": "工作空间", "kind": "workspace",
+          "writable": true, "lastActivityAt": 1791168000000
+        }] }
+        """#.utf8)
+
+        let page = try JSONDecoder().decode(FileSpacesPage.self, from: data)
+
+        #expect(page.spaces.map(\.id) == ["workspace"])
+        #expect(page.spaces.first?.writable == true)
+    }
+
     @Test func decodesAgentCatalogEnvelope() throws {
         let data = Data(#"""
         {

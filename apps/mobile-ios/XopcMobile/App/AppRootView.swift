@@ -6,7 +6,6 @@ struct AppRootView: View {
     @State private var settingsPresented = false
     @State private var quickDraft = ""
     @State private var keyboardVisible = false
-    @State private var tabRootIDs: [AppTab: UUID] = [:]
     @FocusState private var quickInputFocused: Bool
     @AppStorage("app.language") private var language = AppLanguage.system.rawValue
     @AppStorage("app.appearance") private var appearance = AppAppearance.system.rawValue
@@ -16,6 +15,7 @@ struct AppRootView: View {
             NavigationStack {
                 AssistantView(
                     configuration: appState.gatewayConfiguration,
+                    isActive: appState.selectedTab == .assistant,
                     realtimeVoiceCall: realtimeVoiceCall,
                     conversation: appState.selectedConversation,
                     quickChatHandoff: appState.quickChatHandoff,
@@ -28,7 +28,6 @@ struct AppRootView: View {
                     bottomDock(showTabs: !isActionPanelExpanded) { composer }
                 }
             }
-            .id(TabRootIdentity(tab: .assistant, resetID: tabRootIDs[.assistant]))
             .tabItem { Label("助手", systemImage: "sparkles") }
             .tag(AppTab.assistant)
             .toolbar(.hidden, for: .tabBar)
@@ -42,7 +41,6 @@ struct AppRootView: View {
                 )
                 .safeAreaInset(edge: .bottom, spacing: 0) { bottomDock { quickComposer } }
             }
-            .id(TabRootIdentity(tab: .conversations, resetID: tabRootIDs[.conversations]))
             .tabItem { Label("对话", systemImage: "bubble.left.and.bubble.right") }
             .tag(AppTab.conversations)
             .toolbar(.hidden, for: .tabBar)
@@ -55,7 +53,6 @@ struct AppRootView: View {
                 )
                 .safeAreaInset(edge: .bottom, spacing: 0) { bottomDock { quickComposer } }
             }
-            .id(TabRootIdentity(tab: .progress, resetID: tabRootIDs[.progress]))
             .tabItem { Label("进展", systemImage: "chart.line.uptrend.xyaxis") }
             .tag(AppTab.progress)
             .toolbar(.hidden, for: .tabBar)
@@ -67,7 +64,6 @@ struct AppRootView: View {
                 )
                 .safeAreaInset(edge: .bottom, spacing: 0) { bottomDock { quickComposer } }
             }
-            .id(TabRootIdentity(tab: .notes, resetID: tabRootIDs[.notes]))
             .tabItem { Label("笔记", systemImage: "note.text") }
             .tag(AppTab.notes)
             .toolbar(.hidden, for: .tabBar)
@@ -79,7 +75,6 @@ struct AppRootView: View {
                 )
                 .safeAreaInset(edge: .bottom, spacing: 0) { bottomDock { quickComposer } }
             }
-            .id(TabRootIdentity(tab: .profile, resetID: tabRootIDs[.profile]))
             .tabItem { Label("我的", systemImage: "person.crop.circle") }
             .tag(AppTab.profile)
             .toolbar(.hidden, for: .tabBar)
@@ -135,7 +130,7 @@ struct AppRootView: View {
                     dockTab(.assistant, "助手", icon: "bubble.left")
                     dockTab(.conversations, "对话", icon: "bubble.left.and.bubble.right")
                     dockTab(.progress, "进展", icon: "checkmark.circle")
-                    dockTab(.notes, "资料库", icon: "square.on.square")
+                    dockTab(.notes, "笔记", icon: "note.text")
                     dockTab(.profile, "我的", icon: "person")
                 }
                 .padding(.horizontal, 4)
@@ -160,7 +155,7 @@ struct AppRootView: View {
                     .font(.system(size: 22))
                     .frame(width: 40, height: 44)
             }
-            .accessibilityLabel("语音对话")
+            .accessibilityLabel("语音输入")
 
             TextField(quickPlaceholder, text: $quickDraft, axis: .vertical)
                 .focused($quickInputFocused)
@@ -209,20 +204,22 @@ struct AppRootView: View {
     private func dockTab(_ tab: AppTab, _ title: LocalizedStringKey, icon: String) -> some View {
         Button {
             quickInputFocused = false
-            if appState.selectedTab == tab {
-                tabRootIDs[tab] = UUID()
-            } else {
-                appState.selectedTab = tab
-            }
+            appState.selectedTab = tab
         } label: {
             VStack(spacing: 3) {
-                Image(systemName: icon)
-                    .font(.system(size: 21, weight: .regular))
-                    .frame(width: 42, height: 28)
-                    .background(
-                        appState.selectedTab == tab ? Color.blue.opacity(0.12) : .clear,
-                        in: .capsule
-                    )
+                Group {
+                    if tab == .assistant {
+                        LoopiIcon(size: 28, active: appState.selectedTab == .assistant, compact: true)
+                    } else {
+                        Image(systemName: icon)
+                            .font(.system(size: 21, weight: .regular))
+                    }
+                }
+                .frame(width: 42, height: 28)
+                .background(
+                    appState.selectedTab == tab ? Color.blue.opacity(0.12) : .clear,
+                    in: .capsule
+                )
                 Text(title)
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
@@ -248,9 +245,131 @@ struct AppRootView: View {
     }
 }
 
-private struct TabRootIdentity: Hashable {
-    let tab: AppTab
-    let resetID: UUID?
+private struct LoopiPose {
+    var lift: CGFloat = 0
+    var ringAngle: Double = 0
+    var gaze: CGFloat = 0
+    var eyeOpen: CGFloat = 1
+}
+
+private struct LoopiMotionKey: Hashable {
+    let active: Bool
+    let compact: Bool
+    let greeting: Int
+}
+
+struct LoopiIcon: View {
+    let size: CGFloat
+    let active: Bool
+    var compact = false
+    var interactive = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var pose = LoopiPose()
+    @State private var greeting = 0
+    @State private var pendingGreeting = false
+
+    private var motionActive: Bool {
+        active && scenePhase == .active && !reduceMotion
+    }
+
+    var body: some View {
+        Group {
+            if interactive {
+                Button {
+                    guard motionActive else { return }
+                    pendingGreeting = true
+                    greeting += 1
+                } label: {
+                    artwork
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("助手")
+            } else {
+                artwork
+                    .accessibilityHidden(true)
+            }
+        }
+        .task(id: LoopiMotionKey(active: motionActive, compact: compact, greeting: greeting)) {
+            await runMotion()
+        }
+    }
+
+    private var artwork: some View {
+        ZStack {
+            Image("LoopiRing")
+                .renderingMode(.original)
+                .resizable()
+                .frame(width: size, height: size)
+                .rotationEffect(.degrees(pose.ringAngle))
+                .offset(y: pose.lift * size / 304)
+            ZStack {
+                Image("LoopiCore")
+                    .renderingMode(.original)
+                    .resizable()
+                    .frame(width: size, height: size)
+                Image("LoopiEyes")
+                    .renderingMode(.original)
+                    .resizable()
+                    .frame(width: size * 52 / 304, height: size * 14 / 304)
+                    .scaleEffect(x: 1, y: pose.eyeOpen)
+                    .offset(x: pose.gaze * size / 304, y: -2 * size / 304)
+            }
+            .offset(y: pose.lift * size / 200)
+        }
+        .frame(width: size, height: size)
+        .contentShape(.circle)
+    }
+
+    private func pause(_ milliseconds: Int) async -> Bool {
+        do {
+            try await Task.sleep(for: .milliseconds(milliseconds))
+            return !Task.isCancelled
+        } catch {
+            return false
+        }
+    }
+
+    private func move(to next: LoopiPose, duration: Double) {
+        withAnimation(.easeInOut(duration: duration)) {
+            pose = next
+        }
+    }
+
+    private func runMotion() async {
+        pose = LoopiPose()
+        guard motionActive else { return }
+
+        if compact {
+            guard await pause(120) else { return }
+            move(to: LoopiPose(lift: -2), duration: 0.22)
+            guard await pause(260) else { return }
+            move(to: LoopiPose(lift: -2, eyeOpen: 0.12), duration: 0.11)
+            guard await pause(140) else { return }
+            move(to: LoopiPose(lift: -2), duration: 0.18)
+            return
+        }
+
+        if pendingGreeting {
+            pendingGreeting = false
+            move(to: LoopiPose(lift: -5, eyeOpen: 0.25), duration: 0.16)
+            guard await pause(450) else { return }
+            move(to: LoopiPose(), duration: 0.36)
+            guard await pause(1_650) else { return }
+        } else if !(await pause(120)) {
+            return
+        }
+
+        while !Task.isCancelled {
+            move(to: LoopiPose(lift: -4, ringAngle: -1.2, gaze: .random(in: -2.5 ... 2.5)), duration: 1.2)
+            guard await pause(1_400) else { return }
+            move(to: LoopiPose(eyeOpen: 0.12), duration: 0.11)
+            guard await pause(140) else { return }
+            move(to: LoopiPose(), duration: 0.18)
+            guard await pause(Int.random(in: 1_860 ... 4_160)) else { return }
+        }
+    }
 }
 
 #Preview {

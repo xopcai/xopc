@@ -25,8 +25,15 @@ struct NoteAttachmentsSection: View {
                     Button {
                         Task { await open(attachment) }
                     } label: {
-                        Label(attachment.fileName, systemImage: "paperclip")
+                        Label {
+                            Text(attachment.fileName)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } icon: {
+                            Image(systemName: "paperclip")
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
                     }
+                    .buttonStyle(.bordered)
                     .disabled(loadingAttachmentID != nil)
                 }
                 if let transcript = attachment.transcript?.trimmingCharacters(in: .whitespacesAndNewlines),

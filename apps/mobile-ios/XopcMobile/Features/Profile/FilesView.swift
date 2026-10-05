@@ -1,13 +1,79 @@
 import SwiftUI
 
+struct FileLibraryView: View {
+    let configuration: GatewayConfiguration
+
+    @State private var spaces: [FileSpace] = []
+    @State private var isLoading = true
+    @State private var error: String?
+
+    var body: some View {
+        List {
+            if isLoading, spaces.isEmpty {
+                ProgressView("正在读取文件空间…")
+            } else if let error, spaces.isEmpty {
+                ContentUnavailableView("无法读取文件空间", systemImage: "exclamationmark.triangle", description: Text(error))
+                Button("重试") { Task { await load() } }
+            } else if spaces.isEmpty {
+                ContentUnavailableView("暂无文件空间", systemImage: "folder")
+            } else {
+                ForEach(spaces) { space in
+                    NavigationLink {
+                        FilesView(configuration: configuration, initialSpace: space)
+                    } label: {
+                        Label(space.title, systemImage: "folder")
+                    }
+                    .accessibilityIdentifier("file-space-\(space.id)")
+                }
+            }
+        }
+        .navigationTitle("文件")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await load() }
+        .task { await load() }
+    }
+
+    @MainActor private func load() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            spaces = try await GatewayClient(configuration: configuration).fetchFileSpaces()
+            error = nil
+        } catch is CancellationError {
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+struct FileDestinationView: View {
+    let configuration: GatewayConfiguration
+    let file: FileResource
+
+    var body: some View {
+        if file.kind == "directory" {
+            FileFolderView(configuration: configuration, spaceID: file.spaceId,
+                           path: file.relativePath, title: file.name, writable: false)
+        } else {
+            FilePreviewView(configuration: configuration, file: file)
+        }
+    }
+}
+
 struct FilesView: View {
     let configuration: GatewayConfiguration
+    let initialSpace: FileSpace?
 
     @State private var space: FileSpace?
     @State private var items: [FileResource] = []
     @State private var search = ""
     @State private var isLoading = false
     @State private var error: String?
+
+    init(configuration: GatewayConfiguration, initialSpace: FileSpace? = nil) {
+        self.configuration = configuration
+        self.initialSpace = initialSpace
+    }
 
     var body: some View {
         List {
@@ -70,7 +136,12 @@ struct FilesView: View {
         do {
             let client = GatewayClient(configuration: configuration)
             if search.isEmpty {
-                let loadedSpace = try await client.fetchDefaultFileSpace()
+                let loadedSpace: FileSpace
+                if let initialSpace {
+                    loadedSpace = initialSpace
+                } else {
+                    loadedSpace = try await client.fetchDefaultFileSpace()
+                }
                 space = loadedSpace
                 items = try await client.fetchFiles(spaceID: loadedSpace.id)
             } else {

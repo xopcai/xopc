@@ -710,3 +710,8 @@
 "请在系统设置中允许使用麦克风" = "Allow microphone access in Settings.";
 "语音通话失败，请重试" = "Voice call failed. Try again.";
 "自动化目标不存在或已被移除。" = "The automation target does not exist or has been removed.";
+"录音已完成，可转为文字或发送语音" = "Recording complete. Transcribe it or send the audio.";
+"正在转为文字…" = "Transcribing…";
+"转为文字" = "Transcribe";
+"发送语音" = "Send Audio";
+"没有识别出文字，请重试或发送语音" = "No speech was recognized. Try again or send the audio.";

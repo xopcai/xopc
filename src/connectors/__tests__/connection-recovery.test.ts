@@ -71,6 +71,13 @@ describe('durable connection recovery', () => {
       providerConnectionId: id === 'connection-1' ? 'provider-1' : id, identity: { email: `${id}@example.test` }, status: 'active', isDefault: false, metadata: {} });
   }
 
+  it('marks Gmail authorization as a browser flow for mobile clients', () => {
+    requireWait();
+    expect(recovery.snapshot(conversationId).wait?.needs[0]).toMatchObject({
+      phase: 'connect', authorizationMode: 'browser',
+    });
+  });
+
   it('binds approval to the account and resumes the same objective without accepting changed arguments', async () => {
     const account = activeConnection();
     upsertConnectorInstallation({ ...getConnectorInstallation('composio-gmail-local-owner')!, maxScope: 'write' });
@@ -367,7 +374,7 @@ describe('durable connection recovery', () => {
       adapter: { syncConnections: vi.fn(async () => []) } as unknown as ComposioSessionsAdapter, pluginMcp });
     requireSessionConnection({ conversationId, principalId: 'local-owner', agentId: 'main', summary: 'Verify my Demo identity',
       needs: [{ key: target.serverId, target, label: 'oauth-demo', capabilities: [`mcp.tools:${target.serverId}`] }] });
-    expect(recovery.snapshot(conversationId).wait?.needs[0].phase).toBe('connect');
+    expect(recovery.snapshot(conversationId).wait?.needs[0]).toMatchObject({ phase: 'connect', authorizationMode: 'desktop' });
     const connected = await recovery.act(conversationId, action('connect', { needKey: target.serverId }));
     expect(connected.authorizationUrl).toBe('https://example.test/authorize');
     expect(connected.snapshot.wait?.needs[0].phase).toBe('authorizing');
@@ -416,7 +423,7 @@ describe('durable connection recovery', () => {
       capabilities: definition.capabilities,
     };
     requireSessionConnection({ conversationId, principalId: 'local-owner', agentId: 'main', summary: 'Use Store Demo', needs: [storeNeed] });
-    expect(recovery.snapshot(conversationId).wait?.needs[0].phase).toBe('install');
+    expect(recovery.snapshot(conversationId).wait?.needs[0]).toMatchObject({ phase: 'install', authorizationMode: 'desktop' });
 
     const instance = await installConnectorDefinition(config, definition, {});
     const result = await recovery.act(conversationId, action('install_complete', {

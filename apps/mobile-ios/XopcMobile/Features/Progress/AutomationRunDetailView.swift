@@ -8,6 +8,7 @@ struct AutomationRunDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var run: AutomationRunRecord?
     @State private var events: [AutomationRunEvent] = []
     @State private var isLoading = true
@@ -41,16 +42,23 @@ struct AutomationRunDetailView: View {
             if let displayedRun {
                 Section {
                     VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 12) {
-                            Image(systemName: statusAppearance.symbol)
-                                .font(.title2)
-                                .foregroundStyle(statusAppearance.color)
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(LocalizedStringKey(displayedRun.status)).font(.title2.bold())
-                                Text((displayedRun.startedAtMs ?? displayedRun.createdAtMs).millisecondsDate,
-                                     format: .dateTime.month().day().hour().minute())
-                                    .font(.caption).foregroundStyle(.secondary)
+                        if !displayedRun.automationName.isEmpty {
+                            Text(verbatim: displayedRun.automationName)
+                                .font(.headline)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityAddTraits(.isHeader)
+                        }
+                        Group {
+                            if dynamicTypeSize.isAccessibilitySize {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    runStatusIcon
+                                    runStatus(displayedRun)
+                                }
+                            } else {
+                                HStack(spacing: 12) {
+                                    runStatusIcon
+                                    runStatus(displayedRun)
+                                }
                             }
                         }
                         if let summary = displayedRun.summary, !summary.isEmpty {
@@ -58,16 +66,18 @@ struct AutomationRunDetailView: View {
                                 VStack(alignment: .leading, spacing: 10) {
                                     Text("记忆维护已完成")
                                         .font(.subheadline.weight(.semibold))
-                                    LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], alignment: .leading, spacing: 10) {
+                                    LazyVGrid(columns: metricColumns, alignment: .leading, spacing: 10) {
                                         ForEach(maintenance.metrics) { metric in
-                                            HStack(alignment: .firstTextBaseline) {
+                                            VStack(alignment: .leading, spacing: 3) {
                                                 Text(LocalizedStringKey(metric.label))
+                                                    .font(.caption)
                                                     .foregroundStyle(.secondary)
-                                                Spacer(minLength: 4)
+                                                    .fixedSize(horizontal: false, vertical: true)
                                                 Text(metric.count, format: .number)
+                                                    .font(.subheadline.weight(.semibold))
                                                     .monospacedDigit()
                                             }
-                                            .font(.caption)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
                                         }
                                     }
                                 }
@@ -134,8 +144,7 @@ struct AutomationRunDetailView: View {
                 }
             }
         }
-        .navigationTitle(displayedRun?.automationName
-            ?? AppLocalization.string("自动化运行", locale: AppLocalization.selectedLocale))
+        .navigationTitle("运行详情")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: "\(runID):\(pollRevision)") { await poll() }
         .refreshable { await load() }
@@ -167,6 +176,32 @@ struct AutomationRunDetailView: View {
             if isWorking {
                 ProgressView().padding().background(.regularMaterial, in: .circle)
             }
+        }
+    }
+
+    private var metricColumns: [GridItem] {
+        let count = dynamicTypeSize.isAccessibilitySize ? 1 : 2
+        return Array(repeating: GridItem(.flexible()), count: count)
+    }
+
+    private var runStatusIcon: some View {
+        Image(systemName: statusAppearance.symbol)
+            .font(.title2)
+            .foregroundStyle(statusAppearance.color)
+            .frame(width: 48, height: 48)
+            .accessibilityHidden(true)
+    }
+
+    private func runStatus(_ run: AutomationRunRecord) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(LocalizedStringKey(run.status))
+                .font(.title2.bold())
+                .fixedSize(horizontal: false, vertical: true)
+            Text((run.startedAtMs ?? run.createdAtMs).millisecondsDate,
+                 format: .dateTime.month().day().hour().minute())
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

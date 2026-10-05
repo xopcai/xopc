@@ -328,6 +328,11 @@ extension GatewayClient {
         return response.space
     }
 
+    func fetchFileSpaces() async throws -> [FileSpace] {
+        let response: FileSpacesPage = try await request(path: "/api/files/spaces")
+        return response.spaces
+    }
+
     func fetchFiles(spaceID: String, path: String = "") async throws -> [FileResource] {
         let response: FileResourcePage = try await request(
             path: "/api/files/spaces/\(spaceID)/children",

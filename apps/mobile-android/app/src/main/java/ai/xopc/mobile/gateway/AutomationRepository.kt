@@ -15,10 +15,15 @@ data class AutomationRunSummary(val id: String, val automationId: String, val au
   val durationMs: Long?)
 data class AutomationRunEvent(val id: String, val message: String, val createdAtMs: Long?)
 data class AutomationCancellation(val accepted: Boolean, val confirmed: Boolean)
+data class AutomationMetricsNext(val automationId: String, val name: String, val runAtMs: Long)
+data class AutomationMetrics(val totalAutomations: Int, val enabledAutomations: Int,
+  val runningRuns: Int, val failedLastHour: Int, val nextRun: AutomationMetricsNext?)
 
 /** Authenticated Automation reads shared by Progress and its detail destinations. */
 class AutomationRepository(private val gateway: GatewaySession) {
   fun list(): List<AutomationSummary> = parseList(gateway.request("/api/automations"))
+
+  fun metrics(): AutomationMetrics = parseMetrics(gateway.request("/api/automations/metrics"))
 
   fun detail(id: String): AutomationSummary {
     requireValidId(id)
@@ -162,6 +167,26 @@ class AutomationRepository(private val gateway: GatewaySession) {
       val rows = JSONObject(raw).getJSONArray("automations")
       require(rows.length() <= 500) { "INVALID_AUTOMATIONS" }
       return (0 until rows.length()).map { parseAutomation(rows.getJSONObject(it)) }
+    }
+
+    fun parseMetrics(raw: String): AutomationMetrics {
+      val value = JSONObject(raw)
+      val next = value.optJSONObject("nextRun")?.let { row ->
+        val automationId = row.getString("automationId")
+        requireValidId(automationId)
+        val name = row.getString("name")
+        val runAtMs = row.getLong("runAtMs")
+        require(name.isNotBlank() && runAtMs >= 0) { "INVALID_AUTOMATION_METRICS" }
+        AutomationMetricsNext(automationId, name.take(200), runAtMs)
+      }
+      val total = value.getInt("totalAutomations")
+      val enabled = value.getInt("enabledAutomations")
+      val running = value.getInt("runningRuns")
+      val failed = value.getInt("failedLastHour")
+      require(total >= 0 && enabled in 0..total && running >= 0 && failed >= 0) {
+        "INVALID_AUTOMATION_METRICS"
+      }
+      return AutomationMetrics(total, enabled, running, failed, next)
     }
 
     fun parseDetail(id: String, raw: String): AutomationSummary {
