@@ -159,6 +159,12 @@
     <string name="assistant_copy">复制</string>
     <string name="assistant_copy_code">复制代码</string>
     <string name="assistant_reuse">复用</string>
+    <string name="connection_wait_title">需要连接</string>
+    <string name="connection_wait_resuming">正在恢复工作</string>
+    <string name="connection_wait_details">详情</string>
+    <string name="connection_wait_desktop">请在桌面端完成此连接。</string>
+    <string name="connection_wait_browser">可通过 Gateway 完成浏览器授权。</string>
+    <string name="connection_wait_android_readonly">Android 暂不支持连接操作，请在 Gateway 中继续。</string>
     <string name="assistant_save_note">保存为笔记</string>
     <string name="assistant_saved_note">已保存到笔记</string>
     <string name="assistant_save_note_error">保存到笔记失败，请重试</string>

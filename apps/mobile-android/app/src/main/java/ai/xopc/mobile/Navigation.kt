@@ -58,6 +58,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onReloadModels = gateway::loadModels, onSelectModel = gateway::selectModel,
             onReloadAgents = gateway::loadAgents, onSwitchAgent = gateway::switchAgent,
             onReloadContext = gateway::loadContext,
+            onRefreshConnectionWait = gateway::refreshConnectionWait,
             onRefreshProgress = gateway::refreshProgress,
             onRefreshProgressHome = gateway::refreshProgressHome,
             onProgressHomeAction = gateway::actOnProgressHome,

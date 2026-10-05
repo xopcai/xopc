@@ -313,6 +313,7 @@ fun MainScreen(
   onReloadAgents: () -> Unit = {},
   onSwitchAgent: (String, Boolean) -> Unit = { _, _ -> },
   onReloadContext: () -> Unit = {},
+  onRefreshConnectionWait: () -> Unit = {},
   onRefreshProgress: () -> Unit = {},
   onRefreshProgressHome: () -> Unit = {},
   onProgressHomeAction: (ProgressHomeAction) -> Unit = {},
@@ -556,7 +557,7 @@ fun MainScreen(
     onRetryPendingInput = onRetryPendingInput, onStopRun = onStopRun,
     onReloadModels = onReloadModels, onSelectModel = onSelectModel,
     onReloadAgents = onReloadAgents, onSwitchAgent = onSwitchAgent,
-    onReloadContext = onReloadContext,
+    onReloadContext = onReloadContext, onRefreshConnectionWait = onRefreshConnectionWait,
     onRefreshProgress = onRefreshProgress, onLoadMoreProgressTasks = onLoadMoreProgressTasks,
     onRefreshProgressHome = onRefreshProgressHome, onRefreshProgressTasks = onRefreshProgressTasks,
     onProgressHomeAction = onProgressHomeAction,
@@ -701,6 +702,7 @@ internal fun MainContent(
   onReloadAgents: () -> Unit = {},
   onSwitchAgent: (String, Boolean) -> Unit = { _, _ -> },
   onReloadContext: () -> Unit = {},
+  onRefreshConnectionWait: () -> Unit = {},
   onRefreshProgress: () -> Unit = {},
   onRefreshProgressHome: () -> Unit = {},
   onProgressHomeAction: (ProgressHomeAction) -> Unit = {},
@@ -829,6 +831,16 @@ internal fun MainContent(
   }
   LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
     if (selectedTab == HomeTab.Me && connection.profile != null) onLoadPersonal()
+  }
+  val latestConnectionWaitRefresh by rememberUpdatedState(onRefreshConnectionWait)
+  LaunchedEffect(selectedTab, connection.profile?.gatewayId, connection.selectedConversationId) {
+    if (selectedTab == HomeTab.Assistant && connection.profile != null &&
+      connection.selectedConversationId != null) {
+      while (true) {
+        latestConnectionWaitRefresh()
+        delay(5_000)
+      }
+    }
   }
   LaunchedEffect(personalPage, connection.profile?.gatewayId) {
     if (personalPage == "settings-gateways") onOpenGatewayProfiles()
@@ -985,6 +997,7 @@ internal fun MainContent(
           onCreateConversation, onLoadReferences, onAddDraftRef,
           onRetryPendingInput,
           onReloadModels, onSelectModel, onReloadAgents, onSwitchAgent, onReloadContext,
+          onRefreshConnectionWait,
           onOpenExecution, onRetryExecution, onCloseExecution,
           onCopyMessageText, onSaveMessageAsNote, onReuseMessage,
           onLoadMessageMedia, onOpenMessageTarget = { target ->
@@ -1433,7 +1446,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onRetryPendingInput: () -> Unit,
   onReloadModels: () -> Unit, onSelectModel: (String) -> Unit,
   onReloadAgents: () -> Unit, onSwitchAgent: (String, Boolean) -> Unit,
-  onReloadContext: () -> Unit, onOpenExecution: (String) -> Unit,
+  onReloadContext: () -> Unit, onRefreshConnectionWait: () -> Unit,
+  onOpenExecution: (String) -> Unit,
   onRetryExecution: () -> Unit, onCloseExecution: () -> Unit,
   onCopyMessageText: (String) -> Unit,
   onSaveMessageAsNote: (String) -> Unit,
@@ -1512,6 +1526,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
       if (connection.historyLoading) CircularProgressIndicator()
       if (connection.chatError) Text(stringResource(R.string.chat_load_error), color = MaterialTheme.colorScheme.error)
+      if (connection.connectionWait.gatewayId == connection.profile?.gatewayId &&
+        connection.connectionWait.conversationId == connection.selectedConversationId) {
+        ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait)
+      }
       if (connection.activeRunId != null) {
         Text(stringResource(if (connection.stoppingRun) R.string.assistant_stopping else R.string.assistant_running),
           style = MaterialTheme.typography.bodyMedium)

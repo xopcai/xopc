@@ -17,6 +17,8 @@ import ai.xopc.mobile.gateway.PendingInput
 import ai.xopc.mobile.gateway.ConversationModel
 import ai.xopc.mobile.gateway.ConversationAgent
 import ai.xopc.mobile.gateway.ConversationContext
+import ai.xopc.mobile.gateway.ConnectionWaitRepository
+import ai.xopc.mobile.gateway.ConnectionWaitSnapshot
 import ai.xopc.mobile.gateway.TaskWelcomeInfo
 import ai.xopc.mobile.gateway.ProjectWelcomeInfo
 import ai.xopc.mobile.gateway.ProgressRepository
@@ -286,6 +288,7 @@ data class ConnectionUiState(
   val context: ConversationContext? = null,
   val contextLoading: Boolean = false,
   val contextError: Boolean = false,
+  val connectionWait: ConnectionWaitUiState = ConnectionWaitUiState(),
   val taskWelcome: TaskWelcomeInfo? = null,
   val projectWelcome: ProjectWelcomeInfo? = null,
   val progress: ProgressUiState = ProgressUiState(),
@@ -293,6 +296,9 @@ data class ConnectionUiState(
   val shares: ShareCenterUiState = ShareCenterUiState(),
   val personal: PersonalUiState = PersonalUiState(),
 )
+
+data class ConnectionWaitUiState(val gatewayId: String? = null, val conversationId: String? = null,
+  val snapshot: ConnectionWaitSnapshot? = null, val loading: Boolean = false, val error: Boolean = false)
 
 data class MessageNoteFeedback(val messageId: String, val saved: Boolean)
 
@@ -321,6 +327,7 @@ private data class RestoredGateway(val profile: GatewayProfile?, val conversatio
 class GatewayViewModel(application: Application) : AndroidViewModel(application) {
   private val session = GatewaySession(application)
   private val conversations = ConversationRepository(session, application)
+  private val connectionWaitRepository = ConnectionWaitRepository(session)
   private val progressRepository = ProgressRepository(session)
   private val automationRepository = AutomationRepository(session)
   private val noteRepository = NoteRepository(session)
@@ -344,6 +351,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private var modelJob: Job? = null
   private var agentJob: Job? = null
   private var contextJob: Job? = null
+  private var connectionWaitJob: Job? = null
+  private var connectionWaitRevision = 0
   private var referenceJob: Job? = null
   private var referenceRevision = 0
   private var progressJob: Job? = null
@@ -2051,7 +2060,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       }
     }
     val readers = listOf(searchJob, historyJob, executionJob, runStateJob, modelJob, agentJob,
-      contextJob, referenceJob, progressJob, progressHomeJob, progressMetricsJob, progressMoreJob, progressDetailJob,
+      contextJob, connectionWaitJob, referenceJob, progressJob, progressHomeJob, progressMetricsJob,
+      progressMoreJob, progressDetailJob,
       projectsJob, projectDetailJob, automationJob, notesJob, sharesJob, noteDetailJob, noteHistoryJob,
       noteSnapshotJob, personalJob, personalListJob, personalDetailJob)
     readers.forEach { it?.cancel() }
@@ -2059,7 +2069,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     realtimeJob?.cancelAndJoin()
     realtimeJob = null
     realtime.watchRun(null)
-    listRevision++; historyRevision++; executionRevision++; contextRevision++; referenceRevision++
+    listRevision++; historyRevision++; executionRevision++; contextRevision++; connectionWaitRevision++; referenceRevision++
     progressRevision++; progressHomeRevision++; progressDetailRevision++
     projectsRevision++; projectDetailRevision++; automationRevision++
     notesRevision++; noteDetailRevision++; personalRevision++; personalListRevision++; personalDetailRevision++
@@ -2346,6 +2356,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     agentJob?.cancel()
     contextJob?.cancel()
     contextRevision++
+    connectionWaitJob?.cancel()
+    connectionWaitRevision++
     referenceJob?.cancel()
     referenceRevision++
     realtime.watchRun(null)
@@ -2362,6 +2374,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       modelsLoading = false, modelSaving = false, modelError = false, agents = emptyList(),
       selectedAgentId = "", agentsLoading = false, agentError = false) }
     mutableState.update { it.copy(context = null, contextLoading = false, contextError = false,
+      connectionWait = ConnectionWaitUiState(it.profile?.gatewayId, id),
       taskWelcome = null, projectWelcome = null) }
     historyJob = viewModelScope.launch {
       try {
@@ -2397,6 +2410,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           if (revision == historyRevision) loadModels(id)
           if (revision == historyRevision) loadAgents(id)
           if (revision == historyRevision) loadContext()
+          if (revision == historyRevision) refreshConnectionWait()
         }
       } catch (error: CancellationException) {
         throw error
@@ -2523,6 +2537,38 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       } catch (_: Exception) {
         if (revision == contextRevision && mutableState.value.selectedConversationId == id) mutableState.update {
           it.copy(contextLoading = false, contextError = true, taskScopeLoading = true)
+        }
+      }
+    }
+  }
+
+  fun refreshConnectionWait() {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: return
+    val id = current.selectedConversationId ?: return
+    if (current.historyLoading || current.connectionWait.loading) return
+    connectionWaitJob?.cancel()
+    val revision = ++connectionWaitRevision
+    mutableState.update { it.copy(connectionWait = it.connectionWait.copy(gatewayId = gatewayId,
+      conversationId = id, loading = it.connectionWait.snapshot == null, error = false)) }
+    connectionWaitJob = viewModelScope.launch {
+      try {
+        val snapshot = runInterruptible(Dispatchers.IO) {
+          if (conversations.draft(id) != null) null else connectionWaitRepository.snapshot(id)
+        }
+        if (revision == connectionWaitRevision && mutableState.value.profile?.gatewayId == gatewayId &&
+          mutableState.value.selectedConversationId == id) mutableState.update {
+          val previous = it.connectionWait.snapshot
+          val accepted = if (snapshot != null && previous != null &&
+            previous.transcriptId == snapshot.transcriptId && previous.revision > snapshot.revision) previous
+          else snapshot
+          it.copy(connectionWait = ConnectionWaitUiState(gatewayId, id, accepted))
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (revision == connectionWaitRevision && mutableState.value.profile?.gatewayId == gatewayId &&
+          mutableState.value.selectedConversationId == id) mutableState.update {
+          it.copy(connectionWait = it.connectionWait.copy(loading = false, error = true))
         }
       }
     }
