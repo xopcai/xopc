@@ -1,6 +1,6 @@
 # Chat / dock / drawer parity
 
-Baseline: `apps/mobile-expo/src/features/chat/ChatScreen.tsx`, the components it composes, and `CapsuleTabBar.tsx`. Updated 2026-09-18 per user direction: opening a conversation switches the main Chat in place, retaining the drawer and dock; it must not push an embedded detail Chat. The historical verification entries below describe the earlier implementation, not the current navigation contract. This checklist is an acceptance inventory, not a completion claim.
+Baseline: `retired mobile client/src/features/chat/ChatScreen.tsx`, the components it composes, and `CapsuleTabBar.tsx`. Updated 2026-09-18 per user direction: opening a conversation switches the main Chat in place, retaining the drawer and dock; it must not push an embedded detail Chat. The historical verification entries below describe the earlier implementation, not the current navigation contract. This checklist is an acceptance inventory, not a completion claim.
 
 | Area | Acceptance |
 | --- | --- |
@@ -24,7 +24,7 @@ Implemented in this pass:
 - Independent, dated/paginated drawer data, profile shortcuts, search/new conversation, edge swipe, scrim/back dismissal, selected row indicator.
 - Four-tab selection capsule with reduced-motion support, attention badge, keyboard/drawer/action-panel avoidance; root/detail conversation ownership preserved.
 - Model and agent sheets, per-agent model preference for new sessions, scoped conversation files; project/local/worktree changes create a new conversation, selecting the existing scope is a no-op.
-- Draft persistence scoped by Gateway and conversation, notes/tasks/workspace references, `/` command/skill palette and `@` file/note palette; local binary attachments and temporary file URIs are intentionally not persisted, matching Expo.
+- Draft persistence scoped by Gateway and conversation, notes/tasks/workspace references, `/` command/skill palette and `@` file/note palette; local binary attachments and temporary file URIs are intentionally not persisted, matching retired cross-platform client.
 - System photo/camera/document pickers; image history preview and attachment download; versioned queue edit/cancel, send-next and steer, clarification choices/free text/agent decision/cancel.
 - Copy/edit/save note/regenerate/read aloud, source-context versions retained on regeneration; structured history, collapsible thinking/tools, initial bottom scroll and older-page anchoring. Read-aloud cancellation releases request/player/cache resources on navigation/background.
 - Fixed a device-observed reconnect loop: valid payload-free Gateway events were rejected by the native client. Added a regression test and verified that the connecting banner no longer remains on the emulator. Queue updates on the same active run no longer clear streamed text.
@@ -54,7 +54,7 @@ The script edits only local starter and `/` drafts, verifies draft persistence a
 - Native Markdown now renders horizontally scrollable tables (alignment, escaped/code pipes, missing cells), task-list markers, list indentation, strikethrough, code-language headers and explicit code copying. HTTP(S) links require a tap and display the actual target before opening in the system handler; executable/file/credentialed links remain inert. Markdown images are links, not implicit remote downloads. Streaming updates invalidate changed render keys.
 - Persisted tool calls/results are grouped by call ID, including out-of-order parallel results and older-page boundaries. Completed/error states, arguments, expandable full results and output attachments are retained. Ambiguous/orphan results stay visible; results never cross a user-turn boundary.
 - Chat attention opens a three-item sheet with unseen-first ordering, internal destinations, review details enriched from `decisions`, gated approval controls, retry/acknowledge actions, pending/error feedback and a Progress destination. Local seen revisions are encrypted and Gateway-scoped; changed items reappear. Mutation responses after navigation cannot update a different screen.
-- Empty-chat starters reuse the Expo English/Chinese copy through `scripts/export-welcome.mts`. Native selection covers empty/directory/project/task contexts, task attention/failure/review/next steps, project blockers/recovery, Agent specialization and date-seeded exploration. Tests compare native results directly with the shared ranker across 364 context/agent/language/date cases. Shipped Agent names are localized; custom names are retained. Context-fetch failure keeps usable suggestions and exposes retry. Tapping a starter fills an editable draft only.
+- Empty-chat starters use native English/Chinese copy and selection logic for empty/directory/project/task contexts, task attention/failure/review/next steps, project blockers/recovery, Agent specialization and date-seeded exploration. Shipped Agent names are localized; custom names are retained. Context-fetch failure keeps usable suggestions and exposes retry. Tapping a starter fills an editable draft only.
 
 Follow-up evidence:
 
@@ -74,9 +74,9 @@ The UI runner now waits for loaded content and the actual keyboard/dock state, r
 ## Follow-up: conversation search and management
 
 - Drawer search now opens an independent `SessionsView` navigation destination instead of replacing the root Chat view. Returning through a history detail preserves the manager and main draft. Removed the old inline history/actions UI.
-- Matches the current Expo search baseline: all channels (no `channel=webchat` restriction), trimmed 250 ms debounced search, submit/clear, calendar groups, relative timestamps, message counts and pinned/archived indicators. Current Expo does not expose separate channel/status filter chips; no new filter semantics were invented.
+- Matches the current retired cross-platform client search baseline: all channels (no `channel=webchat` restriction), trimmed 250 ms debounced search, submit/clear, calendar groups, relative timestamps, message counts and pinned/archived indicators. Current retired cross-platform client does not expose separate channel/status filter chips; no new filter semantics were invented.
 - Native virtualized rows support tap-to-open and a 300 ms long press that opens a menu, not selection. Explicit multi-select exposes archive/unarchive, pin, one-item rename and confirmed batch deletion. Rename and pin/unpin are also directly available from the row menu.
-- Single deletion uses Expo's 5-second undo deadline. Batch operations serialize requests, block duplicates, retain only failed targets for retry and do not replay successful items. Selected later-page rows survive refresh, page offsets count raw records, stale queries/disposed views cannot overwrite newer state, and delayed/batch writes cannot follow a Gateway switch.
+- Single deletion uses retired cross-platform client's 5-second undo deadline. Batch operations serialize requests, block duplicates, retain only failed targets for retry and do not replay successful items. Selected later-page rows survive refresh, page offsets count raw records, stale queries/disposed views cannot overwrite newer state, and delayed/batch writes cannot follow a Gateway switch.
 - Skeleton/empty/error/retry states reuse native components and theme resources. Batch controls use a neutral capsule with small icons rather than filled primary buttons. English/Chinese strings are included.
 
 Verification: 152 host tests across 30 files; debug/release HAP and CodeLinter passed (empty diagnostic report); brand/contract/welcome generated checks are current. Eight Pura 90 Pro emulator journeys passed, including manager navigation, search/empty/clear, long-press menu, rename cancellation, explicit selection, batch-delete confirmation cancellation and detail→manager→main return with the original draft intact. The temporary slash draft was cleared. Screenshots/UI trees/results remain ignored in `.test/chat-ui/`. Attention UI is still explicitly skipped because the paired Gateway has no unseen attention fixture. Tests exercise API paths, all-channel queries, paging, search races, rename failures, partial batches, refresh failures, undo deadlines, navigation and Gateway isolation using mocks. No real conversation mutations were used for verification. Mate 60 is not connected; no new physical-device acceptance is claimed.
@@ -87,11 +87,11 @@ The final bounded app-process hilog sample contains `CONCUR apply qos failed` an
 
 ## 2026-09-18 composer layout correction
 
-Reference: the user's two screenshots and the current Expo `ChatComposer.tsx` / `composer-layout.ts`.
+Reference: the user's two screenshots and the current retired cross-platform client `ChatComposer.tsx` / `composer-layout.ts`.
 
 - Empty drafts use one compact row: microphone, editor, plus. Send appears only for a non-whitespace draft, attachment or reference; stop remains available during a run.
 - Project/environment scope is inside the rounded shell with a divider. Horizontal shell inset is 12vp, scope height 36vp, editor minimum 40vp / maximum 120vp, tool circles 36vp and send circle 44vp with a 22vp symbol. The editor remains the same node when the first character expands the toolbar.
-- Voice mode replaces the editor, closes the keyboard, and keeps bounded recording/preview/transcription controls inside the shell. Switching back requests focus only after the editor remounts. Existing tap-to-record, preview and explicit transcription behavior is retained; Expo's hold/slide voice gestures are **not** claimed as aligned by this layout change.
+- Voice mode replaces the editor, closes the keyboard, and keeps bounded recording/preview/transcription controls inside the shell. Switching back requests focus only after the editor remounts. Existing tap-to-record, preview and explicit transcription behavior is retained; retired cross-platform client's hold/slide voice gestures are **not** claimed as aligned by this layout change.
 - Added host coverage for compact/expanded/payload rules and emulator UI assertions for measured dimensions, first-keystroke focus, send visibility and voice/keyboard switching. The new UI assertions have **not run successfully yet**: the available Pura 90 Pro emulator is unpaired. Do not equate those assertions with acceptance evidence.
 - Host suite: **160 tests / 31 files passed**. Debug, release and locally signed debug HAP builds passed. CodeLinter report was empty. Existing compiler capability/throw warnings remain; no zero-compiler-warning claim.
 - User reported reconnecting Mate 60. macOS detects a HUAWEI HDC USB device, but after restarting HDC and retrying the known target the device list still contains only the emulator. The new package is **not installed on Mate 60** and visual/keyboard/microphone acceptance remains pending USB debugging authorization and a paired Chat screen. No user messages or remote data were changed.
@@ -119,7 +119,7 @@ Physical follow-up after unlock (2026-09-18): Mate 60 passed three focus/dismiss
 
 ## 2026-09-18 rich Chat projection and interaction pass
 
-Reference source: Expo `session-message-parser.ts`, `assistant-turn-view-model.ts`, `MessageBubble.tsx`, `AssistantStepsBlock.tsx`, `ToolUseBlock.tsx`, `AssistantResultTail.tsx`, `ProductDeliveryCard.tsx` and the shared agent-stream/turn-outcome contracts.
+Reference source: retired cross-platform client `session-message-parser.ts`, `assistant-turn-view-model.ts`, `MessageBubble.tsx`, `AssistantStepsBlock.tsx`, `ToolUseBlock.tsx`, `AssistantResultTail.tsx`, `ProductDeliveryCard.tsx` and the shared agent-stream/turn-outcome contracts.
 
 | Scenario | Native implementation | Evidence / boundary |
 | --- | --- | --- |
@@ -149,7 +149,7 @@ Read `OHOS_REPORT_RESULT`, not just the process exit code. Do not run the fixtur
 
 ## 2026-09-18 attachment and historical-audio follow-up
 
-- Normalized the Expo historical speech aliases (`ttsAudio`, `tts_audio`, `tts`, `audio` and their top-level URI aliases), including arrays, workspace paths, base64 data and duplicate inline audio. Voice-only messages remain visible.
+- Normalized the retired cross-platform client historical speech aliases (`ttsAudio`, `tts_audio`, `tts`, `audio` and their top-level URI aliases), including arrays, workspace paths, base64 data and duplicate inline audio. Voice-only messages remain visible.
 - Successful local sends immediately show attachment previews and context references instead of injecting filenames into the message text. Retry identity and queued-input behavior are unchanged.
 - Bounded embedded plain text, Markdown, CSV, JSON and PDF downloads now share the safe media transport. Text is selectable text, never executable markup. HTML/script data sources remain rejected. The download is fetched before the system save picker creates a destination; response type/size is checked again, cancellation does not write, and incomplete writes report failure and close the handle.
 - Empty/invalid plan and diff events no longer add empty timeline steps or erase a valid plan. Added reconnect/gap tests for ordered tool history, replay without repeated answer text and retention when history reload fails. These are mocked transport tests; resumed runs still use conservative snapshot refresh, not a newly verified real-WSS incremental resume implementation.
@@ -159,11 +159,11 @@ Evidence: **229 host tests / 36 files passed**, and **7/7 native `XopcRichChat` 
 
 Debug/release and locally signed debug builds pass; CodeLinter is empty. Mate 60 remains absent from HDC, so these changes are not installed or accepted on the physical phone. Actual system save-picker completion, authenticated remote media transfer, video codecs, audio interruptions/routing, and real WSS resume remain open.
 
-## 2026-09-18 RN message audit implementation and self-review
+## 2026-09-18 message audit implementation and self-review
 
-Implemented in this pass (Expo and Gateway unchanged):
+Implemented in this pass (retired cross-platform client and Gateway unchanged):
 
-- User display text uses the RN scrub contract: model-only image understanding, runtime/source/skill envelopes and media claim checks are removed from display/copy/edit without altering stored wire content or structured attachments. Fixtures compare directly with the Expo scrubber.
+- User display text uses the shared scrub contract: model-only image understanding, runtime/source/skill envelopes and media claim checks are removed from display/copy/edit without altering stored wire content or structured attachments. Native fixtures cover the retained behavior directly.
 - Top-directed scrolling near the history boundary triggers guarded pagination. The loading/retry header is neutral, message identity and intra-row offset are retained, and old requests cannot reposition a newly selected conversation. Overlapping recovery snapshots retain loaded older pages and the oldest cursor; transcript resets and non-overlapping snapshots replace instead of stitching an unknown gap.
 - User actions are right aligned; assistant copy/save/read use final answer text; fenced-code copying is available. Read aloud supports loading, pause and resume, and audio-bearing messages do not offer redundant synthesis. Playback/download/retry actions use explicit neutral styling rather than system-default blue fills.
 - Draft images have previews. Expanded images decode from source bytes with a 4096-pixel edge / eight-megapixel bound and preserve aspect ratio. Markdown files render with the existing native Markdown renderer. File sharing uses a sandbox file URI, never a Gateway credential-bearing URL. Failed writes/handoffs clean their own file; successful handoffs retain files for receivers, prune files older than one day on subsequent shares, and cap the cache at 32 files / 64 MiB.
@@ -186,5 +186,5 @@ After unlock, physical acceptance resumed: existing pairing restored automatical
 - Natural/assistant realtime voice calls (PCM v3 transport, interruptions, audio routing and capability gating), continuous automatic reading and recorded-voice management. Audio attachment progress/pause/cleanup is emulator-tested; physical audio, interruptions and video playback remain open.
 - Session-management mutation/device/avatar acceptance described above; core search/menu/multi-select implementation is present.
 - Remaining rich-message fidelity: complete Markdown extension-block/deep-link handling, matched typography/media sizing, large-history performance, and active-run reconnect/replay with real WSS traffic. Historical speech aliases, review/artifact cards and ordered live blocks are implemented and partly device-tested above; the native Markdown renderer is still a subset.
-- Matched Expo/Harmony screenshots in both languages/themes and real-device acceptance. The UI pass above does not exercise camera, microphone, TTS provider output or mutations on the user's Gateway.
+- Matched retired cross-platform client/Harmony screenshots in both languages/themes and real-device acceptance. The UI pass above does not exercise camera, microphone, TTS provider output or mutations on the user's Gateway.
 - Isolated end-to-end send/stream/stop/steer, clarification and queue-conflict scenarios remain a separate acceptance gate; their host-mocked tests are not claimed as physical end-to-end evidence.

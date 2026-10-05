@@ -5,7 +5,7 @@ Android 和 iOS 的正式发布入口均已切换到原生项目：
 - Android：`apps/mobile-android`，Kotlin + Jetpack Compose
 - iOS：`apps/mobile-ios`，SwiftUI + XcodeGen
 
-`apps/mobile-expo` 暂时只作为迁移期回滚与功能参考保留，不再参与默认构建、CI、版本递增或正式发布。旧的 `mobile-expo-v*` 标签和 Expo 发布脚本不得用于新版本。
+旧跨端移动工程已经退役并从仓库移除，不再参与构建、CI、版本递增或正式发布。
 
 ## 版本与包标识
 
@@ -83,7 +83,7 @@ Android 工作流会：
 - 校验包名、版本以及固定的生产签名证书；
 - 发布 GitHub Release 和 SHA-256 校验文件。
 
-该工作流当前不自动上传 Google Play。上传 Play Console 后，应验证旧 Expo 版本可以升级到原生版本。原生 Android 尚未迁移 Expo 本地数据，升级用户可能需要重新配对。
+该工作流当前不自动上传 Google Play。上传 Play Console 后，应验证旧版移动客户端可以升级到原生版本。原生 Android 尚未迁移旧客户端本地数据，升级用户可能需要重新配对。
 
 ## iOS TestFlight
 
@@ -108,10 +108,8 @@ iOS 工作流会：
 - `APP_STORE_CONNECT_API_ISSUER`
 - `APP_STORE_CONNECT_PRIVATE_KEY_BASE64`
 
-手动运行工作流且不上传时，可用于验证签名 IPA。正式接管完成的外部证据应至少包括一次成功 TestFlight 上传、真机安装以及从已发布 Expo 版本升级到原生版本的验证。
+手动运行工作流且不上传时，可用于验证签名 IPA。正式接管完成的外部证据应至少包括一次成功 TestFlight 上传、真机安装以及从已发布旧版本升级到原生版本的验证。
 
-## 回滚与 Expo 基线
+## 回滚基线
 
-迁移期保留最后一个 Expo 发布标签和源码，但不保留活动 Expo CI 或发布入口。若原生发布出现问题，先停止商店放量；不要从当前主分支重新创建新的 Expo 版本。
-
-完全删除 Expo 前，还需要单独决定 ShareIntake、Widget 和其他未迁移能力的保留或下线策略。
+原生发布出现问题时，先停止商店放量，并从已发布的原生标签修复；不再恢复已退役的跨平台客户端。未迁移能力后续按产品优先级在原生端重新实现。

@@ -132,7 +132,7 @@ export function getNotificationDevice(deviceId: string): NotificationDevice | nu
 export function listDeliverableNotificationDevices(now = Date.now()): NotificationDevice[] {
   return (getSqliteDatabase().prepare(
     `SELECT * FROM device_push_endpoints
-     WHERE enabled = 1 AND permissions = 'granted' AND lease_expires_at > ?
+     WHERE enabled = 1 AND permissions = 'granted' AND platform = 'harmonyos' AND lease_expires_at > ?
      ORDER BY updated_at DESC`,
   ).all(now) as NotificationDeviceRow[]).map(deviceFromRow);
 }
@@ -155,11 +155,4 @@ export function removeNotificationDevice(deviceId: string): boolean {
   return runSqliteWriteTransaction((db) =>
     db.prepare('DELETE FROM device_push_endpoints WHERE device_id = ?').run(deviceId).changes > 0,
   );
-}
-
-export function disableNotificationDeviceForPushToken(pushToken: string): void {
-  runSqliteWriteTransaction((db) => {
-    db.prepare('UPDATE device_push_endpoints SET enabled = 0, updated_at = ? WHERE push_token = ?')
-      .run(Date.now(), pushToken);
-  });
 }

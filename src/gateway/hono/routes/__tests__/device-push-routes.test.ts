@@ -23,10 +23,12 @@ describe('device push routes', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     createDevice({
-      id: 'device-1', displayName: 'Phone', platform: 'android',
+      id: 'device-1', displayName: 'Phone', platform: 'harmonyos',
       publicKeyJwk: { kty: 'EC', crv: 'P-256', x: 'x', y: 'y' },
       scopes: ['notifications.self'],
     });
+    vi.stubEnv('XOPC_HARMONY_PUSH_SERVICE_ACCOUNT', '/private/account.json');
+    vi.stubEnv('XOPC_HARMONY_PUSH_CATEGORY', 'WORK');
     app = new Hono();
     app.use('*', async (c, next) => {
       setGatewayPrincipal(c, {
@@ -49,7 +51,7 @@ describe('device push routes', () => {
     const registration = await app.request('/api/devices/me/push', {
       method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        platform: 'android', pushToken: 'ExponentPushToken[token]',
+        platform: 'harmonyos', pushToken: 'huawei-token',
         permissions: 'granted', locale: 'zh', preferences: { chatCompleted: true },
       }),
     });
@@ -79,11 +81,11 @@ describe('device push routes', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: 'Device identity must come from authentication' });
   });
-  it('rejects attempts to switch a paired device to another push provider', async () => {
+  it('rejects retired mobile push providers', async () => {
     const response = await app.request('/api/devices/me/push', { method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ platform: 'harmonyos', pushToken: 'token', permissions: 'granted', locale: 'en' }) });
+      body: JSON.stringify({ platform: 'android', pushToken: 'token', permissions: 'granted', locale: 'en' }) });
     expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({ error: 'Push platform must match the paired device' });
+    expect(await response.json()).toMatchObject({ error: 'Invalid push registration' });
   });
   it('registers HarmonyOS only when its independent provider is configured', async () => {
     createDevice({ id: 'harmony-device', displayName: 'Harmony', platform: 'harmonyos', publicKeyJwk: { kty: 'EC' }, scopes: ['notifications.self'] });

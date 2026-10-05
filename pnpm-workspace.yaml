@@ -69,17 +69,10 @@ auditConfig:
   # The web console is a client-only SPA and does not use React Router RSC actions.
   ignoreGhsas:
     - GHSA-qwww-vcr4-c8h2
-    # Metro is pinned to image-size 1.x; the advisory's patched 2.0.3 release is not published yet.
-    - GHSA-w3rx-r6r6-pgpr
-    - GHSA-5p2g-fcmc-qvqq
 
 patchedDependencies:
-  # FlashList v2's absolute row container must survive Android Fabric view flattening.
-  # Remove once https://github.com/Shopify/flash-list/pull/2400 is released.
-  '@shopify/flash-list@2.3.2': patches/@shopify__flash-list@2.3.2.patch
   # macOS 26 validates the temporary keychain password used by set-key-partition-list.
   # Remove once electron-builder ships https://github.com/electron-userland/electron-builder/pull/10067.
   app-builder-lib@26.15.3: patches/app-builder-lib@26.15.3.patch
   # Preserve compact Mermaid edge labels such as -.标签.->.
   beautiful-mermaid@1.1.3: patches/beautiful-mermaid@1.1.3.patch
-  expo-file-system@56.0.11: patches/expo-file-system@56.0.11.patch

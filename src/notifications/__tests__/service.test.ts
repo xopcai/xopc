@@ -10,7 +10,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
-import { getNotificationDevice, registerNotificationDevice } from '../device-store.js';
+import { registerNotificationDevice } from '../device-store.js';
 import { NotificationService } from '../service.js';
 import type { NotificationDomainDelivery } from '../domain-delivery.js';
 import type { NotificationPlan } from '../planner.js';
@@ -46,13 +46,13 @@ describe('NotificationService', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     createDevice({
-      id: 'device-1', displayName: 'Phone', platform: 'ios',
+      id: 'device-1', displayName: 'Phone', platform: 'harmonyos',
       publicKeyJwk: { kty: 'EC' }, scopes: ['notifications.self'],
     });
     registerNotificationDevice({
       deviceId: 'device-1',
-      platform: 'ios',
-      pushToken: 'ExponentPushToken[token]',
+      platform: 'harmonyos',
+      pushToken: 'harmony-token',
       permissions: 'granted',
       locale: 'en',
     });
@@ -70,12 +70,14 @@ describe('NotificationService', () => {
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND (name GLOB 'proactive_*' OR name = 'heartbeat_checks')").all();
     for (const row of tables) db.exec(`DROP TABLE "${String(row.name).replaceAll('"', '""')}"`);
     db.exec('PRAGMA foreign_keys = ON');
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: { status: 'ok', id: 'ticket' } })));
-    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock });
+    const fetchMock = vi.fn<typeof fetch>();
+    const sendHarmony = vi.fn().mockResolvedValue('huawei-request-id');
+    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock, sendHarmony });
     service.persistGatewayEvent('agent.run.ended', chatEvent);
     await service.drain();
     expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1 });
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(sendHarmony).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('rejects uninstalled domain publication and does not send an already queued domain event', async () => {
@@ -109,8 +111,9 @@ describe('NotificationService', () => {
       flush: () => [], drain: async () => {}, recheckMobile: () => 'send',
       mobilePreview: () => ({ title: 'Result ready', body: 'Open the app.' }),
     };
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: { status: 'ok', id: 'ticket' } })));
-    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock, domainDelivery: domain });
+    const fetchMock = vi.fn<typeof fetch>();
+    const sendHarmony = vi.fn().mockResolvedValue('huawei-request-id');
+    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock, domainDelivery: domain, sendHarmony });
     enqueue.mockImplementationOnce(() => { throw new Error('ledger unavailable'); });
     expect(() => service.persistPlan(domainPlan)).toThrow('ledger unavailable');
     expect(getSqliteDatabase().prepare('SELECT count(*) AS n FROM notification_events').get()?.n).toBe(0);
@@ -119,47 +122,11 @@ describe('NotificationService', () => {
     expect(service.persistPlan(domainPlan)).toBeNull();
     expect(enqueue).toHaveBeenCalledOnce();
     await service.drain();
-    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({ title: 'Result ready', body: 'Open the app.' });
+    expect(sendHarmony).toHaveBeenCalledWith(expect.objectContaining({ title: 'Result ready', body: 'Open the app.' }), fetchMock);
     expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1 });
   });
 
-  it('persists, publishes, sends, and confirms an Expo delivery', async () => {
-    const published: unknown[] = [];
-    const fetchMock = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { status: 'ok', id: 'ticket-1' } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { 'ticket-1': { status: 'ok' } } }), { status: 200 }));
-    const service = new NotificationService({
-      publish: (_type, payload) => published.push(payload),
-      fetch: fetchMock,
-    });
-
-    service.handleGatewayEvent('agent.run.ended', chatEvent);
-    await vi.waitFor(() => expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1 }));
-    const event = published[0] as { id: string };
-    rescheduleNotificationDelivery(event.id, 'device-1', 'accepted', 0, 'test receipt now');
-    await service.drain();
-
-    expect(notificationDeliveryMetrics()).toMatchObject({ delivered: 1 });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('disables an Expo token rejected as DeviceNotRegistered', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
-      data: {
-        status: 'error',
-        message: 'The device is no longer registered',
-        details: { error: 'DeviceNotRegistered' },
-      },
-    }), { status: 200 }));
-    const service = new NotificationService({ publish: () => {}, fetch: fetchMock });
-
-    service.handleGatewayEvent('agent.run.ended', chatEvent);
-    await vi.waitFor(() => expect(notificationDeliveryMetrics()).toMatchObject({ dead: 1 }));
-    expect(getNotificationDevice('device-1')?.enabled).toBe(false);
-  });
-
-  it('routes HarmonyOS only to its own provider and never polls Expo receipts for it', async () => {
-    registerNotificationDevice({ deviceId: 'device-1', platform: 'harmonyos', pushToken: 'harmony-token', permissions: 'granted', locale: 'zh' });
+  it('routes HarmonyOS only to its own provider without receipt polling', async () => {
     const fetchMock = vi.fn<typeof fetch>();
     const sendHarmony = vi.fn().mockResolvedValue('huawei-request-id');
     const published: Array<{ id: string }> = [];
@@ -173,12 +140,12 @@ describe('NotificationService', () => {
 
   it('publishes and queues a review notification when work discovery completes', async () => {
     const published: unknown[] = [];
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
-      data: { status: 'ok', id: 'ticket-understanding' },
-    }), { status: 200 }));
+    const fetchMock = vi.fn<typeof fetch>();
+    const sendHarmony = vi.fn().mockResolvedValue('huawei-request-id');
     const service = new NotificationService({
       publish: (_type, payload) => published.push(payload),
       fetch: fetchMock,
+      sendHarmony,
     });
 
     service.handleGatewayEvent('work-discovery.completed', {
@@ -201,10 +168,9 @@ describe('NotificationService', () => {
   });
 
   it('requires an explicit mobile preference before delivering home opportunities', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
-      data: { status: 'ok', id: 'ticket-home' },
-    }), { status: 200 }));
-    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock });
+    const fetchMock = vi.fn<typeof fetch>();
+    const sendHarmony = vi.fn().mockResolvedValue('huawei-request-id');
+    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock, sendHarmony });
     const event = (notificationKey: string) => ({
       notificationKey,
       opportunityId: `opportunity-${notificationKey}`,
@@ -216,11 +182,11 @@ describe('NotificationService', () => {
     expect(fetchMock).not.toHaveBeenCalled();
 
     registerNotificationDevice({
-      deviceId: 'device-1', platform: 'ios', pushToken: 'ExponentPushToken[token]',
+      deviceId: 'device-1', platform: 'harmonyos', pushToken: 'harmony-token',
       permissions: 'granted', locale: 'en', preferences: { homeOpportunity: true },
     });
     service.handleGatewayEvent('home.opportunity.ready', event('explicit-on'));
     await vi.waitFor(() => expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1 }));
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(sendHarmony).toHaveBeenCalledOnce();
   });
 });

@@ -28,7 +28,7 @@ const [aiMarkSegment, humanMarkSegment] = markSegments;
 
 const check = process.argv.includes('--check');
 const requestedTarget = process.argv.find((argument) => argument.startsWith('--target='))?.slice('--target='.length);
-const validTargets = new Set(['all', 'web', 'docs', 'mobile', 'harmony', 'electron', 'browser-ext']);
+const validTargets = new Set(['all', 'web', 'docs', 'harmony', 'electron', 'browser-ext']);
 const target = requestedTarget ?? 'all';
 
 if (!validTargets.has(target)) {
@@ -526,9 +526,6 @@ const iconSizes = [16, 32, 48, 64, 128, 180, 192, 256, 512, 1024];
 const renderSet = (scene) => new Map(iconSizes.map((size) => [size, renderPng(scene, size)]));
 const appDarkPngs = renderSet('app-dark');
 const appLightPngs = renderSet('app-light');
-const mobileAppDarkPngs = renderSet('mobile-app-dark');
-const mobileAppLightPngs = renderSet('mobile-app-light');
-const mobileAppTintedPngs = renderSet('mobile-app-tinted');
 const desktopMacPngs = renderSet('desktop-mac');
 const desktopWindowsPngs = renderSet('desktop-windows');
 const desktopLinuxPngs = renderSet('desktop-linux');
@@ -537,7 +534,7 @@ const faviconPngs = renderSet('favicon');
 const uiLight = renderSvg('mark-light');
 const uiDark = renderSvg('mark-dark');
 
-for (const directory of ['docs/public', 'web/public', 'apps/mobile-expo/assets', 'electron/resources', 'packages/browser-ext/icons']) {
+for (const directory of ['docs/public', 'web/public', 'electron/resources', 'packages/browser-ext/icons']) {
   mkdirSync(join(root, directory), { recursive: true });
 }
 
@@ -586,29 +583,6 @@ queue(
     2,
   )}\n`,
 );
-
-// Expo mobile icons for iOS and Android.
-queue('mobile', 'apps/mobile-expo/assets/icon.png', mobileAppLightPngs.get(1024));
-queue('mobile', 'apps/mobile-expo/assets/icon-light.png', mobileAppLightPngs.get(1024));
-queue('mobile', 'apps/mobile-expo/assets/icon-dark.png', mobileAppDarkPngs.get(1024));
-queue('mobile', 'apps/mobile-expo/assets/icon-tinted.png', mobileAppTintedPngs.get(1024));
-queue('mobile', 'apps/mobile-expo/assets/adaptive-icon.png', renderPng('mobile-adaptive-light', 1024));
-queue('mobile', 'apps/mobile-expo/assets/adaptive-icon-monochrome.png', renderPng('mobile-adaptive-monochrome', 1024));
-queue('mobile', 'apps/mobile-expo/assets/adaptive-icon-background.png', renderPng('mobile-adaptive-background', 1024));
-queue('mobile', 'apps/mobile-expo/assets/favicon.png', badgePngs.get(48));
-queue('mobile', 'apps/mobile-expo/assets/splash-icon.png', renderPng('mark-dark-plain', 1024));
-queue('mobile', 'apps/mobile-expo/assets/splash-icon-dark.png', renderPng('mark-light-plain', 1024));
-for (const [name, scene] of [
-  ['background-light', 'apple-layer-background-light'],
-  ['background-dark', 'apple-layer-background-dark'],
-  ['ai-light', 'apple-layer-ai-light'],
-  ['ai-dark', 'apple-layer-ai-dark'],
-  ['human-light', 'apple-layer-human-light'],
-  ['human-dark', 'apple-layer-human-dark'],
-  ['mono', 'apple-layer-mono'],
-]) {
-  queue('mobile', `apps/mobile-expo/assets/apple-icon-layers/${name}.svg`, renderSvg(scene));
-}
 
 // Preserve the mobile artwork, compensating for Android's adaptive viewport.
 queue('harmony', 'apps/mobile-harmony/AppScope/resources/base/media/app_icon.png', renderPng('harmony-app-light', 1024));

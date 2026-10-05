@@ -80,6 +80,6 @@ XOPC_HARMONY_PUSH_CATEGORY=WORK
 XOPC_HARMONY_PUSH_TEST_MESSAGE=true
 ```
 
-Choose an explicitly authorised category (`WORK`, `IM` or `MARKETING`); the example is not an assertion that the app has category approval. The service-account JSON contains `project_id`, `key_id`, `sub_account`, `private_key`. The server signs PS256 JWTs and sends Huawei V3 notification requests. The client never receives this file. Expo tokens/provider remain separate. Missing configuration returns 503 at registration rather than a false success.
+Choose an explicitly authorised category (`WORK`, `IM` or `MARKETING`); the example is not an assertion that the app has category approval. The service-account JSON contains `project_id`, `key_id`, `sub_account`, `private_key`. The server signs PS256 JWTs and sends Huawei V3 notification requests. The client never receives this file. Native iOS/Android push providers are not currently configured. Missing HarmonyOS configuration returns 503 at registration rather than a false success.
 
 A Huawei request ID means **provider acceptance**, not device delivery. Device taps acknowledge through the existing Gateway endpoint; do not count all accepted pushes as delivered. See [Huawei JWT guide](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/push-jwt-token) and [V3 request reference](https://developer.huawei.com/consumer/en/doc/harmonyos-references/push-scenariozed-api-request-param).

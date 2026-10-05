@@ -1,4 +1,4 @@
-// Keep logical sizes aligned with mobile-expo's composer-layout and ChatComposer.
+// Keep logical sizes aligned with mobile-retired cross-platform client's composer-layout and ChatComposer.
 export const COMPOSER_INPUT_MIN: number = 40;
 export const COMPOSER_INPUT_MAX: number = 120;
 export const COMPOSER_TOOL_SIZE: number = 36;

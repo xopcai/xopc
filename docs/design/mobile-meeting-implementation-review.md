@@ -39,9 +39,9 @@
 - 移动 TypeScript、agent-stream-client TypeScript 检查通过；本批移动文件 ESLint 通过。
 - 移动回归覆盖：重复开始、坏索引保护、恢复与采样时长、拒绝权限、结束其他录音、续传、工作区切换、回执冲突、binary PUT 认证与数据共享授权。
 - 后端三个测试文件：34 项通过、1 项原有可选测试跳过。包含真实 HTTP + token 鉴权 + lazy dispatch、mobile 来源、独立 WAV 合并后的确切字节和时长、封存格式冲突、坏头拒绝、转写到总结、升级保留子表记录。
-- Android 项目 `:xopc-voice:testDebugUnitTest` 编译及 27 项测试通过。使用本机 JDK 17，未修改 Gradle / Expo 版本。
+- Android 项目 `:xopc-voice:testDebugUnitTest` 编译及 27 项测试通过。使用本机 JDK 17，未修改 Gradle / retired cross-platform client 版本。
 - Swift 文件系统测试通过，包括两小时合成 PCM 恢复及超限拒绝；iPhoneOS arm64 / iOS 16.4 目标采集核心类型检查通过。
-- 更新本地 Pods 源文件列表后，XopcVoice 的 iOS simulator arm64 目标编译通过，包含 Expo 桥接层及录音核心。生成目录不提交。
+- 更新本地 Pods 源文件列表后，XopcVoice 的 iOS simulator arm64 目标编译通过，包含 retired cross-platform client 桥接层及录音核心。生成目录不提交。
 
 转写和总结的集成测试使用固定服务返回，不代表已验证真实供应商调用质量。两小时测试是加速写入合成数据，不是两小时实际麦克风录制。
 

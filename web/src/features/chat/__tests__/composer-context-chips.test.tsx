@@ -28,7 +28,7 @@ describe('ComposerContextChips', () => {
       root.render(
         <ComposerContextChips
           refs={[{
-            kind: 'file', sourceId: 'folder-1', expectedVersion: '7', title: 'mobile-expo',
+            kind: 'file', sourceId: 'folder-1', expectedVersion: '7', title: 'mobile-ios',
             fileKind: 'directory',
           }]}
           label="References"
@@ -39,6 +39,6 @@ describe('ComposerContextChips', () => {
 
     expect(container.querySelector('.lucide-folder')).not.toBeNull();
     expect(container.querySelector('.lucide-file-text')).toBeNull();
-    expect(container.textContent).toContain('mobile-expo');
+    expect(container.textContent).toContain('mobile-ios');
   });
 });

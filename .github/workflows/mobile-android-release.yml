@@ -120,7 +120,7 @@ jobs:
           fail_on_unmatched_files: true
           body: |
             Native Android release. Package: `ai.xopc.xopc`.
-            Signed with the existing Production Android certificate. Existing Expo app data is not migrated; pair again if needed.
+            Signed with the existing Production Android certificate. Data from the retired client is not migrated; pair again if needed.
             Verify downloads against `SHA256SUMS`.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

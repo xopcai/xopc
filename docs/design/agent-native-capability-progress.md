@@ -249,7 +249,7 @@ Automations 取消／已读增量：`cancel/read/read_all` 已统一 HTTP、`xop
 
 本增量 4 个文件 70 项测试通过，覆盖真实本地执行器信号、提交后通知失败重试、输出校验失败完整回滚、权限重验、排队取消、新运行隔离、未来完成记录保护及双 Agent 回执一致性。根类型检查、变更 TypeScript ESLint、完整构建通过；保留既有 chunk 大小、无效动态导入和插件耗时警告。真实隔离 Gateway 验证 35 项目录与三个原 REST 路径。无真实模型／第三方执行，无个人数据库迁移或部署。独立运行查询／事件、草稿等未统一入口，以及其他领域和 S4–S6 仍待完成。
 
-Automations 接入发现并清理共享契约中的旧 after_run phase/event，改为服务端实际使用的 completion_hook；补齐 conversationMode/notificationPolicy/completionWebhookUrl。Expo 创建请求和详情显示同步移除旧 afterRun 字段。Expo 类型检查与 7 项请求测试通过，未执行移动端发版或真机 UI 验收。
+Automations 接入发现并清理共享契约中的旧 after_run phase/event，改为服务端实际使用的 completion_hook；补齐 conversationMode/notificationPolicy/completionWebhookUrl。retired cross-platform client 创建请求和详情显示同步移除旧 afterRun 字段。retired cross-platform client 类型检查与 7 项请求测试通过，未执行移动端发版或真机 UI 验收。
 
 不同 scope/surface 只发现其授权子集。已运行根与 Web typecheck、变更代码 ESLint、完整构建、真实隔离 Gateway 冒烟；新增资源 topic 权限测试和 Web 事件去重测试通过。Notes 与 capability 相关 11 个文件 78 项测试通过，Projects／Agent／目录相关 3 个文件 47 项测试通过。真实 Gateway 新增验证了 Notes 跨入口创建／更新重放、过期版本拒绝及携带 operationId 的 WebSocket 事件；由此发现并修复了 pinned 默认值导致的跨入口摘要不一致。测试使用临时数据库，不触及个人数据。
 
@@ -279,7 +279,7 @@ Automations 启停增量：`xopc.automations.set_enabled` 统一原 REST pause/r
 
 启停阶段回归：4 个文件 51 项通过，覆盖服务端调度原有测试、双 Agent 工具共享回执、删除后回放、权限重验、旧版本冲突、输出验证失败回滚、提交后唤醒失败重试和单毫秒版本递增。真实隔离 Gateway 冒烟验证 REST 启停及重放不会覆盖后续更新。根类型检查、变更代码 ESLint 和完整构建通过，构建仍有 chunk 大小、无效动态导入及插件耗时警告；最终工具适配调整后新增 7 项测试再次通过。创建／编辑已由上述增量迁移；删除、执行等入口仍未迁移，不能将当前增量等同于整个 Automations 阶段完成。
 
-最新联合回归：23 个文件 219 项通过；之后新增外部租约、Automation 契约／读取验证独立通过。根／Web／Expo 类型检查通过，Expo 7 项请求测试通过。完整构建通过，保留现有 chunk 大小与动态 import 警告。真实 Gateway 冒烟在与重型构建和测试并行时出现过一次启动超时；待构建结束后独立重跑通过，未把该超时计为功能验收通过。
+最新联合回归：23 个文件 219 项通过；之后新增外部租约、Automation 契约／读取验证独立通过。根／Web／retired cross-platform client 类型检查通过，retired cross-platform client 7 项请求测试通过。完整构建通过，保留现有 chunk 大小与动态 import 警告。真实 Gateway 冒烟在与重型构建和测试并行时出现过一次启动超时；待构建结束后独立重跑通过，未把该超时计为功能验收通过。
 
 仍需开发：Notes 文件／分享／会话等剩余操作、TaskRun 执行停止确认及 handoff 等入口、Projects 主体写入／工作区及对应资源事件、Automations 草稿／修复草稿／模拟及其他渠道入口核全、Scenes、Local Apps；S4 页面上下文与结构化结果、S5 Local App 能力贡献和 MCP、S6 升级回退及性能验收均未完成。当前没有部署或移动端发布。
 

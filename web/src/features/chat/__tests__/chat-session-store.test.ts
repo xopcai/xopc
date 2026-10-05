@@ -216,9 +216,9 @@ describe('useChatSessionStore', () => {
       contextRefs: [{
         kind: 'file',
         fileKind: 'directory',
-        sourceId: 'apps/mobile-expo',
+        sourceId: 'apps/mobile-ios',
         version: '42',
-        title: 'mobile-expo',
+        title: 'mobile-ios',
       }],
       timestamp: 10,
     };

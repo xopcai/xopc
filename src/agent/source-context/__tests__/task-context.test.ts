@@ -116,16 +116,16 @@ describe('task references', () => {
       resource: async () => ({
         space: { id: 'space-1' },
         resource: {
-          kind: 'directory', spaceId: 'space-1', revision: '7', relativePath: 'apps/mobile-expo',
-          name: 'mobile-expo',
+          kind: 'directory', spaceId: 'space-1', revision: '7', relativePath: 'apps/mobile-ios',
+          name: 'mobile-ios',
         },
-        absolutePath: '/workspace/apps/mobile-expo',
+        absolutePath: '/workspace/apps/mobile-ios',
       }),
       children: async () => [],
     } as unknown as FileSpaceService;
 
     await expect(buildFileAgentContext(files, 'folder-1', '7', 'space-1')).resolves.toMatchObject({
-      kind: 'file', fileKind: 'directory', sourceId: 'folder-1', title: 'apps/mobile-expo',
+      kind: 'file', fileKind: 'directory', sourceId: 'folder-1', title: 'apps/mobile-ios',
     });
     await expect(buildFileAgentContext(files, 'folder-1', '7', 'other-space')).resolves.toBeNull();
   });

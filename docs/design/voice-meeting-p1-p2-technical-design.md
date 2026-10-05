@@ -2,7 +2,7 @@
 
 日期：2026-09-15
 状态：设计完成，P1-A 已开始实施；实际落点与未完成项见 [实施与自查](./voice-meeting-p1-p2-implementation-review.md)。文中的类型、表和 API 为完整目标契约，不代表均已落地。
-基线：`bd5e1f73e`，Electron 声明版本 `^42.4.1`，移动端 Expo `~56.0.21`、expo-audio `~56.0.13`。实际发布须记录锁文件解析版本。
+历史基线：`bd5e1f73e`，Electron 声明版本 `^42.4.1`；旧移动端音频栈现已退役。实际实现与发布须以原生 Android/iOS 依赖和锁定版本为准。
 关联：[PRD](./voice-meeting-prd.md) · [P0 自查](./voice-meeting-implementation-review.md) · [实施拆分与验收](./voice-meeting-p1-p2-delivery-plan.md)
 
 ## 1. 目标与交付边界
@@ -27,8 +27,8 @@ P1 让用户听全会议、随时补听，P2 让会议结论进入后续工作�
 | 人工修改与任务关联 | `src/discussions/{edits,action-tasks}.ts` | 保持人工内容和独立任务状态，不从问答自动执行 |
 | 全局录音与 PCM 分段 | `web/src/features/discussions/` | 采集适配器与 UI 状态拆开，复用现有入口 |
 | 桌面权限和可信来源检查 | `electron/main.ts`、`electron/ipc/{shell-permission-gates,trusted-renderer,system-settings-ipc}.ts` | 增加专用采集会话授权，不扩大为任意 renderer 可采屏 |
-| 移动原生 PCM 与中断处理 | `apps/mobile-expo/modules/xopc-voice/`、`apps/mobile-expo/src/features/voice/native-audio-session.ts` | 增加原生持久录音模式；不要绕回 JS 持久化每帧音频 |
-| 移动短录音、设备配对 | `apps/mobile-expo/src/features/chat/voiceRecording.ts`、`apps/mobile-expo/src/query/voice.ts` | 复用权限/设备连接，会议录音生命周期独立于聊天组件 |
+| 移动原生 PCM 与中断处理 | `retired mobile client/modules/xopc-voice/`、`retired mobile client/src/features/voice/native-audio-session.ts` | 增加原生持久录音模式；不要绕回 JS 持久化每帧音频 |
+| 移动短录音、设备配对 | `retired mobile client/src/features/chat/voiceRecording.ts`、`retired mobile client/src/query/voice.ts` | 复用权限/设备连接，会议录音生命周期独立于聊天组件 |
 | 域事件表和任务派发 | `domain_outbox`、`src/tasks/task-outbox-dispatcher.ts` | 提升为通用域事件派发；目前 source 固定 tasks，不能直接塞会议事件 |
 | 场景、授权来源与去重 | `src/scenes/` | 扩展会议准备/跟进场景，不另建轮询系统 |
 
@@ -58,7 +58,7 @@ flowchart TB
 | 后台处理 | 固定类型的 Discussion jobs + 现有 worker 生命周期 | 不引入 Kafka、Redis 队列或新工作流 DSL |
 | 会中问答 | 只读服务 + 固定修订检索 | 不挂载执行工具；不把每句话送入通用 Agent |
 | 检索 | SQLite FTS5 + 项目/时间过滤 | 首期不依赖向量库；召回不足再以评测决定是否加语义检索 |
-| 移动采集 | 扩展已有 xopc-voice 原生模块 | expo-audio 配置能力不等于可靠分块和 JS 休眠恢复能力 |
+| 移动采集 | 在原生 Android/iOS 中实现音频会话服务 | 平台后台音频配置不等于可靠分块和进程恢复能力 |
 | 跟进 | 已有任务/主动订阅 + 域事件 | 不维护第二套任务完成状态，不自动把推测当作承诺完成 |
 
 ## 4. 系统音频：能力探测与采集生命周期
@@ -305,7 +305,7 @@ FTS 只是候选索引，命中后从固定修订读取原文。引用是实际�
 
 已有原生模块具备 PCM、路由和中断回调。新增 `purpose: conversation | meeting`，共享唯一输入引擎和设备占用；会议模式在原生线程中编码/写块，再把低频进度交给 JS。不要新增第二个同时争用麦克风的原生 recorder。
 
-Expo 56 文档支持后台录音配置，并描述 iOS audio 后台模式和 Android 麦克风前台服务；这可作为权限配置依据，不代表现有逐帧 JS 事件已具备后台可靠落盘能力。[Expo SDK 56 Audio](https://docs.expo.dev/versions/v56.0.0/sdk/audio/)
+平台文档支持 iOS 后台音频模式和 Android 麦克风前台服务；这可作为权限配置依据，不代表应用已经具备后台可靠落盘能力。
 
 ### 12.2 文件与恢复
 
@@ -314,7 +314,7 @@ Expo 56 文档支持后台录音配置，并描述 iOS audio 后台模式和 And
 - JS 只收到序号、时长、字节和中断原因，不接收整场 base64；React Query 管服务端状态，本地 journal 管尚未上传的数据。
 - 后台先保证录音，上传允许延迟至恢复前台/网络；JS 定时器和后台网络不作为录音持续性的前提。
 - 耳机拔出、来电、音频焦点丢失、应用被杀各自关闭当前 epoch 并记录原因。允许的短中断在已有授权范围自动恢复；权限丢失或进程重启后只恢复文件，不暗中重开麦克风。
-- 配置通过已有 Expo plugins 修改并重建原生应用；不手改生成的 iOS/Android 工程，不升级 SDK 作为前置条件。
+- 配置通过已有 retired cross-platform client plugins 修改并重建原生应用；不手改生成的 iOS/Android 工程，不升级 SDK 作为前置条件。
 
 Android 麦克风前台服务必须从符合条件的前台交互启动，并满足服务类型/权限限制；不能依靠后台定时任务随时开麦。发布以目标 targetSdk 对应规则和真机验证为准。[Android 前台服务限制](https://developer.android.google.cn/develop/background-work/services/fgs/restrictions-bg-start?hl=en)
 

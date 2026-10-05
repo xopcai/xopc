@@ -112,7 +112,7 @@ Web 头像改成带认证 header 的 fetch → blob URL，缓存按 Gateway/agen
 
 **3.6 手机持续身份校验与 Web 会话迁移**
 
-手机新增共享 `GatewayTransport` 适配边界，覆盖普通 API、refresh、配对、realtime ticket、WebSocket、上传、下载、图片与语音；现有 query 层和页面保持调用形式。不能只改 apiFetch，因为 [realtime ticket](/Users/micjoyce/develop/github/xopc/apps/mobile-expo/src/features/gateway/use-gateway-realtime.ts:47) 目前还有直接 fetch。
+手机新增共享 `GatewayTransport` 适配边界，覆盖普通 API、refresh、配对、realtime ticket、WebSocket、上传、下载、图片与语音；现有 query 层和页面保持调用形式。不能只改 apiFetch，因为 [realtime ticket](/Users/micjoyce/develop/github/xopc/retired mobile client/src/features/gateway/use-gateway-realtime.ts:47) 目前还有直接 fetch。
 
 一期在首次连接/重连/切换路由前取得新鲜 challenge，由已固定 Gateway 公钥签名验证 gatewayId、nonce、用途、能力版本、路由 epoch；失败不发送凭据或正文。并发请求共用一次验证，不能每个请求多握手。refresh 响应也需验证签名及请求绑定，不因形状合法就接受。身份固定值迁到 SecureStore；普通路由缓存可以在 MMKV，但必须验证签名才能用于发送。此阶段能识别假端点，不能阻止能中继挑战的恶意平台读取后续 Bearer 流量，二期负责闭环。
 
@@ -150,7 +150,7 @@ flowchart LR
 **实时、文件、语音与弱网。** 不允许只支持 JSON 聊天便宣称改造完成：
 
 - 文件使用有界密文分片，建议应用负载每帧不超过 32 KiB，最终以选定协议限制为准；流式处理、取消/续传/完整性校验，不能把整段音频或大文件转成巨型 base64 常驻 JS 内存。
-- 请求并发在复用层实现；语音/控制帧优先于大文件，队列与内存有硬上限；加密任务不得持续阻塞 React Native UI 线程。需要原生/worker 适配时随正常 App 更新发布。
+- 请求并发在复用层实现；语音/控制帧优先于大文件，队列与内存有硬上限；加密任务不得持续阻塞 retired cross-platform client UI 线程。需要原生/worker 适配时随正常 App 更新发布。
 - WebSocket 不可用时保留 HTTP 密文传输/拉取能力，避免今天 REST 可用的网络改造后全部不可用。不同载体使用协议定义的独立握手/会话状态或经过验证的有序帧承载，不能临时拼一个没有重放保护的 AES POST。
 - HTTP 载体的序号、重复批次、丢失响应、确认与重传规范必须先形成测试向量；密文重传不触发第二次业务执行。尚未完成此能力时，二期只能试点，不能全量替代现有入口。
 - Realtime 保留 cursor/resume，断线重连重建安全会话、恢复 endpoint，再继续原事件流。写操作沿用持久 clientMessageId/idempotencyKey，响应丢失先查结果，不在两条路由并行发送。

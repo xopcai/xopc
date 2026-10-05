@@ -14,7 +14,7 @@
 
 ## 2. 研究方法与证据边界
 
-- 检索钉钉、飞书、豆包官方产品页、官方教程、发布说明、隐私说明；平台限制使用 Apple、Android 和 Expo 56 文档。
+- 检索钉钉、飞书、豆包官方产品页、官方教程、发布说明、隐私说明；平台限制使用 Apple、Android 和 retired cross-platform client 56 文档。
 - **已查证**表示官方资料明确写到；不表示本轮在 iOS / Android App 上操作过。**设计推导**是我们做出的产品选择。
 - 公开产品介绍不能证明所有套餐、租户、地区和手机平台均具备相同能力。没有资料不等于竞品没有功能。
 - 飞书的手机操作描述可以核对；钉钉中国站部分页面只有搜索索引能取到内容，正文依赖动态加载；豆包手机商店介绍没有检索到录音操作细节。这些地方保留证据缺口，不补造页面和点击次数。
@@ -71,7 +71,7 @@
 | Android 其他 App 声音 | Playback Capture 要用户授权、同一 profile、目标允许采集，且内容 usage 限于 media/game/unknown。[Android capture](https://developer.android.com/media/platform/av-capture) | 可做独立实验，不能作为通用会议 / 电话录音方案 |
 | iOS 系统声音 | ReplayKit 涉及 App 音频、麦克风和屏幕录制；另有广播扩展及系统授权。[ReplayKit](https://developer.apple.com/documentation/ReplayKit) · [安全机制](https://support.apple.com/en-gb/guide/security/seca5fc039dd/web) | 没有依据承诺任意第三方会议或电话双向音频；首版不提供该入口 |
 | 抢占麦克风 | Android 对并发音频输入有优先级和静音规则。[Sharing audio input](https://developer.android.com/media/platform/sharing-audio-input) | 收到帧不等于收到了会议声音；单独监控录音来源和健康 |
-| Expo 是否够用 | SDK 56 支持后台录音配置；默认缓存文件可能被清理。[Expo 56 Audio](https://docs.expo.dev/versions/v56.0.0/sdk/audio/) | 普通录音可以使用，但开关不能替代原生分块、恢复日志和后台状态管理 |
+| 平台基础录音是否够用 | iOS/Android 支持后台录音配置；默认缓存文件仍可能被清理 | 普通录音可以使用，但配置开关不能替代原生分块、恢复日志和后台状态管理 |
 | 后台上传 | iOS background URLSession 支持文件上传，调度不等于实时持续联网。[Apple background transfers](https://developer.apple.com/documentation/foundation/downloading-files-in-the-background) | 录音与上传解耦；第一阶段恢复前台后补传即可 |
 
 平台公开能力也需要签名包真机验证。系统录音 App 的特权、厂商电话录音、外接录音硬件不属于普通第三方 App 的通用 API 能力。外放再用麦克风采集受回声和环境影响，不包装为高质量双路采集。
@@ -80,12 +80,12 @@
 
 | 已核对位置 | 当前事实 | 设计影响 |
 |---|---|---|
-| `apps/mobile-expo/src/features/chat/voiceRecording.ts` | 短语音最长 8 分钟，围绕附件体积约束 | 长会议不能只调高时间常量 |
-| `apps/mobile-expo/src/features/notes/use-voice-capture-interaction.tsx` | 复用短录音；组件卸载会清理当前录音 | 会议生命周期必须属于原生会话 |
-| `apps/mobile-expo/src/features/voice/native-audio-session.ts` | XopcVoice PCM 通过事件送入 JS；已有占用和中断处理 | 复用权限 / 协调，但持久声音不能逐帧经过 JS |
-| `apps/mobile-expo/modules/xopc-voice/` | iOS 使用 voiceChat；Android 有 VOICE_COMMUNICATION 和 MIC 路径；已有通话服务 | 近讲通话策略不应直接用于远场会议 |
+| `retired mobile client/src/features/chat/voiceRecording.ts` | 短语音最长 8 分钟，围绕附件体积约束 | 长会议不能只调高时间常量 |
+| `retired mobile client/src/features/notes/use-voice-capture-interaction.tsx` | 复用短录音；组件卸载会清理当前录音 | 会议生命周期必须属于原生会话 |
+| `retired mobile client/src/features/voice/native-audio-session.ts` | XopcVoice PCM 通过事件送入 JS；已有占用和中断处理 | 复用权限 / 协调，但持久声音不能逐帧经过 JS |
+| `retired mobile client/modules/xopc-voice/` | iOS 使用 voiceChat；Android 有 VOICE_COMMUNICATION 和 MIC 路径；已有通话服务 | 近讲通话策略不应直接用于远场会议 |
 | `VoiceCallService.kt` | wake lock 单次一小时超时，stop 回调在进程内 | 长录音需独立检验生命周期，不能宣布两小时已可靠 |
-| `apps/mobile-expo/app.json` | 配置后台播放及现有 widgets | 不把播放器 / Live Activity 配置当作会议录音已可用 |
+| `retired mobile client/app.json` | 配置后台播放及现有 widgets | 不把播放器 / Live Activity 配置当作会议录音已可用 |
 | `src/gateway/hono/routes/discussions.ts` | 异步 seal/job 已有；创建来源只有 web/electron；块路径仍是单 sequence | 增加 mobile 来源、离线绑定与统一 track/epoch 契约 |
 
 旧的 [移动语音 PRD](./mobile-voice-prd.md) 解决听写和 AI 通话。新方案保留这些独立用户意图；共享权限与设备占用，不混用按钮含义。

@@ -76,14 +76,14 @@ describe('userMessageFromStreamPayload', () => {
       content: 'review it',
       metadata: {
         sourceContexts: [{
-          kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-expo',
+          kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-ios',
           fileKind: 'directory',
         }],
       },
     });
 
     expect(msg?.contextRefs).toEqual([{
-      kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-expo',
+      kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-ios',
       fileKind: 'directory',
     }]);
   });

@@ -1,6 +1,5 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { en } from '../../mobile-expo/src/i18n/locales/en';
 
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
@@ -13,7 +12,10 @@ vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({
 
 import { XopcChatWelcomeViewModel } from '../entry/src/main/ets/viewmodel/chatWelcomeViewModel.ets';
 
-const data = { copy: en.chat.welcomeSpotlight };
+const data = JSON.parse(readFileSync(
+  new URL('../entry/src/main/resources/rawfile/welcome-en.json', import.meta.url),
+  'utf8',
+));
 const scope = {
   conversationId: 's',
   work: { project: { id: 'p', title: 'Project' }, task: { id: 't', title: 'Task' } },

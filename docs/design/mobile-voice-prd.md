@@ -1,8 +1,8 @@
 # 移动端语音产品方案
 
-日期：2026-09-05。状态：代码已实现，真机发布验收待完成。分阶段改动、自查与验证见 [交付记录](./mobile-voice-delivery.md)。
+日期：2026-09-05。状态：产品需求保留，原生 Android/iOS 的后续能力补齐与真机验收另行跟踪。
 
-配套：[技术方案](./mobile-voice-technical-design.md)。遵循 [移动端设计系统](../../apps/mobile-expo/DESIGN.md)，延续 [语音体验方案](./voice-experience-redesign.md) 的两个入口与同一 Chat 原则。涉及移动端入口、后台行为和设置的新增决策，以本文为准；历史交付记录不作为本方案的完成凭证。
+配套：[技术方案](./mobile-voice-technical-design.md)。遵循各原生平台设计规范，延续 [语音体验方案](./voice-experience-redesign.md) 的两个入口与同一 Chat 原则。涉及移动端入口、后台行为和设置的新增决策，以本文为准；历史交付记录不作为本方案的完成凭证。
 
 ## 1. 产品定位与范围
 

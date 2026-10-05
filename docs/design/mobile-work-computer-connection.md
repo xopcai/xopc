@@ -146,7 +146,7 @@ Web/Electron 共用向导主体。桌面窗口采用固定响应式外框：建�
 
 ## 4. 视觉与行为规范
 
-手机遵循 `apps/mobile-expo/DESIGN.md` 的 Quiet Momentum，电脑遵循 `docs/design/ui-design-system.md`。预览采用各端既有目标视觉语言，不发起本期之外的全站主题重构。
+手机遵循 `retired mobile client/DESIGN.md` 的 Quiet Momentum，电脑遵循 `docs/design/ui-design-system.md`。预览采用各端既有目标视觉语言，不发起本期之外的全站主题重构。
 
 - 系统字体；手机标题 28/34，正文 16/23，按钮 15/20；电脑标题 20/28、正文 14/22。标题与内容左对齐。
 - 手机页面水平边距 20–24pt，主按钮高 48pt，触控范围至少 44pt。大字号时内容滚动，操作不覆盖文本。
@@ -390,7 +390,7 @@ Electron 主进程管理 `runInBackground`。开启且系统托盘/菜单栏入�
 
 ## 9. 主要改动位置
 
-- 手机：`apps/mobile-expo/src/features/gateway/`、`src/storage/device-credentials.ts`、`src/api/agent-client.ts`、共享 query keys 与 i18n。
+- 手机：`retired mobile client/src/features/gateway/`、`src/storage/device-credentials.ts`、`src/api/agent-client.ts`、共享 query keys 与 i18n。
 - 电脑 UI：`web/src/features/endpoint-tools/mobile-device-access-section.tsx`、`mobile-device-api.ts`、`features/remote-access/`、`features/tunnel/`、shell 入口与 i18n。
 - Gateway：`src/gateway/hono/routes/devices.ts`、`src/gateway/device-routes.ts`、`src/gateway/security/gateway-scopes.ts`、会话输入接收链。
 - 持久化：`src/storage/sqlite/device-pairing-repository.ts`、设备访问与 schema migration、必要的输入接收账本。

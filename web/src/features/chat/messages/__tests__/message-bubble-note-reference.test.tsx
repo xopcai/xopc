@@ -81,7 +81,7 @@ describe('MessageBubble context reference attachment', () => {
               role: 'user',
               content: [{ type: 'text', text: 'Review this folder' }],
               contextRefs: [{
-                kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-expo',
+                kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-ios',
                 fileKind: 'directory',
               }],
             }}
@@ -94,7 +94,7 @@ describe('MessageBubble context reference attachment', () => {
 
     expect(container.querySelector('.lucide-folder')).not.toBeNull();
     expect(container.textContent).toContain('Folders');
-    expect(container.textContent).toContain('mobile-expo');
+    expect(container.textContent).toContain('mobile-ios');
     const renderedText = container.textContent ?? '';
     expect(renderedText.indexOf('Review this folder')).toBeLessThan(renderedText.indexOf('Folders'));
   });

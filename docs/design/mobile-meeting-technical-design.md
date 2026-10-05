@@ -8,7 +8,7 @@
 
 ## 1. 架构决策
 
-保持 Expo 56、React Native 0.85 和既有 `XopcVoice` 模块。移动端负责可靠采集和本地材料，Gateway 的 Discussion 负责转写、证据及纪要，Note 负责阅读入口，Task 负责执行。以下新增类型、目录及 API 均为建议落点。
+保持 retired cross-platform client 56、retired cross-platform client 0.85 和既有 `XopcVoice` 模块。移动端负责可靠采集和本地材料，Gateway 的 Discussion 负责转写、证据及纪要，Note 负责阅读入口，Task 负责执行。以下新增类型、目录及 API 均为建议落点。
 
 ```mermaid
 flowchart TD
@@ -36,18 +36,18 @@ flowchart TD
 | 先 PCM16 单声道 16kHz 独立 WAV 片段 | 可解释损坏边界，无 AAC 拼接 / 编码预热问题；压缩由测量决定 |
 | 不新增 Meeting 聚合、任务系统或通用事件框架 | 现有 Discussion / Note / Task 足够表达需求 |
 
-expo-audio 能配置后台录音，但不会自动满足这套 journal、分块、修订和恢复契约。继续供短语音与播放使用；长会议不采用 JS `useAudioStream` 转发后再写盘。[Expo 56 Audio](https://docs.expo.dev/versions/v56.0.0/sdk/audio/)
+平台音频 API 能配置后台录音，但不会自动满足这套 journal、分块、修订和恢复契约。短语音与播放可以使用平台能力；长会议必须由原生服务直接落盘。
 
 ## 2. 代码落点与真实差距
 
 | 位置 | 扩展 |
 |---|---|
-| `apps/mobile-expo/modules/xopc-voice/ios/` | 增加录音文件写入器、journal、原生会话状态；现有 Swift module 暴露窄接口 |
-| `apps/mobile-expo/modules/xopc-voice/android/.../voice/` | 同职责 Kotlin 实现；重构现有服务成为一个音频会话服务，明确 call / recording 模式 |
-| `apps/mobile-expo/src/features/voice/audio-playback-coordinator.ts` | 与原生唯一 owner 协调；JS symbol 不足以覆盖后台 / 原生通知 |
-| `apps/mobile-expo/src/features/recordings/`（新增） | 状态适配、录音页、恢复页、状态条、同步控制；组件不拥有设备生命周期 |
-| `apps/mobile-expo/src/query/` | 新增 Discussion 查询与 mutations；服务器状态走 React Query |
-| `apps/mobile-expo/plugins/` | 原生后台能力、用途说明和服务声明；不手改生成的 ios/android 项目 |
+| `retired mobile client/modules/xopc-voice/ios/` | 增加录音文件写入器、journal、原生会话状态；现有 Swift module 暴露窄接口 |
+| `retired mobile client/modules/xopc-voice/android/.../voice/` | 同职责 Kotlin 实现；重构现有服务成为一个音频会话服务，明确 call / recording 模式 |
+| `retired mobile client/src/features/voice/audio-playback-coordinator.ts` | 与原生唯一 owner 协调；JS symbol 不足以覆盖后台 / 原生通知 |
+| `retired mobile client/src/features/recordings/`（新增） | 状态适配、录音页、恢复页、状态条、同步控制；组件不拥有设备生命周期 |
+| `retired mobile client/src/query/` | 新增 Discussion 查询与 mutations；服务器状态走 React Query |
+| `retired mobile client/plugins/` | 原生后台能力、用途说明和服务声明；不手改生成的 ios/android 项目 |
 | `src/discussions/`、SQLite migrations | 增加 mobile 来源、离线创建绑定、原始 track/epoch 接收及映射 |
 | `src/gateway/hono/routes/discussions.ts`、`lazy-bundles.ts` | 统一路由与鉴权映射，沿用现有 seal / job |
 
@@ -57,7 +57,7 @@ expo-audio 能配置后台录音，但不会自动满足这套 journal、分块�
 
 ### 3.1 唯一所有者
 
-原生 `AudioSessionCoordinator` 仅允许一个 capture owner：`dictation | voiceCall | recording`。播放也通过同一协调策略管理，避免 expo-audio、朗读和通话各自改 AVAudioSession。调用方得到 owner token；过期 token 不能停止新会话。
+原生 `AudioSessionCoordinator` 仅允许一个 capture owner：`dictation | voiceCall | recording`。播放也通过同一协调策略管理，避免朗读和通话各自修改平台音频会话。调用方得到 owner token；过期 token 不能停止新会话。
 
 在现有模块内部拆出录音 engine 和通话 engine，不强行合并 DSP。iOS 当前 `.voiceChat` 和 Android `VOICE_COMMUNICATION` 偏近讲通话，可能压制远处参会人；录音模式初选 iOS `.record` / 合适的测量模式、Android `MIC`，以近场 / 远场 / 蓝牙实测确定单一默认策略。不维护多种音源自动轮试的隐式 fallback。
 
@@ -211,7 +211,7 @@ M1 允许 JS 暂停后上传停止，录音照常；前台重连从 journal 继�
 - 用户停止服务、撤销权限、系统回收都进入可恢复终态；不从 BOOT_COMPLETED、定时任务偷偷重启麦克风。
 - 逐厂商测试省电策略；只有遇到明确后台限制时给针对性引导，不首次启动就要求所有用户关闭系统省电。通知权限与麦克风权限分别处理，不因通知拒绝伪报麦克风失败。
 
-最低 OS、targetSdk 和 entitlement 以 Expo 56 实际生成工程及签名产物为准。M0 输出准确版本矩阵；本文不凭依赖声明承诺所有 iOS / Android 版本兼容。
+最低 OS、targetSdk 和 entitlement 以 retired cross-platform client 56 实际生成工程及签名产物为准。M0 输出准确版本矩阵；本文不凭依赖声明承诺所有 iOS / Android 版本兼容。
 
 ## 8. 理解、问答与表现性能
 
@@ -264,6 +264,6 @@ M1 允许 JS 暂停后上传停止，录音照常；前台重连从 journal 继�
 4. 锁屏跨文件保护、Android 一小时 wake lock、原生通知与 JS 所有者竞争列为 M0 门槛。
 5. 完成是 seal；补录关联新 capture，不重新打开终态会话。
 6. 删除 Undo 先隐藏再物理删除，防止 UI 可撤销但文件已不可恢复。
-7. 系统音频宣传、Live Activity、Expo 后台开关均未被写成无条件平台能力。
+7. 系统音频宣传、Live Activity、retired cross-platform client 后台开关均未被写成无条件平台能力。
 
 仍需实验的结论：真实 OS 支持范围、远场输入模式、电量预算、断电尾段损失、竞品当前手机 UI。已给出具体实验和默认路线，不以未知项阻止完成设计，也不把它们伪装成已通过测试。

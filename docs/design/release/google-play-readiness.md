@@ -28,4 +28,4 @@ Google Play publication is deferred. The current Android distribution channel is
 6. If the personal account was created after 2023-11-13, keep at least 12 testers opted in continuously for 14 days and apply for production access.
 7. Create the production release after Google grants production access.
 
-The previous listing copy remains in `apps/mobile-expo/google-play/metadata.md` as migration input until store metadata is moved to a native-owned location. Review credentials must remain only in Play Console. New binaries must come from the native Android release workflow described in [the native mobile release guide](./mobile-build-release.md).
+The listing copy lives in `apps/mobile-android/google-play/metadata.md`. Review credentials must remain only in Play Console. New binaries must come from the native Android release workflow described in [the native mobile release guide](./mobile-build-release.md).
