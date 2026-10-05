@@ -29,7 +29,7 @@ struct AssistantView<Dock: View>: View {
     @State private var showingReferencePicker = false
     @State private var referenceKind = ContextReferenceKind.note
     @State private var isActionPanelExpanded = false
-    @State private var optionsConversation: ConversationSelection?
+    @State private var showingSessionActions = false
     @State private var executionPresentation: ExecutionActivityPresentation?
     @State private var handledQuickChatID: UUID?
     @State private var readAloud = ChatReadAloud()
@@ -81,11 +81,12 @@ struct AssistantView<Dock: View>: View {
             showingFilePicker: $showingFilePicker,
             showingCameraPicker: $showingCameraPicker
         ))
-        .sheet(item: $optionsConversation) { conversation in
-            AssistantOptionsView(
+        .sheet(isPresented: $showingSessionActions) {
+            AssistantSessionActionsView(
                 configuration: configuration,
                 conversation: conversation,
-                onSave: onConversationUpdated
+                state: state,
+                onConversationUpdated: onConversationUpdated
             )
         }
         .sheet(item: $executionPresentation) { presentation in
@@ -168,7 +169,6 @@ struct AssistantView<Dock: View>: View {
                         }
                         .frame(minHeight: 44)
                     }
-                    contextSummary
                     clarificationCard
                     queueCard
                     welcome
@@ -193,7 +193,6 @@ struct AssistantView<Dock: View>: View {
                         .padding(.horizontal, 4)
                         .accessibilityAddTraits(.isHeader)
                 }
-                contextSummary
                 if let errorMessage = state.errorMessage {
                     ErrorBanner(message: errorMessage)
                 }
@@ -240,14 +239,6 @@ struct AssistantView<Dock: View>: View {
     private var showsConversationTitleInTimeline: Bool {
         guard let title = conversation?.title else { return false }
         return title.count > 14
-    }
-
-    private var contextSummary: some View {
-        ConversationContextButton(
-            configuration: configuration,
-            conversation: conversation,
-            state: state
-        )
     }
 
     private var readAloudBar: some View {
@@ -404,26 +395,12 @@ struct AssistantView<Dock: View>: View {
         }
 
         ToolbarItem(placement: .topBarTrailing) {
-            HStack {
-                Button {
-                    onStartConversation(state.selectedAgentID ?? "main")
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                }
-                .accessibilityLabel("新对话")
-                if let conversation {
-                    Button {
-                        optionsConversation = conversation
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                    }
-                    .accessibilityLabel("助手设置")
-                }
-                Button(action: onOpenSettings) {
-                    Image(systemName: "gearshape")
-                }
-                .accessibilityLabel("连接设置")
+            Button {
+                showingSessionActions = true
+            } label: {
+                Image(systemName: "ellipsis")
             }
+            .accessibilityLabel("会话信息与设置")
         }
     }
 }

@@ -41,6 +41,26 @@ class ConversationRepositoryTest {
     assertEquals(true, messages.all { it.hasNonTextContent })
   }
 
+  @Test fun compactHistoryShowsOneAssistantCardPerTurnWithOnlyAnswerText() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val raw = """{"session":{"key":"$id","messages":[
+      {"id":"u1","role":"user","content":"Summarize this video"},
+      {"id":"a1","role":"assistant","turnId":"turn-1","content":"Downloading audio",
+        "rawContent":[{"type":"text","text":"Downloading audio","presentation":"narration"}]},
+      {"id":"a2","role":"assistant","turnId":"turn-1","content":"",
+        "metadata":{"turnOutcome":{"status":"succeeded","deliverables":[{"artifactId":"file-1","title":"notes.md","kind":"document","availability":"available","location":"artifact_store","capabilities":["preview"]}]}}},
+      {"id":"a3","role":"assistant","turnId":"turn-1","content":"Here is the summary",
+        "rawContent":[{"type":"text","text":"Here is the summary","presentation":"answer"}]},
+      {"id":"a4","role":"assistant","turnId":"turn-2","content":"A separate turn"}
+    ]}}"""
+    val messages = ConversationRepository.parseHistory(id, raw).messages
+    assertEquals(listOf("u1", "a3", "a4"), messages.map { it.id })
+    assertEquals("Here is the summary", messages[1].text)
+    assertEquals("turn-1", messages[1].turnId)
+    assertEquals("notes.md", messages[1].outcome?.artifacts?.single()?.title)
+    assertEquals("A separate turn", messages[2].text)
+  }
+
   @Test fun executionDetailUsesOnlyBoundedPublicProjection() {
     val detail = ConversationRepository.parseExecutionDetail("turn-1", """{"detail":{"turnId":"turn-1","steps":[{"id":"a","kind":"thinking"},{"id":"b","kind":"tool","category":"search","preview":"weather report","status":"done"},{"id":"c","kind":"tool","category":"search","preview":"latest forecast","status":"done"}]}}""")
     assertEquals("weather report", detail.steps[1].preview)

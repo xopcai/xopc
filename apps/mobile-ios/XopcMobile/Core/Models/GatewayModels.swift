@@ -155,17 +155,21 @@ struct ConversationSelection: Equatable, Identifiable, Sendable {
         )
     }
 
-    static func projectDraft(project: ProjectRecord) -> ConversationSelection {
+    static func projectDraft(
+        project: ProjectRecord,
+        executionMode: String? = nil,
+        agentId: String? = nil
+    ) -> ConversationSelection {
         ConversationSelection(
             id: UUID().uuidString.lowercased(),
             title: "新项目对话",
-            agentId: project.defaultAgentId ?? "main",
+            agentId: agentId ?? project.defaultAgentId ?? "main",
             transcriptId: nil,
             isDraft: true,
             model: nil,
             thinkingLevel: nil,
             projectId: project.id,
-            executionMode: project.workspaceRoot == nil ? nil : project.executionMode ?? "local_checkout"
+            executionMode: project.workspaceRoot == nil ? nil : executionMode ?? project.executionMode ?? "local_checkout"
         )
     }
 
@@ -290,6 +294,22 @@ struct SessionAgentConfiguration: Decodable, Sendable {
     let model: String?
     let thinkingLevel: String?
     let configVersion: Int?
+    let workingDirectoryLocked: Bool?
+    let effectiveWorkspacePath: String?
+
+    init(
+        model: String?,
+        thinkingLevel: String?,
+        configVersion: Int?,
+        workingDirectoryLocked: Bool? = nil,
+        effectiveWorkspacePath: String? = nil
+    ) {
+        self.model = model
+        self.thinkingLevel = thinkingLevel
+        self.configVersion = configVersion
+        self.workingDirectoryLocked = workingDirectoryLocked
+        self.effectiveWorkspacePath = effectiveWorkspacePath
+    }
 }
 
 struct ActiveRun: Decodable, Sendable {

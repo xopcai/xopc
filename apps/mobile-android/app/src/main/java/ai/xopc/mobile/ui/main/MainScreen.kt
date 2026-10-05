@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.graphics.Bitmap
 import android.provider.Settings
 import android.widget.Toast
 import ai.xopc.mobile.R
@@ -18,6 +19,7 @@ import ai.xopc.mobile.gateway.ConversationMedia
 import ai.xopc.mobile.gateway.ConversationTarget
 import ai.xopc.mobile.gateway.CameraCaptureStore
 import ai.xopc.mobile.gateway.CameraTakePictureContract
+import ai.xopc.mobile.gateway.ChatAttachment
 import ai.xopc.mobile.gateway.ExecutionDetail
 import ai.xopc.mobile.gateway.TaskWelcomeInfo
 import ai.xopc.mobile.gateway.ProjectWelcomeInfo
@@ -36,6 +38,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,8 +47,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -85,6 +90,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -98,7 +104,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -122,6 +127,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
@@ -299,6 +306,7 @@ fun MainScreen(
   onCancelRename: () -> Unit = {},
   onTogglePin: (String) -> Unit = {},
   onToggleArchive: (String) -> Unit = {},
+  onBatchConversations: (List<String>, String) -> Unit = { _, _ -> },
   onBeginConversationShare: (String) -> Unit = {},
   onConfirmConversationShare: () -> Unit = {},
   onDismissConversationShare: () -> Unit = {},
@@ -309,11 +317,13 @@ fun MainScreen(
   onAddQuickAttachment: (String, Uri) -> Unit = { _, _ -> },
   onAddCapturedQuickAttachment: (String, Uri) -> Unit = { _, _ -> },
   onRemoveQuickAttachment: (String) -> Unit = {},
+  onPreviewQuickImage: suspend (ChatAttachment) -> Bitmap? = { null },
   onQuickNavigationHandled: (String) -> Unit = {},
   onDraftChange: (String) -> Unit = {},
   onAddDraftAttachment: (String, String, Uri) -> Unit = { _, _, _ -> },
   onAddCapturedDraftAttachment: (String, String, Uri) -> Unit = { _, _, _ -> },
   onRemoveDraftAttachment: (String) -> Unit = {},
+  onPreviewDraftImage: suspend (String, ChatAttachment) -> Bitmap? = { _, _ -> null },
   onRemoveDraftRef: (String, String) -> Unit = { _, _ -> },
   onLoadReferences: (String, String) -> Unit = { _, _ -> },
   onAddDraftRef: (ReferencePickerItem) -> Boolean = { false },
@@ -355,6 +365,7 @@ fun MainScreen(
   onCloseExecution: () -> Unit = {},
   onSaveMessageAsNote: (String) -> Unit = {},
   onReuseMessage: (String) -> Boolean = { false },
+  onRegenerateMessage: (String) -> Boolean = { false },
   onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray = { _, _ ->
     throw IllegalStateException("MEDIA_UNAVAILABLE")
   },
@@ -532,12 +543,14 @@ fun MainScreen(
     onSaveRename = onSaveRename, onCancelRename = onCancelRename,
     onTogglePin = onTogglePin,
     onToggleArchive = onToggleArchive,
+    onBatchConversations = onBatchConversations,
     onBeginConversationShare = onBeginConversationShare,
     onConfirmConversationShare = onConfirmConversationShare,
     onDismissConversationShare = onDismissConversationShare,
     onScheduleDelete = onScheduleDelete, onUndoDelete = onUndoDelete,
     onQuickDraftChange = onQuickDraftChange, onQuickSubmit = onQuickSubmit,
     onRemoveQuickAttachment = onRemoveQuickAttachment,
+    onPreviewQuickImage = onPreviewQuickImage,
     onPickQuickAttachment = { kind ->
       val gatewayId = connection.profile?.gatewayId
       if (gatewayId != null) {
@@ -569,6 +582,7 @@ fun MainScreen(
       }
     },
     onRemoveDraftAttachment = onRemoveDraftAttachment,
+    onPreviewDraftImage = onPreviewDraftImage,
     onLoadReferences = onLoadReferences, onAddDraftRef = onAddDraftRef,
     onSendMessage = onSendMessage,
     onRetryPendingInput = onRetryPendingInput, onStopRun = onStopRun,
@@ -598,6 +612,7 @@ fun MainScreen(
     onOpenExecution = onOpenExecution, onRetryExecution = onRetryExecution,
     onCloseExecution = onCloseExecution,
     onSaveMessageAsNote = onSaveMessageAsNote, onReuseMessage = onReuseMessage,
+    onRegenerateMessage = onRegenerateMessage,
     onLoadMessageMedia = onLoadMessageMedia,
     onCopyMessageText = { value ->
       (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
@@ -677,6 +692,7 @@ fun MainScreen(
     } })
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun MainContent(
   selectedTab: HomeTab,
@@ -701,6 +717,7 @@ internal fun MainContent(
   onCancelRename: () -> Unit = {},
   onTogglePin: (String) -> Unit = {},
   onToggleArchive: (String) -> Unit = {},
+  onBatchConversations: (List<String>, String) -> Unit = { _, _ -> },
   onBeginConversationShare: (String) -> Unit = {},
   onConfirmConversationShare: () -> Unit = {},
   onDismissConversationShare: () -> Unit = {},
@@ -710,9 +727,11 @@ internal fun MainContent(
   onQuickSubmit: () -> Unit = {},
   onPickQuickAttachment: (String) -> Unit = {},
   onRemoveQuickAttachment: (String) -> Unit = {},
+  onPreviewQuickImage: suspend (ChatAttachment) -> Bitmap? = { null },
   onDraftChange: (String) -> Unit = {},
   onPickDraftAttachment: (String) -> Unit = {},
   onRemoveDraftAttachment: (String) -> Unit = {},
+  onPreviewDraftImage: suspend (String, ChatAttachment) -> Bitmap? = { _, _ -> null },
   onRemoveDraftRef: (String, String) -> Unit = { _, _ -> },
   onLoadReferences: (String, String) -> Unit = { _, _ -> },
   onAddDraftRef: (ReferencePickerItem) -> Boolean = { false },
@@ -754,6 +773,7 @@ internal fun MainContent(
   onCloseExecution: () -> Unit = {},
   onSaveMessageAsNote: (String) -> Unit = {},
   onReuseMessage: (String) -> Boolean = { false },
+  onRegenerateMessage: (String) -> Boolean = { false },
   onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray = { _, _ ->
     throw IllegalStateException("MEDIA_UNAVAILABLE")
   },
@@ -923,7 +943,7 @@ internal fun MainContent(
     if (assistantReferenceQuery.isNotEmpty()) delay(250)
     onLoadReferences(kind, assistantReferenceQuery)
   }
-  val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+  val imeVisible = WindowInsets.isImeVisible
   val tabStateHolder = rememberSaveableStateHolder()
   BackHandler(enabled = assistantActionsOpen) { assistantActionsOpen = false }
   BackHandler(enabled = quickActionsOpen) { quickActionsOpen = false }
@@ -943,7 +963,7 @@ internal fun MainContent(
               assistantComposerValue = value
               onDraftChange(value.text)
             }, assistantComposerFocus, assistantActionsOpen, { assistantActionsOpen = it },
-              onRemoveDraftRef, onRemoveDraftAttachment, onSendMessage, onStopRun)
+              onRemoveDraftRef, onRemoveDraftAttachment, onPreviewDraftImage, onSendMessage, onStopRun)
             AnimatedVisibility(visible = assistantActionsOpen,
               enter = expandVertically(animationSpec = tween(220), expandFrom = Alignment.Bottom) +
                 fadeIn(animationSpec = tween(220)),
@@ -972,7 +992,8 @@ internal fun MainContent(
         } else if (showQuick) {
           MainBottomSurface("secondary-bottom-surface") {
             QuickComposer(connection, selectedTab, onQuickDraftChange, onQuickSubmit,
-              quickActionsOpen, { quickActionsOpen = it }, onRemoveQuickAttachment, onOpenChat = {
+              quickActionsOpen, { quickActionsOpen = it }, onRemoveQuickAttachment,
+              onPreviewQuickImage, onOpenChat = {
                 quickActionsOpen = false
                 onCreateConversation()
                 onSelectTab(HomeTab.Assistant)
@@ -1021,7 +1042,7 @@ internal fun MainContent(
           onReloadModels, onSelectModel, onReloadAgents, onSwitchAgent, onReloadContext,
           onRefreshConnectionWait,
           onOpenExecution, onRetryExecution, onCloseExecution,
-          onCopyMessageText, onSaveMessageAsNote, onReuseMessage,
+          onCopyMessageText, onSaveMessageAsNote, onReuseMessage, onRegenerateMessage,
           onLoadMessageMedia, onOpenMessageTarget = { target ->
             when (target.kind) {
               "note" -> { onOpenNote(target.id); onSelectTab(HomeTab.Notes) }
@@ -1054,7 +1075,8 @@ internal fun MainContent(
           onSelectTaskChildConversation(taskId, id)
           onSelectTab(HomeTab.Assistant)
         }, onDiscardDraft, onBeginRename, onRenameDraftChange, onSaveRename, onCancelRename,
-          onTogglePin, onToggleArchive, onBeginConversationShare, onConfirmConversationShare,
+          onTogglePin, onToggleArchive, onBatchConversations,
+          onBeginConversationShare, onConfirmConversationShare,
           onDismissConversationShare, onScheduleDelete, onUndoDelete)
       }
       HomeTab.Progress -> if (connection.profile == null) PairingScreen(
@@ -1167,11 +1189,94 @@ private fun MainBottomSurface(tag: String, content: @Composable androidx.compose
     .testTag(tag), content = content)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DraftAttachmentStrip(items: List<ChatAttachment>, scopeKey: String?, tagPrefix: String,
+  canRemove: Boolean, onRemove: (String) -> Unit,
+  onPreviewImage: suspend (ChatAttachment) -> Bitmap?) {
+  var previewId by remember(scopeKey) { mutableStateOf<String?>(null) }
+  val previewItem = items.firstOrNull { it.id == previewId && it.type == "image" }
+  val previewLabel = stringResource(R.string.assistant_attachment_preview)
+  val removeLabel = stringResource(R.string.assistant_attachment_remove)
+  if (items.isNotEmpty()) {
+    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+      .padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalAlignment = Alignment.CenterVertically) {
+      items.forEach { item ->
+        if (item.type == "image") {
+          val loaded by produceState<Pair<Boolean, Bitmap?>>(false to null,
+            scopeKey, item.id, item.size) {
+            value = true to runCatching { onPreviewImage(item) }.getOrNull()
+          }
+          Box(modifier = Modifier.size(96.dp).clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable { previewId = item.id }
+            .semantics { contentDescription = "$previewLabel: ${item.name}" }
+            .testTag("$tagPrefix-attachment-${item.id}")) {
+            if (loaded.second != null) Image(loaded.second!!.asImageBitmap(),
+              contentDescription = null, modifier = Modifier.fillMaxSize()
+                .testTag("$tagPrefix-attachment-thumbnail-${item.id}"),
+              contentScale = ContentScale.Crop)
+            else Box(Modifier.fillMaxSize().padding(8.dp), contentAlignment = Alignment.Center) {
+              if (!loaded.first) CircularProgressIndicator(Modifier.size(24.dp))
+              else Text(item.name, style = MaterialTheme.typography.labelSmall, maxLines = 3,
+                overflow = TextOverflow.Ellipsis)
+            }
+            TextButton(onClick = { onRemove(item.id) }, enabled = canRemove,
+              modifier = Modifier.align(Alignment.TopEnd).size(34.dp)
+                .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                .semantics { contentDescription = "$removeLabel: ${item.name}" }
+                .testTag("$tagPrefix-attachment-remove-${item.id}"),
+              contentPadding = PaddingValues(0.dp)) {
+              Text("×", color = Color.White, style = MaterialTheme.typography.titleMedium)
+            }
+          }
+        } else {
+          Row(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh,
+            RoundedCornerShape(12.dp)).padding(start = 12.dp)
+            .testTag("$tagPrefix-attachment-${item.id}"),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text(item.name, modifier = Modifier.size(width = 130.dp, height = 48.dp)
+              .padding(top = 14.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            TextButton(onClick = { onRemove(item.id) }, enabled = canRemove,
+              modifier = Modifier.testTag("$tagPrefix-attachment-remove-${item.id}")) {
+              Text(stringResource(R.string.assistant_attachment_remove))
+            }
+          }
+        }
+      }
+    }
+  }
+  if (previewItem != null) {
+    ModalBottomSheet(onDismissRequest = { previewId = null },
+      modifier = Modifier.testTag("$tagPrefix-attachment-preview")) {
+      val loaded by produceState<Pair<Boolean, Bitmap?>>(false to null,
+        scopeKey, previewItem.id, previewItem.size) {
+        value = true to runCatching { onPreviewImage(previewItem) }.getOrNull()
+      }
+      Text(previewItem.name, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        style = MaterialTheme.typography.titleMedium, maxLines = 2,
+        overflow = TextOverflow.Ellipsis)
+      Box(modifier = Modifier.fillMaxWidth()
+        .height((LocalConfiguration.current.screenHeightDp * 0.6f).dp)
+        .padding(16.dp), contentAlignment = Alignment.Center) {
+        if (loaded.second != null) Image(loaded.second!!.asImageBitmap(),
+          contentDescription = previewItem.name, modifier = Modifier.fillMaxSize()
+            .testTag("$tagPrefix-attachment-preview-image"), contentScale = ContentScale.Fit)
+        else if (!loaded.first) CircularProgressIndicator()
+        else Text(stringResource(R.string.assistant_attachment_preview_unavailable),
+          color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
+    }
+  }
+}
+
 @Composable
 private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
   onChange: (String) -> Unit, onSubmit: () -> Unit,
   actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit,
-  onRemoveAttachment: (String) -> Unit, onOpenChat: () -> Unit) {
+  onRemoveAttachment: (String) -> Unit,
+  onPreviewImage: suspend (ChatAttachment) -> Bitmap?, onOpenChat: () -> Unit) {
   val context = LocalContext.current
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -1190,18 +1295,9 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
     if (connection.quickError) Text(stringResource(R.string.quick_send_error), color = MaterialTheme.colorScheme.error)
     if (connection.quickAttachmentError) Text(stringResource(R.string.assistant_attachment_error),
       color = MaterialTheme.colorScheme.error)
-    connection.quickAttachments.forEach { item ->
-      Row(modifier = Modifier.fillMaxWidth().testTag("quick-attachment-${item.id}"),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text(item.name, modifier = Modifier.weight(1f), maxLines = 1,
-          overflow = TextOverflow.Ellipsis)
-        TextButton(onClick = { onRemoveAttachment(item.id) },
-          enabled = !connection.quickSending && !connection.quickAttachmentLoading,
-          modifier = Modifier.testTag("quick-attachment-remove-${item.id}")) {
-          Text(stringResource(R.string.assistant_attachment_remove))
-        }
-      }
-    }
+    DraftAttachmentStrip(connection.quickAttachments, connection.profile?.gatewayId,
+      "quick", !connection.quickSending && !connection.quickAttachmentLoading,
+      onRemoveAttachment, onPreviewImage)
     Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
       .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(18.dp))
       .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1262,6 +1358,7 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
   onComposerValueChange: (TextFieldValue) -> Unit, composerFocus: FocusRequester,
   actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit,
   onRemoveDraftRef: (String, String) -> Unit, onRemoveDraftAttachment: (String) -> Unit,
+  onPreviewImage: suspend (String, ChatAttachment) -> Bitmap?,
   onSendMessage: () -> Unit, onStopRun: () -> Unit) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -1303,17 +1400,11 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
         }
       }
     }
-    connection.draftAttachments.forEach { item ->
-      Row(modifier = Modifier.fillMaxWidth().testTag("assistant-attachment-${item.id}"),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text(item.name, modifier = Modifier.weight(1f), maxLines = 1,
-          overflow = TextOverflow.Ellipsis)
-        TextButton(onClick = { onRemoveDraftAttachment(item.id) },
-          enabled = !connection.attachmentLoading && !connection.sending && connection.pendingInput == null,
-          modifier = Modifier.testTag("assistant-attachment-remove-${item.id}")) {
-          Text(stringResource(R.string.assistant_attachment_remove))
-        }
-      }
+    DraftAttachmentStrip(connection.draftAttachments,
+      "${connection.profile?.gatewayId}:${connection.selectedConversationId}", "assistant",
+      !connection.attachmentLoading && !connection.sending && connection.pendingInput == null,
+      onRemoveDraftAttachment) { item ->
+      connection.selectedConversationId?.let { onPreviewImage(it, item) }
     }
     }
     Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer,
@@ -1479,6 +1570,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onCopyMessageText: (String) -> Unit,
   onSaveMessageAsNote: (String) -> Unit,
   onReuseMessage: (String) -> Boolean,
+  onRegenerateMessage: (String) -> Boolean,
   onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray,
   onOpenMessageTarget: (ConversationTarget) -> Unit,
   onComposerValueChange: (TextFieldValue) -> Unit,
@@ -1746,6 +1838,17 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-save-note-action")) {
         Text(stringResource(R.string.assistant_save_note), modifier = Modifier.fillMaxWidth())
       }
+      if (actionsMessage.role == "assistant") {
+        val assistantIndex = connection.messages.indexOfFirst { it.id == actionsMessage.id }
+        val source = connection.messages.take(assistantIndex.coerceAtLeast(0)).lastOrNull { it.role == "user" }
+        if (source != null && source.text.isNotBlank() && !source.hasNonTextContent) TextButton(onClick = {
+          if (onRegenerateMessage(actionsMessage.id)) messageActionsId = null
+        }, enabled = connection.activeRunId == null && !connection.sending && connection.pendingInput == null &&
+          connection.realtimeStatus == "connected",
+          modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-regenerate-action")) {
+          Text(stringResource(R.string.assistant_regenerate), modifier = Modifier.fillMaxWidth())
+        }
+      }
       if (actionsMessage.role == "assistant" && codeText.isNotEmpty()) TextButton(onClick = {
         messageActionsId = null
         onCopyMessageText(codeText)
@@ -2006,6 +2109,7 @@ private fun ConversationsScreen(
   onCancelRename: () -> Unit,
   onTogglePin: (String) -> Unit,
   onToggleArchive: (String) -> Unit,
+  onBatchConversations: (List<String>, String) -> Unit,
   onBeginShare: (String) -> Unit,
   onConfirmShare: () -> Unit,
   onDismissShare: () -> Unit,
@@ -2017,6 +2121,15 @@ private fun ConversationsScreen(
   var searchOpen by rememberSaveable { mutableStateOf(true) }
   var expandedTaskParents by rememberSaveable { mutableStateOf(emptyList<String>()) }
   var collapsedTaskParents by rememberSaveable { mutableStateOf(emptyList<String>()) }
+  var selecting by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(false) }
+  var selectedIds by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(emptyList<String>()) }
+  var confirmBatchDelete by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(false) }
+  LaunchedEffect(connection.batchConversationRevision) {
+    if (connection.batchConversationRevision > 0) {
+      selectedIds = connection.batchConversationFailedIds
+      selecting = selectedIds.isNotEmpty()
+    }
+  }
   val listState = rememberLazyListState()
   val currentLoadMore by rememberUpdatedState(onLoadMore)
   LaunchedEffect(connection.profile?.gatewayId, connection.conversationSearch) {
@@ -2066,6 +2179,14 @@ private fun ConversationsScreen(
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("archive-conversation-${menuConversation.id}")) {
         Text(stringResource(if (menuConversation.status == "archived") R.string.conversations_unarchive
           else R.string.conversations_archive), modifier = Modifier.fillMaxWidth())
+      }
+      TextButton(onClick = {
+        menuConversationId = null
+        selectedIds = listOf(menuConversation.id)
+        selecting = true
+      }, enabled = managementEnabled,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("select-conversation-${menuConversation.id}")) {
+        Text(stringResource(R.string.conversations_select), modifier = Modifier.fillMaxWidth())
       }
       HorizontalDivider()
       TextButton(onClick = { menuConversationId = null; onScheduleDelete(menuConversation.id) },
@@ -2173,6 +2294,18 @@ private fun ConversationsScreen(
       Text(stringResource(R.string.conversations_cancel))
     } },
   )
+  if (confirmBatchDelete) AlertDialog(onDismissRequest = { confirmBatchDelete = false },
+    title = { Text(stringResource(R.string.conversations_delete)) },
+    text = { Text(stringResource(R.string.conversations_batch_delete_confirm, selectedIds.size)) },
+    confirmButton = { TextButton(onClick = {
+      confirmBatchDelete = false
+      onBatchConversations(selectedIds, "delete")
+    }, modifier = Modifier.testTag("conversations-batch-delete-confirm")) {
+      Text(stringResource(R.string.conversations_delete), color = MaterialTheme.colorScheme.error)
+    } },
+    dismissButton = { TextButton(onClick = { confirmBatchDelete = false }) {
+      Text(stringResource(R.string.conversations_cancel))
+    } })
   val clearLabel = stringResource(R.string.conversations_clear)
   val newConversationLabel = stringResource(R.string.assistant_new_action)
   val searchLabel = stringResource(R.string.conversations_search)
@@ -2180,14 +2313,20 @@ private fun ConversationsScreen(
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically) {
-      Text(stringResource(R.string.tab_conversations), style = MaterialTheme.typography.headlineMedium,
+      Text(if (selecting) stringResource(R.string.conversations_selected, selectedIds.size)
+        else stringResource(R.string.tab_conversations), style = MaterialTheme.typography.headlineMedium,
         fontWeight = FontWeight.Bold, fontSize = 30.sp, modifier = Modifier.weight(1f))
-      if (!searchOpen) IconButton(onClick = { searchOpen = true },
+      if (selecting) TextButton(onClick = { selecting = false; selectedIds = emptyList() },
+        enabled = !connection.batchConversationBusy,
+        modifier = Modifier.testTag("conversations-selection-cancel")) {
+        Text(stringResource(R.string.conversations_cancel))
+      }
+      if (!selecting && !searchOpen) IconButton(onClick = { searchOpen = true },
         modifier = Modifier.size(48.dp).semantics { contentDescription = searchLabel }
           .testTag("conversations-open-search")) {
         Text("⌕", style = MaterialTheme.typography.headlineMedium)
       }
-      IconButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
+      if (!selecting) IconButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
         modifier = Modifier.size(48.dp).semantics {
           contentDescription = newConversationLabel
         }.testTag("chats-new")) { Text("+", style = MaterialTheme.typography.headlineMedium) }
@@ -2235,6 +2374,9 @@ private fun ConversationsScreen(
       color = MaterialTheme.colorScheme.error)
     if (connection.deleteActionError) Text(stringResource(R.string.conversations_delete_error),
       color = MaterialTheme.colorScheme.error)
+    if (connection.batchConversationFailedIds.isNotEmpty()) Text(
+      stringResource(R.string.conversations_batch_failed, connection.batchConversationFailedIds.size),
+      color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("conversations-batch-error"))
     if (connection.discardDraftError) Text(stringResource(R.string.conversations_discard_error),
       color = MaterialTheme.colorScheme.error)
     if (connection.pendingDeleteId != null) Row(modifier = Modifier.fillMaxWidth(),
@@ -2243,6 +2385,30 @@ private fun ConversationsScreen(
       TextButton(onClick = onUndoDelete, enabled = !connection.deleteCommitting,
         modifier = Modifier.testTag("conversations-undo-delete")) {
         Text(stringResource(R.string.conversations_undo))
+      }
+    }
+    if (selecting) Row(modifier = Modifier.fillMaxWidth().testTag("conversations-batch-bar"),
+      horizontalArrangement = Arrangement.SpaceEvenly) {
+      TextButton(onClick = { onBatchConversations(selectedIds, "archive") },
+        enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
+        modifier = Modifier.testTag("conversations-batch-archive")) {
+        Text(stringResource(R.string.conversations_archive))
+      }
+      TextButton(onClick = { onBatchConversations(selectedIds, "pin") },
+        enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
+        modifier = Modifier.testTag("conversations-batch-pin")) {
+        Text(stringResource(R.string.conversations_pin))
+      }
+      TextButton(onClick = {
+        selectedIds.singleOrNull()?.let(onBeginRename)
+      }, enabled = selectedIds.size == 1 && !connection.batchConversationBusy,
+        modifier = Modifier.testTag("conversations-batch-rename")) {
+        Text(stringResource(R.string.conversations_rename))
+      }
+      TextButton(onClick = { confirmBatchDelete = true },
+        enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
+        modifier = Modifier.testTag("conversations-batch-delete")) {
+        Text(stringResource(R.string.conversations_delete), color = MaterialTheme.colorScheme.error)
       }
     }
     PullToRefreshBox(isRefreshing = connection.conversationsLoading && connection.conversations.isNotEmpty(),
@@ -2276,10 +2442,16 @@ private fun ConversationsScreen(
                 }
               }),
               onDiscard = if (conversation.isLocalDraft) ({ pendingDiscardId = conversation.id }) else null,
-              onMenu = if (conversation.isLocalDraft) null else ({ menuConversationId = conversation.id }),
+              onMenu = if (conversation.isLocalDraft || selecting) null else ({ menuConversationId = conversation.id }),
               selected = conversation.id == connection.selectedConversationId,
+              selectionMode = selecting && !conversation.isLocalDraft,
+              selectionSelected = conversation.id in selectedIds,
               discardEnabled = connection.discardingDraftId == null && !connection.creatingConversation && !connection.sending,
-              onClick = { onSelectConversation(conversation.id) })
+              onClick = {
+                if (selecting && !conversation.isLocalDraft) selectedIds = if (conversation.id in selectedIds)
+                  selectedIds - conversation.id else selectedIds + conversation.id
+                else onSelectConversation(conversation.id)
+              })
           }
           if (taskGroup != null && taskExpanded && connection.conversationSearch.isBlank()) {
             items(taskGroup.items, key = { "task-${conversation.id}-${it.taskId}" }) { child ->
@@ -2307,6 +2479,7 @@ private fun ConversationsScreen(
 @Composable
 private fun ConversationCard(conversation: ConversationSummary, showTime: Boolean = false,
   onDiscard: (() -> Unit)? = null, onMenu: (() -> Unit)? = null, selected: Boolean = false,
+  selectionMode: Boolean = false, selectionSelected: Boolean = false,
   taskGroup: ConversationTaskGroup? = null, taskExpanded: Boolean = false,
   onToggleTasks: (() -> Unit)? = null,
   discardEnabled: Boolean = true, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -2316,6 +2489,7 @@ private fun ConversationCard(conversation: ConversationSummary, showTime: Boolea
   val taskCollapseLabel = stringResource(R.string.conversations_collapse_tasks)
   Card(modifier = modifier.fillMaxWidth().heightIn(min = 64.dp).testTag("conversation-row-${conversation.id}")
     .semantics {
+      if (selectionMode) this.selected = selectionSelected
       if (onMenu != null) customActions = listOf(CustomAccessibilityAction(contextMenuLabel) {
         onMenu(); true
       })
@@ -2327,6 +2501,9 @@ private fun ConversationCard(conversation: ConversationSummary, showTime: Boolea
       else MaterialTheme.colorScheme.surfaceContainer)) {
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (selectionMode) Text(if (selectionSelected) "☑" else "□",
+          style = MaterialTheme.typography.titleMedium,
+          color = MaterialTheme.colorScheme.primary)
         if (taskGroup != null && onToggleTasks != null) IconButton(onClick = onToggleTasks,
           modifier = Modifier.size(48.dp).testTag("conversation-tasks-${conversation.id}").semantics {
             contentDescription = if (taskExpanded) taskCollapseLabel else taskExpandLabel

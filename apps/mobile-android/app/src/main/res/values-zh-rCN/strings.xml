@@ -156,9 +156,12 @@
     <string name="assistant_attachment_error">无法添加或移除此文件。请确认文件可读取，且单个文件不超过 10 MB、总大小不超过 20 MB。</string>
     <string name="camera_capture_error">无法打开相机。请重试或选择照片。</string>
     <string name="assistant_attachment_remove">移除</string>
+    <string name="assistant_attachment_preview_unavailable">无法预览图片</string>
+    <string name="assistant_attachment_preview">预览图片</string>
     <string name="assistant_copy">复制</string>
     <string name="assistant_copy_code">复制代码</string>
     <string name="assistant_reuse">复用</string>
+    <string name="assistant_regenerate">重新生成</string>
     <string name="connection_wait_title">需要连接</string>
     <string name="connection_wait_resuming">正在恢复工作</string>
     <string name="connection_wait_details">详情</string>
@@ -228,6 +231,10 @@
     <string name="conversations_undo">撤销</string>
     <string name="conversations_pending_delete">对话已移出列表，可在 5 秒内撤销。</string>
     <string name="conversations_delete_error">删除对话失败，已恢复到列表。</string>
+    <string name="conversations_select">选择</string>
+    <string name="conversations_selected">已选择 %1$d 项</string>
+    <string name="conversations_batch_delete_confirm">删除选中的 %1$d 个对话？删除后无法撤销。</string>
+    <string name="conversations_batch_failed">%1$d 个对话操作失败，已保留选中以便重试。</string>
     <string name="quick_composer_hint">发起新对话</string>
     <string name="quick_progress_hint">询问进展，或推进下一步</string>
     <string name="quick_notes_hint">查找、整理或引用资料</string>
