@@ -11,6 +11,7 @@ import { XopcNativeNoteEditor } from './NativeNoteEditor';
 import { XopcShareResultView } from './ShareResultView';
 import { XopcVoiceCapture } from '../service/voiceCapture';
 import { XopcChatMediaView } from './ChatMediaView';
+import { XopcDiscussionNoteView } from './DiscussionNoteView';
 import { userErrorMessage } from '../common/userError';
 
 type XopcNoteSheet = 'history' | 'ai' | 'share' | 'tags' | 'more' | 'attachment' | 'voice';
@@ -33,10 +34,13 @@ export struct XopcNotesView {
   @Local activeSheet: XopcNoteSheet = 'more';
   @Local shareResult?: XopcShareResult;
   @Local voice: XopcVoiceCapture = new XopcVoiceCapture();
+  private startTask?: Promise<void>;
+  private visible: boolean = false;
 
   aboutToAppear(): void {
+    this.visible = true;
     const context = this.getUIContext().getHostContext() as common.Context;
-    void this.start(context);
+    this.startTask = this.start(context);
   }
 
   private async start(context: common.Context): Promise<void> {
@@ -44,10 +48,23 @@ export struct XopcNotesView {
     if (this.createOnAppear && !this.model.draft) this.model.create(this.projectId);
   }
 
-  aboutToDisappear(): void { void this.model.saveNow(); this.model.dispose(); void this.voice.cancel(); }
+  aboutToDisappear(): void {
+    this.visible = false;
+    void this.model.saveNow(); this.model.dispose(); void this.voice.cancel();
+  }
 
   @Monitor('initialId')
-  onInitialIdChanged(): void { if (this.initialId) void this.model.open(this.initialId); }
+  onInitialIdChanged(): void { void this.openInitialIdAfterStart(); }
+
+  private async openInitialIdAfterStart(): Promise<void> {
+    const startup = this.startTask;
+    if (!startup) return;
+    await startup;
+    const id = this.initialId;
+    if (this.visible && id && this.model.selected?.id !== id && this.model.openingId !== id) {
+      await this.model.open(id);
+    }
+  }
 
   private openSheet(sheet: XopcNoteSheet): void {
     this.activeSheet = sheet;
@@ -375,7 +392,13 @@ export struct XopcNotesView {
                   })
               }.width('100%').alignItems(VerticalAlign.Center)
 
-              XopcMarkdownView({ content: this.model.selected.markdown, conversationId: this.model.selected.id })
+              if (this.model.selected.kind === 'voice') {
+                XopcDiscussionNoteView({ noteId: this.model.selected.id,
+                  onNoteUpdated: (): void => { void this.model.refreshSelected(); } })
+              }
+              if (this.model.selected.markdown) {
+                XopcMarkdownView({ content: this.model.selected.markdown, conversationId: this.model.selected.id })
+              }
               if (this.model.selected.attachments?.length) {
                 Column({ space: 8 }) {
                   ForEach(this.model.selected.attachments, (attachment: XopcNoteAttachment) => {

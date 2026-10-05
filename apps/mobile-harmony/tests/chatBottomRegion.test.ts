@@ -61,7 +61,7 @@ describe('chat bottom region composition', () => {
     expect(chat.match(/TextArea\(\{ text: this.draft/g)).toHaveLength(1);
   });
 
-  it('overlays the transparent outer region instead of reserving a colored layout block', () => {
+  it('masks content at the lower dock corners while keeping the floating surface transparent', () => {
     expect(chat).toContain('@Local bottomRegionHeight: number = 0;');
     expect(chat).toContain('Stack({ alignContent: Alignment.Bottom })');
     expect(chat).toContain('.contentEndOffset(this.bottomRegionHeight + 24)');
@@ -76,6 +76,7 @@ describe('chat bottom region composition', () => {
     expect(home).not.toContain('.padding({ bottom: this.tab === 0 || this.tab === 3 ? 0 : this.secondaryBottomRegionHeight }).clip(true)');
     expect(home).toContain('this.secondaryBottomRegionHeight = Number(current.height);');
     expect(home).toContain("}.id('secondary-bottom-region').width('100%')");
+    expect(home).toContain("Column().id('secondary-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.surface)");
     expect(home).not.toContain("}.id('secondary-bottom-region').width('100%').backgroundColor");
     expect(home).toContain(".width('100%').height('100%')");
   });
@@ -91,6 +92,7 @@ describe('chat bottom region composition', () => {
     expect(home).not.toContain("$r('sys.symbol.star')");
     expect(home).toContain('this.attention.needsUser.length');
     expect(chat).toContain(".id('chat-bottom-region').width('100%')");
+    expect(chat).toContain("Column().id('chat-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.surface)");
     expect(chat).not.toContain("}.id('chat-bottom-region').width('100%').backgroundColor");
     expect(home).toContain(".id('secondary-bottom-region').width('100%')");
     expect(home).not.toContain("}.id('secondary-bottom-region').width('100%').backgroundColor");

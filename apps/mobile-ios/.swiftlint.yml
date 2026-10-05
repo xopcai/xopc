@@ -1,0 +1,26 @@
+included:
+  - XopcMobile
+  - XopcMobileTests
+  - XopcMobileUITests
+
+excluded:
+  - .derivedData
+  - .signedDerivedData
+
+line_length:
+  warning: 220
+  error: 220
+
+file_length:
+  warning: 500
+  error: 500
+
+identifier_name:
+  excluded:
+    - id
+    - ok
+
+disabled_rules:
+  - multiple_closures_with_trailing_closure
+  - opening_brace
+  - statement_position

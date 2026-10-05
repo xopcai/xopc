@@ -165,7 +165,7 @@ describe('UserModelPage summary navigation', () => {
   });
 
   it('uses the animated Loopi brand mark for the profile identity', () => {
-    const mark = container.querySelector('[data-testid="overview-hero"] [data-loopi="ceramic-v3"]');
+    const mark = container.querySelector('[data-testid="overview-hero"] [data-loopi="ceramic-v4"]');
     expect(mark).not.toBeNull();
     expect(mark?.getAttribute('data-mood')).toBe('listen');
     expect(container.textContent).not.toContain('MI');

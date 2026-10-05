@@ -90,3 +90,6 @@ electron/resources/frpc/
 # Local article drafts, publication records, and growth materials
 /docs/articles/
 diagnosis/
+
+# Local HarmonyOS screen and interaction reference for native mobile parity
+/docs/mobile-reference/

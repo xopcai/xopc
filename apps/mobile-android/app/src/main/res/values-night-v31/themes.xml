@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Xopc.Starting" parent="Theme.Xopc">
+        <item name="android:windowSplashScreenBackground">@color/brand_surface</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/brand_mark</item>
+    </style>
+</resources>

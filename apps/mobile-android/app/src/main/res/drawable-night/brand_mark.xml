@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Matches the geometry and dark colors of HarmonyOS launch_logo.svg. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="1536"
+    android:viewportHeight="1536">
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#F5F5F7"
+        android:strokeLineCap="round"
+        android:strokeWidth="136"
+        android:pathData="M1091.026,835.484 A330,330 0 1,1 700.516,444.974" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#0A84FF"
+        android:strokeLineCap="round"
+        android:strokeWidth="136"
+        android:pathData="M848.951,448.083 A330,330 0 0,1 1087.917,687.049" />
+</vector>

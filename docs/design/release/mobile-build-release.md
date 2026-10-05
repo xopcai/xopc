@@ -1,6 +1,6 @@
 # 移动端构建与发布手册
 
-本文记录 `apps/mobile-expo` 当前已经验证过的 Android 和 iOS 构建、签名与分发流程。两端均直接使用 GitHub Actions Runner 构建，不依赖付费的 EAS Build；EAS 只在首次创建或下载签名凭据时使用。
+Android 已切换到原生项目 `apps/mobile-android`。新的 [Android 构建与发布说明](../../../apps/mobile-android/README.md) 和 `Mobile Android CI` / `Mobile Android Release` 工作流是 Android 的当前入口：`mobile-android-v<versionName>` 标签触发正式签名构建与 GitHub Release。下方旧 Expo Android 构建、`mobile-expo-v*` 标签及 `mobile:release:patch` 的 Android 说明仅保留为历史记录，不再代表当前 Android 发布流程；Expo iOS TestFlight 工作流保持独立运行。
 
 ## 快速选择
 

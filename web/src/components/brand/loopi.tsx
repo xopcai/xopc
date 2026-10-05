@@ -28,24 +28,25 @@ export function Loopi({ mood = 'idle', variant = 'hero', interactive = false, cy
     return () => controller.dispose();
   }, [mood, variant, interactive, cycle]);
   const drawing = (
-    <svg ref={svg} viewBox={variant === 'avatar' ? '48 38 304 304' : '0 0 400 400'} aria-hidden="true" focusable="false" data-loopi="ceramic-v3" data-face-rotation="0">
+    <svg ref={svg} viewBox={variant === 'avatar' ? '40 30 320 320' : '0 0 400 400'} aria-hidden="true" focusable="false" data-loopi="ceramic-v4" data-face-rotation="0">
       <defs>
-        <linearGradient id={`${id}-ceramic`} x1="100" y1="65" x2="280" y2="330" gradientUnits="userSpaceOnUse"><stop className="loopi-ceramic-top" stopColor="#41494C" /><stop offset=".48" className="loopi-ceramic-mid" stopColor="#30383C" /><stop offset="1" className="loopi-ceramic-bottom" stopColor="#3B4449" /></linearGradient>
+        <linearGradient id={`${id}-ceramic`} x1="100" y1="65" x2="280" y2="330" gradientUnits="userSpaceOnUse"><stop className="loopi-ceramic-top" stopColor="#586066" /><stop offset=".34" className="loopi-ceramic-mid" stopColor="#394247" /><stop offset="1" className="loopi-ceramic-bottom" stopColor="#30383C" /></linearGradient>
         <linearGradient id={`${id}-enamel`} x1="230" y1="63" x2="326" y2="170" gradientUnits="userSpaceOnUse"><stop stopColor="#6C9FF6" /><stop offset="1" stopColor="#387DE5" /></linearGradient>
-        <linearGradient id={`${id}-porcelain`} x1="180" y1="127" x2="218" y2="247" gradientUnits="userSpaceOnUse"><stop stopColor="#FFFEF9" /><stop offset=".65" stopColor="#F6F3EB" /><stop offset="1" stopColor="#EAE6DC" /></linearGradient>
-        <linearGradient id={`${id}-edge`} x1="170" y1="50" x2="224" y2="310" gradientUnits="userSpaceOnUse"><stop stopColor="#fff" stopOpacity=".36" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></linearGradient>
-        <filter id={`${id}-shadow`} x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#39473E" floodOpacity=".09" /></filter>
+        <radialGradient id={`${id}-porcelain`} cx="0" cy="0" r="1" gradientTransform="translate(173 153) rotate(52) scale(136 118)" gradientUnits="userSpaceOnUse"><stop stopColor="#FFFEF9" /><stop offset=".62" stopColor="#F9F6EF" /><stop offset="1" stopColor="#DDDAD2" /></radialGradient>
+        <linearGradient id={`${id}-edge`} x1="160" y1="43" x2="240" y2="320" gradientUnits="userSpaceOnUse"><stop stopColor="#fff" stopOpacity=".46" /><stop offset=".42" stopColor="#fff" stopOpacity=".15" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></linearGradient>
+        <filter id={`${id}-shadow`} x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="#28333A" floodOpacity=".16" /></filter>
       </defs>
       {variant === 'hero' && <ellipse cx="200" cy="349" rx="67" ry="4" fill="currentColor" opacity=".05" />}
       <g data-part="ring">
-        <g fill="none" strokeWidth="35" strokeLinecap="round" transform="translate(0 3)"><path stroke="#232C30" d={ai} /><path stroke="#2866C4" d={human} /></g>
-        <g fill="none" strokeWidth="35" strokeLinecap="round" filter={paint('shadow')}><path stroke={paint('ceramic')} d={ai} /><path stroke={paint('enamel')} d={human} /></g>
-        <g fill="none" strokeWidth="1.2" strokeLinecap="round" opacity=".75"><path stroke={paint('edge')} d="M332.445 223.022 A136.5 136.5 0 1 1 166.978 57.555" /><path stroke="#D9E8FF" opacity=".5" d="M237.624 58.788 A136.5 136.5 0 0 1 331.212 152.376" /></g>
+        <g fill="none" strokeWidth="40" strokeLinecap="round" transform="translate(0 5)"><path stroke="#20292E" d={ai} /><path stroke="#2866C4" d={human} /></g>
+        <g fill="none" strokeWidth="40" strokeLinecap="round" filter={paint('shadow')}><path stroke={paint('ceramic')} d={ai} /><path stroke={paint('enamel')} d={human} /></g>
+        <g fill="none" strokeWidth="1.25" strokeLinecap="round" opacity=".8"><path stroke={paint('edge')} d="M337.05 219.025 A140 140 0 1 1 171.37 53.37" /><path stroke="#D9E8FF" opacity=".65" d="M234.343 54.277 A140 140 0 0 1 335.722 155.657" /></g>
         <path data-part="cue" fill="none" stroke="#9ABFFF" strokeWidth="2" strokeLinecap="round" opacity="0" d="M258.163 59.363 A143 143 0 0 1 323.842 118.5" />
       </g>
       <g data-part="core"><g data-part="shape">
-        <path d={core} fill="#DCDDD3" opacity=".5" transform="translate(0 2)" />
-        <path d={core} fill={paint('porcelain')} stroke="#fff" strokeOpacity=".8" filter={paint('shadow')} />
+        <path d={core} fill="#7A827F" opacity=".22" transform="translate(0 6)" />
+        <path d={core} fill={paint('porcelain')} stroke="#fff" strokeOpacity=".7" strokeWidth="1.2" filter={paint('shadow')} />
+        <path d="M143 171 C155 143 176 135 201 135 C223 135 244 145 256 165" fill="none" stroke="#fff" strokeOpacity=".35" strokeWidth="2" strokeLinecap="round" />
       </g><g data-part="face">
         <g data-part="cheeks" opacity="0"><ellipse cx="168" cy="207" rx="8" ry="3.5" fill="#E8B8A5" /><ellipse cx="232" cy="207" rx="8" ry="3.5" fill="#E8B8A5" /></g>
         {[179, 221].map((cx, i) => <g key={cx} data-part={i ? 'right' : 'left'}>

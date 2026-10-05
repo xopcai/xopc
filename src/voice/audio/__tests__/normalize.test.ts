@@ -51,6 +51,26 @@ describe('audio normalization', () => {
     expect(decoded.durationSeconds).toBeCloseTo(0.25, 3);
   });
 
+  it('segments Harmony PCM recordings when ffmpeg is unavailable', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'xopc-normalize-native-wav-'));
+    const previous = process.env.XOPC_FFMPEG_PATH;
+    process.env.XOPC_FFMPEG_PATH = '/definitely/missing/xopc-ffmpeg';
+    try {
+      const filePath = join(directory, 'recording.wav');
+      await writeFile(filePath, pcmWav(2.5));
+      const durations: number[] = [];
+      const count = await forEachNormalizedAudioSegment({ filePath, segmentSeconds: 1 }, async (buffer) => {
+        durations.push(decodeWavToMonoFloat32(buffer).durationSeconds);
+      });
+      expect(count).toBe(3);
+      expect(durations).toEqual([1, 1, 0.5]);
+    } finally {
+      if (previous == null) delete process.env.XOPC_FFMPEG_PATH;
+      else process.env.XOPC_FFMPEG_PATH = previous;
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('reports a missing configured decoder before compressed audio is submitted', async () => {
     const previous = process.env.XOPC_FFMPEG_PATH;
     process.env.XOPC_FFMPEG_PATH = '/definitely/missing/xopc-ffmpeg';

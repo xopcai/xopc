@@ -127,8 +127,8 @@ export struct XopcMarkdownView {
             .width('100%').padding({ left: item.item.kind === 'quote' ? 12 : item.item.kind === 'list' ? Math.min(item.item.level, 6) * 12 : 0 })
         } else if (item.item.kind === 'image') { XopcChatMediaView({ file: this.imageFile(item.item), conversationId: this.conversationId }) }
         else if (item.item.kind === 'rule') {
-          Column().width('100%').height(8).borderRadius(4).backgroundColor(this.colors.grouped)
-            .margin({ top: 4, bottom: 4 })
+          Column().width('100%').height(1).backgroundColor(this.colors.border)
+            .margin({ top: 8, bottom: 8 })
         }
         else if (item.item.kind === 'code') {
           Column() {

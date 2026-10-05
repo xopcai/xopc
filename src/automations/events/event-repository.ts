@@ -171,8 +171,10 @@ export function ingestAutomationEvent(
       return { event: existing, created: false, deliveryCount: count };
     }
 
+    const manualTarget = event.type === 'automation.manual.requested' || event.type === 'automation.rerun.requested';
     const automations = options.targetAutomationIds
-      ? options.targetAutomationIds.map(getAutomation).filter((automation): automation is Automation => Boolean(automation?.enabled))
+      ? options.targetAutomationIds.map(getAutomation)
+        .filter((automation): automation is Automation => Boolean(automation && (automation.enabled || manualTarget)))
       : listAutomations().filter(automation => automation.enabled
         && automation.trigger.kind === 'event'
         && matchesEvent(automation.trigger, event));
