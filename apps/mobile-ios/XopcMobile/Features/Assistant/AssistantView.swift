@@ -1,5 +1,6 @@
 import SwiftUI
 
+// swiftlint:disable file_length
 // swiftlint:disable:next type_body_length
 struct AssistantView<Dock: View>: View {
     let configuration: GatewayConfiguration
