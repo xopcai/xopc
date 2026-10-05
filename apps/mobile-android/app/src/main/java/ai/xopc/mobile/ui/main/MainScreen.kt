@@ -12,6 +12,8 @@ import android.provider.Settings
 import android.widget.Toast
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ConversationSummary
+import ai.xopc.mobile.gateway.ConversationTaskChild
+import ai.xopc.mobile.gateway.ConversationTaskGroup
 import ai.xopc.mobile.gateway.ConversationMedia
 import ai.xopc.mobile.gateway.ConversationTarget
 import ai.xopc.mobile.gateway.CameraCaptureStore
@@ -66,11 +68,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -81,6 +85,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -111,6 +116,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -278,8 +285,10 @@ fun MainScreen(
   connection: ConnectionUiState = ConnectionUiState(),
   onPair: (String) -> Unit = {},
   onConversationSearchChange: (String) -> Unit = {},
+  onRefreshConversations: () -> Unit = {},
   onLoadMoreConversations: () -> Unit = {},
   onSelectConversation: (String) -> Unit = {},
+  onSelectTaskChildConversation: (String, String) -> Unit = { _, _ -> },
   onCreateConversation: () -> Unit = {},
   onCreateReferenceConversation: (String) -> Unit = {},
   onReferenceRequestHandled: (String, String) -> Unit = { _, _ -> },
@@ -290,6 +299,9 @@ fun MainScreen(
   onCancelRename: () -> Unit = {},
   onTogglePin: (String) -> Unit = {},
   onToggleArchive: (String) -> Unit = {},
+  onBeginConversationShare: (String) -> Unit = {},
+  onConfirmConversationShare: () -> Unit = {},
+  onDismissConversationShare: () -> Unit = {},
   onScheduleDelete: (String) -> Unit = {},
   onUndoDelete: () -> Unit = {},
   onQuickDraftChange: (String) -> Unit = {},
@@ -509,7 +521,9 @@ fun MainScreen(
     onPair = onPair, onScanPairing = scanPairingCode,
     pairingScanning = pairingScannerOpen || pairingPermissionRequesting,
     pairingScanError = pairingScanError, onConversationSearchChange = onConversationSearchChange,
+    onRefreshConversations = onRefreshConversations,
     onLoadMoreConversations = onLoadMoreConversations, onSelectConversation = onSelectConversation,
+    onSelectTaskChildConversation = onSelectTaskChildConversation,
     onCreateConversation = onCreateConversation,
     onCreateReferenceConversation = onCreateReferenceConversation,
     onReferenceRequestHandled = onReferenceRequestHandled,
@@ -518,6 +532,9 @@ fun MainScreen(
     onSaveRename = onSaveRename, onCancelRename = onCancelRename,
     onTogglePin = onTogglePin,
     onToggleArchive = onToggleArchive,
+    onBeginConversationShare = onBeginConversationShare,
+    onConfirmConversationShare = onConfirmConversationShare,
+    onDismissConversationShare = onDismissConversationShare,
     onScheduleDelete = onScheduleDelete, onUndoDelete = onUndoDelete,
     onQuickDraftChange = onQuickDraftChange, onQuickSubmit = onQuickSubmit,
     onRemoveQuickAttachment = onRemoveQuickAttachment,
@@ -670,8 +687,10 @@ internal fun MainContent(
   pairingScanning: Boolean = false,
   pairingScanError: Boolean = false,
   onConversationSearchChange: (String) -> Unit = {},
+  onRefreshConversations: () -> Unit = {},
   onLoadMoreConversations: () -> Unit = {},
   onSelectConversation: (String) -> Unit = {},
+  onSelectTaskChildConversation: (String, String) -> Unit = { _, _ -> },
   onCreateConversation: () -> Unit = {},
   onCreateReferenceConversation: (String) -> Unit = {},
   onReferenceRequestHandled: (String, String) -> Unit = { _, _ -> },
@@ -682,6 +701,9 @@ internal fun MainContent(
   onCancelRename: () -> Unit = {},
   onTogglePin: (String) -> Unit = {},
   onToggleArchive: (String) -> Unit = {},
+  onBeginConversationShare: (String) -> Unit = {},
+  onConfirmConversationShare: () -> Unit = {},
+  onDismissConversationShare: () -> Unit = {},
   onScheduleDelete: (String) -> Unit = {},
   onUndoDelete: () -> Unit = {},
   onQuickDraftChange: (String) -> Unit = {},
@@ -1021,14 +1043,19 @@ internal fun MainContent(
           assistantReferenceKind, { assistantReferenceKind = it },
           assistantReferenceQuery, { assistantReferenceQuery = it },
           { assistantActionsOpen = it })
-        else ConversationsScreen(connection, insets, onConversationSearchChange, onLoadMoreConversations, {
+        else ConversationsScreen(connection, insets, onConversationSearchChange,
+          onRefreshConversations, onLoadMoreConversations, {
           onCreateConversation()
           onSelectTab(HomeTab.Assistant)
         }, { id ->
           onSelectConversation(id)
           onSelectTab(HomeTab.Assistant)
+        }, { taskId, id ->
+          onSelectTaskChildConversation(taskId, id)
+          onSelectTab(HomeTab.Assistant)
         }, onDiscardDraft, onBeginRename, onRenameDraftChange, onSaveRename, onCancelRename,
-          onTogglePin, onToggleArchive, onScheduleDelete, onUndoDelete)
+          onTogglePin, onToggleArchive, onBeginConversationShare, onConfirmConversationShare,
+          onDismissConversationShare, onScheduleDelete, onUndoDelete)
       }
       HomeTab.Progress -> if (connection.profile == null) PairingScreen(
         stringResource(R.string.tab_progress), connection, onPair, onScanPairing,
@@ -1967,9 +1994,11 @@ private fun ConversationsScreen(
   connection: ConnectionUiState,
   insets: PaddingValues,
   onSearchChange: (String) -> Unit,
+  onRefresh: () -> Unit,
   onLoadMore: () -> Unit,
   onCreateConversation: () -> Unit,
   onSelectConversation: (String) -> Unit,
+  onSelectTaskChild: (String, String) -> Unit,
   onDiscardDraft: (String) -> Unit,
   onBeginRename: (String) -> Unit,
   onRenameDraftChange: (String) -> Unit,
@@ -1977,21 +2006,50 @@ private fun ConversationsScreen(
   onCancelRename: () -> Unit,
   onTogglePin: (String) -> Unit,
   onToggleArchive: (String) -> Unit,
+  onBeginShare: (String) -> Unit,
+  onConfirmShare: () -> Unit,
+  onDismissShare: () -> Unit,
   onScheduleDelete: (String) -> Unit,
   onUndoDelete: () -> Unit,
 ) {
   var pendingDiscardId by rememberSaveable { mutableStateOf<String?>(null) }
   var menuConversationId by rememberSaveable { mutableStateOf<String?>(null) }
+  var searchOpen by rememberSaveable { mutableStateOf(true) }
+  var expandedTaskParents by rememberSaveable { mutableStateOf(emptyList<String>()) }
+  var collapsedTaskParents by rememberSaveable { mutableStateOf(emptyList<String>()) }
+  val listState = rememberLazyListState()
+  val currentLoadMore by rememberUpdatedState(onLoadMore)
+  LaunchedEffect(connection.profile?.gatewayId, connection.conversationSearch) {
+    listState.scrollToItem(0)
+    expandedTaskParents = emptyList()
+    collapsedTaskParents = emptyList()
+  }
+  LaunchedEffect(connection.profile?.gatewayId, connection.conversationSearch,
+    connection.conversationsHasMore, connection.conversationsLoading,
+    connection.conversationsLoadingMore, connection.conversationsMoreError) {
+    if (!connection.conversationsHasMore || connection.conversationsLoading ||
+      connection.conversationsLoadingMore || connection.conversationsMoreError) return@LaunchedEffect
+    snapshotFlow {
+      val layout = listState.layoutInfo
+      layout.totalItemsCount > 0 &&
+        (layout.visibleItemsInfo.lastOrNull()?.index ?: -1) >= layout.totalItemsCount - 2
+    }.collect { nearEnd -> if (nearEnd) currentLoadMore() }
+  }
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val menuConversation = connection.conversations.firstOrNull { it.id == menuConversationId && !it.isLocalDraft }
   if (menuConversation != null) ModalBottomSheet(onDismissRequest = { menuConversationId = null }) {
     val managementEnabled = !connection.renamingConversation && connection.pinningConversationId == null &&
-      connection.archivingConversationId == null
+      connection.archivingConversationId == null && !connection.conversationShareBusy
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
       verticalArrangement = Arrangement.spacedBy(4.dp)) {
       Text(menuConversation.title, style = MaterialTheme.typography.titleMedium, maxLines = 2,
         overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+      TextButton(onClick = { menuConversationId = null; onBeginShare(menuConversation.id) },
+        enabled = managementEnabled,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("share-conversation-${menuConversation.id}")) {
+        Text(stringResource(R.string.conversations_share), modifier = Modifier.fillMaxWidth())
+      }
       TextButton(onClick = { menuConversationId = null; onBeginRename(menuConversation.id) },
         enabled = managementEnabled,
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("rename-conversation-${menuConversation.id}")) {
@@ -2020,6 +2078,64 @@ private fun ConversationsScreen(
       }
       TextButton(onClick = { menuConversationId = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         Text(stringResource(R.string.conversations_cancel))
+      }
+    }
+  }
+  if (connection.conversationShareBusy) AlertDialog(onDismissRequest = {},
+    title = { Text(stringResource(R.string.conversations_share)) },
+    text = { CircularProgressIndicator(modifier = Modifier.testTag("conversations-share-loading")) },
+    confirmButton = {})
+  connection.conversationSharePreview?.let { preview -> AlertDialog(onDismissRequest = onDismissShare,
+    title = { Text(stringResource(R.string.conversations_share)) },
+    text = { Text(stringResource(R.string.conversations_share_confirm,
+      preview.messageCount, preview.attachmentCount)) },
+    confirmButton = { TextButton(onClick = onConfirmShare,
+      modifier = Modifier.testTag("conversations-share-confirm")) {
+      Text(stringResource(R.string.conversations_share))
+    } },
+    dismissButton = { TextButton(onClick = onDismissShare) {
+      Text(stringResource(R.string.conversations_cancel))
+    } }) }
+  if (connection.conversationShareError) AlertDialog(onDismissRequest = onDismissShare,
+    title = { Text(stringResource(R.string.conversations_share)) },
+    text = { Text(stringResource(R.string.conversations_share_error)) },
+    confirmButton = { TextButton(onClick = onDismissShare) {
+      Text(stringResource(R.string.progress_back))
+    } })
+  val share = connection.conversationShareResult
+  if (share != null) {
+    val context = LocalContext.current
+    ModalBottomSheet(onDismissRequest = onDismissShare,
+      modifier = Modifier.testTag("conversations-share-sheet")) {
+      Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(share.title, style = MaterialTheme.typography.titleLarge)
+        Text(share.url, color = MaterialTheme.colorScheme.primary,
+          modifier = Modifier.testTag("conversations-share-url"))
+        Text(stringResource(when (share.reachability) {
+          "public" -> R.string.notes_share_public
+          "lan" -> R.string.notes_share_lan
+          else -> R.string.notes_share_local
+        }))
+        if (share.hint.isNotBlank()) Text(share.hint)
+        Text(stringResource(R.string.notes_share_expires, share.expiresAt))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          OutlinedButton(onClick = {
+            (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+              .setPrimaryClip(ClipData.newPlainText(share.title, share.url))
+          }, modifier = Modifier.testTag("conversations-share-copy")) {
+            Text(stringResource(R.string.notes_share_copy))
+          }
+          Button(onClick = {
+            val send = Intent(Intent.ACTION_SEND).apply {
+              type = "text/plain"
+              putExtra(Intent.EXTRA_TEXT, "${share.title}\n${share.url}")
+            }
+            context.startActivity(Intent.createChooser(send, null))
+          }, modifier = Modifier.testTag("conversations-share-system")) {
+            Text(stringResource(R.string.notes_share_system))
+          }
+        }
       }
     }
   }
@@ -2057,21 +2173,31 @@ private fun ConversationsScreen(
       Text(stringResource(R.string.conversations_cancel))
     } },
   )
-  Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 16.dp),
+  val clearLabel = stringResource(R.string.conversations_clear)
+  val newConversationLabel = stringResource(R.string.assistant_new_action)
+  val searchLabel = stringResource(R.string.conversations_search)
+  Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically) {
-      Text(stringResource(R.string.tab_conversations), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-      OutlinedButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
-        modifier = Modifier.testTag("chats-new")) { Text(stringResource(R.string.assistant_new_action)) }
+      Text(stringResource(R.string.tab_conversations), style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold, fontSize = 30.sp, modifier = Modifier.weight(1f))
+      if (!searchOpen) IconButton(onClick = { searchOpen = true },
+        modifier = Modifier.size(48.dp).semantics { contentDescription = searchLabel }
+          .testTag("conversations-open-search")) {
+        Text("⌕", style = MaterialTheme.typography.headlineMedium)
+      }
+      IconButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
+        modifier = Modifier.size(48.dp).semantics {
+          contentDescription = newConversationLabel
+        }.testTag("chats-new")) { Text("+", style = MaterialTheme.typography.headlineMedium) }
     }
-    val clearLabel = stringResource(R.string.conversations_clear)
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+    if (searchOpen) Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       BasicTextField(value = connection.conversationSearch, onValueChange = onSearchChange,
-        modifier = Modifier.weight(1f).heightIn(min = 52.dp)
+        modifier = Modifier.weight(1f).heightIn(min = 44.dp)
           .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(24.dp))
-          .padding(horizontal = 16.dp, vertical = 14.dp).testTag("conversations-search"),
+          .padding(horizontal = 16.dp, vertical = 10.dp).testTag("conversations-search"),
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
         singleLine = true,
         decorationBox = { innerTextField ->
@@ -2085,6 +2211,7 @@ private fun ConversationsScreen(
         })
       IconButton(onClick = {
         if (connection.conversationSearch.isNotEmpty()) onSearchChange("")
+        searchOpen = false
         focusManager.clearFocus(force = true)
         keyboardController?.hide()
       }, modifier = Modifier.size(48.dp).semantics { contentDescription = clearLabel }
@@ -2093,8 +2220,15 @@ private fun ConversationsScreen(
           color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
     }
-    if (connection.conversationsLoading) CircularProgressIndicator()
-    if (connection.chatError) Text(stringResource(R.string.chat_load_error), color = MaterialTheme.colorScheme.error)
+    if (connection.conversationsLoading && connection.conversations.isEmpty()) CircularProgressIndicator()
+    if (connection.chatError) Row(verticalAlignment = Alignment.CenterVertically) {
+      Text(stringResource(R.string.chat_load_error), color = MaterialTheme.colorScheme.error,
+        modifier = Modifier.weight(1f))
+      TextButton(onClick = onRefresh, enabled = !connection.conversationsLoading,
+        modifier = Modifier.testTag("conversations-retry")) {
+        Text(stringResource(R.string.progress_refresh))
+      }
+    }
     if (connection.pinActionError) Text(stringResource(R.string.conversations_pin_error),
       color = MaterialTheme.colorScheme.error)
     if (connection.archiveActionError) Text(stringResource(R.string.conversations_archive_error),
@@ -2111,20 +2245,47 @@ private fun ConversationsScreen(
         Text(stringResource(R.string.conversations_undo))
       }
     }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    PullToRefreshBox(isRefreshing = connection.conversationsLoading && connection.conversations.isNotEmpty(),
+      onRefresh = { if (!connection.conversationsLoading && !connection.conversationsLoadingMore) onRefresh() },
+      modifier = Modifier.fillMaxSize().testTag("conversations-refresh-gesture")) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("conversations-list"),
+      verticalArrangement = Arrangement.spacedBy(8.dp)) {
       ConversationGroups.group(connection.conversations.filterNot { it.id == connection.pendingDeleteId }).forEach { group ->
         item(key = "section-${group.id}") {
-          Text(conversationGroupLabel(group.id), style = MaterialTheme.typography.labelLarge,
+          Text(conversationGroupLabel(group.id), style = MaterialTheme.typography.labelSmall, fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+            modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
         }
-        items(group.items, key = { it.id }) { conversation ->
-          ConversationCard(conversation, showTime = true,
-            onDiscard = if (conversation.isLocalDraft) ({ pendingDiscardId = conversation.id }) else null,
-            onMenu = if (conversation.isLocalDraft) null else ({ menuConversationId = conversation.id }),
-            selected = conversation.id == connection.selectedConversationId,
-            discardEnabled = connection.discardingDraftId == null && !connection.creatingConversation && !connection.sending,
-            onClick = { onSelectConversation(conversation.id) })
+        group.items.forEach { conversation ->
+          val taskGroup = connection.conversationTaskGroups[conversation.id]
+            ?.takeIf { it.total > 0 && connection.conversationSearch.isBlank() }
+          val taskExpanded = taskGroup != null && conversation.id !in collapsedTaskParents &&
+            (conversation.id in expandedTaskParents || taskGroup.items.any {
+              it.activeConversationId == connection.selectedConversationId
+            })
+          item(key = conversation.id) {
+            ConversationCard(conversation, showTime = true,
+              taskGroup = taskGroup, taskExpanded = taskExpanded,
+              onToggleTasks = if (taskGroup == null) null else ({
+                if (taskExpanded) {
+                  expandedTaskParents = expandedTaskParents - conversation.id
+                  collapsedTaskParents = collapsedTaskParents + conversation.id
+                } else {
+                  collapsedTaskParents = collapsedTaskParents - conversation.id
+                  expandedTaskParents = expandedTaskParents + conversation.id
+                }
+              }),
+              onDiscard = if (conversation.isLocalDraft) ({ pendingDiscardId = conversation.id }) else null,
+              onMenu = if (conversation.isLocalDraft) null else ({ menuConversationId = conversation.id }),
+              selected = conversation.id == connection.selectedConversationId,
+              discardEnabled = connection.discardingDraftId == null && !connection.creatingConversation && !connection.sending,
+              onClick = { onSelectConversation(conversation.id) })
+          }
+          if (taskGroup != null && taskExpanded && connection.conversationSearch.isBlank()) {
+            items(taskGroup.items, key = { "task-${conversation.id}-${it.taskId}" }) { child ->
+              ConversationTaskRow(child, onOpen = { id -> onSelectTaskChild(child.taskId, id) })
+            }
+          }
         }
       }
       if (connection.conversationsHasMore) item {
@@ -2139,31 +2300,44 @@ private fun ConversationsScreen(
         Text(stringResource(R.string.conversations_more_error), color = MaterialTheme.colorScheme.error)
       }
     }
+    }
   }
 }
 
 @Composable
 private fun ConversationCard(conversation: ConversationSummary, showTime: Boolean = false,
   onDiscard: (() -> Unit)? = null, onMenu: (() -> Unit)? = null, selected: Boolean = false,
+  taskGroup: ConversationTaskGroup? = null, taskExpanded: Boolean = false,
+  onToggleTasks: (() -> Unit)? = null,
   discardEnabled: Boolean = true, onClick: () -> Unit, modifier: Modifier = Modifier) {
   val haptics = LocalHapticFeedback.current
   val contextMenuLabel = stringResource(R.string.conversations_more_actions)
-  Card(modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick,
+  val taskExpandLabel = stringResource(R.string.conversations_expand_tasks)
+  val taskCollapseLabel = stringResource(R.string.conversations_collapse_tasks)
+  Card(modifier = modifier.fillMaxWidth().heightIn(min = 64.dp).testTag("conversation-row-${conversation.id}")
+    .semantics {
+      if (onMenu != null) customActions = listOf(CustomAccessibilityAction(contextMenuLabel) {
+        onMenu(); true
+      })
+    }.combinedClickable(onClick = onClick,
     onLongClick = onMenu?.let { action -> { haptics.performHapticFeedback(HapticFeedbackType.LongPress); action() } },
     onLongClickLabel = if (onMenu != null) stringResource(R.string.conversations_more_actions) else null),
+    shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
       else MaterialTheme.colorScheme.surfaceContainer)) {
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (taskGroup != null && onToggleTasks != null) IconButton(onClick = onToggleTasks,
+          modifier = Modifier.size(48.dp).testTag("conversation-tasks-${conversation.id}").semantics {
+            contentDescription = if (taskExpanded) taskCollapseLabel else taskExpandLabel
+          }) {
+          Text(if (taskExpanded) "⌄" else "›", style = MaterialTheme.typography.titleLarge)
+        }
         Text(if (conversation.isLocalDraft) stringResource(R.string.assistant_new_conversation) else conversation.title,
           style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
           modifier = Modifier.weight(1f))
         if (showTime) Text(conversationAgeLabel(conversation.updatedAt), style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-        if (onMenu != null) IconButton(onClick = onMenu,
-          modifier = Modifier.testTag("conversation-menu-${conversation.id}").semantics {
-            contentDescription = contextMenuLabel
-          }) { Text("⋯") }
       }
       if (!showTime) Text(stringResource(R.string.conversations_message_count, conversation.messageCount),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -2176,6 +2350,31 @@ private fun ConversationCard(conversation: ConversationSummary, showTime: Boolea
         Text(stringResource(R.string.conversations_discard))
       }
     }
+  }
+}
+
+@Composable
+private fun ConversationTaskRow(child: ConversationTaskChild, onOpen: (String) -> Unit) {
+  val status = child.runStatus ?: child.phase
+  val label = when (status) {
+    "running", "active", "verifying" -> stringResource(R.string.conversations_task_running)
+    "completed", "succeeded", "closed" -> stringResource(R.string.conversations_task_completed)
+    "failed" -> stringResource(R.string.conversations_task_failed)
+    "backlog", "ready", "queued", "waiting" -> stringResource(R.string.conversations_task_waiting)
+    else -> status
+  }
+  Row(modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+    .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp))
+    .clickable(enabled = child.activeConversationId != null) {
+      child.activeConversationId?.let(onOpen)
+    }.padding(start = 56.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
+    .testTag("conversation-task-${child.taskId}"),
+    horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Text("•", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
+    Text(child.title, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+      style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(label, maxLines = 1, style = MaterialTheme.typography.labelSmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant)
   }
 }
 

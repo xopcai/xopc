@@ -91,6 +91,75 @@ final class ParityAcceptanceUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["chat-read-aloud-bar"].exists)
     }
 
+    func testExistingChatImageMediaPreview() async throws {
+        guard let token = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_TOKEN"],
+              let conversationID = ProcessInfo.processInfo.environment["XOPC_E2E_MEDIA_CONVERSATION_ID"]
+        else { throw XCTSkip("An existing image conversation and Gateway token are required") }
+        var request = try URLRequest(url: XCTUnwrap(URL(
+            string: "http://127.0.0.1:18790/api/sessions?limit=50&offset=0&channel=webchat&sortBy=updatedAt&sortOrder=desc"
+        )))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        let page = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let rows = page["items"] as? [[String: Any]] ?? []
+        guard let title = rows.first(where: { $0["key"] as? String == conversationID })?["name"] as? String else {
+            throw XCTSkip("The image conversation is outside the currently loaded 50 conversations")
+        }
+
+        openTab("对话")
+        let search = app.textFields["conversations-search-field"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText(title)
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        row.tap()
+        let image = app.buttons["markdown-image-preview"].firstMatch
+        let timeline = app.scrollViews.firstMatch
+        for _ in 0 ..< 12 where !image.exists {
+            timeline.swipeDown()
+        }
+        XCTAssertTrue(image.waitForExistence(timeout: 20), "Persisted chat image should render as a thumbnail")
+        image.tap()
+        XCTAssertTrue(app.buttons["关闭"].waitForExistence(timeout: 5))
+        capture("chat-history-image-preview")
+        app.buttons["关闭"].tap()
+    }
+
+    func testExistingChatVoiceMediaRestored() async throws {
+        guard let token = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_TOKEN"],
+              let conversationID = ProcessInfo.processInfo.environment["XOPC_E2E_VOICE_CONVERSATION_ID"]
+        else { throw XCTSkip("An existing voice conversation and Gateway token are required") }
+        var request = try URLRequest(url: XCTUnwrap(URL(
+            string: "http://127.0.0.1:18790/api/sessions/\(conversationID)/history?limit=50"
+        )))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        let envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let session = try XCTUnwrap(envelope["session"] as? [String: Any])
+        let title = try XCTUnwrap(session["name"] as? String)
+        let messages = session["messages"] as? [[String: Any]] ?? []
+        let voiceID = try XCTUnwrap(messages.flatMap { $0["media"] as? [[String: Any]] ?? [] }
+            .first(where: { $0["type"] as? String == "voice" })?["id"] as? String)
+
+        openTab("对话")
+        let search = app.textFields["conversations-search-field"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText(title)
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "Server search should find older conversations")
+        row.tap()
+        let voice = app.buttons["chat-audio-\(voiceID)"].firstMatch
+        let timeline = app.scrollViews.firstMatch
+        for _ in 0 ..< 30 where !voice.exists {
+            timeline.swipeDown()
+        }
+        XCTAssertTrue(voice.waitForExistence(timeout: 10), "Historical voice message should be restored")
+    }
+
     func testAssistantMessageSaveToNotesAndCleanup() async throws {
         guard let token = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_TOKEN"] else {
             throw XCTSkip("A Gateway token is required for note cleanup")

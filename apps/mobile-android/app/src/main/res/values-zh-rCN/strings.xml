@@ -214,6 +214,15 @@
     <string name="conversations_archive">归档</string>
     <string name="conversations_unarchive">取消归档</string>
     <string name="conversations_archived">已归档</string>
+    <string name="conversations_share">分享</string>
+    <string name="conversations_share_confirm">分享包含 %1$d 条消息和 %2$d 个候选附件的快照？链接将在 24 小时后过期。</string>
+    <string name="conversations_share_error">无法确认分享结果。再次尝试前请先检查分享中心。</string>
+    <string name="conversations_expand_tasks">展开任务对话</string>
+    <string name="conversations_collapse_tasks">收起任务对话</string>
+    <string name="conversations_task_running">进行中</string>
+    <string name="conversations_task_completed">已完成</string>
+    <string name="conversations_task_failed">失败</string>
+    <string name="conversations_task_waiting">待开始</string>
     <string name="conversations_archive_error">修改归档状态失败，请重试。</string>
     <string name="conversations_delete">删除</string>
     <string name="conversations_undo">撤销</string>

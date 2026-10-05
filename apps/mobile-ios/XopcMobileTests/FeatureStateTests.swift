@@ -28,15 +28,6 @@ struct FeatureStateTests {
         #expect(state.selectedAgent?.displayName == "Main")
     }
 
-    @Test func conversationsFilterLocally() async {
-        let state = ConversationsState()
-        await state.load(using: GatewayStub())
-
-        state.searchText = "design"
-
-        #expect(state.visibleConversations.map(\.id) == ["conversation-2"])
-    }
-
     @Test func conversationsGroupByCalendarDay() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
@@ -231,7 +222,7 @@ struct FeatureStateTests {
     }
 }
 
-private struct GatewayStub: GatewayServing {
+struct GatewayStub: GatewayServing {
     var clarification: ClarificationRequest?
     var activeRun: ActiveRun
     var sendInputState: InputState
@@ -262,33 +253,32 @@ private struct GatewayStub: GatewayServing {
         )
     }
 
-    func fetchConversations(search _: String) async throws -> ConversationPage {
-        ConversationPage(
-            items: [
-                ConversationSummary(
-                    key: "conversation-1",
-                    agentId: "main",
-                    name: "Release",
-                    status: "active",
-                    updatedAt: "2026-10-04T00:00:00Z",
-                    messageCount: 2,
-                    projectId: nil,
-                    transcriptId: "transcript-1"
-                ),
-                ConversationSummary(
-                    key: "conversation-2",
-                    agentId: "main",
-                    name: "Design review",
-                    status: "active",
-                    updatedAt: "2026-10-04T00:00:00Z",
-                    messageCount: 4,
-                    projectId: nil,
-                    transcriptId: "transcript-2"
-                )
-            ],
-            total: 2,
-            hasMore: false
-        )
+    func fetchConversations(search: String, offset: Int) async throws -> ConversationPage {
+        let items = [
+            ConversationSummary(
+                key: "conversation-1",
+                agentId: "main",
+                name: "Release",
+                status: "active",
+                updatedAt: "2026-10-04T00:00:00Z",
+                messageCount: 2,
+                projectId: nil,
+                transcriptId: "transcript-1"
+            ),
+            ConversationSummary(
+                key: "conversation-2",
+                agentId: "main",
+                name: "Design review",
+                status: "active",
+                updatedAt: "2026-10-04T00:00:00Z",
+                messageCount: 4,
+                projectId: nil,
+                transcriptId: "transcript-2"
+            )
+        ]
+        let filtered = items.filter { search.isEmpty || $0.displayName.localizedCaseInsensitiveContains(search) }
+        let page = Array(filtered.dropFirst(offset).prefix(1))
+        return ConversationPage(items: page, total: filtered.count, hasMore: offset + page.count < filtered.count)
     }
 
     func fetchHistory(conversationID: String) async throws -> ConversationHistory {
@@ -371,7 +361,7 @@ private struct StreamingGatewayStub: GatewayServing {
         AgentCatalog(defaultId: "main", agents: [])
     }
 
-    func fetchConversations(search _: String) async throws -> ConversationPage {
+    func fetchConversations(search _: String, offset _: Int) async throws -> ConversationPage {
         ConversationPage(items: [], total: 0, hasMore: false)
     }
 
@@ -391,6 +381,7 @@ private struct StreamingGatewayStub: GatewayServing {
                         rawContent: nil,
                         toolCalls: nil,
                         attachments: nil,
+                        media: nil,
                         metadata: nil
                     ),
                     WireMessage(
@@ -402,6 +393,7 @@ private struct StreamingGatewayStub: GatewayServing {
                         rawContent: nil,
                         toolCalls: nil,
                         attachments: nil,
+                        media: nil,
                         metadata: nil
                     )
                 ]

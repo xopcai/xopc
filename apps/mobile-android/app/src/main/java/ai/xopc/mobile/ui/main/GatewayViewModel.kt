@@ -6,6 +6,9 @@ import ai.xopc.mobile.gateway.GatewayProbe
 import ai.xopc.mobile.gateway.GatewaySession
 import ai.xopc.mobile.gateway.ConversationRepository
 import ai.xopc.mobile.gateway.ConversationSummary
+import ai.xopc.mobile.gateway.ConversationTaskGroup
+import ai.xopc.mobile.gateway.ConversationSharePreview
+import ai.xopc.mobile.gateway.ConversationShare
 import ai.xopc.mobile.gateway.ConversationContextRef
 import ai.xopc.mobile.gateway.ChatAttachment
 import ai.xopc.mobile.gateway.CameraCaptureStore
@@ -216,6 +219,7 @@ data class ConnectionUiState(
   val confirmationCode: String? = null,
   val error: String? = null,
   val conversations: List<ConversationSummary> = emptyList(),
+  val conversationTaskGroups: Map<String, ConversationTaskGroup> = emptyMap(),
   val conversationSearch: String = "",
   val selectedConversationId: String? = null,
   val requestedReferenceKind: String? = null,
@@ -233,6 +237,10 @@ data class ConnectionUiState(
   val conversationsLoadingMore: Boolean = false,
   val conversationsHasMore: Boolean = false,
   val conversationsMoreError: Boolean = false,
+  val conversationSharePreview: ConversationSharePreview? = null,
+  val conversationShareBusy: Boolean = false,
+  val conversationShareError: Boolean = false,
+  val conversationShareResult: ConversationShare? = null,
   val discardingDraftId: String? = null,
   val discardDraftError: Boolean = false,
   val renameDraftId: String? = null,
@@ -2291,7 +2299,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
         val result = runInterruptible(Dispatchers.IO) { conversations.list(search = query) }
         if (revision == listRevision) {
           remoteConversationOffset = result.remoteCount
-          mutableState.update { it.copy(conversations = result.items, conversationsLoading = false,
+          mutableState.update { it.copy(conversations = result.items, conversationTaskGroups = result.taskGroups,
+            conversationsLoading = false,
             conversationsHasMore = result.hasMore) }
         }
       } catch (error: CancellationException) {
@@ -2332,6 +2341,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           mutableState.update { state ->
             val seen = state.conversations.mapTo(mutableSetOf()) { it.id }
             state.copy(conversations = state.conversations + page.items.filter { seen.add(it.id) },
+              conversationTaskGroups = state.conversationTaskGroups + page.taskGroups,
               conversationsLoadingMore = false, conversationsHasMore = page.hasMore)
           }
         }
@@ -2344,6 +2354,61 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   }
 
   fun selectConversation(id: String) = selectConversationScoped(id, null)
+
+  fun beginConversationShare(id: String) {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: return
+    if (current.conversationShareBusy || current.conversations.none { it.id == id && !it.isLocalDraft }) return
+    mutableState.update { it.copy(conversationShareBusy = true, conversationShareError = false,
+      conversationSharePreview = null, conversationShareResult = null) }
+    viewModelScope.launch {
+      try {
+        val preview = runInterruptible(Dispatchers.IO) { conversations.sharePreview(id) }
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(conversationShareBusy = false, conversationSharePreview = preview)
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(conversationShareBusy = false, conversationShareError = true)
+        }
+      }
+    }
+  }
+
+  fun confirmConversationShare() {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: return
+    val preview = current.conversationSharePreview ?: return
+    if (current.conversationShareBusy) return
+    mutableState.update { it.copy(conversationShareBusy = true, conversationShareError = false,
+      conversationSharePreview = null) }
+    viewModelScope.launch {
+      try {
+        val result = runInterruptible(Dispatchers.IO) { conversations.share(preview) }
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(conversationShareBusy = false, conversationShareResult = result)
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(conversationShareBusy = false, conversationShareError = true)
+        }
+      }
+    }
+  }
+
+  fun dismissConversationShare() {
+    if (!mutableState.value.conversationShareBusy) mutableState.update { it.copy(
+      conversationSharePreview = null, conversationShareError = false, conversationShareResult = null) }
+  }
+
+  fun selectTaskChildConversation(taskId: String, conversationId: String) {
+    val available = mutableState.value.conversationTaskGroups.values.any { group ->
+      group.items.any { it.taskId == taskId && it.activeConversationId == conversationId }
+    }
+    if (available) selectConversationScoped(conversationId, taskId)
+  }
 
   private fun selectConversationScoped(id: String, taskId: String?) {
     if (mutableState.value.profile == null || mutableState.value.discardingDraftId == id ||

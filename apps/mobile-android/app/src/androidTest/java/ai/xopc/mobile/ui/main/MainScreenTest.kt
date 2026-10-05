@@ -9,6 +9,10 @@ import android.view.accessibility.AccessibilityNodeInfo
 import ai.xopc.mobile.R
 import ai.xopc.mobile.theme.XopcTheme
 import ai.xopc.mobile.gateway.ConversationSummary
+import ai.xopc.mobile.gateway.ConversationTaskChild
+import ai.xopc.mobile.gateway.ConversationTaskGroup
+import ai.xopc.mobile.gateway.ConversationSharePreview
+import ai.xopc.mobile.gateway.ConversationShare
 import ai.xopc.mobile.gateway.GatewayProfile
 import ai.xopc.mobile.gateway.PendingInput
 import ai.xopc.mobile.gateway.ConversationModel
@@ -56,11 +60,13 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsFocused
@@ -1367,8 +1373,79 @@ class MainScreenTest {
     assert(changes.last() == "alpha")
     composeTestRule.onNodeWithTag("conversations-clear").performClick()
     assert(query.value == "")
-    composeTestRule.onNodeWithTag("conversations-clear").assertExists()
+    composeTestRule.onNodeWithTag("conversations-clear").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("conversations-open-search").performClick()
     composeTestRule.onNodeWithTag("conversations-search").assertExists()
+  }
+
+  @Test fun conversationsLoadNextPageWhenScrolledNearEnd() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val rows = (1..40).map { index ->
+      ConversationSummary("00000000-0000-0000-0000-${index.toString().padStart(12, '0')}",
+        "Chat $index", Instant.now().toString(), 1, "main")
+    }
+    val loadingMore = mutableStateOf(false)
+    var requests = 0
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Conversations, onSelectTab = {},
+        connection = ConnectionUiState(profile = profile, conversations = rows,
+          conversationsHasMore = true, conversationsLoadingMore = loadingMore.value),
+        onLoadMoreConversations = { requests++; loadingMore.value = true })
+    }
+    composeTestRule.runOnIdle { assert(requests == 0) }
+    composeTestRule.onNodeWithTag("conversations-list").performScrollToIndex(40)
+    composeTestRule.waitUntil(5_000) { requests == 1 }
+    composeTestRule.runOnIdle { assert(requests == 1) }
+  }
+
+  @Test fun conversationsPullRefreshKeepsExistingRowsAndRetryWorks() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val row = ConversationSummary("11111111-2222-3333-4444-555555555555", "Keep this chat",
+      Instant.now().toString(), 1, "main")
+    val state = mutableStateOf(ConnectionUiState(profile = profile, conversations = listOf(row)))
+    var refreshes = 0
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Conversations, onSelectTab = {}, connection = state.value,
+        onRefreshConversations = {
+          refreshes++
+          state.value = state.value.copy(conversationsLoading = true)
+        })
+    }
+    composeTestRule.onNodeWithTag("conversations-list").performTouchInput { swipeDown() }
+    composeTestRule.waitUntil(5_000) { refreshes == 1 }
+    composeTestRule.onNodeWithText("Keep this chat").assertExists()
+    composeTestRule.runOnIdle { state.value = state.value.copy(conversationsLoading = false, chatError = true) }
+    composeTestRule.onNodeWithTag("conversations-retry").performClick()
+    composeTestRule.runOnIdle { assert(refreshes == 2) }
+  }
+
+  @Test fun conversationTaskChildExpandsAndOpensTaskScopedConversation() {
+    val parent = "11111111-2222-3333-4444-555555555555"
+    val childId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    var opened: String? = null
+    var selectedTab: HomeTab? = null
+    composeTestRule.setContent {
+      XopcTheme {
+      MainContent(selectedTab = HomeTab.Conversations, onSelectTab = { selectedTab = it },
+        connection = ConnectionUiState(profile = profile,
+          conversations = listOf(ConversationSummary(parent, "Parent chat", Instant.now().toString(), 1, "main")),
+          conversationTaskGroups = mapOf(parent to ConversationTaskGroup(1, 1,
+            listOf(ConversationTaskChild("task-1", "Research task", "active", "running", childId))))),
+        onSelectTaskChildConversation = { taskId, conversationId -> opened = "$taskId:$conversationId" })
+      }
+    }
+    composeTestRule.onNodeWithTag("conversation-task-task-1").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("conversation-tasks-$parent").performClick()
+    composeTestRule.onNodeWithText("Research task").assertExists()
+    composeTestRule.mainClock.advanceTimeBy(600)
+    composeTestRule.waitForIdle()
+    saveAcceptanceScreenshot("conversation-task-expanded.png")
+    composeTestRule.onNodeWithTag("conversation-task-task-1").performClick()
+    composeTestRule.runOnIdle {
+      assert(opened == "task-1:$childId")
+      assert(selectedTab == HomeTab.Assistant)
+    }
   }
 
   @Test fun quickComposerKeepsInputSeparateFromSelectedConversation() {
@@ -1495,7 +1572,7 @@ class MainScreenTest {
         onRenameDraftChange = { ui.value = ui.value.copy(renameDraftText = it) },
         onSaveRename = { saved++ })
     }
-    composeTestRule.onNodeWithTag("conversation-menu-$id").performClick()
+    composeTestRule.onNodeWithTag("conversation-row-$id").performTouchInput { longClick() }
     composeTestRule.onNodeWithTag("rename-conversation-$id").performClick()
     composeTestRule.onNodeWithTag("conversations-rename-input").performTextClearance()
     composeTestRule.onNodeWithTag("conversations-rename-save").assertIsNotEnabled()
@@ -1504,6 +1581,39 @@ class MainScreenTest {
     assert(saved == 1)
     composeTestRule.runOnIdle { ui.value = ui.value.copy(renameError = true) }
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.conversations_rename_error)).assertExists()
+  }
+
+  @Test fun conversationShareWaitsForConfirmationAndShowsResult() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val state = mutableStateOf(ConnectionUiState(profile = profile,
+      conversations = listOf(ConversationSummary(id, "Share test", Instant.now().toString(), 2, "main"))))
+    var begins = 0
+    var confirms = 0
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Conversations, onSelectTab = {}, connection = state.value,
+        onBeginConversationShare = {
+          begins++
+          state.value = state.value.copy(conversationSharePreview = ConversationSharePreview(
+            id, "transcript-1", 9, "2026-10-05T00:00:00Z", "Share test", 2, 1))
+        }, onConfirmConversationShare = {
+          confirms++
+          state.value = state.value.copy(conversationSharePreview = null,
+            conversationShareResult = ConversationShare(id, "share-1", "Share test",
+              "https://share.example/s/test", "public", "", "2030-01-01T00:00:00Z"))
+        }, onDismissConversationShare = {
+          state.value = state.value.copy(conversationSharePreview = null,
+            conversationShareResult = null)
+        })
+    }
+    composeTestRule.onNodeWithTag("conversation-row-$id").performTouchInput { longClick() }
+    composeTestRule.onNodeWithTag("share-conversation-$id").performClick()
+    composeTestRule.runOnIdle { assert(begins == 1 && confirms == 0) }
+    composeTestRule.onNodeWithTag("conversations-share-confirm").performClick()
+    composeTestRule.runOnIdle { assert(confirms == 1) }
+    composeTestRule.onNodeWithTag("conversations-share-url").assertTextContains("https://share.example/s/test")
+    composeTestRule.onNodeWithTag("conversations-share-copy").assertExists()
+    composeTestRule.onNodeWithTag("conversations-share-system").assertExists()
   }
 
   @Test fun longPressOpensConversationActionsWithoutOpeningChat() {
@@ -1537,12 +1647,12 @@ class MainScreenTest {
           item.value = item.value.copy(status = if (item.value.status == "pinned") "active" else "pinned")
         })
     }
-    composeTestRule.onNodeWithTag("conversation-menu-$id").performClick()
+    composeTestRule.onNodeWithTag("conversation-row-$id").performTouchInput { longClick() }
     composeTestRule.onNodeWithTag("pin-conversation-$id").performClick()
     assert(toggles == 1)
     assert(!selected)
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.conversations_pinned)).assertExists()
-    composeTestRule.onNodeWithTag("conversation-menu-$id").performClick()
+    composeTestRule.onNodeWithTag("conversation-row-$id").performTouchInput { longClick() }
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.conversations_unpin)).performClick()
     assert(toggles == 2)
     assert(item.value.status == "active")
@@ -1561,12 +1671,12 @@ class MainScreenTest {
           item.value = item.value.copy(status = if (item.value.status == "archived") "active" else "archived")
         })
     }
-    composeTestRule.onNodeWithTag("conversation-menu-$id").performClick()
+    composeTestRule.onNodeWithTag("conversation-row-$id").performTouchInput { longClick() }
     composeTestRule.onNodeWithTag("archive-conversation-$id").performClick()
     assert(toggles == 1)
     composeTestRule.onNodeWithText("Archive test").assertExists()
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.conversations_archived)).assertExists()
-    composeTestRule.onNodeWithTag("conversation-menu-$id").performClick()
+    composeTestRule.onNodeWithTag("conversation-row-$id").performTouchInput { longClick() }
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.conversations_unarchive)).performClick()
     assert(toggles == 2)
     assert(item.value.status == "active")
@@ -1582,7 +1692,7 @@ class MainScreenTest {
         onScheduleDelete = { ui.value = ui.value.copy(pendingDeleteId = it) },
         onUndoDelete = { ui.value = ui.value.copy(pendingDeleteId = null) })
     }
-    composeTestRule.onNodeWithTag("conversation-menu-$id").performClick()
+    composeTestRule.onNodeWithTag("conversation-row-$id").performTouchInput { longClick() }
     composeTestRule.onNodeWithTag("delete-conversation-$id").performClick()
     assert(ui.value.pendingDeleteId == id)
     composeTestRule.onNodeWithText("Delete test").assertDoesNotExist()
@@ -1740,7 +1850,7 @@ class MainScreenTest {
         connection = ConnectionUiState(profile = profile, selectedConversationId = id, activeRunId = "run-1",
           conversations = listOf(ConversationSummary(id, "Running chat", Instant.now().toString(), 2, "main"))))
     }
-    composeTestRule.onNodeWithTag("conversation-menu-$id").performClick()
+    composeTestRule.onNodeWithTag("conversation-row-$id").performTouchInput { longClick() }
     composeTestRule.onNodeWithTag("delete-conversation-$id").assertIsNotEnabled()
   }
 

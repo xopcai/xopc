@@ -160,11 +160,29 @@ struct ReferenceItem: Equatable, Identifiable, Sendable {
 }
 
 struct HistoryAttachment: Decodable, Equatable, Identifiable, Sendable {
+    let mediaID: String?
+    let type: String?
     let name: String?
     let mimeType: String?
+    let size: Int?
+    let uri: String?
+    let duration: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case mediaID = "id"
+        case type, name, mimeType, size, uri, duration
+    }
 
     var id: String {
-        "\(name ?? "attachment")|\(mimeType ?? "application/octet-stream")"
+        mediaID ?? uri ?? "\(name ?? "attachment")|\(mimeType ?? "application/octet-stream")"
+    }
+
+    var isImage: Bool {
+        type == "image" || type == "photo" || mimeType?.hasPrefix("image/") == true
+    }
+
+    var isAudio: Bool {
+        type == "audio" || type == "voice" || mimeType?.hasPrefix("audio/") == true
     }
 }
 

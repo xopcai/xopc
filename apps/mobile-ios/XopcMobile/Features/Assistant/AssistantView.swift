@@ -159,6 +159,15 @@ struct AssistantView<Dock: View>: View {
         } else if state.messages.isEmpty {
             ScrollView {
                 LazyVStack(spacing: 16) {
+                    if let errorMessage = state.errorMessage {
+                        ErrorBanner(message: errorMessage)
+                        Button("重试") {
+                            Task {
+                                await state.loadConversation(conversation, using: GatewayClient(configuration: configuration))
+                            }
+                        }
+                        .frame(minHeight: 44)
+                    }
                     contextSummary
                     clarificationCard
                     queueCard

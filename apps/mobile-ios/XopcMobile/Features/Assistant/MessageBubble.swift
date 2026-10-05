@@ -1,3 +1,5 @@
+import AVFAudio
+import Observation
 import SwiftUI
 
 struct MessageBubble: View {
@@ -140,19 +142,49 @@ struct MessageBubble: View {
     private var attachments: some View {
         if !message.attachments.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(message.attachments) { attachment in
-                    Label(
-                        attachment.name ?? AppLocalization.string("附件", locale: locale),
-                        systemImage: attachment.mimeType?.hasPrefix("image/") == true ? "photo" : "doc"
-                    )
-                    .font(.caption)
-                    .lineLimit(1)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 6)
-                    .background(Color.secondary.opacity(0.1), in: .capsule)
+                let images = message.attachments.filter(\.isImage)
+                if !images.isEmpty {
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 8) {
+                            ForEach(images) { attachment in
+                                if let uri = attachment.uri {
+                                    MarkdownImageView(
+                                        alt: attachment.name ?? AppLocalization.string("图片", locale: locale),
+                                        source: uri,
+                                        configuration: configuration,
+                                        conversationID: conversationID,
+                                        compact: true
+                                    )
+                                } else {
+                                    attachmentLabel(attachment, systemImage: "photo")
+                                }
+                            }
+                        }
+                    }
+                    .scrollIndicators(.hidden)
+                }
+                ForEach(message.attachments.filter { !$0.isImage }) { attachment in
+                    if attachment.isAudio, attachment.uri != nil, let conversationID {
+                        ChatAudioAttachmentView(
+                            attachment: attachment,
+                            configuration: configuration,
+                            conversationID: conversationID
+                        )
+                    } else {
+                        attachmentLabel(attachment, systemImage: "doc")
+                    }
                 }
             }
         }
+    }
+
+    private func attachmentLabel(_ attachment: HistoryAttachment, systemImage: String) -> some View {
+        Label(attachment.name ?? AppLocalization.string("附件", locale: locale), systemImage: systemImage)
+            .font(.caption)
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .frame(minHeight: 44)
+            .background(Color.secondary.opacity(0.1), in: .capsule)
     }
 
     private func referenceAccessibilityLabel(_ reference: ContextReference) -> String {
@@ -177,5 +209,137 @@ struct MessageBubble: View {
             saveFeedback = String(format: String(localized: "保存失败：%@"), error.localizedDescription)
         }
         isSaveFeedbackPresented = true
+    }
+}
+
+private struct ChatAudioAttachmentView: View {
+    let attachment: HistoryAttachment
+    let configuration: GatewayConfiguration
+    let conversationID: String
+
+    @State private var playback = ChatAudioPlayback()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                guard let uri = attachment.uri else { return }
+                playback.toggle(uri: uri, conversationID: conversationID, configuration: configuration)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: playback.isPlaying ? "stop.circle.fill" : "speaker.wave.2.fill")
+                        .font(.title3)
+                    Image(systemName: "waveform")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let duration = attachment.duration, duration > 0 {
+                        Text("\(Int(duration.rounded(.up)))″")
+                            .font(.caption.monospacedDigit())
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .disabled(playback.isLoading)
+            .accessibilityLabel(playback.isPlaying ? "停止播放语音" : "播放语音")
+            .accessibilityIdentifier("chat-audio-\(attachment.id)")
+            if playback.isLoading {
+                ProgressView("正在加载语音…").font(.caption)
+            }
+            if let error = playback.errorMessage {
+                Text(error).font(.caption).foregroundStyle(.red)
+                Button("重试") {
+                    guard let uri = attachment.uri else { return }
+                    playback.retry(uri: uri, conversationID: conversationID, configuration: configuration)
+                }
+                .frame(minHeight: 44)
+            }
+        }
+        .padding(.horizontal, 10)
+        .background(Color.secondary.opacity(0.08), in: .rect(cornerRadius: 12))
+        .onDisappear { playback.stop() }
+    }
+}
+
+@MainActor
+@Observable
+private final class ChatAudioPlayback: NSObject, AVAudioPlayerDelegate {
+    private(set) var isLoading = false
+    private(set) var isPlaying = false
+    private(set) var errorMessage: String?
+    private var player: AVAudioPlayer?
+    private var fetchTask: Task<Void, Never>?
+    private var generation = 0
+    private var ownsAudioSession = false
+
+    func toggle(uri: String, conversationID: String, configuration: GatewayConfiguration) {
+        if isPlaying {
+            stop()
+            return
+        }
+        if let player {
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+                ownsAudioSession = true
+                guard player.play() else { throw ChatImageError.invalidResponse }
+                isPlaying = true
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            return
+        }
+        retry(uri: uri, conversationID: conversationID, configuration: configuration)
+    }
+
+    func retry(uri: String, conversationID: String, configuration: GatewayConfiguration) {
+        stop()
+        isLoading = true
+        let current = generation
+        fetchTask = Task {
+            do {
+                let data = try await ChatAudioLoader(configuration: configuration)
+                    .load(uri: uri, conversationID: conversationID)
+                guard current == generation, !Task.isCancelled else { return }
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+                try AVAudioSession.sharedInstance().setActive(true)
+                ownsAudioSession = true
+                let player = try AVAudioPlayer(data: data)
+                player.delegate = self
+                player.prepareToPlay()
+                guard player.play() else { throw ChatImageError.invalidResponse }
+                self.player = player
+                isPlaying = true
+                errorMessage = nil
+            } catch is CancellationError {
+            } catch {
+                guard current == generation else { return }
+                errorMessage = error.localizedDescription
+            }
+            if current == generation {
+                isLoading = false
+            }
+        }
+    }
+
+    func stop() {
+        generation += 1
+        fetchTask?.cancel()
+        fetchTask = nil
+        player?.stop()
+        player = nil
+        isLoading = false
+        isPlaying = false
+        if ownsAudioSession {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            ownsAudioSession = false
+        }
+    }
+
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully _: Bool) {
+        let identity = ObjectIdentifier(player)
+        Task { @MainActor in
+            guard self.player.map(ObjectIdentifier.init) == identity else { return }
+            self.stop()
+        }
     }
 }

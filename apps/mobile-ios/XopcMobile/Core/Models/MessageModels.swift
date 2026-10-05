@@ -6,13 +6,14 @@ struct WireMessage: Decodable, Sendable {
     let turnId: String?
     let role: String
     let content: MessageContent
-    let rawContent: [MessageBlock]?
+    let rawContent: MessageContent?
     let toolCalls: [HistoryToolCall]?
     let attachments: [HistoryAttachment]?
+    let media: [HistoryAttachment]?
     let metadata: WireMessageMetadata?
 
     var details: [TimelineDetail] {
-        let rawDetails = rawContent?.timelineDetails ?? content.details
+        let rawDetails = rawContent?.details ?? content.details
         let toolResults = toolCalls?.map { call in
             TimelineDetail(
                 id: "\(call.id)-result",
