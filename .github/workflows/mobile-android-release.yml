@@ -64,9 +64,17 @@ jobs:
           expected=5F749E9195465B637D4C64D92F871B7CD0B5C5E9D2205E0086F181AFA80D7495
           actual_apk="$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
           actual_aab="$(keytool -printcert -jarfile "$aab" | sed -n 's/^[[:space:]]*SHA256: //p' | head -1 | tr -d ':')"
-          test "${actual_apk^^}" = "$expected"
-          test "${actual_aab^^}" = "$expected"
+          actual_apk="${actual_apk^^}"
+          actual_aab="${actual_aab^^}"
+          echo "Expected certificate SHA-256: $expected"
+          echo "APK certificate SHA-256: ${actual_apk:-<missing>}"
+          echo "AAB certificate SHA-256: ${actual_aab:-<missing>}"
+          if [[ "$actual_apk" != "$expected" || "$actual_aab" != "$expected" ]]; then
+            echo "::error::Native Android artifacts are not signed by the pinned Production certificate"
+            exit 1
+          fi
           package_line="$("$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | grep '^package:')"
+          echo "$package_line"
           [[ "$package_line" == *"name='ai.xopc.xopc'"* ]]
           version_code="$(sed -n "s/.*versionCode='\([0-9][0-9]*\)'.*/\1/p" <<< "$package_line")"
           test -n "$version_code" && test "$version_code" -gt 78
