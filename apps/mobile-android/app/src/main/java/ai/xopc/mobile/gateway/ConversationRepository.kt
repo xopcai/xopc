@@ -2,6 +2,7 @@ package ai.xopc.mobile.gateway
 
 import android.content.Context
 import android.net.Uri
+import android.util.Base64
 import java.net.URLEncoder
 import java.time.Instant
 import java.util.UUID
@@ -29,8 +30,21 @@ data class TaskWelcomeInfo(val taskTitle: String, val phase: String, val operati
 data class ProjectWelcomeInfo(val projectName: String, val blockedReason: String?,
   val recentFailure: String?, val recommendedAction: String?)
 
+data class ConversationMedia(val id: String, val name: String, val type: String, val mimeType: String,
+  val size: Long, val uri: String, val workspaceRelativePath: String? = null)
+data class ConversationReference(val kind: String, val sourceId: String, val version: String,
+  val title: String, val url: String? = null)
+data class ConversationTarget(val kind: String, val id: String, val title: String,
+  val summary: String? = null, val status: String? = null, val capabilities: List<String> = emptyList())
+data class ConversationArtifact(val artifactId: String, val title: String, val kind: String,
+  val mimeType: String?, val sizeBytes: Long?, val availability: String, val location: String,
+  val capabilities: List<String>, val uri: String?, val workspaceRelativePath: String?, val shareUrl: String?)
+data class ConversationOutcome(val status: String, val summary: String?,
+  val artifacts: List<ConversationArtifact>)
 data class ConversationMessage(val id: String, val role: String, val text: String, val turnId: String? = null,
-  val hasNonTextContent: Boolean = false)
+  val hasNonTextContent: Boolean = false, val media: List<ConversationMedia> = emptyList(),
+  val references: List<ConversationReference> = emptyList(),
+  val targets: List<ConversationTarget> = emptyList(), val outcome: ConversationOutcome? = null)
 data class ConversationHistory(val conversationId: String, val transcriptId: String?, val messages: List<ConversationMessage>,
   val agentId: String? = null)
 data class ExecutionStep(val id: String, val kind: String, val category: String, val text: String,
@@ -279,6 +293,39 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     require(turnId.isNotBlank() && turnId.length <= 256) { "INVALID_TURN_ID" }
     require(draft(conversationId) == null) { "LOCAL_DRAFT" }
     return parseExecutionDetail(turnId, gateway.request("/api/sessions/$conversationId/execution-detail?turnId=${encode(turnId)}"))
+  }
+
+  fun readMessageMedia(conversationId: String, media: ConversationMedia): ByteArray {
+    require(conversationId.matches(Regex("[0-9a-fA-F-]{36}"))) { "INVALID_CONVERSATION_ID" }
+    val uri = media.uri
+    if (uri.startsWith("data:")) {
+      val match = Regex("^data:([A-Za-z0-9.+/-]+);base64,([A-Za-z0-9+/=_-]+)$").matchEntire(uri)
+        ?: throw IllegalArgumentException("INVALID_MEDIA")
+      require(match.groupValues[1] == media.mimeType && match.groupValues[2].length <= 22_369_624) {
+        "INVALID_MEDIA"
+      }
+      return Base64.decode(match.groupValues[2], Base64.DEFAULT).also {
+        require(it.size <= 16 * 1024 * 1024) { "INVALID_MEDIA" }
+      }
+    }
+    val path = when {
+      uri.startsWith("xopc-file:") -> {
+        val id = Uri.decode(uri.removePrefix("xopc-file:")).trim()
+        require(id.isNotBlank()) { "INVALID_MEDIA" }
+        "/api/files/${encode(id)}/content"
+      }
+      uri.startsWith("xopc-attachment://notes/") -> {
+        val match = Regex("^xopc-attachment://notes/([^/?#]+)/([^/?#]+)$", RegexOption.IGNORE_CASE)
+          .matchEntire(uri) ?: throw IllegalArgumentException("INVALID_MEDIA")
+        val noteId = Uri.decode(match.groupValues[1]).trim()
+        val attachmentId = Uri.decode(match.groupValues[2]).trim()
+        require(noteId.isNotBlank() && attachmentId.isNotBlank()) { "INVALID_MEDIA" }
+        "/api/notes/${encode(noteId)}/media/${encode(attachmentId)}"
+      }
+      uri.startsWith("media://") -> "/api/media/read?uri=${encode(uri)}&conversationId=${encode(conversationId)}"
+      else -> throw IllegalArgumentException("INVALID_MEDIA")
+    }
+    return gateway.requestBytes(path)
   }
 
   fun rename(conversationId: String, name: String) {
@@ -772,14 +819,106 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         else -> ""
       }
       val raw = item.optJSONArray("rawContent")
+      val media = parseMessageMedia(item.optJSONArray("media"))
+      val metadata = item.optJSONObject("metadata")
+      val references = parseMessageReferences(metadata?.optJSONArray("sourceContexts"))
+      val outcome = parseMessageOutcome(metadata?.optJSONObject("turnOutcome"))
+      val targets = parseMessageTargets(item.optJSONArray("deliveries"))
       val hasNonTextContent = (item.optJSONArray("media")?.length() ?: 0) > 0 ||
-        (item.optJSONObject("metadata")?.optJSONArray("sourceContexts")?.length() ?: 0) > 0 ||
+        (metadata?.optJSONArray("sourceContexts")?.length() ?: 0) > 0 ||
+        outcome != null || targets.isNotEmpty() ||
         (raw != null && (0 until raw.length()).any { part ->
           raw.optJSONObject(part)?.optString("type")?.let { it != "text" } == true
         })
       if (text.isBlank() && !hasNonTextContent) null else
         ConversationMessage(item.optString("id").ifBlank { item.optString("messageId").ifBlank { "$index" } }, role, text,
-          item.optString("turnId").takeIf(String::isNotBlank), hasNonTextContent)
+          item.optString("turnId").takeIf(String::isNotBlank), hasNonTextContent, media, references, targets, outcome)
+    }
+
+    private fun parseMessageMedia(rows: JSONArray?): List<ConversationMedia> {
+      if (rows == null) return emptyList()
+      return (0 until minOf(rows.length(), 20)).mapNotNull { index ->
+        val row = rows.optJSONObject(index) ?: return@mapNotNull null
+        val name = row.optString("name").take(240)
+        val uri = row.optString("uri").take(16_384)
+        if (name.isBlank() || uri.isBlank()) return@mapNotNull null
+        ConversationMedia(row.optString("id").ifBlank { "media-$index" }.take(256), name,
+          row.optString("type", "file").take(40), row.optString("mimeType").take(160),
+          row.optLong("size").coerceAtLeast(0), uri,
+          row.optString("workspaceRelativePath").takeIf(String::isNotBlank)?.take(2_048))
+      }
+    }
+
+    private fun parseMessageReferences(rows: JSONArray?): List<ConversationReference> {
+      if (rows == null) return emptyList()
+      val allowed = setOf("note", "task", "file", "session", "browser_tab", "browser_page",
+        "mcp_resource", "user_assertion")
+      return (0 until minOf(rows.length(), 20)).mapNotNull { index ->
+        val row = rows.optJSONObject(index) ?: return@mapNotNull null
+        val kind = row.optString("kind")
+        val id = row.optString("sourceId").take(512)
+        if (kind !in allowed || id.isBlank()) return@mapNotNull null
+        ConversationReference(kind, id, row.optString("version").take(256),
+          row.optString("title").ifBlank { id }.take(240),
+          row.optString("url").takeIf { it.startsWith("https://") }?.take(4_096))
+      }.distinctBy { "${it.kind}:${it.sourceId}" }
+    }
+
+    private fun parseMessageTargets(deliveries: JSONArray?): List<ConversationTarget> {
+      if (deliveries == null) return emptyList()
+      val out = mutableListOf<ConversationTarget>()
+      fun add(row: JSONObject?) {
+        row ?: return
+        val kind = row.optString("kind").take(80)
+        val id = row.optString("id").take(1_024)
+        val title = row.optString("title").take(240)
+        if (kind.isBlank() || id.isBlank() || title.isBlank()) return
+        val capabilities = row.optJSONArray("capabilities")?.let { values ->
+          (0 until minOf(values.length(), 20)).mapNotNull { values.optString(it).takeIf(String::isNotBlank)?.take(80) }
+        } ?: emptyList()
+        out += ConversationTarget(kind, id, title,
+          row.optString("summary").takeIf(String::isNotBlank)?.take(500),
+          row.optString("status").takeIf(String::isNotBlank)?.take(120), capabilities)
+      }
+      for (index in 0 until minOf(deliveries.length(), 20)) {
+        val delivery = deliveries.optJSONObject(index) ?: continue
+        add(delivery.optJSONObject("primary"))
+        delivery.optJSONArray("related")?.let { related ->
+          for (relatedIndex in 0 until minOf(related.length(), 50)) add(related.optJSONObject(relatedIndex))
+        }
+        delivery.optJSONObject("presentation")?.takeIf { it.optString("kind") == "table" }
+          ?.optJSONArray("items")?.let { items ->
+            for (itemIndex in 0 until minOf(items.length(), 50)) add(items.optJSONObject(itemIndex))
+          }
+      }
+      return out.distinctBy { "${it.kind}:${it.id}" }.take(50)
+    }
+
+    private fun parseMessageOutcome(row: JSONObject?): ConversationOutcome? {
+      if (row == null) return null
+      val status = row.optString("status")
+      if (status !in setOf("succeeded", "partial", "failed")) return null
+      val artifacts = row.optJSONArray("deliverables")?.let { values ->
+        (0 until minOf(values.length(), 50)).mapNotNull { index ->
+          val item = values.optJSONObject(index) ?: return@mapNotNull null
+          val id = item.optString("artifactId").take(1_024)
+          val title = item.optString("title").take(240)
+          val availability = item.optString("availability")
+          if (id.isBlank() || title.isBlank() || availability !in
+            setOf("materializing", "available", "expired", "missing", "failed")) return@mapNotNull null
+          val capabilities = item.optJSONArray("capabilities")?.let { caps ->
+            (0 until minOf(caps.length(), 20)).mapNotNull { caps.optString(it).takeIf(String::isNotBlank)?.take(80) }
+          } ?: emptyList()
+          ConversationArtifact(id, title, item.optString("kind", "file").take(80),
+            item.optString("mimeType").takeIf(String::isNotBlank)?.take(160),
+            item.optLong("sizeBytes").takeIf { item.has("sizeBytes") && it >= 0 }, availability,
+            item.optString("location").take(80), capabilities,
+            item.optString("uri").takeIf(String::isNotBlank)?.take(16_384),
+            item.optString("workspaceRelativePath").takeIf(String::isNotBlank)?.take(2_048),
+            item.optString("shareUrl").takeIf { it.startsWith("https://") }?.take(4_096))
+        }
+      } ?: emptyList()
+      return ConversationOutcome(status, row.optString("summary").takeIf(String::isNotBlank)?.take(1_000), artifacts)
     }
 
     private fun encode(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")

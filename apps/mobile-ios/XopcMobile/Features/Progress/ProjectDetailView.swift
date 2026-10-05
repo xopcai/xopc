@@ -6,6 +6,7 @@ struct ProjectDetailView: View {
     let onOpenConversation: (String, String, String) -> Void
     let onStartProjectConversation: (ProjectRecord) -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var project: ProjectRecord?
     @State private var sessions: [ConversationSummary] = []
     @State private var tasks: [TaskListItem] = []
@@ -21,17 +22,15 @@ struct ProjectDetailView: View {
             if let project {
                 List {
                     Section {
-                        Picker("项目分区", selection: $selection) {
-                            ForEach(ProjectSection.allCases) { section in
-                                Text(section.title).tag(section)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .listRowInsets(EdgeInsets())
+                        projectSectionPicker
                     }
                     if selection == .overview {
                         Section {
                             VStack(alignment: .leading, spacing: 14) {
+                                Text(project.name)
+                                    .font(.title2.bold())
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityAddTraits(.isHeader)
                                 HStack {
                                     Text(LocalizedStringKey(project.status))
                                         .font(.subheadline.weight(.medium))
@@ -73,7 +72,7 @@ struct ProjectDetailView: View {
                 ProgressView("正在读取项目…")
             }
         }
-        .navigationTitle(project?.name ?? AppLocalization.string("项目详情", locale: AppLocalization.selectedLocale))
+        .navigationTitle("项目详情")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .sheet(item: $creationSheet, onDismiss: { Task { await load() } }) { sheet in
@@ -89,17 +88,59 @@ struct ProjectDetailView: View {
         } message: { Text(error ?? "未知错误") }
     }
 
+    @ViewBuilder
+    private var projectSectionPicker: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            Picker("项目分区", selection: $selection) {
+                ForEach(ProjectSection.allCases) { section in
+                    Text(section.title).tag(section)
+                }
+            }
+            .pickerStyle(.menu)
+            .listRowInsets(EdgeInsets())
+        } else {
+            Picker("项目分区", selection: $selection) {
+                ForEach(ProjectSection.allCases) { section in
+                    Text(section.title).tag(section)
+                }
+            }
+            .pickerStyle(.segmented)
+            .listRowInsets(EdgeInsets())
+        }
+    }
+
     private func projectSessions(_ project: ProjectRecord) -> some View {
         Section {
-            Button("新建项目对话", systemImage: "plus.bubble") { onStartProjectConversation(project) }
+            Button {
+                onStartProjectConversation(project)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "plus.bubble")
+                        .accessibilityHidden(true)
+                    Text("新建项目对话")
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                }
+                .frame(minHeight: 48)
+            }
             if sessions.isEmpty {
                 Text("暂无项目对话").foregroundStyle(.secondary)
             } else {
                 ForEach(visible(sessions)) { session in
                     Button { onOpenConversation(session.id, session.displayName, session.agentId) } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label(session.displayName, systemImage: "bubble.left")
-                            Text("\(session.messageCount) 条消息").font(.caption).foregroundStyle(.secondary)
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "bubble.left")
+                                .foregroundStyle(.blue)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(session.displayName)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text("\(session.messageCount) 条消息")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 8)
                         }
                     }
                 }

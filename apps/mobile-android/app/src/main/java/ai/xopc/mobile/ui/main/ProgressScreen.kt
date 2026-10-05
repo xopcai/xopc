@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -75,9 +76,11 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onCreateAutomation: (String, String, String, String) -> Unit = { _, _, _, _ -> },
   onUpdateAutomation: (String, String, String, String, String) -> Unit = { _, _, _, _, _ -> },
   onDeleteAutomation: (String, String) -> Unit = { _, _ -> },
-  onAutomationRunAction: (String, String) -> Unit = { _, _ -> }) {
+  onAutomationRunAction: (String, String) -> Unit = { _, _ -> },
+  onTopLevelChange: (Boolean) -> Unit = {}) {
   var pendingHomeAction by remember(state.gatewayId) { mutableStateOf<ProgressHomeAction?>(null) }
   var page by rememberSaveable(state.gatewayId) { mutableStateOf("overview") }
+  LaunchedEffect(page) { onTopLevelChange(page == "overview") }
   var selectedTaskId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var detailReturnPage by rememberSaveable(state.gatewayId) { mutableStateOf("overview") }
   var taskFilter by rememberSaveable(state.gatewayId) { mutableStateOf("all") }
@@ -356,7 +359,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         { action -> selectedRunId?.let { onAutomationRunAction(it, action) } })
       else -> ProgressOverview(state, onRefreshHome, onOpenChat, { page = "tasks" },
         { page = "projects"; onLoadProjects() },
-        { page = "automations"; onLoadAutomations() }, ::openTask,
+        { page = "automations"; onLoadAutomations() }, ::openAutomation, ::openTask,
         { pendingHomeAction = it })
     }
   }
@@ -427,7 +430,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
 @Composable
 private fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
   onOpenChat: (String) -> Unit, onOpenTaskList: () -> Unit, onOpenProjects: () -> Unit,
-  onOpenAutomations: () -> Unit, onOpenTask: (String) -> Unit,
+  onOpenAutomations: () -> Unit, onOpenAutomation: (String) -> Unit,
+  onOpenTask: (String) -> Unit,
   onRequestAction: (ProgressHomeAction) -> Unit) {
   LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp),
     contentPadding = PaddingValues(bottom = 20.dp)) {
@@ -443,16 +447,12 @@ private fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
     item {
       Text(stringResource(R.string.progress_frequent_tools), style = MaterialTheme.typography.titleSmall)
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = onOpenTaskList, modifier = Modifier.weight(1f)) {
-          Text(stringResource(R.string.progress_tasks))
-        }
-        OutlinedButton(onClick = onOpenProjects, modifier = Modifier.weight(1f).testTag("progress-projects")) {
-          Text(stringResource(R.string.progress_projects))
-        }
-        OutlinedButton(onClick = onOpenAutomations, modifier = Modifier.weight(1f).testTag("progress-automations")) {
-          Text(stringResource(R.string.progress_automations))
-        }
+        ProgressShortcut(R.string.progress_tasks, onOpenTaskList, Modifier.weight(1f))
+        ProgressShortcut(R.string.progress_projects, onOpenProjects,
+          Modifier.weight(1f).testTag("progress-projects"))
       }
+      ProgressShortcut(R.string.progress_automations, onOpenAutomations,
+        Modifier.fillMaxWidth().padding(top = 8.dp).testTag("progress-automations"))
     }
     if (state.homeLoading && state.needsUser.isEmpty() && state.background.isEmpty()) item {
       CircularProgressIndicator(modifier = Modifier.testTag("progress-loading"))
@@ -478,6 +478,21 @@ private fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
         ProgressHomeRow(item, state.homeActionBusy, onOpenChat, onOpenTask, onRequestAction)
       }
     }
+    state.automationMetrics?.nextRun?.let { next ->
+      item { ProgressSectionTitle(R.string.progress_upcoming) }
+      item {
+        Card(onClick = { onOpenAutomation(next.automationId) },
+          modifier = Modifier.fillMaxWidth().testTag("progress-upcoming-${next.automationId}")) {
+          Column(modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(next.name, style = MaterialTheme.typography.titleMedium)
+            Text(DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+              .format(Date(next.runAtMs)), style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+        }
+      }
+    }
     val closed = state.recentClosedTasks
     if (closed.isNotEmpty()) {
       item { ProgressSectionTitle(R.string.progress_recent_closed) }
@@ -493,6 +508,19 @@ private fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
     }
     if (state.tasksError) item {
       Text(stringResource(R.string.progress_tasks_error), color = MaterialTheme.colorScheme.error)
+    }
+  }
+}
+
+@Composable
+private fun ProgressShortcut(label: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+  Card(onClick = onClick, modifier = modifier.heightIn(min = 64.dp),
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 20.dp),
+      horizontalArrangement = Arrangement.SpaceBetween) {
+      Text(stringResource(label), style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Medium)
+      Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
   }
 }

@@ -1,12 +1,19 @@
 package ai.xopc.mobile.ui.main
 
+import android.Manifest
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.Settings
 import android.widget.Toast
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ConversationSummary
+import ai.xopc.mobile.gateway.ConversationMedia
+import ai.xopc.mobile.gateway.ConversationTarget
 import ai.xopc.mobile.gateway.CameraCaptureStore
 import ai.xopc.mobile.gateway.CameraTakePictureContract
 import ai.xopc.mobile.gateway.ExecutionDetail
@@ -14,13 +21,18 @@ import ai.xopc.mobile.gateway.TaskWelcomeInfo
 import ai.xopc.mobile.gateway.ProjectWelcomeInfo
 import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.NoteMetadataPatch
+import ai.xopc.mobile.gateway.ManagedFile
+import ai.xopc.mobile.gateway.ManagedFileSpace
 import ai.xopc.mobile.gateway.PersonalAssertion
+import ai.xopc.mobile.gateway.PairingProtocol
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +42,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -52,8 +65,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
@@ -73,11 +86,13 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
@@ -89,6 +104,8 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -108,9 +125,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.delay
@@ -127,17 +144,21 @@ enum class HomeTab(@field:StringRes val label: Int, val icon: Int) {
 @Composable
 private fun XopcTabDock(selectedTab: HomeTab, onSelectTab: (HomeTab) -> Unit,
   grouped: Boolean = false, attentionCount: Int = 0) {
-  Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
+  Row(modifier = Modifier.fillMaxWidth().padding(horizontal = if (grouped) 0.dp else 8.dp)
+    .height(52.dp)
     .background(if (grouped) Color.Transparent else MaterialTheme.colorScheme.surface,
       RoundedCornerShape(24.dp))
-    .height(52.dp).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+    .padding(horizontal = 4.dp, vertical = 4.dp).testTag("main-tab-dock"),
+    verticalAlignment = Alignment.CenterVertically) {
     HomeTab.entries.forEach { tab ->
       val selected = selectedTab == tab
       val label = stringResource(tab.label)
+      val interactionSource = remember { MutableInteractionSource() }
       val attentionDescription = if (tab == HomeTab.Progress && attentionCount > 0)
         stringResource(R.string.progress_attention_count, attentionCount) else null
       Column(modifier = Modifier.weight(1f).height(44.dp)
-        .clickable(role = Role.Tab, onClickLabel = label) { onSelectTab(tab) }
+        .clickable(interactionSource = interactionSource, indication = null,
+          role = Role.Tab, onClickLabel = label) { onSelectTab(tab) }
         .semantics {
           this.selected = selected
           if (attentionDescription != null) stateDescription = attentionDescription
@@ -145,12 +166,14 @@ private fun XopcTabDock(selectedTab: HomeTab, onSelectTab: (HomeTab) -> Unit,
         .testTag("tab-${tab.name}"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Box(modifier = Modifier.size(width = 42.dp, height = 28.dp)) {
+        Box(modifier = Modifier.size(width = 42.dp, height = 28.dp)
+          .clip(RoundedCornerShape(16.dp))
+          .indication(interactionSource, ripple(bounded = true, radius = 21.dp))) {
           Box(modifier = Modifier.fillMaxSize()
             .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
               RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-            if (tab == HomeTab.Assistant) Image(painterResource(tab.icon), contentDescription = null,
-              modifier = Modifier.size(28.dp))
+            if (tab == HomeTab.Assistant) LoopiIcon(extent = 28.dp, compact = true,
+              active = selected, modifier = Modifier.testTag("assistant-tab-loopi"))
             else Icon(painterResource(tab.icon), contentDescription = null,
               tint = if (selected) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -230,15 +253,8 @@ private fun AssistantWelcome(recommendation: WelcomeRecommendation?, onChoose: (
   Column(modifier = Modifier.fillMaxWidth().testTag("assistant-welcome"),
     horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.spacedBy(16.dp)) {
-    Box(modifier = Modifier.size(108.dp), contentAlignment = Alignment.Center) {
-      Image(painter = painterResource(R.drawable.brand_mark), contentDescription = null,
-        modifier = Modifier.fillMaxSize())
-      Box(modifier = Modifier.size(34.dp).background(MaterialTheme.colorScheme.surfaceContainer, CircleShape),
-        contentAlignment = Alignment.Center) {
-        Text("•ᴗ•", style = MaterialTheme.typography.titleSmall,
-          color = MaterialTheme.colorScheme.onSurface)
-      }
-    }
+    LoopiIcon(extent = 108.dp, active = true, interactive = true,
+      modifier = Modifier.testTag("assistant-welcome-loopi"))
     Text(stringResource(R.string.assistant_welcome), style = MaterialTheme.typography.titleLarge,
       fontWeight = FontWeight.SemiBold)
     if (recommendation != null) {
@@ -326,8 +342,15 @@ fun MainScreen(
   onCloseExecution: () -> Unit = {},
   onSaveMessageAsNote: (String) -> Unit = {},
   onReuseMessage: (String) -> Boolean = { false },
+  onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray = { _, _ ->
+    throw IllegalStateException("MEDIA_UNAVAILABLE")
+  },
   onMessageNoteFeedbackHandled: (MessageNoteFeedback) -> Unit = {},
   onLoadNotes: (String, String) -> Unit = { _, _ -> },
+  onNoteFileSpaces: suspend () -> List<ManagedFileSpace> = { emptyList() },
+  onNoteFiles: suspend (String?, String, String) -> List<ManagedFile> = { _, _, _ -> emptyList() },
+  onNoteFileText: suspend (String) -> String = { "" },
+  onNoteFileContent: suspend (String) -> ByteArray = { byteArrayOf() },
   onLoadMoreNotes: () -> Unit = {},
   onOpenNote: (String) -> Unit = {},
   onNewNote: () -> Unit = {},
@@ -372,6 +395,13 @@ fun MainScreen(
   onLanguageChange: (String) -> Unit = {},
 ) {
   val context = LocalContext.current
+  val activity = context as? Activity
+  val latestPair by rememberUpdatedState(onPair)
+  var pairingScannerOpen by remember { mutableStateOf(false) }
+  var pairingPermissionRequesting by remember { mutableStateOf(false) }
+  var pairingPermissionRationale by remember { mutableStateOf(false) }
+  var pairingPermissionPermanentlyDenied by remember { mutableStateOf(false) }
+  var pairingScanError by remember { mutableStateOf(false) }
   val latestAddAttachment by rememberUpdatedState(onAddDraftAttachment)
   val latestAddQuickAttachment by rememberUpdatedState(onAddQuickAttachment)
   val latestAddCapturedAttachment by rememberUpdatedState(onAddCapturedDraftAttachment)
@@ -397,6 +427,29 @@ fun MainScreen(
   }
   val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
     handlePickedUri(it)
+  }
+  val pairingCameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    pairingPermissionRequesting = false
+    if (granted) pairingScannerOpen = true
+    else if (activity != null && ActivityCompat.shouldShowRequestPermissionRationale(activity,
+        Manifest.permission.CAMERA)) pairingPermissionRationale = true
+    else pairingPermissionPermanentlyDenied = true
+  }
+  val scanPairingCode: () -> Unit = {
+    if (!pairingScannerOpen && !pairingPermissionRequesting && !connection.pairing && !connection.restoring) {
+      pairingScanError = false
+      pairingPermissionPermanentlyDenied = false
+      when {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED ->
+          pairingScannerOpen = true
+        activity != null && ActivityCompat.shouldShowRequestPermissionRationale(activity,
+          Manifest.permission.CAMERA) -> pairingPermissionRationale = true
+        else -> {
+          pairingPermissionRequesting = true
+          pairingCameraPermission.launch(Manifest.permission.CAMERA)
+        }
+      }
+    }
   }
   var cameraUri by rememberSaveable { mutableStateOf<String?>(null) }
   var cameraGatewayId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -452,7 +505,9 @@ fun MainScreen(
     onMessageNoteFeedbackHandled(feedback)
   }
   MainContent(selectedTab = selectedTab, onSelectTab = { selectedTab = it }, connection = connection,
-    onPair = onPair, onConversationSearchChange = onConversationSearchChange,
+    onPair = onPair, onScanPairing = scanPairingCode,
+    pairingScanning = pairingScannerOpen || pairingPermissionRequesting,
+    pairingScanError = pairingScanError, onConversationSearchChange = onConversationSearchChange,
     onLoadMoreConversations = onLoadMoreConversations, onSelectConversation = onSelectConversation,
     onCreateConversation = onCreateConversation,
     onCreateReferenceConversation = onCreateReferenceConversation,
@@ -525,12 +580,16 @@ fun MainScreen(
     onOpenExecution = onOpenExecution, onRetryExecution = onRetryExecution,
     onCloseExecution = onCloseExecution,
     onSaveMessageAsNote = onSaveMessageAsNote, onReuseMessage = onReuseMessage,
+    onLoadMessageMedia = onLoadMessageMedia,
     onCopyMessageText = { value ->
       (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
         .setPrimaryClip(ClipData.newPlainText(context.getString(R.string.assistant_copy), value))
       Toast.makeText(context, R.string.assistant_copied, Toast.LENGTH_SHORT).show()
     },
-    onLoadNotes = onLoadNotes, onLoadMoreNotes = onLoadMoreNotes, onOpenNote = onOpenNote,
+    onLoadNotes = onLoadNotes, onNoteFileSpaces = onNoteFileSpaces,
+    onNoteFiles = onNoteFiles, onNoteFileText = onNoteFileText,
+    onNoteFileContent = onNoteFileContent,
+    onLoadMoreNotes = onLoadMoreNotes, onOpenNote = onOpenNote,
     onNewNote = onNewNote, onNoteDraftChange = onNoteDraftChange, onSaveNoteDraft = onSaveNoteDraft,
     onCreatedNoteHandled = onCreatedNoteHandled,
     onOpenNoteDraft = onOpenNoteDraft,
@@ -561,6 +620,43 @@ fun MainScreen(
     colorScheme = colorScheme, onColorSchemeChange = onColorSchemeChange,
     language = language, onLanguageChange = onLanguageChange,
     modifier = modifier)
+  if (pairingScannerOpen) PairingQrScannerDialog(onDetected = { invitation ->
+    pairingScannerOpen = false
+    val normalizedInvitation = invitation.trim()
+    try {
+      PairingProtocol.readInvitation(normalizedInvitation)
+      latestPair(normalizedInvitation)
+    } catch (_: IllegalArgumentException) {
+      pairingScanError = true
+    }
+  }, onClose = { pairingScannerOpen = false }, onError = {
+    pairingScannerOpen = false
+    pairingScanError = true
+  })
+  if (pairingPermissionRationale) AlertDialog(
+    onDismissRequest = { pairingPermissionRationale = false },
+    title = { Text(stringResource(R.string.pairing_camera_permission_title)) },
+    text = { Text(stringResource(R.string.pairing_camera_permission_message)) },
+    confirmButton = { TextButton(onClick = {
+      pairingPermissionRationale = false
+      pairingPermissionRequesting = true
+      pairingCameraPermission.launch(Manifest.permission.CAMERA)
+    }) { Text(stringResource(R.string.pairing_camera_permission_continue)) } },
+    dismissButton = { TextButton(onClick = { pairingPermissionRationale = false }) {
+      Text(stringResource(R.string.progress_cancel))
+    } })
+  if (pairingPermissionPermanentlyDenied) AlertDialog(
+    onDismissRequest = { pairingPermissionPermanentlyDenied = false },
+    title = { Text(stringResource(R.string.pairing_camera_permission_title)) },
+    text = { Text(stringResource(R.string.pairing_camera_permission_settings_message)) },
+    confirmButton = { TextButton(onClick = {
+      pairingPermissionPermanentlyDenied = false
+      context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", context.packageName, null)))
+    }) { Text(stringResource(R.string.pairing_camera_permission_settings)) } },
+    dismissButton = { TextButton(onClick = { pairingPermissionPermanentlyDenied = false }) {
+      Text(stringResource(R.string.progress_cancel))
+    } })
 }
 
 @Composable
@@ -569,6 +665,9 @@ internal fun MainContent(
   onSelectTab: (HomeTab) -> Unit,
   connection: ConnectionUiState = ConnectionUiState(),
   onPair: (String) -> Unit = {},
+  onScanPairing: () -> Unit = {},
+  pairingScanning: Boolean = false,
+  pairingScanError: Boolean = false,
   onConversationSearchChange: (String) -> Unit = {},
   onLoadMoreConversations: () -> Unit = {},
   onSelectConversation: (String) -> Unit = {},
@@ -631,8 +730,15 @@ internal fun MainContent(
   onCloseExecution: () -> Unit = {},
   onSaveMessageAsNote: (String) -> Unit = {},
   onReuseMessage: (String) -> Boolean = { false },
+  onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray = { _, _ ->
+    throw IllegalStateException("MEDIA_UNAVAILABLE")
+  },
   onCopyMessageText: (String) -> Unit = {},
   onLoadNotes: (String, String) -> Unit = { _, _ -> },
+  onNoteFileSpaces: suspend () -> List<ManagedFileSpace> = { emptyList() },
+  onNoteFiles: suspend (String?, String, String) -> List<ManagedFile> = { _, _, _ -> emptyList() },
+  onNoteFileText: suspend (String) -> String = { "" },
+  onNoteFileContent: suspend (String) -> ByteArray = { byteArrayOf() },
   onLoadMoreNotes: () -> Unit = {},
   onOpenNote: (String) -> Unit = {},
   onNewNote: () -> Unit = {},
@@ -678,6 +784,8 @@ internal fun MainContent(
   modifier: Modifier = Modifier,
 ) {
   var personalPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
+  var progressAtRoot by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(true) }
+  var notesAtRoot by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(true) }
   var personalReturnPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
   var personalStartSection by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("overview") }
   var personalDetailId by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
@@ -728,24 +836,107 @@ internal fun MainContent(
   }
   var assistantActionsOpen by remember(selectedTab, connection.selectedConversationId) { mutableStateOf(false) }
   var quickActionsOpen by remember(selectedTab, connection.profile?.gatewayId) { mutableStateOf(false) }
+  var assistantComposerValue by remember(connection.selectedConversationId) {
+    mutableStateOf(TextFieldValue(connection.draftText, selection = TextRange(connection.draftText.length)))
+  }
+  val assistantComposerFocus = remember(connection.selectedConversationId) { FocusRequester() }
+  var assistantFocusRevision by remember(connection.selectedConversationId) { mutableIntStateOf(0) }
+  var assistantReferenceKind by remember(connection.profile?.gatewayId, connection.selectedConversationId) {
+    mutableStateOf<String?>(null)
+  }
+  var assistantReferenceQuery by remember(connection.profile?.gatewayId, connection.selectedConversationId) {
+    mutableStateOf("")
+  }
+  val keyboardController = LocalSoftwareKeyboardController.current
+  val focusManager = LocalFocusManager.current
+  val showBottomChrome = when (selectedTab) {
+    HomeTab.Progress -> progressAtRoot
+    HomeTab.Notes -> notesAtRoot
+    HomeTab.Me -> personalPage == "home"
+    else -> true
+  }
+  LaunchedEffect(showBottomChrome) {
+    if (!showBottomChrome) {
+      assistantActionsOpen = false
+      quickActionsOpen = false
+      focusManager.clearFocus(force = true)
+      keyboardController?.hide()
+    }
+  }
+  LaunchedEffect(connection.selectedConversationId, connection.draftText) {
+    if (assistantComposerValue.text != connection.draftText) assistantComposerValue =
+      TextFieldValue(connection.draftText, selection = TextRange(connection.draftText.length))
+  }
+  LaunchedEffect(connection.selectedConversationId, assistantFocusRevision) {
+    if (assistantFocusRevision > 0 && selectedTab == HomeTab.Assistant) {
+      assistantComposerFocus.requestFocus()
+      keyboardController?.show()
+    }
+  }
+  LaunchedEffect(connection.requestedReferenceConversationId, connection.requestedReferenceKind,
+    connection.selectedConversationId, connection.historyLoading) {
+    val id = connection.requestedReferenceConversationId ?: return@LaunchedEffect
+    val kind = connection.requestedReferenceKind ?: return@LaunchedEffect
+    if (id == connection.selectedConversationId && !connection.historyLoading) {
+      assistantReferenceQuery = ""
+      assistantReferenceKind = kind
+      onReferenceRequestHandled(id, kind)
+    }
+  }
+  LaunchedEffect(assistantReferenceKind, assistantReferenceQuery, connection.profile?.gatewayId,
+    connection.selectedConversationId) {
+    val kind = assistantReferenceKind ?: return@LaunchedEffect
+    if (assistantReferenceQuery.isNotEmpty()) delay(250)
+    onLoadReferences(kind, assistantReferenceQuery)
+  }
   val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
   val tabStateHolder = rememberSaveableStateHolder()
   BackHandler(enabled = assistantActionsOpen) { assistantActionsOpen = false }
   BackHandler(enabled = quickActionsOpen) { quickActionsOpen = false }
   BackHandler(enabled = selectedTab == HomeTab.Me && personalPage != "home") { leavePersonalPage() }
   Scaffold(
-    modifier = modifier,
+    modifier = modifier.imePadding(),
+    containerColor = MaterialTheme.colorScheme.background,
     bottomBar = {
-      Column {
+      if (showBottomChrome) Column {
         val attentionCount = connection.progress.needsUser.size.takeIf {
           connection.profile != null && connection.progress.gatewayId == connection.profile.gatewayId
         } ?: 0
-        val showQuick = connection.profile != null && selectedTab != HomeTab.Assistant &&
-          !(selectedTab == HomeTab.Me && personalPage != "home")
-        if (showQuick) {
-          Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(24.dp))
-            .testTag("secondary-bottom-surface")) {
+        val showQuick = connection.profile != null && selectedTab != HomeTab.Assistant
+        if (connection.profile != null && selectedTab == HomeTab.Assistant) {
+          MainBottomSurface("assistant-bottom-surface") {
+            AssistantComposer(connection, assistantComposerValue, { value ->
+              assistantComposerValue = value
+              onDraftChange(value.text)
+            }, assistantComposerFocus, assistantActionsOpen, { assistantActionsOpen = it },
+              onRemoveDraftRef, onRemoveDraftAttachment, onSendMessage, onStopRun)
+            AnimatedVisibility(visible = assistantActionsOpen,
+              enter = expandVertically(animationSpec = tween(220), expandFrom = Alignment.Bottom) +
+                fadeIn(animationSpec = tween(220)),
+              exit = shrinkVertically(animationSpec = tween(180), shrinkTowards = Alignment.Bottom) +
+                fadeOut(animationSpec = tween(180)), label = "assistant-actions") {
+              AssistantActionPanel(
+                canCreate = !connection.creatingConversation && !connection.sending,
+                canReference = !connection.sending && connection.pendingInput == null,
+                canPick = !connection.sending && !connection.attachmentLoading &&
+                  connection.pendingInput == null && connection.draftAttachments.size < 10,
+                onPick = { kind ->
+                  assistantActionsOpen = false
+                  onPickDraftAttachment(kind)
+                }, onOpenReference = { kind ->
+                  assistantActionsOpen = false
+                  assistantReferenceQuery = ""
+                  assistantReferenceKind = kind
+                }, onCreateConversation = {
+                  assistantActionsOpen = false
+                  onCreateConversation()
+                })
+            }
+            if (!assistantActionsOpen && !imeVisible) XopcTabDock(selectedTab, onSelectTab,
+              grouped = true, attentionCount = attentionCount)
+          }
+        } else if (showQuick) {
+          MainBottomSurface("secondary-bottom-surface") {
             QuickComposer(connection, selectedTab, onQuickDraftChange, onQuickSubmit,
               quickActionsOpen, { quickActionsOpen = it }, onRemoveQuickAttachment, onOpenChat = {
                 quickActionsOpen = false
@@ -778,8 +969,7 @@ internal fun MainContent(
             if (!quickActionsOpen && !imeVisible) XopcTabDock(selectedTab, onSelectTab,
               grouped = true, attentionCount = attentionCount)
           }
-        } else if (!assistantActionsOpen && !imeVisible &&
-          !(selectedTab == HomeTab.Me && personalPage != "home")) {
+        } else if (!imeVisible) {
           XopcTabDock(selectedTab, onSelectTab, attentionCount = attentionCount)
         }
       }
@@ -789,16 +979,35 @@ internal fun MainContent(
     when (selectedTab) {
       HomeTab.Assistant, HomeTab.Conversations -> {
         val title = stringResource(selectedTab.label)
-        if (connection.profile == null) PairingScreen(title, connection, onPair, insets)
+        if (connection.profile == null) PairingScreen(title, connection, onPair, onScanPairing,
+          pairingScanning, pairingScanError, insets)
         else if (selectedTab == HomeTab.Assistant) AssistantScreen(connection, insets, onSelectConversation,
-          onCreateConversation, onDraftChange, onRemoveDraftRef, onLoadReferences, onAddDraftRef,
-          onReferenceRequestHandled,
-          onPickDraftAttachment, onRemoveDraftAttachment,
-          onSendMessage, onRetryPendingInput, onStopRun,
+          onCreateConversation, onLoadReferences, onAddDraftRef,
+          onRetryPendingInput,
           onReloadModels, onSelectModel, onReloadAgents, onSwitchAgent, onReloadContext,
           onOpenExecution, onRetryExecution, onCloseExecution,
           onCopyMessageText, onSaveMessageAsNote, onReuseMessage,
-          assistantActionsOpen, { assistantActionsOpen = it })
+          onLoadMessageMedia, onOpenMessageTarget = { target ->
+            when (target.kind) {
+              "note" -> { onOpenNote(target.id); onSelectTab(HomeTab.Notes) }
+              "task" -> { onOpenProgressTask(target.id); onSelectTab(HomeTab.Progress) }
+              "project" -> { onOpenProgressProject(target.id); onSelectTab(HomeTab.Progress) }
+              "automation" -> { onOpenAutomation(target.id); onSelectTab(HomeTab.Progress) }
+              "session" -> { onSelectConversation(target.id); onSelectTab(HomeTab.Assistant) }
+              "user_assertion" -> {
+                personalReturnPage = "home"; personalDetailId = target.id; personalPage = "detail"
+                onOpenPersonalAssertion(target.id); onSelectTab(HomeTab.Me)
+              }
+              "settings" -> { personalPage = "settings"; onSelectTab(HomeTab.Me) }
+            }
+          },
+          { value ->
+            assistantComposerValue = value
+            onDraftChange(value.text)
+          }, { assistantFocusRevision++ },
+          assistantReferenceKind, { assistantReferenceKind = it },
+          assistantReferenceQuery, { assistantReferenceQuery = it },
+          { assistantActionsOpen = it })
         else ConversationsScreen(connection, insets, onConversationSearchChange, onLoadMoreConversations, {
           onCreateConversation()
           onSelectTab(HomeTab.Assistant)
@@ -809,7 +1018,8 @@ internal fun MainContent(
           onTogglePin, onToggleArchive, onScheduleDelete, onUndoDelete)
       }
       HomeTab.Progress -> if (connection.profile == null) PairingScreen(
-        stringResource(R.string.tab_progress), connection, onPair, insets)
+        stringResource(R.string.tab_progress), connection, onPair, onScanPairing,
+        pairingScanning, pairingScanError, insets)
       else ProgressScreen(connection.progress.takeIf { it.gatewayId == connection.profile.gatewayId }
         ?: ProgressUiState(gatewayId = connection.profile.gatewayId, loading = true),
         insets, onRefreshProgressHome, onRefreshProgressTasks, onLoadMoreProgressTasks,
@@ -823,12 +1033,14 @@ internal fun MainContent(
         onUpdateAutomation = onUpdateAutomation,
         onDeleteAutomation = onDeleteAutomation,
         onAutomationRunAction = onAutomationRunAction,
+        onTopLevelChange = { progressAtRoot = it },
         onOpenChat = { id ->
         onSelectConversation(id)
         onSelectTab(HomeTab.Assistant)
       })
       HomeTab.Notes -> if (connection.profile == null) PairingScreen(
-        stringResource(R.string.tab_notes), connection, onPair, insets)
+        stringResource(R.string.tab_notes), connection, onPair, onScanPairing,
+        pairingScanning, pairingScanError, insets)
       else NotesScreen(connection.notes.takeIf { it.gatewayId == connection.profile.gatewayId }
         ?: NotesUiState(gatewayId = connection.profile.gatewayId), insets,
         onLoadNotes, onLoadMoreNotes, onOpenNote, onNewNote,
@@ -836,7 +1048,10 @@ internal fun MainContent(
         onEditNote, onResolveNoteConflict, onNoteMetadataChange,
         onLoadNoteHistory, onLoadNoteSnapshot, onRestoreNoteSnapshot,
         onNoteRestorationHandled, onDeleteNote, onNoteDeletionHandled,
-        onShareNote, onDismissNoteShare)
+        onShareNote, onDismissNoteShare, onNoteFileSpaces = onNoteFileSpaces,
+        onNoteFiles = onNoteFiles, onNoteFileText = onNoteFileText,
+        onNoteFileContent = onNoteFileContent,
+        onTopLevelChange = { notesAtRoot = it })
       HomeTab.Me -> {
         val profile = connection.profile
         val personal = if (profile == null) PersonalUiState(gatewayId = "")
@@ -862,7 +1077,8 @@ internal fun MainContent(
           onActivate = onActivateGateway, onRename = onRenameGateway,
           onRemove = onRemoveGateway)
         else if (personalPage == "settings-add" || personalPage == "pairing") PairingScreen(
-          stringResource(R.string.gateways_add), connection, onPair, insets,
+          stringResource(R.string.gateways_add), connection, onPair, onScanPairing,
+          pairingScanning, pairingScanError, insets,
           onBack = ::leavePersonalPage)
         else if (personalPage == "settings-sharing") ShareCenterScreen(
           state = connection.shares.takeIf { it.gatewayId == profile?.gatewayId }
@@ -905,10 +1121,18 @@ internal fun MainContent(
 }
 
 @Composable
+private fun MainBottomSurface(tag: String, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+  Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(24.dp))
+    .testTag(tag), content = content)
+}
+
+@Composable
 private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
   onChange: (String) -> Unit, onSubmit: () -> Unit,
   actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit,
   onRemoveAttachment: (String) -> Unit, onOpenChat: () -> Unit) {
+  val context = LocalContext.current
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val hasPayload = connection.quickDraftText.isNotBlank() || connection.quickAttachments.isNotEmpty()
@@ -938,9 +1162,9 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
         }
       }
     }
-    Row(modifier = Modifier.fillMaxWidth()
+    Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
       .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(18.dp))
-      .padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+      .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
       IconButton(onClick = onOpenChat, enabled = !connection.quickSending,
         modifier = Modifier.size(48.dp).semantics { contentDescription = assistantLabel }
           .testTag("quick-voice")) {
@@ -971,8 +1195,15 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
         }
         onActionsOpenChange(!actionsOpen)
       }, enabled = !connection.quickSending,
-        modifier = Modifier.size(48.dp).testTag("quick-actions-toggle")) {
-        Text(if (actionsOpen) "×" else "+", style = MaterialTheme.typography.headlineMedium)
+        modifier = Modifier.size(48.dp).semantics {
+          contentDescription = if (actionsOpen) {
+            context.getString(R.string.composer_close_actions)
+          } else {
+            context.getString(R.string.composer_add_actions)
+          }
+        }.testTag("quick-actions-toggle")) {
+        Text(if (actionsOpen) "×" else "+", style = MaterialTheme.typography.headlineMedium,
+          color = MaterialTheme.colorScheme.primary)
       }
       if (hasPayload) {
         IconButton(onClick = onSubmit, enabled = canSend,
@@ -980,6 +1211,97 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
             .semantics { contentDescription = sendLabel }.testTag("quick-send")) {
           Text("↑", style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.surface)
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun AssistantComposer(connection: ConnectionUiState, composerValue: TextFieldValue,
+  onComposerValueChange: (TextFieldValue) -> Unit, composerFocus: FocusRequester,
+  actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit,
+  onRemoveDraftRef: (String, String) -> Unit, onRemoveDraftAttachment: (String) -> Unit,
+  onSendMessage: () -> Unit, onStopRun: () -> Unit) {
+  val focusManager = LocalFocusManager.current
+  val keyboardController = LocalSoftwareKeyboardController.current
+  val expandedComposer = composerValue.text.isNotEmpty() || connection.draftRefs.isNotEmpty() ||
+    connection.draftAttachments.isNotEmpty()
+  val toggleActions: () -> Unit = {
+    if (!actionsOpen) {
+      focusManager.clearFocus(force = true)
+      keyboardController?.hide()
+    }
+    onActionsOpenChange(!actionsOpen)
+  }
+  Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+    if (connection.sendError) Text(stringResource(R.string.assistant_send_error), color = MaterialTheme.colorScheme.error)
+    if (connection.attachmentError) Text(stringResource(R.string.assistant_attachment_error),
+      color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("assistant-attachment-error"))
+    if (connection.attachmentLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp)
+      .testTag("assistant-attachment-loading"))
+    if (connection.pendingDeleteId == connection.selectedConversationId) {
+      Text(stringResource(R.string.conversations_pending_delete), color = MaterialTheme.colorScheme.error)
+    }
+    Column(modifier = Modifier.fillMaxWidth().heightIn(max = 152.dp)
+      .verticalScroll(rememberScrollState())) {
+    connection.draftRefs.forEach { ref ->
+      Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        val kindLabel = when (ref.kind) {
+          "note" -> stringResource(R.string.assistant_action_reference_note)
+          "task" -> stringResource(R.string.assistant_action_reference_task)
+          else -> stringResource(R.string.assistant_assertion_ref)
+        }
+        Text(kindLabel + " · " + ref.title.ifBlank { ref.sourceId },
+          modifier = Modifier.weight(1f).testTag("assistant-ref-${ref.kind}-${ref.sourceId}"),
+          style = MaterialTheme.typography.bodySmall, maxLines = 1,
+          overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = { onRemoveDraftRef(ref.kind, ref.sourceId) },
+          enabled = !connection.sending && connection.pendingInput == null,
+          modifier = Modifier.testTag("assistant-remove-ref-${ref.kind}-${ref.sourceId}")) {
+          Text(stringResource(R.string.assistant_remove_ref))
+        }
+      }
+    }
+    connection.draftAttachments.forEach { item ->
+      Row(modifier = Modifier.fillMaxWidth().testTag("assistant-attachment-${item.id}"),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(item.name, modifier = Modifier.weight(1f), maxLines = 1,
+          overflow = TextOverflow.Ellipsis)
+        TextButton(onClick = { onRemoveDraftAttachment(item.id) },
+          enabled = !connection.attachmentLoading && !connection.sending && connection.pendingInput == null,
+          modifier = Modifier.testTag("assistant-attachment-remove-${item.id}")) {
+          Text(stringResource(R.string.assistant_attachment_remove))
+        }
+      }
+    }
+    }
+    Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer,
+      RoundedCornerShape(18.dp)).testTag("assistant-composer-shell")) {
+      Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.Bottom) {
+        BasicTextField(value = composerValue, onValueChange = onComposerValueChange,
+          modifier = Modifier.weight(1f).heightIn(min = 48.dp).focusRequester(composerFocus)
+            .onFocusChanged { if (it.isFocused) onActionsOpenChange(false) }
+            .padding(horizontal = 12.dp, vertical = 10.dp).testTag("assistant-input"),
+          textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+          maxLines = 5, enabled = connection.pendingDeleteId != connection.selectedConversationId,
+          decorationBox = { innerTextField ->
+            Box {
+              if (composerValue.text.isEmpty()) Text(stringResource(R.string.assistant_input_hint),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+              innerTextField()
+            }
+          })
+        if (!expandedComposer) AssistantComposerButtons(connection, actionsOpen,
+          toggleActions, onSendMessage, onStopRun)
+      }
+      if (expandedComposer) {
+        Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp),
+          horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+          AssistantComposerButtons(connection, actionsOpen,
+            toggleActions, onSendMessage, onStopRun)
         }
       }
     }
@@ -1064,9 +1386,16 @@ private fun AssistantComposerButtons(connection: ConnectionUiState, actionsOpen:
   val hasPayload = connection.draftText.isNotBlank() || connection.draftRefs.isNotEmpty() ||
     connection.draftAttachments.isNotEmpty()
   if (connection.activeRunId == null || !hasPayload) {
+    val context = LocalContext.current
     IconButton(onClick = onToggleActions,
       enabled = !connection.sending && connection.pendingDeleteId != connection.selectedConversationId,
-      modifier = Modifier.size(48.dp).testTag("assistant-actions-toggle")) {
+      modifier = Modifier.size(48.dp).semantics {
+        contentDescription = if (actionsOpen) {
+          context.getString(R.string.composer_close_actions)
+        } else {
+          context.getString(R.string.composer_add_actions)
+        }
+      }.testTag("assistant-actions-toggle")) {
       Text(if (actionsOpen) "×" else "+", style = MaterialTheme.typography.headlineMedium,
         color = MaterialTheme.colorScheme.primary)
     }
@@ -1099,13 +1428,9 @@ private fun AssistantComposerButtons(connection: ConnectionUiState, actionsOpen:
 @Composable
 private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues,
   onSelectConversation: (String) -> Unit, onCreateConversation: () -> Unit,
-  onDraftChange: (String) -> Unit, onRemoveDraftRef: (String, String) -> Unit,
   onLoadReferences: (String, String) -> Unit,
   onAddDraftRef: (ReferencePickerItem) -> Boolean,
-  onReferenceRequestHandled: (String, String) -> Unit,
-  onPickDraftAttachment: (String) -> Unit, onRemoveDraftAttachment: (String) -> Unit,
-  onSendMessage: () -> Unit,
-  onRetryPendingInput: () -> Unit, onStopRun: () -> Unit,
+  onRetryPendingInput: () -> Unit,
   onReloadModels: () -> Unit, onSelectModel: (String) -> Unit,
   onReloadAgents: () -> Unit, onSwitchAgent: (String, Boolean) -> Unit,
   onReloadContext: () -> Unit, onOpenExecution: (String) -> Unit,
@@ -1113,27 +1438,19 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onCopyMessageText: (String) -> Unit,
   onSaveMessageAsNote: (String) -> Unit,
   onReuseMessage: (String) -> Boolean,
-  actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit) {
+  onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray,
+  onOpenMessageTarget: (ConversationTarget) -> Unit,
+  onComposerValueChange: (TextFieldValue) -> Unit,
+  onFocusDraft: () -> Unit,
+  referenceKind: String?, onReferenceKindChange: (String?) -> Unit,
+  referenceQuery: String, onReferenceQueryChange: (String) -> Unit,
+  onActionsOpenChange: (Boolean) -> Unit) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
-  val composerFocus = remember(connection.selectedConversationId) { FocusRequester() }
-  var focusDraftRevision by remember(connection.selectedConversationId) { mutableIntStateOf(0) }
-  var composerValue by remember(connection.selectedConversationId) {
-    mutableStateOf(TextFieldValue(connection.draftText, selection = TextRange(connection.draftText.length)))
-  }
-  LaunchedEffect(connection.selectedConversationId, connection.draftText) {
-    if (composerValue.text != connection.draftText) composerValue =
-      TextFieldValue(connection.draftText, selection = TextRange(connection.draftText.length))
-  }
+  val uriHandler = LocalUriHandler.current
   LaunchedEffect(connection.selectedConversationId, connection.historyLoading) {
     if (connection.selectedConversationId != null && !connection.historyLoading && !connection.chatError &&
       connection.messages.isEmpty() && connection.context == null && !connection.contextError) onReloadContext()
-  }
-  LaunchedEffect(connection.selectedConversationId, focusDraftRevision) {
-    if (focusDraftRevision > 0) {
-      composerFocus.requestFocus()
-      keyboardController?.show()
-    }
   }
   val selected = connection.conversations.firstOrNull { it.id == connection.selectedConversationId }
   var modelPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
@@ -1143,41 +1460,30 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   var pendingAgentId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   var contextOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var optionsOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
-  var referenceKind by remember(connection.profile?.gatewayId, connection.selectedConversationId) {
-    mutableStateOf<String?>(null)
-  }
-  var referenceQuery by remember(connection.profile?.gatewayId, connection.selectedConversationId) {
-    mutableStateOf("")
-  }
-  LaunchedEffect(connection.requestedReferenceConversationId, connection.requestedReferenceKind,
-    connection.selectedConversationId, connection.historyLoading) {
-    val id = connection.requestedReferenceConversationId ?: return@LaunchedEffect
-    val kind = connection.requestedReferenceKind ?: return@LaunchedEffect
-    if (id == connection.selectedConversationId && !connection.historyLoading) {
-      referenceQuery = ""
-      referenceKind = kind
-      onReferenceRequestHandled(id, kind)
-    }
-  }
-  LaunchedEffect(referenceKind, referenceQuery, connection.profile?.gatewayId,
-    connection.selectedConversationId) {
-    val kind = referenceKind ?: return@LaunchedEffect
-    if (referenceQuery.isNotEmpty()) delay(250)
-    onLoadReferences(kind, referenceQuery)
-  }
   val optionsLabel = stringResource(R.string.assistant_options)
-  val expandedComposer = composerValue.text.isNotEmpty() || connection.draftRefs.isNotEmpty() ||
-    connection.draftAttachments.isNotEmpty()
-  val toggleActions: () -> Unit = {
-    if (!actionsOpen) {
-      focusManager.clearFocus(force = true)
-      keyboardController?.hide()
-    }
-    onActionsOpenChange(!actionsOpen)
-  }
   var messageActionsId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   var messageDetailId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
-  Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 16.dp),
+  var executionReturnMessageId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
+  var previewRequest by remember(connection.selectedConversationId) { mutableStateOf<MessagePreviewRequest?>(null) }
+  var externalUrl by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
+  val openLink: (String) -> Unit = { link ->
+    val target = messageLinkTarget(link)
+    if (target != null) onOpenMessageTarget(target)
+    else if (link.startsWith("https://")) externalUrl = link
+  }
+  Box(modifier = Modifier.fillMaxSize().padding(insets)
+    .pointerInput(focusManager, keyboardController) {
+      awaitPointerEventScope {
+        while (true) {
+          val event = awaitPointerEvent(PointerEventPass.Final)
+          if (event.changes.any { !it.pressed && it.previousPressed }) {
+            focusManager.clearFocus(force = true)
+            keyboardController?.hide()
+          }
+        }
+      }
+    }.testTag("assistant-content-area")) {
+  Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically) {
@@ -1218,22 +1524,29 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           AssistantWelcome(if (connection.contextLoading) null else
             taskRecommendation(connection.taskWelcome) ?: projectRecommendation(connection.projectWelcome)) { prompt ->
             onActionsOpenChange(false)
-            composerValue = TextFieldValue(prompt, selection = TextRange(prompt.length))
-            onDraftChange(prompt)
-            focusDraftRevision++
+            onComposerValueChange(TextFieldValue(prompt, selection = TextRange(prompt.length)))
+            onFocusDraft()
           }
         }
       } else LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val latestMessageId = connection.messages.lastOrNull {
+          it.role == "user" || it.role == "assistant"
+        }?.id
         items(connection.messages, key = { it.id }) { message ->
-          Column(modifier = Modifier.fillMaxWidth()) {
-            Text(if (message.role == "user") stringResource(R.string.message_you) else stringResource(R.string.tab_assistant),
-              style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            Text(message.text, style = MaterialTheme.typography.bodyLarge)
-            if (message.role == "assistant" || message.role == "user") TextButton(onClick = { messageActionsId = message.id },
-              modifier = Modifier.testTag("message-more-${message.id}")) {
-              Text(stringResource(R.string.assistant_message_more))
-            }
-          }
+          ChatMessageCard(message, onMore = { messageActionsId = message.id },
+            onOpenTarget = onOpenMessageTarget,
+            onOpenPreview = { media, gallery ->
+              previewRequest = MessagePreviewRequest(connection.selectedConversationId, media, gallery)
+            }, onOpenLink = openLink, onCopy = onCopyMessageText,
+            previewEligible = message.id != latestMessageId,
+            onViewMore = { messageDetailId = message.id },
+            onSaveNote = if (message.role == "assistant" && message.text.isNotBlank())
+              ({ onSaveMessageAsNote(message.id) }) else null,
+            onOpenExecution = if (message.role == "assistant" &&
+              (message.turnId != null || message.hasNonTextContent)) {
+              { executionReturnMessageId = null; onOpenExecution(message.id) }
+            } else null,
+            loadMedia = { media -> onLoadMessageMedia(connection.selectedConversationId, media) })
         }
         if (connection.liveText.isNotBlank() && connection.activeRunId != null) item(key = "live-output") {
           Column(modifier = Modifier.fillMaxWidth()) {
@@ -1271,115 +1584,17 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           }
         }
       }
-      if (connection.sendError) Text(stringResource(R.string.assistant_send_error), color = MaterialTheme.colorScheme.error)
-      if (connection.attachmentError) Text(stringResource(R.string.assistant_attachment_error),
-        color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("assistant-attachment-error"))
-      if (connection.attachmentLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp)
-        .testTag("assistant-attachment-loading"))
-      if (connection.pendingDeleteId == connection.selectedConversationId) {
-        Text(stringResource(R.string.conversations_pending_delete), color = MaterialTheme.colorScheme.error)
-      }
-      connection.draftRefs.forEach { ref ->
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-          val kindLabel = when (ref.kind) {
-            "note" -> stringResource(R.string.assistant_action_reference_note)
-            "task" -> stringResource(R.string.assistant_action_reference_task)
-            else -> stringResource(R.string.assistant_assertion_ref)
-          }
-          Text(kindLabel + " · " + ref.title.ifBlank { ref.sourceId },
-            modifier = Modifier.weight(1f).testTag("assistant-ref-${ref.kind}-${ref.sourceId}"),
-            style = MaterialTheme.typography.bodySmall, maxLines = 1,
-            overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
-          TextButton(onClick = { onRemoveDraftRef(ref.kind, ref.sourceId) },
-            enabled = !connection.sending && connection.pendingInput == null,
-            modifier = Modifier.testTag("assistant-remove-ref-${ref.kind}-${ref.sourceId}")) {
-            Text(stringResource(R.string.assistant_remove_ref))
-          }
-        }
-      }
-      connection.draftAttachments.forEach { item ->
-        Row(modifier = Modifier.fillMaxWidth().testTag("assistant-attachment-${item.id}"),
-          verticalAlignment = Alignment.CenterVertically) {
-          Text(item.name, modifier = Modifier.weight(1f), maxLines = 1,
-            overflow = TextOverflow.Ellipsis)
-          TextButton(onClick = { onRemoveDraftAttachment(item.id) },
-            enabled = !connection.attachmentLoading && !connection.sending && connection.pendingInput == null,
-            modifier = Modifier.testTag("assistant-attachment-remove-${item.id}")) {
-            Text(stringResource(R.string.assistant_attachment_remove))
-          }
-        }
-      }
-      Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface,
-        RoundedCornerShape(24.dp)).padding(8.dp).testTag("assistant-bottom-surface")) {
-        Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer,
-          RoundedCornerShape(18.dp))) {
-          Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.Bottom) {
-            BasicTextField(value = composerValue, onValueChange = { value ->
-              composerValue = value
-              onDraftChange(value.text)
-            }, modifier = Modifier.weight(1f).heightIn(min = 48.dp).focusRequester(composerFocus)
-              .onFocusChanged { if (it.isFocused) onActionsOpenChange(false) }
-              .padding(horizontal = 12.dp, vertical = 10.dp).testTag("assistant-input"),
-              textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-              maxLines = 5, enabled = connection.pendingDeleteId != connection.selectedConversationId,
-              decorationBox = { innerTextField ->
-                Box {
-                  if (composerValue.text.isEmpty()) Text(stringResource(R.string.assistant_input_hint),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                  innerTextField()
-                }
-              })
-            if (!expandedComposer) AssistantComposerButtons(connection, actionsOpen,
-              toggleActions, onSendMessage, onStopRun)
-          }
-          if (expandedComposer) {
-            Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp),
-              horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-              AssistantComposerButtons(connection, actionsOpen,
-                toggleActions, onSendMessage, onStopRun)
-            }
-          }
-        }
-      AnimatedVisibility(visible = actionsOpen,
-        enter = expandVertically(animationSpec = tween(220), expandFrom = Alignment.Bottom) +
-          fadeIn(animationSpec = tween(220)) +
-          slideInVertically(animationSpec = tween(220), initialOffsetY = { it / 16 }),
-        exit = shrinkVertically(animationSpec = tween(180), shrinkTowards = Alignment.Bottom) +
-          fadeOut(animationSpec = tween(180)) +
-          slideOutVertically(animationSpec = tween(180), targetOffsetY = { it / 16 }),
-        label = "assistant-actions") {
-        AssistantActionPanel(
-          canCreate = actionsOpen && !connection.creatingConversation && !connection.sending,
-          canReference = actionsOpen && !connection.sending && connection.pendingInput == null,
-          canPick = actionsOpen && !connection.sending && !connection.attachmentLoading &&
-            connection.pendingInput == null && connection.draftAttachments.size < 10,
-          onPick = { kind ->
-            onActionsOpenChange(false)
-            onPickDraftAttachment(kind)
-          },
-          onOpenReference = { kind ->
-            onActionsOpenChange(false)
-            referenceQuery = ""
-            referenceKind = kind
-          },
-          onCreateConversation = {
-            onActionsOpenChange(false)
-            onCreateConversation()
-          })
-      }
-      }
     }
   }
-  if (referenceKind != null) ModalBottomSheet(onDismissRequest = { referenceKind = null }) {
+  }
+  if (referenceKind != null) ModalBottomSheet(onDismissRequest = { onReferenceKindChange(null) }) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
       Text(stringResource(R.string.assistant_reference_title), style = MaterialTheme.typography.titleMedium)
       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf("note" to R.string.assistant_action_reference_note,
           "task" to R.string.assistant_action_reference_task).forEach { (kind, label) ->
-          TextButton(onClick = { referenceQuery = ""; referenceKind = kind },
+          TextButton(onClick = { onReferenceQueryChange(""); onReferenceKindChange(kind) },
             modifier = Modifier.weight(1f).testTag("assistant-reference-tab-$kind")) {
             Text(stringResource(label), color = if (referenceKind == kind) MaterialTheme.colorScheme.primary
               else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1389,7 +1604,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           Text(stringResource(R.string.assistant_action_reference_file))
         }
       }
-      OutlinedTextField(value = referenceQuery, onValueChange = { if (it.length <= 4096) referenceQuery = it },
+      OutlinedTextField(value = referenceQuery, onValueChange = { if (it.length <= 4096) onReferenceQueryChange(it) },
         label = { Text(stringResource(R.string.assistant_reference_search)) },
         modifier = Modifier.fillMaxWidth().testTag("assistant-reference-search"), singleLine = true)
       if (connection.draftRefs.size >= 5) Text(stringResource(R.string.assistant_reference_limit),
@@ -1401,7 +1616,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       if (!matching || picker.loading) CircularProgressIndicator()
       else if (picker.error) {
         Text(stringResource(R.string.assistant_reference_error), color = MaterialTheme.colorScheme.error)
-        TextButton(onClick = { referenceKind?.let { onLoadReferences(it, referenceQuery) } },
+        TextButton(onClick = { onLoadReferences(referenceKind, referenceQuery) },
           modifier = Modifier.testTag("assistant-reference-retry")) {
           Text(stringResource(R.string.assistant_context_retry))
         }
@@ -1411,7 +1626,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       } else LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
         items(picker.items, key = { it.kind + ":" + it.id }) { item ->
           val alreadyAdded = connection.draftRefs.any { it.kind == item.kind && it.sourceId == item.id }
-          TextButton(onClick = { if (onAddDraftRef(item)) referenceKind = null },
+          TextButton(onClick = { if (onAddDraftRef(item)) onReferenceKindChange(null) },
             enabled = !alreadyAdded && connection.draftRefs.size < 5 && !connection.sending &&
               connection.pendingInput == null,
             modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
@@ -1493,11 +1708,12 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         Text(stringResource(R.string.assistant_copy_code), modifier = Modifier.fillMaxWidth())
       }
       if (actionsMessage.role == "user" && actionsMessage.text.isNotBlank() &&
+        actionsMessage.text.length <= 32_000 &&
         !actionsMessage.hasNonTextContent) TextButton(onClick = {
         if (onReuseMessage(actionsMessage.id)) {
           messageActionsId = null
           onActionsOpenChange(false)
-          focusDraftRevision++
+          onFocusDraft()
         }
       }, enabled = !connection.sending && connection.pendingInput == null &&
         !connection.attachmentLoading && connection.draftAttachments.isEmpty() && connection.draftRefs.isEmpty(),
@@ -1516,12 +1732,17 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       Text(stringResource(R.string.assistant_message_detail), style = MaterialTheme.typography.titleLarge)
       Text(stringResource(if (detailMessage.role == "user") R.string.message_you else R.string.tab_assistant),
         style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-      SelectionContainer {
-        Text(detailMessage.text, style = MaterialTheme.typography.bodyLarge,
-          modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()))
+      Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+        ChatMessageCard(detailMessage, onMore = {}, onOpenTarget = onOpenMessageTarget,
+          onOpenPreview = { media, gallery -> connection.selectedConversationId?.let {
+            previewRequest = MessagePreviewRequest(it, media, gallery)
+          } }, onOpenLink = openLink, onCopy = onCopyMessageText, showMore = false,
+          previewEligible = false,
+          loadMedia = { media -> onLoadMessageMedia(requireNotNull(connection.selectedConversationId), media) })
       }
       if (detailMessage.role == "assistant") {
         OutlinedButton(onClick = {
+          executionReturnMessageId = detailMessage.id
           messageDetailId = null
           onOpenExecution(detailMessage.id)
         }, modifier = Modifier.fillMaxWidth().testTag("message-execution")) {
@@ -1532,9 +1753,9 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     }
   }
   if (connection.executionMessageId != null) ModalBottomSheet(onDismissRequest = {
-    val previous = connection.executionMessageId
     onCloseExecution()
-    messageDetailId = previous
+    messageDetailId = executionReturnMessageId
+    executionReturnMessageId = null
   }) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1542,11 +1763,31 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       ExecutionDetails(connection.executionDetail, connection.executionLoading, connection.executionError,
         connection.activeRunId != null, onRetryExecution)
       TextButton(onClick = {
-        val previous = connection.executionMessageId
         onCloseExecution()
-        messageDetailId = previous
-      }, modifier = Modifier.testTag("execution-back")) { Text(stringResource(R.string.assistant_back_to_message)) }
+        messageDetailId = executionReturnMessageId
+        executionReturnMessageId = null
+      }, modifier = Modifier.testTag("execution-back")) {
+        Text(stringResource(if (executionReturnMessageId != null) R.string.assistant_back_to_message
+          else R.string.assistant_close))
+      }
     }
+  }
+  previewRequest?.let { request ->
+    ModalBottomSheet(onDismissRequest = { previewRequest = null }) {
+      MessageMediaPreview(request, onLoadMessageMedia) { previewRequest = null }
+    }
+  }
+  externalUrl?.let { url ->
+    AlertDialog(onDismissRequest = { externalUrl = null },
+      title = { Text(stringResource(R.string.message_open_external_title)) },
+      text = { Text(url, maxLines = 4, overflow = TextOverflow.Ellipsis) },
+      confirmButton = { TextButton(onClick = {
+        externalUrl = null
+        runCatching { uriHandler.openUri(url) }
+      }) { Text(stringResource(R.string.message_open_external)) } },
+      dismissButton = { TextButton(onClick = { externalUrl = null }) {
+        Text(stringResource(R.string.progress_cancel))
+      } })
   }
   if (contextOpen) AlertDialog(
     onDismissRequest = { contextOpen = false },
@@ -1639,27 +1880,18 @@ private fun ExecutionDetails(detail: ExecutionDetail?, loading: Boolean, error: 
       } else {
         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
           verticalArrangement = Arrangement.spacedBy(4.dp)) {
-          val canExpand = group.steps.size > 1 && group.steps.any { it.preview.isNotBlank() || it.failure.isNotBlank() }
+          val canExpand = group.steps.any { it.preview.isNotBlank() || it.failure.isNotBlank() }
           TextButton(onClick = { if (canExpand) expandedGroupId = if (expandedGroupId == group.id) null else group.id },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("execution-group-${group.id}")) {
             Text(executionCategoryLabel(group.category) + if (group.steps.size > 1) " · ${group.steps.size}" else "",
               modifier = Modifier.weight(1f))
             Text(executionStatusLabel(group.status), color = MaterialTheme.colorScheme.onSurfaceVariant)
           }
-          if (group.steps.size == 1) {
-            val step = group.steps.first()
-            if (step.preview.isNotBlank()) SelectionContainer {
-              Text(step.preview, style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(start = 12.dp).testTag("execution-preview-${step.id}"))
-            }
-            if (step.failure.isNotBlank()) SelectionContainer {
-              Text(step.failure, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 12.dp))
-            }
-          } else if (expandedGroupId == group.id) {
+          if (expandedGroupId == group.id && canExpand) {
             group.steps.forEachIndexed { index, step ->
-              Column(modifier = Modifier.padding(start = 12.dp)) {
-                Text("${index + 1}. ${executionCategoryLabel(group.category)}",
+              Column(modifier = Modifier.padding(start = 12.dp)
+                .testTag("execution-detail-${step.id}")) {
+                if (group.steps.size > 1) Text("${index + 1}. ${executionCategoryLabel(group.category)}",
                   style = MaterialTheme.typography.labelMedium)
                 if (step.preview.isNotBlank()) SelectionContainer {
                   Text(step.preview, style = MaterialTheme.typography.bodySmall,
@@ -1671,10 +1903,15 @@ private fun ExecutionDetails(detail: ExecutionDetail?, loading: Boolean, error: 
                 }
               }
             }
-          } else {
+          } else if (canExpand) {
             group.steps.firstOrNull { it.preview.isNotBlank() }?.let { step ->
               Text(step.preview, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp))
+            }
+            group.steps.firstOrNull { it.failure.isNotBlank() }?.let { step ->
+              Text(step.failure, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error, maxLines = 2,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp))
             }
           }
@@ -1727,6 +1964,8 @@ private fun ConversationsScreen(
 ) {
   var pendingDiscardId by rememberSaveable { mutableStateOf<String?>(null) }
   var menuConversationId by rememberSaveable { mutableStateOf<String?>(null) }
+  val focusManager = LocalFocusManager.current
+  val keyboardController = LocalSoftwareKeyboardController.current
   val menuConversation = connection.conversations.firstOrNull { it.id == menuConversationId && !it.isLocalDraft }
   if (menuConversation != null) ModalBottomSheet(onDismissRequest = { menuConversationId = null }) {
     val managementEnabled = !connection.renamingConversation && connection.pinningConversationId == null &&
@@ -1809,13 +2048,33 @@ private fun ConversationsScreen(
         modifier = Modifier.testTag("chats-new")) { Text(stringResource(R.string.assistant_new_action)) }
     }
     val clearLabel = stringResource(R.string.conversations_clear)
-    OutlinedTextField(value = connection.conversationSearch, onValueChange = onSearchChange,
-      modifier = Modifier.fillMaxWidth().testTag("conversations-search"),
-      label = { Text(stringResource(R.string.conversations_search)) }, singleLine = true,
-      trailingIcon = {
-        if (connection.conversationSearch.isNotEmpty()) IconButton(onClick = { onSearchChange("") },
-          modifier = Modifier.semantics { contentDescription = clearLabel }.testTag("conversations-clear")) { Text("×") }
-      })
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      BasicTextField(value = connection.conversationSearch, onValueChange = onSearchChange,
+        modifier = Modifier.weight(1f).heightIn(min = 52.dp)
+          .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(24.dp))
+          .padding(horizontal = 16.dp, vertical = 14.dp).testTag("conversations-search"),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        singleLine = true,
+        decorationBox = { innerTextField ->
+          Box {
+            if (connection.conversationSearch.isEmpty()) Text(
+              stringResource(R.string.conversations_search),
+              style = MaterialTheme.typography.bodyLarge,
+              color = MaterialTheme.colorScheme.onSurfaceVariant)
+            innerTextField()
+          }
+        })
+      IconButton(onClick = {
+        if (connection.conversationSearch.isNotEmpty()) onSearchChange("")
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+      }, modifier = Modifier.size(48.dp).semantics { contentDescription = clearLabel }
+        .testTag("conversations-clear")) {
+        Text("×", style = MaterialTheme.typography.headlineMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
+    }
     if (connection.conversationsLoading) CircularProgressIndicator()
     if (connection.chatError) Text(stringResource(R.string.chat_load_error), color = MaterialTheme.colorScheme.error)
     if (connection.pinActionError) Text(stringResource(R.string.conversations_pin_error),
@@ -1974,17 +2233,23 @@ private fun PairingScreen(
   title: String,
   connection: ConnectionUiState,
   onPair: (String) -> Unit,
+  onScanPairing: () -> Unit,
+  scanning: Boolean,
+  scanError: Boolean,
   insets: PaddingValues,
   onBack: (() -> Unit)? = null,
 ) {
   // The invitation carries a secret. Keep the draft in memory, not saved instance state.
   var invitation by remember { mutableStateOf("") }
+  var manualEntry by rememberSaveable { mutableStateOf(false) }
+  val busy = connection.pairing || connection.restoring || scanning
   Column(
-    modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 16.dp),
+    modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 24.dp, vertical = 16.dp)
+      .verticalScroll(rememberScrollState()),
     verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-      if (onBack != null) IconButton(onClick = onBack, enabled = !connection.pairing,
+      if (onBack != null) IconButton(onClick = onBack, enabled = !busy,
         modifier = Modifier.testTag("pairing-back")) {
         Text("‹", style = MaterialTheme.typography.headlineMedium)
       }
@@ -1992,18 +2257,37 @@ private fun PairingScreen(
     }
     Text(stringResource(R.string.pairing_hint), style = MaterialTheme.typography.bodyMedium,
       color = MaterialTheme.colorScheme.onSurfaceVariant)
-    OutlinedTextField(
-      value = invitation,
-      onValueChange = { invitation = it },
-      enabled = !connection.pairing,
-      label = { Text(stringResource(R.string.pairing_link_label)) },
-      modifier = Modifier.fillMaxWidth().testTag("pairing-link"),
-      minLines = 3,
-      maxLines = 5,
-    )
-    Button(onClick = { onPair(invitation.trim()) }, enabled = invitation.isNotBlank() && !connection.pairing && !connection.restoring,
-      modifier = Modifier.fillMaxWidth().testTag("pairing-submit")) {
-      Text(stringResource(R.string.pairing_connect))
+    if (!connection.pairing && !connection.restoring) {
+      if (manualEntry) {
+        OutlinedTextField(
+          value = invitation,
+          onValueChange = { invitation = it },
+          enabled = !scanning,
+          label = { Text(stringResource(R.string.pairing_link_label)) },
+          modifier = Modifier.fillMaxWidth().testTag("pairing-link"),
+          minLines = 3,
+          maxLines = 5,
+        )
+        Button(onClick = { onPair(invitation.trim()) },
+          enabled = invitation.isNotBlank() && !scanning,
+          modifier = Modifier.fillMaxWidth().height(52.dp).testTag("pairing-submit")) {
+          Text(stringResource(R.string.pairing_connect))
+        }
+        TextButton(onClick = { manualEntry = false }, enabled = !scanning,
+          modifier = Modifier.fillMaxWidth().testTag("pairing-back-to-scan")) {
+          Text(stringResource(R.string.pairing_back_to_scan))
+        }
+      } else {
+        Button(onClick = onScanPairing, enabled = !scanning,
+          modifier = Modifier.fillMaxWidth().height(52.dp).testTag("pairing-scan")) {
+          Text(if (scanning) stringResource(R.string.pairing_scanning)
+            else stringResource(R.string.pairing_scan))
+        }
+        TextButton(onClick = { manualEntry = true }, enabled = !scanning,
+          modifier = Modifier.fillMaxWidth().testTag("pairing-manual")) {
+          Text(stringResource(R.string.pairing_manual))
+        }
+      }
     }
     if (connection.pairing || connection.restoring) CircularProgressIndicator()
     connection.confirmationCode?.let { code ->
@@ -2012,6 +2296,10 @@ private fun PairingScreen(
     }
     connection.error?.let {
       Text(stringResource(R.string.pairing_error), color = MaterialTheme.colorScheme.error)
+    }
+    if (scanError && connection.error == null) {
+      Text(stringResource(R.string.pairing_scan_error), color = MaterialTheme.colorScheme.error,
+        modifier = Modifier.testTag("pairing-scan-error"))
     }
   }
 }

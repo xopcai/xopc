@@ -5,20 +5,30 @@ import ai.xopc.mobile.gateway.NoteDetail
 import ai.xopc.mobile.gateway.NoteDraft
 import ai.xopc.mobile.gateway.NoteMetadataPatch
 import ai.xopc.mobile.gateway.NoteSummary
+import ai.xopc.mobile.gateway.ManagedFile
+import ai.xopc.mobile.gateway.ManagedFileSpace
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,6 +41,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -39,18 +51,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import java.text.DateFormat
 import java.util.Date
 
@@ -66,11 +87,66 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   onLoadHistory: () -> Unit = {}, onLoadSnapshot: (Long) -> Unit = {},
   onRestoreSnapshot: () -> Unit = {}, onRestorationHandled: (String) -> Unit = {},
   onDeleteNote: () -> Unit = {}, onDeletionHandled: (String) -> Unit = {},
-  onShareNote: () -> Unit = {}, onDismissShare: () -> Unit = {}) {
+  onShareNote: () -> Unit = {}, onDismissShare: () -> Unit = {},
+  onStartVoice: (() -> Unit)? = null,
+  onNoteFileSpaces: suspend () -> List<ManagedFileSpace> = { emptyList() },
+  onNoteFiles: suspend (String?, String, String) -> List<ManagedFile> = { _, _, _ -> emptyList() },
+  onNoteFileText: suspend (String) -> String = { "" },
+  onNoteFileContent: suspend (String) -> ByteArray = { byteArrayOf() },
+  onTopLevelChange: (Boolean) -> Unit = {}) {
   val context = LocalContext.current
   var query by rememberSaveable(state.gatewayId) { mutableStateOf(state.search) }
+  LaunchedEffect(query, state.gatewayId) {
+    if (query.trim() != state.search) {
+      delay(350)
+      onSearch(query.trim(), state.status)
+    }
+  }
   var selectedId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  var creationSheetOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  var fileBrowserOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  var fileSpaceId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
+  var filePath by rememberSaveable(state.gatewayId) { mutableStateOf("") }
+  var selectedFile by remember(state.gatewayId) { mutableStateOf<ManagedFile?>(null) }
+  var fileRefreshRevision by rememberSaveable(state.gatewayId) { mutableStateOf(0) }
+  var fileSpaces by remember(state.gatewayId) { mutableStateOf<List<ManagedFileSpace>>(emptyList()) }
+  var fileItems by remember(state.gatewayId) { mutableStateOf<List<ManagedFile>>(emptyList()) }
+  var searchFiles by remember(state.gatewayId) { mutableStateOf<List<ManagedFile>>(emptyList()) }
+  var fileText by remember(state.gatewayId) { mutableStateOf<String?>(null) }
+  var fileImage by remember(state.gatewayId) { mutableStateOf<ByteArray?>(null) }
+  var filesLoading by remember(state.gatewayId) { mutableStateOf(false) }
+  var filesError by remember(state.gatewayId) { mutableStateOf(false) }
+  LaunchedEffect(selectedId, editorOpen, fileBrowserOpen) {
+    onTopLevelChange(selectedId == null && !editorOpen && !fileBrowserOpen)
+  }
+  LaunchedEffect(query, state.gatewayId) {
+    if (query.isBlank()) searchFiles = emptyList()
+    else {
+      delay(350)
+      searchFiles = runCatching { onNoteFiles(null, "", query.trim()) }.getOrDefault(emptyList())
+    }
+  }
+  LaunchedEffect(fileBrowserOpen, fileSpaceId, filePath, fileRefreshRevision, state.gatewayId) {
+    if (!fileBrowserOpen) return@LaunchedEffect
+    filesLoading = true
+    filesError = false
+    runCatching {
+      fileSpaces = onNoteFileSpaces()
+      fileItems = onNoteFiles(fileSpaceId, filePath, "")
+    }.onFailure { filesError = true }
+    filesLoading = false
+  }
+  LaunchedEffect(selectedFile?.id) {
+    fileText = null
+    fileImage = null
+    val file = selectedFile ?: return@LaunchedEffect
+    if (file.mimeType.startsWith("text/") || file.mimeType in setOf("application/json", "application/xml")) {
+      fileText = runCatching { onNoteFileText(file.id) }.getOrNull()
+    } else if (file.mimeType.startsWith("image/") && file.mimeType != "image/svg+xml") {
+      fileImage = runCatching { onNoteFileContent(file.id) }.getOrNull()
+    }
+  }
   var moreOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var tagsOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var historyOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
@@ -88,6 +164,14 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   }
   BackHandler(enabled = editorOpen || selectedId != null) {
     if (editorOpen) closeEditor() else selectedId = null
+  }
+  BackHandler(enabled = fileBrowserOpen) {
+    when {
+      selectedFile != null -> selectedFile = null
+      filePath.isNotEmpty() -> filePath = filePath.substringBeforeLast('/', "")
+      fileSpaceId != null -> fileSpaceId = null
+      else -> fileBrowserOpen = false
+    }
   }
   LaunchedEffect(state.createdNoteId) {
     if (state.createdNoteId != null) {
@@ -131,30 +215,79 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-      Text(stringResource(R.string.tab_notes), style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.SemiBold)
-      if (editorOpen || selectedId != null) TextButton(onClick = {
-        if (editorOpen) closeEditor() else selectedId = null
+      Text(if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
+        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+      if (fileBrowserOpen || editorOpen || selectedId != null) TextButton(onClick = {
+        if (fileBrowserOpen) {
+          when {
+            selectedFile != null -> selectedFile = null
+            filePath.isNotEmpty() -> filePath = filePath.substringBeforeLast('/', "")
+            fileSpaceId != null -> fileSpaceId = null
+            else -> fileBrowserOpen = false
+          }
+        } else if (editorOpen) closeEditor() else selectedId = null
       },
         modifier = Modifier.testTag("notes-back")) { Text(stringResource(R.string.progress_back)) }
-      else Button(onClick = { editorOpen = true; onNew() },
-        enabled = !state.draftLoading && !state.draftSaving, modifier = Modifier.testTag("notes-new")) {
-        Text(stringResource(R.string.notes_new))
+      else IconButton(onClick = { creationSheetOpen = true },
+        enabled = !state.draftLoading && !state.draftSaving,
+        modifier = Modifier.testTag("notes-new")) {
+        Text("+", style = MaterialTheme.typography.headlineLarge)
       }
     }
-    if (editorOpen) NoteDraftContent(state, onDraftChange, onSaveDraft,
+    if (fileBrowserOpen) NotesFilesContent(fileSpaces, fileItems, selectedFile, fileText, fileImage,
+      filesLoading, filesError, { fileRefreshRevision++ }, { space ->
+        selectedFile = null; filePath = ""; fileSpaceId = space.id
+      }, { file ->
+        if (file.kind == "directory") { fileSpaceId = file.spaceId; filePath = file.relativePath }
+        else selectedFile = file
+      }, Modifier.weight(1f))
+    else if (editorOpen) NoteDraftContent(state, onDraftChange, onSaveDraft,
       Modifier.weight(1f), onResolveConflict)
     else if (selectedId == null) {
       NotesListContent(state, query, { query = it },
       { onSearch(query.trim(), state.status) }, { status -> onSearch(query.trim(), status) },
       { id -> selectedId = id; onOpen(id) }, onLoadMore, Modifier.weight(1f),
-      { id -> editorOpen = true; onOpenDraft(id) })
+      { id -> editorOpen = true; onOpenDraft(id) }, { fileBrowserOpen = true }, searchFiles,
+      { file -> fileBrowserOpen = true; selectedFile = file })
     } else NotesDetailContent(state, selectedId!!, { onOpen(selectedId!!) }, Modifier.weight(1f),
       { editorOpen = true; onEditNote() }, { moreOpen = true }, {
         historyTimestamp = null
         historyOpen = true
         onLoadHistory()
       })
+  }
+  if (creationSheetOpen) ModalBottomSheet(onDismissRequest = { creationSheetOpen = false },
+    modifier = Modifier.testTag("notes-create-sheet")) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp)) {
+      Text(stringResource(R.string.notes_new), style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
+      Card(onClick = { creationSheetOpen = false; editorOpen = true; onNew() },
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("notes-create-text")) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp),
+          horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+          Icon(painterResource(R.drawable.tab_notes), contentDescription = null)
+          Text(stringResource(R.string.notes_create_text), modifier = Modifier.weight(1f))
+          Text("›")
+        }
+      }
+      Card(onClick = { creationSheetOpen = false; onStartVoice?.invoke() },
+        enabled = onStartVoice != null,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).testTag("notes-create-voice")) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp),
+          horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+          Icon(painterResource(R.drawable.action_microphone), contentDescription = null,
+            tint = MaterialTheme.colorScheme.error)
+          Column(modifier = Modifier.weight(1f)) {
+            Text(stringResource(R.string.notes_create_voice))
+            Text(stringResource(R.string.notes_create_voice_hint),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+          Text("›")
+        }
+      }
+    }
   }
   val detail = state.detail?.takeIf { it.id == selectedId }
   if (historyOpen && detail != null) ModalBottomSheet(onDismissRequest = { historyOpen = false },
@@ -328,6 +461,38 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
   onSave: () -> Unit, modifier: Modifier = Modifier,
   onResolveConflict: (Boolean) -> Unit = {}) {
   val draft = state.draft
+  var bodyValue by remember(draft?.id) { mutableStateOf(TextFieldValue(draft?.markdown.orEmpty())) }
+  var undo by remember(draft?.id) { mutableStateOf<List<String>>(emptyList()) }
+  var redo by remember(draft?.id) { mutableStateOf<List<String>>(emptyList()) }
+  if (draft != null && bodyValue.text != draft.markdown) {
+    bodyValue = bodyValue.copy(text = draft.markdown,
+      selection = TextRange(bodyValue.selection.start.coerceAtMost(draft.markdown.length)))
+  }
+  fun updateBody(value: TextFieldValue, recordHistory: Boolean = true) {
+    val current = draft ?: return
+    if (value.text != current.markdown) {
+      if (recordHistory) { undo = (undo + current.markdown).takeLast(100); redo = emptyList() }
+      onChange(current.title, value.text)
+    }
+    bodyValue = value
+  }
+  fun insertMarkdown(prefix: String, suffix: String = "") {
+    val start = bodyValue.selection.min
+    val end = bodyValue.selection.max
+    val selected = bodyValue.text.substring(start, end)
+    val replacement = prefix + selected + suffix
+    val text = bodyValue.text.replaceRange(start, end, replacement)
+    val caret = if (selected.isEmpty()) start + prefix.length else start + replacement.length
+    updateBody(TextFieldValue(text, TextRange(caret)))
+  }
+  fun setHeading(level: Int) {
+    val start = bodyValue.text.lastIndexOf('\n', (bodyValue.selection.min - 1).coerceAtLeast(0)) + 1
+    val end = bodyValue.text.indexOf('\n', start).let { if (it < 0) bodyValue.text.length else it }
+    val line = bodyValue.text.substring(start, end).replace(Regex("^#{1,3} "), "")
+    val heading = "#".repeat(level) + " " + line
+    val text = bodyValue.text.replaceRange(start, end, heading)
+    updateBody(TextFieldValue(text, TextRange((start + heading.length).coerceAtMost(text.length))))
+  }
   Column(modifier = modifier.verticalScroll(rememberScrollState()),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (draft == null) {
@@ -340,7 +505,37 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
       modifier = Modifier.fillMaxWidth().testTag("notes-draft-title"),
       label = { Text(stringResource(R.string.notes_title)) }, singleLine = true,
       enabled = !(state.draftSaving && state.draftConflict != null))
-    OutlinedTextField(draft.markdown, { onChange(draft.title, it) },
+    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+      horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+      val blocked = state.draftSaving && state.draftConflict != null
+      TextButton(onClick = {
+        if (undo.isNotEmpty()) {
+          val previous = undo.last(); undo = undo.dropLast(1)
+          redo = (redo + bodyValue.text).takeLast(100)
+          updateBody(TextFieldValue(previous, TextRange(previous.length)), false)
+        }
+      }, enabled = !blocked && undo.isNotEmpty(), modifier = Modifier.testTag("notes-undo")) { Text("↶") }
+      TextButton(onClick = {
+        if (redo.isNotEmpty()) {
+          val next = redo.last(); redo = redo.dropLast(1)
+          undo = (undo + bodyValue.text).takeLast(100)
+          updateBody(TextFieldValue(next, TextRange(next.length)), false)
+        }
+      }, enabled = !blocked && redo.isNotEmpty(), modifier = Modifier.testTag("notes-redo")) { Text("↷") }
+      listOf("B" to "**", "I" to "*").forEach { (label, marker) ->
+        TextButton(onClick = { insertMarkdown(marker, marker) }, enabled = !blocked,
+          modifier = Modifier.testTag("notes-format-${label.lowercase()}")) { Text(label) }
+      }
+      (1..3).forEach { level ->
+        TextButton(onClick = { setHeading(level) }, enabled = !blocked,
+          modifier = Modifier.testTag("notes-heading-$level")) { Text("H$level") }
+      }
+      listOf("•" to "- ", "☐" to "- [ ] ", "❝" to "> ", "</>" to "`code`",
+        "🔗" to "[link](https://)", "—" to "\n---\n").forEach { (label, value) ->
+        TextButton(onClick = { insertMarkdown(value) }, enabled = !blocked) { Text(label) }
+      }
+    }
+    OutlinedTextField(bodyValue, { updateBody(it) },
       modifier = Modifier.fillMaxWidth().testTag("notes-draft-body"),
       label = { Text(stringResource(R.string.notes_body)) }, minLines = 8,
       enabled = !(state.draftSaving && state.draftConflict != null))
@@ -387,17 +582,41 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
 @Composable
 internal fun NotesListContent(state: NotesUiState, search: String, onSearchChange: (String) -> Unit,
   onSubmit: () -> Unit, onStatus: (String) -> Unit, onOpen: (String) -> Unit,
-  onLoadMore: () -> Unit, modifier: Modifier = Modifier, onOpenDraft: (String) -> Unit = {}) {
+  onLoadMore: () -> Unit, modifier: Modifier = Modifier, onOpenDraft: (String) -> Unit = {},
+  onOpenFiles: (() -> Unit)? = null, searchFiles: List<ManagedFile> = emptyList(),
+  onOpenSearchFile: (ManagedFile) -> Unit = {}) {
+  var filtersOpen by rememberSaveable { mutableStateOf(false) }
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      OutlinedTextField(search, { onSearchChange(it.take(4096)) }, modifier = Modifier.weight(1f).testTag("notes-search"),
-        singleLine = true, placeholder = { Text(stringResource(R.string.notes_search)) },
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalAlignment = Alignment.CenterVertically) {
+      BasicTextField(search, { onSearchChange(it.take(4096)) },
+        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+          .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
+          .padding(horizontal = 14.dp, vertical = 13.dp).testTag("notes-search"),
+        singleLine = true, textStyle = MaterialTheme.typography.bodyLarge.copy(
+          color = MaterialTheme.colorScheme.onSurface),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { onSubmit() }))
-      OutlinedButton(onClick = onSubmit, enabled = !state.loading,
-        modifier = Modifier.testTag("notes-refresh")) { Text(stringResource(R.string.progress_refresh)) }
+        keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+        decorationBox = { inner -> Box {
+          if (search.isEmpty()) Text(stringResource(R.string.notes_search),
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+          inner()
+        } })
+      IconButton(onClick = { onOpenFiles?.invoke() }, enabled = onOpenFiles != null,
+        modifier = Modifier.size(48.dp)
+          .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
+          .testTag("notes-files")) {
+        Icon(painterResource(R.drawable.action_folder), stringResource(R.string.notes_files))
+      }
     }
-    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+      TextButton(onClick = onSubmit, enabled = !state.loading,
+        modifier = Modifier.testTag("notes-refresh")) { Text(stringResource(R.string.progress_refresh)) }
+      TextButton(onClick = { filtersOpen = !filtersOpen },
+        modifier = Modifier.testTag("notes-filter-menu")) { Text(stringResource(R.string.notes_filter)) }
+    }
+    if (filtersOpen) Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
+      horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       listOf("" to R.string.notes_all, "inbox" to R.string.notes_inbox,
         "processed" to R.string.notes_processed, "archived" to R.string.notes_archived).forEach { (status, label) ->
         FilterChip(selected = state.status == status, onClick = { onStatus(status) },
@@ -413,7 +632,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
         modifier = Modifier.testTag("notes-retry")) {
         Text(stringResource(R.string.progress_load_failed))
       } }
-      if (!state.loading && !state.listError && state.items.isEmpty()) item {
+      if (!state.loading && !state.listError && state.items.isEmpty() && searchFiles.isEmpty()) item {
         if (state.drafts.isEmpty()) Text(stringResource(R.string.notes_empty),
           modifier = Modifier.testTag("notes-empty"))
       }
@@ -421,6 +640,13 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
         NoteDraftCard(draft, onOpenDraft)
       }
       items(state.items, key = { it.id }) { note -> NoteCard(note, onOpen) }
+      if (search.isNotBlank() && searchFiles.isNotEmpty()) item {
+        Text(stringResource(R.string.notes_files), style = MaterialTheme.typography.titleSmall,
+          modifier = Modifier.padding(top = 8.dp))
+      }
+      if (search.isNotBlank()) items(searchFiles, key = { "file-${it.id}" }) { file ->
+        ManagedFileCard(file, onOpenSearchFile)
+      }
       if (state.hasMore) item {
         OutlinedButton(onClick = onLoadMore, enabled = !state.loadingMore,
           modifier = Modifier.fillMaxWidth().testTag("notes-load-more")) {
@@ -429,6 +655,84 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
       }
       if (state.moreError) item { Text(stringResource(R.string.notes_more_error),
         color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("notes-more-error")) }
+    }
+  }
+}
+
+@Composable
+private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<ManagedFile>,
+  selected: ManagedFile?, preview: String?, image: ByteArray?, loading: Boolean, error: Boolean,
+  onRetry: () -> Unit, onOpenSpace: (ManagedFileSpace) -> Unit,
+  onOpenFile: (ManagedFile) -> Unit, modifier: Modifier = Modifier) {
+  Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    if (error) OutlinedButton(onClick = onRetry, modifier = Modifier.testTag("notes-files-retry")) {
+      Text(stringResource(R.string.progress_load_failed))
+    }
+    if (loading) CircularProgressIndicator(modifier = Modifier.testTag("notes-files-loading"))
+    if (selected != null) {
+      Text(selected.name, style = MaterialTheme.typography.titleLarge,
+        modifier = Modifier.testTag("notes-file-title"))
+      Text(selected.relativePath, style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+      val bitmap = remember(image) { image?.let { bytes ->
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (bounds.outWidth / sample > 2048 || bounds.outHeight / sample > 2048) sample *= 2
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
+          BitmapFactory.Options().apply { inSampleSize = sample })
+      } }
+      if (bitmap != null) Image(bitmap.asImageBitmap(), selected.name,
+        modifier = Modifier.fillMaxWidth().weight(1f).testTag("notes-file-image"),
+        contentScale = ContentScale.Fit)
+      else if (preview != null) Text(preview, modifier = Modifier.fillMaxWidth().weight(1f)
+        .verticalScroll(rememberScrollState()).testTag("notes-file-preview"),
+        style = MaterialTheme.typography.bodyMedium)
+      else Text(stringResource(R.string.notes_file_preview_unavailable),
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+    } else LazyColumn(modifier = Modifier.weight(1f),
+      verticalArrangement = Arrangement.spacedBy(10.dp)) {
+      if (spaces.isNotEmpty()) {
+        item { Text(stringResource(R.string.notes_file_spaces), style = MaterialTheme.typography.titleSmall) }
+        items(spaces, key = { "space-${it.id}" }) { space ->
+          Card(onClick = { onOpenSpace(space) }, modifier = Modifier.fillMaxWidth()
+            .heightIn(min = 56.dp).testTag("notes-space-${space.id}")) {
+            Row(modifier = Modifier.fillMaxWidth().padding(16.dp),
+              horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+              Icon(painterResource(R.drawable.action_folder), contentDescription = null)
+              Text(space.title, modifier = Modifier.weight(1f))
+              Text("›")
+            }
+          }
+        }
+      }
+      if (items.isNotEmpty()) {
+        item { Text(stringResource(R.string.notes_file_items), style = MaterialTheme.typography.titleSmall) }
+        items(items, key = { "file-${it.id}" }) { file -> ManagedFileCard(file, onOpenFile) }
+      }
+      if (!loading && !error && spaces.isEmpty() && items.isEmpty()) item {
+        Text(stringResource(R.string.notes_files_empty),
+          color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
+    }
+  }
+}
+
+@Composable
+private fun ManagedFileCard(file: ManagedFile, onOpen: (ManagedFile) -> Unit) {
+  Card(onClick = { onOpen(file) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+    .testTag("notes-file-${file.id}")) {
+    Row(modifier = Modifier.fillMaxWidth().padding(14.dp),
+      horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+      Icon(painterResource(if (file.kind == "directory") R.drawable.action_folder else R.drawable.tab_notes),
+        contentDescription = null, modifier = Modifier.size(20.dp))
+      Column(modifier = Modifier.weight(1f)) {
+        Text(file.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(file.relativePath, maxLines = 1, overflow = TextOverflow.Ellipsis,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
+      Text("›")
     }
   }
 }
@@ -449,16 +753,30 @@ private fun NoteDraftCard(draft: NoteDraft, onOpen: (String) -> Unit) {
 
 @Composable
 private fun NoteCard(note: NoteSummary, onOpen: (String) -> Unit) {
-  Card(onClick = { onOpen(note.id) }, modifier = Modifier.fillMaxWidth().testTag("note-${note.id}")) {
-    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-      Text((if (note.pinned) "• " else "") + note.title.ifBlank { stringResource(R.string.notes_untitled) },
-        style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-      if (note.snippet.isNotBlank()) Text(note.snippet, maxLines = 2,
-        overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-      Text("${DateFormat.getDateInstance().format(Date(note.updatedAt))} · ${note.status}",
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-      if (note.tags.isNotEmpty()) Text(note.tags.take(2).joinToString("  ") { "#$it" },
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+  Card(onClick = { onOpen(note.id) }, modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp)
+    .testTag("note-${note.id}")) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+      horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text((if (note.pinned) "⌖ " else "") + note.title.ifBlank { stringResource(R.string.notes_untitled) },
+          style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (note.snippet.isNotBlank()) Text(note.snippet, maxLines = 2,
+          overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
+          color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val statusLabel = stringResource(when (note.status) {
+          "inbox" -> R.string.notes_inbox
+          "processed" -> R.string.notes_processed
+          "archived" -> R.string.notes_archived
+          else -> R.string.notes_all
+        })
+        Text("${DateFormat.getDateInstance().format(Date(note.updatedAt))} · $statusLabel",
+          style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (note.tags.isNotEmpty()) Text(note.tags.take(2).joinToString("  ") { "#$it" },
+          style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary,
+          maxLines = 1, overflow = TextOverflow.Ellipsis)
+      }
+      Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.titleLarge)
     }
   }
 }

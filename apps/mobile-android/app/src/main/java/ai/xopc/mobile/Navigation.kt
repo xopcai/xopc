@@ -69,6 +69,10 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onUpdateAutomation = gateway::updateAutomation,
             onDeleteAutomation = gateway::deleteAutomation,
             onLoadNotes = gateway::loadNotes,
+            onNoteFileSpaces = gateway::noteFileSpaces,
+            onNoteFiles = gateway::noteFiles,
+            onNoteFileText = gateway::noteFileText,
+            onNoteFileContent = gateway::noteFileContent,
             onLoadMoreNotes = gateway::loadMoreNotes,
             onOpenNote = gateway::openNote,
             onNewNote = gateway::beginNoteDraft,
@@ -123,6 +127,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onCloseExecution = gateway::closeExecution,
             onSaveMessageAsNote = gateway::saveMessageAsNote,
             onReuseMessage = gateway::reuseMessage,
+            onLoadMessageMedia = gateway::readMessageMedia,
             onMessageNoteFeedbackHandled = gateway::messageNoteFeedbackHandled,
             modifier = Modifier.safeDrawingPadding())
         }

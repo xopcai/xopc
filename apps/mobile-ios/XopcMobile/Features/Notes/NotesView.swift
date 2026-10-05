@@ -10,6 +10,12 @@ struct NotesView: View {
     @State private var isLoading = false
     @State private var error: String?
     @State private var presentedSheet: NotesSheet?
+    @State private var pendingCreation: NotesSheet?
+    @State private var matchedFiles: [FileResource] = []
+    @State private var fileSearchError: String?
+    @State private var isSearchingFiles = false
+    @State private var notesLoadRevision = 0
+    @State private var fileSearchRevision = 0
     @State private var pendingVoiceNote: PendingVoiceNote?
     @State private var pendingVoiceNoteLoadFailed = false
 
@@ -35,9 +41,9 @@ struct NotesView: View {
                 .accessibilityHint("打开本地待上传录音")
             }
             statusPicker
-            if isLoading, notes.isEmpty {
+            if (isLoading || isSearchingFiles), notes.isEmpty, matchedFiles.isEmpty {
                 loadingRows
-            } else if notes.isEmpty {
+            } else if notes.isEmpty, matchedFiles.isEmpty {
                 ContentUnavailableView(
                     emptyTitle,
                     systemImage: "note.text",
@@ -55,24 +61,73 @@ struct NotesView: View {
                     .accessibilityIdentifier("note-row-\(note.id)")
                 }
             }
+            if isSearchingFiles {
+                ProgressView("正在搜索文件…")
+                    .listRowSeparator(.hidden)
+            }
+            if let fileSearchError {
+                HStack {
+                    Text(fileSearchError).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("重试") { Task { await loadMatchingFiles() } }
+                }
+            }
+            if !matchedFiles.isEmpty {
+                Section("文件") {
+                    ForEach(matchedFiles) { file in
+                        NavigationLink {
+                            FileDestinationView(configuration: configuration, file: file)
+                        } label: {
+                            Label(file.name, systemImage: file.kind == "directory" ? "folder" : "doc.text")
+                        }
+                        .accessibilityIdentifier("note-file-result-\(file.id)")
+                    }
+                }
+            }
         }
         .navigationTitle("笔记")
         .refreshable { await load() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu("新建笔记", systemImage: "plus") {
-                    Button("文字笔记", systemImage: "square.and.pencil") { presentedSheet = .create }
-                    Button("语音笔记", systemImage: "waveform") { presentedSheet = .voice }
-                }
+                Button("新建笔记", systemImage: "plus") { presentedSheet = .choice }
             }
         }
         .sheet(item: $presentedSheet, onDismiss: {
-            Task {
-                await load()
-                await refreshPendingVoiceNote()
+            if let pendingCreation {
+                self.pendingCreation = nil
+                presentedSheet = pendingCreation
+            } else {
+                Task {
+                    await load()
+                    await refreshPendingVoiceNote()
+                }
             }
         }) { sheet in
             switch sheet {
+            case .choice:
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("新建笔记").font(.title2.bold())
+                    Button {
+                        pendingCreation = .create
+                        presentedSheet = nil
+                    } label: {
+                        Label("文字笔记", systemImage: "square.and.pencil")
+                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("notes-create-text")
+                    Button {
+                        pendingCreation = .voice
+                        presentedSheet = nil
+                    } label: {
+                        Label("语音笔记", systemImage: "waveform")
+                            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("notes-create-voice")
+                }
+                .buttonStyle(.bordered)
+                .padding(20)
+                .presentationDetents([.height(250)])
+                .presentationDragIndicator(.visible)
             case .create:
                 NoteEditorView(configuration: configuration)
             case let .detail(id):
@@ -96,6 +151,12 @@ struct NotesView: View {
             await refreshPendingVoiceNote()
         }
         .onChange(of: status) { Task { await load() } }
+        .onChange(of: search) {
+            fileSearchRevision += 1
+            isSearchingFiles = false
+            matchedFiles = []
+            fileSearchError = nil
+        }
         .alert("无法读取笔记", isPresented: errorBinding) {
             Button("重试") { Task { await load() } }
             Button("取消", role: .cancel) {}
@@ -104,18 +165,29 @@ struct NotesView: View {
 
     private var notesSearchField: some View {
         HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            TextField("搜索笔记", text: $search)
-                .textFieldStyle(.plain)
-                .submitLabel(.search)
-                .onSubmit { Task { await load() } }
-                .accessibilityIdentifier("notes-search-field")
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                TextField("搜索笔记", text: $search)
+                    .textFieldStyle(.plain)
+                    .submitLabel(.search)
+                    .onSubmit { Task { await load(); await loadMatchingFiles() } }
+                    .accessibilityIdentifier("notes-search-field")
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 48)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+            NavigationLink {
+                FileLibraryView(configuration: configuration)
+            } label: {
+                Image(systemName: "folder")
+                    .frame(width: 48, height: 48)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+            }
+            .accessibilityLabel("文件")
+            .accessibilityIdentifier("notes-files-button")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
     }
 
     private var statusPicker: some View {
@@ -169,15 +241,48 @@ struct NotesView: View {
 
     @MainActor
     private func load() async {
+        notesLoadRevision += 1
+        let revision = notesLoadRevision
+        let query = search
+        let selectedStatus = status
         isLoading = true
-        defer { isLoading = false }
+        defer { if revision == notesLoadRevision { isLoading = false } }
         do {
-            notes = try await GatewayClient(configuration: configuration)
-                .fetchNotes(search: search, status: status).items
+            let loaded = try await GatewayClient(configuration: configuration)
+                .fetchNotes(search: query, status: selectedStatus).items
+            guard revision == notesLoadRevision else { return }
+            notes = loaded
             error = nil
         } catch is CancellationError {
         } catch {
+            guard revision == notesLoadRevision else { return }
             self.error = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func loadMatchingFiles() async {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            matchedFiles = []
+            fileSearchError = nil
+            return
+        }
+        fileSearchRevision += 1
+        let revision = fileSearchRevision
+        isSearchingFiles = true
+        defer { if revision == fileSearchRevision { isSearchingFiles = false } }
+        do {
+            let files = try await GatewayClient(configuration: configuration).searchFiles(query: query)
+            guard revision == fileSearchRevision,
+                  search.trimmingCharacters(in: .whitespacesAndNewlines) == query else { return }
+            matchedFiles = files
+            fileSearchError = nil
+        } catch is CancellationError {
+        } catch {
+            guard revision == fileSearchRevision,
+                  search.trimmingCharacters(in: .whitespacesAndNewlines) == query else { return }
+            fileSearchError = error.localizedDescription
         }
     }
 
@@ -193,12 +298,14 @@ struct NotesView: View {
 }
 
 private enum NotesSheet: Identifiable {
+    case choice
     case create
     case voice
     case detail(String)
 
     var id: String {
         switch self {
+        case .choice: "choice"
         case .create: "create"
         case .voice: "voice"
         case let .detail(id): "detail-\(id)"

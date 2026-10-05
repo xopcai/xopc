@@ -250,6 +250,156 @@ final class ParityAcceptanceUITests: XCTestCase {
         capture("automation-details-accessibility-audit")
     }
 
+    func testTaskDetailAccessibilityAudit() throws {
+        openTab("进展")
+        app.buttons["任务"].tap()
+        let task = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "task-")).firstMatch
+        XCTAssertTrue(task.waitForExistence(timeout: 10))
+        task.tap()
+        XCTAssertTrue(app.buttons["编辑"].waitForExistence(timeout: 10))
+        try app.performAccessibilityAudit(for: [
+            .elementDetection,
+            .hitRegion,
+            .sufficientElementDescription,
+            .textClipped,
+            .trait
+        ], logAccessibilityIssue)
+        capture("task-detail-accessibility-audit")
+    }
+
+    func testProjectDetailAccessibilityAudit() throws {
+        openTab("进展")
+        app.buttons["项目"].tap()
+        let project = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-")).firstMatch
+        XCTAssertTrue(project.waitForExistence(timeout: 10))
+        project.tap()
+        XCTAssertTrue(app.buttons["新建项目对话"].waitForExistence(timeout: 10))
+        try app.performAccessibilityAudit(for: [
+            .elementDetection,
+            .hitRegion,
+            .sufficientElementDescription,
+            .textClipped,
+            .trait
+        ], logAccessibilityIssue)
+        capture("project-detail-accessibility-audit")
+    }
+
+    func testNoteDetailAccessibilityAudit() throws {
+        openTab("笔记")
+        let note = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "note-row-")).firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 10))
+        note.tap()
+        XCTAssertTrue(app.buttons["编辑"].waitForExistence(timeout: 10))
+        try app.performAccessibilityAudit(for: [
+            .elementDetection,
+            .hitRegion,
+            .sufficientElementDescription,
+            .textClipped,
+            .trait
+        ], logAccessibilityIssue)
+        capture("note-detail-accessibility-audit")
+    }
+
+    func testCreationEditorsAccessibilityAudit() throws {
+        openTab("笔记")
+        app.buttons["新建笔记"].tap()
+        app.buttons["文字笔记"].tap()
+        XCTAssertTrue(app.navigationBars["新建笔记"].waitForExistence(timeout: 8))
+        try performCoreAccessibilityAudit()
+        app.buttons["取消"].tap()
+
+        app.buttons["新建笔记"].tap()
+        app.buttons["语音笔记"].tap()
+        XCTAssertTrue(app.navigationBars["语音笔记"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["开始录音"].waitForExistence(timeout: 8))
+        try performCoreAccessibilityAudit()
+        app.buttons["取消"].tap()
+
+        openTab("进展")
+        app.buttons["自动化"].tap()
+        XCTAssertTrue(app.buttons["新建自动化"].waitForExistence(timeout: 8))
+        app.buttons["新建自动化"].tap()
+        XCTAssertTrue(app.navigationBars["新建自动化"].waitForExistence(timeout: 8))
+        try performCoreAccessibilityAudit()
+        capture("creation-editors-accessibility-audit")
+    }
+
+    func testAssistantMessageAndExecutionAccessibilityAudit() throws {
+        openTab("对话")
+        XCTAssertTrue(openCell(at: 3))
+        let more = app.buttons.matching(identifier: "更多").firstMatch
+        XCTAssertTrue(more.waitForExistence(timeout: 8))
+        more.tap()
+        let details = app.buttons.matching(NSPredicate(format: "label == %@", "消息详情")).firstMatch
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        details.tap()
+        XCTAssertTrue(app.navigationBars["消息详情"].waitForExistence(timeout: 8))
+        try performCoreAccessibilityAudit()
+
+        let execution = app.buttons["执行过程"]
+        XCTAssertTrue(execution.waitForExistence(timeout: 8))
+        execution.tap()
+        XCTAssertTrue(app.navigationBars["执行过程"].waitForExistence(timeout: 8))
+        try performCoreAccessibilityAudit()
+        capture("assistant-message-execution-accessibility-audit")
+    }
+
+    func testVoiceNoteLifecycleAccessibilityAudit() throws {
+        openTab("笔记")
+        app.buttons["新建笔记"].tap()
+        app.buttons["语音笔记"].tap()
+        let discardPending = app.buttons["丢弃这段录音"]
+        if discardPending.waitForExistence(timeout: 3) {
+            discardPending.tap()
+            let confirmDiscard = app.buttons["丢弃录音"]
+            XCTAssertTrue(confirmDiscard.waitForExistence(timeout: 3))
+            confirmDiscard.tap()
+        }
+        let start = app.buttons["开始录音"]
+        XCTAssertTrue(start.waitForExistence(timeout: 8))
+        start.tap()
+        let consent = app.buttons["同意并开始"]
+        if consent.waitForExistence(timeout: 3) {
+            consent.tap()
+        }
+
+        XCTAssertTrue(app.buttons["暂停"].waitForExistence(timeout: 8))
+        try performCoreAccessibilityAudit()
+        app.buttons["暂停"].tap()
+        XCTAssertTrue(app.buttons["继续"].waitForExistence(timeout: 5))
+        try performCoreAccessibilityAudit()
+
+        app.buttons["保存"].tap()
+        XCTAssertTrue(app.navigationBars["笔记"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["语音记录"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["逐字稿"].exists)
+        try performContentAccessibilityAudit()
+        assertVoiceDetailHitTargets()
+
+        let retry = app.buttons["重试"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 20))
+        try performContentAccessibilityAudit()
+        assertVoiceDetailHitTargets()
+        retry.tap()
+        XCTAssertTrue(app.buttons["播放录音"].waitForExistence(timeout: 8))
+        try performContentAccessibilityAudit()
+        assertVoiceDetailHitTargets()
+        capture("voice-note-lifecycle-accessibility-audit")
+
+        let more = app.buttons["更多"]
+        if more.waitForExistence(timeout: 3) {
+            more.tap()
+            let delete = app.buttons["删除"].firstMatch
+            if delete.waitForExistence(timeout: 3) {
+                delete.tap()
+                let confirm = app.buttons["删除"].firstMatch
+                if confirm.waitForExistence(timeout: 3) {
+                    confirm.tap()
+                }
+            }
+        }
+    }
+
     func testExistingAutomationRunShowsTimeline() {
         openTab("进展")
         app.buttons["自动化"].tap()
@@ -611,8 +761,20 @@ final class ParityAcceptanceUITests: XCTestCase {
             relaunch()
             openTab("笔记")
             XCTAssertTrue(app.navigationBars["笔记"].waitForExistence(timeout: 5))
-            XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.textFields["notes-search-field"].waitForExistence(timeout: 5))
         }
+        XCTAssertTrue(app.buttons["notes-files-button"].exists)
+        app.buttons["新建笔记"].tap()
+        XCTAssertTrue(app.buttons["notes-create-text"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["notes-create-voice"].exists)
+    }
+
+    func testNotesFilesEntryOpensFileLibrary() {
+        openTab("笔记")
+        let files = app.buttons["notes-files-button"]
+        XCTAssertTrue(files.waitForExistence(timeout: 5))
+        files.tap()
+        XCTAssertTrue(app.navigationBars["文件"].waitForExistence(timeout: 5))
     }
 
     func testCompletedDiscussionShowsOrganizedSummary() async throws {
@@ -1399,6 +1561,34 @@ final class ParityAcceptanceUITests: XCTestCase {
             print(element.debugDescription)
         }
         return false
+    }
+
+    private func performCoreAccessibilityAudit() throws {
+        try app.performAccessibilityAudit(for: [
+            .elementDetection,
+            .hitRegion,
+            .sufficientElementDescription,
+            .textClipped,
+            .trait
+        ], logAccessibilityIssue)
+    }
+
+    private func performContentAccessibilityAudit() throws {
+        try app.performAccessibilityAudit(for: [
+            .elementDetection,
+            .sufficientElementDescription,
+            .textClipped,
+            .trait
+        ], logAccessibilityIssue)
+    }
+
+    private func assertVoiceDetailHitTargets() {
+        for label in ["逐字稿", "播放录音", "重试", "重新上传本地录音"] {
+            let button = app.buttons[label]
+            guard button.exists else { continue }
+            XCTAssertGreaterThanOrEqual(button.frame.width, 44, "Voice detail button is too narrow: \(label)")
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44, "Voice detail button is too short: \(label)")
+        }
     }
 
     private func capture(_ name: String) {

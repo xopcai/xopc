@@ -415,6 +415,10 @@ struct FileSpaceEnvelope: Decodable, Sendable {
     let space: FileSpace
 }
 
+struct FileSpacesPage: Decodable, Sendable {
+    let spaces: [FileSpace]
+}
+
 struct FileSpace: Decodable, Identifiable, Hashable, Sendable {
     let id: String
     let title: String

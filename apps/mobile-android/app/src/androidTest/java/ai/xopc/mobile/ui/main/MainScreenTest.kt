@@ -1,11 +1,13 @@
 package ai.xopc.mobile.ui.main
 
+import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.content.ContentValues
 import android.graphics.Bitmap
 import android.provider.MediaStore
 import android.view.accessibility.AccessibilityNodeInfo
 import ai.xopc.mobile.R
+import ai.xopc.mobile.theme.XopcTheme
 import ai.xopc.mobile.gateway.ConversationSummary
 import ai.xopc.mobile.gateway.GatewayProfile
 import ai.xopc.mobile.gateway.PendingInput
@@ -13,6 +15,11 @@ import ai.xopc.mobile.gateway.ConversationModel
 import ai.xopc.mobile.gateway.ConversationAgent
 import ai.xopc.mobile.gateway.ConversationContext
 import ai.xopc.mobile.gateway.ConversationMessage
+import ai.xopc.mobile.gateway.ConversationMedia
+import ai.xopc.mobile.gateway.ConversationReference
+import ai.xopc.mobile.gateway.ConversationTarget
+import ai.xopc.mobile.gateway.ConversationArtifact
+import ai.xopc.mobile.gateway.ConversationOutcome
 import ai.xopc.mobile.gateway.ExecutionDetail
 import ai.xopc.mobile.gateway.ExecutionStep
 import ai.xopc.mobile.gateway.ContextWorkItem
@@ -26,6 +33,8 @@ import ai.xopc.mobile.gateway.ProgressItem
 import ai.xopc.mobile.gateway.ProgressTask
 import ai.xopc.mobile.gateway.ProgressProject
 import ai.xopc.mobile.gateway.AutomationSummary
+import ai.xopc.mobile.gateway.AutomationMetrics
+import ai.xopc.mobile.gateway.AutomationMetricsNext
 import ai.xopc.mobile.gateway.NoteSummary
 import ai.xopc.mobile.gateway.NoteDetail
 import ai.xopc.mobile.gateway.PersonalSummary
@@ -49,6 +58,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.assertIsEnabled
@@ -58,15 +68,200 @@ import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.runtime.mutableStateOf
 import androidx.test.espresso.Espresso
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import java.io.File
+import java.io.FileOutputStream
+import java.io.ByteArrayOutputStream
 
 class MainScreenTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+
+  @Test fun assistantComposerAndTabDockShareOneBottomSurface() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(profile = profile,
+          selectedConversationId = "11111111-2222-3333-4444-555555555555"))
+    }
+
+    val composerBounds = composeTestRule.onAllNodesWithTag("assistant-bottom-surface")
+      .fetchSemanticsNodes().single().boundsInRoot
+    val dockBounds = composeTestRule.onAllNodesWithTag("main-tab-dock")
+      .fetchSemanticsNodes().single().boundsInRoot
+    val inputBounds = composeTestRule.onAllNodesWithTag("assistant-input")
+      .fetchSemanticsNodes().single().boundsInRoot
+    assertTrue(composerBounds.top <= inputBounds.top)
+    assertTrue(composerBounds.bottom >= dockBounds.bottom)
+    assertTrue(inputBounds.bottom <= dockBounds.top)
+  }
+
+  @Test fun tappingChatContentDismissesComposerFocus() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(profile = profile, selectedConversationId = "test"))
+    }
+
+    composeTestRule.onNodeWithTag("assistant-input").performClick()
+    composeTestRule.onNodeWithTag("assistant-input").assertIsFocused()
+    composeTestRule.onNodeWithTag("assistant-welcome").performTouchInput { click() }
+    composeTestRule.onNodeWithTag("assistant-input").assertIsNotFocused()
+  }
+
+  @Test fun messageReferencesTargetsAndAttachmentPreviewAreInteractive() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val media = ConversationMedia("media-1", "brief.txt", "document", "text/plain", 5,
+      "data:text/plain;base64,aGVsbG8=")
+    val user = ConversationMessage("user-1", "user", "Review this", hasNonTextContent = true,
+      media = listOf(media), references = listOf(ConversationReference("note", "note-1", "3", "Brief")))
+    val assistant = ConversationMessage("assistant-1", "assistant", "Created [task](/tasks/task-1)",
+      targets = listOf(ConversationTarget("task", "task-1", "Ship", capabilities = listOf("open"))),
+      outcome = ConversationOutcome("succeeded", "Created report", listOf(ConversationArtifact(
+        "artifact-1", "report.md", "document", "text/markdown", 6, "available", "artifact_store",
+        listOf("preview"), "data:text/markdown;base64,cmVwb3J0", null, null))))
+    var selectedTab = HomeTab.Assistant
+    var openedNote = ""
+    var openedTask = ""
+    composeTestRule.setContent {
+      XopcTheme {
+      MainContent(selectedTab = selectedTab, onSelectTab = { selectedTab = it },
+        connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+          selectedConversationId = id, messages = listOf(user, assistant)),
+        onOpenNote = { openedNote = it }, onOpenProgressTask = { openedTask = it },
+        onLoadMessageMedia = { _, _ -> "hello".toByteArray() })
+      }
+    }
+    saveAcceptanceScreenshot("message-parity-chat.png")
+    val userBounds = composeTestRule.onNodeWithTag("message-more-user-1")
+      .fetchSemanticsNode().boundsInRoot
+    val assistantBounds = composeTestRule.onNodeWithTag("message-assistant-card-assistant-1", useUnmergedTree = true)
+      .fetchSemanticsNode().boundsInRoot
+    val actionsBounds = composeTestRule.onNodeWithTag("message-more-assistant-1")
+      .fetchSemanticsNode().boundsInRoot
+    assertTrue(userBounds.left > assistantBounds.left)
+    assertTrue(userBounds.right > assistantBounds.right)
+    assertTrue(actionsBounds.top >= assistantBounds.bottom)
+    composeTestRule.onNodeWithTag("message-reference-note-note-1").performClick()
+    composeTestRule.runOnIdle {
+      assertEquals("note-1", openedNote)
+      assertEquals(HomeTab.Notes, selectedTab)
+      selectedTab = HomeTab.Assistant
+    }
+    composeTestRule.onNodeWithTag("message-media-media-1").performClick()
+    composeTestRule.onNodeWithTag("message-media-preview-text").assertTextContains("hello")
+    saveAcceptanceScreenshot("message-parity-preview.png", "message-media-preview")
+    composeTestRule.onNodeWithTag("message-media-preview-close").performClick()
+    composeTestRule.onNodeWithTag("message-artifact-artifact-1").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("message-media-preview-text").assertTextContains("hello")
+    composeTestRule.onNodeWithTag("message-media-preview-close").performClick()
+    composeTestRule.onNodeWithTag("message-target-task-task-1").performScrollTo().performClick()
+    composeTestRule.runOnIdle {
+      assertEquals("task-1", openedTask)
+      assertEquals(HomeTab.Progress, selectedTab)
+    }
+  }
+
+  @Test fun userImageVoiceAndFileAttachmentsMatchTheHarmonyDisclosureLayout() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val png = ByteArrayOutputStream().use { output ->
+      Bitmap.createBitmap(12, 12, Bitmap.Config.ARGB_8888).also {
+        it.eraseColor(android.graphics.Color.BLUE)
+      }.compress(Bitmap.CompressFormat.PNG, 100, output)
+      output.toByteArray()
+    }
+    val media = listOf(
+      ConversationMedia("audio-1", "voice.m4a", "audio", "audio/mp4", 2048, "media://audio-1"),
+      ConversationMedia("image-1", "one.png", "image", "image/png", png.size.toLong(), "media://image-1"),
+      ConversationMedia("image-2", "two.png", "image", "image/png", png.size.toLong(), "media://image-2"),
+      ConversationMedia("file-1", "one.txt", "document", "text/plain", 3, "media://file-1"),
+      ConversationMedia("file-2", "two.pdf", "document", "application/pdf", 4, "media://file-2"),
+      ConversationMedia("file-3", "three.json", "document", "application/json", 5, "media://file-3"),
+      ConversationMedia("file-4", "four.csv", "document", "text/csv", 6, "media://file-4"))
+    composeTestRule.setContent {
+      XopcTheme {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+          selectedConversationId = id,
+          messages = listOf(ConversationMessage("user-media", "user", "请查看", media = media))),
+        onLoadMessageMedia = { _, item -> if (item.mimeType.startsWith("image/")) png else "abc".toByteArray() })
+      }
+    }
+    composeTestRule.onNodeWithTag("message-audio-audio-1").assertExists()
+    val audioBounds = composeTestRule.onNodeWithTag("message-audio-audio-1")
+      .fetchSemanticsNode().boundsInRoot
+    val bubbleBounds = composeTestRule.onNodeWithTag("message-more-user-media")
+      .fetchSemanticsNode().boundsInRoot
+    assertTrue(audioBounds.width < bubbleBounds.width)
+    composeTestRule.onNodeWithTag("message-image-strip-user-media", useUnmergedTree = true).assertExists()
+    composeTestRule.onNodeWithTag("message-image-thumbnail-image-1", useUnmergedTree = true).assertExists()
+    saveAcceptanceScreenshot("message-media-layout.png")
+    composeTestRule.onNodeWithTag("message-image-image-1").performClick()
+    composeTestRule.onNodeWithTag("message-media-preview-image").assertExists()
+    composeTestRule.onNodeWithTag("message-image-next").performClick()
+    composeTestRule.onNodeWithText("two.png").assertExists()
+    composeTestRule.onNodeWithTag("message-media-preview-close").performClick()
+
+    composeTestRule.onNodeWithTag("message-attachments-toggle-user-media").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("message-media-file-4").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("message-media-preview-text").assertTextContains("abc")
+    composeTestRule.onNodeWithTag("message-media-preview-close").performClick()
+
+    composeTestRule.onNodeWithTag("message-media-file-2").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("message-media-preview-binary").assertExists()
+    composeTestRule.onNodeWithTag("message-media-open-system").assertExists()
+    composeTestRule.onNodeWithTag("message-media-preview-close").performClick()
+
+    composeTestRule.onNodeWithTag("message-audio-audio-1").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("message-media-preview-audio").assertExists()
+    saveAcceptanceScreenshot("message-audio-preview.png", "message-media-preview")
+  }
+
+  @Test fun failedAssistantOutcomeKeepsAVisibleStatusInsideItsCard() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+          connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+            selectedConversationId = id, messages = listOf(ConversationMessage("failed-answer", "assistant", "",
+              outcome = ConversationOutcome("failed", null, emptyList())))))
+      }
+    }
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.message_result_failed)).assertExists()
+  }
+
+  @Test fun assistantMarkdownLinkStaysInlineAndOpensItsTarget() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    var openedTask = ""
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+          connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+            selectedConversationId = id,
+            messages = listOf(ConversationMessage("linked-answer", "assistant", "[task](/tasks/task-1)"))),
+          onOpenProgressTask = { openedTask = it })
+      }
+    }
+    composeTestRule.onNodeWithText("task").performClick()
+    assertEquals("task-1", openedTask)
+  }
+
+  private fun saveAcceptanceScreenshot(name: String, tag: String? = null) {
+    val node = if (tag == null) composeTestRule.onAllNodes(isRoot()).onFirst()
+      else composeTestRule.onNodeWithTag(tag)
+    val image = node.captureToImage().asAndroidBitmap()
+    val file = File(composeTestRule.activity.getExternalFilesDir(null), name)
+    FileOutputStream(file).use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
+  }
 
   @Test fun photoActionOpensSystemPickerAndCancelReturnsWithoutAddingAnAttachment() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
@@ -327,11 +522,43 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("settings-back").performClick()
     composeTestRule.onNodeWithTag("settings-back").performClick()
     composeTestRule.onNodeWithTag("personal-connect").performClick()
+    composeTestRule.onNodeWithTag("pairing-scan").assertExists()
+    composeTestRule.onNodeWithTag("pairing-manual").performClick()
     composeTestRule.onNodeWithTag("pairing-link").assertExists()
     composeTestRule.onNodeWithTag("tab-Me").assertDoesNotExist()
     composeTestRule.onNodeWithTag("pairing-back").performClick()
     composeTestRule.onNodeWithTag("personal-unpaired").assertExists()
     assert(pairCalls == 0)
+  }
+
+  @Test fun unpairedGatewayUsesQrScanAsThePrimaryAction() {
+    var scans = 0
+    var pairs = 0
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(), onPair = { pairs++ }, onScanPairing = { scans++ })
+    }
+    composeTestRule.onNodeWithTag("pairing-scan").assertIsEnabled().performClick()
+    composeTestRule.runOnIdle {
+      assertEquals(1, scans)
+      assertEquals(0, pairs)
+    }
+    composeTestRule.onNodeWithTag("pairing-manual").performClick()
+    composeTestRule.onNodeWithTag("pairing-link").assertExists()
+    composeTestRule.onNodeWithTag("pairing-back-to-scan").performClick()
+    composeTestRule.onNodeWithTag("pairing-scan").assertExists()
+  }
+
+  @Test fun gatewayQrScanOpensLiveCameraWithoutAPhotoShutter() {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val packageName = composeTestRule.activity.packageName
+    instrumentation.uiAutomation.executeShellCommand("pm grant $packageName ${Manifest.permission.CAMERA}").close()
+    composeTestRule.setContent { MainScreen() }
+    composeTestRule.onNodeWithTag("pairing-scan").performClick()
+    composeTestRule.onNodeWithTag("pairing-scanner").assertExists()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.pairing_scanner_hint)).assertExists()
+    composeTestRule.onNodeWithTag("pairing-scanner-close").performClick()
+    composeTestRule.onNodeWithTag("pairing-scanner").assertDoesNotExist()
   }
 
   @Test fun settingsOpensShareCenterWithoutTheTopLevelDockAndReturns() {
@@ -673,9 +900,35 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("note-note-1").performClick()
     assert(opened == "note-1")
     composeTestRule.onNodeWithTag("note-detail-body").assertExists()
+    composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
     composeTestRule.onNodeWithTag("notes-back").performClick()
     composeTestRule.onNodeWithTag("note-note-1").assertExists()
+    composeTestRule.onNodeWithTag("secondary-bottom-surface").assertExists()
+    composeTestRule.onNodeWithTag("main-tab-dock").assertExists()
     assert(loads == 1)
+  }
+
+  @Test fun progressSecondaryPagesHideComposerAndDockUntilReturningToOverview() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Progress, onSelectTab = {},
+        connection = ConnectionUiState(profile = profile,
+          progress = ProgressUiState(gatewayId = "gateway")))
+    }
+    composeTestRule.onNodeWithTag("secondary-bottom-surface").assertExists()
+    composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("secondary-bottom-surface").assertExists()
+    composeTestRule.onNodeWithTag("progress-projects").performClick()
+    composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("progress-automations").performClick()
+    composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("secondary-bottom-surface").assertExists()
   }
 
   @Test fun automationEditKeepsDraftAndRequiresDiscardConfirmation() {
@@ -735,6 +988,24 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("Verify build").assertExists()
     composeTestRule.onNodeWithTag("progress-back").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-1").assertExists()
+  }
+
+  @Test fun progressOverviewShowsAndOpensTheUpcomingAutomation() {
+    val state = ProgressUiState(automationMetrics = AutomationMetrics(3, 2, 0, 0,
+      AutomationMetricsNext("auto-next", "Morning brief", 2_000L)))
+    var openedAutomation: String? = null
+    composeTestRule.setContent {
+      ProgressScreen(state, androidx.compose.foundation.layout.PaddingValues(),
+        onRefreshHome = {}, onRefreshTasks = {}, onLoadMore = {}, onOpenTask = {},
+        onSearchChange = {}, onSubmitSearch = {}, onTaskCommand = {}, onStartTask = {},
+        onCreateTaskWithChat = {}, onLoadProjects = {}, onOpenProject = {},
+        onCreateTask = { _, _, _ -> }, onOpenTaskChat = {}, onSaveTask = { _, _, _, _, _ -> },
+        onOpenChat = {}, onOpenAutomation = { openedAutomation = it })
+    }
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.progress_upcoming))
+      .performScrollTo().assertExists()
+    composeTestRule.onNodeWithTag("progress-upcoming-auto-next").performScrollTo().performClick()
+    assert(openedAutomation == "auto-next")
   }
 
   @Test fun progressOpensTaskOutsideLoadedPageAndCanRetryDetail() {
@@ -1096,7 +1367,8 @@ class MainScreenTest {
     assert(changes.last() == "alpha")
     composeTestRule.onNodeWithTag("conversations-clear").performClick()
     assert(query.value == "")
-    composeTestRule.onNodeWithTag("conversations-clear").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("conversations-clear").assertExists()
+    composeTestRule.onNodeWithTag("conversations-search").assertExists()
   }
 
   @Test fun quickComposerKeepsInputSeparateFromSelectedConversation() {
@@ -1498,6 +1770,43 @@ class MainScreenTest {
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_message_detail)).assertExists()
   }
 
+  @Test fun historicalLongAssistantUsesEightLinePreviewAndBottomSheetDetail() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val longAnswer = (1..9).joinToString("\n") { "第${it}行内容" }
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(profile = profile, selectedConversationId = id,
+          messages = listOf(
+            ConversationMessage("answer-long", "assistant", longAnswer, "turn-long"),
+            ConversationMessage("answer-latest", "assistant", "最新消息保持展开", "turn-latest"))))
+    }
+    composeTestRule.onNodeWithTag("message-preview-answer-long").assertExists()
+    composeTestRule.onNodeWithTag("message-view-more-answer-long").performClick()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_message_detail)).assertExists()
+    composeTestRule.onNodeWithText("第9行内容").assertExists()
+    composeTestRule.onNodeWithTag("message-view-more-answer-latest").assertDoesNotExist()
+  }
+
+  @Test fun assistantExecutionEntryOpensBottomSheetAndSingleToolExpands() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val ui = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = id,
+      messages = listOf(ConversationMessage("answer-1", "assistant", "完成", "turn-1"))))
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = ui.value,
+        onOpenExecution = { ui.value = ui.value.copy(executionMessageId = it,
+          executionDetail = ExecutionDetail("turn-1", listOf(
+            ExecutionStep("tool-1", "tool", "fetch", "", "https://example.com/result", "", "done")))) },
+        onCloseExecution = { ui.value = ui.value.copy(executionMessageId = null, executionDetail = null) })
+    }
+    composeTestRule.onNodeWithTag("message-steps-answer-1").performClick()
+    composeTestRule.onNodeWithTag("execution-group-tool-1").assertExists()
+    composeTestRule.onNodeWithTag("execution-group-tool-1").performClick()
+    composeTestRule.onNodeWithTag("execution-detail-tool-1").assertExists()
+    composeTestRule.onNodeWithTag("execution-preview-tool-1").assertExists()
+  }
+
   @Test fun assistantMessageMenuCopiesAnswerOrOnlyItsCodeBlocks() {
     val id = "11111111-2222-3333-4444-555555555555"
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
@@ -1548,6 +1857,48 @@ class MainScreenTest {
     composeTestRule.runOnIdle { state.value = state.value.copy(savingMessageNoteId = "answer-1") }
     composeTestRule.onNodeWithTag("message-more-answer-1").performClick()
     composeTestRule.onNodeWithTag("message-save-note-action").assertIsNotEnabled()
+  }
+
+  @Test fun userMessageReuseFillsEditableDraftWithoutSending() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = id,
+      messages = listOf(ConversationMessage("user-1", "user", "Original request")), draftText = "Other draft"))
+    var reused = ""
+    var sends = 0
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value,
+        onReuseMessage = { messageId ->
+          reused = messageId
+          state.value = state.value.copy(draftText = "Original request")
+          true
+        }, onSendMessage = { sends++ })
+    }
+    composeTestRule.onNodeWithTag("message-more-user-1").performClick()
+    composeTestRule.onNodeWithTag("message-reuse-action").performClick()
+    composeTestRule.onNodeWithTag("assistant-input").assertTextEquals("Original request")
+    composeTestRule.runOnIdle {
+      assertEquals("user-1", reused)
+      assertEquals(0, sends)
+    }
+    composeTestRule.onNodeWithTag("message-reuse-action").assertDoesNotExist()
+  }
+
+  @Test fun userMessageReuseDoesNotDropMediaOrStagedReferences() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = id,
+      messages = listOf(ConversationMessage("media", "user", "Look here", hasNonTextContent = true),
+        ConversationMessage("plain", "user", "Text only")),
+      draftRefs = listOf(ConversationContextRef("note", "note-1", "1", "Note"))))
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value)
+    }
+    composeTestRule.onNodeWithTag("message-more-media").performClick()
+    composeTestRule.onNodeWithTag("message-reuse-action").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("message-copy-action").performClick()
+    composeTestRule.onNodeWithTag("message-more-plain").performClick()
+    composeTestRule.onNodeWithTag("message-reuse-action").assertIsNotEnabled()
   }
 
   @Test fun assistantAttachmentActionStagesAndCanSendWithoutText() {

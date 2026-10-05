@@ -31,7 +31,9 @@ import { MAX_ATTACHMENTS, validateAttachmentSize } from '../common/attachments';
 import { copyChatMessage, saveChatMessage } from '../service/chatMessageActions';
 import { pickChatPhoto } from '../service/chatPhotoPicker';
 import { XopcChatPromptViewModel } from '../viewmodel/chatPromptViewModel';
+import { XopcConnectionWaitViewModel } from '../viewmodel/connectionWaitViewModel';
 import { XopcChatPrompt } from './ChatPrompt';
+import { XopcChatConnectionWait } from './ChatConnectionWait';
 import { chatReadAloud, XopcChatReadAloud } from '../service/chatReadAloud';
 import { XopcChatDrafts } from '../service/chatDrafts';
 import { gatewaySession } from '../service/gatewaySession';
@@ -74,6 +76,7 @@ export struct XopcChatView {
   @Local options: XopcChatOptionsViewModel = new XopcChatOptionsViewModel();
   @Local context: XopcChatContextViewModel = new XopcChatContextViewModel();
   @Local prompt: XopcChatPromptViewModel = new XopcChatPromptViewModel();
+  @Local connectionWait: XopcConnectionWaitViewModel = new XopcConnectionWaitViewModel();
   @Local refs: XopcContextRef[] = [];
   @Local panelOpen: boolean = false;
   @Local sheetOpen: boolean = false;
@@ -601,6 +604,7 @@ export struct XopcChatView {
   private openSheet(mode: string): void { this.palette.close(); this.editor.stopEditing(); this.setPanel(false); this.sheetMode = mode; this.sheetOpen = true; }
   @Monitor('chat.loading', 'chat.agentId')
   onHistoryReady(): void {
+    if (this.visible && !this.chat.loading && this.chat.selectedId) void this.connectionWait.refresh();
     const id = this.chat.selectedId + ':' + this.chat.agentId;
     if (this.visible && !this.chat.loading && this.chat.selectedId && this.optionsId !== id) {
       this.onConversationChange(this.chat.selectedId);
@@ -608,13 +612,25 @@ export struct XopcChatView {
     }
   }
   @Monitor('chat.auxiliaryRevision')
-  onAuxiliaryState(): void { if (this.visible) { this.options.refreshQueue(); this.prompt.refresh(); } }
+  onAuxiliaryState(): void { if (this.visible) { this.options.refreshQueue(); this.prompt.refresh(); void this.connectionWait.refresh(); } }
+  @Monitor('chat.selectedId')
+  onConnectionWaitTarget(): void {
+    this.connectionWait.start(this.chat.selectedId);
+    if (!this.visible || !this.layout.foreground) this.connectionWait.pause();
+  }
+  @Monitor('chat.runId', 'chat.connection')
+  onConnectionWaitRun(): void { if (this.visible && !this.chat.loading) void this.connectionWait.refresh(); }
+  @Monitor('layout.foreground')
+  onConnectionWaitForeground(): void {
+    if (this.layout.foreground && this.activePage) this.connectionWait.onReturn();
+    else this.connectionWait.pause();
+  }
   @Monitor('activePage')
   onActivityChange(): void {
     this.visible = this.activePage;
     if (!this.activePage) { clearTimeout(this.scrollTimer); this.layoutScrollAnimating = false; }
-    if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.attention.dispose(); this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.chat.deactivate(); }
-    else { this.attention.activate(); this.bindBack(); this.chat.activate(); this.onHistoryReady(); this.options.resume(); this.prompt.resume(); }
+    if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.attention.dispose(); this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.connectionWait.pause(); this.chat.deactivate(); }
+    else { this.attention.activate(); this.bindBack(); this.chat.activate(); this.onHistoryReady(); this.options.resume(); this.prompt.resume(); if (this.layout.foreground) this.connectionWait.onReturn(); }
   }
   @Monitor('requestRevision', 'chat.sending')
   onTargetChange(): void {
@@ -646,7 +662,7 @@ export struct XopcChatView {
     this.setPanel(true);
     this.chooseAction(this.requestedAction);
   }
-  aboutToDisappear(): void { this.closeExecutionDetail(); this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
+  aboutToDisappear(): void { this.closeExecutionDetail(); this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
 
   private async attentionAction(action: XopcHomeAction): Promise<void> {
     if (action.type === 'open') {
@@ -1180,6 +1196,7 @@ export struct XopcChatView {
     Column().id('chat-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.surface)
     Column() {
     Column() {
+    if (this.connectionWait.snapshot?.wait) { XopcChatConnectionWait({ model: this.connectionWait }) }
     if (this.prompt.prompt) { XopcChatPrompt({ model: this.prompt }) }
     else if (this.unseenAttention.length) {
       Row({ space: 8 }) {

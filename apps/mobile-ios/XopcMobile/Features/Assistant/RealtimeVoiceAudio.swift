@@ -22,7 +22,7 @@ final class RealtimeVoiceAudio {
             throw RealtimeVoiceAudioError.microphonePermissionDenied
         }
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])
         try session.setActive(true)
 
         let engine = AVAudioEngine()

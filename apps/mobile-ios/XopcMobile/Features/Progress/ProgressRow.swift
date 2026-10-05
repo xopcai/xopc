@@ -11,9 +11,14 @@ struct ProgressRow: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: symbol).font(.title3).foregroundStyle(.blue).frame(width: 28)
             VStack(alignment: .leading, spacing: 5) {
-                Text(title).font(.headline).lineLimit(2)
+                Text(title)
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack { Text(LocalizedStringKey(state)); Text(date, format: .dateTime.month().day().hour().minute()) }
                     .font(.caption).foregroundStyle(.tertiary)

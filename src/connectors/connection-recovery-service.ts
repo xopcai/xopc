@@ -87,7 +87,7 @@ export class ConnectionRecoveryService {
           : need.connectionId === need.target.serverId ? 'ready'
             : need.attempt && need.attempt.expiresAt > Date.now() ? 'authorizing'
               : need.unavailable ? 'reconnect' : 'connect';
-        return { ...need, phase, accounts: [], alternatives: [],
+        return { ...need, authorizationMode: 'desktop', phase, accounts: [], alternatives: [],
           ...((availability.reason || need.capabilityError) ? { reason: availability.reason ?? need.capabilityError } : {}) };
       }
       if (need.target.type === 'store-connector') {
@@ -105,6 +105,7 @@ export class ConnectionRecoveryService {
         const phase = !instance ? 'install' : !digestMatches || unhealthy ? 'blocked' : 'ready';
         return {
           ...need,
+          authorizationMode: 'desktop',
           ...(instance ? { connectionId: instance.instanceId } : {}),
           phase,
           accounts: [],
@@ -116,6 +117,8 @@ export class ConnectionRecoveryService {
       }
       const id = need.target.connectorId;
       const instance = listConnectorInstances(this.deps.getConfig()).find(instance => instance.connectorId === id);
+      const definition = (instance ? getInstalledConnectorDefinition(this.deps.getConfig(), instance.instanceId) : undefined) ?? getConnectorDefinition(id);
+      const authorizationMode = definition?.runtime.type === 'composio' && definition.runtime.role === 'toolkit' ? 'browser' : 'desktop';
       const installation = getConnectorInstallation(`${id}-${wait.principalId}`);
       const cli = instance?.materialized.type === 'cli' ? getCliAdapter(instance.materialized.adapterId) : undefined;
       const requiredScope = Math.max(1, ...need.capabilities.filter(capability => cli || /^[A-Z]+_/.test(capability)).map(capability => SCOPE_ORDER[cli ? cli.curatedActions[capability] ?? 'read' : scopeForComposioAction(capability).scope]));
@@ -152,7 +155,7 @@ export class ConnectionRecoveryService {
             : need.unavailable || all.some(connection => ['expired', 'revoked', 'failed'].includes(connection.status)) ? 'reconnect' : 'connect';
       const alternatives = ['composio-gmail', 'composio-outlook'].includes(id)
         ? ['composio-gmail', 'composio-outlook'].filter(candidate => candidate !== id).map(candidate => ({ candidateRef: candidate, label: getConnectorDefinition(candidate)?.displayName ?? candidate })) : [];
-      return { ...need, alternatives, accountId: selected?.accountId ?? need.accountId, connectionId: selected?.id ?? need.connectionId, phase,
+      return { ...need, authorizationMode, alternatives, accountId: selected?.accountId ?? need.accountId, connectionId: selected?.id ?? need.connectionId, phase,
         accounts: active.map(connection => ({ id: connection.accountId!,
           label: [getConnectorAccount(connection.accountId!)?.label, connection.identity.email ?? connection.identity.name ?? connection.accountId].filter(Boolean).join(' · ') })),
         ...(need.capabilityError && selected ? { reason: need.capabilityError } : {}),
