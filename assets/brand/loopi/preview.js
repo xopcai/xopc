@@ -12,8 +12,8 @@
   };
   $$('.ai-arc', svg).forEach(path => path.setAttribute('d', arc(120, 11.8, 258.2)));
   $$('.human-arc', svg).forEach(path => path.setAttribute('d', arc(120, 284.2, 345.8)));
-  $('#ai-edge').setAttribute('d', arc(136.5, 14, 256));
-  $('#human-edge').setAttribute('d', arc(136.5, 286, 344));
+  $('#ai-edge').setAttribute('d', arc(140, 14, 256));
+  $('#human-edge').setAttribute('d', arc(140, 286, 344));
   $('#blue-cue').setAttribute('d', arc(143, 294, 330));
 
   const moods = {

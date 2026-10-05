@@ -1,0 +1,10 @@
+DerivedData/
+.derivedData/
+.signedDerivedData/
+.uiDerivedData/
+build/
+dist/
+*.xcresult
+*.xcuserstate
+xcuserdata/
+.DS_Store

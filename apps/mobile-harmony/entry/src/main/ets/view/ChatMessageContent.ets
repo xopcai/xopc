@@ -42,7 +42,7 @@ export struct XopcChatMessageContent {
   @Computed get imageMedia(): XopcHistoryMedia[] {
     return this.fileMedia.filter((file: XopcHistoryMedia): boolean => filePreviewKind(file.name, file.mimeType) === 'image');
   }
-  @Computed get userImageThumbnailSize(): number { return this.imageMedia.length === 1 ? 168 : 112; }
+  @Computed get userImageThumbnailSize(): number { return this.imageMedia.length === 1 ? 120 : 112; }
   @Computed get attachmentMedia(): XopcHistoryMedia[] {
     return this.row.role === 'user'
       ? this.fileMedia.filter((file: XopcHistoryMedia): boolean => filePreviewKind(file.name, file.mimeType) !== 'image')
@@ -151,7 +151,11 @@ export struct XopcChatMessageContent {
         }
         Repeat<XopcHistoryMedia>(this.audioMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
           if (this.row.role === 'user') {
-            XopcChatMediaView({ file: item.item, conversationId: this.conversationId, inlineVoice: true })
+            Row() {
+              Column() {
+                XopcChatMediaView({ file: item.item, conversationId: this.conversationId, inlineVoice: true })
+              }.width(this.row.text ? 148 : '100%')
+            }.width('100%').justifyContent(FlexAlign.Start)
           } else {
             XopcChatMediaView({ file: item.item, conversationId: this.conversationId })
           }
@@ -164,14 +168,14 @@ export struct XopcChatMessageContent {
                   XopcChatMediaView({ file: item.item, conversationId: this.conversationId, compact: true,
                     embedded: true, compactThumbnail: true, compactThumbnailWidth: this.userImageThumbnailSize,
                     compactThumbnailHeight: this.userImageThumbnailSize,
-                    compactThumbnailContain: true, compactMetadata: false, compactDisclosure: false,
+                    compactThumbnailContain: false, compactMetadata: false, compactDisclosure: false,
                     imageGallery: this.imageMedia })
-                }.width(this.userImageThumbnailSize + 8).height(this.userImageThumbnailSize + 8)
+                }.width(this.userImageThumbnailSize).height(this.userImageThumbnailSize)
                   .borderRadius(12).clip(true).backgroundColor(this.colors.grouped)
               }).key((file: XopcHistoryMedia): string => file.id || file.uri)
             }.width('100%').justifyContent(this.imageMedia.length === 1 ? FlexAlign.End : FlexAlign.Start)
           }.id('chat-user-image-strip-' + this.row.id).scrollable(ScrollDirection.Horizontal)
-            .scrollBar(BarState.Off).width('100%').height(this.userImageThumbnailSize + 8)
+            .scrollBar(BarState.Off).width('100%').height(this.userImageThumbnailSize)
         }
         if (this.attachmentMedia.length) {
           if (this.row.role !== 'user') {

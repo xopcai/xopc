@@ -1124,6 +1124,20 @@
     { "name": "personal_goal_achieved", "value": "Achieved" },
     { "name": "personal_goal_due", "value": "Due %s" },
     { "name": "personal_goal_empty", "value": "No near-term goals yet." },
-    { "name": "personal_goal_empty_help", "value": "Add what you want to achieve next so xopc can keep work moving." }
+    { "name": "personal_goal_empty_help", "value": "Add what you want to achieve next so xopc can keep work moving." },
+    { "name": "discussion_loading", "value": "Loading recording…" },
+    { "name": "discussion_recording", "value": "Voice recording" },
+    { "name": "discussion_processing", "value": "Recording saved. Transcript and summary are being prepared; this page updates automatically." },
+    { "name": "discussion_failed", "value": "Recording processing needs attention." },
+    { "name": "discussion_transcript_failed", "value": "Recording saved, but transcription has not finished. Available transcript text is shown below; try again later." },
+    { "name": "discussion_summary", "value": "Summary" },
+    { "name": "discussion_key_points", "value": "Key points" },
+    { "name": "discussion_decisions", "value": "Decisions" },
+    { "name": "discussion_risks", "value": "Risks" },
+    { "name": "discussion_questions", "value": "Open questions" },
+    { "name": "discussion_actions", "value": "Action items" },
+    { "name": "discussion_transcript", "value": "Transcript" },
+    { "name": "discussion_transcript_pending", "value": "Awaiting transcription" },
+    { "name": "discussion_no_speech", "value": "No recognizable speech was found in this recording." }
   ]
 }

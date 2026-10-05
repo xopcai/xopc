@@ -53,7 +53,7 @@ describe('MessageList welcome state', () => {
     expect(container.textContent).toContain('今天想推进什么？');
     expect(container.textContent).not.toContain('办公输出');
     expect(container.textContent).not.toContain('写作润色');
-    expect(container.querySelector('[data-loopi="ceramic-v3"]')).not.toBeNull();
+    expect(container.querySelector('[data-loopi="ceramic-v4"]')).not.toBeNull();
     expect(container.innerHTML).toContain('sm:size-32');
     expect(container.innerHTML).toContain('sm:pt-36');
     expect(container.innerHTML).toContain('max-height:800px)]:pt-12');

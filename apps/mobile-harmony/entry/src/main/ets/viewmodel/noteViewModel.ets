@@ -56,9 +56,9 @@ export class XopcNoteViewModel {
     if (initialId) this.openingId = initialId;
     try {
       this.draftsReady = this.drafts.initialize(context);
-      if (initialId && this.openingId !== initialId) return;
       if (initialId) {
         await this.draftsReady;
+        if (this.openingId !== initialId) return;
         await this.open(initialId);
       } else {
         await this.list();
@@ -67,6 +67,7 @@ export class XopcNoteViewModel {
       void this.flushPending(initialId);
     } catch (error) {
       this.error = (error as Error).message;
+      this.openingId = '';
       hilog.warn(0x0000, 'XopcNotes', 'Notes startup failed: %{public}s', this.error);
     }
   }
@@ -102,6 +103,10 @@ export class XopcNoteViewModel {
   }
 
   async open(id: string): Promise<void> {
+    if (this.draftsReady) {
+      try { await this.draftsReady; }
+      catch (error) { this.error = (error as Error).message; this.openingId = ''; return; }
+    }
     if (this.loading) return;
     this.openingId = id;
     this.selected = undefined; this.draft = undefined; this.editing = false;
@@ -133,6 +138,17 @@ export class XopcNoteViewModel {
       this.editorRevision++;
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) { this.loading = false; this.openingId = ''; } }
+  }
+
+  async refreshSelected(): Promise<void> {
+    const id = this.selected?.id;
+    if (!id || this.editing) return;
+    try {
+      const note = await this.repository.detail(id);
+      if (this.selected?.id !== id || this.editing) return;
+      this.selected = note;
+      if (this.draft?.noteId === id && this.draft.syncState === 'clean') this.draft = this.draftFromNote(note);
+    } catch (_error) { /* Discussion content remains available when the note refresh is delayed. */ }
   }
 
   create(projectId: string = this.projectId): void {

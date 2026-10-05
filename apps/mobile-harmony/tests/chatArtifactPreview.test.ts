@@ -19,7 +19,7 @@ describe('chat artifact image preview', () => {
     expect(media).toContain('.width(this.compactThumbnailWidth || (this.compactMetadata ? 36 : 48))');
     expect(media).toContain('.height(this.compactThumbnailHeight || (this.compactMetadata ? 36 : 48))');
     expect(media).toContain('.objectFit(this.compactThumbnailContain ? ImageFit.Contain : ImageFit.Cover)');
-    expect(media).toContain('const maxDimension = this.compactThumbnail ? 128 : 1024;');
+    expect(media).toContain('const maxDimension = this.compactThumbnail ? Math.min(512, Math.max(128, thumbnailExtent * 3)) : 1024;');
     expect(media).toContain(".onClick((): void => { this.openPreview(); })");
     expect(media).toContain("$r('app.string.chat_artifact_available_size', this.fileSizeLabel())");
     expect(zh).toContain('"value":"可用 · %s"');

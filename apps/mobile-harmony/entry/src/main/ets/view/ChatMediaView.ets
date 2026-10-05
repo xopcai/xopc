@@ -334,7 +334,8 @@ export struct XopcChatMediaView {
       try {
         const info = await source.getImageInfo();
         this.pictureRatio = info.size.width / Math.max(1, info.size.height);
-        const maxDimension = this.compactThumbnail ? 128 : 1024;
+        const thumbnailExtent = Math.max(this.compactThumbnailWidth || 48, this.compactThumbnailHeight || 48);
+        const maxDimension = this.compactThumbnail ? Math.min(512, Math.max(128, thumbnailExtent * 3)) : 1024;
         const scale = Math.min(1, maxDimension / Math.max(info.size.width, info.size.height));
         const picture = await source.createPixelMap({ desiredSize: { width: Math.max(1, Math.round(info.size.width * scale)), height: Math.max(1, Math.round(info.size.height * scale)) } });
         if (generation !== this.generation) { await picture.release(); return; }
@@ -450,8 +451,9 @@ export struct XopcChatMediaView {
               SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
             }
           }.width('100%').constraintSize({ minHeight: this.compactThumbnailHeight > 0
-            ? this.compactThumbnailHeight + 8 : this.compactThumbnail ? 56 : 48 })
-            .padding(this.compactMetadata ? { left: 12, right: 12 } : { left: 4, right: 4 })
+            ? this.compactThumbnailHeight + (this.compactMetadata ? 8 : 0) : this.compactThumbnail ? 56 : 48 })
+            .padding({ left: this.compactMetadata ? 12 : this.compactThumbnail ? 0 : 4,
+              right: this.compactMetadata ? 12 : this.compactThumbnail ? 0 : 4 })
         }.id('chat-preview-' + this.file.id).width('100%').padding(0)
           .backgroundColor(this.embedded ? Color.Transparent : this.colors.input)
           .borderRadius(this.embedded ? 0 : 10)

@@ -38,6 +38,14 @@ export class XopcDiscussionCaptureRepository {
     return JSON.parse(await gatewaySession.request('/api/discussions/' + encodeURIComponent(id) + '/transcript')) as XopcDiscussionTranscript;
   }
 
+  async byNote(noteId: string): Promise<XopcDiscussionDetail> {
+    return JSON.parse(await gatewaySession.request('/api/discussions/by-note/' + encodeURIComponent(noteId))) as XopcDiscussionDetail;
+  }
+
+  async retry(id: string): Promise<void> {
+    await gatewaySession.request('/api/discussions/' + encodeURIComponent(id) + '/retry', 'POST');
+  }
+
   async upload(id: string, sequence: number, wav: Uint8Array, startedAtMs: number,
     endedAtMs: number): Promise<XopcDiscussionTranscript> {
     const sha256 = await xopcSha256(wav);

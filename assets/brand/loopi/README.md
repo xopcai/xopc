@@ -1,6 +1,8 @@
-# Loopi / 小环 · v3 设计评审
+# Loopi / 小环 · 动态角色设计
 
-最新入口为 **preview.html**，设计已更新为薄陶瓷圆环 + 正面扁圆核心。运行时通过独立 SVG 图层控制眼睛、嘴、核心、外圈，包含自然眨眼、视线跟随、轻点回应、八种表情、官网循环和等待确认的 Onboarding。
+品牌 Logo、应用图标、favicon 和系统启动标识始终使用 `assets/brand/xopc-mark.svg` 的纯 80/20 圆环。Loopi 的脸与陶瓷材质只用于官网 landing、对话欢迎页、Onboarding 等产品内的动态角色场景，不进入静态 icon 资源。
+
+最新入口为 **preview.html**，设计已更新为克制的陶瓷质感圆环 + 正面扁圆核心。运行时通过独立 SVG 图层控制眼睛、嘴、核心、外圈，包含自然眨眼、视线跟随、轻点回应、八种表情、官网循环和等待确认的 Onboarding。
 
 预览不需要安装依赖，可直接用浏览器打开。静态矢量快照为 loopi-ceramic.svg，动效源以 preview.html 的图层和 preview.js 为准。该 SVG 是中性状态的浏览器导出快照，修改造型后需重新导出。
 

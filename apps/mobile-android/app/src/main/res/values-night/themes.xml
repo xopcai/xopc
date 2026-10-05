@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Xopc" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:navigationBarColor">@color/brand_surface</item>
+    </style>
+    <style name="Theme.Xopc.Starting" parent="Theme.Xopc">
+        <item name="android:windowBackground">@drawable/brand_splash</item>
+    </style>
+</resources>
