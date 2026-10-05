@@ -184,7 +184,7 @@ describe('dispatchAgentStreamEvent', () => {
       messageId: 'm1',
       toolCallId: 'tc1',
       command: 'pnpm test',
-      cwd: 'apps/mobile-expo',
+      cwd: 'apps/mobile-ios',
     })), cb);
     dispatchAgentStreamEvent('tool_update', JSON.stringify(envelope('tool_update', 'run-1', {
       messageId: 'm1',
@@ -209,7 +209,7 @@ describe('dispatchAgentStreamEvent', () => {
       messageId: 'm1',
       toolCallId: 'tc1',
       command: 'pnpm test',
-      cwd: 'apps/mobile-expo',
+      cwd: 'apps/mobile-ios',
       exitCode: 0,
       durationMs: 123,
       timedOut: false,
@@ -222,7 +222,7 @@ describe('dispatchAgentStreamEvent', () => {
     expect(cb.onCommandStarted).toHaveBeenCalledWith({
       toolCallId: 'tc1',
       command: 'pnpm test',
-      cwd: 'apps/mobile-expo',
+      cwd: 'apps/mobile-ios',
     });
     expect(cb.onCommandOutputDelta).toHaveBeenCalledWith({
       toolCallId: 'tc1',
@@ -232,7 +232,7 @@ describe('dispatchAgentStreamEvent', () => {
     expect(cb.onCommandCompleted).toHaveBeenCalledWith({
       toolCallId: 'tc1',
       command: 'pnpm test',
-      cwd: 'apps/mobile-expo',
+      cwd: 'apps/mobile-ios',
       exitCode: 0,
       durationMs: 123,
       timedOut: false,

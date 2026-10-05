@@ -43,11 +43,9 @@ export default defineConfig({
     },
   },
   test: {
-    // Mobile tests use their own Expo-aware Vitest config.
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
-      'apps/mobile-expo/**',
       'apps/mobile-harmony/**/build/**',
     ],
     projects: [

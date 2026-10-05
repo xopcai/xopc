@@ -53,13 +53,6 @@ release
 **/release
 apps/macos/.build
 apps/ios/build
-apps/mobile-expo/ios/Pods
-apps/mobile-expo/ios/build
-apps/mobile-expo/android/.gradle
-apps/mobile-expo/android/build
-apps/mobile-expo/android/app/build
-apps/mobile-expo/android/app/.cxx
-apps/mobile-expo/.expo
 apps/mobile-harmony/.test
 apps/mobile-harmony/.hvigor
 apps/mobile-harmony/**/build

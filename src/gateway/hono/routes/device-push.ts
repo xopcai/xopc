@@ -38,7 +38,7 @@ function parsePreferences(value: unknown): Partial<NotificationPreferences> | nu
 }
 
 function parsePlatform(value: unknown): NotificationDevicePlatform | null {
-  return value === 'ios' || value === 'android' || value === 'harmonyos' ? value : null;
+  return value === 'harmonyos' ? value : null;
 }
 
 function parsePermission(value: unknown): NotificationPermission | null {

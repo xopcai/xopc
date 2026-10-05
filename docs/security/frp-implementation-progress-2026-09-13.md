@@ -30,7 +30,7 @@
 - 手机沿用原配对身份，固定公钥从已配对缓存一次迁入 SecureStore；后续不允许普通缓存或发现结果覆盖。发送凭据前验证新鲜签名 challenge，结果短期缓存并发复用；前台恢复清缓存。challenge 是防错端点措施，不是端到端通道，尚无 B 系列能力版本/route epoch 协商。
 - refresh 响应 v3 签名绑定 Gateway、nonce、requestId、期限与 tokens；手机和浏览器扩展验签后才持久化。重试保留轮换 journal，拒绝无签名响应；网络失败不清配对。
 - 私有图片/文件通过验证过的 API 传输；原生 Image 不持有 Bearer，公网缩略图剥离所有凭据。图片流式写临时文件，单响应上限 100 MiB，React Query 缓存淘汰时删除文件。崩溃遗留缓存由系统缓存清理，尚非应用级磁盘总量预算。
-- 固定 `expo-file-system@56.0.11` 原生补丁拒绝上传重定向；iOS 使用 foreground URLSession，Android 关闭两个 redirect 开关。JS 检查原生能力常量，旧原生包拒绝上传；保留文件流式上传，不把整文件读入 JS。
+- 旧客户端曾通过固定版本原生补丁拒绝上传重定向；当前原生 Android/iOS 客户端应在各自网络层实现并验证同等策略。文件仍应流式上传，避免把整文件读入内存。
 
 自审发现并修复：真实 Gateway 登录暴露 SQLite schema version 未递增；已修正为 164。会话达到上限时允许原子替换当前会话，新登录超限返回明确 409。SDK 默认上传会跟随重定向，因此仅设置 JS fetch 不够，加入最小原生补丁。错误签名、重放 nonce 和无签名 refresh 不可写入凭据。私有图片 URL 格式错误不会导致 render 抛异常；移除图片调用处残留的 Bearer headers，下载失败继续触发头像降级显示。
 
@@ -44,14 +44,14 @@
 | TypeScript / Web build | 主项目、Web、移动端、浏览器扩展、Broker 类型检查通过；Web build 通过（已有大 chunk 提示） |
 | 真 frpc/frps 0.62.1 | 正确 CA/hostname 成功，错误 CA/hostname 失败；注册签名、Login/NewProxy、内部租约路由、公网 Host 恢复、正在传输连接撤销通过 |
 | 真 Gateway CLI 启动 | `node scripts/security/gateway-session-smoke.mjs`：Cookie、CSRF、lazy route、identity challenge、WS 建连、logout 关闭连接、未消费 ticket 失效、query-token 拒绝通过 |
-| 原生上传重定向 | `node scripts/security/native-upload-redirect-smoke.mjs`：macOS Foundation 编译实际补丁 delegate，1 MiB 上传遇 307 不向目标发送请求；不是 iOS/Android 整包验收 |
+| 原生上传重定向 | 旧客户端的 macOS Foundation 定向检查曾确认 1 MiB 上传遇 307 时不向目标发送请求；该结论不代表当前 iOS/Android 整包验收 |
 | 部署脚本 | shell/Python 静态检查与已知/未知 stream 迁移场景通过；本机无 nginx/systemd，未做生产部署 |
 
 ## 交互影响与发布门槛
 
 正常扫码、电脑确认、聊天、地址收藏及前台上传不增加人工安全步骤。以下变化不能隐藏：
 
-1. 新注册/refresh 协议不支持旧格式，需要 Gateway、Broker、手机、扩展协调升级；手机必须新原生安装包，不能只推 OTA JS，也不能用 Expo Go 验收上传。
+1. 新注册/refresh 协议不支持旧格式，需要 Gateway、Broker、手机、扩展协调升级；手机必须新原生安装包，不能只推 OTA JS，也不能用 retired cross-platform client Go 验收上传。
 2. iOS 上传切到后台可能暂停或失败，需回前台重试。若后台持续上传是必须保留的产品要求，先完成受控原生后台上传实现和真机验收，再发布本改动。
 3. 证书/身份异常、授权明确撤销、过旧的客户端会中断连接；临时断网不清除配对。历史地址恢复证明丢失会保持冻结。
 4. Linux 必须验证 Nginx 配置、端口、服务权限、证书续期，以及生产负载下撤销时延。iOS/Android 必须验证整包构建、弱网、上传取消/恢复、图片缓存、语音、前后台切换和启动 p95；当前没有真机性能数据。

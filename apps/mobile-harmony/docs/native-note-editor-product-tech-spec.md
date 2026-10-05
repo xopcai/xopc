@@ -50,9 +50,9 @@
 - 当前保存路径没有本地 draft、outbox、操作合并和冲突恢复。
 - 页面离开时以“放弃修改”对话框兜底，这与系统笔记的自动保存心智相反。
 
-### 2.2 Expo 当前实现中值得复用的部分
+### 2.2 retired cross-platform client 当前实现中值得复用的部分
 
-Expo 端已经具备相对完整的笔记领域结构：
+retired cross-platform client 端已经具备相对完整的笔记领域结构：
 
 - 笔记列表：全部 / 收件箱 / 待办 / 归档、标签、搜索、置顶、批量操作。
 - 详情页：阅读态与编辑态、标题、Markdown、标签、分享、朗读、打开对话。
@@ -203,7 +203,7 @@ AI 不进入 `NoteEditorAdapter`，也不直接操作 RichEditor selection API�
 |---|---|---|---|
 | ArkUI `RichEditorController` Span 模式 | 原生输入、选区、图文混排、IME 事件、样式与段落控制；项目 API 23 可用 | Markdown 语义需自建；无公开的完整编辑器命令栈 | 推荐 |
 | `RichEditorStyledStringController` | StyledString 管理直观，整段样式迁移方便 | 不支持 `onWillChange/onDidChange/aboutToIMEInput` 等关键增量回调；`setStyledString` 是全量替换 | 不适合作为主编辑器 |
-| ArkWeb + Tiptap | 与 Expo 逻辑接近，功能成熟 | 输入链路、桥接、首屏、内存和键盘体验不够原生 | 仅作为 fallback/spike |
+| ArkWeb + Tiptap | 与 retired cross-platform client 逻辑接近，功能成熟 | 输入链路、桥接、首屏、内存和键盘体验不够原生 | 仅作为 fallback/spike |
 | 多个 TextArea 的 block editor | 每块模型简单 | 中文输入法、跨块选择、粘贴、撤销和焦点切换复杂 | 不推荐 |
 | NDK 自研排版编辑器 | 完全可控 | 成本和风险远超当前需求 | 不考虑 |
 
@@ -293,7 +293,7 @@ TextRun
 
 ### 7.2 Markdown contract
 
-需要与 Expo 和 Gateway 共同遵守：
+需要与 retired cross-platform client 和 Gateway 共同遵守：
 
 - H1-H3：`#` / `##` / `###`。
 - 列表：`- item`。
@@ -305,7 +305,7 @@ TextRun
 - 图片：`![alt](xopc-attachment://notes/{noteId}/{attachmentId})`。
 - 文件/音频：`[label](xopc-attachment://notes/{noteId}/{attachmentId})`。
 
-必须新增跨端 golden fixtures，同一组 Markdown 在 Gateway、Expo 和 HarmonyOS parse/serialize 后保持语义一致。允许规范化空白，但不能丢块、链接、附件或 todo 状态。
+必须新增跨端 golden fixtures，同一组 Markdown 在 Gateway、retired cross-platform client 和 HarmonyOS parse/serialize 后保持语义一致。允许规范化空白，但不能丢块、链接、附件或 todo 状态。
 
 ### 7.3 RichEditor 映射策略
 
@@ -318,7 +318,7 @@ TextRun
 
 ## 8. Editor Adapter Contract
 
-HarmonyOS 端应对齐 Expo 的语义，但使用 ArkTS 类型：
+HarmonyOS 端应对齐 retired cross-platform client 的语义，但使用 ArkTS 类型：
 
 ```text
 NoteEditorAdapter
@@ -546,7 +546,7 @@ HarmonyOS 模型必须把 `remoteVersion` 与 `updatedAt` 分开，保存时发�
 
 回归测试：
 
-- Expo 与 HarmonyOS 编辑同一笔记后 Markdown 语义一致。
+- retired cross-platform client 与 HarmonyOS 编辑同一笔记后 Markdown 语义一致。
 - 笔记可被聊天引用、分享、朗读和历史恢复。
 - Gateway 版本低于能力要求时安全降级为只读或基础编辑。
 

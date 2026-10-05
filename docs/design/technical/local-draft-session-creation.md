@@ -2,7 +2,7 @@
 
 状态：主链路已实现，仍有收尾项与设备验收未完成（见末节）。日期：2026-09-27。
 
-本方案定义 Web/Electron、Expo（iOS/Android）、HarmonyOS、浏览器扩展和 TUI 的手工新会话流程。直接切换到单一协议，删除旧预创建、空壳复用和协议回退路径。下文是目标设计，具体实现与验收状态以末节为准。
+本方案定义 Web/Electron、retired cross-platform client（iOS/Android）、HarmonyOS、浏览器扩展和 TUI 的手工新会话流程。直接切换到单一协议，删除旧预创建、空壳复用和协议回退路径。下文是目标设计，具体实现与验收状态以末节为准。
 
 ## 1. 决策与边界
 
@@ -25,7 +25,7 @@
 | `web/src/features/chat/session/resolve-new-chat-target.ts` | 等会话列表，再复用或创建空壳 | 本地创建草稿，不读取列表来决定新建 |
 | `web/src/features/chat/session/webchat-empty-shell-cache.ts` | 30 秒空壳缓存 | 删除 |
 | `web/src/features/chat/session/session-manager.ts` | 创建后只返回 session，未利用响应里的 agentConfig | 由首次输入响应一次安装正式快照 |
-| `apps/mobile-expo/src/features/chat/session-prefetch.ts` | 提前 POST 创建，缓存五分钟 | 删除预创建及全部调用 |
+| `retired mobile client/src/features/chat/session-prefetch.ts` | 提前 POST 创建，缓存五分钟 | 删除预创建及全部调用 |
 | `apps/mobile-harmony/entry/src/main/ets/viewmodel/chatViewModel.ets` | create → open → history → activeRun | 草稿直接显示；接收后安装快照 |
 | `src/gateway/hono/routes/sessions.ts` | 创建、环境 attach、配置初始化串行完成后返回 | 接收与环境准备分开，准备过程可恢复 |
 | `src/gateway/service/session-input-coordinator.ts` | 输入要求会话已存在 | 增加明确的 start 命令，append 继续要求存在 |
@@ -56,7 +56,7 @@ type ChatDraft = {
 
 存储 key 包含 `gatewayId + principalId + conversationId`，不使用可变 URL 或 token 值作为身份。换网、切换同一 Gateway 的访问路由不换草稿；换 Gateway 或账号隔离数据。未配对设备先完成配对，不生成可发送目标。
 
-Web 使用 IndexedDB 保存草稿、冻结提交和附件 Blob；Expo 复用本地存储及持久附件目录；HarmonyOS 使用现有本地存储适配器与持久附件目录。共享的是 schema、状态转换和指纹规范，不跨平台封装 UI 或存储 API。临时会话草稿只留内存，退出后不做后台自动重放，UI 明确其不保留行为。
+Web 使用 IndexedDB 保存草稿、冻结提交和附件 Blob；retired cross-platform client 复用本地存储及持久附件目录；HarmonyOS 使用现有本地存储适配器与持久附件目录。共享的是 schema、状态转换和指纹规范，不跨平台封装 UI 或存储 API。临时会话草稿只留内存，退出后不做后台自动重放，UI 明确其不保留行为。
 
 URL 可直接进入 `/chat/:conversationId`。先查当前作用域的本地草稿，再走正式会话加载。不存在本地草稿的未知 UUID 按现有会话读取，404 显示不存在，绝不据此重建。别的设备在首次发送前无法打开该草稿链接；分享操作只对正式会话开放。
 
@@ -190,7 +190,7 @@ materialize 使用独立持久 command receipt，遵循相同指纹、鉴权和 
 | execution-environments | 固定资源身份、租约/版本、崩溃 reconcile、受管资源补偿 |
 | input coordinator | preparing 状态、ready 领取门禁、相同消息指纹冲突处理 |
 | Web/Electron | DraftStore、草稿路由/页面状态、持久 outbox、禁用草稿态服务端查询 |
-| Expo | 替换 prefetch/takeNewChatConversationId，query 层提交、MMKV/附件持久化、所有新建入口接入 |
+| retired cross-platform client | 替换 prefetch/takeNewChatConversationId，query 层提交、MMKV/附件持久化、所有新建入口接入 |
 | HarmonyOS | repository/VM 区分 draft/session，创建不调用 open/recover，补持久冻结提交与恢复 |
 | 浏览器扩展/Web 扩展入口 | 页面引用在发送时冻结；新建本地化，删除先创建后补配置 |
 | TUI 本地/远程 | /new 本地草稿；首次输入调用统一应用服务，远程使用同一协议，本地无 HTTP 但相同接收语义 |
@@ -199,9 +199,9 @@ materialize 使用独立持久 command receipt，遵循相同指纹、鉴权和 
 
 ### 移动端交付边界：Android、iOS、HarmonyOS
 
-HarmonyOS 是本次必交付客户端，与 Expo 的 Android/iOS 同步完成并验收，不能把“移动端完成”等同于 Expo 完成。三端共用协议和产品状态，原生存储、组件生命周期和附件访问分别实现。
+HarmonyOS 是本次必交付客户端，与 retired cross-platform client 的 Android/iOS 同步完成并验收，不能把“移动端完成”等同于 retired cross-platform client 完成。三端共用协议和产品状态，原生存储、组件生命周期和附件访问分别实现。
 
-| 能力 | Expo：Android/iOS | HarmonyOS |
+| 能力 | retired cross-platform client：Android/iOS | HarmonyOS |
 | --- | --- | --- |
 | 新建入口 | Chat、Sessions、Agent、Project 页面统一 draft factory | `ChatView.newConversation`、`sessionsViewModel.newConversation` 及首页/Agent/项目入口统一 draft factory |
 | 草稿进入 | 路由直接使用 UUID，query 根据 target.kind 启用 | `XopcChatViewModel` 增加独立 draft 进入操作；不调用正式会话 `open/recover` |
@@ -222,8 +222,8 @@ HarmonyOS 是本次必交付客户端，与 Expo 的 Android/iOS 同步完成并
 以下删除在实现时与新入口切换同一变更完成，不保留弃用壳或兜底路径：
 
 1. Web `resolve-new-chat-target.ts`、`reusable-empty-shell.ts`、`webchat-empty-shell-cache.ts` 的旧实现及专属测试；`new-chat-handoff.ts` 改为本地草稿导航，删除按 agent/project 合并远程创建 Promise 的逻辑。
-2. Expo `session-prefetch.ts` 及其服务端预热调用、TTL、pendingCreates；所有 sessions/project/agent/chat 新建按钮改用本地 draft factory。
-3. Web/HarmonyOS/Expo 的 create → config PATCH/GET → history/run → send 流程；删除从 /new 推导 creating-session 的页面状态。保留真正打开已有会话的历史加载能力。
+2. retired cross-platform client `session-prefetch.ts` 及其服务端预热调用、TTL、pendingCreates；所有 sessions/project/agent/chat 新建按钮改用本地 draft factory。
+3. Web/HarmonyOS/retired cross-platform client 的 create → config PATCH/GET → history/run → send 流程；删除从 /new 推导 creating-session 的页面状态。保留真正打开已有会话的历史加载能力。
 4. 删除通用 `POST /api/sessions` 手工空会话接口及对应公开 contract/client helpers；所有调用逐个归入 start、显式 materialize 或领域创建服务。不得留下旧 TUI/扩展调用作为例外。
 5. 删除输入旧 request shape 的解析和 fallback，统一 start/append。`ensureSessionExists` 如仅为发送前额外探测则从该路径删除；`/resolve` 若仍承担有效的只读定位语义则保留该语义，不做隐式创建。
 6. 删除 `genericNewChatShell` 空壳复用资格及专属 TUI 空壳清理逻辑；迁移中移除废弃字段。`hiddenFromSessionList` 仍有后台/任务业务用途，不作为兼容字段误删。
@@ -266,31 +266,31 @@ HarmonyOS 是本次必交付客户端，与 Expo 的 Android/iOS 同步完成并
 
 已实现：
 
-- Web、Expo、HarmonyOS、浏览器扩展与远程 TUI 的本地 UUID 草稿；删除通用创建接口、Web 空壳复用、Expo 预创建、TUI 空壳清理和公开旧创建 contract。
+- Web、retired cross-platform client、HarmonyOS、浏览器扩展与远程 TUI 的本地 UUID 草稿；删除通用创建接口、Web 空壳复用、retired cross-platform client 预创建、TUI 空壳清理和公开旧创建 contract。
 - 严格 start/append/materialize 协议；SQLite 223 迁移、主体绑定的内容指纹回执、原子接收、删除 tombstone、reset 后原回执重放。
 - 输入保持 queued，执行领取由 preparation 状态门控，等价于独立 preparing 输入状态。环境准备使用持久任务、租约、预留环境 ID、固定 base commit、CAS 完成、失败重试和删除后清理任务。
-- Web IndexedDB、Expo MMKV、鸿蒙加密 RDB、远程 TUI 本地文件保存待确认命令；临时 Web/Expo 新草稿和对应 outbox 在内存中保存。Expo 普通提交前复制临时附件到持久目录。
+- Web IndexedDB、retired cross-platform client MMKV、鸿蒙加密 RDB、远程 TUI 本地文件保存待确认命令；临时 Web/retired cross-platform client 新草稿和对应 outbox 在内存中保存。retired cross-platform client 普通提交前复制临时附件到持久目录。
 - 语音与会话文件资源显式 materialize；准备失败状态及重试入口；新建 Web 输入框与发送就绪状态分离。
 - 身份哈希排除 origin 凭据；当前附件 URI 仍参与指纹，客户端必须重用已上传引用，不能换临时签名 URL 后冒充同一提交。
 - 浏览器扩展首次发送/恢复固定 Gateway、设备、公钥身份及 outbox 键；切换主体后保留原待确认命令，拒绝旧回执与跨主体 401 重发。凭证刷新返回时校验当前主体，避免已切换的配置被旧刷新结果覆盖。新草稿只采用 main Agent 的配置默认模型，不再取模型列表第一项。
 - Embedded TUI 新建仅写私有本地草稿，不初始化 Agent 或创建 SQLite 会话；首次发送先持久化冻结命令，再通过统一事务接收并按指定输入领取，完成后更新持久输入状态。工作流启动显式物化；草稿中的模型、工作目录和项目配置支持本地编辑。
 - TUI 编辑器按会话保存文字与粘贴图片，切换和退出时刷新；远程模式按 Gateway/主体隔离目录，文件权限为 0600。清空编辑器删除对应记录及其内嵌附件。
 - Web IndexedDB 保存未发送正文、附件和上下文引用；临时新会话只写内存。恢复结果不会覆盖恢复期间新输入或主动清空的内容，切换前的编辑无需等待初次读取完成。
-- Expo 普通编辑器保存所有附件类型，不再只保存工作区引用；系统临时文件复制到应用私有 chat-drafts，提交另存 chat-outbox。回收扫描所有持久记录的引用，仅删除这两个目录下超过 24 小时、无引用、目录结构符合预期的 payload 副本，不删除源文件或 Gateway 文件。临时新草稿不复制、不落盘。
-- 鸿蒙未发送草稿移入加密 RDB 的 composers 表，保存附件内嵌数据或稳定资源引用；写入串行化并等待 RDB 写入完成，清空删除整条记录。Expo、鸿蒙和浏览器扩展的编辑器作用域统一包含 Gateway、设备身份和会话。
+- retired cross-platform client 普通编辑器保存所有附件类型，不再只保存工作区引用；系统临时文件复制到应用私有 chat-drafts，提交另存 chat-outbox。回收扫描所有持久记录的引用，仅删除这两个目录下超过 24 小时、无引用、目录结构符合预期的 payload 副本，不删除源文件或 Gateway 文件。临时新草稿不复制、不落盘。
+- 鸿蒙未发送草稿移入加密 RDB 的 composers 表，保存附件内嵌数据或稳定资源引用；写入串行化并等待 RDB 写入完成，清空删除整条记录。retired cross-platform client、鸿蒙和浏览器扩展的编辑器作用域统一包含 Gateway、设备身份和会话。
 
 仍需收尾，不能视为整套设计已验收：
 
 - Embedded TUI 已接入首次输入原子接收及孤儿领取恢复：持久化执行进程标记，进程退出后把原输入原子标记为 interrupted，不自动重放；用户可显式重试原输入或取消。正式会话后续输入、steer 和执行仍使用原本地执行器，不能宣称完整持久队列已贯通。
 - 未发送编辑器正文/附件已接入保存和清空回收；尚未实现空白会话元数据的 TTL 清理，以及无人再打开客户端时的后台文件回收。旧草稿格式不提供运行时 fallback，发布前仍需独立的数据导出/一次性转存检查，不能直接清除旧内容。
-- Expo 草稿存储失败已有可见提示，附件仅保存私有文件引用和元数据，不随按键序列化 Base64；Web 配额失败提示及各端大附件、系统强杀和跨身份操作仍需进一步验收。
+- retired cross-platform client 草稿存储失败已有可见提示，附件仅保存私有文件引用和元数据，不随按键序列化 Base64；Web 配额失败提示及各端大附件、系统强杀和跨身份操作仍需进一步验收。
 - Web 项目新建仍需读取项目详情后确定默认 Agent/执行选项；输入框已允许先编辑，但尚未完全做到项目草稿身份立即落盘。
 - 浏览器扩展在 Gateway/配对主体切换期间的所有异步回调隔离，以及各端冷启动/杀进程/弱网交互，需要进一步端到端验证。
 - 未执行 p95 延迟测量；未执行真实模型首条输入测试，HTTP 集成测试使用真实监听、鉴权和 SQLite，但模拟模型执行器。
 
-前轮验证：根项目相关回归 351 文件 / 2109 测试通过；Expo 91 文件 / 532 测试通过；鸿蒙逻辑回归 72 文件 / 438 测试通过。Node、Web、Expo 和浏览器扩展类型检查通过。
+前轮验证：根项目相关回归 351 文件 / 2109 测试通过；retired cross-platform client 91 文件 / 532 测试通过；鸿蒙逻辑回归 72 文件 / 438 测试通过。Node、Web、retired cross-platform client 和浏览器扩展类型检查通过。
 
-本轮验证：TUI、Web 聊天、浏览器扩展与 SQLite 创建相关回归 220 文件 / 1343 测试通过；Expo 92 文件 / 536 测试通过，回收触发点补充后专项 12 测试通过；鸿蒙逻辑回归 74 文件 / 444 测试通过。Node、Web、Expo、扩展类型检查通过。鸿蒙原生整包构建成功，仍有 SDK/异常处理警告；构建配置没有 signingConfig，Pura90Pro 模拟器部署调用超时，未改为安装到已连接的真实手机，因此设备安装与弱网验收未完成。并行的鸿蒙图片/语音界面改动保留，未计为本任务实现。
+本轮验证：TUI、Web 聊天、浏览器扩展与 SQLite 创建相关回归 220 文件 / 1343 测试通过；retired cross-platform client 92 文件 / 536 测试通过，回收触发点补充后专项 12 测试通过；鸿蒙逻辑回归 74 文件 / 444 测试通过。Node、Web、retired cross-platform client、扩展类型检查通过。鸿蒙原生整包构建成功，仍有 SDK/异常处理警告；构建配置没有 signingConfig，Pura90Pro 模拟器部署调用超时，未改为安装到已连接的真实手机，因此设备安装与弱网验收未完成。并行的鸿蒙图片/语音界面改动保留，未计为本任务实现。
 
 ### Web 发送阻断修复（2026-09-27）
 

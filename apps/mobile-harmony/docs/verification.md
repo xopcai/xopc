@@ -19,7 +19,7 @@ The CI build also reads the packaged HAP manifest and checks `minAPIVersion = 60
 | Gateway types | Root `pnpm run typecheck` passed |
 | Client host tests | 13 files / 51 tests: protocols, fixtures, real Gateway auth handlers, refresh/completion recovery, Asset chunking, WS state/cursors, workspace contracts, Markdown, notification routing, voice lifecycle, chat request isolation, attachment picker/limits/history/idempotency |
 | Backend regression | 9 files / 47 tests: SQLite migration and references, HarmonyOS platform parsing, pairing/notes/push routes, provider separation, Huawei PS256/V3 requests, existing delivery storage |
-| Existing Expo regression | 170 files / 946 tests passed |
+| Historical cross-platform client regression | 170 files / 946 tests passed before retirement |
 | Native crypto/storage | 3 tests on Pura 90 Pro API 26 emulator: Unicode/chunk/empty/delete Asset operations, P-256 compact signatures and key restore, Ed25519 verification/tamper rejection |
 | Native TLS pairing | 1 test: NetworkKit HTTPS → real isolated Hono pairing/auth routes → native P-256/Ed25519 → durable credentials → new session instance → refresh rotation → authenticated request |
 | Native UI | 1 smoke test: reject invalid link, enter settings, Chinese/English switch, dark/system appearance, return to connection page |

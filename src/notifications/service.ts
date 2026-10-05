@@ -3,10 +3,7 @@ import { localizeNotification, type ProductNotificationType } from '@xopcai/gate
 
 import { createLogger } from '../utils/logger.js';
 
-import {
-  disableNotificationDeviceForPushToken,
-  listDeliverableNotificationDevices,
-} from './device-store.js';
+import { listDeliverableNotificationDevices } from './device-store.js';
 import { notificationPlanFromGatewayEvent, type NotificationPlan } from './planner.js';
 import {
   createNotificationEvent,
@@ -15,7 +12,6 @@ import {
   listDueNotificationDeliveries,
   markNotificationDeliveryAccepted,
   markNotificationDeliveryDead,
-  markNotificationDeliveryDelivered,
   pruneNotificationEvents,
   rescheduleNotificationDelivery,
   type NotificationDelivery,
@@ -26,18 +22,8 @@ import { sendHarmonyPush } from './harmony-push.js';
 import { getOrCreateGatewayIdentity } from '../storage/sqlite/gateway-identity-repository.js';
 
 const log = createLogger('Notifications');
-const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
-const EXPO_RECEIPTS_URL = 'https://exp.host/--/api/v2/push/getReceipts';
 const MAX_DELIVERY_ATTEMPTS = 5;
 const RETRY_DELAYS_MS = [30_000, 120_000, 600_000, 3_600_000, 21_600_000];
-const RECEIPT_DELAY_MS = 15 * 60_000;
-
-type ExpoResult = {
-  status?: string;
-  id?: string;
-  message?: string;
-  details?: { error?: string };
-};
 
 const STANDARD_PREFERENCES: Partial<Record<ProductNotificationType, keyof NotificationPreferences | true>> = {
   'chat.completed': 'chatCompleted', 'chat.failed': 'chatFailed',
@@ -55,10 +41,6 @@ function preferenceAllows(type: ProductNotificationType, preferences: Notificati
 
 function retryAt(attempts: number, now: number): number {
   return now + RETRY_DELAYS_MS[Math.min(attempts, RETRY_DELAYS_MS.length - 1)]!;
-}
-
-function expoError(result: ExpoResult): string {
-  return result.details?.error || result.message || 'Expo rejected the notification';
 }
 
 export class NotificationService {
@@ -139,7 +121,6 @@ export class NotificationService {
       }
       for (const notification of this.options.domainDelivery?.flush((plan) => this.persistPlan(plan)) ?? []) this.options.publish('notification.created', notification);
       await this.deliverPending();
-      await this.checkReceipts();
       await this.options.domainDelivery?.drain();
     } catch (err) {
       log.warn({ err }, 'Notification delivery pass failed');
@@ -176,87 +157,20 @@ export class NotificationService {
     const localized = localizeNotification(delivery.event, delivery.locale);
     const preview = domain?.mobilePreview(delivery.event, delivery.locale) ?? { title: localized.localizedTitle, body: localized.localizedBody };
     try {
-      if (delivery.platform === 'harmonyos') {
-        const ticket = await (this.options.sendHarmony ?? sendHarmonyPush)({
-          pushToken: delivery.pushToken, eventId: delivery.event.id,
-          gatewayId: getOrCreateGatewayIdentity().id, target: delivery.event.target,
-          title: preview.title,
-          body: preview.body,
-        }, fetchImpl);
-        // Provider acceptance is not a device delivery receipt. V3 has no Expo receipt to poll.
-        markNotificationDeliveryAccepted(delivery.event.id, delivery.deviceId, ticket, Number.MAX_SAFE_INTEGER);
+      if (delivery.platform !== 'harmonyos') {
+        markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Native push provider is not configured');
         return;
       }
-      const response = await fetchImpl(EXPO_PUSH_URL, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        signal: AbortSignal.timeout(10_000),
-        body: JSON.stringify({
-          to: delivery.pushToken,
-          title: preview.title,
-          body: preview.body,
-          sound: delivery.event.priority === 'high' ? 'default' : undefined,
-          priority: delivery.event.priority,
-          data: {
-            eventId: delivery.event.id,
-            target: delivery.event.target,
-            ...delivery.event.payload,
-          },
-        }),
-      });
-      if (!response.ok) throw new Error(`Expo push request failed (${response.status})`);
-      const body = await response.json() as { data?: ExpoResult | ExpoResult[] };
-      const result = Array.isArray(body.data) ? body.data[0] : body.data;
-      if (result?.status !== 'ok' || !result.id) {
-        const error = expoError(result ?? {});
-        if (result?.details?.error === 'DeviceNotRegistered') {
-          disableNotificationDeviceForPushToken(delivery.pushToken);
-          markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, error);
-          return;
-        }
-        throw new Error(error);
-      }
-      markNotificationDeliveryAccepted(
-        delivery.event.id,
-        delivery.deviceId,
-        result.id,
-        Date.now() + RECEIPT_DELAY_MS,
-      );
+      const ticket = await (this.options.sendHarmony ?? sendHarmonyPush)({
+        pushToken: delivery.pushToken, eventId: delivery.event.id,
+        gatewayId: getOrCreateGatewayIdentity().id, target: delivery.event.target,
+        title: preview.title,
+        body: preview.body,
+      }, fetchImpl);
+      // Huawei Push Kit V3 exposes provider acceptance but no device delivery receipt.
+      markNotificationDeliveryAccepted(delivery.event.id, delivery.deviceId, ticket, Number.MAX_SAFE_INTEGER);
     } catch (err) {
       this.retryOrFail(delivery, err);
-    }
-  }
-
-  private async checkReceipts(): Promise<void> {
-    const deliveries = listDueNotificationDeliveries('accepted');
-    const withTickets = deliveries.filter((delivery) => delivery.platform !== 'harmonyos' && delivery.providerTicketId);
-    if (withTickets.length === 0) return;
-    const fetchImpl = this.options.fetch ?? fetch;
-    try {
-      const response = await fetchImpl(EXPO_RECEIPTS_URL, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        signal: AbortSignal.timeout(10_000),
-        body: JSON.stringify({ ids: withTickets.map((delivery) => delivery.providerTicketId) }),
-      });
-      if (!response.ok) throw new Error(`Expo receipt request failed (${response.status})`);
-      const body = await response.json() as { data?: Record<string, ExpoResult> };
-      for (const delivery of withTickets) {
-        const result = body.data?.[delivery.providerTicketId!];
-        if (!result) {
-          this.retryOrFail(delivery, new Error('Expo receipt is not ready'), 'accepted');
-        } else if (result.status === 'ok') {
-          markNotificationDeliveryDelivered(delivery.event.id, delivery.deviceId);
-        } else {
-          const error = expoError(result);
-          if (result.details?.error === 'DeviceNotRegistered') {
-            disableNotificationDeviceForPushToken(delivery.pushToken);
-          }
-          markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, error);
-        }
-      }
-    } catch (err) {
-      for (const delivery of withTickets) this.retryOrFail(delivery, err, 'accepted');
     }
   }
 

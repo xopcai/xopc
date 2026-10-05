@@ -139,7 +139,7 @@ describe('ChatStreamMapper', () => {
       content: [{ type: 'text', text: 'review it' }],
       metadata: {
         sourceContexts: [{
-          kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-expo',
+          kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-ios',
           fileKind: 'directory', text: 'private directory listing',
         }],
       },
@@ -150,7 +150,7 @@ describe('ChatStreamMapper', () => {
         message: {
           metadata: {
             sourceContexts: [{
-              kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-expo',
+              kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-ios',
               fileKind: 'directory',
             }],
           },

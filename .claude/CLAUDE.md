@@ -1,7 +1,7 @@
 === DEVECO NATIVE FLOW — MULTI-PLATFORM DEVELOPMENT ===
 
 This project uses deveco-native-flow for HarmonyOS/Android/iOS development.
-Detected platforms: Android and iOS through Expo; HarmonyOS is planned.
+Detected platforms: native Android, native iOS, and HarmonyOS.
 
 ### Skill Paths
 
