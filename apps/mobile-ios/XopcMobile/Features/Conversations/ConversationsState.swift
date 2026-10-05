@@ -6,32 +6,83 @@ import Observation
 final class ConversationsState {
     private(set) var conversations: [ConversationSummary] = []
     private(set) var isLoading = false
+    private(set) var isLoadingMore = false
+    private(set) var hasMore = false
     private(set) var errorMessage: String?
     private(set) var operatingConversationID: String?
     var searchText = ""
+    private var activeSearch = ""
+    private var generation = 0
+    private var nextOffset = 0
 
     var visibleConversations: [ConversationSummary] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query == activeSearch else { return [] }
         guard !query.isEmpty else { return conversations }
-        return conversations.filter {
-            $0.displayName.localizedCaseInsensitiveContains(query)
-                || $0.agentId.localizedCaseInsensitiveContains(query)
-        }
+        let titleMatches = conversations.filter { $0.displayName.localizedCaseInsensitiveContains(query) }
+        let otherMatches = conversations.filter { !$0.displayName.localizedCaseInsensitiveContains(query) }
+        return titleMatches + otherMatches
     }
 
     func load(using gateway: any GatewayServing) async {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        generation += 1
+        let current = generation
+        if query != activeSearch {
+            conversations = []
+            nextOffset = 0
+            hasMore = false
+        }
+        activeSearch = query
         isLoading = true
+        isLoadingMore = false
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            if current == generation {
+                isLoading = false
+            }
+        }
 
         do {
-            let page = try await gateway.fetchConversations(search: "")
-            guard !Task.isCancelled else { return }
+            let page = try await gateway.fetchConversations(search: query, offset: 0)
+            guard current == generation, !Task.isCancelled else { return }
             conversations = page.items
+            nextOffset = page.items.count
+            hasMore = page.hasMore
         } catch is CancellationError {
             return
         } catch {
-            guard !Task.isCancelled else { return }
+            guard current == generation, !Task.isCancelled else { return }
+            conversations = []
+            nextOffset = 0
+            hasMore = false
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadMore(using gateway: any GatewayServing) async {
+        guard hasMore, !isLoading, !isLoadingMore,
+              activeSearch == searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        else { return }
+        let current = generation
+        let offset = nextOffset
+        isLoadingMore = true
+        defer {
+            if current == generation {
+                isLoadingMore = false
+            }
+        }
+        do {
+            let page = try await gateway.fetchConversations(search: activeSearch, offset: offset)
+            guard current == generation, !Task.isCancelled else { return }
+            let existing = Set(conversations.map(\.id))
+            conversations.append(contentsOf: page.items.filter { !existing.contains($0.id) })
+            nextOffset += page.items.count
+            hasMore = page.hasMore && !page.items.isEmpty
+        } catch is CancellationError {
+            return
+        } catch {
+            guard current == generation, !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
     }

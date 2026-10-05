@@ -2,7 +2,7 @@ import Foundation
 
 protocol GatewayServing: Sendable {
     func fetchAgents() async throws -> AgentCatalog
-    func fetchConversations(search: String) async throws -> ConversationPage
+    func fetchConversations(search: String, offset: Int) async throws -> ConversationPage
     func fetchHistory(conversationID: String) async throws -> ConversationHistory
     func fetchContext(conversationID: String) async throws -> ConversationContextSummary
     func fetchModels(agentID: String) async throws -> ChatModelCatalog
@@ -187,10 +187,10 @@ struct GatewayClient: GatewayServing, Sendable {
         return catalog
     }
 
-    func fetchConversations(search: String = "") async throws -> ConversationPage {
+    func fetchConversations(search: String = "", offset: Int = 0) async throws -> ConversationPage {
         var query = [
             URLQueryItem(name: "limit", value: "50"),
-            URLQueryItem(name: "offset", value: "0"),
+            URLQueryItem(name: "offset", value: String(offset)),
             URLQueryItem(name: "channel", value: "webchat"),
             URLQueryItem(name: "sortBy", value: "updatedAt"),
             URLQueryItem(name: "sortOrder", value: "desc")

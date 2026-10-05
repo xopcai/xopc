@@ -59,6 +59,25 @@ class ConversationRepositoryTest {
     assertEquals(false, page.hasMore)
   }
 
+  @Test fun sessionListRetainsTaskChildrenForReturnedParentsOnly() {
+    val parent = "11111111-2222-3333-4444-555555555555"
+    val child = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    val page = ConversationRepository.parseList("""{"items":[{"key":"$parent","title":"Parent",
+      "updatedAt":"2026-10-05T00:00:00Z","messageCount":1}],"hasMore":false,
+      "childrenByConversationId":{"$parent":{"total":1,"activeCount":1,"items":[{"taskId":"task-1",
+      "title":"Research","phase":"active","runStatus":"running","activeConversationId":"$child"}]},
+      "other":{"total":0,"activeCount":0,"items":[]}}}""")
+    assertEquals(setOf(parent), page.taskGroups.keys)
+    assertEquals("task-1", page.taskGroups.getValue(parent).items.single().taskId)
+    assertEquals(child, page.taskGroups.getValue(parent).items.single().activeConversationId)
+    assertThrows(IllegalArgumentException::class.java) {
+      ConversationRepository.parseList("""{"items":[{"key":"$parent","title":"Parent",
+        "updatedAt":"2026-10-05T00:00:00Z","messageCount":1}],"hasMore":false,
+        "childrenByConversationId":{"$parent":{"total":0,"activeCount":0,"items":[{"taskId":"task-1",
+        "title":"Research","phase":"active"}]}}}""")
+    }
+  }
+
   @Test fun contextSummaryRetainsScopeAndRejectsAnotherConversation() {
     val id = "11111111-2222-3333-4444-555555555555"
     val raw = """{"summary":{"conversationId":"$id","work":{"project":{"id":"project-1","title":"Alpha"},"task":{"id":"task-1","title":"Review"}},"environment":{"kind":"managed_worktree","rootPath":"/work/alpha","available":true,"branch":"main"},"sources":[{"id":"note-1","title":"Brief","unavailable":false}],"sourcesHasMore":true,"unavailableSections":["attachments"]}}"""

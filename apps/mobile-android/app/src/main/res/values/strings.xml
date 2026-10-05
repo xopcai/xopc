@@ -214,6 +214,15 @@
     <string name="conversations_archive">Archive</string>
     <string name="conversations_unarchive">Unarchive</string>
     <string name="conversations_archived">Archived</string>
+    <string name="conversations_share">Share</string>
+    <string name="conversations_share_confirm">Share a snapshot of %1$d messages and %2$d attachment candidates? The link expires in 24 hours.</string>
+    <string name="conversations_share_error">Could not confirm the share. Check Share Center before trying again.</string>
+    <string name="conversations_expand_tasks">Expand task conversations</string>
+    <string name="conversations_collapse_tasks">Collapse task conversations</string>
+    <string name="conversations_task_running">In progress</string>
+    <string name="conversations_task_completed">Completed</string>
+    <string name="conversations_task_failed">Failed</string>
+    <string name="conversations_task_waiting">Not started</string>
     <string name="conversations_archive_error">Could not change the archived state. Try again.</string>
     <string name="conversations_delete">Delete</string>
     <string name="conversations_undo">Undo</string>

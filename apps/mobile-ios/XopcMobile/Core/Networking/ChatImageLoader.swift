@@ -32,6 +32,35 @@ struct ChatImageLoader: Sendable {
     }
 }
 
+struct ChatAudioLoader: Sendable {
+    let configuration: GatewayConfiguration
+    let session: URLSession
+
+    init(configuration: GatewayConfiguration, session: URLSession = .shared) {
+        self.configuration = configuration
+        self.session = session
+    }
+
+    func load(uri: String, conversationID: String) async throws -> Data {
+        guard uri.hasPrefix("media://"),
+              let request = ChatImageSource.resolve(uri, conversationID: conversationID)?
+              .request(configuration: configuration)
+        else { throw ChatImageError.invalidSource }
+        let (bytes, response) = try await session.bytes(for: request, delegate: ChatImageRedirectBlocker())
+        guard let response = response as? HTTPURLResponse, response.statusCode == 200,
+              response.value(forHTTPHeaderField: "Content-Type")?.lowercased().hasPrefix("audio/") == true
+        else { throw ChatImageError.invalidResponse }
+        guard response.expectedContentLength <= AttachmentPolicy.maximumBytes else { throw ChatImageError.tooLarge }
+        var data = Data()
+        for try await byte in bytes {
+            guard data.count < AttachmentPolicy.maximumBytes else { throw ChatImageError.tooLarge }
+            data.append(byte)
+        }
+        guard !data.isEmpty else { throw ChatImageError.invalidResponse }
+        return data
+    }
+}
+
 enum ChatImageError: Error {
     case invalidSource
     case invalidResponse

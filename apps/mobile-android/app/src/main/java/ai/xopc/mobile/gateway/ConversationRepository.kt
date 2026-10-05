@@ -18,7 +18,16 @@ data class ConversationSummary(
   val isLocalDraft: Boolean = false,
   val status: String = "active",
 )
-data class ConversationPage(val items: List<ConversationSummary>, val remoteCount: Int, val hasMore: Boolean)
+data class ConversationTaskChild(val taskId: String, val title: String, val phase: String,
+  val runStatus: String?, val activeConversationId: String?)
+data class ConversationTaskGroup(val total: Int, val activeCount: Int, val items: List<ConversationTaskChild>)
+data class ConversationPage(val items: List<ConversationSummary>, val remoteCount: Int, val hasMore: Boolean,
+  val taskGroups: Map<String, ConversationTaskGroup> = emptyMap())
+data class ConversationSharePreview(val conversationId: String, val transcriptId: String,
+  val cutoffSeq: Long, val metadataUpdatedAt: String, val title: String,
+  val messageCount: Int, val attachmentCount: Int)
+data class ConversationShare(val conversationId: String, val id: String, val title: String,
+  val url: String, val reachability: String, val hint: String, val expiresAt: String)
 data class ContextWorkItem(val id: String, val title: String)
 data class ContextSource(val id: String, val title: String, val unavailable: Boolean)
 data class ContextEnvironment(val kind: String, val rootPath: String, val available: Boolean, val branch: String?)
@@ -278,9 +287,27 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
 
   fun list(search: String = "", offset: Int = 0, limit: Int = 20): ConversationPage {
     require(offset >= 0 && limit in 1..100)
-    val query = "?limit=$limit&offset=$offset&channel=webchat&rootConversationsOnly=true&sortBy=updatedAt&sortOrder=desc&search=${encode(search.trim())}"
+    val roots = if (search.isBlank()) "&rootConversationsOnly=true" else ""
+    val query = "?limit=$limit&offset=$offset&channel=webchat$roots&sortBy=updatedAt&sortOrder=desc&search=${encode(search.trim())}"
     val remote = parseList(gateway.request("/api/sessions$query"))
     return remote.copy(items = (if (offset == 0) localDrafts(search) else emptyList()) + remote.items)
+  }
+
+  fun sharePreview(conversationId: String): ConversationSharePreview {
+    require(conversationId.matches(Regex("[0-9a-fA-F-]{36}"))) { "INVALID_CONVERSATION_ID" }
+    return parseSharePreview(conversationId,
+      gateway.request("/api/sessions/$conversationId/share-preview"))
+  }
+
+  fun share(preview: ConversationSharePreview): ConversationShare {
+    require(preview.conversationId.matches(Regex("[0-9a-fA-F-]{36}"))) { "INVALID_CONVERSATION_ID" }
+    val body = JSONObject().put("expectedTranscriptId", preview.transcriptId)
+      .put("expectedCutoffSeq", preview.cutoffSeq)
+      .put("expectedMetadataUpdatedAt", preview.metadataUpdatedAt)
+      .put("ttlMs", 86_400_000).put("maxViews", JSONObject.NULL)
+      .put("includeToolActivities", true)
+    return parseConversationShare(preview,
+      gateway.request("/api/sessions/${preview.conversationId}/shares", "POST", body.toString()))
   }
 
   fun history(conversationId: String): ConversationHistory {
@@ -705,7 +732,66 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         ConversationSummary(id, title, item.getString("updatedAt"), item.getInt("messageCount"),
           item.optString("agentId").takeIf(String::isNotBlank), status = status)
       }
-      return ConversationPage(parsed, parsed.size, root.getBoolean("hasMore") && parsed.isNotEmpty())
+      val groups = root.optJSONObject("childrenByConversationId")
+      require(!root.has("childrenByConversationId") || groups != null) { "INVALID_SESSION_LIST" }
+      val ids = parsed.mapTo(mutableSetOf()) { it.id }
+      val taskGroups = mutableMapOf<String, ConversationTaskGroup>()
+      if (groups != null) for (id in groups.keys()) {
+        if (id !in ids) continue
+        val group = groups.getJSONObject(id)
+        val rows = group.getJSONArray("items")
+        val total = group.getInt("total")
+        val activeCount = group.getInt("activeCount")
+        require(total >= 0 && activeCount in 0..total && rows.length() <= 500 && rows.length() <= total) {
+          "INVALID_SESSION_LIST"
+        }
+        val children = (0 until rows.length()).map { index ->
+          val row = rows.getJSONObject(index)
+          val taskId = row.getString("taskId")
+          val title = row.getString("title")
+          require(taskId.isNotBlank() && title.isNotBlank()) { "INVALID_SESSION_LIST" }
+          ConversationTaskChild(taskId, title, row.getString("phase"),
+            row.optString("runStatus").takeIf(String::isNotBlank),
+            row.optString("activeConversationId").takeIf(String::isNotBlank))
+        }
+        taskGroups[id] = ConversationTaskGroup(total, activeCount, children)
+      }
+      return ConversationPage(parsed, parsed.size, root.getBoolean("hasMore") && parsed.isNotEmpty(), taskGroups)
+    }
+
+    fun parseSharePreview(conversationId: String, raw: String): ConversationSharePreview {
+      val envelope = JSONObject(raw)
+      require(envelope.optBoolean("ok")) { "INVALID_SESSION_SHARE_PREVIEW" }
+      val payload = envelope.getJSONObject("payload")
+      val transcriptId = payload.getString("transcriptId")
+      val cutoffSeq = payload.getLong("cutoffSeq")
+      val updatedAt = payload.getString("metadataUpdatedAt")
+      val title = payload.optString("title").ifBlank { "Conversation" }
+      val messageCount = payload.getInt("messageCount")
+      val attachments = payload.getJSONArray("attachmentCandidates")
+      require(transcriptId.isNotBlank() && transcriptId.length <= 256 && cutoffSeq >= 0 &&
+        updatedAt.isNotBlank() && updatedAt.length <= 100 && title.length <= 1000 &&
+        messageCount >= 0 && attachments.length() <= 1000) { "INVALID_SESSION_SHARE_PREVIEW" }
+      return ConversationSharePreview(conversationId, transcriptId, cutoffSeq, updatedAt,
+        title, messageCount, attachments.length())
+    }
+
+    fun parseConversationShare(preview: ConversationSharePreview, raw: String): ConversationShare {
+      val envelope = JSONObject(raw)
+      require(envelope.optBoolean("ok")) { "INVALID_SESSION_SHARE" }
+      val payload = envelope.getJSONObject("payload")
+      val id = payload.getString("id")
+      val url = payload.getString("shareUrl")
+      val reachability = payload.getString("reachability")
+      val expiresAt = payload.getString("expiresAt")
+      val uri = java.net.URI(url)
+      require(id.matches(Regex("[A-Za-z0-9_-]{1,128}")) && payload.getString("kind") == "session" &&
+        uri.scheme in setOf("http", "https") && !uri.host.isNullOrBlank() && uri.userInfo == null &&
+        url.length <= 4096 && reachability in setOf("public", "lan", "local-only") &&
+        expiresAt.length in 1..100) { "INVALID_SESSION_SHARE" }
+      return ConversationShare(preview.conversationId, id,
+        payload.optString("title").ifBlank { preview.title }.take(1000), url,
+        reachability, payload.optString("reachabilityHint").take(500), expiresAt)
     }
 
     fun parseContext(conversationId: String, raw: String, configRaw: String): ConversationContext {
