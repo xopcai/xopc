@@ -159,6 +159,12 @@
     <string name="assistant_copy">Copy</string>
     <string name="assistant_copy_code">Copy code</string>
     <string name="assistant_reuse">Reuse</string>
+    <string name="connection_wait_title">Connection needed</string>
+    <string name="connection_wait_resuming">Resuming work</string>
+    <string name="connection_wait_details">Details</string>
+    <string name="connection_wait_desktop">Complete this connection on desktop.</string>
+    <string name="connection_wait_browser">Browser authorization is available through Gateway.</string>
+    <string name="connection_wait_android_readonly">Connection actions are not available in Android yet. Use Gateway to continue.</string>
     <string name="assistant_save_note">Save as note</string>
     <string name="assistant_saved_note">Saved to Notes</string>
     <string name="assistant_save_note_error">Could not save to Notes. Try again.</string>

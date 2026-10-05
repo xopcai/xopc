@@ -767,6 +767,8 @@ final class ParityAcceptanceUITests: XCTestCase {
         app.buttons["新建笔记"].tap()
         XCTAssertTrue(app.buttons["notes-create-text"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["notes-create-voice"].exists)
+        app.buttons["notes-create-text"].tap()
+        XCTAssertTrue(app.navigationBars["新建笔记"].waitForExistence(timeout: 5))
     }
 
     func testNotesFilesEntryOpensFileLibrary() {

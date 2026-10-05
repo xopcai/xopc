@@ -129,18 +129,30 @@ struct AssistantView<Dock: View>: View {
             ProgressView("正在连接助手…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let errorMessage = state.errorMessage, state.agents.isEmpty {
-            ContentUnavailableView {
-                Label("无法连接 Gateway", systemImage: "network.slash")
-            } description: {
+            VStack(spacing: 16) {
+                Image(systemName: "network.slash")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Text("无法连接 Gateway")
+                    .font(.title2.bold())
                 Text(errorMessage)
-            } actions: {
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Button("连接设置", action: onOpenSettings)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                 Button("重试") {
                     Task {
                         await state.load(using: GatewayClient(configuration: configuration))
                     }
                 }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
             }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if state.isLoadingHistory {
             ProgressView("正在读取消息…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
