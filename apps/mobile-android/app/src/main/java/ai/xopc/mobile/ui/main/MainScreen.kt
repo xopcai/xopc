@@ -325,6 +325,7 @@ fun MainScreen(
   onRetryExecution: () -> Unit = {},
   onCloseExecution: () -> Unit = {},
   onSaveMessageAsNote: (String) -> Unit = {},
+  onReuseMessage: (String) -> Boolean = { false },
   onMessageNoteFeedbackHandled: (MessageNoteFeedback) -> Unit = {},
   onLoadNotes: (String, String) -> Unit = { _, _ -> },
   onLoadMoreNotes: () -> Unit = {},
@@ -523,7 +524,7 @@ fun MainScreen(
     onSubmitProgressTaskSearch = onSubmitProgressTaskSearch,
     onOpenExecution = onOpenExecution, onRetryExecution = onRetryExecution,
     onCloseExecution = onCloseExecution,
-    onSaveMessageAsNote = onSaveMessageAsNote,
+    onSaveMessageAsNote = onSaveMessageAsNote, onReuseMessage = onReuseMessage,
     onCopyMessageText = { value ->
       (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
         .setPrimaryClip(ClipData.newPlainText(context.getString(R.string.assistant_copy), value))
@@ -629,6 +630,7 @@ internal fun MainContent(
   onRetryExecution: () -> Unit = {},
   onCloseExecution: () -> Unit = {},
   onSaveMessageAsNote: (String) -> Unit = {},
+  onReuseMessage: (String) -> Boolean = { false },
   onCopyMessageText: (String) -> Unit = {},
   onLoadNotes: (String, String) -> Unit = { _, _ -> },
   onLoadMoreNotes: () -> Unit = {},
@@ -795,7 +797,7 @@ internal fun MainContent(
           onSendMessage, onRetryPendingInput, onStopRun,
           onReloadModels, onSelectModel, onReloadAgents, onSwitchAgent, onReloadContext,
           onOpenExecution, onRetryExecution, onCloseExecution,
-          onCopyMessageText, onSaveMessageAsNote,
+          onCopyMessageText, onSaveMessageAsNote, onReuseMessage,
           assistantActionsOpen, { assistantActionsOpen = it })
         else ConversationsScreen(connection, insets, onConversationSearchChange, onLoadMoreConversations, {
           onCreateConversation()
@@ -1110,6 +1112,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onRetryExecution: () -> Unit, onCloseExecution: () -> Unit,
   onCopyMessageText: (String) -> Unit,
   onSaveMessageAsNote: (String) -> Unit,
+  onReuseMessage: (String) -> Boolean,
   actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -1226,7 +1229,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             Text(if (message.role == "user") stringResource(R.string.message_you) else stringResource(R.string.tab_assistant),
               style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             Text(message.text, style = MaterialTheme.typography.bodyLarge)
-            if (message.role == "assistant") TextButton(onClick = { messageActionsId = message.id },
+            if (message.role == "assistant" || message.role == "user") TextButton(onClick = { messageActionsId = message.id },
               modifier = Modifier.testTag("message-more-${message.id}")) {
               Text(stringResource(R.string.assistant_message_more))
             }
@@ -1464,7 +1467,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
       Text(stringResource(R.string.assistant_message_more), style = MaterialTheme.typography.titleMedium)
-      TextButton(onClick = {
+      if (actionsMessage.role == "assistant") TextButton(onClick = {
         messageActionsId = null
         messageDetailId = actionsMessage.id
       }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-detail-action")) {
@@ -1476,18 +1479,30 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-copy-action")) {
         Text(stringResource(R.string.assistant_copy), modifier = Modifier.fillMaxWidth())
       }
-      if (actionsMessage.text.isNotBlank()) TextButton(onClick = {
+      if (actionsMessage.role == "assistant" && actionsMessage.text.isNotBlank()) TextButton(onClick = {
         messageActionsId = null
         onSaveMessageAsNote(actionsMessage.id)
       }, enabled = connection.savingMessageNoteId == null,
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-save-note-action")) {
         Text(stringResource(R.string.assistant_save_note), modifier = Modifier.fillMaxWidth())
       }
-      if (codeText.isNotEmpty()) TextButton(onClick = {
+      if (actionsMessage.role == "assistant" && codeText.isNotEmpty()) TextButton(onClick = {
         messageActionsId = null
         onCopyMessageText(codeText)
       }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-copy-code-action")) {
         Text(stringResource(R.string.assistant_copy_code), modifier = Modifier.fillMaxWidth())
+      }
+      if (actionsMessage.role == "user" && actionsMessage.text.isNotBlank() &&
+        !actionsMessage.hasNonTextContent) TextButton(onClick = {
+        if (onReuseMessage(actionsMessage.id)) {
+          messageActionsId = null
+          onActionsOpenChange(false)
+          focusDraftRevision++
+        }
+      }, enabled = !connection.sending && connection.pendingInput == null &&
+        !connection.attachmentLoading && connection.draftAttachments.isEmpty() && connection.draftRefs.isEmpty(),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-reuse-action")) {
+        Text(stringResource(R.string.assistant_reuse), modifier = Modifier.fillMaxWidth())
       }
       TextButton(onClick = { messageActionsId = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         Text(stringResource(R.string.assistant_close))
