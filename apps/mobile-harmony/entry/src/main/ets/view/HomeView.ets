@@ -1,5 +1,6 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatView } from './ChatView';
+import { CHAT_ACTION_PANEL_CLOSE_MS, CHAT_ACTION_PANEL_OPEN_MS, XopcChatActionPanel } from './ChatActionPanel';
 import { XopcSessionsView } from './SessionsView';
 import { XopcWorkspaceView } from './WorkspaceView';
 import { XopcProjectSpaceView } from './ProjectSpaceView';
@@ -101,7 +102,7 @@ export struct XopcHomeView {
   }
   aboutToDisappear(): void {
     quickChatIntake.clear();
-    this.setQuickPanel(false);
+    this.setQuickPanel(false, false);
     layoutState.dismissTabNavigation = undefined;
     notificationNavigation.onTarget = undefined; clearInterval(this.attentionTimer); this.attention.dispose();
     try { accessibility.offAnimationReduceStateChange(this.onMotionChange); } catch (_) {}
@@ -319,13 +320,20 @@ export struct XopcHomeView {
     } finally { this.quickSending = false; }
   }
 
-  private setQuickPanel(open: boolean): void {
+  private setQuickPanel(open: boolean, animated: boolean = true): void {
+    if (this.quickPanelOpen === open) { layoutState.chatActionsOpen = open; return; }
     if (open) {
       this.quickEditor.stopEditing();
       this.getUIContext().getFocusController().clearFocus();
     }
-    this.quickPanelOpen = open;
-    layoutState.chatActionsOpen = open;
+    if (!animated || this.layout.reduceMotion) {
+      this.quickPanelOpen = open; layoutState.chatActionsOpen = open;
+      return;
+    }
+    this.getUIContext().animateTo({ duration: open ? CHAT_ACTION_PANEL_OPEN_MS : CHAT_ACTION_PANEL_CLOSE_MS,
+      curve: open ? Curve.EaseOut : Curve.EaseInOut }, (): void => {
+      this.quickPanelOpen = open; layoutState.chatActionsOpen = open;
+    });
   }
 
   private chooseQuickAction(id: string): void {
@@ -494,47 +502,8 @@ export struct XopcHomeView {
     }
   }
 
-  @Builder
-  quickActionTile(id: string, label: Resource, symbol: Resource, enabled: boolean) {
-    Button({ type: ButtonType.Normal }) {
-      Column({ space: 6 }) {
-        Row() {
-          SymbolGlyph(symbol).fontSize(24).fontColor([this.colors.foreground])
-        }.width(48).height(48).justifyContent(FlexAlign.Center).alignItems(VerticalAlign.Center)
-          .borderRadius(14).backgroundColor(this.colors.input)
-        Text(label).fontSize(12).fontColor(this.colors.secondary).maxLines(2).textAlign(TextAlign.Center)
-      }.width('100%')
-    }.id('home-quick-action-' + id).width('25%').height(84).padding(2).backgroundColor(Color.Transparent)
-      .accessibilityText(label).enabled(enabled).onClick((): void => { this.chooseQuickAction(id); })
-  }
-
-  @Builder
-  quickActionPanel() {
-    Swiper() {
-      Column({ space: 4 }) {
-        Row() {
-          this.quickActionTile('photos', $r('app.string.chat_photos'), $r('sys.symbol.picture'), this.quickFiles.length < MAX_ATTACHMENTS)
-          this.quickActionTile('camera', $r('app.string.chat_camera'), $r('sys.symbol.camera'), this.quickFiles.length < MAX_ATTACHMENTS)
-          this.quickActionTile('document', $r('app.string.chat_local_files'), $r('sys.symbol.folder'), this.quickFiles.length < MAX_ATTACHMENTS)
-          this.quickActionTile('record-voice', $r('app.string.record_voice'), $r('sys.symbol.mic'), true)
-        }.width('100%')
-        Row() {
-          this.quickActionTile('reference-note', $r('app.string.chat_reference_note'), $r('sys.symbol.doc'), true)
-          this.quickActionTile('reference-task', $r('app.string.chat_reference_task'), $r('sys.symbol.checkmark_circle'), true)
-          this.quickActionTile('reference-file', $r('app.string.chat_reference_file'), $r('sys.symbol.folder'), true)
-          this.quickActionTile('new-chat', $r('app.string.new_chat'), $r('sys.symbol.square_and_pencil'), true)
-        }.width('100%')
-      }.width('100%').padding({ left: 6, right: 6, top: 4, bottom: 20 })
-      Column({ space: 4 }) {
-        Row() {
-          this.quickActionTile('voice-no-tools', $r('app.string.voice_call_action_natural'), $r('sys.symbol.waveform'), true)
-          this.quickActionTile('voice-with-tools', $r('app.string.voice_call_action_assistant'), $r('sys.symbol.speaker_wave_2'), true)
-        }.width('100%')
-      }.width('100%').padding({ left: 6, right: 6, top: 4, bottom: 20 })
-    }.id('home-quick-action-panel').width('100%').height(196).loop(false).autoPlay(false)
-      .indicator(new DotIndicator().itemWidth(6).itemHeight(6).selectedItemWidth(6).selectedItemHeight(6)
-        .color(this.colors.border).selectedColor(this.colors.secondary))
-      .backgroundColor(this.colors.panel).borderRadius(18).clip(true).margin({ bottom: 8 })
+  private disabledQuickActionIds(): string[] {
+    return this.quickFiles.length >= MAX_ATTACHMENTS ? ['photos', 'camera', 'document'] : [];
   }
 
   @Builder
@@ -676,13 +645,16 @@ export struct XopcHomeView {
           .justifyContent(FlexAlign.Center).backgroundColor(this.colors.surface)
       }
       if (this.tab !== 0) {
+        Column().id('secondary-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.surface)
         Column() {
           Column() {
             if (this.capture.active) {
               this.noteCaptureBar()
             } else {
               this.quickComposer()
-              if (this.quickPanelOpen) { this.quickActionPanel() }
+              XopcChatActionPanel({ open: this.quickPanelOpen, idPrefix: 'home-quick-action',
+                disabledIds: this.disabledQuickActionIds(),
+                onSelect: (id: string): void => { this.chooseQuickAction(id); } })
             }
             if (this.layout.isMainDockVisible(this.tab)) { this.dockItems() }
           }.id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)

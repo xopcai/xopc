@@ -55,6 +55,19 @@ describe('chat read aloud lifecycle', () => {
     expect(reader.continuousConversationId).toBe(''); expect(reader.state).toBe('playing');
     expect(player.release).not.toHaveBeenCalled(); expect(mock.stopBackground).not.toHaveBeenCalled();
   });
+  it('continues through the next speech chunk after leaving the chat page', async () => {
+    await reader.speak(context, 'First. Second.', 'one', 'en');
+    events.get('stateChange')?.('prepared');
+    await vi.waitFor(() => expect(mock.request).toHaveBeenCalledTimes(2));
+    events.get('stateChange')?.('playing');
+    reader.continuousConversationId = 'conversation';
+    reader.leaveForeground();
+    events.get('stateChange')?.('completed');
+    await vi.waitFor(() => expect(mock.createPlayer).toHaveBeenCalledTimes(2));
+    expect(reader.continuousConversationId).toBe('');
+    expect(mock.startBackground).toHaveBeenCalledOnce();
+    expect(mock.stopBackground).not.toHaveBeenCalled();
+  });
   it('prefetches the next sentence during playback and reuses it at the boundary', async () => {
     await reader.speak(context, 'First. Second.', 'one', 'en');
     expect(mock.request).toHaveBeenCalledOnce();

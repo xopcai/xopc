@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { sessionInputCommandSchema, sessionCommandIdentity } from './session-input-command.js';
 
 const start = {
@@ -23,5 +24,31 @@ describe('session input commands', () => {
   });
   it('rejects environment selection without a project', () => {
     expect(sessionInputCommandSchema.safeParse({ ...start, creation: { ...start.creation, execution: { mode: 'managed_worktree' } } }).success).toBe(false);
+  });
+});
+
+describe('session input command references', () => {
+  const base = {
+    kind: 'start',
+    clientMessageId: 'message-1',
+    creation: { agentId: 'main', projectId: null, execution: null, temporary: false,
+      model: 'test/model', thinkingLevel: 'off' },
+    origin: { type: 'endpoint', endpointId: 'android-test', token: 'claim' },
+  };
+
+  it('accepts a versioned user assertion without display-only fields', () => {
+    expect(sessionInputCommandSchema.safeParse({ ...base,
+      input: { content: 'Update this understanding', contextRefs: [
+        { kind: 'user_assertion', sourceId: 'assertion-1', expectedVersion: '123' },
+      ] },
+    }).success).toBe(true);
+  });
+
+  it('rejects display-only fields in the transmitted reference', () => {
+    expect(sessionInputCommandSchema.safeParse({ ...base,
+      input: { content: 'Update this understanding', contextRefs: [
+        { kind: 'user_assertion', sourceId: 'assertion-1', expectedVersion: '123', title: 'Private text' },
+      ] },
+    }).success).toBe(false);
   });
 });

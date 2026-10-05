@@ -1,0 +1,1893 @@
+package ai.xopc.mobile.ui.main
+
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.net.Uri
+import android.widget.Toast
+import ai.xopc.mobile.R
+import ai.xopc.mobile.gateway.ConversationSummary
+import ai.xopc.mobile.gateway.ExecutionDetail
+import ai.xopc.mobile.gateway.TaskWelcomeInfo
+import ai.xopc.mobile.gateway.ProjectWelcomeInfo
+import ai.xopc.mobile.gateway.ProgressHomeAction
+import ai.xopc.mobile.gateway.NoteMetadataPatch
+import ai.xopc.mobile.gateway.PersonalAssertion
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.delay
+
+/** The five top-level destinations mirror the current HarmonyOS home screen. */
+enum class HomeTab(@field:StringRes val label: Int, val icon: Int) {
+  Assistant(R.string.tab_assistant, R.drawable.tab_assistant),
+  Conversations(R.string.tab_conversations, R.drawable.tab_conversations),
+  Progress(R.string.tab_progress, R.drawable.tab_progress),
+  Notes(R.string.tab_notes, R.drawable.tab_notes),
+  Me(R.string.tab_me, R.drawable.tab_me),
+}
+
+@Composable
+private fun XopcTabDock(selectedTab: HomeTab, onSelectTab: (HomeTab) -> Unit,
+  grouped: Boolean = false, attentionCount: Int = 0) {
+  Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
+    .background(if (grouped) Color.Transparent else MaterialTheme.colorScheme.surface,
+      RoundedCornerShape(24.dp))
+    .height(52.dp).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+    HomeTab.entries.forEach { tab ->
+      val selected = selectedTab == tab
+      val label = stringResource(tab.label)
+      val attentionDescription = if (tab == HomeTab.Progress && attentionCount > 0)
+        stringResource(R.string.progress_attention_count, attentionCount) else null
+      Column(modifier = Modifier.weight(1f).height(44.dp)
+        .clickable(role = Role.Tab, onClickLabel = label) { onSelectTab(tab) }
+        .semantics {
+          this.selected = selected
+          if (attentionDescription != null) stateDescription = attentionDescription
+        }
+        .testTag("tab-${tab.name}"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Box(modifier = Modifier.size(width = 42.dp, height = 28.dp)) {
+          Box(modifier = Modifier.fillMaxSize()
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+              RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+            if (tab == HomeTab.Assistant) Image(painterResource(tab.icon), contentDescription = null,
+              modifier = Modifier.size(28.dp))
+            else Icon(painterResource(tab.icon), contentDescription = null,
+              tint = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(22.dp))
+          }
+          if (tab == HomeTab.Progress && attentionCount > 0) {
+            Text(if (attentionCount > 99) "99+" else attentionCount.toString(),
+              modifier = Modifier.align(Alignment.TopEnd).testTag("progress-attention-badge")
+                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
+                .padding(horizontal = 3.dp),
+              fontSize = 10.sp, lineHeight = 16.sp,
+              color = MaterialTheme.colorScheme.primary)
+          }
+        }
+        Text(label, fontSize = 11.sp, lineHeight = 12.sp, maxLines = 1,
+          color = if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant)
+      }
+    }
+  }
+}
+
+private data class WelcomeRecommendation(val title: String, val reason: String, val prompt: String)
+
+@Composable
+private fun taskRecommendation(info: TaskWelcomeInfo?): WelcomeRecommendation? {
+  if (info == null) return null
+  val task = info.taskTitle
+  return when {
+    !info.attentionSummary.isNullOrBlank() -> WelcomeRecommendation(
+      stringResource(R.string.welcome_task_attention_title, info.attentionSummary),
+      stringResource(R.string.welcome_task_attention_reason, task),
+      stringResource(R.string.welcome_task_attention_prompt, task, info.attentionSummary))
+    !info.recentFailure.isNullOrBlank() -> WelcomeRecommendation(
+      stringResource(R.string.welcome_task_failure_title, info.recentFailure),
+      stringResource(R.string.welcome_task_failure_reason, task),
+      stringResource(R.string.welcome_task_failure_prompt, task, info.recentFailure))
+    info.phase == "review" || info.operationalState == "verifying" -> WelcomeRecommendation(
+      stringResource(R.string.welcome_task_review_title),
+      stringResource(R.string.welcome_task_review_reason, task),
+      stringResource(R.string.welcome_task_review_prompt, task))
+    info.phase == "closed" -> WelcomeRecommendation(
+      stringResource(R.string.welcome_task_closed_title),
+      stringResource(R.string.welcome_task_closed_reason, task),
+      stringResource(R.string.welcome_task_closed_prompt, task))
+    !info.nextAction.isNullOrBlank() -> WelcomeRecommendation(
+      stringResource(R.string.welcome_task_next_title, info.nextAction),
+      stringResource(R.string.welcome_task_next_reason, task),
+      stringResource(R.string.welcome_task_next_prompt, task, info.nextAction))
+    else -> null
+  }
+}
+
+@Composable
+private fun projectRecommendation(info: ProjectWelcomeInfo?): WelcomeRecommendation? {
+  if (info == null) return null
+  val project = info.projectName
+  return when {
+    !info.blockedReason.isNullOrBlank() -> WelcomeRecommendation(
+      stringResource(R.string.welcome_project_blocked_title, info.blockedReason),
+      stringResource(R.string.welcome_project_blocked_reason, project),
+      stringResource(R.string.welcome_project_blocked_prompt, project, info.blockedReason))
+    !info.recentFailure.isNullOrBlank() -> WelcomeRecommendation(
+      stringResource(R.string.welcome_project_failure_title, info.recentFailure),
+      stringResource(R.string.welcome_project_failure_reason, project),
+      stringResource(R.string.welcome_project_failure_prompt, project, info.recentFailure))
+    !info.recommendedAction.isNullOrBlank() -> WelcomeRecommendation(
+      stringResource(R.string.welcome_project_next_title, info.recommendedAction),
+      stringResource(R.string.welcome_project_next_reason, project),
+      stringResource(R.string.welcome_project_next_prompt, project, info.recommendedAction))
+    else -> null
+  }
+}
+
+@Composable
+private fun AssistantWelcome(recommendation: WelcomeRecommendation?, onChoose: (String) -> Unit) {
+  Column(modifier = Modifier.fillMaxWidth().testTag("assistant-welcome"),
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Box(modifier = Modifier.size(108.dp), contentAlignment = Alignment.Center) {
+      Image(painter = painterResource(R.drawable.brand_mark), contentDescription = null,
+        modifier = Modifier.fillMaxSize())
+      Box(modifier = Modifier.size(34.dp).background(MaterialTheme.colorScheme.surfaceContainer, CircleShape),
+        contentAlignment = Alignment.Center) {
+        Text("•ᴗ•", style = MaterialTheme.typography.titleSmall,
+          color = MaterialTheme.colorScheme.onSurface)
+      }
+    }
+    Text(stringResource(R.string.assistant_welcome), style = MaterialTheme.typography.titleLarge,
+      fontWeight = FontWeight.SemiBold)
+    if (recommendation != null) {
+      Card(onClick = { onChoose(recommendation.prompt) },
+        modifier = Modifier.fillMaxWidth().testTag("assistant-welcome-recommendation")) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          Text(recommendation.title, style = MaterialTheme.typography.titleMedium, maxLines = 2,
+            overflow = TextOverflow.Ellipsis)
+          Text(recommendation.reason, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+            overflow = TextOverflow.Ellipsis)
+        }
+      }
+    }
+  }
+}
+
+@Composable
+fun MainScreen(
+  modifier: Modifier = Modifier,
+  connection: ConnectionUiState = ConnectionUiState(),
+  onPair: (String) -> Unit = {},
+  onConversationSearchChange: (String) -> Unit = {},
+  onLoadMoreConversations: () -> Unit = {},
+  onSelectConversation: (String) -> Unit = {},
+  onCreateConversation: () -> Unit = {},
+  onCreateReferenceConversation: (String) -> Unit = {},
+  onReferenceRequestHandled: (String, String) -> Unit = { _, _ -> },
+  onDiscardDraft: (String) -> Unit = {},
+  onBeginRename: (String) -> Unit = {},
+  onRenameDraftChange: (String) -> Unit = {},
+  onSaveRename: () -> Unit = {},
+  onCancelRename: () -> Unit = {},
+  onTogglePin: (String) -> Unit = {},
+  onToggleArchive: (String) -> Unit = {},
+  onScheduleDelete: (String) -> Unit = {},
+  onUndoDelete: () -> Unit = {},
+  onQuickDraftChange: (String) -> Unit = {},
+  onQuickSubmit: () -> Unit = {},
+  onQuickNavigationHandled: (String) -> Unit = {},
+  onDraftChange: (String) -> Unit = {},
+  onAddDraftAttachment: (String, String, Uri) -> Unit = { _, _, _ -> },
+  onRemoveDraftAttachment: (String) -> Unit = {},
+  onRemoveDraftRef: (String, String) -> Unit = { _, _ -> },
+  onLoadReferences: (String, String) -> Unit = { _, _ -> },
+  onAddDraftRef: (ReferencePickerItem) -> Boolean = { false },
+  onSendMessage: () -> Unit = {},
+  onRetryPendingInput: () -> Unit = {},
+  onStopRun: () -> Unit = {},
+  onReloadModels: () -> Unit = {},
+  onSelectModel: (String) -> Unit = {},
+  onReloadAgents: () -> Unit = {},
+  onSwitchAgent: (String, Boolean) -> Unit = { _, _ -> },
+  onReloadContext: () -> Unit = {},
+  onRefreshProgress: () -> Unit = {},
+  onRefreshProgressHome: () -> Unit = {},
+  onProgressHomeAction: (ProgressHomeAction) -> Unit = {},
+  onLoadAutomations: () -> Unit = {},
+  onOpenAutomation: (String) -> Unit = {},
+  onOpenAutomationRun: (String) -> Unit = {},
+  onAutomationAction: (String, String) -> Unit = { _, _ -> },
+  onCreateAutomation: (String, String, String, String) -> Unit = { _, _, _, _ -> },
+  onUpdateAutomation: (String, String, String, String, String) -> Unit = { _, _, _, _, _ -> },
+  onDeleteAutomation: (String, String) -> Unit = { _, _ -> },
+  onAutomationRunAction: (String, String) -> Unit = { _, _ -> },
+  onRefreshProgressTasks: () -> Unit = {},
+  onLoadMoreProgressTasks: () -> Unit = {},
+  onOpenProgressTask: (String) -> Unit = {},
+  onProgressTaskCommand: (String) -> Unit = {},
+  onStartProgressTask: (String) -> Unit = {},
+  onCreateTaskWithChat: () -> Unit = {},
+  onLoadProgressProjects: () -> Unit = {},
+  onOpenProgressProject: (String) -> Unit = {},
+  onCreateProgressTask: (String, String, String) -> Unit = { _, _, _ -> },
+  onOpenTaskChat: (String) -> Unit = {},
+  onSaveProgressTask: (String, Int, String, String, String) -> Unit = { _, _, _, _, _ -> },
+  onProgressTaskSearchChange: (String) -> Unit = {},
+  onSubmitProgressTaskSearch: () -> Unit = {},
+  onOpenExecution: (String) -> Unit = {},
+  onRetryExecution: () -> Unit = {},
+  onCloseExecution: () -> Unit = {},
+  onLoadNotes: (String, String) -> Unit = { _, _ -> },
+  onLoadMoreNotes: () -> Unit = {},
+  onOpenNote: (String) -> Unit = {},
+  onNewNote: () -> Unit = {},
+  onNoteDraftChange: (String, String) -> Unit = { _, _ -> },
+  onSaveNoteDraft: () -> Unit = {},
+  onCreatedNoteHandled: (String) -> Unit = {},
+  onOpenNoteDraft: (String) -> Unit = {},
+  onEditNote: () -> Unit = {},
+  onResolveNoteConflict: (Boolean) -> Unit = {},
+  onNoteMetadataChange: (NoteMetadataPatch) -> Unit = {},
+  onLoadNoteHistory: () -> Unit = {},
+  onLoadNoteSnapshot: (Long) -> Unit = {},
+  onRestoreNoteSnapshot: () -> Unit = {},
+  onNoteRestorationHandled: (String) -> Unit = {},
+  onDeleteNote: () -> Unit = {},
+  onNoteDeletionHandled: (String) -> Unit = {},
+  onShareNote: () -> Unit = {},
+  onDismissNoteShare: () -> Unit = {},
+  onLoadShares: () -> Unit = {},
+  onCloseShares: () -> Unit = {},
+  onRevokeShare: (String) -> Unit = {},
+  onExtendShare: (String, Int) -> Unit = { _, _ -> },
+  onLoadPersonal: () -> Unit = {},
+  onSavePersonalGoal: (String?, String, String, String, Long?) -> Unit = { _, _, _, _, _ -> },
+  onLoadPersonalAssertions: (String, String, Boolean) -> Unit = { _, _, _ -> },
+  onOpenPersonalAssertion: (String) -> Unit = {},
+  onClosePersonalAssertion: () -> Unit = {},
+  onSavePersonalProfile: (ai.xopc.mobile.gateway.PersonalProfile) -> Unit = {},
+  onSavePersonalStatement: (String) -> Unit = {},
+  onDeletePersonalAssertion: () -> Unit = {},
+  onStartUnderstandingChat: (PersonalAssertion?) -> Unit = {},
+  onOpenGatewayProfiles: () -> Unit = {},
+  onProbeGateway: (String) -> Unit = {},
+  onActivateGateway: (String) -> Unit = {},
+  onRenameGateway: (String, String) -> Unit = { _, _ -> },
+  onRemoveGateway: (String) -> Unit = {},
+  appearanceMode: String = "system",
+  onAppearanceModeChange: (String) -> Unit = {},
+  colorScheme: String = "default",
+  onColorSchemeChange: (String) -> Unit = {},
+  language: String = "system",
+  onLanguageChange: (String) -> Unit = {},
+) {
+  val context = LocalContext.current
+  val latestAddAttachment by rememberUpdatedState(onAddDraftAttachment)
+  var pickerGatewayId by rememberSaveable { mutableStateOf<String?>(null) }
+  var pickerConversationId by rememberSaveable { mutableStateOf<String?>(null) }
+  val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val gatewayId = pickerGatewayId
+    val conversationId = pickerConversationId
+    pickerGatewayId = null
+    pickerConversationId = null
+    if (uri != null && gatewayId != null && conversationId != null &&
+      connection.profile?.gatewayId == gatewayId && connection.selectedConversationId == conversationId) {
+      latestAddAttachment(gatewayId, conversationId, uri)
+    }
+  }
+  var selectedTab by rememberSaveable { mutableStateOf(HomeTab.Assistant) }
+  LaunchedEffect(connection.quickOpenedConversationId, connection.selectedConversationId) {
+    val id = connection.quickOpenedConversationId
+    if (id != null && id == connection.selectedConversationId) {
+      selectedTab = HomeTab.Assistant
+      onQuickNavigationHandled(id)
+    }
+  }
+  MainContent(selectedTab = selectedTab, onSelectTab = { selectedTab = it }, connection = connection,
+    onPair = onPair, onConversationSearchChange = onConversationSearchChange,
+    onLoadMoreConversations = onLoadMoreConversations, onSelectConversation = onSelectConversation,
+    onCreateConversation = onCreateConversation,
+    onCreateReferenceConversation = onCreateReferenceConversation,
+    onReferenceRequestHandled = onReferenceRequestHandled,
+    onDiscardDraft = onDiscardDraft,
+    onBeginRename = onBeginRename, onRenameDraftChange = onRenameDraftChange,
+    onSaveRename = onSaveRename, onCancelRename = onCancelRename,
+    onTogglePin = onTogglePin,
+    onToggleArchive = onToggleArchive,
+    onScheduleDelete = onScheduleDelete, onUndoDelete = onUndoDelete,
+    onQuickDraftChange = onQuickDraftChange, onQuickSubmit = onQuickSubmit,
+    onDraftChange = onDraftChange, onRemoveDraftRef = onRemoveDraftRef,
+    onPickDraftAttachment = { kind ->
+      val gatewayId = connection.profile?.gatewayId
+      val conversationId = connection.selectedConversationId
+      if (gatewayId != null && conversationId != null) {
+        pickerGatewayId = gatewayId
+        pickerConversationId = conversationId
+        documentPicker.launch(arrayOf(if (kind == "photos") "image/*" else "*/*"))
+      }
+    },
+    onRemoveDraftAttachment = onRemoveDraftAttachment,
+    onLoadReferences = onLoadReferences, onAddDraftRef = onAddDraftRef,
+    onSendMessage = onSendMessage,
+    onRetryPendingInput = onRetryPendingInput, onStopRun = onStopRun,
+    onReloadModels = onReloadModels, onSelectModel = onSelectModel,
+    onReloadAgents = onReloadAgents, onSwitchAgent = onSwitchAgent,
+    onReloadContext = onReloadContext,
+    onRefreshProgress = onRefreshProgress, onLoadMoreProgressTasks = onLoadMoreProgressTasks,
+    onRefreshProgressHome = onRefreshProgressHome, onRefreshProgressTasks = onRefreshProgressTasks,
+    onProgressHomeAction = onProgressHomeAction,
+    onLoadAutomations = onLoadAutomations, onOpenAutomation = onOpenAutomation,
+    onOpenAutomationRun = onOpenAutomationRun,
+    onAutomationAction = onAutomationAction,
+    onCreateAutomation = onCreateAutomation,
+    onUpdateAutomation = onUpdateAutomation,
+    onDeleteAutomation = onDeleteAutomation,
+    onAutomationRunAction = onAutomationRunAction,
+    onOpenProgressTask = onOpenProgressTask, onProgressTaskSearchChange = onProgressTaskSearchChange,
+    onProgressTaskCommand = onProgressTaskCommand,
+    onStartProgressTask = onStartProgressTask,
+    onCreateTaskWithChat = onCreateTaskWithChat,
+    onLoadProgressProjects = onLoadProgressProjects,
+    onOpenProgressProject = onOpenProgressProject,
+    onCreateProgressTask = onCreateProgressTask,
+    onOpenTaskChat = onOpenTaskChat,
+    onSaveProgressTask = onSaveProgressTask,
+    onSubmitProgressTaskSearch = onSubmitProgressTaskSearch,
+    onOpenExecution = onOpenExecution, onRetryExecution = onRetryExecution,
+    onCloseExecution = onCloseExecution,
+    onCopyMessageText = { value ->
+      (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+        .setPrimaryClip(ClipData.newPlainText(context.getString(R.string.assistant_copy), value))
+      Toast.makeText(context, R.string.assistant_copied, Toast.LENGTH_SHORT).show()
+    },
+    onLoadNotes = onLoadNotes, onLoadMoreNotes = onLoadMoreNotes, onOpenNote = onOpenNote,
+    onNewNote = onNewNote, onNoteDraftChange = onNoteDraftChange, onSaveNoteDraft = onSaveNoteDraft,
+    onCreatedNoteHandled = onCreatedNoteHandled,
+    onOpenNoteDraft = onOpenNoteDraft,
+    onEditNote = onEditNote, onResolveNoteConflict = onResolveNoteConflict,
+    onNoteMetadataChange = onNoteMetadataChange,
+    onLoadNoteHistory = onLoadNoteHistory, onLoadNoteSnapshot = onLoadNoteSnapshot,
+    onRestoreNoteSnapshot = onRestoreNoteSnapshot,
+    onNoteRestorationHandled = onNoteRestorationHandled,
+    onDeleteNote = onDeleteNote, onNoteDeletionHandled = onNoteDeletionHandled,
+    onShareNote = onShareNote, onDismissNoteShare = onDismissNoteShare,
+    onLoadShares = onLoadShares, onCloseShares = onCloseShares,
+    onRevokeShare = onRevokeShare, onExtendShare = onExtendShare,
+    onLoadPersonal = onLoadPersonal,
+    onSavePersonalGoal = onSavePersonalGoal,
+    onLoadPersonalAssertions = onLoadPersonalAssertions,
+    onOpenPersonalAssertion = onOpenPersonalAssertion,
+    onClosePersonalAssertion = onClosePersonalAssertion,
+    onSavePersonalProfile = onSavePersonalProfile,
+    onSavePersonalStatement = onSavePersonalStatement,
+    onDeletePersonalAssertion = onDeletePersonalAssertion,
+    onStartUnderstandingChat = onStartUnderstandingChat,
+    onOpenGatewayProfiles = onOpenGatewayProfiles,
+    onProbeGateway = onProbeGateway,
+    onActivateGateway = onActivateGateway,
+    onRenameGateway = onRenameGateway,
+    onRemoveGateway = onRemoveGateway,
+    appearanceMode = appearanceMode, onAppearanceModeChange = onAppearanceModeChange,
+    colorScheme = colorScheme, onColorSchemeChange = onColorSchemeChange,
+    language = language, onLanguageChange = onLanguageChange,
+    modifier = modifier)
+}
+
+@Composable
+internal fun MainContent(
+  selectedTab: HomeTab,
+  onSelectTab: (HomeTab) -> Unit,
+  connection: ConnectionUiState = ConnectionUiState(),
+  onPair: (String) -> Unit = {},
+  onConversationSearchChange: (String) -> Unit = {},
+  onLoadMoreConversations: () -> Unit = {},
+  onSelectConversation: (String) -> Unit = {},
+  onCreateConversation: () -> Unit = {},
+  onCreateReferenceConversation: (String) -> Unit = {},
+  onReferenceRequestHandled: (String, String) -> Unit = { _, _ -> },
+  onDiscardDraft: (String) -> Unit = {},
+  onBeginRename: (String) -> Unit = {},
+  onRenameDraftChange: (String) -> Unit = {},
+  onSaveRename: () -> Unit = {},
+  onCancelRename: () -> Unit = {},
+  onTogglePin: (String) -> Unit = {},
+  onToggleArchive: (String) -> Unit = {},
+  onScheduleDelete: (String) -> Unit = {},
+  onUndoDelete: () -> Unit = {},
+  onQuickDraftChange: (String) -> Unit = {},
+  onQuickSubmit: () -> Unit = {},
+  onDraftChange: (String) -> Unit = {},
+  onPickDraftAttachment: (String) -> Unit = {},
+  onRemoveDraftAttachment: (String) -> Unit = {},
+  onRemoveDraftRef: (String, String) -> Unit = { _, _ -> },
+  onLoadReferences: (String, String) -> Unit = { _, _ -> },
+  onAddDraftRef: (ReferencePickerItem) -> Boolean = { false },
+  onSendMessage: () -> Unit = {},
+  onRetryPendingInput: () -> Unit = {},
+  onStopRun: () -> Unit = {},
+  onReloadModels: () -> Unit = {},
+  onSelectModel: (String) -> Unit = {},
+  onReloadAgents: () -> Unit = {},
+  onSwitchAgent: (String, Boolean) -> Unit = { _, _ -> },
+  onReloadContext: () -> Unit = {},
+  onRefreshProgress: () -> Unit = {},
+  onRefreshProgressHome: () -> Unit = {},
+  onProgressHomeAction: (ProgressHomeAction) -> Unit = {},
+  onLoadAutomations: () -> Unit = {},
+  onOpenAutomation: (String) -> Unit = {},
+  onOpenAutomationRun: (String) -> Unit = {},
+  onAutomationAction: (String, String) -> Unit = { _, _ -> },
+  onCreateAutomation: (String, String, String, String) -> Unit = { _, _, _, _ -> },
+  onUpdateAutomation: (String, String, String, String, String) -> Unit = { _, _, _, _, _ -> },
+  onDeleteAutomation: (String, String) -> Unit = { _, _ -> },
+  onAutomationRunAction: (String, String) -> Unit = { _, _ -> },
+  onRefreshProgressTasks: () -> Unit = {},
+  onLoadMoreProgressTasks: () -> Unit = {},
+  onOpenProgressTask: (String) -> Unit = {},
+  onProgressTaskCommand: (String) -> Unit = {},
+  onStartProgressTask: (String) -> Unit = {},
+  onCreateTaskWithChat: () -> Unit = {},
+  onLoadProgressProjects: () -> Unit = {},
+  onOpenProgressProject: (String) -> Unit = {},
+  onCreateProgressTask: (String, String, String) -> Unit = { _, _, _ -> },
+  onOpenTaskChat: (String) -> Unit = {},
+  onSaveProgressTask: (String, Int, String, String, String) -> Unit = { _, _, _, _, _ -> },
+  onProgressTaskSearchChange: (String) -> Unit = {},
+  onSubmitProgressTaskSearch: () -> Unit = {},
+  onOpenExecution: (String) -> Unit = {},
+  onRetryExecution: () -> Unit = {},
+  onCloseExecution: () -> Unit = {},
+  onCopyMessageText: (String) -> Unit = {},
+  onLoadNotes: (String, String) -> Unit = { _, _ -> },
+  onLoadMoreNotes: () -> Unit = {},
+  onOpenNote: (String) -> Unit = {},
+  onNewNote: () -> Unit = {},
+  onNoteDraftChange: (String, String) -> Unit = { _, _ -> },
+  onSaveNoteDraft: () -> Unit = {},
+  onCreatedNoteHandled: (String) -> Unit = {},
+  onOpenNoteDraft: (String) -> Unit = {},
+  onEditNote: () -> Unit = {},
+  onResolveNoteConflict: (Boolean) -> Unit = {},
+  onNoteMetadataChange: (NoteMetadataPatch) -> Unit = {},
+  onLoadNoteHistory: () -> Unit = {},
+  onLoadNoteSnapshot: (Long) -> Unit = {},
+  onRestoreNoteSnapshot: () -> Unit = {},
+  onNoteRestorationHandled: (String) -> Unit = {},
+  onDeleteNote: () -> Unit = {},
+  onNoteDeletionHandled: (String) -> Unit = {},
+  onShareNote: () -> Unit = {},
+  onDismissNoteShare: () -> Unit = {},
+  onLoadShares: () -> Unit = {},
+  onCloseShares: () -> Unit = {},
+  onRevokeShare: (String) -> Unit = {},
+  onExtendShare: (String, Int) -> Unit = { _, _ -> },
+  onLoadPersonal: () -> Unit = {},
+  onSavePersonalGoal: (String?, String, String, String, Long?) -> Unit = { _, _, _, _, _ -> },
+  onLoadPersonalAssertions: (String, String, Boolean) -> Unit = { _, _, _ -> },
+  onOpenPersonalAssertion: (String) -> Unit = {},
+  onClosePersonalAssertion: () -> Unit = {},
+  onSavePersonalProfile: (ai.xopc.mobile.gateway.PersonalProfile) -> Unit = {},
+  onSavePersonalStatement: (String) -> Unit = {},
+  onDeletePersonalAssertion: () -> Unit = {},
+  onStartUnderstandingChat: (PersonalAssertion?) -> Unit = {},
+  onOpenGatewayProfiles: () -> Unit = {},
+  onProbeGateway: (String) -> Unit = {},
+  onActivateGateway: (String) -> Unit = {},
+  onRenameGateway: (String, String) -> Unit = { _, _ -> },
+  onRemoveGateway: (String) -> Unit = {},
+  appearanceMode: String = "system",
+  onAppearanceModeChange: (String) -> Unit = {},
+  colorScheme: String = "default",
+  onColorSchemeChange: (String) -> Unit = {},
+  language: String = "system",
+  onLanguageChange: (String) -> Unit = {},
+  modifier: Modifier = Modifier,
+) {
+  var personalPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
+  var personalReturnPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
+  var personalStartSection by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("overview") }
+  var personalDetailId by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
+  fun leavePersonalPage() {
+    if (personalPage == "detail") {
+      personalPage = personalReturnPage
+      onClosePersonalAssertion()
+    } else if (personalPage == "settings-appearance" || personalPage == "settings-language" ||
+      personalPage == "settings-gateways" || personalPage == "settings-sharing") {
+      if (personalPage == "settings-sharing") onCloseShares()
+      personalPage = "settings"
+    } else if (personalPage == "settings-add") {
+      personalPage = "settings-gateways"
+    } else personalPage = "home"
+  }
+  LaunchedEffect(connection.personal.assertionDeletedRevision) {
+    if (personalPage == "detail" && connection.personal.assertionDeletedRevision > 0 &&
+      connection.personal.selectedAssertionId == null) personalPage = personalReturnPage
+  }
+  LaunchedEffect(connection.profile?.gatewayId) {
+    if (connection.profile != null) {
+      while (true) {
+        onRefreshProgressHome()
+        delay(30_000)
+      }
+    }
+  }
+  LaunchedEffect(connection.requestedReferenceConversationId,
+    connection.requestedReferenceKind, connection.selectedConversationId) {
+    if (connection.requestedReferenceKind != null &&
+      connection.requestedReferenceConversationId == connection.selectedConversationId &&
+      connection.selectedConversationId != null) onSelectTab(HomeTab.Assistant)
+  }
+  LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
+    if (selectedTab == HomeTab.Progress && connection.profile != null) onRefreshProgressTasks()
+  }
+  LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
+    if (selectedTab == HomeTab.Notes && connection.profile != null) {
+      onLoadNotes(connection.notes.search, connection.notes.status)
+    }
+  }
+  LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
+    if (selectedTab == HomeTab.Me && connection.profile != null) onLoadPersonal()
+  }
+  LaunchedEffect(personalPage, connection.profile?.gatewayId) {
+    if (personalPage == "settings-gateways") onOpenGatewayProfiles()
+    if (personalPage == "settings-sharing" && connection.profile != null) onLoadShares()
+  }
+  var assistantActionsOpen by remember(selectedTab, connection.selectedConversationId) { mutableStateOf(false) }
+  var quickActionsOpen by remember(selectedTab, connection.profile?.gatewayId) { mutableStateOf(false) }
+  val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+  val tabStateHolder = rememberSaveableStateHolder()
+  BackHandler(enabled = assistantActionsOpen) { assistantActionsOpen = false }
+  BackHandler(enabled = quickActionsOpen) { quickActionsOpen = false }
+  BackHandler(enabled = selectedTab == HomeTab.Me && personalPage != "home") { leavePersonalPage() }
+  Scaffold(
+    modifier = modifier,
+    bottomBar = {
+      Column {
+        val attentionCount = connection.progress.needsUser.size.takeIf {
+          connection.profile != null && connection.progress.gatewayId == connection.profile.gatewayId
+        } ?: 0
+        val showQuick = connection.profile != null && selectedTab != HomeTab.Assistant &&
+          !(selectedTab == HomeTab.Me && personalPage != "home")
+        if (showQuick) {
+          Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(24.dp))
+            .testTag("secondary-bottom-surface")) {
+            QuickComposer(connection, selectedTab, onQuickDraftChange, onQuickSubmit,
+              quickActionsOpen, { quickActionsOpen = it }, onOpenChat = {
+                quickActionsOpen = false
+                onCreateConversation()
+                onSelectTab(HomeTab.Assistant)
+              })
+            AnimatedVisibility(visible = quickActionsOpen,
+              enter = expandVertically(animationSpec = tween(220), expandFrom = Alignment.Bottom) +
+                fadeIn(animationSpec = tween(220)),
+              exit = shrinkVertically(animationSpec = tween(180), shrinkTowards = Alignment.Bottom) +
+                fadeOut(animationSpec = tween(180)), label = "quick-actions") {
+              AssistantActionPanel(canCreate = !connection.creatingConversation && !connection.quickSending,
+                canReference = !connection.creatingConversation && !connection.quickSending,
+                onOpenReference = { kind ->
+                  quickActionsOpen = false
+                  onCreateReferenceConversation(kind)
+                },
+                onCreateConversation = {
+                  quickActionsOpen = false
+                  onCreateConversation()
+                  onSelectTab(HomeTab.Assistant)
+                }, tagPrefix = "quick")
+            }
+            if (!quickActionsOpen && !imeVisible) XopcTabDock(selectedTab, onSelectTab,
+              grouped = true, attentionCount = attentionCount)
+          }
+        } else if (!assistantActionsOpen && !imeVisible &&
+          !(selectedTab == HomeTab.Me && personalPage != "home")) {
+          XopcTabDock(selectedTab, onSelectTab, attentionCount = attentionCount)
+        }
+      }
+    },
+  ) { insets ->
+    tabStateHolder.SaveableStateProvider(selectedTab.name) {
+    when (selectedTab) {
+      HomeTab.Assistant, HomeTab.Conversations -> {
+        val title = stringResource(selectedTab.label)
+        if (connection.profile == null) PairingScreen(title, connection, onPair, insets)
+        else if (selectedTab == HomeTab.Assistant) AssistantScreen(connection, insets, onSelectConversation,
+          onCreateConversation, onDraftChange, onRemoveDraftRef, onLoadReferences, onAddDraftRef,
+          onReferenceRequestHandled,
+          onPickDraftAttachment, onRemoveDraftAttachment,
+          onSendMessage, onRetryPendingInput, onStopRun,
+          onReloadModels, onSelectModel, onReloadAgents, onSwitchAgent, onReloadContext,
+          onOpenExecution, onRetryExecution, onCloseExecution,
+          onCopyMessageText,
+          assistantActionsOpen, { assistantActionsOpen = it })
+        else ConversationsScreen(connection, insets, onConversationSearchChange, onLoadMoreConversations, {
+          onCreateConversation()
+          onSelectTab(HomeTab.Assistant)
+        }, { id ->
+          onSelectConversation(id)
+          onSelectTab(HomeTab.Assistant)
+        }, onDiscardDraft, onBeginRename, onRenameDraftChange, onSaveRename, onCancelRename,
+          onTogglePin, onToggleArchive, onScheduleDelete, onUndoDelete)
+      }
+      HomeTab.Progress -> if (connection.profile == null) PairingScreen(
+        stringResource(R.string.tab_progress), connection, onPair, insets)
+      else ProgressScreen(connection.progress.takeIf { it.gatewayId == connection.profile.gatewayId }
+        ?: ProgressUiState(gatewayId = connection.profile.gatewayId, loading = true),
+        insets, onRefreshProgressHome, onRefreshProgressTasks, onLoadMoreProgressTasks,
+        onOpenProgressTask, onProgressTaskSearchChange, onSubmitProgressTaskSearch,
+        onProgressTaskCommand, onStartProgressTask, onCreateTaskWithChat,
+        onLoadProgressProjects, onOpenProgressProject, onCreateProgressTask,
+        onOpenTaskChat, onSaveProgressTask, onHomeAction = onProgressHomeAction,
+        onLoadAutomations = onLoadAutomations, onOpenAutomation = onOpenAutomation,
+        onOpenAutomationRun = onOpenAutomationRun, onAutomationAction = onAutomationAction,
+        onCreateAutomation = onCreateAutomation,
+        onUpdateAutomation = onUpdateAutomation,
+        onDeleteAutomation = onDeleteAutomation,
+        onAutomationRunAction = onAutomationRunAction,
+        onOpenChat = { id ->
+        onSelectConversation(id)
+        onSelectTab(HomeTab.Assistant)
+      })
+      HomeTab.Notes -> if (connection.profile == null) PairingScreen(
+        stringResource(R.string.tab_notes), connection, onPair, insets)
+      else NotesScreen(connection.notes.takeIf { it.gatewayId == connection.profile.gatewayId }
+        ?: NotesUiState(gatewayId = connection.profile.gatewayId), insets,
+        onLoadNotes, onLoadMoreNotes, onOpenNote, onNewNote,
+        onNoteDraftChange, onSaveNoteDraft, onCreatedNoteHandled, onOpenNoteDraft,
+        onEditNote, onResolveNoteConflict, onNoteMetadataChange,
+        onLoadNoteHistory, onLoadNoteSnapshot, onRestoreNoteSnapshot,
+        onNoteRestorationHandled, onDeleteNote, onNoteDeletionHandled,
+        onShareNote, onDismissNoteShare)
+      HomeTab.Me -> {
+        val profile = connection.profile
+        val personal = if (profile == null) PersonalUiState(gatewayId = "")
+          else connection.personal.takeIf { it.gatewayId == profile.gatewayId }
+            ?: PersonalUiState(gatewayId = profile.gatewayId, loading = true)
+        if (personalPage == "home" && profile == null) UnpairedPersonalScreen(insets,
+          onOpenSettings = { personalPage = "settings" },
+          onConnect = { personalPage = "pairing" })
+        else if (personalPage == "home") PersonalScreen(personal, insets,
+          connection.realtimeStatus == "connected", onLoadPersonal, onSavePersonalGoal,
+          onOpenSettings = { personalPage = "settings" },
+          onOpenAbout = { personalStartSection = "overview"; personalPage = "about" },
+          onOpenUnderstanding = { personalStartSection = "understanding"; personalPage = "about" },
+          onOpenAssertion = { id ->
+            personalReturnPage = "home"
+            personalDetailId = id
+            personalPage = "detail"
+            onOpenPersonalAssertion(id)
+          })
+        else if (personalPage == "settings-gateways") GatewayProfilesScreen(connection, insets,
+          onBack = ::leavePersonalPage, onAdd = { personalPage = "settings-add" },
+          onRefresh = onOpenGatewayProfiles, onProbe = onProbeGateway,
+          onActivate = onActivateGateway, onRename = onRenameGateway,
+          onRemove = onRemoveGateway)
+        else if (personalPage == "settings-add" || personalPage == "pairing") PairingScreen(
+          stringResource(R.string.gateways_add), connection, onPair, insets,
+          onBack = ::leavePersonalPage)
+        else if (personalPage == "settings-sharing") ShareCenterScreen(
+          state = connection.shares.takeIf { it.gatewayId == profile?.gatewayId }
+            ?: ShareCenterUiState(gatewayId = profile?.gatewayId, loading = profile != null),
+          connected = profile != null, insets = insets, onBack = ::leavePersonalPage,
+          onRefresh = onLoadShares, onRevoke = onRevokeShare, onExtend = onExtendShare)
+        else if (personalPage.startsWith("settings")) SettingsScreen(
+          profile = connection.profile, appearanceMode = appearanceMode, colorScheme = colorScheme,
+          language = language, section = when (personalPage) {
+            "settings-appearance" -> "appearance"
+            "settings-language" -> "language"
+            else -> "root"
+          }, insets = insets,
+          onBack = ::leavePersonalPage,
+          onOpenGateways = { personalPage = "settings-gateways" },
+          onOpenSharing = { personalPage = "settings-sharing" },
+          onOpenAppearance = { personalPage = "settings-appearance" },
+          onOpenLanguage = { personalPage = "settings-language" },
+          onAppearanceModeChange = onAppearanceModeChange,
+          onColorSchemeChange = onColorSchemeChange,
+          onLanguageChange = onLanguageChange)
+        else AboutYouScreen(personal, personalPage, insets, personalStartSection,
+          onBack = ::leavePersonalPage, onOpenList = {}, onOpenDetail = { id ->
+            personalReturnPage = "about"
+            personalDetailId = id
+            personalPage = "detail"
+            onOpenPersonalAssertion(id)
+          }, onLoadList = onLoadPersonalAssertions,
+          onRetryDetail = { if (personalDetailId.isNotBlank()) onOpenPersonalAssertion(personalDetailId) },
+          onOpenNotes = { personalPage = "home"; onSelectTab(HomeTab.Notes) },
+          onSaveProfile = onSavePersonalProfile,
+          onSaveStatement = onSavePersonalStatement,
+          onDeleteAssertion = onDeletePersonalAssertion,
+          onStartChat = onStartUnderstandingChat,
+          chatBusy = connection.creatingConversation)
+      }
+    }
+    }
+  }
+}
+
+@Composable
+private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
+  onChange: (String) -> Unit, onSubmit: () -> Unit,
+  actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit, onOpenChat: () -> Unit) {
+  val focusManager = LocalFocusManager.current
+  val keyboardController = LocalSoftwareKeyboardController.current
+  val canSend = connection.quickDraftText.isNotBlank() && !connection.quickSending &&
+    !connection.creatingConversation && !connection.sending && connection.realtimeStatus == "connected"
+  val placeholder = when (tab) {
+    HomeTab.Progress -> R.string.quick_progress_hint
+    HomeTab.Notes -> R.string.quick_notes_hint
+    HomeTab.Me -> R.string.quick_me_hint
+    else -> R.string.quick_composer_hint
+  }
+  val assistantLabel = stringResource(R.string.tab_assistant)
+  val sendLabel = stringResource(R.string.quick_send)
+  Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
+    if (connection.quickError) Text(stringResource(R.string.quick_send_error), color = MaterialTheme.colorScheme.error)
+    Row(modifier = Modifier.fillMaxWidth()
+      .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(18.dp))
+      .padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+      IconButton(onClick = onOpenChat, enabled = !connection.quickSending,
+        modifier = Modifier.size(48.dp).semantics { contentDescription = assistantLabel }
+          .testTag("quick-voice")) {
+        Icon(painterResource(R.drawable.action_microphone), contentDescription = null,
+          tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+      }
+      BasicTextField(value = connection.quickDraftText, onValueChange = onChange,
+        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+          .onFocusChanged { if (it.isFocused) onActionsOpenChange(false) }
+          .padding(horizontal = 4.dp, vertical = 12.dp).testTag("quick-composer"),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        singleLine = true, enabled = !connection.quickSending,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+        keyboardActions = KeyboardActions(onSend = { if (canSend) onSubmit() }),
+        decorationBox = { innerTextField ->
+          Box {
+            if (connection.quickDraftText.isEmpty()) Text(stringResource(placeholder),
+              style = MaterialTheme.typography.bodyLarge,
+              color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+              overflow = TextOverflow.Ellipsis)
+            innerTextField()
+          }
+        })
+      IconButton(onClick = {
+        if (!actionsOpen) {
+          focusManager.clearFocus(force = true)
+          keyboardController?.hide()
+        }
+        onActionsOpenChange(!actionsOpen)
+      }, enabled = !connection.quickSending,
+        modifier = Modifier.size(48.dp).testTag("quick-actions-toggle")) {
+        Text(if (actionsOpen) "×" else "+", style = MaterialTheme.typography.headlineMedium)
+      }
+      if (connection.quickDraftText.isNotBlank()) {
+        IconButton(onClick = onSubmit, enabled = canSend,
+          modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.onSurface, CircleShape)
+            .semantics { contentDescription = sendLabel }.testTag("quick-send")) {
+          Text("↑", style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.surface)
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () -> Unit,
+  canReference: Boolean = false, onOpenReference: (String) -> Unit = {},
+  canPick: Boolean = false, onPick: (String) -> Unit = {},
+  tagPrefix: String = "assistant") {
+  val firstPage = listOf(
+    Triple(R.string.assistant_action_photos, R.drawable.action_photo, "photos"),
+    Triple(R.string.assistant_action_camera, R.drawable.action_camera, "camera"),
+    Triple(R.string.assistant_action_local_files, R.drawable.action_folder, "local-files"),
+    Triple(R.string.assistant_action_voice, R.drawable.action_microphone, "voice"),
+    Triple(R.string.assistant_action_reference_note, R.drawable.tab_notes, "reference-note"),
+    Triple(R.string.assistant_action_reference_task, R.drawable.tab_progress, "reference-task"),
+    Triple(R.string.assistant_action_reference_file, R.drawable.action_folder, "reference-file"),
+    Triple(R.string.assistant_action_new_chat, R.drawable.action_new_chat, "new-chat"),
+  )
+  val secondPage = listOf(
+    Triple(R.string.assistant_action_voice_natural, R.drawable.action_waveform, "voice-natural"),
+    Triple(R.string.assistant_action_voice_assistant, R.drawable.action_speaker, "voice-assistant"),
+  )
+  val pages = listOf(firstPage, secondPage)
+  val pagerState = rememberPagerState(pageCount = { pages.size })
+  Column(modifier = Modifier.fillMaxWidth().testTag("$tagPrefix-action-panel")
+    .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(18.dp))
+    .padding(top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxWidth().height(178.dp)) { page ->
+      Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        pages[page].chunked(4).forEach { row ->
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            row.forEach { (label, icon, id) ->
+              val enabled = (id == "new-chat" && canCreate) ||
+                (id in setOf("reference-note", "reference-task") && canReference) ||
+                (id in setOf("photos", "local-files") && canPick)
+              TextButton(onClick = {
+                if (id == "new-chat") onCreateConversation()
+                else if (id in setOf("photos", "local-files")) onPick(id)
+                else onOpenReference(if (id == "reference-note") "note" else "task")
+              }, enabled = enabled,
+                modifier = Modifier.weight(1f).height(84.dp).testTag("$tagPrefix-action-$id"),
+                contentPadding = PaddingValues(0.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                  Box(modifier = Modifier.size(48.dp)
+                    .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)),
+                    contentAlignment = Alignment.Center) {
+                    Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(24.dp),
+                      tint = if (enabled) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                  }
+                  Text(stringResource(label), style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                      alpha = if (enabled) 1f else 0.65f),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+              }
+            }
+            repeat(4 - row.size) { androidx.compose.foundation.layout.Spacer(Modifier.weight(1f)) }
+          }
+        }
+      }
+    }
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
+      verticalAlignment = Alignment.CenterVertically) {
+      pages.indices.forEach { page ->
+        Box(modifier = Modifier.padding(horizontal = 4.dp).size(6.dp)
+          .background(if (pagerState.currentPage == page) MaterialTheme.colorScheme.onSurfaceVariant
+            else MaterialTheme.colorScheme.outlineVariant, CircleShape))
+      }
+    }
+  }
+}
+
+@Composable
+private fun AssistantComposerButtons(connection: ConnectionUiState, actionsOpen: Boolean,
+  onToggleActions: () -> Unit, onSendMessage: () -> Unit, onStopRun: () -> Unit) {
+  val hasPayload = connection.draftText.isNotBlank() || connection.draftRefs.isNotEmpty() ||
+    connection.draftAttachments.isNotEmpty()
+  if (connection.activeRunId == null || !hasPayload) {
+    IconButton(onClick = onToggleActions,
+      enabled = !connection.sending && connection.pendingDeleteId != connection.selectedConversationId,
+      modifier = Modifier.size(48.dp).testTag("assistant-actions-toggle")) {
+      Text(if (actionsOpen) "×" else "+", style = MaterialTheme.typography.headlineMedium,
+        color = MaterialTheme.colorScheme.primary)
+    }
+  }
+  if (hasPayload) {
+    val sendLabel = stringResource(R.string.assistant_send)
+    IconButton(onClick = onSendMessage, modifier = Modifier.size(48.dp)
+      .semantics { contentDescription = sendLabel }.testTag("assistant-send")
+      .background(MaterialTheme.colorScheme.onSurface, CircleShape),
+      enabled = !connection.sending && !connection.taskScopeLoading &&
+        !connection.attachmentLoading &&
+        connection.draftModelReady && connection.realtimeStatus == "connected" &&
+        connection.pendingInput == null && connection.pendingDeleteId != connection.selectedConversationId) {
+      Text("↑", style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.surface)
+    }
+  }
+  if (connection.activeRunId != null) {
+    val stopLabel = stringResource(R.string.assistant_stop)
+    IconButton(onClick = onStopRun, modifier = Modifier.size(48.dp)
+      .semantics { contentDescription = stopLabel }.testTag("assistant-stop")
+      .background(MaterialTheme.colorScheme.onSurface, CircleShape),
+      enabled = !connection.stoppingRun) {
+      Text("■", color = MaterialTheme.colorScheme.surface)
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues,
+  onSelectConversation: (String) -> Unit, onCreateConversation: () -> Unit,
+  onDraftChange: (String) -> Unit, onRemoveDraftRef: (String, String) -> Unit,
+  onLoadReferences: (String, String) -> Unit,
+  onAddDraftRef: (ReferencePickerItem) -> Boolean,
+  onReferenceRequestHandled: (String, String) -> Unit,
+  onPickDraftAttachment: (String) -> Unit, onRemoveDraftAttachment: (String) -> Unit,
+  onSendMessage: () -> Unit,
+  onRetryPendingInput: () -> Unit, onStopRun: () -> Unit,
+  onReloadModels: () -> Unit, onSelectModel: (String) -> Unit,
+  onReloadAgents: () -> Unit, onSwitchAgent: (String, Boolean) -> Unit,
+  onReloadContext: () -> Unit, onOpenExecution: (String) -> Unit,
+  onRetryExecution: () -> Unit, onCloseExecution: () -> Unit,
+  onCopyMessageText: (String) -> Unit,
+  actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit) {
+  val focusManager = LocalFocusManager.current
+  val keyboardController = LocalSoftwareKeyboardController.current
+  val composerFocus = remember(connection.selectedConversationId) { FocusRequester() }
+  var focusDraftRevision by remember(connection.selectedConversationId) { mutableIntStateOf(0) }
+  var composerValue by remember(connection.selectedConversationId) {
+    mutableStateOf(TextFieldValue(connection.draftText, selection = TextRange(connection.draftText.length)))
+  }
+  LaunchedEffect(connection.selectedConversationId, connection.draftText) {
+    if (composerValue.text != connection.draftText) composerValue =
+      TextFieldValue(connection.draftText, selection = TextRange(connection.draftText.length))
+  }
+  LaunchedEffect(connection.selectedConversationId, connection.historyLoading) {
+    if (connection.selectedConversationId != null && !connection.historyLoading && !connection.chatError &&
+      connection.messages.isEmpty() && connection.context == null && !connection.contextError) onReloadContext()
+  }
+  LaunchedEffect(connection.selectedConversationId, focusDraftRevision) {
+    if (focusDraftRevision > 0) {
+      composerFocus.requestFocus()
+      keyboardController?.show()
+    }
+  }
+  val selected = connection.conversations.firstOrNull { it.id == connection.selectedConversationId }
+  var modelPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var modelQuery by remember(connection.selectedConversationId) { mutableStateOf("") }
+  var agentPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var agentQuery by remember(connection.selectedConversationId) { mutableStateOf("") }
+  var pendingAgentId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
+  var contextOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var optionsOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var referenceKind by remember(connection.profile?.gatewayId, connection.selectedConversationId) {
+    mutableStateOf<String?>(null)
+  }
+  var referenceQuery by remember(connection.profile?.gatewayId, connection.selectedConversationId) {
+    mutableStateOf("")
+  }
+  LaunchedEffect(connection.requestedReferenceConversationId, connection.requestedReferenceKind,
+    connection.selectedConversationId, connection.historyLoading) {
+    val id = connection.requestedReferenceConversationId ?: return@LaunchedEffect
+    val kind = connection.requestedReferenceKind ?: return@LaunchedEffect
+    if (id == connection.selectedConversationId && !connection.historyLoading) {
+      referenceQuery = ""
+      referenceKind = kind
+      onReferenceRequestHandled(id, kind)
+    }
+  }
+  LaunchedEffect(referenceKind, referenceQuery, connection.profile?.gatewayId,
+    connection.selectedConversationId) {
+    val kind = referenceKind ?: return@LaunchedEffect
+    if (referenceQuery.isNotEmpty()) delay(250)
+    onLoadReferences(kind, referenceQuery)
+  }
+  val optionsLabel = stringResource(R.string.assistant_options)
+  val expandedComposer = composerValue.text.isNotEmpty() || connection.draftRefs.isNotEmpty() ||
+    connection.draftAttachments.isNotEmpty()
+  val toggleActions: () -> Unit = {
+    if (!actionsOpen) {
+      focusManager.clearFocus(force = true)
+      keyboardController?.hide()
+    }
+    onActionsOpenChange(!actionsOpen)
+  }
+  var messageActionsId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
+  var messageDetailId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
+  Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 16.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically) {
+      Text(selected?.takeUnless { it.isLocalDraft }?.title
+        ?: stringResource(R.string.assistant_new_conversation),
+        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium,
+        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+      IconButton(onClick = { optionsOpen = true },
+        modifier = Modifier.semantics { contentDescription = optionsLabel }.testTag("assistant-options")) {
+        Text("···", style = MaterialTheme.typography.titleLarge)
+      }
+    }
+    if (connection.selectedConversationId == null) {
+      Text(stringResource(R.string.assistant_choose_conversation), style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (connection.conversationsLoading) CircularProgressIndicator()
+      connection.conversations.take(3).forEach { conversation ->
+        ConversationCard(conversation, onClick = { onSelectConversation(conversation.id) })
+      }
+    } else {
+      if (connection.agentError) Text(stringResource(R.string.assistant_agent_error), color = MaterialTheme.colorScheme.error)
+      if (connection.modelError) Text(stringResource(R.string.assistant_model_error), color = MaterialTheme.colorScheme.error)
+      if (connection.realtimeStatus != "connected") Text(stringResource(R.string.assistant_reconnecting),
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (connection.draftModelLoading) Text(stringResource(R.string.assistant_model_loading),
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (connection.historyLoading) CircularProgressIndicator()
+      if (connection.chatError) Text(stringResource(R.string.chat_load_error), color = MaterialTheme.colorScheme.error)
+      if (connection.activeRunId != null) {
+        Text(stringResource(if (connection.stoppingRun) R.string.assistant_stopping else R.string.assistant_running),
+          style = MaterialTheme.typography.bodyMedium)
+      }
+      if (connection.stopError) Text(stringResource(R.string.assistant_stop_error), color = MaterialTheme.colorScheme.error)
+      if (connection.runError) Text(stringResource(R.string.assistant_run_error), color = MaterialTheme.colorScheme.error)
+      if (!connection.historyLoading && connection.messages.isEmpty() &&
+        connection.activeRunId == null && connection.liveText.isBlank()) {
+        Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+          AssistantWelcome(if (connection.contextLoading) null else
+            taskRecommendation(connection.taskWelcome) ?: projectRecommendation(connection.projectWelcome)) { prompt ->
+            onActionsOpenChange(false)
+            composerValue = TextFieldValue(prompt, selection = TextRange(prompt.length))
+            onDraftChange(prompt)
+            focusDraftRevision++
+          }
+        }
+      } else LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        items(connection.messages, key = { it.id }) { message ->
+          Column(modifier = Modifier.fillMaxWidth()) {
+            Text(if (message.role == "user") stringResource(R.string.message_you) else stringResource(R.string.tab_assistant),
+              style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Text(message.text, style = MaterialTheme.typography.bodyLarge)
+            if (message.role == "assistant") TextButton(onClick = { messageActionsId = message.id },
+              modifier = Modifier.testTag("message-more-${message.id}")) {
+              Text(stringResource(R.string.assistant_message_more))
+            }
+          }
+        }
+        if (connection.liveText.isNotBlank() && connection.activeRunId != null) item(key = "live-output") {
+          Column(modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.assistant_live_output), style = MaterialTheme.typography.labelMedium,
+              color = MaterialTheme.colorScheme.primary)
+            Text(connection.liveText, style = MaterialTheme.typography.bodyLarge)
+          }
+        }
+      }
+      connection.pendingInput?.let { pending ->
+        Card(modifier = Modifier.fillMaxWidth().testTag("assistant-pending")) {
+          Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.assistant_pending_input), style = MaterialTheme.typography.labelMedium)
+            if (pending.content.isNotBlank()) Text(pending.content, style = MaterialTheme.typography.bodyMedium)
+            pending.attachments.forEach { item ->
+              Text(item.name, style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("assistant-pending-attachment-${item.id}"))
+            }
+            OutlinedButton(onClick = onRetryPendingInput, modifier = Modifier.testTag("assistant-retry"),
+              enabled = !connection.sending && !connection.taskScopeLoading &&
+                connection.realtimeStatus == "connected" && connection.draftModelReady) {
+              Text(stringResource(R.string.assistant_retry))
+            }
+          }
+        }
+      }
+      if (connection.taskScopeLoading) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text(stringResource(if (connection.contextError) R.string.assistant_task_scope_error
+            else R.string.assistant_task_scope_loading), modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+          if (connection.contextError) TextButton(onClick = onReloadContext,
+            modifier = Modifier.testTag("assistant-task-scope-retry")) {
+            Text(stringResource(R.string.progress_refresh))
+          }
+        }
+      }
+      if (connection.sendError) Text(stringResource(R.string.assistant_send_error), color = MaterialTheme.colorScheme.error)
+      if (connection.attachmentError) Text(stringResource(R.string.assistant_attachment_error),
+        color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("assistant-attachment-error"))
+      if (connection.attachmentLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp)
+        .testTag("assistant-attachment-loading"))
+      if (connection.pendingDeleteId == connection.selectedConversationId) {
+        Text(stringResource(R.string.conversations_pending_delete), color = MaterialTheme.colorScheme.error)
+      }
+      connection.draftRefs.forEach { ref ->
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+          val kindLabel = when (ref.kind) {
+            "note" -> stringResource(R.string.assistant_action_reference_note)
+            "task" -> stringResource(R.string.assistant_action_reference_task)
+            else -> stringResource(R.string.assistant_assertion_ref)
+          }
+          Text(kindLabel + " · " + ref.title.ifBlank { ref.sourceId },
+            modifier = Modifier.weight(1f).testTag("assistant-ref-${ref.kind}-${ref.sourceId}"),
+            style = MaterialTheme.typography.bodySmall, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          TextButton(onClick = { onRemoveDraftRef(ref.kind, ref.sourceId) },
+            enabled = !connection.sending && connection.pendingInput == null,
+            modifier = Modifier.testTag("assistant-remove-ref-${ref.kind}-${ref.sourceId}")) {
+            Text(stringResource(R.string.assistant_remove_ref))
+          }
+        }
+      }
+      connection.draftAttachments.forEach { item ->
+        Row(modifier = Modifier.fillMaxWidth().testTag("assistant-attachment-${item.id}"),
+          verticalAlignment = Alignment.CenterVertically) {
+          Text(item.name, modifier = Modifier.weight(1f), maxLines = 1,
+            overflow = TextOverflow.Ellipsis)
+          TextButton(onClick = { onRemoveDraftAttachment(item.id) },
+            enabled = !connection.attachmentLoading && !connection.sending && connection.pendingInput == null,
+            modifier = Modifier.testTag("assistant-attachment-remove-${item.id}")) {
+            Text(stringResource(R.string.assistant_attachment_remove))
+          }
+        }
+      }
+      Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface,
+        RoundedCornerShape(24.dp)).padding(8.dp).testTag("assistant-bottom-surface")) {
+        Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer,
+          RoundedCornerShape(18.dp))) {
+          Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.Bottom) {
+            BasicTextField(value = composerValue, onValueChange = { value ->
+              composerValue = value
+              onDraftChange(value.text)
+            }, modifier = Modifier.weight(1f).heightIn(min = 48.dp).focusRequester(composerFocus)
+              .onFocusChanged { if (it.isFocused) onActionsOpenChange(false) }
+              .padding(horizontal = 12.dp, vertical = 10.dp).testTag("assistant-input"),
+              textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+              maxLines = 5, enabled = connection.pendingDeleteId != connection.selectedConversationId,
+              decorationBox = { innerTextField ->
+                Box {
+                  if (composerValue.text.isEmpty()) Text(stringResource(R.string.assistant_input_hint),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                  innerTextField()
+                }
+              })
+            if (!expandedComposer) AssistantComposerButtons(connection, actionsOpen,
+              toggleActions, onSendMessage, onStopRun)
+          }
+          if (expandedComposer) {
+            Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp),
+              horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+              AssistantComposerButtons(connection, actionsOpen,
+                toggleActions, onSendMessage, onStopRun)
+            }
+          }
+        }
+      AnimatedVisibility(visible = actionsOpen,
+        enter = expandVertically(animationSpec = tween(220), expandFrom = Alignment.Bottom) +
+          fadeIn(animationSpec = tween(220)) +
+          slideInVertically(animationSpec = tween(220), initialOffsetY = { it / 16 }),
+        exit = shrinkVertically(animationSpec = tween(180), shrinkTowards = Alignment.Bottom) +
+          fadeOut(animationSpec = tween(180)) +
+          slideOutVertically(animationSpec = tween(180), targetOffsetY = { it / 16 }),
+        label = "assistant-actions") {
+        AssistantActionPanel(
+          canCreate = actionsOpen && !connection.creatingConversation && !connection.sending,
+          canReference = actionsOpen && !connection.sending && connection.pendingInput == null,
+          canPick = actionsOpen && !connection.sending && !connection.attachmentLoading &&
+            connection.pendingInput == null && connection.draftAttachments.size < 10,
+          onPick = { kind ->
+            onActionsOpenChange(false)
+            onPickDraftAttachment(kind)
+          },
+          onOpenReference = { kind ->
+            onActionsOpenChange(false)
+            referenceQuery = ""
+            referenceKind = kind
+          },
+          onCreateConversation = {
+            onActionsOpenChange(false)
+            onCreateConversation()
+          })
+      }
+      }
+    }
+  }
+  if (referenceKind != null) ModalBottomSheet(onDismissRequest = { referenceKind = null }) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Text(stringResource(R.string.assistant_reference_title), style = MaterialTheme.typography.titleMedium)
+      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf("note" to R.string.assistant_action_reference_note,
+          "task" to R.string.assistant_action_reference_task).forEach { (kind, label) ->
+          TextButton(onClick = { referenceQuery = ""; referenceKind = kind },
+            modifier = Modifier.weight(1f).testTag("assistant-reference-tab-$kind")) {
+            Text(stringResource(label), color = if (referenceKind == kind) MaterialTheme.colorScheme.primary
+              else MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+        }
+        TextButton(onClick = {}, enabled = false, modifier = Modifier.weight(1f)) {
+          Text(stringResource(R.string.assistant_action_reference_file))
+        }
+      }
+      OutlinedTextField(value = referenceQuery, onValueChange = { if (it.length <= 4096) referenceQuery = it },
+        label = { Text(stringResource(R.string.assistant_reference_search)) },
+        modifier = Modifier.fillMaxWidth().testTag("assistant-reference-search"), singleLine = true)
+      if (connection.draftRefs.size >= 5) Text(stringResource(R.string.assistant_reference_limit),
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      val picker = connection.referencePicker
+      val matching = picker.gatewayId == connection.profile?.gatewayId &&
+        picker.conversationId == connection.selectedConversationId &&
+        picker.kind == referenceKind && picker.query == referenceQuery.trim()
+      if (!matching || picker.loading) CircularProgressIndicator()
+      else if (picker.error) {
+        Text(stringResource(R.string.assistant_reference_error), color = MaterialTheme.colorScheme.error)
+        TextButton(onClick = { referenceKind?.let { onLoadReferences(it, referenceQuery) } },
+          modifier = Modifier.testTag("assistant-reference-retry")) {
+          Text(stringResource(R.string.assistant_context_retry))
+        }
+      } else if (picker.items.isEmpty()) {
+        Text(stringResource(R.string.assistant_reference_empty),
+          color = MaterialTheme.colorScheme.onSurfaceVariant)
+      } else LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+        items(picker.items, key = { it.kind + ":" + it.id }) { item ->
+          val alreadyAdded = connection.draftRefs.any { it.kind == item.kind && it.sourceId == item.id }
+          TextButton(onClick = { if (onAddDraftRef(item)) referenceKind = null },
+            enabled = !alreadyAdded && connection.draftRefs.size < 5 && !connection.sending &&
+              connection.pendingInput == null,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+              .testTag("assistant-reference-${item.kind}-${item.id}")) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+              Text(item.title.ifBlank { stringResource(R.string.notes_untitled) }, maxLines = 1,
+                overflow = TextOverflow.Ellipsis)
+              if (item.description.isNotBlank()) Text(item.description,
+                style = MaterialTheme.typography.bodySmall, maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+          }
+        }
+      }
+    }
+  }
+  if (optionsOpen) ModalBottomSheet(onDismissRequest = { optionsOpen = false }) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+      verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      Text(stringResource(R.string.assistant_options), style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(bottom = 8.dp))
+      TextButton(onClick = { optionsOpen = false; onCreateConversation() },
+        enabled = !connection.creatingConversation,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("assistant-new")) {
+        Text(stringResource(R.string.assistant_action_new_chat), modifier = Modifier.fillMaxWidth())
+      }
+      if (connection.selectedConversationId != null) {
+        TextButton(onClick = { optionsOpen = false; agentPickerOpen = true; onReloadAgents() },
+          enabled = !connection.creatingConversation,
+          modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("assistant-agent")) {
+          Text(stringResource(R.string.assistant_agent) + " · " +
+            (connection.agents.firstOrNull { it.id == connection.selectedAgentId }?.name
+              ?: connection.selectedAgentId), modifier = Modifier.fillMaxWidth())
+        }
+        TextButton(onClick = { optionsOpen = false; modelPickerOpen = true; onReloadModels() },
+          enabled = !connection.modelSaving,
+          modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("assistant-model")) {
+          Text(stringResource(R.string.assistant_model) + " · " +
+            (connection.models.firstOrNull { it.id == connection.selectedModelId }?.name
+              ?: connection.selectedModelId), modifier = Modifier.fillMaxWidth())
+        }
+        TextButton(onClick = { optionsOpen = false; contextOpen = true; onReloadContext() },
+          modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("assistant-context")) {
+          Text(stringResource(R.string.assistant_context), modifier = Modifier.fillMaxWidth())
+        }
+      }
+    }
+  }
+  val actionsMessage = connection.messages.firstOrNull { it.id == messageActionsId }
+  if (actionsMessage != null) ModalBottomSheet(onDismissRequest = { messageActionsId = null }) {
+    val codeText = extractMarkdownCodeBlocks(actionsMessage.text)
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Text(stringResource(R.string.assistant_message_more), style = MaterialTheme.typography.titleMedium)
+      TextButton(onClick = {
+        messageActionsId = null
+        messageDetailId = actionsMessage.id
+      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-detail-action")) {
+        Text(stringResource(R.string.assistant_message_detail), modifier = Modifier.fillMaxWidth())
+      }
+      TextButton(onClick = {
+        messageActionsId = null
+        onCopyMessageText(actionsMessage.text)
+      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-copy-action")) {
+        Text(stringResource(R.string.assistant_copy), modifier = Modifier.fillMaxWidth())
+      }
+      if (codeText.isNotEmpty()) TextButton(onClick = {
+        messageActionsId = null
+        onCopyMessageText(codeText)
+      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-copy-code-action")) {
+        Text(stringResource(R.string.assistant_copy_code), modifier = Modifier.fillMaxWidth())
+      }
+      TextButton(onClick = { messageActionsId = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text(stringResource(R.string.assistant_close))
+      }
+    }
+  }
+  val detailMessage = connection.messages.firstOrNull { it.id == messageDetailId }
+  if (detailMessage != null) ModalBottomSheet(onDismissRequest = { messageDetailId = null }) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+      verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Text(stringResource(R.string.assistant_message_detail), style = MaterialTheme.typography.titleLarge)
+      Text(stringResource(if (detailMessage.role == "user") R.string.message_you else R.string.tab_assistant),
+        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+      SelectionContainer {
+        Text(detailMessage.text, style = MaterialTheme.typography.bodyLarge,
+          modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()))
+      }
+      if (detailMessage.role == "assistant") {
+        OutlinedButton(onClick = {
+          messageDetailId = null
+          onOpenExecution(detailMessage.id)
+        }, modifier = Modifier.fillMaxWidth().testTag("message-execution")) {
+          Text(stringResource(R.string.assistant_execution))
+        }
+      }
+      TextButton(onClick = { messageDetailId = null }) { Text(stringResource(R.string.assistant_close)) }
+    }
+  }
+  if (connection.executionMessageId != null) ModalBottomSheet(onDismissRequest = {
+    val previous = connection.executionMessageId
+    onCloseExecution()
+    messageDetailId = previous
+  }) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+      verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Text(stringResource(R.string.assistant_execution), style = MaterialTheme.typography.titleLarge)
+      ExecutionDetails(connection.executionDetail, connection.executionLoading, connection.executionError,
+        connection.activeRunId != null, onRetryExecution)
+      TextButton(onClick = {
+        val previous = connection.executionMessageId
+        onCloseExecution()
+        messageDetailId = previous
+      }, modifier = Modifier.testTag("execution-back")) { Text(stringResource(R.string.assistant_back_to_message)) }
+    }
+  }
+  if (contextOpen) AlertDialog(
+    onDismissRequest = { contextOpen = false },
+    title = { Text(stringResource(R.string.assistant_context)) },
+    text = { ContextDetails(connection, onReloadContext) },
+    confirmButton = { TextButton(onClick = { contextOpen = false }) { Text(stringResource(R.string.assistant_model_close)) } },
+  )
+  if (modelPickerOpen) AlertDialog(
+    onDismissRequest = { modelPickerOpen = false },
+    title = { Text(stringResource(R.string.assistant_model)) },
+    text = {
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(value = modelQuery, onValueChange = { modelQuery = it },
+          label = { Text(stringResource(R.string.assistant_model_search)) }, singleLine = true)
+        if (connection.modelsLoading) CircularProgressIndicator()
+        if (connection.modelError) TextButton(onClick = onReloadModels) {
+          Text(stringResource(R.string.assistant_model_retry))
+        }
+        LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+          items(connection.models.filter { modelQuery.isBlank() ||
+            it.name.contains(modelQuery, ignoreCase = true) || it.id.contains(modelQuery, ignoreCase = true) },
+            key = { it.id }) { model ->
+            TextButton(onClick = { onSelectModel(model.id); modelPickerOpen = false },
+              enabled = !connection.modelSaving && !connection.sending && connection.activeRunId == null &&
+                connection.pendingInput == null, modifier = Modifier.fillMaxWidth().testTag("model-${model.id}")) {
+              Text("${if (model.id == connection.selectedModelId) "✓ " else ""}${model.name} · ${model.id}")
+            }
+          }
+        }
+      }
+    },
+    confirmButton = { TextButton(onClick = { modelPickerOpen = false }) { Text(stringResource(R.string.assistant_model_close)) } },
+  )
+  if (agentPickerOpen) AlertDialog(
+    onDismissRequest = { agentPickerOpen = false },
+    title = { Text(stringResource(R.string.assistant_agent)) },
+    text = {
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(value = agentQuery, onValueChange = { agentQuery = it },
+          label = { Text(stringResource(R.string.assistant_agent_search)) }, singleLine = true)
+        if (connection.agentsLoading) CircularProgressIndicator()
+        if (connection.agentError) TextButton(onClick = onReloadAgents) {
+          Text(stringResource(R.string.assistant_agent_retry))
+        }
+        LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+          items(connection.agents.filter { agentQuery.isBlank() ||
+            it.name.contains(agentQuery, ignoreCase = true) || it.id.contains(agentQuery, ignoreCase = true) },
+            key = { it.id }) { agent ->
+            TextButton(onClick = {
+              agentPickerOpen = false
+              if (connection.draftText.isNotBlank()) pendingAgentId = agent.id
+              else onSwitchAgent(agent.id, false)
+            }, enabled = !connection.creatingConversation, modifier = Modifier.fillMaxWidth().testTag("agent-${agent.id}")) {
+              Text("${if (agent.id == connection.selectedAgentId) "✓ " else ""}${agent.name} · ${agent.id}")
+            }
+          }
+        }
+      }
+    },
+    confirmButton = { TextButton(onClick = { agentPickerOpen = false }) { Text(stringResource(R.string.assistant_model_close)) } },
+  )
+  pendingAgentId?.let { agentId ->
+    AlertDialog(onDismissRequest = { pendingAgentId = null },
+      title = { Text(stringResource(R.string.assistant_discard_draft_title)) },
+      text = { Text(stringResource(R.string.assistant_discard_draft_message)) },
+      confirmButton = { TextButton(onClick = { pendingAgentId = null; onSwitchAgent(agentId, true) },
+        modifier = Modifier.testTag("agent-discard-confirm")) { Text(stringResource(R.string.assistant_discard_draft_confirm)) } },
+      dismissButton = { TextButton(onClick = { pendingAgentId = null }) { Text(stringResource(R.string.assistant_discard_draft_cancel)) } })
+  }
+}
+
+@Composable
+private fun ExecutionDetails(detail: ExecutionDetail?, loading: Boolean, error: Boolean, live: Boolean,
+  onRetry: () -> Unit) {
+  var expandedGroupId by remember(detail?.turnId) { mutableStateOf<String?>(null) }
+  val groups = remember(detail, live) { ExecutionGroups.group(detail?.steps.orEmpty(), live) }
+  if (loading && detail == null) CircularProgressIndicator(modifier = Modifier.testTag("execution-loading"))
+  if (error) {
+    Text(stringResource(R.string.assistant_execution_error), color = MaterialTheme.colorScheme.error)
+    TextButton(onClick = onRetry, modifier = Modifier.testTag("execution-retry")) {
+      Text(stringResource(R.string.assistant_execution_retry))
+    }
+  }
+  if (!loading && !error && groups.isEmpty()) Text(stringResource(R.string.assistant_execution_empty))
+  if (groups.isNotEmpty()) LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    items(groups, key = { it.id }) { group ->
+      if (group.kind == "progress") {
+        SelectionContainer { Text(group.steps.first().text, style = MaterialTheme.typography.bodyMedium) }
+      } else {
+        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          val canExpand = group.steps.size > 1 && group.steps.any { it.preview.isNotBlank() || it.failure.isNotBlank() }
+          TextButton(onClick = { if (canExpand) expandedGroupId = if (expandedGroupId == group.id) null else group.id },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("execution-group-${group.id}")) {
+            Text(executionCategoryLabel(group.category) + if (group.steps.size > 1) " · ${group.steps.size}" else "",
+              modifier = Modifier.weight(1f))
+            Text(executionStatusLabel(group.status), color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+          if (group.steps.size == 1) {
+            val step = group.steps.first()
+            if (step.preview.isNotBlank()) SelectionContainer {
+              Text(step.preview, style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = 12.dp).testTag("execution-preview-${step.id}"))
+            }
+            if (step.failure.isNotBlank()) SelectionContainer {
+              Text(step.failure, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 12.dp))
+            }
+          } else if (expandedGroupId == group.id) {
+            group.steps.forEachIndexed { index, step ->
+              Column(modifier = Modifier.padding(start = 12.dp)) {
+                Text("${index + 1}. ${executionCategoryLabel(group.category)}",
+                  style = MaterialTheme.typography.labelMedium)
+                if (step.preview.isNotBlank()) SelectionContainer {
+                  Text(step.preview, style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.testTag("execution-preview-${step.id}"))
+                }
+                if (step.failure.isNotBlank()) SelectionContainer {
+                  Text(step.failure, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error)
+                }
+              }
+            }
+          } else {
+            group.steps.firstOrNull { it.preview.isNotBlank() }?.let { step ->
+              Text(step.preview, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp))
+            }
+          }
+        }
+        HorizontalDivider()
+      }
+    }
+  }
+}
+
+@Composable
+private fun executionCategoryLabel(category: String): String = stringResource(when (category) {
+  "search" -> R.string.assistant_step_search
+  "read" -> R.string.assistant_step_read
+  "command" -> R.string.assistant_step_command
+  "write", "edit" -> R.string.assistant_step_edit
+  "fetch" -> R.string.assistant_step_fetch
+  "share" -> R.string.assistant_step_share
+  "speech" -> R.string.assistant_step_speech
+  "plan" -> R.string.assistant_step_plan
+  else -> R.string.assistant_step_other
+})
+
+@Composable
+private fun executionStatusLabel(status: String): String = stringResource(when (status) {
+  "running" -> R.string.assistant_step_running
+  "error" -> R.string.assistant_step_error
+  "stopped" -> R.string.assistant_step_stopped
+  else -> R.string.assistant_step_done
+})
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConversationsScreen(
+  connection: ConnectionUiState,
+  insets: PaddingValues,
+  onSearchChange: (String) -> Unit,
+  onLoadMore: () -> Unit,
+  onCreateConversation: () -> Unit,
+  onSelectConversation: (String) -> Unit,
+  onDiscardDraft: (String) -> Unit,
+  onBeginRename: (String) -> Unit,
+  onRenameDraftChange: (String) -> Unit,
+  onSaveRename: () -> Unit,
+  onCancelRename: () -> Unit,
+  onTogglePin: (String) -> Unit,
+  onToggleArchive: (String) -> Unit,
+  onScheduleDelete: (String) -> Unit,
+  onUndoDelete: () -> Unit,
+) {
+  var pendingDiscardId by rememberSaveable { mutableStateOf<String?>(null) }
+  var menuConversationId by rememberSaveable { mutableStateOf<String?>(null) }
+  val menuConversation = connection.conversations.firstOrNull { it.id == menuConversationId && !it.isLocalDraft }
+  if (menuConversation != null) ModalBottomSheet(onDismissRequest = { menuConversationId = null }) {
+    val managementEnabled = !connection.renamingConversation && connection.pinningConversationId == null &&
+      connection.archivingConversationId == null
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+      verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      Text(menuConversation.title, style = MaterialTheme.typography.titleMedium, maxLines = 2,
+        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+      TextButton(onClick = { menuConversationId = null; onBeginRename(menuConversation.id) },
+        enabled = managementEnabled,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("rename-conversation-${menuConversation.id}")) {
+        Text(stringResource(R.string.conversations_rename), modifier = Modifier.fillMaxWidth())
+      }
+      TextButton(onClick = { menuConversationId = null; onTogglePin(menuConversation.id) },
+        enabled = managementEnabled,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("pin-conversation-${menuConversation.id}")) {
+        Text(stringResource(if (menuConversation.status == "pinned") R.string.conversations_unpin
+          else R.string.conversations_pin), modifier = Modifier.fillMaxWidth())
+      }
+      TextButton(onClick = { menuConversationId = null; onToggleArchive(menuConversation.id) },
+        enabled = managementEnabled,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("archive-conversation-${menuConversation.id}")) {
+        Text(stringResource(if (menuConversation.status == "archived") R.string.conversations_unarchive
+          else R.string.conversations_archive), modifier = Modifier.fillMaxWidth())
+      }
+      HorizontalDivider()
+      TextButton(onClick = { menuConversationId = null; onScheduleDelete(menuConversation.id) },
+        enabled = managementEnabled && connection.pendingDeleteId == null && !connection.sending &&
+          (menuConversation.id != connection.selectedConversationId ||
+            (connection.activeRunId == null && connection.pendingInput == null)),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("delete-conversation-${menuConversation.id}")) {
+        Text(stringResource(R.string.conversations_delete), color = MaterialTheme.colorScheme.error,
+          modifier = Modifier.fillMaxWidth())
+      }
+      TextButton(onClick = { menuConversationId = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text(stringResource(R.string.conversations_cancel))
+      }
+    }
+  }
+  if (pendingDiscardId != null) AlertDialog(
+    onDismissRequest = { pendingDiscardId = null },
+    title = { Text(stringResource(R.string.conversations_discard_title)) },
+    text = { Text(stringResource(R.string.conversations_discard_message)) },
+    confirmButton = { TextButton(onClick = {
+      pendingDiscardId?.let(onDiscardDraft)
+      pendingDiscardId = null
+    }, modifier = Modifier.testTag("conversations-confirm-discard")) {
+      Text(stringResource(R.string.conversations_discard))
+    } },
+    dismissButton = { TextButton(onClick = { pendingDiscardId = null }) {
+      Text(stringResource(R.string.conversations_cancel))
+    } },
+  )
+  if (connection.renameDraftId != null) AlertDialog(
+    onDismissRequest = onCancelRename,
+    title = { Text(stringResource(R.string.conversations_rename)) },
+    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      OutlinedTextField(value = connection.renameDraftText, onValueChange = onRenameDraftChange,
+        modifier = Modifier.fillMaxWidth().testTag("conversations-rename-input"), singleLine = true,
+        label = { Text(stringResource(R.string.conversations_name)) },
+        enabled = !connection.renamingConversation)
+      if (connection.renameError) Text(stringResource(R.string.conversations_rename_error),
+        color = MaterialTheme.colorScheme.error)
+    } },
+    confirmButton = { TextButton(onClick = onSaveRename,
+      enabled = connection.renameDraftText.isNotBlank() && !connection.renamingConversation,
+      modifier = Modifier.testTag("conversations-rename-save")) {
+      Text(stringResource(R.string.conversations_save))
+    } },
+    dismissButton = { TextButton(onClick = onCancelRename, enabled = !connection.renamingConversation) {
+      Text(stringResource(R.string.conversations_cancel))
+    } },
+  )
+  Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 16.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically) {
+      Text(stringResource(R.string.tab_conversations), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+      OutlinedButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
+        modifier = Modifier.testTag("chats-new")) { Text(stringResource(R.string.assistant_new_action)) }
+    }
+    val clearLabel = stringResource(R.string.conversations_clear)
+    OutlinedTextField(value = connection.conversationSearch, onValueChange = onSearchChange,
+      modifier = Modifier.fillMaxWidth().testTag("conversations-search"),
+      label = { Text(stringResource(R.string.conversations_search)) }, singleLine = true,
+      trailingIcon = {
+        if (connection.conversationSearch.isNotEmpty()) IconButton(onClick = { onSearchChange("") },
+          modifier = Modifier.semantics { contentDescription = clearLabel }.testTag("conversations-clear")) { Text("×") }
+      })
+    if (connection.conversationsLoading) CircularProgressIndicator()
+    if (connection.chatError) Text(stringResource(R.string.chat_load_error), color = MaterialTheme.colorScheme.error)
+    if (connection.pinActionError) Text(stringResource(R.string.conversations_pin_error),
+      color = MaterialTheme.colorScheme.error)
+    if (connection.archiveActionError) Text(stringResource(R.string.conversations_archive_error),
+      color = MaterialTheme.colorScheme.error)
+    if (connection.deleteActionError) Text(stringResource(R.string.conversations_delete_error),
+      color = MaterialTheme.colorScheme.error)
+    if (connection.discardDraftError) Text(stringResource(R.string.conversations_discard_error),
+      color = MaterialTheme.colorScheme.error)
+    if (connection.pendingDeleteId != null) Row(modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+      Text(stringResource(R.string.conversations_pending_delete))
+      TextButton(onClick = onUndoDelete, enabled = !connection.deleteCommitting,
+        modifier = Modifier.testTag("conversations-undo-delete")) {
+        Text(stringResource(R.string.conversations_undo))
+      }
+    }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      ConversationGroups.group(connection.conversations.filterNot { it.id == connection.pendingDeleteId }).forEach { group ->
+        item(key = "section-${group.id}") {
+          Text(conversationGroupLabel(group.id), style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+        }
+        items(group.items, key = { it.id }) { conversation ->
+          ConversationCard(conversation, showTime = true,
+            onDiscard = if (conversation.isLocalDraft) ({ pendingDiscardId = conversation.id }) else null,
+            onMenu = if (conversation.isLocalDraft) null else ({ menuConversationId = conversation.id }),
+            selected = conversation.id == connection.selectedConversationId,
+            discardEnabled = connection.discardingDraftId == null && !connection.creatingConversation && !connection.sending,
+            onClick = { onSelectConversation(conversation.id) })
+        }
+      }
+      if (connection.conversationsHasMore) item {
+        OutlinedButton(onClick = onLoadMore,
+          enabled = !connection.conversationsLoading && !connection.conversationsLoadingMore,
+          modifier = Modifier.fillMaxWidth().testTag("conversations-load-more")) {
+          Text(stringResource(if (connection.conversationsLoadingMore) R.string.conversations_loading_more
+            else R.string.conversations_load_more))
+        }
+      }
+      if (connection.conversationsMoreError) item {
+        Text(stringResource(R.string.conversations_more_error), color = MaterialTheme.colorScheme.error)
+      }
+    }
+  }
+}
+
+@Composable
+private fun ConversationCard(conversation: ConversationSummary, showTime: Boolean = false,
+  onDiscard: (() -> Unit)? = null, onMenu: (() -> Unit)? = null, selected: Boolean = false,
+  discardEnabled: Boolean = true, onClick: () -> Unit, modifier: Modifier = Modifier) {
+  val haptics = LocalHapticFeedback.current
+  val contextMenuLabel = stringResource(R.string.conversations_more_actions)
+  Card(modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick,
+    onLongClick = onMenu?.let { action -> { haptics.performHapticFeedback(HapticFeedbackType.LongPress); action() } },
+    onLongClickLabel = if (onMenu != null) stringResource(R.string.conversations_more_actions) else null),
+    colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
+      else MaterialTheme.colorScheme.surfaceContainer)) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(if (conversation.isLocalDraft) stringResource(R.string.assistant_new_conversation) else conversation.title,
+          style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.weight(1f))
+        if (showTime) Text(conversationAgeLabel(conversation.updatedAt), style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        if (onMenu != null) IconButton(onClick = onMenu,
+          modifier = Modifier.testTag("conversation-menu-${conversation.id}").semantics {
+            contentDescription = contextMenuLabel
+          }) { Text("⋯") }
+      }
+      if (!showTime) Text(stringResource(R.string.conversations_message_count, conversation.messageCount),
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (conversation.status == "pinned") Text(stringResource(R.string.conversations_pinned),
+        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+      if (conversation.status == "archived") Text(stringResource(R.string.conversations_archived),
+        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (onDiscard != null) TextButton(onClick = onDiscard, enabled = discardEnabled,
+        modifier = Modifier.testTag("discard-draft-${conversation.id}")) {
+        Text(stringResource(R.string.conversations_discard))
+      }
+    }
+  }
+}
+
+@Composable
+private fun conversationGroupLabel(id: String): String {
+  val locale = LocalConfiguration.current.locales[0]
+  return when (id) {
+  "today" -> stringResource(R.string.conversations_today)
+  "yesterday" -> stringResource(R.string.conversations_yesterday)
+  "this_week" -> stringResource(R.string.conversations_this_week)
+  "last_week" -> stringResource(R.string.conversations_last_week)
+  "this_month" -> stringResource(R.string.conversations_this_month)
+  "earlier" -> stringResource(R.string.conversations_earlier)
+  else -> runCatching {
+    YearMonth.parse(id).format(DateTimeFormatter.ofPattern("LLLL yyyy", locale))
+  }.getOrDefault(id)
+  }
+}
+
+@Composable
+private fun conversationAgeLabel(updatedAt: String): String {
+  val age = ConversationGroups.age(updatedAt)
+  val locale = LocalConfiguration.current.locales[0]
+  return when (age.unit) {
+    "now" -> stringResource(R.string.conversations_now)
+    "minute" -> stringResource(R.string.conversations_minutes_ago, age.count)
+    "hour" -> stringResource(R.string.conversations_hours_ago, age.count)
+    "day" -> stringResource(R.string.conversations_days_ago, age.count)
+    "week" -> stringResource(R.string.conversations_weeks_ago, age.count)
+    "date" -> age.date?.format(DateTimeFormatter.ofPattern("MMM d", locale)).orEmpty()
+    else -> ""
+  }
+}
+
+@Composable
+private fun ContextDetails(connection: ConnectionUiState, onRetry: () -> Unit) {
+  Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 380.dp)) {
+    if (connection.contextLoading) CircularProgressIndicator()
+    if (connection.contextError) {
+      Text(stringResource(R.string.assistant_context_error), color = MaterialTheme.colorScheme.error)
+      TextButton(onClick = onRetry) { Text(stringResource(R.string.assistant_context_retry)) }
+    }
+    connection.context?.let { context ->
+      LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item { Text(stringResource(R.string.assistant_context_project,
+          context.project?.title ?: stringResource(R.string.assistant_context_none))) }
+        context.task?.let { task -> item { Text(stringResource(R.string.assistant_context_task, task.title)) } }
+        context.environment?.let { environment ->
+          item { Text(stringResource(R.string.assistant_context_environment,
+            if (environment.kind == "managed_worktree") "Worktree" else "Local")) }
+          item { Text(environment.rootPath) }
+          environment.branch?.let { branch -> item { Text(branch) } }
+          if (!environment.available) item { Text(stringResource(R.string.assistant_context_unavailable)) }
+        }
+        if (context.workingDirectoryLocked) item { Text(stringResource(R.string.assistant_context_locked)) }
+        context.sources.forEachIndexed { index, source ->
+          item(key = "source-$index") {
+            Text(source.title.ifBlank { source.id })
+            if (source.unavailable) Text(stringResource(R.string.assistant_context_unavailable))
+          }
+        }
+        if (context.sourcesHasMore) item { Text(stringResource(R.string.assistant_context_more_sources)) }
+        if (context.unavailableSections.isNotEmpty()) item {
+          Text(stringResource(R.string.assistant_context_partial), color = MaterialTheme.colorScheme.error)
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun PairingScreen(
+  title: String,
+  connection: ConnectionUiState,
+  onPair: (String) -> Unit,
+  insets: PaddingValues,
+  onBack: (() -> Unit)? = null,
+) {
+  // The invitation carries a secret. Keep the draft in memory, not saved instance state.
+  var invitation by remember { mutableStateOf("") }
+  Column(
+    modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 16.dp),
+    verticalArrangement = Arrangement.spacedBy(16.dp),
+  ) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      if (onBack != null) IconButton(onClick = onBack, enabled = !connection.pairing,
+        modifier = Modifier.testTag("pairing-back")) {
+        Text("‹", style = MaterialTheme.typography.headlineMedium)
+      }
+      Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+    }
+    Text(stringResource(R.string.pairing_hint), style = MaterialTheme.typography.bodyMedium,
+      color = MaterialTheme.colorScheme.onSurfaceVariant)
+    OutlinedTextField(
+      value = invitation,
+      onValueChange = { invitation = it },
+      enabled = !connection.pairing,
+      label = { Text(stringResource(R.string.pairing_link_label)) },
+      modifier = Modifier.fillMaxWidth().testTag("pairing-link"),
+      minLines = 3,
+      maxLines = 5,
+    )
+    Button(onClick = { onPair(invitation.trim()) }, enabled = invitation.isNotBlank() && !connection.pairing && !connection.restoring,
+      modifier = Modifier.fillMaxWidth().testTag("pairing-submit")) {
+      Text(stringResource(R.string.pairing_connect))
+    }
+    if (connection.pairing || connection.restoring) CircularProgressIndicator()
+    connection.confirmationCode?.let { code ->
+      Text(stringResource(R.string.pairing_confirmation_code, code), style = MaterialTheme.typography.titleMedium)
+      Text(stringResource(R.string.pairing_approve_hint), style = MaterialTheme.typography.bodyMedium)
+    }
+    connection.error?.let {
+      Text(stringResource(R.string.pairing_error), color = MaterialTheme.colorScheme.error)
+    }
+  }
+}
+
+@Composable
+private fun UnpairedScreen(title: String, description: String, insets: PaddingValues) {
+  Column(
+    modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 16.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
+  ) {
+    Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+      Text(description, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+  }
+}

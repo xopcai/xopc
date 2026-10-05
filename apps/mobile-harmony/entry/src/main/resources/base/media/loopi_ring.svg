@@ -1,12 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="48 38 304 304">
   <defs>
-    <linearGradient id="graphite" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#41494c"/><stop offset=".6" stop-color="#30383c"/><stop offset="1" stop-color="#3b4449"/></linearGradient>
+    <linearGradient id="graphite" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#586066"/><stop offset=".34" stop-color="#394247"/><stop offset="1" stop-color="#30383c"/></linearGradient>
     <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#6c9ff6"/><stop offset="1" stop-color="#387de5"/></linearGradient>
+    <linearGradient id="bevel" x1=".2" y1="0" x2=".8" y2="1"><stop stop-color="#ffffff" stop-opacity=".46"/><stop offset=".42" stop-color="#ffffff" stop-opacity=".15"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>
   </defs>
-  <g fill="none" stroke-width="35" stroke-linecap="round">
-    <path d="M317.464 214.54 A120 120 0 1 1 175.46 72.536" stroke="#252e32" transform="translate(0 2)"/>
-    <path d="M229.437 73.667 A120 120 0 0 1 316.333 160.563" stroke="#2865ba" transform="translate(0 2)"/>
+  <g fill="none" stroke-width="40" stroke-linecap="round">
+    <path d="M317.464 214.54 A120 120 0 1 1 175.46 72.536" stroke="#20292e" transform="translate(0 5)"/>
+    <path d="M229.437 73.667 A120 120 0 0 1 316.333 160.563" stroke="#2865ba" transform="translate(0 5)"/>
     <path d="M317.464 214.54 A120 120 0 1 1 175.46 72.536" stroke="url(#graphite)"/>
     <path d="M229.437 73.667 A120 120 0 0 1 316.333 160.563" stroke="url(#blue)"/>
   </g>
+  <g fill="none" stroke-width="1.25" stroke-linecap="round" opacity=".8"><path d="M337.05 219.025 A140 140 0 1 1 171.37 53.37" stroke="url(#bevel)"/><path d="M234.343 54.277 A140 140 0 0 1 335.722 155.657" stroke="#d9e8ff" opacity=".65"/></g>
 </svg>

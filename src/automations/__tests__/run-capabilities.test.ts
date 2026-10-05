@@ -366,6 +366,20 @@ describe('automation execution capabilities', () => {
     expect(await service.listRuns()).toHaveLength(2);
   });
 
+  it('queues manual runs and reruns for a paused automation without enabling its schedule', async () => {
+    const { automation, invoke } = await fixture();
+    await service.pause(automation.id);
+    vi.spyOn(service, 'dispatchQueuedRun').mockImplementation(() => {});
+    const first = AutomationRunMutationOutputSchema.parse(await invoke(automation.id, 'paused-run'));
+    expect(first.run).toMatchObject({ automationId: automation.id, manual: true, status: 'queued' });
+    expect((await service.get(automation.id))?.enabled).toBe(false);
+    await service.cancelRun(first.run.id);
+    const second = AutomationRunMutationOutputSchema.parse(await invoke(first.run.id, 'paused-rerun', 'rerun'));
+    expect(second.run).toMatchObject({ automationId: automation.id, manual: true, status: 'queued' });
+    expect((await service.get(automation.id))?.enabled).toBe(false);
+    expect(await service.listRuns()).toHaveLength(2);
+  });
+
   it('shares execution receipts between agent tools without repeating completed work', async () => {
     const { automation } = await fixture();
     const deps = { getAutomationService: () => service, getCurrentAgentId: () => 'reviewer' };

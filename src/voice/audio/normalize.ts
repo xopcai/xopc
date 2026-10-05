@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, open, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -187,6 +187,8 @@ export async function forEachNormalizedAudioSegment(
   if (!Number.isFinite(maxDurationSeconds) || maxDurationSeconds <= 0) {
     throw new AudioNormalizationError('Maximum audio duration must be positive');
   }
+  const nativeCount = await forEachNativePcmWavSegment(input, segmentSeconds, maxDurationSeconds, consume);
+  if (nativeCount !== undefined) return nativeCount;
   const directory = await mkdtemp(join(tmpdir(), 'xopc-audio-'));
   const outputPattern = join(directory, 'segment-%05d.wav');
   try {
@@ -218,4 +220,50 @@ export async function forEachNormalizedAudioSegment(
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+async function forEachNativePcmWavSegment(
+  input: { filePath: string; signal?: AbortSignal },
+  segmentSeconds: number,
+  maxDurationSeconds: number,
+  consume: (buffer: Buffer, index: number) => Promise<void>,
+): Promise<number | undefined> {
+  const file = await open(input.filePath, 'r');
+  try {
+    const header = Buffer.alloc(44);
+    if ((await file.read(header, 0, header.length, 0)).bytesRead !== header.length
+      || header.toString('ascii', 0, 4) !== 'RIFF'
+      || header.toString('ascii', 8, 12) !== 'WAVE'
+      || header.toString('ascii', 12, 16) !== 'fmt '
+      || header.readUInt32LE(16) !== 16
+      || header.readUInt16LE(20) !== 1
+      || header.readUInt16LE(22) !== 1
+      || header.readUInt32LE(24) !== TARGET_SAMPLE_RATE
+      || header.readUInt16LE(34) !== 16
+      || header.toString('ascii', 36, 40) !== 'data') return undefined;
+    const dataBytes = header.readUInt32LE(40);
+    const fileSize = (await file.stat()).size;
+    if (!dataBytes || dataBytes % 2 !== 0 || fileSize !== dataBytes + 44) return undefined;
+    if (dataBytes / (TARGET_SAMPLE_RATE * 2) > maxDurationSeconds + 0.05) {
+      throw new AudioNormalizationError(`Decoded audio exceeds the ${Math.round(maxDurationSeconds)} second limit`);
+    }
+    const segmentBytes = Math.max(2, Math.floor(Math.min(segmentSeconds, 30) * TARGET_SAMPLE_RATE) * 2);
+    let count = 0;
+    for (let offset = 0; offset < dataBytes; offset += segmentBytes) {
+      input.signal?.throwIfAborted();
+      const bytes = Math.min(segmentBytes, dataBytes - offset);
+      const segment = Buffer.allocUnsafe(44 + bytes);
+      header.copy(segment, 0);
+      segment.writeUInt32LE(bytes + 36, 4);
+      segment.writeUInt32LE(bytes, 40);
+      let read = 0;
+      while (read < bytes) {
+        const result = await file.read(segment, 44 + read, bytes - read, 44 + offset + read);
+        if (!result.bytesRead) throw new AudioNormalizationError('Recording ended before its WAV data was complete');
+        read += result.bytesRead;
+      }
+      await consume(segment, count++);
+    }
+    return count;
+  } finally { await file.close(); }
 }

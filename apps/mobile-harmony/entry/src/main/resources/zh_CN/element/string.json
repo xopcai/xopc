@@ -1124,6 +1124,20 @@
     { "name": "personal_goal_achieved", "value": "已达成" },
     { "name": "personal_goal_due", "value": "目标日期 %s" },
     { "name": "personal_goal_empty", "value": "还没有近期目标。" },
-    { "name": "personal_goal_empty_help", "value": "添加下一步想达成的结果，让 xopc 持续推动进展。" }
+    { "name": "personal_goal_empty_help", "value": "添加下一步想达成的结果，让 xopc 持续推动进展。" },
+    { "name": "discussion_loading", "value": "正在加载录音…" },
+    { "name": "discussion_recording", "value": "语音记录" },
+    { "name": "discussion_processing", "value": "录音已保存，正在生成逐字稿和纪要；页面会自动更新。" },
+    { "name": "discussion_failed", "value": "录音处理遇到问题。" },
+    { "name": "discussion_transcript_failed", "value": "录音已保存，但转写尚未完成。下方可查看已识别的内容，稍后可重试。" },
+    { "name": "discussion_summary", "value": "内容纪要" },
+    { "name": "discussion_key_points", "value": "要点" },
+    { "name": "discussion_decisions", "value": "决定" },
+    { "name": "discussion_risks", "value": "风险" },
+    { "name": "discussion_questions", "value": "待确认" },
+    { "name": "discussion_actions", "value": "待办事项" },
+    { "name": "discussion_transcript", "value": "逐字稿" },
+    { "name": "discussion_transcript_pending", "value": "等待转写" },
+    { "name": "discussion_no_speech", "value": "这段录音中没有识别到可用的语音内容。" }
   ]
 }

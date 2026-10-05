@@ -22,23 +22,24 @@
 <button class="stage" id="stage" aria-label="轻轻点一下小环，它会眨眼回应">
 <svg id="loopi" viewBox="0 0 400 400" aria-hidden="true">
 <defs>
-<linearGradient id="ceramic" x1="100" y1="65" x2="280" y2="330" gradientUnits="userSpaceOnUse"><stop stop-color="#41494C"/><stop offset=".48" stop-color="#30383C"/><stop offset="1" stop-color="#3B4449"/></linearGradient>
+<linearGradient id="ceramic" x1="100" y1="65" x2="280" y2="330" gradientUnits="userSpaceOnUse"><stop stop-color="#586066"/><stop offset=".34" stop-color="#394247"/><stop offset="1" stop-color="#30383C"/></linearGradient>
 <linearGradient id="enamel" x1="230" y1="63" x2="326" y2="170" gradientUnits="userSpaceOnUse"><stop stop-color="#6C9FF6"/><stop offset="1" stop-color="#387DE5"/></linearGradient>
-<linearGradient id="porcelain" x1="180" y1="127" x2="218" y2="247" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFEF9"/><stop offset=".65" stop-color="#F6F3EB"/><stop offset="1" stop-color="#EAE6DC"/></linearGradient>
-<linearGradient id="edge" x1="170" y1="50" x2="224" y2="310" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF" stop-opacity=".36"/><stop offset=".46" stop-color="#FFFFFF" stop-opacity=".04"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
-<filter id="soft-shadow" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#39473E" flood-opacity=".09"/></filter>
+<radialGradient id="porcelain" cx="0" cy="0" r="1" gradientTransform="translate(173 153) rotate(52) scale(136 118)" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFEF9"/><stop offset=".62" stop-color="#F9F6EF"/><stop offset="1" stop-color="#DDDAD2"/></radialGradient>
+<linearGradient id="edge" x1="160" y1="43" x2="240" y2="320" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF" stop-opacity=".46"/><stop offset=".42" stop-color="#FFFFFF" stop-opacity=".15"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+<filter id="soft-shadow" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#28333A" flood-opacity=".16"/></filter>
 <filter id="floor-blur" x="-40%" y="-300%" width="180%" height="700%"><feGaussianBlur stdDeviation="5"/></filter>
 </defs>
 <ellipse id="floor" cx="200" cy="349" rx="73" ry="6" fill="#546455" opacity=".10" filter="url(#floor-blur)"/>
 <g id="ring-motion">
-<g fill="none" stroke-width="35" stroke-linecap="round" transform="translate(0 3)" opacity=".95"><path class="ai-arc" stroke="#232C30"/><path class="human-arc" stroke="#2866C4"/></g>
-<g fill="none" stroke-width="35" stroke-linecap="round" filter="url(#soft-shadow)"><path class="ai-arc" stroke="url(#ceramic)"/><path class="human-arc" stroke="url(#enamel)"/></g>
-<g fill="none" stroke-width="1.2" stroke-linecap="round" opacity=".75"><path id="ai-edge" stroke="url(#edge)"/><path id="human-edge" stroke="#D9E8FF" opacity=".5"/></g>
+<g fill="none" stroke-width="40" stroke-linecap="round" transform="translate(0 5)" opacity=".95"><path class="ai-arc" stroke="#20292E"/><path class="human-arc" stroke="#2866C4"/></g>
+<g fill="none" stroke-width="40" stroke-linecap="round" filter="url(#soft-shadow)"><path class="ai-arc" stroke="url(#ceramic)"/><path class="human-arc" stroke="url(#enamel)"/></g>
+<g fill="none" stroke-width="1.25" stroke-linecap="round" opacity=".8"><path id="ai-edge" stroke="url(#edge)"/><path id="human-edge" stroke="#D9E8FF" opacity=".65"/></g>
 <path id="blue-cue" fill="none" stroke="#9ABFFF" stroke-width="2" stroke-linecap="round" opacity="0"/>
 </g>
 <g id="core-position"><g id="core-shape">
-<path d="M130 190 C130 153 156 131 200 131 C244 131 270 153 270 190 C270 229 244 250 200 250 C156 250 130 229 130 190Z" fill="#DCDDD3" opacity=".5" transform="translate(0 2)"/>
-<path d="M130 190 C130 153 156 131 200 131 C244 131 270 153 270 190 C270 229 244 250 200 250 C156 250 130 229 130 190Z" fill="url(#porcelain)" stroke="#FFFFFF" stroke-opacity=".8" stroke-width="1" filter="url(#soft-shadow)"/>
+<path d="M130 190 C130 153 156 131 200 131 C244 131 270 153 270 190 C270 229 244 250 200 250 C156 250 130 229 130 190Z" fill="#7A827F" opacity=".22" transform="translate(0 6)"/>
+<path d="M130 190 C130 153 156 131 200 131 C244 131 270 153 270 190 C270 229 244 250 200 250 C156 250 130 229 130 190Z" fill="url(#porcelain)" stroke="#FFFFFF" stroke-opacity=".7" stroke-width="1.2" filter="url(#soft-shadow)"/>
+<path d="M143 171 C155 143 176 135 201 135 C223 135 244 145 256 165" fill="none" stroke="#FFFFFF" stroke-opacity=".35" stroke-width="2" stroke-linecap="round"/>
 </g><g id="face">
 <g id="cheeks" opacity="0"><ellipse cx="168" cy="207" rx="8" ry="3.5" fill="#E8B8A5"/><ellipse cx="232" cy="207" rx="8" ry="3.5" fill="#E8B8A5"/></g>
 <g id="eye-left"><ellipse class="eye-fill" cx="179" cy="188" rx="4.4" ry="6.2" fill="#293236"/><circle class="eye-glint" cx="180" cy="186" r=".9" fill="#FFFEFA"/><path class="eye-curve" d="M174 188 Q179 181 184 188" fill="none" stroke="#293236" stroke-width="2.8" stroke-linecap="round" opacity="0"/></g>

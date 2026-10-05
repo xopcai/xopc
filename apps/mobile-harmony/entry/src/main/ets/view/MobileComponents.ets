@@ -1,6 +1,7 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage, userErrorTitle } from '../common/userError';
 import { XopcUserErrorContext } from '../common/userErrorClassifier';
+import { XopcLoopi } from './Loopi';
 
 @ComponentV2
 export struct XopcBrandLoading {
@@ -8,26 +9,6 @@ export struct XopcBrandLoading {
   @Param compact: boolean = false;
   @Param reduceMotion: boolean = false;
   @Param label: ResourceStr = $r('app.string.loading');
-  @Local accentAngle: number = 0;
-  private animationTimer: number = -1;
-
-  aboutToAppear(): void { this.startAnimation(); }
-
-  aboutToDisappear(): void {
-    clearTimeout(this.animationTimer);
-    this.animationTimer = -1;
-  }
-
-  @Monitor('reduceMotion')
-  onReduceMotionChange(): void { this.startAnimation(); }
-
-  private startAnimation(): void {
-    clearTimeout(this.animationTimer);
-    this.animationTimer = -1;
-    this.accentAngle = 0;
-    if (this.reduceMotion) return;
-    this.animationTimer = setTimeout((): void => { this.accentAngle = 360; }, 0);
-  }
 
   private labelText(): string {
     if (typeof this.label === 'string') return this.label;
@@ -36,14 +17,8 @@ export struct XopcBrandLoading {
 
   build() {
     Column({ space: this.compact ? 0 : 12 }) {
-      Stack({ alignContent: Alignment.Center }) {
-        Image($r('app.media.brand_logo_base')).width(this.compact ? 20 : 42).height(this.compact ? 20 : 42)
-          .objectFit(ImageFit.Contain)
-        Image($r('app.media.brand_logo_accent')).width(this.compact ? 20 : 42).height(this.compact ? 20 : 42)
-          .objectFit(ImageFit.Contain).rotate({ angle: this.accentAngle })
-          .animation({ duration: this.reduceMotion ? 0 : 1450, curve: Curve.Linear,
-            iterations: this.reduceMotion ? 1 : -1 })
-      }.width(this.compact ? 20 : 42).height(this.compact ? 20 : 42)
+      XopcLoopi({ extent: this.compact ? 20 : 42, compact: this.compact,
+        activePage: !this.reduceMotion, mood: 'work' })
       if (!this.compact) {
         Text(this.label).fontSize(13).fontColor(this.colors.tertiary)
       }
