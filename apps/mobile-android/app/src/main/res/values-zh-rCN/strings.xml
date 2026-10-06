@@ -90,6 +90,7 @@
     <string name="assistant_retry">查询并重试</string>
     <string name="assistant_older_messages">更早消息</string>
     <string name="assistant_older_retry">重试加载更早消息</string>
+    <string name="assistant_jump_bottom">返回最新消息</string>
     <string name="assistant_input_hint">输入消息</string>
     <string name="composer_add_actions">打开消息操作</string>
     <string name="composer_close_actions">关闭消息操作</string>
