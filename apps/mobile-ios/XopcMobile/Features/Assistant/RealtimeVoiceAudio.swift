@@ -7,15 +7,21 @@ final class RealtimeVoiceAudio {
     private var player: AVAudioPlayerNode?
     private var inputContinuation: AsyncStream<Data>.Continuation?
     private var interruptionObserver: NSObjectProtocol?
+    private var routeObserver: NSObjectProtocol?
+    private var engineObserver: NSObjectProtocol?
     private var playbackGeneration = 0
     private var playedMilliseconds: [String: Int] = [:]
     private var onPlayed: ((String, Int) -> Void)?
     private var onInterrupted: (() -> Void)?
+    private var onRoute: ((String) -> Void)?
+    private var onRouteFailure: (() -> Void)?
     private(set) var isMuted = false
 
     func start(
         onPlayed: @escaping (String, Int) -> Void,
-        onInterrupted: @escaping () -> Void
+        onInterrupted: @escaping () -> Void,
+        onRoute: @escaping (String) -> Void,
+        onRouteFailure: @escaping () -> Void
     ) async throws -> AsyncStream<Data> {
         stop()
         guard await AVAudioApplication.requestRecordPermission() else {
@@ -46,6 +52,8 @@ final class RealtimeVoiceAudio {
             self.player = player
             self.onPlayed = onPlayed
             self.onInterrupted = onInterrupted
+            self.onRoute = onRoute
+            self.onRouteFailure = onRouteFailure
             interruptionObserver = NotificationCenter.default.addObserver(
                 forName: AVAudioSession.interruptionNotification, object: session, queue: .main
             ) { [weak self] notification in
@@ -54,6 +62,23 @@ final class RealtimeVoiceAudio {
                     Task { @MainActor [weak self] in self?.onInterrupted?() }
                 }
             }
+            routeObserver = NotificationCenter.default.addObserver(
+                forName: AVAudioSession.routeChangeNotification, object: session, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.onRoute?(Self.routeName())
+                }
+            }
+            engineObserver = NotificationCenter.default.addObserver(
+                forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, let engine = self.engine, !engine.isRunning else { return }
+                    self.onRouteFailure?()
+                }
+            }
+            onRoute(Self.routeName())
             return stream
         } catch {
             engine.inputNode.removeTap(onBus: 0)
@@ -71,6 +96,7 @@ final class RealtimeVoiceAudio {
 
     func setSpeaker(_ speaker: Bool) throws {
         try AVAudioSession.sharedInstance().overrideOutputAudioPort(speaker ? .speaker : .none)
+        onRoute?(Self.routeName())
     }
 
     func enqueue(responseID: String, pcm: Data) throws {
@@ -119,8 +145,12 @@ final class RealtimeVoiceAudio {
             NotificationCenter.default.removeObserver(interruptionObserver)
             self.interruptionObserver = nil
         }
+        if let routeObserver { NotificationCenter.default.removeObserver(routeObserver); self.routeObserver = nil }
+        if let engineObserver { NotificationCenter.default.removeObserver(engineObserver); self.engineObserver = nil }
         onPlayed = nil
         onInterrupted = nil
+        onRoute = nil
+        onRouteFailure = nil
         playedMilliseconds.removeAll()
         isMuted = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -131,6 +161,17 @@ final class RealtimeVoiceAudio {
             commonFormat: .pcmFormatInt16, sampleRate: sampleRate, channels: 1, interleaved: false
         ) else { throw RealtimeVoiceAudioError.unsupportedInputFormat }
         return format
+    }
+
+    private static func routeName() -> String {
+        guard let port = AVAudioSession.sharedInstance().currentRoute.outputs.first?.portType else { return "system" }
+        switch port {
+        case .builtInSpeaker: return "speaker"
+        case .builtInReceiver: return "earpiece"
+        case .bluetoothHFP, .bluetoothA2DP, .bluetoothLE: return "bluetooth"
+        case .headphones, .headsetMic, .usbAudio: return "headset"
+        default: return "system"
+        }
     }
 }
 

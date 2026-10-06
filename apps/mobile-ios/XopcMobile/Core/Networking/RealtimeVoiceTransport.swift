@@ -1,6 +1,6 @@
 import Foundation
 
-enum RealtimeVoiceTransportError: Error, Sendable {
+enum RealtimeVoiceTransportError: Error, Equatable, Sendable {
     case secureRouteRequired
     case protocolMismatch
     case disconnected
@@ -10,6 +10,7 @@ enum RealtimeVoiceTransportError: Error, Sendable {
 enum RealtimeVoiceIncoming: Sendable {
     case event(RealtimeVoiceEvent)
     case audio(RealtimeVoiceDownlinkFrame)
+    case latency(Int)
 }
 
 actor RealtimeVoiceTransport {
@@ -30,6 +31,7 @@ actor RealtimeVoiceTransport {
     private var ready = false
     private var closed = true
     private var lastPong = Date()
+    private var lastPing: Date?
     private var streamEpoch = 0
 
     func connect(origin: URL, session: RealtimeVoiceSession) throws -> AsyncThrowingStream<RealtimeVoiceIncoming, Error> {
@@ -198,6 +200,10 @@ actor RealtimeVoiceTransport {
             startHeartbeat(intervalMs: event.payload.heartbeatIntervalMs ?? 15000)
         } else if event.type == "session.pong" {
             lastPong = Date()
+            if let lastPing {
+                continuation?.yield(.latency(Int(Date().timeIntervalSince(lastPing) * 1000)))
+                self.lastPing = nil
+            }
         }
         continuation?.yield(.event(event))
         if event.type == "session.closed" || event.type == "session.error" && event.payload.recoverable != true {
@@ -216,6 +222,7 @@ actor RealtimeVoiceTransport {
                     close()
                     return
                 }
+                lastPing = Date()
                 try? await send("session.ping")
             }
         }

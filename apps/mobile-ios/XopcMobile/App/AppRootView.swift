@@ -1,83 +1,30 @@
+import AVFoundation
 import SwiftUI
 
 struct AppRootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var appState = AppState()
     @State private var realtimeVoiceCall = RealtimeVoiceCall()
     @State private var settingsPresented = false
     @State private var quickDraft = ""
     @State private var keyboardVisible = false
+    @State private var assistantInputFocused = false
+    @State private var secondaryDockHeight: CGFloat = 0
     @FocusState private var quickInputFocused: Bool
     @AppStorage("app.language") private var language = AppLanguage.system.rawValue
     @AppStorage("app.appearance") private var appearance = AppAppearance.system.rawValue
 
     var body: some View {
-        TabView(selection: $appState.selectedTab) {
-            NavigationStack {
-                AssistantView(
-                    configuration: appState.gatewayConfiguration,
-                    isActive: appState.selectedTab == .assistant,
-                    realtimeVoiceCall: realtimeVoiceCall,
-                    conversation: appState.selectedConversation,
-                    quickChatHandoff: appState.quickChatHandoff,
-                    onStartConversation: appState.startConversation,
-                    onConversationUpdated: appState.updateConversation,
-                    onQuickChatHandled: appState.consumeQuickChatHandoff,
-                    onOpenConversations: appState.showConversations,
-                    onOpenSettings: { settingsPresented = true }
-                ) { composer, isActionPanelExpanded in
-                    bottomDock(showTabs: !isActionPanelExpanded) { composer }
-                }
-            }
-            .tabItem { Label("助手", systemImage: "sparkles") }
-            .tag(AppTab.assistant)
-            .toolbar(.hidden, for: .tabBar)
-
-            NavigationStack {
-                ConversationsView(
-                    configuration: appState.gatewayConfiguration,
-                    onSelect: appState.open,
-                    onStartNew: { appState.startConversation(agentId: "main") },
-                    onOpenSettings: { settingsPresented = true }
+        Group {
+            if appState.gatewayConfiguration.token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                GatewayProfileEditor(
+                    onPair: appState.pairGateway,
+                    canCancel: false,
+                    onManage: appState.gatewayProfiles.isEmpty ? nil : { settingsPresented = true }
                 )
-                .safeAreaInset(edge: .bottom, spacing: 0) { bottomDock { quickComposer } }
+            } else {
+                tabShell
             }
-            .tabItem { Label("对话", systemImage: "bubble.left.and.bubble.right") }
-            .tag(AppTab.conversations)
-            .toolbar(.hidden, for: .tabBar)
-
-            NavigationStack {
-                ProgressHubView(
-                    configuration: appState.gatewayConfiguration,
-                    onOpenConversation: appState.openConversation,
-                    onStartProjectConversation: appState.startProjectConversation
-                )
-                .safeAreaInset(edge: .bottom, spacing: 0) { bottomDock { quickComposer } }
-            }
-            .tabItem { Label("进展", systemImage: "chart.line.uptrend.xyaxis") }
-            .tag(AppTab.progress)
-            .toolbar(.hidden, for: .tabBar)
-
-            NavigationStack {
-                NotesView(
-                    configuration: appState.gatewayConfiguration,
-                    onOpenConversation: appState.openConversation
-                )
-                .safeAreaInset(edge: .bottom, spacing: 0) { bottomDock { quickComposer } }
-            }
-            .tabItem { Label("笔记", systemImage: "note.text") }
-            .tag(AppTab.notes)
-            .toolbar(.hidden, for: .tabBar)
-
-            NavigationStack {
-                ProfileView(
-                    configuration: appState.gatewayConfiguration,
-                    onOpenGatewaySettings: { settingsPresented = true }
-                )
-                .safeAreaInset(edge: .bottom, spacing: 0) { bottomDock { quickComposer } }
-            }
-            .tabItem { Label("我的", systemImage: "person.crop.circle") }
-            .tag(AppTab.profile)
-            .toolbar(.hidden, for: .tabBar)
         }
         .tint(.blue)
         .environment(\.locale, (AppLanguage(rawValue: language) ?? .system).locale)
@@ -102,21 +49,139 @@ struct AppRootView: View {
         .sheet(isPresented: $settingsPresented) {
             GatewayProfilesView(
                 profiles: appState.gatewayProfiles,
-                configurations: appState.gatewayProfileConfigurations,
                 activeProfileID: appState.activeGatewayProfileID,
                 storageError: appState.connectionStorageError,
-                onSave: appState.saveGatewayProfile,
+                onPair: appState.pairGateway,
+                onRefresh: appState.refreshGatewayProfile,
                 onActivate: appState.activateGatewayProfile,
                 onRename: appState.renameGatewayProfile,
                 onRemove: appState.removeGatewayProfile
             )
         }
+        .onChange(of: scenePhase) {
+            if scenePhase == .active {
+                Task { await appState.refreshGatewayOnForeground() }
+                Task { await realtimeVoiceCall.resumeAfterInterruption() }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
+            guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  raw == AVAudioSession.InterruptionType.ended.rawValue else { return }
+            Task { await realtimeVoiceCall.resumeAfterInterruption() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            keyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
             keyboardVisible = true
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             keyboardVisible = false
+            assistantInputFocused = false
+            quickInputFocused = false
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+            keyboardVisible = false
+            assistantInputFocused = false
+            quickInputFocused = false
+        }
+    }
+
+    private var tabShell: some View {
+        TabView(selection: $appState.selectedTab) {
+            NavigationStack {
+                AssistantView(
+                    configuration: appState.gatewayConfiguration,
+                    isActive: appState.selectedTab == .assistant,
+                    realtimeVoiceCall: realtimeVoiceCall,
+                    conversation: appState.selectedConversation,
+                    quickChatHandoff: appState.quickChatHandoff,
+                    onStartConversation: appState.startConversation,
+                    onStartScopedConversation: appState.startScopedConversation,
+                    onConversationUpdated: appState.updateConversation,
+                    onQuickChatHandled: appState.consumeQuickChatHandoff,
+                    onOpenSettings: { settingsPresented = true },
+                    onInputFocusChanged: { assistantInputFocused = $0 }
+                ) { composer, isActionPanelExpanded in
+                    bottomDock(showTabs: !isActionPanelExpanded) { composer }
+                }
+            }
+            .tabItem { Label("助手", systemImage: "sparkles") }
+            .tag(AppTab.assistant)
+            .toolbar(.hidden, for: .tabBar)
+
+            NavigationStack {
+                secondaryTab {
+                    ConversationsView(
+                        configuration: appState.gatewayConfiguration,
+                        onSelect: appState.open,
+                        onStartNew: { appState.startConversation(agentId: "main") },
+                        onOpenSettings: { settingsPresented = true },
+                        bottomInset: secondaryDockHeight + 24
+                    )
+                }
+            }
+            .tabItem { Label("对话", systemImage: "bubble.left.and.bubble.right") }
+            .tag(AppTab.conversations)
+            .toolbar(.hidden, for: .tabBar)
+
+            NavigationStack {
+                secondaryTab {
+                    ProgressHubView(
+                        configuration: appState.gatewayConfiguration,
+                        onOpenConversation: appState.openConversation,
+                        onStartProjectConversation: appState.startProjectConversation,
+                        bottomInset: secondaryDockHeight + 24
+                    )
+                }
+            }
+            .tabItem { Label("进展", systemImage: "chart.line.uptrend.xyaxis") }
+            .tag(AppTab.progress)
+            .toolbar(.hidden, for: .tabBar)
+
+            NavigationStack {
+                secondaryTab {
+                    NotesView(
+                        configuration: appState.gatewayConfiguration,
+                        onOpenConversation: appState.openConversation,
+                        bottomInset: secondaryDockHeight + 24
+                    )
+                }
+            }
+            .tabItem { Label("笔记", systemImage: "note.text") }
+            .tag(AppTab.notes)
+            .toolbar(.hidden, for: .tabBar)
+
+            NavigationStack {
+                secondaryTab {
+                    ProfileView(
+                        configuration: appState.gatewayConfiguration,
+                        onOpenGatewaySettings: { settingsPresented = true },
+                        bottomInset: secondaryDockHeight + 24
+                    )
+                }
+            }
+            .tabItem { Label("我的", systemImage: "person.crop.circle") }
+            .tag(AppTab.profile)
+            .toolbar(.hidden, for: .tabBar)
+        }
+    }
+
+    private func secondaryTab<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        ZStack(alignment: .bottom) {
+            content()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .overlay(alignment: .bottom) {
+                    Color(uiColor: .systemGroupedBackground)
+                        .frame(height: 24)
+                        .ignoresSafeArea(edges: .bottom)
+                        .allowsHitTesting(false)
+                }
+            bottomDock { quickComposer }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { secondaryDockHeight = $0 }
+        }
+        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
     }
 
     private func bottomDock(
@@ -125,7 +190,7 @@ struct AppRootView: View {
     ) -> some View {
         VStack(spacing: 0) {
             composer()
-            if showTabs, !keyboardVisible {
+            if showTabs, !keyboardVisible, !assistantInputFocused, !quickInputFocused {
                 HStack(spacing: 0) {
                     dockTab(.assistant, "助手", icon: "bubble.left")
                     dockTab(.conversations, "对话", icon: "bubble.left.and.bubble.right")
@@ -140,10 +205,11 @@ struct AppRootView: View {
         }
         .frame(maxWidth: 720)
         .background(Color(uiColor: .systemBackground), in: .rect(cornerRadius: 24))
+        .clipShape(.rect(cornerRadius: 24))
+        .shadow(color: .black.opacity(0.06), radius: 12, y: -2)
         .padding(.horizontal, 8)
         .padding(.top, 4)
         .frame(maxWidth: .infinity)
-        .background(Color(uiColor: .systemGroupedBackground))
     }
 
     private var quickComposer: some View {

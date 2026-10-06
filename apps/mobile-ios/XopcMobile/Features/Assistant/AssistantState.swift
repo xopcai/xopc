@@ -24,6 +24,7 @@ final class AssistantState {
     var queueError: String?
     var isUpdatingQueue = false
     private var loadedConversationID: String?
+    private var contextGeneration = 0
 
     func load(using gateway: any GatewayServing) async {
         isLoading = true
@@ -58,6 +59,7 @@ final class AssistantState {
             return
         }
         loadedConversationID = conversation?.id
+        contextGeneration += 1
         messages = []
         executionActivity = []
         activityLabel = nil
@@ -98,6 +100,7 @@ final class AssistantState {
     ) async -> ConversationSelection? {
         let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty || !attachments.isEmpty || !references.isEmpty, !isSending else { return nil }
+        if conversation.isDraft { loadedConversationID = conversation.id }
         isSending = true
         errorMessage = nil
         executionActivity = []
@@ -272,15 +275,31 @@ extension AssistantState {
         for conversation: ConversationSelection,
         using gateway: any GatewayServing
     ) async {
-        guard !conversation.isDraft else { return }
+        guard !conversation.isDraft, loadedConversationID == conversation.id else { return }
+        contextGeneration += 1
+        let generation = contextGeneration
         isLoadingContext = true
         contextError = nil
-        defer { isLoadingContext = false }
+        contextSummary = nil
+        defer {
+            if loadedConversationID == conversation.id, contextGeneration == generation {
+                isLoadingContext = false
+            }
+        }
         do {
-            contextSummary = try await gateway.fetchContext(conversationID: conversation.id)
+            let summary = try await gateway.fetchContext(conversationID: conversation.id)
+            guard loadedConversationID == conversation.id,
+                  contextGeneration == generation,
+                  !Task.isCancelled else { return }
+            guard summary.conversationId == conversation.id else {
+                contextError = "会话上下文不匹配，请重试"
+                return
+            }
+            contextSummary = summary
         } catch is CancellationError {
             return
         } catch {
+            guard loadedConversationID == conversation.id, contextGeneration == generation else { return }
             contextError = error.localizedDescription
         }
     }

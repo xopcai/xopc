@@ -4,7 +4,10 @@ struct AssistantSessionActionsView: View {
     let configuration: GatewayConfiguration
     let conversation: ConversationSelection?
     let state: AssistantState
+    let pendingReferences: [ContextReference]
+    let onAddReference: (ContextReference) -> Void
     let onConversationUpdated: (ConversationSelection) -> Void
+    let onStartScopedConversation: (ProjectRecord?, String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var showingAssistantSettings = false
@@ -15,14 +18,37 @@ struct AssistantSessionActionsView: View {
                 Section("会话") {
                     NavigationLink {
                         ConversationContextView(
+                            configuration: configuration,
+                            conversation: conversation,
                             summary: state.contextSummary,
                             isLoading: state.isLoadingContext,
                             errorMessage: state.contextError,
-                            isDraft: conversation?.isDraft ?? true,
+                            pendingReferences: pendingReferences,
+                            onAddReference: onAddReference,
+                            onStartScopedConversation: { project, mode in
+                                dismiss()
+                                onStartScopedConversation(project, mode)
+                            },
+                            onDirectoryChanged: reloadContext,
                             onRetry: reloadContext
                         )
                     } label: {
                         Label("当前上下文", systemImage: "scope")
+                    }
+
+                    NavigationLink {
+                        SessionEnvironmentSettingsView(
+                            configuration: configuration,
+                            conversation: conversation,
+                            summary: state.contextSummary,
+                            onStartScopedConversation: { project, mode in
+                                dismiss()
+                                onStartScopedConversation(project, mode)
+                            },
+                            onDirectoryChanged: reloadContext
+                        )
+                    } label: {
+                        Label("执行环境与范围", systemImage: "folder.badge.gearshape")
                     }
 
                     if let conversation {

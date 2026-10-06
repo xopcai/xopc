@@ -75,6 +75,12 @@ struct StartMessageCommand: Encodable {
     let origin: MessageOriginCommand
 }
 
+struct MaterializeVoiceCommand: Encodable {
+    let commandId: String
+    let creation: SessionCreationCommand
+    let purpose = "voice"
+}
+
 struct AppendMessageCommand: Encodable {
     let kind = "append"
     let clientMessageId: String

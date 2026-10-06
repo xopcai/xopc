@@ -7,6 +7,7 @@ import ai.xopc.mobile.gateway.NoteMetadataPatch
 import ai.xopc.mobile.gateway.NoteHistoryEntry
 import ai.xopc.mobile.gateway.NoteSnapshot
 import ai.xopc.mobile.gateway.NoteShare
+import ai.xopc.mobile.gateway.NoteAiPreview
 import ai.xopc.mobile.gateway.ManagedFile
 import ai.xopc.mobile.gateway.ManagedFileSpace
 import androidx.activity.ComponentActivity
@@ -15,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -31,6 +33,38 @@ class NotesScreenTest {
 
   private val note = NoteSummary("note-1", "Idea", "A short idea", "inbox", "thought",
     2000L, true, listOf("mobile"))
+
+  @Test fun aiEditRequiresPreviewBeforeApplyingToTheDraft() {
+    val detail = NoteDetail("note-1", "Idea", "Body", "inbox", "thought",
+      2000L, false, emptyList(), 3L)
+    var state by mutableStateOf(NotesUiState(gatewayId = "test", items = listOf(note), detail = detail))
+    var applied = 0
+    composeTestRule.setContent {
+      NotesScreen(state, androidx.compose.foundation.layout.PaddingValues(), { _, _ -> }, {},
+        { id -> state = state.copy(selectedId = id) },
+        onEditNote = { state = state.copy(draft = NoteDraft(detail.id, detail.title,
+          detail.markdown, "00000000-0000-0000-0000-000000000003", 1, 3)) },
+        onAiPreview = { instruction ->
+          assertEquals("Improve", instruction)
+          NoteAiPreview("patch-1", "Updated body", "", "Body", "Improved body",
+            null, null, null)
+        }, onApplyAi = { preview ->
+          applied++
+          state = state.copy(draft = state.draft!!.copy(markdown = preview.proposedMarkdown))
+        })
+    }
+    composeTestRule.onNodeWithTag("note-note-1").performClick()
+    composeTestRule.onNodeWithTag("note-detail-ai").performClick()
+    composeTestRule.onNodeWithTag("note-ai-instruction").performTextInput("Improve")
+    composeTestRule.onNodeWithTag("note-ai-generate").performClick()
+    composeTestRule.waitUntil(5_000) {
+      composeTestRule.onAllNodesWithTag("note-ai-apply").fetchSemanticsNodes().isNotEmpty()
+    }
+    assertEquals(0, applied)
+    composeTestRule.onNodeWithTag("note-ai-apply").performClick()
+    assertEquals(1, applied)
+    composeTestRule.onNodeWithTag("notes-draft-body").assertTextContains("Improved body")
+  }
 
   @Test fun noteShareRequiresExplicitMenuActionAndShowsConfirmedLink() {
     val detail = NoteDetail("note-1", "Idea", "Body", "inbox", "thought",
@@ -85,7 +119,8 @@ class NotesScreenTest {
       NotesDetailContent(NotesUiState(selectedId = "note-1", detail = detail,
         detailError = true), "note-1", { retries++ })
     }
-    composeTestRule.onNodeWithText("# Idea\nBody").assertExists()
+    composeTestRule.onNodeWithTag("note-detail-body").assertExists()
+    composeTestRule.onNodeWithText("Body").assertExists()
     composeTestRule.onNodeWithTag("note-detail-retry").performClick()
     assertEquals(1, retries)
   }
@@ -354,7 +389,7 @@ class NotesScreenTest {
         androidx.compose.foundation.layout.PaddingValues(), { text, _ -> query = text }, {}, {},
         onNoteFileSpaces = { listOf(ManagedFileSpace("space", "Workspace", false)) },
         onNoteFiles = { _, _, search -> if (search.isNotEmpty()) listOf(file) else emptyList() },
-        onNoteFileText = { "test" })
+        onNoteFileContent = { "test".toByteArray() })
     }
     composeTestRule.onNodeWithTag("notes-search").performTextInput("readme")
     composeTestRule.waitUntil(5_000) {

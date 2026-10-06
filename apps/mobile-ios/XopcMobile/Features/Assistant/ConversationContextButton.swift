@@ -4,6 +4,10 @@ struct ConversationContextButton: View {
     let configuration: GatewayConfiguration
     let conversation: ConversationSelection?
     let state: AssistantState
+    let pendingReferences: [ContextReference]
+    let onAddReference: (ContextReference) -> Void
+    let onStartScopedConversation: (ProjectRecord?, String?) -> Void
+    let onDirectoryChanged: () -> Void
 
     @Environment(\.locale) private var locale
 
@@ -42,10 +46,15 @@ struct ConversationContextButton: View {
     private var sheet: some View {
         NavigationStack {
             ConversationContextView(
+                configuration: configuration,
+                conversation: conversation,
                 summary: state.contextSummary,
                 isLoading: state.isLoadingContext,
                 errorMessage: state.contextError,
-                isDraft: conversation?.isDraft ?? true,
+                pendingReferences: pendingReferences,
+                onAddReference: onAddReference,
+                onStartScopedConversation: onStartScopedConversation,
+                onDirectoryChanged: onDirectoryChanged,
                 onRetry: retry
             )
             .toolbar {

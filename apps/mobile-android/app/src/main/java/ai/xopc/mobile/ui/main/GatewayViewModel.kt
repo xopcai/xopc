@@ -4,6 +4,8 @@ import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.GatewayProfile
 import ai.xopc.mobile.gateway.GatewayProbe
 import ai.xopc.mobile.gateway.GatewaySession
+import ai.xopc.mobile.gateway.GatewayHttpException
+import ai.xopc.mobile.gateway.VoiceCallConnection
 import ai.xopc.mobile.gateway.ConversationRepository
 import ai.xopc.mobile.gateway.ConversationSummary
 import ai.xopc.mobile.gateway.ConversationTaskGroup
@@ -20,6 +22,8 @@ import ai.xopc.mobile.gateway.PendingInput
 import ai.xopc.mobile.gateway.ConversationModel
 import ai.xopc.mobile.gateway.ConversationAgent
 import ai.xopc.mobile.gateway.ConversationContext
+import ai.xopc.mobile.gateway.ContextEnvironmentOptions
+import ai.xopc.mobile.gateway.ContextDirectoryPage
 import ai.xopc.mobile.gateway.ConnectionWaitRepository
 import ai.xopc.mobile.gateway.ConnectionWaitSnapshot
 import ai.xopc.mobile.gateway.TaskWelcomeInfo
@@ -29,6 +33,7 @@ import ai.xopc.mobile.gateway.ProgressItem
 import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.ProgressTask
 import ai.xopc.mobile.gateway.ProgressProject
+import ai.xopc.mobile.gateway.ProgressProjectSession
 import ai.xopc.mobile.gateway.AutomationRepository
 import ai.xopc.mobile.gateway.AutomationMetrics
 import ai.xopc.mobile.gateway.AutomationSummary
@@ -45,6 +50,7 @@ import ai.xopc.mobile.gateway.NoteMetadataPatch
 import ai.xopc.mobile.gateway.NoteHistoryEntry
 import ai.xopc.mobile.gateway.NoteSnapshot
 import ai.xopc.mobile.gateway.NoteShare
+import ai.xopc.mobile.gateway.NoteAiPreview
 import ai.xopc.mobile.gateway.NoteDraft
 import ai.xopc.mobile.gateway.NoteDraftStore
 import ai.xopc.mobile.gateway.ShareRepository
@@ -57,7 +63,9 @@ import ai.xopc.mobile.gateway.RealtimeClient
 import ai.xopc.mobile.gateway.RunStreamEvent
 import android.app.Application
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -66,6 +74,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
@@ -73,6 +82,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import java.util.Locale
 import java.util.UUID
@@ -111,6 +121,9 @@ data class ProgressUiState(
   val projectId: String? = null,
   val project: ProgressProject? = null,
   val projectTasks: List<ProgressTask> = emptyList(),
+  val projectSessions: List<ProgressProjectSession> = emptyList(),
+  val projectSessionsLoading: Boolean = false,
+  val projectSessionsError: Boolean = false,
   val projectLoading: Boolean = false,
   val projectError: Boolean = false,
   val createBusy: Boolean = false,
@@ -263,6 +276,8 @@ data class ConnectionUiState(
   val realtimeStatus: String = "offline",
   val sending: Boolean = false,
   val sendError: Boolean = false,
+  val sendErrorDetail: String? = null,
+  val sendRejected: Boolean = false,
   val pendingInput: PendingInput? = null,
   val draftText: String = "",
   val draftRefs: List<ConversationContextRef> = emptyList(),
@@ -300,6 +315,7 @@ data class ConnectionUiState(
   val context: ConversationContext? = null,
   val contextLoading: Boolean = false,
   val contextError: Boolean = false,
+  val contextPanel: ContextPanelUiState = ContextPanelUiState(),
   val connectionWait: ConnectionWaitUiState = ConnectionWaitUiState(),
   val taskWelcome: TaskWelcomeInfo? = null,
   val projectWelcome: ProjectWelcomeInfo? = null,
@@ -319,6 +335,13 @@ data class ReferencePickerItem(val kind: String, val id: String, val title: Stri
 data class ReferencePickerUiState(val gatewayId: String? = null, val conversationId: String? = null,
   val kind: String = "", val query: String = "", val items: List<ReferencePickerItem> = emptyList(),
   val loading: Boolean = false, val error: Boolean = false)
+data class ContextPanelUiState(val gatewayId: String? = null, val conversationId: String? = null,
+  val mode: String = "", val loading: Boolean = false, val error: Boolean = false,
+  val projects: List<ProgressProject> = emptyList(),
+  val environment: ContextEnvironmentOptions? = null,
+  val directories: ContextDirectoryPage? = null,
+  val files: List<ManagedFile> = emptyList(), val filePath: String = "", val fileQuery: String = "",
+  val saving: Boolean = false)
 
 data class ShareCenterUiState(val gatewayId: String? = null, val items: List<ShareItem> = emptyList(),
   val loading: Boolean = false, val busyId: String? = null, val error: Boolean = false)
@@ -363,6 +386,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private var modelJob: Job? = null
   private var agentJob: Job? = null
   private var contextJob: Job? = null
+  private var contextPanelJob: Job? = null
+  private var contextPanelRevision = 0
   private var connectionWaitJob: Job? = null
   private var connectionWaitRevision = 0
   private var referenceJob: Job? = null
@@ -407,6 +432,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private var createTaskSignature = ""
   private var createTaskKey = ""
   private var realtimeJob: Job? = null
+  private var pairingJob: Job? = null
+  private var cancelPairingJob: Job? = null
   private var gatewayProbeGeneration = 0
   private var draftWriteJob: Job? = null
   private var refWriteJob: Job? = null
@@ -811,6 +838,184 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       }
     }
   }
+
+  suspend fun previewNoteAi(instruction: String): NoteAiPreview {
+    val notes = mutableState.value.notes
+    val note = requireNotNull(notes.detail?.takeIf { it.id == notes.selectedId }) { "NOTE_UNAVAILABLE" }
+    val markdown = notes.draft?.takeIf { it.id == note.id }?.markdown ?: note.markdown
+    return runInterruptible(Dispatchers.IO) { noteRepository.previewAiEdit(note, instruction, markdown) }
+  }
+
+  fun applyNoteAi(preview: NoteAiPreview) {
+    val notes = mutableState.value.notes
+    val draft = notes.draft ?: return
+    if (draft.id != notes.selectedId || draft.markdown != preview.originalMarkdown) return
+    changeNoteDraft(preview.title ?: draft.title, preview.proposedMarkdown)
+    if (preview.tags != null || preview.status != null) viewModelScope.launch {
+      val synced = withTimeoutOrNull(30_000) { state.first { current ->
+        val active = current.notes.draft
+        current.profile?.gatewayId == notes.gatewayId && current.notes.selectedId == draft.id &&
+          active?.id == draft.id && active.version == current.notes.draftSyncedVersion &&
+          !current.notes.draftSaving && !current.notes.metadataBusy
+      } }
+      if (synced != null) updateNoteMetadata(NoteMetadataPatch(tags = preview.tags,
+        status = preview.status))
+    }
+  }
+
+  suspend fun openNoteConversation(id: String): String {
+    val conversationId = runInterruptible(Dispatchers.IO) { noteRepository.openConversation(id) }
+    selectConversation(conversationId)
+    return conversationId
+  }
+
+  suspend fun attachNoteFile(uri: Uri) {
+    require(uri.scheme == "content") { "INVALID_ATTACHMENT_URI" }
+    val media = runInterruptible(Dispatchers.IO) {
+      val resolver = getApplication<Application>().contentResolver
+      val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        ?.use { if (it.moveToFirst()) it.getString(0) else null }
+        ?.substringAfterLast('/')?.substringAfterLast('\\')?.take(255)?.ifBlank { null }
+        ?: "attachment"
+      val mimeType = resolver.getType(uri)?.takeIf {
+        it.matches(Regex("[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+"))
+      } ?: "application/octet-stream"
+      val output = java.io.ByteArrayOutputStream()
+      resolver.openInputStream(uri)?.use { input ->
+        val buffer = ByteArray(8192)
+        while (true) {
+          val count = input.read(buffer)
+          if (count < 0) break
+          require(output.size() + count <= 8 * 1024 * 1024) { "UPLOAD_LIMIT_8_MB" }
+          output.write(buffer, 0, count)
+        }
+      } ?: throw IllegalStateException("ATTACHMENT_UNAVAILABLE")
+      Triple(name, mimeType, output.toByteArray())
+    }
+    attachNoteBytes(media.first, media.second, media.third)
+  }
+
+  suspend fun attachNoteVoice(bytes: ByteArray, durationSeconds: Int) {
+    require(durationSeconds in 1..600 && bytes.size in 1..(8 * 1024 * 1024)) {
+      "INVALID_VOICE_ATTACHMENT"
+    }
+    attachNoteBytes("voice.m4a", "audio/mp4", bytes, durationSeconds)
+  }
+
+  private suspend fun attachNoteBytes(name: String, mimeType: String, bytes: ByteArray,
+    durationSeconds: Int? = null) {
+    val initial = mutableState.value.notes
+    val localDraft = initial.draft?.takeIf { it.id.startsWith("local-") }
+    if (localDraft != null) {
+      require(localDraft.title.isNotBlank() || localDraft.markdown.isNotBlank()) {
+        "EMPTY_NOTE"
+      }
+      if (!initial.draftSaving) submitNoteDraft()
+      withTimeoutOrNull(30_000) { state.first { current ->
+        val notes = current.notes
+        notes.draftError || (notes.draft?.id != localDraft.id &&
+          notes.draft?.baseRemoteVersion?.let { it > 0 } == true &&
+          notes.detail?.id == notes.draft.id && !notes.draftSaving)
+      } } ?: throw IllegalStateException("NOTE_SAVE_PENDING")
+      require(!mutableState.value.notes.draftError) { "NOTE_SAVE_FAILED" }
+    }
+    val notes = mutableState.value.notes
+    val note = notes.detail?.takeIf { it.id == notes.selectedId }
+      ?: throw IllegalStateException("NOTE_UNAVAILABLE")
+    require(notes.draft?.id == note.id && note.remoteVersion != null) { "SAVE_NOTE_FIRST" }
+    if (notes.draft.version != notes.draftSyncedVersion && !notes.draftSaving) submitNoteDraft()
+    withTimeoutOrNull(30_000) { state.first { current ->
+      val draft = current.notes.draft
+      current.notes.selectedId == note.id && draft?.id == note.id &&
+        draft.version == current.notes.draftSyncedVersion && !current.notes.draftSaving
+    } } ?: throw IllegalStateException("NOTE_SAVE_PENDING")
+    val attachment = runInterruptible(Dispatchers.IO) {
+      noteRepository.addMedia(note.id, name, mimeType, bytes,
+        UUID.randomUUID().toString(), durationSeconds)
+    }
+    val latest = mutableState.value.notes
+    if (latest.selectedId != note.id || latest.draft?.id != note.id) return
+    mutableState.update { current -> current.copy(notes = current.notes.copy(
+      detail = current.notes.detail?.takeIf { it.id == note.id }?.let {
+        it.copy(attachments = it.attachments + attachment)
+      } ?: current.notes.detail)) }
+    val escaped = attachment.fileName.replace("\\", "\\\\")
+      .replace("[", "\\[").replace("]", "\\]")
+    val target = "xopc-attachment://notes/${note.id}/${attachment.id}"
+    val markdown = if (attachment.type == "image") "![$escaped]($target)"
+      else "[$escaped]($target)"
+    changeNoteDraft(latest.draft.title, latest.draft.markdown.trimEnd() +
+      (if (latest.draft.markdown.isBlank()) "" else "\n\n") + markdown)
+  }
+
+  suspend fun noteAttachmentBytes(noteId: String, attachmentId: String): ByteArray =
+    runInterruptible(Dispatchers.IO) { noteRepository.mediaBytes(noteId, attachmentId) }
+
+  suspend fun createVoiceCall(conversationId: String, mode: String): VoiceCallConnection =
+    runInterruptible(Dispatchers.IO) {
+      require(mode == "natural" || mode == "assistant") { "INVALID_VOICE_MODE" }
+      conversations.materializeForVoice(conversationId)
+      val status = org.json.JSONObject(session.request("/api/voice/realtime/status"))
+        .getJSONObject("payload")
+      val availability = status.getJSONObject("capabilities").getJSONObject(mode)
+      require(status.getBoolean("enabled") && availability.getBoolean("available")) {
+        availability.optString("reasonCode", "VOICE_UNAVAILABLE")
+      }
+      val body = org.json.JSONObject().put("purpose", "conversation")
+        .put("conversationId", conversationId).put("mode", mode)
+        .put("supportedProtocolVersions", org.json.JSONArray().put(3))
+        .put("mediaPreferences", org.json.JSONArray().put("websocket-pcm")).toString()
+      session.request("/api/voice/realtime/preflight", "POST", body)
+      val result = org.json.JSONObject(session.request("/api/voice/realtime/sessions", "POST", body))
+        .getJSONObject("payload")
+      require(result.getInt("protocolVersion") == 3 &&
+        result.getJSONObject("inputFormat").getInt("sampleRate") == 16_000 &&
+        result.getString("websocketPath") == "/api/voice/realtime/v3/ws") { "UNSUPPORTED_VOICE_SESSION" }
+      val auth = session.voiceAuth()
+      VoiceCallConnection(result.getString("sessionId"), result.getString("ticket"),
+        result.getString("websocketPath"), result.getInt("connectionEpoch"), auth.origin,
+        auth.bearer, result.getJSONObject("limits").getLong("maxSessionMs"),
+        result.getJSONObject("route").getString("engine"))
+    }
+
+  suspend fun cancelVoiceCall(call: VoiceCallConnection) = runInterruptible(Dispatchers.IO) {
+    val body = org.json.JSONObject().put("sessionId", call.sessionId).put("ticket", call.ticket)
+    session.request("/api/voice/realtime/sessions/cancel", "POST", body.toString())
+    Unit
+  }
+
+  suspend fun respondToVoiceClarification(requestId: String, version: Int,
+    action: String, answer: String) = runInterruptible(Dispatchers.IO) {
+    require(requestId.matches(Regex("[A-Za-z0-9_-]{1,128}")) && version > 0 &&
+      action in setOf("answer", "agent_decide")) { "INVALID_CLARIFICATION" }
+    val body = org.json.JSONObject().put("action", action).put("expectedVersion", version)
+      .put("idempotencyKey", UUID.randomUUID().toString())
+    if (action == "answer") body.put("answer", answer.take(10_000))
+    session.request("/api/clarifications/$requestId/responses", "POST", body.toString())
+    Unit
+  }
+
+  suspend fun pendingVoiceApproval(conversationId: String): VoiceApproval? =
+    runInterruptible(Dispatchers.IO) {
+      require(conversationId.matches(Regex("[0-9a-fA-F-]{36}"))) { "INVALID_CONVERSATION_ID" }
+      val rows = org.json.JSONObject(session.request(
+        "/api/connectors/approvals?status=pending&conversationId=$conversationId"))
+        .getJSONObject("payload").getJSONArray("approvals")
+      (0 until rows.length()).asSequence().map(rows::getJSONObject).firstOrNull { row ->
+        row.optString("conversationId") == conversationId && row.optString("status") == "pending" &&
+          runCatching { java.time.Instant.parse(row.getString("expiresAt"))
+            .isAfter(java.time.Instant.now()) }.getOrDefault(false)
+      }?.let { VoiceApproval(it.getString("id"), it.optString("actionId"), conversationId) }
+    }
+
+  suspend fun respondToVoiceApproval(approval: VoiceApproval, allow: Boolean) =
+    runInterruptible(Dispatchers.IO) {
+      val body = org.json.JSONObject().put("id", approval.id)
+        .put("decision", if (allow) "approved" else "denied")
+        .put("conversationId", approval.conversationId)
+      session.request("/api/connectors/approvals/respond", "POST", body.toString())
+      Unit
+    }
 
   private fun scheduleNoteAutoSave(gatewayId: String, draft: NoteDraft) {
     noteAutoSaveJob?.cancel()
@@ -1836,7 +2041,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     projectDetailJob?.cancel()
     val revision = ++projectDetailRevision
     mutableState.update { it.copy(progress = it.progress.copy(projectId = id, project = null,
-      projectTasks = emptyList(), projectLoading = true, projectError = false)) }
+      projectTasks = emptyList(), projectSessions = emptyList(), projectSessionsLoading = true,
+      projectSessionsError = false, projectLoading = true, projectError = false)) }
     projectDetailJob = viewModelScope.launch {
       try {
         val (project, tasks) = runInterruptible(Dispatchers.IO) {
@@ -1846,10 +2052,32 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           it.copy(progress = it.progress.copy(project = project, projectTasks = tasks.items,
             projectLoading = false))
         }
+        val local = runInterruptible(Dispatchers.IO) {
+          conversations.projectDrafts(id).map { draft ->
+            ProgressProjectSession(draft.conversationId, "", 0, isLocalDraft = true)
+          }
+        }
+        if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(progress = it.progress.copy(projectSessions = local))
+        }
+        val sessions = try { runInterruptible(Dispatchers.IO) {
+          local + progressRepository.projectSessions(id).filterNot { row -> local.any { it.id == row.id } }
+        } }
+        catch (error: CancellationException) { throw error }
+        catch (_: Exception) {
+          if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+            it.copy(progress = it.progress.copy(projectSessionsLoading = false, projectSessionsError = true))
+          }
+          return@launch
+        }
+        if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(progress = it.progress.copy(projectSessions = sessions, projectSessionsLoading = false))
+        }
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) {
         if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-          it.copy(progress = it.progress.copy(projectLoading = false, projectError = true))
+          it.copy(progress = it.progress.copy(projectLoading = false, projectSessionsLoading = false,
+            projectError = true))
         }
       }
     }
@@ -2073,7 +2301,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       }
     }
     val readers = listOf(searchJob, historyJob, executionJob, runStateJob, modelJob, agentJob,
-      contextJob, connectionWaitJob, referenceJob, progressJob, progressHomeJob, progressMetricsJob,
+      contextJob, contextPanelJob, connectionWaitJob, referenceJob, progressJob, progressHomeJob, progressMetricsJob,
       progressMoreJob, progressDetailJob,
       projectsJob, projectDetailJob, automationJob, notesJob, sharesJob, noteDetailJob, noteHistoryJob,
       noteSnapshotJob, personalJob, personalListJob, personalDetailJob)
@@ -2082,7 +2310,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     realtimeJob?.cancelAndJoin()
     realtimeJob = null
     realtime.watchRun(null)
-    listRevision++; historyRevision++; executionRevision++; contextRevision++; connectionWaitRevision++; referenceRevision++
+    listRevision++; historyRevision++; executionRevision++; contextRevision++; contextPanelRevision++
+    connectionWaitRevision++; referenceRevision++
     progressRevision++; progressHomeRevision++; progressDetailRevision++
     projectsRevision++; projectDetailRevision++; automationRevision++
     notesRevision++; noteDetailRevision++; personalRevision++; personalListRevision++; personalDetailRevision++
@@ -2267,7 +2496,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       return
     }
     mutableState.update { it.copy(pairing = true, confirmationCode = null, error = null) }
-    viewModelScope.launch {
+    pairingJob = viewModelScope.launch {
       var quiesced = false
       try {
         if (oldProfile != null) { quiesceGateway(); quiesced = true }
@@ -2277,6 +2506,10 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
         adoptGateway(profile)
         createConversation()
       } catch (error: CancellationException) {
+        mutableState.update { it.copy(pairing = false, confirmationCode = null) }
+        if (quiesced && session.currentProfile()?.gatewayId == oldProfile?.gatewayId) {
+          connectRealtime(); loadConversations()
+        }
         throw error
       } catch (error: Exception) {
         val known = setOf("INVALID_INVITATION", "INVALID_SECURE_ORIGIN", "PAIRING_EXPIRED", "PAIRING_REJECTED",
@@ -2287,7 +2520,25 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           connectRealtime(); loadConversations()
           mutableState.value.selectedConversationId?.let(::selectConversation)
         }
+      } finally {
+        pairingJob = null
       }
+    }
+  }
+
+  fun cancelPairing() {
+    if (!mutableState.value.pairing || cancelPairingJob?.isActive == true) return
+    val active = pairingJob
+    cancelPairingJob = viewModelScope.launch {
+      try {
+        active?.cancelAndJoin()
+        withContext(Dispatchers.IO) { session.cancelPairing() }
+        mutableState.update { it.copy(pairing = false, confirmationCode = null, error = null) }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        mutableState.update { it.copy(pairing = false, confirmationCode = null,
+          error = "PAIRING_CANCEL_FAILED") }
+      } finally { cancelPairingJob = null }
     }
   }
 
@@ -2426,6 +2677,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     agentJob?.cancel()
     contextJob?.cancel()
     contextRevision++
+    contextPanelJob?.cancel()
+    contextPanelRevision++
     connectionWaitJob?.cancel()
     connectionWaitRevision++
     referenceJob?.cancel()
@@ -2439,7 +2692,9 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       executionMessageId = null, executionDetail = null, executionLoading = false, executionError = false,
       draftModelLoading = false, draftModelReady = false, chatError = false, activeRunId = null,
       stoppingRun = false, stopError = false, runError = false, liveText = "", liveMessageId = null,
-      pendingInput = null, sendError = false, referencePicker = ReferencePickerUiState()) }
+      pendingInput = null, sendError = false, sendErrorDetail = null, sendRejected = false,
+      referencePicker = ReferencePickerUiState(),
+      contextPanel = ContextPanelUiState()) }
     mutableState.update { it.copy(models = emptyList(), selectedModelId = "", modelConfigVersion = null,
       modelsLoading = false, modelSaving = false, modelError = false, agents = emptyList(),
       selectedAgentId = "", agentsLoading = false, agentError = false) }
@@ -2610,6 +2865,122 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
         }
       }
     }
+  }
+
+  fun loadContextPanel(mode: String, path: String = "", query: String = "") {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: return
+    val conversationId = current.selectedConversationId ?: return
+    if (mode !in setOf("project", "environment", "directory", "files") ||
+      path.length > 4096 || query.length > 4096) return
+    contextPanelJob?.cancel()
+    val revision = ++contextPanelRevision
+    mutableState.update { it.copy(contextPanel = ContextPanelUiState(gatewayId, conversationId,
+      mode = mode, loading = true, filePath = path, fileQuery = query)) }
+    contextPanelJob = viewModelScope.launch {
+      try {
+        val loaded = runInterruptible(Dispatchers.IO) {
+          when (mode) {
+            "project" -> ContextPanelUiState(gatewayId, conversationId, mode,
+              projects = progressRepository.projects().filter { it.status != "archived" })
+            "environment" -> ContextPanelUiState(gatewayId, conversationId, mode,
+              environment = conversations.contextEnvironmentOptions(
+                requireNotNull(current.context?.project?.id)))
+            "directory" -> ContextPanelUiState(gatewayId, conversationId, mode,
+              directories = conversations.contextDirectories(path))
+            else -> {
+              conversations.materialize(conversationId, "session_resources")
+              val root = org.json.JSONObject(session.request(
+                "/api/files/contexts/session/${java.net.URLEncoder.encode(conversationId, "UTF-8")}"))
+              val spaceId = root.getJSONObject("space").getString("id")
+              ContextPanelUiState(gatewayId, conversationId, mode,
+                files = fileRepository.list(spaceId, path, query), filePath = path, fileQuery = query)
+            }
+          }
+        }
+        if (revision == contextPanelRevision && mutableState.value.profile?.gatewayId == gatewayId &&
+          mutableState.value.selectedConversationId == conversationId) mutableState.update {
+          it.copy(contextPanel = loaded)
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (revision == contextPanelRevision && mutableState.value.profile?.gatewayId == gatewayId &&
+          mutableState.value.selectedConversationId == conversationId) mutableState.update {
+          it.copy(contextPanel = it.contextPanel.copy(loading = false, error = true))
+        }
+      }
+    }
+  }
+
+  fun setContextDirectory() {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: return
+    val id = current.selectedConversationId ?: return
+    val path = current.contextPanel.directories?.currentPath ?: return
+    if (current.context?.workingDirectoryLocked == true || current.contextPanel.saving ||
+      current.contextPanel.loading || path.isBlank()) return
+    contextPanelJob?.cancel()
+    val revision = ++contextPanelRevision
+    mutableState.update { it.copy(contextPanel = it.contextPanel.copy(saving = true, error = false)) }
+    contextPanelJob = viewModelScope.launch {
+      try {
+        runInterruptible(Dispatchers.IO) { conversations.setContextDirectory(id, path) }
+        if (revision == contextPanelRevision && mutableState.value.profile?.gatewayId == gatewayId &&
+          mutableState.value.selectedConversationId == id) {
+          mutableState.update { it.copy(contextPanel = ContextPanelUiState()) }
+          loadContext()
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (revision == contextPanelRevision && mutableState.value.selectedConversationId == id) mutableState.update {
+          it.copy(contextPanel = it.contextPanel.copy(saving = false, error = true))
+        }
+      }
+    }
+  }
+
+  fun addContextFile(file: ManagedFile) {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: return
+    val id = current.selectedConversationId ?: return
+    if (file.kind == "directory" || current.contextPanel.saving || current.sending ||
+      current.pendingInput != null || current.draftAttachments.any {
+        it.workspaceRelativePath == file.relativePath
+      }) return
+    if (file.size !in 1..(10 * 1024 * 1024) ||
+      current.draftAttachments.sumOf { it.size.toLong() } + file.size > 20 * 1024 * 1024) {
+      mutableState.update { it.copy(contextPanel = it.contextPanel.copy(error = true)) }
+      return
+    }
+    contextPanelJob?.cancel()
+    val revision = ++contextPanelRevision
+    mutableState.update { it.copy(contextPanel = it.contextPanel.copy(saving = true, error = false)) }
+    contextPanelJob = viewModelScope.launch {
+      try {
+        val attachment = runInterruptible(Dispatchers.IO) {
+          conversations.addComposerFile(gatewayId, id, file)
+        }
+        if (revision == contextPanelRevision && mutableState.value.profile?.gatewayId == gatewayId &&
+          mutableState.value.selectedConversationId == id) mutableState.update {
+          it.copy(draftAttachments = it.draftAttachments + attachment,
+            contextPanel = it.contextPanel.copy(saving = false))
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (revision == contextPanelRevision && mutableState.value.selectedConversationId == id) mutableState.update {
+          it.copy(contextPanel = it.contextPanel.copy(saving = false, error = true))
+        }
+      }
+    }
+  }
+
+  fun createContextConversation(projectId: String?, mode: String?) {
+    val current = mutableState.value
+    if (current.sending || current.historyLoading || current.pendingInput != null) return
+    if (projectId == current.context?.project?.id &&
+      (mode == null || mode == current.context?.environment?.kind)) return
+    createConversationFor(current.selectedAgentId.ifBlank { current.defaultAgentId }, false,
+      projectId = projectId, executionMode = mode)
   }
 
   fun refreshConnectionWait() {
@@ -2815,12 +3186,54 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   suspend fun previewDraftImage(conversationId: String, item: ChatAttachment): Bitmap? {
     if (mutableState.value.selectedConversationId != conversationId ||
       mutableState.value.profile == null) return null
-    return withContext(Dispatchers.IO) { conversations.composerImagePreview(conversationId, item) }
+    return withContext(Dispatchers.IO) {
+      if (item.workspaceRelativePath == null || item.workspaceFileId == null ||
+        !item.mimeType.startsWith("image/")) conversations.composerImagePreview(conversationId, item)
+      else runCatching {
+        val bytes = fileRepository.content(item.workspaceFileId)
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) null else {
+          var sample = 1
+          while (bounds.outWidth / sample > 1024 || bounds.outHeight / sample > 1024) sample *= 2
+          BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.RGB_565
+          })
+        }
+      }.getOrNull()
+    }
   }
 
   suspend fun previewQuickImage(item: ChatAttachment): Bitmap? {
     if (mutableState.value.profile == null) return null
     return withContext(Dispatchers.IO) { conversations.quickImagePreview(item) }
+  }
+
+  suspend fun speechChunk(text: String, language: String): ByteArray =
+    withContext(Dispatchers.IO) { session.requestSpeech(text, language) }
+
+  suspend fun addVoiceDraftAttachment(bytes: ByteArray, durationSeconds: Int) {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
+    val conversationId = current.selectedConversationId ?: throw IllegalStateException("NO_CONVERSATION")
+    require(!current.sending && current.pendingInput == null && !current.attachmentLoading) {
+      "COMPOSER_BUSY"
+    }
+    mutableState.update { it.copy(attachmentLoading = true, attachmentError = false) }
+    try {
+      val items = runInterruptible(Dispatchers.IO) {
+        conversations.addComposerVoice(gatewayId, conversationId, bytes, durationSeconds)
+        conversations.composerAttachments(conversationId)
+      }
+      if (mutableState.value.profile?.gatewayId == gatewayId &&
+        mutableState.value.selectedConversationId == conversationId) mutableState.update {
+        it.copy(draftAttachments = items, attachmentLoading = false)
+      }
+    } catch (failure: Exception) {
+      mutableState.update { it.copy(attachmentLoading = false, attachmentError = true) }
+      throw failure
+    }
   }
 
   fun addCapturedDraftAttachment(gatewayId: String, conversationId: String, uri: Uri) =
@@ -2998,6 +3411,16 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
 
   fun createConversation() {
     createConversationFor(mutableState.value.selectedAgentId.ifBlank { mutableState.value.defaultAgentId }, false)
+  }
+
+  fun createProjectConversation(projectId: String) {
+    val current = mutableState.value
+    val project = current.progress.project
+    if (project?.id != projectId ||
+      !projectId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) return
+    createConversationFor(project.defaultAgentId?.takeIf(String::isNotBlank) ?: "main", false,
+      projectId = projectId,
+      executionMode = if (project.workspaceRoot.isNullOrBlank()) null else project.executionMode)
   }
 
   fun createConversationForReference(kind: String) {
@@ -3379,7 +3802,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   }
 
   private fun createConversationFor(agentId: String, discardCurrentDraft: Boolean,
-    referenceKind: String? = null) {
+    referenceKind: String? = null, projectId: String? = null, executionMode: String? = null) {
     if (mutableState.value.profile == null || mutableState.value.creatingConversation) return
     val previousId = mutableState.value.selectedConversationId
     mutableState.update { it.copy(creatingConversation = true, chatError = false) }
@@ -3387,11 +3810,16 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       try {
         draftWriteJob?.join()
         val draft = runInterruptible(Dispatchers.IO) {
-          val created = conversations.createDraft(agentId)
+          val created = conversations.createDraft(agentId, projectId, executionMode)
           if (discardCurrentDraft && previousId != null) conversations.saveComposerDraft(previousId, "")
           created
         }
-        mutableState.update { it.copy(creatingConversation = false) }
+        mutableState.update { current -> current.copy(creatingConversation = false,
+          progress = if (projectId != null && current.progress.projectId == projectId)
+            current.progress.copy(projectSessions = listOf(ProgressProjectSession(
+              draft.conversationId, "", 0, isLocalDraft = true)) +
+              current.progress.projectSessions.filterNot { it.id == draft.conversationId })
+          else current.progress) }
         selectConversation(draft.conversationId)
         if (referenceKind != null && mutableState.value.selectedConversationId == draft.conversationId) {
           mutableState.update { it.copy(requestedReferenceKind = referenceKind,
@@ -3432,7 +3860,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       mutableState.value.taskScopeLoading ||
       (!modelPrepared && !mutableState.value.draftModelReady) ||
       mutableState.value.realtimeStatus != "connected") return false
-    mutableState.update { it.copy(sending = true, sendError = false) }
+    mutableState.update { it.copy(sending = true, sendError = false, sendErrorDetail = null, sendRejected = false) }
     viewModelScope.launch {
       try {
         draftWriteJob?.join()
@@ -3465,7 +3893,9 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           catch (cancelled: CancellationException) { throw cancelled }
           catch (_: Exception) { null }
         if (mutableState.value.selectedConversationId == id) mutableState.update {
-          it.copy(sending = false, sendError = true, pendingInput = pending)
+          it.copy(sending = false, sendError = true, pendingInput = pending,
+            sendErrorDetail = (error as? GatewayHttpException)?.detail,
+            sendRejected = error is GatewayHttpException && error.status in 400..499)
         }
       }
     }

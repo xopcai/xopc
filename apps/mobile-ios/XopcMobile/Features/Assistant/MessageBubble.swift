@@ -8,6 +8,7 @@ struct MessageBubble: View {
     let conversationID: String?
     let assistantState: AssistantState?
     let readAloud: ChatReadAloud
+    let canReadAloud: Bool
     @Environment(\.locale) private var locale
     @State private var isActionsPresented = false
     @State private var isDetailPresented = false
@@ -56,6 +57,7 @@ struct MessageBubble: View {
                         .frame(width: 40, height: 40)
                         .contentShape(.rect)
                         .accessibilityIdentifier("chat-read-aloud-\(message.id)")
+                        .disabled(!canReadAloud)
                     }
                     Button("更多", systemImage: "ellipsis") {
                         isActionsPresented = true

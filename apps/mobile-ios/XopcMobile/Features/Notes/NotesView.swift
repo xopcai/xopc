@@ -3,6 +3,7 @@ import SwiftUI
 struct NotesView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
+    var bottomInset: CGFloat = 0
 
     @State private var notes: [NoteSummary] = []
     @State private var search = ""
@@ -85,7 +86,9 @@ struct NotesView: View {
                 }
             }
         }
+        .contentMargins(.bottom, bottomInset, for: .scrollContent)
         .navigationTitle("笔记")
+        .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

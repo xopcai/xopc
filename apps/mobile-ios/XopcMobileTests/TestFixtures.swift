@@ -3,7 +3,7 @@
 func emptyContext(conversationID: String) -> ConversationContextSummary {
     ConversationContextSummary(
         conversationId: conversationID,
-        work: ContextWork(project: nil, task: nil),
+        work: ContextWork(project: nil, task: nil, delegatedTasks: nil, delegatedTaskCount: nil),
         sources: [],
         sourcesHasMore: false,
         environment: nil,

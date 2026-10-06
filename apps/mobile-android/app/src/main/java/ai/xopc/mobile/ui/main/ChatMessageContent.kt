@@ -134,7 +134,8 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
         else if (isUser) SelectionContainer {
           Text(message.text, style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 25.sp),
             modifier = Modifier.fillMaxWidth())
-        } else RichMessageText(message.text, onOpenLink, onCopy)
+        } else MarkdownContent(message.text, modifier = Modifier.fillMaxWidth(),
+          onOpenLink = onOpenLink, onCopyCode = onCopy)
       }
       if (isUser) MessageReferences(message.references, onOpenTarget)
       if (message.media.isNotEmpty()) MessageMedia(message.id, message.media, isUser,
@@ -152,7 +153,8 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
         MessageTargets(message.targets, onOpenTarget)
       }
     }
-    if (!isUser && showMore && message.text.isNotBlank()) Row(
+    if (!isUser && showMore && (message.text.isNotBlank() || contentCount > 0 ||
+      message.outcome != null || onOpenExecution != null)) Row(
       modifier = Modifier.padding(start = 8.dp, top = 2.dp),
       horizontalArrangement = Arrangement.spacedBy(4.dp)) {
       IconButton(onClick = onViewMore, modifier = Modifier.size(44.dp)
@@ -178,13 +180,8 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
 
 @Composable
 private fun MessageTextPreview(messageId: String, text: String, lineLimit: Int, onViewMore: () -> Unit) {
-  SelectionContainer {
-    Text(plainMessageMarkdown(text).lineSequence().map { line ->
-      line.trim().removePrefix("### ").removePrefix("## ").removePrefix("# ")
-    }.joinToString("\n").trim(), style = MaterialTheme.typography.bodyLarge,
-      maxLines = lineLimit, overflow = TextOverflow.Ellipsis,
-      modifier = Modifier.testTag("message-preview-$messageId"))
-  }
+  MarkdownContent(text, modifier = Modifier.testTag("message-preview-$messageId"),
+    maxLines = lineLimit)
   TextButton(onClick = onViewMore, modifier = Modifier.heightIn(min = 48.dp)
     .testTag("message-view-more-$messageId")) {
     Text(stringResource(R.string.assistant_view_more))
@@ -210,68 +207,6 @@ private fun MessageReferences(items: List<ConversationReference>, onOpen: (Conve
             maxLines = 1, overflow = TextOverflow.Ellipsis)
           Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-      }
-    }
-  }
-}
-
-@Composable
-internal fun RichMessageText(text: String, onOpenLink: (String) -> Unit, onCopy: (String) -> Unit) {
-  val fences = Regex("```([A-Za-z0-9_-]*)\\r?\\n?([\\s\\S]*?)```")
-  var cursor = 0
-  fences.findAll(text).forEach { match ->
-    if (match.range.first > cursor) MarkdownParagraphs(text.substring(cursor, match.range.first), onOpenLink)
-    val code = match.groupValues[2].trim()
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
-      modifier = Modifier.fillMaxWidth()) {
-      Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (match.groupValues[1].isNotBlank()) Text(match.groupValues[1],
-          style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SelectionContainer { Text(code, fontFamily = FontFamily.Monospace,
-          style = MaterialTheme.typography.bodySmall) }
-        TextButton(onClick = { onCopy(code) }, modifier = Modifier.heightIn(min = 48.dp)) {
-          Text(stringResource(R.string.assistant_copy_code))
-        }
-      }
-    }
-    cursor = match.range.last + 1
-  }
-  if (cursor < text.length) MarkdownParagraphs(text.substring(cursor), onOpenLink)
-}
-
-@Composable
-private fun MarkdownParagraphs(text: String, onOpenLink: (String) -> Unit) {
-  val cleaned = text.trim()
-  val links = Regex("\\[([^]\\n]{1,240})]\\(([^)\\s]{1,4096})\\)")
-  val linkColor = MaterialTheme.colorScheme.primary
-  if (cleaned.isNotBlank()) SelectionContainer {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      cleaned.lines().forEach { line ->
-        val trimmed = line.trim()
-        val display = trimmed.removePrefix("### ").removePrefix("## ").removePrefix("# ")
-        val annotated = buildAnnotatedString {
-          var cursor = 0
-          links.findAll(display).forEach { match ->
-            append(display.substring(cursor, match.range.first))
-            val url = match.groupValues[2]
-            withLink(LinkAnnotation.Url(url,
-              TextLinkStyles(style = SpanStyle(color = linkColor))) { onOpenLink(url) }) {
-              append(match.groupValues[1])
-            }
-            cursor = match.range.last + 1
-          }
-          append(display.substring(cursor))
-        }
-        if (trimmed.isEmpty()) Spacer(Modifier.height(4.dp)) else Text(
-          text = annotated,
-          modifier = if (trimmed.startsWith("- ") || trimmed.startsWith("* "))
-            Modifier.padding(start = 8.dp) else Modifier,
-          style = when {
-            trimmed.startsWith("# ") -> MaterialTheme.typography.titleLarge
-            trimmed.startsWith("## ") -> MaterialTheme.typography.titleMedium
-            trimmed.startsWith("### ") -> MaterialTheme.typography.titleSmall
-            else -> MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp)
-          }, fontWeight = if (trimmed.startsWith('#')) FontWeight.SemiBold else FontWeight.Normal)
       }
     }
   }

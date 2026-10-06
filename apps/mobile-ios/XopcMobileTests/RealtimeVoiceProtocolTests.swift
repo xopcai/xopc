@@ -3,6 +3,31 @@ import Testing
 @testable import XopcMobile
 
 struct RealtimeVoiceProtocolTests {
+    @Test func voiceRecoveryMatchesHarmonyTransientFailures() {
+        for reason in ["NETWORK", "network", "route_lost", "CAPTURE_FAILED", "PLAYBACK_FAILED",
+                       "CAPTURE_INTERRUPTED", "OMNI_CONNECTION_CLOSED", "OMNI_CONNECTION_FAILED"] {
+            #expect(VoiceRecoveryPolicy.shouldReconnect(reason))
+        }
+        for reason in ["PROTOCOL_ERROR", "TIME_LIMIT", "MICROPHONE_PERMISSION_DENIED", "user_finished"] {
+            #expect(!VoiceRecoveryPolicy.shouldReconnect(reason))
+        }
+    }
+
+    @Test func voiceDraftMaterializationUsesTheSessionCreationContract() throws {
+        let body = MaterializeVoiceCommand(
+            commandId: "voice-1",
+            creation: SessionCreationCommand(agentId: "main", projectId: nil, execution: nil,
+                                             temporary: false, model: "provider/model", thinkingLevel: "off")
+        )
+        let data = try JSONEncoder().encode(body)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let creation = try #require(json["creation"] as? [String: Any])
+        #expect(json["purpose"] as? String == "voice")
+        #expect(creation["projectId"] is NSNull)
+        #expect(creation["execution"] is NSNull)
+        #expect(creation["model"] as? String == "provider/model")
+    }
+
     @Test func uplinkMatchesVersionThreeBinaryHeader() throws {
         let pcm = Data(repeating: 0x7F, count: 640)
         let frame = try RealtimeVoiceProtocol.encodeUplink(

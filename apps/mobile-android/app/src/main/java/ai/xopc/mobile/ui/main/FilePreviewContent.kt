@@ -81,12 +81,12 @@ internal fun FilePreviewContent(name: String, mimeType: String, bytes: ByteArray
   when (previewFileKind(name, mimeType)) {
     PreviewFileKind.MARKDOWN -> Column(modifier.verticalScroll(rememberScrollState())
       .testTag("file-preview-markdown")) {
-      RichMessageText(bytes.toString(Charsets.UTF_8).take(100_000), onOpenLink = { url ->
+      MarkdownContent(bytes.toString(Charsets.UTF_8).take(100_000), onOpenLink = { url ->
         val uri = Uri.parse(url)
         if (uri.scheme in listOf("http", "https")) runCatching {
           context.startActivity(Intent(Intent.ACTION_VIEW, uri))
         }
-      }, onCopy = { code ->
+      }, onCopyCode = { code ->
         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
           .setPrimaryClip(ClipData.newPlainText("code", code))
       })
