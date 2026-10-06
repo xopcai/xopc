@@ -93,7 +93,7 @@ export interface XopcChatRow { id: string; role: string; text: string; thinking?
 export interface XopcDrawerProfile { profile?: XopcProfileFields; suggestedCallName?: string; }
 export interface XopcProfileFields { callName?: string; role?: string; }
 export interface XopcSessionGroup { id: string; label: string; items: XopcSessionItem[]; }
-export interface XopcModelThinking { initialValue: string; options: string[]; }
+export interface XopcModelThinking { mode: string; initialValue: string; options: string[]; }
 export interface XopcChatModel { id: string; name?: string; description?: string; displayNames?: Record<string, string>; thinking?: XopcModelThinking; }
 export interface XopcChatModels { defaultId?: string; models?: XopcChatModel[]; items?: XopcChatModel[]; }
 export interface XopcAgentSkillConfig { mode?: string; include?: string[]; }
