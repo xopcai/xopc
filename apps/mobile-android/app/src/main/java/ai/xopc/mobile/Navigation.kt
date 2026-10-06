@@ -36,6 +36,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onConversationSearchChange = gateway::updateConversationSearch,
             onRefreshConversations = { gateway.loadConversations() },
             onLoadMoreConversations = gateway::loadMoreConversations,
+            onLoadOlderHistory = gateway::loadOlderHistory,
             onSelectConversation = gateway::selectConversation, onCreateConversation = gateway::createConversation,
             onCreateProjectConversation = gateway::createProjectConversation,
             onSelectTaskChildConversation = gateway::selectTaskChildConversation,

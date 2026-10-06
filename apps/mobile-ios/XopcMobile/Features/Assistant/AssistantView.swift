@@ -242,7 +242,8 @@ struct AssistantView<Dock: View>: View {
                         conversationID: conversation?.isDraft == false ? conversation?.id : nil,
                         assistantState: state,
                         readAloud: readAloud,
-                        canReadAloud: realtimeVoiceCall.phase == .idle
+                        canReadAloud: realtimeVoiceCall.phase == .idle,
+                        previewEligible: message.id != state.messages.last?.id
                     )
                 }
                 if state.isRunActive {

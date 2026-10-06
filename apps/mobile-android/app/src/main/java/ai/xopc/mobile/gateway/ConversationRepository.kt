@@ -60,7 +60,7 @@ data class ConversationMessage(val id: String, val role: String, val text: Strin
   val references: List<ConversationReference> = emptyList(),
   val targets: List<ConversationTarget> = emptyList(), val outcome: ConversationOutcome? = null)
 data class ConversationHistory(val conversationId: String, val transcriptId: String?, val messages: List<ConversationMessage>,
-  val agentId: String? = null)
+  val agentId: String? = null, val nextBeforeCursor: String? = null)
 data class ExecutionStep(val id: String, val kind: String, val category: String, val text: String,
   val preview: String, val failure: String, val status: String)
 data class ExecutionDetail(val turnId: String, val steps: List<ExecutionStep>)
@@ -391,9 +391,12 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       gateway.request("/api/sessions/${preview.conversationId}/shares", "POST", body.toString()))
   }
 
-  fun history(conversationId: String): ConversationHistory {
+  fun history(conversationId: String, before: String? = null): ConversationHistory {
     require(conversationId.matches(Regex("[0-9a-fA-F-]{36}"))) { "INVALID_CONVERSATION_ID" }
-    return parseHistory(conversationId, gateway.request("/api/sessions/$conversationId/history?view=compact&limit=20"))
+    require(before == null || before.matches(Regex("[1-9][0-9]{0,15}"))) { "INVALID_HISTORY_CURSOR" }
+    val path = "/api/sessions/$conversationId/history?view=compact&limit=20" +
+      (before?.let { "&before=$it" } ?: "")
+    return parseHistory(conversationId, gateway.request(path))
   }
 
   fun executionDetail(conversationId: String, turnId: String): ExecutionDetail {
@@ -1002,12 +1005,20 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     }
 
     fun parseHistory(conversationId: String, raw: String): ConversationHistory {
-      val session = JSONObject(raw).getJSONObject("session")
+      val root = JSONObject(raw)
+      val session = root.getJSONObject("session")
       require(session.getString("key") == conversationId) { "INVALID_SESSION_HISTORY" }
       val messages = session.getJSONArray("messages")
       require(messages.length() <= 100) { "INVALID_SESSION_HISTORY" }
+      val pagination = root.optJSONObject("pagination")
+      val hasMore = pagination?.optBoolean("hasMore") == true
+      val cursor = pagination?.optString("nextBeforeCursor")?.takeIf(String::isNotBlank)
+      require(!hasMore || cursor?.matches(Regex("[1-9][0-9]{0,15}")) == true) {
+        "INVALID_SESSION_HISTORY_CURSOR"
+      }
       return ConversationHistory(conversationId, session.optString("transcriptId").takeIf(String::isNotBlank),
-        parseMessages(messages), session.optString("agentId").takeIf(String::isNotBlank))
+        parseMessages(messages), session.optString("agentId").takeIf(String::isNotBlank),
+        if (hasMore) cursor else null)
     }
 
     fun parseExecutionDetail(turnId: String, raw: String): ExecutionDetail {
