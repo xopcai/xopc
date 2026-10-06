@@ -91,7 +91,8 @@ export struct XopcChatMessageContent {
       if (this.showPreview) {
         if (this.row.role === 'assistant') {
           XopcMarkdownView({ content: this.previewMarkdown, conversationId: this.conversationId, compactReading: true,
-            previewLineLimit: this.previewLines, onNavigate: this.onNavigate })
+            previewLineLimit: this.previewLines, onNavigate: this.onNavigate,
+            onPreviewTap: (): void => { this.onShowMore(this.row); } })
         } else {
         Text(this.previewText).fontSize(16).lineHeight(this.row.role === 'assistant' ? 23 : 25)
           .fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.Start)

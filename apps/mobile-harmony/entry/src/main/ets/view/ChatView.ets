@@ -48,7 +48,7 @@ import { seedChatMediaCache } from '../service/chatMedia';
 import { advanceAssistantAudio, latestAssistantAudio, XopcAssistantAudioState } from '../common/assistantAudioAutoplay';
 import { assistantAudioAutoplay } from '../service/assistantAudioAutoplay';
 import { editChatImageAttachment } from '../service/chatImageEditing';
-import { latestChatMessageId } from '../common/chatMessagePreview';
+import { chatMessageNeedsPreview, latestChatMessageId } from '../common/chatMessagePreview';
 import { userTextBubbleWidth } from '../common/chatBubbleLayout';
 import { chatPresentationRows, chatNeedsWideBubble } from '../common/chatPresentation';
 import { XopcBrandLoading } from './MobileComponents';
@@ -134,6 +134,8 @@ export struct XopcChatView {
   @Local imageEditorError: string = '';
   @Local messageDetailOpen: boolean = false;
   @Local messageDetailRow: XopcChatRow = { id: '', role: 'assistant', text: '' };
+  @Local messageDetailContentReady: boolean = false;
+  private messageDetailContentTimer: number = -1;
   @Local assistantMenuOpen: boolean = false;
   @Local assistantMenuRow: XopcChatRow = { id: '', role: 'assistant', text: '' };
   private pendingAssistantMenuAction: string = '';
@@ -482,6 +484,8 @@ export struct XopcChatView {
   }
 
   private openMessageDetail(row: XopcChatRow): void {
+    if (this.messageDetailContentTimer !== -1) clearTimeout(this.messageDetailContentTimer);
+    this.messageDetailContentReady = false;
     this.messageDetailRow = row;
     this.messageDetailOpen = true;
   }
@@ -1145,6 +1149,9 @@ export struct XopcChatView {
                 .constraintSize({ minWidth: 64, maxWidth: '90%' })
                 .padding({ left: 16, right: 16, top: 14, bottom: 14 }).alignItems(HorizontalAlign.Start)
                 .borderRadius(18).backgroundColor(this.colors.panel)
+                .onClick((): void => {
+                  if (item.item.id !== this.latestMessageId && chatMessageNeedsPreview(item.item)) this.openMessageDetail(item.item);
+                })
               if (!item.item.live && chatAnswerText(item.item)) { this.assistantMessageActions(item.item) }
             }.width('100%').alignItems(HorizontalAlign.Start)
           } else {
@@ -1552,7 +1559,12 @@ export struct XopcChatView {
           backgroundColor: this.colors.panel, onDisappear: (): void => { this.imageEditorError = ''; } })
       Column().id('chat-message-detail-sheet-host').width('100%').height(0)
         .bindSheet($$this.messageDetailOpen, this.messageDetailSheet, { height: '94%', dragBar: false,
-          showClose: false, backgroundColor: this.colors.panel })
+          showClose: false, backgroundColor: this.colors.panel,
+          onDisappear: (): void => {
+            if (this.messageDetailContentTimer !== -1) clearTimeout(this.messageDetailContentTimer);
+            this.messageDetailContentTimer = -1;
+            this.messageDetailContentReady = false;
+          } })
       Column().id('chat-assistant-menu-sheet-host').width('100%').height(0)
         .bindSheet($$this.assistantMenuOpen, this.assistantMessageMenuSheet, {
           height: 112 + this.assistantMenuActionCount * 56,
@@ -1601,15 +1613,23 @@ export struct XopcChatView {
       Column().width('100%').height(1).backgroundColor(this.colors.border)
       Scroll() {
         Column() {
-          XopcChatMessageContent({ row: this.messageDetailRow, conversationId: this.chat.selectedId,
-            disclosure: this.disclosure, reasoning: this.context.config?.reasoningLevel || 'on',
-            onShowExecution: (row: XopcChatRow): void => { this.messageDetailOpen = false; this.openExecutionDetail(row); },
-            onNavigate: (route: XopcMobileRoute): void => { this.navigateFromMessageDetail(route); },
-            onFillDraft: (text: string): void => { this.fillDraftFromMessageDetail(text); } })
+          if (this.messageDetailContentReady) {
+            XopcChatMessageContent({ row: this.messageDetailRow, conversationId: this.chat.selectedId,
+              disclosure: this.disclosure, reasoning: this.context.config?.reasoningLevel || 'on',
+              onShowExecution: (row: XopcChatRow): void => { this.messageDetailOpen = false; this.openExecutionDetail(row); },
+              onNavigate: (route: XopcMobileRoute): void => { this.navigateFromMessageDetail(route); },
+              onFillDraft: (text: string): void => { this.fillDraftFromMessageDetail(text); } })
+          }
         }.width('100%').padding({ left: 16, right: 16, top: 20, bottom: 32 }).alignItems(HorizontalAlign.Start)
       }.id('chat-message-detail-scroll').layoutWeight(1).width('100%').scrollBar(BarState.Auto)
         .align(Alignment.TopStart)
     }.id('chat-message-detail').width('100%').height('100%').backgroundColor(this.colors.panel)
+      .onAppear((): void => {
+        this.messageDetailContentTimer = setTimeout((): void => {
+          if (this.messageDetailOpen) this.messageDetailContentReady = true;
+          this.messageDetailContentTimer = -1;
+        }, 0);
+      })
   }
 
   @Builder
