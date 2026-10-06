@@ -62,7 +62,7 @@ describe('bootstrapApplicationStateSync', () => {
     const repository = new AgentCatalogRepository();
     expect(repository.listPendingProvisioningAgentIds()).toEqual([]);
     expect(repository.snapshot().agents.map((agent) => agent.id)).toEqual([
-      'coder', 'creative', 'data-analyst', 'main', 'researcher', 'writer',
+      'coder', 'conductor', 'creative', 'data-analyst', 'main', 'researcher', 'writer',
     ]);
     expect(existsSync(join(stateDir, 'agents', 'main', 'profile', 'IDENTITY.md'))).toBe(true);
   });
