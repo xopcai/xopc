@@ -490,6 +490,36 @@ export class MessageSender {
         await this.resume(state.activeRunId, resolvedChatId, callbacks);
         return;
       }
+      if (!taskId && !replaceTurnId) {
+        // A newly accepted input is often still queued when the 202 response is
+        // sent. Keep following that input so an early run does not leave the
+        // optimistic response bubble waiting forever.
+        while (ownInput) {
+          await retryDelay(400, controller.signal);
+          if (this._abort !== controller) return;
+          const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(chatId)}/input-state`), {
+            signal: controller.signal,
+          });
+          if (this._abort !== controller) return;
+          if (!response.ok) continue;
+          const snapshot = await response.json() as {
+            payload?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string }> };
+          };
+          controller.signal.throwIfAborted();
+          assertScope();
+          const current = snapshot.payload;
+          if (current?.activeRunId && current.activeInputId === ownInput.id) {
+            await this.resume(current.activeRunId, resolvedChatId, callbacks);
+            return;
+          }
+          if (current?.inputs && !current.inputs.some((input) => input.id === ownInput.id)) {
+            break;
+          }
+        }
+        await callbacks?.onReplayGap?.();
+        callbacks?.onResult({ runId: '', conversationId: resolvedChatId, status: 'success' });
+        return;
+      }
       this._abort = undefined;
     } finally {
       if (this._abort === controller) this._abort = undefined;

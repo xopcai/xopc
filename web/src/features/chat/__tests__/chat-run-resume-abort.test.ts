@@ -51,7 +51,9 @@ vi.mock('@/features/chat/session/local-session-drafts', () => ({
   clearPendingSessionCommand: vi.fn(), confirmSessionCommand: vi.fn(),
 }));
 
-function acceptedInput(conversationId: string, clientMessageId: string, inputState = { inputs: [] }): Response {
+function acceptedInput(conversationId: string, clientMessageId: string, inputState: {
+  inputs: Array<{ id: string; clientMessageId: string }>;
+} = { inputs: [] }): Response {
   return new Response(JSON.stringify({ payload: { inputState,
     receipt: { conversationId, clientMessageId, transcriptId: 'transcript' }, session: { transcriptId: 'transcript' },
   } }), { status: 202 });
@@ -351,6 +353,50 @@ describe('MessageSender terminal state', () => {
       expect.stringContaining(`/turns/turn-old/replace`),
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+
+  it('clears a first response that finishes before the submission snapshot', async () => {
+    const sender = new MessageSender();
+    const onReplayGap = vi.fn(async () => {});
+    const onResult = vi.fn();
+    vi.mocked(apiFetch).mockImplementation(async (_url, init) =>
+      acceptedInput(conversationId, JSON.parse(String(init?.body)).clientMessageId));
+
+    await sender.send('hello', conversationId, undefined, 'off', {
+      onInputAccepted: vi.fn(), onStreamStart: vi.fn(), onToken: vi.fn(),
+      onThinking: vi.fn(), onThinkingEnd: vi.fn(), onToolStart: vi.fn(),
+      onToolEnd: vi.fn(), onProgress: vi.fn(), onReplayGap, onResult, onError: vi.fn(),
+    });
+
+    expect(onReplayGap).toHaveBeenCalledOnce();
+    expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ status: 'success' }));
+  });
+
+  it('follows an accepted queued first input until it finishes', async () => {
+    const sender = new MessageSender();
+    const onReplayGap = vi.fn(async () => {});
+    const onResult = vi.fn();
+    vi.mocked(apiFetch).mockImplementation(async (url, init) => {
+      if (String(url).endsWith('/input-state')) {
+        return new Response(JSON.stringify({ payload: { inputs: [] } }), { status: 200 });
+      }
+      const clientMessageId = JSON.parse(String(init?.body)).clientMessageId;
+      return acceptedInput(conversationId, clientMessageId, {
+        inputs: [{ id: 'input-queued', clientMessageId }],
+      });
+    });
+
+    await sender.send('hello', conversationId, undefined, 'off', {
+      onStreamStart: vi.fn(), onToken: vi.fn(), onThinking: vi.fn(),
+      onThinkingEnd: vi.fn(), onToolStart: vi.fn(), onToolEnd: vi.fn(),
+      onProgress: vi.fn(), onReplayGap, onResult, onError: vi.fn(),
+    });
+
+    expect(apiFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/input-state'), expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(onReplayGap).toHaveBeenCalledOnce();
+    expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ status: 'success' }));
   });
 
   it.each(['send', 'resume'] as const)(
