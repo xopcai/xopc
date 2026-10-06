@@ -22,9 +22,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 data class ChatAttachment(val id: String, val type: String, val name: String,
-  val mimeType: String, val size: Int)
+  val mimeType: String, val size: Int, val durationSeconds: Int? = null,
+  val workspaceRelativePath: String? = null, val workspaceFileId: String? = null)
 
-/** Immutable, encrypted attachment snapshots scoped to one Gateway and conversation. */
+/** Encrypted attachment snapshots and workspace references scoped to one Gateway and conversation. */
 class ChatAttachmentStore(context: Context) {
   private val app = context.applicationContext
   private val database = AttachmentDatabase(app)
@@ -68,6 +69,49 @@ class ChatAttachmentStore(context: Context) {
     return item
   }
 
+  /** Keep Gateway workspace files as references instead of downloading and uploading them again. */
+  @Synchronized
+  fun addWorkspaceFile(gatewayId: String, conversationId: String, file: ManagedFile): ChatAttachment {
+    checkScope(gatewayId, conversationId)
+    val current = list(gatewayId, conversationId)
+    require(current.size < MAX_ATTACHMENTS && file.size in 1..MAX_BYTES.toLong() &&
+      current.sumOf { it.size.toLong() } + file.size <= MAX_TOTAL_BYTES &&
+      file.kind == "file" && file.name.isNotBlank() && file.name.length <= 255 &&
+      file.name.none { it.code < 32 } && file.id.length in 1..512 &&
+      file.id.all { it.isLetterOrDigit() || it in "-_." } && file.relativePath.isNotBlank() &&
+      safeRelativePath(file.relativePath)) { "INVALID_WORKSPACE_ATTACHMENT" }
+    val mime = file.mimeType.ifBlank { "application/octet-stream" }
+    require(mime.length <= 127 && MIME.matches(mime)) { "INVALID_ATTACHMENT_METADATA" }
+    val item = ChatAttachment(UUID.randomUUID().toString(),
+      if (mime.startsWith("image/")) "image" else "document", file.name, mime,
+      file.size.toInt(), workspaceRelativePath = file.relativePath, workspaceFileId = file.id)
+    val metadata = metadataJson(item).toString().toByteArray(Charsets.UTF_8)
+    val values = ContentValues().apply {
+      put("gateway_id", gatewayId); put("conversation_id", conversationId); put("attachment_id", item.id)
+      put("metadata", encrypt(gatewayId, conversationId, item.id, "metadata", metadata))
+      put("payload", encrypt(gatewayId, conversationId, item.id, "payload", byteArrayOf()))
+      put("created_at", System.currentTimeMillis())
+    }
+    check(database.writableDatabase.insertOrThrow(TABLE, null, values) != -1L) { "ATTACHMENT_SAVE_FAILED" }
+    return item
+  }
+
+  @Synchronized
+  fun addVoiceBytes(gatewayId: String, conversationId: String, bytes: ByteArray,
+    durationSeconds: Int): ChatAttachment {
+    require(durationSeconds in 1..600 && bytes.size in 1..MAX_BYTES) { "INVALID_VOICE_ATTACHMENT" }
+    val saved = addBytes(gatewayId, conversationId, "voice.m4a", "audio/mp4", bytes)
+    val voice = saved.copy(type = "voice", durationSeconds = durationSeconds)
+    val metadata = metadataJson(voice).toString().toByteArray(Charsets.UTF_8)
+    val values = ContentValues().apply {
+      put("metadata", encrypt(gatewayId, conversationId, saved.id, "metadata", metadata))
+    }
+    require(database.writableDatabase.update(TABLE, values,
+      "gateway_id=? AND conversation_id=? AND attachment_id=?",
+      arrayOf(gatewayId, conversationId, saved.id)) == 1) { "ATTACHMENT_SAVE_FAILED" }
+    return voice
+  }
+
   @Synchronized
   fun list(gatewayId: String, conversationId: String): List<ChatAttachment> {
     checkScope(gatewayId, conversationId)
@@ -103,10 +147,14 @@ class ChatAttachmentStore(context: Context) {
           "metadata", rows.getBlob(0)).toString(Charsets.UTF_8)))
         require(saved == item) { "MISMATCHED_ATTACHMENT" }
         val bytes = decrypt(gatewayId, conversationId, item.id, "payload", rows.getBlob(1))
-        require(bytes.size == item.size && bytes.size in 1..MAX_BYTES) { "INVALID_ATTACHMENT_DATA" }
+        require(if (item.workspaceRelativePath == null) bytes.size == item.size && bytes.size in 1..MAX_BYTES
+          else bytes.isEmpty()) { "INVALID_ATTACHMENT_DATA" }
         array.put(JSONObject().put("type", item.type).put("name", item.name)
           .put("mimeType", item.mimeType).put("size", item.size)
-          .put("data", Base64.getEncoder().encodeToString(bytes)))
+          .put("data", Base64.getEncoder().encodeToString(bytes)).also { wire ->
+            item.durationSeconds?.let { wire.put("durationSeconds", it) }
+            item.workspaceRelativePath?.let { wire.put("workspaceRelativePath", it) }
+          })
       }
     }
     return array
@@ -116,7 +164,7 @@ class ChatAttachmentStore(context: Context) {
   @Synchronized
   fun previewImage(gatewayId: String, conversationId: String, item: ChatAttachment): Bitmap? {
     checkScope(gatewayId, conversationId); checkId(item.id)
-    if (item.type != "image" || !item.mimeType.startsWith("image/")) return null
+    if (item.workspaceRelativePath != null || item.type != "image" || !item.mimeType.startsWith("image/")) return null
     database.readableDatabase.query(TABLE, arrayOf("metadata", "payload"),
       "gateway_id=? AND conversation_id=? AND attachment_id=?",
       arrayOf(gatewayId, conversationId, item.id), null, null, null).use { rows ->
@@ -267,18 +315,37 @@ class ChatAttachmentStore(context: Context) {
 
     fun metadataJson(item: ChatAttachment): JSONObject = JSONObject().put("id", item.id)
       .put("type", item.type).put("name", item.name).put("mimeType", item.mimeType)
-      .put("size", item.size)
+      .put("size", item.size).also { json ->
+        item.durationSeconds?.let { json.put("durationSeconds", it) }
+        item.workspaceRelativePath?.let { json.put("workspaceRelativePath", it) }
+        item.workspaceFileId?.let { json.put("workspaceFileId", it) }
+      }
 
     fun parseMetadata(value: JSONObject): ChatAttachment {
       val item = ChatAttachment(value.getString("id"), value.getString("type"),
-        value.getString("name"), value.getString("mimeType"), value.getInt("size"))
+        value.getString("name"), value.getString("mimeType"), value.getInt("size"),
+        value.optInt("durationSeconds").takeIf { value.has("durationSeconds") },
+        value.optString("workspaceRelativePath").takeIf(String::isNotBlank),
+        value.optString("workspaceFileId").takeIf(String::isNotBlank))
       require(runCatching { UUID.fromString(item.id) }.isSuccess &&
-        item.type in setOf("image", "document") && item.name.isNotBlank() &&
+        item.type in setOf("image", "document", "voice") && item.name.isNotBlank() &&
         item.name.length <= 255 && item.name.none { it.code < 32 } &&
         item.mimeType.length <= 127 && MIME.matches(item.mimeType) &&
-        item.size in 1..MAX_BYTES) { "INVALID_ATTACHMENT_METADATA" }
+        item.size in 1..MAX_BYTES &&
+        (item.workspaceRelativePath == null && item.workspaceFileId == null ||
+          item.workspaceRelativePath != null && item.workspaceFileId?.let { id ->
+            id.length in 1..512 && id.all { it.isLetterOrDigit() || it in "-_." }
+          } == true &&
+          item.type != "voice" && safeRelativePath(item.workspaceRelativePath)) &&
+        (item.type == "voice" && item.mimeType == "audio/mp4" &&
+          item.durationSeconds != null && item.durationSeconds in 1..600 ||
+          item.type != "voice" && item.durationSeconds == null)) { "INVALID_ATTACHMENT_METADATA" }
       return item
     }
+
+    private fun safeRelativePath(path: String): Boolean = path.length <= 4096 &&
+      !path.startsWith('/') && !path.contains('\\') &&
+      path.split('/').all { it.isNotBlank() && it != "." && it != ".." }
 
     private fun mimeFromName(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
       "jpg", "jpeg" -> "image/jpeg"

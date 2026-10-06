@@ -20,6 +20,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatAttachmentStoreTest {
+  @Test fun voiceRecordingKeepsDurationInEncryptedDraftAndWirePayload() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val gatewayId = UUID.randomUUID().toString()
+    val conversationId = UUID.randomUUID().toString()
+    val store = ChatAttachmentStore(context)
+    try {
+      val item = store.addVoiceBytes(gatewayId, conversationId, byteArrayOf(1, 2, 3), 4)
+      assertEquals("voice", item.type)
+      assertEquals(4, ChatAttachmentStore(context).list(gatewayId, conversationId).single().durationSeconds)
+      val wire = store.wirePayloads(gatewayId, conversationId, listOf(item)).getJSONObject(0)
+      assertEquals("voice", wire.getString("type"))
+      assertEquals("audio/mp4", wire.getString("mimeType"))
+      assertEquals(4, wire.getInt("durationSeconds"))
+      assertEquals(listOf(1, 2, 3), Base64.getDecoder().decode(wire.getString("data"))
+        .map { it.toInt() })
+    } finally { store.removeGateway(gatewayId) }
+  }
+
   @Test fun imagePreviewUsesEncryptedSnapshotAndConversationScope() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val gatewayId = UUID.randomUUID().toString()

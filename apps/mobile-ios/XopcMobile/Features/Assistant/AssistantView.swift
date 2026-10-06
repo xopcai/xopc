@@ -9,10 +9,11 @@ struct AssistantView<Dock: View>: View {
     let conversation: ConversationSelection?
     let quickChatHandoff: QuickChatHandoff?
     let onStartConversation: (String) -> Void
+    let onStartScopedConversation: (ProjectRecord?, String?, String) -> Void
     let onConversationUpdated: (ConversationSelection) -> Void
     let onQuickChatHandled: (UUID) -> Void
-    let onOpenConversations: () -> Void
     let onOpenSettings: () -> Void
+    let onInputFocusChanged: (Bool) -> Void
     let bottomDock: (AssistantComposer, Bool) -> Dock
 
     @Environment(\.locale) private var locale
@@ -33,19 +34,31 @@ struct AssistantView<Dock: View>: View {
     @State private var executionPresentation: ExecutionActivityPresentation?
     @State private var handledQuickChatID: UUID?
     @State private var readAloud = ChatReadAloud()
+    @State private var startingVoice = false
+    @State private var voiceStartError: String?
+    @State private var voiceMaterializationIDs: [String: String] = [:]
+    @State private var bottomDockHeight: CGFloat = 0
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             content
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .overlay(alignment: .bottom) {
+                    Color(uiColor: .systemGroupedBackground)
+                        .frame(height: 24)
+                        .ignoresSafeArea(edges: .bottom)
+                        .allowsHitTesting(false)
+                }
             VStack(spacing: 0) {
                 if readAloud.state != .idle {
                     readAloudBar
                 }
                 bottomDock(composer, isActionPanelExpanded)
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bottomDockHeight = $0 }
         }
+        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .navigationTitle(conversationNavigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
@@ -73,7 +86,10 @@ struct AssistantView<Dock: View>: View {
             handleQuickChatHandoff()
         }
         .onAppear(perform: handleQuickChatHandoff)
-        .onDisappear { readAloud.stop() }
+        .onDisappear {
+            readAloud.stop()
+            onInputFocusChanged(false)
+        }
         .modifier(AttachmentPickerModifier(
             attachments: $attachments,
             errorMessage: $attachmentError,
@@ -86,7 +102,16 @@ struct AssistantView<Dock: View>: View {
                 configuration: configuration,
                 conversation: conversation,
                 state: state,
-                onConversationUpdated: onConversationUpdated
+                pendingReferences: references,
+                onAddReference: { reference in
+                    guard references.count < 5,
+                          !references.contains(where: { $0.id == reference.id }) else { return }
+                    references.append(reference)
+                },
+                onConversationUpdated: onConversationUpdated,
+                onStartScopedConversation: { project, mode in
+                    onStartScopedConversation(project, mode, conversation?.agentId ?? state.selectedAgentID ?? "main")
+                }
             )
         }
         .sheet(item: $executionPresentation) { presentation in
@@ -121,6 +146,14 @@ struct AssistantView<Dock: View>: View {
                 let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
                 draft = existing.isEmpty ? text : "\(existing) \(text)"
             }
+        }
+        .alert("无法开始语音", isPresented: Binding(
+            get: { voiceStartError != nil },
+            set: { if !$0 { voiceStartError = nil } }
+        )) {
+            Button("好") { voiceStartError = nil }
+        } message: {
+            Text(voiceStartError ?? "请稍后重试")
         }
     }
 
@@ -158,24 +191,28 @@ struct AssistantView<Dock: View>: View {
             ProgressView("正在读取消息…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if state.messages.isEmpty {
-            ScrollView {
-                LazyVStack(spacing: 16) {
-                    if let errorMessage = state.errorMessage {
-                        ErrorBanner(message: errorMessage)
-                        Button("重试") {
-                            Task {
-                                await state.loadConversation(conversation, using: GatewayClient(configuration: configuration))
+            GeometryReader { viewport in
+                ScrollView {
+                    LazyVStack(spacing: 16) {
+                        if let errorMessage = state.errorMessage {
+                            ErrorBanner(message: errorMessage)
+                            Button("重试") {
+                                Task {
+                                    await state.loadConversation(conversation, using: GatewayClient(configuration: configuration))
+                                }
                             }
+                            .frame(minHeight: 44)
                         }
-                        .frame(minHeight: 44)
+                        clarificationCard
+                        queueCard
+                        welcome
                     }
-                    clarificationCard
-                    queueCard
-                    welcome
+                    .padding()
+                    .frame(maxWidth: 720)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: max(0, viewport.size.height - bottomDockHeight - 24))
                 }
-                .padding()
-                .frame(maxWidth: 720)
-                .frame(maxWidth: .infinity)
+                .contentMargins(.bottom, bottomDockHeight + 24, for: .scrollContent)
             }
         } else {
             messageTimeline
@@ -204,7 +241,8 @@ struct AssistantView<Dock: View>: View {
                         configuration: configuration,
                         conversationID: conversation?.isDraft == false ? conversation?.id : nil,
                         assistantState: state,
-                        readAloud: readAloud
+                        readAloud: readAloud,
+                        canReadAloud: realtimeVoiceCall.phase == .idle
                     )
                 }
                 if state.isRunActive {
@@ -227,6 +265,7 @@ struct AssistantView<Dock: View>: View {
             .frame(maxWidth: .infinity)
         }
         .defaultScrollAnchor(.bottom)
+        .contentMargins(.bottom, bottomDockHeight + 24, for: .scrollContent)
     }
 
     private var conversationNavigationTitle: String {
@@ -286,25 +325,13 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var welcome: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 18) {
             LoopiIcon(size: 108, active: isActive, interactive: true)
                 .accessibilityIdentifier("chat-welcome-loopi")
-            welcomeTitle
-                .font(.title2.weight(.semibold))
+            Text(verbatim: locale.language.languageCode?.identifier == "zh"
+                ? "今天想推进什么？" : "What do you want to move forward?")
+                .font(.system(size: 20, weight: .medium))
                 .multilineTextAlignment(.center)
-            welcomeMessage
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            if conversation == nil {
-                Button("开始新对话") {
-                    onStartConversation(state.selectedAgentID ?? "main")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(state.selectedAgentID == nil)
-                Button("打开已有对话", action: onOpenConversations)
-                    .buttonStyle(.bordered)
-            }
         }
         .padding(.vertical, 28)
         .frame(maxWidth: .infinity)
@@ -323,10 +350,11 @@ struct AssistantView<Dock: View>: View {
             referenceKind: $referenceKind,
             isActionPanelExpanded: $isActionPanelExpanded,
             attachmentError: attachmentError,
-            hasConversation: conversation != nil,
             canReferenceFiles: conversation?.isDraft == false,
-            canStartRealtimeVoice: conversation?.isDraft == false && realtimeVoiceCall.phase == .idle,
+            canStartRealtimeVoice: conversation != nil && !startingVoice && !state.isRunActive
+                && !state.isSending && realtimeVoiceCall.phase == .idle,
             isRunActive: state.isRunActive,
+            onInputFocusChanged: onInputFocusChanged,
             onStop: {
                 Task { await state.stop(using: GatewayClient(configuration: configuration)) }
             },
@@ -334,13 +362,31 @@ struct AssistantView<Dock: View>: View {
             onSteer: { send(delivery: .steer) },
             onNewConversation: { onStartConversation(state.selectedAgentID ?? "main") },
             onRealtimeVoice: { mode in
-                guard let conversation, !conversation.isDraft else { return }
+                guard let conversation, !startingVoice, !state.isRunActive, !state.isSending else { return }
+                startingVoice = true
                 Task {
+                    defer { startingVoice = false }
+                    let gateway = GatewayClient(configuration: configuration)
+                    let selected: ConversationSelection
+                    do {
+                        let commandID = voiceMaterializationIDs[conversation.id]
+                            ?? UUID().uuidString.lowercased()
+                        voiceMaterializationIDs[conversation.id] = commandID
+                        selected = try await gateway.materializeVoiceConversation(conversation, commandID: commandID)
+                    } catch {
+                        voiceStartError = error.localizedDescription
+                        return
+                    }
+                    voiceMaterializationIDs.removeValue(forKey: conversation.id)
+                    if selected.isDraft == false && conversation.isDraft {
+                        onConversationUpdated(selected)
+                    }
+                    readAloud.stop()
                     await realtimeVoiceCall.start(
-                        conversationID: conversation.id,
+                        conversationID: selected.id,
                         mode: mode,
-                        name: conversation.title,
-                        gateway: GatewayClient(configuration: configuration)
+                        name: selected.title,
+                        gateway: gateway
                     )
                 }
             }
@@ -429,26 +475,6 @@ private struct ConversationLoadKey: Equatable {
 }
 
 private extension AssistantView {
-    var welcomeTitle: Text {
-        if let conversation {
-            return Text(verbatim: conversation.title)
-        }
-        if let agent = state.selectedAgent {
-            return Text("和 \(agent.displayName) 一起开始")
-        }
-        return Text("从一个想法开始")
-    }
-
-    var welcomeMessage: Text {
-        if let conversation {
-            return Text("由 \(conversation.agentId) 助手处理，发送消息后会实时显示回答。")
-        }
-        if let description = state.selectedAgent?.description {
-            return Text(verbatim: description)
-        }
-        return Text("告诉助手你想完成什么，项目和上下文可以随后补充。")
-    }
-
     @ViewBuilder
     var queueCard: some View {
         if !state.pendingInputs.isEmpty || state.queueError != nil, let conversation {

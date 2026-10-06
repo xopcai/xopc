@@ -256,6 +256,8 @@ struct ConversationContextSummary: Decodable, Equatable, Sendable {
 struct ContextWork: Decodable, Equatable, Sendable {
     let project: ContextWorkItem?
     let task: ContextWorkItem?
+    let delegatedTasks: [ContextDelegatedTask]?
+    let delegatedTaskCount: Int?
 }
 
 struct ContextWorkItem: Decodable, Equatable, Identifiable, Sendable {
@@ -265,9 +267,23 @@ struct ContextWorkItem: Decodable, Equatable, Identifiable, Sendable {
 }
 
 struct ContextSource: Decodable, Equatable, Identifiable, Sendable {
+    let kind: String?
     let id: String
     let title: String?
     let unavailable: Bool?
+    let fileKind: String?
+    let origins: [ContextSourceOrigin]?
+}
+
+struct ContextSourceOrigin: Decodable, Equatable, Sendable {
+    let kind: String
+}
+
+struct ContextDelegatedTask: Decodable, Equatable, Identifiable, Sendable {
+    let id: String
+    let title: String
+    let phase: String
+    let runStatus: String?
 }
 
 struct ChatEnvironment: Decodable, Equatable, Sendable {
@@ -339,6 +355,14 @@ struct InputReceipt: Decodable, Sendable {
     let conversationId: String
     let clientMessageId: String
     let transcriptId: String
+    let lifecycle: String?
+
+    init(conversationId: String, clientMessageId: String, transcriptId: String, lifecycle: String? = nil) {
+        self.conversationId = conversationId
+        self.clientMessageId = clientMessageId
+        self.transcriptId = transcriptId
+        self.lifecycle = lifecycle
+    }
 }
 
 struct CommandSession: Decodable, Sendable {

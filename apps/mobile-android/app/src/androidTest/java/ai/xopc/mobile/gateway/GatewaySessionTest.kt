@@ -26,6 +26,47 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GatewaySessionTest {
+  @Test fun workspaceFileReferenceSurvivesRestartAndSendsPathWithoutPayload() {
+    val app = ApplicationProvider.getApplicationContext<Context>()
+    val store = ChatAttachmentStore(app)
+    val gateway = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    val conversation = "11111111-2222-3333-4444-555555555555"
+    store.removeConversation(gateway, conversation)
+    try {
+      val file = ManagedFile("file-1", "space-1", "brief.png", "docs/brief.png", "file", "image/png", 2048)
+      val attachment = store.addWorkspaceFile(gateway, conversation, file)
+      assertEquals("docs/brief.png", ChatAttachmentStore(app).list(gateway, conversation).single().workspaceRelativePath)
+      val wire = ChatAttachmentStore(app).wirePayloads(gateway, conversation, listOf(attachment)).getJSONObject(0)
+      assertEquals("docs/brief.png", wire.getString("workspaceRelativePath"))
+      assertEquals("", wire.getString("data"))
+      assertEquals(false, wire.has("workspaceFileId"))
+    } finally { store.removeConversation(gateway, conversation) }
+  }
+
+  @Test fun contextActionsUseGatewayEnvironmentAndDirectoryApis() {
+    val app = ApplicationProvider.getApplicationContext<Context>()
+    val credentials = AndroidSecureStore(app, "context_actions_credentials_test_v1",
+      "xopc.gateway.credentials.context.actions.test.v1")
+    clear(credentials)
+    try {
+      val fake = FakeGateway()
+      val session = GatewaySession(app, fake,
+        DeviceIdentity("xopc.gateway.device.context.actions.p256.test.v1"), credentials)
+      session.pair(invitation()) {}
+      val repository = ConversationRepository(session, app)
+      val options = repository.contextEnvironmentOptions("project-1")
+      assertEquals(true, options.localAvailable)
+      assertEquals("uncommitted_changes", options.worktreeUnavailableReason)
+      val root = repository.contextDirectories("")
+      assertEquals("/", root.currentPath)
+      assertEquals("/workspace", root.entries.single().absolutePath)
+      val child = repository.contextDirectories("/workspace")
+      assertEquals("/", child.parentPath)
+      repository.setContextDirectory("11111111-2222-3333-4444-555555555555", "/workspace")
+      assertEquals("/workspace", fake.lastDirectoryPatch?.getString("workingDirectory"))
+    } finally { clear(credentials) }
+  }
+
   @Test fun compactHistoryMarksUserMediaAndReferencesAsNonTextForReuse() {
     val id = "11111111-2222-3333-4444-555555555555"
     val history = ConversationRepository.parseHistory(id,
@@ -42,6 +83,81 @@ class GatewaySessionTest {
   private val pairingId = UUID.fromString("11111111-2222-3333-4444-555555555555")
   private val signingKey = Ed25519PrivateKeyParameters(ByteArray(32) { (it + 1).toByte() }, 0)
   private val origin = "https://gateway.example"
+
+  @Test fun projectDraftKeepsScopeAfterRestartAndFirstSend() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val credentials = AndroidSecureStore(context, "project_draft_credentials_test_v1",
+      "xopc.gateway.credentials.project.draft.test.v1")
+    val local = AndroidSecureStore(context)
+    val indexKey = "draft-index.$gatewayId"
+    val previousIndex = local.read(indexKey)
+    var draftId: String? = null
+    clear(credentials)
+    try {
+      val fake = FakeGateway().apply { expectedInputContent = "Project kickoff" }
+      val session = GatewaySession(context, fake,
+        DeviceIdentity("xopc.gateway.device.project.draft.p256.test.v1"), credentials)
+      session.pair(invitation()) {}
+      val repository = ConversationRepository(session, context)
+      val draft = repository.createDraft("research", "project-1", "managed_worktree")
+      draftId = draft.conversationId
+      val restored = ConversationRepository(session, context)
+      assertEquals("project-1", restored.draft(draft.conversationId)?.projectId)
+      assertEquals("research", restored.draft(draft.conversationId)?.agentId)
+      assertEquals("managed_worktree", restored.draft(draft.conversationId)?.executionMode)
+      assertEquals(listOf(draft.conversationId), restored.projectDrafts("project-1").map { it.conversationId })
+      assertEquals("project-1", restored.context(draft.conversationId).project?.id)
+      assertEquals("Alpha", restored.context(draft.conversationId).project?.title)
+      restored.prepareDraftModel(draft.conversationId)
+      restored.send(draft.conversationId, "Project kickoff", TurnClaim("endpoint", "claim"))
+      assertEquals("project-1", fake.lastInputCommand!!.getJSONObject("creation").getString("projectId"))
+      assertEquals("research", fake.lastInputCommand!!.getJSONObject("creation").getString("agentId"))
+      assertEquals("managed_worktree", fake.lastInputCommand!!.getJSONObject("creation")
+        .getJSONObject("execution").getString("mode"))
+      assertEquals(emptyList<LocalConversationDraft>(), restored.projectDrafts("project-1"))
+    } finally {
+      draftId?.let { local.remove("draft.$gatewayId.$it") }
+      if (previousIndex == null) local.remove(indexKey) else local.write(indexKey, previousIndex)
+      clear(credentials)
+    }
+  }
+
+  @Test fun projectDraftUsesGatewayExecutionModeAndRepairsOlderDraftBeforeSend() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val credentials = AndroidSecureStore(context, "project_mode_credentials_test_v1",
+      "xopc.gateway.credentials.project.mode.test.v1")
+    val local = AndroidSecureStore(context)
+    val indexKey = "draft-index.$gatewayId"
+    val previousIndex = local.read(indexKey)
+    val draftIds = mutableListOf<String>()
+    clear(credentials)
+    try {
+      val fake = FakeGateway().apply { expectedInputContent = "Project kickoff" }
+      val session = GatewaySession(context, fake,
+        DeviceIdentity("xopc.gateway.device.project.mode.p256.test.v1"), credentials)
+      session.pair(invitation()) {}
+      val repository = ConversationRepository(session, context)
+      fake.projectWorkspaceRoot = "/workspace"
+      fake.projectExecutionMode = "managed_worktree"
+      val newDraft = repository.createDraft("research", "project-1")
+      draftIds += newDraft.conversationId
+      assertEquals("managed_worktree", newDraft.executionMode)
+
+      fake.projectWorkspaceRoot = null
+      val olderDraft = repository.createDraft("research", "project-1")
+      draftIds += olderDraft.conversationId
+      assertNull(olderDraft.executionMode)
+      fake.projectWorkspaceRoot = "/workspace"
+      repository.prepareDraftModel(olderDraft.conversationId)
+      repository.send(olderDraft.conversationId, "Project kickoff", TurnClaim("endpoint", "claim"))
+      assertEquals("managed_worktree", fake.lastInputCommand!!.getJSONObject("creation")
+        .getJSONObject("execution").getString("mode"))
+    } finally {
+      draftIds.forEach { local.remove("draft.$gatewayId.$it") }
+      if (previousIndex == null) local.remove(indexKey) else local.write(indexKey, previousIndex)
+      clear(credentials)
+    }
+  }
 
   @Test fun assistantMessageQuickCaptureUsesHarmonyNoteContractAndStableMutationKey() {
     val context = ApplicationProvider.getApplicationContext<Context>()
@@ -630,6 +746,39 @@ class GatewaySessionTest {
     }
   }
 
+  @Test fun cancelPairingSendsSignedRequestAndClearsPendingJournal() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val store = AndroidSecureStore(context, "cancel_pairing_credentials_test_v1",
+      "xopc.gateway.credentials.cancel.pairing.test.v1")
+    clear(store)
+    try {
+      val fake = FakeGateway().apply { rejectPairingStatus = true }
+      val session = GatewaySession(context, fake,
+        DeviceIdentity("xopc.gateway.device.cancel.pairing.p256.test.v1"), store)
+      assertThrows(GatewayHttpException::class.java) { session.pair(invitation()) }
+      assertNotNull(store.read("pairing"))
+      session.cancelPairing()
+      assertNull(store.read("pairing"))
+      session.cancelPairing()
+    } finally { clear(store) }
+  }
+
+  @Test fun rejectedPairingClearsJournalSoAnotherInvitationCanBeUsed() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val store = AndroidSecureStore(context, "rejected_pairing_credentials_test_v1",
+      "xopc.gateway.credentials.rejected.pairing.test.v1")
+    clear(store)
+    try {
+      val fake = FakeGateway().apply { pairingFinalStatus = "rejected" }
+      val session = GatewaySession(context, fake,
+        DeviceIdentity("xopc.gateway.device.rejected.pairing.p256.test.v1"), store)
+      assertThrows(IllegalStateException::class.java) { session.pair(invitation()) }
+      assertNull(store.read("pairing"))
+      fake.pairingFinalStatus = "approved"
+      assertEquals(gatewayId.toString(), session.pair(invitation()).gatewayId)
+    } finally { clear(store) }
+  }
+
   @Test fun savedGatewaysProbeAndSwitchWithoutPublishingAFailedCandidate() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val store = AndroidSecureStore(context, "gateway_catalog_test_v1", "xopc.gateway.catalog.test.v1")
@@ -707,12 +856,17 @@ class GatewaySessionTest {
     private val fakeSigningKey: Ed25519PrivateKeyParameters = signingKey,
     private val fakeOrigin: String = origin) : GatewayHttp {
     var rejectStatus = false
+    var rejectPairingStatus = false
+    var pairingFinalStatus = "approved"
     var lastBearer = ""
     var inputPostCount = 0
     var expectedInputContent = "Quick topic"
+    var projectWorkspaceRoot: String? = null
+    var projectExecutionMode = "local_checkout"
     var lastInputCommand: JSONObject? = null
     var taskInputPostCount = 0
     var lastModelPatch: JSONObject? = null
+    var lastDirectoryPatch: JSONObject? = null
     var lastRename: String? = null
     val pinActions = mutableListOf<String>()
     val archiveActions = mutableListOf<String>()
@@ -774,9 +928,12 @@ class GatewaySessionTest {
           .put("gatewayId", fakeId.toString()).put("pairingId", fakePairingId.toString()).put("issuedAt", System.currentTimeMillis()))
         path.startsWith("/api/device-pairing/requests") -> {
           verifyDeviceProof(path, input)
+          if (rejectPairingStatus && path.endsWith("/status"))
+            throw GatewayHttpException(503, "Pairing status unavailable")
           val status = when {
-            path.endsWith("/status") -> "approved"
+            path.endsWith("/status") -> pairingFinalStatus
             path.endsWith("/complete") -> "completed"
+            path.endsWith("/cancel") -> "cancelled"
             else -> "pending"
           }
           val response = JSONObject().put("gateway", JSONObject().put("id", fakeId.toString()).put("name", "Test Gateway"))
@@ -851,10 +1008,19 @@ class GatewaySessionTest {
           """{"profile":{"callName":"Mia","role":"Designer","pronouns":"they",
             "timezone":"Asia/Shanghai","locale":"zh"}}"""
         }
+        path == "/api/projects/project-1/environment-options" && method == "GET" ->
+          """{"ok":true,"options":{"localAvailable":true,"worktreeUnavailableReason":"uncommitted_changes"}}"""
+        path == "/api/host/fs/list" && method == "GET" ->
+          """{"ok":true,"payload":{"currentPath":"/","parentPath":null,"entries":[
+            {"name":"workspace","absolutePath":"/workspace","isDirectory":true}]}}"""
+        path == "/api/host/fs/list?path=%2Fworkspace" && method == "GET" ->
+          """{"ok":true,"payload":{"currentPath":"/workspace","parentPath":"/","entries":[]}}"""
         path == "/api/projects/project-1" && method == "GET" -> {
           projectReadPaths += path
           progressProjectPaths += path
-          """{"ok":true,"project":{"id":"project-1","name":"Alpha"}}"""
+          JSONObject().put("ok", true).put("project", JSONObject().put("id", "project-1")
+            .put("name", "Alpha").put("workspaceRoot", projectWorkspaceRoot ?: JSONObject.NULL)
+            .put("executionMode", projectExecutionMode)).toString()
         }
         path == "/api/projects?limit=100&sortBy=updatedAt&sortOrder=desc&includeOperating=true" && method == "GET" -> {
           progressProjectPaths += path
@@ -1196,6 +1362,10 @@ class GatewaySessionTest {
         path.startsWith("/api/models?") -> JSONObject().put("ok", true).put("payload", JSONObject()
           .put("defaultId", "test/one").put("models", org.json.JSONArray()
             .put(JSONObject().put("id", "test/one").put("name", "One")))).toString()
+        path.endsWith("/agent-config") && method == "PATCH" && input.has("workingDirectory") -> {
+          lastDirectoryPatch = input
+          """{"ok":true,"payload":{"workingDirectory":"/workspace"}}"""
+        }
         path.endsWith("/agent-config") && method == "PATCH" -> {
           lastModelPatch = input
           JSONObject().put("ok", true).put("payload", JSONObject()
@@ -1255,6 +1425,7 @@ class GatewaySessionTest {
       val action = when {
         path.endsWith("/status") -> "status"
         path.endsWith("/complete") -> "complete"
+        path.endsWith("/cancel") -> "cancel"
         else -> "request"
       }
       if (action == "request") {

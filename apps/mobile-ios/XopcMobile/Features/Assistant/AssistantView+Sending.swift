@@ -2,7 +2,7 @@ import Foundation
 
 extension AssistantView {
     func send(delivery: MessageDelivery) {
-        guard let conversation else { return }
+        let conversation = conversation ?? .draft(agentId: state.selectedAgentID ?? "main")
         let text = draft
         let selectedAttachments = attachments
         let selectedReferences = references

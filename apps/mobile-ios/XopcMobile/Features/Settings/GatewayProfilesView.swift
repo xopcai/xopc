@@ -1,11 +1,12 @@
+import AVFoundation
 import SwiftUI
 
 struct GatewayProfilesView: View {
     let profiles: [GatewayProfile]
-    let configurations: [String: GatewayConfiguration]
     let activeProfileID: String?
     let storageError: String?
-    let onSave: (String, URL, String) -> Void
+    let onPair: (String, @escaping @MainActor (String) -> Void) async throws -> Void
+    let onRefresh: (String) async throws -> GatewayConfiguration
     let onActivate: (String) -> Void
     let onRename: (String, String) -> Void
     let onRemove: (String) -> Void
@@ -14,6 +15,7 @@ struct GatewayProfilesView: View {
     @State private var probeStates: [String: GatewayProbeState] = [:]
     @State private var editing = false
     @State private var deleteProfile: GatewayProfile?
+    @State private var detailProfile: GatewayProfile?
     @State private var renameProfile: GatewayProfile?
     @State private var renameText = ""
 
@@ -21,30 +23,39 @@ struct GatewayProfilesView: View {
         NavigationStack {
             List {
                 Section {
-                    ForEach(profiles) { profile in
-                        GatewayProfileRow(
-                            profile: profile,
-                            isActive: profile.id == activeProfileID,
-                            probe: probeStates[profile.id],
-                            onProbe: { Task { _ = await probe(profile) } },
-                            onActivate: {
-                                Task {
-                                    if await probe(profile) {
-                                        onActivate(profile.id)
+                    if profiles.isEmpty {
+                        ContentUnavailableView {
+                            Label("还没有连接 Gateway", systemImage: "network")
+                        } description: {
+                            Text("在电脑上生成连接二维码后，点右上角添加。")
+                        }
+                    } else {
+                        ForEach(profiles) { profile in
+                            GatewayProfileRow(
+                                profile: profile,
+                                isActive: profile.id == activeProfileID,
+                                probe: probeStates[profile.id],
+                                onProbe: { Task { _ = await probe(profile) } },
+                                onActivate: {
+                                    Task {
+                                        if await probe(profile) {
+                                            onActivate(profile.id)
+                                        }
                                     }
-                                }
-                            },
-                            onRename: {
-                                renameText = profile.name
-                                renameProfile = profile
-                            },
-                            onRemove: { deleteProfile = profile }
-                        )
+                                },
+                                onRename: {
+                                    renameText = profile.name
+                                    renameProfile = profile
+                                },
+                                onDetails: { detailProfile = profile },
+                                onRemove: { deleteProfile = profile }
+                            )
+                        }
                     }
                 } header: {
                     Text("已保存的 Gateway")
                 } footer: {
-                    Text("切换前必须先探测成功。令牌分别保存在系统钥匙串中。")
+                    Text("切换前必须先探测成功。连接凭据分别保存在系统钥匙串中。")
                 }
                 if let storageError {
                     Section { Label(storageError, systemImage: "exclamationmark.triangle").foregroundStyle(.red) }
@@ -52,6 +63,18 @@ struct GatewayProfilesView: View {
             }
             .navigationTitle("Gateway 管理")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(item: $detailProfile) { profile in
+                GatewayProfileDetailView(
+                    profile: profile,
+                    isActive: profile.id == activeProfileID,
+                    probe: probeStates[profile.id],
+                    onProbe: { Task { _ = await probe(profile) } },
+                    onRename: {
+                        renameText = profile.name
+                        renameProfile = profile
+                    }
+                )
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -60,7 +83,7 @@ struct GatewayProfilesView: View {
                 }
             }
             .sheet(isPresented: $editing) {
-                GatewayProfileEditor(existingProfiles: profiles, onSave: onSave)
+                GatewayProfileEditor(onPair: onPair)
             }
             .confirmationDialog(
                 "移除 Gateway？",
@@ -78,6 +101,8 @@ struct GatewayProfilesView: View {
                     deleteProfile = nil
                 }
                 Button("取消", role: .cancel) { deleteProfile = nil }
+            } message: {
+                Text("将从此设备移除连接凭据。若移除当前 Gateway，会切换到其他已保存的 Gateway。")
             }
             .alert("重命名 Gateway", isPresented: Binding(get: { renameProfile != nil }, set: {
                 if !$0 {
@@ -95,7 +120,7 @@ struct GatewayProfilesView: View {
                 .disabled(renameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .task { await probeAll() }
-            .onChange(of: profiles) { Task { await probeAll() } }
+            .onChange(of: profiles.map(\.id)) { Task { await probeAll() } }
         }
     }
 
@@ -103,33 +128,16 @@ struct GatewayProfilesView: View {
         for profile in profiles {
             probeStates[profile.id] = .checking
         }
-        await withTaskGroup(of: (String, GatewayProbeState).self) { group in
-            for profile in profiles {
-                group.addTask {
-                    let started = ContinuousClock.now
-                    let configuration = configurations[profile.id]
-                        ?? GatewayConfiguration(baseURL: profile.baseURL, token: "")
-                    do {
-                        _ = try await GatewayClient(configuration: configuration).fetchAgents()
-                        let elapsed = started.duration(to: .now)
-                        return (profile.id, .reachable(milliseconds: elapsed.milliseconds, checkedAt: .now))
-                    } catch {
-                        return (profile.id, .offline(error.localizedDescription, checkedAt: .now))
-                    }
-                }
-            }
-            for await (id, state) in group {
-                probeStates[id] = state
-            }
+        for profile in profiles {
+            _ = await probe(profile)
         }
     }
 
     @MainActor private func probe(_ profile: GatewayProfile) async -> Bool {
         probeStates[profile.id] = .checking
-        let configuration = configurations[profile.id]
-            ?? GatewayConfiguration(baseURL: profile.baseURL, token: "")
         let started = ContinuousClock.now
         do {
+            let configuration = try await onRefresh(profile.id)
             _ = try await GatewayClient(configuration: configuration).fetchAgents()
             let elapsed = started.duration(to: .now)
             probeStates[profile.id] = .reachable(milliseconds: elapsed.milliseconds, checkedAt: .now)
@@ -181,41 +189,67 @@ private struct GatewayProfileRow: View {
     let onProbe: () -> Void
     let onActivate: () -> Void
     let onRename: () -> Void
+    let onDetails: () -> Void
     let onRemove: () -> Void
+    @State private var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(profile.name).font(.headline)
-                    Text(profile.baseURL.absoluteString).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-                Spacer()
-                if isActive {
-                    Text("当前").font(.caption.weight(.semibold)).foregroundStyle(.blue)
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "link")
+                        .font(.title3)
+                        .foregroundStyle(.blue)
+                        .frame(width: 44, height: 44)
+                        .background(.blue.opacity(0.1), in: .rect(cornerRadius: 14))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(profile.name).font(.headline).foregroundStyle(.primary)
+                        Text(profile.baseURL.host ?? profile.baseURL.absoluteString)
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer(minLength: 6)
+                    if isActive {
+                        Text("当前")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.blue)
+                    }
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
                 }
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("gateway-profile-\(profile.id)")
             HStack {
                 ProbeLabel(state: probe)
                 Spacer()
-                NavigationLink("详情") {
-                    GatewayProfileDetailView(
-                        profile: profile,
-                        isActive: isActive,
-                        probe: probe,
-                        onProbe: onProbe,
-                        onRename: onRename
-                    )
-                }
                 Button("探测", action: onProbe)
-                if !isActive {
-                    Button("切换", action: onActivate).disabled(probe?.isOnline != true)
-                    Button("移除", role: .destructive, action: onRemove)
-                }
             }
             .font(.caption)
+            if expanded {
+                Divider()
+                Text(profile.baseURL.absoluteString)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                HStack(spacing: 12) {
+                    Button("详情", action: onDetails)
+                    Button("重命名", action: onRename)
+                    Spacer()
+                    Button("移除", role: .destructive, action: onRemove)
+                }
+                .font(.subheadline)
+                if !isActive {
+                    Button("切换", action: onActivate)
+                        .font(.subheadline)
+                        .disabled(probe?.isOnline != true)
+                }
+            }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
+        .buttonStyle(.borderless)
     }
 }
 
@@ -248,7 +282,7 @@ private struct GatewayProfileDetailView: View {
                 Button("重新探测", systemImage: "arrow.clockwise", action: onProbe)
             }
             Section {
-                Label("访问令牌保存在系统钥匙串中，不在页面中回显。", systemImage: "lock.shield")
+                Label("连接凭据保存在系统钥匙串中，不会在页面显示。", systemImage: "lock.shield")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -274,63 +308,234 @@ private struct ProbeLabel: View {
     }
 }
 
-private struct GatewayProfileEditor: View {
-    let existingProfiles: [GatewayProfile]
-    let onSave: (String, URL, String) -> Void
+struct GatewayProfileEditor: View {
+    let onPair: (String, @escaping @MainActor (String) -> Void) async throws -> Void
+    let canCancel: Bool
+    let onManage: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var baseURL = ""
-    @State private var token = ""
-    @State private var isTesting = false
-    @State private var result: String?
+    @State private var link = ""
+    @State private var showingScanner = false
+    @State private var showingManualEntry = false
+    @State private var isPairing = false
+    @State private var confirmationCode = ""
+    @State private var errorMessage: String?
+    @State private var pairingTask: Task<Void, Never>?
+
+    init(
+        onPair: @escaping (String, @escaping @MainActor (String) -> Void) async throws -> Void,
+        canCancel: Bool = true,
+        onManage: (() -> Void)? = nil
+    ) {
+        self.onPair = onPair
+        self.canCancel = canCancel
+        self.onManage = onManage
+    }
 
     var body: some View {
         NavigationStack {
-            Form {
-                TextField("名称", text: $name)
-                TextField("地址", text: $baseURL).textInputAutocapitalization(.never).keyboardType(.URL).autocorrectionDisabled()
-                SecureField("访问令牌", text: $token).textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button("测试连接") { Task { await test() } }.disabled(validatedURL == nil || isTesting)
-                if let result {
-                    Text(result).font(.footnote)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    Text(isPairing ? "等待电脑确认" : "连接你的 Gateway")
+                        .font(.largeTitle.bold())
+                    Text(isPairing
+                        ? "请在电脑上核对并批准这台 iPhone 的连接请求。"
+                        : "在电脑的 xopc 中打开设备配对，扫描二维码即可连接。")
+                        .foregroundStyle(.secondary)
+
+                    if !confirmationCode.isEmpty {
+                        VStack(spacing: 10) {
+                            Text(confirmationCode)
+                                .font(.system(size: 40, weight: .semibold, design: .rounded))
+                                .tracking(5)
+                            Text("确认电脑上显示相同的核对码后批准连接。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(24)
+                        .background(Color.secondary.opacity(0.1), in: .rect(cornerRadius: 18))
+                    }
+
+                    if let errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+
+                    if isPairing {
+                        ProgressView("正在等待批准…")
+                            .frame(maxWidth: .infinity)
+                    } else if showingManualEntry {
+                        TextField("粘贴电脑生成的连接链接", text: $link, axis: .vertical)
+                            .lineLimit(3 ... 5)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(14)
+                            .background(Color.secondary.opacity(0.1), in: .rect(cornerRadius: 14))
+                            .accessibilityIdentifier("gateway-pairing-link")
+                        Button("连接 Gateway") { connect() }
+                            .buttonStyle(.borderedProminent)
+                            .frame(maxWidth: .infinity)
+                            .disabled(link.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        Button("返回扫码") { showingManualEntry = false }
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Button {
+                            showingScanner = true
+                        } label: {
+                            Label("扫描连接二维码", systemImage: "qrcode.viewfinder")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("gateway-pairing-scan")
+                        Button("粘贴连接链接") { showingManualEntry = true }
+                            .frame(maxWidth: .infinity)
+                    }
                 }
+                .padding(24)
             }
-            .navigationTitle("添加 Gateway")
+            .navigationTitle(canCancel ? "添加 Gateway" : "连接 Gateway")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        guard let url = validatedURL else { return }
-                        onSave(name.isEmpty ? (url.host ?? "Gateway") : name, url, token)
-                        dismiss()
+                if canCancel {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") {
+                            pairingTask?.cancel()
+                            Task { try? await GatewayPairingService.shared.cancelPending() }
+                            dismiss()
+                        }
                     }
-                    .disabled(validatedURL == nil || isDuplicate || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                } else if let onManage {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Gateway 管理", systemImage: "gearshape", action: onManage)
+                    }
+                }
+            }
+            .interactiveDismissDisabled(isPairing)
+            .onDisappear { pairingTask?.cancel() }
+            .task {
+                if let pending = GatewayPairingService.shared.pendingLink() {
+                    link = pending
+                    showingManualEntry = true
+                }
+            }
+            .sheet(isPresented: $showingScanner) {
+                NavigationStack {
+                    GatewayQRScanner { value in
+                        showingScanner = false
+                        link = value
+                        connect()
+                    }
+                    .navigationTitle("扫描连接二维码")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("取消") { showingScanner = false }
+                        }
+                    }
                 }
             }
         }
     }
 
-    private var isDuplicate: Bool {
-        guard let validatedURL else { return false }
-        return existingProfiles.contains { $0.baseURL == validatedURL }
+    private func connect() {
+        guard !isPairing else { return }
+        isPairing = true
+        errorMessage = nil
+        confirmationCode = ""
+        pairingTask = Task {
+            do {
+                try await onPair(link) { confirmationCode = $0 }
+                try Task.checkCancellation()
+                dismiss()
+            } catch is CancellationError {
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isPairing = false
+            pairingTask = nil
+        }
+    }
+}
+
+private struct GatewayQRScanner: UIViewControllerRepresentable {
+    let onScan: (String) -> Void
+
+    func makeUIViewController(context: Context) -> ScannerController {
+        let controller = ScannerController()
+        controller.onScan = onScan
+        return controller
     }
 
-    private var validatedURL: URL? {
-        guard let url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)),
-              let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme), url.host != nil
-        else { return nil }
-        return url
-    }
+    func updateUIViewController(_: ScannerController, context _: Context) {}
 
-    @MainActor private func test() async {
-        guard let url = validatedURL else { return }
-        isTesting = true
-        defer { isTesting = false }
-        do {
-            let count = try await GatewayClient(configuration: GatewayConfiguration(baseURL: url, token: token)).fetchAgents().agents.count
-            result = AppLocalization.resolve("连接成功，读取到 \(count) 个助手")
-        } catch { result = error.localizedDescription }
+    final class ScannerController: UIViewController, @preconcurrency AVCaptureMetadataOutputObjectsDelegate {
+        var onScan: ((String) -> Void)?
+        nonisolated(unsafe) private let session = AVCaptureSession()
+        private var didScan = false
+
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            view.backgroundColor = .black
+            Task { @MainActor in
+                let permission = await AVCaptureDevice.requestAccess(for: .video)
+                guard permission, let camera = AVCaptureDevice.default(for: .video),
+                      let input = try? AVCaptureDeviceInput(device: camera),
+                      session.canAddInput(input)
+                else {
+                    let message = UILabel()
+                    message.text = AppLocalization.string(
+                        permission
+                            ? "当前设备没有可用相机，请返回后粘贴连接链接。"
+                            : "请允许相机访问，或返回后粘贴连接链接。",
+                        locale: AppLocalization.selectedLocale
+                    )
+                    message.textColor = .white
+                    message.textAlignment = .center
+                    message.numberOfLines = 0
+                    message.translatesAutoresizingMaskIntoConstraints = false
+                    view.addSubview(message)
+                    NSLayoutConstraint.activate([
+                        message.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                        message.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+                        message.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
+                        message.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24)
+                    ])
+                    return
+                }
+                session.addInput(input)
+                let output = AVCaptureMetadataOutput()
+                guard session.canAddOutput(output) else { return }
+                session.addOutput(output)
+                output.setMetadataObjectsDelegate(self, queue: .main)
+                output.metadataObjectTypes = [.qr]
+                let preview = AVCaptureVideoPreviewLayer(session: session)
+                preview.videoGravity = .resizeAspectFill
+                preview.frame = view.bounds
+                view.layer.addSublayer(preview)
+                DispatchQueue.global(qos: .userInitiated).async { self.session.startRunning() }
+            }
+        }
+
+        override func viewDidLayoutSubviews() {
+            super.viewDidLayoutSubviews()
+            (view.layer.sublayers?.first as? AVCaptureVideoPreviewLayer)?.frame = view.bounds
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            DispatchQueue.global(qos: .userInitiated).async { self.session.stopRunning() }
+        }
+
+        func metadataOutput(
+            _: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from _: AVCaptureConnection
+        ) {
+            guard !didScan,
+                  let value = (metadataObjects.first as? AVMetadataMachineReadableCodeObject)?.stringValue
+            else { return }
+            didScan = true
+            onScan?(value)
+        }
     }
 }

@@ -4,6 +4,7 @@ struct ProgressHubView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
     let onStartProjectConversation: (ProjectRecord) -> Void
+    var bottomInset: CGFloat = 0
 
     @Environment(\.locale) private var locale
     @State private var home: HomeSnapshot?
@@ -122,7 +123,9 @@ struct ProgressHubView: View {
                 }
             }
         }
+        .contentMargins(.bottom, bottomInset, for: .scrollContent)
         .navigationTitle("进展")
+        .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task(id: configuration) { await load() }
         .onChange(of: locale.identifier) { Task { await load() } }

@@ -456,6 +456,18 @@ struct MobileUserSummary: Decodable, Sendable {
     let counts: MobileUserCounts
     let goals: [MobileUserGoal]
     let recent: [MobileUserAssertion]
+    let primaryFocus: MobileUserFocus?
+    let rules: [MobileUserRule]?
+}
+
+struct MobileUserFocus: Decodable, Sendable {
+    let title: String
+    let desiredOutcome: String?
+}
+
+struct MobileUserRule: Decodable, Identifiable, Sendable {
+    let id: String
+    let statement: String
 }
 
 struct MobileUserProfile: Decodable, Sendable {
@@ -486,6 +498,7 @@ struct MobileUserGoal: Decodable, Identifiable, Sendable {
     let desiredOutcome: String?
     let status: String
     let isPrimary: Bool?
+    let targetAt: Int64?
 }
 
 struct MobileUserAssertion: Decodable, Identifiable, Sendable {
@@ -494,7 +507,32 @@ struct MobileUserAssertion: Decodable, Identifiable, Sendable {
     let kind: String
     let status: String
     let confidence: Double?
+    let authority: String?
+    let scope: MobileUserScope?
+    let sources: [MobileUserSource]?
 }
+
+struct MobileUserScope: Decodable, Sendable { let type: String }
+struct MobileUserSource: Decodable, Sendable { let label: String? }
+struct MobileUserAssertionPage: Decodable, Sendable {
+    let items: [MobileUserAssertion]
+    let nextCursor: String?
+}
+struct MobileUserAssertionEnvelope: Decodable, Sendable { let assertion: MobileUserAssertion }
+
+struct MobileShare: Decodable, Identifiable, Sendable {
+    let id: String
+    let fileName: String
+    let shareUrl: String
+    let expiresAt: String
+    let revoked: Bool
+    let expired: Bool
+}
+struct MobileShareListEnvelope: Decodable, Sendable {
+    let ok: Bool
+    let payload: MobileShareList
+}
+struct MobileShareList: Decodable, Sendable { let shares: [MobileShare] }
 
 extension Int64 {
     var millisecondsDate: Date {

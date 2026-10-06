@@ -28,6 +28,17 @@ class NoteRepositoryTest {
     }
   }
 
+  @Test fun detailParsesUploadedMediaForPreview() {
+    val raw = """{"note":{"id":"note-1","title":"Idea","kind":"thought","status":"inbox",
+      "createdAt":1000,"updatedAt":2000,"markdown":"Audio","remoteVersion":3,
+      "attachments":[{"id":"media-1","type":"audio","fileName":"voice.m4a",
+      "mimeType":"audio/mp4","size":1024,"relativePath":"notes/media-1","duration":4}]}}"""
+    val item = NoteRepository.parseDetail("note-1", raw).attachments.single()
+    assertEquals("media-1", item.id)
+    assertEquals("audio", item.type)
+    assertEquals(4, item.durationSeconds)
+  }
+
   @Test fun saveReconciliationPreservesNewKeystrokesAndRebasesTheDraft() {
     val sent = NoteDraft("local-00000000-0000-0000-0000-000000000001", "Old", "Old body",
       "00000000-0000-0000-0000-000000000002", 3)

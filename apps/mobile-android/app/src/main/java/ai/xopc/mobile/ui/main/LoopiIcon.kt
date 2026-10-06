@@ -66,7 +66,7 @@ private fun rememberLoopiMotionAllowed(): Boolean {
   return allowed
 }
 
-/** The ring and face move independently, like HarmonyOS Loopi. */
+/** The ring keeps its idle motion while greetings animate only the face. */
 @Composable
 internal fun LoopiIcon(extent: Dp, active: Boolean, compact: Boolean = false,
   interactive: Boolean = false, modifier: Modifier = Modifier) {
@@ -90,7 +90,7 @@ internal fun LoopiIcon(extent: Dp, active: Boolean, compact: Boolean = false,
   LaunchedEffect(motionActive) { if (!motionActive) greeting = false }
   Box(modifier = modifier.size(extent).then(touchModifier), contentAlignment = Alignment.Center) {
     if (motionActive) AnimatedLoopiArtwork(extent, compact, greeting)
-    else LoopiArtwork(extent, lift = 0f, ringAngle = 0f, eyeOpen = 1f)
+    else LoopiArtwork(extent, ringLift = 0f, faceLift = 0f, ringAngle = 0f, eyeOpen = 1f)
   }
 }
 
@@ -112,14 +112,13 @@ private fun AnimatedLoopiArtwork(extent: Dp, compact: Boolean, greeting: Boolean
       0.12f at 1510
       1f at 1690
     }), label = "loopi-blink")
-  val greetingLift by animateFloatAsState(if (greeting) -5f else 0f,
+  val greetingLift by animateFloatAsState(if (greeting) -2f else 0f,
     animationSpec = tween(if (greeting) 160 else 360), label = "loopi-greeting-lift")
-  val greetingAngle by animateFloatAsState(if (greeting) 7f else 0f,
-    animationSpec = tween(if (greeting) 160 else 360), label = "loopi-greeting-ring")
   val greetingEyes by animateFloatAsState(if (greeting) 0.25f else 1f,
     animationSpec = tween(if (greeting) 160 else 180), label = "loopi-greeting-eyes")
-  LoopiArtwork(extent, lift = -4f * breathing + greetingLift,
-    ringAngle = -1.2f * breathing + greetingAngle,
+  LoopiArtwork(extent, ringLift = -4f * breathing,
+    faceLift = -4f * breathing + greetingLift,
+    ringAngle = -1.2f * breathing,
     eyeOpen = blink * greetingEyes)
 }
 
@@ -134,21 +133,23 @@ private fun CompactLoopiArtwork(extent: Dp) {
     eyes.animateTo(0.12f, tween(110))
     eyes.animateTo(1f, tween(180))
   }
-  LoopiArtwork(extent, lift = lift.value, ringAngle = 0f, eyeOpen = eyes.value)
+  LoopiArtwork(extent, ringLift = lift.value, faceLift = lift.value,
+    ringAngle = 0f, eyeOpen = eyes.value)
 }
 
 @Composable
-private fun LoopiArtwork(extent: Dp, lift: Float, ringAngle: Float, eyeOpen: Float) {
+private fun LoopiArtwork(extent: Dp, ringLift: Float, faceLift: Float,
+  ringAngle: Float, eyeOpen: Float) {
   val extentPx = with(LocalDensity.current) { extent.toPx() }
   val face = MaterialTheme.colorScheme.surface.copy(red = 0.96f, green = 0.95f, blue = 0.91f)
   Box(modifier = Modifier.size(extent), contentAlignment = Alignment.Center) {
     Image(painterResource(R.drawable.brand_mark), contentDescription = null,
       modifier = Modifier.size(extent).graphicsLayer {
         rotationZ = ringAngle
-        translationY = lift * extentPx / 304f
+        translationY = ringLift * extentPx / 304f
       })
-    Canvas(modifier = Modifier.size(extent * 0.38f).graphicsLayer {
-      translationY = lift * extentPx / 200f
+    Canvas(modifier = Modifier.size(extent * 0.28f).graphicsLayer {
+      translationY = faceLift * extentPx / 200f
     }) {
       val width = size.width
       val height = size.height

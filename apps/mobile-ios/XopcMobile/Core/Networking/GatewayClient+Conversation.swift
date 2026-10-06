@@ -158,3 +158,31 @@ extension GatewayClient {
         let _: IgnoredResponse = try await request(path: "/api/sessions/\(id)", method: "DELETE")
     }
 }
+
+struct ProjectEnvironmentOptions: Decodable, Sendable {
+    let localAvailable: Bool
+    let worktreeUnavailableReason: String?
+}
+
+private struct ProjectEnvironmentOptionsResponse: Decodable {
+    let ok: Bool
+    let options: ProjectEnvironmentOptions
+}
+
+struct HostDirectories: Decodable, Sendable {
+    let currentPath: String
+    let parentPath: String?
+    let entries: [HostDirectoryEntry]
+}
+
+struct HostDirectoryEntry: Decodable, Identifiable, Sendable {
+    let name: String
+    let absolutePath: String
+    let isDirectory: Bool
+
+    var id: String { absolutePath }
+}
+
+private struct WorkingDirectoryCommand: Encodable {
+    let workingDirectory: String
+}

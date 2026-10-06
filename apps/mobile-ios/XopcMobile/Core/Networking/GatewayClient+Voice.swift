@@ -27,6 +27,36 @@ private struct RealtimeVoiceApprovalDecision: Encodable {
 }
 
 extension GatewayClient {
+    func materializeVoiceConversation(_ conversation: ConversationSelection, commandID: String) async throws -> ConversationSelection {
+        guard conversation.isDraft else { return conversation }
+        let catalog = try await fetchModels(agentID: conversation.agentId)
+        guard let model = conversation.model ?? catalog.defaultId ?? catalog.models.first?.id else {
+            throw GatewayClientError.server("当前助手没有可用模型")
+        }
+        let thinking = conversation.thinkingLevel
+            ?? catalog.models.first(where: { $0.id == model })?.thinking?.initialValue
+            ?? "off"
+        let command = MaterializeVoiceCommand(
+            commandId: commandID,
+            creation: .init(
+                agentId: conversation.agentId,
+                projectId: conversation.projectId,
+                execution: conversation.executionMode.map { ExecutionCommand(mode: $0, baseRef: nil) },
+                temporary: false, model: model, thinkingLevel: thinking
+            )
+        )
+        let envelope: GatewayEnvelope<SessionCommandResult> = try await request(
+            path: "/api/sessions/\(conversation.id)/materialize",
+            method: "POST", body: encoder.encode(command)
+        )
+        guard envelope.isSuccessful, let result = envelope.payload,
+              result.receipt.conversationId == conversation.id,
+              result.receipt.lifecycle == "ready" else {
+            throw GatewayClientError.server(envelope.error?.message ?? "语音会话尚未准备好，请重试")
+        }
+        return conversation.materialized(transcriptId: result.receipt.transcriptId)
+    }
+
     func transcribeVoice(_ audio: RecordedAudio, language: String?) async throws -> String {
         let boundary = "xopc-\(UUID().uuidString)"
         var body = Data()
