@@ -11,6 +11,7 @@ export struct XopcChatOptions {
   @Param model: XopcChatOptionsViewModel = new XopcChatOptionsViewModel();
   @Param mode: string = 'actions';
   @Param contextSummary: ResourceStr = '';
+  @Param thinkingBusy: boolean = false;
   @Event onMode: (mode: string) => void = (_mode: string): void => {};
   @Event onContext: () => void = (): void => {};
   @Event onAgent: (id: string) => void = (_id: string): void => {};
@@ -27,11 +28,28 @@ export struct XopcChatOptions {
     if (image.data) return 'data:' + image.mimeType + ';base64,' + image.data;
     return image.uri?.startsWith('http') || image.uri?.startsWith('file:') || image.uri?.startsWith('data:') ? image.uri : '';
   }
+  private thinkingLabel(level: string): ResourceStr {
+    if (level === 'off') return $r('app.string.chat_thinking_off');
+    if (level === 'minimal') return $r('app.string.chat_thinking_minimal');
+    if (level === 'low') return $r('app.string.chat_thinking_low');
+    if (level === 'medium') return $r('app.string.chat_thinking_medium');
+    if (level === 'high') return $r('app.string.chat_thinking_high');
+    if (level === 'xhigh') return $r('app.string.chat_thinking_xhigh');
+    if (level === 'max') return $r('app.string.chat_thinking_max');
+    return level;
+  }
+  private thinkingSummary(): ResourceStr {
+    const mode = this.model.selectedModel()?.thinking?.mode;
+    if (mode === 'none' || !mode) return $r('app.string.chat_thinking_unsupported');
+    if (mode === 'fixed') return $r('app.string.chat_thinking_fixed');
+    return this.thinkingLabel(this.model.thinkingLevel);
+  }
 
   build() {
     Column({ space: 8 }) {
       Row() {
-        Text(this.mode === 'model' ? $r('app.string.chat_model') : this.mode === 'agent' ? $r('app.string.chat_agent')
+        Text(this.mode === 'model' ? $r('app.string.chat_model') : this.mode === 'thinking' ? $r('app.string.chat_thinking_effort')
+          : this.mode === 'agent' ? $r('app.string.chat_agent')
           : this.mode === 'queue' ? $r('app.string.chat_queue') : $r('app.string.chat_actions'))
           .fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
         Button('×').width(44).height(44).padding(0).fontSize(28).backgroundColor(Color.Transparent)
@@ -53,6 +71,18 @@ export struct XopcChatOptions {
                 summary: item.id, showChevron: false, onOpen: async (): Promise<void> => { if (await this.model.selectModel(item.id)) this.onClose(); } })
             }.enabled(!this.model.saving)
           }, (item: XopcChatModel): string => item.id)
+        } else if (this.mode === 'thinking') {
+          if (this.model.selectedModel()?.thinking?.mode === 'levels' || this.model.selectedModel()?.thinking?.mode === 'toggle') {
+            ForEach(this.model.selectedModel()?.thinking?.options || [], (level: string) => {
+              ListItem() {
+                XopcHubRow({ heading: this.thinkingLabel(level),
+                  summary: level === this.model.thinkingLevel ? $r('app.string.chat_thinking_selected') : '',
+                  onOpen: async (): Promise<void> => { if (await this.model.selectThinking(level)) this.onClose(); } })
+              }.enabled(!this.model.loading && !this.model.saving && !this.thinkingBusy)
+            }, (level: string): string => level)
+          } else {
+            ListItem() { Text(this.thinkingSummary()).fontColor(this.colors.secondary).padding(12) }
+          }
         } else if (this.mode === 'agent') {
           ForEach(this.model.agents.filter((item: XopcChatAgent): boolean => (item.name + ' ' + item.id).toLowerCase().includes(this.query.toLowerCase())), (item: XopcChatAgent) => {
             ListItem() { XopcHubRow({ heading: (item.id === this.model.agentId ? '✓ ' : '') + (item.name || item.id), summary: item.description || item.id,
@@ -109,6 +139,8 @@ export struct XopcChatOptions {
             compact: true, symbol: $r('sys.symbol.link'), onOpen: (): void => { this.onContext(); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_agent'), summary: this.model.agentName(), compact: true, onOpen: (): void => { this.onMode('agent'); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_model'), summary: this.model.modelName(appSettings.effectiveLanguage()), compact: true, onOpen: (): void => { this.onMode('model'); } }) }
+          ListItem() { XopcHubRow({ heading: $r('app.string.chat_thinking_effort'), summary: this.thinkingSummary(), compact: true,
+            onOpen: (): void => { this.onMode('thinking'); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.new_chat'), compact: true, symbol: $r('sys.symbol.square_and_pencil'), onOpen: (): void => { this.onNewChat(); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_session_files'), compact: true, symbol: $r('sys.symbol.folder'), onOpen: (): void => { this.onFiles(); } }) }
         }

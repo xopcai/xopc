@@ -115,7 +115,8 @@ export struct XopcChatView {
       const controls = this.context.directories ? 3 : 1;
       return Math.min(620, Math.max(300, 140 + (directories + controls) * 56));
     }
-    if (this.sheetMode === 'actions') return 364;
+    if (this.sheetMode === 'actions') return 448;
+    if (this.sheetMode === 'thinking') return Math.min(620, Math.max(280, 136 + (this.options.selectedModel()?.thinking?.options.length || 1) * 60));
     if (this.sheetMode === 'queue') return Math.min(620, Math.max(260, 156 + this.options.queued.length * 120));
     if (this.sheetMode === 'attention') return Math.min(560, Math.max(300, 188 + Math.min(this.attentionItems.length, 3) * 96));
     return 620;
@@ -1697,6 +1698,7 @@ export struct XopcChatView {
         onClose: (): void => { this.sheetOpen = false; }, onRetry: (): void => { this.context.load(this.chat.selectedId); } })
     } else {
     XopcChatOptions({ model: this.options, mode: this.sheetMode, contextSummary: this.contextMenuSummary(),
+      thinkingBusy: this.chat.sending || !!this.chat.runId || !!this.options.queued.length,
       onContext: (): void => { this.sheetMode = 'context'; },
       onMode: (mode: string): void => { this.sheetMode = mode; }, onClose: (): void => { this.sheetOpen = false; },
       onRetry: (): void => { this.options.load(this.chat.selectedId, this.chat.agentId); },

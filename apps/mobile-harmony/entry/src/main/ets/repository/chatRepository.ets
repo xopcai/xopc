@@ -330,7 +330,7 @@ export class XopcChatRepository {
       if (thinkingLevel !== undefined) draft.creation.thinkingLevel = thinkingLevel;
       await localSessionStore.save(draft, scope); return;
     }
-    const body: XopcAgentConfig = { model };
+    const body: XopcAgentConfig = { model, thinkingLevel };
     await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/agent-config', 'PATCH', JSON.stringify(body));
   }
   async rememberModel(agentId: string, model: string, thinkingLevel?: string): Promise<void> {
