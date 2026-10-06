@@ -49,6 +49,20 @@ class GatewaySession(
         mutationId, durationSeconds)
     }
   }
+  fun transcribeAudio(bytes: ByteArray, language: String): String {
+    val auth = voiceAuth()
+    val raw = try { http.transcribeAudio(auth.origin, auth.bearer, bytes, language) }
+    catch (failure: GatewayHttpException) {
+      if (failure.status != 401) throw failure
+      val refreshed = synchronized(this) { accessToken = null; voiceAuth() }
+      http.transcribeAudio(refreshed.origin, refreshed.bearer, bytes, language)
+    }
+    val result = JSONObject(raw)
+    require(result.optBoolean("ok") && result.optJSONObject("payload")?.optString("text")?.isNotBlank() == true) {
+      "EMPTY_TRANSCRIPTION"
+    }
+    return result.getJSONObject("payload").getString("text").trim()
+  }
   @Volatile private var profile: GatewayProfile? = null
   @Volatile private var accessToken: String? = null
   @Volatile private var accessExpiresAt: Long = 0

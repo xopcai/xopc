@@ -1,4 +1,5 @@
 <resources>
+    <string name="brand_loading">Loading…</string>
     <string name="app_name">xopc</string>
     <string name="tab_assistant">Assistant</string>
     <string name="tab_conversations">Chats</string>
@@ -158,6 +159,7 @@
     <string name="assistant_agent_retry">Refresh agents</string>
     <string name="assistant_context">Context</string>
     <string name="assistant_context_hint">Current associations, not a record of everything the model has read.</string>
+    <string name="assistant_session_files">Session files</string>
     <string name="assistant_context_change_directory">Change working directory</string>
     <string name="assistant_context_use_directory">Use this directory</string>
     <string name="assistant_context_error">Could not load conversation context.</string>
@@ -391,6 +393,12 @@
     <string name="voice_recorded_seconds">Recorded %1$d s</string>
     <string name="voice_playing">Playing recording</string>
     <string name="voice_record_error">Recording failed</string>
+    <string name="voice_input_hold">Hold to speak</string>
+    <string name="voice_input_release_send">Release to send</string>
+    <string name="voice_input_release_cancel">Release to cancel</string>
+    <string name="voice_input_release_text">Release to convert to text</string>
+    <string name="voice_input_working">Processing voice…</string>
+    <string name="voice_input_retry">Retry</string>
     <string name="voice_record_stop">Stop</string>
     <string name="voice_preview">Preview</string>
     <string name="voice_add_attachment">Add to message</string>

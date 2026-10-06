@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -76,7 +75,7 @@ internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
       item { Text(stringResource(R.string.automation_list_hint, state.items.size),
         style = MaterialTheme.typography.bodySmall) }
       if (state.listLoading && state.items.isEmpty()) item {
-        CircularProgressIndicator(modifier = Modifier.testTag("automation-list-loading"))
+        BrandLoadingPanel(modifier = Modifier.testTag("automation-list-loading"))
       }
       if (state.listError) item { OutlinedButton(onClick = onRefresh,
         modifier = Modifier.testTag("automation-list-retry")) {
@@ -173,7 +172,7 @@ internal fun AutomationDetailContent(state: AutomationUiState,
   LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp),
     contentPadding = PaddingValues(bottom = 20.dp)) {
     if (state.detailLoading && item == null) item {
-      CircularProgressIndicator(modifier = Modifier.testTag("automation-detail-loading"))
+      BrandLoadingPanel(modifier = Modifier.testTag("automation-detail-loading"))
     }
     if (state.detailError) item { OutlinedButton(onClick = onRetry,
       modifier = Modifier.testTag("automation-detail-retry")) { Text(stringResource(R.string.progress_load_failed)) } }
@@ -280,7 +279,7 @@ internal fun AutomationRunContent(state: AutomationUiState,
   LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp),
     contentPadding = PaddingValues(bottom = 20.dp)) {
     if (state.runLoading && run == null) item {
-      CircularProgressIndicator(modifier = Modifier.testTag("automation-run-loading"))
+      BrandLoadingPanel(modifier = Modifier.testTag("automation-run-loading"))
     }
     if (state.runError) item { OutlinedButton(onClick = onRetry,
       modifier = Modifier.testTag("automation-run-retry")) { Text(stringResource(R.string.progress_load_failed)) } }

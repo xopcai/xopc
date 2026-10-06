@@ -50,7 +50,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -407,7 +406,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       modifier = Modifier.testTag("note-attachment-preview"),
       title = { Text(attachmentToPreview.fileName) },
       text = { when {
-        !preview.first -> CircularProgressIndicator()
+        !preview.first -> BrandLoadingPanel(minHeight = 120.dp)
         content == null -> Text(stringResource(R.string.notes_file_preview_unavailable))
         attachmentToPreview.type == "image" -> {
           val image = remember(content) {
@@ -488,7 +487,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           }
         }
       }
-      if (aiBusy) CircularProgressIndicator()
+      if (aiBusy) BrandLoadingIndicator(modifier = Modifier.fillMaxWidth())
       if (aiError) Text(stringResource(R.string.progress_load_failed),
         color = MaterialTheme.colorScheme.error)
     }
@@ -610,7 +609,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Text(stringResource(R.string.notes_history), style = MaterialTheme.typography.titleLarge)
       if (state.historyLoading || state.snapshotLoading || state.restoreBusy) {
-        CircularProgressIndicator(modifier = Modifier.testTag("note-history-loading"))
+        BrandLoadingPanel(modifier = Modifier.testTag("note-history-loading"))
       } else if (state.restoreError || state.snapshotError || state.historyError) {
         Text(stringResource(R.string.notes_history_error), color = MaterialTheme.colorScheme.error,
           modifier = Modifier.testTag("note-history-error"))
@@ -713,7 +712,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   }
   if (state.shareBusy) AlertDialog(onDismissRequest = {},
     title = { Text(stringResource(R.string.notes_share)) },
-    text = { CircularProgressIndicator(modifier = Modifier.testTag("note-share-loading")) },
+    text = { BrandLoadingPanel(modifier = Modifier.testTag("note-share-loading"), minHeight = 120.dp) },
     confirmButton = {})
   if (state.shareError) AlertDialog(onDismissRequest = onDismissShare,
     title = { Text(stringResource(R.string.notes_share)) },
@@ -815,7 +814,7 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
     if (draft == null) {
       if (state.draftError) Text(stringResource(R.string.notes_draft_error),
         color = MaterialTheme.colorScheme.error)
-      else CircularProgressIndicator(modifier = Modifier.testTag("notes-draft-loading"))
+      else BrandLoadingPanel(modifier = Modifier.testTag("notes-draft-loading"))
       return@Column
     }
     val titleHint = stringResource(R.string.notes_title)
@@ -993,7 +992,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
       verticalArrangement = Arrangement.spacedBy(10.dp),
       contentPadding = PaddingValues(bottom = bottomChromeHeight + 20.dp)) {
       if (state.loading && state.items.isEmpty()) item {
-        CircularProgressIndicator(modifier = Modifier.testTag("notes-loading"))
+        BrandLoadingPanel(modifier = Modifier.testTag("notes-loading"))
       }
       if (state.listError) item { OutlinedButton(onClick = onSubmit,
         modifier = Modifier.testTag("notes-retry")) {
@@ -1017,6 +1016,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
       if (state.hasMore) item {
         OutlinedButton(onClick = onLoadMore, enabled = !state.loadingMore,
           modifier = Modifier.fillMaxWidth().testTag("notes-load-more")) {
+          if (state.loadingMore) BrandLoadingIndicator(extent = 20.dp)
           Text(stringResource(R.string.notes_load_more))
         }
       }
@@ -1035,7 +1035,7 @@ private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<Manage
     if (error) OutlinedButton(onClick = onRetry, modifier = Modifier.testTag("notes-files-retry")) {
       Text(stringResource(R.string.progress_load_failed))
     }
-    if (loading) CircularProgressIndicator(modifier = Modifier.testTag("notes-files-loading"))
+    if (loading) BrandLoadingPanel(modifier = Modifier.testTag("notes-files-loading"))
     if (selected != null) {
       Text(selected.name, style = MaterialTheme.typography.titleLarge,
         modifier = Modifier.testTag("notes-file-title"))
@@ -1158,7 +1158,7 @@ internal fun NotesDetailContent(state: NotesUiState, id: String, onRetry: () -> 
   Box(modifier = modifier.fillMaxWidth().testTag("note-detail")) {
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
       .padding(top = 8.dp, bottom = 84.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      if (state.detailLoading && note == null) CircularProgressIndicator(
+      if (state.detailLoading && note == null) BrandLoadingPanel(
         modifier = Modifier.testTag("note-detail-loading"))
       if (state.detailError) OutlinedButton(onClick = onRetry,
         modifier = Modifier.testTag("note-detail-retry")) {
@@ -1168,8 +1168,10 @@ internal fun NotesDetailContent(state: NotesUiState, id: String, onRetry: () -> 
         color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("note-metadata-error"))
       if (state.deleteError) Text(stringResource(R.string.notes_delete_error),
         color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("note-delete-error"))
-      if (state.metadataBusy) CircularProgressIndicator(modifier = Modifier.testTag("note-metadata-busy"))
-      if (state.deleteBusy) CircularProgressIndicator(modifier = Modifier.testTag("note-delete-busy"))
+      if (state.metadataBusy) BrandLoadingIndicator(
+        modifier = Modifier.fillMaxWidth().testTag("note-metadata-busy"))
+      if (state.deleteBusy) BrandLoadingIndicator(
+        modifier = Modifier.fillMaxWidth().testTag("note-delete-busy"))
       if (note != null) NoteBody(note, onOpenLink, onPreviewAttachment)
     }
     if (note != null) Row(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()

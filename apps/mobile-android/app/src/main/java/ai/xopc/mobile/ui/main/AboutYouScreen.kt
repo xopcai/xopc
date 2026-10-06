@@ -7,6 +7,7 @@ import ai.xopc.mobile.gateway.PersonalProfile
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,7 +26,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -286,7 +286,7 @@ private fun AssertionList(state: PersonalUiState, filter: String, query: String,
   modifier: Modifier = Modifier) {
   Column(modifier.verticalScroll(rememberScrollState())
     .padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    if (state.assertionsLoading) CircularProgressIndicator(Modifier.padding(top = 24.dp).size(24.dp))
+    if (state.assertionsLoading) BrandLoadingPanel(Modifier.padding(top = 24.dp))
     else if (state.assertions.isEmpty() && !state.assertionsError) {
       AboutCard {
         Text(stringResource(if (query.isNotBlank()) R.string.about_you_empty_search else when (filter) {
@@ -305,7 +305,9 @@ private fun AssertionList(state: PersonalUiState, filter: String, query: String,
     }
     if (state.assertionCursor != null && !state.assertionsMoreLoading) TextButton(onClick = onLoadMore,
       modifier = Modifier.testTag("about-you-load-more")) { Text(stringResource(R.string.about_you_load_more)) }
-    if (state.assertionsMoreLoading) CircularProgressIndicator(Modifier.size(24.dp))
+    if (state.assertionsMoreLoading) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+      BrandLoadingIndicator()
+    }
     Spacer(Modifier.height(24.dp))
   }
 }
@@ -343,7 +345,7 @@ private fun AssertionDetail(state: PersonalUiState, onRetry: () -> Unit,
   }
   Column(Modifier.fillMaxSize().padding(horizontal = 20.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    if (state.assertionDetailLoading) CircularProgressIndicator(Modifier.size(24.dp))
+    if (state.assertionDetailLoading) BrandLoadingPanel(Modifier.weight(1f))
     else if (state.assertionDetailError || item == null) {
       Text(stringResource(R.string.about_you_detail_error), color = MaterialTheme.colorScheme.error)
       TextButton(onClick = onRetry) { Text(stringResource(R.string.personal_retry)) }

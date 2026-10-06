@@ -29,6 +29,10 @@ internal class VoiceMemoRecorder(private val context: Context) {
     get() = ((recordedMs + if (phase == "recording")
       SystemClock.elapsedRealtime() - segmentStartedAt else 0L) / 1000).toInt()
 
+  val elapsedMilliseconds: Long
+    get() = recordedMs + if (phase == "recording")
+      SystemClock.elapsedRealtime() - segmentStartedAt else 0L
+
   @SuppressLint("MissingPermission")
   fun start() {
     cancel()

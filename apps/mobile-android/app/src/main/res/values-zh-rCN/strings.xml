@@ -1,4 +1,5 @@
 <resources>
+    <string name="brand_loading">加载中…</string>
     <string name="app_name">xopc</string>
     <string name="tab_assistant">助手</string>
     <string name="tab_conversations">对话</string>
@@ -158,6 +159,7 @@
     <string name="assistant_agent_retry">刷新助手角色</string>
     <string name="assistant_context">上下文</string>
     <string name="assistant_context_hint">当前关联的资料，不代表模型已读取全部内容。</string>
+    <string name="assistant_session_files">会话文件</string>
     <string name="assistant_context_change_directory">更改工作目录</string>
     <string name="assistant_context_use_directory">使用此目录</string>
     <string name="assistant_context_error">无法加载会话上下文。</string>
@@ -391,6 +393,12 @@
     <string name="voice_recorded_seconds">已录制 %1$d 秒</string>
     <string name="voice_playing">正在播放录音</string>
     <string name="voice_record_error">录音失败</string>
+    <string name="voice_input_hold">按住说话</string>
+    <string name="voice_input_release_send">松开发送</string>
+    <string name="voice_input_release_cancel">松开取消</string>
+    <string name="voice_input_release_text">松开转文字</string>
+    <string name="voice_input_working">正在处理语音…</string>
+    <string name="voice_input_retry">重试</string>
     <string name="voice_record_stop">停止</string>
     <string name="voice_preview">试听</string>
     <string name="voice_add_attachment">添加到消息</string>

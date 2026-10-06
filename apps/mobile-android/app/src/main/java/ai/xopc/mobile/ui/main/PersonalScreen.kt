@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -42,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -115,6 +115,8 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
     if (editorOpen && state.savedGoalRevision > saveStartedRevision) editorOpen = false
   }
   val settingsLabel = stringResource(R.string.settings_title)
+  val loadingHeight = (LocalConfiguration.current.screenHeightDp.dp - bottomChromeHeight - 260.dp)
+    .coerceAtLeast(220.dp)
   Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState())
     .padding(horizontal = 20.dp).testTag("personal-screen")) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
@@ -129,7 +131,7 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
     }
     ProfileCard(state.summary, connected, onOpenAbout)
     if (state.loading && state.summary == null) {
-      CircularProgressIndicator(Modifier.padding(top = 28.dp).size(24.dp))
+      BrandLoadingPanel(modifier = Modifier.testTag("personal-loading"), minHeight = loadingHeight)
     } else {
       state.summary?.let { summary -> PersonalSections(summary, ::openEditor,
         onOpenUnderstanding, onOpenAssertion) }
