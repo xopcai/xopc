@@ -20,6 +20,7 @@ struct XopcMarkdownInline {
   @Param compactReading: boolean = false;
   @Param lineLimit: number = Infinity;
   @Event onOpenLink: (href: string) => void = (_href: string): void => {};
+  @Event onPreviewTap: () => void = (): void => {};
   @Computed get spans(): XopcMarkdownSpan[] { return markdownSpans(this.content); }
   @Computed get textSize(): number {
     if (!this.headingLevel) return 16;
@@ -68,13 +69,17 @@ struct XopcMarkdownInline {
           .fontFamily(span.kind === 'code' ? 'monospace' : 'sans-serif')
           .fontColor(span.href ? this.colors.accent : this.muted ? this.colors.secondary : this.colors.foreground)
           .decoration({ type: span.href ? TextDecorationType.Underline : span.kind === 'strike' ? TextDecorationType.LineThrough : TextDecorationType.None })
-          .onClick((): void => { if (span.href) this.openTarget(span.href); })
+          .onClick((): void => {
+            if (span.href) this.openTarget(span.href);
+            else this.onPreviewTap();
+          })
       }, (span: XopcMarkdownSpan): string => span.id + ':' + span.kind + ':' + span.text + ':' + (span.href || ''))
     }.fontSize(this.textSize)
       .lineHeight(this.textLineHeight)
       .maxLines(this.lineLimit).textOverflow({ overflow: TextOverflow.Ellipsis })
       .copyOption(CopyOptions.InApp).width('100%')
       .textAlign(this.alignment === 'right' ? TextAlign.End : this.alignment === 'center' ? TextAlign.Center : TextAlign.Start)
+      .onClick((): void => { this.onPreviewTap(); })
   }
 }
 
@@ -86,6 +91,7 @@ export struct XopcMarkdownView {
   @Param compactReading: boolean = false;
   @Param previewLineLimit: number = 0;
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
+  @Event onPreviewTap: () => void = (): void => {};
   @Local linkedFile?: XopcHistoryMedia;
   @Local previewRequest: number = 0;
   private openInternalLink(href: string): void {
@@ -123,7 +129,8 @@ export struct XopcMarkdownView {
         if (this.previewLineLimit > 0) {
           XopcMarkdownInline({ content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0,
             muted: item.item.kind === 'quote', compactReading: this.compactReading, lineLimit: this.blockLines(item.index),
-            onOpenLink: (href: string): void => { this.openInternalLink(href); } })
+            onOpenLink: (href: string): void => { this.openInternalLink(href); },
+            onPreviewTap: (): void => { this.onPreviewTap(); } })
             .width('100%').padding({ left: item.item.kind === 'quote' ? 12 : item.item.kind === 'list' ? Math.min(item.item.level, 6) * 12 : 0 })
         } else if (item.item.kind === 'image') { XopcChatMediaView({ file: this.imageFile(item.item), conversationId: this.conversationId }) }
         else if (item.item.kind === 'rule') {
