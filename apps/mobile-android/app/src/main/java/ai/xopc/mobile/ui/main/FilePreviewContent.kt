@@ -26,7 +26,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -176,7 +175,7 @@ private fun PdfFilePreview(bytes: ByteArray, modifier: Modifier) {
   val handle = source?.getOrNull()
   var pageIndex by remember(bytes) { mutableIntStateOf(0) }
   if (handle == null) {
-    if (source == null) CircularProgressIndicator(modifier = modifier.testTag("file-preview-pdf-status"))
+    if (source == null) BrandLoadingPanel(modifier = modifier.testTag("file-preview-pdf-status"))
     else Text(stringResource(R.string.notes_file_preview_unavailable),
       modifier = modifier.testTag("file-preview-pdf-status"))
     return

@@ -30,7 +30,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -120,12 +119,16 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
     }
     if (state.loading && state.items.isEmpty()) {
       Box(Modifier.fillMaxSize().testTag("shares-loading"), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator()
+        BrandLoadingPanel(modifier = Modifier.fillMaxSize())
       }
     } else {
       PullToRefreshBox(isRefreshing = state.loading,
         onRefresh = { if (state.busyId == null) onRefresh() },
-        modifier = Modifier.fillMaxSize().testTag("shares-refresh-gesture")) {
+        modifier = Modifier.fillMaxSize().testTag("shares-refresh-gesture"),
+        indicator = {
+          if (state.loading) BrandLoadingIndicator(
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp), extent = 32.dp)
+        }) {
       LazyColumn(modifier = Modifier.fillMaxSize().testTag("shares-list"),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {

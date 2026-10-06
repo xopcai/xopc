@@ -3213,6 +3213,9 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   suspend fun speechChunk(text: String, language: String): ByteArray =
     withContext(Dispatchers.IO) { session.requestSpeech(text, language) }
 
+  suspend fun transcribeAudio(bytes: ByteArray, language: String): String =
+    withContext(Dispatchers.IO) { session.transcribeAudio(bytes, language) }
+
   suspend fun addVoiceDraftAttachment(bytes: ByteArray, durationSeconds: Int) {
     val current = mutableState.value
     val gatewayId = current.profile?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
@@ -3233,6 +3236,22 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     } catch (failure: Exception) {
       mutableState.update { it.copy(attachmentLoading = false, attachmentError = true) }
       throw failure
+    }
+  }
+
+  suspend fun sendVoiceRecording(bytes: ByteArray, durationSeconds: Int) {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
+    val conversationId = current.selectedConversationId ?: throw IllegalStateException("NO_CONVERSATION")
+    require(!current.sending && current.pendingInput == null && !current.attachmentLoading) {
+      "COMPOSER_BUSY"
+    }
+    val attachment = runInterruptible(Dispatchers.IO) {
+      conversations.addComposerVoice(gatewayId, conversationId, bytes, durationSeconds)
+    }
+    if (!sendContent(conversationId, "", refsOverride = emptyList(),
+        attachmentsOverride = listOf(attachment), preserveDraft = true)) {
+      throw IllegalStateException("COMPOSER_BUSY")
     }
   }
 

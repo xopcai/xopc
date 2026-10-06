@@ -21,10 +21,40 @@ interface GatewayHttp {
   fun uploadMultipart(origin: String, path: String, bearer: String, name: String,
     mimeType: String, bytes: ByteArray, mutationId: String, durationSeconds: Int? = null): String =
     throw UnsupportedOperationException("MULTIPART_UNAVAILABLE")
+  fun transcribeAudio(origin: String, bearer: String, bytes: ByteArray, language: String): String =
+    throw UnsupportedOperationException("TRANSCRIPTION_UNAVAILABLE")
 }
 
 /** HTTPS-only transport for Gateway API calls; the caller must verify signed identity proofs. */
 class GatewayTransport : GatewayHttp {
+  override fun transcribeAudio(origin: String, bearer: String, bytes: ByteArray,
+    language: String): String {
+    require(bytes.size in 1..(4 * 1024 * 1024) && language in setOf("", "zh", "en")) {
+      "INVALID_RECORDING_SIZE"
+    }
+    val boundary = "xopc-${UUID.randomUUID()}"
+    val prefix = ("--$boundary\r\nContent-Disposition: form-data; name=\"audio\"; " +
+      "filename=\"voice.m4a\"\r\nContent-Type: audio/m4a\r\n\r\n").toByteArray(Charsets.UTF_8)
+    val suffix = ("\r\n" + (if (language.isNotEmpty())
+      "--$boundary\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\n$language\r\n"
+      else "") + "--$boundary--\r\n").toByteArray(Charsets.UTF_8)
+    val connection = URL(PairingProtocol.secureOrigin(origin) + "/api/voice/transcriptions")
+      .openConnection() as HttpsURLConnection
+    try {
+      connection.requestMethod = "POST"
+      connection.instanceFollowRedirects = false
+      connection.connectTimeout = 8_000
+      connection.readTimeout = 60_000
+      connection.doOutput = true
+      connection.setFixedLengthStreamingMode(prefix.size + bytes.size + suffix.size)
+      connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+      connection.setRequestProperty("Authorization", "Bearer $bearer")
+      connection.outputStream.use { it.write(prefix); it.write(bytes); it.write(suffix) }
+      val status = connection.responseCode
+      if (status !in 200..299) throw GatewayHttpException(status)
+      return connection.inputStream.use { readBounded(it).toString(Charsets.UTF_8) }
+    } finally { connection.disconnect() }
+  }
   override fun request(origin: String, path: String, method: String, body: String, bearer: String): String =
     requestWithHeaders(origin, path, method, body, bearer, emptyMap())
 

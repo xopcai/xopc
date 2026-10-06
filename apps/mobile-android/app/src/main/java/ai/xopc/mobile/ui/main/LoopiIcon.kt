@@ -69,7 +69,7 @@ private fun rememberLoopiMotionAllowed(): Boolean {
 /** The ring keeps its idle motion while greetings animate only the face. */
 @Composable
 internal fun LoopiIcon(extent: Dp, active: Boolean, compact: Boolean = false,
-  interactive: Boolean = false, modifier: Modifier = Modifier) {
+  interactive: Boolean = false, working: Boolean = false, modifier: Modifier = Modifier) {
   val motionAllowed = rememberLoopiMotionAllowed()
   val motionActive = active && motionAllowed
   var greeting by remember { mutableStateOf(false) }
@@ -89,13 +89,13 @@ internal fun LoopiIcon(extent: Dp, active: Boolean, compact: Boolean = false,
   } else Modifier
   LaunchedEffect(motionActive) { if (!motionActive) greeting = false }
   Box(modifier = modifier.size(extent).then(touchModifier), contentAlignment = Alignment.Center) {
-    if (motionActive) AnimatedLoopiArtwork(extent, compact, greeting)
+    if (motionActive) AnimatedLoopiArtwork(extent, compact, greeting, working)
     else LoopiArtwork(extent, ringLift = 0f, faceLift = 0f, ringAngle = 0f, eyeOpen = 1f)
   }
 }
 
 @Composable
-private fun AnimatedLoopiArtwork(extent: Dp, compact: Boolean, greeting: Boolean) {
+private fun AnimatedLoopiArtwork(extent: Dp, compact: Boolean, greeting: Boolean, working: Boolean) {
   if (compact) {
     CompactLoopiArtwork(extent)
     return
@@ -118,7 +118,7 @@ private fun AnimatedLoopiArtwork(extent: Dp, compact: Boolean, greeting: Boolean
     animationSpec = tween(if (greeting) 160 else 180), label = "loopi-greeting-eyes")
   LoopiArtwork(extent, ringLift = -4f * breathing,
     faceLift = -4f * breathing + greetingLift,
-    ringAngle = -1.2f * breathing,
+    ringAngle = (if (working) 2f else -1.2f) * breathing,
     eyeOpen = blink * greetingEyes)
 }
 

@@ -151,12 +151,14 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onRegenerateMessage = gateway::regenerateMessage,
             onLoadMessageMedia = gateway::readMessageMedia,
             onSpeechChunk = gateway::speechChunk,
+            onTranscribeAudio = gateway::transcribeAudio,
             onCreateVoiceCall = gateway::createVoiceCall,
             onCancelVoiceCall = gateway::cancelVoiceCall,
             onVoiceClarification = gateway::respondToVoiceClarification,
             onPendingVoiceApproval = gateway::pendingVoiceApproval,
             onRespondVoiceApproval = gateway::respondToVoiceApproval,
             onAddVoiceAttachment = gateway::addVoiceDraftAttachment,
+            onSendVoiceRecording = gateway::sendVoiceRecording,
             onMessageNoteFeedbackHandled = gateway::messageNoteFeedbackHandled,
             modifier = Modifier.safeDrawingPadding())
         }

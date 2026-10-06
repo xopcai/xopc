@@ -32,7 +32,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -290,7 +289,7 @@ private fun MessageImageThumbnail(item: ConversationMedia, size: Int,
       modifier = Modifier.fillMaxWidth().height(size.dp).testTag("message-image-thumbnail-${item.id}"),
       contentScale = ContentScale.Crop)
     else Box(modifier = Modifier.fillMaxWidth().height(size.dp), contentAlignment = Alignment.Center) {
-      if (result == null) CircularProgressIndicator(modifier = Modifier.size(24.dp))
+      if (result == null) BrandLoadingIndicator(modifier = Modifier.size(24.dp))
       else Text("▧", style = MaterialTheme.typography.headlineMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -375,7 +374,7 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
       color = MaterialTheme.colorScheme.onSurfaceVariant)
     val payload = result?.getOrNull()
     if (result == null) {
-      CircularProgressIndicator(modifier = Modifier.size(28.dp).testTag("message-media-preview-loading"))
+      BrandLoadingPanel(modifier = Modifier.testTag("message-media-preview-loading"))
     } else if (payload == null) {
       Text(stringResource(R.string.message_preview_unavailable), color = MaterialTheme.colorScheme.error,
         modifier = Modifier.testTag("message-media-preview-error"))
@@ -482,7 +481,7 @@ private fun AudioMessagePreview(payload: ByteArray, media: ConversationMedia) {
       ready?.let { Text(formatDuration(it.player.duration), style = MaterialTheme.typography.labelMedium) }
     }
     when {
-      resource == null -> CircularProgressIndicator(modifier = Modifier.size(28.dp))
+      resource == null -> BrandLoadingPanel(minHeight = 120.dp)
       ready == null -> Text(stringResource(R.string.message_preview_unavailable),
         color = MaterialTheme.colorScheme.error)
       else -> OutlinedButton(onClick = {
