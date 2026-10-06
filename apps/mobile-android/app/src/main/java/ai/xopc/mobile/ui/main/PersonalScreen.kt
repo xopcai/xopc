@@ -50,6 +50,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -90,7 +91,8 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
     { _, _, _, _, _ -> }, onOpenAbout: () -> Unit = {},
   onOpenUnderstanding: () -> Unit = {},
   onOpenSettings: () -> Unit = {},
-  onOpenAssertion: (String) -> Unit = {}) {
+  onOpenAssertion: (String) -> Unit = {},
+  bottomChromeHeight: Dp = 0.dp) {
   var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var editingId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var title by rememberSaveable(state.gatewayId) { mutableStateOf("") }
@@ -137,7 +139,7 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
         style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 16.dp))
       TextButton(onClick = onRefresh) { Text(stringResource(R.string.personal_retry)) }
     }
-    Spacer(Modifier.height(24.dp))
+    Spacer(Modifier.height(bottomChromeHeight + 24.dp))
   }
   if (editorOpen) ModalBottomSheet(onDismissRequest = { if (!state.savingGoal) editorOpen = false },
     modifier = Modifier.testTag("personal-goal-sheet")) {

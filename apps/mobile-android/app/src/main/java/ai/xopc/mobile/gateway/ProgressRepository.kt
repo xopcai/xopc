@@ -17,7 +17,10 @@ data class ProgressTask(val id: String, val title: String, val body: String, val
   val allowedCommands: List<String> = emptyList())
 data class ProgressTaskPage(val items: List<ProgressTask>, val total: Int)
 data class ProgressProject(val id: String, val name: String, val description: String, val status: String,
-  val brief: String)
+  val brief: String, val defaultAgentId: String? = null, val workspaceRoot: String? = null,
+  val executionMode: String = "local_checkout")
+data class ProgressProjectSession(val id: String, val title: String, val messageCount: Int,
+  val isLocalDraft: Boolean = false)
 
 /** Read-only Progress data from the same authenticated Gateway session as Assistant. */
 class ProgressRepository(private val gateway: GatewaySession) {
@@ -69,6 +72,11 @@ class ProgressRepository(private val gateway: GatewaySession) {
   fun projectTasks(id: String): ProgressTaskPage {
     require(id.matches(Regex("[A-Za-z0-9_-]{1,128}"))) { "INVALID_PROJECT_ID" }
     return parseTasks(gateway.request("/api/tasks?projectId=$id&limit=30&offset=0"))
+  }
+
+  fun projectSessions(id: String): List<ProgressProjectSession> {
+    require(id.matches(Regex("[A-Za-z0-9_-]{1,128}"))) { "INVALID_PROJECT_ID" }
+    return parseProjectSessions(gateway.request("/api/projects/$id/sessions?limit=100"))
   }
 
   fun createTask(title: String, body: String, projectId: String, idempotencyKey: String): ProgressTask {
@@ -135,6 +143,23 @@ class ProgressRepository(private val gateway: GatewaySession) {
       }
     }
 
+    fun parseProjectSessions(raw: String): List<ProgressProjectSession> {
+      val root = JSONObject(raw)
+      require(root.getBoolean("ok")) { "INVALID_PROJECT_SESSIONS" }
+      val rows = root.getJSONArray("sessions")
+      require(rows.length() <= 100) { "INVALID_PROJECT_SESSIONS" }
+      return (0 until rows.length()).map { rows.getJSONObject(it) }
+        .filter { it.optJSONObject("customData")?.optString("origin") != "task" }
+        .map { row ->
+          val id = row.getString("key")
+          val count = row.getInt("messageCount")
+          require(id.matches(Regex("[0-9a-fA-F-]{36}")) && count >= 0) { "INVALID_PROJECT_SESSIONS" }
+          val title = sequenceOf("displayName", "name", "title")
+            .mapNotNull { row.optString(it).takeIf(String::isNotBlank) }.firstOrNull() ?: id
+          ProgressProjectSession(id, title.take(160), count)
+        }
+    }
+
     fun parseTaskCreate(raw: String): ProgressTask {
       val root = JSONObject(raw)
       require(root.getBoolean("ok")) { "INVALID_PROGRESS_TASK_CREATE" }
@@ -149,8 +174,12 @@ class ProgressRepository(private val gateway: GatewaySession) {
       require(id.matches(Regex("[A-Za-z0-9_-]{1,128}")) && name.isNotBlank()) {
         "INVALID_PROGRESS_PROJECT"
       }
+      val mode = row.optString("executionMode").ifBlank { "local_checkout" }
+      require(mode in setOf("local_checkout", "managed_worktree")) { "INVALID_PROGRESS_PROJECT" }
       return ProgressProject(id, name.take(160), row.optString("description").take(4000),
-        row.optString("status"), row.optString("brief").take(4000))
+        row.optString("status"), row.optString("brief").take(4000),
+        row.optString("defaultAgentId").takeIf { !row.isNull("defaultAgentId") && it.isNotBlank() },
+        row.optString("workspaceRoot").takeIf { !row.isNull("workspaceRoot") && it.isNotBlank() }, mode)
     }
 
     fun parseHome(raw: String): ProgressHome {

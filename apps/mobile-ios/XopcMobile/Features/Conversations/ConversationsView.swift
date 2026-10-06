@@ -5,6 +5,7 @@ struct ConversationsView: View {
     let onSelect: (ConversationSummary) -> Void
     let onStartNew: () -> Void
     let onOpenSettings: () -> Void
+    var bottomInset: CGFloat = 0
 
     @Environment(\.locale) private var locale
 
@@ -65,6 +66,7 @@ struct ConversationsView: View {
                         }
                     }
                     .listStyle(.plain)
+                    .contentMargins(.bottom, bottomInset, for: .scrollContent)
                     .scrollContentBackground(.hidden)
                     .background(Color(uiColor: .systemGroupedBackground))
                     .refreshable {
@@ -75,6 +77,7 @@ struct ConversationsView: View {
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("对话")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("新建对话", systemImage: "plus", action: onStartNew)

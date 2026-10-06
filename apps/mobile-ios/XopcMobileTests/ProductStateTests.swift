@@ -194,6 +194,46 @@ struct ProductStateTests {
         #expect(renamed.baseURL == profile.baseURL)
     }
 
+    @Test func removingLastGatewayDoesNotRecreateLegacyProfile() throws {
+        let suite = "xopc-gateway-remove-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let url = try #require(URL(string: "https://gateway.example.test"))
+        let profile = GatewayProfile(id: "gateway-remove-test", name: "Gateway", baseURL: url)
+        defaults.set(try JSONEncoder().encode([profile]), forKey: "gateway.profiles")
+        defaults.set(profile.id, forKey: "gateway.activeProfile")
+        defaults.set(url.absoluteString, forKey: "gateway.baseURL")
+        let store = GatewayConfigurationStore(defaults: defaults, tokenStore: MemoryGatewayTokenStore())
+
+        try store.removeProfile(id: profile.id)
+
+        #expect(store.loadProfiles().isEmpty)
+        #expect(store.activeProfileID() == nil)
+        #expect(store.load().baseURL.absoluteString == "http://127.0.0.1:18790")
+    }
+
+    @Test func changingPairedRouteKeepsGatewayProfileIdentity() throws {
+        let suite = "xopc-gateway-route-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = GatewayConfigurationStore(defaults: defaults, tokenStore: MemoryGatewayTokenStore())
+        let original = try store.saveProfile(
+            name: "Work Gateway",
+            configuration: GatewayConfiguration(baseURL: #require(URL(string: "https://first.example.test")), token: "first")
+        )
+        _ = try store.activateProfile(id: original.id)
+
+        let updated = try store.updateProfile(
+            id: original.id, name: original.name,
+            configuration: GatewayConfiguration(baseURL: #require(URL(string: "https://second.example.test")), token: "second")
+        )
+
+        #expect(store.loadProfiles().count == 1)
+        #expect(updated.id == original.id)
+        #expect(store.load().baseURL == updated.baseURL)
+        #expect(store.load().token == "second")
+    }
+
     @Test func homeRoutesRejectExternalLinksAndResolveKnownDetails() {
         #expect(HomeOpenRoute(href: "/tasks/task-1") == .task("task-1"))
         #expect(HomeOpenRoute(href: "/automations?automation=automation-1") == .automation("automation-1"))
@@ -278,5 +318,22 @@ private extension Data {
         append(UInt8(value >> 8 & 0xFF))
         append(UInt8(value >> 16 & 0xFF))
         append(UInt8(value >> 24))
+    }
+}
+
+@MainActor
+private final class MemoryGatewayTokenStore: GatewayTokenStoring {
+    private var values: [String: String] = [:]
+
+    func load(account: String) -> String? {
+        values[account]
+    }
+
+    func save(_ token: String, account: String) {
+        if token.isEmpty {
+            values.removeValue(forKey: account)
+        } else {
+            values[account] = token
+        }
     }
 }

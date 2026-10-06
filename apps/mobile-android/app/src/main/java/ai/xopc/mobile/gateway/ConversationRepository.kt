@@ -34,7 +34,11 @@ data class ContextSource(val id: String, val title: String, val unavailable: Boo
 data class ContextEnvironment(val kind: String, val rootPath: String, val available: Boolean, val branch: String?)
 data class ConversationContext(val conversationId: String, val project: ContextWorkItem?, val task: ContextWorkItem?,
   val environment: ContextEnvironment?, val sources: List<ContextSource>, val sourcesHasMore: Boolean,
-  val unavailableSections: List<String>, val workingDirectoryLocked: Boolean)
+  val unavailableSections: List<String>, val workingDirectoryLocked: Boolean,
+  val effectiveWorkspacePath: String = "")
+data class ContextEnvironmentOptions(val localAvailable: Boolean, val worktreeUnavailableReason: String?)
+data class ContextDirectory(val name: String, val absolutePath: String, val isDirectory: Boolean)
+data class ContextDirectoryPage(val currentPath: String, val parentPath: String?, val entries: List<ContextDirectory>)
 data class TaskWelcomeInfo(val taskTitle: String, val phase: String, val operationalState: String,
   val attentionSummary: String?, val recentFailure: String?, val nextAction: String?)
 data class ProjectWelcomeInfo(val projectName: String, val blockedReason: String?,
@@ -75,6 +79,8 @@ data class LocalConversationDraft(
   val model: String,
   val thinkingLevel: String,
   val createdAt: String,
+  val projectId: String? = null,
+  val executionMode: String? = null,
 )
 
 /** Assistant and Conversations read the same Gateway-backed conversation data. */
@@ -112,6 +118,19 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
     return (attachmentStore ?: throw IllegalStateException("NO_ATTACHMENT_STORE"))
       .import(gatewayId, conversationId, uri)
+  }
+
+  fun addComposerVoice(gatewayId: String, conversationId: String, bytes: ByteArray,
+    durationSeconds: Int): ChatAttachment {
+    require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
+    return (attachmentStore ?: throw IllegalStateException("NO_ATTACHMENT_STORE"))
+      .addVoiceBytes(gatewayId, conversationId, bytes, durationSeconds)
+  }
+
+  fun addComposerFile(gatewayId: String, conversationId: String, file: ManagedFile): ChatAttachment {
+    require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
+    return (attachmentStore ?: throw IllegalStateException("NO_ATTACHMENT_STORE"))
+      .addWorkspaceFile(gatewayId, conversationId, file)
   }
 
   fun removeComposerAttachment(gatewayId: String, conversationId: String, attachmentId: String) {
@@ -219,10 +238,17 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
   }
 
   @Synchronized
-  fun createDraft(agentId: String = "main"): LocalConversationDraft {
+  fun createDraft(agentId: String = "main", projectId: String? = null,
+    executionMode: String? = null): LocalConversationDraft {
     val gatewayId = gateway.currentProfile()?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
     require(agentId.isNotBlank()) { "INVALID_AGENT_ID" }
-    val draft = LocalConversationDraft(UUID.randomUUID().toString(), agentId, "", "off", Instant.now().toString())
+    require(projectId == null || projectId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) { "INVALID_PROJECT_ID" }
+    require(executionMode == null || projectId != null &&
+      executionMode in setOf("local_checkout", "managed_worktree")) { "INVALID_EXECUTION_MODE" }
+    val resolvedMode = if (projectId != null && executionMode == null)
+      defaultProjectExecutionMode(projectId) else executionMode
+    val draft = LocalConversationDraft(UUID.randomUUID().toString(), agentId, "", "off", Instant.now().toString(),
+      projectId, resolvedMode)
     val store = pendingStore ?: throw IllegalStateException("NO_SECURE_STORE")
     store.write(draftKey(gatewayId, draft.conversationId), draftJson(draft).toString())
     val ids = draftIds(gatewayId).filterNot { it == draft.conversationId }
@@ -237,7 +263,36 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     val json = JSONObject(raw)
     require(json.getString("conversationId") == conversationId) { "INVALID_DRAFT" }
     return LocalConversationDraft(conversationId, json.getString("agentId"), json.getString("model"),
-      json.getString("thinkingLevel"), json.getString("createdAt"))
+      json.getString("thinkingLevel"), json.getString("createdAt"),
+      if (json.isNull("projectId")) null else json.optString("projectId").takeIf(String::isNotBlank),
+      if (json.isNull("executionMode")) null else json.optString("executionMode").takeIf(String::isNotBlank))
+  }
+
+  fun projectDrafts(projectId: String): List<LocalConversationDraft> {
+    require(projectId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) { "INVALID_PROJECT_ID" }
+    val gatewayId = gateway.currentProfile()?.gatewayId ?: return emptyList()
+    return draftIds(gatewayId).mapNotNull(::draft).filter { it.projectId == projectId }
+  }
+
+  fun materializeForVoice(conversationId: String) = materialize(conversationId, "voice")
+
+  fun materialize(conversationId: String, purpose: String) {
+    require(purpose in setOf("voice", "session_resources")) { "INVALID_MATERIALIZATION_PURPOSE" }
+    val existing = draft(conversationId) ?: return
+    val gatewayId = gateway.currentProfile()?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
+    val ready = if (existing.model.isBlank()) prepareDraftModel(conversationId) else existing
+    val creation = JSONObject().put("agentId", ready.agentId).put("projectId", ready.projectId ?: JSONObject.NULL)
+      .put("execution", ready.executionMode?.let { JSONObject().put("mode", it) } ?: JSONObject.NULL)
+      .put("temporary", false).put("model", ready.model)
+      .put("thinkingLevel", ready.thinkingLevel)
+    val body = JSONObject().put("commandId", conversationId).put("purpose", purpose)
+      .put("creation", creation)
+    val raw = gateway.request("/api/sessions/$conversationId/materialize", "POST", body.toString())
+    val receipt = JSONObject(raw).getJSONObject("payload").getJSONObject("receipt")
+    require(receipt.getString("conversationId") == conversationId &&
+      receipt.getString("clientMessageId") == conversationId &&
+      receipt.getString("lifecycle") == "ready") { "INVALID_VOICE_MATERIALIZATION" }
+    removeDraft(conversationId, gatewayId)
   }
 
   @Synchronized
@@ -295,6 +350,21 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
   private fun draftJson(draft: LocalConversationDraft) = JSONObject()
     .put("conversationId", draft.conversationId).put("agentId", draft.agentId).put("model", draft.model)
     .put("thinkingLevel", draft.thinkingLevel).put("createdAt", draft.createdAt)
+    .put("projectId", draft.projectId ?: JSONObject.NULL)
+    .put("executionMode", draft.executionMode ?: JSONObject.NULL)
+
+  private fun defaultProjectExecutionMode(projectId: String): String? {
+    val result = JSONObject(gateway.request("/api/projects/${encode(projectId)}"))
+    require(result.optBoolean("ok")) { "INVALID_PROJECT" }
+    val project = result.getJSONObject("project")
+    require(project.getString("id") == projectId && project.getString("name").isNotBlank()) {
+      "INVALID_PROJECT"
+    }
+    if (project.isNull("workspaceRoot") || project.optString("workspaceRoot").isBlank()) return null
+    val mode = project.optString("executionMode").ifBlank { "local_checkout" }
+    require(mode in setOf("local_checkout", "managed_worktree")) { "INVALID_EXECUTION_MODE" }
+    return mode
+  }
 
   fun list(search: String = "", offset: Int = 0, limit: Int = 20): ConversationPage {
     require(offset >= 0 && limit in 1..100)
@@ -402,11 +472,57 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
 
   fun context(conversationId: String): ConversationContext {
     require(conversationId.matches(Regex("[0-9a-fA-F-]{36}"))) { "INVALID_CONVERSATION_ID" }
-    if (draft(conversationId) != null) return ConversationContext(conversationId, null, null, null,
-      emptyList(), false, emptyList(), true)
+    draft(conversationId)?.let { local ->
+      val project = local.projectId?.let { id ->
+        val response = JSONObject(gateway.request("/api/projects/${encode(id)}"))
+        val item = response.getJSONObject("project")
+        require(item.getString("id") == id) { "INVALID_PROJECT" }
+        ContextWorkItem(id, item.getString("name")) to item.optString("workspaceRoot")
+      }
+      val environment = local.executionMode?.let { mode ->
+        ContextEnvironment(mode, project?.second.orEmpty(), !project?.second.isNullOrBlank(), null)
+      }
+      return ConversationContext(conversationId, project?.first, null, environment,
+        emptyList(), false, emptyList(), true)
+    }
     val summary = gateway.request("/api/sessions/$conversationId/context-summary")
     val config = gateway.request("/api/sessions/$conversationId/agent-config")
     return parseContext(conversationId, summary, config)
+  }
+
+  fun contextEnvironmentOptions(projectId: String): ContextEnvironmentOptions {
+    require(projectId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) { "INVALID_PROJECT_ID" }
+    val root = JSONObject(gateway.request("/api/projects/${encode(projectId)}/environment-options"))
+    require(root.optBoolean("ok")) { "INVALID_ENVIRONMENT_OPTIONS" }
+    val options = root.getJSONObject("options")
+    return ContextEnvironmentOptions(options.optBoolean("localAvailable"),
+      options.optString("worktreeUnavailableReason").takeIf(String::isNotBlank))
+  }
+
+  fun contextDirectories(path: String): ContextDirectoryPage {
+    require(path.length <= 4096) { "INVALID_DIRECTORY" }
+    val root = JSONObject(gateway.request("/api/host/fs/list" +
+      if (path.isBlank()) "" else "?path=${encode(path)}"))
+    require(root.optBoolean("ok")) { "INVALID_DIRECTORIES" }
+    val payload = root.getJSONObject("payload")
+    val rows = payload.getJSONArray("entries")
+    require(rows.length() <= 2000) { "INVALID_DIRECTORIES" }
+    return ContextDirectoryPage(payload.optString("currentPath"),
+      payload.optString("parentPath").takeIf(String::isNotBlank),
+      (0 until rows.length()).map { index ->
+        val item = rows.getJSONObject(index)
+        ContextDirectory(item.getString("name"), item.getString("absolutePath"), item.optBoolean("isDirectory"))
+      })
+  }
+
+  fun setContextDirectory(conversationId: String, path: String) {
+    require(conversationId.matches(Regex("[0-9a-fA-F-]{36}")) && path.isNotBlank() && path.length <= 4096) {
+      "INVALID_DIRECTORY"
+    }
+    require(draft(conversationId) == null) { "LOCAL_DRAFT" }
+    val response = JSONObject(gateway.request("/api/sessions/$conversationId/agent-config", "PATCH",
+      JSONObject().put("workingDirectory", path).toString()))
+    require(response.optBoolean("ok")) { "DIRECTORY_UPDATE_FAILED" }
   }
 
   fun taskWelcome(task: ContextWorkItem): TaskWelcomeInfo =
@@ -488,12 +604,18 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       }
       require(parsePendingInput(saved.toString()).attachments == attachments) { "INPUT_PENDING" }
     }
-    val command = saved ?: (draft(conversationId)?.let { local ->
+    val command = saved ?: (draft(conversationId)?.let { existing ->
+      val local = if (existing.projectId != null && existing.executionMode == null) {
+        existing.copy(executionMode = defaultProjectExecutionMode(existing.projectId)).also {
+          pendingStore?.write(draftKey(profile.gatewayId, conversationId), draftJson(it).toString())
+        }
+      } else existing
       require(local.model.isNotBlank()) { "MODEL_UNAVAILABLE" }
       JSONObject().put("kind", "start").put("clientMessageId", UUID.randomUUID().toString())
         .put("localAttachments", localAttachments)
-        .put("creation", JSONObject().put("agentId", local.agentId).put("projectId", JSONObject.NULL)
-          .put("execution", JSONObject.NULL).put("temporary", false).put("model", local.model)
+        .put("creation", JSONObject().put("agentId", local.agentId).put("projectId", local.projectId ?: JSONObject.NULL)
+          .put("execution", local.executionMode?.let { JSONObject().put("mode", it) } ?: JSONObject.NULL)
+          .put("temporary", false).put("model", local.model)
           .put("thinkingLevel", local.thinkingLevel))
         .put("input", JSONObject().put("content", content)
           .apply { if (refs.isNotEmpty()) put("contextRefs", contextRefs) })
@@ -826,7 +948,8 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       val unavailable = (0 until sections.length()).map { sections.getString(it) }
       val config = JSONObject(configRaw).getJSONObject("payload")
       return ConversationContext(conversationId, workItem("project"), workItem("task"), environment,
-        sources, summary.getBoolean("sourcesHasMore"), unavailable, config.optBoolean("workingDirectoryLocked"))
+        sources, summary.getBoolean("sourcesHasMore"), unavailable, config.optBoolean("workingDirectoryLocked"),
+        config.optString("effectiveWorkspacePath"))
     }
 
     fun parseTaskWelcome(taskId: String, raw: String): TaskWelcomeInfo {

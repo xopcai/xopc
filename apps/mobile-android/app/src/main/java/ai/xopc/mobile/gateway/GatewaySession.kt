@@ -17,6 +17,7 @@ data class GatewayProfile(
 )
 data class GatewayProbe(val gatewayId: String, val status: String, val latencyMs: Long,
   val routeUrl: String, val checkedAt: Long)
+data class VoiceGatewayAuth(val origin: String, val bearer: String)
 private data class GatewayCatalog(val profiles: List<GatewayProfile>, val activeGatewayId: String)
 
 /** One verified Gateway session shared by Assistant and Conversations. All calls are blocking: use an IO dispatcher. */
@@ -26,6 +27,28 @@ class GatewaySession(
   private val identity: DeviceIdentity = DeviceIdentity(),
   private val store: AndroidSecureStore = AndroidSecureStore(context),
 ) {
+  @Synchronized
+  fun voiceAuth(): VoiceGatewayAuth {
+    val current = profile ?: throw IllegalStateException("NOT_PAIRED")
+    val route = current.routes.firstOrNull { it.id == current.activeRouteId }
+      ?: throw IllegalStateException("NO_VERIFIED_ROUTE")
+    verifyRoute(current, route)
+    return VoiceGatewayAuth(route.url, token())
+  }
+
+  fun uploadNoteMedia(path: String, name: String, mimeType: String, bytes: ByteArray,
+    mutationId: String, durationSeconds: Int? = null): String {
+    val auth = voiceAuth()
+    return try {
+      http.uploadMultipart(auth.origin, path, auth.bearer, name, mimeType, bytes,
+        mutationId, durationSeconds)
+    } catch (failure: GatewayHttpException) {
+      if (failure.status != 401) throw failure
+      val refreshed = synchronized(this) { accessToken = null; voiceAuth() }
+      http.uploadMultipart(refreshed.origin, path, refreshed.bearer, name, mimeType, bytes,
+        mutationId, durationSeconds)
+    }
+  }
   @Volatile private var profile: GatewayProfile? = null
   @Volatile private var accessToken: String? = null
   @Volatile private var accessExpiresAt: Long = 0
@@ -86,6 +109,26 @@ class GatewaySession(
       }
     }
     throw last
+  }
+
+  /** Generate a bounded speech segment without holding the session lock during playback generation. */
+  fun requestSpeech(text: String, language: String): ByteArray {
+    require(text.isNotBlank() && text.length <= 240) { "INVALID_SPEECH_TEXT" }
+    require(language == "zh-CN" || language == "en-US") { "INVALID_SPEECH_LANGUAGE" }
+    val (route, bearer) = synchronized(this) {
+      val current = profile ?: throw IllegalStateException("NOT_PAIRED")
+      val selected = current.routes.firstOrNull { it.id == current.activeRouteId }
+        ?: throw IllegalStateException("NO_VERIFIED_ROUTE")
+      verifyRoute(current, selected)
+      selected to token()
+    }
+    val body = JSONObject().put("text", text).put("language", language).toString()
+    return try { http.postBytes(route.url, "/api/voice/speech", body, bearer) }
+    catch (error: GatewayHttpException) {
+      if (error.status != 401) throw error
+      val refreshed = synchronized(this) { accessToken = null; token() }
+      http.postBytes(route.url, "/api/voice/speech", body, refreshed)
+    }
   }
 
   @Synchronized
@@ -294,12 +337,18 @@ class GatewaySession(
     var request = response.getJSONObject("request")
     while (request.getString("status") == "pending") {
       onConfirmationCode(request.getString("confirmationCode"))
-      if (System.currentTimeMillis() >= request.getLong("expiresAt")) throw IllegalStateException("PAIRING_EXPIRED")
+      if (System.currentTimeMillis() >= request.getLong("expiresAt")) {
+        store.remove("pairing")
+        throw IllegalStateException("PAIRING_EXPIRED")
+      }
       Thread.sleep(1_500)
       response = pairingRequest(invitation, journal, "status")
       request = response.getJSONObject("request")
     }
-    require(request.getString("status") in setOf("approved", "completed")) { "PAIRING_${request.getString("status").uppercase()}" }
+    if (request.getString("status") !in setOf("approved", "completed")) {
+      store.remove("pairing")
+      throw IllegalStateException("PAIRING_${request.getString("status").uppercase()}")
+    }
     response = pairingRequest(invitation, journal, "complete")
     request = response.getJSONObject("request")
     require(request.getString("status") == "completed") { "INVALID_PAIRING_RESPONSE" }
@@ -319,6 +368,14 @@ class GatewaySession(
     accessToken = null
     accessExpiresAt = 0
     return result
+  }
+
+  @Synchronized
+  fun cancelPairing() {
+    val journal = store.read("pairing")?.let(::JSONObject) ?: return
+    val invitation = PairingProtocol.readInvitation(journal.getString("link"), 0)
+    pairingRequest(invitation, journal, "cancel")
+    store.remove("pairing")
   }
 
   private fun probe(invitation: PairingInvitation): String {

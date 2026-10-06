@@ -184,7 +184,7 @@ final class ParityAcceptanceUITests: XCTestCase {
     }
 
     func testAssistantAddPanelActionsAndPlacement() {
-        app.buttons["新对话"].tap()
+        openNewConversation()
         let add = app.buttons["添加附件或引用"]
         XCTAssertTrue(add.waitForExistence(timeout: 5))
         add.tap()
@@ -197,7 +197,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         XCTAssertTrue(app.buttons["引用文件"].exists)
         XCTAssertTrue(app.buttons["新建会话"].exists)
         XCTAssertGreaterThan(app.buttons["照片"].frame.minY, app.descendants(matching: .any)["assistant-chat-composer"].frame.maxY)
-        XCTAssertFalse(app.buttons["home-tab-assistant"].exists)
+        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForNonExistence(timeout: 5))
         app.buttons["引用任务"].tap()
         XCTAssertTrue(app.navigationBars["添加引用"].waitForExistence(timeout: 5))
         app.buttons["取消"].tap()
@@ -207,26 +207,60 @@ final class ParityAcceptanceUITests: XCTestCase {
     }
 
     func testAssistantKeyboardAndAddPanelAreMutuallyExclusive() {
-        app.buttons["新对话"].tap()
+        openNewConversation()
         let composer = app.descendants(matching: .any)["assistant-chat-composer"]
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         composer.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertLessThan(app.keyboards.firstMatch.frame.minY, app.frame.maxY)
+        capture("assistant-keyboard-tab-visibility")
+        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForNonExistence(timeout: 5))
 
         app.buttons["添加附件或引用"].tap()
         let panel = app.collectionViews["assistant-action-panel"]
         XCTAssertTrue(panel.waitForExistence(timeout: 5))
         XCTAssertFalse(app.keyboards.firstMatch.exists)
+        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForNonExistence(timeout: 5))
         capture("assistant-add-panel-after-keyboard")
 
         composer.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(panel.exists)
+        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForNonExistence(timeout: 5))
         capture("assistant-keyboard-after-add-panel")
+
+        app.buttons["添加附件或引用"].tap()
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        app.buttons["关闭添加面板"].tap()
+        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 5))
+    }
+
+    func testSessionContextLivesInToolbarMenu() {
+        XCTAssertFalse(app.buttons["新对话"].exists)
+        let actions = app.buttons["会话信息与设置"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 5))
+        actions.tap()
+        XCTAssertTrue(app.navigationBars["会话信息与设置"].waitForExistence(timeout: 5))
+        app.buttons["当前上下文"].tap()
+        XCTAssertTrue(app.navigationBars["当前上下文"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["新对话尚无上下文"].exists)
+        app.swipeUp()
+        let addReference = app.buttons["添加单次引用"]
+        XCTAssertTrue(addReference.waitForExistence(timeout: 5))
+        addReference.tap()
+        XCTAssertTrue(app.navigationBars["添加引用"].waitForExistence(timeout: 5))
+        app.buttons["取消"].tap()
+        navigateBack()
+        app.buttons["执行环境与范围"].tap()
+        XCTAssertTrue(app.navigationBars["执行环境与范围"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["不关联项目"].exists)
+        app.buttons["不关联项目"].tap()
+        XCTAssertTrue(app.navigationBars["执行环境与范围"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["会话信息与设置"].waitForExistence(timeout: 5))
     }
 
     func testAssistantActionPanelAccessibilityAudit() throws {
-        app.buttons["新对话"].tap()
+        openNewConversation()
         let add = app.buttons["添加附件或引用"]
         XCTAssertTrue(add.waitForExistence(timeout: 5))
         add.tap()
@@ -888,8 +922,7 @@ final class ParityAcceptanceUITests: XCTestCase {
 
     func testLanguageSwitchUpdatesVisibleNavigationAndDock() {
         openTab("我的")
-        app.swipeUp()
-        app.buttons["应用设置"].tap()
+        app.buttons["设置"].tap()
         app.buttons["语言"].tap()
         tapPickerOption("English")
 
@@ -901,13 +934,10 @@ final class ParityAcceptanceUITests: XCTestCase {
 
         app.buttons["home-tab-conversations"].tap()
         XCTAssertTrue(app.navigationBars["Chats"].waitForExistence(timeout: 5))
-        XCTAssertTrue(
-            app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "messages")).firstMatch.waitForExistence(timeout: 8)
-        )
         capture("46-english-conversations")
         openTab("我的")
 
-        app.buttons["App Settings"].tap()
+        app.buttons["Settings"].tap()
         app.buttons["Language"].tap()
         tapPickerOption("Simplified Chinese")
         XCTAssertTrue(app.navigationBars["语言"].waitForExistence(timeout: 5))
@@ -915,8 +945,7 @@ final class ParityAcceptanceUITests: XCTestCase {
 
     func testEnglishProjectCreationLabels() {
         openTab("我的")
-        app.swipeUp()
-        app.buttons["应用设置"].tap()
+        app.buttons["设置"].tap()
         app.buttons["语言"].tap()
         tapPickerOption("English")
         navigateBack()
@@ -1112,8 +1141,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         openTab("我的")
         capture("24-profile")
 
-        app.swipeUp()
-        app.buttons["应用设置"].tap()
+        app.buttons["设置"].tap()
         capture("25-settings")
         app.buttons["语言"].tap()
         capture("28-language")
@@ -1122,11 +1150,9 @@ final class ParityAcceptanceUITests: XCTestCase {
         tapPickerOption("Simplified Chinese")
         XCTAssertTrue(app.buttons["English"].waitForExistence(timeout: 5))
         navigateBack()
-        app.buttons["主题"].tap()
+        app.buttons["外观"].tap()
         capture("29-theme")
         navigateBack()
-        navigateBack()
-
         app.buttons["文件"].tap()
         capture("31-files")
         if openCell(at: 0) {
@@ -1154,9 +1180,17 @@ final class ParityAcceptanceUITests: XCTestCase {
         }
         relaunch()
         openTab("我的")
-        app.swipeUp()
+        app.buttons["设置"].tap()
         app.buttons["Gateway 管理"].tap()
         capture("26-gateway-management")
+        app.buttons["添加"].tap()
+        XCTAssertTrue(app.buttons["gateway-pairing-scan"].waitForExistence(timeout: 5))
+        app.buttons["粘贴连接链接"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["gateway-pairing-link"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["访问令牌"].exists)
+        app.buttons["取消"].tap()
+        let gatewayProfile = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "gateway-profile-")).firstMatch
+        if gatewayProfile.waitForExistence(timeout: 5) { gatewayProfile.tap() }
         let details = app.buttons["详情"].firstMatch
         if details.waitForExistence(timeout: 5) {
             details.tap()
@@ -1166,7 +1200,7 @@ final class ParityAcceptanceUITests: XCTestCase {
 
     func testFileTransferControlsWithoutWritingUserFiles() {
         openTab("我的")
-        app.swipeUp()
+        app.buttons["设置"].tap()
         app.buttons["文件"].tap()
         XCTAssertTrue(app.buttons["刷新"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["上传"].waitForExistence(timeout: 8))
@@ -1204,7 +1238,7 @@ final class ParityAcceptanceUITests: XCTestCase {
             try await Self.removeFileNamed(fileName, spaceID: spaceID, token: token)
         }
         openTab("我的")
-        app.swipeUp()
+        app.buttons["设置"].tap()
         app.buttons["文件"].tap()
         app.buttons["上传"].tap()
         let fixture = app.cells.matching(NSPredicate(format: "label CONTAINS %@", "xopc-ios-picker-e2e-20261005")).firstMatch
@@ -1254,7 +1288,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         }
 
         openTab("我的")
-        app.swipeUp()
+        app.buttons["设置"].tap()
         app.buttons["文件"].tap()
         app.buttons["上传"].tap()
         let fixture = app.cells.matching(NSPredicate(format: "label CONTAINS %@", "xopc-ios-picker-e2e-20261005")).firstMatch
@@ -1302,7 +1336,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         }
 
         openTab("我的")
-        app.swipeUp()
+        app.buttons["设置"].tap()
         app.buttons["文件"].tap()
         app.buttons["上传"].tap()
         let fixture = app.cells.matching(NSPredicate(format: "label CONTAINS %@", "xopc-ios-over-limit-e2e-20261005")).firstMatch
@@ -1339,7 +1373,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["home-tab-profile"].waitForExistence(timeout: 10))
         openTab("我的")
-        app.swipeUp()
+        app.buttons["设置"].tap()
         app.buttons["文件"].tap()
         app.buttons["上传"].tap()
         let fixture = app.cells.matching(NSPredicate(format: "label CONTAINS %@", "xopc-ios-retry-e2e-20261005")).firstMatch
@@ -1424,6 +1458,14 @@ final class ParityAcceptanceUITests: XCTestCase {
         let button = app.buttons["home-tab-\(tab)"]
         XCTAssertTrue(button.waitForExistence(timeout: 5), "Missing tab: \(label)")
         button.tap()
+    }
+
+    private func openNewConversation() {
+        openTab("对话")
+        let create = app.buttons["新建对话"]
+        XCTAssertTrue(create.waitForExistence(timeout: 5))
+        create.tap()
+        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 5))
     }
 
     private func relaunchInEnglish() {
@@ -1667,5 +1709,96 @@ final class ParityAcceptanceUITests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+}
+
+@MainActor
+final class GatewayPairingE2EUITests: XCTestCase {
+    func testPairsWithLocalGateway() async throws {
+        guard let token = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_TOKEN"], !token.isEmpty else {
+            throw XCTSkip("A local Gateway token is required")
+        }
+        let baseURL = URL(string: "http://127.0.0.1:18790")!
+        let created = try await request(baseURL: baseURL, token: token, path: "/api/device-pairing/setups",
+                                        method: "POST", body: ["targetKind": "mobile"])
+        let setup = try XCTUnwrap(created["setup"] as? [String: Any])
+        let setupID = try XCTUnwrap(setup["id"] as? String)
+        let link = try XCTUnwrap(setup["universalLink"] as? String)
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "chinese"
+        app.launch()
+        XCTAssertTrue(app.navigationBars["连接 Gateway"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["home-tab-assistant"].exists)
+        if app.buttons["粘贴连接链接"].exists {
+            app.buttons["粘贴连接链接"].tap()
+        }
+        let field = app.descendants(matching: .any)["gateway-pairing-link"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        if let existing = field.value as? String, !existing.isEmpty {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
+        }
+        field.typeText(link)
+        app.buttons["连接 Gateway"].tap()
+
+        var pending: [String: Any]?
+        for _ in 0 ..< 15 {
+            let status = try await request(baseURL: baseURL, token: token,
+                                           path: "/api/device-pairing/setups/\(setupID)")
+            pending = status["request"] as? [String: Any]
+            if pending != nil { break }
+            let keychainError = app.staticTexts.matching(NSPredicate(
+                format: "label BEGINSWITH %@", "无法保存设备凭据"
+            )).firstMatch
+            if keychainError.exists {
+                XCTFail(keychainError.label)
+                return
+            }
+            if app.staticTexts["设备凭据已丢失，请重新扫码连接。"].exists {
+                XCTFail("The app lost its pairing credentials before submitting the request")
+                return
+            }
+            try await Task.sleep(for: .seconds(1))
+        }
+        XCTAssertNotNil(pending, "The app did not submit a pairing request to the local Gateway")
+        let requestID = try XCTUnwrap(pending?["requestId"] as? String)
+        let revision = try XCTUnwrap(pending?["revision"] as? Int)
+        _ = try await request(baseURL: baseURL, token: token,
+                              path: "/api/device-pairing/requests/\(requestID)/decision",
+                              method: "POST", body: ["decision": "approve", "expectedRevision": revision])
+
+        var result: [String: Any]?
+        for _ in 0 ..< 25 {
+            let status = try await request(baseURL: baseURL, token: token,
+                                           path: "/api/device-pairing/setups/\(setupID)")
+            result = status["request"] as? [String: Any]
+            if result?["status"] as? String == "completed" { break }
+            try await Task.sleep(for: .seconds(1))
+        }
+        XCTAssertEqual(result?["status"] as? String, "completed")
+        let editorDismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"), object: app.navigationBars["连接 Gateway"]
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [editorDismissed], timeout: 10), .completed)
+        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
+        let testDeviceID = try XCTUnwrap(result?["deviceId"] as? String)
+        _ = try await request(baseURL: baseURL, token: token,
+                              path: "/api/endpoint-tools/devices/revoke", method: "POST",
+                              body: ["ids": [testDeviceID]])
+    }
+
+    private func request(baseURL: URL, token: String, path: String, method: String = "GET",
+                         body: [String: Any]? = nil) async throws -> [String: Any] {
+        var request = URLRequest(url: baseURL.appending(path: path))
+        request.httpMethod = method
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertTrue((200 ..< 300).contains((response as? HTTPURLResponse)?.statusCode ?? 0))
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 }

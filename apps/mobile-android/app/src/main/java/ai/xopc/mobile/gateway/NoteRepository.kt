@@ -2,13 +2,16 @@ package ai.xopc.mobile.gateway
 
 import java.net.URLEncoder
 import org.json.JSONObject
+import org.json.JSONArray
 
 data class NoteSummary(val id: String, val title: String, val snippet: String, val status: String,
   val kind: String, val updatedAt: Long, val pinned: Boolean, val tags: List<String>)
 data class NotePage(val items: List<NoteSummary>, val total: Int, val hasMore: Boolean)
 data class NoteDetail(val id: String, val title: String, val markdown: String, val status: String,
   val kind: String, val updatedAt: Long, val pinned: Boolean, val tags: List<String>,
-  val remoteVersion: Long?)
+  val remoteVersion: Long?, val attachments: List<NoteAttachment> = emptyList())
+data class NoteAttachment(val id: String, val type: String, val fileName: String,
+  val mimeType: String, val size: Long, val durationSeconds: Int?)
 data class NoteSyncResult(val note: NoteDetail, val conflict: Boolean)
 data class NoteMetadataPatch(val pinned: Boolean? = null, val status: String? = null,
   val tags: List<String>? = null)
@@ -17,9 +20,104 @@ data class NoteSnapshot(val noteId: String, val timestamp: Long, val trigger: St
   val title: String?, val markdown: String)
 data class NoteShare(val noteId: String, val id: String, val title: String, val url: String,
   val reachability: String, val hint: String, val expiresAt: String)
+data class NoteAiPreview(val patchId: String, val summary: String, val message: String,
+  val originalMarkdown: String, val proposedMarkdown: String, val title: String?,
+  val tags: List<String>?, val status: String?)
 
 /** Bounded, authenticated projection of the Gateway's Notes list and detail. */
 class NoteRepository(private val gateway: GatewaySession) {
+  fun addMedia(noteId: String, name: String, mimeType: String, bytes: ByteArray,
+    mutationId: String, durationSeconds: Int? = null): NoteAttachment {
+    requireValidId(noteId)
+    val raw = gateway.uploadNoteMedia("/api/notes/$noteId/media", name, mimeType, bytes,
+      mutationId, durationSeconds)
+    return parseAttachment(JSONObject(raw).getJSONObject("attachment"))
+  }
+
+  fun mediaBytes(noteId: String, attachmentId: String): ByteArray {
+    requireValidId(noteId); requireValidId(attachmentId)
+    return gateway.requestBytes("/api/notes/$noteId/media/$attachmentId")
+  }
+  fun openConversation(id: String): String {
+    requireValidId(id)
+    val result = JSONObject(gateway.request("/api/notes/$id/chat", "POST"))
+    val binding = result.getJSONObject("sourceBinding")
+    require(binding.getString("kind") == "note" && binding.getString("sourceId") == id &&
+      binding.getString("version").isNotBlank()) { "INVALID_NOTE_CONVERSATION" }
+    return result.getString("conversationId").also { require(it.isNotBlank()) }
+  }
+
+  fun previewAiEdit(note: NoteDetail, instruction: String, markdown: String): NoteAiPreview {
+    requireValidId(note.id)
+    require(instruction.isNotBlank() && instruction.length <= 10_000) { "INVALID_NOTE_INSTRUCTION" }
+    val context = JSONObject().put("type", "note").put("range", JSONObject()
+      .put("start", 0).put("end", markdown.length))
+    val body = JSONObject().put("instruction", instruction.trim()).put("markdown", markdown)
+      .put("context", context)
+    val result = JSONObject(gateway.request("/api/notes/${note.id}/ai/edit", "POST", body.toString()))
+    val patch = result.getJSONObject("patch")
+    val operations = patch.getJSONArray("operations")
+    require(operations.length() <= 100) { "INVALID_AI_PATCH" }
+    var proposed = markdown
+    val ranged = mutableListOf<JSONObject>()
+    for (index in 0 until operations.length()) {
+      val op = operations.getJSONObject(index)
+      if (op.getString("type") in setOf("replaceRange", "insertAt")) ranged += op
+    }
+    ranged.sortedByDescending { if (it.getString("type") == "insertAt") it.getInt("offset")
+      else it.getInt("from") }.forEach { op ->
+      val start = if (op.getString("type") == "insertAt") op.getInt("offset") else op.getInt("from")
+      val end = if (op.getString("type") == "insertAt") start else op.getInt("to")
+      require(start in 0..proposed.length && end in start..proposed.length) { "INVALID_AI_PATCH" }
+      proposed = proposed.replaceRange(start, end, op.getString("markdown"))
+    }
+    var title: String? = null
+    var tags: List<String>? = null
+    var status: String? = null
+    for (index in 0 until operations.length()) {
+      val op = operations.getJSONObject(index)
+      when (op.getString("type")) {
+        "appendSection" -> proposed = proposed.trimEnd() + "\n\n" + noteSection(op)
+        "prependSection" -> proposed = noteSection(op) + "\n\n" + proposed
+        "replaceSection" -> proposed = replaceNoteSection(proposed, op.getString("sectionId"),
+          op.getString("markdown"))
+        "updateMetadata" -> {
+          if (op.has("title")) title = op.getString("title")
+          if (op.has("tags")) tags = jsonTags(op.getJSONArray("tags"))
+          if (op.has("status")) status = op.getString("status").also {
+            require(it in statuses) { "INVALID_AI_PATCH" }
+          }
+        }
+        "replaceRange", "insertAt" -> Unit
+        else -> throw IllegalArgumentException("INVALID_AI_PATCH")
+      }
+    }
+    return NoteAiPreview(patch.getString("id"), patch.optString("summary"),
+      result.optString("message"), markdown, proposed, title, tags, status)
+  }
+
+  private fun noteSection(op: JSONObject): String =
+    (op.optString("heading").trim().takeIf(String::isNotEmpty)?.let { "## $it\n\n" } ?: "") +
+      op.getString("markdown").trim()
+
+  private fun replaceNoteSection(markdown: String, sectionId: String, replacement: String): String {
+    val target = sectionId.trim().lowercase()
+    if (target.isEmpty()) return markdown
+    val lines = markdown.split('\n').toMutableList()
+    val headings = Regex("^#{1,6}\\s+(.+)$")
+    val slug = { value: String -> value.trim().lowercase().replace(Regex("[^a-z0-9\\u4e00-\\u9fff]+"), "-")
+      .trim('-') }
+    val start = lines.indexOfFirst { line -> headings.find(line)?.groupValues?.get(1)?.let(slug) == target }
+    if (start < 0) return markdown
+    val end = (start + 1 until lines.size).firstOrNull { headings.matches(lines[it]) } ?: lines.size
+    lines.subList(start + 1, end).clear()
+    lines.addAll(start + 1, replacement.trim().split('\n'))
+    return lines.joinToString("\n")
+  }
+
+  private fun jsonTags(rows: JSONArray): List<String> = (0 until rows.length()).map(rows::getString).also {
+    require(it.size <= 100 && it.all { tag -> tag.isNotBlank() && tag.length <= 512 }) { "INVALID_AI_PATCH" }
+  }
   fun list(search: String = "", status: String = "", offset: Int = 0, limit: Int = 30): NotePage {
     require(search.length <= 4096 && status in setOf("", "inbox", "processed", "archived") &&
       offset >= 0 && limit in 1..100) { "INVALID_NOTE_QUERY" }
@@ -75,7 +173,7 @@ class NoteRepository(private val gateway: GatewaySession) {
   fun updateMetadata(note: NoteDetail, patch: NoteMetadataPatch): NoteDetail {
     requireValidId(note.id)
     val revision = requireNotNull(note.remoteVersion) { "MISSING_NOTE_REVISION" }
-    require(revision > 0 && listOf(patch.pinned, patch.status, patch.tags).count { it != null } == 1) {
+    require(revision > 0 && listOf(patch.pinned, patch.status, patch.tags).any { it != null }) {
       "INVALID_NOTE_METADATA_PATCH"
     }
     require(patch.status == null || patch.status in statuses) { "INVALID_NOTE_STATUS" }
@@ -151,8 +249,25 @@ class NoteRepository(private val gateway: GatewaySession) {
       require(markdown.length <= 2_000_000) { "INVALID_NOTE" }
       val revision = if (row.has("remoteVersion") && !row.isNull("remoteVersion"))
         row.getLong("remoteVersion").also { require(it > 0) { "INVALID_NOTE_REVISION" } } else null
+      val rows = row.optJSONArray("attachments") ?: JSONArray()
+      require(rows.length() <= 100) { "INVALID_NOTE_ATTACHMENTS" }
+      val attachments = (0 until rows.length()).map { parseAttachment(rows.getJSONObject(it)) }
       return NoteDetail(id, summary.title, markdown, summary.status, summary.kind,
-        summary.updatedAt, summary.pinned, summary.tags, revision)
+        summary.updatedAt, summary.pinned, summary.tags, revision, attachments)
+    }
+
+    private fun parseAttachment(row: JSONObject): NoteAttachment {
+      val id = row.getString("id")
+      val type = row.getString("type")
+      val fileName = row.getString("fileName")
+      val mimeType = row.getString("mimeType")
+      val size = row.getLong("size")
+      val duration = row.optInt("duration").takeIf { row.has("duration") }
+      require(id.matches(idPattern) && type in setOf("image", "video", "audio", "file") &&
+        fileName.isNotBlank() && fileName.length <= 255 && size in 1..(8L * 1024 * 1024) &&
+        mimeType.matches(Regex("[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+")) &&
+        (duration == null || duration in 1..600)) { "INVALID_NOTE_ATTACHMENT" }
+      return NoteAttachment(id, type, fileName, mimeType, size, duration)
     }
 
     fun parseHistory(raw: String): List<NoteHistoryEntry> {

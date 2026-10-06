@@ -5,6 +5,7 @@ import ai.xopc.mobile.gateway.ProgressItem
 import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.ProgressTask
 import ai.xopc.mobile.gateway.ProgressProject
+import ai.xopc.mobile.gateway.ProgressProjectSession
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -42,6 +44,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
@@ -68,6 +71,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onOpenTaskChat: (String) -> Unit,
   onSaveTask: (String, Int, String, String, String) -> Unit,
   onOpenChat: (String) -> Unit,
+  onCreateProjectChat: (String) -> Unit = {},
   onHomeAction: (ProgressHomeAction) -> Unit = {},
   onLoadAutomations: () -> Unit = {},
   onOpenAutomation: (String) -> Unit = {},
@@ -77,7 +81,9 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onUpdateAutomation: (String, String, String, String, String) -> Unit = { _, _, _, _, _ -> },
   onDeleteAutomation: (String, String) -> Unit = { _, _ -> },
   onAutomationRunAction: (String, String) -> Unit = { _, _ -> },
-  onTopLevelChange: (Boolean) -> Unit = {}) {
+  onTopLevelChange: (Boolean) -> Unit = {},
+  chatBusy: Boolean = false,
+  bottomChromeHeight: Dp = 0.dp) {
   var pendingHomeAction by remember(state.gatewayId) { mutableStateOf<ProgressHomeAction?>(null) }
   var page by rememberSaveable(state.gatewayId) { mutableStateOf("overview") }
   LaunchedEffect(page) { onTopLevelChange(page == "overview") }
@@ -272,13 +278,16 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
           Text(stringResource(R.string.progress_load_failed))
         }
         state.project != null -> ProgressProjectDetail(state.project, state.projectTasks,
+          state.projectSessions, state.projectSessionsLoading, state.projectSessionsError,
           onCreate = {
             createTitle = ""
             createBody = ""
             createProjectId = selectedProjectId.orEmpty()
             createStartedRevision = state.createSavedRevision
             page = "create"
-          }, onOpenTask = ::openTask)
+          }, onOpenTask = ::openTask, onOpenChat = onOpenChat,
+          onCreateChat = { onCreateProjectChat(state.project.id) }, chatBusy = chatBusy,
+          onRetrySessions = { selectedProjectId?.let(onOpenProject) })
       }
       "edit" -> ProgressTaskEditor(editTitle, { editTitle = it }, editBody, { editBody = it },
         editProject, { editProject = it }, editDirty, state.editBusy, state.editError) {
@@ -360,7 +369,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       else -> ProgressOverview(state, onRefreshHome, onOpenChat, { page = "tasks" },
         { page = "projects"; onLoadProjects() },
         { page = "automations"; onLoadAutomations() }, ::openAutomation, ::openTask,
-        { pendingHomeAction = it })
+        { pendingHomeAction = it }, bottomChromeHeight)
     }
   }
   if (discardAutomationOpen) AlertDialog(onDismissRequest = { discardAutomationOpen = false },
@@ -432,9 +441,10 @@ private fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
   onOpenChat: (String) -> Unit, onOpenTaskList: () -> Unit, onOpenProjects: () -> Unit,
   onOpenAutomations: () -> Unit, onOpenAutomation: (String) -> Unit,
   onOpenTask: (String) -> Unit,
-  onRequestAction: (ProgressHomeAction) -> Unit) {
-  LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp),
-    contentPadding = PaddingValues(bottom = 20.dp)) {
+  onRequestAction: (ProgressHomeAction) -> Unit, bottomChromeHeight: Dp) {
+  LazyColumn(modifier = Modifier.fillMaxSize().testTag("progress-overview-list"),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
+    contentPadding = PaddingValues(bottom = bottomChromeHeight + 20.dp)) {
     item {
       Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -529,7 +539,13 @@ private fun ProgressShortcut(label: Int, onClick: () -> Unit, modifier: Modifier
 private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
   onOpenProject: (String) -> Unit) {
   var search by rememberSaveable(state.gatewayId) { mutableStateOf("") }
-  val shown = state.projects.filter { it.name.contains(search.trim(), ignoreCase = true) }
+  var filter by rememberSaveable(state.gatewayId) { mutableStateOf("all") }
+  val matching = state.projects.filter { it.name.contains(search.trim(), ignoreCase = true) }
+  val shown = matching.filter { project -> when (filter) {
+    "active" -> project.status != "archived"
+    "archived" -> project.status == "archived"
+    else -> true
+  } }
   Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       OutlinedTextField(value = search, onValueChange = { search = it },
@@ -537,6 +553,17 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
         placeholder = { Text(stringResource(R.string.progress_search_projects)) }, singleLine = true)
       TextButton(onClick = onRefresh, enabled = !state.projectsLoading,
         modifier = Modifier.testTag("progress-project-refresh")) { Text(stringResource(R.string.progress_refresh)) }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      FilterChip(selected = filter == "all", onClick = { filter = "all" },
+        modifier = Modifier.testTag("progress-project-filter-all"),
+        label = { Text("${stringResource(R.string.progress_filter_all)} ${matching.size}") })
+      FilterChip(selected = filter == "active", onClick = { filter = "active" },
+        modifier = Modifier.testTag("progress-project-filter-active"),
+        label = { Text("${stringResource(R.string.progress_project_filter_active)} ${matching.count { it.status != "archived" }}") })
+      FilterChip(selected = filter == "archived", onClick = { filter = "archived" },
+        modifier = Modifier.testTag("progress-project-filter-archived"),
+        label = { Text("${stringResource(R.string.progress_project_filter_archived)} ${matching.count { it.status == "archived" }}") })
     }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
       if (state.projectsLoading && state.projects.isEmpty()) item {
@@ -553,7 +580,8 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
           modifier = Modifier.fillMaxWidth().testTag("progress-project-${project.id}")) {
           Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(project.name, style = MaterialTheme.typography.titleMedium)
-            Text(project.status, style = MaterialTheme.typography.bodySmall,
+            Text(projectStatusLabel(project.status), modifier = Modifier.testTag("progress-project-status-${project.id}"),
+              style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant)
             val summary = project.brief.ifBlank { project.description }
             if (summary.isNotBlank()) Text(summary, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -566,20 +594,70 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
 
 @Composable
 private fun ProgressProjectDetail(project: ProgressProject, tasks: List<ProgressTask>,
-  onCreate: () -> Unit, onOpenTask: (String) -> Unit) {
+  sessions: List<ProgressProjectSession>, sessionsLoading: Boolean, sessionsError: Boolean,
+  onCreate: () -> Unit, onOpenTask: (String) -> Unit, onOpenChat: (String) -> Unit,
+  onCreateChat: () -> Unit, chatBusy: Boolean,
+  onRetrySessions: () -> Unit) {
+  var section by rememberSaveable(project.id) { mutableStateOf("overview") }
   LazyColumn(modifier = Modifier.fillMaxSize().testTag("progress-project-detail"),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     item {
       Card {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           Text(project.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-          Text(project.status, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          Text(projectStatusLabel(project.status), modifier = Modifier.testTag("progress-project-detail-status"),
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
           Text(project.brief.ifBlank { project.description }.ifBlank {
             stringResource(R.string.progress_project_no_description)
           })
         }
       }
     }
+    item {
+      Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = section == "overview", onClick = { section = "overview" },
+          modifier = Modifier.testTag("progress-project-tab-overview"),
+          label = { Text(stringResource(R.string.progress_project_overview)) })
+        FilterChip(selected = section == "sessions", onClick = { section = "sessions" },
+          modifier = Modifier.testTag("progress-project-tab-sessions"),
+          label = { Text("${stringResource(R.string.tab_conversations)} ${sessions.size}") })
+        FilterChip(selected = section == "tasks", onClick = { section = "tasks" },
+          modifier = Modifier.testTag("progress-project-tab-tasks"),
+          label = { Text("${stringResource(R.string.progress_tasks)} ${tasks.size}") })
+      }
+    }
+    if (section == "overview" || section == "sessions") {
+      item {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+          ProgressSectionTitle(R.string.tab_conversations)
+          TextButton(onClick = onCreateChat, enabled = !chatBusy,
+            modifier = Modifier.testTag("progress-project-new-chat")) {
+            Text(stringResource(R.string.assistant_new_conversation))
+          }
+        }
+      }
+      if (sessionsLoading) item { CircularProgressIndicator(modifier = Modifier.testTag("progress-project-sessions-loading")) }
+      else if (sessionsError) item {
+        OutlinedButton(onClick = onRetrySessions, modifier = Modifier.testTag("progress-project-sessions-retry")) {
+          Text(stringResource(R.string.progress_project_sessions_error))
+        }
+      }
+      else if (sessions.isEmpty()) item { Text(stringResource(R.string.progress_project_no_sessions)) }
+      items(if (section == "overview") sessions.take(3) else sessions, key = { "session-${it.id}" }) { session ->
+        Card(onClick = { onOpenChat(session.id) },
+          modifier = Modifier.fillMaxWidth().testTag("progress-project-session-${session.id}")) {
+          Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(if (session.isLocalDraft) stringResource(R.string.assistant_new_conversation) else session.title,
+              style = MaterialTheme.typography.titleMedium,
+              maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(R.string.progress_project_session_messages, session.messageCount),
+              color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+        }
+      }
+    }
+    if (section == "overview" || section == "tasks") {
     item {
       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         ProgressSectionTitle(R.string.progress_tasks)
@@ -589,7 +667,7 @@ private fun ProgressProjectDetail(project: ProgressProject, tasks: List<Progress
       }
     }
     if (tasks.isEmpty()) item { Text(stringResource(R.string.progress_project_no_tasks)) }
-    items(tasks, key = { it.id }) { task ->
+    items(if (section == "overview") tasks.take(3) else tasks, key = { "task-${it.id}" }) { task ->
       Card(onClick = { onOpenTask(task.id) },
         modifier = Modifier.fillMaxWidth().testTag("progress-project-task-${task.id}")) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -597,6 +675,7 @@ private fun ProgressProjectDetail(project: ProgressProject, tasks: List<Progress
           Text(progressPhaseLabel(task.phase), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
       }
+    }
     }
   }
 }
@@ -856,6 +935,20 @@ private fun ProgressTaskEditor(title: String, onTitleChange: (String) -> Unit,
     }
     if (busy) CircularProgressIndicator(modifier = Modifier.testTag("progress-edit-busy"))
   }
+}
+
+@Composable
+private fun projectStatusLabel(status: String): String {
+  val label = when (status) {
+    "active" -> R.string.progress_project_status_active
+    "planned" -> R.string.progress_project_status_planned
+    "paused" -> R.string.progress_project_status_paused
+    "completed" -> R.string.progress_project_status_completed
+    "cancelled" -> R.string.progress_project_status_cancelled
+    "archived" -> R.string.progress_project_status_archived
+    else -> return status
+  }
+  return stringResource(label)
 }
 
 @Composable

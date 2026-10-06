@@ -3,6 +3,82 @@ import Testing
 @testable import XopcMobile
 
 struct GatewayModelsTests {
+    @Test func decodesSessionContextRelations() throws {
+        let summary = try JSONDecoder().decode(ConversationContextResponse.self, from: Data(#"""
+        {"summary":{"conversationId":"session-1","work":{"project":{"id":"project-1","title":"Project"},
+          "delegatedTasks":[{"id":"task-1","title":"Review","phase":"active","runStatus":"running"}],
+          "delegatedTaskCount":1},"sources":[{"kind":"note","id":"note-1","title":"Plan",
+          "origins":[{"kind":"session"},{"kind":"recent"}]}],"sourcesHasMore":false,
+          "unavailableSections":[]}}
+        """#.utf8)).summary
+
+        #expect(summary.work.delegatedTaskCount == 1)
+        #expect(summary.work.delegatedTasks?.first?.title == "Review")
+        #expect(summary.sources.first?.kind == "note")
+        #expect(summary.sources.first?.origins?.map(\.kind) == ["session", "recent"])
+    }
+
+    @Test @MainActor func storesGatewayCredentialsInSimulatorKeychain() throws {
+        let account = "gateway-keychain-e2e-\(UUID().uuidString.lowercased())"
+        let store = SystemGatewayTokenStore()
+        defer { try? store.save("", account: account) }
+
+        try store.save("keychain-round-trip", account: account)
+        #expect(store.load(account: account) == "keychain-round-trip")
+        try store.save("keychain-updated", account: account)
+        #expect(store.load(account: account) == "keychain-updated")
+    }
+
+    @Test func decodesUserUnderstandingDashboardAndDetails() throws {
+        let summary = try JSONDecoder().decode(MobileUserSummary.self, from: Data(#"""
+        {"profile":{"callName":"小林","role":"设计师","pronouns":"","timezone":"Asia/Shanghai","locale":"zh"},
+         "suggestedCallName":"小林","settings":{"memoryEnabled":true,"showMemoryReferences":true,"sensitiveWritePolicy":"confirm"},
+         "counts":{"total":2,"explicit":1,"learned":1,"review":1,"workMemory":3},
+         "primaryFocus":{"title":"完成原型","desiredOutcome":"可测试"},
+         "goals":[{"id":"goal-1","title":"完成原型","desiredOutcome":"可测试","status":"active","targetAt":1791168000000,"isPrimary":true}],
+         "recent":[{"id":"assertion-1","statement":"喜欢简洁界面","kind":"preference","status":"active","authority":"user_explicit","confidence":1}],
+         "rules":[{"id":"rule-1","statement":"先展示草稿"}]}
+        """#.utf8))
+        #expect(summary.primaryFocus?.title == "完成原型")
+        #expect(summary.goals.first?.targetAt == 1_791_168_000_000)
+        #expect(summary.rules?.first?.statement == "先展示草稿")
+
+        let page = try JSONDecoder().decode(MobileUserAssertionPage.self, from: Data(#"""
+        {"items":[{"id":"assertion-1","statement":"喜欢简洁界面","kind":"preference","status":"active",
+          "authority":"user_explicit","confidence":0.9,"scope":{"type":"global"},"sources":[{"label":"对话"}]}],
+         "nextCursor":"next"}
+        """#.utf8))
+        #expect(page.items.first?.sources?.first?.label == "对话")
+        #expect(page.nextCursor == "next")
+    }
+
+    @Test func readsGatewayContractPairingInvitation() throws {
+        let link = "https://link.xopc.ai/c#BBEREREREUERgREREREREREHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHByIiIiIiIkIigiIiIiIiIiIJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCXDb2IABABtodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20"
+        let invitation = try GatewayPairingInvitation.parse(link)
+
+        #expect(invitation.pairingID == "11111111-1111-4111-8111-111111111111")
+        #expect(invitation.gatewayID == "22222222-2222-4222-8222-222222222222")
+        #expect(invitation.origins.map(\.absoluteString) == ["https://gateway.example.com"])
+        #expect(invitation.pairingToken.hasPrefix("xopc_pair_11111111-1111-4111-8111-111111111111_"))
+        #expect(throws: GatewayPairingError.self) {
+            try GatewayPairingInvitation.parse(link.replacingOccurrences(of: "https://link.xopc.ai/c#", with: "http://example.com/#"))
+        }
+    }
+
+    @Test func signsTheGatewayContractCanonicalPairingBody() throws {
+        let body: [String: Any] = [
+            "gatewayId": "gateway", "requestId": "request", "pairingToken": "token",
+            "timestamp": 123, "nonce": "nonce",
+            "device": [
+                "displayName": "iPhone", "platform": "ios",
+                "publicKeyJwk": ["kty": "EC", "crv": "P-256", "x": "x", "y": "y"]
+            ]
+        ]
+        let message = try GatewayPairingProof.message(action: "request", body: body)
+
+        #expect(message == "xopc-device-pairing-v3\nPOST\nrequest\n{\"device\":{\"displayName\":\"iPhone\",\"platform\":\"ios\",\"publicKeyJwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"x\",\"y\":\"y\"}},\"gatewayId\":\"gateway\",\"nonce\":\"nonce\",\"pairingToken\":\"token\",\"requestId\":\"request\",\"timestamp\":123}")
+    }
+
     @Test func decodesFileSpacesForNotesLibrary() throws {
         let data = Data(#"""
         { "spaces": [{

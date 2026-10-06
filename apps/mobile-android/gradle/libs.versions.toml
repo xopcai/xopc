@@ -17,6 +17,7 @@ lifecycleViewmodelNav3 = "2.10.0"
 okhttp = "5.3.0"
 zxing = "3.5.4"
 camerax = "1.6.2"
+commonmark = "0.30.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -47,6 +48,9 @@ zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
 androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
+commonmark-gfm-tables = { module = "org.commonmark:commonmark-ext-gfm-tables", version.ref = "commonmark" }
+commonmark-gfm-strikethrough = { module = "org.commonmark:commonmark-ext-gfm-strikethrough", version.ref = "commonmark" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }

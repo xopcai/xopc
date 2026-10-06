@@ -39,6 +39,22 @@ struct RealtimeVoiceCallView: View {
                 .foregroundStyle(call.errorCode == nil ? Color.secondary : Color.red)
                 .padding(.top, 8)
                 .accessibilityIdentifier("voice-call-status")
+            if call.phase == .connected, call.networkQuality != "good" {
+                Label(call.networkQuality == "critical" ? "网络较差，正在缓冲" : "网络波动",
+                      systemImage: "wifi.exclamationmark")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(.top, 5)
+            }
+            if call.phase == .connected, call.route != "system" {
+                Text(routeTitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+            if !call.activity.isEmpty {
+                Text(call.activity).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
             TimelineView(.periodic(from: call.startedAt, by: 1)) { context in
                 Text(elapsed(context.date))
                     .font(.caption.monospacedDigit())
@@ -84,6 +100,7 @@ struct RealtimeVoiceCallView: View {
                 }
                 .buttonStyle(.bordered)
                 .padding(.bottom, 24)
+                .disabled(call.taskCancelling)
             }
             HStack(spacing: 12) {
                 control("静音", image: call.muted ? "mic.slash.fill" : "mic", active: call.muted) {
@@ -137,6 +154,16 @@ struct RealtimeVoiceCallView: View {
             return "正在思考"
         }
         return "正在聆听"
+    }
+
+    private var routeTitle: LocalizedStringResource {
+        switch call.route {
+        case "speaker": "扬声器"
+        case "earpiece": "听筒"
+        case "bluetooth": "蓝牙"
+        case "headset": "耳机"
+        default: "系统音频"
+        }
     }
 
     private func elapsed(_ date: Date) -> String {
@@ -197,6 +224,7 @@ struct RealtimeVoiceCallView: View {
                         ForEach(clarification.choices, id: \.self) { choice in
                             Button(choice) { Task { await call.submitClarification(action: "answer", answer: choice) } }
                                 .buttonStyle(.bordered)
+                                .disabled(call.respondingToIntervention)
                         }
                     }
                 }
@@ -211,6 +239,7 @@ struct RealtimeVoiceCallView: View {
             HStack {
                 Button("交给助手决定") { Task { await call.submitClarification(action: "agent_decide") } }
                     .buttonStyle(.bordered)
+                    .disabled(call.respondingToIntervention)
                 Spacer()
                 Button("发送") {
                     let text = answer.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -219,7 +248,7 @@ struct RealtimeVoiceCallView: View {
                     answer = ""
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(call.respondingToIntervention || answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(14)
@@ -236,9 +265,11 @@ struct RealtimeVoiceCallView: View {
             HStack {
                 Button("拒绝") { Task { await call.respondToApproval(approved: false) } }
                     .buttonStyle(.bordered)
+                    .disabled(call.respondingToIntervention)
                 Spacer()
                 Button("批准") { Task { await call.respondToApproval(approved: true) } }
                     .buttonStyle(.borderedProminent)
+                    .disabled(call.respondingToIntervention)
             }
         }
         .padding(14)
@@ -261,7 +292,10 @@ struct RealtimeVoiceMiniBar: View {
                             .font(.subheadline.weight(.medium))
                             .lineLimit(1)
                         Text(AppLocalization.string(
-                            call.phase == .paused ? "通话已暂停 · 点击重试" : "通话进行中", locale: locale
+                            call.phase == .paused ? "通话已暂停 · 点击重试"
+                                : call.phase == .recovering ? "正在重新连接"
+                                : call.phase == .connecting ? "正在连接" : "通话进行中",
+                            locale: locale
                         ))
                         .font(.caption)
                         .foregroundStyle(.secondary)

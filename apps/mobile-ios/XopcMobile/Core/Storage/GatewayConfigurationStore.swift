@@ -5,13 +5,14 @@ import Security
 final class GatewayConfigurationStore {
     private let defaults: UserDefaults
     private let baseURLKey = "gateway.baseURL"
-    private let keychainService = "ai.xopc.xopc.gateway"
     private let keychainAccount = "access-token"
     private let profilesKey = "gateway.profiles"
     private let activeProfileKey = "gateway.activeProfile"
+    private let tokenStore: any GatewayTokenStoring
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, tokenStore: any GatewayTokenStoring = SystemGatewayTokenStore()) {
         self.defaults = defaults
+        self.tokenStore = tokenStore
     }
 
     func load() -> GatewayConfiguration {
@@ -88,6 +89,22 @@ final class GatewayConfigurationStore {
         return profile
     }
 
+    func updateProfile(id: String, name: String, configuration: GatewayConfiguration) throws -> GatewayProfile {
+        var profiles = loadProfiles()
+        guard let index = profiles.firstIndex(where: { $0.id == id }) else {
+            throw GatewayConfigurationStoreError.profileNotFound
+        }
+        let profile = GatewayProfile(id: id, name: name, baseURL: configuration.baseURL)
+        try saveToken(configuration.token, account: profileTokenAccount(id))
+        profiles[index] = profile
+        try persist(profiles)
+        if defaults.string(forKey: activeProfileKey) == id {
+            defaults.set(configuration.baseURL.absoluteString, forKey: baseURLKey)
+            try saveToken(configuration.token)
+        }
+        return profile
+    }
+
     func activateProfile(id: String) throws -> GatewayConfiguration {
         guard let profile = loadProfiles().first(where: { $0.id == id }) else {
             throw GatewayConfigurationStoreError.profileNotFound
@@ -116,14 +133,14 @@ final class GatewayConfigurationStore {
         var profiles = loadProfiles()
         profiles.removeAll { $0.id == id }
         try persist(profiles)
-        try saveToken("", account: profileTokenAccount(id))
-        if defaults.string(forKey: activeProfileKey) == id {
-            if let next = profiles.first {
-                _ = try activateProfile(id: next.id)
-            } else {
-                defaults.removeObject(forKey: activeProfileKey)
-            }
+        if profiles.isEmpty {
+            defaults.removeObject(forKey: activeProfileKey)
+            defaults.removeObject(forKey: baseURLKey)
+        } else if defaults.string(forKey: activeProfileKey) == id, let next = profiles.first {
+            _ = try activateProfile(id: next.id)
         }
+        try saveToken("", account: profileTokenAccount(id))
+        if profiles.isEmpty { try saveToken("") }
     }
 
     private func configuration(for profile: GatewayProfile) -> GatewayConfiguration {
@@ -143,7 +160,26 @@ final class GatewayConfigurationStore {
     }
 
     private func loadToken(account: String? = nil) -> String? {
-        var query = keychainIdentity(account: account ?? keychainAccount)
+        tokenStore.load(account: account ?? keychainAccount)
+    }
+
+    private func saveToken(_ token: String, account: String? = nil) throws {
+        try tokenStore.save(token, account: account ?? keychainAccount)
+    }
+}
+
+@MainActor
+protocol GatewayTokenStoring {
+    func load(account: String) -> String?
+    func save(_ token: String, account: String) throws
+}
+
+@MainActor
+struct SystemGatewayTokenStore: GatewayTokenStoring {
+    private let keychainService = "ai.xopc.xopc.gateway"
+
+    func load(account: String) -> String? {
+        var query = keychainIdentity(account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
@@ -155,8 +191,8 @@ final class GatewayConfigurationStore {
         return String(data: data, encoding: .utf8)
     }
 
-    private func saveToken(_ token: String, account: String? = nil) throws {
-        let identity = keychainIdentity(account: account ?? keychainAccount)
+    func save(_ token: String, account: String) throws {
+        let identity = keychainIdentity(account: account)
         if token.isEmpty {
             let status = SecItemDelete(identity as CFDictionary)
             guard status == errSecSuccess || status == errSecItemNotFound else {

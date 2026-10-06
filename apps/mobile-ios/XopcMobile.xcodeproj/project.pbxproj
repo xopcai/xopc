@@ -21,6 +21,7 @@
 		124B70EBED2EFABA81F75A48 /* ProjectTaskEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93BAAB9A5E492AC5DF693C5A /* ProjectTaskEditorView.swift */; };
 		14DF591B12C7D14CF991550D /* AssistantOptionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25DA3228471D55EE4704F260 /* AssistantOptionsView.swift */; };
 		18B2209050FDA67F7596E881 /* GatewayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C6E75BB052D95075AC66B64 /* GatewayClient.swift */; };
+		A12B34C56D78E90F12A34B56 /* GatewayPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12B34C56D78E90F12A34B57 /* GatewayPairing.swift */; };
 		19234BB7B3E0F96251717E8C /* MarkdownBlocksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794BD953FB93FEDE80CB2A00 /* MarkdownBlocksTests.swift */; };
 		1DBAA23BDF065B11F12B33C8 /* NoteAttachmentsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE37390D9DE228209D0D9C2 /* NoteAttachmentsSection.swift */; };
 		1E933A6E8068947AF05AC34C /* MessageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F870C2254E2430F6C2D9D077 /* MessageModels.swift */; };
@@ -97,7 +98,6 @@
 		D3ABAF2AEEAE08456E44B863 /* FeatureStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 390E698F139D6E95B996C88A /* FeatureStateTests.swift */; };
 		D8A742CC9B90AC33A3B16D87 /* AppLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8D791DF361327CBB69D5A7D /* AppLocalizationTests.swift */; };
 		DD51A4D23BB63E54D262EB58 /* QueuedInputsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52BAE7D015632E4519B92D8D /* QueuedInputsCard.swift */; };
-		DEADB3F7A35AF86641BE1146 /* ConnectionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9F8C86A1C0A9E30AC44BBA9 /* ConnectionSettingsView.swift */; };
 		DF78DCC6F1D9FBC363A4E81E /* TaskEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74B5BF8D4118453BB4A02656 /* TaskEditorView.swift */; };
 		E12625938BE53168F7CD29D3 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9329B786AE1D1FD018CE9DE /* MessageBubble.swift */; };
 		E948DEDC7561CA33FF750A31 /* RealtimeVoiceCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C60A2CB1866CC9F7F23E108 /* RealtimeVoiceCallView.swift */; };
@@ -177,6 +177,7 @@
 		626D1ED3CB8A067D90888730 /* ProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressView.swift; sourceTree = "<group>"; };
 		66D14A958D5D2CB04CF92AD4 /* PendingVoiceNoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingVoiceNoteStore.swift; sourceTree = "<group>"; };
 		6C6E75BB052D95075AC66B64 /* GatewayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayClient.swift; sourceTree = "<group>"; };
+		A12B34C56D78E90F12A34B57 /* GatewayPairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayPairing.swift; sourceTree = "<group>"; };
 		6D825661BEBDD6B5A541C267 /* ProjectCreationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCreationTests.swift; sourceTree = "<group>"; };
 		74B5BF8D4118453BB4A02656 /* TaskEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditorView.swift; sourceTree = "<group>"; };
 		794BD953FB93FEDE80CB2A00 /* MarkdownBlocksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownBlocksTests.swift; sourceTree = "<group>"; };
@@ -214,7 +215,6 @@
 		C5A904020C27A972B2AB0E31 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		C8F3C4A9808977FAC0A3DC5B /* GatewayModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayModelsTests.swift; sourceTree = "<group>"; };
 		C9329B786AE1D1FD018CE9DE /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
-		C9F8C86A1C0A9E30AC44BBA9 /* ConnectionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSettingsView.swift; sourceTree = "<group>"; };
 		CC3AE6C51A0F9DED9CB7E227 /* GatewayClient+Messaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+Messaging.swift"; sourceTree = "<group>"; };
 		D04AB488F9AD240DC800C567 /* AutomationRunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationRunDetailView.swift; sourceTree = "<group>"; };
 		D13D27FE4A5FEC485141F446 /* ChatImageSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatImageSource.swift; sourceTree = "<group>"; };
@@ -313,6 +313,7 @@
 			children = (
 				8FDDA0C2E058A5B28288921F /* ChatImageLoader.swift */,
 				6C6E75BB052D95075AC66B64 /* GatewayClient.swift */,
+				A12B34C56D78E90F12A34B57 /* GatewayPairing.swift */,
 				5A21ADCB00C6EC5E7859AE32 /* GatewayClient+Conversation.swift */,
 				CC3AE6C51A0F9DED9CB7E227 /* GatewayClient+Messaging.swift */,
 				DF04AD3268C6808CA568CBAB /* GatewayClient+Products.swift */,
@@ -393,7 +394,6 @@
 			isa = PBXGroup;
 			children = (
 				F47BE78FE0529BB686EDBC64 /* AppPreferencesView.swift */,
-				C9F8C86A1C0A9E30AC44BBA9 /* ConnectionSettingsView.swift */,
 				945CE29DD9EAD63F09B42935 /* GatewayProfilesView.swift */,
 			);
 			path = Settings;
@@ -619,7 +619,6 @@
 				2CFC93707DB58FC6F2A706B4 /* ChatReadAloud.swift in Sources */,
 				0B755942056EE4838FBFDF79 /* ClarificationCard.swift in Sources */,
 				488823A91EA8A914959BF43B /* ClarificationModels.swift in Sources */,
-				DEADB3F7A35AF86641BE1146 /* ConnectionSettingsView.swift in Sources */,
 				9BE40403A8FDBFC39CBFF641 /* ConversationContextButton.swift in Sources */,
 				C584DE6838646B27073D38C2 /* ConversationContextView.swift in Sources */,
 				4EFBB47302B3D45026E5B952 /* ConversationsState.swift in Sources */,
@@ -634,6 +633,7 @@
 				49A8FAF15003050B34221780 /* GatewayClient+TaskEditing.swift in Sources */,
 				9BC3836E08B47060F01E9735 /* GatewayClient+Voice.swift in Sources */,
 				18B2209050FDA67F7596E881 /* GatewayClient.swift in Sources */,
+				A12B34C56D78E90F12A34B56 /* GatewayPairing.swift in Sources */,
 				F10B6CDD8CB6BB6A7395DFDC /* GatewayCommands.swift in Sources */,
 				0302993FD1FDB80B9B34E311 /* GatewayConfigurationStore.swift in Sources */,
 				699CC30DBBE7B4F2147710D9 /* GatewayModels.swift in Sources */,
@@ -744,6 +744,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_ENTITLEMENTS = XopcMobile/XopcMobile.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = XopcMobile/Resources/Info.plist;
@@ -752,7 +753,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄并发送给助手的图片。";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于录制语音消息和语音笔记。";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于实时语音、语音助手、语音消息和语音笔记。";
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -898,6 +900,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_ENTITLEMENTS = XopcMobile/XopcMobile.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = XopcMobile/Resources/Info.plist;
@@ -906,7 +909,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄并发送给助手的图片。";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于录制语音消息和语音笔记。";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于实时语音、语音助手、语音消息和语音笔记。";
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				LD_RUNPATH_SEARCH_PATHS = (

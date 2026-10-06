@@ -14,6 +14,38 @@ private struct MessageNoteCapture: Encodable {
     let platform = "ios"
 }
 
+private struct UserProfileMutation: Encodable {
+    let callName: String
+    let role: String
+    let pronouns: String
+    let timezone: String
+    let locale: String
+}
+private struct MobileUserProfileEnvelope: Decodable { let profile: MobileUserProfile }
+private struct UserGoalScope: Encodable { let type: String }
+private struct UserGoalMutation: Encodable {
+    let title: String
+    let desiredOutcome: String
+    let status: String?
+    let targetAt: Int64?
+    let scope: UserGoalScope?
+
+    func encode(to encoder: Encoder) throws {
+        enum Key: String, CodingKey { case title, desiredOutcome, status, targetAt, scope }
+        var container = encoder.container(keyedBy: Key.self)
+        try container.encode(title, forKey: .title)
+        try container.encode(desiredOutcome, forKey: .desiredOutcome)
+        try container.encodeIfPresent(status, forKey: .status)
+        try container.encodeIfPresent(scope, forKey: .scope)
+        if status != nil { try container.encode(targetAt, forKey: .targetAt) }
+        else { try container.encodeIfPresent(targetAt, forKey: .targetAt) }
+    }
+}
+private struct UserGoalEnvelope: Decodable { let goal: MobileUserGoal }
+private struct UserStatementMutation: Encodable { let statement: String }
+private struct UserMutationResult: Decodable {}
+private struct ShareExtension: Encodable { let extendTtlMs: Int64 }
+
 extension GatewayClient {
     func fetchHome(locale: String) async throws -> HomeSnapshot {
         try await request(path: "/api/home", queryItems: [URLQueryItem(name: "locale", value: locale)])
@@ -417,6 +449,59 @@ extension GatewayClient {
 
     func fetchMobileUserSummary() async throws -> MobileUserSummary {
         try await request(path: "/api/user-model/mobile-summary")
+    }
+
+    func fetchUserAssertions(filter: String, query: String, cursor: String? = nil) async throws -> MobileUserAssertionPage {
+        var items = [
+            URLQueryItem(name: "view", value: "mobile"),
+            URLQueryItem(name: "limit", value: "20"),
+            URLQueryItem(name: "filter", value: filter)
+        ]
+        if !query.isEmpty { items.append(URLQueryItem(name: "q", value: query)) }
+        if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await request(path: "/api/user-model/assertions", queryItems: items)
+    }
+
+    func fetchUserAssertion(id: String) async throws -> MobileUserAssertion {
+        let response: MobileUserAssertionEnvelope = try await request(path: "/api/user-model/assertions/\(id)")
+        return response.assertion
+    }
+
+    func updateUserProfile(callName: String, role: String, pronouns: String, timezone: String, locale: String) async throws {
+        let body = try encoder.encode(UserProfileMutation(callName: callName, role: role, pronouns: pronouns,
+                                                          timezone: timezone, locale: locale))
+        let _: MobileUserProfileEnvelope = try await request(path: "/api/user-model/profile", method: "PATCH", body: body)
+    }
+
+    func saveUserGoal(id: String?, title: String, desiredOutcome: String, status: String, targetAt: Int64?) async throws {
+        let body = try encoder.encode(UserGoalMutation(title: title, desiredOutcome: desiredOutcome,
+                                                       status: id == nil ? nil : status, targetAt: targetAt,
+                                                       scope: id == nil ? UserGoalScope(type: "global") : nil))
+        let path = id.map { "/api/user-model/goals/\($0)" } ?? "/api/user-model/goals"
+        let _: UserGoalEnvelope = try await request(path: path, method: id == nil ? "POST" : "PATCH", body: body)
+    }
+
+    func updateUserAssertion(id: String, statement: String) async throws {
+        let body = try encoder.encode(UserStatementMutation(statement: statement))
+        let _: UserMutationResult = try await request(path: "/api/user-model/assertions/\(id)", method: "PATCH", body: body)
+    }
+
+    func deleteUserAssertion(id: String) async throws {
+        let _: UserMutationResult = try await request(path: "/api/user-model/assertions/\(id)", method: "DELETE")
+    }
+
+    func fetchShares() async throws -> [MobileShare] {
+        let result: MobileShareListEnvelope = try await request(path: "/api/shares")
+        return result.payload.shares
+    }
+
+    func revokeShare(id: String) async throws {
+        let _: UserMutationResult = try await request(path: "/api/shares/\(id)", method: "DELETE")
+    }
+
+    func extendShare(id: String, days: Int) async throws {
+        let body = try encoder.encode(ShareExtension(extendTtlMs: Int64(days) * 86_400_000))
+        let _: UserMutationResult = try await request(path: "/api/shares/\(id)", method: "PATCH", body: body)
     }
 
     func createVoiceNote(audio: RecordedAudio) async throws -> NoteDetail {

@@ -79,7 +79,7 @@ final class LiveExecutionUITests: XCTestCase {
     func testLiveExecutionOpensAndSettles() async throws {
         let marker = "iOS-live-execution-\(UUID().uuidString.prefix(8))"
         self.marker = marker
-        app.buttons["新对话"].tap()
+        openNewConversation()
         let composer = app.descendants(matching: .any)["assistant-chat-composer"]
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         composer.tap()
@@ -146,7 +146,7 @@ final class LiveExecutionUITests: XCTestCase {
         let marker = "iOS-tool-failure-\(UUID().uuidString.prefix(8))"
         self.marker = marker
         let missingFile = "missing-\(UUID().uuidString).txt"
-        app.buttons[copy.newChat].tap()
+        openNewConversation(label: copy.newChat)
         let composer = app.descendants(matching: .any)["assistant-chat-composer"]
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         composer.tap()
@@ -196,7 +196,7 @@ final class LiveExecutionUITests: XCTestCase {
     func testMarkdownTableAndEmbeddedImageRoundTrip() async throws {
         let marker = "iOS-markdown-visual-\(UUID().uuidString.prefix(8))"
         self.marker = marker
-        app.buttons["新对话"].tap()
+        openNewConversation()
         let composer = app.descendants(matching: .any)["assistant-chat-composer"]
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         composer.tap()
@@ -277,7 +277,7 @@ final class LiveExecutionUITests: XCTestCase {
         }
         let marker = "iOS-execution-retry-\(UUID().uuidString.prefix(8))"
         self.marker = marker
-        app.buttons[copy.newChat].tap()
+        openNewConversation(label: copy.newChat)
         let composer = app.descendants(matching: .any)["assistant-chat-composer"]
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         composer.tap()
@@ -409,6 +409,14 @@ final class LiveExecutionUITests: XCTestCase {
         request.httpMethod = "POST"
         let (_, response) = try await URLSession.shared.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 204 else { throw CleanupError.invalidResponse }
+    }
+
+    private func openNewConversation(label: String = "新建对话") {
+        app.buttons["home-tab-conversations"].tap()
+        let create = app.buttons[label == "新对话" ? "新建对话" : label]
+        XCTAssertTrue(create.waitForExistence(timeout: 5))
+        create.tap()
+        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 5))
     }
 
     private func capture(_ name: String) {

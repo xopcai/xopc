@@ -20,9 +20,12 @@ final class RealtimeVoiceCall {
     private(set) var responseID = ""
     private(set) var responseStage = ""
     private(set) var taskID = ""
+    private(set) var taskCancelling = false
     private(set) var networkQuality = "good"
+    private(set) var route = "system"
     private(set) var clarification: Clarification?
     private(set) var approval: RealtimeVoiceApproval?
+    private(set) var respondingToIntervention = false
 
     struct Clarification: Sendable {
         let requestID: String
@@ -49,6 +52,7 @@ final class RealtimeVoiceCall {
     private var receivedMilliseconds = 0
     private var playedMilliseconds = 0
     private var congested = false
+    private var releaseInProgress = false
 
     func start(conversationID: String, mode: RealtimeVoiceMode, name: String, gateway: GatewayClient) async {
         guard phase == .idle else { expanded = true; return }
@@ -75,10 +79,19 @@ final class RealtimeVoiceCall {
     }
 
     func resume() async {
+        while releaseInProgress {
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled else { return }
+        }
         guard phase == .paused || phase == .recovering else { return }
         reconnectTask?.cancel()
         reconnectTask = nil
         await open(recovering: true)
+    }
+
+    func resumeAfterInterruption() async {
+        guard phase == .paused, errorCode == "AUDIO_INTERRUPTED" else { return }
+        await resume()
     }
 
     func setMuted(_ value: Bool) async {
@@ -106,8 +119,10 @@ final class RealtimeVoiceCall {
     }
 
     func cancelTask() async {
-        guard !taskID.isEmpty else { return }
-        try? await transport.send("task.cancel", payload: .init(taskId: taskID))
+        guard !taskID.isEmpty, !taskCancelling else { return }
+        taskCancelling = true
+        do { try await transport.send("task.cancel", payload: .init(taskId: taskID)) }
+        catch { taskCancelling = false; errorCode = "NETWORK" }
     }
 
     func end() async {
@@ -124,6 +139,7 @@ final class RealtimeVoiceCall {
         errorCode = nil
         responseID = ""
         taskID = ""
+        taskCancelling = false
         clarification = nil
         approval = nil
     }
@@ -151,7 +167,11 @@ final class RealtimeVoiceCall {
             self.session = session
             let input = try await audio.start(
                 onPlayed: { [weak self] id, milliseconds in self?.played(id: id, milliseconds: milliseconds) },
-                onInterrupted: { [weak self] in Task { await self?.pause(reason: "AUDIO_INTERRUPTED") } }
+                onInterrupted: { [weak self] in Task { await self?.pause(reason: "AUDIO_INTERRUPTED") } },
+                onRoute: { [weak self] route in self?.route = route },
+                onRouteFailure: { [weak self] in
+                    Task { await self?.pause(reason: "route_lost", reconnect: true) }
+                }
             )
             guard generation == current else { await release(); return }
             if speaker {
@@ -205,28 +225,36 @@ final class RealtimeVoiceCall {
                 switch incoming {
                 case let .event(event): await handle(event)
                 case let .audio(frame): await handle(frame)
+                case let .latency(milliseconds):
+                    if !congested { networkQuality = milliseconds > 800 ? "degraded" : "good" }
                 }
             }
             if generation == self.generation, phase != .idle, phase != .ending {
                 let reason = errorCode ?? "NETWORK"
-                await pause(reason: reason, reconnect: phase == .connected && reason == "NETWORK")
+                await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
             }
         } catch {
             if generation == self.generation, phase != .idle, phase != .ending {
-                await pause(reason: "NETWORK", reconnect: true)
+                let reason = error is RealtimeVoiceTransportError
+                    && (error as? RealtimeVoiceTransportError) == .protocolMismatch ? "PROTOCOL_ERROR" : "NETWORK"
+                await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
             }
         }
     }
 
     private func pause(reason: String, reconnect: Bool = false) async {
         guard phase != .idle, phase != .ending else { return }
+        if releaseInProgress || phase == .recovering && reconnect { return }
         if let connectedAt, Date().timeIntervalSince(connectedAt) >= 30 {
             reconnectAttempt = 0
         }
         generation += 1
         errorCode = reason
         phase = reconnect ? .recovering : .paused
+        releaseInProgress = true
         await release()
+        releaseInProgress = false
+        guard phase != .idle, phase != .ending else { return }
         guard reconnect, reconnectAttempt < 5 else {
             phase = .paused
             return
@@ -259,17 +287,27 @@ final class RealtimeVoiceCall {
         receivedMilliseconds = 0
         playedMilliseconds = 0
         responseDone = false
+        responseID = ""
+        responseStage = ""
+        taskID = ""
+        taskCancelling = false
+        activity = ""
+        clarification = nil
         approval = nil
     }
 }
 
 extension RealtimeVoiceCall {
     func submitClarification(action: String, answer: String? = nil) async {
-        guard let clarification, let gateway else { return }
+        guard let clarification, let gateway, !respondingToIntervention else { return }
+        let current = generation
+        respondingToIntervention = true
+        defer { respondingToIntervention = false }
         do {
             try await gateway.respondToRealtimeVoiceClarification(
                 id: clarification.requestID, version: clarification.version, action: action, answer: answer
             )
+            guard generation == current else { return }
             self.clarification = nil
             try? await transport.send("input.mute", payload: .init(muted: muted || congested || approval != nil))
         } catch {
@@ -278,9 +316,13 @@ extension RealtimeVoiceCall {
     }
 
     func respondToApproval(approved: Bool) async {
-        guard let approval, let gateway else { return }
+        guard let approval, let gateway, !respondingToIntervention else { return }
+        let current = generation
+        respondingToIntervention = true
+        defer { respondingToIntervention = false }
         do {
             try await gateway.respondToRealtimeVoiceApproval(approval, approved: approved)
+            guard generation == current else { return }
             self.approval = nil
             try? await transport.send("input.mute", payload: .init(muted: muted || congested || clarification != nil))
         } catch {
@@ -332,7 +374,7 @@ private extension RealtimeVoiceCall {
             errorCode = payload.code ?? "SERVICE_UNAVAILABLE"
         case "session.closed":
             let reason = errorCode ?? payload.reason ?? "NETWORK"
-            await pause(reason: reason, reconnect: phase == .connected && payload.reason == "network")
+            await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
         default: break
         }
     }
@@ -399,10 +441,12 @@ private extension RealtimeVoiceCall {
         switch type {
         case "task.created":
             taskID = payload.taskId ?? ""
+            taskCancelling = false
         case "task.activity" where payload.taskId == taskID:
             activity = payload.status == "running" ? payload.toolName ?? "" : ""
         case "task.done" where payload.taskId == taskID:
             taskID = ""
+            taskCancelling = false
             activity = ""
         default: break
         }
@@ -447,5 +491,12 @@ private enum RealtimeVoiceCallError: Error {
         switch self {
         case let .unavailable(code): code
         }
+    }
+}
+
+enum VoiceRecoveryPolicy {
+    static func shouldReconnect(_ reason: String) -> Bool {
+        ["NETWORK", "network", "route_lost", "CAPTURE_FAILED", "PLAYBACK_FAILED", "CAPTURE_INTERRUPTED",
+         "OMNI_CONNECTION_CLOSED", "OMNI_CONNECTION_FAILED"].contains(reason)
     }
 }
