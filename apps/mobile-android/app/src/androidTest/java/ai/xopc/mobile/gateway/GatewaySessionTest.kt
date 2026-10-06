@@ -79,6 +79,26 @@ class GatewaySessionTest {
     assertEquals(listOf(false, true, true, true), history.messages.map { it.hasNonTextContent })
     assertEquals(4, history.messages.size)
   }
+
+  @Test fun olderHistoryUsesValidatedGatewayCursor() {
+    val app = ApplicationProvider.getApplicationContext<Context>()
+    val credentials = AndroidSecureStore(app, "older_history_credentials_test_v1",
+      "xopc.gateway.credentials.older.history.test.v1")
+    clear(credentials)
+    try {
+      val fake = FakeGateway()
+      val session = GatewaySession(app, fake,
+        DeviceIdentity("xopc.gateway.device.older.history.p256.test.v1"), credentials)
+      session.pair(invitation()) {}
+      val repository = ConversationRepository(session, app)
+      val id = "11111111-2222-3333-4444-555555555555"
+      val page = repository.history(id, "20")
+      assertEquals("older", page.messages.single().id)
+      assertEquals(listOf("/api/sessions/$id/history?view=compact&limit=20&before=20"), fake.historyReadPaths)
+      assertThrows(IllegalArgumentException::class.java) { repository.history(id, "../bad") }
+      assertEquals(1, fake.historyReadPaths.size)
+    } finally { clear(credentials) }
+  }
   private val gatewayId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
   private val pairingId = UUID.fromString("11111111-2222-3333-4444-555555555555")
   private val signingKey = Ed25519PrivateKeyParameters(ByteArray(32) { (it + 1).toByte() }, 0)
@@ -888,6 +908,7 @@ class GatewaySessionTest {
     val noteSyncIds = mutableListOf<String>()
     val noteMetadataFields = mutableListOf<String>()
     val noteHistoryPaths = mutableListOf<String>()
+    val historyReadPaths = mutableListOf<String>()
     val noteDeletePaths = mutableListOf<String>()
     val noteSharePaths = mutableListOf<String>()
     val shareMutations = mutableListOf<String>()
@@ -1284,6 +1305,12 @@ class GatewaySessionTest {
         path == "/api/sessions/bbbbbbbb-cccc-dddd-eeee-ffffffffffff/history?view=compact&limit=20" && method == "GET" ->
           """{"session":{"key":"bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
             "transcriptId":"transcript-task","messages":[]}}"""
+        path == "/api/sessions/11111111-2222-3333-4444-555555555555/history?view=compact&limit=20&before=20" && method == "GET" -> {
+          historyReadPaths += path
+          """{"session":{"key":"11111111-2222-3333-4444-555555555555",
+            "transcriptId":"transcript-1","messages":[{"id":"older","role":"user","content":"Earlier"}]},
+            "pagination":{"hasMore":false}}"""
+        }
         path == "/api/sessions/bbbbbbbb-cccc-dddd-eeee-ffffffffffff/agent-config" && method == "GET" ->
           """{"ok":true,"payload":{"model":"test/one","configVersion":13}}"""
         path == "/api/sessions/11111111-2222-3333-4444-555555555555/share-preview" && method == "GET" -> {

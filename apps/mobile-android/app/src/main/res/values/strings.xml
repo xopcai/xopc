@@ -88,6 +88,8 @@
     <string name="assistant_send_rejected_detail">Gateway rejected this message: %1$s</string>
     <string name="assistant_pending_input">Pending confirmation</string>
     <string name="assistant_retry">Check and retry</string>
+    <string name="assistant_older_messages">Earlier messages</string>
+    <string name="assistant_older_retry">Retry earlier messages</string>
     <string name="assistant_input_hint">Message</string>
     <string name="composer_add_actions">Open message actions</string>
     <string name="composer_close_actions">Close message actions</string>

@@ -272,6 +272,10 @@ data class ConnectionUiState(
   val batchConversationFailedIds: List<String> = emptyList(),
   val batchConversationRevision: Int = 0,
   val historyLoading: Boolean = false,
+  val historyTranscriptId: String? = null,
+  val historyBefore: String? = null,
+  val historyLoadingOlder: Boolean = false,
+  val historyOlderError: Boolean = false,
   val chatError: Boolean = false,
   val realtimeStatus: String = "offline",
   val sending: Boolean = false,
@@ -380,6 +384,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private var historyRevision = 0
   private var contextRevision = 0
   private var historyJob: Job? = null
+  private var olderHistoryJob: Job? = null
   private var executionJob: Job? = null
   private var executionRevision = 0
   private var runStateJob: Job? = null
@@ -2300,7 +2305,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
         noteDraftLock.withLock { noteDraftStore.save(oldId, draft) }
       }
     }
-    val readers = listOf(searchJob, historyJob, executionJob, runStateJob, modelJob, agentJob,
+    val readers = listOf(searchJob, historyJob, olderHistoryJob, executionJob, runStateJob, modelJob, agentJob,
       contextJob, contextPanelJob, connectionWaitJob, referenceJob, progressJob, progressHomeJob, progressMetricsJob,
       progressMoreJob, progressDetailJob,
       projectsJob, projectDetailJob, automationJob, notesJob, sharesJob, noteDetailJob, noteHistoryJob,
@@ -2670,6 +2675,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     if (mutableState.value.profile == null || mutableState.value.discardingDraftId == id ||
       mutableState.value.pendingDeleteId == id) return
     historyJob?.cancel()
+    olderHistoryJob?.cancel()
     executionJob?.cancel()
     executionRevision++
     runStateJob?.cancel()
@@ -2689,6 +2695,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       requestedReferenceKind = null, requestedReferenceConversationId = null,
       taskScopeLoading = taskId == null, messages = emptyList(), draftText = "", draftRefs = emptyList(),
       draftAttachments = emptyList(), attachmentLoading = false, attachmentError = false, historyLoading = true,
+      historyTranscriptId = null, historyBefore = null, historyLoadingOlder = false,
+      historyOlderError = false,
       executionMessageId = null, executionDetail = null, executionLoading = false, executionError = false,
       draftModelLoading = false, draftModelReady = false, chatError = false, activeRunId = null,
       stoppingRun = false, stopError = false, runError = false, liveText = "", liveMessageId = null,
@@ -2730,6 +2738,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           val history = runInterruptible(Dispatchers.IO) { conversations.history(id) }
           if (revision == historyRevision) mutableState.update { it.copy(messages = history.messages,
             historyLoading = false, draftModelReady = true,
+            historyTranscriptId = history.transcriptId,
+            historyBefore = history.nextBeforeCursor?.takeIf { _ -> history.transcriptId != null },
             selectedAgentId = history.agentId ?: it.conversations.firstOrNull { item -> item.id == id }?.agentId.orEmpty()) }
           if (revision == historyRevision) refreshRunState(id)
           if (revision == historyRevision) loadModels(id)
@@ -2742,6 +2752,41 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       } catch (_: Exception) {
         if (revision == historyRevision) mutableState.update { it.copy(historyLoading = false,
           draftModelLoading = false, taskScopeLoading = false, chatError = true) }
+      }
+    }
+  }
+
+  fun loadOlderHistory() {
+    val current = mutableState.value
+    val id = current.selectedConversationId ?: return
+    val transcriptId = current.historyTranscriptId ?: return
+    val before = current.historyBefore ?: return
+    if (current.historyLoading || current.historyLoadingOlder || current.profile == null) return
+    val revision = historyRevision
+    mutableState.update { it.copy(historyLoadingOlder = true, historyOlderError = false) }
+    olderHistoryJob = viewModelScope.launch {
+      try {
+        val older = runInterruptible(Dispatchers.IO) { conversations.history(id, before) }
+        if (revision != historyRevision) return@launch
+        mutableState.update { state ->
+          if (state.selectedConversationId != id || state.historyTranscriptId != transcriptId ||
+            state.historyBefore != before) state
+          else if (older.transcriptId != transcriptId || older.nextBeforeCursor == before) {
+            state.copy(historyLoadingOlder = false, historyOlderError = true)
+          } else {
+            val existing = state.messages.mapTo(mutableSetOf()) { it.id }
+            state.copy(messages = older.messages.filter { existing.add(it.id) } + state.messages,
+              historyBefore = older.nextBeforeCursor, historyLoadingOlder = false,
+              historyOlderError = false)
+          }
+        }
+      } catch (error: CancellationException) {
+        throw error
+      } catch (_: Exception) {
+        if (revision == historyRevision) mutableState.update { state ->
+          if (state.selectedConversationId == id && state.historyBefore == before)
+            state.copy(historyLoadingOlder = false, historyOlderError = true) else state
+        }
       }
     }
   }
@@ -3092,14 +3137,30 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private fun refreshSelectedHistory(id: String) {
     if (mutableState.value.selectedConversationId != id || mutableState.value.draftModelLoading) return
     historyJob?.cancel()
+    olderHistoryJob?.cancel()
     val revision = ++historyRevision
+    mutableState.update { it.copy(historyLoadingOlder = false) }
     historyJob = viewModelScope.launch {
       try {
         val (history, pending) = runInterruptible(Dispatchers.IO) {
           (if (conversations.draft(id) != null) null else conversations.history(id)) to conversations.pendingInput(id)
         }
-        if (revision == historyRevision) mutableState.update {
-          it.copy(messages = history?.messages ?: it.messages, pendingInput = pending,
+        if (revision == historyRevision) mutableState.update { state ->
+          val overlap = history?.messages?.firstNotNullOfOrNull { latest ->
+            state.messages.indexOfFirst { it.id == latest.id }.takeIf { it >= 0 }
+          }
+          val retainOlder = history != null && history.transcriptId != null &&
+            history.transcriptId == state.historyTranscriptId && overlap != null
+          state.copy(messages = when {
+              history == null -> state.messages
+              retainOlder -> state.messages.take(overlap) + history.messages
+              else -> history.messages
+            }, pendingInput = pending,
+            historyTranscriptId = history?.transcriptId ?: state.historyTranscriptId,
+            historyBefore = when {
+              history == null || retainOlder -> state.historyBefore
+              else -> history.nextBeforeCursor?.takeIf { _ -> history.transcriptId != null }
+            }, historyLoadingOlder = false, historyOlderError = false,
             historyLoading = false, chatError = false)
         }
       } catch (error: CancellationException) {

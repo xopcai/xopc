@@ -178,6 +178,36 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
   }
 
+  @Test fun assistantOlderPageKeepsVisibleMessageAfterPrepend() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val id = "11111111-2222-3333-4444-555555555555"
+    val latest = (20 until 40).map { index ->
+      ConversationMessage("message-$index", "assistant", "Reply $index")
+    }
+    val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = id,
+      messages = latest, historyTranscriptId = "transcript-1", historyBefore = "20"))
+    var requests = 0
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value,
+          onLoadOlderHistory = {
+            requests++
+            state.value = state.value.copy(historyLoadingOlder = true)
+          })
+      }
+    }
+    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToIndex(0)
+    composeTestRule.onNodeWithTag("assistant-load-older").performClick()
+    assertEquals(1, requests)
+    composeTestRule.runOnIdle {
+      state.value = state.value.copy(messages = (0 until 20).map { index ->
+        ConversationMessage("message-$index", "assistant", "Reply $index")
+      } + latest, historyBefore = null, historyLoadingOlder = false)
+    }
+    composeTestRule.onNodeWithText("Reply 20").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-load-older").assertDoesNotExist()
+  }
+
   @Test fun otherMainTabsScrollBehindFloatingBottomSurface() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val selectedTab = mutableStateOf(HomeTab.Conversations)
@@ -2105,10 +2135,11 @@ class MainScreenTest {
             ConversationMessage("answer-long", "assistant", longAnswer, "turn-long"),
             ConversationMessage("answer-latest", "assistant", "最新消息保持展开", "turn-latest"))))
     }
-    composeTestRule.onNodeWithTag("message-preview-answer-long").assertExists()
-    composeTestRule.onNodeWithTag("message-view-more-answer-long").performClick()
+    composeTestRule.onNodeWithTag("message-preview-answer-long", useUnmergedTree = true).assertExists()
+    composeTestRule.onNodeWithTag("message-assistant-card-answer-long").performClick()
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_message_detail)).assertExists()
-    composeTestRule.onNodeWithText("第9行内容").assertExists()
+    composeTestRule.onNode(hasText("第9行内容", substring = true) and
+      hasAnyAncestor(hasTestTag("message-detail-scroll"))).assertExists()
     composeTestRule.onNodeWithTag("message-view-more-answer-latest").assertDoesNotExist()
   }
 
