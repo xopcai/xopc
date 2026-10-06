@@ -113,8 +113,12 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       .clip(RoundedCornerShape(18.dp))
       .background(if (isUser) MaterialTheme.colorScheme.primaryContainer
         else MaterialTheme.colorScheme.surface)
-      .then(if (isUser) Modifier.combinedClickable(onClick = onMore, onLongClick = onMore)
-        .testTag("message-more-${message.id}") else Modifier)
+      .then(when {
+        isUser -> Modifier.combinedClickable(onClick = onMore, onLongClick = onMore)
+          .testTag("message-more-${message.id}")
+        showPreview -> Modifier.combinedClickable(onClick = onViewMore, onLongClick = onMore)
+        else -> Modifier
+      })
       .padding(horizontal = if (voiceOnly) 4.dp else if (isUser) 14.dp else 16.dp,
         vertical = if (voiceOnly) 0.dp else if (isUser) 10.dp else 14.dp)
       .then(if (isUser) Modifier else Modifier.testTag("message-assistant-card-${message.id}")),

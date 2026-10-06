@@ -21,75 +21,82 @@ struct NotesView: View {
     @State private var pendingVoiceNoteLoadFailed = false
 
     var body: some View {
-        List {
+        VStack(spacing: 0) {
             notesSearchField
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
-            if pendingVoiceNote != nil || pendingVoiceNoteLoadFailed {
-                Button {
-                    presentedSheet = .voice
-                } label: {
-                    Label {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(pendingVoiceTitle).font(.headline)
-                            Text(pendingVoiceDetail)
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "waveform")
-                    }
-                }
-                .accessibilityHint("打开本地待上传录音")
-            }
-            statusPicker
-            if (isLoading || isSearchingFiles), notes.isEmpty, matchedFiles.isEmpty {
-                loadingRows
-            } else if notes.isEmpty, matchedFiles.isEmpty {
-                ContentUnavailableView(
-                    emptyTitle,
-                    systemImage: "note.text",
-                    description: Text("新建一条文字笔记，或调整筛选条件。")
-                )
-                .listRowBackground(Color.clear)
-            } else {
-                ForEach(notes) { note in
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+            List {
+                if pendingVoiceNote != nil || pendingVoiceNoteLoadFailed {
                     Button {
-                        presentedSheet = .detail(note.id)
+                        presentedSheet = .voice
                     } label: {
-                        NoteRow(note: note)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("note-row-\(note.id)")
-                }
-            }
-            if isSearchingFiles {
-                ProgressView("正在搜索文件…")
-                    .listRowSeparator(.hidden)
-            }
-            if let fileSearchError {
-                HStack {
-                    Text(fileSearchError).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("重试") { Task { await loadMatchingFiles() } }
-                }
-            }
-            if !matchedFiles.isEmpty {
-                Section("文件") {
-                    ForEach(matchedFiles) { file in
-                        NavigationLink {
-                            FileDestinationView(configuration: configuration, file: file)
-                        } label: {
-                            Label(file.name, systemImage: file.kind == "directory" ? "folder" : "doc.text")
+                        Label {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(pendingVoiceTitle).font(.headline)
+                                Text(pendingVoiceDetail)
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "waveform")
                         }
-                        .accessibilityIdentifier("note-file-result-\(file.id)")
+                    }
+                    .accessibilityHint("打开本地待上传录音")
+                }
+                statusPicker
+                if (isLoading || isSearchingFiles), notes.isEmpty, matchedFiles.isEmpty {
+                    loadingRows
+                } else if notes.isEmpty, matchedFiles.isEmpty {
+                    ContentUnavailableView(
+                        emptyTitle,
+                        systemImage: "note.text",
+                        description: Text("新建一条文字笔记，或调整筛选条件。")
+                    )
+                    .listRowBackground(Color.clear)
+                } else {
+                    ForEach(notes) { note in
+                        Button {
+                            presentedSheet = .detail(note.id)
+                        } label: {
+                            NoteRow(note: note)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("note-row-\(note.id)")
+                    }
+                }
+                if isSearchingFiles {
+                    ProgressView("正在搜索文件…")
+                        .listRowSeparator(.hidden)
+                }
+                if let fileSearchError {
+                    HStack {
+                        Text(fileSearchError).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("重试") { Task { await loadMatchingFiles() } }
+                    }
+                }
+                if !matchedFiles.isEmpty {
+                    Section("文件") {
+                        ForEach(matchedFiles) { file in
+                            NavigationLink {
+                                FileDestinationView(configuration: configuration, file: file)
+                            } label: {
+                                Label(file.name, systemImage: file.kind == "directory" ? "folder" : "doc.text")
+                            }
+                            .accessibilityIdentifier("note-file-result-\(file.id)")
+                        }
                     }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .contentMargins(.top, 0, for: .scrollContent)
+            .contentMargins(.bottom, bottomInset, for: .scrollContent)
+            .refreshable { await load() }
         }
-        .contentMargins(.bottom, bottomInset, for: .scrollContent)
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("笔记")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await load() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("新建笔记", systemImage: "plus") { presentedSheet = .choice }

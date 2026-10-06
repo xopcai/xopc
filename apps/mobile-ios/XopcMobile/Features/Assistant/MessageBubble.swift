@@ -9,6 +9,7 @@ struct MessageBubble: View {
     let assistantState: AssistantState?
     let readAloud: ChatReadAloud
     let canReadAloud: Bool
+    let previewEligible: Bool
     @Environment(\.locale) private var locale
     @State private var isActionsPresented = false
     @State private var isDetailPresented = false
@@ -105,13 +106,45 @@ struct MessageBubble: View {
     @ViewBuilder
     private var messageText: some View {
         if !message.text.isEmpty {
-            if message.role == "assistant", !message.markdownParts.isEmpty {
+            if showsPreview {
+                Button {
+                    isDetailPresented = true
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(.init(String(message.text.prefix(1_500))))
+                            .lineLimit(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("查看更多")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.blue)
+                            .frame(minHeight: 44, alignment: .leading)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("chat-message-preview-\(message.id)")
+                .accessibilityHint("打开完整消息")
+            } else if message.role == "assistant", !message.markdownParts.isEmpty {
                 MarkdownBodyView(parts: message.markdownParts, configuration: configuration, conversationID: conversationID)
             } else {
                 Text(message.text)
                     .textSelection(.enabled)
             }
         }
+    }
+
+    private var showsPreview: Bool {
+        guard message.role == "assistant", previewEligible, !message.isPending else { return false }
+        var lines = 0
+        for rawLine in message.text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { continue }
+            let units = line.reduce(0.0) { $0 + ($1.isASCII ? 0.55 : 1) }
+            lines += max(1, Int(ceil(units / 15)))
+            if lines > 8 { return true }
+        }
+        return false
     }
 
     private var codeBlocks: String {

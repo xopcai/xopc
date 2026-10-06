@@ -331,6 +331,7 @@ fun MainScreen(
   onConversationSearchChange: (String) -> Unit = {},
   onRefreshConversations: () -> Unit = {},
   onLoadMoreConversations: () -> Unit = {},
+  onLoadOlderHistory: () -> Unit = {},
   onSelectConversation: (String) -> Unit = {},
   onSelectTaskChildConversation: (String, String) -> Unit = { _, _ -> },
   onCreateConversation: () -> Unit = {},
@@ -610,7 +611,8 @@ fun MainScreen(
     pairingScanning = pairingScannerOpen || pairingPermissionRequesting,
     pairingScanError = pairingScanError, onConversationSearchChange = onConversationSearchChange,
     onRefreshConversations = onRefreshConversations,
-    onLoadMoreConversations = onLoadMoreConversations, onSelectConversation = onSelectConversation,
+    onLoadMoreConversations = onLoadMoreConversations, onLoadOlderHistory = onLoadOlderHistory,
+    onSelectConversation = onSelectConversation,
     onSelectTaskChildConversation = onSelectTaskChildConversation,
     onCreateConversation = onCreateConversation,
     onCreateProjectConversation = onCreateProjectConversation,
@@ -800,6 +802,7 @@ internal fun MainContent(
   onConversationSearchChange: (String) -> Unit = {},
   onRefreshConversations: () -> Unit = {},
   onLoadMoreConversations: () -> Unit = {},
+  onLoadOlderHistory: () -> Unit = {},
   onSelectConversation: (String) -> Unit = {},
   onSelectTaskChildConversation: (String, String) -> Unit = { _, _ -> },
   onCreateConversation: () -> Unit = {},
@@ -1394,7 +1397,7 @@ internal fun MainContent(
           pairingScanning, pairingScanError, insets)
         else if (selectedTab == HomeTab.Assistant) AssistantScreen(connection,
           rootInsets, bottomChromeHeight, onSelectConversation,
-          onCreateConversation, onLoadReferences, onAddDraftRef,
+          onCreateConversation, onLoadOlderHistory, onLoadReferences, onAddDraftRef,
           onNoteFileContent,
           onRetryPendingInput,
           onReloadModels, onSelectModel, onReloadAgents, onSwitchAgent, onReloadContext,
@@ -2175,6 +2178,7 @@ private fun AssistantComposerButtons(connection: ConnectionUiState, actionsOpen:
 private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues,
   bottomChromeHeight: androidx.compose.ui.unit.Dp,
   onSelectConversation: (String) -> Unit, onCreateConversation: () -> Unit,
+  onLoadOlderHistory: () -> Unit,
   onLoadReferences: (String, String) -> Unit,
   onAddDraftRef: (ReferencePickerItem) -> Boolean,
   onSessionFileContent: suspend (String) -> ByteArray,
@@ -2260,11 +2264,22 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     connection.connectionWait.snapshot?.wait?.phase?.let { it != "ready" } == true
   val messageListState = remember(connection.selectedConversationId) { LazyListState() }
   var positionedAtLatest by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var olderAnchor by remember(connection.selectedConversationId) { mutableStateOf<Pair<String, Int>?>(null) }
   LaunchedEffect(connection.selectedConversationId, connection.historyLoading,
     connection.messages.lastOrNull()?.id) {
     if (!positionedAtLatest && !connection.historyLoading && connection.messages.isNotEmpty()) {
-      messageListState.scrollToItem(connection.messages.lastIndex)
+      messageListState.scrollToItem(connection.messages.lastIndex +
+        if (connection.historyBefore != null) 1 else 0)
       positionedAtLatest = true
+    }
+  }
+  LaunchedEffect(connection.messages.firstOrNull()?.id, connection.historyLoadingOlder) {
+    val anchor = olderAnchor
+    if (!connection.historyLoadingOlder && anchor != null) {
+      val index = connection.messages.indexOfFirst { it.id == anchor.first }
+      if (index >= 0) messageListState.scrollToItem(index + if (connection.historyBefore != null) 1 else 0,
+        anchor.second)
+      olderAnchor = null
     }
   }
   val statusIssue = when {
@@ -2346,7 +2361,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       if (connection.historyLoading && connection.messages.isEmpty()) {
         Box(modifier = Modifier.weight(1f)) { AssistantHistorySkeleton() }
       } else if (!connection.historyLoading && connection.messages.isEmpty() &&
-        connection.activeRunId == null && connection.liveText.isBlank()) {
+        connection.historyBefore == null && connection.activeRunId == null && connection.liveText.isBlank()) {
         Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
           AssistantWelcome(if (connection.contextLoading) null else
             taskRecommendation(connection.taskWelcome) ?: projectRecommendation(connection.projectWelcome)) { prompt ->
@@ -2359,6 +2374,21 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         state = messageListState,
         contentPadding = PaddingValues(bottom = bottomChromeHeight + if (showConnectionWait) 104.dp else 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (connection.historyBefore != null) item(key = "assistant-older") {
+          Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            if (connection.historyLoadingOlder) BrandLoadingIndicator(extent = 20.dp)
+            else TextButton(onClick = {
+              val visible = messageListState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
+                connection.messages.any { it.id == item.key }
+              }
+              olderAnchor = (visible?.key as? String)?.let { it to (-visible.offset).coerceAtLeast(0) }
+              onLoadOlderHistory()
+            }, modifier = Modifier.testTag("assistant-load-older")) {
+              Text(stringResource(if (connection.historyOlderError) R.string.assistant_older_retry
+                else R.string.assistant_older_messages))
+            }
+          }
+        }
         val latestMessageId = connection.messages.lastOrNull {
           it.role == "user" || it.role == "assistant"
         }?.id
