@@ -20,7 +20,7 @@ export class XopcChatOptionsViewModel {
   private generation: number = 0;
   private queueRequest: number = 0;
   private timer: number = -1;
-  private thinkingLevel?: string;
+  @Trace thinkingLevel: string = 'off';
 
   dispose(): void { this.generation++; this.queueRequest++; clearInterval(this.timer); this.timer = -1; }
   pause(): void { this.queueRequest++; clearInterval(this.timer); this.timer = -1; }
@@ -31,7 +31,7 @@ export class XopcChatOptionsViewModel {
   async load(id: string, agentId: string = ''): Promise<void> {
     this.pause(); const generation = ++this.generation;
     this.queueRequest++; this.conversationId = id; this.agentId = agentId; this.queued = [];
-    this.models = []; this.agents = []; this.modelId = ''; this.error = ''; this.loading = true;
+    this.models = []; this.agents = []; this.modelId = ''; this.thinkingLevel = 'off'; this.error = ''; this.loading = true;
     this.resume();
     try {
       // Freeze draft identity before slower catalog requests. The first input may
@@ -48,7 +48,8 @@ export class XopcChatOptionsViewModel {
         : await this.repository.config(id);
       if (generation !== this.generation) return;
       this.modelId = config.model || models.defaultId || this.models[0]?.id || '';
-      this.thinkingLevel = config.thinkingLevel;
+      const currentModel = this.models.find((item: XopcChatModel): boolean => item.id === this.modelId);
+      this.thinkingLevel = this.supportedThinking(currentModel, config.thinkingLevel);
       if (!config.model && this.modelId && draft) {
         const selected = this.models.find((item: XopcChatModel): boolean => item.id === this.modelId);
         this.thinkingLevel = selected?.thinking?.initialValue ?? 'off';
@@ -61,15 +62,37 @@ export class XopcChatOptionsViewModel {
     const model = this.models.find((item: XopcChatModel): boolean => item.id === this.modelId);
     return model?.displayNames?.[language.startsWith('zh') ? 'zh-CN' : 'en'] || model?.name || this.modelId.split('/').pop() || 'xopc';
   }
+  selectedModel(): XopcChatModel | undefined { return this.models.find((item: XopcChatModel): boolean => item.id === this.modelId); }
+  private supportedThinking(model: XopcChatModel | undefined, level?: string): string {
+    if (!model?.thinking) return level || 'off';
+    return model.thinking.options.includes(level || '') ? level || 'off' : model.thinking.initialValue;
+  }
   agentName(): string { return this.agents.find((item: XopcChatAgent): boolean => item.id === this.agentId)?.name || this.agentId; }
   async selectModel(id: string): Promise<boolean> {
     if (this.loading || this.saving || !this.conversationId || !this.models.some((item: XopcChatModel): boolean => item.id === id)) return false;
+    const model = this.models.find((item: XopcChatModel): boolean => item.id === id);
+    const level = this.supportedThinking(model, this.thinkingLevel);
     this.saving = true; this.error = ''; const generation = ++this.generation;
     try {
-      await this.repository.setModel(this.conversationId, id);
+      await this.repository.setModel(this.conversationId, id, level);
       if (generation !== this.generation) return false;
-      this.modelId = id;
-      await this.repository.rememberModel(this.agentId, id, this.thinkingLevel);
+      this.modelId = id; this.thinkingLevel = level;
+      await this.repository.rememberModel(this.agentId, id, level);
+      return generation === this.generation;
+    } catch (error) { if (generation === this.generation) this.error = (error as Error).message; return false; }
+    finally { this.saving = false; }
+  }
+  async selectThinking(level: string): Promise<boolean> {
+    const model = this.selectedModel();
+    if (this.loading || this.saving || !this.conversationId || !model?.thinking?.options.includes(level)
+      || (model.thinking.mode !== 'levels' && model.thinking.mode !== 'toggle')) return false;
+    if (level === this.thinkingLevel) return true;
+    this.saving = true; this.error = ''; const generation = ++this.generation;
+    try {
+      await this.repository.setModel(this.conversationId, this.modelId, level);
+      if (generation !== this.generation) return false;
+      this.thinkingLevel = level;
+      await this.repository.rememberModel(this.agentId, this.modelId, level);
       return generation === this.generation;
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; return false; }
     finally { this.saving = false; }
