@@ -90,6 +90,7 @@
     <string name="assistant_retry">Check and retry</string>
     <string name="assistant_older_messages">Earlier messages</string>
     <string name="assistant_older_retry">Retry earlier messages</string>
+    <string name="assistant_jump_bottom">Jump to latest message</string>
     <string name="assistant_input_hint">Message</string>
     <string name="composer_add_actions">Open message actions</string>
     <string name="composer_close_actions">Close message actions</string>

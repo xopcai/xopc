@@ -92,6 +92,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -2263,15 +2264,41 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     connection.connectionWait.conversationId == connection.selectedConversationId &&
     connection.connectionWait.snapshot?.wait?.phase?.let { it != "ready" } == true
   val messageListState = remember(connection.selectedConversationId) { LazyListState() }
+  val messageScrollScope = rememberCoroutineScope()
   var positionedAtLatest by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var followBottom by remember(connection.selectedConversationId) { mutableStateOf(true) }
+  var programmaticMessageScroll by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var olderAnchor by remember(connection.selectedConversationId) { mutableStateOf<Pair<String, Int>?>(null) }
-  LaunchedEffect(connection.selectedConversationId, connection.historyLoading,
-    connection.messages.lastOrNull()?.id) {
-    if (!positionedAtLatest && !connection.historyLoading && connection.messages.isNotEmpty()) {
-      messageListState.scrollToItem(connection.messages.lastIndex +
-        if (connection.historyBefore != null) 1 else 0)
+  suspend fun scrollMessagesToBottom() {
+    val lastIndex = connection.messages.lastIndex + (if (connection.historyBefore != null) 1 else 0) +
+      (if (connection.liveText.isNotBlank() && connection.activeRunId != null) 1 else 0)
+    if (lastIndex < 0) return
+    programmaticMessageScroll = true
+    try {
+      messageListState.scrollToItem(lastIndex)
+      withFrameNanos { }
+      val layout = messageListState.layoutInfo
+      val last = layout.visibleItemsInfo.firstOrNull { it.index == lastIndex }
+      if (last != null) messageListState.scrollBy(
+        (last.size + layout.viewportEndOffset - layout.viewportStartOffset).toFloat())
       positionedAtLatest = true
+      followBottom = true
+    } finally {
+      programmaticMessageScroll = false
     }
+  }
+  LaunchedEffect(messageListState, connection.historyLoadingOlder) {
+    snapshotFlow { messageListState.isScrollInProgress to messageListState.canScrollForward }
+      .collect { (scrolling, canScrollForward) ->
+        if (scrolling && positionedAtLatest && !programmaticMessageScroll &&
+          !connection.historyLoadingOlder) followBottom = !canScrollForward
+      }
+  }
+  LaunchedEffect(connection.selectedConversationId, connection.historyLoading,
+    connection.messages.lastOrNull()?.id, connection.liveText, connection.activeRunId) {
+    if (!connection.historyLoading && !connection.historyLoadingOlder &&
+      (connection.messages.isNotEmpty() || connection.liveText.isNotBlank()) &&
+      (!positionedAtLatest || followBottom)) scrollMessagesToBottom()
   }
   LaunchedEffect(connection.messages.firstOrNull()?.id, connection.historyLoadingOlder) {
     val anchor = olderAnchor
@@ -2437,6 +2464,19 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   if (showConnectionWait) Box(modifier = Modifier.align(Alignment.BottomCenter)
     .padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
     ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait)
+  }
+  if (positionedAtLatest && !followBottom && messageListState.canScrollForward) {
+    val jumpLabel = stringResource(R.string.assistant_jump_bottom)
+    IconButton(onClick = {
+      followBottom = true
+      messageScrollScope.launch { scrollMessagesToBottom() }
+    }, modifier = Modifier.align(Alignment.BottomEnd)
+      .padding(end = 20.dp, bottom = bottomChromeHeight + if (showConnectionWait) 112.dp else 12.dp)
+      .size(44.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+      .semantics { contentDescription = jumpLabel }.testTag("assistant-jump-bottom")) {
+      if (connection.activeRunId != null) BrandLoadingIndicator(extent = 22.dp)
+      else Text("↓", style = MaterialTheme.typography.titleLarge)
+    }
   }
   }
   if (referenceKind != null) ModalBottomSheet(onDismissRequest = { onReferenceKindChange(null) }) {
