@@ -36,7 +36,7 @@ describe('single connection action area', () => {
     mocked.state.wait = {
       id: 'wait', conversationId: 'one', transcriptId: 'instance', principalId: 'local-owner', agentId: 'main', objectiveId: 'objective', objectiveRevision: 1, objectiveUpdatedAt: 1,
       originInputId: 'input', originRunId: 'run', summary: 'Summarize unread email from last week', status: 'open', phase: 'needs_connection', version: 1, createdAt: 1, updatedAt: 1,
-      needs: [{ key: 'gmail', target: { type: 'connector', connectorId: 'composio-gmail' }, label: 'Gmail', capabilities: ['email.read'], phase: 'connect', accounts: [] }],
+      needs: [{ key: 'gmail', target: { type: 'connector', connectorId: 'composio-gmail' }, label: 'Gmail', capabilities: ['email.read'], phase: 'connect', authorizationMode: 'browser', accounts: [] }],
     };
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   });
@@ -82,7 +82,7 @@ describe('single connection action area', () => {
     expect(mocked.state.act).toHaveBeenCalledExactlyOnceWith('check');
   });
   it('groups multiple apps behind one action area and keeps closing the dialog separate from cancellation', async () => {
-    mocked.state.wait!.needs.push({ key: 'calendar', target: { type: 'connector', connectorId: 'composio-googlecalendar' }, label: 'Google Calendar', capabilities: ['calendar.read'], phase: 'connect', accounts: [] });
+    mocked.state.wait!.needs.push({ key: 'calendar', target: { type: 'connector', connectorId: 'composio-googlecalendar' }, label: 'Google Calendar', capabilities: ['calendar.read'], phase: 'connect', authorizationMode: 'browser', accounts: [] });
     await render(); await click('Details');
     expect(document.querySelectorAll('section')).toHaveLength(1);
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Google Calendar');
@@ -98,7 +98,7 @@ describe('single connection action area', () => {
         type: 'store-connector', packageName: 'demo-connector', connectorId: 'demo-connector', version: '1.0.0',
         sha256: 'a'.repeat(64), reviewHash: 'b'.repeat(64), description: 'Demo tools',
       },
-      label: 'Demo Connector', capabilities: ['tools'], phase: 'install', accounts: [],
+      label: 'Demo Connector', capabilities: ['tools'], phase: 'install', authorizationMode: 'desktop', accounts: [],
     };
     mocked.fetchPlan.mockResolvedValue({
       packageName: 'demo-connector', version: '1.0.0', reviewHash: 'b'.repeat(64), permissions: {}, requiresRestart: false,
