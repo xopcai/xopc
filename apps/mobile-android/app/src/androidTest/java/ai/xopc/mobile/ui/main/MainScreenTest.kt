@@ -169,13 +169,73 @@ class MainScreenTest {
     composeTestRule.runOnIdle { state.value = state.value.copy(historyLoading = false, messages = messages) }
     composeTestRule.onNodeWithText("Reply 29").assertIsDisplayed()
 
-    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToIndex(0)
+    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToIndex(1)
+    composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
     composeTestRule.runOnIdle {
       state.value = state.value.copy(messages = messages +
         ConversationMessage("message-30", "assistant", "Reply 30"))
     }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
+  }
+
+  @Test fun assistantFollowsNewMessagesAtBottomAndOffersJumpAfterReadingBack() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val id = "11111111-2222-3333-4444-555555555555"
+    val initial = (0 until 30).map { index ->
+      ConversationMessage("message-$index", "assistant", "Reply $index")
+    }
+    val state = mutableStateOf(ConnectionUiState(profile = profile,
+      selectedConversationId = id, messages = initial))
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value)
+      }
+    }
+    composeTestRule.onNodeWithText("Reply 29").assertIsDisplayed()
+    composeTestRule.runOnIdle {
+      state.value = state.value.copy(messages = initial +
+        ConversationMessage("message-30", "assistant", "Reply 30"))
+    }
+    composeTestRule.onNodeWithText("Reply 30").assertIsDisplayed()
+
+    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToIndex(1)
+    composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
+    composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
+    composeTestRule.runOnIdle {
+      state.value = state.value.copy(messages = state.value.messages +
+        ConversationMessage("message-31", "assistant", "Reply 31"))
+    }
+    composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-jump-bottom").performClick()
+    composeTestRule.onNodeWithText("Reply 31").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertDoesNotExist()
+  }
+
+  @Test fun assistantStreamingTextFollowsTailOnlyWhileAtBottom() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val id = "11111111-2222-3333-4444-555555555555"
+    val messages = (0 until 24).map { index ->
+      ConversationMessage("message-$index", "assistant", "Reply $index")
+    }
+    val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = id,
+      messages = messages, activeRunId = "run-1", liveText = "Starting"))
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value)
+      }
+    }
+    val stream = (0 until 24).joinToString("\n\n") { "Paragraph $it" } + "\n\nTail marker"
+    composeTestRule.runOnIdle { state.value = state.value.copy(liveText = stream) }
+    composeTestRule.onNodeWithText("Tail marker").assertIsDisplayed()
+
+    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToIndex(1)
+    composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
+    composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
+    composeTestRule.runOnIdle { state.value = state.value.copy(liveText = stream + "\n\nMore output") }
+    composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
   }
 
   @Test fun assistantOlderPageKeepsVisibleMessageAfterPrepend() {

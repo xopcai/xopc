@@ -3,8 +3,8 @@ import { markdownBlocks, markdownSpans, XopcMarkdownBlock, XopcMarkdownSpan } fr
 import { chatAnswerText } from './chatRichContent';
 import { markdownEstimatedLines } from './markdownLayout';
 
-export const USER_MESSAGE_PREVIEW_LINES: number = 4;
-export const ASSISTANT_MESSAGE_PREVIEW_LINES: number = 8;
+export const USER_MESSAGE_PREVIEW_LINES: number = 6;
+export const ASSISTANT_MESSAGE_PREVIEW_LINES: number = 12;
 
 export function latestChatMessageId(rows: XopcChatRow[]): string {
   for (let index = rows.length - 1; index >= 0; index--) {
