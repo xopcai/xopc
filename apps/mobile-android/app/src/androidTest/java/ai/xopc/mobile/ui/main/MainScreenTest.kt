@@ -101,6 +101,23 @@ import java.io.ByteArrayOutputStream
 class MainScreenTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
+  @Test fun personalLoadingCentersLoopiInAvailableContent() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Me, onSelectTab = {},
+          connection = ConnectionUiState(profile = profile,
+            personal = PersonalUiState(gatewayId = "gateway", loading = true)))
+      }
+    }
+    val screen = composeTestRule.onNodeWithTag("personal-screen").fetchSemanticsNode().boundsInRoot
+    val panel = composeTestRule.onNodeWithTag("personal-loading").fetchSemanticsNode().boundsInRoot
+    val logo = composeTestRule.onNodeWithTag("brand-loading-logo").fetchSemanticsNode().boundsInRoot
+    assertTrue(kotlin.math.abs(logo.center.x - panel.center.x) < 2f)
+    assertTrue(panel.center.y > screen.top + screen.height * 0.35f)
+    assertTrue(panel.center.y < screen.bottom - screen.height * 0.15f)
+  }
+
   @Test fun assistantComposerAndTabDockShareOneBottomSurface() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     composeTestRule.setContent {
@@ -134,6 +151,31 @@ class MainScreenTest {
     assertTrue(contentBounds.bottom >= composerBounds.bottom)
     assertTrue(maskBounds.top >= composerBounds.bottom)
     assertTrue(lastMessageBounds.bottom <= composerBounds.top)
+  }
+
+  @Test fun assistantHistoryOpensAtLatestButDoesNotInterruptReadingOlderMessages() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val id = "11111111-2222-3333-4444-555555555555"
+    val messages = (0 until 30).map { index ->
+      ConversationMessage("message-$index", "assistant", "Reply $index")
+    }
+    val state = mutableStateOf(ConnectionUiState(profile = profile,
+      selectedConversationId = id, historyLoading = true))
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value)
+      }
+    }
+    composeTestRule.runOnIdle { state.value = state.value.copy(historyLoading = false, messages = messages) }
+    composeTestRule.onNodeWithText("Reply 29").assertIsDisplayed()
+
+    composeTestRule.onNodeWithTag("assistant-message-list").performScrollToIndex(0)
+    composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
+    composeTestRule.runOnIdle {
+      state.value = state.value.copy(messages = messages +
+        ConversationMessage("message-30", "assistant", "Reply 30"))
+    }
+    composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
   }
 
   @Test fun otherMainTabsScrollBehindFloatingBottomSurface() {
@@ -1462,6 +1504,20 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("conversations-search").assertExists()
   }
 
+  @Test fun conversationHeaderSearchAndNewIconsShareVerticalCenter() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Conversations, onSelectTab = {},
+        connection = ConnectionUiState(profile = profile))
+    }
+    composeTestRule.onNodeWithTag("conversations-clear").performClick()
+    val search = composeTestRule.onNodeWithTag("conversations-search-icon", useUnmergedTree = true)
+      .fetchSemanticsNode().boundsInRoot
+    val add = composeTestRule.onNodeWithTag("conversations-new-icon", useUnmergedTree = true)
+      .fetchSemanticsNode().boundsInRoot
+    assertTrue(kotlin.math.abs(search.center.y - add.center.y) < 1f)
+  }
+
   @Test fun conversationsLoadNextPageWhenScrolledNearEnd() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val rows = (1..40).map { index ->
@@ -2281,9 +2337,27 @@ class MainScreenTest {
           selectedConversationId = id, activeRunId = "run-1", realtimeStatus = "connected"),
         onStopRun = { stops++ })
     }
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_running)).assertExists()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_running)).assertDoesNotExist()
     composeTestRule.onNodeWithTag("assistant-stop").assertIsEnabled().performClick()
     assert(stops == 1)
+  }
+
+  @Test
+  fun transientChatLoadingUsesSkeletonWithoutHeaderStatusText() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+          selectedConversationId = id, historyLoading = true, draftModelLoading = true,
+          taskScopeLoading = true, realtimeStatus = "connecting"))
+    }
+    composeTestRule.onNodeWithTag("assistant-history-skeleton").assertExists()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_reconnecting))
+      .assertDoesNotExist()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_model_loading))
+      .assertDoesNotExist()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_task_scope_loading))
+      .assertDoesNotExist()
   }
 
   @Test fun contextSheetShowsScopeAndRefreshesOnOpen() {
@@ -2302,9 +2376,73 @@ class MainScreenTest {
     assert(refreshes == 1)
     composeTestRule.onNodeWithText("/work/alpha", substring = true).assertExists()
     composeTestRule.onNodeWithText("Brief").assertExists()
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_context_locked)).assertExists()
     composeTestRule.onNodeWithTag("context-project").assertExists()
     composeTestRule.onNodeWithTag("context-add-reference").assertExists()
+    composeTestRule.onNodeWithTag("context-back").performClick()
+    composeTestRule.onNodeWithTag("assistant-session-files").assertExists()
+  }
+
+  @Test fun chatOptionsFollowHarmonyInformationOrder() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val context = ConversationContext(id, ContextWorkItem("p", "Alpha"), null,
+      ContextEnvironment("managed_worktree", "/work/alpha", true, "main"),
+      emptyList(), false, emptyList(), false)
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+          selectedConversationId = id, context = context))
+    }
+    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    val tags = listOf("assistant-context", "assistant-agent", "assistant-model", "assistant-new",
+      "assistant-session-files")
+    val tops = tags.map { composeTestRule.onNodeWithTag(it).fetchSemanticsNode().boundsInRoot.top }
+    assertTrue(tops.zipWithNext().all { (a, b) -> a < b })
+    composeTestRule.onNodeWithText("Alpha · Worktree").assertExists()
+  }
+
+  @Test fun environmentChoicesShowAvailabilityAndReason() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val context = ConversationContext(id, ContextWorkItem("p", "Alpha"), null,
+      ContextEnvironment("local_checkout", "/work/alpha", true, "main"),
+      emptyList(), false, emptyList(), false)
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+          selectedConversationId = id, context = context,
+          contextPanel = ContextPanelUiState(mode = "environment", environment =
+            ai.xopc.mobile.gateway.ContextEnvironmentOptions(true, "Worktree unavailable"))))
+    }
+    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("assistant-context").performClick()
+    composeTestRule.onNodeWithTag("context-environment").performClick()
+    composeTestRule.onNodeWithTag("context-local").assertIsEnabled()
+    composeTestRule.onNodeWithTag("context-worktree").assertIsNotEnabled()
+    composeTestRule.onNodeWithText("Worktree unavailable").assertExists()
+  }
+
+  @Test fun sessionFilesOpenReadOnlyPreviewWithoutAttachingToDraft() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val file = ai.xopc.mobile.gateway.ManagedFile("file-1", "space-1", "readme.txt",
+      "readme.txt", "file", "text/plain", 5)
+    var loadedMode = ""
+    var attached = false
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+          selectedConversationId = id,
+          contextPanel = ContextPanelUiState(mode = "files", files = listOf(file))),
+        onLoadContextPanel = { mode, _, _ -> loadedMode = mode },
+        onNoteFileContent = { "Hello".toByteArray() },
+        onAddContextFile = { attached = true })
+    }
+    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("assistant-session-files").performClick()
+    composeTestRule.runOnIdle { assertEquals("files", loadedMode) }
+    composeTestRule.onNodeWithTag("session-file-file-1").performClick()
+    composeTestRule.waitUntil(5_000) {
+      composeTestRule.onAllNodesWithText("Hello", substring = true).fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.runOnIdle { assertTrue(!attached) }
   }
 
   @Test fun contextSheetOpensProjectChoicesAndCreatesScopedConversation() {

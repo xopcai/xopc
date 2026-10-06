@@ -462,7 +462,7 @@ export struct XopcChatView {
       units += text.charCodeAt(index) > 255 ? 1 : 0.55;
     }
     const width = Math.max(minimum, Math.min(maximum, Math.ceil(units * 16) + 30));
-    return width >= maximum ? '90%' : width + 'vp';
+    return width >= maximum ? '100%' : width + 'vp';
   }
 
   private userBubbleWidth(row: XopcChatRow): string {
@@ -476,8 +476,8 @@ export struct XopcChatView {
   }
 
   private assistantBubbleWidth(row: XopcChatRow): string {
-    if (row.live) return '90%';
-    if (chatNeedsWideBubble(row)) return '90%';
+    if (row.live) return '100%';
+    if (chatNeedsWideBubble(row)) return '100%';
     return this.textBubbleWidth(chatAnswerText(row), 64, 272);
   }
 
@@ -1142,7 +1142,7 @@ export struct XopcChatView {
                   reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
                   onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
               }.id('chat-assistant-card-' + item.item.id).width(this.assistantBubbleWidth(item.item))
-                .constraintSize({ minWidth: 64, maxWidth: '90%' })
+                .constraintSize({ minWidth: 64, maxWidth: '100%' })
                 .padding({ left: 16, right: 16, top: 14, bottom: 14 }).alignItems(HorizontalAlign.Start)
                 .borderRadius(18).backgroundColor(this.colors.panel)
               if (!item.item.live && chatAnswerText(item.item)) { this.assistantMessageActions(item.item) }
@@ -1156,7 +1156,7 @@ export struct XopcChatView {
           }
         }
       }).key((row: XopcChatRow): string => this.chat.selectedId + ':' + row.id).virtualScroll({ totalCount: this.presentationRows.length })
-    }.id('chat-message-list').height('100%').width('100%').padding({ left: 12, right: 12 }).cachedCount(3)
+    }.id('chat-message-list').height('100%').width('100%').padding({ left: 20, right: 20 }).cachedCount(3)
       .contentEndOffset(this.bottomRegionHeight + 24)
       .onAreaChange((previous: Area, current: Area): void => { this.onMessageViewportChange(previous, current); })
       .onScrollIndex((start: number, end: number): void => {

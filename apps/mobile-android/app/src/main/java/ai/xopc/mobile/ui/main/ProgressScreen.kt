@@ -24,7 +24,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -271,7 +270,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       }
       "projects" -> ProgressProjects(state, onLoadProjects, ::openProject)
       "project" -> when {
-        state.projectId != selectedProjectId || state.projectLoading -> CircularProgressIndicator(
+        state.projectId != selectedProjectId || state.projectLoading -> BrandLoadingPanel(
           modifier = Modifier.testTag("progress-project-loading"))
         state.projectError -> OutlinedButton(onClick = { selectedProjectId?.let(onOpenProject) },
           modifier = Modifier.testTag("progress-project-retry")) {
@@ -294,7 +293,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         selectedTaskId?.let { id -> onSaveTask(id, editVersion, editTitle, editBody, editProject) }
       }
       "detail" -> when {
-        state.detailTaskId != selectedTaskId || state.detailLoading -> CircularProgressIndicator(
+        state.detailTaskId != selectedTaskId || state.detailLoading -> BrandLoadingPanel(
           modifier = Modifier.testTag("progress-detail-loading"))
         state.detailError -> OutlinedButton(onClick = { selectedTaskId?.let(onOpenTask) },
           modifier = Modifier.testTag("progress-detail-retry")) {
@@ -465,7 +464,7 @@ private fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
         Modifier.fillMaxWidth().padding(top = 8.dp).testTag("progress-automations"))
     }
     if (state.homeLoading && state.needsUser.isEmpty() && state.background.isEmpty()) item {
-      CircularProgressIndicator(modifier = Modifier.testTag("progress-loading"))
+      BrandLoadingPanel(modifier = Modifier.testTag("progress-loading"))
     }
     if (state.homeError) item {
       OutlinedButton(onClick = onRefresh, modifier = Modifier.testTag("progress-retry")) {
@@ -567,7 +566,7 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
     }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
       if (state.projectsLoading && state.projects.isEmpty()) item {
-        CircularProgressIndicator(modifier = Modifier.testTag("progress-projects-loading"))
+        BrandLoadingPanel(modifier = Modifier.testTag("progress-projects-loading"))
       }
       if (state.projectsError) item {
         Text(stringResource(R.string.progress_load_failed), color = MaterialTheme.colorScheme.error)
@@ -637,7 +636,7 @@ private fun ProgressProjectDetail(project: ProgressProject, tasks: List<Progress
           }
         }
       }
-      if (sessionsLoading) item { CircularProgressIndicator(modifier = Modifier.testTag("progress-project-sessions-loading")) }
+      if (sessionsLoading) item { BrandLoadingPanel(modifier = Modifier.testTag("progress-project-sessions-loading")) }
       else if (sessionsError) item {
         OutlinedButton(onClick = onRetrySessions, modifier = Modifier.testTag("progress-project-sessions-retry")) {
           Text(stringResource(R.string.progress_project_sessions_error))
@@ -703,7 +702,7 @@ private fun ProgressTaskCreate(title: String, onTitleChange: (String) -> Unit,
       modifier = Modifier.fillMaxWidth().testTag("progress-create-save")) {
       Text(stringResource(R.string.progress_save))
     }
-    if (busy) CircularProgressIndicator(modifier = Modifier.testTag("progress-create-busy"))
+    if (busy) BrandLoadingIndicator(modifier = Modifier.fillMaxWidth().testTag("progress-create-busy"))
   }
 }
 
@@ -786,7 +785,7 @@ private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterCha
     if (state.tasksError) item {
       OutlinedButton(onClick = onRefresh) { Text(stringResource(R.string.progress_load_failed)) }
     }
-    if (state.loading && state.tasks.isEmpty()) item { CircularProgressIndicator() }
+    if (state.loading && state.tasks.isEmpty()) item { BrandLoadingPanel() }
     if (!state.loading && !state.tasksError && shown.isEmpty()) item {
       Text(stringResource(if (state.tasks.isEmpty()) R.string.progress_no_tasks else R.string.progress_no_matches))
     }
@@ -805,6 +804,7 @@ private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterCha
     if (state.tasks.size < state.taskTotal) item {
       OutlinedButton(onClick = onLoadMore, enabled = !state.loadingMore,
         modifier = Modifier.fillMaxWidth().testTag("progress-load-more")) {
+        if (state.loadingMore) BrandLoadingIndicator(extent = 20.dp)
         Text(stringResource(if (state.loadingMore) R.string.progress_loading_more else R.string.progress_load_more))
       }
       if (state.moreError) Text(stringResource(R.string.progress_more_error), color = MaterialTheme.colorScheme.error)
@@ -856,7 +856,7 @@ private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: 
       color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("progress-task-chat-error"))
     if (commandError) Text(stringResource(R.string.progress_command_error),
       color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("progress-command-error"))
-    if (busy) CircularProgressIndicator(modifier = Modifier.testTag("progress-command-busy"))
+    if (busy) BrandLoadingIndicator(modifier = Modifier.fillMaxWidth().testTag("progress-command-busy"))
     if ("start" in task.allowedCommands) OutlinedTextField(value = agentId,
       onValueChange = { agentId = it }, modifier = Modifier.fillMaxWidth().testTag("progress-start-agent"),
       label = { Text(stringResource(R.string.progress_agent_id)) }, singleLine = true, enabled = !busy)
@@ -933,7 +933,7 @@ private fun ProgressTaskEditor(title: String, onTitleChange: (String) -> Unit,
       modifier = Modifier.fillMaxWidth().testTag("progress-edit-save")) {
       Text(stringResource(R.string.progress_save))
     }
-    if (busy) CircularProgressIndicator(modifier = Modifier.testTag("progress-edit-busy"))
+    if (busy) BrandLoadingIndicator(modifier = Modifier.fillMaxWidth().testTag("progress-edit-busy"))
   }
 }
 

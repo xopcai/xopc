@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.provider.Settings
 import android.widget.Toast
 import java.net.URI
@@ -68,7 +69,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -89,6 +89,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -135,6 +136,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -168,6 +171,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
 
 /** The five top-level destinations mirror the current HarmonyOS home screen. */
 enum class HomeTab(@field:StringRes val label: Int, val icon: Int) {
@@ -308,6 +312,17 @@ private fun AssistantWelcome(recommendation: WelcomeRecommendation?, onChoose: (
 }
 
 @Composable
+private fun AssistantHistorySkeleton() {
+  Column(modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("assistant-history-skeleton"),
+    verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    repeat(4) { index ->
+      Box(modifier = Modifier.fillMaxWidth(if (index % 2 == 0) 0.9f else 0.7f)
+        .height(64.dp).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)))
+    }
+  }
+}
+
+@Composable
 fun MainScreen(
   modifier: Modifier = Modifier,
   connection: ConnectionUiState = ConnectionUiState(),
@@ -399,6 +414,9 @@ fun MainScreen(
   onSpeechChunk: suspend (String, String) -> ByteArray = { _, _ ->
     throw IllegalStateException("SPEECH_UNAVAILABLE")
   },
+  onTranscribeAudio: suspend (ByteArray, String) -> String = { _, _ ->
+    throw IllegalStateException("TRANSCRIPTION_UNAVAILABLE")
+  },
   onCreateVoiceCall: suspend (String, String) -> VoiceCallConnection = { _, _ ->
     throw IllegalStateException("VOICE_UNAVAILABLE")
   },
@@ -407,6 +425,9 @@ fun MainScreen(
   onPendingVoiceApproval: suspend (String) -> VoiceApproval? = { null },
   onRespondVoiceApproval: suspend (VoiceApproval, Boolean) -> Unit = { _, _ -> },
   onAddVoiceAttachment: suspend (ByteArray, Int) -> Unit = { _, _ ->
+    throw IllegalStateException("VOICE_UNAVAILABLE")
+  },
+  onSendVoiceRecording: suspend (ByteArray, Int) -> Unit = { _, _ ->
     throw IllegalStateException("VOICE_UNAVAILABLE")
   },
   onMessageNoteFeedbackHandled: (MessageNoteFeedback) -> Unit = {},
@@ -675,11 +696,13 @@ fun MainScreen(
     onRegenerateMessage = onRegenerateMessage,
     onLoadMessageMedia = onLoadMessageMedia,
     onSpeechChunk = onSpeechChunk,
+    onTranscribeAudio = onTranscribeAudio,
     onCreateVoiceCall = onCreateVoiceCall, onCancelVoiceCall = onCancelVoiceCall,
     onVoiceClarification = onVoiceClarification,
     onPendingVoiceApproval = onPendingVoiceApproval,
     onRespondVoiceApproval = onRespondVoiceApproval,
     onAddVoiceAttachment = onAddVoiceAttachment,
+    onSendVoiceRecording = onSendVoiceRecording,
     onCopyMessageText = { value ->
       (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
         .setPrimaryClip(ClipData.newPlainText(context.getString(R.string.assistant_copy), value))
@@ -857,6 +880,9 @@ internal fun MainContent(
   onSpeechChunk: suspend (String, String) -> ByteArray = { _, _ ->
     throw IllegalStateException("SPEECH_UNAVAILABLE")
   },
+  onTranscribeAudio: suspend (ByteArray, String) -> String = { _, _ ->
+    throw IllegalStateException("TRANSCRIPTION_UNAVAILABLE")
+  },
   onCreateVoiceCall: suspend (String, String) -> VoiceCallConnection = { _, _ ->
     throw IllegalStateException("VOICE_UNAVAILABLE")
   },
@@ -865,6 +891,9 @@ internal fun MainContent(
   onPendingVoiceApproval: suspend (String) -> VoiceApproval? = { null },
   onRespondVoiceApproval: suspend (VoiceApproval, Boolean) -> Unit = { _, _ -> },
   onAddVoiceAttachment: suspend (ByteArray, Int) -> Unit = { _, _ ->
+    throw IllegalStateException("VOICE_UNAVAILABLE")
+  },
+  onSendVoiceRecording: suspend (ByteArray, Int) -> Unit = { _, _ ->
     throw IllegalStateException("VOICE_UNAVAILABLE")
   },
   onCopyMessageText: (String) -> Unit = {},
@@ -946,12 +975,39 @@ internal fun MainContent(
     VoiceMemoRecorder(voiceContext)
   }
   DisposableEffect(voiceMemo) { onDispose { voiceMemo.cancel() } }
-  DisposableEffect(lifecycleOwner, voiceCall, voiceMemo) {
+  val inputVoice = remember(connection.profile?.gatewayId, connection.selectedConversationId) {
+    VoiceMemoRecorder(voiceContext)
+  }
+  var inputVoiceMode by remember(connection.profile?.gatewayId, connection.selectedConversationId) {
+    mutableStateOf(false)
+  }
+  var inputVoiceHeld by remember(inputVoice) { mutableStateOf(false) }
+  var inputVoiceBusy by remember(inputVoice) { mutableStateOf(false) }
+  var inputVoiceError by remember(inputVoice) { mutableStateOf("") }
+  var inputVoiceDestination by remember(inputVoice) { mutableStateOf("send") }
+  var inputVoiceRetryDestination by remember(inputVoice) { mutableStateOf("send") }
+  var inputVoiceElapsed by remember(inputVoice) { mutableIntStateOf(0) }
+  DisposableEffect(inputVoice) { onDispose { inputVoice.cancel() } }
+  LaunchedEffect(inputVoiceHeld) {
+    while (inputVoiceHeld) {
+      inputVoiceElapsed = inputVoice.elapsedSeconds
+      delay(250)
+    }
+  }
+  val inputVoicePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    if (granted) inputVoiceMode = true
+    else inputVoiceError = voiceContext.getString(R.string.voice_permission_denied)
+  }
+  val voiceFocusManager = LocalFocusManager.current
+  DisposableEffect(lifecycleOwner, voiceCall, voiceMemo, inputVoice) {
     val observer = LifecycleEventObserver { _, event ->
       if (event == Lifecycle.Event.ON_STOP) {
         if (voiceMemo.phase == "recording" || voiceMemo.phase == "paused")
           voiceMemo.stopRecording()
         if (voiceCall.phase != "idle") voiceScope.launch { voiceCall.stop() }
+        if (inputVoice.phase != "idle") {
+          inputVoice.cancel(); inputVoiceHeld = false
+        }
       }
     }
     lifecycleOwner.lifecycle.addObserver(observer)
@@ -1078,6 +1134,81 @@ internal fun MainContent(
     mutableStateOf("")
   }
   val keyboardController = LocalSoftwareKeyboardController.current
+  val currentComposerConnection by rememberUpdatedState(connection)
+  LaunchedEffect(inputVoiceMode) {
+    if (inputVoiceMode) {
+      assistantActionsOpen = false
+      voiceFocusManager.clearFocus(force = true)
+      keyboardController?.hide()
+    }
+  }
+  fun toggleInputVoice() {
+    if (inputVoiceBusy || inputVoiceHeld || inputVoice.phase != "idle") return
+    inputVoiceError = ""
+    if (inputVoiceMode) {
+      inputVoiceMode = false
+      assistantComposerFocus.requestFocus()
+      keyboardController?.show()
+    } else if (ContextCompat.checkSelfPermission(voiceContext, Manifest.permission.RECORD_AUDIO) ==
+      PackageManager.PERMISSION_GRANTED) {
+      assistantActionsOpen = false
+      voiceFocusManager.clearFocus(force = true)
+      keyboardController?.hide()
+      inputVoiceMode = true
+    } else inputVoicePermission.launch(Manifest.permission.RECORD_AUDIO)
+  }
+  fun deliverInputVoice(destination: String) {
+    if (inputVoiceBusy || inputVoice.phase != "ready") return
+    val targetGatewayId = connection.profile?.gatewayId
+    val targetConversationId = connection.selectedConversationId
+    inputVoiceRetryDestination = destination
+    inputVoiceBusy = true
+    voiceScope.launch {
+      try {
+        val (bytes, seconds) = withContext(Dispatchers.IO) { inputVoice.consume() }
+        if (destination == "text") {
+          val lang = when { language.startsWith("zh") -> "zh"; language.startsWith("en") -> "en"; else -> "" }
+          val transcript = onTranscribeAudio(bytes, lang)
+          if (inputVoice.phase != "ready" || currentComposerConnection.profile?.gatewayId != targetGatewayId ||
+            currentComposerConnection.selectedConversationId != targetConversationId) return@launch
+          val next = if (assistantComposerValue.text.isBlank()) transcript
+            else assistantComposerValue.text + "\n" + transcript
+          assistantComposerValue = TextFieldValue(next, selection = TextRange(next.length))
+          onDraftChange(next)
+          inputVoiceMode = false
+          assistantComposerFocus.requestFocus()
+          keyboardController?.show()
+        } else {
+          if (inputVoice.phase != "ready" || currentComposerConnection.profile?.gatewayId != targetGatewayId ||
+            currentComposerConnection.selectedConversationId != targetConversationId) return@launch
+          onSendVoiceRecording(bytes, seconds)
+        }
+        inputVoice.cancel()
+        inputVoiceError = ""
+      } catch (failure: Exception) {
+        inputVoiceError = failure.message ?: voiceContext.getString(R.string.voice_record_error)
+      } finally { inputVoiceBusy = false }
+    }
+  }
+  fun finishInputVoice(destination: String) {
+    if (!inputVoiceHeld) return
+    inputVoiceHeld = false
+    inputVoiceDestination = "send"
+    if (destination == "cancel" || inputVoice.elapsedMilliseconds < 380) {
+      inputVoice.cancel()
+      return
+    }
+    inputVoice.stopRecording()
+    if (inputVoice.phase != "ready") {
+      inputVoiceError = inputVoice.error.ifBlank { voiceContext.getString(R.string.voice_record_error) }
+      inputVoice.cancel()
+      return
+    }
+    deliverInputVoice(destination)
+  }
+  LaunchedEffect(inputVoiceElapsed, inputVoiceHeld) {
+    if (inputVoiceHeld && inputVoiceElapsed >= 120) finishInputVoice(inputVoiceDestination)
+  }
   val focusManager = LocalFocusManager.current
   val showBottomChrome = connection.profile != null && when (selectedTab) {
     HomeTab.Progress -> progressAtRoot
@@ -1144,7 +1275,26 @@ internal fun MainContent(
               assistantComposerValue = value
               onDraftChange(value.text)
             }, assistantComposerFocus, assistantActionsOpen, { assistantActionsOpen = it },
-              onRemoveDraftRef, onRemoveDraftAttachment, onPreviewDraftImage, onSendMessage, onStopRun)
+              onRemoveDraftRef, onRemoveDraftAttachment, onPreviewDraftImage, onSendMessage, onStopRun,
+              inputVoiceMode, inputVoiceHeld, inputVoiceBusy, inputVoice.phase, inputVoiceError,
+              inputVoiceDestination, inputVoiceElapsed,
+              ::toggleInputVoice, onVoiceStart = {
+                if (inputVoiceBusy || inputVoice.phase != "idle" || connection.sending) false
+                else {
+                  inputVoiceError = ""; inputVoiceDestination = "send"; inputVoiceElapsed = 0
+                  inputVoice.start()
+                  inputVoiceHeld = inputVoice.phase == "recording"
+                  if (!inputVoiceHeld) {
+                    inputVoiceError = inputVoice.error
+                    inputVoice.cancel()
+                  }
+                  inputVoiceHeld
+                }
+              }, onVoiceMove = { dx, dy ->
+                inputVoiceDestination = voiceRecordingDestination(dx, dy, inputVoiceDestination)
+              }, onVoiceFinish = ::finishInputVoice, onVoiceCancel = {
+                inputVoice.cancel(); inputVoiceError = ""; inputVoiceHeld = false
+              }, onVoiceRetry = { deliverInputVoice(inputVoiceRetryDestination) })
             AnimatedVisibility(visible = assistantActionsOpen,
               enter = expandVertically(animationSpec = tween(220), expandFrom = Alignment.Bottom) +
                 fadeIn(animationSpec = tween(220)),
@@ -1245,6 +1395,7 @@ internal fun MainContent(
         else if (selectedTab == HomeTab.Assistant) AssistantScreen(connection,
           rootInsets, bottomChromeHeight, onSelectConversation,
           onCreateConversation, onLoadReferences, onAddDraftRef,
+          onNoteFileContent,
           onRetryPendingInput,
           onReloadModels, onSelectModel, onReloadAgents, onSwitchAgent, onReloadContext,
           onLoadContextPanel, onSetContextDirectory, onAddContextFile, onCreateContextConversation,
@@ -1577,7 +1728,7 @@ private fun DraftAttachmentStrip(items: List<ChatAttachment>, scopeKey: String?,
                 .testTag("$tagPrefix-attachment-thumbnail-${item.id}"),
               contentScale = ContentScale.Crop)
             else Box(Modifier.fillMaxSize().padding(8.dp), contentAlignment = Alignment.Center) {
-              if (!loaded.first) CircularProgressIndicator(Modifier.size(24.dp))
+              if (!loaded.first) BrandLoadingIndicator(Modifier.size(24.dp))
               else Text(item.name, style = MaterialTheme.typography.labelSmall, maxLines = 3,
                 overflow = TextOverflow.Ellipsis)
             }
@@ -1622,7 +1773,7 @@ private fun DraftAttachmentStrip(items: List<ChatAttachment>, scopeKey: String?,
         if (loaded.second != null) Image(loaded.second!!.asImageBitmap(),
           contentDescription = previewItem.name, modifier = Modifier.fillMaxSize()
             .testTag("$tagPrefix-attachment-preview-image"), contentScale = ContentScale.Fit)
-        else if (!loaded.first) CircularProgressIndicator()
+        else if (!loaded.first) BrandLoadingIndicator(modifier = Modifier.fillMaxWidth())
         else Text(stringResource(R.string.assistant_attachment_preview_unavailable),
           color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
@@ -1702,9 +1853,12 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
       }
       if (hasPayload) {
         IconButton(onClick = onSubmit, enabled = canSend,
-          modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.onSurface, CircleShape)
+          modifier = Modifier.size(48.dp).background(
+            if (connection.quickSending) MaterialTheme.colorScheme.surfaceContainerHigh
+            else MaterialTheme.colorScheme.onSurface, CircleShape)
             .semantics { contentDescription = sendLabel }.testTag("quick-send")) {
-          Text("↑", style = MaterialTheme.typography.titleLarge,
+          if (connection.quickSending) BrandLoadingIndicator(extent = 24.dp)
+          else Text("↑", style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.surface)
         }
       }
@@ -1718,11 +1872,22 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
   actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit,
   onRemoveDraftRef: (String, String) -> Unit, onRemoveDraftAttachment: (String) -> Unit,
   onPreviewImage: suspend (String, ChatAttachment) -> Bitmap?,
-  onSendMessage: () -> Unit, onStopRun: () -> Unit) {
+  onSendMessage: () -> Unit, onStopRun: () -> Unit,
+  voiceMode: Boolean, voiceHeld: Boolean, voiceBusy: Boolean, voicePhase: String,
+  voiceError: String, voiceDestination: String, voiceSeconds: Int,
+  onVoiceToggle: () -> Unit, onVoiceStart: () -> Boolean,
+  onVoiceMove: (Float, Float) -> Unit, onVoiceFinish: (String) -> Unit,
+  onVoiceCancel: () -> Unit, onVoiceRetry: () -> Unit) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val expandedComposer = composerValue.text.isNotEmpty() || connection.draftRefs.isNotEmpty() ||
     connection.draftAttachments.isNotEmpty()
+  val showVoicePad = voiceMode || voicePhase != "idle"
+  val density = LocalDensity.current
+  val currentVoiceStart by rememberUpdatedState(onVoiceStart)
+  val currentVoiceMove by rememberUpdatedState(onVoiceMove)
+  val currentVoiceFinish by rememberUpdatedState(onVoiceFinish)
+  val currentVoiceCancel by rememberUpdatedState(onVoiceCancel)
   val toggleActions: () -> Unit = {
     if (!actionsOpen) {
       focusManager.clearFocus(force = true)
@@ -1740,8 +1905,10 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
       }, color = MaterialTheme.colorScheme.error)
     if (connection.attachmentError) Text(stringResource(R.string.assistant_attachment_error),
       color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("assistant-attachment-error"))
-    if (connection.attachmentLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp)
+    if (connection.attachmentLoading) BrandLoadingIndicator(modifier = Modifier.fillMaxWidth()
       .testTag("assistant-attachment-loading"))
+    if (voiceError.isNotBlank()) Text(voiceError, color = MaterialTheme.colorScheme.error,
+      modifier = Modifier.testTag("assistant-voice-error"))
     if (connection.pendingDeleteId == connection.selectedConversationId) {
       Text(stringResource(R.string.conversations_pending_delete), color = MaterialTheme.colorScheme.error)
     }
@@ -1774,9 +1941,55 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
     }
     Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer,
       RoundedCornerShape(18.dp)).testTag("assistant-composer-shell")) {
+      if (voiceHeld) Row(modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text("✕", color = if (voiceDestination == "cancel") MaterialTheme.colorScheme.error
+          else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("◖))  %02d:%02d".format(voiceSeconds / 60, voiceSeconds % 60),
+          color = MaterialTheme.colorScheme.primary)
+        Text("☷", color = if (voiceDestination == "text") MaterialTheme.colorScheme.primary
+          else MaterialTheme.colorScheme.onSurfaceVariant)
+      }
       Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.Bottom) {
-        BasicTextField(value = composerValue, onValueChange = onComposerValueChange,
+        if (showVoicePad) {
+          if (voicePhase == "ready" && !voiceBusy) Row(modifier = Modifier.weight(1f).height(48.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onVoiceCancel, modifier = Modifier.weight(1f)
+              .testTag("assistant-voice-cancel")) { Text(stringResource(R.string.progress_cancel)) }
+            TextButton(onClick = onVoiceRetry, modifier = Modifier.weight(1f)
+              .testTag("assistant-voice-retry")) { Text(stringResource(R.string.voice_input_retry)) }
+          } else Box(modifier = Modifier.weight(1f).height(48.dp)
+            .pointerInput(voiceBusy, connection.sending) {
+              awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                if (!currentVoiceStart()) return@awaitEachGesture
+                var destination = "send"
+                var released = false
+                do {
+                  val event = awaitPointerEvent()
+                  val change = event.changes.firstOrNull { it.id == down.id }
+                  if (change == null) break
+                  val dx = (change.position.x - down.position.x) / density.density
+                  val dy = (change.position.y - down.position.y) / density.density
+                  destination = voiceRecordingDestination(dx, dy, destination)
+                  currentVoiceMove(dx, dy)
+                  released = !change.pressed
+                } while (!released)
+                if (released) currentVoiceFinish(destination) else currentVoiceCancel()
+              }
+            }.semantics { contentDescription = "Hold to speak" }
+            .testTag("assistant-voice-record"), contentAlignment = Alignment.Center) {
+            Text(when {
+              voiceBusy -> stringResource(R.string.voice_input_working)
+              voiceDestination == "cancel" -> stringResource(R.string.voice_input_release_cancel)
+              voiceDestination == "text" -> stringResource(R.string.voice_input_release_text)
+              voiceHeld -> stringResource(R.string.voice_input_release_send)
+              else -> stringResource(R.string.voice_input_hold)
+            }, color = if (voiceDestination == "cancel") MaterialTheme.colorScheme.error
+              else MaterialTheme.colorScheme.onSurface)
+          }
+        } else BasicTextField(value = composerValue, onValueChange = onComposerValueChange,
           modifier = Modifier.weight(1f).heightIn(min = 48.dp).focusRequester(composerFocus)
             .onFocusChanged { if (it.isFocused) onActionsOpenChange(false) }
             .padding(horizontal = 12.dp, vertical = 10.dp).testTag("assistant-input"),
@@ -1790,17 +2003,44 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
               innerTextField()
             }
           })
-        if (!expandedComposer) AssistantComposerButtons(connection, actionsOpen,
-          toggleActions, onSendMessage, onStopRun)
+        if (!expandedComposer) {
+          VoiceInputToggle(voiceMode, voiceBusy || voicePhase != "idle" || connection.sending, onVoiceToggle)
+          AssistantComposerButtons(connection, actionsOpen,
+            toggleActions, onSendMessage, onStopRun)
+        }
       }
       if (expandedComposer) {
         Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp),
           horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+          VoiceInputToggle(voiceMode, voiceBusy || voicePhase != "idle" || connection.sending, onVoiceToggle)
           AssistantComposerButtons(connection, actionsOpen,
             toggleActions, onSendMessage, onStopRun)
         }
       }
     }
+  }
+}
+
+private fun voiceRecordingDestination(dx: Float, dy: Float, current: String): String {
+  if (current == "cancel" && dy < -52 && dx < -24) return "cancel"
+  if (current == "text" && dy < -52 && dx > 24) return "text"
+  return when {
+    dy < -72 && dx < -40 -> "cancel"
+    dy < -72 && dx > 40 -> "text"
+    else -> "send"
+  }
+}
+
+@Composable
+private fun VoiceInputToggle(active: Boolean, disabled: Boolean, onClick: () -> Unit) {
+  IconButton(onClick = onClick, enabled = !disabled,
+    modifier = Modifier.size(48.dp).semantics {
+      contentDescription = if (active) "Switch to keyboard" else "Voice input"
+    }.testTag("assistant-voice-toggle")) {
+    if (active) Text("⌨", color = MaterialTheme.colorScheme.primary,
+      style = MaterialTheme.typography.titleLarge)
+    else Icon(painterResource(R.drawable.action_microphone), contentDescription = null,
+      tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
   }
 }
 
@@ -1908,12 +2148,14 @@ private fun AssistantComposerButtons(connection: ConnectionUiState, actionsOpen:
     val sendLabel = stringResource(R.string.assistant_send)
     IconButton(onClick = onSendMessage, modifier = Modifier.size(48.dp)
       .semantics { contentDescription = sendLabel }.testTag("assistant-send")
-      .background(MaterialTheme.colorScheme.onSurface, CircleShape),
+      .background(if (connection.sending) MaterialTheme.colorScheme.surfaceContainerHigh
+        else MaterialTheme.colorScheme.onSurface, CircleShape),
       enabled = !connection.sending && !connection.taskScopeLoading &&
         !connection.attachmentLoading &&
         connection.draftModelReady && connection.realtimeStatus == "connected" &&
         connection.pendingInput == null && connection.pendingDeleteId != connection.selectedConversationId) {
-      Text("↑", style = MaterialTheme.typography.titleLarge,
+      if (connection.sending) BrandLoadingIndicator(extent = 24.dp)
+      else Text("↑", style = MaterialTheme.typography.titleLarge,
         color = MaterialTheme.colorScheme.surface)
     }
   }
@@ -1935,6 +2177,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onSelectConversation: (String) -> Unit, onCreateConversation: () -> Unit,
   onLoadReferences: (String, String) -> Unit,
   onAddDraftRef: (ReferencePickerItem) -> Boolean,
+  onSessionFileContent: suspend (String) -> ByteArray,
   onRetryPendingInput: () -> Unit,
   onReloadModels: () -> Unit, onSelectModel: (String) -> Unit,
   onReloadAgents: () -> Unit, onSwitchAgent: (String, Boolean) -> Unit,
@@ -1981,6 +2224,9 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   var agentQuery by remember(connection.selectedConversationId) { mutableStateOf("") }
   var pendingAgentId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   var contextOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var sessionFilesOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var contextInitialMode by remember(connection.selectedConversationId) { mutableStateOf("context") }
+  var contextInitialKind by remember(connection.selectedConversationId) { mutableStateOf("note") }
   var optionsOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   val optionsLabel = stringResource(R.string.assistant_options)
   var messageActionsId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
@@ -2008,6 +2254,33 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     val target = messageLinkTarget(link)
     if (target != null) onOpenMessageTarget(target)
     else if (link.startsWith("https://")) externalUrl = link
+  }
+  val showConnectionWait = connection.connectionWait.gatewayId == connection.profile?.gatewayId &&
+    connection.connectionWait.conversationId == connection.selectedConversationId &&
+    connection.connectionWait.snapshot?.wait?.phase?.let { it != "ready" } == true
+  val messageListState = remember(connection.selectedConversationId) { LazyListState() }
+  var positionedAtLatest by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  LaunchedEffect(connection.selectedConversationId, connection.historyLoading,
+    connection.messages.lastOrNull()?.id) {
+    if (!positionedAtLatest && !connection.historyLoading && connection.messages.isNotEmpty()) {
+      messageListState.scrollToItem(connection.messages.lastIndex)
+      positionedAtLatest = true
+    }
+  }
+  val statusIssue = when {
+    connection.chatError -> R.string.chat_load_error
+    connection.contextError && connection.taskScopeLoading -> R.string.assistant_task_scope_error
+    connection.runError -> R.string.assistant_run_error
+    connection.stopError -> R.string.assistant_stop_error
+    connection.agentError -> R.string.assistant_agent_error
+    connection.modelError -> R.string.assistant_model_error
+    else -> null
+  }
+  val retryStatus: () -> Unit = when (statusIssue) {
+    R.string.assistant_task_scope_error -> onReloadContext
+    R.string.assistant_agent_error -> onReloadAgents
+    R.string.assistant_model_error -> onReloadModels
+    else -> { { connection.selectedConversationId?.let(onSelectConversation) } }
   }
   Box(modifier = Modifier.fillMaxSize().padding(insets)
     .pointerInput(focusManager, keyboardController) {
@@ -2037,31 +2310,25 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     if (connection.selectedConversationId == null) {
       Text(stringResource(R.string.assistant_choose_conversation), style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
-      if (connection.conversationsLoading) CircularProgressIndicator()
+      if (connection.conversationsLoading) BrandLoadingPanel()
       connection.conversations.take(3).forEach { conversation ->
         ConversationCard(conversation, onClick = { onSelectConversation(conversation.id) })
       }
     } else {
-      if (connection.agentError) Text(stringResource(R.string.assistant_agent_error), color = MaterialTheme.colorScheme.error)
-      if (connection.modelError) Text(stringResource(R.string.assistant_model_error), color = MaterialTheme.colorScheme.error)
-      if (connection.realtimeStatus != "connected") Text(stringResource(R.string.assistant_reconnecting),
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-      if (connection.draftModelLoading) Text(stringResource(R.string.assistant_model_loading),
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-      if (connection.historyLoading) CircularProgressIndicator()
-      if (connection.chatError) Text(stringResource(R.string.chat_load_error), color = MaterialTheme.colorScheme.error)
-      if (connection.connectionWait.gatewayId == connection.profile?.gatewayId &&
-        connection.connectionWait.conversationId == connection.selectedConversationId) {
-        ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait)
-      }
-      if (connection.activeRunId != null) {
-        Text(stringResource(if (connection.stoppingRun) R.string.assistant_stopping else R.string.assistant_running),
-          style = MaterialTheme.typography.bodyMedium)
+      if (statusIssue != null) Row(modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(statusIssue), modifier = Modifier.weight(1f),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3)
+        TextButton(onClick = retryStatus, modifier = Modifier.testTag("assistant-status-retry")) {
+          Text(stringResource(R.string.progress_refresh))
+        }
       }
       if (reader.state.phase != "idle") Row(modifier = Modifier.fillMaxWidth()
         .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
         .padding(horizontal = 8.dp).testTag("assistant-read-aloud-controls"),
         verticalAlignment = Alignment.CenterVertically) {
+        if (reader.state.phase == "loading") BrandLoadingIndicator(extent = 20.dp)
         Text(when (reader.state.phase) {
           "loading" -> stringResource(R.string.assistant_speech_loading)
           "error" -> stringResource(R.string.assistant_speech_error)
@@ -2076,9 +2343,9 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           Text(stringResource(R.string.assistant_stop))
         }
       }
-      if (connection.stopError) Text(stringResource(R.string.assistant_stop_error), color = MaterialTheme.colorScheme.error)
-      if (connection.runError) Text(stringResource(R.string.assistant_run_error), color = MaterialTheme.colorScheme.error)
-      if (!connection.historyLoading && connection.messages.isEmpty() &&
+      if (connection.historyLoading && connection.messages.isEmpty()) {
+        Box(modifier = Modifier.weight(1f)) { AssistantHistorySkeleton() }
+      } else if (!connection.historyLoading && connection.messages.isEmpty() &&
         connection.activeRunId == null && connection.liveText.isBlank()) {
         Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
           AssistantWelcome(if (connection.contextLoading) null else
@@ -2089,7 +2356,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           }
         }
       } else LazyColumn(modifier = Modifier.weight(1f).testTag("assistant-message-list"),
-        contentPadding = PaddingValues(bottom = bottomChromeHeight + 12.dp),
+        state = messageListState,
+        contentPadding = PaddingValues(bottom = bottomChromeHeight + if (showConnectionWait) 104.dp else 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val latestMessageId = connection.messages.lastOrNull {
           it.role == "user" || it.role == "assistant"
@@ -2111,10 +2379,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             loadMedia = { media -> onLoadMessageMedia(connection.selectedConversationId, media) })
         }
         if (connection.liveText.isNotBlank() && connection.activeRunId != null) item(key = "live-output") {
-          Column(modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.assistant_live_output), style = MaterialTheme.typography.labelMedium,
-              color = MaterialTheme.colorScheme.primary)
-            MarkdownContent(connection.liveText, modifier = Modifier.fillMaxWidth(),
+          Card(modifier = Modifier.fillMaxWidth(0.9f).testTag("assistant-live-output")) {
+            MarkdownContent(connection.liveText, modifier = Modifier.fillMaxWidth().padding(16.dp),
               onOpenLink = openLink, onCopyCode = onCopyMessageText)
           }
         }
@@ -2136,18 +2402,11 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           }
         }
       }
-      if (connection.taskScopeLoading) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          Text(stringResource(if (connection.contextError) R.string.assistant_task_scope_error
-            else R.string.assistant_task_scope_loading), modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-          if (connection.contextError) TextButton(onClick = onReloadContext,
-            modifier = Modifier.testTag("assistant-task-scope-retry")) {
-            Text(stringResource(R.string.progress_refresh))
-          }
-        }
-      }
     }
+  }
+  if (showConnectionWait) Box(modifier = Modifier.align(Alignment.BottomCenter)
+    .padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
+    ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait)
   }
   }
   if (referenceKind != null) ModalBottomSheet(onDismissRequest = { onReferenceKindChange(null) }) {
@@ -2176,7 +2435,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       val matching = picker.gatewayId == connection.profile?.gatewayId &&
         picker.conversationId == connection.selectedConversationId &&
         picker.kind == referenceKind && picker.query == referenceQuery.trim()
-      if (!matching || picker.loading) CircularProgressIndicator()
+      if (!matching || picker.loading) BrandLoadingPanel(minHeight = 120.dp)
       else if (picker.error) {
         Text(stringResource(R.string.assistant_reference_error), color = MaterialTheme.colorScheme.error)
         TextButton(onClick = { onLoadReferences(referenceKind, referenceQuery) },
@@ -2207,36 +2466,56 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       }
     }
   }
-  if (optionsOpen) ModalBottomSheet(onDismissRequest = { optionsOpen = false }) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+  if (optionsOpen || contextOpen) ModalBottomSheet(onDismissRequest = {
+    optionsOpen = false; contextOpen = false
+  }) {
+    if (contextOpen) {
+      ContextDetails(connection, onReloadContext, onLoadContextPanel, onSetContextDirectory,
+        onAddContextFile, onCreateContextConversation, onLoadReferences, onAddDraftRef,
+        initialMode = contextInitialMode, initialKind = contextInitialKind,
+        onBackToOptions = { contextOpen = false; optionsOpen = true },
+        onClose = { contextOpen = false; optionsOpen = false })
+    } else {
+    val contextSummary = listOfNotNull(connection.context?.project?.title?.takeIf(String::isNotBlank),
+      connection.context?.environment?.let { if (it.kind == "managed_worktree") "Worktree" else "Local" })
+      .joinToString(" · ")
+    Column(modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp)
+      .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 16.dp),
       verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      Text(stringResource(R.string.assistant_options), style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(bottom = 8.dp))
-      TextButton(onClick = { optionsOpen = false; onCreateConversation() },
-        enabled = !connection.creatingConversation,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("assistant-new")) {
-        Text(stringResource(R.string.assistant_action_new_chat), modifier = Modifier.fillMaxWidth())
+      Text(stringResource(R.string.assistant_options), style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+      if (connection.selectedConversationId != null) {
+        ContextRow(stringResource(R.string.assistant_context), contextSummary, "assistant-context",
+          iconRes = R.drawable.action_folder, compact = true) {
+          optionsOpen = false; contextInitialMode = "context"; contextInitialKind = "note"
+          contextOpen = true; onReloadContext()
+        }
+        ContextRow(stringResource(R.string.assistant_agent),
+          connection.agents.firstOrNull { it.id == connection.selectedAgentId }?.name
+            ?: connection.selectedAgentId, "assistant-agent", iconRes = R.drawable.tab_assistant,
+          compact = true, enabled = !connection.creatingConversation) {
+          optionsOpen = false; agentPickerOpen = true; onReloadAgents()
+        }
+        ContextRow(stringResource(R.string.assistant_model),
+          connection.models.firstOrNull { it.id == connection.selectedModelId }?.name
+            ?: connection.selectedModelId, "assistant-model", iconRes = R.drawable.action_waveform,
+          compact = true, enabled = !connection.modelSaving) {
+          optionsOpen = false; modelPickerOpen = true; onReloadModels()
+        }
+      }
+      ContextRow(stringResource(R.string.assistant_action_new_chat), "", "assistant-new",
+        iconRes = R.drawable.action_new_chat, compact = true,
+        enabled = !connection.creatingConversation) {
+        optionsOpen = false; onCreateConversation()
       }
       if (connection.selectedConversationId != null) {
-        TextButton(onClick = { optionsOpen = false; agentPickerOpen = true; onReloadAgents() },
-          enabled = !connection.creatingConversation,
-          modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("assistant-agent")) {
-          Text(stringResource(R.string.assistant_agent) + " · " +
-            (connection.agents.firstOrNull { it.id == connection.selectedAgentId }?.name
-              ?: connection.selectedAgentId), modifier = Modifier.fillMaxWidth())
-        }
-        TextButton(onClick = { optionsOpen = false; modelPickerOpen = true; onReloadModels() },
-          enabled = !connection.modelSaving,
-          modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("assistant-model")) {
-          Text(stringResource(R.string.assistant_model) + " · " +
-            (connection.models.firstOrNull { it.id == connection.selectedModelId }?.name
-              ?: connection.selectedModelId), modifier = Modifier.fillMaxWidth())
-        }
-        TextButton(onClick = { optionsOpen = false; contextOpen = true; onReloadContext() },
-          modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("assistant-context")) {
-          Text(stringResource(R.string.assistant_context), modifier = Modifier.fillMaxWidth())
+        ContextRow(stringResource(R.string.assistant_session_files), "", "assistant-session-files",
+          iconRes = R.drawable.action_folder, compact = true) {
+          optionsOpen = false; sessionFilesOpen = true
+          onLoadContextPanel("files", "", "")
         }
       }
+    }
     }
   }
   val actionsMessage = connection.messages.firstOrNull { it.id == messageActionsId }
@@ -2374,10 +2653,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         Text(stringResource(R.string.progress_cancel))
       } })
   }
-  if (contextOpen) ModalBottomSheet(onDismissRequest = { contextOpen = false }) {
-    ContextDetails(connection, onReloadContext, onLoadContextPanel, onSetContextDirectory,
-      onAddContextFile, onCreateContextConversation, onLoadReferences, onAddDraftRef,
-      onClose = { contextOpen = false })
+  if (sessionFilesOpen) ModalBottomSheet(onDismissRequest = { sessionFilesOpen = false }) {
+    SessionFilesDetails(connection.contextPanel, onLoadContextPanel, onSessionFileContent) {
+      sessionFilesOpen = false
+    }
   }
   if (modelPickerOpen) AlertDialog(
     onDismissRequest = { modelPickerOpen = false },
@@ -2386,7 +2665,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(value = modelQuery, onValueChange = { modelQuery = it },
           label = { Text(stringResource(R.string.assistant_model_search)) }, singleLine = true)
-        if (connection.modelsLoading) CircularProgressIndicator()
+        if (connection.modelsLoading) BrandLoadingPanel(minHeight = 120.dp)
         if (connection.modelError) TextButton(onClick = onReloadModels) {
           Text(stringResource(R.string.assistant_model_retry))
         }
@@ -2412,7 +2691,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(value = agentQuery, onValueChange = { agentQuery = it },
           label = { Text(stringResource(R.string.assistant_agent_search)) }, singleLine = true)
-        if (connection.agentsLoading) CircularProgressIndicator()
+        if (connection.agentsLoading) BrandLoadingPanel(minHeight = 120.dp)
         if (connection.agentError) TextButton(onClick = onReloadAgents) {
           Text(stringResource(R.string.assistant_agent_retry))
         }
@@ -2448,7 +2727,7 @@ private fun ExecutionDetails(detail: ExecutionDetail?, loading: Boolean, error: 
   onRetry: () -> Unit, onOpenLink: (String) -> Unit) {
   var expandedGroupId by remember(detail?.turnId) { mutableStateOf<String?>(null) }
   val groups = remember(detail, live) { ExecutionGroups.group(detail?.steps.orEmpty(), live) }
-  if (loading && detail == null) CircularProgressIndicator(modifier = Modifier.testTag("execution-loading"))
+  if (loading && detail == null) BrandLoadingPanel(modifier = Modifier.testTag("execution-loading"))
   if (error) {
     Text(stringResource(R.string.assistant_execution_error), color = MaterialTheme.colorScheme.error)
     TextButton(onClick = onRetry, modifier = Modifier.testTag("execution-retry")) {
@@ -2660,7 +2939,7 @@ private fun ConversationsScreen(
   }
   if (connection.conversationShareBusy) AlertDialog(onDismissRequest = {},
     title = { Text(stringResource(R.string.conversations_share)) },
-    text = { CircularProgressIndicator(modifier = Modifier.testTag("conversations-share-loading")) },
+    text = { BrandLoadingPanel(modifier = Modifier.testTag("conversations-share-loading"), minHeight = 120.dp) },
     confirmButton = {})
   connection.conversationSharePreview?.let { preview -> AlertDialog(onDismissRequest = onDismissShare,
     title = { Text(stringResource(R.string.conversations_share)) },
@@ -2780,12 +3059,18 @@ private fun ConversationsScreen(
       if (!selecting && !searchOpen) IconButton(onClick = { searchOpen = true },
         modifier = Modifier.size(48.dp).semantics { contentDescription = searchLabel }
           .testTag("conversations-open-search")) {
-        Text("⌕", style = MaterialTheme.typography.headlineMedium)
+        Icon(painterResource(R.drawable.action_search), contentDescription = null,
+          tint = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(24.dp).testTag("conversations-search-icon"))
       }
       if (!selecting) IconButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
         modifier = Modifier.size(48.dp).semantics {
           contentDescription = newConversationLabel
-        }.testTag("chats-new")) { Text("+", style = MaterialTheme.typography.headlineMedium) }
+        }.testTag("chats-new")) {
+        Icon(painterResource(R.drawable.action_add), contentDescription = null,
+          tint = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(24.dp).testTag("conversations-new-icon"))
+      }
     }
     if (searchOpen) Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2815,7 +3100,7 @@ private fun ConversationsScreen(
           color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
     }
-    if (connection.conversationsLoading && connection.conversations.isEmpty()) CircularProgressIndicator()
+    if (connection.conversationsLoading && connection.conversations.isEmpty()) BrandLoadingPanel()
     if (connection.chatError) Row(verticalAlignment = Alignment.CenterVertically) {
       Text(stringResource(R.string.chat_load_error), color = MaterialTheme.colorScheme.error,
         modifier = Modifier.weight(1f))
@@ -2869,7 +3154,11 @@ private fun ConversationsScreen(
     }
     PullToRefreshBox(isRefreshing = connection.conversationsLoading && connection.conversations.isNotEmpty(),
       onRefresh = { if (!connection.conversationsLoading && !connection.conversationsLoadingMore) onRefresh() },
-      modifier = Modifier.fillMaxSize().testTag("conversations-refresh-gesture")) {
+      modifier = Modifier.fillMaxSize().testTag("conversations-refresh-gesture"),
+      indicator = {
+        if (connection.conversationsLoading && connection.conversations.isNotEmpty()) BrandLoadingIndicator(
+          modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp), extent = 32.dp)
+      }) {
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("conversations-list"),
       contentPadding = PaddingValues(bottom = bottomChromeHeight + 20.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2921,6 +3210,7 @@ private fun ConversationsScreen(
         OutlinedButton(onClick = onLoadMore,
           enabled = !connection.conversationsLoading && !connection.conversationsLoadingMore,
           modifier = Modifier.fillMaxWidth().testTag("conversations-load-more")) {
+          if (connection.conversationsLoadingMore) BrandLoadingIndicator(extent = 20.dp)
           Text(stringResource(if (connection.conversationsLoadingMore) R.string.conversations_loading_more
             else R.string.conversations_load_more))
         }
@@ -3048,14 +3338,34 @@ private fun ContextDetails(connection: ConnectionUiState, onRetry: () -> Unit,
   onLoadPanel: (String, String, String) -> Unit, onSetDirectory: () -> Unit,
   onAddFile: (ManagedFile) -> Unit, onCreateScope: (String?, String?) -> Unit,
   onLoadReferences: (String, String) -> Unit, onAddReference: (ReferencePickerItem) -> Boolean,
-  onClose: () -> Unit) {
-  var mode by remember(connection.selectedConversationId) { mutableStateOf("context") }
-  var kind by remember(connection.selectedConversationId) { mutableStateOf("note") }
+  initialMode: String = "context", initialKind: String = "note",
+  onBackToOptions: () -> Unit, onClose: () -> Unit) {
+  var mode by remember(connection.selectedConversationId, initialMode) { mutableStateOf(initialMode) }
+  var kind by remember(connection.selectedConversationId, initialKind) { mutableStateOf(initialKind) }
   var query by remember(connection.selectedConversationId) { mutableStateOf("") }
   var filePath by remember(connection.selectedConversationId) { mutableStateOf("") }
   var fileAttachmentCount by remember(connection.selectedConversationId) { mutableIntStateOf(-1) }
   val panel = connection.contextPanel
   val summary = connection.context
+  val sheetRows = when (mode) {
+    "project" -> panel.projects.size + 1
+    "environment" -> 2 + if (panel.environment?.worktreeUnavailableReason != null) 1 else 0
+    "directory" -> (panel.directories?.entries?.count { it.isDirectory } ?: 0) + 3
+    "references" -> 7
+    else -> 2 + summary?.sources.orEmpty().size.coerceAtMost(5) +
+      (if (summary?.environment != null) 1 else 0) +
+      (if (summary?.project == null && summary?.task == null &&
+        summary?.workingDirectoryLocked != true) 1 else 0)
+  }
+  val desiredHeight = when (mode) {
+    "environment" -> if (panel.environment?.worktreeUnavailableReason != null) 336.dp else 272.dp
+    "project" -> (132 + sheetRows * 68).dp.coerceIn(240.dp, 620.dp)
+    "directory" -> (140 + sheetRows * 56).dp.coerceIn(300.dp, 620.dp)
+    "references" -> 620.dp
+    else -> if (connection.contextLoading || summary == null) 300.dp
+      else (132 + sheetRows * 64).dp.coerceIn(280.dp, 620.dp)
+  }
+  val sheetHeight = minOf(desiredHeight, LocalConfiguration.current.screenHeightDp.dp * 0.84f)
   fun choose(next: String) {
     mode = next
     if (next == "project" || next == "environment") onLoadPanel(next, "", "")
@@ -3076,17 +3386,18 @@ private fun ContextDetails(connection: ConnectionUiState, onRetry: () -> Unit,
     if (fileAttachmentCount >= 0 && !panel.saving &&
       connection.draftAttachments.size > fileAttachmentCount) onClose()
   }
-  Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.84f)
-    .padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+  Column(modifier = Modifier.fillMaxWidth().height(sheetHeight)
+    .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 24.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+      TextButton(onClick = { if (mode == "context") onBackToOptions() else mode = "context" },
+        modifier = Modifier.testTag("context-back")) { Text("‹") }
       Text(stringResource(R.string.assistant_context), modifier = Modifier.weight(1f),
-        style = MaterialTheme.typography.titleLarge)
+        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
       TextButton(onClick = onClose, modifier = Modifier.testTag("context-close")) {
-        Text(stringResource(R.string.assistant_close))
+        Text("×", style = MaterialTheme.typography.headlineMedium)
       }
     }
-    if (mode != "context") TextButton(onClick = { mode = "context" },
-      modifier = Modifier.testTag("context-back")) { Text(stringResource(R.string.progress_back)) }
     if (mode == "references") {
       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         listOf("note" to R.string.tab_notes, "task" to R.string.progress_tasks,
@@ -3111,7 +3422,7 @@ private fun ContextDetails(connection: ConnectionUiState, onRetry: () -> Unit,
       connection.referencePicker.loading else panel.loading || panel.saving
     val failed = if (mode == "context") connection.contextError else if (mode == "references" && kind != "file")
       connection.referencePicker.error else panel.error
-    if (busy) CircularProgressIndicator(modifier = Modifier.testTag("context-loading"))
+    if (busy) BrandLoadingPanel(modifier = Modifier.testTag("context-loading"))
     if (failed) {
       Text(stringResource(R.string.assistant_context_error), color = MaterialTheme.colorScheme.error)
       TextButton(onClick = {
@@ -3125,17 +3436,19 @@ private fun ContextDetails(connection: ConnectionUiState, onRetry: () -> Unit,
       }, modifier = Modifier.testTag("context-retry")) { Text(stringResource(R.string.assistant_context_retry)) }
     }
     LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(),
-      verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      verticalArrangement = Arrangement.spacedBy(8.dp)) {
       when (mode) {
         "context" -> if (summary != null) {
           item { Text(stringResource(R.string.assistant_context_hint),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
           item { ContextRow(summary.project?.title ?: stringResource(R.string.assistant_context_none),
-            summary.task?.title.orEmpty(), "context-project") { choose("project") } }
+            summary.task?.title.orEmpty(), "context-project", iconRes = R.drawable.action_folder) {
+            choose("project")
+          } }
           summary.environment?.let { environment -> item {
             ContextRow(if (environment.kind == "managed_worktree") "Worktree" else "Local",
               listOf(environment.rootPath, environment.branch.orEmpty()).filter(String::isNotBlank)
-                .joinToString("\n"), "context-environment") {
+                .joinToString("\n"), "context-environment", iconRes = R.drawable.settings_gear) {
               choose(if (summary.project != null) "environment" else "directory")
             }
           } }
@@ -3144,16 +3457,12 @@ private fun ContextDetails(connection: ConnectionUiState, onRetry: () -> Unit,
               choose("directory")
             }
           }
-          if (summary.workingDirectoryLocked) item { Text(stringResource(R.string.assistant_context_locked),
-            color = MaterialTheme.colorScheme.onSurfaceVariant) }
           items(summary.sources, key = { it.id }) { source ->
             ContextRow(source.title.ifBlank { source.id }, if (source.unavailable)
               stringResource(R.string.assistant_context_unavailable) else "", "context-source-${source.id}",
-              enabled = false) {}
+              enabled = false, navigable = false, iconRes = R.drawable.tab_notes) {}
           }
           if (summary.sourcesHasMore) item { Text(stringResource(R.string.assistant_context_more_sources)) }
-          if (summary.unavailableSections.isNotEmpty()) item { Text(stringResource(R.string.assistant_context_partial),
-            color = MaterialTheme.colorScheme.error) }
           item { ContextRow(stringResource(R.string.assistant_reference_title), "", "context-add-reference") {
             choose("references")
           } }
@@ -3171,11 +3480,13 @@ private fun ContextDetails(connection: ConnectionUiState, onRetry: () -> Unit,
           }
         }
         "environment" -> {
-          item { ContextRow("Local", "", "context-local", enabled = panel.environment?.localAvailable == true) {
+          item { ContextRow("Local", "", "context-local", iconRes = R.drawable.action_folder,
+            enabled = panel.environment?.localAvailable == true) {
             onCreateScope(summary?.project?.id, "local_checkout"); onClose()
           } }
           item { ContextRow("Worktree", panel.environment?.worktreeUnavailableReason.orEmpty(),
-            "context-worktree", enabled = panel.environment != null &&
+            "context-worktree", iconRes = R.drawable.action_folder,
+            enabled = panel.environment != null &&
               panel.environment.worktreeUnavailableReason == null) {
             onCreateScope(summary?.project?.id, "managed_worktree"); onClose()
           } }
@@ -3224,16 +3535,121 @@ private fun ContextDetails(connection: ConnectionUiState, onRetry: () -> Unit,
 }
 
 @Composable
+private fun SessionFilesDetails(panel: ContextPanelUiState,
+  onLoadPanel: (String, String, String) -> Unit,
+  onLoadContent: suspend (String) -> ByteArray, onClose: () -> Unit) {
+  var path by remember { mutableStateOf("") }
+  var query by remember { mutableStateOf("") }
+  var selected by remember { mutableStateOf<ManagedFile?>(null) }
+  val content by produceState<ByteArray?>(initialValue = null, selected?.id) {
+    value = null
+    val file = selected ?: return@produceState
+    value = try { onLoadContent(file.id) }
+      catch (error: CancellationException) { throw error }
+      catch (_: Exception) { byteArrayOf() }
+  }
+  Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f)
+    .padding(horizontal = 20.dp, vertical = 8.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+      TextButton(onClick = {
+        if (selected != null) selected = null
+        else if (path.isNotBlank()) {
+          path = path.substringBeforeLast('/', "")
+          onLoadPanel("files", path, query)
+        } else onClose()
+      }, modifier = Modifier.testTag("session-files-back")) { Text("‹") }
+      Text(stringResource(R.string.assistant_session_files),
+        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+        modifier = Modifier.weight(1f))
+      TextButton(onClick = onClose) { Text("×") }
+    }
+    if (selected == null) {
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(query, onValueChange = { query = it.take(4096) },
+          modifier = Modifier.weight(1f).testTag("session-files-search"),
+          label = { Text(stringResource(R.string.assistant_reference_search)) },
+          singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+          keyboardActions = KeyboardActions(onSearch = { onLoadPanel("files", path, query) }))
+        TextButton(onClick = { onLoadPanel("files", path, query) },
+          modifier = Modifier.testTag("session-files-refresh")) {
+          Text(stringResource(R.string.assistant_context_retry))
+        }
+      }
+      Text(if (path.isBlank()) stringResource(R.string.assistant_session_files) else path,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1, overflow = TextOverflow.Ellipsis)
+      if (panel.loading) BrandLoadingPanel(modifier = Modifier.testTag("session-files-loading"))
+      if (panel.error) Text(stringResource(R.string.assistant_context_error),
+        color = MaterialTheme.colorScheme.error)
+      LazyColumn(modifier = Modifier.weight(1f),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!panel.loading && !panel.error && panel.files.isEmpty()) item {
+          Text(stringResource(R.string.notes_files_empty),
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        items(panel.files, key = { it.id }) { file ->
+          ContextRow(file.name, file.relativePath, "session-file-${file.id}",
+            iconRes = if (file.kind == "directory") R.drawable.action_folder else R.drawable.tab_notes) {
+            if (file.kind == "directory") {
+              path = file.relativePath
+              onLoadPanel("files", path, query)
+            } else selected = file
+          }
+        }
+      }
+    } else {
+      val file = selected!!
+      Text(file.name, style = MaterialTheme.typography.titleMedium)
+      Text(file.relativePath, style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (content == null) BrandLoadingPanel(modifier = Modifier.testTag("session-file-loading"))
+      else if (content!!.isEmpty()) Text(stringResource(R.string.notes_file_preview_unavailable))
+      else if (isBitmapPreview(file.name, file.mimeType)) {
+        val bitmap = remember(content) {
+          val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+          BitmapFactory.decodeByteArray(content!!, 0, content!!.size, bounds)
+          var sample = 1
+          while (bounds.outWidth / sample > 2048 || bounds.outHeight / sample > 2048) sample *= 2
+          BitmapFactory.decodeByteArray(content!!, 0, content!!.size,
+            BitmapFactory.Options().apply { inSampleSize = sample })
+        }
+        if (bitmap != null) Image(bitmap.asImageBitmap(), file.name,
+          modifier = Modifier.fillMaxWidth().weight(1f).testTag("session-file-image"),
+          contentScale = ContentScale.Fit)
+        else Text(stringResource(R.string.notes_file_preview_unavailable))
+      } else FilePreviewContent(file.name, file.mimeType, content!!,
+        modifier = Modifier.fillMaxWidth().weight(1f).testTag("session-file-preview"))
+    }
+  }
+}
+
+@Composable
 private fun ContextRow(title: String, subtitle: String, tag: String, enabled: Boolean = true,
+  iconRes: Int? = null, compact: Boolean = false, navigable: Boolean = true,
   onClick: () -> Unit) {
   TextButton(onClick = onClick, enabled = enabled,
-    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(tag)) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-      Text(title, color = MaterialTheme.colorScheme.onSurface, maxLines = 2,
-        overflow = TextOverflow.Ellipsis)
-      if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
-        overflow = TextOverflow.Ellipsis)
+    modifier = Modifier.fillMaxWidth().heightIn(min = if (compact) 52.dp else 64.dp)
+      .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(if (compact) 12.dp else 14.dp))
+      .testTag(tag), contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 16.dp,
+      vertical = if (compact) 6.dp else 12.dp)) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 12.dp)) {
+      if (iconRes != null) Icon(painterResource(iconRes), contentDescription = null,
+        modifier = Modifier.size(if (compact) 20.dp else 23.dp),
+        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(title, color = MaterialTheme.colorScheme.onSurface,
+          style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
+          fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
+          overflow = TextOverflow.Ellipsis)
+      }
+      if (navigable) Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.titleMedium)
     }
   }
 }
@@ -3355,7 +3771,7 @@ private fun PairingScreen(
           modifier = Modifier.fillMaxWidth().height(48.dp).testTag("pairing-cancel")) {
           Text(stringResource(R.string.progress_cancel))
         }
-        connection.restoring -> CircularProgressIndicator(
+        connection.restoring -> BrandLoadingIndicator(
           modifier = Modifier.testTag("pairing-progress"))
         showHelp -> Button(onClick = closeSecondary,
           modifier = Modifier.fillMaxWidth().height(52.dp).testTag("pairing-ready")) {
