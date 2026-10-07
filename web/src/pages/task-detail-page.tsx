@@ -1,13 +1,14 @@
 import { TaskInputCard } from '@/features/tasks/task-input-card';
-import { verifiedTaskCriteria } from '@xopcai/gateway-contract';
 import type { TaskChangedEvent, TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, CalendarClock, Circle, CircleCheck, CircleX, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import useSWR from 'swr';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
+import { automationApi } from '@/features/automations/automation-api';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -19,10 +20,11 @@ import { fetchProjectOperatingView } from '@/features/projects/api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { DependencyPicker, type DependencyCandidate } from '@/features/tasks/dependency-picker';
 import { taskChatHref, taskDetailModalHref } from '@/features/tasks/task-detail-route';
-import { cancelTaskRun, commandTask, deleteTask, handoffTask, submitTaskFeedback, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
+import { cancelTaskRun, commandTask, deleteTask, handoffTask, reviewTaskCriterion, submitTaskFeedback, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
 import { TaskResultEvidence } from '@/features/tasks/task-result-evidence';
 import { TaskCollaborationPanel } from '@/features/tasks/task-collaboration-panel';
 import { taskCopy } from '@/features/tasks/task-copy';
+import { summarizeTaskCriteria } from '@/features/tasks/task-detail-summary';
 import { hasTaskEditConflict, optimisticallyPatchTask, type TaskEditBase } from '@/features/tasks/task-detail-sync';
 import { useTaskDetail } from '@/features/tasks/use-task-detail';
 import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
@@ -191,9 +193,8 @@ function readTaskChatPanelPercent(): number {
 }
 
 type DetailStatusKey = 'captured' | 'ready' | 'queued' | 'running' | 'verifying' | 'waiting' | 'blocked' | 'needsUser' | 'review' | 'completed' | 'ended' | 'paused';
-type VerificationStatus = 'passed' | 'failed' | 'unverified';
 type TaskEditConflict = 'title' | 'description' | null;
-type TaskPendingOperation = 'command' | 'phase' | 'priority' | 'dueAt' | 'delegateAgentId' | 'dependencies' | 'delete';
+type TaskPendingOperation = 'command' | 'phase' | 'priority' | 'dueAt' | 'delegateAgentId' | 'dependencies' | 'acceptance' | 'delete';
 
 function detailStatusKey(detail: TaskDetail): DetailStatusKey {
   if (detail.task.phase === 'closed') return detail.task.resolution === 'done' ? 'completed' : 'ended';
@@ -213,21 +214,13 @@ function detailStatusTone(status: DetailStatusKey): string {
   return 'bg-surface-hover text-fg-muted';
 }
 
-function TextList({ items, empty, verificationByCriterion }: {
+function TextList({ items, empty }: {
   items: string[];
   empty: string;
-  verificationByCriterion?: ReadonlyMap<string, VerificationStatus>;
 }) {
   if (items.length === 0) return <p className="text-sm leading-6 text-fg-muted">{empty}</p>;
   return <ul className="space-y-2">{items.map((item) => {
-    const verification = verificationByCriterion?.get(item) ?? 'unverified';
-    const Icon = verification === 'passed' ? CircleCheck : verification === 'failed' ? CircleX : Circle;
-    const iconClass = verification === 'passed'
-      ? 'mt-1 size-4 shrink-0 text-success'
-      : verification === 'failed'
-        ? 'mt-1 size-4 shrink-0 text-danger'
-        : 'mt-1 size-4 shrink-0 text-fg-subtle';
-    return <li key={item} className="flex gap-2 text-sm leading-6 text-fg"><Icon className={iconClass} /><span>{item}</span></li>;
+    return <li key={item} className="flex gap-2 text-sm leading-6 text-fg"><Circle className="mt-1 size-4 shrink-0 text-fg-subtle" /><span>{item}</span></li>;
   })}</ul>;
 }
 
@@ -256,6 +249,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     conversationLoading,
     conversationError,
   } = useTaskDetail(taskId);
+  const { data: automationList } = useSWR(taskId ? 'task-detail-automations' : null, () => automationApi.list());
   const [error, setError] = useState<string | null>(null);
   const [pendingOperations, setPendingOperations] = useState<ReadonlySet<TaskPendingOperation>>(() => new Set());
   const [dependencyCandidates, setDependencyCandidates] = useState<DependencyCandidate[]>([]);
@@ -572,6 +566,22 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     }
   }, [copy.actionFailed, navigate, onDeleted, returnPath, setOperationPending, taskId]);
 
+  const reviewCriterion = useCallback(async (criterionIndex: number, status: 'passed' | 'failed') => {
+    const currentDetail = detailRef.current;
+    if (!currentDetail) return;
+    setOperationPending('acceptance', true);
+    setError(null);
+    try {
+      await mutateDetail(await reviewTaskCriterion(taskId, criterionIndex, status,
+        currentDetail.task.version, currentDetail.task.latestContractVersion), { revalidate: false });
+    } catch {
+      setError(copy.actionFailed);
+      await mutateDetail();
+    } finally {
+      setOperationPending('acceptance', false);
+    }
+  }, [copy.actionFailed, mutateDetail, setOperationPending, taskId]);
+
   useLayoutEffect(() => {
     if (presentation === 'modal') return;
     setPageHeader({
@@ -586,18 +596,17 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   if (!detail) return <div className={presentation === 'modal' ? 'p-5' : 'mx-auto max-w-4xl p-4 sm:p-6'}><DetailSkeleton /></div>;
 
   const activeWait = detail.waits[0];
+  const criterionSummaries = summarizeTaskCriteria(detail);
+  const allCriteriaPassed = criterionSummaries.length > 0 && criterionSummaries.every((criterion) => criterion.status === 'passed');
   const pausedWait = detail.waits.find((wait) => wait.kind === 'paused');
   const latestReceipt = detail.receipts[0];
   const statusKey = detailStatusKey(detail);
   const statusLabel = copy.detailStatuses[statusKey];
   const objective = detail.task.body?.trim() || detail.task.contract?.objective.trim();
-  const receiptForCurrentContract = detail.runs.find((run) => run.id === latestReceipt?.runId)?.contractVersion === detail.task.latestContractVersion ? latestReceipt : undefined;
-  const evidenceVerifiedCriteria = verifiedTaskCriteria(receiptForCurrentContract);
-  const verificationByCriterion = new Map(receiptForCurrentContract?.verification.checks.map((check) => [check.criterion, check.status === 'passed' && !evidenceVerifiedCriteria.has(check.criterion) ? 'unverified' : check.status]));
   const canSchedule = detail.allowedCommands.includes('mark_ready');
   const canStart = detail.allowedCommands.includes('start');
   const canPause = detail.allowedCommands.includes('add_wait');
-  const canApprove = !activeWait && detail.task.phase === 'review' && detail.allowedCommands.includes('close');
+  const canApprove = !activeWait && allCriteriaPassed && detail.task.phase === 'review' && detail.allowedCommands.includes('close');
   const canReopen = detail.allowedCommands.includes('reopen');
   const conversationConversationId = detail.conversation.activeConversationId;
   const conversationAgentId = detail.conversation.currentExecutorAgentId
@@ -610,13 +619,23 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     && workspacePanelConversationId === conversationConversationId,
   );
   const needsUserAttention = detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required');
-  const acceptanceCriteria = detail.task.contract?.acceptanceCriteria ?? [];
-  const verifiedCriteriaCount = acceptanceCriteria.filter((criterion) => verificationByCriterion.get(criterion) === 'passed').length;
+  const verifiedCriteriaCount = criterionSummaries.filter((criterion) => criterion.status === 'passed').length;
+  const deliverables = detail.context.filter((item) => item.role === 'deliverable');
+  const currentRunIds = new Set(detail.runs.filter((run) => run.contractVersion === detail.task.latestContractVersion).map((run) => run.id));
+  const artifactEvidence = [...new Map(detail.receipts.filter((receipt) => currentRunIds.has(receipt.runId))
+    .flatMap((receipt) => receipt.evidence.filter((item) => item.kind === 'artifact'))
+    .map((item) => [item.uri ?? item.title, item])).values()];
+  const referenceContext = detail.context.filter((item) => item.role !== 'deliverable');
+  const workflowRuns = detail.runs.filter((run) => run.executorKind === 'workflow' && !run.parentRunId);
+  const workflowIds = [...new Set(workflowRuns.map((run) => run.executorRef.workflowId).filter((id): id is string => typeof id === 'string'))];
+  const linkedAutomations = automationList?.automations.filter((automation) => automation.action.kind === 'task_command' && automation.action.taskId === taskId) ?? [];
+  const linkedSessions = detail.sessions.filter((session, index, sessions) => sessions.findIndex((entry) => entry.conversationId === session.conversationId) === index);
   const expectedOutputs = detail.task.contract?.expectedOutputs ?? [];
   const constraints = detail.task.contract?.constraints ?? [];
   const approvalRequired = detail.task.contract?.approvalRequired ?? [];
   const assumptions = detail.task.contract?.assumptions ?? [];
   const risks = detail.task.contract?.risks ?? [];
+  const hasSupportingContext = constraints.length > 0 || approvalRequired.length > 0 || assumptions.length > 0 || risks.length > 0;
   const recentlyChanged = (...fields: TaskChangedEvent['changedFields']): boolean => Boolean(
     recentChange?.changedFields.some((field) => fields.includes(field)),
   );
@@ -670,43 +689,14 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     </div>
   );
 
-  const headerActions = (
-    <div className="flex flex-wrap items-center gap-2">
-      {taskActions}
-      <PageContextCaptureButton resource={{ kind: 'task', id: detail.task.id, revision: String(detail.task.version) }} disabled={editingTitle || editingDescription || pendingOperations.size > 0} />
-      {conversationConversationId && presentation !== 'modal' ? (
-        <>
-          <Button
-            type="button"
-            variant="ghost"
-            className={cn('h-8 shrink-0 px-2 text-xs', taskWorkspaceOpen && 'bg-surface-hover text-fg')}
-            aria-label={language === 'zh' ? '项目文件' : 'Project files'}
-            aria-pressed={taskWorkspaceOpen}
-            onClick={() => {
-              setSideChatOpen(conversationConversationId, false);
-              openWorkspacePanelForSession(conversationConversationId);
-            }}
-          >
-            <FolderOpen className="size-3.5" aria-hidden />
-            {language === 'zh' ? '文件' : 'Files'}
-          </Button>
-          <Button asChild variant="ghost" className="h-8 shrink-0 px-2 text-xs">
-            <Link to={taskChatHref(taskId)}>
-              <ExternalLink className="size-3.5" />
-              {language === 'zh' ? '全屏' : 'Full screen'}
-            </Link>
-          </Button>
-        </>
-      ) : null}
-    </div>
-  );
-
   return (
     <div
       ref={splitPaneRef}
       className={`${presentation === 'modal' ? 'flex h-full min-h-0 flex-col' : 'flex min-h-[calc(100dvh-8rem)] flex-col overflow-hidden'} ${resizingPanels ? 'lg:cursor-col-resize lg:select-none' : ''}`}
       style={{ '--task-chat-panel-width': `${chatPanelPercent}%` } as CSSProperties}
     >
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+      <div className="flex min-w-0 shrink-0 flex-col lg:min-h-0 lg:flex-1 lg:shrink">
       <header className={cn('shrink-0 border-b border-edge-subtle bg-surface-panel px-5 py-4 sm:px-6', recentlyChanged('title') && 'task-detail-live-update')}>
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           <div className="min-w-0 flex-1">
@@ -763,18 +753,69 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
           </span>
           <span className="text-fg-subtle">{copy.updatedAt.replace('{{date}}', formatMediumDateTime(detail.task.updatedAt, language))}</span>
         </div>
-        <div className="mt-4 border-t border-edge-subtle pt-3">{headerActions}</div>
+        <div className="mt-4 border-t border-edge-subtle pt-3">{taskActions}</div>
         {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-      <section className="task-detail-scroll min-w-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6">
+      <section className="task-detail-scroll min-w-0 flex-1 p-5 sm:p-6 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
+
+      <section className="mb-4 overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel shadow-surface">
+        <div className="border-b border-edge-subtle p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '目标与验收' : 'Goal and acceptance'}</h2>
+            {criterionSummaries.length > 0 ? <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.criteriaProgress.replace('{{verified}}', String(verifiedCriteriaCount)).replace('{{total}}', String(criterionSummaries.length))}</span> : null}
+          </div>
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-fg">{detail.task.contract?.objective || detail.task.title}</p>
+        </div>
+        <div className="p-5">
+          <h3 className="text-xs font-medium text-fg-muted">{copy.successDefinition}</h3>
+          {criterionSummaries.length > 0 ? <ul className="mt-3 space-y-3">{criterionSummaries.map((criterion, index) => {
+            const Icon = criterion.status === 'passed' ? CircleCheck : criterion.status === 'failed' ? CircleX : Circle;
+            const tone = criterion.status === 'passed' ? 'text-success' : criterion.status === 'failed' ? 'text-danger' : 'text-fg-subtle';
+            return <li key={`${index}-${criterion.text}`} className="flex items-start gap-2.5 text-sm leading-5 text-fg">
+              <Icon className={cn('mt-0.5 size-4 shrink-0', tone)} aria-hidden />
+              <div className="min-w-0 flex-1">
+                <p>{criterion.text}</p>
+                {criterion.evidence.length > 0 ? <div className="mt-1 flex flex-wrap gap-x-2 text-xs leading-5 text-fg-muted"><span>{language === 'zh' ? '依据：' : 'Evidence:'}</span>{criterion.evidence.map((item) => item.uri && /^https?:\/\//.test(item.uri) ? <a key={item.title} className="text-accent hover:underline" href={item.uri} target="_blank" rel="noreferrer">{item.title}</a> : <span key={item.title}>{item.title}</span>)}</div> : null}
+                {criterion.review ? <p className="mt-1 text-xs text-fg-muted">{language === 'zh' ? '人工判定' : 'Reviewed by user'} · {formatMediumDateTime(criterion.review.reviewedAt, language)}</p> : null}
+              </div>
+              {detail.task.phase !== 'closed' && detail.task.contract?.acceptancePolicy !== 'verified_auto' ? <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild><Button type="button" variant="ghost" className="h-7 shrink-0 px-2 text-xs" disabled={pendingOperations.has('acceptance')}>{language === 'zh' ? '判定' : 'Review'}</Button></DropdownMenu.Trigger>
+                <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={4} className="z-[100] min-w-32 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+                  <DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => void reviewCriterion(index, 'passed')}>{language === 'zh' ? '确认通过' : 'Mark passed'}</DropdownMenu.Item>
+                  <DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => void reviewCriterion(index, 'failed')}>{language === 'zh' ? '标记未通过' : 'Mark failed'}</DropdownMenu.Item>
+                </DropdownMenu.Content></DropdownMenu.Portal>
+              </DropdownMenu.Root> : null}
+            </li>;
+          })}</ul> : <p className="mt-3 text-sm text-fg-muted">{copy.noDefinition}</p>}
+        </div>
+      </section>
 
       {detail.attention.length > 0 ? <section className={cn('mb-4 rounded-xl border border-warning/20 bg-warning/10 p-4', recentlyChanged('attention') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h2><ul className="mt-2 space-y-1.5 text-sm leading-6 text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`} className="flex flex-wrap items-start justify-between gap-2"><span className="min-w-0 flex-1">{item.summary}</span>{item.kind === 'input_required' || item.kind === 'approval_required' ? <Link className="inline-flex min-h-11 items-center rounded-lg bg-surface-panel px-3 text-sm font-medium text-accent" to={taskChatHref(taskId)}>{language === 'zh' ? (item.kind === 'approval_required' ? '查看并决定' : '补充信息') : (item.kind === 'approval_required' ? 'Review decision' : 'Provide information')}</Link> : null}</li>)}</ul></section> : null}
 
       {detail.task.phase !== 'closed' && !pausedWait && detail.waits.filter(wait => (wait.kind === 'user_input' || (wait.kind === 'approval' && typeof wait.condition.capability === 'string')) && wait.condition.type !== 'connection').map(wait => <TaskInputCard key={wait.id} wait={wait} detail={detail} zh={language === 'zh'} onUpdated={updated => { void mutateDetail(updated, { revalidate: false }); }} />)}
 
       <div className="mb-4"><TaskCollaborationPanel key={taskId} taskId={taskId} /></div>
+
+      {(deliverables.length > 0 || artifactEvidence.length > 0 || expectedOutputs.length > 0) ? <section className="mb-4 rounded-xl border border-edge-subtle bg-surface-panel p-5 shadow-surface">
+        <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '交付物' : 'Deliverables'}</h2>
+        {(deliverables.length > 0 || artifactEvidence.length > 0) ? <ul className="mt-3 space-y-2">{deliverables.map((item) => <li key={item.id} className="rounded-lg bg-surface-hover p-3 text-sm">
+          <span className="block text-xs text-fg-muted">{copy.contextKindLabels[item.targetKind]}</span>
+          {item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <span className="mt-1 block break-words text-fg">{item.title ?? item.targetId}</span>}
+        </li>)}{artifactEvidence.map((item) => <li key={item.uri ?? item.title} className="rounded-lg bg-surface-hover p-3 text-sm"><span className="block text-xs text-fg-muted">{language === 'zh' ? '执行产物' : 'Run artifact'}</span>{item.uri && /^https?:\/\//.test(item.uri) ? <a className="mt-1 block break-all text-accent hover:underline" href={item.uri} target="_blank" rel="noreferrer">{item.title}</a> : <span className="mt-1 block break-words text-fg">{item.title}</span>}</li>)}</ul> : <p className="mt-2 text-sm text-fg-muted">{language === 'zh' ? '尚未关联交付物' : 'No deliverables linked yet'}</p>}
+        {expectedOutputs.length > 0 ? <div className="mt-4 border-t border-edge-subtle pt-3"><h3 className="text-xs font-medium text-fg-muted">{copy.expectedOutputs}</h3><div className="mt-2"><TextList items={expectedOutputs} empty={copy.noDefinition} /></div></div> : null}
+      </section> : null}
+
+      <section className="mb-4 rounded-xl border border-edge-subtle bg-surface-panel p-5 shadow-surface">
+        <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '关联内容' : 'Related work'}</h2>
+        {(linkedSessions.length > 0 || detail.runs.length > 0 || linkedAutomations.length > 0 || detail.dependencies.length > 0 || detail.dependents.length > 0) ? <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {linkedSessions.length > 0 ? <div className="rounded-lg bg-surface-hover p-3"><h3 className="text-xs font-medium text-fg-muted">{language === 'zh' ? `对话 · ${linkedSessions.length}` : `Conversations · ${linkedSessions.length}`}</h3><ul className="mt-2 space-y-1.5">{linkedSessions.slice(0, 3).map((session) => <li key={session.id}><Link className="block truncate text-sm text-accent hover:underline" to={session.conversationId === conversationConversationId ? taskChatHref(taskId) : `/chat/${encodeURIComponent(session.conversationId)}`}>{session.conversationId === conversationConversationId ? (language === 'zh' ? '当前执行对话' : 'Current execution chat') : session.role === 'discussion' ? (language === 'zh' ? '关联讨论' : 'Linked discussion') : (language === 'zh' ? '历史执行对话' : 'Earlier execution chat')}</Link></li>)}</ul></div> : null}
+          {detail.runs.length > 0 ? <div className="rounded-lg bg-surface-hover p-3"><h3 className="text-xs font-medium text-fg-muted">{language === 'zh' ? `执行 · ${detail.runs.length}` : `Runs · ${detail.runs.length}`}</h3><p className="mt-2 text-sm text-fg">{language === 'zh' ? '最近执行：' : 'Latest run: '}{latestReceipt ? copy.receiptStatuses[latestReceipt.status] : statusLabel}</p>{workflowRuns.length > 0 ? <p className="mt-1 text-xs text-fg-muted">{language === 'zh' ? `含 ${workflowRuns.length} 次工作流执行` : `${workflowRuns.length} workflow runs`}</p> : null}{workflowIds.map((id) => <Link key={id} className="mt-1 block truncate text-xs text-accent hover:underline" to={`/workflows/${encodeURIComponent(id)}`}>{language === 'zh' ? '工作流：' : 'Workflow: '}{id}</Link>)}</div> : null}
+          {linkedAutomations.length > 0 ? <div className="rounded-lg bg-surface-hover p-3"><h3 className="text-xs font-medium text-fg-muted">{language === 'zh' ? `自动化 · ${linkedAutomations.length}` : `Automations · ${linkedAutomations.length}`}</h3><ul className="mt-2 space-y-1.5">{linkedAutomations.slice(0, 3).map((automation) => <li key={automation.id}><Link className="block truncate text-sm text-accent hover:underline" to={`/automations?automation=${encodeURIComponent(automation.id)}`}>{automation.name}</Link></li>)}</ul></div> : null}
+          {(detail.dependencies.length > 0 || detail.dependents.length > 0) ? <div className="rounded-lg bg-surface-hover p-3"><h3 className="text-xs font-medium text-fg-muted">{copy.taskRelations}</h3><p className="mt-2 text-sm text-fg">{language === 'zh' ? `${detail.dependencies.length} 个前置任务 · ${detail.dependents.length} 个后续任务` : `${detail.dependencies.length} prerequisites · ${detail.dependents.length} dependents`}</p></div> : null}
+        </div> : <p className="mt-2 text-sm text-fg-muted">{language === 'zh' ? '还没有关联内容' : 'No related work yet'}</p>}
+        <div className="mt-4 border-t border-edge-subtle pt-3"><PageContextCaptureButton resource={{ kind: 'task', id: detail.task.id, revision: String(detail.task.version) }} disabled={editingTitle || editingDescription || pendingOperations.size > 0} /></div>
+      </section>
 
       <div className="flex flex-col gap-4">
         <main className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface divide-y divide-edge-subtle">
@@ -814,19 +855,18 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
             ) : null}
           </section>
 
-          <section className={cn('p-5', recentlyChanged('contract') && 'task-detail-live-update')}>
+          {hasSupportingContext ? <section className={cn('p-5', recentlyChanged('contract') && 'task-detail-live-update')}>
             <h2 className="text-sm font-semibold text-fg">{copy.taskDefinition}</h2>
-            <div className="mt-5"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-medium text-fg">{copy.successDefinition}</h3>{acceptanceCriteria.length > 0 ? <span className="text-xs text-fg-subtle">{copy.criteriaProgress.replace('{{verified}}', String(verifiedCriteriaCount)).replace('{{total}}', String(acceptanceCriteria.length))}</span> : null}</div><div className="mt-3"><TextList items={acceptanceCriteria} empty={copy.noDefinition} verificationByCriterion={verificationByCriterion} /></div></div>
-            {expectedOutputs.length > 0 ? <div className="mt-5 border-t border-edge-subtle pt-5"><h3 className="text-sm font-medium text-fg">{copy.expectedOutputs}</h3><div className="mt-3"><TextList items={expectedOutputs} empty={copy.noDefinition} /></div></div> : null}
+            <p className="mt-2 text-xs leading-5 text-fg-muted">{language === 'zh' ? '执行边界及补充背景' : 'Execution boundaries and supporting context'}</p>
             {constraints.length > 0 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.constraints}</summary><div className="mt-3"><TextList items={constraints} empty={copy.noDefinition} /></div></details> : null}
             {approvalRequired.length > 0 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.approvalRequired}</summary><div className="mt-3"><TextList items={approvalRequired} empty={copy.noDefinition} /></div></details> : null}
             {assumptions.length > 0 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.contextAssumptions}</summary><div className="mt-3"><TextList items={assumptions} empty={copy.noDefinition} /></div></details> : null}
             {risks.length > 0 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.contextRisks}</summary><div className="mt-3"><TextList items={risks} empty={copy.noDefinition} /></div></details> : null}
-          </section>
+          </section> : null}
 
           {latestReceipt ? <section className={cn('p-5', recentlyChanged('runs', 'receipts') && 'task-detail-live-update')}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold text-fg">{copy.latestResult}</h2><p className="mt-1 text-xs text-fg-muted">{language === 'zh' ? (latestReceipt.completionVerdict === 'achieved' ? '本次执行报告目标已达成，请结合下方验证依据验收。' : '这是阶段性结果，尚不能代表任务全部完成。') : (latestReceipt.completionVerdict === 'achieved' ? 'The run reports the goal achieved. Review the evidence below.' : 'This is a partial result; the task is not yet fully complete.')}</p><MarkdownView content={latestReceipt.summary} compact className="mt-2 text-sm leading-6 text-fg" /></div><span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.receiptStatuses[latestReceipt.status]} · {copy.verificationStatuses[latestReceipt.verification.status]}</span></div>{latestReceipt.remainingWork.length > 0 ? <div className="mt-4"><h3 className="text-xs font-medium text-fg-muted">{copy.remainingWork}</h3><div className="mt-2"><TextList items={latestReceipt.remainingWork} empty={copy.noRemainingWork} /></div></div> : null}{latestReceipt.nextAction ? <div className="mt-4 rounded-lg bg-surface-hover p-3"><p className="text-xs font-medium text-fg-muted">{copy.nextAction}</p><p className="mt-1 text-sm text-fg">{latestReceipt.nextAction}</p></div> : null}<div className="mt-4 flex flex-wrap items-center gap-2"><Button className="border-0 bg-surface-hover px-2 py-1 text-xs shadow-none" variant="secondary" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'helpful')}>{copy.doneWell}</Button><Button className="px-2 py-1 text-xs" variant="ghost" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'not_helpful')}>{copy.needsFix}</Button></div><TaskResultEvidence evidence={latestReceipt.evidence} projectId={detail.task.projectId} conversationId={conversationConversationId ?? undefined} language={language} />{detail.receipts.length > 1 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.executionHistory.replace('{{count}}', String(detail.receipts.length - 1))}</summary><div className="mt-3 space-y-3">{detail.receipts.slice(1).map((receipt) => <article key={receipt.runId} className="rounded-lg bg-surface-hover p-3"><div className="flex items-start justify-between gap-3"><p className="text-sm text-fg">{receipt.summary}</p><span className="shrink-0 text-xs text-fg-subtle">{copy.receiptStatuses[receipt.status]}</span></div></article>)}</div></details> : null}</section> : null}
 
-          {detail.context.length > 0 ? <section className={cn('p-5', recentlyChanged('context') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{copy.contextUsed}</h2><ul className="mt-4 grid gap-2 sm:grid-cols-2">{detail.context.map((item) => <li key={item.id} className="min-w-0 rounded-lg bg-surface-hover p-2.5"><span className="text-[11px] text-fg-subtle">{copy.contextRoleLabels[item.role]} · {copy.contextKindLabels[item.targetKind]}</span>{item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-sm text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <p className="mt-1 break-words text-sm text-fg">{item.title ?? item.targetId}</p>}</li>)}</ul></section> : null}
+          {referenceContext.length > 0 ? <section className={cn('p-5', recentlyChanged('context') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{copy.contextUsed}</h2><ul className="mt-4 grid gap-2 sm:grid-cols-2">{referenceContext.map((item) => <li key={item.id} className="min-w-0 rounded-lg bg-surface-hover p-2.5"><span className="text-[11px] text-fg-subtle">{copy.contextRoleLabels[item.role]} · {copy.contextKindLabels[item.targetKind]}</span>{item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-sm text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <p className="mt-1 break-words text-sm text-fg">{item.title ?? item.targetId}</p>}</li>)}</ul></section> : null}
         </main>
 
         <aside className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface divide-y divide-edge-subtle">
@@ -853,6 +893,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
         </aside>
       </div>
       </section>
+      </div>
 
       <div
         role="separator"
@@ -867,12 +908,24 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
         onDoubleClick={() => commitChatPanelPercent(DEFAULT_TASK_CHAT_PANEL_PERCENT)}
         className={`group hidden w-2 shrink-0 cursor-col-resize touch-none items-stretch justify-center bg-surface-panel outline-none transition-colors hover:bg-surface-hover focus-visible:bg-surface-hover lg:flex ${resizingPanels ? 'bg-surface-hover' : ''}`}
       >
-        <div className="my-3 w-px rounded-full bg-edge-strong/70 transition-colors group-hover:bg-accent group-focus-visible:bg-accent" />
+        <div className="w-px bg-edge-strong/70 transition-colors group-hover:bg-accent group-focus-visible:bg-accent" />
       </div>
 
-      <aside className="flex min-h-[34rem] min-w-0 flex-col bg-surface-panel lg:min-h-0 lg:w-[var(--task-chat-panel-width)] lg:shrink-0">
-        <div className="flex shrink-0 items-center border-b border-edge-subtle px-4 py-3">
+      <aside className="flex min-h-[34rem] min-w-0 shrink-0 flex-col border-t border-edge-subtle bg-surface-panel lg:min-h-0 lg:w-[var(--task-chat-panel-width)] lg:border-t-0">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge-subtle px-4 py-3">
           <h2 className="text-sm font-medium text-fg-muted">{language === 'zh' ? '执行对话' : 'Execution chat'}</h2>
+          <div className="flex items-center gap-1">
+          {linkedSessions.length > 1 ? <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild><Button type="button" variant="ghost" className="h-8 px-2 text-xs">{language === 'zh' ? `${linkedSessions.length} 段对话` : `${linkedSessions.length} conversations`}</Button></DropdownMenu.Trigger>
+            <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={6} className="z-[100] min-w-52 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+              {linkedSessions.map((session) => <DropdownMenu.Item key={session.id} asChild><Link className="block rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover" to={session.conversationId === conversationConversationId ? taskChatHref(taskId) : `/chat/${encodeURIComponent(session.conversationId)}`}>{session.conversationId === conversationConversationId ? (language === 'zh' ? '当前执行对话' : 'Current execution chat') : session.role === 'discussion' ? (language === 'zh' ? '关联讨论' : 'Linked discussion') : (language === 'zh' ? '历史执行对话' : 'Earlier execution chat')}</Link></DropdownMenu.Item>)}
+            </DropdownMenu.Content></DropdownMenu.Portal>
+          </DropdownMenu.Root> : null}
+          {conversationConversationId ? <>
+            <Button type="button" variant="ghost" className={cn('size-8 p-0', taskWorkspaceOpen && 'bg-surface-hover text-fg')} aria-label={language === 'zh' ? '项目文件' : 'Project files'} aria-pressed={taskWorkspaceOpen} onClick={() => { setSideChatOpen(conversationConversationId, false); openWorkspacePanelForSession(conversationConversationId); }}><FolderOpen className="size-4" aria-hidden /></Button>
+            <Button asChild variant="ghost" className="size-8 p-0"><Link to={taskChatHref(taskId)} aria-label={language === 'zh' ? '全屏打开对话' : 'Open chat full screen'}><ExternalLink className="size-4" aria-hidden /></Link></Button>
+          </> : null}
+          </div>
         </div>
         {conversationConversationId ? (
           <div className="min-h-0 flex-1"><ChatPage embedded conversationId={conversationConversationId} taskId={taskId} /></div>
@@ -919,13 +972,9 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
   onClose: () => void;
 }) {
   const language = useLocaleStore((state) => state.language);
-  const { data: detail } = useTaskDetail(taskId);
-  const conversationConversationId = detail?.conversation.activeConversationId ?? null;
   const workspacePanelOpen = useWorkspacePanelStore((state) => state.open);
   const workspacePanelWidth = useWorkspacePanelStore((state) => state.widthPx);
   const workspaceConversationId = useWorkspacePanelStore((state) => state.conversationIdOverride);
-  const openWorkspacePanelForSession = useWorkspacePanelStore((state) => state.openForSession);
-  const setSideChatOpen = useSideChatStore((state) => state.setOpen);
   const previewPath = useWorkspacePreviewStore((state) => state.path);
   const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
   const workspacePanelOffset = workspacePanelOpen ? workspacePanelWidth : 0;
@@ -975,34 +1024,6 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
             <Dialog.Title className="font-medium text-fg">{language === 'zh' ? '任务详情' : 'Task details'}</Dialog.Title>
             <Dialog.Description className="sr-only">{language === 'zh' ? '查看并操作任务详情' : 'View and manage task details'}</Dialog.Description>
             <div className="flex shrink-0 items-center gap-1">
-              {conversationConversationId ? (
-                <>
-                  <button
-                    type="button"
-                    className={cn(
-                      'flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg',
-                      workspacePanelOpen && workspaceConversationId === conversationConversationId && 'bg-surface-hover text-fg',
-                    )}
-                    aria-label={language === 'zh' ? '项目文件' : 'Project files'}
-                    title={language === 'zh' ? '项目文件' : 'Project files'}
-                    aria-pressed={workspacePanelOpen && workspaceConversationId === conversationConversationId}
-                    onClick={() => {
-                      setSideChatOpen(conversationConversationId, false);
-                      openWorkspacePanelForSession(conversationConversationId);
-                    }}
-                  >
-                    <FolderOpen className="size-4" aria-hidden />
-                  </button>
-                  <Link
-                    to={taskChatHref(taskId)}
-                    className="flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg"
-                    aria-label={language === 'zh' ? '全屏打开对话' : 'Open chat full screen'}
-                    title={language === 'zh' ? '全屏打开对话' : 'Open chat full screen'}
-                  >
-                    <ExternalLink className="size-4" aria-hidden />
-                  </Link>
-                </>
-              ) : null}
               <Dialog.Close className="flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={language === 'zh' ? '关闭任务详情' : 'Close task details'}><X className="size-4" aria-hidden /></Dialog.Close>
             </div>
           </header>

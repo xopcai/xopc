@@ -3,16 +3,47 @@ export interface XopcWorkspaceItem {
   id: string; title: string; body: string; status: string; version: number;
   projectId?: string; priority?: string; updatedAt?: number; brief?: string; outcome?: string;
   cron?: string; enabled?: boolean; editable: boolean; actions: string[]; automation?: XopcAutomation;
+  taskDetail?: XopcMobileTaskDetail;
 }
 export interface XopcTask {
   id: string; title: string; body?: string; phase: string; version: number; projectId?: string; priority: string;
-  closedAt?: number; updatedAt?: number; resolution?: string;
+  closedAt?: number; updatedAt?: number; resolution?: string; latestContractVersion?: number; contract?: XopcTaskContract;
 }
 export interface XopcTaskResult { task: XopcTask; allowedCommands?: string[]; }
 export interface XopcTaskList { items: XopcTaskResult[]; total?: number; }
 export interface XopcTaskContract {
   objective: string; expectedOutputs: string[]; acceptanceCriteria: string[]; constraints: string[];
   approvalRequired: string[]; assumptions: string[]; risks: string[]; acceptancePolicy: string; outputDestinations: Object[];
+}
+export interface XopcMobileTaskAttention { kind: string; summary: string; }
+export interface XopcMobileTaskReview {
+  contractVersion: number; criterionIndex: number; status: string; reviewedAt: number;
+}
+export interface XopcMobileTaskCheck { criterion: string; status: string; evidenceTitles: string[]; }
+export interface XopcMobileTaskEvidence { kind: string; title: string; strength: string; verifies?: string[]; uri?: string; }
+export interface XopcMobileTaskVerification { checks: XopcMobileTaskCheck[]; }
+export interface XopcMobileTaskReceipt {
+  runId: string; summary: string; status: string; finalizedAt: number; evidence: XopcMobileTaskEvidence[];
+  verification: XopcMobileTaskVerification; remainingWork: string[];
+}
+export interface XopcMobileTaskContext { id: string; role: string; targetKind: string; targetId: string; title?: string; }
+export interface XopcMobileTaskSession { id: string; conversationId: string; role: string; status: string; }
+export interface XopcMobileTaskDependency { id: string; title: string; phase: string; }
+export interface XopcMobileTaskRun { id: string; contractVersion: number; }
+export interface XopcMobileTaskConversation { activeConversationId?: string; }
+export interface XopcMobileTaskDetail {
+  contract?: XopcTaskContract; latestContractVersion: number;
+  attention: XopcMobileTaskAttention[]; criterionReviews: XopcMobileTaskReview[];
+  receipts: XopcMobileTaskReceipt[]; context: XopcMobileTaskContext[];
+  sessions: XopcMobileTaskSession[]; dependencies: XopcMobileTaskDependency[];
+  dependents: XopcMobileTaskDependency[]; runs: XopcMobileTaskRun[]; activeConversationId?: string;
+}
+export interface XopcMobileTaskDetailResult extends XopcTaskResult {
+  attention: XopcMobileTaskAttention[]; criterionReviews: XopcMobileTaskReview[];
+  receipts: XopcMobileTaskReceipt[]; context: XopcMobileTaskContext[];
+  sessions: XopcMobileTaskSession[]; dependencies: XopcMobileTaskDependency[];
+  dependents: XopcMobileTaskDependency[]; runs: XopcMobileTaskRun[];
+  conversation?: XopcMobileTaskConversation;
 }
 export interface XopcTaskActivation { mode: string; phase: string; }
 export interface XopcTaskCreate {

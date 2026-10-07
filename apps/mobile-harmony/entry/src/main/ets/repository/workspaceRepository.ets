@@ -4,9 +4,9 @@ import {
   XopcSection, XopcWorkspaceItem, XopcWorkspacePage, XopcTaskList, XopcProjectList,
   XopcAutomationList, XopcTaskResult, XopcProjectResult, XopcAutomationResult,
   XopcTaskPatch, XopcProjectWrite, XopcTaskCommandBody, XopcTaskCommand,
-  XopcAutomationRuns, XopcAutomationRun
+  XopcAutomationRuns, XopcAutomationRun, XopcMobileTaskDetailResult
 } from '../model/workspace';
-import { taskItem, projectItem, automationItem, newTask, scheduledAutomation } from '../common/workspaceProtocol';
+import { taskItem, taskDetailItem, projectItem, automationItem, newTask, scheduledAutomation } from '../common/workspaceProtocol';
 
 export class XopcWorkspaceRepository {
   uuid(): string { return new XopcDeviceCrypto().uuid(); }
@@ -32,7 +32,7 @@ export class XopcWorkspaceRepository {
 
   async detail(section: XopcSection, id: string): Promise<XopcWorkspaceItem> {
     const raw = await gatewaySession.request('/api/' + section + '/' + encodeURIComponent(id));
-    if (section === 'tasks') return taskItem(JSON.parse(raw) as XopcTaskResult);
+    if (section === 'tasks') return taskDetailItem(JSON.parse(raw) as XopcMobileTaskDetailResult);
     if (section === 'projects') return projectItem((JSON.parse(raw) as XopcProjectResult).project);
     if (section === 'automations') return automationItem((JSON.parse(raw) as XopcAutomationResult).automation);
     throw new Error('INVALID_WORKSPACE_SECTION');

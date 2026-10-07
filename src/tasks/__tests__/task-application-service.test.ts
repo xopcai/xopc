@@ -25,6 +25,7 @@ import { decisionFromTask } from '../home-query-service.js';
 import { TaskSignalService } from '../task-signal-service.js';
 import { TaskOriginRepository } from '../task-origin-repository.js';
 import { TaskCollaborationRepository } from '../task-collaboration-repository.js';
+import { TaskCriterionReviewRepository } from '../task-criterion-review-repository.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 
 const contract = {
@@ -76,6 +77,43 @@ describe('TaskApplicationService', () => {
     verification: { status: 'passed' as const, checks: [{ criterion: 'tests pass', status: 'passed' as const, evidenceTitles: ['Tests'] }] }, remainingWork: [],
     needsUser: false, completionVerdict: 'achieved' as const,
   };
+
+  it('requires current criterion reviews before manually completing a task', () => {
+    const service = new TaskApplicationService();
+    const created = service.create({
+      idempotencyKey: 'manual-acceptance', title: 'Review work', priority: 'normal',
+      contract: { ...contract, acceptancePolicy: 'manual' },
+      dependencies: [], context: [], authorityGrants: [],
+      activation: { mode: 'capture', phase: 'ready' },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const taskId = created.model.task.id;
+    const close = (key: string) => service.execute({ taskId,
+      expectedVersion: new TaskRepository().require(taskId).version,
+      idempotencyKey: key, command: { type: 'close', resolution: 'done' } });
+    expect(close('close-before-review')).toMatchObject({ ok: false, reason: 'blocked' });
+    const reviews = new TaskCriterionReviewRepository();
+    const failedTask = new TaskRepository().require(taskId);
+    reviews.set({ task: failedTask, expectedVersion: failedTask.version, criterionIndex: 0,
+      status: 'failed', actor: { kind: 'user', id: 'owner' } });
+    expect(close('close-after-failure')).toMatchObject({ ok: false, reason: 'blocked' });
+    const passedTask = new TaskRepository().require(taskId);
+    reviews.set({ task: passedTask, expectedVersion: passedTask.version, criterionIndex: 0,
+      status: 'passed', actor: { kind: 'user', id: 'owner' } });
+    const beforeRevision = new TaskRepository().require(taskId);
+    expect(reviews.allPassed(beforeRevision)).toBe(true);
+    const revised = new TaskRepository().reviseContract({
+      taskId, expectedVersion: beforeRevision.version, ...contract,
+      acceptancePolicy: 'manual', createdBy: { kind: 'user', id: 'owner' },
+    });
+    expect(revised?.latestContractVersion).toBe(2);
+    expect(close('close-after-revision')).toMatchObject({ ok: false, reason: 'blocked' });
+    const current = new TaskRepository().require(taskId);
+    reviews.set({ task: current, expectedVersion: current.version, criterionIndex: 0,
+      status: 'passed', actor: { kind: 'user', id: 'owner' } });
+    expect(close('close-after-review')).toMatchObject({ ok: true, model: { task: { phase: 'closed', resolution: 'done' } } });
+  });
 
   it('links a created task to its originating conversation once', () => {
     const conversation = createConversation({ agentId: 'main' });
@@ -508,7 +546,7 @@ describe('TaskApplicationService', () => {
   it('resumes a blocked start from a dependency signal without a legacy queue item', () => {
     const service = new TaskApplicationService();
     const dependency = service.create({
-      idempotencyKey: 'signal-dependency', title: 'Dependency', priority: 'normal', contract,
+      idempotencyKey: 'signal-dependency', title: 'Dependency', priority: 'normal', contract: { ...contract, acceptancePolicy: 'manual' },
       dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'ready' },
     });
     const blocked = service.create({
@@ -518,9 +556,17 @@ describe('TaskApplicationService', () => {
     });
     expect(blocked).toMatchObject({ ok: false, reason: 'blocked' });
     if (!dependency.ok || blocked.ok || !blocked.model) return;
+    const review = new TaskCriterionReviewRepository().set({
+      task: dependency.model.task,
+      expectedVersion: dependency.model.task.version,
+      criterionIndex: 0,
+      status: 'passed',
+      actor: { kind: 'user', id: 'owner' },
+    });
+    expect(review?.status).toBe('passed');
     const closed = service.execute({
       taskId: dependency.model.task.id,
-      expectedVersion: dependency.model.task.version,
+      expectedVersion: new TaskRepository().require(dependency.model.task.id).version,
       idempotencyKey: 'close-dependency',
       command: { type: 'close', resolution: 'done' },
     });
