@@ -634,19 +634,16 @@ export struct XopcWorkspaceView {
         }
         ForEach(this.supportedActions(item), (action: string) => {
           ListItem() {
-            Row() {
-              if (action === 'close' || action === 'delete') { Blank() }
-              Button(this.label(action)).width(action === 'close' || action === 'delete' ? 120 : '100%')
-                .height(46).borderRadius(14)
-                .backgroundColor(action === 'start' || action === 'mark_ready' || action === 'request_review'
-                  ? this.colors.accent : action === 'close' || action === 'delete' ? Color.Transparent : this.colors.input)
-                .fontColor(action === 'start' || action === 'mark_ready' || action === 'request_review'
-                  ? Color.White : action === 'delete' ? this.colors.danger : this.colors.foreground)
-                .enabled(!this.model.busy && (action !== 'start' || this.agents.some((agent: XopcChatAgent): boolean => agent.id === this.agentId)))
-                .onClick((): void => { this.action(action); })
-            }.width('100%')
+            Button(this.label(action)).width('100%').height(action === 'close' ? 52 : 46).borderRadius(14)
+              .backgroundColor(action === 'start' || action === 'mark_ready' || action === 'request_review' || action === 'close'
+                ? this.colors.accent : action === 'delete' ? Color.Transparent : this.colors.input)
+              .fontColor(action === 'start' || action === 'mark_ready' || action === 'request_review' || action === 'close'
+                ? Color.White : action === 'delete' ? this.colors.danger : this.colors.foreground)
+              .enabled(!this.model.busy && (action !== 'start' || this.agents.some((agent: XopcChatAgent): boolean => agent.id === this.agentId)))
+              .onClick((): void => { this.action(action); })
           }
         }, (action: string): string => action)
+        if (this.section === 'tasks') { ListItem() { Column().height(32) } }
       }
     }.layoutWeight(1).width('100%').padding({ left: 20, right: 20, bottom: 20 }).scrollBar(BarState.Off)
     }
