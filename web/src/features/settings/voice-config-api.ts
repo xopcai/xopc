@@ -44,9 +44,9 @@ export async function fetchRealtimeVoiceStatus(): Promise<RealtimeVoiceStatus> {
   return result.payload;
 }
 
-export async function previewRealtimeVoice(signal: AbortSignal): Promise<ArrayBuffer> {
+export async function previewRealtimeVoice(signal: AbortSignal, voice?: string): Promise<ArrayBuffer> {
   const result = await fetchJson<{ payload: { audio: string; sampleRate: number } }>(
-    apiUrl('/api/voice/realtime/preview'), { method: 'POST', signal },
+    apiUrl('/api/voice/realtime/preview'), { method: 'POST', signal, body: JSON.stringify(voice ? { voice } : {}) },
   );
   if (result.payload.sampleRate !== 24_000) throw new Error('Unsupported preview sample rate');
   return Uint8Array.from(atob(result.payload.audio), (c) => c.charCodeAt(0)).buffer;
@@ -73,14 +73,12 @@ function defaultStt(): SttSettings {
   };
 }
 
-// Defaults intentionally mirror src/config/schema.ts (TTSConfigSchema /
-// TTSEdgeConfigSchema) so a
-// PATCH /api/config round-trip never silently overrides backend defaults.
+// Match the runtime defaults so saving an untouched settings page does not enable readout.
 function defaultTts(): TtsSettings {
   return {
     enabled: true,
-    provider: 'edge',
-    trigger: 'inbound',
+    provider: 'xopc-cloud',
+    trigger: 'off',
     maxTextLength: 512,
     timeoutMs: 60000,
     providers: {
@@ -138,7 +136,7 @@ function mergeStt(raw: unknown): SttSettings {
 
 /** Provider id is open string so extension SpeechProviderPlugins remain supported. */
 function normalizeTtsProvider(v: unknown): string {
-  return typeof v === 'string' && v.trim().length > 0 ? v.trim() : 'edge';
+  return typeof v === 'string' && v.trim().length > 0 ? v.trim() : 'xopc-cloud';
 }
 
 function mergeTts(raw: unknown): TtsSettings {
@@ -151,7 +149,7 @@ function mergeTts(raw: unknown): TtsSettings {
     raw.trigger === 'inbound' ||
     raw.trigger === 'tagged'
       ? raw.trigger
-      : 'inbound';
+      : 'off';
   const providers = {
     ...(d.providers ?? {}),
     ...(isRecord(raw.providers)

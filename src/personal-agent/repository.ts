@@ -16,6 +16,7 @@ export interface PersonalAgentRecord {
   state: PersonalAgentState;
   displayName: string;
   appearance: PersonalAppearance;
+  voicePreference: { provider: string; model: string; voice: string } | null;
   preferences: Record<string, unknown>;
   revision: number;
   errorMessage: string | null;
@@ -63,6 +64,7 @@ function toRecord(ownerId: string, agent: StoredAgent, session: PersonalSession 
     state: agent.provisioningState === 'error' ? 'error' : ready ? 'ready' : 'provisioning',
     displayName: agent.profile?.name ?? 'Ada',
     appearance: appearanceFrom(agent),
+    voicePreference: agent.profile?.voicePreference ?? null,
     preferences: agent.profile?.responsePreferences ?? DEFAULT_PERSONAL_PREFERENCES,
     revision: agent.revision,
     errorMessage: agent.provisioningError ?? null,

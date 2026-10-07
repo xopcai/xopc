@@ -24,7 +24,8 @@ describe('voice-config-api', () => {
     expect(state.tts.enabled).toBe(true);
     expect(state.stt.provider).toBe('openai');
     expect(state.stt.fallback).toEqual({ enabled: false, order: [] });
-    expect(state.tts.trigger).toBe('inbound');
+    expect(state.tts.provider).toBe('xopc-cloud');
+    expect(state.tts.trigger).toBe('off');
     expect(state.tts.timeoutMs).toBe(60_000);
     expect(state.voice.input.refinement.mode).toBe('off');
     expect(state.voice.languageMode).toBe('auto');
@@ -54,7 +55,7 @@ describe('voice-config-api', () => {
       voice: {
         input: { refinement: { mode: 'punctuation', model: 'openai/gpt-test' } },
       },
-      tts: { trigger: 'inbound', timeoutMs: 60_000 },
+      tts: { trigger: 'off', timeoutMs: 60_000 },
     });
     expect(fetchJson).toHaveBeenNthCalledWith(2, '/api/voice/language', {
       method: 'POST',

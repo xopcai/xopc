@@ -53,6 +53,15 @@ describe('ModelCatalogPersistence', () => {
     if (process.platform !== 'win32') expect(statSync(path).mode & 0o777).toBe(0o600);
   });
 
+  it('persists a catalog with recommendations for only published capabilities', async () => {
+    const { persistence } = createPersistence();
+    const catalog = { ...fixture(), recommended: { stt: 'qwen-audio-3.0-asr-flash', tts: 'edge-tts' } };
+
+    await persistence.save(catalog);
+
+    expect(persistence.loadSync()).toEqual(catalog);
+  });
+
   it('rejects corrupt, unknown, and oversized snapshots', async () => {
     const { persistence, path } = createPersistence();
     await persistence.save(fixture());

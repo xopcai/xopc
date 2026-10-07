@@ -76,7 +76,7 @@ export const alibabaTranscriptionProvider: MediaUnderstandingProvider = {
     inputSampleRates: [16_000],
     turnDetection: ['server_vad'],
     defaultModel: DEFAULT_STREAMING_MODEL,
-    models: ['qwen-audio-3.1-asr-flash-streaming', DEFAULT_STREAMING_MODEL],
+    models: [DEFAULT_STREAMING_MODEL, 'qwen-audio-3.0-asr-flash-streaming'],
   },
   openAudioStream: (request) => openDashScopeStreamingStt({
     ...request,

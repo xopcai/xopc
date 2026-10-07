@@ -88,7 +88,9 @@ describe('chat bottom region composition', () => {
     expect(home).toContain('if (this.tab !== 0)');
     expect(home.match(/this.tabItem\(/g)).toHaveLength(5);
     expect(home).toContain('.onClick((): void => { this.selectTab(index); })');
-    expect(home).toContain("this.tabItem(0, $r('app.string.assistant'), $r('sys.symbol.ellipsis_bubble'))");
+    expect(home).toContain("this.tabItem(0, this.personalAgent.record?.state === 'ready'");
+    expect(home).toContain('&& this.personalAgent.record.conversationId === this.activeChatId');
+    expect(home).toContain("? this.personalAgent.record.displayName : $r('app.string.assistant')");
     expect(home).not.toContain("$r('sys.symbol.star')");
     expect(home).toContain('this.attention.needsUser.length');
     expect(chat).toContain(".id('chat-bottom-region').width('100%')");
@@ -230,7 +232,7 @@ describe('chat bottom region composition', () => {
 
   it('shows the conversation title in the header and keeps model selection in the actions sheet', () => {
     const header = chat.slice(chat.indexOf('if (!this.embedded)'), chat.indexOf('if (this.hasConnectionIssue())'));
-    expect(header).toContain("Text(this.chat.title || $r('app.string.untitled'))");
+    expect(header).toContain("this.personalConversation ? this.personalAgent?.displayName ?? 'Ada' : this.chat.title || $r('app.string.untitled')");
     expect(header).not.toContain("$r('sys.symbol.line_3_horizontal')");
     expect(header).not.toContain("this.options.modelName(appSettings.effectiveLanguage())");
     expect(header).not.toContain(".id('chat-model-picker')");

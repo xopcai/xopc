@@ -9,6 +9,7 @@ describe('mergeTtsConfigFromAppConfig', () => {
     expect(merged.trigger).toBe('off');
     expect(merged.managedAuto).toBe(true);
     expect(merged.providers?.openai?.model).toBe('tts-1');
+    expect(merged.providers?.alibaba).toMatchObject({ model: 'qwen3-tts-flash', voice: 'Cherry' });
     expect(merged.fallback?.order?.length).toBeGreaterThan(0);
   });
 

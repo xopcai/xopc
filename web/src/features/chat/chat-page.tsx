@@ -107,7 +107,9 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   conversationId?: string;
   taskId?: string;
   personal?: boolean;
-  personalWelcome?: { name: string; addressAs?: string; avatar?: ReactNode; opening?: string };
+  personalWelcome?: { name: string; addressAs?: string; avatar?: ReactNode; opening?: string;
+    showSupportChoice?: boolean; onChooseSupport?: (mode: 'listen' | 'untangle' | 'solutions') => void;
+    onSkipSupport?: () => void; supportChoiceError?: string | null };
 } = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -1206,6 +1208,17 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                           <div className="flex size-16 items-center justify-center rounded-3xl bg-accent/10 text-3xl text-accent" aria-hidden>{personalWelcome.avatar ?? '✦'}</div>
                           <h2 className="text-2xl font-semibold">{language === 'zh' ? `你好${personalWelcome.addressAs ? `，${personalWelcome.addressAs}` : ''}。我们从哪里开始？` : `Hello${personalWelcome.addressAs ? `, ${personalWelcome.addressAs}` : ''}. Where should we start?`}</h2>
                           <p className="max-w-xl text-sm leading-relaxed text-fg-muted">{personalWelcome.opening ?? (language === 'zh' ? '想讨论问题、整理思路或推进工作，都可以直接说。' : 'Bring a question, an idea, or work to move forward.')}</p>
+                          {personalWelcome.showSupportChoice && <div className="mt-3 w-full rounded-2xl border border-edge bg-surface-panel p-4">
+                            <p className="text-sm font-medium text-fg">{language === 'zh' ? '遇到难题时，你希望我先怎么回应？' : 'When something is difficult, how should I respond first?'}</p>
+                            <div className="mt-3 flex flex-wrap gap-2">{([
+                              ['listen', language === 'zh' ? '先听我说' : 'Listen first'],
+                              ['untangle', language === 'zh' ? '一起理清' : 'Untangle it'],
+                              ['solutions', language === 'zh' ? '直接给建议' : 'Give advice'],
+                            ] as const).map(([mode, label]) => <button key={mode} type="button" onClick={() => personalWelcome.onChooseSupport?.(mode)} className="rounded-full border border-edge px-3 py-2 text-xs text-fg hover:bg-surface-hover">{label}</button>)}
+                              <button type="button" onClick={personalWelcome.onSkipSupport} className="px-3 py-2 text-xs text-fg-muted hover:text-fg">{language === 'zh' ? '先聊正事' : 'Start chatting'}</button>
+                            </div>
+                            {personalWelcome.supportChoiceError && <p role="alert" className="mt-3 text-xs text-danger">{personalWelcome.supportChoiceError}</p>}
+                          </div>}
                         </div>
                       ) : agentSetup ? (
                         <AgentSetupWelcome

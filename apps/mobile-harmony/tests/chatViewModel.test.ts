@@ -428,6 +428,19 @@ describe('chat history isolation', () => {
     await vi.waitFor(() => expect(chat.loading).toBe(false));
     expect(chat.selectedId).toBe('main'); expect(mocks.create).not.toHaveBeenCalled(); chat.dispose();
   });
+  it('keeps a selected personal conversation as the main chat across a restart', async () => {
+    mocks.history.mockResolvedValue(page('personal-conversation', 'hello again'));
+    const first = new XopcChatViewModel(); first.start('personal-conversation', true);
+    await vi.waitFor(() => expect(first.loading).toBe(false));
+    expect(mocks.saveMainConversation).toHaveBeenCalledWith('personal-conversation');
+    first.dispose();
+
+    mocks.mainConversation.mockResolvedValue('personal-conversation');
+    const resumed = new XopcChatViewModel(); resumed.start();
+    await vi.waitFor(() => expect(resumed.rows[0]?.text).toBe('hello again'));
+    expect(resumed.selectedId).toBe('personal-conversation');
+    expect(mocks.create).not.toHaveBeenCalled(); resumed.dispose();
+  });
   it('replaces a stale persisted main conversation that the Gateway no longer has', async () => {
     mocks.mainConversation.mockResolvedValue('missing'); mocks.create.mockResolvedValue('replacement');
     mocks.history.mockRejectedValueOnce(Object.assign(new Error('HTTP_404'), { status: 404 }))

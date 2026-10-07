@@ -10,6 +10,7 @@ import { getSessionMetadata, patchSessionMetadata } from '../storage/sqlite/sess
 import { setSessionConfig } from '../storage/sqlite/config-repository.js';
 import type { GatewayService } from '../gateway/service.js';
 import { PERSONAL_MAIN_TOOL_IDS } from './policy.js';
+import { completePersonalOnboarding } from './onboarding.js';
 import {
   DEFAULT_PERSONAL_PREFERENCES, getPersonalAgent, personalAgentId,
   type PersonalAgentRecord,
@@ -111,10 +112,11 @@ export function createOrResumePersonalAgent(
   ownerId: string,
   requestedModel?: string,
   availableModels: typeof listPersonalModels = listPersonalModels,
+  initial?: { displayName: string; appearance: Exclude<PersonalAppearance, 'custom'>; voicePreference?: { provider: string; model: string; voice: string } },
 ): Promise<PersonalAgentRecord> {
   const current = inFlightProvisioning.get(ownerId);
   if (current) return current;
-  const pending = provisionPersonalAgent(service, ownerId, requestedModel, availableModels);
+  const pending = provisionPersonalAgent(service, ownerId, requestedModel, availableModels, initial);
   inFlightProvisioning.set(ownerId, pending);
   void pending.finally(() => {
     if (inFlightProvisioning.get(ownerId) === pending) inFlightProvisioning.delete(ownerId);
@@ -127,9 +129,11 @@ async function provisionPersonalAgent(
   ownerId: string,
   requestedModel?: string,
   availableModels: typeof listPersonalModels = listPersonalModels,
+  initial?: { displayName: string; appearance: Exclude<PersonalAppearance, 'custom'>; voicePreference?: { provider: string; model: string; voice: string } },
 ): Promise<PersonalAgentRecord> {
   const existingIdentity = getPersonalAgent(ownerId);
   if (existingIdentity?.state === 'ready') {
+    completePersonalOnboarding(ownerId);
     await refreshPersonalDelegationGuidance(service, ownerId);
     ensurePersonalConversationVisibility(ownerId);
     return getPersonalAgent(ownerId) ?? existingIdentity;
@@ -149,12 +153,13 @@ async function provisionPersonalAgent(
       id: agentId,
       enabled: true,
       profile: {
-        name: 'Ada',
+        name: initial?.displayName ?? 'Ada',
         description: 'A personal AI that adapts its responses to the user and coordinates work.',
         creature: 'assistant',
         language: 'zh',
-        emoji: appearanceEmoji('loopi'),
-        avatar: appearanceAvatar('loopi'),
+        emoji: appearanceEmoji(initial?.appearance ?? 'loopi'),
+        avatar: appearanceAvatar(initial?.appearance ?? 'loopi'),
+        ...(initial?.voicePreference ? { voicePreference: initial.voicePreference } : {}),
         responsePreferences: DEFAULT_PERSONAL_PREFERENCES,
         instructions: personalInstructions(DEFAULT_PERSONAL_PREFERENCES),
       },
@@ -181,6 +186,7 @@ async function provisionPersonalAgent(
   }
   ensurePersonalConversationVisibility(ownerId);
   setSessionConfig(conversationId, { modelOverride: chosen.id, fixedModel: true, thinkingLevel: 'off' }, process.cwd());
+  completePersonalOnboarding(ownerId);
   return getPersonalAgent(ownerId) ?? record;
 }
 
@@ -191,8 +197,9 @@ export async function patchPersonalProfile(
   displayName: string,
   preferences: PersonalPreferences,
   appearance: PersonalAppearance,
+  voicePreference?: { provider: string; model: string; voice: string } | null,
 ): Promise<PersonalAgentRecord | null> {
-  const updated = await updatePersonalProfileRecord(ownerId, revision, displayName, preferences, appearance);
+  const updated = await updatePersonalProfileRecord(ownerId, revision, displayName, preferences, appearance, voicePreference);
   if (!updated) return null;
   service.refreshAgentCatalog();
   service.agentService.evictSessionAgent(updated.conversationId);
@@ -205,6 +212,7 @@ export async function updatePersonalProfileRecord(
   displayName: string,
   preferences: PersonalPreferences,
   appearance: PersonalAppearance,
+  voicePreference?: { provider: string; model: string; voice: string } | null,
 ): Promise<PersonalAgentRecord | null> {
   const repository = new AgentCatalogRepository();
   const current = repository.get(personalAgentId(ownerId));
@@ -214,6 +222,7 @@ export async function updatePersonalProfileRecord(
     name: displayName,
     emoji: appearanceEmoji(appearance),
     avatar: appearanceAvatar(appearance),
+    ...(voicePreference !== undefined ? { voicePreference: voicePreference ?? undefined } : {}),
     responsePreferences: preferences,
     instructions: personalInstructions(preferences),
   };

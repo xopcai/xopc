@@ -6,8 +6,12 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps Cloud onboarding to models without capturing neighboring routes', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/models/cloud-onboarding')?.id).toBe('models');
+    expect(findAuthenticatedLazyRouteBundle('/api/models-cloud-onboarding')).toBeUndefined();
+  });
   it('maps personal Agent routes without catching neighboring paths', () => {
-    for (const path of ['/api/personal-agent', '/api/personal-agent/models', '/api/personal-agent/profile', '/api/personal-agent/activity']) {
+    for (const path of ['/api/personal-agent', '/api/personal-agent/models', '/api/personal-agent/onboarding', '/api/personal-agent/profile', '/api/personal-agent/activity']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('personal-agent');
     }
     expect(findAuthenticatedLazyRouteBundle('/api/personal-agent-other')).toBeUndefined();

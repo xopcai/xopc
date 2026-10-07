@@ -27,6 +27,7 @@ import type {
 } from '../../media-understanding/types.js';
 import { createPreauthConnectionBudget } from '../../gateway/security/preauth-connection-budget.js';
 import { createLogger } from '../../utils/logger.js';
+import { getPersonalAgentByConversation } from '../../personal-agent/repository.js';
 import { onUserContextChange } from '../../user-context/changes.js';
 import { mergeSttConfigFromAppConfig } from '../stt/config.js';
 import { resolveSTTProviderChain } from '../stt/factory.js';
@@ -239,7 +240,23 @@ export class VoiceRealtimeRuntime {
         503,
       );
     }
-    const tts = request.mode === 'assistant' ? resolveStreamingTts(config) : undefined;
+    const baseTts = request.mode === 'assistant' ? resolveStreamingTts(config) : undefined;
+    const personalVoice = request.conversationId
+      ? getPersonalAgentByConversation(request.conversationId)?.voicePreference : null;
+    const tts = baseTts && personalVoice && baseTts.route.provider === personalVoice.provider
+      && baseTts.route.model === personalVoice.model ? {
+      ...baseTts,
+      config: {
+        ...baseTts.config,
+        providers: {
+          ...baseTts.config.providers,
+          [baseTts.route.provider]: {
+            ...baseTts.config.providers?.[baseTts.route.provider],
+            voice: personalVoice.voice,
+          },
+        },
+      },
+    } : baseTts;
     if (request.purpose === 'conversation') {
       if (!request.conversationId || !await this.options.sessionExists(request.conversationId)) {
         throw new VoiceSessionCreationError('SESSION_NOT_FOUND', 'Conversation session was not found', 404);
