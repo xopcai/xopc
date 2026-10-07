@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const DEFAULT_AGENT_MODEL_REF = 'deepseek/deepseek-v4-flash';
+export const DEFAULT_AGENT_MODEL_REF = 'deepseek/deepseek-flash';
 export const DEFAULT_CORE_SKILLS = [
   'doc-coauthoring',
   'define-task',
@@ -137,6 +137,7 @@ export const AgentDefaultsSchema = z.object({
 
 export const ResponsePreferencesSchema = z.object({
   addressAs: z.string().trim().max(60).optional(),
+  guidance: z.string().trim().max(500).optional(),
   warmth: z.enum(['reserved', 'balanced', 'gentle']).optional(),
   humor: z.enum(['none', 'occasional', 'playful']).optional(),
   supportMode: z.enum(['listen', 'untangle', 'solutions']).optional(),

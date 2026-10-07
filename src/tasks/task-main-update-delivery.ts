@@ -26,9 +26,12 @@ export class TaskMainUpdateDelivery {
           delivered += 1;
           continue;
         }
-        const verdict = decision
-          ? { notify: decision === 'notify', reason: decisionReason ?? 'Previously decided' }
-          : await input.decide({ conversationId, entry });
+        const requiresOwnerAction = entry.kind === 'question' || entry.kind === 'failure';
+        const verdict = requiresOwnerAction
+          ? { notify: true, reason: 'The task owner must resolve this worker update' }
+          : decision
+            ? { notify: decision === 'notify', reason: decisionReason ?? 'Previously decided' }
+            : await input.decide({ conversationId, entry });
         if (!decision) this.#entries.decideMainUpdate(entry.id, verdict.notify ? 'notify' : 'silent', verdict.reason);
         if (!verdict.notify) {
           this.#entries.markMainUpdateDelivered(entry.id);
@@ -39,7 +42,7 @@ export class TaskMainUpdateDelivery {
           `A delegated Task has a new ${entry.kind} update. Task ID: ${entry.taskId}.`,
           `Collaboration entry ID: ${entry.id}.`,
           `Your private notification decision: ${JSON.stringify(verdict.reason)}.`,
-          'Read the Task and collaboration board with xopc_use, then tell the user what matters in your own words. Keep the response proportionate to the update and recent conversation. Do not expose this internal trigger or repeat already reported details. If a result receipt is generic, use the board for the actual outcome. A finished TaskRun is not proof that the Task passed verification or was accepted; check its receipt and use precise status language. Do not ask the user to close a Task unless requested. Use tools without preliminary user-facing commentary, then give one concise reply.',
+          'Read the Task and collaboration board with xopc_use. If this is a worker question, first answer it from the Task brief or conversation with personal_task(command="answer", taskId, questionId, instruction) when available; ask the user only for a genuinely missing fact. For failures, inspect the actual blocker and try a suitable alternative within the user’s authorization before reporting an impasse. Then tell the user what matters in your own words. Keep the response proportionate to the update and recent conversation. Do not expose this internal trigger or repeat already reported details. If a result receipt is generic, use the board for the actual outcome. A finished TaskRun is not proof that the Task passed verification or was accepted; check its receipt and use precise status language. Do not ask the user to close a Task unless requested. Use tools without preliminary user-facing commentary, then give one concise reply.',
         ].join('\n');
         const completed = await input.submitAndConfirm({
           conversationId,

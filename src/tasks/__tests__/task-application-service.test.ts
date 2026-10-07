@@ -148,6 +148,22 @@ describe('TaskApplicationService', () => {
     const run = new TaskRunRepository().require(result.runId);
     expect(run.trigger).toMatchObject({ kind: 'system', context: event });
     expect(buildTaskRunMessage('Handle the source event', run.trigger)).toContain('"noteId":"note-1"');
+    expect(buildTaskRunMessage('Handle the source event', run.trigger, 'Use the linked brief and preserve all facts'))
+      .toContain('<task_brief>\nUse the linked brief and preserve all facts\n</task_brief>');
+  });
+
+  it('does not mark an empty TaskRun as succeeded', () => {
+    const { task, run, runs } = createRunningTask('empty-result');
+    const coordinator = TaskRunCoordinator.start({
+      runId: run.id,
+      context: { taskId: task.id, conversationId: createConversation({ agentId: 'main' }).key,
+        agentId: 'main', triggerKind: 'user' },
+      fallbackObjective: contract.objective,
+    });
+    expect(coordinator).toBeDefined();
+    coordinator!.finalize({ status: 'succeeded', summary: 'Message processed', assistantText: '' });
+    expect(runs.require(run.id).status).toBe('failed');
+    expect(runs.getReceipt(run.id)).toMatchObject({ failure: { code: 'empty_agent_run' } });
   });
 
   it('grants only the reviewed capability and resumes the blocked task', () => {

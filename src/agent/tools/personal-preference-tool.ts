@@ -7,9 +7,9 @@ import { PersonalPreferencesSchema, updatePersonalProfileRecord } from '../../pe
 const PreferenceSchema = Type.Object({
   field: Type.Union([
     Type.Literal('addressAs'), Type.Literal('warmth'), Type.Literal('humor'),
-    Type.Literal('supportMode'), Type.Literal('detailLevel'), Type.Literal('proactivity'),
+    Type.Literal('supportMode'), Type.Literal('detailLevel'), Type.Literal('proactivity'), Type.Literal('guidance'),
   ]),
-  value: Type.String({ description: 'Use the exact enum for the field: warmth=reserved|balanced|gentle; humor=none|occasional|playful; supportMode=listen|untangle|solutions; detailLevel=brief|balanced|detailed; proactivity=decisions|important|open. addressAs is free text. Save only explicitly requested lasting preferences.' }),
+  value: Type.String({ description: 'Use the exact enum for warmth, humor, supportMode, detailLevel, or proactivity. addressAs is a name. guidance is free text for the user’s precise, explicitly requested lasting response preference; preserve their meaning. Do not store temporary mood or guesswork.' }),
 });
 
 export function createPersonalPreferenceTool(deps: {

@@ -403,6 +403,7 @@ export async function *runGatewayAgent(
         taskRun.finalize({
           status: taskRunStatus,
           summary: taskRunSummary,
+          assistantText: mapper.getLastAssistantText(),
         });
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);

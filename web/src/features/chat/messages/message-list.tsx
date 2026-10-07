@@ -112,6 +112,8 @@ export const MessageList = memo(function MessageList({
     <InlinePreviewSchedulerProvider>
       <div ref={registerListContentRef} className="flex w-full min-w-0 flex-col gap-8 pb-8">
         {list.map((msg, index) => {
+        if (msg.role === 'assistant' && msg.content?.length
+          && msg.content.every((block) => block.type === 'text' && block.text.trim() === 'NO_REPLY')) return null;
         const isLast = index === list.length - 1;
         const isStreamRow = Boolean((streaming || sending || msg.pendingResponseStatus) && isLast && msg.role === 'assistant');
         const isLastUserRow = isLastUserMessageInThread(list, index);

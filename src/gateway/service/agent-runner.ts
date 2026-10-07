@@ -27,6 +27,11 @@ import type { AgentSourceContext, TurnContextRef } from '../../agent/source-cont
 import { fitSourceContextsToBudget } from '../../agent/source-context/budget.js';
 import { createLogger } from '../../utils/logger.js';
 import { listActiveSessionInputExecutions, listActiveSessionInputRuns } from '../../storage/sqlite/index.js';
+import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
+import { TaskCollaborationRepository } from '../../tasks/task-collaboration-repository.js';
+import { TaskApplicationService } from '../../tasks/task-application-service.js';
+import { TaskRepository } from '../../tasks/task-repository.js';
 import {
   SessionInputCoordinator,
   type ReplaceLatestTurnInput,
@@ -436,6 +441,34 @@ export class GatewayAgentRunner {
     publishStreamFor: (runId: string) => (event: ClarificationStreamEvent) => void;
   }): Promise<ClarifyRequestResult> {
     const { conversationId, request, publishStreamFor } = opts;
+    const taskSession = request.kind !== 'approval'
+      ? new TaskConversationRepository().resolveActiveExecutionSession(conversationId)
+      : undefined;
+    if (taskSession?.runId) {
+      const entry = runSqliteWriteTransaction(() => {
+        const posted = new TaskCollaborationRepository().append({
+          taskId: taskSession.taskId,
+          taskRunId: taskSession.runId,
+          authorKind: 'worker_agent',
+          authorId: taskSession.agentId ?? 'worker',
+          kind: 'question',
+          body: request.question,
+          idempotencyKey: `clarify:${taskSession.runId}:${opts.toolCallId}`,
+        });
+        const task = new TaskRepository().require(taskSession.taskId);
+        const result = new TaskApplicationService().execute({
+          taskId: task.id,
+          expectedVersion: task.version,
+          idempotencyKey: `clarify-wait:${posted.id}`,
+          command: { type: 'add_wait', wait: { kind: 'external_event', reason: request.question,
+            condition: { collaborationEntryId: posted.id } } },
+          actor: { kind: 'agent', id: taskSession.agentId ?? 'worker' },
+        });
+        if (!result.ok) throw new Error('Could not pause TaskRun for worker question');
+        return posted;
+      });
+      return { status: 'waiting', waitId: entry.id };
+    }
     const runId = this.activeWebchatRunBySession.get(conversationId) ?? opts.runId;
     const publishStream = this.externalStreamBySession.get(conversationId)
       ?? (runId ? publishStreamFor(runId) : undefined);

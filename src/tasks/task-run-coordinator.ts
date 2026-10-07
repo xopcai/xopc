@@ -3,6 +3,7 @@ import type { TaskEvidence, TaskRunReceipt, TurnOutcome } from '@xopcai/gateway-
 import type { ExecutionContext } from './execution-context.js';
 import { TaskApplicationService } from './task-application-service.js';
 import { TaskContextRepository } from './task-context-repository.js';
+import { TaskCollaborationRepository } from './task-collaboration-repository.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 
@@ -94,23 +95,29 @@ export class TaskRunCoordinator {
       provenance: 'tool', strength: 'observed', observedAt: Date.now() });
   }
 
-  finalize(input: { status: TaskRunReceipt['status']; summary: string }): void {
+  finalize(input: { status: TaskRunReceipt['status']; summary: string; assistantText?: string }): void {
     const run = this.#runs.get(this.runId);
     if (!run || !['running', 'waiting', 'verifying'].includes(run.status)) return;
     if (run.status === 'waiting' && this.#runs.listActiveWaits(run.taskId).length > 0) return;
+    const hasAssistantResult = Boolean(input.assistantText?.trim() && input.assistantText.trim() !== 'NO_REPLY');
+    const hasBoardResult = new TaskCollaborationRepository().recent(run.taskId, undefined, 20)
+      .some((entry) => entry.taskRunId === run.id && entry.kind === 'result');
+    const emptySuccess = input.status === 'succeeded' && !hasAssistantResult && !hasBoardResult && this.#evidence.length === 0;
+    const status = emptySuccess ? 'failed' : input.status;
+    const summary = emptySuccess ? 'Agent run returned no result or evidence' : input.summary;
     this.#application.completeRun({
       runId: run.id,
       expectedRunVersion: run.version,
       receipt: {
-        status: input.status,
-        summary: input.summary,
+        status,
+        summary,
         changes: this.#evidence.filter((item) => item.kind === 'state'),
         evidence: this.#evidence,
         verification: { status: 'unverified', checks: [] },
-        remainingWork: [],
+        remainingWork: emptySuccess ? [new TaskRepository().require(run.taskId).contract?.objective ?? 'Complete the task'] : [],
         needsUser: false,
-        completionVerdict: input.status === 'succeeded' ? 'partial' : 'not_achieved',
-        ...(input.status === 'failed' ? { failure: { code: 'agent_run_failed', phase: 'execution', recoveryAction: 'Retry the task run' } } : {}),
+        completionVerdict: status === 'succeeded' ? 'partial' : 'not_achieved',
+        ...(status === 'failed' ? { failure: { code: emptySuccess ? 'empty_agent_run' : 'agent_run_failed', phase: 'execution', recoveryAction: 'Retry the task run with another available Agent or model' } } : {}),
       },
     });
   }
