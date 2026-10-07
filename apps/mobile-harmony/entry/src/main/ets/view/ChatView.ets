@@ -53,6 +53,13 @@ import { userTextBubbleWidth } from '../common/chatBubbleLayout';
 import { chatPresentationRows, chatNeedsWideBubble } from '../common/chatPresentation';
 import { XopcBrandLoading } from './MobileComponents';
 
+interface XopcSendFlightRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 @ComponentV2
 export struct XopcChatView {
   @Local colors: XopcThemeColors = appThemeColors;
@@ -211,6 +218,22 @@ export struct XopcChatView {
   private olderGeneration: number = 0;
   private autoReadState?: XopcAutoReadState;
   private assistantAudioState?: XopcAssistantAudioState;
+  private sendFlightRoot?: XopcSendFlightRect;
+  private sendFlightComposer?: XopcSendFlightRect;
+  private sendFlightTarget?: XopcSendFlightRect;
+  private sendFlightTimer: number = -1;
+  private sendFlightFallbackTimer: number = -1;
+  private sendFlightRevision: number = 0;
+  @Local sendFlightRowId: string = '';
+  @Local sendFlightText: string = '';
+  @Local sendFlightActive: boolean = false;
+  @Local sendFlightX: number = 0;
+  @Local sendFlightY: number = 0;
+  @Local sendFlightWidth: number = 0;
+  @Local sendFlightOffsetX: number = 0;
+  @Local sendFlightOffsetY: number = 0;
+  @Local sendFlightScale: number = 1;
+  @Local sendFlightOpacity: number = 1;
 
   @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.loading', 'activePage', 'reader.continuousConversationId', 'voice.state')
   onAutoReadChange(): void {
@@ -268,6 +291,7 @@ export struct XopcChatView {
     const profile = gatewaySession.currentProfile();
     const scope = JSON.stringify([profile?.gatewayId || '', profile?.deviceId || '', this.chat.selectedId]);
     if (!this.chat.selectedId || scope === this.draftScope) return;
+    this.clearSendFlight();
     clearTimeout(this.draftTimer); this.saveDraft();
     clearTimeout(this.scrollTimer); this.layoutScrollAnimating = false;
     this.initialScrollPending = true; this.atBottom = true; this.showJumpBottom = false; this.palette.close();
@@ -338,6 +362,79 @@ export struct XopcChatView {
     if (Number(previous.height) !== Number(current.height) || Number(previous.width) !== Number(current.width)) {
       this.onMessageLayoutChange();
     }
+  }
+  private sendFlightRect(area: Area): XopcSendFlightRect {
+    return { x: Number(area.globalPosition.x), y: Number(area.globalPosition.y),
+      width: Number(area.width), height: Number(area.height) };
+  }
+  private clearSendFlight(): void {
+    this.sendFlightRevision++;
+    clearTimeout(this.sendFlightTimer);
+    clearTimeout(this.sendFlightFallbackTimer);
+    this.sendFlightTimer = -1;
+    this.sendFlightFallbackTimer = -1;
+    this.sendFlightActive = false;
+    this.sendFlightRowId = '';
+    this.sendFlightTarget = undefined;
+  }
+  private enqueueSendFlight(rowId: string, content: string, files: XopcChatAttachment[], refs: XopcContextRef[],
+    delivery: string): void {
+    this.clearSendFlight();
+    if (!this.visible || this.layout.reduceMotion || !this.atBottom || !content.trim() || content.length > 120
+      || files.length || refs.length || (!!this.chat.runId && delivery === 'next')
+      || !this.sendFlightRoot || !this.sendFlightComposer) return;
+    this.sendFlightRowId = rowId;
+    this.sendFlightText = content;
+    const revision = this.sendFlightRevision;
+    this.sendFlightFallbackTimer = setTimeout((): void => {
+      if (revision === this.sendFlightRevision) this.clearSendFlight();
+    }, 500);
+  }
+  private onSendFlightTarget(rowId: string, area: Area): void {
+    if (!this.sendFlightRowId || rowId !== this.sendFlightRowId || this.sendFlightActive) return;
+    this.sendFlightTarget = this.sendFlightRect(area);
+    clearTimeout(this.sendFlightTimer);
+    const revision = this.sendFlightRevision;
+    // Let the list finish its bottom alignment after the new row is inserted.
+    this.sendFlightTimer = setTimeout((): void => {
+      if (revision === this.sendFlightRevision) this.startSendFlight();
+    }, 45);
+  }
+  private startSendFlight(): void {
+    const root = this.sendFlightRoot;
+    const composer = this.sendFlightComposer;
+    const target = this.sendFlightTarget;
+    if (!this.visible || !root || !composer || !target || !this.sendFlightRowId
+      || !Number.isFinite(target.x) || !Number.isFinite(target.y) || target.width <= 0 || target.height > 160
+      || target.y < root.y || target.y + target.height > root.y + root.height) {
+      this.clearSendFlight(); return;
+    }
+    const startX = composer.x + composer.width - target.width - 12;
+    const startY = composer.y + (composer.height - target.height) / 2;
+    this.sendFlightX = startX - root.x;
+    this.sendFlightY = startY - root.y;
+    this.sendFlightWidth = target.width;
+    this.sendFlightOffsetX = 0;
+    this.sendFlightOffsetY = 0;
+    this.sendFlightScale = 0.96;
+    this.sendFlightOpacity = 0.9;
+    this.sendFlightActive = true;
+    const revision = this.sendFlightRevision;
+    clearTimeout(this.sendFlightFallbackTimer);
+    this.sendFlightFallbackTimer = setTimeout((): void => {
+      if (revision === this.sendFlightRevision) this.clearSendFlight();
+    }, 400);
+    this.sendFlightTimer = setTimeout((): void => {
+      if (revision !== this.sendFlightRevision) return;
+      this.getUIContext().animateTo({ duration: 280, curve: Curve.EaseOut, onFinish: (): void => {
+        if (revision === this.sendFlightRevision) this.clearSendFlight();
+      } }, (): void => {
+        this.sendFlightOffsetX = target.x - startX;
+        this.sendFlightOffsetY = target.y - startY;
+        this.sendFlightScale = 1;
+        this.sendFlightOpacity = 1;
+      });
+    }, 16);
   }
   private async loadOlder(): Promise<void> {
     if (this.loadingOlder || !this.chat.hasOlder || this.chat.loading || this.initialScrollPending) return;
@@ -633,6 +730,7 @@ export struct XopcChatView {
   @Monitor('activePage')
   onActivityChange(): void {
     this.visible = this.activePage;
+    if (!this.activePage) this.clearSendFlight();
     if (!this.activePage) { clearTimeout(this.scrollTimer); this.layoutScrollAnimating = false; }
     if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.attention.dispose(); this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.connectionWait.pause(); this.chat.deactivate(); }
     else { this.attention.activate(); this.bindBack(); this.chat.activate(); this.onHistoryReady(); this.options.resume(); this.prompt.resume(); if (this.layout.foreground) this.connectionWait.onReturn(); }
@@ -667,7 +765,7 @@ export struct XopcChatView {
     this.setPanel(true);
     this.chooseAction(this.requestedAction);
   }
-  aboutToDisappear(): void { this.closeExecutionDetail(); this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
+  aboutToDisappear(): void { this.clearSendFlight(); this.closeExecutionDetail(); this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
 
   private async attentionAction(action: XopcHomeAction): Promise<void> {
     if (action.type === 'open') {
@@ -738,7 +836,8 @@ export struct XopcChatView {
       if (replaced) { this.cancelEditing(); this.options.refreshQueue(); }
       return;
     }
-    const sent = await this.chat.send(text, files, delivery, refs, (): void => {
+    const sent = await this.chat.send(text, files, delivery, refs, (rowId: string): void => {
+      this.enqueueSendFlight(rowId, text, files, refs, delivery);
       if (this.draft === text) this.draft = '';
       if (this.attachments === files) this.attachments = [];
       if (this.refs === refs) this.refs = [];
@@ -1114,6 +1213,7 @@ export struct XopcChatView {
               Row() {
                 if (item.item.sendState === 'sending') {
                   LoadingProgress().width(24).height(24).color(this.colors.secondary).margin({ right: 8 })
+                    .opacity(this.sendFlightRowId === item.item.id ? 0 : 1)
                 } else if (item.item.sendState === 'failed') {
                   Button({ type: ButtonType.Circle }) {
                     Text('!').fontSize(18).fontWeight(FontWeight.Bold).fontColor(this.colors.danger)
@@ -1133,6 +1233,10 @@ export struct XopcChatView {
                   .padding(this.userVoiceOnly(item.item) ? { left: 4, right: 4, top: 0, bottom: 0 }
                     : { left: 14, right: 14, top: 10, bottom: 10 }).alignItems(HorizontalAlign.Start)
                   .borderRadius(18).backgroundColor(this.colors.accentSoft)
+                  .opacity(this.sendFlightRowId === item.item.id ? 0 : 1)
+                  .onAreaChange((_previous: Area, current: Area): void => {
+                    this.onSendFlightTarget(item.item.id, current);
+                  })
                   .bindContextMenu(item.item.text ? this.userMessageMenu(item.item) : undefined, ResponseType.LongPress)
               }.width('100%').justifyContent(FlexAlign.End)
             }.width('100%').alignItems(HorizontalAlign.End)
@@ -1181,6 +1285,7 @@ export struct XopcChatView {
       .onScrollStop((): void => { this.finishLayoutScroll(); })
       .onTouch((event: TouchEvent): void => {
         if (event.type === TouchType.Down) {
+          if (this.sendFlightRowId) this.clearSendFlight();
           this.layoutScrollAnimating = false; clearTimeout(this.scrollTimer); this.dismissComposer();
         }
       })
@@ -1451,6 +1556,7 @@ export struct XopcChatView {
       }
     }.id('chat-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)
       .borderRadius(18).clip(true).margin({ bottom: 8, top: 8 })
+      .onAreaChange((_previous: Area, current: Area): void => { this.sendFlightComposer = this.sendFlightRect(current); })
     XopcChatActionPanel({ open: this.panelOpen, disabledIds: this.disabledActionIds(),
       onSelect: (id: string): void => { this.chooseAction(id); } })
     this.bottomDock()
@@ -1583,7 +1689,18 @@ export struct XopcChatView {
         })
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight, dragBar: true, showClose: false, backgroundColor: this.colors.panel })
+    if (this.sendFlightActive) {
+      Text(this.sendFlightText).fontSize(16).lineHeight(20).fontColor(this.colors.foreground)
+        .maxLines(4).textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width(this.sendFlightWidth).padding({ left: 14, right: 14, top: 10, bottom: 10 })
+        .borderRadius(18).backgroundColor(this.colors.accentSoft)
+        .position({ x: this.sendFlightX, y: this.sendFlightY })
+        .translate({ x: this.sendFlightOffsetX, y: this.sendFlightOffsetY })
+        .scale({ x: this.sendFlightScale, y: this.sendFlightScale })
+        .opacity(this.sendFlightOpacity).hitTestBehavior(HitTestMode.None)
+    }
     }.width('100%').height('100%')
+      .onAreaChange((_previous: Area, current: Area): void => { this.sendFlightRoot = this.sendFlightRect(current); })
       .bindSheet($$this.executionOpen, this.executionDetailSheet, { height: '92%', dragBar: false,
         showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => { this.closeExecutionDetail(); } })
   }
