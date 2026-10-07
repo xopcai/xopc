@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import * as Popover from '@radix-ui/react-popover';
 import { ArrowUpRight, ListTodo, MessageCircle, Phone, Settings2, Upload, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -336,12 +337,34 @@ export function PersonalPage() {
           <button type="button" disabled={voiceCall.active} onClick={() => {
             if (record?.state === 'ready') voiceCallRef.current.open({ conversationId: record.conversationId, name: record.displayName, mode: 'assistant' });
           }} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50" aria-label={zh ? '语音通话' : 'Voice call'} title={zh ? '语音通话' : 'Voice call'}><Phone className="size-5" /></button>
-          <button type="button" onClick={() => { if (showActivity) setShowActivity(false); else void openActivity(); }} aria-pressed={showActivity} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '正在做的事' : 'Activity'}><ListTodo className="size-5" /></button>
+          <Popover.Root open={showActivity} onOpenChange={open => { if (open) void openActivity(); else setShowActivity(false); }}>
+            <Popover.Trigger asChild>
+              <button type="button" aria-pressed={showActivity} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '正在做的事' : 'Activity'}><ListTodo className="size-5" /></button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content side="bottom" align="end" sideOffset={8} collisionPadding={8} aria-label={zh ? '派发的任务' : 'Delegated tasks'} className="z-50 flex h-[min(34rem,calc(100dvh-6rem))] w-[min(25rem,calc(100vw-1rem))] min-h-0 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-inset shadow-xl focus:outline-none">
+                <div className="flex shrink-0 items-start justify-between gap-3 px-6 pb-3 pt-6">
+                  <div className="min-w-0"><h2 className="text-base font-semibold tracking-tight text-fg">{zh ? '交给我推进的事' : 'Delegated work'}</h2><p className="mt-1 text-xs text-fg-muted">{activity ? (zh ? `最近更新 · 共 ${activity.total} 项` : `Recently updated · ${activity.total} total`) : (zh ? '查看任务进展与结果' : 'Follow progress and results')}</p></div>
+                  <Popover.Close className="touch-target -mr-2 -mt-1 rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭活动' : 'Close activity'}><X className="size-4" /></Popover.Close>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-5 pt-3">
+                  {!activity && !activityError && <div className="space-y-2"><Skeleton className="h-18 rounded-2xl" /><Skeleton className="h-18 rounded-2xl" /><Skeleton className="h-18 rounded-2xl" /></div>}
+                  {activityError && <div className="px-5 py-12 text-center"><p className="text-sm text-fg-muted">{zh ? '暂时无法读取任务' : 'Could not load tasks'}</p><button type="button" onClick={() => void openActivity()} className="mt-3 rounded-lg px-3 py-2 text-sm text-accent hover:bg-surface-hover">{zh ? '重试' : 'Try again'}</button></div>}
+                  {activity?.items.length === 0 && <div className="px-5 py-16 text-center"><ListTodo className="mx-auto size-7 text-fg-subtle" aria-hidden /><p className="mt-4 text-sm font-medium text-fg">{zh ? '还没有派发的任务' : 'No delegated work yet'}</p><p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '你可以在对话里直接告诉我想推进的事。' : 'Tell me what you would like to move forward in chat.'}</p></div>}
+                  {activity && activity.items.length > 0 && <div className="space-y-2">{activity.items.map(item => <ActivityRow key={item.id} item={item} zh={zh} />)}</div>}
+                  {activity && activityLoadedCount < activity.total && <div className="pt-4 text-center">
+                    <button type="button" onClick={() => void loadMoreActivity()} disabled={activityLoadingMore} className="min-h-10 rounded-xl bg-surface-panel px-5 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50">{activityLoadingMore ? (zh ? '正在加载…' : 'Loading…') : (zh ? '加载更多' : 'Load more')}</button>
+                    {activityMoreError && <p role="alert" className="mt-2 text-xs text-danger">{zh ? '加载失败，请重试' : 'Could not load more. Try again.'}</p>}
+                  </div>}
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
           <button type="button" onClick={openSettings} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '回应偏好' : 'Response preferences'}><Settings2 className="size-5" /></button>
         </div> : null,
     });
     return () => clearPageHeader();
-  }, [appearance, clearPageHeader, openActivity, openSettings, record, setPageHeader, showActivity, voiceCall.active, zh]);
+  }, [activity, activityError, activityLoadedCount, activityLoadingMore, activityMoreError, appearance, clearPageHeader, loadMoreActivity, openActivity, openSettings, record, setPageHeader, showActivity, voiceCall.active, zh]);
 
   function renderSettingsDrawer() {
     return (
@@ -437,22 +460,6 @@ export function PersonalPage() {
       </div>}
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1"><ChatPage embedded personal personalWelcome={{ name: record.displayName, addressAs: record.preferences.addressAs, avatar: <PersonalAvatar appearance={record.appearance} agentId={record.agentId} className="size-14" />, opening: openingFor(record.preferences, zh), showSupportChoice: !welcomeDone, onChooseSupport: mode => void finishWelcome(mode), onSkipSupport: () => void finishWelcome(), supportChoiceError: error }} conversationId={record.conversationId} /></div>
-        {showActivity && <aside className="fixed inset-0 z-30 flex min-w-0 flex-col bg-surface-inset shadow-lg sm:static sm:w-[min(25rem,42vw)] sm:shadow-none" aria-label={zh ? '派发的任务' : 'Delegated tasks'}>
-          <div className="flex shrink-0 items-start justify-between gap-3 px-6 pb-3 pt-6">
-            <div className="min-w-0"><h2 className="text-base font-semibold tracking-tight text-fg">{zh ? '交给我推进的事' : 'Delegated work'}</h2><p className="mt-1 text-xs text-fg-muted">{activity ? (zh ? `最近更新 · 共 ${activity.total} 项` : `Recently updated · ${activity.total} total`) : (zh ? '查看任务进展与结果' : 'Follow progress and results')}</p></div>
-            <button type="button" onClick={() => setShowActivity(false)} className="touch-target -mr-2 -mt-1 rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭活动' : 'Close activity'}><X className="size-4" /></button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-5 pt-3">
-            {!activity && !activityError && <div className="space-y-2"><Skeleton className="h-18 rounded-2xl" /><Skeleton className="h-18 rounded-2xl" /><Skeleton className="h-18 rounded-2xl" /></div>}
-            {activityError && <div className="px-5 py-12 text-center"><p className="text-sm text-fg-muted">{zh ? '暂时无法读取任务' : 'Could not load tasks'}</p><button type="button" onClick={() => void openActivity()} className="mt-3 rounded-lg px-3 py-2 text-sm text-accent hover:bg-surface-hover">{zh ? '重试' : 'Try again'}</button></div>}
-            {activity?.items.length === 0 && <div className="px-5 py-16 text-center"><ListTodo className="mx-auto size-7 text-fg-subtle" aria-hidden /><p className="mt-4 text-sm font-medium text-fg">{zh ? '还没有派发的任务' : 'No delegated work yet'}</p><p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '你可以在对话里直接告诉我想推进的事。' : 'Tell me what you would like to move forward in chat.'}</p></div>}
-            {activity && activity.items.length > 0 && <div className="space-y-2">{activity.items.map(item => <ActivityRow key={item.id} item={item} zh={zh} />)}</div>}
-            {activity && activityLoadedCount < activity.total && <div className="pt-4 text-center">
-              <button type="button" onClick={() => void loadMoreActivity()} disabled={activityLoadingMore} className="min-h-10 rounded-xl bg-surface-panel px-5 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50">{activityLoadingMore ? (zh ? '正在加载…' : 'Loading…') : (zh ? '加载更多' : 'Load more')}</button>
-              {activityMoreError && <p role="alert" className="mt-2 text-xs text-danger">{zh ? '加载失败，请重试' : 'Could not load more. Try again.'}</p>}
-            </div>}
-          </div>
-        </aside>}
       </div>
       {showSettings && renderSettingsDrawer()}
     </div>
