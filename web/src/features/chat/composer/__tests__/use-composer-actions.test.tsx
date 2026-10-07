@@ -52,6 +52,26 @@ describe('composer acceptance preserves drafts', () => {
     expect(options.clearAttachments).toHaveBeenCalledOnce();
   });
 
+  it('reports the accepted optimistic dispatch with its original draft', async () => {
+    const onDispatched = vi.fn();
+    options = {
+      ...options,
+      onDispatched,
+      onSend: (...args) => {
+        args[4]?.onDispatched?.({ clientSubmissionId: 'send-1' });
+        return true;
+      },
+    };
+    await render();
+
+    actions.send();
+
+    expect(onDispatched).toHaveBeenCalledWith(
+      { clientSubmissionId: 'send-1' },
+      { text: 'Original', attachments: [], contextRefs: [] },
+    );
+  });
+
   it('retains a rejected draft', async () => {
     actions.send();
     await act(async () => accept(false));
