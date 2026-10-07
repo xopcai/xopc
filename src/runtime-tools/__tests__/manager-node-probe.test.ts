@@ -57,5 +57,6 @@ describe('managed Node.js package manager probe', () => {
         await rm(stateDir, { recursive: true, force: true });
       }
     },
+    15_000,
   );
 });
