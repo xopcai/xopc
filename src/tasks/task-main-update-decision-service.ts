@@ -7,6 +7,7 @@ import { resolveModel } from '../providers/index.js';
 import { TaskCollaborationRepository, type TaskCollaborationEntry } from './task-collaboration-repository.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
+import { getPersonalAgentByConversation } from '../personal-agent/repository.js';
 
 export interface TaskMainUpdateDecision {
   notify: boolean;
@@ -66,6 +67,10 @@ export class TaskMainUpdateDecisionService {
   async decide(input: { conversationId: string; entry: TaskCollaborationEntry }): Promise<TaskMainUpdateDecision> {
     const task = this.#tasks.get(input.entry.taskId);
     if (!task) return { notify: false, reason: 'Task no longer exists', userPreference: 'unspecified' };
+    const personal = getPersonalAgentByConversation(input.conversationId);
+    if (personal?.preferences.proactivity === 'decisions' && input.entry.kind === 'progress') {
+      return { notify: false, reason: 'Personal AI is set to report results and decisions only', userPreference: 'final_only' };
+    }
     const run = this.#runs.getLatestRoot(task.id);
     const history = recentConversation(await this.deps.loadHistory(input.conversationId));
     const board = this.#entries.recent(task.id, undefined, 5).map((entry) => ({

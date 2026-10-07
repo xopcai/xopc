@@ -113,6 +113,7 @@ export const WorkflowPolicySchema = z.object({
 }).strict();
 
 export const RuntimePolicySchema = z.object({
+  thinkingLevel: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
   commandIsolation: z.discriminatedUnion('mode', [
     z.object({ mode: z.literal('host') }).strict(),
     z.object({ mode: z.literal('docker'), image: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9./:_-]*@sha256:[a-f0-9]{64}$/), network: z.boolean().default(false), workspaceAccess: z.enum(['read-only', 'read-write']).default('read-only') }).strict(),
@@ -134,6 +135,15 @@ export const AgentDefaultsSchema = z.object({
   runtime: RuntimePolicySchema.default({}),
 }).strict();
 
+export const ResponsePreferencesSchema = z.object({
+  addressAs: z.string().trim().max(60).optional(),
+  warmth: z.enum(['reserved', 'balanced', 'gentle']).optional(),
+  humor: z.enum(['none', 'occasional', 'playful']).optional(),
+  supportMode: z.enum(['listen', 'untangle', 'solutions']).optional(),
+  detailLevel: z.enum(['brief', 'balanced', 'detailed']).optional(),
+  proactivity: z.enum(['decisions', 'important', 'open']).optional(),
+}).strict();
+
 export const AgentProfileSchema = z.object({
   name: z.string().trim().min(1),
   description: z.string().trim().optional(),
@@ -142,6 +152,7 @@ export const AgentProfileSchema = z.object({
   language: z.string().trim().optional(),
   emoji: z.string().trim().optional(),
   avatar: z.string().trim().optional(),
+  responsePreferences: ResponsePreferencesSchema.optional(),
   instructions: z.string().trim().min(1).optional(),
 }).strict();
 

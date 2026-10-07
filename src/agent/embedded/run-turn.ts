@@ -63,6 +63,10 @@ import { withDelegationScope } from '../orchestration/delegation-scope.js';
 import { runWithEmbeddedExecutionSession } from './execution-context.js';
 import type { CompactionDiscardedAttempt } from '../memory/compaction.js';
 import { continuesAfterTool, trackAiUsageStream } from '../../usage/recorder.js';
+import { isXopcDatabaseOpen } from '../../storage/sqlite/index.js';
+import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
+import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
+import { getModelThinking } from '../../providers/model-thinking.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -330,6 +334,12 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
   const timeoutMs = params.timeoutMs || resolveAgentTurnTimeoutMs();
   const resolvedModel = requireEmbeddedModel(model, params.modelRef);
+  const configuredThinking = isXopcDatabaseOpen() && getSessionMetadata(conversationId)
+    ? resolveEffectiveAgentConfigForSession(conversationId).config.runtime.thinkingLevel
+    : undefined;
+  if (configuredThinking && !getModelThinking(resolvedModel).options.includes(configuredThinking)) {
+    throw new Error(`Agent requires a model that supports thinking ${configuredThinking}`);
+  }
   const promptCachePolicy = resolvePromptCachePolicy(params.promptCachePolicy);
   const compactionPolicy = params.compactionPolicy ?? resolveCompactionPolicy();
   const transcriptRuntime = params.transcriptRuntime ?? (
@@ -364,7 +374,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       modelRef: params.modelRef,
       tools,
       systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
-      thinkingLevel: thinkingLevel ?? 'medium',
+      thinkingLevel: configuredThinking ?? thinkingLevel ?? 'medium',
       transcriptRuntime,
     });
 

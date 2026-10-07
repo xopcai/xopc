@@ -70,10 +70,11 @@ export class AgentCatalogService {
     this.resumePendingPurgeSync();
   }
 
-  async update(agentIdRaw: string, patch: Partial<Omit<AgentEntry, 'id'>>): Promise<StoredAgent> {
+  async update(agentIdRaw: string, patch: Partial<Omit<AgentEntry, 'id'>>, expectedRevision?: number): Promise<StoredAgent> {
     const agentId = normalizeAgentId(agentIdRaw);
     const current = this.repository.get(agentId);
     if (!current) throw new Error(`Agent "${agentId}" not found`);
+    if (expectedRevision !== undefined && current.revision !== expectedRevision) throw new Error('Agent revision conflict');
     const { revision, provisioningState: _state, provisioningError: _error,
       createdAt: _created, updatedAt: _updated, deletedAt: _deleted, ...entry } = current;
     const next = { ...entry, ...patch, id: agentId } as AgentEntry;

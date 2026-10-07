@@ -4,6 +4,7 @@ export interface VoiceCallTarget {
   conversationId: string;
   name: string;
   taskId?: string;
+  mode?: 'assistant';
 }
 
 export interface VoiceCallContextValue {

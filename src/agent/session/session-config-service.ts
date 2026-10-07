@@ -33,6 +33,7 @@ import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
+import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 
 const log = createLogger('SessionConfigService');
 
@@ -82,6 +83,13 @@ export class SessionConfigService {
     conversationId: string,
     partial: PatchSessionAgentConfigInput,
   ): Promise<PatchSessionAgentConfigResult> {
+    const configuredThinking = resolveEffectiveAgentConfigForSession(conversationId).config.runtime.thinkingLevel;
+    if (configuredThinking && partial.thinkingLevel !== undefined && partial.thinkingLevel !== configuredThinking) {
+      return { ok: false, code: 'INVALID_THINKING', error: `This agent uses thinking ${configuredThinking}` };
+    }
+    if (configuredThinking && (partial.model !== undefined || partial.thinkingLevel !== undefined)) {
+      partial = { ...partial, thinkingLevel: configuredThinking };
+    }
     if (partial.model !== undefined || partial.thinkingLevel !== undefined || partial.fixedModel) {
       const existing = await this.opts.sessionConfigStore.get(conversationId);
       if (partial.configVersion !== undefined && partial.configVersion !== (existing?.updatedAt ?? 0)) {
@@ -184,6 +192,11 @@ export class SessionConfigService {
 
   /** Materialize a restored/new chat choice; unavailable identities stay visible for repair. */
   async initializeModelSelection(conversationId: string, modelRef: string, thinkingLevel?: string, configVersion?: number): Promise<PatchSessionAgentConfigResult> {
+    const configuredThinking = resolveEffectiveAgentConfigForSession(conversationId).config.runtime.thinkingLevel;
+    if (configuredThinking && thinkingLevel !== undefined && thinkingLevel !== configuredThinking) {
+      return { ok: false, code: 'INVALID_THINKING', error: `This agent uses thinking ${configuredThinking}` };
+    }
+    if (configuredThinking) thinkingLevel = configuredThinking;
     const existing = await this.opts.sessionConfigStore.get(conversationId);
     if (configVersion !== undefined && configVersion !== (existing?.updatedAt ?? 0)) {
       return { ok: false, code: 'CONFIG_CHANGED', error: 'Model configuration changed. Refresh and try again.' };
@@ -197,6 +210,7 @@ export class SessionConfigService {
         configVersion,
       });
     }
+    if (configuredThinking) return { ok: false, code: 'INVALID_MODEL', error: `Select an available model that supports thinking ${configuredThinking}` };
     if (!modelRef.trim() || !modelRef.includes('/')) return { ok: false, code: 'INVALID_MODEL', error: 'Select a specific model' };
     await this.opts.sessionConfigStore.update(conversationId, {
       modelOverride: modelRef, fixedModel: true, thinkingLevel: normalizeThinkLevel(thinkingLevel) ?? existing?.thinkingLevel ?? 'off',
@@ -244,6 +258,9 @@ export class SessionConfigService {
     model: string | undefined,
   ): Promise<boolean> {
     const raw = model?.trim();
+    const configuredThinking = resolveEffectiveAgentConfigForSession(conversationId).config.runtime.thinkingLevel;
+    const selectedModel = raw ? this.opts.modelManager.findByRef(raw) : undefined;
+    if (configuredThinking && (!selectedModel || !getModelThinking(selectedModel).options.includes(configuredThinking))) return false;
     if (!raw) {
       await this.clearModelOverride(conversationId);
       return true;

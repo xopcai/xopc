@@ -1,6 +1,7 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import type { Message } from '@/features/chat/messages/messages.types';
+import { taskDetailHref } from '@/features/tasks/task-detail-route';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -11,6 +12,7 @@ function displayTaskTitle(title: string): string {
 }
 
 export function TaskTriggerCard({ trigger }: { trigger: NonNullable<Message['taskTrigger']> }) {
+  const location = useLocation();
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).chat.taskTrigger;
   return (
@@ -18,7 +20,7 @@ export function TaskTriggerCard({ trigger }: { trigger: NonNullable<Message['tas
       data-task-trigger={trigger.entryId}>
       <span className="shrink-0">{copy.about}</span>
       <Link className="inline-flex min-w-0 max-w-[min(48vw,30rem)] font-medium text-fg hover:text-accent hover:underline"
-        to={`/tasks/${encodeURIComponent(trigger.taskId)}`}
+        to={taskDetailHref(`${location.pathname}${location.search}`, trigger.taskId)}
         title={trigger.taskTitle}
         aria-label={`${copy.openTask}：${trigger.taskTitle}`}>
         <span className="truncate">「{displayTaskTitle(trigger.taskTitle)}」</span>

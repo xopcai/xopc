@@ -653,6 +653,8 @@ describe('xopc_use tool', () => {
       command: 'create',
       args: {
         objective: 'Prepare the launch checklist',
+        title: 'Launch checklist',
+        body: '## Scope\n\n- Review the release gates.\n- Confirm the owner.',
         projectId: project.id,
         priority: 'high',
       },
@@ -663,7 +665,8 @@ describe('xopc_use tool', () => {
       ok: true,
       createMode: 'capture',
       task: {
-        title: 'Prepare the launch checklist',
+        title: 'Launch checklist',
+        body: '## Scope\n\n- Review the release gates.\n- Confirm the owner.',
         phase: 'backlog',
         priority: 'high',
       },

@@ -6,6 +6,12 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps personal Agent routes without catching neighboring paths', () => {
+    for (const path of ['/api/personal-agent', '/api/personal-agent/models', '/api/personal-agent/profile', '/api/personal-agent/activity']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('personal-agent');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/personal-agent-other')).toBeUndefined();
+  });
   it('leaves the eagerly registered execution detail route to sessions', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/sessions/id/execution-detail')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/sessions/id/execution-detail-other')).toBeUndefined();

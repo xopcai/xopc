@@ -12,6 +12,7 @@ import type { MessageContent } from '@/features/chat/messages/messages.types';
 import { useDevViewStore } from '@/stores/dev-view-store';
 import { messages } from '@/i18n/messages';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
+import * as workspaceApi from '@/features/workspace/workspace-api';
 import { ExtensionProvider } from '@/features/extensions/extension-provider';
 
 const emptyLabels = {
@@ -77,6 +78,7 @@ describe('streaming assistant Markdown rendering', () => {
     useWorkspacePreviewStore.getState().setPath(null);
     useDevViewStore.setState({ showRawToolData: false });
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   function render(
@@ -249,7 +251,11 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent).toContain('/Users/example/.xopc/workspace/main/proposal.md');
   });
 
-  it('opens Sidechat workspace links against the parent conversation', () => {
+  it('opens Sidechat workspace links against the parent conversation', async () => {
+    vi.spyOn(workspaceApi, 'resolveWorkspaceFileReference').mockResolvedValue({
+      inputPath: 'checklist.html', displayName: 'checklist.html', scope: 'workspace',
+      exists: true, workspaceRelativePath: 'checklist.html', capabilities: ['preview'],
+    });
     render(
       [{ type: 'text', text: '[Open page](checklist.html)' }],
       false,
@@ -258,11 +264,28 @@ describe('streaming assistant Markdown rendering', () => {
       'parent-conversation-id',
     );
 
-    act(() => container.querySelector<HTMLAnchorElement>('a')?.click());
+    await act(async () => { container.querySelector<HTMLAnchorElement>('a')?.click(); });
 
     expect(useWorkspacePreviewStore.getState()).toMatchObject({
       path: 'checklist.html',
       conversationId: 'parent-conversation-id',
+    });
+  });
+
+  it('opens a delegated workspace file from the default workspace when absent from the conversation', async () => {
+    const resolveFile = vi.spyOn(workspaceApi, 'resolveWorkspaceFileReference').mockImplementation(async (path, options) =>
+      options?.conversationId ? null : {
+        inputPath: path, displayName: path, scope: 'workspace', exists: true,
+        workspaceRelativePath: path, capabilities: ['preview'],
+      });
+    render([{ type: 'text', text: '[ai-news-brief-2026-10-07.md](xopc://workspace/file?path=ai-news-brief-2026-10-07.md)' }], false);
+
+    await act(async () => { container.querySelector<HTMLAnchorElement>('a')?.click(); });
+
+    expect(resolveFile).toHaveBeenCalledTimes(2);
+    expect(useWorkspacePreviewStore.getState()).toMatchObject({
+      path: 'ai-news-brief-2026-10-07.md',
+      conversationId: null,
     });
   });
 

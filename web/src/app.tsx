@@ -85,6 +85,7 @@ const LocalAppsPage = lazy(() => loadLocalAppsPage().then((m) => ({ default: m.L
 const LocalAppWorkbenchPage = lazy(() => loadLocalAppWorkbenchPage().then((m) => ({ default: m.LocalAppWorkbenchPage })));
 const ProductOpenPage = lazy(() => loadProductOpenPage().then((m) => ({ default: m.ProductOpenPage })));
 const WorkDiscoveryPage = lazy(() => loadWorkDiscoveryPage().then((m) => ({ default: m.WorkDiscoveryPage })));
+const PersonalPage = lazy(() => import('@/features/personal-agent/personal-page').then(m => ({ default: m.PersonalPage })));
 
 function SecondaryRouteFallback() {
   return (
@@ -156,6 +157,10 @@ const router = createHashRouter([
     element: <AppShell />,
     errorElement: <RouteErrorFallback />,
     children: [
+      {
+        path: 'personal',
+        element: <Suspense fallback={<SecondaryRouteFallback />}><PersonalPage /></Suspense>,
+      },
       {
         index: true,
         element: (

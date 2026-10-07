@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchHomeAdvisorHistory } from '@/features/tasks/home-api';
+import { modalizeTaskDetailHref } from '@/features/tasks/task-detail-route';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -107,7 +108,7 @@ export function HomeAdvisorHistoryDialog({
   const openItem = (item: HomeOpportunityHistoryItem) => {
     if (item.href) {
       onOpenChange(false);
-      navigate(item.href);
+      navigate(modalizeTaskDetailHref('/', item.href));
       return;
     }
     if (item.status === 'discussing') {

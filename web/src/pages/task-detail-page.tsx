@@ -194,7 +194,7 @@ function readTaskChatPanelPercent(): number {
 
 type DetailStatusKey = 'captured' | 'ready' | 'queued' | 'running' | 'verifying' | 'waiting' | 'blocked' | 'needsUser' | 'review' | 'completed' | 'ended' | 'paused';
 type TaskEditConflict = 'title' | 'description' | null;
-type TaskPendingOperation = 'command' | 'phase' | 'priority' | 'dueAt' | 'delegateAgentId' | 'dependencies' | 'acceptance' | 'delete';
+type TaskPendingOperation = 'command' | 'phase' | 'priority' | 'dueAt' | 'delegateAgentId' | 'dependencies' | 'acceptance' | 'delete' | 'title';
 
 function detailStatusKey(detail: TaskDetail): DetailStatusKey {
   if (detail.task.phase === 'closed') return detail.task.resolution === 'done' ? 'completed' : 'ended';
@@ -259,6 +259,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const [titleDraft, setTitleDraft] = useState('');
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [objectiveExpanded, setObjectiveExpanded] = useState(false);
   const [chatPanelPercent, setChatPanelPercent] = useState(readTaskChatPanelPercent);
   const [resizingPanels, setResizingPanels] = useState(false);
   const splitPaneRef = useRef<HTMLDivElement>(null);
@@ -306,7 +307,9 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     setError(null);
     setEditConflict(null);
     setEditingTitle(false);
+    titleEditBaseRef.current = null;
     setEditingDescription(false);
+    setObjectiveExpanded(false);
     setRecentChange(null);
     setDeleteDialogOpen(false);
   }, [taskId]);
@@ -393,24 +396,46 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     }
   }, [copy.actionFailed, mutateDetail, setOperationPending, taskId]);
 
-  const saveTitleOnBlur = async () => {
+  const beginTitleEdit = () => {
     if (!detail) return;
+    titleEditBaseRef.current = { value: detail.task.title, version: detail.task.version };
+    setEditConflict(null);
+    setTitleDraft(detail.task.title);
+    setEditingTitle(true);
+  };
+
+  const cancelTitleEdit = () => {
+    skipTitleSaveRef.current = true;
+    setTitleDraft(detailRef.current?.task.title ?? '');
+    titleEditBaseRef.current = null;
+    setEditConflict(null);
+    setEditingTitle(false);
+    queueMicrotask(() => { skipTitleSaveRef.current = false; });
+  };
+
+  const saveTitle = async (keepMyChanges = false) => {
     if (skipTitleSaveRef.current) {
       skipTitleSaveRef.current = false;
       return;
     }
+    const currentDetail = detailRef.current;
+    if (!currentDetail || pendingOperations.has('title')) return;
     const title = titleDraft.trim();
+    if (!title) {
+      cancelTitleEdit();
+      return;
+    }
     const editBase = titleEditBaseRef.current;
-    if (hasTaskEditConflict(editBase, detail.task.version, detail.task.title, title)) {
+    if (!keepMyChanges && hasTaskEditConflict(editBase, currentDetail.task.version, currentDetail.task.title, title)) {
       setEditConflict('title');
       return;
     }
-    if (!title || title === detail.task.title) {
-      setTitleDraft(detail.task.title);
-      setEditingTitle(false);
+    if (title === currentDetail.task.title) {
+      cancelTitleEdit();
       return;
     }
-    if (await savePatch({ title })) {
+    if (await savePatch({ title }, 'title')) {
+      titleEditBaseRef.current = null;
       setEditConflict(null);
       setEditingTitle(false);
     }
@@ -692,11 +717,11 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   return (
     <div
       ref={splitPaneRef}
-      className={`${presentation === 'modal' ? 'flex h-full min-h-0 flex-col' : 'flex min-h-[calc(100dvh-8rem)] flex-col overflow-hidden'} ${resizingPanels ? 'lg:cursor-col-resize lg:select-none' : ''}`}
+      className={`flex h-full min-h-0 flex-col overflow-hidden ${resizingPanels ? 'lg:cursor-col-resize lg:select-none' : ''}`}
       style={{ '--task-chat-panel-width': `${chatPanelPercent}%` } as CSSProperties}
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-      <div className="flex min-w-0 shrink-0 flex-col lg:min-h-0 lg:flex-1 lg:shrink">
+      <div className="task-detail-scroll flex min-w-0 shrink-0 flex-col lg:min-h-0 lg:flex-1 lg:shrink lg:overflow-y-auto lg:overscroll-contain">
       <header className={cn('shrink-0 border-b border-edge-subtle bg-surface-panel px-5 py-4 sm:px-6', recentlyChanged('title') && 'task-detail-live-update')}>
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           <div className="min-w-0 flex-1">
@@ -712,35 +737,43 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
               ) : null}
             </div>
             {editingTitle ? (
-              <input
+              <textarea
                 autoFocus
                 data-task-inline-editor
+                aria-label={language === 'zh' ? '任务标题' : 'Task title'}
+                rows={2}
                 value={titleDraft}
+                onFocus={(event) => {
+                  if (titleEditBaseRef.current?.value === titleDraft) {
+                    event.currentTarget.setSelectionRange(0, 0);
+                    event.currentTarget.scrollTop = 0;
+                  }
+                }}
                 onChange={(event) => setTitleDraft(event.target.value)}
-                onBlur={() => void saveTitleOnBlur()}
+                onBlur={() => void saveTitle()}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') event.currentTarget.blur();
+                  if (event.nativeEvent.isComposing) return;
                   if (event.key === 'Escape') {
                     event.preventDefault();
                     event.stopPropagation();
-                    skipTitleSaveRef.current = true;
-                    setTitleDraft(detail.task.title);
-                    setEditingTitle(false);
-                    queueMicrotask(() => { skipTitleSaveRef.current = false; });
+                    cancelTitleEdit();
+                  } else if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    event.currentTarget.blur();
                   }
                 }}
-                className="mt-2 w-full max-w-3xl rounded-lg bg-surface-hover px-3 py-2 text-xl font-semibold leading-7 text-fg outline-none ring-2 ring-accent/30 focus:ring-accent/60"
+                className="mt-2 block max-h-56 min-h-14 w-full max-w-3xl resize-none overflow-y-auto bg-transparent p-0 text-xl font-semibold leading-7 text-fg outline-none [field-sizing:content]"
               />
             ) : (
-              <button type="button" className="mt-2 block max-w-full rounded-lg text-left outline-none hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { titleEditBaseRef.current = { value: detail.task.title, version: detail.task.version }; setEditConflict(null); setTitleDraft(detail.task.title); setEditingTitle(true); }}>
-                <h1 className="break-words text-xl font-semibold leading-7 text-fg">{detail.task.title}</h1>
-              </button>
+              <h1 className="mt-2 max-w-3xl break-words text-xl font-semibold leading-7 text-fg">
+                <button type="button" className="line-clamp-2 max-w-full rounded-sm text-left outline-none hover:bg-surface-hover/60 focus-visible:ring-2 focus-visible:ring-accent/40" title={detail.task.title} onClick={beginTitleEdit}>{detail.task.title}</button>
+              </h1>
             )}
             {editConflict === 'title' ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-warning" role="alert">
                 <span>{language === 'zh' ? 'Agent 在你编辑期间更新了标题。' : 'The Agent updated the title while you were editing.'}</span>
-                <button type="button" className="rounded-md bg-surface-hover px-2 py-1 text-fg" onClick={() => { setTitleDraft(detail.task.title); setEditConflict(null); setEditingTitle(false); }}>{language === 'zh' ? '使用 Agent 版本' : 'Use Agent version'}</button>
-                <button type="button" className="rounded-md bg-accent-soft px-2 py-1 text-accent-fg" onClick={() => void savePatch({ title: titleDraft.trim() }).then((saved) => { if (saved) { setEditConflict(null); setEditingTitle(false); } })}>{language === 'zh' ? '保留我的修改' : 'Keep my changes'}</button>
+                <button type="button" className="rounded-md bg-surface-hover px-2 py-1 text-fg" onClick={cancelTitleEdit}>{language === 'zh' ? '使用 Agent 版本' : 'Use Agent version'}</button>
+                <button type="button" className="rounded-md bg-accent-soft px-2 py-1 text-accent-fg" disabled={pendingOperations.has('title')} onClick={() => void saveTitle(true)}>{language === 'zh' ? '保留我的修改' : 'Keep my changes'}</button>
               </div>
             ) : null}
           </div>
@@ -757,7 +790,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
         {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
       </header>
 
-      <section className="task-detail-scroll min-w-0 flex-1 p-5 sm:p-6 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
+      <section className="min-w-0 p-5 sm:p-6">
 
       <section className="mb-4 overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel shadow-surface">
         <div className="border-b border-edge-subtle p-5">
@@ -765,7 +798,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
             <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '目标与验收' : 'Goal and acceptance'}</h2>
             {criterionSummaries.length > 0 ? <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.criteriaProgress.replace('{{verified}}', String(verifiedCriteriaCount)).replace('{{total}}', String(criterionSummaries.length))}</span> : null}
           </div>
-          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-fg">{detail.task.contract?.objective || detail.task.title}</p>
+          <p className={cn('mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-fg', !objectiveExpanded && (detail.task.contract?.objective || detail.task.title).length > 280 && 'line-clamp-3')}>{detail.task.contract?.objective || detail.task.title}</p>
+          {(detail.task.contract?.objective || detail.task.title).length > 280 ? <button type="button" className="mt-2 text-xs font-medium text-accent hover:underline" aria-expanded={objectiveExpanded} onClick={() => setObjectiveExpanded((current) => !current)}>{language === 'zh' ? (objectiveExpanded ? '收起目标' : '展开完整目标') : (objectiveExpanded ? 'Show less' : 'Show full goal')}</button> : null}
         </div>
         <div className="p-5">
           <h3 className="text-xs font-medium text-fg-muted">{copy.successDefinition}</h3>
@@ -842,9 +876,12 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
                 className="mt-3 w-full resize-y rounded-lg bg-surface-hover px-3 py-2 text-sm leading-6 text-fg outline-none ring-2 ring-accent/20 focus:ring-accent/50"
               />
             ) : (
-              <button type="button" className="-mx-1 mt-2 block w-[calc(100%+0.5rem)] rounded-lg px-1 py-1 text-left outline-none hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { const draft = detail.task.body ?? detail.task.contract?.objective ?? ''; initialDescriptionDraftRef.current = draft; descriptionEditBaseRef.current = { value: detail.task.body ?? '', version: detail.task.version }; setEditConflict(null); setDescriptionDraft(draft); setEditingDescription(true); }}>
-                <span className="whitespace-pre-wrap text-sm leading-6 text-fg-muted">{objective && objective !== detail.task.title ? objective : copy.noTaskDescription}</span>
-              </button>
+              <div className="mt-2">
+                {objective && objective !== detail.task.title
+                  ? <MarkdownView content={objective} compact className="break-words text-sm leading-6 text-fg-muted" />
+                  : <p className="text-sm leading-6 text-fg-muted">{copy.noTaskDescription}</p>}
+                <button type="button" className="mt-2 rounded-md px-2 py-1 text-xs text-accent hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { const draft = detail.task.body ?? detail.task.contract?.objective ?? ''; initialDescriptionDraftRef.current = draft; descriptionEditBaseRef.current = { value: detail.task.body ?? '', version: detail.task.version }; setEditConflict(null); setDescriptionDraft(draft); setEditingDescription(true); }}>{language === 'zh' ? '编辑说明' : 'Edit description'}</button>
+              </div>
             )}
             {editConflict === 'description' ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-warning" role="alert">

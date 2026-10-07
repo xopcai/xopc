@@ -21,6 +21,7 @@ import type {
 import { getSessionDisplayName } from './session-key.js';
 import type { Config } from '../config/schema.js';
 import { getAgentDefaultModelRef } from '../config/schema.js';
+import { resolveEffectiveAgentConfigForSession } from '../config/agent-profile.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { MessageBus } from '../infra/bus/index.js';
 import type { SessionStore, SessionConfigStore } from '../session/index.js';
@@ -374,6 +375,8 @@ export class CommandContextImpl implements CommandContext {
    * Get current thinking level (session override or default)
    */
   async getThinkingLevel(): Promise<ThinkLevel | undefined> {
+    const configured = resolveEffectiveAgentConfigForSession(this.conversationId).config.runtime.thinkingLevel;
+    if (configured) return configured;
     const configStore = this.deps.sessionConfigStore;
     if (configStore) {
       const sessionConfig = await configStore.get(this.conversationId);
@@ -388,6 +391,8 @@ export class CommandContextImpl implements CommandContext {
    * Set thinking level for this session
    */
   async setThinkingLevel(level: ThinkLevel): Promise<void> {
+    const configured = resolveEffectiveAgentConfigForSession(this.conversationId).config.runtime.thinkingLevel;
+    if (configured && level !== configured) throw new Error(`This agent uses thinking ${configured}`);
     const configStore = this.deps.sessionConfigStore;
     if (configStore) {
       await configStore.update(this.conversationId, { thinkingLevel: level });
@@ -396,7 +401,8 @@ export class CommandContextImpl implements CommandContext {
   }
 
   syncAgentThinkingLevel(level: ThinkLevel): void {
-    this.deps.applySessionThinkingLevel?.(this.conversationId, level);
+    const configured = resolveEffectiveAgentConfigForSession(this.conversationId).config.runtime.thinkingLevel;
+    this.deps.applySessionThinkingLevel?.(this.conversationId, configured ?? level);
   }
 
   async compactSession(options?: { instructions?: string; force?: boolean }): Promise<CompactSessionResult | null> {

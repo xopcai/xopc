@@ -11,14 +11,20 @@ export function taskDetailModalHref(backgroundPath: string, taskId: string): str
   return `${pathname}?${search.toString()}`;
 }
 
+export function taskDetailHref(backgroundPath: string, taskId: string): string {
+  return backgroundPath.split('?')[0]?.startsWith('/tasks/')
+    ? `/tasks/${encodeURIComponent(taskId)}`
+    : taskDetailModalHref(backgroundPath, taskId);
+}
+
 export function modalizeTaskDetailHref(backgroundPath: string, href: string): string {
   const match = /^\/tasks\/([^/?#]+)/.exec(href);
   if (!match) return href;
 
   try {
-    return taskDetailModalHref(backgroundPath, decodeURIComponent(match[1]));
+    return taskDetailHref(backgroundPath, decodeURIComponent(match[1]));
   } catch {
-    return taskDetailModalHref(backgroundPath, match[1]);
+    return taskDetailHref(backgroundPath, match[1]);
   }
 }
 

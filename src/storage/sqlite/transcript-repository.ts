@@ -56,7 +56,8 @@ function shouldRevealSessionForUserMessage(db: DatabaseSync, conversationId: str
   if (!row?.custom_data_json) return true;
   try {
     const customData = JSON.parse(row.custom_data_json) as Record<string, unknown>;
-    return customData.deferVisibilityUntilOutput !== true;
+    return customData.deferVisibilityUntilOutput !== true
+      && customData.keepHiddenFromSessionList !== true;
   } catch {
     return true;
   }
