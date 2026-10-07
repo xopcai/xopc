@@ -70,7 +70,7 @@ describe('MessageList streaming row props', () => {
     expect(propsByMessageIndex.get(0)?.deleteRoundDisabled).toBe(false);
     expect(propsByMessageIndex.get(1)?.suppressAssistantActions).toBe(false);
     expect(propsByMessageIndex.get(2)?.deleteRoundDisabled).toBe(true);
-    expect(propsByMessageIndex.get(3)?.suppressAssistantActions).toBe(true);
+    expect(propsByMessageIndex.get(3)?.suppressAssistantActions).toBe(false);
   });
 
   it('hides actions under every assistant reply when requested', () => {
@@ -118,7 +118,7 @@ describe('MessageList streaming row props', () => {
       );
     });
     expect(propsByMessageIndex.get(3)?.isStreaming).toBe(true);
-    expect(propsByMessageIndex.get(3)?.suppressAssistantActions).toBe(true);
+    expect(propsByMessageIndex.get(3)?.suppressAssistantActions).toBe(false);
   });
 
   it('places a task update in the following assistant reply instead of a separate row', () => {

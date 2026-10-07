@@ -108,6 +108,38 @@ describe('useChatScrollViewport', () => {
     expect(scrollTop).toBe(400);
   });
 
+  it('does not issue another bottom scroll when the completed reply shrinks', () => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    let height = 1000;
+    let top = 600;
+    let scrollWrites = 0;
+    Object.defineProperties(el, {
+      clientHeight: { get: () => 400 },
+      scrollHeight: { get: () => height },
+      scrollTop: {
+        get: () => top,
+        set: (value: number) => {
+          scrollWrites += 1;
+          top = Math.max(0, Math.min(value, height - 400));
+        },
+      },
+    });
+
+    act(() => observers.get(el.firstElementChild!)?.());
+    height = 1100;
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(top).toBe(700);
+
+    scrollWrites = 0;
+    height = 1050;
+    top = Math.min(top, height - 400);
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(scrollWrites).toBe(0);
+    expect(top).toBe(650);
+    expect(viewport?.atBottom).toBe(true);
+  });
+
   it('keeps the button hidden for upward gestures when content fits and continues following growth', () => {
     act(() => root.render(<Harness />));
     const el = container.firstElementChild as HTMLDivElement;
