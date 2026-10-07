@@ -31,9 +31,16 @@ const PREVIOUS_DELEGATION_RULES = [
   'For current news, delegate to an Agent with web_search. Include the requested date or time window and topic in the brief; require source links, publication dates, and a distinction between confirmed news and uncertain reports. Tell the user briefly that you are checking. Stay available while the Task runs, then summarize verified results in their preferred style.',
   'If no suitable Agent is available, explain the specific missing capability and offer the next useful option. Never claim a Task was created before the tool confirms it.',
 ].join('\n');
+const PRIOR_DELEGATION_RULES = [
+  'Own the user’s request through completion. If you cannot reliably do it yourself because of missing tools, access, knowledge, time, or specialist judgment, first call personal_task(command="agents"). Match the request to another Agent’s description and availableTools, then create a Task for a plausible candidate. This applies to short requests too. Your own limitation is not a system limitation. Do not stop at “I cannot” or ask the user to switch models or do your work before checking Agents.',
+  'If the chosen Agent or tool cannot complete the Task, inspect the actual blocker and try another suitable Agent or a reasonable alternative within the user’s authorization. Do not repeat the same failed approach indefinitely. Ask the user only for a decision, access, or information that no available Agent can supply. Explain a concrete blocker only after checking the available paths; never imply that an untried path was attempted.',
+  'For current news or other live facts, find an Agent with web_search and require dated sources. For coding, analysis, writing, media, or connected-app work, choose by the Agent’s role and tools rather than a fixed name. Give the Task a short title and a complete Markdown brief. After Task creation succeeds, tell the user briefly what is happening, stay available, and summarize verified outcomes in their preferred style.',
+  'Never claim a Task was created or completed before its tool result confirms that state. Respect the user’s authorization and the selected Agent’s permissions.',
+].join('\n');
 const DELEGATION_RULES = [
   'Own the user’s request through completion. If you cannot reliably do it yourself because of missing tools, access, knowledge, time, or specialist judgment, first call personal_task(command="agents"). Match the request to another Agent’s description and availableTools, then create a Task for a plausible candidate. This applies to short requests too. Your own limitation is not a system limitation. Do not stop at “I cannot” or ask the user to switch models or do your work before checking Agents.',
   'If the chosen Agent or tool cannot complete the Task, inspect the actual blocker and try another suitable Agent or a reasonable alternative within the user’s authorization. Do not repeat the same failed approach indefinitely. Ask the user only for a decision, access, or information that no available Agent can supply. Explain a concrete blocker only after checking the available paths; never imply that an untried path was attempted.',
+  'A worker question is yours to resolve first. Read the Task brief and earlier conversation; when the answer is already there, call personal_task(command="answer", taskId=..., questionId=..., instruction=...) so the worker resumes. Ask the user only when the missing fact cannot be found. Once the user asks you to complete a task, retrying a suitable alternative Agent is already authorized; do not ask permission to try again.',
   'For current news or other live facts, find an Agent with web_search and require dated sources. For coding, analysis, writing, media, or connected-app work, choose by the Agent’s role and tools rather than a fixed name. Give the Task a short title and a complete Markdown brief. After Task creation succeeds, tell the user briefly what is happening, stay available, and summarize verified outcomes in their preferred style.',
   'Never claim a Task was created or completed before its tool result confirms that state. Respect the user’s authorization and the selected Agent’s permissions.',
 ] as const;
@@ -47,6 +54,7 @@ export function personalInstructions(preferences: PersonalPreferences): string {
     'Give the accurate answer or next step in the order this user prefers. Acknowledge feelings only when relevant, without guessing how the user feels. Avoid formulaic reassurance, praise, pet names, emojis, or jokes unless the user welcomes them and the moment fits. Be accurate about task state, evidence, and uncertainty.',
   ];
   if (preferences.addressAs) rules.push(`Address the user as ${JSON.stringify(preferences.addressAs)} when a name fits naturally.`);
+  if (preferences.guidance) rules.push(`User's explicit response preference: ${JSON.stringify(preferences.guidance)}. Follow it when relevant, subject to accuracy and the current request.`);
   if (preferences.warmth) rules.push({ reserved: 'Tone: calm and direct; skip emotional preambles.', balanced: 'Tone: friendly and natural.', gentle: 'Tone: softly supportive without being sentimental.' }[preferences.warmth]);
   if (preferences.humor) rules.push({ none: 'Do not add jokes.', occasional: 'Use an occasional light touch when the moment fits.', playful: 'Be lightly playful in easy moments.' }[preferences.humor]);
   if (preferences.supportMode) rules.push({ listen: 'When the user is struggling, listen and reflect briefly before proposing fixes.', untangle: 'When the user is struggling, help name the core problem and make it manageable.', solutions: 'When the user is struggling, offer a concrete next step promptly.' }[preferences.supportMode]);
@@ -60,9 +68,8 @@ export async function refreshPersonalDelegationGuidance(service: GatewayService,
   const agent = repository.get(personalAgentId(ownerId));
   const instructions = agent?.profile?.instructions;
   if (!agent || !instructions) return;
-  const oldRule = instructions.includes(PREVIOUS_DELEGATION_RULES)
-    ? PREVIOUS_DELEGATION_RULES
-    : instructions.includes(LEGACY_DELEGATION_RULE) ? LEGACY_DELEGATION_RULE : null;
+  const oldRule = [PRIOR_DELEGATION_RULES, PREVIOUS_DELEGATION_RULES, LEGACY_DELEGATION_RULE]
+    .find((rule) => instructions.includes(rule));
   if (!oldRule) return;
   try {
     await new AgentCatalogService().update(agent.id, {

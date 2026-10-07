@@ -93,6 +93,27 @@ describe('TaskCollaborationRepository', () => {
     expect(new TaskCollaborationRepository().get(answer.id)?.deliveryStatus).toBe('delivered');
   });
 
+  it('always routes worker questions to the task owner', async () => {
+    const owner = createConversation({ agentId: 'main' });
+    const created = new TaskApplicationService().create({
+      idempotencyKey: 'owner-question', title: 'Write an update', priority: 'normal',
+      contract: { objective: 'Write an update', expectedOutputs: [], acceptanceCriteria: [],
+        constraints: [], approvalRequired: [], assumptions: [], risks: [],
+        acceptancePolicy: 'manual', outputDestinations: [] },
+      dependencies: [], context: [], authorityGrants: [], originConversationId: owner.key,
+      activation: { mode: 'capture', phase: 'backlog' },
+    });
+    if (!created.ok) throw new Error('Expected Task');
+    const question = new TaskCollaborationRepository().append({ taskId: created.model.task.id,
+      authorKind: 'worker_agent', authorId: 'writer', kind: 'question',
+      body: 'Which audience?', idempotencyKey: 'worker-question' });
+    const decide = vi.fn(async () => ({ notify: false, reason: 'quiet', userPreference: 'final_only' as const }));
+    const submitAndConfirm = vi.fn(async (_message: { conversationId: string; clientMessageId: string; content: string }) => true);
+    expect(await new TaskMainUpdateDelivery().drain({ isAvailable: () => true, decide, submitAndConfirm })).toBe(1);
+    expect(decide).not.toHaveBeenCalled();
+    expect(submitAndConfirm.mock.calls[0]?.[0].content).toContain(question.id);
+  });
+
   it('shows the newest board update to the worker after a long collaboration history', () => {
     const task = new TaskRepository().create({ title: 'Research', objective: 'Research options' });
     const board = new TaskCollaborationRepository();

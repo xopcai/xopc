@@ -1,3 +1,5 @@
+import type { VoiceModeCapability } from '@xopcai/realtime-protocol/voice';
+
 import type { Config } from '../config/schema.js';
 import type { AgentDefaults } from '../agent-config/index.js';
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
@@ -16,6 +18,9 @@ export interface XopcCloudCapabilitySelection {
   stt: string;
   tts: string;
   ttsVoice: string;
+  realtimeStt?: string;
+  realtimeTts?: { model: string; voice: string };
+  realtimeOmni?: { model: string; voice: string };
 }
 
 export type PrepareXopcCloudCapabilitySetupResult =
@@ -58,6 +63,25 @@ function recommendedModel(
     .sort((left, right) => compareCatalogModels(left, right, recommendation))[0];
 }
 
+function recommendedVoiceModel(
+  source: CatalogSource,
+  mode: VoiceModeCapability,
+): CatalogModel | undefined {
+  const recommendation = mode === 'transcription.stream'
+    ? source.recommended?.stt
+    : mode === 'speech.stream' ? source.recommended?.tts : undefined;
+  return source.models
+    .filter((model) => model.availability === 'available'
+      && model.voice?.modes.includes(mode)
+      && (mode === 'transcription.stream' || Boolean(model.voice.voices.length)))
+    .sort((left, right) => compareCatalogModels(left, right, recommendation))[0];
+}
+
+function selectedVoice(model: CatalogModel): string {
+  const voices = model.voice?.voices ?? [];
+  return voices.find((voice) => voice.id === model.voice?.defaultVoice)?.id ?? voices[0].id;
+}
+
 export function selectXopcCloudCapabilities(
   source: CatalogSource,
 ): { selection?: XopcCloudCapabilitySelection; missing: CloudCapability[] } {
@@ -66,6 +90,9 @@ export function selectXopcCloudCapabilities(
   const imageGeneration = recommendedModel(source, 'image-generation');
   const stt = recommendedModel(source, 'stt');
   const tts = recommendedModel(source, 'tts');
+  const realtimeStt = recommendedVoiceModel(source, 'transcription.stream');
+  const realtimeTts = recommendedVoiceModel(source, 'speech.stream');
+  const realtimeOmni = recommendedVoiceModel(source, 'conversation');
   const missing: CloudCapability[] = [];
   if (!chat) missing.push('chat');
   if (!vision) missing.push('vision');
@@ -84,6 +111,9 @@ export function selectXopcCloudCapabilities(
       stt: stt.id,
       tts: tts.id,
       ttsVoice: tts.tts.defaultVoice,
+      ...(realtimeStt ? { realtimeStt: realtimeStt.id } : {}),
+      ...(realtimeTts ? { realtimeTts: { model: realtimeTts.id, voice: selectedVoice(realtimeTts) } } : {}),
+      ...(realtimeOmni ? { realtimeOmni: { model: realtimeOmni.id, voice: selectedVoice(realtimeOmni) } } : {}),
     },
   };
 }
@@ -174,6 +204,25 @@ export function prepareXopcCloudCapabilitySetup(
           },
         },
       },
+      ...(selection.realtimeStt || selection.realtimeTts || selection.realtimeOmni ? {
+        voice: {
+          ...config.voice,
+          realtime: {
+            ...config.voice?.realtime,
+            enabled: true,
+            ...(selection.realtimeStt ? { stt: { provider: 'xopc-cloud' as const, model: selection.realtimeStt } } : {}),
+            ...(selection.realtimeTts ? { tts: { provider: 'xopc-cloud' as const, ...selection.realtimeTts } } : {}),
+            ...(selection.realtimeOmni ? {
+              omni: {
+                provider: 'xopc-cloud' as const,
+                ...selection.realtimeOmni,
+                instructions: config.voice?.realtime?.omni?.instructions
+                  ?? 'Keep replies conversational and concise. You cannot execute tools.',
+              },
+            } : {}),
+          },
+        },
+      } : {}),
     },
   };
 }

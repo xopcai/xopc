@@ -147,7 +147,7 @@ async function runModelsList(options: ModelsListOptions): Promise<void> {
   }
 
   console.log('\nUsage:');
-  console.log('   xopc models set deepseek/deepseek-v4-flash');
+  console.log('   xopc models set deepseek/deepseek-flash');
   console.log('   xopc models auth login --provider anthropic');
   console.log('   xopc models auth paste-api-key --provider deepseek');
 }
@@ -277,7 +277,7 @@ function createModelsCommand(_ctx: CLIContext): Command {
       formatExamples([
         'xopc models list',
         'xopc models status',
-        'xopc models set deepseek/deepseek-v4-flash',
+        'xopc models set deepseek/deepseek-flash',
         'xopc models auth list',
         'xopc models auth login --provider anthropic',
         'xopc models auth paste-api-key --provider deepseek',
