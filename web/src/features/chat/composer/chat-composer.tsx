@@ -19,6 +19,7 @@ import { ComposerContextChips } from '@/features/chat/composer/composer-context-
 import { ComposerContextBar, type ComposerContextBarProps } from '@/features/chat/composer/composer-context-bar';
 import { takeComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
 import { ComposerToolbar } from '@/features/chat/composer/composer-toolbar';
+import { PersonalComposerActions, PersonalComposerAttachButton } from '@/features/chat/composer/personal-composer-controls';
 import { readLocalSessionDraft } from '../session/local-session-drafts';
 import { wireFollowUpAttachmentsToComposer } from '@/features/chat/composer/follow-up-attachments-wire';
 import { MAX_PENDING_FOLLOW_UPS } from '@/features/chat/follow-up/pending-follow-up.types';
@@ -92,6 +93,7 @@ function composerAttachmentFromWire(attachment: WireAttachment): Attachment {
 }
 
 export const ChatComposer = memo(function ChatComposer({
+  personal = false,
   placeholder,
   disabled,
   sendDisabled = false,
@@ -137,6 +139,7 @@ export const ChatComposer = memo(function ChatComposer({
   editingUserTurnId,
   onCancelUserMessageEdit,
 }: {
+  personal?: boolean;
   placeholder?: string;
   disabled: boolean;
   sendDisabled?: boolean;
@@ -629,6 +632,7 @@ export const ChatComposer = memo(function ChatComposer({
       {conversationId ? <ConnectionActionBar key={conversationId} conversationId={conversationId} /> : null}
       {composerContext ? <ComposerContextBar {...composerContext} conversationId={conversationId} disabled={(composerContext.disabled ?? disabled) || sending || streaming} /> : null}
     <ComposerFrame
+      className={personal ? 'rounded-[1.65rem] shadow-surface dark:bg-surface-panel/90' : undefined}
       dragging={att.isDragging}
       onDragOver={(e) => {
         if (e.dataTransfer?.types.includes('Files') || hasWorkspaceFileDrag(e.dataTransfer)) {
@@ -719,7 +723,7 @@ export const ChatComposer = memo(function ChatComposer({
       {pageContextPreview}
 
 
-      <div className="flex min-h-0 shrink-0 flex-col">
+      <div className={personal ? 'flex min-h-0 shrink-0 items-end gap-1 px-1.5 py-1.5 sm:px-2' : 'flex min-h-0 shrink-0 flex-col'}>
         <input
           ref={fileInputRef}
           type="file"
@@ -732,8 +736,16 @@ export const ChatComposer = memo(function ChatComposer({
           }}
         />
 
+        {personal && !voice.voiceActive && <PersonalComposerAttachButton
+          disabled={disabled || sendDisabled}
+          attachmentCount={att.attachments.length}
+          maxAttachments={MAX_CHAT_ATTACHMENTS}
+          chat={m.chat}
+          onPickFiles={() => fileInputRef.current?.click()}
+        />}
+
         <div
-          className={cn('relative px-3 pb-0 pt-1 sm:px-4', att.attachments.length > 0 && 'pt-2')}
+          className={personal ? 'relative min-w-0 flex-1 px-1' : cn('relative px-3 pb-0 pt-1 sm:px-4', att.attachments.length > 0 && 'pt-2')}
         >
           <AtMentionPicker
             open={pickers.atPicker.open}
@@ -811,6 +823,7 @@ export const ChatComposer = memo(function ChatComposer({
             editorRef={editor.editorRef}
             disabled={disabled}
             hidden={voice.voiceActive && voice.phase !== 'error'}
+            compact={personal}
             ariaLabel={placeholder ?? m.chat.inputPlaceholder}
             placeholder={
               placeholder ?? contextualPlaceholder ?? (runBusyState
@@ -829,7 +842,18 @@ export const ChatComposer = memo(function ChatComposer({
           />
         </div>
 
-        <ComposerToolbar
+        {personal ? <PersonalComposerActions
+          disabled={disabled || sendDisabled}
+          voiceActive={voice.voiceActive}
+          runBusy={runBusyState}
+          hasDraft={hasDraft}
+          chat={m.chat}
+          onStartVoiceInput={voice.startVoiceInput}
+          onSend={actions.send}
+          onQueue={onAddPendingFollowUp ? actions.flushSteeringDraft : undefined}
+          onAbort={onAbort}
+          onInterrupt={actions.interruptDraft}
+        /> : <ComposerToolbar
           disabled={disabled || sendDisabled}
           sending={sending}
           streaming={streaming}
@@ -862,7 +886,7 @@ export const ChatComposer = memo(function ChatComposer({
           showModelSelector={showModelSelector}
           onModelChange={onModelChange}
           modelDisabled={modelDisabled}
-        />
+        />}
       </div>
       <ReviewLauncherDialog
         open={reviewOpen}

@@ -26,6 +26,7 @@ import useSWR from 'swr';
 
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { fetchTask } from '@/features/tasks/home-api';
+import { taskDetailHref } from '@/features/tasks/task-detail-route';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 import { messages } from '@/i18n/messages';
@@ -198,6 +199,10 @@ function DeliveryRow({
   const open = () => {
     if (filePath && canPreviewFile) {
       setPreviewPath(filePath, null, projectId, conversationId);
+      return;
+    }
+    if (reference.kind === 'task') {
+      navigate(taskDetailHref(`${location.pathname}${location.search}`, reference.id));
       return;
     }
     if (route) navigate(withDetailReturnTo(route, `${location.pathname}${location.search}`));

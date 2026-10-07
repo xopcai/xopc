@@ -134,12 +134,18 @@ describe('personal Agent identity', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(dir, 'xopc.db') });
     try {
-      new AgentCatalogRepository().ensureInitialized();
+      const repository = new AgentCatalogRepository();
+      repository.ensureInitialized();
+      const settings = repository.getSettings();
+      repository.updateDefaults({
+        ...settings.defaults,
+        models: { ...settings.defaults.models, intents: { fast: { primary: 'test/fast', fallbacks: [] } } },
+      }, settings.revision);
       const gateway = { refreshAgentCatalog: () => {} } as unknown as GatewayService;
-      const models = async () => [{ id: 'test/fast', name: 'Fast' }];
+      const models = async () => [{ id: 'test/slow', name: 'Slow' }, { id: 'test/fast', name: 'Fast' }];
       const [first, second] = await Promise.all([
-        createOrResumePersonalAgent(gateway, 'local-owner', 'test/fast', models),
-        createOrResumePersonalAgent(gateway, 'local-owner', 'test/fast', models),
+        createOrResumePersonalAgent(gateway, 'local-owner', undefined, models),
+        createOrResumePersonalAgent(gateway, 'local-owner', undefined, models),
       ]);
       expect(first.state).toBe('ready');
       expect(second.conversationId).toBe(first.conversationId);
@@ -155,7 +161,7 @@ describe('personal Agent identity', () => {
       });
       deleteSessionConfig(first.conversationId);
       expect(getPersonalAgent('local-owner')?.state).toBe('provisioning');
-      const resumed = await createOrResumePersonalAgent(gateway, 'local-owner', 'test/fast', models);
+      const resumed = await createOrResumePersonalAgent(gateway, 'local-owner', undefined, models);
       expect(resumed.conversationId).toBe(first.conversationId);
       expect(resumed.state).toBe('ready');
       expect(getSqliteDatabase().prepare(`SELECT COUNT(*) AS count FROM sessions WHERE agent_id = ?`).get(first.agentId))
