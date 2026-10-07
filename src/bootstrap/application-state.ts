@@ -1,4 +1,5 @@
 import { ensureStarterAgentsInitialized } from '../agent/starter-agents.js';
+import { migrateIdentityMarkdownToCatalog } from '../agent-catalog/migrations/identity-markdown-cutover.js';
 import { cutoverLegacyAgentConfig, type AgentCatalogCutoverResult } from '../agent-catalog/index.js';
 import { AgentCatalogService } from '../agent-catalog/service.js';
 import { runBootstrapMigrationsSync } from '../migrations/runner.js';
@@ -18,6 +19,7 @@ export function bootstrapApplicationStateSync(configPath: string): ApplicationSt
   const agentCatalog = cutoverLegacyAgentConfig({ configPath });
   const configMigration = runBootstrapMigrationsSync(configPath);
   ensureStarterAgentsInitialized();
+  migrateIdentityMarkdownToCatalog();
   new AgentCatalogService().resumePendingProvisioningSync();
   return { agentCatalog, configChanged: configMigration.changed };
 }

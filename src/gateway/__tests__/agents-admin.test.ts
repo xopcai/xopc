@@ -9,7 +9,9 @@ import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import {
   createGatewayAgent,
   getGatewayAgentEffectiveConfig,
+  listAgentProfileFiles,
   listGatewayAgents,
+  readAgentProfileFile,
   updateGatewayAgent,
 } from '../agents-admin.js';
 
@@ -49,6 +51,24 @@ describe('agents admin', () => {
     expect(created?.skills).toBeUndefined();
     expect(created?.tools).toBeUndefined();
     expect(created?.workspace).toBeUndefined();
+  });
+
+  it('lists identity fields from the structured profile', async () => {
+    const created = await createGatewayAgent({ profile: {
+      name: 'Code Helper', description: 'Reviews code', creature: 'engineer',
+      language: 'zh-CN', emoji: '💻', avatar: 'xopc:custom',
+    } });
+    expect(created.ok).toBe(true);
+    const row = (await listGatewayAgents()).agents.find((agent) => agent.id === 'code-helper');
+    expect(row).toMatchObject({
+      name: 'Code Helper', description: 'Reviews code', language: 'zh-CN', avatar: 'xopc:custom',
+    });
+  });
+
+  it('does not expose the retired identity document as an editable profile file', async () => {
+    const listing = await listAgentProfileFiles('main');
+    expect(listing.ok && listing.data.files.some((file) => file.name === 'IDENTITY.md')).toBe(false);
+    expect((await readAgentProfileFile('main', 'IDENTITY.md')).ok).toBe(false);
   });
 
   it('creates an agent from a display name with no ASCII characters', async () => {

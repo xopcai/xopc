@@ -13,10 +13,8 @@ import { WORKSPACE_FILES } from '../config/paths.js';
 
 const PROFILE_FILE_NAMES = [
   WORKSPACE_FILES.SOUL,
-  WORKSPACE_FILES.IDENTITY,
   WORKSPACE_FILES.TOOLS,
   WORKSPACE_FILES.AGENTS,
-  WORKSPACE_FILES.HEARTBEAT,
 ] as const;
 
 const DEFAULT_PREVIEW_CHARS = 900;
@@ -78,7 +76,6 @@ function buildEditInstructions(agentId: string, fileNames: readonly string[]): s
     '',
     'Tell me what to change, or say things like:',
     '- “Refine `SOUL.md` to sound warmer and more concise.”',
-    '- “Update `IDENTITY.md` so this agent is focused on data analysis.”',
     '- “Read `SOUL.md` first, propose changes, then write them back.”',
     '',
     `Editable profile files: ${files}.`,
@@ -94,7 +91,7 @@ const agentEditCommand: CommandDefinition = {
   category: 'system',
   scope: ['global', 'private', 'group'],
   acceptsArgs: true,
-  examples: ['/agent-edit', '/agent-edit SOUL.md', '/agent-edit IDENTITY.md --limit=2000'],
+  examples: ['/agent-edit', '/agent-edit SOUL.md', '/agent-edit AGENTS.md --limit=2000'],
   handler: async (ctx: CommandContext, args: string) => {
     await ctx.setTyping(true);
 
@@ -109,7 +106,7 @@ const agentEditCommand: CommandDefinition = {
 
     const agentId = normalizeAgentId(resolveAgentIdFromConversationId(ctx.conversationId));
     const profileDir = resolveAgentProfileDir(agentId);
-    const namesToShow = fileName ? [fileName] : [WORKSPACE_FILES.SOUL, WORKSPACE_FILES.IDENTITY];
+    const namesToShow = fileName ? [fileName] : [WORKSPACE_FILES.SOUL, WORKSPACE_FILES.AGENTS];
 
     const sections: string[] = [];
     for (const name of namesToShow) {

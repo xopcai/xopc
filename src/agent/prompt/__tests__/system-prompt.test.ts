@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { PROMPT_CACHE_BOUNDARY } from '../cache-boundary.js';
-import { NO_REPLY } from '../../../heartbeat/tokens.js';
+import { NO_REPLY } from '../../messaging/no-reply.js';
 import { buildSystemPrompt, splitBuiltSystemPrompt } from '../system-prompt.js';
 
 const BASE_TOOLS = ['read_file', 'write_file', 'exec_command', 'skills_list', 'skill_view'];
@@ -28,22 +28,6 @@ describe('buildSystemPrompt section order', () => {
     expect(runtimeIndex).toBeGreaterThan(boundaryIndex);
   });
 
-  it('keeps HEARTBEAT out of the system prompt', () => {
-    const prompt = buildSystemPrompt('/workspace/main', {
-      heartbeatEnabled: true,
-      toolNames: BASE_TOOLS,
-      contextFiles: [
-        { path: 'profile/AGENTS.md', content: 'rules' },
-        { path: 'profile/HEARTBEAT.md', content: 'check inbox' },
-      ],
-    });
-    const split = splitBuiltSystemPrompt(prompt);
-    expect(split).toBeDefined();
-    expect(split!.stablePrefix).toContain('# Project Context');
-    expect(split!.stablePrefix).not.toContain('check inbox');
-    expect(split!.dynamicSuffix).not.toContain('check inbox');
-    expect(split!.dynamicSuffix).toContain('## Heartbeats');
-  });
 });
 
 describe('buildSystemPrompt prompt modes', () => {
@@ -151,6 +135,20 @@ describe('buildSystemPrompt response language', () => {
     expect(prompt).toContain('## Tooling');
     expect(prompt).toContain('## Safety');
     expect(prompt).toContain(PROMPT_CACHE_BOUNDARY.trim());
+  });
+
+  it('renders structured identity without display-only avatar data', () => {
+    const prompt = buildSystemPrompt('/ws', {
+      agentProfile: {
+        name: '小助', description: '研究伙伴', creature: 'assistant', style: '直接、温和', language: 'zh-CN',
+        emoji: '✨', avatar: 'xopc:custom',
+      },
+    });
+    expect(prompt).toContain('## Agent identity\n\nName: 小助');
+    expect(prompt).toContain('Description: 研究伙伴');
+    expect(prompt).toContain('Style: 直接、温和');
+    expect(prompt).toContain('Primary language: zh-CN');
+    expect(prompt).not.toContain('xopc:custom');
   });
 });
 

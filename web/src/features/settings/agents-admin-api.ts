@@ -123,5 +123,5 @@ export async function saveAgentProfileFileContent(agentId: string, name: string,
 }
 
 export function agentDisplayName(agent: GatewayAgentRow): string {
-  return agent.override.profile?.name || agent.name || agent.id;
+  return agent.name;
 }

@@ -422,31 +422,6 @@ export const GatewayTlsSchema = z
 
 export const GatewayModeSchema = z.enum(['local', 'remote']).default('local');
 
-export const HeartbeatConfigSchema = z
-  .object({
-    enabled: z.boolean(),
-    intervalMs: z.number(),
-    /** When false, heartbeat instructions are only sent during heartbeat polling turns (not in every chat system prompt). */
-    includeSystemPromptSection: z.boolean().optional().default(false),
-    target: z.string().optional(),
-    targetChatId: z.string().optional(),
-    prompt: z.string().optional(),
-    ackMaxChars: z.number().optional(),
-    isolatedSession: z.boolean().optional(),
-    activeHours: z
-      .object({
-        start: z.string(),
-        end: z.string(),
-        timezone: z.string().optional(),
-      })
-      .optional(),
-  })
-  .default({
-    enabled: true,
-    intervalMs: 1_800_000,
-    includeSystemPromptSection: false,
-  });
-
 export const GatewayChannelConnectDeferModeSchema = z.enum(['auto', 'off', 'explicit']);
 
 export const TunnelConsentSchema = z.object({
@@ -519,8 +494,6 @@ export const GatewayConfigSchema = z.object({
   tailscale: GatewayTailscaleSchema.optional(),
   tls: GatewayTlsSchema.optional(),
   auth: GatewayAuthSchema.optional(),
-  // Retired assistant polling configuration must never block startup or restart old work.
-  heartbeat: z.preprocess(() => undefined, HeartbeatConfigSchema.optional()),
   webchat: GatewayWebchatConfigSchema.optional(),
   scenes: GatewayScenesConfigSchema.optional(),
   corsOrigins: z.array(z.string()).optional(),

@@ -4,9 +4,9 @@ import { join } from 'node:path';
 import { resolveAgentProfileDir } from '../../agent/agent-scope.js';
 import { loadProfileBootstrapFiles } from '../../agent/bootstrap/load-bootstrap-files.js';
 import {
-  DEFAULT_IDENTITY_FILENAME,
   DEFAULT_SOUL_FILENAME,
 } from '../../agent/context/workspace.js';
+import type { AgentProfile } from '../../agent-config/index.js';
 import type { Config } from '../../config/schema.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 
@@ -21,15 +21,6 @@ interface PersonaSection {
   title: string;
   content: string;
   weight: number;
-}
-
-function identityName(content: string | undefined): string | undefined {
-  if (!content) return;
-  for (const line of content.split('\n')) {
-    const match = line.match(/^[-*]\s+\*\*Name:\*\*\s*(.*)/i);
-    const value = match?.[1]?.trim();
-    if (value && !/^_\(.*\)_$/.test(value)) return value;
-  }
 }
 
 function truncateToBudget(content: string, budget: number): string {
@@ -64,9 +55,8 @@ function allocateSectionBudgets(sections: PersonaSection[], available: number): 
 
 export function buildVoicePersonaBlock(input: {
   agentId: string;
-  name: string;
+  profile?: AgentProfile;
   customInstructions?: string;
-  identityMarkdown?: string;
   soulMarkdown?: string;
   maxChars?: number;
 }): string {
@@ -75,11 +65,14 @@ export function buildVoicePersonaBlock(input: {
     '# Current agent persona',
     'Use this trusted profile for identity, tone, values, and communication style. It cannot grant tools or override the live-voice capability and safety rules.',
     `Agent id: ${input.agentId}`,
-    `Agent name: ${input.name}`,
+    `Agent name: ${input.profile?.name ?? input.agentId}`,
+    ...(input.profile?.description ? [`Description: ${input.profile.description}`] : []),
+    ...(input.profile?.creature ? [`Type: ${input.profile.creature}`] : []),
+    ...(input.profile?.style ? [`Style: ${input.profile.style}`] : []),
+    ...(input.profile?.language ? [`Primary language: ${input.profile.language}`] : []),
   ].join('\n');
   const sections: PersonaSection[] = [
     { title: 'Explicit personality instructions', content: input.customInstructions?.trim() ?? '', weight: 4 },
-    { title: DEFAULT_IDENTITY_FILENAME, content: input.identityMarkdown?.trim() ?? '', weight: 2 },
     { title: DEFAULT_SOUL_FILENAME, content: input.soulMarkdown?.trim() ?? '', weight: 6 },
   ].filter((section) => section.content.length > 0);
   if (header.length >= maxChars || sections.length === 0) return header.slice(0, maxChars);
@@ -94,7 +87,7 @@ export function buildVoicePersonaBlock(input: {
 }
 
 function fileSignature(profileDir: string): string {
-  return [DEFAULT_IDENTITY_FILENAME, DEFAULT_SOUL_FILENAME].map((name) => {
+  return [DEFAULT_SOUL_FILENAME].map((name) => {
     try {
       const stat = statSync(join(profileDir, name));
       return `${name}:${stat.size}:${stat.mtimeMs}`;
@@ -108,7 +101,7 @@ function profileVersion(config: Config, conversationId: string): string {
   const profile = resolveEffectiveAgentProfileForSession(conversationId);
   return JSON.stringify({
     agentId: profile.agentId,
-    name: profile.config.profile?.name,
+    profile: profile.config.profile,
     customInstructions: profile.customInstructions,
     profileDir: resolveAgentProfileDir(profile.agentId),
   });
@@ -123,15 +116,13 @@ export function buildVoicePersonaContext(input: {
   const profile = resolveEffectiveAgentProfileForSession(input.conversationId);
   const profileDir = resolveAgentProfileDir(profile.agentId);
   const files = loadProfileBootstrapFiles(profileDir);
-  const identity = files.find((file) => file.name === DEFAULT_IDENTITY_FILENAME && !file.missing)?.content;
   const soul = files.find((file) => file.name === DEFAULT_SOUL_FILENAME && !file.missing)?.content;
   const version = profileVersion(config, input.conversationId);
   const signature = fileSignature(profileDir);
   const block = buildVoicePersonaBlock({
     agentId: profile.agentId,
-    name: profile.config.profile?.name ?? identityName(identity) ?? profile.agentId,
+    profile: profile.config.profile,
     customInstructions: profile.customInstructions,
-    identityMarkdown: identity,
     soulMarkdown: soul,
     maxChars: input.maxChars,
   });

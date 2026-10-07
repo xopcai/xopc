@@ -52,10 +52,8 @@ export const FILENAMES = {
 // ============================================
 export const WORKSPACE_FILES = {
   SOUL: 'SOUL.md',
-  IDENTITY: 'IDENTITY.md',
   AGENTS: 'AGENTS.md',
   TOOLS: 'TOOLS.md',
-  HEARTBEAT: 'HEARTBEAT.md',
 } as const;
 
 // ============================================

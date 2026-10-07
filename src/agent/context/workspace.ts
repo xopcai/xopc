@@ -13,37 +13,30 @@ import { parseFrontmatter } from '../../markdown/frontmatter.js';
 const log = createLogger('Workspace');
 
 // =============================================================================
-// Profile Markdown filenames & types (SOUL.md, IDENTITY.md, … under `profile/`)
+// Profile Markdown filenames & types (SOUL.md, … under `profile/`)
 // =============================================================================
 
 export const DEFAULT_AGENTS_FILENAME = 'AGENTS.md';
 export const DEFAULT_SOUL_FILENAME = 'SOUL.md';
 export const DEFAULT_TOOLS_FILENAME = 'TOOLS.md';
-export const DEFAULT_IDENTITY_FILENAME = 'IDENTITY.md';
-export const DEFAULT_HEARTBEAT_FILENAME = 'HEARTBEAT.md';
 
 export type AgentProfileMarkdownFilename =
   | typeof DEFAULT_AGENTS_FILENAME
   | typeof DEFAULT_SOUL_FILENAME
-  | typeof DEFAULT_TOOLS_FILENAME
-  | typeof DEFAULT_IDENTITY_FILENAME
-  | typeof DEFAULT_HEARTBEAT_FILENAME;
+  | typeof DEFAULT_TOOLS_FILENAME;
 
 /**
  * Order for loading profile Markdown files into the system prompt (persona / user before repo guide, etc.).
  */
 export const AGENT_PROFILE_MARKDOWN_SYSTEM_FILES: readonly AgentProfileMarkdownFilename[] = [
   DEFAULT_SOUL_FILENAME,
-  DEFAULT_IDENTITY_FILENAME,
   DEFAULT_TOOLS_FILENAME,
   DEFAULT_AGENTS_FILENAME,
-  DEFAULT_HEARTBEAT_FILENAME,
 ];
 
 /** Files that should be surfaced when missing. Other profile files are optional overlays. */
 export const REQUIRED_AGENT_PROFILE_MARKDOWN_FILES: readonly AgentProfileMarkdownFilename[] = [
   DEFAULT_SOUL_FILENAME,
-  DEFAULT_IDENTITY_FILENAME,
 ];
 
 export const REQUIRED_AGENT_PROFILE_MARKDOWN_FILE_SET: ReadonlySet<string> = new Set(

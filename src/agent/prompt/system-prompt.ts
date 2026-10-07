@@ -7,6 +7,7 @@
  */
 
 import type { EmbeddedContextFile } from '../bootstrap/types.js';
+import type { AgentProfile } from '../../agent-config/index.js';
 import type { ResponseLanguage } from '../../i18n/response-language.js';
 import { buildActionTrustPrompt, type UserTrustLevel } from '../../user-context/trust-policy.js';
 import { PROMPT_CACHE_BOUNDARY, splitPromptCacheBoundary } from './cache-boundary.js';
@@ -26,7 +27,6 @@ import {
   buildSkillsSection,
 } from './sections/memory-skills.js';
 import {
-  buildHeartbeatBehaviorSection,
   buildMessagingSection,
   buildOutputDirectivesSection,
   buildSilentRepliesSection,
@@ -35,7 +35,6 @@ import {
 import {
   buildProjectContextSection,
   getContextFileBasename,
-  isHeartbeatContextFile,
   sortContextFilesForPrompt,
 } from './sections/project-context.js';
 import { buildToolingSection, hasSkillsTools } from './sections/tooling.js';
@@ -46,6 +45,7 @@ import {
   type RuntimeInfoInput,
 } from './sections/workspace-runtime.js';
 import { buildResponseLanguageSection } from './sections/response-language.js';
+import { buildAgentIdentitySection } from './sections/agent-identity.js';
 import { buildOverridablePromptSection } from './system-prompt-params.js';
 import type { MemoryCitationsMode, PromptMode, SilentReplyPromptMode } from './types.js';
 
@@ -58,8 +58,6 @@ export {
 export interface SystemPromptOptions {
   contextFiles?: EmbeddedContextFile[];
   promptMode?: PromptMode;
-  heartbeatEnabled?: boolean;
-  heartbeatPrompt?: string;
   /** Registered tool names for Tooling section and memory/skills gating. */
   toolNames?: string[];
   toolSummaries?: Record<string, string>;
@@ -80,6 +78,7 @@ export interface SystemPromptOptions {
   actionTrustLevel?: UserTrustLevel;
   responseLanguage?: ResponseLanguage;
   customInstructions?: string;
+  agentProfile?: AgentProfile;
 }
 
 function joinSections(sections: Array<string | undefined>): string {
@@ -93,8 +92,6 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   const {
     contextFiles = [],
     promptMode = 'full',
-    heartbeatEnabled = false,
-    heartbeatPrompt,
     toolNames = [],
     toolSummaries,
     memoryCitationsMode = 'on',
@@ -114,11 +111,13 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
     actionTrustLevel,
     responseLanguage = 'auto',
     customInstructions,
+    agentProfile,
   } = options;
 
   if (promptMode === 'none') {
     return joinSections([
       'You are a personal AI assistant running inside xopc.',
+      buildAgentIdentitySection(agentProfile),
       customInstructions?.trim()
         ? `<custom_instructions>\n${customInstructions.trim()}\n</custom_instructions>`
         : undefined,
@@ -133,7 +132,7 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   const sectionOverrides = promptContribution?.sectionOverrides ?? {};
 
   const orderedContextFiles = sortContextFilesForPrompt(
-    contextFiles.filter((file) => file.path.trim().length > 0 && !isHeartbeatContextFile(file.path)),
+    contextFiles.filter((file) => file.path.trim().length > 0),
   );
   const hasProfileMemory = orderedContextFiles.some(
     (file) => getContextFileBasename(file.path) === 'memory.md',
@@ -141,6 +140,7 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
 
   const stableSections: string[] = [
     'You are a personal AI assistant running inside xopc.',
+    buildAgentIdentitySection(agentProfile) ?? '',
     ...(customInstructions?.trim()
       ? [`<custom_instructions>\n${customInstructions.trim()}\n</custom_instructions>`]
       : []),
@@ -259,11 +259,6 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   }
 
   dynamicSections.push(
-    buildHeartbeatBehaviorSection({
-      enabled: heartbeatEnabled,
-      customPrompt: heartbeatPrompt,
-      userTimezone,
-    }),
     buildRuntimeSection(runtime),
   );
 

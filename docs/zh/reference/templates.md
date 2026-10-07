@@ -1,16 +1,14 @@
 # Agent Profile 文件
 
-xopc 为每个 Agent 创建一小组 Markdown 文件，让你无需修改程序代码就能查看和调整 Agent 的身份与工作规则。
+xopc 将每个 Agent 的名称、简介、类型、语言、表情和头像保存在结构化资料中。下面的 Markdown 文件用于个性和工作规则。
 
 默认位置：`~/.xopc/agents/<agent-id>/profile/`。
 
 | 文件 | 适合填写的内容 |
 | --- | --- |
 | [SOUL.md](./templates/SOUL.md) | 稳定原则、语气和价值观 |
-| [IDENTITY.md](./templates/IDENTITY.md) | 名称、角色、说明、语言和可见身份 |
 | [TOOLS.md](./templates/TOOLS.md) | 可以安全提供给 Agent 的本地工具提示 |
 | [AGENTS.md](./templates/AGENTS.md) | 工作规则、协作方式和红线 |
-| [HEARTBEAT.md](./templates/HEARTBEAT.md) | 启用 Heartbeat 时的简短检查规则 |
 
 ## 安全编辑
 

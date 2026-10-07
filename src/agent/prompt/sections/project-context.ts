@@ -1,18 +1,12 @@
 import type { EmbeddedContextFile } from '../../bootstrap/types.js';
-import { DEFAULT_HEARTBEAT_FILENAME } from '../../context/workspace.js';
-
 export const CONTEXT_FILE_ORDER = new Map<string, number>([
   ['agents.md', 10],
   ['soul.md', 20],
-  ['identity.md', 30],
   ['user.md', 40],
   ['tools.md', 50],
   ['bootstrap.md', 60],
   ['memory.md', 70],
 ]);
-
-export const DEFAULT_HEARTBEAT_PROMPT_CONTEXT_BLOCK =
-  'Default heartbeat prompt:\n`Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.`';
 
 export function normalizeContextFilePath(pathValue: string): string {
   return pathValue.trim().replace(/\\/g, '/');
@@ -24,7 +18,7 @@ export function getContextFileBasename(pathValue: string): string {
 }
 
 export function sanitizeContextFileContentForPrompt(content: string): string {
-  return content.replaceAll(DEFAULT_HEARTBEAT_PROMPT_CONTEXT_BLOCK, '').replace(/\n{3,}/g, '\n\n');
+  return content.replace(/\n{3,}/g, '\n\n');
 }
 
 export function sortContextFilesForPrompt(contextFiles: EmbeddedContextFile[]): EmbeddedContextFile[] {
@@ -63,9 +57,4 @@ export function buildProjectContextSection(params: {
     lines.push(`## ${file.path}`, '', sanitizeContextFileContentForPrompt(file.content), '');
   }
   return lines;
-}
-
-/** Heartbeat content belongs to the heartbeat user turn, never the system prompt. */
-export function isHeartbeatContextFile(pathValue: string): boolean {
-  return getContextFileBasename(pathValue) === DEFAULT_HEARTBEAT_FILENAME.toLowerCase();
 }

@@ -113,7 +113,7 @@ describe('xopc_use tool', () => {
     const invalid = await tool.execute('agent-dry-run-invalid', {
       mode: 'agent',
       command: 'create',
-      args: { id: 'xiaomei', profile: { name: '小美', emoji: '🌸' } },
+      args: { id: 'xiaomei', profile: { name: '小美', unknownField: '🌸' } },
       dryRun: true,
     });
     expect(invalid.content[0]).toMatchObject({

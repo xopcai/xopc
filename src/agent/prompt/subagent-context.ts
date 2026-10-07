@@ -1,4 +1,4 @@
-import { NO_REPLY } from '../../heartbeat/tokens.js';
+import { NO_REPLY } from '../messaging/no-reply.js';
 import type { ResponseLanguage } from '../../i18n/response-language.js';
 import { buildSystemPrompt } from './system-prompt.js';
 

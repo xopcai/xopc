@@ -449,7 +449,6 @@ export class AgentService {
       bus,
       hookHandler: this.hookHandler,
       streamManager: this.streamManager,
-      getConfig: () => this.effectiveAppConfig(),
       getLastAssistantPlainText: (sk) => this.getLastAssistantPlainText(sk),
       reviewTaskTurn: (payload) => this.taskJudge.reviewTurn(payload),
     });

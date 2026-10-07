@@ -119,32 +119,6 @@ _This file is yours to evolve. As you learn who you are, update it._
     log.info({ path: soulPath }, 'Created SOUL.md');
   }
 
-  // IDENTITY.md - Agent identity definition
-  const identityPath = join(profileDir, WORKSPACE_FILES.IDENTITY);
-  if (!existsSync(identityPath)) {
-    const identityContent = `# IDENTITY.md - Who Am I?
-
-- **Name:** ${agentId}
-- **Creature:** AI Assistant
-- **Vibe:** Helpful, precise, no fluff.
-- **Emoji:** 🤖
-
-## Core Expertise
-
-- General assistance and problem solving
-- Code and technical tasks
-- Research and analysis
-
-## Decision Framework
-
-1. **Simplicity first** - The simplest solution is usually the best
-2. **Explicit over clever** - Clarity beats conciseness
-3. **Actions over words** - Show, don't just tell
-`;
-    await writeFile(identityPath, identityContent, 'utf-8');
-    log.info({ path: identityPath }, 'Created IDENTITY.md');
-  }
-
   // AGENTS.md - Behavior guidelines
   const agentsPath = join(profileDir, WORKSPACE_FILES.AGENTS);
   if (!existsSync(agentsPath)) {
@@ -208,19 +182,6 @@ Skills are shared. Your setup is yours.
 `;
     await writeFile(toolsPath, toolsContent, 'utf-8');
     log.info({ path: toolsPath }, 'Created TOOLS.md');
-  }
-
-  // HEARTBEAT.md - Heartbeat tasks (empty = no heartbeat)
-  const heartbeatPath = join(profileDir, WORKSPACE_FILES.HEARTBEAT);
-  if (!existsSync(heartbeatPath)) {
-    const heartbeatContent = `# HEARTBEAT.md
-
-# Keep this file empty (or with only comments) to skip heartbeat API calls.
-
-# Add tasks below when you want the agent to check something periodically.
-`;
-    await writeFile(heartbeatPath, heartbeatContent, 'utf-8');
-    log.info({ path: heartbeatPath }, 'Created HEARTBEAT.md');
   }
 
 }
