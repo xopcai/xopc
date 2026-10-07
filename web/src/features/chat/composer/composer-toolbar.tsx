@@ -1,4 +1,4 @@
-import { AudioLines, Plus, Send, Square } from 'lucide-react';
+import { AudioLines, ListPlus, Plus, Send, Square } from 'lucide-react';
 import { memo, type HTMLAttributes } from 'react';
 
 import { ComposerModelConfigControl } from '@/features/chat/model/composer-model-config-control';
@@ -33,6 +33,7 @@ export interface ComposerToolbarProps {
   onStartVoiceConversation: () => void;
 
   onSend: () => void;
+  onQueue?: () => void | Promise<void>;
   onAbort: () => void;
   onInterrupt?: () => void;
 
@@ -83,13 +84,31 @@ export function ComposerRunControl({
   showSteeringInterrupt,
   chat: m,
   onSend,
+  onQueue,
   onAbort,
   onInterrupt,
-}: Pick<ComposerToolbarProps, 'disabled' | 'voiceActive' | 'runBusy' | 'hasDraft' | 'showSteeringInterrupt' | 'chat' | 'onSend' | 'onAbort' | 'onInterrupt'>) {
+}: Pick<ComposerToolbarProps, 'disabled' | 'voiceActive' | 'runBusy' | 'hasDraft' | 'showSteeringInterrupt' | 'chat' | 'onSend' | 'onQueue' | 'onAbort' | 'onInterrupt'>) {
   return (
     <div className="flex shrink-0 items-center gap-1">
       {runBusy ? (
         <>
+          {hasDraft && onQueue ? (
+            <button
+              type="button"
+              className={cn(
+                'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-accent-fg hover:bg-accent-soft dark:hover:bg-accent-soft',
+                interaction.transition,
+                interaction.press,
+                interaction.focusRingPanel,
+              )}
+              disabled={disabled || voiceActive}
+              title={m.followUpQueueAdd}
+              aria-label={m.followUpQueueAdd}
+              onClick={() => void onQueue()}
+            >
+              <ListPlus className="size-4 stroke-[1.75]" />
+            </button>
+          ) : null}
           {showSteeringInterrupt && onInterrupt ? (
             <button
               type="button"
@@ -171,6 +190,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   voiceConversationEnabled,
   onStartVoiceConversation,
   onSend,
+  onQueue,
   onAbort,
   onInterrupt,
   sessionModel,
@@ -237,6 +257,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
             showSteeringInterrupt={showSteeringInterrupt}
             chat={m}
             onSend={onSend}
+            onQueue={onQueue}
             onAbort={onAbort}
             onInterrupt={onInterrupt}
           />

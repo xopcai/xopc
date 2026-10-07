@@ -491,6 +491,7 @@
     "voicePlaybackSpeed": "Playback speed",
     "inputPlaceholderSteering": "Follow-up: Enter queues a row; click a row to edit here",
     "inputPlaceholderSteeringEdit": "Editing queued follow-up — Enter saves, Esc discards changes",
+    "followUpQueueAdd": "Add to follow-up queue",
     "steeringInterruptSend": "Stop and send now (⌘↵ or Ctrl+↵)",
     "followUpQueueAria": "Follow-up queue (sent after this reply, in order)",
     "followUpQueueHeading": "Follow-ups",

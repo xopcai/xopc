@@ -1,3 +1,4 @@
+import type { AppContextEnvelope } from '@xopcai/gateway-contract';
 import {
   useCallback,
   useEffect,
@@ -32,6 +33,7 @@ export type ChatFollowUpClarifyApi = {
     content: string,
     attachments?: PendingFollowUp['attachments'],
     contextRefs?: ComposerContextRef[],
+    appContext?: AppContextEnvelope,
   ) => Promise<void>;
   beginEditFollowUp: (id: string) => void;
   cancelEditFollowUp: () => void;
@@ -268,6 +270,7 @@ export function useChatFollowUpClarify(options: {
       content: string,
       attachments?: PendingFollowUp['attachments'],
       contextRefs?: ComposerContextRef[],
+      appContext?: AppContextEnvelope,
     ) => {
       const trimmed = content.trim();
       if (!trimmed && !attachments?.length && !contextRefs?.length) return;
@@ -286,6 +289,7 @@ export function useChatFollowUpClarify(options: {
           clientMessageId: crypto.randomUUID(), delivery: 'next', content: trimmed || content,
           attachments: attachments?.length ? attachments : undefined, thinking: effectiveThinking,
           contextRefs: contextRefs?.map(({ refId, kind, sourceId, expectedVersion }) => ({ refId, kind, sourceId, expectedVersion })),
+          appContext,
         origin,
         }),
       });

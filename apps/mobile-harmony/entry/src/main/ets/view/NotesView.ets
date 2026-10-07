@@ -33,6 +33,7 @@ export struct XopcNotesView {
   @Local sheetOpen: boolean = false;
   @Local activeSheet: XopcNoteSheet = 'more';
   @Local shareResult?: XopcShareResult;
+  @Local editorPreview?: XopcHistoryMedia;
   @Local voice: XopcVoiceCapture = new XopcVoiceCapture();
   private startTask?: Promise<void>;
   private visible: boolean = false;
@@ -154,15 +155,22 @@ export struct XopcNotesView {
       uri: 'xopc-attachment://notes/' + encodeURIComponent(note.id) + '/' + encodeURIComponent(attachment.id)
     };
   }
+  private attachmentInBody(note: XopcNote, attachment: XopcNoteAttachment): boolean {
+    const target = 'xopc-attachment://notes/' + encodeURIComponent(note.id) + '/' + encodeURIComponent(attachment.id);
+    return note.markdown.includes(target);
+  }
 
   @Builder
   noteAttachment(note: XopcNote, attachment: XopcNoteAttachment, editing: boolean = false) {
     if (attachment.type === 'audio') {
       XopcChatMediaView({ file: this.attachmentMedia(note, attachment), conversationId: note.id, inlineVoice: true })
         .padding({ left: 8, right: 8 }).borderRadius(12).backgroundColor(this.colors.input)
+    } else if (attachment.type === 'image') {
+      XopcChatMediaView({ file: this.attachmentMedia(note, attachment), conversationId: note.id,
+        noteInlineImage: true })
     } else {
       XopcChatMediaView({ file: this.attachmentMedia(note, attachment), conversationId: note.id, compact: true,
-        compactThumbnail: attachment.type === 'image', compactAvailable: true, embedded: editing })
+        compactAvailable: true, embedded: editing })
     }
   }
 
@@ -296,17 +304,29 @@ export struct XopcNotesView {
         .width('100%').fontSize(25).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
         .backgroundColor(Color.Transparent).onChange((value: string): void => { this.model.updateTitle(value); })
       XopcNativeNoteEditor({ markdown: this.model.draft?.markdown ?? '', revision: this.model.editorRevision,
+        noteId: this.model.selected?.id || '', attachments: this.model.selected?.attachments || [],
         onChange: (value: string): void => { this.model.updateMarkdown(value); },
-        onSelection: (value: string): void => { this.model.selectedText = value; } })
+        onSelection: (value: string): void => { this.model.selectedText = value; },
+        onImageTap: (attachmentId: string): void => {
+          const note = this.model.selected;
+          const attachment = note?.attachments?.find((item: XopcNoteAttachment): boolean => item.id === attachmentId);
+          if (note && attachment) this.editorPreview = this.attachmentMedia(note, attachment);
+        } })
         .layoutWeight(1)
-      if (this.model.selected?.attachments?.length) {
+      if (this.editorPreview && this.model.selected) {
+        XopcChatMediaView({ file: this.editorPreview, conversationId: this.model.selected.id, previewOnly: true,
+          onPreviewClosed: (): void => { this.editorPreview = undefined; } }).height(0)
+      }
+      if (this.model.selected?.attachments?.some((attachment: XopcNoteAttachment): boolean =>
+        !this.attachmentInBody(this.model.selected as XopcNote, attachment))) {
         Scroll() {
-          Row({ space: 8 }) {
-            ForEach(this.model.selected.attachments, (attachment: XopcNoteAttachment) => {
-              Column() { this.noteAttachment(this.model.selected as XopcNote, attachment, true) }.width(220)
+          Column({ space: 8 }) {
+            ForEach(this.model.selected.attachments.filter((attachment: XopcNoteAttachment): boolean =>
+              !this.attachmentInBody(this.model.selected as XopcNote, attachment)), (attachment: XopcNoteAttachment) => {
+              this.noteAttachment(this.model.selected as XopcNote, attachment, true)
             }, (attachment: XopcNoteAttachment): string => attachment.id)
-          }
-        }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+          }.width('100%')
+        }.width('100%').constraintSize({ maxHeight: 200 }).scrollBar(BarState.Off)
       }
       Row({ space: 8 }) {
         Button($r('app.string.note_add_attachment')).id('note-add-attachment').layoutWeight(1).height(42).backgroundColor(this.colors.input)
@@ -397,11 +417,14 @@ export struct XopcNotesView {
                   onNoteUpdated: (): void => { void this.model.refreshSelected(); } })
               }
               if (this.model.selected.markdown) {
-                XopcMarkdownView({ content: this.model.selected.markdown, conversationId: this.model.selected.id })
+                XopcMarkdownView({ content: this.model.selected.markdown, conversationId: this.model.selected.id,
+                  inlineNoteImages: true })
               }
-              if (this.model.selected.attachments?.length) {
+              if (this.model.selected.attachments?.some((attachment: XopcNoteAttachment): boolean =>
+                !this.attachmentInBody(this.model.selected as XopcNote, attachment))) {
                 Column({ space: 8 }) {
-                  ForEach(this.model.selected.attachments, (attachment: XopcNoteAttachment) => {
+                  ForEach(this.model.selected.attachments.filter((attachment: XopcNoteAttachment): boolean =>
+                    !this.attachmentInBody(this.model.selected as XopcNote, attachment)), (attachment: XopcNoteAttachment) => {
                     this.noteAttachment(this.model.selected as XopcNote, attachment)
                   }, (attachment: XopcNoteAttachment): string => attachment.id)
                 }.width('100%')

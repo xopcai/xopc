@@ -39,6 +39,15 @@ describe('chat options and queue', () => {
     await model.refreshQueue();
     expect(model.queued.map(x => x.id)).toEqual(['first', 'later']); model.dispose();
   });
+  it('reorders follow-ups with the queue position API', async () => {
+    mock.queue.mockResolvedValue({ conversationId: 'one', activeRunId: 'run-1', inputs: [input('a', 1), input('b', 2), input('c', 3)] });
+    const model = new XopcChatOptionsViewModel(); await model.load('one');
+    mock.updateQueued.mockResolvedValue({ conversationId: 'one', activeRunId: 'run-1', inputs: [input('b', 1), input('c', 2), input('a', 3)] });
+    model.moveQueued(0, 2);
+    expect(model.queued.map(x => x.id)).toEqual(['b', 'c', 'a']);
+    expect(mock.updateQueued).toHaveBeenCalledWith('one', input('a', 1), { position: 2 });
+    await vi.waitFor(() => expect(model.queueBusy).toBe(false)); model.dispose();
+  });
   it('remembers the selected model for this agent only after Gateway confirmation', async () => {
     const model = new XopcChatOptionsViewModel(); mock.config.mockResolvedValueOnce({ model: 'p/a', thinkingLevel: 'high' });
     await model.load('one', 'main'); expect(await model.selectModel('p/b')).toBe(true);
