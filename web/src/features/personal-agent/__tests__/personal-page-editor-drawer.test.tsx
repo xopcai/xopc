@@ -80,20 +80,20 @@ describe('Personal AI editor', () => {
     expect(container.querySelector('[data-testid="personal-chat"]')).toBe(chat);
   });
 
-  it('closes the delegated tasks panel when the header button is clicked again', async () => {
+  it('toggles the delegated tasks popover from the header button', async () => {
     await act(async () => {
       root.render(<MemoryRouter><PersonalPage /></MemoryRouter>);
     });
     act(() => headerRoot.render(usePageHeaderStore.getState().end));
 
     await act(async () => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Activity"]')?.click());
-    expect(container.querySelector('aside[aria-label="Delegated tasks"]')).not.toBeNull();
-
     act(() => headerRoot.render(usePageHeaderStore.getState().end));
+    expect(document.querySelector('[data-radix-popper-content-wrapper] [aria-label="Delegated tasks"]')).not.toBeNull();
+    expect(container.querySelector('aside')).toBeNull();
     expect(headerContainer.querySelector('button[aria-label="Activity"]')?.getAttribute('aria-pressed')).toBe('true');
     act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Activity"]')?.click());
-    expect(container.querySelector('aside[aria-label="Delegated tasks"]')).toBeNull();
     act(() => headerRoot.render(usePageHeaderStore.getState().end));
+    expect(document.querySelector('[data-radix-popper-content-wrapper] [aria-label="Delegated tasks"]')).toBeNull();
     expect(headerContainer.querySelector('button[aria-label="Activity"]')?.getAttribute('aria-pressed')).toBe('false');
   });
 });
