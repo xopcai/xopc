@@ -67,6 +67,7 @@ import { isXopcDatabaseOpen } from '../../storage/sqlite/index.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { getModelThinking } from '../../providers/model-thinking.js';
+import { NO_REPLY } from '../messaging/no-reply.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -594,6 +595,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     let policyStopped = false;
     let connectionStopped = false;
     let clarificationStopped = false;
+    let sentVisibleMessage = false;
     params.turnPolicy?.reset();
     session.agent.beforeToolCall = async (context, signal) => {
       const resume = getClarificationResumeInput(conversationId, runId);
@@ -651,6 +653,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       }
       if (event.type === 'tool_execution_end') {
         markTurnToolResult(conversationId, runId, event.toolName);
+        if (event.toolName === 'send_message' && !event.isError) sentVisibleMessage = true;
       }
       onEvent?.({ ...event, runId });
     }, params.onAgentEvent);
@@ -700,6 +703,17 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
             recoveryState,
             onContextRecovered: () => { useAuthoritativeProjection = true; },
           });
+          if (params.requireVisibleReply && !sentVisibleMessage && !policyStopped
+            && !runAbortSignal.aborted && !isAssistantTurnFailed(session.agent)
+            && !isAssistantTurnAborted(session.agent)
+            && lastAssistantPlainText(session).trim() === NO_REPLY) {
+            await session.sendCustomMessage({
+              customType: 'visible_reply_required',
+              content: 'The direct user message still needs a visible response in this conversation. Answer it now. If it is unclear, ask one short clarifying question. Do not output NO_REPLY.',
+              display: false,
+            }, { triggerTurn: true });
+            await session.agent.waitForIdle();
+          }
           // One bounded continuation closes accidental early completion without
           // forcing impossible checks or bypassing user cancellation and budgets.
           const pending = await verification.pendingContext();
@@ -730,6 +744,11 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
           errorMessage: getAssistantTurnErrorMessage(session.agent) ?? 'Assistant turn failed',
           lastAssistantText: lastAssistantPlainText(session),
         };
+      }
+
+      if (params.requireVisibleReply && !sentVisibleMessage
+        && lastAssistantPlainText(session).trim() === NO_REPLY) {
+        return { ok: false, retryable: false, errorMessage: 'Assistant did not produce a visible reply' };
       }
 
       runner.piSm.appendCustomEntry('xopc.model-selection', {

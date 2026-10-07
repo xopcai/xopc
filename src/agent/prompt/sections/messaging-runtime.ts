@@ -30,7 +30,8 @@ export function buildSilentRepliesSection(params: {
   }
   return [
     '## Silent Replies',
-    `When you have nothing to say, respond with ONLY: ${NO_REPLY}`,
+    `Use ${NO_REPLY} only for background or system-generated events that need no user-facing update, or after you have already delivered the reply with send_message.`,
+    'Always answer a direct message from a person in the current conversation, even if it is brief, unclear, repeated, or looks like a test. Acknowledge it or ask a short clarifying question.',
     '',
     'Rules:',
     '- It must be your ENTIRE message — nothing else',

@@ -8,6 +8,7 @@ import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
 
 import {
   closeXopcDatabase,
+  getSqliteDatabase,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
@@ -128,6 +129,30 @@ describe('TaskApplicationService', () => {
     expect(service.create(input)).toEqual(first);
     expect(new TaskOriginRepository().list(conversation.key)).toMatchObject({ total: 1,
       items: [{ id: first.ok ? first.model.task.id : undefined, title: 'Background work' }] });
+  });
+
+  it('pages delegated tasks by latest update when requested', () => {
+    const conversation = createConversation({ agentId: 'main' });
+    const tasks = new TaskRepository();
+    const db = getSqliteDatabase();
+    const ids = ['Older active', 'Newest finished', 'Middle active'].map((title, index) => {
+      const task = tasks.create({ title, objective: title });
+      db.prepare('INSERT INTO task_origin_links (task_id, conversation_id, created_at) VALUES (?, ?, ?)')
+        .run(task.id, conversation.key, index + 1);
+      db.prepare('UPDATE tasks SET phase = ?, resolution = ?, updated_at = ? WHERE task_id = ?')
+        .run(index === 1 ? 'closed' : 'active', index === 1 ? 'done' : null,
+          (index === 0 ? 1 : index === 1 ? 3 : 2) * 1000, task.id);
+      return task.id;
+    });
+
+    const origin = new TaskOriginRepository();
+    expect(origin.list(conversation.key, 2, { order: 'recent' })).toMatchObject({
+      total: 3, items: [{ id: ids[1] }, { id: ids[2] }],
+    });
+    expect(origin.list(conversation.key, 2, { order: 'recent', offset: 2 })).toMatchObject({
+      total: 3, items: [{ id: ids[0] }],
+    });
+    expect(origin.list(conversation.key, 2).items.map(item => item.id)).toEqual([ids[2], ids[0]]);
   });
 
   it('persists automation trigger context and includes it in the dispatched message', () => {

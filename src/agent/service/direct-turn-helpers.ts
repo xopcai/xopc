@@ -154,6 +154,7 @@ export interface RunDirectAgentTurnInput {
   sourceImages?: ImageContent[];
   sourceContexts?: AgentSourceContext[];
   presentation?: 'voice';
+  requireVisibleReply?: boolean;
   onEvent?: (event: EmbeddedStreamEvent) => void;
 }
 
@@ -208,6 +209,7 @@ export async function runDirectAgentTurn(
     dynamicSystemContext: userContext.dynamicSystemContext,
     llmImages,
     presentation: input.presentation,
+    requireVisibleReply: input.requireVisibleReply,
     sessionStore: deps.sessionStore,
     agentManager: deps.agentManager,
     modelManager: deps.modelManager,

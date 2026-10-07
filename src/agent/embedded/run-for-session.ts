@@ -36,6 +36,7 @@ export type RunEmbeddedForSessionParams = {
   modelManager: ModelManager;
   thinkingOverride?: string | null;
   presentation?: 'voice';
+  requireVisibleReply?: boolean;
   abortSignal?: AbortSignal;
   /** Absolute parent deadline. The turn's own timeout is capped to the remaining budget. */
   deadlineAtMs?: number;
@@ -268,6 +269,7 @@ export async function runEmbeddedTurnForSession(
             onEvent: params.onEvent,
             onAgentEvent: (event) => agentManager.emitRuntimeEvent(conversationId, event),
             resumeLastUserMessage,
+            requireVisibleReply: params.requireVisibleReply,
           }),
           runId,
         );

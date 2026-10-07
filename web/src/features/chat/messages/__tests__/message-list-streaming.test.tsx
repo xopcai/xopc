@@ -73,6 +73,20 @@ describe('MessageList streaming row props', () => {
     expect(propsByMessageIndex.get(3)?.suppressAssistantActions).toBe(true);
   });
 
+  it('hides actions under every assistant reply when requested', () => {
+    act(() => root.render(<MessageList
+      messages={list}
+      streaming={false}
+      progress={null}
+      reasoningLevel="stream"
+      registerListContentRef={() => {}}
+      hideAssistantActions
+    />));
+
+    expect(propsByMessageIndex.get(1)?.suppressAssistantActions).toBe(true);
+    expect(propsByMessageIndex.get(3)?.suppressAssistantActions).toBe(true);
+  });
+
   it('renders ephemeral trailing content after transcript messages', () => {
     act(() => {
       root.render(
