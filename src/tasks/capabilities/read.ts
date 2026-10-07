@@ -9,6 +9,7 @@ import { TaskReadModelProjector } from '../task-read-model-projector.js';
 import { TaskContextRepository } from '../task-context-repository.js';
 import { TaskConversationRepository } from '../task-conversation-repository.js';
 import { TaskDependencyService } from '../task-dependency-service.js';
+import { TaskCriterionReviewRepository } from '../task-criterion-review-repository.js';
 import { TaskValueMetricsService } from '../task-value-metrics-service.js';
 
 export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): void {
@@ -24,6 +25,7 @@ export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): 
   const context = new TaskContextRepository();
   const conversations = new TaskConversationRepository();
   const dependencies = new TaskDependencyService();
+  const criterionReviews = new TaskCriterionReviewRepository();
   dispatcher.register(defineReadCapability({
     id: 'xopc.task_runs.get', majorVersion: 1, description: 'Read a task run, receipt, events and active waits.',
     effect: 'read', surfaces: ['http', 'agent', 'cli'], scopes: ['tasks.read'],
@@ -55,6 +57,7 @@ export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): 
       return {
         ok: true as const, ...model,
         waits: runs.listActiveWaits(id), runs: runs.listByTask(id), receipts: runs.listReceipts(id),
+        criterionReviews: criterionReviews.list(id, task.latestContractVersion),
         context: context.list(id), conversation: conversations.requireState(id), sessions: conversations.listSessions(id),
         authorityGrants: context.listActiveGrants(id),
         dependencies: dependencies.listDependencies(id), dependents: dependencies.listDependents(id),

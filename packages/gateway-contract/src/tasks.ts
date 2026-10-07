@@ -36,6 +36,7 @@ export const TaskChangedFieldSchema = z.enum([
   'context',
   'runs',
   'receipts',
+  'acceptance',
   'feedback',
   'attention',
   'conversation',
@@ -203,6 +204,23 @@ export const TaskRunReceiptSchema = z.object({
   contextTraceId: z.string().optional(),
   finalizedAt: z.number().int().nonnegative(),
 });
+
+export const TaskCriterionReviewSchema = z.object({
+  contractVersion: z.number().int().positive(),
+  criterionIndex: z.number().int().nonnegative(),
+  criterionText: z.string(),
+  status: z.enum(['passed', 'failed']),
+  note: z.string().optional(),
+  reviewedBy: ActorRefSchema,
+  reviewedAt: z.number().int().nonnegative(),
+});
+
+export const TaskCriterionReviewInputSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  contractVersion: z.number().int().positive(),
+  status: z.enum(['passed', 'failed']),
+  note: z.string().trim().max(2000).optional(),
+}).strict();
 
 export const TaskExecutorSelectionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('agent'), agentId: z.string().min(1) }),
@@ -379,6 +397,7 @@ export const TaskDetailResponseSchema = z.object({
   waits: z.array(TaskWaitSchema),
   runs: z.array(TaskRunSchema),
   receipts: z.array(TaskRunReceiptSchema),
+  criterionReviews: z.array(TaskCriterionReviewSchema),
   context: z.array(TaskContextEdgeSchema),
   conversation: TaskConversationStateSchema,
   sessions: z.array(TaskSessionLinkSchema),
@@ -405,6 +424,7 @@ export type TaskDependencySummary = z.infer<typeof TaskDependencySummarySchema>;
 export type TaskEvidence = z.infer<typeof TaskEvidenceSchema>;
 export type TaskJudgment = z.infer<typeof TaskJudgmentSchema>;
 export type TaskRunReceipt = z.infer<typeof TaskRunReceiptSchema>;
+export type TaskCriterionReview = z.infer<typeof TaskCriterionReviewSchema>;
 export type TaskExecutorSelection = z.infer<typeof TaskExecutorSelectionSchema>;
 export type TaskContractInput = z.infer<typeof TaskContractInputSchema>;
 export type TaskContextInput = z.infer<typeof TaskContextInputSchema>;

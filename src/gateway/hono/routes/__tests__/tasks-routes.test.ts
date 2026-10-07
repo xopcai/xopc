@@ -15,6 +15,7 @@ import { TaskConversationRepository } from '../../../../tasks/task-conversation-
 import { TaskRepository } from '../../../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../../../tasks/task-run-repository.js';
 import { TaskCollaborationRepository } from '../../../../tasks/task-collaboration-repository.js';
+import { TaskCriterionReviewRepository } from '../../../../tasks/task-criterion-review-repository.js';
 import { registerTaskRoutes } from '../tasks.js';
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 
@@ -30,7 +31,7 @@ describe('task routes', () => {
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     app = new Hono();
     app.use('*', async (c, next) => {
-      setGatewayPrincipal(c, { kind: 'owner', principalId: 'test-owner', scopes: ['tasks.read', 'tasks.write'] });
+      setGatewayPrincipal(c, { kind: c.req.header('x-test-principal-kind') === 'device' ? 'device' : 'owner', principalId: 'test-owner', scopes: ['tasks.read', 'tasks.write'] });
       await next();
     });
     registerTaskRoutes(app, {
@@ -97,6 +98,32 @@ describe('task routes', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ ok: true,
       metrics: { delegatedTasks: 0, pendingDeliveries: 0, interruptedRuns: 0 } });
+  });
+
+  it('records a human criterion review and rejects stale task versions', async () => {
+    const task = new TaskRepository().create({ title: 'Review route', objective: 'Check result',
+      acceptanceCriteria: ['User accepts the result'], acceptancePolicy: 'manual' });
+    const url = `/api/tasks/${task.id}/criteria/0/review`;
+    const input = { expectedVersion: task.version, contractVersion: task.latestContractVersion, status: 'passed' };
+    const response = await app.request(url, { method: 'PUT',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ok: true,
+      review: { criterionIndex: 0, status: 'passed', reviewedBy: { kind: 'user', id: 'test-owner' } } });
+    expect(new TaskCriterionReviewRepository().list(task.id, task.latestContractVersion)).toHaveLength(1);
+    const stale = await app.request(url, { method: 'PUT',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+    expect(stale.status).toBe(409);
+  });
+
+  it('does not allow a device token to make a human criterion review', async () => {
+    const task = new TaskRepository().create({ title: 'Owner review', objective: 'Check result',
+      acceptanceCriteria: ['Owner accepts the result'], acceptancePolicy: 'manual' });
+    const response = await app.request(`/api/tasks/${task.id}/criteria/0/review`, { method: 'PUT',
+      headers: { 'content-type': 'application/json', 'x-test-principal-kind': 'device' },
+      body: JSON.stringify({ expectedVersion: task.version, contractVersion: task.latestContractVersion, status: 'passed' }) });
+    expect(response.status).toBe(403);
+    expect(new TaskCriterionReviewRepository().list(task.id, task.latestContractVersion)).toHaveLength(0);
   });
 
   it.each(['/new', '/RESET prompt', '/restart', '/clear', '/archive'])(

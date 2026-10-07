@@ -1,5 +1,5 @@
 import type {
-  XopcTaskResult, XopcProject, XopcAutomation, XopcWorkspaceItem,
+  XopcTaskResult, XopcMobileTaskDetailResult, XopcProject, XopcAutomation, XopcWorkspaceItem,
   XopcTaskCreate, XopcAutomationWrite
 } from '../model/workspace';
 
@@ -9,6 +9,17 @@ export function taskItem(result: XopcTaskResult): XopcWorkspaceItem {
   return { id: task.id, title: task.title, body: task.body ?? '', status: task.phase, version: task.version,
     projectId: task.projectId, priority: task.priority, updatedAt: task.updatedAt,
     editable: true, actions: result.allowedCommands ?? [] };
+}
+export function taskDetailItem(result: XopcMobileTaskDetailResult): XopcWorkspaceItem {
+  const item = taskItem(result);
+  item.taskDetail = {
+    contract: result.task.contract, latestContractVersion: result.task.latestContractVersion ?? 0,
+    attention: result.attention ?? [], criterionReviews: result.criterionReviews ?? [],
+    receipts: result.receipts ?? [], context: result.context ?? [], sessions: result.sessions ?? [],
+    dependencies: result.dependencies ?? [], dependents: result.dependents ?? [], runs: result.runs ?? [],
+    activeConversationId: result.conversation?.activeConversationId
+  };
+  return item;
 }
 export function projectItem(project: XopcProject): XopcWorkspaceItem {
   if (!project?.id || typeof project.name !== 'string') throw new Error('INVALID_PROJECT');

@@ -9,6 +9,7 @@ import { TaskMutationOutputSchema } from '../../../tasks/capabilities/write.js';
 import { TaskDeleteOutputSchema } from '../../../tasks/capabilities/management.js';
 import {
   TaskCommandRequestSchema,
+  TaskCriterionReviewInputSchema,
   TaskCreateRequestSchema,
   TaskHandoffRequestSchema,
   TaskRunCancelOutputSchema,
@@ -24,6 +25,7 @@ import { enqueueTaskChangedEvent } from '../../../tasks/task-change-events.js';
 import { TaskRepository } from '../../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
 import { TaskCollaborationRepository } from '../../../tasks/task-collaboration-repository.js';
+import { TaskCriterionReviewRepository } from '../../../tasks/task-criterion-review-repository.js';
 import { getTaskOrchestrationMetrics } from '../../../tasks/task-orchestration-metrics.js';
 import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
@@ -51,6 +53,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   const runs = new TaskRunRepository();
   const conversations = new TaskConversationRepository();
   const collaboration = new TaskCollaborationRepository();
+  const criterionReviews = new TaskCriterionReviewRepository();
   const conversationQuery = new TaskConversationQueryService(deps.service.sessions);
   const handoffs = new TaskHandoffService({
     sessionIndex: deps.service.sessionIndexInstance,
@@ -108,6 +111,41 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     try {
       return c.json(await capabilities.call('xopc.tasks.get', { id: c.req.param('id') }, capabilityHttpContext(c)));
     } catch (error) { return capabilityHttpError(c, error); }
+  });
+
+  authenticated.put('/api/tasks/:id/criteria/:index/review', taskRateLimit, async (c) => {
+    const principal = getGatewayPrincipal(c);
+    if (!hasGatewayScope(principal.scopes, 'tasks.write')
+      || (principal.kind !== 'owner' && principal.kind !== 'trusted-proxy')) {
+      return c.json({ ok: false, error: 'Human review requires owner access' }, 403);
+    }
+    const index = Number(c.req.param('index'));
+    const parsed = TaskCriterionReviewInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!Number.isInteger(index) || index < 0 || !parsed.success) {
+      return c.json({ ok: false, error: 'Invalid criterion review' }, 400);
+    }
+    const task = tasks.get(c.req.param('id'));
+    if (!task) return c.json({ ok: false, error: 'Task not found' }, 404);
+    if (task.latestContractVersion !== parsed.data.contractVersion
+      || task.version !== parsed.data.expectedVersion || task.phase === 'closed') {
+      return c.json({ ok: false, error: 'Task changed; refresh before reviewing' }, 409);
+    }
+    if (task.contract?.acceptanceCriteria[index] === undefined) {
+      return c.json({ ok: false, error: 'Criterion not found' }, 404);
+    }
+    if (task.contract.acceptancePolicy === 'verified_auto') {
+      return c.json({ ok: false, error: 'This criterion requires verified execution evidence' }, 409);
+    }
+    const review = criterionReviews.set({ task, expectedVersion: parsed.data.expectedVersion,
+      criterionIndex: index, status: parsed.data.status, note: parsed.data.note,
+      actor: { kind: 'user', id: principal.principalId } });
+    if (!review) return c.json({ ok: false, error: 'Task changed; refresh before reviewing' }, 409);
+    runSqliteWriteTransaction((db) => enqueueTaskChangedEvent(db, {
+      taskId: task.id, projectId: task.projectId, version: task.version + 1,
+      changedFields: ['acceptance'], actor: { kind: 'user', id: principal.principalId },
+    }));
+    deps.service.dispatchTaskEvents();
+    return c.json({ ok: true, review, version: task.version + 1 });
   });
 
   authenticated.get('/api/tasks/:id/collaboration', async (c) => {

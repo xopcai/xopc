@@ -1277,6 +1277,19 @@ CREATE TABLE task_contracts (
   FOREIGN KEY (task_id) REFERENCES tasks(task_id) ON DELETE CASCADE
 );
 
+CREATE TABLE task_criterion_reviews (
+  task_id TEXT NOT NULL,
+  contract_version INTEGER NOT NULL,
+  criterion_index INTEGER NOT NULL,
+  criterion_text TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('passed', 'failed')),
+  note TEXT,
+  reviewed_by_json TEXT NOT NULL,
+  reviewed_at INTEGER NOT NULL,
+  PRIMARY KEY (task_id, contract_version, criterion_index),
+  FOREIGN KEY (task_id, contract_version) REFERENCES task_contracts(task_id, version) ON DELETE CASCADE
+);
+
 CREATE TABLE task_dependencies (
   task_id TEXT NOT NULL,
   depends_on_task_id TEXT NOT NULL,
