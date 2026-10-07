@@ -33,6 +33,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
+import { taskDetailHref } from '@/features/tasks/task-detail-route';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
@@ -78,11 +79,12 @@ const SidebarTaskChildRow = memo(function SidebarTaskChildRow({
   onNavigate?: () => void;
   sb: ReturnType<typeof messages>['sidebar'];
 }) {
+  const location = useLocation();
   const runPresence = useChatRunPresenceStore((state) => (
     child.activeConversationId ? state.runs[child.activeConversationId] : undefined
   ));
   return <Link
-    to={child.activeConversationId ? `/chat/task/${encodeURIComponent(child.taskId)}` : `/tasks/${encodeURIComponent(child.taskId)}`}
+    to={child.activeConversationId ? `/chat/task/${encodeURIComponent(child.taskId)}` : taskDetailHref(`${location.pathname}${location.search}`, child.taskId)}
     className={cn(
       'ml-8 flex min-h-8 items-center gap-2 rounded-lg px-2 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg',
       activeTaskId === child.taskId && 'bg-surface-active text-fg')}

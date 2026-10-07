@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { serializeUserTurnDocument } from '@xopcai/gateway-contract';
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FileText } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -101,10 +101,12 @@ type EditingUserTurn = {
   turnId: string;
 };
 
-export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId }: {
+export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId, personal = false, personalWelcome }: {
   embedded?: boolean;
   conversationId?: string;
   taskId?: string;
+  personal?: boolean;
+  personalWelcome?: { name: string; addressAs?: string; avatar?: ReactNode; opening?: string };
 } = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -1098,10 +1100,10 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
             onScroll={handleChatScroll}
             data-chat-find-open={chatFind.open ? '' : undefined}
           >
-            <div className={embedded ? 'px-3' : 'px-3 sm:px-5 xl:px-6'}>
+            <div className={embedded && !personal ? 'px-3' : 'px-3 sm:px-5 xl:px-6'}>
               <div
                 data-chat-message-frame
-                className={cn('mx-auto w-full min-w-0', !embedded && 'xl:max-w-[var(--max-width-chat-frame)]')}
+                className={cn('mx-auto w-full min-w-0', (!embedded || personal) && 'xl:max-w-[var(--max-width-chat-frame)]')}
               >
               {isLoadingHistory ? (
                 <div className="flex min-h-[min(40vh,20rem)] w-full flex-col gap-10 py-8" aria-busy="true">
@@ -1174,7 +1176,13 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                     onPickWelcomePrompt={onPickWelcomePrompt}
                     welcomeSpotlight={welcomeSpotlight}
                     welcomeOverlay={
-                      agentSetup ? (
+                      personal && personalWelcome ? (
+                        <div className="mx-auto flex w-full max-w-2xl flex-col items-start gap-3 px-4 py-8 text-fg">
+                          <div className="flex size-16 items-center justify-center rounded-3xl bg-accent/10 text-3xl text-accent" aria-hidden>{personalWelcome.avatar ?? '✦'}</div>
+                          <h2 className="text-2xl font-semibold">{language === 'zh' ? `你好${personalWelcome.addressAs ? `，${personalWelcome.addressAs}` : ''}。我们从哪里开始？` : `Hello${personalWelcome.addressAs ? `, ${personalWelcome.addressAs}` : ''}. Where should we start?`}</h2>
+                          <p className="max-w-xl text-sm leading-relaxed text-fg-muted">{personalWelcome.opening ?? (language === 'zh' ? '想讨论问题、整理思路或推进工作，都可以直接说。我会按你的偏好回应。' : 'You can bring a question, an idea, or work to move forward. I’ll respond in the way you prefer.')}</p>
+                        </div>
+                      ) : agentSetup ? (
                         <AgentSetupWelcome
                           agentName={welcomeAgent.name?.trim() || agents.displayAgentId}
                           messages={m.agentsSettings}
@@ -1221,12 +1229,12 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
           </div>
 
           <div className="sticky bottom-0 z-10 shrink-0 bg-surface-panel">
-            <div className={embedded ? 'px-3' : 'px-3 sm:px-5 xl:px-6'}>
+            <div className={embedded && !personal ? 'px-3' : 'px-3 sm:px-5 xl:px-6'}>
               <div
                 data-chat-composer-frame
                 className={cn(
                   'relative mx-auto w-full min-w-0',
-                  !embedded && 'xl:max-w-[var(--max-width-chat-frame)]',
+                  (!embedded || personal) && 'xl:max-w-[var(--max-width-chat-frame)]',
                   compactWelcomeLayout ? 'py-2.5' : 'py-2 sm:py-4',
                 )}
               >
@@ -1314,7 +1322,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 welcomeSuggestion={!skillDiscovery && compactWelcomeLayout ? welcomeSelection : null}
                 onAcceptWelcomeSuggestion={onPickWelcomePrompt}
                 thinkingLevel={session.thinkingLevel}
-                modelSupportsThinking={session.modelSupportsThinking}
+                modelSupportsThinking={personal ? false : session.modelSupportsThinking}
                 onThinkingChange={session.onSessionThinkingLevelChange}
                 onSend={projectComposer.send}
                 editingUserTurnId={editingUserTurn?.turnId}
@@ -1338,17 +1346,18 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 onPendingFollowUpSteer={(id) => void followUp.steerPendingFollowUp(id)}
                 steeringFollowUpId={followUp.steeringFollowUpId}
                 sessionModel={session.sessionModel}
-                showModelSelector
+                showModelSelector={!personal}
                 onModelChange={session.onSessionModelChange}
                 modelDisabled={
                   (isSessionTransitioning && !session.projectPreparation) || projectComposer.busy || stream.streaming || stream.sending || session.modelConfigSaving
                 }
                 onChatAgentChange={
-                  !agentSetup && !taskId && agents.showChatAgentSelector ? agents.onChatAgentChange : undefined
+                  !personal && !agentSetup && !taskId && agents.showChatAgentSelector ? agents.onChatAgentChange : undefined
                 }
                 currentAgentId={agents.displayAgentId}
-                voiceAgentName={welcomeAgent.name}
+                voiceAgentName={personal && personalWelcome ? personalWelcome.name : welcomeAgent.name}
                 voiceTaskId={taskId ?? undefined}
+                voiceMode={personal ? 'assistant' : undefined}
                 prepareVoiceSession={session.projectPreparation ? () => session.projectPreparation!.create(projectComposer.mode) : undefined}
               />
               </div>

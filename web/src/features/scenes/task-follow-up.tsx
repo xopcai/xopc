@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { flushSync } from 'react-dom';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import type { TaskFollowUpInput } from '../../../../src/scenes/taskFollowUp/contracts';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { PageContextCaptureButton } from '@/features/chat/context/page-context-capture-button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { taskDetailHref } from '@/features/tasks/task-detail-route';
 import { fetchProjects } from '@/features/projects/api';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -123,6 +124,7 @@ export function CreateTaskExecution({ template }: { template: SceneTemplate }) {
 }
 
 export function TaskExecutionDetail({ id, initial }: { id: string; initial: TaskExecutionDetails }) {
+  const location = useLocation();
   const [configurationDirty, setConfigurationDirty] = useState(false);
   const zh = useLocaleStore(state => state.language) === 'zh';
   const text = (cn: string, en: string) => zh ? cn : en;
@@ -151,7 +153,7 @@ export function TaskExecutionDetail({ id, initial }: { id: string; initial: Task
     <section className={panel}>
       <h3 className="font-medium text-fg">{text('来源 → 任务 → 产物', 'Source → task → artifacts')}</h3>
       <p className="break-words text-sm text-fg-muted">{item.input.source.provider}</p>
-      <div className="flex flex-wrap gap-4"><Link className="text-sm text-accent-fg" to={`/tasks/${item.task.id}`}>{text('打开关联任务', 'Open linked task')}</Link>
+      <div className="flex flex-wrap gap-4"><Link className="text-sm text-accent-fg" to={taskDetailHref(`${location.pathname}${location.search}`, item.task.id)}>{text('打开关联任务', 'Open linked task')}</Link>
         {item.input.sourceUrl && <a className="text-sm text-accent-fg" href={item.input.sourceUrl} target="_blank" rel="noopener noreferrer">{text('打开原讨论', 'Open source')}</a>}</div>
       <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
         <div><dt className="text-fg-muted">{text('已观察版本', 'Observed revision')}</dt><dd>{item.observedRevision}</dd></div>
@@ -223,6 +225,7 @@ function FollowUpConfiguration({ item, onSaved, onDirty }: { item: TaskExecution
 type Branch = { ref: string; sha: string; subject: string; worktree?: string; taskId: string | null; activationId: string | null; association: string; changedSinceConfirmation: boolean };
 
 function TaskBranches({ projectId, taskId }: { projectId: string; taskId: string }) {
+  const location = useLocation();
   const zh = useLocaleStore(state => state.language) === 'zh';
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState('');
@@ -249,7 +252,7 @@ function TaskBranches({ projectId, taskId }: { projectId: string; taskId: string
       </Select>
       {branch && <div className="space-y-3 break-all text-sm text-fg"><p>{branch.subject}</p><p className="text-fg-muted">{branch.sha}</p>
         {branch.worktree && <p className="text-fg-muted">{branch.worktree}</p>}
-        {branch.taskId ? <Link className="text-accent-fg" to={branch.activationId ? `/scenes/${branch.activationId}` : `/tasks/${branch.taskId}`}>{zh ? '查看对应事项' : 'Open associated work'}</Link>
+        {branch.taskId ? <Link className="text-accent-fg" to={branch.activationId ? `/scenes/${branch.activationId}` : taskDetailHref(`${location.pathname}${location.search}`, branch.taskId)}>{zh ? '查看对应事项' : 'Open associated work'}</Link>
           : <Button variant="secondary" disabled={busy} onClick={() => void associate()}>{busy ? (zh ? '关联中…' : 'Linking…') : (zh ? '确认关联到当前任务' : 'Confirm association with this task')}</Button>}
         {branch.changedSinceConfirmation && <p className="text-fg-muted">{zh ? '该分支在确认关联后已有新提交。' : 'This branch has new commits since confirmation.'}</p>}
       </div>}

@@ -48,5 +48,10 @@ describe('task sidebar hierarchy', () => {
 
     getSqliteDatabase().prepare('UPDATE sessions SET hidden_from_session_list = 1 WHERE conversation_id = ?').run(parent);
     expect(listSessionMetadata({ rootConversationsOnly: true }).items.map((session) => session.key)).toContain(worker);
+
+    getSqliteDatabase().prepare(`UPDATE sessions SET custom_data_json = ? WHERE conversation_id = ?`)
+      .run(JSON.stringify({ keepHiddenFromSessionList: true }), parent);
+    expect(listSessionMetadata({ rootConversationsOnly: true }).items.map((session) => session.key))
+      .not.toContain(worker);
   });
 });

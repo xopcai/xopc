@@ -253,6 +253,20 @@ describe('sqlite repositories', () => {
     expect(getSessionMetadata(CONVERSATION_ID)?.hiddenFromSessionList).toBe(true);
   });
 
+  it('keeps permanently hidden conversations out of session lists after user input', () => {
+    ensureSessionRecord(CONVERSATION_ID, CWD, {
+      ...METADATA,
+      hiddenFromSessionList: true,
+      customData: { keepHiddenFromSessionList: true },
+    });
+
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('hello'));
+    replaceTranscriptRows(CONVERSATION_ID, [userMessage('restored turn'), assistantMessage('reply')]);
+
+    expect(getSessionMetadata(CONVERSATION_ID)?.hiddenFromSessionList).toBe(true);
+    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).not.toContain(CONVERSATION_ID);
+  });
+
   it('filters legacy automation shells without output from visible session lists', () => {
     ensureSessionRecord(CONVERSATION_ID, CWD, {
       ...METADATA,

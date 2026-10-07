@@ -4,6 +4,7 @@ import {
   closeTaskDetailModalHref,
   modalizeTaskDetailHref,
   taskChatHref,
+  taskDetailHref,
   taskDetailModalHref,
 } from '../task-detail-route';
 
@@ -26,6 +27,11 @@ describe('task detail modal route', () => {
   it('turns standalone task links into modal links without changing other links', () => {
     expect(modalizeTaskDetailHref('/home?view=focus', '/tasks/task%201')).toBe('/home?view=focus&task=task+1');
     expect(modalizeTaskDetailHref('/home', '/chat/new')).toBe('/chat/new');
+  });
+
+  it('keeps full page navigation when already viewing a standalone task', () => {
+    expect(taskDetailHref('/tasks/current?returnTo=%2Fchat%2Fone', 'task 1')).toBe('/tasks/task%201');
+    expect(taskDetailHref('/chat/one?tab=files', 'task 1')).toBe('/chat/one?tab=files&task=task+1');
   });
 
   it('keeps the task binding when opening its conversation full screen', () => {

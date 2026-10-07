@@ -11,6 +11,8 @@ import {
 } from '../../storage/sqlite/session-creation-repository.js';
 import type { GatewayService } from '../service.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
+import { getPersonalAgentByConversation } from '../../personal-agent/repository.js';
+import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 
 function validateCreation(service: GatewayService, creation: SessionCreation): void {
   const project = creation.projectId ? service.projects.get(creation.projectId) : null;
@@ -28,6 +30,16 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
   command: SessionInputCommand | SessionMaterializeCommand,
   prepareSourceContexts: () => Promise<AgentSourceContext[]> = async () => []) {
   return withModelConfigLock(conversationId, async () => {
+    const personal = getPersonalAgentByConversation(conversationId);
+    if (personal && 'creation' in command && command.creation.agentId !== personal.agentId) {
+      throw new SessionCommandError('BAD_REQUEST', 'Personal AI identity is fixed');
+    }
+    const configuredThinking = ('creation' in command
+      ? resolveEffectiveAgentConfigForAgent(command.creation.agentId)
+      : resolveEffectiveAgentConfigForSession(conversationId)).config.runtime.thinkingLevel;
+    if (configuredThinking && 'creation' in command && command.creation.thinkingLevel !== configuredThinking) {
+      throw new SessionCommandError('BAD_REQUEST', `This agent uses thinking ${configuredThinking}`);
+    }
     const clientMessageId = 'commandId' in command ? command.commandId : command.clientMessageId;
     const existing = matchSessionInputReceipt(conversationId, clientMessageId, principalId, sessionCommandHash(command));
     if (existing) return sessionCommandSnapshot(service, existing);
@@ -45,7 +57,7 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
       conversationId, clientMessageId, delivery: command.kind === 'start' ? 'next' : command.delivery,
       content: command.input.content, attachments: command.input.attachments, contextRefs: command.input.contextRefs,
       sourceContexts: await prepareSourceContexts(),
-      thinking: command.kind === 'start' ? command.creation.thinkingLevel : (await service.sessions.getAgentConfig(conversationId)).thinkingLevel,
+      thinking: configuredThinking ?? (command.kind === 'start' ? command.creation.thinkingLevel : (await service.sessions.getAgentConfig(conversationId)).thinkingLevel),
       origin: command.origin.type === 'endpoint' ? { type: 'endpoint', endpointId: command.origin.endpointId } : command.origin,
     }) : undefined;
     const receipt = acceptSessionCommand({ conversationId, principalId, command, preparedInput,

@@ -164,4 +164,21 @@ describe('MarkdownView links', () => {
       kind: 'absolute',
     });
   });
+
+  it('opens a delegated result workspace link from chat Markdown', () => {
+    const onOpen = vi.fn();
+    const container = renderMarkdown(
+      '完整文件：[ai-news-brief-2026-10-07.md](xopc://workspace/file?path=ai-news-brief-2026-10-07.md)',
+      onOpen,
+    );
+    const anchor = container.querySelector('a');
+
+    expect(anchor?.getAttribute('href')).toBe('/xopc/workspace/file?path=ai-news-brief-2026-10-07.md');
+    act(() => anchor?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(onOpen).toHaveBeenCalledWith({
+      path: 'ai-news-brief-2026-10-07.md',
+      kind: 'workspace-relative',
+      line: undefined,
+    });
+  });
 });

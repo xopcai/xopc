@@ -72,6 +72,8 @@ import {
   type MarketplaceSkillInstallToolResult,
 } from './index.js';
 import { createSessionSearchTool } from './session-search-tool.js';
+import { createPersonalTaskTool } from './personal-task-tool.js';
+import { createPersonalPreferenceTool } from './personal-preference-tool.js';
 import { getPendingTranscriptUserText } from '../inbound/attachment-pipeline.js';
 import type { MemoryManager } from '../memory/manager.js';
 import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
@@ -339,6 +341,7 @@ export class AgentToolsFactory {
     const getSkillMgr = options?.getSkillManager;
     const disabled = options?.disabledTools;
     const allowed = options?.toolAllowlist ? new Set(options.toolAllowlist) : undefined;
+    const personalToolsConfigured = Boolean(allowed?.has('personal_task') || allowed?.has('personal_preference'));
 
     const primary = getPrimary?.();
     const modelHasVision = primary?.input?.includes('image') ?? false;
@@ -401,6 +404,22 @@ export class AgentToolsFactory {
     const grep = createGrepTool(workspace);
     const find = createFindTool(workspace);
 
+    const productToolDeps = {
+      getWorkspace: () => this.deps.workspace,
+      getConfig: () => this.deps.getConfig?.(),
+      getCurrentAgentId: () => options?.agentId,
+      getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
+      getAutomationService: this.deps.getAutomationService,
+      getSceneAccess: this.deps.getSceneAccess,
+      getNotesService: this.deps.getNotesService,
+      getProjectService: this.deps.getProjectService,
+      getWorkDiscovery: this.deps.getWorkDiscovery,
+      getLocalAppService: this.deps.getLocalAppService,
+      getChatPreviewService: this.deps.getChatPreviewService,
+      dispatchTaskEvents: this.deps.dispatchTaskEvents,
+      dispatchTaskRuns: this.deps.dispatchTaskRuns,
+      onAgentCatalogMutate: this.deps.onAgentCatalogMutate,
+    };
     const core: AgentTool<any, any>[] = [
       createSessionStatusTool(),
       createMemoryMaintenanceTool({
@@ -606,22 +625,14 @@ export class AgentToolsFactory {
         || this.deps.dispatchTaskEvents
         || this.deps.dispatchTaskRuns
         ? [
-            createXopcUseTool({
-              getWorkspace: () => this.deps.workspace,
-              getConfig: () => this.deps.getConfig?.(),
-              getCurrentAgentId: () => options.agentId,
-              getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
-              getAutomationService: this.deps.getAutomationService,
-              getSceneAccess: this.deps.getSceneAccess,
-              getNotesService: this.deps.getNotesService,
-              getProjectService: this.deps.getProjectService,
-              getWorkDiscovery: this.deps.getWorkDiscovery,
-              getLocalAppService: this.deps.getLocalAppService,
-              getChatPreviewService: this.deps.getChatPreviewService,
-              dispatchTaskEvents: this.deps.dispatchTaskEvents,
-              dispatchTaskRuns: this.deps.dispatchTaskRuns,
-              onAgentCatalogMutate: this.deps.onAgentCatalogMutate,
-            }),
+            createXopcUseTool(productToolDeps),
+            ...(personalToolsConfigured ? [
+              createPersonalTaskTool(productToolDeps),
+              createPersonalPreferenceTool({
+                getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
+                onAgentCatalogMutate: this.deps.onAgentCatalogMutate,
+              }),
+            ] : []),
           ]
         : []),
       ...(cfg?.computer.enabled && this.deps.endpointTools

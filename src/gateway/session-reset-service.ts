@@ -1,4 +1,5 @@
 import type { AgentService } from '../agent/service.js';
+import { isPersonalConversation } from '../personal-agent/repository.js';
 import { abortEmbeddedRun } from '../agent/embedded/runs.js';
 import { retireSessionMcpRuntimeForConversationId } from '../agent/mcp/bundle-mcp-tools.js';
 import type { SessionIndex } from '../session/index.js';
@@ -27,6 +28,9 @@ export async function performSessionReset(
   const key = conversationId.trim();
   if (!key) {
     return { ok: false, error: 'Session key required' };
+  }
+  if (isPersonalConversation(key)) {
+    return { ok: false, error: 'Personal AI conversation cannot be reset' };
   }
 
   await abortEmbeddedRun(key);

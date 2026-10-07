@@ -23,7 +23,8 @@ function clampMiniPosition(left: number, top: number, width: number, height: num
 }
 
 export function VoiceCallProvider({ children }: { children: ReactNode }) {
-  const m = messages(useLocaleStore((state) => state.language)).chat;
+  const language = useLocaleStore((state) => state.language);
+  const m = messages(language).chat;
   const [target, setTarget] = useState<VoiceCallTarget | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [more, setMore] = useState(false);
@@ -80,14 +81,14 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     const attempt = ++startAttempt.current;
     voice.cancelVoiceInput();
     setTarget(next);
-    void voice.startVoiceConversation(next.conversationId).finally(() => { if (attempt === startAttempt.current) starting.current = false; });
+    void voice.startVoiceConversation(next.conversationId, next.mode).finally(() => { if (attempt === startAttempt.current) starting.current = false; });
   };
   const context = {
     active,
     conversationId: active ? target?.conversationId ?? null : null,
     open: (next: VoiceCallTarget) => {
       start(next);
-      setExpanded(true);
+      setExpanded(false);
     },
   };
   const status = voice.error ? m.callFailed
@@ -96,7 +97,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         : voice.clarification ? m.callWaiting
           : voice.activities.some((activity) => activity.status === 'running') ? m.callWorking
           : voice.responsePhase === 'speaking' ? m.voiceSpeaking
-          : voice.responsePhase === 'thinking' ? m.voiceThinking
+          : voice.responsePhase === 'thinking' ? target?.mode === 'assistant'
+            ? language === 'zh' ? '正在组织回应…' : 'Getting back to you…'
+            : m.voiceThinking
             : voice.muted ? m.callMicMuted : m.callListening;
   const end = () => {
     startAttempt.current += 1;
@@ -112,8 +115,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
 
   return <VoiceCallContext.Provider value={context}>
     {children}
-    {target && !expanded ? <div ref={miniCardRef} style={miniPosition ? { left: miniPosition.left, top: miniPosition.top, right: 'auto', bottom: 'auto' } : undefined} className="fixed bottom-5 right-5 z-50 flex max-w-[calc(100vw-2.5rem)] items-center gap-3 rounded-xl border border-edge bg-surface-panel p-3 shadow-float" role="region" aria-label={m.voiceConversation}>
-      <button type="button" onClick={() => { if (suppressMiniClick.current) { suppressMiniClick.current = false; return; } setExpanded(true); }} onPointerDown={startMiniDrag} onPointerMove={moveMiniDrag} onPointerUp={endMiniDrag} onPointerCancel={cancelMiniDrag} className="min-w-0 touch-none select-none rounded-lg text-left cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+    {target && !expanded ? <div ref={miniCardRef} style={miniPosition ? { left: miniPosition.left, top: miniPosition.top, right: 'auto' } : undefined} className="fixed right-5 top-[calc(5rem+env(safe-area-inset-top))] z-50 flex max-w-[calc(100vw-2.5rem)] items-center gap-3 rounded-xl border border-edge bg-surface-panel p-3 shadow-float" role="region" aria-label={m.voiceConversation}>
+      <button type="button" aria-label={language === 'zh' ? '展开通话' : 'Expand call'} onClick={() => { if (suppressMiniClick.current) { suppressMiniClick.current = false; return; } setExpanded(true); }} onPointerDown={startMiniDrag} onPointerMove={moveMiniDrag} onPointerUp={endMiniDrag} onPointerCancel={cancelMiniDrag} className="min-w-0 touch-none select-none rounded-lg text-left cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <span className="block truncate text-sm font-medium text-fg">{target.name}</span>
         <span className="block text-xs text-fg-muted">{status} · {voice.elapsedLabel}</span>
       </button>
@@ -122,7 +125,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     </div> : null}
     <Dialog.Root open={Boolean(target && expanded)} onOpenChange={(open) => { if (!open) setExpanded(false); }} modal={false}>
       <Dialog.Portal>
-        <Dialog.Content onInteractOutside={(event) => event.preventDefault()} className="xopc-dialog-content-pane fixed bottom-3 right-3 z-[71] flex h-[min(480px,85dvh)] w-[min(380px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay text-fg shadow-float focus:outline-none">
+        <Dialog.Content onInteractOutside={(event) => event.preventDefault()} className="xopc-dialog-content-pane fixed right-3 top-[calc(4.5rem+env(safe-area-inset-top))] z-[71] flex h-[min(480px,calc(100dvh-6rem))] w-[min(380px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay text-fg shadow-float focus:outline-none">
           <header className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3">
             <div className="min-w-0"><Dialog.Title className="truncate font-medium">{target?.name}</Dialog.Title><Dialog.Description className="text-xs text-fg-muted">{m.callSessionHint}</Dialog.Description></div>
             <div className="flex"><Button variant="ghost" onClick={() => setMore(!more)} aria-label={m.callMore} aria-expanded={more}><Ellipsis className="size-4" /></Button><Button variant="ghost" onClick={() => setExpanded(false)} aria-label={m.callMinimize}><Minimize2 className="size-4" /></Button></div>

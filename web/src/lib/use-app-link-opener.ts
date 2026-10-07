@@ -1,6 +1,8 @@
 import { useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { modalizeTaskDetailHref } from '@/features/tasks/task-detail-route';
+
 import { withDetailReturnTo } from './navigation-return';
 import { openExternalHttpLink, resolveAppLink } from './app-link';
 
@@ -15,7 +17,8 @@ export function useAppLinkOpener() {
   return useCallback(async (href: string): Promise<OpenAppLinkResult> => {
     const intent = resolveAppLink(href);
     if (intent.kind === 'internal-route') {
-      navigate(withDetailReturnTo(intent.route, `${location.pathname}${location.search}`));
+      const backgroundPath = `${location.pathname}${location.search}`;
+      navigate(withDetailReturnTo(modalizeTaskDetailHref(backgroundPath, intent.route), backgroundPath));
       return { ok: true, kind: intent.kind };
     }
     if (intent.kind === 'external-http') {

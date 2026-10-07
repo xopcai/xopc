@@ -25,6 +25,12 @@ function agent(patch: Partial<AgentEntry> = {}): AgentEntry {
 }
 
 describe('resolveEffectiveAgentConfig', () => {
+  it('lets an agent fix its thinking level without changing global runtime defaults', () => {
+    const result = resolveEffectiveAgentConfig({ defaults, agent: agent({ runtime: { thinkingLevel: 'off' } }) });
+    expect(result.config.runtime).toMatchObject({ thinkingLevel: 'off', timeoutMs: 60_000, maxTurns: 20 });
+    expect(result.sources['runtime.thinkingLevel']).toBe('agent');
+  });
+
   it('inherits global defaults for a minimal agent', () => {
     const result = resolveEffectiveAgentConfig({ defaults, agent: agent() });
 

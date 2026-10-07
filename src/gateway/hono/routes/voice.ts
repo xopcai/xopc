@@ -10,6 +10,7 @@ import { voiceSettingsCatalog, selectPlatformVoice } from '../../../voice/platfo
 import type { Context, Hono } from 'hono';
 import { type UserMessage } from '@earendil-works/pi-ai/compat';
 import { createVoiceSessionRequestSchema } from '@xopcai/realtime-protocol/voice';
+import { isPersonalConversation } from '../../../personal-agent/repository.js';
 import { z } from 'zod';
 
 import type { Config } from '../../../config/schema.js';
@@ -279,6 +280,9 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     const parsed = createVoiceSessionRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json({ ok: false, error: { code: 'INVALID_REQUEST', message: 'Invalid realtime voice session request' } }, 400);
+    }
+    if (parsed.data.conversationId && isPersonalConversation(parsed.data.conversationId) && parsed.data.mode !== 'assistant') {
+      return c.json({ ok: false, error: { code: 'INVALID_REQUEST', message: 'Personal AI voice requires assistant mode' } }, 400);
     }
     try {
       const preparation = parsed.data.conversationId ? getSessionPreparation(parsed.data.conversationId) : undefined;

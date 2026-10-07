@@ -26,6 +26,7 @@ import {
 } from '../../../storage/sqlite/sidebar-layout-repository.js';
 import { summarizeAiUsageByConversations } from '../../../storage/sqlite/ai-usage-repository.js';
 import { listSidebarTaskGroups } from '../../../tasks/task-sidebar-hierarchy.js';
+import { isPersonalConversation } from '../../../personal-agent/repository.js';
 
 const log = createGatewayRouteLogger('Sessions');
 
@@ -957,6 +958,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // DELETE /api/sessions/:key - Delete session (removes key from index)
   authenticated.delete('/api/sessions/:key', async (c) => {
     const key = c.req.param('key');
+    if (isPersonalConversation(key)) return c.json({ ok: false, error: 'Personal AI conversation cannot be deleted here' }, 409);
     if (service.voiceRealtime?.hasConversation(key)) return c.json({ error: 'End the voice call before deleting the session' }, 409);
     if (environments.get(key) && service.getActiveWebchatRunId(key)) {
       return c.json({ ok: false, error: 'Stop the active session run before deleting its environment' }, 409);

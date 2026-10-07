@@ -1046,7 +1046,7 @@ export class AgentManager implements AgentInstanceGateway {
         conversationId: instance.conversationId,
         modelRef: instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel,
         agentId: instance.effectiveProfile.agentId,
-        thinkingLevel: this.config.thinkingLevel ?? 'medium',
+        thinkingLevel: instance.effectiveProfile.config.runtime.thinkingLevel ?? this.config.thinkingLevel ?? 'medium',
         activeProjectContext: instance.activeProjectContext,
       });
       replaceAgentSystemPrompt(instance.agent, newPrompt);
@@ -1153,7 +1153,7 @@ export class AgentManager implements AgentInstanceGateway {
         conversationId: instance.conversationId,
         modelRef: instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel,
         agentId: instance.effectiveProfile.agentId,
-        thinkingLevel: this.config.thinkingLevel ?? 'medium',
+        thinkingLevel: instance.effectiveProfile.config.runtime.thinkingLevel ?? this.config.thinkingLevel ?? 'medium',
         activeProjectContext: instance.activeProjectContext,
       });
       replaceAgentSystemPrompt(instance.agent, newPrompt);
@@ -1304,7 +1304,7 @@ export class AgentManager implements AgentInstanceGateway {
     const contextFiles = this.resolveContextFilesForSession(conversationId, instance.effectiveProfile);
     const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
     const thinkingLevel =
-      this.config.thinkingLevel ?? 'medium';
+      instance.effectiveProfile.config.runtime.thinkingLevel ?? this.config.thinkingLevel ?? 'medium';
 
     const activeProjectContext = this.buildExecutionScopeContext(conversationId);
 
@@ -1458,7 +1458,7 @@ export class AgentManager implements AgentInstanceGateway {
     });
     const registeredToolNames = tools.map((t) => t.name);
 
-    const thinkingLevel = this.config.thinkingLevel ?? 'medium';
+    const thinkingLevel = profile.config.runtime.thinkingLevel ?? this.config.thinkingLevel ?? 'medium';
     const turnPolicy = this.buildAgentTurnPolicy(conversationId, profile);
     const providerStreamFn = createExtensionAwareStreamFn();
 

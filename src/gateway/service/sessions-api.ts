@@ -28,6 +28,7 @@ import { getDistinctSessionChatIds } from './session-chat-ids.js';
 import { performSessionReset, type SessionResetResult } from '../session-reset-service.js';
 import { resolveAgentIdFromConversationId } from '../../routing/agent-session-key.js';
 import type { ActiveExecution } from './active-execution.js';
+import { isPersonalConversation } from '../../personal-agent/repository.js';
 
 function clampWindowSpan(value: number | undefined, fallback: number): number {
   const parsed = Math.trunc(value ?? fallback);
@@ -288,6 +289,7 @@ export class GatewaySessionsApi {
   // ── Lifecycle (delete / rename / tag / pin / archive) ─────────────────
 
   async delete(key: string): Promise<{ deleted: boolean }> {
+    if (isPersonalConversation(key)) return { deleted: false };
     const transcriptRows = await this.opts.sessionIndex.getStore()
       .loadTranscriptHistoryRows(key)
       .catch(() => []);
@@ -302,6 +304,7 @@ export class GatewaySessionsApi {
 
   /** Reset transcript in place (archive + new session id); preserves session key and overrides. */
   reset(key: string): Promise<SessionResetResult> {
+    if (isPersonalConversation(key)) return Promise.resolve({ ok: false, error: 'Personal AI conversation cannot be reset' });
     return performSessionReset(key, {
       sessionIndex: this.opts.sessionIndex,
       getAgentService: this.opts.getAgentService,
@@ -309,7 +312,9 @@ export class GatewaySessionsApi {
   }
 
   deleteMany(keys: string[]): Promise<{ success: string[]; failed: string[] }> {
-    return this.opts.sessionIndex.deleteSessions(keys);
+    const protectedKeys = keys.filter(isPersonalConversation);
+    return this.opts.sessionIndex.deleteSessions(keys.filter(key => !isPersonalConversation(key)))
+      .then(result => ({ success: result.success, failed: [...result.failed, ...protectedKeys] }));
   }
 
   async rename(key: string, name: string): Promise<{ renamed: boolean }> {
