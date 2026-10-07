@@ -20,7 +20,7 @@ import { Link, useLocation } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { useUiExtensions } from '@/features/extensions/extension-provider';
-import { PersonalAvatar } from '@/features/personal-agent/personal-avatar';
+import { PersonalAvatar, type PersonalAppearance } from '@/features/personal-agent/personal-avatar';
 import { resolveLucideIcon, type LucideIcon } from '@/features/extensions/extension-nav-icon';
 import { extensionPagePath } from '@/features/extensions/extension-paths';
 import { messages } from '@/i18n/messages';
@@ -103,8 +103,9 @@ type MenuItem = {
 };
 
 type PersonalNavProfile = {
+  agentId: string;
   displayName: string;
-  appearance: 'spark' | 'cloud' | 'bean';
+  appearance: PersonalAppearance;
 };
 
 function rowClass(collapsed: boolean, active: boolean, popover = false): string {
@@ -220,15 +221,15 @@ export function SidebarNavItems({
         to="/personal"
         aria-current={pathname === '/personal' ? 'page' : undefined}
         className={rowClass(collapsed, pathname === '/personal')}
-        title={personal?.payload?.displayName || 'Personal AI'}
+        title={personal?.payload?.displayName || 'Ada'}
         onMouseEnter={() => preloadRouteForPath('/personal')}
         onFocus={() => preloadRouteForPath('/personal')}
         onClick={() => onNavigate?.()}
       >
-        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-panel" aria-hidden>
-          <PersonalAvatar appearance={personal?.payload?.appearance ?? 'spark'} className="size-5" />
+        <span className="flex size-5 shrink-0 items-center justify-center" aria-hidden>
+          <PersonalAvatar appearance={personal?.payload?.appearance ?? 'loopi'} agentId={personal?.payload?.agentId} className="size-5" />
         </span>
-        {!collapsed && <span className="truncate">{personal?.payload?.displayName || 'Personal AI'}</span>}
+        {!collapsed && <span className="truncate">{personal?.payload?.displayName || 'Ada'}</span>}
       </Link>
       {visibleItems.map((item) => renderLink(item))}
       <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>

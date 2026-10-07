@@ -47,16 +47,15 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
     () => fetchTtsVoices(outputProvider!, outputModel!, 'realtime'),
     { revalidateOnFocus: false },
   );
-  const realtimeVoices = outputProvider === 'alibaba'
-    ? voices.filter((voice) => ['Cherry', 'Ethan', 'Serena', 'Chelsie'].includes(voice.id))
-    : voices;
+  const realtimeVoices = voices;
+  const omniAlibabaVoices = voices.filter((voice) => ['Cherry', 'Ethan', 'Serena', 'Chelsie'].includes(voice.id));
   const key = typeof form.stt.providers?.alibaba?.apiKey === 'string' ? form.stt.providers.alibaba.apiKey : '';
   const keyConfigured = Boolean(key) || sttProviders.some((entry) => entry.id === 'alibaba' && entry.configured);
   const native = realtime.defaultEngine === 'omni';
   const currentVoice = native ? realtime.omni?.voice ?? '' : selection?.voice ?? status?.tts?.voice ?? '';
   const voiceOptions = native ? realtime.omni?.provider === 'xopc-cloud'
     ? catalog?.models.find(model => model.id === realtime.omni?.model)?.voice.voices ?? []
-    : ['Cherry', 'Ethan', 'Serena', 'Chelsie'].map((id) => ({ id, name: id })) : realtimeVoices;
+    : omniAlibabaVoices.length ? omniAlibabaVoices : ['Cherry', 'Ethan', 'Serena', 'Chelsie'].map((id) => ({ id, name: id })) : realtimeVoices;
   const canListen = Boolean(status?.enabled && status.stt);
   const canSpeak = Boolean(status?.enabled && status.tts);
   const updateRealtime = (patch: Partial<typeof realtime>) => onChange({
@@ -111,8 +110,13 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
         }}>
           {!native ? <SelectOption value="">{s.defaultVoice}</SelectOption> : null}
           {currentVoice && !voiceOptions.some((voice) => voice.id === currentVoice) ? <SelectOption value={currentVoice}>{currentVoice}</SelectOption> : null}
-          {voiceOptions.map((voice) => <SelectOption key={voice.id} value={voice.id}>{voice.name}</SelectOption>)}
+          {voiceOptions.map((voice) => <SelectOption key={voice.id} value={voice.id}>{voice.name}{'gender' in voice && voice.gender ? ` · ${voice.gender === 'female' ? '女声' : '男声'}` : ''}{'style' in voice && voice.style ? ` · ${voice.style}` : ''}</SelectOption>)}
         </Select>
+        {(() => {
+          const selected = voiceOptions.find((voice) => voice.id === currentVoice);
+          return selected && 'description' in selected && typeof selected.description === 'string'
+            ? <p className="text-xs text-fg-muted">{selected.description}</p> : null;
+        })()}
       </div>
       <label className="flex items-center justify-between gap-4 text-sm text-fg"><span>{s.bargeIn}<span className="mt-1 block text-xs text-fg-muted">{v.realtime.bargeInDescription}</span></span><input type="checkbox" role="switch" aria-checked={realtime.bargeIn} checked={realtime.bargeIn} className="size-4 accent-accent" onChange={(e) => updateRealtime({ bargeIn: e.target.checked })} /></label>
       </> : null}

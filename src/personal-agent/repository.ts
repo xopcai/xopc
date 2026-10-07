@@ -7,7 +7,7 @@ import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 
 export type PersonalAgentState = 'provisioning' | 'ready' | 'error';
-export type PersonalAppearance = 'spark' | 'cloud' | 'bean';
+export type PersonalAppearance = 'loopi' | 'loopi-curious' | 'loopi-care' | 'custom';
 
 export interface PersonalAgentRecord {
   ownerId: string;
@@ -45,7 +45,11 @@ function personalSession(column: 'agent_id' | 'conversation_id', value: string):
 }
 
 function appearanceFrom(agent: StoredAgent): PersonalAppearance {
-  return agent.profile?.emoji === '☁' ? 'cloud' : agent.profile?.emoji === '◕' ? 'bean' : 'spark';
+  const avatar = agent.profile?.avatar;
+  if (avatar === 'xopc:custom') return 'custom';
+  if (avatar === 'xopc:loopi:curious' || avatar === 'xopc:loopi:listen' || (!avatar && agent.profile?.emoji === '☁')) return 'loopi-curious';
+  if (avatar === 'xopc:loopi:care' || (!avatar && agent.profile?.emoji === '◕')) return 'loopi-care';
+  return 'loopi';
 }
 
 function toRecord(ownerId: string, agent: StoredAgent, session: PersonalSession | null): PersonalAgentRecord {
@@ -57,7 +61,7 @@ function toRecord(ownerId: string, agent: StoredAgent, session: PersonalSession 
     agentId: agent.id,
     conversationId: session?.conversation_id ?? personalConversationId(ownerId),
     state: agent.provisioningState === 'error' ? 'error' : ready ? 'ready' : 'provisioning',
-    displayName: agent.profile?.name ?? 'Personal AI',
+    displayName: agent.profile?.name ?? 'Ada',
     appearance: appearanceFrom(agent),
     preferences: agent.profile?.responsePreferences ?? DEFAULT_PERSONAL_PREFERENCES,
     revision: agent.revision,

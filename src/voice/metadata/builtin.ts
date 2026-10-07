@@ -1,6 +1,7 @@
 import { registerVoiceProviderMetadata } from './registry.js';
 import type { VoiceOptionMetadata, VoiceProviderMetadata } from './types.js';
 import { MINIMAX_TTS_MODELS, MINIMAX_TTS_VOICES, OPENAI_TTS_MODELS, OPENAI_TTS_VOICES } from '../tts/providers/index.js';
+import { alibabaTtsVoices as alibabaVoices } from '../tts/providers/alibaba-voices.js';
 
 function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -11,26 +12,18 @@ function options(values: readonly string[], names?: Record<string, string>): Voi
 }
 
 const alibabaSttModels = [
+  { id: 'qwen-audio-3.1-asr-flash', name: 'Qwen Audio 3.1 ASR Flash' },
   { id: 'qwen-audio-3.0-asr-flash', name: 'Qwen Audio 3.0 ASR Flash' },
 ];
 
 const alibabaTtsModels = [
-  { id: 'qwen-tts', name: 'Qwen TTS (Recommended)' },
+  { id: 'qwen-tts', name: 'Qwen TTS (Legacy)' },
   { id: 'qwen-tts-realtime', name: 'Qwen TTS Realtime' },
-  { id: 'qwen3-tts-flash', name: 'Qwen3 TTS Flash' },
+  { id: 'qwen3-tts-flash', name: 'Qwen3 TTS Flash (Recommended)' },
   { id: 'qwen3-tts-instruct-flash', name: 'Qwen3 TTS Instruct Flash' },
 ];
 
-const alibabaTtsVoices = [
-  { id: 'Cherry', name: 'Cherry' },
-  { id: 'Ethan', name: 'Ethan' },
-  { id: 'Serena', name: 'Serena' },
-  { id: 'Chelsie', name: 'Chelsie' },
-  { id: 'longxiaochun', name: 'Long Xiao Chun (龙小春)' },
-  { id: 'longxiaobai', name: 'Long Xiao Bai (龙小白)' },
-  { id: 'longwan', name: 'Long Wan (龙婉)' },
-  { id: 'longcheng', name: 'Long Cheng (龙呈)' },
-];
+const alibabaTtsVoices = alibabaVoices.map(({ id, name, description, gender, category }) => ({ id, name: name ?? id, description, gender, style: category }));
 
 const edgeVoices = [
   { id: 'en-US-MichelleNeural', name: 'Michelle (US English, Female)' },
@@ -69,7 +62,7 @@ export const builtinVoiceProviderMetadata: VoiceProviderMetadata[] = [
     models: alibabaSttModels,
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', secret: true, placeholder: 'sk-...', description: 'DASHSCOPE_API_KEY' },
-      { key: 'model', label: 'Model', type: 'select', options: alibabaSttModels, defaultValue: 'qwen-audio-3.0-asr-flash' },
+      { key: 'model', label: 'Model', type: 'select', options: alibabaSttModels, defaultValue: 'qwen-audio-3.1-asr-flash' },
       { key: 'language', label: 'Language hint', type: 'string', placeholder: 'zh' },
     ],
     diagnostics: { requiresApiKey: true, envKeys: ['DASHSCOPE_API_KEY'], configPath: 'tools.media.audio.providers.alibaba' },
@@ -132,8 +125,8 @@ export const builtinVoiceProviderMetadata: VoiceProviderMetadata[] = [
     voices: alibabaTtsVoices,
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', secret: true, placeholder: 'sk-...', description: 'DASHSCOPE_API_KEY' },
-      { key: 'model', label: 'Model', type: 'select', options: alibabaTtsModels, defaultValue: 'qwen-tts' },
-      { key: 'voice', label: 'Voice', type: 'select', options: alibabaTtsVoices, defaultValue: 'longxiaochun' },
+      { key: 'model', label: 'Model', type: 'select', options: alibabaTtsModels, defaultValue: 'qwen3-tts-flash' },
+      { key: 'voice', label: 'Voice', type: 'select', options: alibabaTtsVoices, defaultValue: 'Cherry' },
     ],
     diagnostics: { requiresApiKey: true, envKeys: ['DASHSCOPE_API_KEY'], configPath: 'messages.tts.providers.alibaba' },
   },

@@ -10,7 +10,11 @@ export const voiceManifestSchema = z.strictObject({
   outputFormat: z.strictObject({ encoding: z.literal('pcm_s16le'), sampleRate: z.literal(24000), channels: z.literal(1) }),
   turnDetection: z.array(z.literal('server_vad')),
   bargeIn: z.boolean(), tools: z.boolean(), resumable: z.literal(false),
-  voices: z.array(z.strictObject({ id: z.string().min(1), name: z.string(), languages: z.array(z.string()) })),
+  voices: z.array(z.strictObject({
+    id: z.string().min(1), name: z.string(), languages: z.array(z.string()),
+    gender: z.enum(['female', 'male']).optional(),
+    style: z.string().optional(), description: z.string().optional(),
+  })),
   defaultVoice: z.string().min(1).optional(),
   limits: z.strictObject({ maxFrameBytes: z.number().int().positive().max(65536), maxSessionSeconds: z.number().int().positive() }),
 });

@@ -21,6 +21,7 @@ function createVoice(
     responseText: '',
     activities: [], clarification: null, dismissClarification: vi.fn(),
     responsePhase: 'idle',
+    callConnectionStage: null,
     muted: false,
     error: null, failureKind: null, settingsRequired: false,
     endedReason: null,

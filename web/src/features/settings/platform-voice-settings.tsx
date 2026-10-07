@@ -47,8 +47,8 @@ export function PlatformVoiceSettings({ disabled = false }: { disabled?: boolean
           {models.map(model => <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>)}
         </Select>{!models.length ? <span className="text-xs text-fg-muted">{zh ? '暂无可用模型' : 'No available model'}</span> : null}</label>
         {model && model.voice.voices.length > 0 ? <label className="space-y-1 text-sm"><span>{zh ? '音色' : 'Voice'}</span><Select className="w-full" value={selected?.voice ?? ''} disabled={busy || disabled} onChange={event => void request({ mode, model: model.id, voice: event.target.value })}>
-          {model.voice.voices.map(voice => <SelectOption key={voice.id} value={voice.id}>{voice.name}</SelectOption>)}
-        </Select></label> : null}
+          {model.voice.voices.map(voice => <SelectOption key={voice.id} value={voice.id}>{voice.name}{voice.gender ? ` · ${zh ? voice.gender === 'female' ? '女声' : '男声' : voice.gender}` : ''}{voice.style ? ` · ${voice.style}` : ''}</SelectOption>)}
+        </Select>{model.voice.voices.find(voice => voice.id === (selected?.voice ?? model.voice.defaultVoice))?.description ? <span className="block text-xs text-fg-muted">{model.voice.voices.find(voice => voice.id === (selected?.voice ?? model.voice.defaultVoice))?.description}</span> : null}</label> : null}
       </div>;
     })}
   </section>;

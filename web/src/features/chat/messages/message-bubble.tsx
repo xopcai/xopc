@@ -80,6 +80,7 @@ const USER_MESSAGE_SENDING_EXIT_MS = 120;
 
 export const MessageBubble = memo(function MessageBubble({
   message: rawMessage,
+  personal = false,
   followUpTrigger,
   authToken,
   conversationId,
@@ -106,6 +107,7 @@ export const MessageBubble = memo(function MessageBubble({
   showAssistantWorkLog = true,
 }: {
   message: Message;
+  personal?: boolean;
   followUpTrigger?: NonNullable<Message['taskTrigger']>;
   authToken?: string;
   conversationId?: string | null;
@@ -312,6 +314,8 @@ export const MessageBubble = memo(function MessageBubble({
   const showStreamingCursor = isAssistant
     ? Boolean(assistantTurnView?.answer.showStreamingCursor)
     : isStreaming;
+  const showPersonalThinkingBubble = personal && isAssistant && isStreaming
+    && !assistantTurnView?.answer.started && !attachmentsForBubble?.length;
 
   const showMeta =
     Boolean(progressForMeta?.message) ||
@@ -590,7 +594,7 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         ) : null}
 
-        {!isUser && showMeta ? (
+        {!isUser && showMeta && !showPersonalThinkingBubble ? (
           <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-fg-disabled">
             {progressForMeta?.message && !hasAssistantActivity ? (
               <span className="text-fg-subtle" title={progressForMeta.detail ?? ''}>
@@ -615,9 +619,20 @@ export const MessageBubble = memo(function MessageBubble({
                 : 'text-base leading-[1.6875]',
             isUser &&
               'w-fit max-w-full rounded-2xl bg-surface-hover/80 px-4 py-3 text-left dark:bg-surface-hover/50',
+            isUser && personal && 'rounded-tr-sm',
+            showPersonalThinkingBubble && 'bg-transparent p-0',
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">
+            {showPersonalThinkingBubble ? (
+              <div className="xopc-personal-thinking" role="status" aria-label={m.chat.thinkingLabel}>
+                <svg className="xopc-personal-thinking-outline" viewBox="0 0 84 54" fill="none" aria-hidden="true">
+                  <path d="M12 1H48C67 1 83 17 83 36V42C83 48 78 53 72 53H12C6 53 1 48 1 42V12C1 6 6 1 12 1Z" />
+                  <path className="xopc-personal-thinking-trace" pathLength="268" d="M12 1H48C67 1 83 17 83 36V42C83 48 78 53 72 53H12C6 53 1 48 1 42V12C1 6 6 1 12 1Z" />
+                </svg>
+                <span className="xopc-personal-thinking-dots" aria-hidden="true"><i /><i /><i /></span>
+              </div>
+            ) : null}
             {!followUpTrigger ? assistantStepsBlock : null}
             {(displayForFlow?.length ?? 0) > 0 ? (
               <>
