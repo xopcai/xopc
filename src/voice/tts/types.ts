@@ -119,7 +119,7 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
   },
   providers: {
     'xopc-cloud': {},
-    alibaba: { model: 'qwen-tts', voice: 'Cherry' },
+    alibaba: { model: 'qwen3-tts-flash', voice: 'Cherry' },
     openai: { model: 'tts-1', voice: 'alloy' },
     edge: {
       enabled: true,

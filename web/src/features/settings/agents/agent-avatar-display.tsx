@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 
+import { Loopi, type LoopiMood } from '@/components/brand/loopi';
 import { cn } from '@/lib/cn';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -31,6 +32,7 @@ function fallbackAvatarDataUri(agentId: string, size = 128): string {
 
 type ResolvedAvatar =
   | { kind: 'sync'; src: string }
+  | { kind: 'loopi'; mood: LoopiMood }
   | { kind: 'authenticated'; url: string; fallbackSrc: string }
   | { kind: 'dicebear'; styleId: StoredDicebearStyleId; seed: string; fallbackSrc: string };
 
@@ -42,6 +44,10 @@ function resolveAvatar(
 ): ResolvedAvatar {
   const trimmed = avatar?.trim() ?? '';
   const fallbackSrc = fallbackAvatarDataUri(agentId, size);
+  if (trimmed.startsWith('xopc:loopi:')) {
+    const mood = trimmed.slice('xopc:loopi:'.length);
+    if (mood === 'idle' || mood === 'listen' || mood === 'curious' || mood === 'care') return { kind: 'loopi', mood };
+  }
   if (!trimmed) {
     return { kind: 'dicebear', styleId: 'adventurer', seed: agentId, fallbackSrc };
   }
@@ -92,7 +98,7 @@ export function AgentAvatarDisplay(props: {
     () => resolveAvatar(agentId, avatar, size, cacheRevision),
     [agentId, avatar, token, size, cacheRevision],
   );
-  const primarySrc = resolved.kind === 'sync' ? resolved.src : resolved.fallbackSrc;
+  const primarySrc = resolved.kind === 'sync' ? resolved.src : resolved.kind === 'loopi' ? fallbackAvatarDataUri(agentId, size) : resolved.fallbackSrc;
   const [src, setSrc] = useState(primarySrc);
 
   useEffect(() => {
@@ -133,6 +139,10 @@ export function AgentAvatarDisplay(props: {
       cancelled = true;
     };
   }, [resolved, size]);
+
+  if (resolved.kind === 'loopi') {
+    return <span className={cn('inline-flex items-center justify-center rounded-full bg-surface-hover', props.className)} style={{ width: size, height: size }}><Loopi variant="avatar" mood={resolved.mood} className="size-full" /></span>;
+  }
 
   return (
     <img

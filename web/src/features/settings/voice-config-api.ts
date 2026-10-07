@@ -66,7 +66,7 @@ function defaultStt(): SttSettings {
     enabled: false,
     provider: 'openai',
     providers: {
-      alibaba: { model: 'qwen-audio-3.0-asr-flash' },
+      alibaba: { model: 'qwen-audio-3.1-asr-flash' },
       openai: { model: 'gpt-4o-mini-transcribe' },
     },
     fallback: { enabled: false, order: [] },
@@ -84,7 +84,7 @@ function defaultTts(): TtsSettings {
     maxTextLength: 512,
     timeoutMs: 60000,
     providers: {
-      alibaba: { model: 'qwen-tts', voice: 'Cherry' },
+      alibaba: { model: 'qwen3-tts-flash', voice: 'Cherry' },
       openai: { model: 'tts-1', voice: 'alloy' },
       edge: { voice: 'zh-CN-XiaoxiaoNeural', lang: 'zh-CN' },
       minimax: { model: 'speech-2.8-hd', voice: 'male-qn-qingse' },

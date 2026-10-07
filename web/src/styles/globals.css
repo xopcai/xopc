@@ -1657,6 +1657,71 @@ html.dark[data-color-scheme="porcelain"] {
   }
 }
 
+.xopc-personal-thinking {
+  position: relative;
+  width: 84px;
+  height: 54px;
+}
+
+.xopc-personal-thinking-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  stroke: var(--color-edge-strong);
+  stroke-width: 1.5;
+}
+
+.xopc-personal-thinking-outline > path:first-child { opacity: 0.45; }
+
+.xopc-personal-thinking-trace {
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 58 210;
+  filter: drop-shadow(0 0 4px var(--color-accent));
+  opacity: 1;
+}
+
+.xopc-personal-thinking-dots {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding-top: 6px;
+}
+
+.xopc-personal-thinking-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-fg-muted);
+}
+
+@keyframes xopc-personal-thinking-trace {
+  to { stroke-dashoffset: -268; }
+}
+
+@keyframes xopc-personal-thinking-dot {
+  0%, 60%, 100% { opacity: 0.45; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .xopc-personal-thinking-trace {
+    animation: xopc-personal-thinking-trace 2.4s linear infinite;
+  }
+
+  .xopc-personal-thinking-dots i {
+    animation: xopc-personal-thinking-dot 1.2s ease-in-out infinite;
+  }
+
+  .xopc-personal-thinking-dots i:nth-child(2) { animation-delay: 150ms; }
+  .xopc-personal-thinking-dots i:nth-child(3) { animation-delay: 300ms; }
+}
+
 /**
  * Chat markdown bubbles: keep long lines / code / tables from widening the main column
  * (avoids horizontal scrollbars on the message list while streaming).

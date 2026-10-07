@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   playerDuck: vi.fn(),
   playerSetMuted: vi.fn(),
   playerClose: vi.fn(async () => undefined),
+  playerStartRingback: vi.fn(),
+  playerStopRingback: vi.fn(),
   pendingAudio: false,
 }));
 
@@ -43,6 +45,8 @@ vi.mock('@/features/voice/realtime/pcm-player', () => ({
     duck = mocks.playerDuck;
     setMuted = mocks.playerSetMuted;
     close = mocks.playerClose;
+    startRingback = mocks.playerStartRingback;
+    stopRingback = mocks.playerStopRingback;
   },
 }));
 vi.mock('@xopcai/composer-core/pcm-wav-recorder', () => ({
@@ -263,6 +267,8 @@ describe('useRealtimeVoice', () => {
       conversationId: 'agent:main:webchat:default:direct:voice',
     }));
     expect(mocks.playerStart).toHaveBeenCalledOnce();
+    expect(mocks.playerStartRingback).toHaveBeenCalledOnce();
+    expect(mocks.playerStopRingback).toHaveBeenCalled();
     act(() => onEvent({ type: 'response.created', payload: { responseId: 'r1' } }));
     act(() => onEvent({ type: 'response.text.delta', payload: { responseId: 'r1', delta: '你好' } }));
     expect(voice.responsePhase).toBe('speaking');
@@ -274,6 +280,40 @@ describe('useRealtimeVoice', () => {
     expect(mocks.playerClear).not.toHaveBeenCalled();
     act(() => onEvent({ type: 'response.cancelled', payload: { responseId: 'r1', reason: 'barge_in' } }));
     expect(mocks.playerClear).toHaveBeenCalledOnce();
+  });
+
+  it('rings only after microphone setup and stops when a pending call is ended', async () => {
+    let releaseMedia!: () => void;
+    let releaseConnect!: () => void;
+    const mediaGate = new Promise<void>((resolve) => { releaseMedia = resolve; });
+    const connectGate = new Promise<void>((resolve) => { releaseConnect = resolve; });
+    const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementationOnce(async () => {
+      await mediaGate;
+      return getUserMedia({ audio: true });
+    });
+    const connect = mocks.connect.getMockImplementation()!;
+    mocks.connect.mockImplementationOnce(async (options) => {
+      await connectGate;
+      return connect(options);
+    });
+    render();
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = voice.startVoiceConversation('voice-conversation', 'assistant');
+      await Promise.resolve();
+    });
+    expect(voice.callConnectionStage).toBe('preparing');
+    expect(mocks.playerStartRingback).not.toHaveBeenCalled();
+
+    await act(async () => { releaseMedia(); await Promise.resolve(); });
+    expect(voice.callConnectionStage).toBe('dialing');
+    expect(mocks.playerStartRingback).toHaveBeenCalledOnce();
+    act(() => voice.cancelVoiceInput());
+    expect(mocks.playerStopRingback).toHaveBeenCalled();
+    expect(voice.callConnectionStage).toBeNull();
+    await act(async () => { releaseConnect(); await pending; });
+    expect(voice.phase).toBe('idle');
   });
 
   it('selects Omni explicitly and ignores cancelled-response audio and text', async () => {

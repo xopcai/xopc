@@ -29,6 +29,7 @@ function isVoiceConfigurationError(error: unknown): boolean {
 
 export type VoiceSessionMode = 'dictation' | 'conversation';
 export type VoiceResponsePhase = 'idle' | 'thinking' | 'speaking';
+export type CallConnectionStage = 'preparing' | 'dialing' | 'slow' | null;
 
 function formatElapsed(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return '0:00';
@@ -94,6 +95,7 @@ export interface UseRealtimeVoiceReturn {
   } | null;
   dismissClarification: (requestId: string) => void;
   responsePhase: VoiceResponsePhase;
+  callConnectionStage: CallConnectionStage;
   muted: boolean;
   error: string | null;
   failureKind: VoiceCaptureFailureKind | null;
@@ -120,6 +122,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const [activities, setActivities] = useState<UseRealtimeVoiceReturn['activities']>([]);
   const [clarification, setClarification] = useState<UseRealtimeVoiceReturn['clarification']>(null);
   const [responsePhase, setResponsePhase] = useState<VoiceResponsePhase>('idle');
+  const [callConnectionStage, setCallConnectionStage] = useState<CallConnectionStage>(null);
   const [muted, setMuted] = useState(false);
   const mutedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +155,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const playedBytesRef = useRef(0);
   const maxSessionMsRef = useRef(600_000);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const slowConnectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onTranscriptRef = useRef(onTranscript);
   onTranscriptRef.current = onTranscript;
 
@@ -178,6 +182,9 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     controllerRef.current?.abort();
     controllerRef.current = null;
     stopTimer();
+    if (slowConnectionTimerRef.current !== null) clearTimeout(slowConnectionTimerRef.current);
+    slowConnectionTimerRef.current = null;
+    playerRef.current?.stopRingback();
     stopMedia();
     captureRef.current?.cancel();
     captureRef.current = null;
@@ -193,6 +200,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     setFinalTranscript('');
     setResponseText('');
     setResponsePhase('idle');
+    setCallConnectionStage(null);
     setActivities([]);
     setClarification(null);
     speechStoppedAtRef.current = null;
@@ -294,6 +302,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     const attempt = ++attemptRef.current;
     const isCurrent = () => attempt === attemptRef.current;
     setMode(purpose);
+    setCallConnectionStage(purpose === 'conversation' ? 'preparing' : null);
     callModeRef.current = callMode;
     setResponseText('');
     updatePhase('starting');
@@ -333,6 +342,16 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         return;
       }
       mediaStreamRef.current = stream;
+      if (purpose === 'conversation') {
+        setCallConnectionStage('dialing');
+        playerRef.current?.startRingback();
+        slowConnectionTimerRef.current = setTimeout(() => {
+          if (!isCurrent()) return;
+          playerRef.current?.stopRingback();
+          setCallConnectionStage('slow');
+          slowConnectionTimerRef.current = null;
+        }, 12_000);
+      }
       stage = 'session';
       dictationRef.current.clear();
       const client = await VoiceSessionClient.connect({
@@ -446,6 +465,9 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         onClose: (reason) => { if (isCurrent()) handleSessionClose(reason); },
       });
       if (!isCurrent()) { client.stop('surface_closed'); return; }
+      playerRef.current?.stopRingback();
+      if (slowConnectionTimerRef.current !== null) clearTimeout(slowConnectionTimerRef.current);
+      slowConnectionTimerRef.current = null;
       clientRef.current = client;
       maxSessionMsRef.current = client.session.limits.maxSessionMs;
       stage = 'recorder';
@@ -483,6 +505,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       recordStartPerfRef.current = performance.now();
       setElapsedSec(0);
       updatePhase('recording');
+      setCallConnectionStage(null);
       startTimer();
     } catch (error) {
       if (!isCurrent()) return;
@@ -547,6 +570,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     captureRef.current?.cancel();
     clientRef.current?.stop('surface_closed');
     void playerRef.current?.close();
+    if (slowConnectionTimerRef.current !== null) clearTimeout(slowConnectionTimerRef.current);
     stopMedia();
     stopTimer();
   }, [stopMedia, stopTimer]);
@@ -600,6 +624,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     clarification,
     dismissClarification: (requestId) => setClarification((current) => current?.requestId === requestId ? null : current),
     responsePhase,
+    callConnectionStage,
     muted,
     error,
     failureKind,

@@ -1,0 +1,13 @@
+.personal-avatar-motion {
+  animation: personal-avatar-breathe 4.4s ease-in-out infinite;
+  transform-origin: center 58%;
+}
+
+@keyframes personal-avatar-breathe {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-2px) rotate(1.5deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .personal-avatar-motion { animation: none; }
+}

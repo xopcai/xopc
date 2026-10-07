@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, ListTodo, MessageCircle, Phone, Settings2, X } from 'lucide-react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { ArrowRight, ArrowUpRight, ListTodo, MessageCircle, Phone, Settings2, Upload, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { ChatPage } from '@/features/chat/chat-page';
 import { useVoiceCall } from '@/features/voice/realtime/voice-call-context';
+import { bumpAgentAvatarCacheRevision } from '@/features/settings/agents/agent-avatar-cache';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { fetchJson } from '@/lib/fetch';
 import { formatMediumDate } from '@/lib/date-formatters';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
-import { PersonalAvatar } from './personal-avatar';
+import { PersonalAvatar, type PersonalAppearance } from './personal-avatar';
 
 type Preferences = {
   addressAs?: string;
@@ -27,7 +29,7 @@ type PersonalAgent = {
   conversationId: string;
   state: 'provisioning' | 'ready' | 'error';
   displayName: string;
-  appearance: 'spark' | 'cloud' | 'bean';
+  appearance: PersonalAppearance;
   preferences: Preferences;
   revision: number;
   errorMessage: string | null;
@@ -79,9 +81,9 @@ const STYLE_OPTIONS = [
 ] as const;
 
 const APPEARANCES = [
-  { id: 'spark', zh: '星形', en: 'Star', color: 'bg-amber-100/40 dark:bg-amber-400/10' },
-  { id: 'cloud', zh: '云形', en: 'Cloud', color: 'bg-sky-100/40 dark:bg-sky-400/10' },
-  { id: 'bean', zh: '圆形', en: 'Round', color: 'bg-lime-100/40 dark:bg-lime-400/10' },
+  { id: 'loopi', zh: '小环', en: 'Loopi', color: 'bg-slate-100/50 dark:bg-slate-400/10' },
+  { id: 'loopi-curious', zh: '好奇', en: 'Curious', color: 'bg-blue-100/50 dark:bg-blue-400/10' },
+  { id: 'loopi-care', zh: '温和', en: 'Gentle', color: 'bg-violet-100/50 dark:bg-violet-400/10' },
 ] as const;
 
 function appearanceFor(id: PersonalAgent['appearance']) {
@@ -139,7 +141,9 @@ export function PersonalPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState('natural');
-  const [appearance, setAppearance] = useState<PersonalAgent['appearance']>('spark');
+  const [appearance, setAppearance] = useState<PersonalAppearance>('loopi');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [displayName, setDisplayName] = useState('');
   const [addressAs, setAddressAs] = useState('');
   const [supportMode, setSupportMode] = useState<Preferences['supportMode']>('untangle');
@@ -154,6 +158,10 @@ export function PersonalPage() {
   const [activityMoreError, setActivityMoreError] = useState(false);
   const [activityLoadedCount, setActivityLoadedCount] = useState(0);
   const activityRequestRef = useRef(0);
+  const openSettings = useCallback(() => {
+    setShowActivity(false);
+    setShowSettings(true);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -272,35 +280,148 @@ export function PersonalPage() {
     }
   };
 
+  const uploadAvatar = async (file: File) => {
+    if (!record || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setError(zh ? '请选择 PNG、JPEG 或 WebP 图片。' : 'Choose a PNG, JPEG, or WebP image.');
+      return;
+    }
+    if (file.size === 0 || file.size > 512 * 1024) {
+      setError(zh ? '图片大小不能超过 512 KB。' : 'Image must be 512 KB or smaller.');
+      return;
+    }
+    setUploadingAvatar(true);
+    setError(null);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      await fetchJson<ApiResult<{ agentId: string }>>(apiUrl(`/api/agents/${encodeURIComponent(record.agentId)}/avatar`), {
+        method: 'PUT',
+        body: JSON.stringify({ base64: dataUrl.slice(dataUrl.indexOf(',') + 1), mimeType: file.type }),
+      });
+      bumpAgentAvatarCacheRevision(record.agentId);
+      setAppearance('custom');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   useLayoutEffect(() => {
     const ready = record?.state === 'ready';
     const avatar = ready ? record.appearance : appearance;
-    const title = ready ? record.displayName : 'Personal AI';
+    const title = ready ? record.displayName : 'Ada';
     setPageHeader({
       startExtra: null,
       main: <div className="flex min-w-0 items-center gap-2.5">
-        <span className={`flex size-8 shrink-0 items-center justify-center rounded-full ${appearanceFor(avatar).color}`}><PersonalAvatar appearance={avatar} className="size-8" /></span>
+        {ready ? (
+          <button type="button" onClick={openSettings} className="touch-target -m-1 shrink-0 rounded-full p-1 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? `编辑${title}的资料` : `Edit ${title}'s profile`} title={zh ? '编辑 Personal AI' : 'Edit Personal AI'}>
+            <span className="flex size-8 items-center justify-center"><PersonalAvatar appearance={avatar} agentId={record?.agentId} className="size-8" /></span>
+          </button>
+        ) : <span className="flex size-8 shrink-0 items-center justify-center"><PersonalAvatar appearance={avatar} agentId={record?.agentId} className="size-8" /></span>}
         <h1 className="min-w-0 truncate text-sm font-semibold text-fg sm:text-base">{title}</h1>
-        {showSettings && <span className="truncate text-sm text-fg-muted">· {zh ? '回应偏好' : 'Response preferences'}</span>}
       </div>,
-      end: ready ? showSettings ? <button type="button" onClick={() => setShowSettings(false)} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '关闭偏好设置' : 'Close response preferences'}><X className="size-5" /></button>
-        : <div className="flex items-center gap-1">
+      end: ready ? <div className="flex items-center gap-1">
           <button type="button" disabled={voiceCall.active} onClick={() => {
             if (record?.state === 'ready') voiceCallRef.current.open({ conversationId: record.conversationId, name: record.displayName, mode: 'assistant' });
           }} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50" aria-label={zh ? '语音通话' : 'Voice call'} title={zh ? '语音通话' : 'Voice call'}><Phone className="size-5" /></button>
           <button type="button" onClick={() => void openActivity()} aria-pressed={showActivity} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '正在做的事' : 'Activity'}><ListTodo className="size-5" /></button>
-          <button type="button" onClick={() => setShowSettings(true)} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '回应偏好' : 'Response preferences'}><Settings2 className="size-5" /></button>
+          <button type="button" onClick={openSettings} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '回应偏好' : 'Response preferences'}><Settings2 className="size-5" /></button>
         </div> : null,
     });
     return () => clearPageHeader();
-  }, [appearance, clearPageHeader, openActivity, record, setPageHeader, showActivity, showSettings, voiceCall.active, zh]);
+  }, [appearance, clearPageHeader, openActivity, openSettings, record, setPageHeader, showActivity, voiceCall.active, zh]);
+
+  function renderSettingsDrawer() {
+    return (
+      <Dialog.Root open={showSettings} onOpenChange={setShowSettings}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content aria-describedby={undefined} className="xopc-drawer-right fixed right-0 top-0 z-[81] flex h-dvh w-full max-w-[42rem] flex-col overflow-hidden border-l border-edge bg-surface-overlay shadow-popover outline-none">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-edge px-5 py-4 sm:px-6">
+              <div className="min-w-0">
+                <Dialog.Title className="text-lg font-semibold text-fg">{zh ? '编辑 Personal AI' : 'Edit Personal AI'}</Dialog.Title>
+                <p className="mt-1 text-sm text-fg-muted">{zh ? '调整回应方式、称呼与形象' : 'Adjust responses, name, and appearance'}</p>
+              </div>
+              <Dialog.Close className="touch-target -mr-2 -mt-1 rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭编辑' : 'Close editor'}><X className="size-5" /></Dialog.Close>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-6">
+              <div className="mx-auto max-w-2xl">
+                <div className="rounded-2xl border border-edge bg-surface-panel p-5 sm:p-6">
+                  <div className="text-sm font-medium text-fg">{zh ? '回答的语气' : 'Response tone'}</div>
+                  <p className="mt-1 text-xs text-fg-muted">{zh ? '选一个起点；每次对话仍会按具体情况调整。' : 'Choose a starting point. Each reply still adapts to the situation.'}</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    {STYLE_OPTIONS.map(option => <button key={option.id} type="button" onClick={() => setSelectedStyle(option.id)} aria-pressed={selectedStyle === option.id} className={`min-h-28 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${selectedStyle === option.id ? 'border-accent bg-accent/5' : 'border-edge hover:bg-surface-hover'}`}>
+                      <span className="flex items-center gap-2 font-medium text-fg"><MessageCircle className="size-4 text-accent" aria-hidden />{zh ? option.zh : option.en}</span>
+                      <span className="mt-2 block text-xs leading-relaxed text-fg-muted">{zh ? option.zhExample : option.enExample}</span>
+                    </button>)}
+                  </div>
+                  <div className="mt-6 text-sm font-medium text-fg">{zh ? '遇到棘手的问题时，希望先得到什么？' : 'When a problem is tricky, what helps first?'}</div>
+                  <div className="mt-3 flex flex-wrap gap-2">{([
+                    ['listen', zh ? '先听我说' : 'Listen first'],
+                    ['untangle', zh ? '帮我理清' : 'Help me untangle it'],
+                    ['solutions', zh ? '直接给办法' : 'Give me solutions'],
+                  ] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={supportMode === value} onClick={() => setSupportMode(value)} className={`min-h-11 rounded-full border px-4 text-sm ${supportMode === value ? 'border-accent bg-accent/5 text-fg' : 'border-edge text-fg-muted hover:bg-surface-hover'}`}>{label}</button>)}</div>
+                  <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                    <div><p className="mb-2 text-sm font-medium text-fg">{zh ? '回答多详细' : 'Answer length'}</p><PopoverSelect value={detailLevel ?? 'balanced'} options={[
+                      { value: 'brief', label: zh ? '简短，先说结论' : 'Brief, answer first' },
+                      { value: 'balanced', label: zh ? '适中' : 'Balanced' },
+                      { value: 'detailed', label: zh ? '多解释一点' : 'More detail' },
+                    ]} placeholder={zh ? '选择回答长度' : 'Choose answer length'} allowEmpty={false} onChange={value => setDetailLevel(value as Preferences['detailLevel'])} /></div>
+                    <div><p className="mb-2 text-sm font-medium text-fg">{zh ? '主动更新的频率' : 'Proactive updates'}</p><PopoverSelect value={proactivity ?? 'decisions'} options={[
+                      { value: 'decisions', label: zh ? '只说结果和决定' : 'Results and decisions only' },
+                      { value: 'important', label: zh ? '重要进展也告诉我' : 'Important milestones too' },
+                      { value: 'open', label: zh ? '可以多提建议' : 'More suggestions' },
+                    ]} placeholder={zh ? '选择主动程度' : 'Choose check-in style'} allowEmpty={false} onChange={value => setProactivity(value as Preferences['proactivity'])} /></div>
+                  </div>
+                  <details className="mt-5 text-sm text-fg-muted"><summary className="cursor-pointer select-none">{zh ? '更多表达偏好' : 'More expression preferences'}</summary><div className="mt-3 max-w-xs"><p className="mb-2 font-medium text-fg">{zh ? '轻松程度' : 'Lightness'}</p><PopoverSelect value={humor ?? 'none'} options={[
+                    { value: 'none', label: zh ? '不加玩笑' : 'No jokes' },
+                    { value: 'occasional', label: zh ? '合适时轻松一点' : 'A light touch when it fits' },
+                    { value: 'playful', label: zh ? '可以更活泼' : 'More playful' },
+                  ]} placeholder={zh ? '选择轻松程度' : 'Choose lightness'} allowEmpty={false} onChange={value => setHumor(value as Preferences['humor'])} /></div></details>
+                  <div className="mt-6 rounded-2xl border border-edge bg-surface-base p-4" aria-live="polite">
+                    <p className="text-xs font-medium text-fg-muted">{zh ? '语气与支持方式预览' : 'Tone and support preview'}</p>
+                    <p className="mt-3 text-sm text-fg-muted">{zh ? '你：我手上有三件事，不知道先做哪件。' : 'You: I have three things to do and don’t know where to start.'}</p>
+                    <div className="mt-2 flex items-start gap-3"><span className={`flex size-8 shrink-0 items-center justify-center rounded-full ${appearanceFor(appearance).color}`}><PersonalAvatar appearance={appearance} agentId={record?.agentId} className="size-8" /></span><p className="rounded-2xl rounded-tl-sm bg-surface-hover px-4 py-3 text-sm leading-relaxed text-fg">{responsePreviewFor(STYLE_OPTIONS.find(item => item.id === selectedStyle)?.warmth, supportMode, zh)}</p></div>
+                  </div>
+                  <div className="mt-7 border-t border-edge pt-6"><h3 className="text-sm font-medium text-fg">{zh ? '称呼与形象（可选）' : 'Name and appearance (optional)'}</h3><p className="mt-1 text-xs text-fg-muted">{zh ? '名称与称呼可随时修改；界面形象不决定回答语气。' : 'Names can change anytime; appearance does not determine response tone.'}</p></div>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <div><label htmlFor="personal-name" className="block text-sm font-medium text-fg">{zh ? '助手名称' : 'Assistant name'}</label><input id="personal-name" value={displayName} onChange={event => setDisplayName(event.target.value)} maxLength={60} placeholder="Ada" className="mt-2 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent" /></div>
+                    <div><label htmlFor="personal-address" className="block text-sm font-medium text-fg">{zh ? '怎么称呼你' : 'What should it call you?'}</label><input id="personal-address" value={addressAs} onChange={event => setAddressAs(event.target.value)} maxLength={60} placeholder={zh ? '可留空' : 'Optional'} className="mt-2 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent" /></div>
+                  </div>
+                  <div className="mt-5 text-sm font-medium text-fg">{zh ? '界面形象' : 'On-screen appearance'}</div>
+                  <div className="mt-3 flex flex-wrap gap-3">{APPEARANCES.map(item => <button key={item.id} type="button" onClick={() => setAppearance(item.id)} aria-pressed={appearance === item.id} className={`flex min-h-16 min-w-20 items-center gap-2 rounded-xl px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${appearance === item.id ? 'bg-accent/10' : 'bg-surface-hover hover:bg-surface-active'}`}><span className={`flex size-8 items-center justify-center rounded-full ${item.color}`}><PersonalAvatar appearance={item.id} className="size-8" /></span><span className="text-xs text-fg-muted">{zh ? item.zh : item.en}</span></button>)}
+                    <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" aria-label={zh ? '上传头像' : 'Upload avatar'} onChange={event => {
+                      const file = event.currentTarget.files?.[0];
+                      if (file) void uploadAvatar(file);
+                      event.currentTarget.value = '';
+                    }} />
+                    <button type="button" disabled={uploadingAvatar} onClick={() => avatarInputRef.current?.click()} aria-pressed={appearance === 'custom'} className={`flex min-h-16 min-w-20 items-center gap-2 rounded-xl px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${appearance === 'custom' ? 'bg-accent/10' : 'bg-surface-hover hover:bg-surface-active'}`}><span className="flex size-8 items-center justify-center rounded-full bg-surface-panel">{appearance === 'custom' ? <PersonalAvatar appearance="custom" agentId={record?.agentId} className="size-8" /> : <Upload className="size-4 text-fg-muted" aria-hidden />}</span><span className="text-xs text-fg-muted">{uploadingAvatar ? (zh ? '上传中…' : 'Uploading…') : (zh ? '上传图片' : 'Upload')}</span></button>
+                  </div>
+                </div>
+                <p className="mt-5 text-center text-sm text-fg-muted">{zh ? '之后可以直接说“回答短一点”或“先听我说”，回应方式会继续调整。' : 'You can later say “keep it shorter” or “listen first” to adjust how it responds.'}</p>
+              </div>
+            </div>
+            <div className="shrink-0 border-t border-edge bg-surface-overlay px-5 py-4 sm:px-6">
+              {error && <p role="alert" className="mb-3 text-sm text-danger">{error}</p>}
+              <button type="button" disabled={busy || uploadingAvatar} onClick={() => void save()} className="min-h-11 w-full rounded-xl bg-accent px-4 py-2.5 font-medium text-white disabled:opacity-50">{busy ? (zh ? '正在保存…' : 'Saving…') : (zh ? '保存回应偏好' : 'Save response preferences')}</button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    );
+  }
 
   if (loading) return <div className="mx-auto w-full max-w-2xl space-y-5 px-6 py-12"><Skeleton className="h-20 w-20 rounded-full" /><Skeleton className="h-9 w-72" /><Skeleton className="h-44 w-full rounded-2xl" /></div>;
 
-  if (record?.state === 'ready' && !showSettings) return (
+  if (record?.state === 'ready') return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-surface-panel">
       <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1"><ChatPage embedded personal personalWelcome={{ name: record.displayName, addressAs: record.preferences.addressAs, avatar: <PersonalAvatar appearance={record.appearance} className="size-14" />, opening: openingFor(record.preferences, zh) }} conversationId={record.conversationId} /></div>
+        <div className="min-w-0 flex-1"><ChatPage embedded personal personalWelcome={{ name: record.displayName, addressAs: record.preferences.addressAs, avatar: <PersonalAvatar appearance={record.appearance} agentId={record.agentId} className="size-14" />, opening: openingFor(record.preferences, zh) }} conversationId={record.conversationId} /></div>
         {showActivity && <aside className="fixed inset-0 z-30 flex min-w-0 flex-col bg-surface-inset shadow-lg sm:static sm:w-[min(25rem,42vw)] sm:shadow-none" aria-label={zh ? '派发的任务' : 'Delegated tasks'}>
           <div className="flex shrink-0 items-start justify-between gap-3 px-6 pb-3 pt-6">
             <div className="min-w-0"><h2 className="text-base font-semibold tracking-tight text-fg">{zh ? '交给我推进的事' : 'Delegated work'}</h2><p className="mt-1 text-xs text-fg-muted">{activity ? (zh ? `最近更新 · 共 ${activity.total} 项` : `Recently updated · ${activity.total} total`) : (zh ? '查看任务进展与结果' : 'Follow progress and results')}</p></div>
@@ -318,14 +439,15 @@ export function PersonalPage() {
           </div>
         </aside>}
       </div>
+      {showSettings && renderSettingsDrawer()}
     </div>
   );
 
-  if (!showSettings) return (
+  return (
     <div className="flex h-full min-h-0 flex-1 items-center justify-center overflow-y-auto bg-surface-base px-5 py-10 sm:px-8">
       <div className="w-full max-w-lg text-center">
-        <div className="mx-auto flex size-20 items-center justify-center rounded-[1.75rem] bg-amber-100/40 dark:bg-amber-400/10">
-          <PersonalAvatar appearance="spark" className="size-16" />
+        <div className="mx-auto flex size-20 items-center justify-center rounded-[1.75rem] bg-surface-hover">
+          <PersonalAvatar appearance="loopi" className="size-16" />
         </div>
         <h2 className="mt-7 text-3xl font-semibold tracking-tight text-fg">{zh ? '有事，直接和我说' : 'Start with a conversation'}</h2>
         <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-fg-muted">{zh
@@ -343,63 +465,5 @@ export function PersonalPage() {
     </div>
   );
 
-  return (
-    <div className="h-full min-h-0 overflow-y-auto bg-surface-base px-4 py-8 sm:px-6">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-7">
-          <h2 className="text-2xl font-semibold tracking-tight text-fg">{showSettings ? (zh ? '调整回应方式' : 'Adjust how it responds') : (zh ? '让回应更适合你' : 'Make responses feel right for you')}</h2>
-          <p className="mt-2 text-sm leading-relaxed text-fg-muted">{zh ? '先选你喜欢的表达方式。名字和形象可以稍后再决定，所有设置都能随时调整。' : 'Start with the way you like to be answered. Name and appearance can wait, and every choice can change later.'}</p>
-        </div>
 
-        <div className="rounded-2xl border border-edge bg-surface-panel p-5 sm:p-6">
-          <div className="text-sm font-medium text-fg">{zh ? '回答的语气' : 'Response tone'}</div>
-          <p className="mt-1 text-xs text-fg-muted">{zh ? '选一个起点；每次对话仍会按具体情况调整。' : 'Choose a starting point. Each reply still adapts to the situation.'}</p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            {STYLE_OPTIONS.map(option => <button key={option.id} type="button" onClick={() => setSelectedStyle(option.id)} aria-pressed={selectedStyle === option.id} className={`min-h-28 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${selectedStyle === option.id ? 'border-accent bg-accent/5' : 'border-edge hover:bg-surface-hover'}`}>
-              <span className="flex items-center gap-2 font-medium text-fg"><MessageCircle className="size-4 text-accent" aria-hidden />{zh ? option.zh : option.en}</span>
-              <span className="mt-2 block text-xs leading-relaxed text-fg-muted">{zh ? option.zhExample : option.enExample}</span>
-            </button>)}
-          </div>
-          <div className="mt-6 text-sm font-medium text-fg">{zh ? '遇到棘手的问题时，希望先得到什么？' : 'When a problem is tricky, what helps first?'}</div>
-          <div className="mt-3 flex flex-wrap gap-2">{([
-            ['listen', zh ? '先听我说' : 'Listen first'],
-            ['untangle', zh ? '帮我理清' : 'Help me untangle it'],
-            ['solutions', zh ? '直接给办法' : 'Give me solutions'],
-          ] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={supportMode === value} onClick={() => setSupportMode(value)} className={`min-h-11 rounded-full border px-4 text-sm ${supportMode === value ? 'border-accent bg-accent/5 text-fg' : 'border-edge text-fg-muted hover:bg-surface-hover'}`}>{label}</button>)}</div>
-          <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <div><p className="mb-2 text-sm font-medium text-fg">{zh ? '回答多详细' : 'Answer length'}</p><PopoverSelect value={detailLevel ?? 'balanced'} options={[
-              { value: 'brief', label: zh ? '简短，先说结论' : 'Brief, answer first' },
-              { value: 'balanced', label: zh ? '适中' : 'Balanced' },
-              { value: 'detailed', label: zh ? '多解释一点' : 'More detail' },
-            ]} placeholder={zh ? '选择回答长度' : 'Choose answer length'} allowEmpty={false} onChange={value => setDetailLevel(value as Preferences['detailLevel'])} /></div>
-            <div><p className="mb-2 text-sm font-medium text-fg">{zh ? '主动更新的频率' : 'Proactive updates'}</p><PopoverSelect value={proactivity ?? 'decisions'} options={[
-              { value: 'decisions', label: zh ? '只说结果和决定' : 'Results and decisions only' },
-              { value: 'important', label: zh ? '重要进展也告诉我' : 'Important milestones too' },
-              { value: 'open', label: zh ? '可以多提建议' : 'More suggestions' },
-            ]} placeholder={zh ? '选择主动程度' : 'Choose check-in style'} allowEmpty={false} onChange={value => setProactivity(value as Preferences['proactivity'])} /></div>
-          </div>
-          <details className="mt-5 text-sm text-fg-muted"><summary className="cursor-pointer select-none">{zh ? '更多表达偏好' : 'More expression preferences'}</summary><div className="mt-3 max-w-xs"><p className="mb-2 font-medium text-fg">{zh ? '轻松程度' : 'Lightness'}</p><PopoverSelect value={humor ?? 'none'} options={[
-            { value: 'none', label: zh ? '不加玩笑' : 'No jokes' },
-            { value: 'occasional', label: zh ? '合适时轻松一点' : 'A light touch when it fits' },
-            { value: 'playful', label: zh ? '可以更活泼' : 'More playful' },
-          ]} placeholder={zh ? '选择轻松程度' : 'Choose lightness'} allowEmpty={false} onChange={value => setHumor(value as Preferences['humor'])} /></div></details>
-          <div className="mt-6 rounded-2xl border border-edge bg-surface-base p-4" aria-live="polite">
-            <p className="text-xs font-medium text-fg-muted">{zh ? '语气与支持方式预览' : 'Tone and support preview'}</p>
-            <p className="mt-3 text-sm text-fg-muted">{zh ? '你：我手上有三件事，不知道先做哪件。' : 'You: I have three things to do and don’t know where to start.'}</p>
-            <div className="mt-2 flex items-start gap-3"><span className={`flex size-8 shrink-0 items-center justify-center rounded-full ${appearanceFor(appearance).color}`}><PersonalAvatar appearance={appearance} className="size-8" /></span><p className="rounded-2xl rounded-tl-sm bg-surface-hover px-4 py-3 text-sm leading-relaxed text-fg">{responsePreviewFor(STYLE_OPTIONS.find(item => item.id === selectedStyle)?.warmth, supportMode, zh)}</p></div>
-          </div>
-          <div className="mt-7 border-t border-edge pt-6"><h3 className="text-sm font-medium text-fg">{zh ? '称呼与形象（可选）' : 'Name and appearance (optional)'}</h3><p className="mt-1 text-xs text-fg-muted">{zh ? '名称与称呼可随时修改；界面形象不决定回答语气。' : 'Names can change anytime; appearance does not determine response tone.'}</p></div>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <div><label htmlFor="personal-name" className="block text-sm font-medium text-fg">{zh ? '助手名称' : 'Assistant name'}</label><input id="personal-name" value={displayName} onChange={event => setDisplayName(event.target.value)} maxLength={60} placeholder="Personal AI" className="mt-2 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent" /></div>
-            <div><label htmlFor="personal-address" className="block text-sm font-medium text-fg">{zh ? '怎么称呼你' : 'What should it call you?'}</label><input id="personal-address" value={addressAs} onChange={event => setAddressAs(event.target.value)} maxLength={60} placeholder={zh ? '可留空' : 'Optional'} className="mt-2 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent" /></div>
-          </div>
-          <div className="mt-5 text-sm font-medium text-fg">{zh ? '界面形象' : 'On-screen appearance'}</div>
-          <div className="mt-3 flex flex-wrap gap-3">{APPEARANCES.map(item => <button key={item.id} type="button" onClick={() => setAppearance(item.id)} aria-pressed={appearance === item.id} className={`flex min-h-16 min-w-20 items-center gap-2 rounded-xl border px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${appearance === item.id ? 'border-accent bg-accent/5' : 'border-edge hover:bg-surface-hover'}`}><span className={`flex size-8 items-center justify-center rounded-full ${item.color}`}><PersonalAvatar appearance={item.id} className="size-8" /></span><span className="text-xs text-fg-muted">{zh ? item.zh : item.en}</span></button>)}</div>
-          {error && <p role="alert" className="mt-4 text-sm text-red-600">{error}</p>}
-          <button type="button" disabled={busy} onClick={() => void save()} className="mt-6 min-h-11 w-full rounded-xl bg-accent px-4 py-2.5 font-medium text-white disabled:opacity-50">{busy ? (zh ? '正在保存…' : 'Saving…') : (zh ? '保存回应偏好' : 'Save response preferences')}</button>
-        </div>
-        <p className="mt-5 text-center text-sm text-fg-muted">{zh ? '之后可以直接说“回答短一点”或“先听我说”，回应方式会继续调整。' : 'You can later say “keep it shorter” or “listen first” to adjust how it responds.'}</p>
-      </div>
-    </div>
-  );
 }

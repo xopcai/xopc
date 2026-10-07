@@ -13,6 +13,8 @@ export interface VoiceModel {
   id: string;
   name: string;
   description?: string;
+  gender?: string;
+  style?: string;
   tts?: {
     speed: boolean;
     instructions: boolean;

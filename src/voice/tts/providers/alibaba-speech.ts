@@ -27,6 +27,7 @@ import {
 import { createLogger } from '../../../utils/logger.js';
 import { openDashScopeStreamingTts } from '../../dashscope/streaming-tts-stream.js';
 import { registerSpeechProvider } from '../speech-registry.js';
+import { alibabaVoicesForModel } from './alibaba-voices.js';
 import type {
   SpeechDirectiveTokenParseContext,
   SpeechDirectiveTokenParseResult,
@@ -43,21 +44,11 @@ const log = createLogger('SpeechProvider:Alibaba');
 
 const DEFAULT_BASE_URL =
   'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
-const DEFAULT_MODEL = 'qwen-tts';
+const DEFAULT_MODEL = 'qwen3-tts-flash';
 export const ALIBABA_REALTIME_TTS_MODEL = 'qwen3-tts-flash-realtime';
-const DEFAULT_VOICE = 'longxiaochun';
+const DEFAULT_VOICE = 'Cherry';
 const ENV_KEY = 'DASHSCOPE_API_KEY';
 const MAX_TEXT_LENGTH = 512;
-const ALIBABA_VOICES = [
-  'Cherry',
-  'Ethan',
-  'Serena',
-  'Chelsie',
-  'longxiaochun',
-  'longxiaobai',
-  'longwan',
-  'longcheng',
-] as const;
 
 interface AlibabaTtsConfig extends Record<string, unknown> {
   apiKey?: string;
@@ -153,7 +144,9 @@ export const alibabaSpeechProvider: SpeechProviderPlugin = {
 
   parseDirectiveToken: parseDirectiveTokenInternal,
 
-  listVoices: async () => ALIBABA_VOICES.map((id) => ({ id, name: id })),
+  listVoices: async ({ providerConfig }) => alibabaVoicesForModel(
+    typeof providerConfig?.model === 'string' ? providerConfig.model : DEFAULT_MODEL,
+  ),
 
   synthesize: async (req: SpeechSynthesisRequest): Promise<SpeechSynthesisResult> => {
     const config = readProviderConfig(req.providerConfig);

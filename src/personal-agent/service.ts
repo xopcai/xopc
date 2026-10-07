@@ -18,11 +18,15 @@ import {
 export const PersonalPreferencesSchema = ResponsePreferencesSchema;
 
 export type PersonalPreferences = z.infer<typeof PersonalPreferencesSchema>;
-export const PersonalAppearanceSchema = z.enum(['spark', 'cloud', 'bean']);
+export const PersonalAppearanceSchema = z.enum(['loopi', 'loopi-curious', 'loopi-care', 'custom']);
 export type PersonalAppearance = z.infer<typeof PersonalAppearanceSchema>;
 
 function appearanceEmoji(appearance: PersonalAppearance): string {
-  return appearance === 'cloud' ? '☁' : appearance === 'bean' ? '◕' : '✦';
+  return appearance === 'loopi-curious' ? '◌' : appearance === 'loopi-care' ? '♡' : '◉';
+}
+
+function appearanceAvatar(appearance: PersonalAppearance): string {
+  return appearance === 'custom' ? 'xopc:custom' : `xopc:loopi:${appearance === 'loopi' ? 'idle' : appearance.slice('loopi-'.length)}`;
 }
 
 const LEGACY_DELEGATION_RULE = 'Answer simple requests directly. For complex work, use personal_task agents to find a suitable specialist, then create a Task and remain available to talk. Never claim a task was created before the tool confirms it.';
@@ -145,11 +149,12 @@ async function provisionPersonalAgent(
       id: agentId,
       enabled: true,
       profile: {
-        name: 'Personal AI',
+        name: 'Ada',
         description: 'A personal AI that adapts its responses to the user and coordinates work.',
         creature: 'assistant',
         language: 'zh',
-        emoji: appearanceEmoji('spark'),
+        emoji: appearanceEmoji('loopi'),
+        avatar: appearanceAvatar('loopi'),
         responsePreferences: DEFAULT_PERSONAL_PREFERENCES,
         instructions: personalInstructions(DEFAULT_PERSONAL_PREFERENCES),
       },
@@ -208,6 +213,7 @@ export async function updatePersonalProfileRecord(
     ...current.profile,
     name: displayName,
     emoji: appearanceEmoji(appearance),
+    avatar: appearanceAvatar(appearance),
     responsePreferences: preferences,
     instructions: personalInstructions(preferences),
   };
