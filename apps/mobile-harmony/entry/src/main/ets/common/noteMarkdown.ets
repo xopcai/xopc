@@ -12,6 +12,8 @@ export interface XopcNoteEditorSpan {
   heading: number;
   /** Whether this span is inline code. */
   code: boolean;
+  /** Original Markdown for an inline note attachment image. */
+  imageMarkdown?: string;
 }
 
 /** SDK-independent RichEditor result used for deterministic Markdown serialization. */
@@ -26,6 +28,7 @@ export interface XopcNoteEditorResultSpan {
   italic: boolean;
   /** Whether inline-code styling is active. */
   code: boolean;
+  imageMarkdown?: string;
 }
 
 function inlineSpans(text: string, heading: number): XopcNoteEditorSpan[] {
@@ -54,6 +57,11 @@ export function noteEditorSpans(markdown: string): XopcNoteEditorSpan[] {
   const output: XopcNoteEditorSpan[] = [];
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   lines.forEach((source: string, index: number): void => {
+    if (/^!\[(?:\\.|[^\]])*\]\(xopc-attachment:\/\/notes\/[^\s)]+\)$/.test(source)) {
+      output.push({ text: '', bold: false, italic: false, heading: 0, code: false, imageMarkdown: source });
+      if (index < lines.length - 1) output.push({ text: '\n', bold: false, italic: false, heading: 0, code: false });
+      return;
+    }
     const headingMatch = /^(#{1,4})\s+(.*)$/.exec(source);
     const heading = headingMatch ? headingMatch[1].length : 0;
     const text = headingMatch ? headingMatch[2] : source;
@@ -68,6 +76,11 @@ export function noteEditorMarkdown(spans: XopcNoteEditorResultSpan[]): string {
   let result = '';
   let lineStart = true;
   spans.forEach((span: XopcNoteEditorResultSpan): void => {
+    if (span.imageMarkdown) {
+      result += span.imageMarkdown;
+      lineStart = false;
+      return;
+    }
     let value = span.text;
     if (lineStart && value !== '\n') {
       const level = span.fontSize >= 29 ? 1 : span.fontSize >= 23 ? 2 : span.fontSize >= 19 ? 3 : 0;

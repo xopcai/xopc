@@ -19,6 +19,7 @@ export class XopcChatOptionsViewModel {
   private conversationId: string = '';
   private generation: number = 0;
   private queueRequest: number = 0;
+  private queuePositionOffset: number = 0;
   private timer: number = -1;
   @Trace thinkingLevel: string = 'off';
 
@@ -110,7 +111,8 @@ export class XopcChatOptionsViewModel {
     const queued = state.inputs.filter((item: XopcQueuedInput): boolean => item.kind === 'message' && item.status === 'queued')
       .sort((a: XopcQueuedInput, b: XopcQueuedInput): number => a.position - b.position);
     // The first unclaimed input is the pending turn, not a follow-up.
-    this.queued = !state.activeRunId && state.preparation?.state !== 'preparation_failed' ? queued.slice(1) : queued;
+    this.queuePositionOffset = !state.activeRunId && state.preparation?.state !== 'preparation_failed' && queued.length ? 1 : 0;
+    this.queued = this.queuePositionOffset ? queued.slice(1) : queued;
     this.preparation = state.preparation;
     this.queueError = state.preparation?.state === 'preparation_failed' ? state.preparation.lastError || 'SESSION_PREPARATION_FAILED' : '';
   }
@@ -125,6 +127,15 @@ export class XopcChatOptionsViewModel {
       this.applyQueue(state); return true;
     } catch (error) { if (generation === this.generation) { await this.refreshQueue(); this.queueError = (error as Error).message; } return false; }
     finally { this.queueBusy = false; }
+  }
+  moveQueued(from: number, to: number): void {
+    if (this.queueBusy || from < 0 || from >= this.queued.length || to < 0 || to >= this.queued.length || from === to) return;
+    const reordered = this.queued.slice();
+    const input = reordered.splice(from, 1)[0];
+    if (!input) return;
+    reordered.splice(to, 0, input);
+    this.queued = reordered;
+    void this.updateQueued(input, { position: to + this.queuePositionOffset });
   }
   async cancelQueued(input: XopcQueuedInput): Promise<void> {
     if (this.queueBusy) return;

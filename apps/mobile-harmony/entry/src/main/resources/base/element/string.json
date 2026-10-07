@@ -183,6 +183,7 @@
     { "name": "chat_session_files", "value": "Conversation files" },
     { "name": "chat_queue", "value": "Queued messages" },
     { "name": "chat_queue_empty", "value": "No queued messages" },
+    { "name": "chat_queue_drag_hint", "value": "Tap a message to edit · Touch and hold to reorder" },
     { "name": "chat_read_aloud", "value": "Read aloud" },
     { "name": "chat_read_aloud_loading", "value": "Preparing audio…" },
     { "name": "chat_read_aloud_playing", "value": "Reading aloud" },
@@ -706,9 +707,10 @@
     },
     {
       "name": "progress_hint",
-      "value": "What needs you, and what is moving forward."
+      "value": "Handle what needs you, then check active and upcoming work."
     },
     { "name": "progress_summary", "value": "%d need you · %d moving" },
+    { "name": "progress_action_required", "value": "Needs attention" },
     { "name": "work_tools", "value": "Work tools" },
     { "name": "quick_access", "value": "Quick access" },
     { "name": "frequent_tools", "value": "Your work" },

@@ -183,6 +183,7 @@
     { "name": "chat_session_files", "value": "会话文件" },
     { "name": "chat_queue", "value": "待发送消息" },
     { "name": "chat_queue_empty", "value": "没有待发送的消息" },
+    { "name": "chat_queue_drag_hint", "value": "点击消息可编辑 · 长按拖动调整顺序" },
     { "name": "chat_read_aloud", "value": "朗读" },
     { "name": "chat_read_aloud_loading", "value": "正在准备语音…" },
     { "name": "chat_read_aloud_playing", "value": "正在朗读" },
@@ -706,9 +707,10 @@
     },
     {
       "name": "progress_hint",
-      "value": "需要你处理的事，以及正在推进的工作。"
+      "value": "先处理待办，再查看进行中和接下来的安排。"
     },
     { "name": "progress_summary", "value": "%d 项待处理 · %d 项进行中" },
+    { "name": "progress_action_required", "value": "待处理" },
     { "name": "work_tools", "value": "工作工具" },
     { "name": "quick_access", "value": "快速入口" },
     { "name": "frequent_tools", "value": "常用工作" },

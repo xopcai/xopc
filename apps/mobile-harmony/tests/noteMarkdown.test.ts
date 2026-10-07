@@ -19,8 +19,20 @@ describe('Harmony native note Markdown bridge', () => {
 
   it('renders canonical note images while preserving attachment references in the editor', () => {
     const markdown = '![Photo](xopc-attachment://notes/note-1/att-1)';
-    expect(noteEditorSpans(markdown).map(span => span.text).join('')).toBe(markdown);
+    expect(noteEditorSpans(markdown)).toMatchObject([{ imageMarkdown: markdown }]);
+    expect(noteEditorMarkdown([{ text: '', fontSize: 17, fontWeight: 400, italic: false, code: false,
+      imageMarkdown: markdown }])).toBe(markdown);
     expect(markdownBlocks(markdown)).toMatchObject([{ kind: 'image', text: 'Photo', href: 'xopc-attachment://notes/note-1/att-1' }]);
+  });
+
+  it('keeps an inline image between editable paragraphs', () => {
+    const markdown = 'Before\n![Train](xopc-attachment://notes/note-1/att-1)\nAfter';
+    const spans = noteEditorSpans(markdown);
+    expect(spans.filter((span) => span.imageMarkdown)).toHaveLength(1);
+    expect(noteEditorMarkdown(spans.map((span) => ({
+      text: span.text, fontSize: 17, fontWeight: 400, italic: false, code: false,
+      imageMarkdown: span.imageMarkdown,
+    })))).toBe(markdown);
   });
 
   it('applies offset operations from the end so original offsets remain stable', () => {
