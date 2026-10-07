@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
 
 import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
@@ -41,6 +42,17 @@ function source(models: CatalogModel[]): CatalogSource {
   };
 }
 
+function voice(modes: Array<'transcription.stream' | 'speech.stream' | 'conversation'>) {
+  return voiceManifestSchema.parse({
+    protocolVersion: 1, serviceVersion: 1, modes, transport: 'websocket-pcm',
+    inputFormat: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1 },
+    outputFormat: { encoding: 'pcm_s16le', sampleRate: 24000, channels: 1 },
+    turnDetection: ['server_vad'], bargeIn: true, tools: false, resumable: false,
+    voices: [{ id: 'voice-a', name: 'Voice A', languages: ['zh'] }], defaultVoice: 'voice-a',
+    limits: { maxFrameBytes: 65536, maxSessionSeconds: 1800 },
+  });
+}
+
 const completeCatalog = source([
   model({ id: 'chat', kind: 'language' }),
   model({ id: 'vision-other', kind: 'language', input: ['text', 'image'], priority: 0 }),
@@ -62,7 +74,10 @@ const completeCatalog = source([
       instructions: false,
       defaultVoice: 'Chelsie',
     },
+    voice: voice(['speech.stream']),
   }),
+  model({ id: 'stt-live', kind: 'stt', input: ['audio'], operations: ['audio.transcription'], voice: voice(['transcription.stream']) }),
+  model({ id: 'omni-live', kind: 'omni', input: ['audio'], output: ['audio'], operations: ['audio.conversation'], voice: voice(['conversation']) }),
 ]);
 
 beforeAll(() => initializeTestAgentCatalog());
@@ -79,6 +94,9 @@ describe('XOPC Cloud capability setup', () => {
         stt: 'stt-recommended',
         tts: 'tts-recommended',
         ttsVoice: 'Chelsie',
+        realtimeStt: 'stt-live',
+        realtimeTts: { model: 'tts-recommended', voice: 'voice-a' },
+        realtimeOmni: { model: 'omni-live', voice: 'voice-a' },
       },
     });
   });
@@ -122,6 +140,23 @@ describe('XOPC Cloud capability setup', () => {
         'xopc-cloud': { model: 'tts-recommended', voice: 'Chelsie' },
       },
     });
+    expect(prepared.config.voice?.realtime).toMatchObject({
+      enabled: true,
+      stt: { provider: 'xopc-cloud', model: 'stt-live' },
+      tts: { provider: 'xopc-cloud', model: 'tts-recommended', voice: 'voice-a' },
+      omni: { provider: 'xopc-cloud', model: 'omni-live', voice: 'voice-a' },
+    });
+    expect(ConfigSchema.safeParse(prepared.config).success).toBe(true);
+  });
+
+  it('leaves realtime voice unset when the Cloud catalog publishes no realtime mode', () => {
+    const catalog = source(completeCatalog.models.map(({ voice: _voice, ...entry }) => entry));
+    const prepared = prepareXopcCloudCapabilitySetup(ConfigSchema.parse({}), catalog);
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    expect(prepared.config.voice?.realtime?.stt).toBeUndefined();
+    expect(prepared.config.voice?.realtime?.tts).toBeUndefined();
+    expect(prepared.config.voice?.realtime?.omni).toBeUndefined();
   });
 
   it('does not produce a partial configuration when the catalog is incomplete', () => {

@@ -143,4 +143,15 @@ describe('MessageList history identity', () => {
 
     expect(container.querySelectorAll('[data-chat-time-separator]')).toHaveLength(2);
   });
+
+  it('hides a silent assistant marker while preserving real replies', () => {
+    store().setCommittedSnapshot(conversationId, { messages: [
+      message(10),
+      { ...message(20, 'assistant'), content: [{ type: 'text', text: 'NO_REPLY' }] },
+      message(30, 'assistant'),
+    ], hasMore: false });
+    act(() => root.render(<Harness />));
+    expect(bubble(20)).toBeNull();
+    expect(bubble(30)).not.toBeNull();
+  });
 });

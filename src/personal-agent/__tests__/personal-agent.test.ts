@@ -88,10 +88,13 @@ describe('personal Agent identity', () => {
       expect(codeCandidates.map(candidate => candidate.id)).toContain('coder');
       expect(codeCandidates.map(candidate => candidate.id)).not.toContain('researcher');
       expect(await updatePersonalProfileRecord('local-owner', 999, '阿沐', {}, 'spark')).toBeNull();
-      const updated = await updatePersonalProfileRecord('local-owner', first.revision, '阿沐', { warmth: 'gentle' }, 'cloud');
+      const updated = await updatePersonalProfileRecord('local-owner', first.revision, '阿沐',
+        { warmth: 'gentle', guidance: 'When I am anxious, offer one concrete step before asking questions.' }, 'cloud');
       expect(updated?.revision).toBe(first.revision + 1);
       expect(getPersonalAgent('local-owner')?.displayName).toBe('阿沐');
-      expect(repository.get(agentId)?.profile?.responsePreferences).toMatchObject({ warmth: 'gentle' });
+      expect(repository.get(agentId)?.profile?.responsePreferences).toMatchObject({ warmth: 'gentle',
+        guidance: 'When I am anxious, offer one concrete step before asking questions.' });
+      expect(repository.get(agentId)?.profile?.instructions).toContain('offer one concrete step before asking questions');
       expect(getSqliteDatabase().prepare("SELECT name FROM sqlite_master WHERE name = 'personal_agents'").get()).toBeUndefined();
 
       if (!server.listening) await once(server, 'listening');
@@ -218,6 +221,14 @@ describe('personal Agent identity', () => {
       }, refreshed.revision);
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       expect(repository.get(agentId)?.profile?.instructions).toContain('If the chosen Agent or tool cannot complete the Task');
+      expect(repository.get(agentId)?.profile?.instructions).toContain('Keep my custom instruction.');
+      const prior = repository.get(agentId)!;
+      const priorInstructions = prior.profile!.instructions!.split('\n').filter((_, index) => index !== 2).join('\n');
+      await new AgentCatalogService().update(agentId, {
+        profile: { ...prior.profile!, instructions: priorInstructions },
+      }, prior.revision);
+      await refreshPersonalDelegationGuidance(gateway, 'local-owner');
+      expect(repository.get(agentId)?.profile?.instructions).toContain('A worker question is yours to resolve first');
       expect(repository.get(agentId)?.profile?.instructions).toContain('Keep my custom instruction.');
     } finally {
       closeXopcDatabase();
