@@ -29,7 +29,10 @@ describe('Personal AI editor', () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
       .IS_REACT_ACT_ENVIRONMENT = true;
-    vi.mocked(fetchJson).mockImplementation(async (url) => ({
+    vi.mocked(fetchJson).mockImplementation(async (url) => String(url).includes('/activity') ? {
+      ok: true,
+      payload: { items: [], total: 0 },
+    } : ({
       ok: true,
       payload: String(url).includes('/models') ? [] : {
         agentId: 'personal',
@@ -75,5 +78,22 @@ describe('Personal AI editor', () => {
     act(() => document.querySelector<HTMLButtonElement>('button[aria-label="Close editor"]')?.click());
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(container.querySelector('[data-testid="personal-chat"]')).toBe(chat);
+  });
+
+  it('closes the delegated tasks panel when the header button is clicked again', async () => {
+    await act(async () => {
+      root.render(<MemoryRouter><PersonalPage /></MemoryRouter>);
+    });
+    act(() => headerRoot.render(usePageHeaderStore.getState().end));
+
+    await act(async () => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Activity"]')?.click());
+    expect(container.querySelector('aside[aria-label="Delegated tasks"]')).not.toBeNull();
+
+    act(() => headerRoot.render(usePageHeaderStore.getState().end));
+    expect(headerContainer.querySelector('button[aria-label="Activity"]')?.getAttribute('aria-pressed')).toBe('true');
+    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Activity"]')?.click());
+    expect(container.querySelector('aside[aria-label="Delegated tasks"]')).toBeNull();
+    act(() => headerRoot.render(usePageHeaderStore.getState().end));
+    expect(headerContainer.querySelector('button[aria-label="Activity"]')?.getAttribute('aria-pressed')).toBe('false');
   });
 });
