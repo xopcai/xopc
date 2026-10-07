@@ -110,6 +110,7 @@ export interface SpeechVoiceOption {
   description?: string;
   locale?: string;
   gender?: string;
+  style?: string;
   /** Provider-defined personality / style tags. */
   personalities?: string[];
 }

@@ -81,7 +81,7 @@ export const DEFAULT_STT_CONFIG: STTConfig = {
   enabled: false,
   provider: 'openai',
   providers: {
-    alibaba: { model: 'qwen-audio-3.0-asr-flash' },
+    alibaba: { model: 'qwen-audio-3.1-asr-flash' },
     openai: { model: 'gpt-4o-mini-transcribe' },
   },
   fallback: {

@@ -61,7 +61,7 @@ export function initializeVoiceDefaults(
     fallback: audio?.fallback ?? { enabled: false, order: [] },
     providers: {
       ...(audio?.providers ?? {}),
-      alibaba: { model: 'qwen-audio-3.0-asr-flash', ...(audio?.providers?.alibaba ?? {}) },
+      alibaba: { model: 'qwen-audio-3.1-asr-flash', ...(audio?.providers?.alibaba ?? {}) },
       openai: { model: 'gpt-4o-mini-transcribe', ...(audio?.providers?.openai ?? {}) },
     },
   };

@@ -1187,6 +1187,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                   ) : null}
                   <MessageList
                     messages={msgSlice.items}
+                    personal={personal}
                     authToken={token ?? undefined}
                     conversationId={session.decodedKey ?? session.conversationId}
                     projectId={scopedProject?.id}

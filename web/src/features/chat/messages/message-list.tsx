@@ -23,6 +23,7 @@ const ignoreWelcomePrompt = (_selection: WelcomeSuggestionSelection): void => {}
 
 export const MessageList = memo(function MessageList({
   messages: list,
+  personal = false,
   authToken,
   conversationId,
   workspaceConversationId,
@@ -52,6 +53,7 @@ export const MessageList = memo(function MessageList({
   trailingContent,
 }: {
   messages: Message[];
+  personal?: boolean;
   authToken?: string;
   conversationId?: string | null;
   /** Persistent session whose workspace backs file links in this message list. */
@@ -162,6 +164,7 @@ export const MessageList = memo(function MessageList({
             ) : null}
             {msg.role === 'task' && msg.taskTrigger ? <TaskTriggerCard trigger={msg.taskTrigger} /> : <MessageBubble
               message={msg}
+              personal={personal}
               followUpTrigger={followUpTrigger}
               authToken={authToken}
               conversationId={conversationId}

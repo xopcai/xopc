@@ -1034,10 +1034,16 @@ function VoiceProviderConfigFields({
             value={currentVoice ?? ''}
             onChange={(event) => onPatch({ voice: event.target.value })}
           >
+            {currentVoice && !voices.some((voice) => voice.id === currentVoice) ? (
+              <SelectOption value={currentVoice}>{currentVoice} · unavailable</SelectOption>
+            ) : null}
             {voices.map((voice) => (
-              <SelectOption key={voice.id} value={voice.id}>{voice.name}</SelectOption>
+              <SelectOption key={voice.id} value={voice.id}>{voice.name}{voice.gender ? ` · ${voice.gender === 'female' ? '女声' : '男声'}` : ''}{voice.style ? ` · ${voice.style}` : ''}</SelectOption>
             ))}
           </Select>
+          {voices.find((voice) => voice.id === currentVoice)?.description ? (
+            <p className="text-xs text-fg-subtle">{voices.find((voice) => voice.id === currentVoice)?.description}</p>
+          ) : null}
         </div>
       );
     }

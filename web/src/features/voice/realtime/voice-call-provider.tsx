@@ -93,7 +93,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   };
   const status = voice.error ? m.callFailed
     : !active ? voice.endedReason ? m.callDisconnected : m.callReady
-      : !connected ? m.callConnecting
+      : !connected ? voice.callConnectionStage === 'preparing' ? m.callPreparing
+        : voice.callConnectionStage === 'slow' ? m.callConnectingSlow : m.callConnecting
         : voice.clarification ? m.callWaiting
           : voice.activities.some((activity) => activity.status === 'running') ? m.callWorking
           : voice.responsePhase === 'speaking' ? m.voiceSpeaking
@@ -118,7 +119,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     {target && !expanded ? <div ref={miniCardRef} style={miniPosition ? { left: miniPosition.left, top: miniPosition.top, right: 'auto' } : undefined} className="fixed right-5 top-[calc(5rem+env(safe-area-inset-top))] z-50 flex max-w-[calc(100vw-2.5rem)] items-center gap-3 rounded-xl border border-edge bg-surface-panel p-3 shadow-float" role="region" aria-label={m.voiceConversation}>
       <button type="button" aria-label={language === 'zh' ? '展开通话' : 'Expand call'} onClick={() => { if (suppressMiniClick.current) { suppressMiniClick.current = false; return; } setExpanded(true); }} onPointerDown={startMiniDrag} onPointerMove={moveMiniDrag} onPointerUp={endMiniDrag} onPointerCancel={cancelMiniDrag} className="min-w-0 touch-none select-none rounded-lg text-left cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <span className="block truncate text-sm font-medium text-fg">{target.name}</span>
-        <span className="block text-xs text-fg-muted">{status} · {voice.elapsedLabel}</span>
+        <span className="block text-xs text-fg-muted">{status}{connected ? ` · ${voice.elapsedLabel}` : ''}</span>
       </button>
       <Button variant="ghost" disabled={!connected} onClick={voice.toggleMute} aria-label={voice.muted ? m.callUnmute : m.callMute}>{voice.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}</Button>
       <Button variant="ghost" onClick={end} aria-label={m.callEnd}><PhoneOff className="size-4 text-red-500" /></Button>
@@ -133,7 +134,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
           {more ? <div className="flex shrink-0 items-center justify-between border-b border-edge px-4 py-2"><Button variant="ghost" aria-pressed={captions} onClick={() => setCaptions(!captions)}><Captions className="size-4" />{m.callCaptions}</Button>{settingsLink}</div> : null}
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-5 py-5">
             <AudioLines className="size-10 text-accent-fg" aria-hidden="true" />
-            <div><p className="text-lg font-medium" role="status">{status}</p><p className="mt-1 text-xs tabular-nums text-fg-muted">{active ? voice.elapsedLabel : m.callContinuity}{connected && voice.muted && voice.responsePhase !== 'idle' ? ` · ${m.callMicMuted}` : ''}</p></div>
+            <div><p className="text-lg font-medium" role="status">{status}</p>{connected || !active ? <p className="mt-1 text-xs tabular-nums text-fg-muted">{connected ? voice.elapsedLabel : m.callContinuity}{connected && voice.muted && voice.responsePhase !== 'idle' ? ` · ${m.callMicMuted}` : ''}</p> : null}</div>
             {voice.error ? <details className="text-sm text-fg-muted"><summary className="cursor-pointer">{m.callErrorDetails}</summary><p role="alert" className="mt-2 break-words text-xs">{voice.error}</p></details> : null}
             {!active && voice.failureKind === 'session' ? <div className="space-y-2 text-sm text-fg-muted"><p>{m.callSetupHint}</p>{settingsLink}</div> : null}
             {connected && captions ? <div className="space-y-3 text-sm leading-relaxed">

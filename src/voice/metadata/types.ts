@@ -6,6 +6,8 @@ export interface VoiceOptionMetadata {
   id: string;
   name: string;
   description?: string;
+  gender?: string;
+  style?: string;
 }
 
 export interface VoiceConfigFieldMetadata {

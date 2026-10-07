@@ -11,6 +11,7 @@ interface FakeAudioParam {
   cancelScheduledValues?: ReturnType<typeof vi.fn>;
   setTargetAtTime?: ReturnType<typeof vi.fn>;
   setValueAtTime?: ReturnType<typeof vi.fn>;
+  linearRampToValueAtTime?: ReturnType<typeof vi.fn>;
 }
 
 interface FakeAudioNode {
@@ -37,9 +38,10 @@ class FakeAudioContext {
   sources: ReturnType<typeof createSource>[] = [];
   gains: FakeGainNode[] = [];
   compressors: FakeCompressorNode[] = [];
+  oscillators: Array<{ frequency: { value: number }; type: string; connect: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>; start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; onended: (() => void) | null }> = [];
   createGain(): FakeGainNode {
     const gain = { connect: vi.fn(), disconnect: vi.fn(), gain: {
-      value: 1, cancelScheduledValues: vi.fn(), setTargetAtTime: vi.fn(), setValueAtTime: vi.fn(),
+      value: 1, cancelScheduledValues: vi.fn(), setTargetAtTime: vi.fn(), setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(),
     } };
     this.gains.push(gain);
     return gain;
@@ -61,6 +63,11 @@ class FakeAudioContext {
     this.sources.push(source);
     return source;
   }
+  createOscillator() {
+    const oscillator = { frequency: { value: 0 }, type: 'sine', connect: vi.fn(), disconnect: vi.fn(), start: vi.fn(), stop: vi.fn(), onended: null as (() => void) | null };
+    this.oscillators.push(oscillator);
+    return oscillator;
+  }
   async resume() {}
   async close() { this.state = 'closed'; }
 }
@@ -71,7 +78,34 @@ describe('PcmPlayer', () => {
     context = new FakeAudioContext();
     vi.stubGlobal('AudioContext', class { constructor() { return context; } });
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it('starts a soft delayed ringback and stops it before another pulse', async () => {
+    vi.useFakeTimers();
+    const player = new PcmPlayer();
+    player.startRingback();
+    vi.advanceTimersByTime(499);
+    expect(context.oscillators).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(context.oscillators.map((oscillator) => oscillator.frequency.value)).toEqual([392, 494]);
+    vi.advanceTimersByTime(3_000);
+    expect(context.oscillators).toHaveLength(4);
+    player.stopRingback();
+    expect(context.gains[1].gain.setTargetAtTime).toHaveBeenLastCalledWith(0, context.currentTime, 0.025);
+    vi.advanceTimersByTime(3_000);
+    expect(context.oscillators).toHaveLength(4);
+    await player.close();
+  });
+
+  it('stays silent when the call connects before the ringback delay', async () => {
+    vi.useFakeTimers();
+    const player = new PcmPlayer();
+    player.startRingback();
+    player.stopRingback();
+    vi.advanceTimersByTime(3_000);
+    expect(context.oscillators).toHaveLength(0);
+    await player.close();
+  });
 
   it('keeps a fast audio burst and acknowledges only completed playback', () => {
     const player = new PcmPlayer();
