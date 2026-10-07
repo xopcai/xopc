@@ -10,6 +10,7 @@ import { XopcFilesView } from './FilesView';
 import { XopcSettingsView } from './SettingsView';
 import { XopcProgressView } from './HomeHubs';
 import { XopcPersonalView } from './PersonalView';
+import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { XopcLoopi } from './Loopi';
 import { XopcWorkflowView } from './WorkflowView';
 import { XopcAutomationRunView } from './AutomationRunView';
@@ -18,6 +19,7 @@ import { XopcAboutYouView } from './AboutYouView';
 import { XopcShareIntakeDialog } from './ShareIntakeDialog';
 import { XopcIncomingShare } from '../model/share';
 import { XopcChatRepository } from '../repository/chatRepository';
+import { XopcPersonalAgentViewModel } from '../viewmodel/personalAgentViewModel';
 import { userErrorMessage } from '../common/userError';
 import { shareIntake, XopcShareIntake } from '../service/shareIntake';
 import { XopcMobileRoute } from '../model/home';
@@ -54,6 +56,7 @@ export struct XopcHomeView {
   @Local layout: XopcLayoutState = layoutState;
   @Local secondaryBottomRegionHeight: number = 0;
   @Local attention: XopcProgressViewModel = new XopcProgressViewModel();
+  @Local personalAgent: XopcPersonalAgentViewModel = new XopcPersonalAgentViewModel();
   @Local requestedChatId: string = '';
   @Local activeChatId: string = '';
   @Local requestedChatDraft: string = '';
@@ -75,6 +78,7 @@ export struct XopcHomeView {
   @Local pendingChatId: string = '';
   @Local intake: XopcShareIntake = shareIntake;
   private chatRepository: XopcChatRepository = new XopcChatRepository();
+  private personalOpening: boolean = false;
   private quickEditor: TextInputController = new TextInputController();
   private deletedChatIds: Set<string> = new Set<string>();
   private replacementRevision: number = 0;
@@ -98,6 +102,7 @@ export struct XopcHomeView {
     };
     notificationNavigation.consume();
     this.attention.refresh();
+    void this.personalAgent.refresh();
     this.attentionTimer = setInterval((): void => { this.attention.refresh(); }, 30000);
   }
   aboutToDisappear(): void {
@@ -251,6 +256,25 @@ export struct XopcHomeView {
     if (focusComposer) this.chatFocusRevision++;
     this.pathStack.clear();
     this.activateTab(0);
+  }
+
+  private async openPersonalChat(): Promise<void> {
+    if (this.personalOpening) return;
+    this.personalOpening = true;
+    const originatingTab = this.tab;
+    const selectedRevision = this.chatRequestRevision;
+    try {
+      const record = await this.personalAgent.openOrCreate();
+      if (this.tab !== originatingTab || selectedRevision !== this.chatRequestRevision) return;
+      if (!record) {
+        this.getUIContext().getPromptAction().showToast({ message: userErrorMessage(this.personalAgent.error, 'save') });
+        return;
+      }
+      this.returnToConversations = false;
+      this.switchToChat(record.conversationId, '');
+    } finally {
+      this.personalOpening = false;
+    }
   }
 
   private openConversationFromList(id: string, focusComposer: boolean): void {
@@ -450,7 +474,14 @@ export struct XopcHomeView {
       Stack({ alignContent: Alignment.TopEnd }) {
         Row() {
           if (index === 0) {
-            XopcLoopi({ extent: 28, compact: true, activePage: this.tab === 0 && !this.detailVisible }).id('assistant-tab-loopi')
+            if (this.personalAgent.record?.state === 'ready'
+              && this.personalAgent.record.conversationId === this.activeChatId) {
+              XopcPersonalAgentAvatar({ extent: 28, compact: true, activePage: this.tab === 0 && !this.detailVisible,
+                agentId: this.personalAgent.record.agentId,
+                appearance: this.personalAgent.record.appearance }).id('assistant-tab-personal-avatar')
+            } else {
+              XopcLoopi({ extent: 28, compact: true, activePage: this.tab === 0 && !this.detailVisible }).id('assistant-tab-loopi')
+            }
           } else {
             SymbolGlyph(icon).fontSize(22).fontColor([this.tab === index ? this.colors.accent : this.colors.secondary])
           }
@@ -464,6 +495,7 @@ export struct XopcHomeView {
       }
       Text(label).fontSize(11).fontWeight(FontWeight.Medium)
         .fontColor(this.tab === index ? this.colors.accent : this.colors.secondary)
+        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
     }.width('100%').height(44).justifyContent(FlexAlign.Center)
       .backgroundColor(Color.Transparent).borderRadius(26)
     }.id('main-tab-' + index).layoutWeight(1).height(44).padding(0).borderRadius(26).backgroundColor(Color.Transparent)
@@ -474,7 +506,9 @@ export struct XopcHomeView {
   @Builder
   dockItems() {
     Row() {
-      this.tabItem(0, $r('app.string.assistant'), $r('sys.symbol.ellipsis_bubble'))
+      this.tabItem(0, this.personalAgent.record?.state === 'ready'
+        && this.personalAgent.record.conversationId === this.activeChatId
+        ? this.personalAgent.record.displayName : $r('app.string.assistant'), $r('sys.symbol.ellipsis_bubble'))
       this.tabItem(1, $r('app.string.conversations'), $r('sys.symbol.message'))
       this.tabItem(2, $r('app.string.progress'), $r('sys.symbol.checkmark_circle'))
       this.tabItem(3, $r('app.string.notes'), $r('sys.symbol.doc'))
@@ -608,6 +642,8 @@ export struct XopcHomeView {
       Column() {
       Tabs({ barPosition: BarPosition.End, index: this.tab }) {
         TabContent() { XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
+          personalAgent: this.personalAgent.record, personalBusy: this.personalAgent.creating,
+          onOpenPersonal: (): void => { void this.openPersonalChat(); },
           focusRevision: this.chatFocusRevision,
           requestedAction: this.requestedChatAction, actionRevision: this.chatActionRevision,
           intakeRevision: this.intake.chatRevision, intakeText: this.requestedChatDraft,
@@ -631,7 +667,10 @@ export struct XopcHomeView {
           bottomInset: this.secondaryBottomRegionHeight,
           onStartVoice: (): void => { void this.startNoteCapture(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
-        TabContent() { XopcPersonalView({ activePage: this.tab === 4 && !this.detailVisible, bottomInset: this.secondaryBottomRegionHeight, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
+        TabContent() { XopcPersonalView({ activePage: this.tab === 4 && !this.detailVisible,
+          bottomInset: this.secondaryBottomRegionHeight, personalAgent: this.personalAgent.record,
+          personalBusy: this.personalAgent.creating, onOpenPersonal: (): void => { void this.openPersonalChat(); },
+          onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
       }.scrollable(false).barHeight(0).barMode(BarMode.Fixed)
         .animationDuration(0)
         .onChange((index: number): void => { this.tab = index; })

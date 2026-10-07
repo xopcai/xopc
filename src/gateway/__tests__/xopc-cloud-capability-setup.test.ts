@@ -1,11 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
 
 import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import type { CatalogModel, CatalogSource } from '../../providers/model-catalog-store.js';
+import { getModelCatalogStore } from '../../providers/model-catalog-store.js';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import {
+  applyXopcCloudCapabilitySetup,
   prepareXopcCloudCapabilitySetup,
   selectXopcCloudCapabilities,
 } from '../xopc-cloud-capability-setup.js';
@@ -84,6 +87,47 @@ beforeAll(() => initializeTestAgentCatalog());
 afterAll(() => closeXopcDatabase());
 
 describe('XOPC Cloud capability setup', () => {
+  it('keeps an available API-key chat default and explicit media settings after OAuth', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
+    try {
+      initializeTestAgentCatalog({ defaults: {
+        models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
+        skills: { mode: 'selected', include: [] }, tools: {}, workflows: {}, runtime: {},
+      } });
+      getModelCatalogStore().saveSource('xopc-cloud', completeCatalog);
+      const config = ConfigSchema.parse({
+        tools: { media: { audio: { enabled: false, provider: 'xopc-local' } } },
+        messages: { tts: { enabled: false, provider: 'edge' } },
+      });
+      const saved: typeof config[] = [];
+      const result = await applyXopcCloudCapabilitySetup({
+        currentConfig: config,
+        saveConfig: async (next) => { saved.push(next); return { saved: true }; },
+      });
+      expect(result.configured).toBe(true);
+      expect(new AgentCatalogRepository().getSettings().defaults.models.chat.primary).toBe('openai/gpt-5');
+      expect(saved[0].tools?.media?.audio).toEqual(config.tools?.media?.audio);
+      expect(saved[0].messages?.tts).toEqual(config.messages?.tts);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('sets up published chat capabilities even if image and speech models are missing', async () => {
+    initializeTestAgentCatalog({ defaults: {
+      models: { chat: { primary: 'missing/model', fallbacks: [] }, intents: {} },
+      skills: { mode: 'selected', include: [] }, tools: {}, workflows: {}, runtime: {},
+    } });
+    getModelCatalogStore().saveSource('xopc-cloud', source([model({ id: 'chat', kind: 'language' })]));
+    const saved: Array<ReturnType<typeof ConfigSchema.parse>> = [];
+    const result = await applyXopcCloudCapabilitySetup({
+      currentConfig: ConfigSchema.parse({}),
+      saveConfig: async (next) => { saved.push(next); return { saved: true }; },
+    });
+    expect(result).toMatchObject({ configured: true, missing: ['vision', 'image-generation', 'stt', 'tts'] });
+    expect(saved).toHaveLength(1);
+    expect(new AgentCatalogRepository().getSettings().defaults.models.chat.primary).toBe('xopc-cloud/chat');
+  });
   it('selects the Cloud recommendation for every managed capability', () => {
     expect(selectXopcCloudCapabilities(completeCatalog)).toEqual({
       missing: [],
@@ -98,6 +142,24 @@ describe('XOPC Cloud capability setup', () => {
         realtimeTts: { model: 'tts-recommended', voice: 'voice-a' },
         realtimeOmni: { model: 'omni-live', voice: 'voice-a' },
       },
+    });
+  });
+
+  it('starts realtime speech with a general voice when the catalog offers Cherry', () => {
+    const tts = completeCatalog.models.find((entry) => entry.id === 'tts-recommended')!;
+    const catalog = source(completeCatalog.models.map((entry) => entry.id === tts.id ? {
+      ...entry,
+      voice: voiceManifestSchema.parse({
+        ...tts.voice,
+        voices: [
+          { id: 'Chelsie', name: 'Chelsie', languages: ['zh'] },
+          { id: 'Cherry', name: 'Cherry', languages: ['zh'] },
+        ],
+        defaultVoice: 'Chelsie',
+      }),
+    } : entry));
+    expect(selectXopcCloudCapabilities(catalog).selection?.realtimeTts).toEqual({
+      model: 'tts-recommended', voice: 'Cherry',
     });
   });
 

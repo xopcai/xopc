@@ -70,6 +70,7 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import { buildCapabilityPlansForConfig } from '../../../capabilities/readiness/index.js';
 import { getXopcCloudCatalogCoordinator } from '../../../providers/xopc-cloud-catalog-coordinator.js';
+import { dismissXopcCloudOnboarding, getXopcCloudOnboardingStatus } from '../../xopc-cloud-onboarding.js';
 
 function catalogDisplayNames(providerId: string, modelId: string): { displayNames?: Partial<Record<'zh-CN' | 'en', string>> } {
   const model = getModelCatalogStore().getSource(providerId)?.models.find(item => item.id === modelId);
@@ -126,6 +127,19 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
   const { service, strictRateLimitMiddleware } = deps;
   const catalogSync = service.getModelCatalogSync();
   const xopcCloudAccount = new XopcCloudAccountService();
+
+  authenticated.get('/api/models/cloud-onboarding', async (c) => {
+    const [status, auth] = await Promise.all([
+      getXopcCloudOnboardingStatus(),
+      getProviderAuthState('xopc-cloud'),
+    ]);
+    return c.json({ ok: true, payload: { status, hasGrant: auth.authMode === 'oauth' } });
+  });
+
+  authenticated.put('/api/models/cloud-onboarding', strictRateLimitMiddleware, async (c) => {
+    await dismissXopcCloudOnboarding();
+    return c.json({ ok: true, payload: { status: 'dismissed' } });
+  });
 
   authenticated.get('/api/models/catalog/status', (c) => {
     const readiness = getXopcCloudCatalogCoordinator().snapshot();

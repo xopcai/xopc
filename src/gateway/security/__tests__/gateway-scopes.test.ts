@@ -25,6 +25,11 @@ describe('gateway scopes', () => {
     }
   });
   it('maps read and write operations separately', () => {
+    expect(requiredGatewayScope('GET', '/api/personal-agent')).toBe('sessions.read');
+    expect(requiredGatewayScope('POST', '/api/personal-agent')).toBe('sessions.write');
+    expect(requiredGatewayScope('PATCH', '/api/personal-agent/profile')).toBe('sessions.write');
+    expect(requiredGatewayScope('GET', '/api/personal-agent/activity')).toBe('tasks.read');
+    expect(requiredGatewayScope('GET', '/api/personal-agent-other')).toBe('gateway.admin');
     expect(requiredGatewayScope('POST', '/api/automations/simulate')).toBe('automations.read');
     expect(requiredGatewayScope('POST', '/api/automations/draft')).toBe('automations.write');
     expect(requiredGatewayScope('POST', '/api/automations/simulate-other')).toBe('automations.write');

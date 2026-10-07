@@ -7,7 +7,8 @@ import { getXopcDatabase } from '../../storage/sqlite/index.js';
 import { AgentCatalogRepository } from '../repository.js';
 
 const MIGRATION_ID = 'agent-identity-structured-v1';
-const FIELDS: Record<string, keyof Omit<AgentProfile, 'instructions'>> = {
+const FIELDS: Record<string, keyof Pick<AgentProfile,
+  'name' | 'description' | 'creature' | 'style' | 'language' | 'emoji' | 'avatar'>> = {
   name: 'name', 名称: 'name',
   description: 'description', 简介: 'description', 一句话介绍: 'description', 职责: 'description',
   creature: 'creature', type: 'creature', role: 'creature', 类型: 'creature', 角色: 'creature',
