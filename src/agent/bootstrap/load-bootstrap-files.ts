@@ -4,8 +4,6 @@ import { join, resolve } from 'node:path';
 import { stripFrontMatter } from '../context/workspace.js';
 import {
   DEFAULT_AGENTS_FILENAME,
-  DEFAULT_HEARTBEAT_FILENAME,
-  DEFAULT_IDENTITY_FILENAME,
   DEFAULT_SOUL_FILENAME,
   DEFAULT_TOOLS_FILENAME,
   REQUIRED_AGENT_PROFILE_MARKDOWN_FILE_SET,
@@ -16,8 +14,6 @@ const PROFILE_LOAD_ORDER: BootstrapFileName[] = [
   DEFAULT_AGENTS_FILENAME,
   DEFAULT_SOUL_FILENAME,
   DEFAULT_TOOLS_FILENAME,
-  DEFAULT_IDENTITY_FILENAME,
-  DEFAULT_HEARTBEAT_FILENAME,
 ];
 
 function readProfileFile(filePath: string): string | null {

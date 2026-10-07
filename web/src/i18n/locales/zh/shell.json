@@ -30,7 +30,6 @@
     "settingsGateway": "本机服务",
     "settingsRuntimes": "运行环境",
     "settingsDevices": "设备",
-    "settingsHeartbeat": "主动提醒",
     "settingsTunnel": "远程访问",
     "settingsShares": "分享",
     "settingsCron": "定时任务",

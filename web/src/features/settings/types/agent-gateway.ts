@@ -22,7 +22,16 @@ export type SkillDefaults =
 export type SkillOverride =
   | { mode: 'merge'; add: string[]; remove: string[] }
   | { mode: 'replace'; include: string[] };
-export type AgentProfile = { name: string; instructions?: string };
+export type AgentProfile = {
+  name: string;
+  description?: string;
+  creature?: string;
+  style?: string;
+  language?: string;
+  emoji?: string;
+  avatar?: string;
+  instructions?: string;
+};
 export type AgentDefaults = {
   models: AgentModelsDefaults;
   skills: SkillDefaults;

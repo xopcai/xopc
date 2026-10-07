@@ -16,9 +16,11 @@ import {
   type AgentProfileEditorHandle,
 } from '@/features/settings/agents/agent-profile-editor';
 import { updateGatewayAgent } from '@/features/settings/agents-admin-api';
+import { CREATURE_PRESETS } from '@/features/settings/agents/agent-profile-markdown';
 import type {
   AgentModelsOverride,
   AgentOverride,
+  AgentProfile,
   GatewayAgentRow,
   ModelIntent,
   ModelRoute,
@@ -186,6 +188,12 @@ export function AgentEditor({
     ? (zh ? `${agent.effective.skills.include.length} 个已选技能` : `${agent.effective.skills.include.length} selected skills`)
     : (zh ? '所有已启用技能' : 'All enabled skills');
   const profileName = draft.profile?.name ?? agent.name ?? agent.id;
+  const updateIdentity = (field: keyof Pick<AgentProfile, 'name' | 'description' | 'creature' | 'style' | 'language' | 'emoji' | 'avatar'>, value: string) => {
+    setDraft((current) => ({
+      ...current,
+      profile: { ...current.profile, name: current.profile?.name ?? agent.name ?? agent.id, [field]: value },
+    }));
+  };
   const workingDirectoryMessages = getMessages(zh ? 'zh' : 'en').chat.workingDirectory;
   const intentLabels: Record<ModelIntent, string> = {
     fast: messages.editorIntentFast,
@@ -346,17 +354,26 @@ export function AgentEditor({
 
           {profileVisited ? (
             <div className={cn('space-y-6', panel !== 'profile' && 'hidden')}>
-              <SectionTitle title={zh ? '身份、个性与工作区' : 'Identity, behavior, and workspace'} description={zh ? '完整管理这个智能体的身份资料、五类角色文件和工作目录。' : 'Manage this agent’s identity, all five profile documents, and working directory.'} />
+              <SectionTitle title={zh ? '身份、个性与工作区' : 'Identity, behavior, and workspace'} description={zh ? '管理结构化身份资料、三类角色文件和工作目录。' : 'Manage structured identity, three profile documents, and the working directory.'} />
+              <section className="rounded-2xl border border-edge bg-surface-base p-4 sm:p-5">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><Sparkles className="size-4" aria-hidden /></span>
+                  <div><h4 className="text-sm font-semibold text-fg">{zh ? '智能体身份' : 'Agent identity'}</h4><p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '身份资料保存在智能体配置中，供界面、对话和语音共同使用。' : 'Identity is saved in the Agent profile and shared by the UI, chat, and voice.'}</p></div>
+                </div>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <label className="text-xs font-medium text-fg-muted">{zh ? '名称' : 'Name'}<input className={`${inputClass} mt-1.5`} value={profileName} onChange={(event) => updateIdentity('name', event.target.value)} placeholder={zh ? '例如：小助' : 'e.g. Nova'} /></label>
+                  <label className="text-xs font-medium text-fg-muted">{zh ? '一句话介绍' : 'Description'}<input className={`${inputClass} mt-1.5`} value={draft.profile?.description ?? ''} onChange={(event) => updateIdentity('description', event.target.value)} placeholder={zh ? '擅长什么、如何帮助你' : 'What this agent is great at'} /></label>
+                  <label className="text-xs font-medium text-fg-muted">{zh ? '类型' : 'Type'}<input className={`${inputClass} mt-1.5`} list={`agent-creatures-${agent.id}`} value={draft.profile?.creature ?? ''} onChange={(event) => updateIdentity('creature', event.target.value)} placeholder={zh ? 'AI 助手、研究伙伴…' : 'AI assistant, research partner…'} /><datalist id={`agent-creatures-${agent.id}`}>{CREATURE_PRESETS.map((item) => <option key={item.value} value={item.value}>{zh ? item.labelZh : item.labelEn}</option>)}</datalist></label>
+                  <label className="text-xs font-medium text-fg-muted">{zh ? '表达风格' : 'Style'}<input className={`${inputClass} mt-1.5`} value={draft.profile?.style ?? ''} onChange={(event) => updateIdentity('style', event.target.value)} placeholder={zh ? '例如：直接、温和' : 'e.g. direct and warm'} /></label>
+                  <label className="text-xs font-medium text-fg-muted">{zh ? '主要语言' : 'Primary language'}<input className={`${inputClass} mt-1.5`} value={draft.profile?.language ?? ''} onChange={(event) => updateIdentity('language', event.target.value)} placeholder={zh ? '例如：简体中文' : 'e.g. English'} /></label>
+                  <label className="text-xs font-medium text-fg-muted">{zh ? '签名表情' : 'Signature emoji'}<input className={`${inputClass} mt-1.5`} value={draft.profile?.emoji ?? ''} onChange={(event) => updateIdentity('emoji', event.target.value)} placeholder="✨" /></label>
+                  <label className="text-xs font-medium text-fg-muted">{zh ? '头像地址' : 'Avatar URL or path'}<input className={`${inputClass} mt-1.5`} value={draft.profile?.avatar ?? ''} onChange={(event) => updateIdentity('avatar', event.target.value)} placeholder={zh ? 'URL 或本地路径' : 'URL or local path'} /></label>
+                </div>
+              </section>
               <AgentProfileEditor
                 ref={profileEditorRef}
                 agentId={agent.id}
                 zh={zh}
-                inputClass={inputClass}
-                name={profileName}
-                onNameChange={(name) => setDraft((current) => ({
-                  ...current,
-                  profile: { name, ...(current.profile?.instructions ? { instructions: current.profile.instructions } : {}) },
-                }))}
                 onDirtyChange={handleProfileFilesDirty}
               />
               <section className="rounded-2xl border border-edge bg-surface-base p-4 sm:p-5">
@@ -378,8 +395,8 @@ export function AgentEditor({
               </section>
               <section className="rounded-2xl border border-edge bg-surface-base p-4 sm:p-5">
                 <h4 className="text-sm font-semibold text-fg">{zh ? '附加指令' : 'Additional instructions'}</h4>
-                <p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '仅用于需要高优先级补充的简短规则；完整个性与规范建议写入上方角色配置。' : 'Use this for short, high-priority additions. Keep the full personality and operating guidance in the profile documents above.'}</p>
-                <textarea rows={4} className={`${inputClass} mt-4 resize-y leading-6`} value={draft.profile?.instructions ?? ''} onChange={(event) => setDraft((current) => ({ ...current, profile: { name: current.profile?.name || agent.name || agent.id, instructions: event.target.value || undefined } }))} placeholder={zh ? '可选：补充必须始终遵循的规则' : 'Optional: add a rule that must always be followed'} />
+                <p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '补充简短的执行规则；个性与长期工作规范请写入上方角色配置。' : 'Add short execution rules. Keep personality and lasting work guidance in the profile documents above.'}</p>
+                <textarea rows={4} className={`${inputClass} mt-4 resize-y leading-6`} value={draft.profile?.instructions ?? ''} onChange={(event) => setDraft((current) => ({ ...current, profile: { ...current.profile, name: current.profile?.name || agent.name || agent.id, instructions: event.target.value || undefined } }))} placeholder={zh ? '可选：补充必须始终遵循的规则' : 'Optional: add a rule that must always be followed'} />
               </section>
             </div>
           ) : null}

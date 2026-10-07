@@ -5,7 +5,6 @@ import {
   FileText,
   FolderOpen,
   Globe,
-  Heart,
   Radio,
   Keyboard,
   Layers,
@@ -43,7 +42,6 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsGateway: Globe,
   settingsRuntimes: TerminalSquare,
   settingsDevices: Smartphone,
-  settingsHeartbeat: Heart,
   settingsTunnel: Radio,
   settingsShares: Share2,
 };

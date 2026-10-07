@@ -183,7 +183,7 @@
     "tuiDefaultAgentSaved": "Saved",
     "tuiDefaultAgentInvalid": "Choose an available agent for the TUI default.",
     "selectAgent": "Agent",
-    "selectAgentHint": "Choose an entry to edit. Profile Markdown (SOUL.md, IDENTITY.md, …) is read from that agent's `agents/<id>/profile/` directory.",
+    "selectAgentHint": "Choose an entry to edit. Profile Markdown (SOUL.md, AGENTS.md, …) is read from that agent's `agents/<id>/profile/` directory.",
     "agent": "Agent",
     "defaultBadge": "default",
     "globalDefaultBadge": "global default",
@@ -236,7 +236,7 @@
     "addAgentAria": "Add agent",
     "createModalCancel": "Cancel",
     "closeDialogAria": "Close",
-    "filesHint": "Editable persona files (SOUL, IDENTITY, …). Changes save automatically after you stop typing; use Preview to render Markdown.",
+    "filesHint": "Editable persona files (SOUL, AGENTS, …). Changes save automatically after you stop typing; use Preview to render Markdown.",
     "filesLoading": "Loading file list…",
     "filesEmpty": "No files yet.",
     "pickFile": "Select a file to edit.",
@@ -555,7 +555,7 @@
     "copyFromExistingAgentNone": "Do not copy; create a new agent",
     "duplicateName": "Copy of {{name}}",
     "duplicateIdSuffix": "-copy",
-    "copyProfileFiles": "Copy profile files (SOUL, IDENTITY, …)",
+    "copyProfileFiles": "Copy profile files (SOUL, AGENTS, …)",
     "createCopy": "Create Copy"
   }
 }

@@ -33,7 +33,7 @@ describe('loadProfileMarkdownFiles', () => {
     writeFileSync(join(profileDir, DEFAULT_SOUL_FILENAME), '# SOUL\n\nHello', 'utf-8');
 
     const files = loadProfileMarkdownFiles(profileDir);
-    expect(files.find((f) => f.name === 'IDENTITY.md')?.missing).toBe(true);
+    expect(files.find((f) => f.name === 'SOUL.md')?.content).toContain('Hello');
     expect(files.some((f) => f.name === 'AGENTS.md')).toBe(false);
     expect(files.some((f) => f.name === 'USER.md')).toBe(false);
     expect(files.some((f) => f.name === 'MEMORY.md')).toBe(false);

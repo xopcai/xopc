@@ -25,18 +25,16 @@
 - `tui.defaultAgent`：迁为按 surface 保存的 Agent 偏好
 - Agent revision、生命周期、创建与更新时间
 - Agent 工作区初始化和清理任务
+- Agent 结构化身份：名称、简介、类型、表达风格、语言、表情、头像
 
 ### 继续保留在文件系统
 
 - `SOUL.md`
-- `IDENTITY.md`
 - `AGENTS.md`
 - `TOOLS.md`
-- `HEARTBEAT.md`
 - Agent workspace 内容
 - Agent 私有认证文件
 
-结构化名称和 `profile.instructions` 以 SQLite 为准。Profile Markdown 是附加上下文，不反向覆盖结构化字段。创建时可以把名称写入初始 `IDENTITY.md`，后续不能把其中的 `Name` 当作数据库字段的事实来源。
 
 ### 继续保留在 `xopc.json`
 
@@ -44,6 +42,8 @@
 - 不直接构成 Agent 注册表的全局应用设置
 
 JSON 可以作为 Agent 的导入、导出和备份格式，但不再是运行时事实来源。
+
+升级时一次性解析原 `IDENTITY.md` 的身份字段写入 `agents.profile_json`，已有数据库字段优先。原文件改名为 `.identity-migration-backup` 保留供核对；运行时、界面和语音不再读取该文件。
 
 ## 数据模型
 

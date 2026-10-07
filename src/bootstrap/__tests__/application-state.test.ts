@@ -64,6 +64,6 @@ describe('bootstrapApplicationStateSync', () => {
     expect(repository.snapshot().agents.map((agent) => agent.id)).toEqual([
       'coder', 'conductor', 'creative', 'data-analyst', 'main', 'researcher', 'writer',
     ]);
-    expect(existsSync(join(stateDir, 'agents', 'main', 'profile', 'IDENTITY.md'))).toBe(true);
+    expect(existsSync(join(stateDir, 'agents', 'main', 'profile', 'IDENTITY.md'))).toBe(false);
   });
 });

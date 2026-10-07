@@ -184,7 +184,7 @@ export interface CreateCoreToolsOptions {
   createDelegationPolicy?: () => import('../orchestration/agent-turn-policy.js').AgentTurnPolicy;
   /** Workspace root for file/command tools (defaults to factory workspace). */
   workspace?: string;
-  /** Canonical `agents/<id>/profile/`: bare SOUL.md / IDENTITY.md resolve here after the workspace. */
+  /** Canonical `agents/<id>/profile/`: bare SOUL.md resolve here after the workspace. */
   profileMarkdownRoot?: string;
   /** Tool `name` values to omit (e.g. `exec_command`, `extensions` for extension tools). */
   disabledTools?: Set<string>;

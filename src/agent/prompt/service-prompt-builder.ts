@@ -5,6 +5,7 @@
  */
 
 import type { Config } from '../../config/schema.js';
+import type { AgentProfile } from '../../agent-config/index.js';
 import {
   getInteractionState,
   getUserTrustPolicy,
@@ -32,6 +33,7 @@ export interface SystemPromptBuildOptions {
   workspaceOverride?: string;
   profileMarkdownPathRoot?: string;
   customInstructions?: string;
+  agentProfile?: AgentProfile;
   skillPromptText?: string;
   skillAllowlist?: string[];
   registeredToolNames?: string[];
@@ -73,7 +75,6 @@ export class SystemPromptBuilder {
       ? getInteractionState(options.conversationId)
       : undefined;
     const interactionPrompt = interactionState ? buildInteractionStatePrompt(interactionState) : '';
-    const heartbeatEnabled = this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false;
     const userTimezone = isXopcDatabaseOpen() ? getUserTimezone() : undefined;
 
     const ttsMerged = mergeTtsConfigFromAppConfig(this.config.messages?.tts);
@@ -94,7 +95,6 @@ export class SystemPromptBuilder {
       toolSummaries: options.toolSummaries,
       userTimezone,
       externalMemoryInstructions: options.externalMemoryInstructions,
-      heartbeatEnabled,
       ttsSystemHint,
       extraSystemPrompt: [
         options.extraSystemPrompt,
@@ -112,8 +112,6 @@ export class SystemPromptBuilder {
     const basePrompt = buildBaseSystemPrompt(ws, {
       contextFiles,
       promptMode: resolved.promptMode,
-      heartbeatEnabled: resolved.heartbeatEnabled,
-      heartbeatPrompt: resolved.heartbeatPrompt,
       toolNames: resolved.toolNames,
       toolSummaries: resolved.toolSummaries,
       memoryCitationsMode: resolved.memoryCitationsMode,
@@ -133,6 +131,7 @@ export class SystemPromptBuilder {
       actionTrustLevel,
       responseLanguage,
       customInstructions: options.customInstructions,
+      agentProfile: options.agentProfile,
     });
 
     const skillPrompt =
@@ -188,12 +187,10 @@ export class SystemPromptBuilder {
       toolNames: options?.registeredToolNames,
       userTimezone: isXopcDatabaseOpen() ? getUserTimezone() : undefined,
       externalMemoryInstructions: options?.externalMemoryInstructions,
-      heartbeatEnabled: this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false,
     });
     return buildBaseSystemPrompt(ws, {
       contextFiles,
       promptMode: resolved.promptMode,
-      heartbeatEnabled: resolved.heartbeatEnabled,
       toolNames: resolved.toolNames,
       userTimezone: resolved.userTimezone,
       runtime: resolved.runtimeInfo,

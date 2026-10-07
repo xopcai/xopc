@@ -21,7 +21,6 @@ import {
 import type { AgentEntry, AgentModelsOverride, EffectiveAgentConfig, SkillOverride } from '../agent-config/index.js';
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { AgentCatalogService } from '../agent-catalog/service.js';
-import { WORKSPACE_FILES } from '../config/paths.js';
 import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
 import { GATEWAY_BUILTIN_TOOL_IDS } from './agent-builtin-tools.js';
 import { isPathUnderWorkspace, resolveWorkspaceSafePath } from './workspace-editor-path.js';
@@ -33,7 +32,7 @@ export type GatewayAgentRow = {
   name?: string;
   description?: string;
   language?: string;
-  /** Value from `IDENTITY.md` **Avatar:** line when present (may be URL, `xopc:…`, etc.). */
+  /** Avatar reference from the structured Agent profile. */
   avatar?: string;
   workspace: string;
   /** Absolute directory for profile Markdown (`SOUL.md`, …) and gateway avatars: `agents/<id>/profile/`. */
@@ -69,33 +68,6 @@ function collectAgentIdsForList(): string[] {
   return [...ids];
 }
 
-/** Extract `**Avatar:**` value from profile IDENTITY.md (same line shape as the gateway console parser). */
-export function extractAvatarFromIdentityMarkdown(content: string): string | undefined {
-  return parseIdentityMarkdown(content).avatar || undefined;
-}
-
-export function parseIdentityMarkdown(content: string): {
-  name?: string;
-  description?: string;
-  language?: string;
-  avatar?: string;
-} {
-  const out: { name?: string; description?: string; language?: string; avatar?: string } = {};
-  for (const line of content.split('\n')) {
-    const match = line.match(/^[-*]\s+\*\*(Name|Description|Language|Avatar):\*\*\s*(.*)/i);
-    if (match) {
-      const key = match[1]?.toLowerCase();
-      const v = match[2]?.trim() ?? '';
-      if (!v || /^_\(.*\)_$/.test(v)) continue;
-      if (key === 'name') out.name = v;
-      if (key === 'description') out.description = v;
-      if (key === 'language') out.language = v;
-      if (key === 'avatar') out.avatar = v;
-    }
-  }
-  return out;
-}
-
 export async function listGatewayAgents(
   _options: { locale?: string } = {},
 ): Promise<GatewayAgentsListResponse> {
@@ -105,20 +77,13 @@ export async function listGatewayAgents(
     const profile = resolveEffectiveAgentProfile(id);
     const entry = listAgentEntries().find((e) => normalizeAgentId(e.id) === id);
     if (!entry) continue;
-    let identity: ReturnType<typeof parseIdentityMarkdown> = {};
-    try {
-      const identityPath = join(resolveAgentProfileDir(id), WORKSPACE_FILES.IDENTITY);
-      const content = await readFile(identityPath, 'utf-8');
-      identity = parseIdentityMarkdown(content);
-    } catch {
-      /* missing IDENTITY.md or unreadable */
-    }
+    const identity = entry.profile;
     agents.push({
       id,
-      name: entry.profile?.name ?? identity.name ?? id,
-      ...(identity.description ? { description: identity.description } : {}),
-      ...(identity.language ? { language: identity.language } : {}),
-      ...(identity.avatar ? { avatar: identity.avatar } : {}),
+      name: identity?.name ?? id,
+      ...(identity?.description ? { description: identity.description } : {}),
+      ...(identity?.language ? { language: identity.language } : {}),
+      ...(identity?.avatar ? { avatar: identity.avatar } : {}),
       workspace: profile.resolvedWorkspacePath,
       profileDir: resolveAgentProfileDir(id),
       override: structuredClone(entry),
@@ -363,7 +328,7 @@ export async function writeAgentProfileFile(
 }
 
 // ---------------------------------------------------------------------------
-// Binary agent avatar (profile markdown root dir, not a SOUL/IDENTITY markdown file)
+// Binary agent avatar under the Agent profile directory
 // ---------------------------------------------------------------------------
 
 const AGENT_AVATAR_MAX_BYTES = 512 * 1024;

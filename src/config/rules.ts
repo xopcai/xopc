@@ -69,9 +69,6 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   // Channels - hot reload (channel-specific prefixes are registered by channel plugins)
   { prefix: 'channels', kind: 'hot', description: 'Any channel subtree (e.g. future extensions)' },
   
-  // Heartbeat lives under gateway.heartbeat in config JSON (not top-level `heartbeat`)
-  { prefix: 'gateway.heartbeat', kind: 'hot', description: 'Heartbeat settings' },
-  
   // Web search - hot reload
   { prefix: 'webSearch', kind: 'hot', description: 'Web search settings' },
   { prefix: 'webTools', kind: 'hot', description: 'Web tools settings' },

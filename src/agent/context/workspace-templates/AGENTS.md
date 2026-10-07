@@ -11,7 +11,7 @@ This workspace is the agent's working area. Treat it as user-owned state.
 
 ## Startup Context
 
-Use runtime-provided startup context first. It may already include the shared user context and profile files such as `SOUL.md`, `IDENTITY.md`, `TOOLS.md`, `AGENTS.md`, and `HEARTBEAT.md`.
+Use runtime-provided startup context first. It may already include the shared user context and profile files such as `SOUL.md`, `TOOLS.md`, and `AGENTS.md`.
 
 Do not manually reread startup files unless:
 

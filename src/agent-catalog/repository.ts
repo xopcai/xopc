@@ -116,7 +116,13 @@ export class AgentCatalogRepository {
         (id, enabled, workspace_override, profile_json, overrides_json, provisioning_state,
          provisioning_error, revision, created_at, updated_at, deleted_at)
         VALUES (?, 1, NULL, ?, '{}', 'pending', NULL, 1, ?, ?, NULL)`)
-        .run(DEFAULT_AGENT_ID, JSON.stringify({ name: 'Main' }), now, now);
+        .run(DEFAULT_AGENT_ID, JSON.stringify({
+          name: 'Smart Assistant',
+          description: 'General-purpose personal assistant.',
+          creature: 'assistant',
+          language: 'en',
+          emoji: '✨',
+        }), now, now);
       db.prepare(`INSERT OR IGNORE INTO agent_catalog_settings
         (singleton_id, default_agent_id, defaults_json, revision, created_at, updated_at)
         VALUES (1, ?, ?, 1, ?, ?)`)

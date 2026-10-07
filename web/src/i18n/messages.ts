@@ -15,7 +15,6 @@ export type Tab =
   | 'settingsGateway'
   | 'settingsRuntimes'
   | 'settingsDevices'
-  | 'settingsHeartbeat'
   | 'settingsTunnel'
   | 'settingsShares'
   | 'settingsAgentBrowser'
@@ -37,7 +36,6 @@ export type SettingsSectionId =
   | 'gateway'
   | 'runtimes'
   | 'devices'
-  | 'heartbeat'
   | 'tunnel'
   | 'remote-access'
   | 'shares'
@@ -55,7 +53,6 @@ export type ModelsSettingsMessages = MessageBundle['modelsSettings'];
 export type ChannelsSettingsMessages = MessageBundle['channelsSettings'];
 export type VoiceSettingsMessages = MessageBundle['voiceSettings'];
 export type GatewaySettingsMessages = MessageBundle['gatewaySettings'];
-export type HeartbeatSettingsMessages = MessageBundle['heartbeatSettings'];
 export type TunnelSettingsMessages = MessageBundle['tunnelSettings'];
 export type SharesSettingsMessages = MessageBundle['sharesSettings'];
 export type WebSearchSettingsMessages = MessageBundle['webSearchSettings'];

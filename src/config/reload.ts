@@ -30,7 +30,6 @@ export interface ReloadCallbacks {
   onModelsReload?: ReloadCallback;
   onChannelsReload?: ReloadCallback;
   onCronReload?: ReloadCallback;
-  onHeartbeatReload?: ReloadCallback;
   onToolsReload?: ReloadCallback;
   onMcpReload?: ReloadCallback;
   onWebSearchReload?: ReloadCallback;
@@ -252,13 +251,6 @@ export class ConfigHotReloader {
     if (path.startsWith('cron.')) {
       if (this.callbacks.onCronReload) {
         await Promise.resolve(this.callbacks.onCronReload(newConfig));
-      }
-      return;
-    }
-
-    if (path === 'gateway.heartbeat' || path.startsWith('gateway.heartbeat.')) {
-      if (this.callbacks.onHeartbeatReload) {
-        await Promise.resolve(this.callbacks.onHeartbeatReload(newConfig));
       }
       return;
     }

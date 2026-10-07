@@ -13,10 +13,8 @@ const __dirname = dirname(__filename);
 /** Profile Markdown template file names (seeded into `agents/<id>/profile/`). */
 export const TEMPLATE_FILES = [
   'SOUL.md',
-  'IDENTITY.md',
   'TOOLS.md',
   'AGENTS.md',
-  'HEARTBEAT.md',
 ] as const;
 
 export type TemplateFile = (typeof TEMPLATE_FILES)[number];
@@ -142,15 +140,6 @@ _You're not a chatbot. You're becoming someone._
 
 This file is yours to evolve.
 `,
-    'IDENTITY.md': `# IDENTITY.md - Who Am I?
-
-_Fill this in during your first conversation._
-
-- **Name:**
-- **Creature:**
-- **Vibe:**
-- **Emoji:**
-`,
     'TOOLS.md': `# TOOLS.md - Local Notes
 
 Environment-specific notes:
@@ -158,17 +147,6 @@ Environment-specific notes:
 - SSH hosts
 - API endpoints
 - Device nicknames
-`,
-    'HEARTBEAT.md': `# HEARTBEAT.md - Periodic Checks
-
-Edit this file to define what you check during heartbeat polls.
-
-## Example Checklist
-
-- [ ] Check email for urgent messages
-- [ ] Check calendar for upcoming events
-
-**Remember:** If nothing needs attention, reply \`HEARTBEAT_OK\`.
 `,
   };
   

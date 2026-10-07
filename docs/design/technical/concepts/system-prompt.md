@@ -1,7 +1,7 @@
 ---
 summary: "What the xopc system prompt contains and how it is assembled"
 read_when:
-  - Editing system prompt text, tools list, or time/heartbeat sections
+  - Editing system prompt text, tools list, or time sections
   - Changing workspace bootstrap or skills injection behavior
 title: "System prompt"
 ---
@@ -21,14 +21,14 @@ The following project context files have been loaded:
 …
 ```
 
-`HEARTBEAT.md` (when enabled) appears under **Dynamic Project Context** below the prompt cache boundary.
-
 ## Bootstrap loading
 
 Runtime loads bootstrap files from **`agents/<agentId>/profile/`** in a fixed order (see [Workspace](workspace.md)):
 
+Agent identity is read from the structured catalog profile and rendered as an `Agent identity` prompt section. Profile Markdown supplies personality and working guidance only.
+
 - Per-file and total character budgets are runtime constants unless exposed by a future manifest runtime field.
-- Subagent and automation-run sessions use a minimal agent profile allowlist (AGENTS, TOOLS, SOUL, IDENTITY) while relevant assertions and knowledge come from the shared execution-context planner.
+- Subagent and automation-run sessions use a minimal agent profile allowlist (AGENTS, TOOLS, SOUL) while relevant assertions and knowledge come from the shared execution-context planner.
 - Profile context injection follows the selected manifest/runtime policy and session state.
 
 Implementation: `src/agent/bootstrap/`, assembled in `src/agent/prompt/system-prompt.ts`.

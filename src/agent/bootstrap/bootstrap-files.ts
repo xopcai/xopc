@@ -1,5 +1,4 @@
 import type { Config } from '../../config/schema.js';
-import { DEFAULT_HEARTBEAT_FILENAME } from '../context/workspace.js';
 import {
   getOrLoadBootstrapFiles,
   markBootstrapContextInjected,
@@ -10,36 +9,21 @@ import {
   resolveBootstrapMaxChars,
   resolveBootstrapTotalMaxChars,
 } from './bootstrap-context.js';
-import { filterBootstrapFilesForSession } from './filter-bootstrap-files.js';
 import { loadProfileBootstrapFiles } from './load-bootstrap-files.js';
 import type { EmbeddedContextFile, WorkspaceBootstrapFile } from './types.js';
 
 export { clearAllBootstrapSnapshots, clearBootstrapSnapshot } from './bootstrap-cache.js';
 
-function filterHeartbeatBootstrapFile(
-  files: WorkspaceBootstrapFile[],
-  exclude: boolean,
-): WorkspaceBootstrapFile[] {
-  if (!exclude) {
-    return files;
-  }
-  return files.filter((file) => file.name !== DEFAULT_HEARTBEAT_FILENAME);
-}
-
 export function resolveBootstrapFilesSync(params: {
   profileDir: string;
   conversationId?: string;
-  excludeHeartbeat?: boolean;
 }): WorkspaceBootstrapFile[] {
-  const rawFiles = loadProfileBootstrapFiles(params.profileDir);
-  const filtered = filterBootstrapFilesForSession(rawFiles, params.conversationId);
-  return filterHeartbeatBootstrapFile(filtered, params.excludeHeartbeat ?? false);
+  return loadProfileBootstrapFiles(params.profileDir);
 }
 
 export async function resolveBootstrapFilesForRun(params: {
   profileDir: string;
   conversationId?: string;
-  excludeHeartbeat?: boolean;
   warn?: (message: string) => void;
 }): Promise<WorkspaceBootstrapFile[]> {
   const conversationId = params.conversationId;
@@ -49,15 +33,13 @@ export async function resolveBootstrapFilesForRun(params: {
         conversationId,
       })
     : loadProfileBootstrapFiles(params.profileDir);
-  const filtered = filterBootstrapFilesForSession(rawFiles, conversationId);
-  return filterHeartbeatBootstrapFile(filtered, params.excludeHeartbeat ?? false);
+  return rawFiles;
 }
 
 export function resolveBootstrapContextSync(params: {
   profileDir: string;
   config?: Config;
   conversationId?: string;
-  excludeHeartbeat?: boolean;
   contextInjection?: 'always' | 'continuation-skip' | 'never';
 }): {
   bootstrapFiles: WorkspaceBootstrapFile[];
@@ -89,7 +71,6 @@ export async function resolveBootstrapContextForRun(params: {
   profileDir: string;
   config?: Config;
   conversationId?: string;
-  excludeHeartbeat?: boolean;
   contextInjection?: 'always' | 'continuation-skip' | 'never';
   warn?: (message: string) => void;
 }): Promise<{
