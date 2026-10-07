@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 
 import type {
   ComposerContextRef,
+  ComposerDispatchReceipt,
   ComposerDraft,
   ComposerSendHandler,
   WireAttachment,
@@ -55,6 +56,7 @@ export interface UseComposerActionsOptions {
   getThinkingLevel: () => string;
 
   onSend: ComposerSendHandler;
+  onDispatched?: (receipt: ComposerDispatchReceipt, draft: ComposerDraft) => void;
   onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | Promise<void>;
   onSteeringInterrupt?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void;
   onCommitEditFollowUp: (
@@ -96,6 +98,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     getContextRefs,
     getThinkingLevel,
     onSend,
+    onDispatched,
     onAddPendingFollowUp,
     onSteeringInterrupt,
     onCommitEditFollowUp,
@@ -130,7 +133,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
       draft.attachments.length > 0 ? draft.attachments : undefined,
       getThinkingLevel(),
       draft.contextRefs.length > 0 ? draft.contextRefs : undefined,
-      { onDispatched: () => {} },
+      { onDispatched: (receipt) => onDispatched?.(receipt, draft) },
     ];
     const result = onSend(...sendArgs);
     commitAcceptedSend(result, () => {
@@ -148,6 +151,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     voiceActive,
     cancelVoiceInput,
     onSend,
+    onDispatched,
     getThinkingLevel,
     onUserTextCommitted,
     resetEditor,

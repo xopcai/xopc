@@ -31,6 +31,7 @@ import {
   extractActiveTurnConversationPlan,
 } from '@/features/chat/messages/conversation-plan';
 import { MessageList } from '@/features/chat/messages/message-list';
+import { usePersonalSendTransition } from '@/features/chat/messages/use-personal-send-transition';
 import type { Message } from '@/features/chat/messages/messages.types';
 import {
   extractUserMessagePlainText,
@@ -345,6 +346,12 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     hasMore: session.hasMore,
     loadingMore: session.loadingMore,
     loadMoreMessages: session.loadMoreMessages,
+  });
+  const onPersonalSendDispatched = usePersonalSendTransition({
+    enabled: personal,
+    conversationId: session.conversationId,
+    messages: msgSlice.items,
+    viewportRef: scrollRef,
   });
   const [activeMessageIndex, setActiveMessageIndex] = useState(0);
   const timelineRafRef = useRef<number | null>(null);
@@ -1319,6 +1326,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
               <ReadAloudDock />
               <ChatComposer
                 personal={personal}
+                onPersonalSendDispatched={personal ? onPersonalSendDispatched : undefined}
                 placeholder={personal
                   ? stream.streaming || stream.sending
                     ? language === 'zh' ? '继续聊，或补充要求…' : 'Keep talking or add a detail…'

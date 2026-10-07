@@ -38,6 +38,8 @@ import {
   MAX_COMPOSER_CONTEXT_REFS,
   type ComposerAttachmentSummary,
   type ComposerContextRef,
+  type ComposerDispatchReceipt,
+  type ComposerDraft,
   type ComposerSendHandler,
   type WireAttachment,
 } from '@/features/chat/composer/composer.types';
@@ -109,6 +111,7 @@ export const ChatComposer = memo(function ChatComposer({
   modelSupportsThinking,
   onThinkingChange,
   onSend: submit,
+  onPersonalSendDispatched,
   onAbort,
   onAddPendingFollowUp,
   onSteeringInterrupt,
@@ -162,6 +165,7 @@ export const ChatComposer = memo(function ChatComposer({
   modelSupportsThinking: boolean;
   onThinkingChange: (level: string) => void | Promise<void>;
   onSend: ComposerSendHandler;
+  onPersonalSendDispatched?: (receipt: ComposerDispatchReceipt, source: DOMRect, draft: ComposerDraft) => void;
   onAbort: () => void;
   onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | Promise<void>;
   onSteeringInterrupt?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void;
@@ -532,6 +536,12 @@ export const ChatComposer = memo(function ChatComposer({
     getContextRefs: () => contextRefs,
     getThinkingLevel: () => thinkingLevelRef.current,
     onSend,
+    onDispatched: personal && onPersonalSendDispatched
+      ? (receipt, draft) => {
+          const source = editor.editorRef.current?.getBoundingClientRect();
+          if (source) onPersonalSendDispatched(receipt, source, draft);
+        }
+      : undefined,
     onAddPendingFollowUp,
     onSteeringInterrupt,
     onCommitEditFollowUp,
