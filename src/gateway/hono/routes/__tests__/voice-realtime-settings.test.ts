@@ -54,7 +54,9 @@ describe('realtime voice setup endpoints', () => {
 
   it('discovers realtime voices using the shared input credential', async () => {
     const response = await app().request('/api/voice/tts-voices?purpose=realtime&provider=alibaba&model=qwen3-tts-flash-realtime');
-    expect(await response.json()).toMatchObject({ payload: { voices: expect.arrayContaining([{ id: 'Cherry', name: 'Cherry' }]) } });
+    expect(await response.json()).toMatchObject({ payload: { voices: expect.arrayContaining([
+      expect.objectContaining({ id: 'Cherry', name: '芊悦 (Cherry)' }),
+    ]) } });
   });
 
   it('previews a bounded fixed sample using native PCM and releases the provider', async () => {

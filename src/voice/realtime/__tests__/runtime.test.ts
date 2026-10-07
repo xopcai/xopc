@@ -51,7 +51,7 @@ describe('VoiceRealtimeRuntime session creation', () => {
       engine: 'dictation',
       stt: {
         provider: 'alibaba',
-        model: 'qwen-audio-3.0-asr-flash-streaming',
+        model: 'qwen-audio-3.1-asr-flash-streaming',
         managed: false,
       },
     });
