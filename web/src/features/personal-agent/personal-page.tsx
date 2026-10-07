@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { ArrowUpRight, ListTodo, MessageCircle, Phone, Settings2, Upload, X } from 'lucide-react';
+import { ArrowUpRight, ListTodo, Phone, Settings2, Upload, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Skeleton } from '@/components/ui/skeleton';
@@ -42,6 +41,12 @@ type ModelOption = { id: string; name: string };
 type ApiResult<T> = { ok: boolean; payload: T };
 type Activity = { items: Array<{ id: string; title: string; phase: string; runStatus?: string; updatedAt: number }>; total: number };
 type ActivityItem = Activity['items'][number];
+type ProfileChanges = {
+  displayName?: string;
+  appearance?: PersonalAppearance;
+  preferences?: Partial<Preferences>;
+  voicePreference?: PersonalAgent['voicePreference'];
+};
 const ACTIVITY_PAGE_SIZE = 5;
 
 function activityTitle(title: string): string {
@@ -79,9 +84,9 @@ function ActivityRow({ item, zh }: { item: ActivityItem; zh: boolean }) {
 }
 
 const STYLE_OPTIONS = [
-  { id: 'direct', warmth: 'reserved', zh: '直接清楚', en: 'Clear and direct', zhExample: '先说结论，再说明下一步。', enExample: 'Lead with the answer, then the next step.' },
-  { id: 'natural', warmth: 'balanced', zh: '自然有分寸', en: 'Natural and measured', zhExample: '说清重点，也留出必要的解释。', enExample: 'Cover the point, with enough context to act.' },
-  { id: 'gentle', warmth: 'gentle', zh: '温和耐心', en: 'Warm and patient', zhExample: '语气柔和一些，仍然把事情说清楚。', enExample: 'Be gentle while keeping the answer clear.' },
+  { id: 'direct', warmth: 'reserved', zh: '直接', en: 'Direct' },
+  { id: 'natural', warmth: 'balanced', zh: '自然', en: 'Natural' },
+  { id: 'gentle', warmth: 'gentle', zh: '温和', en: 'Gentle' },
 ] as const;
 
 const APPEARANCES = [
@@ -89,10 +94,6 @@ const APPEARANCES = [
   { id: 'loopi-curious', zh: '好奇', en: 'Curious', color: 'bg-blue-100/50 dark:bg-blue-400/10' },
   { id: 'loopi-care', zh: '温和', en: 'Gentle', color: 'bg-violet-100/50 dark:bg-violet-400/10' },
 ] as const;
-
-function appearanceFor(id: PersonalAgent['appearance']) {
-  return APPEARANCES.find(item => item.id === id) ?? APPEARANCES[0];
-}
 
 function openingFor(preferences: Preferences, zh: boolean): string {
   if (preferences.warmth === 'reserved') return zh
@@ -104,28 +105,6 @@ function openingFor(preferences: Preferences, zh: boolean): string {
   return zh
     ? '有什么想讨论或推进的事？直接告诉我就好。'
     : 'What would you like to discuss or move forward? Just tell me what is on your mind.';
-}
-
-function responsePreviewFor(warmth: Preferences['warmth'], supportMode: Preferences['supportMode'], zh: boolean): string {
-  if (supportMode === 'listen') {
-    if (warmth === 'reserved') return zh ? '先说说这三件事。我听完再帮你排顺序。' : 'Tell me about the three tasks first. I’ll listen, then help order them.';
-    if (warmth === 'gentle') return zh ? '可以，慢慢说说每件事现在到哪一步。等你说完，我们再一起排顺序。' : 'Take your time telling me where each task stands. Once you’re done, we can sort the order together.';
-    return zh ? '你先说说三件事各自到哪一步。我听完再和你一起排顺序。' : 'Tell me where each task stands. I’ll listen first, then help you order them.';
-  }
-  if (supportMode === 'solutions') {
-    if (warmth === 'reserved') return zh ? '列出三件事和截止时间。我直接给你建议顺序与依据。' : 'List the three tasks and deadlines. I’ll give you a suggested order and why.';
-    if (warmth === 'gentle') return zh ? '把三件事和截止时间告诉我。我先帮你排出一个可行顺序，再解释为什么。' : 'Tell me the three tasks and deadlines. I’ll suggest a workable order and explain why.';
-    return zh ? '把三件事和截止时间发我，我会给出建议顺序和理由。' : 'Send me the three tasks and deadlines. I’ll suggest an order and explain why.';
-  }
-  if (warmth === 'reserved') return zh
-    ? '列出三件事、截止时间和影响范围。我帮你排优先级。'
-    : 'List the three tasks, deadlines, and impact. I’ll rank them.';
-  if (warmth === 'gentle') return zh
-    ? '我们先把三件事放到一起看。告诉我各自的截止时间，我帮你理清先后。'
-    : 'Let’s look at the three together. Tell me their deadlines, and I’ll help sort the order.';
-  return zh
-    ? '可以。把三件事和截止时间发我，我们先找出最该做的一件。'
-    : 'Sure. Send me the three tasks and deadlines, and we’ll identify the one to start with.';
 }
 
 function styleId(preferences: Preferences): string {
@@ -140,9 +119,11 @@ export function PersonalPage() {
   const setPageHeader = usePageHeaderStore(state => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore(state => state.clearPageHeader);
   const [record, setRecord] = useState<PersonalAgent | null>(null);
+  const recordRef = useRef<PersonalAgent | null>(null);
+  const profileUpdateQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const [models, setModels] = useState<ModelOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [savingCount, setSavingCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [welcomeDone, setWelcomeDone] = useState(true);
   const [avatarUploadFailed, setAvatarUploadFailed] = useState(false);
@@ -150,6 +131,8 @@ export function PersonalPage() {
   const [appearance, setAppearance] = useState<PersonalAppearance>('loopi');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null!);
+  const profileButtonRef = useRef<HTMLButtonElement>(null);
   const [displayName, setDisplayName] = useState('');
   const [addressAs, setAddressAs] = useState('');
   const [supportMode, setSupportMode] = useState<Preferences['supportMode']>('untangle');
@@ -157,6 +140,7 @@ export function PersonalPage() {
   const [detailLevel, setDetailLevel] = useState<Preferences['detailLevel']>('balanced');
   const [proactivity, setProactivity] = useState<Preferences['proactivity']>('decisions');
   const [showSettings, setShowSettings] = useState(false);
+  const [showAppearanceChoices, setShowAppearanceChoices] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
   const [activity, setActivity] = useState<Activity | null>(null);
   const [activityError, setActivityError] = useState(false);
@@ -166,7 +150,13 @@ export function PersonalPage() {
   const activityRequestRef = useRef(0);
   const openSettings = useCallback(() => {
     setShowActivity(false);
+    setShowAppearanceChoices(false);
     setShowSettings(true);
+  }, []);
+  const toggleSettings = useCallback(() => {
+    setShowActivity(false);
+    setShowAppearanceChoices(false);
+    setShowSettings(open => !open);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -175,6 +165,7 @@ export function PersonalPage() {
         fetchJson<ApiResult<PersonalAgent | null>>(apiUrl('/api/personal-agent')),
         fetchJson<ApiResult<ModelOption[]>>(apiUrl('/api/personal-agent/models')),
       ]);
+      recordRef.current = personal.payload;
       setRecord(personal.payload);
       if (personal.payload?.state === 'ready') {
         const onboarding = await fetchJson<ApiResult<{ completed: boolean; welcomeDone: boolean }>>(apiUrl('/api/personal-agent/onboarding'));
@@ -202,21 +193,37 @@ export function PersonalPage() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const saveStyle = async (nextRecord: PersonalAgent, name: string, style: string) => {
-    const option = STYLE_OPTIONS.find(item => item.id === style) ?? STYLE_OPTIONS[1];
-    const response = await fetchJson<ApiResult<PersonalAgent>>(apiUrl('/api/personal-agent/profile'), {
-      method: 'PATCH',
-      body: JSON.stringify({
-        revision: nextRecord.revision,
-        displayName: name.trim() || nextRecord.displayName,
-        appearance,
-        preferences: { ...nextRecord.preferences, addressAs: addressAs.trim() || undefined, supportMode, detailLevel, proactivity,
-          warmth: option.warmth, humor },
-      }),
-    });
-    setRecord(response.payload);
-    window.dispatchEvent(new CustomEvent('personal-agent-updated', { detail: response.payload }));
-  };
+  const queueProfileUpdate = useCallback((changes: ProfileChanges): Promise<boolean> => {
+    setSavingCount(count => count + 1);
+    setError(null);
+    const update = profileUpdateQueueRef.current.then(async () => {
+      const current = recordRef.current;
+      if (!current) return false;
+      const displayName = changes.displayName?.trim() || current.displayName;
+      const appearance = changes.appearance ?? current.appearance;
+      const preferences = { ...current.preferences, ...changes.preferences };
+      const voicePreference = changes.voicePreference === undefined ? current.voicePreference : changes.voicePreference;
+      if (displayName === current.displayName && appearance === current.appearance
+        && JSON.stringify(preferences) === JSON.stringify(current.preferences)
+        && JSON.stringify(voicePreference) === JSON.stringify(current.voicePreference)) return true;
+      try {
+        const response = await fetchJson<ApiResult<PersonalAgent>>(apiUrl('/api/personal-agent/profile'), {
+          method: 'PATCH',
+          body: JSON.stringify({ revision: current.revision, displayName, appearance, preferences,
+            ...(changes.voicePreference !== undefined ? { voicePreference } : {}) }),
+        });
+        recordRef.current = response.payload;
+        setRecord(response.payload);
+        window.dispatchEvent(new CustomEvent('personal-agent-updated', { detail: response.payload }));
+        return true;
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+        return false;
+      }
+    }).finally(() => setSavingCount(count => count - 1));
+    profileUpdateQueueRef.current = update;
+    return update;
+  }, []);
 
   const finishWelcome = async (mode?: 'listen' | 'untangle' | 'solutions') => {
     if (!record) return;
@@ -228,6 +235,7 @@ export function PersonalPage() {
           body: JSON.stringify({ revision: record.revision, displayName: record.displayName, appearance: record.appearance,
             preferences: { ...record.preferences, supportMode: mode } }),
         });
+        recordRef.current = updated.payload;
         setRecord(updated.payload);
       }
       await fetchJson(apiUrl('/api/personal-agent/onboarding/welcome'), { method: 'POST', body: '{}' });
@@ -273,21 +281,6 @@ export function PersonalPage() {
     }
   }, [activity, activityLoadedCount, activityLoadingMore]);
 
-  const save = async () => {
-    if (!record) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await saveStyle(record, displayName, selectedStyle);
-      setShowSettings(false);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const uploadAvatar = async (file: File) => {
     if (!record || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       setError(zh ? '请选择 PNG、JPEG 或 WebP 图片。' : 'Choose a PNG, JPEG, or WebP image.');
@@ -312,6 +305,8 @@ export function PersonalPage() {
       });
       bumpAgentAvatarCacheRevision(record.agentId);
       setAppearance('custom');
+      setShowAppearanceChoices(false);
+      await queueProfileUpdate({ appearance: 'custom' });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -327,7 +322,7 @@ export function PersonalPage() {
       startExtra: null,
       main: <div className="flex min-w-0 items-center gap-2.5">
         {ready ? (
-          <button type="button" onClick={openSettings} className="touch-target -m-1 shrink-0 rounded-full p-1 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? `编辑${title}的资料` : `Edit ${title}'s profile`} title={zh ? '编辑 Personal AI' : 'Edit Personal AI'}>
+          <button ref={profileButtonRef} type="button" onClick={toggleSettings} aria-expanded={showSettings} className="touch-target -m-1 shrink-0 rounded-full p-1 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? `编辑${title}的资料` : `Edit ${title}'s profile`} title={zh ? '资料' : 'Profile'}>
             <span className="flex size-8 items-center justify-center"><PersonalAvatar appearance={avatar} agentId={record?.agentId} className="size-8" /></span>
           </button>
         ) : <span className="flex size-8 shrink-0 items-center justify-center"><PersonalAvatar appearance={avatar} agentId={record?.agentId} className="size-8" /></span>}
@@ -360,94 +355,86 @@ export function PersonalPage() {
               </Popover.Content>
             </Popover.Portal>
           </Popover.Root>
-          <button type="button" onClick={openSettings} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '回应偏好' : 'Response preferences'}><Settings2 className="size-5" /></button>
+          <button ref={settingsButtonRef} type="button" onClick={toggleSettings} aria-expanded={showSettings} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '回应偏好' : 'Response preferences'}><Settings2 className="size-5" /></button>
         </div> : null,
     });
     return () => clearPageHeader();
-  }, [activity, activityError, activityLoadedCount, activityLoadingMore, activityMoreError, appearance, clearPageHeader, loadMoreActivity, openActivity, openSettings, record, setPageHeader, showActivity, voiceCall.active, zh]);
+  }, [activity, activityError, activityLoadedCount, activityLoadingMore, activityMoreError, appearance, clearPageHeader, loadMoreActivity, openActivity, record, setPageHeader, showActivity, showSettings, toggleSettings, voiceCall.active, zh]);
 
-  function renderSettingsDrawer() {
-    return (
-      <Dialog.Root open={showSettings} onOpenChange={setShowSettings}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content aria-describedby={undefined} className="xopc-drawer-right fixed right-0 top-0 z-[81] flex h-dvh w-full max-w-[42rem] flex-col overflow-hidden bg-surface-overlay shadow-popover outline-none">
-            <div className="flex shrink-0 items-start justify-between gap-4 px-5 pb-3 pt-6 sm:px-8 sm:pt-8">
-              <div className="min-w-0">
-                <Dialog.Title className="text-lg font-semibold text-fg">{zh ? '编辑 Personal AI' : 'Edit Personal AI'}</Dialog.Title>
-                <p className="mt-1 text-sm text-fg-muted">{zh ? '调整回应方式、称呼与形象' : 'Adjust responses, name, and appearance'}</p>
-              </div>
-              <Dialog.Close className="touch-target -mr-2 -mt-1 rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭编辑' : 'Close editor'}><X className="size-5" /></Dialog.Close>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-8 pt-5 sm:px-8">
-              <div className="mx-auto max-w-2xl">
-                <div>
-                  <div className="text-sm font-medium text-fg">{zh ? '回答的语气' : 'Response tone'}</div>
-                  <p className="mt-1 text-xs text-fg-muted">{zh ? '选一个起点；每次对话仍会按具体情况调整。' : 'Choose a starting point. Each reply still adapts to the situation.'}</p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    {STYLE_OPTIONS.map(option => <button key={option.id} type="button" onClick={() => setSelectedStyle(option.id)} aria-pressed={selectedStyle === option.id} className={`min-h-24 rounded-xl p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${selectedStyle === option.id ? 'bg-accent/10 ring-1 ring-accent/40' : 'bg-surface-panel hover:bg-surface-hover'}`}>
-                      <span className="flex items-center gap-2 font-medium text-fg"><MessageCircle className="size-4 text-accent" aria-hidden />{zh ? option.zh : option.en}</span>
-                      <span className="mt-2 block text-xs leading-relaxed text-fg-muted">{zh ? option.zhExample : option.enExample}</span>
-                    </button>)}
-                  </div>
-                  <div className="mt-6 text-sm font-medium text-fg">{zh ? '遇到棘手的问题时，希望先得到什么？' : 'When a problem is tricky, what helps first?'}</div>
-                  <div className="mt-3 flex flex-wrap gap-2">{([
-                    ['listen', zh ? '先听我说' : 'Listen first'],
-                    ['untangle', zh ? '帮我理清' : 'Help me untangle it'],
-                    ['solutions', zh ? '直接给办法' : 'Give me solutions'],
-                  ] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={supportMode === value} onClick={() => setSupportMode(value)} className={`min-h-10 rounded-full px-4 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${supportMode === value ? 'bg-accent/10 text-fg ring-1 ring-accent/40' : 'bg-surface-panel text-fg-muted hover:bg-surface-hover'}`}>{label}</button>)}</div>
-                  <div className="mt-6 grid gap-5 sm:grid-cols-2">
-                    <div><p className="mb-2 text-sm font-medium text-fg">{zh ? '回答多详细' : 'Answer length'}</p><PopoverSelect value={detailLevel ?? 'balanced'} options={[
-                      { value: 'brief', label: zh ? '简短，先说结论' : 'Brief, answer first' },
-                      { value: 'balanced', label: zh ? '适中' : 'Balanced' },
-                      { value: 'detailed', label: zh ? '多解释一点' : 'More detail' },
-                    ]} placeholder={zh ? '选择回答长度' : 'Choose answer length'} allowEmpty={false} onChange={value => setDetailLevel(value as Preferences['detailLevel'])} /></div>
-                    <div><p className="mb-2 text-sm font-medium text-fg">{zh ? '主动更新的频率' : 'Proactive updates'}</p><PopoverSelect value={proactivity ?? 'decisions'} options={[
-                      { value: 'decisions', label: zh ? '只说结果和决定' : 'Results and decisions only' },
-                      { value: 'important', label: zh ? '重要进展也告诉我' : 'Important milestones too' },
-                      { value: 'open', label: zh ? '可以多提建议' : 'More suggestions' },
-                    ]} placeholder={zh ? '选择主动程度' : 'Choose check-in style'} allowEmpty={false} onChange={value => setProactivity(value as Preferences['proactivity'])} /></div>
-                  </div>
-                  <details className="mt-5 text-sm text-fg-muted"><summary className="cursor-pointer select-none">{zh ? '更多表达偏好' : 'More expression preferences'}</summary><div className="mt-3 max-w-xs"><p className="mb-2 font-medium text-fg">{zh ? '轻松程度' : 'Lightness'}</p><PopoverSelect value={humor ?? 'none'} options={[
-                    { value: 'none', label: zh ? '不加玩笑' : 'No jokes' },
-                    { value: 'occasional', label: zh ? '合适时轻松一点' : 'A light touch when it fits' },
-                    { value: 'playful', label: zh ? '可以更活泼' : 'More playful' },
-                  ]} placeholder={zh ? '选择轻松程度' : 'Choose lightness'} allowEmpty={false} onChange={value => setHumor(value as Preferences['humor'])} /></div></details>
-                  <div className="mt-7 rounded-2xl bg-surface-inset p-4 sm:p-5" aria-live="polite">
-                    <p className="text-xs font-medium text-fg-muted">{zh ? '语气与支持方式预览' : 'Tone and support preview'}</p>
-                    <p className="mt-3 text-sm text-fg-muted">{zh ? '你：我手上有三件事，不知道先做哪件。' : 'You: I have three things to do and don’t know where to start.'}</p>
-                    <div className="mt-2 flex items-start gap-3"><span className={`flex size-8 shrink-0 items-center justify-center rounded-full ${appearanceFor(appearance).color}`}><PersonalAvatar appearance={appearance} agentId={record?.agentId} className="size-8" /></span><p className="rounded-2xl rounded-tl-sm bg-surface-hover px-4 py-3 text-sm leading-relaxed text-fg">{responsePreviewFor(STYLE_OPTIONS.find(item => item.id === selectedStyle)?.warmth, supportMode, zh)}</p></div>
-                  </div>
-                  <div className="mt-12"><h3 className="text-sm font-medium text-fg">{zh ? '称呼与形象（可选）' : 'Name and appearance (optional)'}</h3><p className="mt-1 text-xs text-fg-muted">{zh ? '名称与称呼可随时修改；界面形象不决定回答语气。' : 'Names can change anytime; appearance does not determine response tone.'}</p></div>
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                    <div><label htmlFor="personal-name" className="block text-sm font-medium text-fg">{zh ? '助手名称' : 'Assistant name'}</label><input id="personal-name" value={displayName} onChange={event => setDisplayName(event.target.value)} maxLength={60} placeholder="Ada" className="mt-2 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent" /></div>
-                    <div><label htmlFor="personal-address" className="block text-sm font-medium text-fg">{zh ? '怎么称呼你' : 'What should it call you?'}</label><input id="personal-address" value={addressAs} onChange={event => setAddressAs(event.target.value)} maxLength={60} placeholder={zh ? '可留空' : 'Optional'} className="mt-2 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent" /></div>
-                  </div>
-                  <div className="mt-5 text-sm font-medium text-fg">{zh ? '界面形象' : 'On-screen appearance'}</div>
-                  <div className="mt-3 flex flex-wrap gap-3">{APPEARANCES.map(item => <button key={item.id} type="button" onClick={() => setAppearance(item.id)} aria-pressed={appearance === item.id} className={`flex min-h-16 min-w-20 items-center gap-2 rounded-xl px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${appearance === item.id ? 'bg-accent/10' : 'bg-surface-hover hover:bg-surface-active'}`}><span className={`flex size-8 items-center justify-center rounded-full ${item.color}`}><PersonalAvatar appearance={item.id} className="size-8" /></span><span className="text-xs text-fg-muted">{zh ? item.zh : item.en}</span></button>)}
-                    <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" aria-label={zh ? '上传头像' : 'Upload avatar'} onChange={event => {
-                      const file = event.currentTarget.files?.[0];
-                      if (file) void uploadAvatar(file);
-                      event.currentTarget.value = '';
-                    }} />
-                    <button type="button" disabled={uploadingAvatar} onClick={() => avatarInputRef.current?.click()} aria-pressed={appearance === 'custom'} className={`flex min-h-16 min-w-20 items-center gap-2 rounded-xl px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${appearance === 'custom' ? 'bg-accent/10' : 'bg-surface-hover hover:bg-surface-active'}`}><span className="flex size-8 items-center justify-center rounded-full bg-surface-panel">{appearance === 'custom' ? <PersonalAvatar appearance="custom" agentId={record?.agentId} className="size-8" /> : <Upload className="size-4 text-fg-muted" aria-hidden />}</span><span className="text-xs text-fg-muted">{uploadingAvatar ? (zh ? '上传中…' : 'Uploading…') : (zh ? '上传图片' : 'Upload')}</span></button>
-                  </div>
-                  {record && <PersonalVoiceSetting record={record} zh={zh} onSaved={updated => {
-                    setRecord(updated);
-                    window.dispatchEvent(new CustomEvent('personal-agent-updated', { detail: updated }));
-                  }} />}
+  function renderSettingsPopover() {
+    if (!record) return null;
+    return <Popover.Root open={showSettings} onOpenChange={open => { setShowSettings(open); if (!open) setShowAppearanceChoices(false); }}>
+      <Popover.Anchor virtualRef={settingsButtonRef} />
+      <Popover.Portal>
+        <Popover.Content
+          side="bottom" align="end" sideOffset={8} collisionPadding={8}
+          aria-label={zh ? '编辑 Personal AI' : 'Edit Personal AI'}
+          onInteractOutside={event => {
+            if (event.target instanceof Node && (settingsButtonRef.current?.contains(event.target) || profileButtonRef.current?.contains(event.target))) event.preventDefault();
+          }}
+          className="z-50 flex h-[min(38rem,calc(100dvh-6rem))] w-[min(28rem,calc(100vw-1rem))] min-h-0 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-xl outline-none"
+        >
+          <div className="relative flex shrink-0 flex-col items-center px-5 pt-5 text-center">
+            <button type="button" disabled={uploadingAvatar} onClick={() => setShowAppearanceChoices(open => !open)} aria-expanded={showAppearanceChoices} aria-controls="personal-appearance-options" aria-label={zh ? '选择头像' : 'Choose avatar'} className="rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
+              <PersonalAvatar appearance={appearance} agentId={record.agentId} className="size-20" />
+            </button>
+            <h2 className="mt-3 max-w-full truncate text-lg font-semibold text-fg">{displayName || record.displayName}</h2>
+            {savingCount > 0 && <span className="absolute right-4 top-4 text-xs text-fg-muted">{zh ? '正在保存…' : 'Saving…'}</span>}
+          </div>
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-5 py-5">
+              {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+              {showAppearanceChoices && <section id="personal-appearance-options">
+                <h3 className="mb-3 text-sm font-medium text-fg">{zh ? '形象' : 'Appearance'}</h3>
+                <div className="grid grid-cols-4 gap-2">{APPEARANCES.map(item => <button key={item.id} type="button" onClick={() => { setAppearance(item.id); setShowAppearanceChoices(false); void queueProfileUpdate({ appearance: item.id }); }} aria-pressed={appearance === item.id} className={`flex min-w-0 flex-col items-center gap-1.5 rounded-xl px-1 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${appearance === item.id ? 'bg-accent/10 ring-1 ring-accent/40' : 'bg-surface-panel hover:bg-surface-hover'}`}><span className={`flex size-8 items-center justify-center rounded-full ${item.color}`}><PersonalAvatar appearance={item.id} className="size-8" /></span><span className="truncate text-xs text-fg-muted">{zh ? item.zh : item.en}</span></button>)}
+                  <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" aria-label={zh ? '上传头像' : 'Upload avatar'} onChange={event => {
+                    const file = event.currentTarget.files?.[0];
+                    if (file) void uploadAvatar(file);
+                    event.currentTarget.value = '';
+                  }} />
+                  <button type="button" disabled={uploadingAvatar} onClick={() => avatarInputRef.current?.click()} aria-pressed={appearance === 'custom'} className={`flex min-w-0 flex-col items-center gap-1.5 rounded-xl px-1 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${appearance === 'custom' ? 'bg-accent/10 ring-1 ring-accent/40' : 'bg-surface-panel hover:bg-surface-hover'}`}><span className="flex size-8 items-center justify-center rounded-full bg-surface-panel">{appearance === 'custom' ? <PersonalAvatar appearance="custom" agentId={record.agentId} className="size-8" /> : <Upload className="size-4 text-fg-muted" aria-hidden />}</span><span className="truncate text-xs text-fg-muted">{uploadingAvatar ? (zh ? '上传中…' : 'Uploading…') : (zh ? '上传' : 'Upload')}</span></button>
                 </div>
-                <p className="mt-5 text-center text-sm text-fg-muted">{zh ? '之后可以直接说“回答短一点”或“先听我说”，回应方式会继续调整。' : 'You can later say “keep it shorter” or “listen first” to adjust how it responds.'}</p>
+              </section>}
+              <section>
+                <h3 className="mb-3 text-sm font-medium text-fg">{zh ? '语气' : 'Tone'}</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {STYLE_OPTIONS.map(option => <button key={option.id} type="button" onClick={() => { setSelectedStyle(option.id); void queueProfileUpdate({ preferences: { warmth: option.warmth } }); }} aria-pressed={selectedStyle === option.id} className={`min-h-10 rounded-xl px-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${selectedStyle === option.id ? 'bg-accent/10 font-medium text-fg ring-1 ring-accent/40' : 'bg-surface-panel text-fg-muted hover:bg-surface-hover'}`}>{zh ? option.zh : option.en}</button>)}
+                </div>
+              </section>
+              <section>
+                <h3 className="mb-3 text-sm font-medium text-fg">{zh ? '棘手时' : 'When things get tricky'}</h3>
+                <div className="flex flex-wrap gap-2">{([
+                  ['listen', zh ? '先听' : 'Listen'],
+                  ['untangle', zh ? '理清' : 'Untangle'],
+                  ['solutions', zh ? '给办法' : 'Suggest'],
+                ] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={supportMode === value} onClick={() => { setSupportMode(value); void queueProfileUpdate({ preferences: { supportMode: value } }); }} className={`min-h-9 rounded-full px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${supportMode === value ? 'bg-accent/10 text-fg ring-1 ring-accent/40' : 'bg-surface-panel text-fg-muted hover:bg-surface-hover'}`}>{label}</button>)}</div>
+              </section>
+              <div className="grid grid-cols-2 gap-3">
+                <div><p className="mb-2 text-sm font-medium text-fg">{zh ? '回答长度' : 'Length'}</p><PopoverSelect value={detailLevel ?? 'balanced'} options={[
+                  { value: 'brief', label: zh ? '简短' : 'Brief' },
+                  { value: 'balanced', label: zh ? '适中' : 'Balanced' },
+                  { value: 'detailed', label: zh ? '详细' : 'Detailed' },
+                ]} placeholder={zh ? '选择长度' : 'Choose length'} allowEmpty={false} onChange={value => { const next = value as Preferences['detailLevel']; setDetailLevel(next); void queueProfileUpdate({ preferences: { detailLevel: next } }); }} /></div>
+                <div><p className="mb-2 text-sm font-medium text-fg">{zh ? '主动更新' : 'Updates'}</p><PopoverSelect value={proactivity ?? 'decisions'} options={[
+                  { value: 'decisions', label: zh ? '结果与决定' : 'Results only' },
+                  { value: 'important', label: zh ? '重要进展' : 'Milestones' },
+                  { value: 'open', label: zh ? '多提建议' : 'Suggestions' },
+                ]} placeholder={zh ? '选择频率' : 'Choose frequency'} allowEmpty={false} onChange={value => { const next = value as Preferences['proactivity']; setProactivity(next); void queueProfileUpdate({ preferences: { proactivity: next } }); }} /></div>
               </div>
-            </div>
-            <div className="shrink-0 bg-surface-overlay px-5 pb-6 pt-3 sm:px-8">
-              {error && <p role="alert" className="mb-3 text-sm text-danger">{error}</p>}
-              <div className="mx-auto flex max-w-2xl justify-end"><button type="button" disabled={busy || uploadingAvatar} onClick={() => void save()} className="min-h-11 w-full rounded-xl bg-accent px-6 py-2.5 font-medium text-on-accent transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:opacity-50 sm:w-auto">{busy ? (zh ? '正在保存…' : 'Saving…') : (zh ? '保存回应偏好' : 'Save response preferences')}</button></div>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-    );
+              <details className="text-sm text-fg-muted"><summary className="cursor-pointer select-none">{zh ? '更多偏好' : 'More preferences'}</summary><div className="mt-3"><p className="mb-2 font-medium text-fg">{zh ? '轻松程度' : 'Humor'}</p><PopoverSelect value={humor ?? 'none'} options={[
+                { value: 'none', label: zh ? '不加玩笑' : 'None' },
+                { value: 'occasional', label: zh ? '偶尔轻松' : 'Sometimes' },
+                { value: 'playful', label: zh ? '活泼' : 'Playful' },
+              ]} placeholder={zh ? '选择程度' : 'Choose level'} allowEmpty={false} onChange={value => { const next = value as Preferences['humor']; setHumor(next); void queueProfileUpdate({ preferences: { humor: next } }); }} /></div></details>
+              <h3 className="border-t border-edge pt-5 text-sm font-medium text-fg">{zh ? '称呼' : 'Name'}</h3>
+              <section className="grid grid-cols-2 gap-3">
+                <div><label htmlFor="personal-name" className="block text-xs text-fg-muted">{zh ? '助手名称' : 'Assistant name'}</label><input id="personal-name" value={displayName} onChange={event => setDisplayName(event.target.value)} onBlur={event => { const next = event.currentTarget.value.trim(); if (next) { setDisplayName(next); void queueProfileUpdate({ displayName: next }); } else setDisplayName(recordRef.current?.displayName ?? ''); }} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} maxLength={60} placeholder="Ada" className="mt-1.5 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent" /></div>
+                <div><label htmlFor="personal-address" className="block text-xs text-fg-muted">{zh ? '怎么称呼你' : 'Your name'}</label><input id="personal-address" value={addressAs} onChange={event => setAddressAs(event.target.value)} onBlur={event => { const next = event.currentTarget.value.trim(); setAddressAs(next); void queueProfileUpdate({ preferences: { addressAs: next || undefined } }); }} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} maxLength={60} placeholder={zh ? '可留空' : 'Optional'} className="mt-1.5 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent" /></div>
+              </section>
+              <PersonalVoiceSetting record={record} zh={zh} onSelectVoice={voicePreference => queueProfileUpdate({ voicePreference })} />
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>;
   }
 
   if (loading) return <div className="mx-auto w-full max-w-2xl space-y-5 px-6 py-12"><Skeleton className="h-20 w-20 rounded-full" /><Skeleton className="h-9 w-72" /><Skeleton className="h-44 w-full rounded-2xl" /></div>;
@@ -461,11 +448,12 @@ export function PersonalPage() {
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1"><ChatPage embedded personal personalWelcome={{ name: record.displayName, addressAs: record.preferences.addressAs, avatar: <PersonalAvatar appearance={record.appearance} agentId={record.agentId} className="size-14" />, opening: openingFor(record.preferences, zh), showSupportChoice: !welcomeDone, onChooseSupport: mode => void finishWelcome(mode), onSkipSupport: () => void finishWelcome(), supportChoiceError: error }} conversationId={record.conversationId} /></div>
       </div>
-      {showSettings && renderSettingsDrawer()}
+      {renderSettingsPopover()}
     </div>
   );
 
   return <PersonalOnboarding modelsAvailable={models.length > 0} onCreated={(created, avatarFailed) => {
+    recordRef.current = created;
     setRecord(created);
     setWelcomeDone(false);
     setAvatarUploadFailed(avatarFailed);
