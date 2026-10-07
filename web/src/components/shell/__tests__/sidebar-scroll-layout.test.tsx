@@ -59,7 +59,8 @@ describe('sidebar scroll layout', () => {
     expect(scrollRegion?.querySelector('.bg-edge-subtle')).toBeNull();
     expect(scrollRegion?.querySelector('[role="separator"] span')?.className).toContain('bg-transparent');
     expect(scrollRegion?.querySelector('[role="separator"]')?.getAttribute('aria-valuenow')).toBe('3');
-    expect(scrollRegion?.querySelectorAll('nav[aria-label="Main"] a')).toHaveLength(3);
+    expect(menu?.querySelector('a[href="/personal"]')).not.toBeNull();
+    expect(scrollRegion?.querySelectorAll('nav[aria-label="Main"] a')).toHaveLength(4);
     expect(newChat?.className).toContain('leading-6');
     expect(newChat?.className).toContain('text-fg-muted');
     expect(newChat?.className).toContain('md:py-1.5');
@@ -89,6 +90,6 @@ describe('sidebar scroll layout', () => {
     act(() => separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })));
 
     expect(separator.getAttribute('aria-valuenow')).toBe('5');
-    expect(container.querySelectorAll('nav[aria-label="Main"] a')).toHaveLength(5);
+    expect(container.querySelectorAll('nav[aria-label="Main"] a')).toHaveLength(6);
   });
 });
