@@ -559,6 +559,7 @@ export async function* runProcessDirectStreaming(
                 abortSignal: signal,
                 sourceContexts,
                 presentation: input.presentation,
+                requireVisibleReply: input.origin.type === 'endpoint',
                 runId: input.runId,
                 onEvent: (embeddedEvent) => {
                   const event = { ...embeddedEvent };

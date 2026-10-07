@@ -40,6 +40,7 @@ import { buildSpeakableText, detectSpeechLanguage } from '@/features/voice/read-
 import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { AssistantTurnTasks } from '@/features/chat/messages/assistant-turn-tasks';
+import { assistantVisibleMessage } from '@/features/chat/messages/assistant-visible-message';
 import { TaskTriggerCard } from '@/features/chat/messages/task-trigger-card';
 import { MessageContextAttachments } from '@/features/chat/messages/message-context-attachments';
 import {
@@ -78,7 +79,7 @@ const USER_MESSAGE_SENDING_DELAY_MS = 700;
 const USER_MESSAGE_SENDING_EXIT_MS = 120;
 
 export const MessageBubble = memo(function MessageBubble({
-  message,
+  message: rawMessage,
   followUpTrigger,
   authToken,
   conversationId,
@@ -140,6 +141,7 @@ export const MessageBubble = memo(function MessageBubble({
   responseFeedbackEnabled?: boolean;
   showAssistantWorkLog?: boolean;
 }) {
+  const message = useMemo(() => assistantVisibleMessage(rawMessage), [rawMessage]);
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const navigate = useNavigate();

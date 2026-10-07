@@ -202,6 +202,8 @@ describe('buildSystemPrompt messaging and silent replies', () => {
     expect(prompt).toContain('## Messaging');
     expect(prompt).toContain('## Silent Replies');
     expect(prompt).toContain(NO_REPLY);
+    expect(prompt).toContain('Always answer a direct message from a person');
+    expect(prompt).toContain('brief, unclear, repeated, or looks like a test');
   });
 
   it('skips silent replies when mode is none', () => {

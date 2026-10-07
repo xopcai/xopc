@@ -61,11 +61,13 @@ function animateSend(source: Point, bubble: HTMLElement, viewport: HTMLElement):
     finished = true;
     bubble.style.visibility = previousVisibility;
     ghost.remove();
-    viewport.removeEventListener('scroll', finish);
+    viewport.removeEventListener('wheel', finish);
+    viewport.removeEventListener('touchstart', finish);
     window.removeEventListener('resize', finish);
     animation.cancel();
   };
-  viewport.addEventListener('scroll', finish, { passive: true });
+  viewport.addEventListener('wheel', finish, { passive: true });
+  viewport.addEventListener('touchstart', finish, { passive: true });
   window.addEventListener('resize', finish);
   void animation.finished.then(finish, finish);
   return finish;
@@ -96,7 +98,7 @@ export function usePersonalSendTransition({
   const onDispatched = useCallback((receipt: ComposerDispatchReceipt, source: DOMRect, draft: ComposerDraft) => {
     clear();
     if (!enabled || !conversationId || draft.attachments.length > 0 || draft.contextRefs.length > 0
-      || !draft.text.trim() || draft.text.length > 240 || draft.text.includes('\n')
+      || !draft.text.trim()
       || document.visibilityState === 'hidden'
       || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 

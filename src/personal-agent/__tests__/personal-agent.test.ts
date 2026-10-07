@@ -107,6 +107,8 @@ describe('personal Agent identity', () => {
       expect(await response.json()).toMatchObject({ ok: true, payload: { displayName: '阿沐', conversationId: first.conversationId } });
       const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
       expect((await fetch(`${url}/activity`, { headers })).status).toBe(200);
+      expect((await fetch(`${url}/activity?limit=5&offset=0`, { headers })).status).toBe(200);
+      expect((await fetch(`${url}/activity?limit=0`, { headers })).status).toBe(400);
       expect((await fetch(url, { method: 'POST', headers, body: JSON.stringify({ unknown: true }) })).status).toBe(400);
       expect((await fetch(`${url}/profile`, { method: 'PATCH', headers, body: JSON.stringify({ revision: -1 }) })).status).toBe(400);
     } finally {
