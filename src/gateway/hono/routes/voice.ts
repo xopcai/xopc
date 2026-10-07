@@ -242,6 +242,17 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     const config = service.currentConfig as Config;
     const route = resolveStreamingTts(config);
     if (!route) return c.json({ ok: false, error: { message: 'Realtime voice output is not configured' } }, 503);
+    const body = await c.req.json().catch(() => ({})) as { voice?: unknown };
+    const selectedVoice = typeof body.voice === 'string' ? body.voice.trim() : '';
+    if (selectedVoice) {
+      if (selectedVoice.length > 200 || !route.provider.plugin.listVoices) return c.json({ ok: false, error: { message: 'Voice is unavailable' } }, 400);
+      const voices = await route.provider.plugin.listVoices({ cfg: config, providerConfig: route.provider.providerConfig });
+      if (!voices.some(voice => voice.id === selectedVoice)) return c.json({ ok: false, error: { message: 'Voice is unavailable' } }, 400);
+    }
+    const previewConfig = selectedVoice ? { ...route.config, providers: {
+      ...route.config.providers,
+      [route.route.provider]: { ...route.config.providers?.[route.route.provider], voice: selectedVoice },
+    } } : route.config;
     const controller = new AbortController();
     const signal = AbortSignal.any([c.req.raw.signal, controller.signal, AbortSignal.timeout(20_000)]);
     let result: Awaited<ReturnType<typeof speakStream>> | undefined;
@@ -250,7 +261,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       const text = config.voice?.language === 'en'
         ? 'Hello, I am your assistant. You can talk to me naturally.'
         : '你好，我是你的助手。现在可以和我自然对话了。';
-      result = await speakStream(text, route.config, { signal, appConfig: config, allowFallback: false, parseDirectives: false });
+      result = await speakStream(text, previewConfig, { signal, appConfig: config, allowFallback: false, parseDirectives: false });
       if (result.outputFormat !== 'pcm') throw new Error('Realtime preview requires PCM audio');
       reader = result.audioStream.getReader();
       const chunks: Uint8Array[] = [];

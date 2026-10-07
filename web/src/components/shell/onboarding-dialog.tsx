@@ -14,7 +14,10 @@ import {
 } from '@/features/work-discovery/api';
 import { WorkDiscoveryPage } from '@/features/work-discovery/work-discovery-page';
 import { useNeedsModelSetup } from '@/features/onboarding/use-needs-model-setup';
+import { CloudOnboardingCard, useCloudOnboarding } from '@/features/onboarding/cloud-onboarding';
 import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import { isElectron } from '@/lib/electron-env';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -26,7 +29,8 @@ export function OnboardingDialog() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const modelSetup = useNeedsModelSetup(Boolean(token));
-  const isSettingsRoute = pathname.startsWith('/settings');
+  const cloudOnboarding = useCloudOnboarding(Boolean(token));
+  const isSettingsRoute = pathname.startsWith('/settings') || pathname === '/personal';
   const [workDiscovery, setWorkDiscovery] = useState<WorkDiscoveryOnboardingSnapshot | null>(null);
   const [experienceClosed, setExperienceClosed] = useState(false);
 
@@ -47,10 +51,13 @@ export function OnboardingDialog() {
 
   const experience = deriveOnboardingExperienceState({
     authenticated: Boolean(token),
+    desktop: isElectron(),
     settingsRoute: isSettingsRoute,
     modelSetupReady: modelSetup.ready,
     needsModelSetup: modelSetup.needsSetup,
     modelGuideDismissed: modelSetup.guideDismissed,
+    cloudOnboardingReady: cloudOnboarding.ready,
+    cloudOnboardingPending: cloudOnboarding.pending,
     workDiscovery,
     closed: experienceClosed,
   });
@@ -70,20 +77,32 @@ export function OnboardingDialog() {
     void dismissWorkDiscoveryOnboarding().catch(() => {});
   };
 
+  const dismissCloud = async () => {
+    await cloudOnboarding.dismiss();
+    if (modelSetup.ready && !modelSetup.needsSetup && !hasPendingWorkDiscovery(workDiscovery)) closeExperience();
+  };
+
   return (
     <Dialog.Root
+      modal={experience.stage !== 'cloud'}
       open={experience.open}
       onOpenChange={(nextOpen) => {
         if (!nextOpen) {
           if (experience.stage === 'setup') dismissExperience();
+          else if (experience.stage === 'cloud') void dismissCloud().catch(closeExperience);
           else leaveExperience();
         }
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[55] bg-scrim backdrop-blur-md" />
+        {experience.stage !== 'cloud' ? <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[55] bg-scrim backdrop-blur-md" /> : null}
         <Dialog.Content
-          className="xopc-onboarding-dialog app-chrome-shell fixed inset-0 z-[56] overflow-hidden outline-none"
+          className={cn(
+            'app-chrome-shell fixed z-[56] outline-none',
+            experience.stage === 'cloud'
+              ? 'bottom-4 right-4 max-h-[calc(100vh-2rem)] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-edge bg-surface-panel shadow-xl'
+              : 'xopc-onboarding-dialog inset-0 overflow-hidden',
+          )}
           onPointerDownOutside={(e) => e.preventDefault()}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
@@ -95,10 +114,25 @@ export function OnboardingDialog() {
                 const workDiscovery = await fetchWorkDiscoveryOnboarding().catch(() => null);
                 setWorkDiscovery(workDiscovery);
                 await modelSetup.refresh();
-                if (!hasPendingWorkDiscovery(workDiscovery)) leaveExperience();
+                const cloudStatus = await cloudOnboarding.refresh().catch(() => null);
+                let cloudPromptPending = cloudStatus?.status === 'unseen' && !cloudStatus.hasGrant;
+                if (isElectron() && cloudPromptPending) {
+                  // The desktop setup wizard already presented XOPC Cloud as its recommended provider.
+                  await cloudOnboarding.dismiss().catch(() => undefined);
+                  cloudPromptPending = false;
+                }
+                if (!hasPendingWorkDiscovery(workDiscovery) && !cloudPromptPending) leaveExperience();
               }}
               onDismiss={dismissExperience}
               canDismiss
+            />
+          ) : experience.stage === 'cloud' ? (
+            <CloudOnboardingCard
+              context={pathname.startsWith('/chat') ? 'chat' : pathname === '/personal' ? 'personal' : 'general'}
+              onDismiss={() => void dismissCloud().catch(closeExperience)}
+              onConnected={() => {
+                void cloudOnboarding.refresh().catch(closeExperience);
+              }}
             />
           ) : (
             <div className="xopc-onboarding-work-stage h-full overflow-hidden">

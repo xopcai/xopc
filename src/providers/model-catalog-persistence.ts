@@ -98,7 +98,7 @@ const persistedCatalogSchema = z.object({
   baseUrl: z.string().url(),
   api: z.enum(['openai-completions', 'openai-responses']),
   recommendedModel: z.string().nullable(),
-  recommended: z.record(
+  recommended: z.partialRecord(
     z.enum(['vision', 'image-generation', 'stt', 'tts']),
     z.string(),
   ).optional(),

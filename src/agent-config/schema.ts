@@ -153,6 +153,11 @@ export const AgentProfileSchema = z.object({
   language: z.string().trim().optional(),
   emoji: z.string().trim().optional(),
   avatar: z.string().trim().optional(),
+  voicePreference: z.object({
+    provider: z.string().trim().min(1).max(100),
+    model: z.string().trim().min(1).max(200),
+    voice: z.string().trim().min(1).max(200),
+  }).strict().optional(),
   responsePreferences: ResponsePreferencesSchema.optional(),
   instructions: z.string().trim().min(1).optional(),
 }).strict();

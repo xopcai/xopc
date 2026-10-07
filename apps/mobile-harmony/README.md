@@ -54,6 +54,7 @@ Inspect `OHOS_REPORT_RESULT`: HDC's exit code can be zero even when a test fails
 | --- | --- | --- |
 | Connection | Paste/Scan Kit invitation, explicit Gateway approval, identity verification, refresh recovery, Asset Store credentials | Native TLS pairing and restart/rotation pass; camera scan on physical device pending |
 | Chat | Session list/search/create/rename/pin/archive/reset/delete, history, Markdown, text/file/image input, stream/abort, reconnect/gap recovery | Logic/contract tests pass; real agent streaming and lifecycle journey pending |
+| Personal AI | Loopi entry in Chat, one fixed conversation, personalized first tab and welcome, paired-mobile access and restart restoration | Targeted host tests and HAP build pass; device interaction still needs acceptance |
 | Work | Tasks, projects, scheduled automations and execution history | API-shaped CRUD/actions; full cross-client journey pending |
 | Notes/files | Notes CRUD/search/Markdown; one-tap voice notes with live transcript, markers, pause and background capture; file spaces/search/text edit/delete and system picker transfer | Native picker, physical audio and real-time transcription journey pending |
 | Voice | Permission-gated short recording, 120-second cap, playback, Gateway transcription into chat draft | Lifecycle tests pass; physical audio and actual transcription pending |

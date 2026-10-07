@@ -2,7 +2,7 @@ import type { WorkDiscoveryOnboardingSnapshot } from '@/features/work-discovery/
 
 export type OnboardingExperienceState = {
   open: boolean;
-  stage: 'setup' | 'work';
+  stage: 'setup' | 'cloud' | 'work';
 };
 
 export function hasPendingWorkDiscovery(snapshot: WorkDiscoveryOnboardingSnapshot | null): boolean {
@@ -12,22 +12,29 @@ export function hasPendingWorkDiscovery(snapshot: WorkDiscoveryOnboardingSnapsho
 
 export function deriveOnboardingExperienceState(input: {
   authenticated: boolean;
+  desktop: boolean;
   settingsRoute: boolean;
   modelSetupReady: boolean;
   needsModelSetup: boolean;
   modelGuideDismissed: boolean;
+  cloudOnboardingReady: boolean;
+  cloudOnboardingPending: boolean;
   workDiscovery: WorkDiscoveryOnboardingSnapshot | null;
   closed: boolean;
 }): OnboardingExperienceState {
-  const setupPending = input.needsModelSetup && !input.modelGuideDismissed;
-  const workPending = !input.needsModelSetup && hasPendingWorkDiscovery(input.workDiscovery);
+  const requiredSetup = !input.settingsRoute && input.modelSetupReady
+    && input.needsModelSetup && !input.modelGuideDismissed;
+  const cloudPending = input.cloudOnboardingReady && input.cloudOnboardingPending
+    && (!input.desktop || input.modelSetupReady)
+    && !(input.desktop && requiredSetup);
+  const setupPending = requiredSetup && !cloudPending;
+  const workPending = !cloudPending && !input.settingsRoute && input.modelSetupReady
+    && !input.needsModelSetup && hasPendingWorkDiscovery(input.workDiscovery);
   const eligible = input.authenticated
-    && !input.settingsRoute
-    && input.modelSetupReady
     && !input.closed;
 
   return {
-    open: eligible && (setupPending || workPending),
-    stage: setupPending ? 'setup' : 'work',
+    open: eligible && (setupPending || cloudPending || workPending),
+    stage: cloudPending ? 'cloud' : setupPending ? 'setup' : 'work',
   };
 }

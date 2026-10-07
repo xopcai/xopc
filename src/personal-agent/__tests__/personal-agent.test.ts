@@ -22,6 +22,8 @@ import { getSessionMetadata, listSessionMetadata } from '../../storage/sqlite/se
 import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
+import { createDevice, issueDeviceTokenPair } from '../../storage/sqlite/device-access-repository.js';
+import { DEFAULT_MOBILE_SCOPES } from '../../gateway/security/gateway-scopes.js';
 import { getPersonalAgent, isPersonalConversation, personalAgentId, personalConversationId } from '../repository.js';
 import { createOrResumePersonalAgent, ensurePersonalConversationVisibility, personalInstructions, refreshPersonalDelegationGuidance, updatePersonalProfileRecord } from '../service.js';
 
@@ -53,6 +55,21 @@ describe('personal Agent identity', () => {
       expect(getSessionMetadata(conversationId)?.customData?.keepHiddenFromSessionList).toBe(true);
       expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).not.toContain(conversationId);
       expect(getPersonalAgent('local-owner')?.state).toBe('provisioning');
+      if (!server.listening) await once(server, 'listening');
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Missing Gateway address');
+      const url = `http://127.0.0.1:${address.port}/api/personal-agent`;
+      const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+      const onboardingUrl = `${url}/onboarding`;
+      expect((await fetch(onboardingUrl)).status).toBe(401);
+      const savedDraft = await fetch(onboardingUrl, { method: 'PUT', headers,
+        body: JSON.stringify({ step: 'identity', draft: { displayName: '阿沐' } }) });
+      expect(savedDraft.status).toBe(200);
+      expect(await savedDraft.json()).toMatchObject({ ok: true, payload: { step: 'identity', draft: { displayName: '阿沐' } } });
+      const loadedDraft = await fetch(onboardingUrl, { headers });
+      expect(loadedDraft.status).toBe(200);
+      expect(await loadedDraft.json()).toMatchObject({ ok: true, payload: { draft: { displayName: '阿沐' } } });
+      expect((await fetch(`${onboardingUrl}/welcome`, { method: 'POST', headers })).status).toBe(409);
       setSessionConfig(conversationId, { thinkingLevel: 'off', fixedModel: true, modelOverride: 'test/fast' }, dir);
       const first = getPersonalAgent('local-owner');
       if (!first) throw new Error('Missing Personal AI');
@@ -97,15 +114,27 @@ describe('personal Agent identity', () => {
       expect(repository.get(agentId)?.profile?.instructions).toContain('offer one concrete step before asking questions');
       expect(getSqliteDatabase().prepare("SELECT name FROM sqlite_master WHERE name = 'personal_agents'").get()).toBeUndefined();
 
-      if (!server.listening) await once(server, 'listening');
-      const address = server.address();
-      if (!address || typeof address === 'string') throw new Error('Missing Gateway address');
-      const url = `http://127.0.0.1:${address.port}/api/personal-agent`;
       expect((await fetch(url)).status).toBe(401);
       const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ ok: true, payload: { displayName: '阿沐', conversationId: first.conversationId } });
-      const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+      createDevice({ id: 'personal-phone', displayName: 'Phone', platform: 'harmonyos',
+        publicKeyJwk: { kty: 'EC' }, scopes: [...DEFAULT_MOBILE_SCOPES] });
+      const phoneToken = issueDeviceTokenPair('personal-phone').accessToken;
+      const phoneResponse = await fetch(url, { headers: { authorization: `Bearer ${phoneToken}` } });
+      expect(phoneResponse.status).toBe(200);
+      expect(await phoneResponse.json()).toMatchObject({ ok: true, payload: { conversationId: first.conversationId } });
+      const phoneCreate = await fetch(url, { method: 'POST',
+        headers: { authorization: `Bearer ${phoneToken}`, 'content-type': 'application/json' }, body: '{}' });
+      expect(phoneCreate.status).toBe(200);
+      expect(await phoneCreate.json()).toMatchObject({ ok: true, payload: { conversationId: first.conversationId } });
+      createDevice({ id: 'personal-extension', displayName: 'Extension', platform: 'chrome',
+        extensionId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', publicKeyJwk: { kty: 'EC' }, scopes: [...DEFAULT_MOBILE_SCOPES] });
+      const extensionToken = issueDeviceTokenPair('personal-extension').accessToken;
+      expect((await fetch(url, { headers: { authorization: `Bearer ${extensionToken}` } })).status).toBe(403);
+      expect((await fetch(onboardingUrl, { headers: { authorization: `Bearer ${extensionToken}` } })).status).toBe(403);
+      expect((await fetch(onboardingUrl, { method: 'PUT', headers,
+        body: JSON.stringify({ step: 'voice', draft: { displayName: 'Other' } }) })).status).toBe(409);
       expect((await fetch(`${url}/activity`, { headers })).status).toBe(200);
       expect((await fetch(`${url}/activity?limit=5&offset=0`, { headers })).status).toBe(200);
       expect((await fetch(`${url}/activity?limit=0`, { headers })).status).toBe(400);

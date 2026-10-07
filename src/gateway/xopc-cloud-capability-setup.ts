@@ -7,6 +7,7 @@ import { AgentCatalogService } from '../agent-catalog/service.js';
 import type { CatalogModel, CatalogSource } from '../providers/model-catalog-store.js';
 import { getModelCatalogStore } from '../providers/model-catalog-store.js';
 import { compareCatalogModels } from '../providers/model-catalog-ranking.js';
+import { getAvailableModels } from '../providers/index.js';
 import { prepareUpdateGlobalDefaults } from './global-defaults-admin.js';
 
 type CloudCapability = 'chat' | 'vision' | 'image-generation' | 'stt' | 'tts';
@@ -28,7 +29,7 @@ export type PrepareXopcCloudCapabilitySetupResult =
   | { ok: false; error: string; missing: CloudCapability[] };
 
 export type ApplyXopcCloudCapabilitySetupResult =
-  | { configured: true; selection: XopcCloudCapabilitySelection }
+  | { configured: true; selection: Partial<XopcCloudCapabilitySelection>; missing: CloudCapability[] }
   | { configured: false; error: string; missing?: CloudCapability[] };
 
 function supportsCapability(model: CatalogModel, capability: CloudCapability): boolean {
@@ -79,7 +80,9 @@ function recommendedVoiceModel(
 
 function selectedVoice(model: CatalogModel): string {
   const voices = model.voice?.voices ?? [];
-  return voices.find((voice) => voice.id === model.voice?.defaultVoice)?.id ?? voices[0].id;
+  return voices.find((voice) => voice.id === 'Cherry')?.id
+    ?? voices.find((voice) => voice.id === model.voice?.defaultVoice)?.id
+    ?? voices[0].id;
 }
 
 export function selectXopcCloudCapabilities(
@@ -235,14 +238,84 @@ export async function applyXopcCloudCapabilitySetup(service: {
   if (!source) {
     return { configured: false, error: 'XOPC Cloud model catalog is unavailable' };
   }
-  const prepared = prepareXopcCloudCapabilitySetup(service.currentConfig, source);
-  if (prepared.ok === false) {
-    return { configured: false, error: prepared.error, missing: prepared.missing };
+  const selection = selectXopcCloudCapabilities(source);
+  const currentDefaults = new AgentCatalogRepository().getSettings().defaults;
+  const availableModels = new Set((await getAvailableModels()).map((model) => `${model.provider}/${model.id}`));
+  const nextDefaults = structuredClone(currentDefaults);
+  const nextConfig = structuredClone(service.currentConfig);
+  const chat = recommendedModel(source, 'chat');
+  const vision = recommendedModel(source, 'vision');
+  const imageGeneration = recommendedModel(source, 'image-generation');
+  const stt = recommendedModel(source, 'stt');
+  const tts = recommendedModel(source, 'tts');
+
+  const realtimeStt = recommendedVoiceModel(source, 'transcription.stream');
+  const realtimeTts = recommendedVoiceModel(source, 'speech.stream');
+  const realtimeOmni = recommendedVoiceModel(source, 'conversation');
+
+  if (chat && !availableModels.has(currentDefaults.models.chat.primary)) {
+    nextDefaults.models.chat = { primary: `xopc-cloud/${chat.id}`, fallbacks: [] };
   }
-  const saved = await service.saveConfig(prepared.config);
+  if (vision && !currentDefaults.models.imageUnderstanding) {
+    nextDefaults.models.imageUnderstanding = { primary: `xopc-cloud/${vision.id}`, fallbacks: [] };
+  }
+  if (imageGeneration && !currentDefaults.models.imageGeneration) {
+    nextDefaults.models.imageGeneration = { primary: `xopc-cloud/${imageGeneration.id}`, fallbacks: [], autoProviderFallback: false };
+  }
+  if (stt && !nextConfig.tools?.media?.audio) {
+    nextConfig.tools ??= {};
+    nextConfig.tools.media ??= {};
+    nextConfig.tools.media.audio = {
+      enabled: true,
+      provider: 'xopc-cloud',
+      fallback: { enabled: false, order: ['xopc-cloud'] },
+      providers: { 'xopc-cloud': { model: stt.id } },
+    };
+  }
+  if (tts && tts.tts?.defaultVoice && !nextConfig.messages?.tts) {
+    nextConfig.messages ??= {};
+    nextConfig.messages.tts = {
+      enabled: true,
+      provider: 'xopc-cloud',
+      trigger: 'off',
+      maxTextLength: 512,
+      timeoutMs: 60_000,
+      providers: { 'xopc-cloud': { model: tts.id, voice: tts.tts.defaultVoice } },
+    };
+  }
+  const realtime = nextConfig.voice?.realtime;
+  if (realtime?.enabled) {
+    // Existing voice settings are user choices; fill only a missing mode on an enabled setup.
+    if (realtimeStt && !realtime.stt) realtime.stt = { provider: 'xopc-cloud', model: realtimeStt.id };
+    if (realtimeTts && !realtime.tts) realtime.tts = { provider: 'xopc-cloud', model: realtimeTts.id, voice: selectedVoice(realtimeTts) };
+    if (realtimeOmni && !realtime.omni) realtime.omni = {
+      provider: 'xopc-cloud', model: realtimeOmni.id, voice: selectedVoice(realtimeOmni),
+      instructions: 'Keep replies conversational and concise. You cannot execute tools.',
+    };
+  }
+
+  if (!chat && !vision && !imageGeneration && !stt && !tts && !realtimeStt && !realtimeTts && !realtimeOmni) {
+    return { configured: false, error: 'XOPC Cloud published no usable models', missing: selection.missing };
+  }
+  const defaultsUpdate = prepareUpdateGlobalDefaults({ defaults: nextDefaults });
+  if (defaultsUpdate.ok === false) return { configured: false, error: defaultsUpdate.error };
+  const saved = await service.saveConfig(nextConfig);
   if (!saved.saved) {
     return { configured: false, error: saved.error ?? 'Failed to save XOPC Cloud capability configuration' };
   }
-  new AgentCatalogService().updateDefaults(prepared.defaults);
-  return { configured: true, selection: prepared.selection };
+  new AgentCatalogService().updateDefaults(defaultsUpdate.data.defaults);
+  return {
+    configured: true,
+    missing: selection.missing,
+    selection: {
+      ...(chat ? { chat: chat.id } : {}),
+      ...(vision ? { vision: vision.id } : {}),
+      ...(imageGeneration ? { imageGeneration: imageGeneration.id } : {}),
+      ...(stt ? { stt: stt.id } : {}),
+      ...(tts ? { tts: tts.id, ttsVoice: tts.tts?.defaultVoice } : {}),
+      ...(realtimeStt ? { realtimeStt: realtimeStt.id } : {}),
+      ...(realtimeTts ? { realtimeTts: { model: realtimeTts.id, voice: selectedVoice(realtimeTts) } } : {}),
+      ...(realtimeOmni ? { realtimeOmni: { model: realtimeOmni.id, voice: selectedVoice(realtimeOmni) } } : {}),
+    },
+  };
 }
