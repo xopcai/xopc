@@ -63,6 +63,8 @@ export function useChatScrollViewport({
   const listContentRef = useRef<HTMLDivElement | null>(null);
   const followingRef = useRef(true);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const measuredScrollHeightRef = useRef(0);
+  const measuredClientHeightRef = useRef(0);
 
   const [atBottom, setAtBottom] = useState(true);
 
@@ -110,9 +112,15 @@ export function useChatScrollViewport({
   }, [setFollowing]);
 
   const onResize = useCallback(() => {
-    scrollToEnd();
     const el = scrollRef.current;
     if (!el) return;
+    const grew = el.scrollHeight > measuredScrollHeightRef.current;
+    const viewportShrank = el.clientHeight < measuredClientHeightRef.current;
+    measuredScrollHeightRef.current = el.scrollHeight;
+    measuredClientHeightRef.current = el.clientHeight;
+    // Shrinking completed content is already clamped by the browser. Reasserting
+    // the tail here produces an extra visible scroll at turn completion.
+    if (grew || viewportShrank) scrollToEnd();
     // Resizing the composer or keyboard must not re-enable following for history readers.
     setAtBottom(isNearChatBottom(el));
   }, [scrollToEnd]);
@@ -177,6 +185,8 @@ export function useChatScrollViewport({
     if (!hasToken || showSessionLoading) return;
     listScrollMetricsRef.current = { first: undefined, len: 0, scrollHeight: 0 };
     prevMessageCountRef.current = 0;
+    measuredScrollHeightRef.current = 0;
+    measuredClientHeightRef.current = 0;
     setFollowing(true);
     scrollToEnd({ force: true });
   }, [conversationId, hasToken, showSessionLoading, setFollowing, scrollToEnd]);

@@ -302,9 +302,10 @@ export const MessageBubble = memo(function MessageBubble({
   }, [message.contextRefs, message.userTurnDocument]);
 
   const hasAssistantActivity = Boolean(assistantTurnView?.workLog.active || assistantTurnView?.workLog.items.length);
+  const assistantAnswerStarted = Boolean(assistantTurnView?.answer.started);
   const progressForMeta =
     reasoningHidden ||
-    (isAssistant && hasAssistantActivity)
+    (isAssistant && (hasAssistantActivity || assistantAnswerStarted))
       ? null
       : progress;
 
@@ -317,11 +318,13 @@ export const MessageBubble = memo(function MessageBubble({
   const showPersonalThinkingBubble = personal && isAssistant && isStreaming
     && !assistantTurnView?.answer.started && !attachmentsForBubble?.length;
 
-  const showMeta =
-    Boolean(progressForMeta?.message) ||
-    (isStreaming && !streamingThinking);
+  const showPendingThinking = isStreaming && !streamingThinking
+    && (!isAssistant || (!hasAssistantActivity && !assistantAnswerStarted));
+  const showMeta = Boolean(progressForMeta?.message) || showPendingThinking;
 
   const assistantActionsVisible = isAssistant && !readonly && !isStreaming && !suppressAssistantActions;
+  const reserveAssistantActions = isAssistant && isStreaming && !readonly && !suppressAssistantActions
+    && assistantAnswerStarted;
   const copyMarkdown = useMemo(
     () => (assistantActionsVisible ? getAssistantCopyMarkdown(message.content ?? []) : ''),
     [assistantActionsVisible, message.content],
@@ -588,7 +591,7 @@ export const MessageBubble = memo(function MessageBubble({
                 {progressForMeta.message}
               </span>
             ) : null}
-            {isStreaming && !hasAssistantActivity && !streamingThinking && !progressForMeta?.message ? (
+            {showPendingThinking && !progressForMeta?.message ? (
               <span className="text-fg-subtle">{m.chat.thinkingLabel}</span>
             ) : null}
           </div>
@@ -601,7 +604,7 @@ export const MessageBubble = memo(function MessageBubble({
                 {progressForMeta.message}
               </span>
             ) : null}
-            {isStreaming && !hasAssistantActivity && !streamingThinking && !progressForMeta?.message ? (
+            {showPendingThinking && !progressForMeta?.message ? (
               <span className="text-fg-subtle">{m.chat.thinkingLabel}</span>
             ) : null}
           </div>
@@ -840,6 +843,9 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         ) : null}
 
+        {reserveAssistantActions ? (
+          <div data-assistant-actions-placeholder className="mt-1 min-h-9 shrink-0" aria-hidden="true" />
+        ) : null}
         {assistantActionsVisible && copyMarkdown ? (
           <ChatActionTooltipProvider>
           <div

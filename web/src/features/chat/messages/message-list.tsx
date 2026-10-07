@@ -184,8 +184,8 @@ export const MessageList = memo(function MessageList({
               onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
               onExtractAssistantTask={onExtractAssistantTask}
               onForkAssistantTurn={onForkAssistantTurn}
-              // A live row has no actions; focused views can hide them for every reply.
-              suppressAssistantActions={hideAssistantActions || isStreamRow}
+              // The bubble hides live actions and reserves their eventual height.
+              suppressAssistantActions={hideAssistantActions}
               onEditUserMessage={onEditUserMessage}
               userMessageCanEdit={
                 (!editLatestUserOnly || isLastUserRow)
