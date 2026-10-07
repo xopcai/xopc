@@ -24,6 +24,14 @@ function startsWithAny(path: string, prefixes: readonly string[]): boolean {
 
 export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBundle[] = [
   {
+    id: 'personal-agent',
+    match: path => startsWithAny(path, ['/api/personal-agent']),
+    load: async () => {
+      const { registerPersonalAgentRoutes } = await import('./personal-agent.js');
+      return { register: registerPersonalAgentRoutes };
+    },
+  },
+  {
     id: 'agent-plugins',
     match: path => path === '/api/extensions/inspect' || path === '/api/extensions/install'
       || startsWithAny(path, ['/api/extensions/agent-plugins']),

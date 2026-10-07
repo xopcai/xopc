@@ -131,6 +131,7 @@ export const ChatComposer = memo(function ChatComposer({
   currentAgentId,
   voiceAgentName,
   voiceTaskId,
+  voiceMode,
   prepareVoiceSession,
   prepareContextSession,
   editingUserTurnId,
@@ -183,6 +184,7 @@ export const ChatComposer = memo(function ChatComposer({
   currentAgentId?: string;
   voiceAgentName?: string;
   voiceTaskId?: string;
+  voiceMode?: 'assistant';
   prepareVoiceSession?: () => Promise<string>;
   prepareContextSession?: () => Promise<string | null>;
   editingUserTurnId?: string | null;
@@ -845,10 +847,10 @@ export const ChatComposer = memo(function ChatComposer({
           voiceConversationEnabled={Boolean(conversationId || prepareVoiceSession) && !runBusyState}
           onStartVoiceConversation={() => {
             if (preparingCallRef.current) return;
-            if (conversationId) { call.open({ conversationId, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId }); return; }
+            if (conversationId) { call.open({ conversationId, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId, mode: voiceMode }); return; }
             if (!prepareVoiceSession) return;
             preparingCallRef.current = true;
-            void prepareVoiceSession().then((key) => call.open({ conversationId: key, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId }))
+            void prepareVoiceSession().then((key) => call.open({ conversationId: key, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId, mode: voiceMode }))
               .catch((error: unknown) => showComposerNotification('error', error instanceof Error ? error.message : m.chat.callFailed))
               .finally(() => { preparingCallRef.current = false; });
           }}

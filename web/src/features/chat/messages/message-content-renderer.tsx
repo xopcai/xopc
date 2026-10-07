@@ -313,8 +313,34 @@ function ChatMarkdownView({
   const openFile = useCallback(
     (target: WorkspaceFileLinkTarget) => {
       if (target.kind === 'workspace-relative') {
-        setPreview(target.path, target.line, projectId, conversationId);
-        setResolution(null);
+        setResolution({ status: 'loading', target });
+        void (async () => {
+          const scoped = await resolveWorkspaceFileReference(target.path, {
+            projectId: projectId?.trim() || undefined,
+            conversationId: conversationId?.trim() || undefined,
+          });
+          if (scoped?.scope === 'workspace' && scoped.workspaceRelativePath) {
+            setPreview(scoped.workspaceRelativePath, target.line, projectId, conversationId);
+            setResolution(null);
+            return;
+          }
+          // A delegated result may be saved in the default workspace while its
+          // message is delivered in another Agent's conversation.
+          const fallback = !projectId && conversationId
+            ? await resolveWorkspaceFileReference(target.path)
+            : null;
+          if (fallback?.scope === 'workspace' && fallback.workspaceRelativePath) {
+            setPreview(fallback.workspaceRelativePath, target.line);
+            setResolution(null);
+            return;
+          }
+          setResolution(scoped
+            ? { status: 'ready', target, ref: scoped }
+            : { status: 'error', target, message: fileReferenceMessages.resolveFailedDescription });
+        })().catch((err) => setResolution({
+          status: 'error', target,
+          message: err instanceof Error ? err.message : String(err),
+        }));
         return;
       }
 

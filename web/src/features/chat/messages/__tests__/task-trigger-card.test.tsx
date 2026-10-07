@@ -33,6 +33,6 @@ describe('task update trigger', () => {
     expect(container.textContent).not.toContain('Task update');
     expect(container.querySelector('[data-task-trigger]')?.className).toContain('border-t');
     expect(container.querySelector('a span')?.className).toContain('truncate');
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('/tasks/task-1');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('/?task=task-1');
   });
 });

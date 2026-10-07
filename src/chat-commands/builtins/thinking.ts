@@ -78,8 +78,16 @@ const thinkCommand: CommandDefinition = {
       };
     }
     
-    await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.conversationId, 'thinkingLevel', level);
-    ctx.syncAgentThinkingLevel?.(level);
+    if (ctx.setThinkingLevel) {
+      try {
+        await ctx.setThinkingLevel(level);
+      } catch (error) {
+        return { content: error instanceof Error ? error.message : 'Unable to change thinking level', success: false };
+      }
+    } else {
+      await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.conversationId, 'thinkingLevel', level);
+      ctx.syncAgentThinkingLevel?.(level);
+    }
 
     const levelDescriptions: Record<ThinkLevel, string> = {
       off: 'No thinking',

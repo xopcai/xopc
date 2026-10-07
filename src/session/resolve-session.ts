@@ -22,6 +22,7 @@ import {
 } from './reset-policy.js';
 import { resolveChannelResetConfig, resolveSessionResetType } from './reset-type.js';
 import type { SessionMetadata } from './types.js';
+import { isPersonalConversation } from '../personal-agent/repository.js';
 
 const log = createLogger('ResolveSession');
 
@@ -104,7 +105,7 @@ export async function resolveSession(opts: {
         policy: resetPolicy,
       })
     : { fresh: false };
-  const fresh = freshness.fresh;
+  const fresh = Boolean(sessionMetadata && conversationId && isPersonalConversation(conversationId)) || freshness.fresh;
   const transcriptId =
     opts.transcriptId?.trim() || (fresh ? sessionMetadata?.transcriptId : undefined) || randomUUID();
   const isNewSession = !fresh && !opts.transcriptId?.trim();

@@ -15,15 +15,19 @@ import {
   Users,
   Zap,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import useSWR from 'swr';
 
 import { useUiExtensions } from '@/features/extensions/extension-provider';
+import { PersonalAvatar } from '@/features/personal-agent/personal-avatar';
 import { resolveLucideIcon, type LucideIcon } from '@/features/extensions/extension-nav-icon';
 import { extensionPagePath } from '@/features/extensions/extension-paths';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { fetchJson } from '@/lib/fetch';
 import { preloadRouteForPath } from '@/lib/route-preload';
+import { apiUrl } from '@/lib/url';
 import {
   PRODUCT_DOMAINS,
   productSectionAtLocation,
@@ -31,6 +35,7 @@ import {
   type ProductSectionId,
 } from '@/navigation/product-navigation';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useGatewayStore } from '@/stores/gateway-store';
 
 const DEFAULT_VISIBLE_ITEMS = 3;
 const MAX_VISIBLE_ITEMS = 5;
@@ -97,6 +102,11 @@ type MenuItem = {
   active: boolean;
 };
 
+type PersonalNavProfile = {
+  displayName: string;
+  appearance: 'spark' | 'cloud' | 'bean';
+};
+
 function rowClass(collapsed: boolean, active: boolean, popover = false): string {
   return cn(
     'flex w-full items-center text-sm font-medium transition-colors duration-200 ease-out',
@@ -129,6 +139,24 @@ export function SidebarNavItems({
   const copy = m.productNavigation;
   const activeSection = productSectionAtLocation(pathname, search);
   const uiExtensions = useUiExtensions();
+  const browserSession = useGatewayStore((state) => state.conversationId);
+  const { data: personal, mutate: refreshPersonal } = useSWR(
+    browserSession ? ['personal-agent-nav', browserSession] : null,
+    () => fetchJson<{ ok: boolean; payload: PersonalNavProfile | null }>(apiUrl('/api/personal-agent')),
+    { revalidateOnFocus: false },
+  );
+  useEffect(() => {
+    const onProfileUpdated = (event: Event) => {
+      const profile = (event as CustomEvent<PersonalNavProfile | null>).detail;
+      if (profile === undefined) {
+        void refreshPersonal();
+      } else {
+        void refreshPersonal({ ok: true, payload: profile }, { revalidate: false });
+      }
+    };
+    window.addEventListener('personal-agent-updated', onProfileUpdated);
+    return () => window.removeEventListener('personal-agent-updated', onProfileUpdated);
+  }, [refreshPersonal]);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const builtins: MenuItem[] = ALL_SECTION_IDS.map((sectionId) => {
     const section = SECTION_BY_ID.get(sectionId)!;
@@ -188,6 +216,20 @@ export function SidebarNavItems({
 
   return (
     <>
+      <Link
+        to="/personal"
+        aria-current={pathname === '/personal' ? 'page' : undefined}
+        className={rowClass(collapsed, pathname === '/personal')}
+        title={personal?.payload?.displayName || 'Personal AI'}
+        onMouseEnter={() => preloadRouteForPath('/personal')}
+        onFocus={() => preloadRouteForPath('/personal')}
+        onClick={() => onNavigate?.()}
+      >
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-panel" aria-hidden>
+          <PersonalAvatar appearance={personal?.payload?.appearance ?? 'spark'} className="size-5" />
+        </span>
+        {!collapsed && <span className="truncate">{personal?.payload?.displayName || 'Personal AI'}</span>}
+      </Link>
       {visibleItems.map((item) => renderLink(item))}
       <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
         <Popover.Trigger asChild>

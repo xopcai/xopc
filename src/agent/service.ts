@@ -96,6 +96,7 @@ import {
 } from './agent-scope.js';
 import {
   extractProfileAgentId,
+  resolveEffectiveAgentConfigForSession,
 } from '../config/agent-profile.js';
 import { getUserTimezone } from '../user-model/index.js';
 import { getProjectForSession } from '../projects/workspace.js';
@@ -108,6 +109,7 @@ import { applyConfigOverrides } from '../config/runtime-overrides.js';
 import { analyzeResponseLanguage } from '../i18n/language-consistency.js';
 import { resolveResponseLanguageForSession } from './prompt/response-language.js';
 import { resolveModel } from '../providers/index.js';
+import { getModelThinking } from '../providers/model-thinking.js';
 
 export type { AgentServiceConfig, AgentContext, StreamHandle } from './service.types.js';
 
@@ -797,6 +799,10 @@ export class AgentService {
   }
 
   async switchModelForSession(conversationId: string, modelId: string): Promise<boolean> {
+    const configuredThinking = resolveEffectiveAgentConfigForSession(conversationId).config.runtime.thinkingLevel;
+    if (configuredThinking && !getModelThinking(resolveModel(modelId)).options.includes(configuredThinking)) {
+      return false;
+    }
     const ok = await this.modelManager.switchModelForSession(conversationId, modelId);
     if (!ok) return false;
     await this.sessionConfigStore.update(conversationId, { modelOverride: modelId });

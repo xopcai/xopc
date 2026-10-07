@@ -44,6 +44,7 @@ describe('product primary navigation', () => {
 
     const links = [...container.querySelectorAll('a')];
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/personal',
       '/',
       '/capabilities/skills',
       '/automations',
@@ -73,6 +74,7 @@ describe('product primary navigation', () => {
     renderAt('/', <SidebarNavItems visibleLimit={5} />);
 
     expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
+      '/personal',
       '/',
       '/capabilities/skills',
       '/automations',
@@ -84,7 +86,7 @@ describe('product primary navigation', () => {
   it('allows the visible shortcut area to shrink to one item', () => {
     renderAt('/', <SidebarNavItems visibleLimit={1} />);
 
-    expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/']);
+    expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/personal', '/']);
     expect(container.querySelector('button[aria-label="More navigation items"]')).not.toBeNull();
   });
 
@@ -127,7 +129,7 @@ describe('product primary navigation', () => {
     renderAt('/extensions/sample-extension/dashboard', <SidebarNavItems />);
 
     const links = [...container.querySelectorAll('a')];
-    expect(links).toHaveLength(3);
+    expect(links).toHaveLength(4);
     const more = openMore();
     expect(more.className).toContain('bg-surface-active');
     const extensionLink = document.body.querySelector<HTMLAnchorElement>('a[href="/extensions/sample-extension/dashboard"]');

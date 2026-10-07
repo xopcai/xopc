@@ -46,6 +46,7 @@ import { HomeQuickComposer } from '@/features/tasks/home-quick-composer';
 import { HomeAdvisorCard, type HomeAdvisorReceipt } from '@/features/tasks/home-advisor-card';
 import { HomeAdvisorHistoryDialog } from '@/features/tasks/home-advisor-history-dialog';
 import { HomeAdvisorStatusControl, type HomeAdvisorStatusCopy } from '@/features/tasks/home-advisor-status-control';
+import { modalizeTaskDetailHref } from '@/features/tasks/task-detail-route';
 import { taskCopy } from '@/features/tasks/task-copy';
 import {
   type VoiceInputShortcutTarget,
@@ -399,7 +400,7 @@ export function HomePage() {
 
   const runAction = useCallback<HomeActionRunner>((action, itemId) => {
     if (action.type === 'open') {
-      navigate(action.href);
+      navigate(modalizeTaskDetailHref('/', action.href));
       return;
     }
     setBusyItemId(itemId);
@@ -448,7 +449,7 @@ export function HomePage() {
           setAdvisorReceipt({
             title: t.home.advisorStartedTitle,
             detail: interpolate(t.home.advisorStartedDetail, { title: opportunity.title }),
-            href: result.href,
+            href: modalizeTaskDetailHref('/', result.href),
           });
           await load();
           return;

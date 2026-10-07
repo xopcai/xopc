@@ -44,6 +44,15 @@ describe('AgentToolsFactory', () => {
     expect(names).toHaveLength(2);
     expect(factory.createCapabilityTools(['desktop-pet-authoring'], { toolAllowlist })).toEqual([]);
   });
+  it('registers personal tools only when the Agent allowlist requests them', () => {
+    const factory = new AgentToolsFactory({
+      workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,
+      dispatchTaskRuns: () => {},
+    });
+    expect(factory.createCoreTools().map(tool => tool.name)).not.toContain('personal_task');
+    expect(factory.createCoreTools({ toolAllowlist: ['personal_task', 'personal_preference'] }).map(tool => tool.name))
+      .toEqual(['personal_task', 'personal_preference']);
+  });
   it('provides Conductor with focused reads without file writes or shell access', () => {
     const factory = new AgentToolsFactory({
       workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,

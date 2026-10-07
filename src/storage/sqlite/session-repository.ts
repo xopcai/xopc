@@ -167,8 +167,12 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
       JOIN task_origin_links origin ON origin.task_id = worker.task_id
       JOIN sessions parent ON parent.conversation_id = origin.conversation_id
       WHERE worker.conversation_id = s.conversation_id AND worker.role = 'execution'
-        AND parent.hidden_from_session_list = 0
-        AND (parent.updated_at >= ? OR parent.status = 'pinned' OR parent.conversation_id = ?)
+        AND (
+          COALESCE(CASE WHEN json_valid(parent.custom_data_json)
+            THEN json_extract(parent.custom_data_json, '$.keepHiddenFromSessionList') END, 0) = 1
+          OR (parent.hidden_from_session_list = 0
+            AND (parent.updated_at >= ? OR parent.status = 'pinned' OR parent.conversation_id = ?))
+        )
     )`);
     params.push(query.updatedAfter ?? 0, query.includeConversationId ?? '');
   }

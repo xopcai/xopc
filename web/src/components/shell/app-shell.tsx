@@ -235,7 +235,7 @@ function AppShellContent() {
                 {!isSettingsRoute && !previewPath ? <PrimaryAppHeader /> : null}
                 <main id="app-main-content" className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   {previewPath != null && !taskModalId ? (
-                    <WorkspacePreviewPane />
+                    <WorkspacePreviewPane allowOutsideChat={pathname === '/personal'} />
                   ) : (
                     <div
                       key={routeKey}

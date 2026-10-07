@@ -159,6 +159,16 @@ describe('SessionConfigService project workspace', () => {
     return { service, sessionConfigStore, runtime, modelManager };
   }
 
+  it('enforces a configured Agent thinking level for session edits', async () => {
+    seedConversationFixtures();
+    seedTestAgentCatalog({ agents: [{ id: 'main', runtime: { thinkingLevel: 'off' } }] });
+    const { service } = modelFixture();
+    expect(await service.patch(CONVERSATION_ID, { thinkingLevel: 'high' }))
+      .toMatchObject({ ok: false, code: 'INVALID_THINKING' });
+    expect(await service.initializeModelSelection(CONVERSATION_ID, 'test/first', 'high'))
+      .toMatchObject({ ok: false, code: 'INVALID_THINKING' });
+  });
+
   it('commits model and level together and rejects stale writers without runtime changes', async () => {
     seedConversationFixtures();
     const { service, sessionConfigStore, runtime } = modelFixture();

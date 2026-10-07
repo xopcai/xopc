@@ -474,6 +474,12 @@ describe('useRealtimeVoice', () => {
     act(() => root.render(<App showPage />));
     await act(async () => call.open({ conversationId: 'same-session', name: 'Ada' }));
     expect(call.active).toBe(true);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    const initialMiniCard = document.querySelector<HTMLElement>('[role="region"]')!;
+    expect(initialMiniCard.textContent).toContain('Ada');
+    expect(initialMiniCard.className).toContain('top-[calc(5rem+env(safe-area-inset-top))]');
+    await act(async () => initialMiniCard.querySelector<HTMLButtonElement>('button')!.click());
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     act(() => {
       onEvent({ type: 'response.created', payload: { responseId: 'reply' } });
       onEvent({ type: 'response.audio.started', payload: { responseId: 'reply' } });
