@@ -127,7 +127,10 @@ async function provisionPersonalAgent(
   const existing = new AgentCatalogRepository().get(agentId);
   const available = await availableModels();
   const preferredModel = requestedModel ?? existing?.models?.chat?.primary;
-  const chosen = preferredModel ? available.find(model => model.id === preferredModel) : available[0];
+  const fastModel = preferredModel ? undefined : new AgentCatalogRepository().getSettings().defaults.models.intents.fast?.primary;
+  const chosen = preferredModel
+    ? available.find(model => model.id === preferredModel)
+    : available.find(model => model.id === fastModel) ?? available[0];
   if (!chosen) throw new Error('Choose a configured model that supports thinking off');
   const catalog = new AgentCatalogService();
   if (!existing) {

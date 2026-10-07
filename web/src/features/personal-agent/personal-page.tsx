@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
-import { ArrowUpRight, ListTodo, MessageCircle, Settings2, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ArrowRight, ArrowUpRight, ListTodo, MessageCircle, Phone, Settings2, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { ChatPage } from '@/features/chat/chat-page';
+import { useVoiceCall } from '@/features/voice/realtime/voice-call-context';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { fetchJson } from '@/lib/fetch';
 import { formatMediumDate } from '@/lib/date-formatters';
@@ -94,8 +95,8 @@ function openingFor(preferences: Preferences, zh: boolean): string {
     ? '想聊一件事，或让我帮你推进工作，都可以从这里开始。我会认真听，也会把下一步说清楚。'
     : 'You can talk something through or ask me to move work forward. I’ll listen carefully and make the next step clear.';
   return zh
-    ? '有什么想讨论或推进的事？告诉我你现在最需要什么，我会按你的习惯回应。'
-    : 'What would you like to discuss or move forward? Tell me what you need, and I’ll respond in your preferred way.';
+    ? '有什么想讨论或推进的事？直接告诉我就好。'
+    : 'What would you like to discuss or move forward? Just tell me what is on your mind.';
 }
 
 function responsePreviewFor(warmth: Preferences['warmth'], supportMode: Preferences['supportMode'], zh: boolean): string {
@@ -125,6 +126,9 @@ function styleId(preferences: Preferences): string {
 }
 
 export function PersonalPage() {
+  const voiceCall = useVoiceCall();
+  const voiceCallRef = useRef(voiceCall);
+  voiceCallRef.current = voiceCall;
   const zh = useLocaleStore(state => state.language) === 'zh';
   const setPageHeader = usePageHeaderStore(state => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore(state => state.clearPageHeader);
@@ -133,7 +137,6 @@ export function PersonalPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState('');
   const [selectedStyle, setSelectedStyle] = useState('natural');
   const [appearance, setAppearance] = useState<PersonalAgent['appearance']>('spark');
   const [displayName, setDisplayName] = useState('');
@@ -157,7 +160,6 @@ export function PersonalPage() {
       window.dispatchEvent(new CustomEvent('personal-agent-updated', { detail: personal.payload }));
       if (personal.payload) window.dispatchEvent(new Event('session-updated'));
       setModels(compatible.payload);
-      setSelectedModel(current => current || compatible.payload[0]?.id || '');
       if (personal.payload) {
         setDisplayName(personal.payload.displayName);
         setAppearance(personal.payload.appearance);
@@ -194,16 +196,16 @@ export function PersonalPage() {
   };
 
   const create = async () => {
-    if (!selectedModel) return;
+    if (models.length === 0) return;
     setBusy(true);
     setError(null);
     try {
       const response = await fetchJson<ApiResult<PersonalAgent>>(apiUrl('/api/personal-agent'), {
-        method: 'POST', body: JSON.stringify({ model: selectedModel }),
+        method: 'POST', body: JSON.stringify({}),
       });
       setRecord(response.payload);
       window.dispatchEvent(new CustomEvent('personal-agent-updated', { detail: response.payload }));
-      await saveStyle(response.payload, displayName, selectedStyle);
+      window.dispatchEvent(new Event('session-updated'));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       await refresh();
@@ -252,12 +254,15 @@ export function PersonalPage() {
       </div>,
       end: ready ? showSettings ? <button type="button" onClick={() => setShowSettings(false)} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '关闭偏好设置' : 'Close response preferences'}><X className="size-5" /></button>
         : <div className="flex items-center gap-1">
+          <button type="button" disabled={voiceCall.active} onClick={() => {
+            if (record?.state === 'ready') voiceCallRef.current.open({ conversationId: record.conversationId, name: record.displayName, mode: 'assistant' });
+          }} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50" aria-label={zh ? '语音通话' : 'Voice call'} title={zh ? '语音通话' : 'Voice call'}><Phone className="size-5" /></button>
           <button type="button" onClick={() => void openActivity()} aria-pressed={showActivity} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '正在做的事' : 'Activity'}><ListTodo className="size-5" /></button>
           <button type="button" onClick={() => setShowSettings(true)} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '回应偏好' : 'Response preferences'}><Settings2 className="size-5" /></button>
         </div> : null,
     });
     return () => clearPageHeader();
-  }, [appearance, clearPageHeader, openActivity, record, setPageHeader, showActivity, showSettings, zh]);
+  }, [appearance, clearPageHeader, openActivity, record, setPageHeader, showActivity, showSettings, voiceCall.active, zh]);
 
   if (loading) return <div className="mx-auto w-full max-w-2xl space-y-5 px-6 py-12"><Skeleton className="h-20 w-20 rounded-full" /><Skeleton className="h-9 w-72" /><Skeleton className="h-44 w-full rounded-2xl" /></div>;
 
@@ -281,6 +286,28 @@ export function PersonalPage() {
             {finishedTasks.length > 0 && <section className={activeTasks.length ? 'mt-7' : ''} aria-label={zh ? '已结束' : 'Finished'}><h3 className="px-3 pb-1 text-[11px] font-medium tracking-wide text-fg-subtle">{zh ? '已结束' : 'FINISHED'}</h3><div className="divide-y divide-edge-subtle">{finishedTasks.map(item => <ActivityRow key={item.id} item={item} zh={zh} />)}</div></section>}
           </div>
         </aside>}
+      </div>
+    </div>
+  );
+
+  if (!showSettings) return (
+    <div className="flex h-full min-h-0 flex-1 items-center justify-center overflow-y-auto bg-surface-base px-5 py-10 sm:px-8">
+      <div className="w-full max-w-lg text-center">
+        <div className="mx-auto flex size-20 items-center justify-center rounded-[1.75rem] bg-amber-100/40 dark:bg-amber-400/10">
+          <PersonalAvatar appearance="spark" className="size-16" />
+        </div>
+        <h2 className="mt-7 text-3xl font-semibold tracking-tight text-fg">{zh ? '有事，直接和我说' : 'Start with a conversation'}</h2>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-fg-muted">{zh
+          ? '聊想法、问问题，或交给我一件要推进的事。我们先从对话开始，回应方式可以边聊边调整。'
+          : 'Bring a question, an idea, or something to move forward. We can shape how I respond as we talk.'}</p>
+        <button type="button" disabled={busy || models.length === 0} onClick={() => void create()}
+          className="mx-auto mt-8 flex min-h-12 w-full max-w-xs items-center justify-center gap-2 rounded-xl bg-accent px-5 text-sm font-medium text-white transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:opacity-50">
+          {busy ? (zh ? '正在准备对话…' : 'Getting ready…') : (zh ? '开始对话' : 'Start chatting')}
+          {!busy && <ArrowRight className="size-4" aria-hidden />}
+        </button>
+        {models.length === 0 && <p className="mt-5 text-sm text-fg-muted">{zh ? '开始前需要配置一个可用模型。' : 'Set up a compatible model to get started.'} <Link to="/settings/capabilities/models" className="text-accent underline underline-offset-2">{zh ? '前往模型设置' : 'Model settings'}</Link></p>}
+        {error && <p role="alert" className="mt-5 text-sm text-danger">{error}</p>}
+        {models.length > 0 && <p className="mt-5 text-xs text-fg-subtle">{zh ? '名字、形象和其他偏好，以后都能随时调整。' : 'You can change the name, appearance, and preferences later.'}</p>}
       </div>
     </div>
   );
@@ -337,10 +364,8 @@ export function PersonalPage() {
           </div>
           <div className="mt-5 text-sm font-medium text-fg">{zh ? '界面形象' : 'On-screen appearance'}</div>
           <div className="mt-3 flex flex-wrap gap-3">{APPEARANCES.map(item => <button key={item.id} type="button" onClick={() => setAppearance(item.id)} aria-pressed={appearance === item.id} className={`flex min-h-16 min-w-20 items-center gap-2 rounded-xl border px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${appearance === item.id ? 'border-accent bg-accent/5' : 'border-edge hover:bg-surface-hover'}`}><span className={`flex size-8 items-center justify-center rounded-full ${item.color}`}><PersonalAvatar appearance={item.id} className="size-8" /></span><span className="text-xs text-fg-muted">{zh ? item.zh : item.en}</span></button>)}</div>
-          {record?.state !== 'ready' && <div className="mt-6"><p className="mb-2 text-sm font-medium text-fg">{zh ? '快速对话模型' : 'Fast conversation model'}</p><PopoverSelect value={selectedModel} options={models.map(model => ({ value: model.id, label: model.name }))} placeholder={zh ? '选择支持关闭思考的模型' : 'Choose a model with thinking off'} allowEmpty={false} onChange={setSelectedModel} /><p className="mt-2 text-xs text-fg-muted">{zh ? '复杂任务会交给专业 Agent 深入处理。' : 'Specialist agents handle deeper work.'}</p></div>}
           {error && <p role="alert" className="mt-4 text-sm text-red-600">{error}</p>}
-          {record?.state !== 'ready' && models.length === 0 && <p className="mt-4 text-sm text-fg-muted">{zh ? '请先配置一个支持关闭思考的模型。' : 'Configure a model that supports thinking off first.'}</p>}
-          <button type="button" disabled={busy || (record?.state !== 'ready' && !selectedModel)} onClick={() => void (record?.state === 'ready' ? save() : create())} className="mt-6 min-h-11 w-full rounded-xl bg-accent px-4 py-2.5 font-medium text-white disabled:opacity-50">{busy ? (zh ? '正在准备…' : 'Getting ready…') : record?.state === 'ready' ? (zh ? '保存回应偏好' : 'Save response preferences') : (zh ? '创建 Personal AI' : 'Create Personal AI')}</button>
+          <button type="button" disabled={busy} onClick={() => void save()} className="mt-6 min-h-11 w-full rounded-xl bg-accent px-4 py-2.5 font-medium text-white disabled:opacity-50">{busy ? (zh ? '正在保存…' : 'Saving…') : (zh ? '保存回应偏好' : 'Save response preferences')}</button>
         </div>
         <p className="mt-5 text-center text-sm text-fg-muted">{zh ? '之后可以直接说“回答短一点”或“先听我说”，回应方式会继续调整。' : 'You can later say “keep it shorter” or “listen first” to adjust how it responds.'}</p>
       </div>

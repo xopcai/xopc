@@ -47,6 +47,7 @@ export const MessageList = memo(function MessageList({
   editLatestUserOnly = false,
   editRequiresTurnId = false,
   responseFeedbackEnabled,
+  showAssistantWorkLog = true,
   trailingContent,
 }: {
   messages: Message[];
@@ -76,6 +77,8 @@ export const MessageList = memo(function MessageList({
   editLatestUserOnly?: boolean;
   editRequiresTurnId?: boolean;
   responseFeedbackEnabled?: boolean;
+  /** Whether to show the assistant's reasoning and tool activity disclosure. */
+  showAssistantWorkLog?: boolean;
   /** Ephemeral UI rendered after the latest transcript message; never persisted as a message. */
   trailingContent?: ReactNode;
 }) {
@@ -183,6 +186,7 @@ export const MessageList = memo(function MessageList({
                 && msg.deliveryStatus !== 'sending'
               }
               responseFeedbackEnabled={responseFeedbackEnabled}
+              showAssistantWorkLog={showAssistantWorkLog}
             />}
           </div>
         );

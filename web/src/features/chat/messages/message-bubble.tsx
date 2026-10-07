@@ -102,6 +102,7 @@ export const MessageBubble = memo(function MessageBubble({
   onEditUserMessage,
   userMessageCanEdit = true,
   responseFeedbackEnabled = true,
+  showAssistantWorkLog = true,
 }: {
   message: Message;
   followUpTrigger?: NonNullable<Message['taskTrigger']>;
@@ -137,6 +138,7 @@ export const MessageBubble = memo(function MessageBubble({
   onEditUserMessage?: (message: Message, messageIndex: number) => void;
   userMessageCanEdit?: boolean;
   responseFeedbackEnabled?: boolean;
+  showAssistantWorkLog?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -540,7 +542,7 @@ export const MessageBubble = memo(function MessageBubble({
   }, [isUser, userCopyText]);
 
   const retryDisabled = deleteRoundDisabled || !userMessageCanRetry;
-  const assistantStepsBlock = assistantTurnView
+  const assistantStepsBlock = showAssistantWorkLog && assistantTurnView
     && (assistantTurnView.workLog.active || assistantTurnView.workLog.items.length > 0)
     ? <AssistantStepsBlock
         workLog={assistantTurnView.workLog}
