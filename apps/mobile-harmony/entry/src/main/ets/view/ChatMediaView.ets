@@ -23,6 +23,7 @@ export struct XopcChatMediaView {
   @Param draftPreview: boolean = false;
   @Param compact: boolean = false;
   @Param embedded: boolean = false;
+  @Param noteInlineImage: boolean = false;
   @Param compactThumbnail: boolean = false;
   @Param compactAvailable: boolean = false;
   @Param compactDisclosure: boolean = true;
@@ -460,13 +461,15 @@ export struct XopcChatMediaView {
           .enabled(!this.busy && this.previewable())
           .accessibilityText($r('app.string.chat_preview_file', this.file.name)).onClick((): void => { this.openPreview(); })
       } else if (this.picture) {
-        Image(this.picture).width(this.draftPreview ? 120 : '100%').height(this.draftPreview ? 100 : 200).objectFit(ImageFit.Contain).borderRadius(12)
+        Image(this.picture).width(this.draftPreview ? 120 : '100%')
+          .height(this.noteInlineImage ? Math.max(220, Math.min(420, 320 / Math.max(0.2, this.pictureRatio))) : this.draftPreview ? 100 : 200)
+          .objectFit(this.noteInlineImage ? ImageFit.Cover : ImageFit.Contain).borderRadius(12)
           .id('chat-image-' + this.file.id).accessibilityText(this.file.name).onClick((): void => { this.openPreview(); })
       } else if (this.file.mimeType.startsWith('image/') && !this.error) {
         Column() {}.width('100%').height(160).borderRadius(12).backgroundColor(this.colors.grouped)
           .accessibilityText($r('app.string.chat_media_loading'))
       }
-      if (!this.inlineVoice && !this.compact) {
+      if (!this.inlineVoice && !this.compact && !this.noteInlineImage) {
         Row({ space: 8 }) {
           Text(this.file.name || this.file.type).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1).maxLines(2)
           if (this.previewable()) {

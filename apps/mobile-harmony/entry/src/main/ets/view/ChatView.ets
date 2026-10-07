@@ -117,7 +117,7 @@ export struct XopcChatView {
     }
     if (this.sheetMode === 'actions') return 448;
     if (this.sheetMode === 'thinking') return Math.min(620, Math.max(280, 136 + (this.options.selectedModel()?.thinking?.options.length || 1) * 60));
-    if (this.sheetMode === 'queue') return Math.min(620, Math.max(260, 156 + this.options.queued.length * 120));
+    if (this.sheetMode === 'queue') return Math.min(620, Math.max(240, 156 + this.options.queued.length * 92));
     if (this.sheetMode === 'attention') return Math.min(560, Math.max(300, 188 + Math.min(this.attentionItems.length, 3) * 96));
     return 620;
   }
@@ -1221,10 +1221,19 @@ export struct XopcChatView {
       }.width('92%').borderRadius(12).backgroundColor(this.colors.accentSoft).margin({ bottom: 8 })
     }
     if (this.options.queued.length || this.options.queueError) {
-      Button() {
-        Row({ space: 8 }) { Text($r('app.string.chat_queue')); Text(this.options.queued.length.toString()) }
-      }.id('chat-queue')
-        .height(44).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 10 }) {
+          Text($r('app.string.chat_queue')).fontSize(13).fontWeight(FontWeight.Medium)
+            .fontColor(this.colors.foreground).layoutWeight(1)
+          if (this.options.queued.length) {
+            Text(this.options.queued.length.toString()).fontSize(12).fontColor(this.colors.accent)
+              .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+              .borderRadius(10).backgroundColor(this.colors.accentSoft)
+          }
+          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(13).fontColor([this.colors.tertiary])
+        }.width('100%').padding({ left: 12, right: 12 })
+      }.id('chat-queue').width('92%').height(44).padding(0).borderRadius(14)
+        .backgroundColor(this.colors.input).margin({ bottom: 8 })
         .onClick((): void => { this.options.refreshQueue(); this.openSheet('queue'); })
     }
     if (this.editingQueuedId || this.editingTurnId) {

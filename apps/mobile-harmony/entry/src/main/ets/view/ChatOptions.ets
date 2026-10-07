@@ -58,6 +58,9 @@ export struct XopcChatOptions {
       if (this.mode === 'model' || this.mode === 'agent') {
         TextInput({ text: this.query, placeholder: $r('app.string.search') }).onChange((value: string): void => { this.query = value; })
       }
+      if (this.mode === 'queue' && this.model.queued.length > 1) {
+        Text($r('app.string.chat_queue_drag_hint')).fontSize(12).fontColor(this.colors.secondary).width('100%')
+      }
       if (this.model.loading) { XopcListSkeleton() }
       if (this.model.error && this.mode !== 'queue') {
         Text(userErrorMessage(this.model.error, 'collection')).fontColor(this.colors.secondary)
@@ -97,42 +100,44 @@ export struct XopcChatOptions {
               }
             }
           }
-          ForEach(this.model.queued, (item: XopcQueuedInput, index: number) => {
+          ForEach(this.model.queued, (item: XopcQueuedInput) => {
             ListItem() {
-              Column({ space: 8 }) {
-                Row({ space: 10 }) {
-                  if (this.queueImage(item)) {
-                    Image(this.queueImage(item)).width(52).height(52).borderRadius(10).objectFit(ImageFit.Cover)
-                      .sourceSize({ width: 104, height: 104 })
-                  } else if (item.attachments?.length) {
-                    SymbolGlyph($r('sys.symbol.paperclip')).fontSize(22).fontColor([this.colors.secondary])
-                      .width(52).height(52)
-                  }
-                  Column({ space: 4 }) {
-                    Text(item.content || $r('app.string.add_attachment')).fontColor(this.colors.foreground).width('100%')
-                      .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    if (item.attachments?.length || item.contextRefs?.length) {
-                      Text((item.attachments?.length ? '📎 ' + item.attachments.length : '')
-                        + (item.attachments?.length && item.contextRefs?.length ? '  ·  ' : '')
-                        + (item.contextRefs?.length ? '@ ' + item.contextRefs.length : ''))
-                        .fontSize(12).fontColor(this.colors.secondary)
+              Row({ space: 10 }) {
+                Text('≡').fontSize(24).fontColor(this.colors.tertiary).width(26).textAlign(TextAlign.Center)
+                Button({ type: ButtonType.Normal }) {
+                  Row({ space: 10 }) {
+                    if (this.queueImage(item)) {
+                      Image(this.queueImage(item)).width(44).height(44).borderRadius(9).objectFit(ImageFit.Cover)
+                        .sourceSize({ width: 88, height: 88 })
+                    } else if (item.attachments?.length) {
+                      SymbolGlyph($r('sys.symbol.paperclip')).fontSize(20).fontColor([this.colors.secondary])
+                        .width(44).height(44)
                     }
-                  }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                }.width('100%')
-                Row({ space: 4 }) {
-                  Button('↑').enabled(!this.model.queueBusy && index > 0).height(40).backgroundColor(Color.Transparent)
-                    .onClick((): void => { this.model.updateQueued(item, { position: index - 1 }); })
-                  Button('↓').enabled(!this.model.queueBusy && index < this.model.queued.length - 1).height(40).backgroundColor(Color.Transparent)
-                    .onClick((): void => { this.model.updateQueued(item, { position: index + 1 }); })
-                  Blank()
-                  Button($r('app.string.chat_edit')).enabled(!this.model.queueBusy).height(40).backgroundColor(Color.Transparent)
-                    .onClick((): void => { this.onEditQueued(item); })
-                  Button($r('app.string.cancel')).enabled(!this.model.queueBusy).height(40).backgroundColor(Color.Transparent)
-                    .onClick((): void => { this.model.cancelQueued(item); })
-                }.width('100%')
-              }.width('100%').padding(12).borderRadius(12).backgroundColor(this.colors.grouped)
+                    Column({ space: 4 }) {
+                      Text(item.content || $r('app.string.add_attachment')).fontSize(14).fontColor(this.colors.foreground)
+                        .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                      if (item.attachments?.length || item.contextRefs?.length) {
+                        Text((item.attachments?.length ? '📎 ' + item.attachments.length : '')
+                          + (item.attachments?.length && item.contextRefs?.length ? '  ·  ' : '')
+                          + (item.contextRefs?.length ? '@ ' + item.contextRefs.length : ''))
+                          .fontSize(12).fontColor(this.colors.secondary)
+                      }
+                    }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                    SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(12).fontColor([this.colors.tertiary])
+                  }.width('100%')
+                }.layoutWeight(1).padding(0).backgroundColor(Color.Transparent).enabled(!this.model.queueBusy)
+                  .accessibilityText($r('app.string.edit'))
+                  .onClick((): void => { this.onEditQueued(item); })
+                Button({ type: ButtonType.Circle }) {
+                  SymbolGlyph($r('sys.symbol.trash')).fontSize(18).fontColor([this.colors.secondary])
+                }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).enabled(!this.model.queueBusy)
+                  .accessibilityText($r('app.string.delete'))
+                  .onClick((): void => { this.model.cancelQueued(item); })
+              }.width('100%').constraintSize({ minHeight: 76 }).padding({ left: 8, right: 8, top: 8, bottom: 8 })
+                .borderRadius(12).backgroundColor(this.colors.grouped)
             }
           }, (item: XopcQueuedInput): string => item.id)
+            .onMove((from: number, to: number): void => { this.model.moveQueued(from, to); })
           if (!this.model.queued.length && !this.model.queueError) { ListItem() { Text($r('app.string.chat_queue_empty')).fontColor(this.colors.secondary).padding(24) } }
         } else {
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_context'), summary: this.contextSummary,

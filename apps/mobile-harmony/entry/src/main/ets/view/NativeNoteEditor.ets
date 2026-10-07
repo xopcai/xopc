@@ -1,18 +1,30 @@
+import { common } from '@kit.AbilityKit';
+import { image } from '@kit.ImageKit';
+
 import { noteEditorMarkdown, noteEditorSpans, XopcNoteEditorResultSpan, XopcNoteEditorSpan } from '../common/noteMarkdown';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { XopcNoteAttachment } from '../model/note';
+import { XopcHistoryMedia } from '../model/chat';
+import { readChatMedia } from '../service/chatMedia';
 
 /** Native RichEditor surface. Markdown conversion remains a pure, testable boundary. */
 @ComponentV2
 export struct XopcNativeNoteEditor {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param markdown: string = '';
+  @Param noteId: string = '';
+  @Param attachments: XopcNoteAttachment[] = [];
   @Param revision: number = 0;
   @Param readOnly: boolean = false;
   @Event onChange: (markdown: string) => void = (_markdown: string): void => {};
   @Event onSelection: (text: string) => void = (_text: string): void => {};
+  @Event onImageTap: (attachmentId: string) => void = (_attachmentId: string): void => {};
   private controller: RichEditorController = new RichEditorController();
   private ready: boolean = false;
-  private loading: boolean = false;
+  @Local loading: boolean = false;
+  private loadGeneration: number = 0;
+  private imageTokens: Map<image.PixelMap, string> = new Map<image.PixelMap, string>();
+  private imageOrder: string[] = [];
   private selectionStart: number = 0;
   private selectionEnd: number = 0;
   private changeTimer: number = -1;
@@ -20,7 +32,7 @@ export struct XopcNativeNoteEditor {
   private undoStack: string[] = [];
   private redoStack: string[] = [];
 
-  aboutToDisappear(): void { this.cancelChangeTimer(); this.emitChange(); }
+  aboutToDisappear(): void { this.cancelChangeTimer(); this.emitChange(); this.loadGeneration++; this.releaseImages(); }
 
   @Monitor('revision')
   onRevisionChanged(): void {
@@ -36,25 +48,91 @@ export struct XopcNativeNoteEditor {
     return 17;
   }
 
-  private loadMarkdown(): void {
+  private releaseImages(): void {
+    this.imageTokens.forEach((_token: string, picture: image.PixelMap): void => { void picture.release(); });
+    this.imageTokens.clear();
+    this.imageOrder = [];
+  }
+
+  private imageAttachment(token: string): XopcNoteAttachment | undefined {
+    return this.attachments.find((attachment: XopcNoteAttachment): boolean => token.includes(
+      'xopc-attachment://notes/' + encodeURIComponent(this.noteId) + '/' + encodeURIComponent(attachment.id)));
+  }
+
+  private imageMedia(attachment: XopcNoteAttachment): XopcHistoryMedia {
+    return { id: attachment.id, name: attachment.fileName, type: attachment.type, mimeType: attachment.mimeType,
+      size: attachment.size, uri: 'xopc-attachment://notes/' + encodeURIComponent(this.noteId) + '/' + encodeURIComponent(attachment.id) };
+  }
+
+  private addText(span: XopcNoteEditorSpan): void {
+    this.controller.addTextSpan(span.text, { style: {
+      fontColor: this.colors.foreground,
+      fontSize: this.fontSize(span.heading),
+      fontWeight: span.heading > 0 || span.bold ? FontWeight.Bold : FontWeight.Normal,
+      fontStyle: span.italic ? FontStyle.Italic : FontStyle.Normal,
+      fontFamily: span.code ? 'monospace' : undefined
+    } });
+  }
+  private addImageFallback(token: string): void {
+    this.addText({ text: token, bold: false, italic: false, heading: 0, code: false });
+  }
+
+  private loadMarkdown(): void { void this.renderMarkdown(); }
+
+  private async renderMarkdown(): Promise<void> {
+    const generation = ++this.loadGeneration;
     this.loading = true;
     this.controller.deleteSpans();
-    noteEditorSpans(this.markdown).forEach((span: XopcNoteEditorSpan): void => {
-      this.controller.addTextSpan(span.text, { style: {
-        fontColor: this.colors.foreground,
-        fontSize: this.fontSize(span.heading),
-        fontWeight: span.heading > 0 || span.bold ? FontWeight.Bold : FontWeight.Normal,
-        fontStyle: span.italic ? FontStyle.Italic : FontStyle.Normal,
-        fontFamily: span.code ? 'monospace' : undefined
-      } });
-    });
-    this.lastMarkdown = this.markdown;
-    this.loading = false;
+    this.releaseImages();
+    try {
+      for (const span of noteEditorSpans(this.markdown)) {
+        if (generation !== this.loadGeneration) return;
+        const attachment = span.imageMarkdown ? this.imageAttachment(span.imageMarkdown) : undefined;
+        if (!span.imageMarkdown) { this.addText(span); continue; }
+        if (!attachment || !this.noteId) { this.addImageFallback(span.imageMarkdown); continue; }
+        try {
+          const context = this.getUIContext().getHostContext() as common.Context;
+          const bytes = await readChatMedia(this.imageMedia(attachment), this.noteId, context);
+          if (generation !== this.loadGeneration) return;
+          const source = image.createImageSource(bytes);
+          try {
+            const info = await source.getImageInfo();
+            const scale = Math.min(1, 900 / Math.max(info.size.width, info.size.height));
+            const picture = await source.createPixelMap({ desiredSize: {
+              width: Math.max(1, Math.round(info.size.width * scale)), height: Math.max(1, Math.round(info.size.height * scale)) } });
+            if (generation !== this.loadGeneration) { await picture.release(); return; }
+            const height = Math.max(220, Math.min(400, 300 * info.size.height / Math.max(1, info.size.width)));
+            try {
+              this.controller.addImageSpan(picture, { imageStyle: { size: [300, height], objectFit: ImageFit.Cover },
+                gesture: { onClick: (_event: ClickEvent): void => { this.onImageTap(attachment.id); } } });
+              this.imageTokens.set(picture, span.imageMarkdown);
+              this.imageOrder.push(span.imageMarkdown);
+            } catch (error) { await picture.release(); throw error as Error; }
+          } finally { await source.release(); }
+        } catch (_error) { this.addImageFallback(span.imageMarkdown); }
+      }
+      this.lastMarkdown = this.markdown;
+    } finally { if (generation === this.loadGeneration) this.loading = false; }
   }
 
   private currentMarkdown(): string {
     const spans: XopcNoteEditorResultSpan[] = [];
-    this.controller.getSpans().forEach((raw: RichEditorImageSpanResult | RichEditorTextSpanResult): void => {
+    let unknownImage = false;
+    const currentSpans = this.controller.getSpans();
+    const imageCount = currentSpans.filter((raw: RichEditorImageSpanResult | RichEditorTextSpanResult): boolean =>
+      !!(raw as RichEditorImageSpanResult).imageStyle).length;
+    let imageIndex = 0;
+    currentSpans.forEach((raw: RichEditorImageSpanResult | RichEditorTextSpanResult): void => {
+      const imageSpan = raw as RichEditorImageSpanResult;
+      if (imageSpan.imageStyle) {
+        const token = imageSpan.valuePixelMap ? this.imageTokens.get(imageSpan.valuePixelMap) : undefined;
+        const fallback = imageCount === this.imageOrder.length ? this.imageOrder[imageIndex] : undefined;
+        imageIndex++;
+        if (token || fallback) spans.push({ text: '', fontSize: 17, fontWeight: 400, italic: false, code: false,
+          imageMarkdown: token || fallback });
+        else unknownImage = true;
+        return;
+      }
       const span = raw as RichEditorTextSpanResult;
       if (typeof span.value !== 'string') return;
       spans.push({
@@ -65,7 +143,7 @@ export struct XopcNativeNoteEditor {
         code: span.textStyle.fontFamily.toLowerCase().includes('mono')
       });
     });
-    return noteEditorMarkdown(spans);
+    return unknownImage ? this.lastMarkdown : noteEditorMarkdown(spans);
   }
 
   private emitChange(): void {
@@ -185,6 +263,21 @@ export struct XopcNativeNoteEditor {
 
   build() {
     Column({ space: 8 }) {
+      RichEditor({ controller: this.controller })
+        .layoutWeight(1).width('100%').padding({ left: 2, right: 2, top: 8, bottom: 28 })
+        .enabled(!this.readOnly && !this.loading).backgroundColor(Color.Transparent).placeholder($r('app.string.note_editor_placeholder'), {
+          fontColor: this.colors.tertiary
+        }).copyOptions(CopyOptions.LocalDevice).enableDataDetector(false)
+        .onReady((): void => { this.ready = true; this.loadMarkdown(); })
+        .onSelectionChange((range: RichEditorRange): void => {
+          this.selectionStart = range.start ?? 0; this.selectionEnd = range.end ?? this.selectionStart;
+          const text = this.selectionEnd > this.selectionStart ? this.controller.getSpans(range)
+            .map((raw: RichEditorImageSpanResult | RichEditorTextSpanResult): string =>
+              typeof (raw as RichEditorTextSpanResult).value === 'string' ? (raw as RichEditorTextSpanResult).value : '').join('') : '';
+          this.onSelection(text);
+        })
+        .onDidChange((_before: TextRange, _after: TextRange): void => { this.scheduleChange(); })
+        .onBlur((): void => { this.cancelChangeTimer(); this.emitChange(); })
       if (!this.readOnly) {
         Scroll() {
           Row({ space: 8 }) {
@@ -204,21 +297,6 @@ export struct XopcNativeNoteEditor {
           }.padding({ left: 2, right: 2 })
         }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%')
       }
-      RichEditor({ controller: this.controller })
-        .layoutWeight(1).width('100%').padding({ left: 2, right: 2, top: 8, bottom: 28 })
-        .enabled(!this.readOnly).backgroundColor(Color.Transparent).placeholder($r('app.string.note_editor_placeholder'), {
-          fontColor: this.colors.tertiary
-        }).copyOptions(CopyOptions.LocalDevice).enableDataDetector(false)
-        .onReady((): void => { this.ready = true; this.loadMarkdown(); })
-        .onSelectionChange((range: RichEditorRange): void => {
-          this.selectionStart = range.start ?? 0; this.selectionEnd = range.end ?? this.selectionStart;
-          const text = this.selectionEnd > this.selectionStart ? this.controller.getSpans(range)
-            .map((raw: RichEditorImageSpanResult | RichEditorTextSpanResult): string =>
-              typeof (raw as RichEditorTextSpanResult).value === 'string' ? (raw as RichEditorTextSpanResult).value : '').join('') : '';
-          this.onSelection(text);
-        })
-        .onDidChange((_before: TextRange, _after: TextRange): void => { this.scheduleChange(); })
-        .onBlur((): void => { this.cancelChangeTimer(); this.emitChange(); })
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
   }
 }

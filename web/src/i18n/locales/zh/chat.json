@@ -491,6 +491,7 @@
     "voicePlaybackSpeed": "播放速度",
     "inputPlaceholderSteering": "输入后续问题，按 Enter 加入队列；点击队列项可编辑。",
     "inputPlaceholderSteeringEdit": "正在编辑队列中的后续问题 — Enter 保存，Esc 放弃修改",
+    "followUpQueueAdd": "加入后续问题队列",
     "steeringInterruptSend": "停止当前回复并立即发送（⌘↵ 或 Ctrl+↵）",
     "followUpQueueAria": "后续问题队列（本轮结束后按顺序发送）",
     "followUpQueueHeading": "后续问题",

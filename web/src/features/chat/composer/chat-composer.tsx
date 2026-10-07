@@ -12,6 +12,7 @@ import { ComposerFrame } from '@/features/chat/composer/composer-frame';
 import { shouldRouteGlobalComposerPaste } from '@/features/chat/composer/composer-global-paste';
 import { applyComposerPaste, resolveComposerPaste } from '@/features/chat/composer/composer-paste';
 import { ChatPendingFollowUpStack } from '@/features/chat/follow-up/chat-pending-follow-up-stack';
+import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
 import { SessionPreparationStatus } from '@/features/chat/session/session-preparation-status';
 import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
 import { ComposerContextChips } from '@/features/chat/composer/composer-context-chips';
@@ -365,7 +366,8 @@ export const ChatComposer = memo(function ChatComposer({
     }
   }, [onWireInputClearWalk, setContextRefs]);
 
-  const runBusy = sending || streaming;
+  const agentRunActive = useSidebarSessionAgentRun(conversationId ?? '');
+  const runBusy = sending || streaming || agentRunActive;
   busyRef.current = runBusy;
 
   const openReviewLauncher = useCallback(() => {
@@ -851,6 +853,7 @@ export const ChatComposer = memo(function ChatComposer({
               .finally(() => { preparingCallRef.current = false; });
           }}
           onSend={actions.send}
+          onQueue={onAddPendingFollowUp ? actions.flushSteeringDraft : undefined}
           onAbort={onAbort}
           onInterrupt={actions.interruptDraft}
           sessionModel={sessionModel}

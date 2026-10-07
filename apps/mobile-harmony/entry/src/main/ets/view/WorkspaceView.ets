@@ -5,6 +5,8 @@ import { XopcMarkdownView } from './MarkdownView';
 import { XopcBrandLoading, XopcHubRow, XopcListSkeleton } from './MobileComponents';
 import { XopcMobileRoute } from '../model/home';
 import { userErrorMessage } from '../common/userError';
+import { XopcChatRepository } from '../repository/chatRepository';
+import { XopcChatAgent, XopcChatAgents } from '../model/chat';
 
 @ComponentV2
 export struct XopcWorkspaceView {
@@ -21,16 +23,91 @@ export struct XopcWorkspaceView {
   @Local search: string = '';
   @Local filter: string = 'all';
   @Local agentId: string = '';
+  @Local agents: XopcChatAgent[] = [];
+  @Local defaultAgent: string = '';
+  @Local agentsLoading: boolean = false;
+  @Local agentsError: string = '';
+  @Local agentPickerOpen: boolean = false;
+  @Local agentQuery: string = '';
+  private chatRepository: XopcChatRepository = new XopcChatRepository();
   @Local automationDefinitionExpanded: boolean = false;
   @Local creatingChat: boolean = false;
 
-  aboutToAppear(): void { this.model.start(this.section, this.initialId, this.createOnAppear, this.projectId); }
+  aboutToAppear(): void {
+    this.model.start(this.section, this.initialId, this.createOnAppear, this.projectId);
+    if (this.section === 'tasks') this.loadAgents();
+  }
   @Monitor('initialId')
   onTargetChange(): void {
     this.automationDefinitionExpanded = false;
+    this.agentId = this.defaultAgentId();
     if (this.initialId) this.model.open(this.initialId);
   }
   aboutToDisappear(): void { this.model.dispose(); }
+
+  private defaultAgentId(): string { return this.defaultAgent || this.agents[0]?.id || ''; }
+
+  private async loadAgents(): Promise<void> {
+    this.agentsLoading = true; this.agentsError = '';
+    try {
+      const result: XopcChatAgents = await this.chatRepository.agents();
+      this.agents = result.agents;
+      this.defaultAgent = result.agents.some((item: XopcChatAgent): boolean => item.id === result.defaultId)
+        ? result.defaultId : result.agents[0]?.id || '';
+      this.agentId = result.agents.some((item: XopcChatAgent): boolean => item.id === this.agentId)
+        ? this.agentId : this.defaultAgentId();
+    } catch (error) { this.agentsError = (error as Error).message; }
+    finally { this.agentsLoading = false; }
+  }
+
+  private selectedAgentName(): string {
+    const agent = this.agents.find((item: XopcChatAgent): boolean => item.id === this.agentId);
+    return agent?.name || agent?.id || '';
+  }
+
+  private matchingAgents(): XopcChatAgent[] {
+    const query = this.agentQuery.trim().toLowerCase();
+    return this.agents.filter((item: XopcChatAgent): boolean =>
+      !query || (item.name + ' ' + item.id + ' ' + (item.description ?? '')).toLowerCase().includes(query));
+  }
+
+  @Builder
+  agentPicker() {
+    Column({ space: 12 }) {
+      Text($r('app.string.chat_agent')).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+        .width('100%').padding({ top: 12 })
+      TextInput({ text: this.agentQuery, placeholder: $r('app.string.search') }).height(48)
+        .backgroundColor(this.colors.input).borderRadius(14).padding({ left: 14, right: 14 })
+        .onChange((text: string): void => { this.agentQuery = text; })
+      List({ space: 8 }) {
+        ForEach(this.matchingAgents(), (agent: XopcChatAgent) => {
+          ListItem() {
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 10 }) {
+                Column({ space: 4 }) {
+                  Text(agent.name || agent.id).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  Text(agent.description || agent.id).fontSize(12).fontColor(this.colors.secondary)
+                    .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                if (agent.id === this.agentId) {
+                  SymbolGlyph($r('sys.symbol.checkmark_circle')).fontSize(20).fontColor([this.colors.accent])
+                }
+              }.width('100%').padding(14)
+            }.width('100%').padding(0).borderRadius(14).backgroundColor(this.colors.input)
+              .onClick((): void => { this.agentId = agent.id; this.agentPickerOpen = false; this.agentQuery = ''; })
+          }
+        }, (agent: XopcChatAgent): string => agent.id)
+        if (!this.matchingAgents().length) {
+          ListItem() {
+            Text($r('app.string.workspace_no_matches')).fontSize(14).fontColor(this.colors.secondary)
+              .width('100%').padding(20).textAlign(TextAlign.Center)
+          }
+        }
+      }.layoutWeight(1).width('100%')
+    }.width('100%').height('100%').padding({ left: 20, right: 20, bottom: 20 })
+      .backgroundColor(this.colors.panel).alignItems(HorizontalAlign.Start)
+  }
 
   private async goBack(): Promise<void> {
     if (this.model.openingId) {
@@ -446,19 +523,25 @@ export struct XopcWorkspaceView {
       } else {
         ListItem() {
           Column({ space: 12 }) {
-            Row({ space: 12 }) {
-              Row() {
-                SymbolGlyph(this.section === 'projects' ? $r('sys.symbol.folder') : $r('sys.symbol.doc_text'))
-                  .fontSize(24).fontColor([this.colors.accent])
-              }.width(48).height(48).justifyContent(FlexAlign.Center).borderRadius(24).backgroundColor(this.colors.accentSoft)
-              Column({ space: 5 }) {
-                Text(item.title || $r('app.string.untitled')).fontSize(21).lineHeight(28).fontWeight(FontWeight.Bold)
-                  .fontColor(this.colors.foreground).width('100%')
-                Text(this.statusLabel(item.status)).fontSize(13).fontWeight(FontWeight.Medium)
-                  .fontColor(item.status === 'active' || item.status === 'in_progress' || item.status === 'ready'
-                    ? this.colors.accent : this.colors.secondary)
-              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            }.width('100%')
+            if (this.section === 'tasks') {
+              Text(this.statusLabel(item.status)).fontSize(12).fontWeight(FontWeight.Medium)
+                .fontColor(item.status === 'active' || item.status === 'in_progress' || item.status === 'ready'
+                  ? this.colors.accent : this.colors.secondary)
+                .padding({ left: 10, right: 10, top: 5, bottom: 5 }).borderRadius(10).backgroundColor(this.colors.accentSoft)
+              Text(item.title || $r('app.string.untitled')).fontSize(20).lineHeight(28).fontWeight(FontWeight.Bold)
+                .fontColor(this.colors.foreground).width('100%')
+            } else {
+              Row({ space: 12 }) {
+                Row() { SymbolGlyph($r('sys.symbol.folder')).fontSize(24).fontColor([this.colors.accent]) }
+                  .width(48).height(48).justifyContent(FlexAlign.Center).borderRadius(24).backgroundColor(this.colors.accentSoft)
+                Column({ space: 5 }) {
+                  Text(item.title || $r('app.string.untitled')).fontSize(21).lineHeight(28).fontWeight(FontWeight.Bold)
+                    .fontColor(this.colors.foreground).width('100%')
+                  Text(this.statusLabel(item.status)).fontSize(13).fontWeight(FontWeight.Medium)
+                    .fontColor(item.status === 'active' ? this.colors.accent : this.colors.secondary)
+                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+              }.width('100%')
+            }
             if (this.section === 'tasks' && item.projectId) {
               Row({ space: 8 }) {
                 SymbolGlyph($r('sys.symbol.folder')).fontSize(15).fontColor([this.colors.tertiary])
@@ -467,12 +550,15 @@ export struct XopcWorkspaceView {
             }
           }.width('100%').padding(18).alignItems(HorizontalAlign.Start).borderRadius(20).backgroundColor(this.colors.panel)
         }
-        ListItem() { Text($r('app.string.workspace_description')).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary) }
-        ListItem() {
-          Column() {
-            if (item.body) { XopcMarkdownView({ content: item.body }) }
-            else { Text($r('app.string.workspace_no_description')).fontSize(14).fontColor(this.colors.tertiary).width('100%') }
-          }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(16).backgroundColor(this.colors.panel)
+        if (item.body || this.section !== 'tasks') {
+          ListItem() { Text($r('app.string.workspace_description')).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary) }
+          ListItem() {
+            Column() {
+              if (item.body) { XopcMarkdownView({ content: item.body }) }
+              else { Text($r('app.string.workspace_no_description')).fontSize(14).fontColor(this.colors.tertiary).width('100%') }
+            }
+              .width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(16).backgroundColor(this.colors.panel)
+          }
         }
         if (item.projectId || item.priority || item.updatedAt || item.outcome) {
           ListItem() { Text($r('app.string.workspace_details')).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary).margin({ top: 8 }) }
@@ -502,38 +588,63 @@ export struct XopcWorkspaceView {
             }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(16).backgroundColor(this.colors.panel)
           }
         }
-        if (item.editable) {
+        if (this.section === 'tasks' && item.id) {
+          ListItem() {
+            Row({ space: 10 }) {
+              Button() {
+                Row({ space: 8 }) {
+                  SymbolGlyph($r('sys.symbol.message')).fontSize(18).fontColor([this.colors.accent])
+                  Text($r('app.string.task_open_conversation')).fontSize(14).fontWeight(FontWeight.Medium)
+                    .fontColor(this.colors.accent)
+                }
+              }.layoutWeight(1).height(48).backgroundColor(this.colors.accentSoft).borderRadius(14)
+                .onClick((): void => { this.onNavigate({ page: 'task-chat', itemId: item.id, title: item.title, projectId: item.projectId }); })
+              if (item.editable) {
+                Button($r('app.string.edit')).height(48).backgroundColor(this.colors.input)
+                  .fontColor(this.colors.foreground).borderRadius(14)
+                  .onClick((): void => { this.model.editing = true; })
+              }
+            }.width('100%')
+          }
+        } else if (item.editable) {
           ListItem() {
             Button($r('app.string.edit')).width('100%').height(46).backgroundColor(this.colors.input)
               .fontColor(this.colors.foreground).onClick((): void => { this.model.editing = true; })
           }
         }
-        if (this.section === 'tasks' && item.id) {
-          ListItem() {
-            Button() {
-              Row({ space: 10 }) {
-                SymbolGlyph($r('sys.symbol.message')).fontSize(20).fontColor([Color.White])
-                Text($r('app.string.task_open_conversation')).fontSize(16).fontWeight(FontWeight.Medium).fontColor(Color.White)
-              }
-            }.width('100%').height(50).backgroundColor(this.colors.accent).borderRadius(15)
-              .onClick((): void => { this.onNavigate({ page: 'task-chat', itemId: item.id, title: item.title, projectId: item.projectId }); })
-          }
-        }
         if (this.section === 'tasks' && item.actions.includes('start')) {
           ListItem() {
-            TextInput({ text: this.agentId, placeholder: $r('app.string.agent_id') })
-              .onChange((text: string): void => { this.agentId = text; })
+            Column({ space: 8 }) {
+              Text($r('app.string.chat_agent')).fontSize(13).fontColor(this.colors.secondary)
+              Button({ type: ButtonType.Normal }) {
+                Row({ space: 10 }) {
+                  Text(this.selectedAgentName() || $r('app.string.loading')).fontSize(15)
+                    .fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
+                  SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(14).fontColor([this.colors.secondary])
+                }.width('100%').padding({ left: 16, right: 16 })
+              }.width('100%').height(48).padding(0).borderRadius(14).backgroundColor(this.colors.input)
+                .enabled(!this.agentsLoading && this.agents.length > 0)
+                .onClick((): void => { this.agentQuery = ''; this.agentPickerOpen = true; })
+              if (this.agentsError) {
+                Button($r('app.string.refresh')).height(40).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
+                  .onClick((): void => { this.loadAgents(); })
+              }
+            }.width('100%').alignItems(HorizontalAlign.Start)
           }
         }
         ForEach(this.supportedActions(item), (action: string) => {
           ListItem() {
-            Button(this.label(action)).width('100%').height(46)
-              .backgroundColor(action === 'start' || action === 'mark_ready' || action === 'request_review'
-                ? this.colors.accent : this.colors.input)
-              .fontColor(action === 'start' || action === 'mark_ready' || action === 'request_review'
-                ? Color.White : action === 'delete' ? this.colors.danger : this.colors.foreground)
-              .enabled(!this.model.busy && (action !== 'start' || this.agentId.trim().length > 0))
-              .onClick((): void => { this.action(action); })
+            Row() {
+              if (action === 'close' || action === 'delete') { Blank() }
+              Button(this.label(action)).width(action === 'close' || action === 'delete' ? 120 : '100%')
+                .height(46).borderRadius(14)
+                .backgroundColor(action === 'start' || action === 'mark_ready' || action === 'request_review'
+                  ? this.colors.accent : action === 'close' || action === 'delete' ? Color.Transparent : this.colors.input)
+                .fontColor(action === 'start' || action === 'mark_ready' || action === 'request_review'
+                  ? Color.White : action === 'delete' ? this.colors.danger : this.colors.foreground)
+                .enabled(!this.model.busy && (action !== 'start' || this.agents.some((agent: XopcChatAgent): boolean => agent.id === this.agentId)))
+                .onClick((): void => { this.action(action); })
+            }.width('100%')
           }
         }, (action: string): string => action)
       }
@@ -562,6 +673,10 @@ export struct XopcWorkspaceView {
       else if (this.model.openingId) { XopcBrandLoading() }
       else { this.list() }
     }.height('100%').width('100%').backgroundColor(this.colors.surface)
+      .bindSheet($$this.agentPickerOpen, this.agentPicker, {
+        height: '70%', dragBar: true, backgroundColor: this.colors.panel,
+        onDisappear: (): void => { this.agentQuery = ''; }
+      })
     }.hideTitleBar(true).onBackPressed((): boolean => {
       if (!this.model.busy || !!this.model.openingId) this.goBack(); return true;
     })

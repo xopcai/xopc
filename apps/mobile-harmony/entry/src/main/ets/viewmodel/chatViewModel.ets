@@ -16,6 +16,7 @@ interface XopcPendingChatSend {
   attachments: XopcChatAttachment[];
   refs: XopcContextRef[];
   delivery: string;
+  queuedWhileRunning: boolean;
 }
 
 interface XopcChatHttpFailure { status?: number; }
@@ -359,13 +360,15 @@ export class XopcChatViewModel {
     const row: XopcChatRow = { id: command.clientMessageId, role: 'user', text: command.input.content,
       media: chatAttachments(media, command.clientMessageId), refs, sendState: 'failed' };
     this.outbox.set(row.id, { conversationId: id, transcriptId: command.expectedTranscriptId,
-      row, attachments, refs, delivery: command.delivery || 'next' });
+      row, attachments, refs, delivery: command.delivery || 'next', queuedWhileRunning: false });
     this.rows = this.rows.concat([row]);
   }
 
   private pendingRows(): XopcChatRow[] {
     const rows: XopcChatRow[] = [];
-    this.outbox.forEach((input: XopcPendingChatSend): void => { if (input.conversationId === this.selectedId) rows.push(input.row); });
+    this.outbox.forEach((input: XopcPendingChatSend): void => {
+      if (input.conversationId === this.selectedId && !input.queuedWhileRunning) rows.push(input.row);
+    });
     return rows;
   }
 
@@ -402,9 +405,11 @@ export class XopcChatViewModel {
       id: id + ':attachment:' + index, name: file.name, type: file.type, mimeType: file.mimeType,
       size: file.size, uri: file.uri || '', data: file.data, workspaceRelativePath: file.workspaceRelativePath, duration: file.duration }));
     const row: XopcChatRow = { id, role: 'user', text: content, media: chatAttachments(media, id), refs: refs.slice(), sendState: 'sending' };
+    const queuedWhileRunning = !!this.runId && delivery === 'next';
     const input: XopcPendingChatSend = { conversationId: this.selectedId, transcriptId: this.transcriptId,
-      row, attachments: attachments.slice(), refs: refs.slice(), delivery };
-    this.outbox.set(id, input); this.rows = this.rows.concat([row]);
+      row, attachments: attachments.slice(), refs: refs.slice(), delivery, queuedWhileRunning };
+    this.outbox.set(id, input);
+    if (!queuedWhileRunning) this.rows = this.rows.concat([row]);
     this.historyRequest++; this.recoveryRequest++; this.olderPending = false;
     onEnqueued();
     return this.deliver(input);
@@ -450,7 +455,8 @@ export class XopcChatViewModel {
       // In-flight reads predate this acceptance and must not roll back the visible input or run.
       this.historyRequest++; this.recoveryRequest++; this.olderPending = false;
       this.hasNetworkHistory = true;
-      this.updateSendState(input, 'sent');
+      if (input.queuedWhileRunning) this.outbox.delete(input.row.id);
+      else this.updateSendState(input, 'sent');
       if (!alreadyRunning) { this.snapshotMode = false; this.streaming = ''; this.thinking = ''; this.tool = '';
         this.liveRow = undefined; this.liveActivityRow = undefined; this.completedActivityRunId = ''; }
       this.trackRun(run);
@@ -461,6 +467,10 @@ export class XopcChatViewModel {
       if (!this.outbox.has(input.row.id)) return true;
       this.executionInputIds.delete(input.row.id);
       this.error = (error as Error).message;
+      if (input.queuedWhileRunning) {
+        input.queuedWhileRunning = false;
+        this.rows = this.rows.concat([input.row]);
+      }
       this.updateSendState(input, 'failed'); return false;
     }
     finally { this.sending = false; }

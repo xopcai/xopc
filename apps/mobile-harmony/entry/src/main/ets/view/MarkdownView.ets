@@ -90,6 +90,7 @@ export struct XopcMarkdownView {
   @Param conversationId: string = '';
   @Param compactReading: boolean = false;
   @Param previewLineLimit: number = 0;
+  @Param inlineNoteImages: boolean = false;
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onPreviewTap: () => void = (): void => {};
   @Local linkedFile?: XopcHistoryMedia;
@@ -132,7 +133,8 @@ export struct XopcMarkdownView {
             onOpenLink: (href: string): void => { this.openInternalLink(href); },
             onPreviewTap: (): void => { this.onPreviewTap(); } })
             .width('100%').padding({ left: item.item.kind === 'quote' ? 12 : item.item.kind === 'list' ? Math.min(item.item.level, 6) * 12 : 0 })
-        } else if (item.item.kind === 'image') { XopcChatMediaView({ file: this.imageFile(item.item), conversationId: this.conversationId }) }
+        } else if (item.item.kind === 'image') { XopcChatMediaView({ file: this.imageFile(item.item), conversationId: this.conversationId,
+          noteInlineImage: this.inlineNoteImages }) }
         else if (item.item.kind === 'rule') {
           Column().width('100%').height(1).backgroundColor(this.colors.border)
             .margin({ top: 8, bottom: 8 })
