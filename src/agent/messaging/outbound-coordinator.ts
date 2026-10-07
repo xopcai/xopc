@@ -14,11 +14,10 @@
  */
 
 import type { MessageBus, InboundMessage } from '../../infra/bus/index.js';
-import type { Config } from '../../config/schema.js';
 import type { HookHandler } from '../lifecycle/hook-handler.js';
 import type { SessionContext } from '../session/index.js';
 import { createTypingController, type TypingController } from '../lifecycle/typing.js';
-import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../../heartbeat/tokens.js';
+import { NO_REPLY } from './no-reply.js';
 import { createLogger } from '../../utils/logger.js';
 import type { StreamManager } from './stream-manager.js';
 
@@ -28,8 +27,6 @@ export interface OutboundCoordinatorConfig {
   bus: MessageBus;
   hookHandler: HookHandler;
   streamManager: StreamManager;
-  /** Reads the effective config snapshot (honours runtime overrides). */
-  getConfig: () => Config | undefined;
   /** Resolves the last visible assistant text for a session (in-memory + agent fallback). */
   getLastAssistantPlainText: (conversationId: string) => string;
   reviewTaskTurn: (payload: SessionTurnCompletePayload) => Promise<void>;
@@ -51,7 +48,6 @@ export class OutboundCoordinator {
   private readonly bus: MessageBus;
   private readonly hookHandler: HookHandler;
   private readonly streamManager: StreamManager;
-  private readonly getConfig: () => Config | undefined;
   private readonly getLastAssistantPlainText: (conversationId: string) => string;
   private readonly reviewTaskTurn: OutboundCoordinatorConfig['reviewTaskTurn'];
 
@@ -59,7 +55,6 @@ export class OutboundCoordinator {
     this.bus = config.bus;
     this.hookHandler = config.hookHandler;
     this.streamManager = config.streamManager;
-    this.getConfig = config.getConfig;
     this.getLastAssistantPlainText = config.getLastAssistantPlainText;
     this.reviewTaskTurn = config.reviewTaskTurn;
   }
@@ -123,8 +118,7 @@ export class OutboundCoordinator {
       return;
     }
 
-    const ackMax = this.getConfig()?.gateway?.heartbeat?.ackMaxChars ?? DEFAULT_ACK_MAX_CHARS;
-    if (shouldSilence(finalContent, ackMax) || finalContent.trim() === NO_REPLY) {
+    if (finalContent.trim() === NO_REPLY) {
       log.debug({ conversationId: sessionContext.conversationId }, 'Silent reply — skipping outbound');
       return;
     }

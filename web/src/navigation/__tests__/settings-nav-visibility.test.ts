@@ -17,7 +17,6 @@ describe('settings-nav-visibility', () => {
     expect(isSettingsTabVisibleInMode('settingsSearch', 'simple')).toBe(true);
     expect(isSettingsTabVisibleInMode('settingsTunnel', 'simple')).toBe(true);
     expect(isSettingsTabVisibleInMode('settingsShares', 'simple')).toBe(true);
-    expect(isSettingsTabVisibleInMode('settingsHeartbeat', 'simple')).toBe(true);
     expect(isSettingsTabVisibleInMode('logs', 'simple')).toBe(false);
   });
 
@@ -25,7 +24,6 @@ describe('settings-nav-visibility', () => {
     expect(isSettingsPathVisibleInMode('/settings/overview', 'simple')).toBe(true);
     expect(isSettingsPathVisibleInMode('/settings/remote-access', 'simple')).toBe(true);
     expect(isSettingsPathVisibleInMode('/settings/shares', 'simple')).toBe(true);
-    expect(isSettingsPathVisibleInMode('/settings/heartbeat', 'simple')).toBe(true);
     expect(isSettingsPathVisibleInMode('/settings/ext/foo', 'simple')).toBe(false);
     expect(isSettingsPathVisibleInMode('/settings/logs', 'advanced')).toBe(true);
   });

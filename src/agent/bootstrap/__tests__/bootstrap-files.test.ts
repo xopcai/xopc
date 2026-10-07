@@ -29,12 +29,11 @@ describe('bootstrap-files', () => {
     const profileDir = fixtureProfileDir('xopc-bootstrap-');
     writeFileSync(join(profileDir, 'AGENTS.md'), '# agents');
     writeFileSync(join(profileDir, 'SOUL.md'), '# soul');
-    writeFileSync(join(profileDir, 'IDENTITY.md'), '# identity');
+    writeFileSync(join(profileDir, 'HEARTBEAT.md'), '# legacy heartbeat');
 
     const files = loadProfileBootstrapFiles(profileDir);
     const names = files.map((f) => f.name);
     expect(names.indexOf('AGENTS.md')).toBeLessThan(names.indexOf('SOUL.md'));
-    expect(names.indexOf('SOUL.md')).toBeLessThan(names.indexOf('IDENTITY.md'));
     expect(names).not.toContain('MEMORY.md');
     expect(names).not.toContain('TOOLS.md');
     expect(names).not.toContain('HEARTBEAT.md');
@@ -46,7 +45,7 @@ describe('bootstrap-files', () => {
     writeFileSync(join(profileDir, 'SOUL.md'), '# soul');
 
     const files = loadProfileBootstrapFiles(profileDir);
-    expect(files.find((f) => f.name === 'IDENTITY.md')?.missing).toBe(true);
+    expect(files.find((f) => f.name === 'SOUL.md')?.missing).toBe(false);
     expect(files.some((f) => f.name === 'AGENTS.md')).toBe(false);
     expect(files.some((f) => f.name === 'USER.md')).toBe(false);
     expect(files.some((f) => f.name === 'MEMORY.md')).toBe(false);

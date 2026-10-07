@@ -171,7 +171,7 @@ export class AgentCatalogService {
     await mkdir(workspace, { recursive: true });
     await mkdir(resolveAgentDir(entry.id), { recursive: true });
     await mkdir(profileDir, { recursive: true });
-    seedAgentProfileMarkdownFiles(profileDir, workspace, { displayName: entry.profile?.name ?? entry.id });
+    seedAgentProfileMarkdownFiles(profileDir, workspace);
   }
 
   private provisionSync(entry: AgentEntry): void {
@@ -180,7 +180,7 @@ export class AgentCatalogService {
     mkdirSync(workspace, { recursive: true });
     mkdirSync(resolveAgentDir(entry.id), { recursive: true });
     mkdirSync(profileDir, { recursive: true });
-    seedAgentProfileMarkdownFiles(profileDir, workspace, { displayName: entry.profile?.name ?? entry.id });
+    seedAgentProfileMarkdownFiles(profileDir, workspace);
   }
 
   private purgeEntryDataSync(entry: AgentEntry, defaultAgentId: string): void {

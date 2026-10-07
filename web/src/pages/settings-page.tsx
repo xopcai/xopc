@@ -30,7 +30,6 @@ const SECTIONS: SettingsSectionId[] = [
   'gateway',
   'runtimes',
   'devices',
-  'heartbeat',
   'remote-access',
   'shares',
 ];

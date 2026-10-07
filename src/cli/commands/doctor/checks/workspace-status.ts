@@ -58,7 +58,6 @@ export async function checkWorkspaceStatus(ctx: DoctorContext): Promise<CheckRes
 
   const missing: string[] = [];
   if (!hasProfileFile(WORKSPACE_FILES.SOUL)) missing.push(WORKSPACE_FILES.SOUL);
-  if (!hasProfileFile(WORKSPACE_FILES.IDENTITY)) missing.push(WORKSPACE_FILES.IDENTITY);
 
   if (missing.length > 0) {
     return {

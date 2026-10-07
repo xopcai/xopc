@@ -50,9 +50,9 @@ to a TaskRun. Never treat these three objects as interchangeable.
 Commands: \`list\`, \`get\`, \`create\`, \`update\`, \`set_default\`, \`disable\`,
 \`delete\`, and \`purge\`.
 
-An Agent profile accepts only \`name\` and optional \`instructions\`. Put personality,
-language, role, and behavioral guidance in \`profile.instructions\`; do not invent profile
-fields such as \`description\`, \`language\`, \`emoji\`, or \`creature\`.
+An Agent profile stores \`name\` and optional \`description\`, \`creature\`, \`style\`, \`language\`,
+\`emoji\`, and \`avatar\` identity fields. Use \`instructions\` for short execution rules.
+Put personality in SOUL.md and ongoing work guidance in AGENTS.md.
 
 \`\`\`json
 {
@@ -62,7 +62,10 @@ fields such as \`description\`, \`language\`, \`emoji\`, or \`creature\`.
     "id": "xiaomei",
     "profile": {
       "name": "小美",
-      "instructions": "使用中文交流，语气温柔、亲切、可爱，同时保持回答清晰可靠。"
+      "description": "帮助整理日常事项",
+      "language": "zh-CN",
+      "style": "温柔、亲切",
+      "instructions": "给出操作建议前先核对关键事实。"
     },
     "idempotencyKey": "create-agent-xiaomei"
   }

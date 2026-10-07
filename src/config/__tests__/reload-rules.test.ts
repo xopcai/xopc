@@ -18,12 +18,6 @@ describe('matchReloadRule', () => {
     expect(BASE_RELOAD_RULES.some((x) => x.prefix === 'channels')).toBe(true);
   });
 
-  it('matches gateway heartbeat paths (config shape is gateway.heartbeat)', () => {
-    const r = matchReloadRule('gateway.heartbeat.intervalMs');
-    expect(r?.prefix).toBe('gateway.heartbeat');
-    expect(r?.kind).toBe('hot');
-  });
-
   it('requires restart for trusted proxy settings', () => {
     expect(matchReloadRule('gateway.trustedProxies')?.kind).toBe('restart');
     expect(matchReloadRule('gateway.allowRealIpFallback')?.kind).toBe('restart');

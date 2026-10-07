@@ -136,6 +136,12 @@ export const AgentDefaultsSchema = z.object({
 
 export const AgentProfileSchema = z.object({
   name: z.string().trim().min(1),
+  description: z.string().trim().optional(),
+  creature: z.string().trim().optional(),
+  style: z.string().trim().optional(),
+  language: z.string().trim().optional(),
+  emoji: z.string().trim().optional(),
+  avatar: z.string().trim().optional(),
   instructions: z.string().trim().min(1).optional(),
 }).strict();
 
@@ -156,10 +162,7 @@ export const EffectiveAgentConfigSchema = z.object({
   id: AgentIdSchema,
   enabled: z.boolean(),
   workspace: z.string().min(1),
-  profile: z.object({
-    name: z.string().min(1),
-    instructions: z.string().optional(),
-  }).strict().optional(),
+  profile: AgentProfileSchema.optional(),
   models: AgentModelsDefaultsSchema,
   skills: SkillDefaultsSchema,
   tools: ToolPoliciesSchema,
@@ -172,6 +175,7 @@ export type AgentModelsDefaults = z.infer<typeof AgentModelsDefaultsSchema>;
 export type AgentModelsOverride = z.infer<typeof AgentModelsOverrideSchema>;
 export type ModelIntent = z.infer<typeof ModelIntentSchema>;
 export type AgentDefaults = z.infer<typeof AgentDefaultsSchema>;
+export type AgentProfile = z.infer<typeof AgentProfileSchema>;
 export type AgentEntry = z.infer<typeof AgentEntrySchema>;
 export type EffectiveAgentConfig = z.infer<typeof EffectiveAgentConfigSchema>;
 export type SkillDefaults = z.infer<typeof SkillDefaultsSchema>;

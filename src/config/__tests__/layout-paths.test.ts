@@ -156,8 +156,8 @@ describe('Layout alignment: agent internal paths', () => {
     expect(resolveAgentProfileMarkdownPath('main', 'SOUL.md')).toBe(
       join(STATE_DIR, 'agents', 'main', 'profile', 'SOUL.md'),
     );
-    expect(resolveAgentProfileMarkdownPathFromPaths('helper', 'IDENTITY.md')).toBe(
-      resolveAgentProfileMarkdownPath('helper', 'IDENTITY.md'),
+    expect(resolveAgentProfileMarkdownPathFromPaths('helper', 'AGENTS.md')).toBe(
+      resolveAgentProfileMarkdownPath('helper', 'AGENTS.md'),
     );
     expect(resolveAgentProfileDirFromPaths('research')).toBe(resolveAgentProfileDir('research'));
   });

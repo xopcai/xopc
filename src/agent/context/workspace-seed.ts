@@ -13,19 +13,10 @@ import {
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
 } from '../agent-scope.js';
-import { WORKSPACE_FILES } from '../../config/paths.js';
 import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from './workspace.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('WorkspaceSeed');
-
-/** Marker in bundled/reference `IDENTITY.md` templates; replaced on agent creation when a display name is known. */
-export const IDENTITY_NAME_PLACEHOLDER = '_(pick something you like)_';
-
-export type SeedWorkspaceProfileMarkdownOptions = {
-  /** Fills the **Name** line in `IDENTITY.md` when the template still contains the placeholder. */
-  displayName?: string;
-};
 
 const SEED_FILENAMES: readonly string[] = [...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES];
 
@@ -82,14 +73,6 @@ function writeFileIfMissing(targetPath: string, content: string): boolean {
   return true;
 }
 
-function personalizeIdentityTemplate(content: string, displayName?: string): string {
-  const n = displayName?.trim();
-  if (!n || !content.includes(IDENTITY_NAME_PLACEHOLDER)) {
-    return content;
-  }
-  return content.replaceAll(IDENTITY_NAME_PLACEHOLDER, n);
-}
-
 /**
  * Seed profile Markdown into `profileDir` (`agents/<id>/profile/`).
  * When `markdownWorkspaceDir` is set, runs `git init` on a brand-new Markdown workspace only (never under `profile/`).
@@ -98,7 +81,6 @@ function personalizeIdentityTemplate(content: string, displayName?: string): str
 export function seedAgentProfileMarkdownFiles(
   profileDir: string,
   markdownWorkspaceDir: string,
-  options?: SeedWorkspaceProfileMarkdownOptions,
 ): void {
   const wsPreExisted = existsSync(markdownWorkspaceDir);
   mkdirSync(profileDir, { recursive: true });
@@ -114,9 +96,7 @@ export function seedAgentProfileMarkdownFiles(
       log.warn({ name }, 'Missing workspace template file; skip seeding');
       continue;
     }
-    const body =
-      name === WORKSPACE_FILES.IDENTITY ? personalizeIdentityTemplate(tpl, options?.displayName) : tpl;
-    if (writeFileIfMissing(targetPath, body)) {
+    if (writeFileIfMissing(targetPath, tpl)) {
       seeded++;
     }
   }
@@ -152,6 +132,5 @@ export function seedMainAgentProfileMarkdown(): void {
   seedAgentProfileMarkdownFiles(
     resolveAgentProfileDir(agentId),
     resolveAgentWorkspaceDir(agentId),
-    { displayName: agentId },
   );
 }

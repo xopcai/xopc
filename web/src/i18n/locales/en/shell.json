@@ -30,7 +30,6 @@
     "settingsGateway": "Local service",
     "settingsRuntimes": "Runtime",
     "settingsDevices": "Devices",
-    "settingsHeartbeat": "Proactive reminders",
     "settingsTunnel": "Remote access",
     "settingsShares": "Sharing",
     "settingsCron": "Scheduled tasks",

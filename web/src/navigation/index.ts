@@ -16,7 +16,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsGateway'
   | 'settingsRuntimes'
   | 'settingsDevices'
-  | 'settingsHeartbeat'
   | 'settingsTunnel'
   | 'settingsShares',
   SettingsSectionId
@@ -32,7 +31,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsGateway: 'gateway',
   settingsRuntimes: 'runtimes',
   settingsDevices: 'devices',
-  settingsHeartbeat: 'heartbeat',
   settingsTunnel: 'remote-access',
   settingsShares: 'shares',
 };

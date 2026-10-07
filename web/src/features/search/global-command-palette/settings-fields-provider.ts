@@ -199,15 +199,6 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       keywords: ['mcp', 'server', 'tools', 'external', 'stdio', '服务器', 'connector'],
     },
 
-    // --- Heartbeat ---
-    {
-      id: 'field:heartbeat:interval',
-      title: isZh ? '心跳间隔' : 'Heartbeat Interval',
-      subtitle: isZh ? '网关存活检测频率' : 'Gateway keep-alive check frequency',
-      path: '/settings/heartbeat',
-      keywords: ['heartbeat', 'interval', 'keepalive', 'alive', '心跳'],
-    },
-
     // --- Remote Access ---
     {
       id: 'field:tunnel:enabled',

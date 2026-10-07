@@ -76,8 +76,6 @@ export interface SystemPromptBuildParams {
   channels?: string[];
   memoryCitationsMode?: MemoryCitationsMode;
   includeMemorySection?: boolean;
-  heartbeatEnabled?: boolean;
-  heartbeatPrompt?: string;
   externalMemoryInstructions?: string;
   ttsSystemHint?: string;
   extraSystemPrompt?: string;
@@ -97,8 +95,6 @@ export function resolveSystemPromptBuildParams(
     toolSummaries?: Record<string, string>;
     userTimezone?: string;
     externalMemoryInstructions?: string;
-    heartbeatEnabled?: boolean;
-    heartbeatPrompt?: string;
     ttsSystemHint?: string;
     extraSystemPrompt?: string;
     activeProjectContext?: string;
@@ -131,8 +127,6 @@ export function resolveSystemPromptBuildParams(
     channels: resolveDeliverableChannels(config),
     memoryCitationsMode: params.memoryCitationsMode,
     includeMemorySection: params.includeMemorySection,
-    heartbeatEnabled: params.heartbeatEnabled,
-    heartbeatPrompt: params.heartbeatPrompt,
     externalMemoryInstructions: params.externalMemoryInstructions,
     ttsSystemHint: params.ttsSystemHint,
     extraSystemPrompt: params.extraSystemPrompt,

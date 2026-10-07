@@ -632,7 +632,7 @@ WSVR = 当周至少发生一次有效场景帮助的活跃用户数 / 当周活�
 | `proactive_events` 与 temporal worker | 清理实验事件记录，替换旧扫描器 | SceneEvent／TriggerIntent |
 | proactive run／insight | 清理实验历史，删除旧 reader | SceneRun／SceneOutcome |
 | proactive card／Inbox | 统一结果卡和采用证据 | ScenePresentation |
-| `HEARTBEAT.md` 和 HeartbeatService | 旧运行时已移除；用户文件不扫描、不导入、不删除 | 未来按真实需求定义周期场景 |
+| 旧 Agent 心跳和 HeartbeatService | 运行时、配置、角色文件入口均已移除 | 未来按真实需求定义周期场景 |
 | Project monitoring | 保留权限与低风险动作 | 场景级行动边界 |
 | Automation scheduler | 不强制改名，逐步提取公共调度 | 场景可复用的计划能力 |
 | Skill／Extension marketplace | 复用目录和安装基础 | 场景模板分发基础 |

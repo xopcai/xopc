@@ -1,4 +1,4 @@
-import { NO_REPLY } from '../../../heartbeat/tokens.js';
+import { NO_REPLY } from '../../messaging/no-reply.js';
 
 export function buildMessagingSection(params: {
   channels: string[];
@@ -69,31 +69,4 @@ export function buildTimeSection(timezone?: string): string {
     '',
     'If you need the current date/time/day-of-week, use the `session_status` tool or the inbound message timestamp envelope (when present).',
   ].join('\n');
-}
-
-export function buildHeartbeatBehaviorSection(params: {
-  enabled: boolean;
-  customPrompt?: string;
-  userTimezone?: string;
-}): string {
-  if (!params.enabled) {
-    return '';
-  }
-  if (params.customPrompt?.trim()) {
-    return `## Heartbeats\n\n${params.customPrompt.trim()}`;
-  }
-  let quietHoursNote = '';
-  if (params.userTimezone) {
-    quietHoursNote = `\n\n> Quiet hours: The user is in **${params.userTimezone}**. Avoid proactive checks during late night (23:00-08:00) unless urgent.`;
-  }
-  return [
-    '## Heartbeats',
-    '',
-    'If the current user message is a heartbeat poll and nothing needs attention, reply exactly: HEARTBEAT_OK',
-    '',
-    'If something needs attention, do NOT include "HEARTBEAT_OK"; reply with the alert text instead.',
-    quietHoursNote.trim(),
-  ]
-    .filter(Boolean)
-    .join('\n');
 }

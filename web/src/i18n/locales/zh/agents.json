@@ -183,7 +183,7 @@
     "tuiDefaultAgentSaved": "已保存",
     "tuiDefaultAgentInvalid": "请选择一个可用 Agent 作为 TUI 默认值。",
     "selectAgent": "智能体",
-    "selectAgentHint": "选择要编辑的智能体。角色配置文件（SOUL.md、IDENTITY.md 等）从该智能体目录 `agents/<id>/profile/` 读取。",
+    "selectAgentHint": "选择要编辑的智能体。角色配置文件（SOUL.md、AGENTS.md 等）从该智能体目录 `agents/<id>/profile/` 读取。",
     "agent": "智能体",
     "defaultBadge": "默认",
     "globalDefaultBadge": "全局默认",
@@ -236,7 +236,7 @@
     "addAgentAria": "添加智能体",
     "createModalCancel": "取消",
     "closeDialogAria": "关闭",
-    "filesHint": "智能体的身份配置文件（SOUL、IDENTITY 等）。编辑后自动保存，可用「预览」查看渲染效果。",
+    "filesHint": "智能体角色文件（SOUL、AGENTS 等）。编辑后自动保存，可用「预览」查看渲染效果。",
     "filesLoading": "正在加载文件列表…",
     "filesEmpty": "暂无文件。",
     "pickFile": "请选择要编辑的文件。",
@@ -555,7 +555,7 @@
     "copyFromExistingAgentNone": "不复制，创建新 Agent",
     "duplicateName": "{{name}} 的副本",
     "duplicateIdSuffix": "-copy",
-    "copyProfileFiles": "复制 Profile 文件（SOUL、IDENTITY 等）",
+    "copyProfileFiles": "复制 Profile 文件（SOUL、AGENTS 等）",
     "createCopy": "创建副本"
   }
 }

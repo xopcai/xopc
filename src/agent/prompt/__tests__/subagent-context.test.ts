@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { NO_REPLY } from '../../../heartbeat/tokens.js';
+import { NO_REPLY } from '../../messaging/no-reply.js';
 import { buildSubagentContextSection, buildSubagentSystemPrompt } from '../subagent-context.js';
 
 describe('buildSubagentContextSection', () => {

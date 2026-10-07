@@ -6,7 +6,6 @@ import {
   FileCog,
   Heart,
   Pencil,
-  Sparkles,
 } from 'lucide-react';
 import {
   forwardRef,
@@ -30,13 +29,9 @@ import { cn } from '@/lib/cn';
 import { useThemeStore } from '@/stores/theme-store';
 
 import {
-  CREATURE_PRESETS,
-  type IdentityFields,
   SOUL_TEMPLATES,
-  parseIdentityMarkdown,
   replaceProfileMarkdownBody,
   splitProfileMarkdownFrontMatter,
-  updateIdentityMarkdown,
 } from './agent-profile-markdown';
 
 const loadBlockEditor = () => import('@/components/block-editor');
@@ -44,17 +39,15 @@ const loadMarkdownEditor = () => import('@/components/markdown/markdown-editor')
 const BlockEditor = lazy(() => loadBlockEditor().then((module) => ({ default: module.BlockEditor })));
 const MarkdownEditor = lazy(() => loadMarkdownEditor().then((module) => ({ default: module.MarkdownEditor })));
 
-const PROFILE_FILES = ['SOUL.md', 'IDENTITY.md', 'TOOLS.md', 'AGENTS.md', 'HEARTBEAT.md'] as const;
+const PROFILE_FILES = ['SOUL.md', 'TOOLS.md', 'AGENTS.md'] as const;
 type ProfileFileName = typeof PROFILE_FILES[number];
 type EditorMode = 'direct' | 'source' | 'preview';
 type ProfileDrafts = Record<ProfileFileName, string>;
 
 const EMPTY_DRAFTS: ProfileDrafts = {
   'SOUL.md': '',
-  'IDENTITY.md': '',
   'TOOLS.md': '',
   'AGENTS.md': '',
-  'HEARTBEAT.md': '',
 };
 
 export type AgentProfileEditorHandle = {
@@ -64,9 +57,6 @@ export type AgentProfileEditorHandle = {
 type Props = {
   agentId: string;
   zh: boolean;
-  inputClass: string;
-  name: string;
-  onNameChange: (name: string) => void;
   onDirtyChange: (dirty: boolean) => void;
 };
 
@@ -84,9 +74,6 @@ function EditorFallback() {
 export const AgentProfileEditor = forwardRef<AgentProfileEditorHandle, Props>(function AgentProfileEditor({
   agentId,
   zh,
-  inputClass,
-  name,
-  onNameChange,
   onDirtyChange,
 }, ref) {
   const isDark = useThemeStore((state) => state.resolved === 'dark');
@@ -152,28 +139,10 @@ export const AgentProfileEditor = forwardRef<AgentProfileEditorHandle, Props>(fu
   }, [agentId, baseline, drafts]);
   useImperativeHandle(ref, () => ({ save }), [save]);
 
-  const identity = useMemo(() => parseIdentityMarkdown(drafts['IDENTITY.md']), [drafts]);
-  const effectiveIdentity = useMemo(
-    () => ({ ...identity, name: identity.name || name }),
-    [identity, name],
-  );
-  const updateIdentity = (patch: Partial<IdentityFields>) => {
-    const next = { ...effectiveIdentity, ...patch };
-    setDrafts((current) => ({
-      ...current,
-      'IDENTITY.md': updateIdentityMarkdown(current['IDENTITY.md'], next),
-    }));
-    if (patch.name !== undefined) onNameChange(patch.name);
-  };
-
   const fileInfo: Record<ProfileFileName, { label: string; description: string }> = {
     'SOUL.md': {
       label: zh ? '个性与边界' : 'Personality & boundaries',
       description: zh ? '定义语气、价值观、行为原则与安全边界。' : 'Tone, values, behavior principles, and safety boundaries.',
-    },
-    'IDENTITY.md': {
-      label: zh ? '身份资料' : 'Identity',
-      description: zh ? '智能体如何介绍自己；上方表单与此文件保持同步。' : 'How the agent presents itself; synchronized with the form above.',
     },
     'TOOLS.md': {
       label: zh ? '工具说明' : 'Tool guidance',
@@ -183,10 +152,6 @@ export const AgentProfileEditor = forwardRef<AgentProfileEditorHandle, Props>(fu
       label: zh ? '工作规范' : 'Working instructions',
       description: zh ? '该智能体长期遵循的协作和执行规范。' : 'Persistent collaboration and execution instructions.',
     },
-    'HEARTBEAT.md': {
-      label: zh ? '主动检查' : 'Heartbeat',
-      description: zh ? '定期唤醒时需要检查和处理的事项。' : 'What to inspect and handle during scheduled wake-ups.',
-    },
   };
 
   const templateIcons = [BriefcaseBusiness, Heart, Code2, Pencil];
@@ -194,28 +159,11 @@ export const AgentProfileEditor = forwardRef<AgentProfileEditorHandle, Props>(fu
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-edge bg-surface-base p-4 sm:p-5">
-        <div className="flex items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><Sparkles className="size-4" aria-hidden /></span>
-          <div><h4 className="text-sm font-semibold text-fg">{zh ? '智能体身份' : 'Agent identity'}</h4><p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '这些内容会写入 IDENTITY.md，并用于智能体自我介绍。' : 'These fields are written to IDENTITY.md and shape how the agent introduces itself.'}</p></div>
-        </div>
-        {loading ? <div className="mt-5 grid gap-4 sm:grid-cols-2"><Skeleton className="h-16" /><Skeleton className="h-16" /><Skeleton className="h-16" /><Skeleton className="h-16" /></div> : loadFailed ? <p className="mt-5 text-sm text-fg-muted">{zh ? '身份资料暂时无法加载，请关闭后重试。' : 'Identity details could not be loaded. Close the editor and try again.'}</p> : (
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <label className="text-xs font-medium text-fg-muted">{zh ? '名称' : 'Name'}<input className={`${inputClass} mt-1.5`} value={effectiveIdentity.name} onChange={(event) => updateIdentity({ name: event.target.value })} placeholder={zh ? '例如：小助' : 'e.g. Nova'} /></label>
-            <label className="text-xs font-medium text-fg-muted">{zh ? '一句话介绍' : 'Description'}<input className={`${inputClass} mt-1.5`} value={effectiveIdentity.description} onChange={(event) => updateIdentity({ description: event.target.value })} placeholder={zh ? '擅长什么、如何帮助你' : 'What this agent is great at'} /></label>
-            <label className="text-xs font-medium text-fg-muted">{zh ? '类型' : 'Type'}<input className={`${inputClass} mt-1.5`} list={`agent-creatures-${agentId}`} value={effectiveIdentity.creature} onChange={(event) => updateIdentity({ creature: event.target.value })} placeholder={zh ? 'AI 助手、研究伙伴…' : 'AI assistant, research partner…'} /><datalist id={`agent-creatures-${agentId}`}>{CREATURE_PRESETS.map((item) => <option key={item.value} value={item.value}>{zh ? item.labelZh : item.labelEn}</option>)}</datalist></label>
-            <label className="text-xs font-medium text-fg-muted">{zh ? '主要语言' : 'Primary language'}<input className={`${inputClass} mt-1.5`} value={effectiveIdentity.language} onChange={(event) => updateIdentity({ language: event.target.value })} placeholder={zh ? '例如：简体中文' : 'e.g. English'} /></label>
-            <label className="text-xs font-medium text-fg-muted">{zh ? '签名表情' : 'Signature emoji'}<input className={`${inputClass} mt-1.5`} value={effectiveIdentity.emoji} onChange={(event) => updateIdentity({ emoji: event.target.value })} placeholder="✨" /></label>
-            <label className="text-xs font-medium text-fg-muted">{zh ? '头像地址' : 'Avatar URL or path'}<input className={`${inputClass} mt-1.5`} value={effectiveIdentity.avatar} onChange={(event) => updateIdentity({ avatar: event.target.value })} placeholder={zh ? 'URL 或本地路径' : 'URL or local path'} /></label>
-          </div>
-        )}
-      </section>
-
       <section className="overflow-hidden rounded-2xl border border-edge bg-surface-base">
         <div className="border-b border-edge px-4 py-4 sm:px-5">
           <div className="flex items-start gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-hover text-fg-muted"><FileCog className="size-4" aria-hidden /></span>
-            <div className="min-w-0"><h4 className="text-sm font-semibold text-fg">{zh ? '角色配置' : 'Profile documents'}</h4><p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '五类角色文件均可编辑。默认使用所见即所得编辑器，熟悉 Markdown 时再切换源码。' : 'All five profile documents are editable. The visual editor is the default; switch to Markdown source only when needed.'}</p></div>
+            <div className="min-w-0"><h4 className="text-sm font-semibold text-fg">{zh ? '角色配置' : 'Profile documents'}</h4><p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '三类角色文件均可编辑。默认使用所见即所得编辑器，熟悉 Markdown 时再切换源码。' : 'All three profile documents are editable. The visual editor is the default; switch to Markdown source only when needed.'}</p></div>
           </div>
           <div className="mt-4 flex gap-1 overflow-x-auto" role="tablist" aria-label={zh ? '角色配置文件' : 'Profile documents'}>
             {PROFILE_FILES.map((file) => (

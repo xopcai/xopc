@@ -38,9 +38,7 @@ describe('Omni voice persona context', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-voice-persona-'));
     process.env.XOPC_STATE_DIR = stateDir;
     for (const id of ['main', 'coder']) mkdirSync(join(stateDir, 'agents', id, 'profile'), { recursive: true });
-    writeFileSync(join(stateDir, 'agents', 'main', 'profile', 'IDENTITY.md'), '- **Name:** Main File');
     writeFileSync(join(stateDir, 'agents', 'main', 'profile', 'SOUL.md'), 'MAIN_ONLY_PERSONA');
-    writeFileSync(join(stateDir, 'agents', 'coder', 'profile', 'IDENTITY.md'), '- **Name:** Coder File\n- **Language:** Chinese');
     writeFileSync(join(stateDir, 'agents', 'coder', 'profile', 'SOUL.md'), 'CODER_ONLY_PERSONA\nBe sharp and calm.');
   });
 
@@ -68,14 +66,13 @@ describe('Omni voice persona context', () => {
     seedConversationFixtures();
     const block = buildVoicePersonaBlock({
       agentId: 'coder',
-      name: 'Code Voice',
+      profile: { name: 'Code Voice', description: 'Coding specialist', language: 'Chinese' },
       customInstructions: `CUSTOM_START ${'c'.repeat(4_000)}`,
-      identityMarkdown: `IDENTITY_START ${'i'.repeat(4_000)}`,
       soulMarkdown: `SOUL_START ${'s'.repeat(8_000)}`,
     });
     expect(block.length).toBeLessThanOrEqual(VOICE_PERSONA_MAX_CHARS);
     expect(block).toContain('CUSTOM_START');
-    expect(block).toContain('IDENTITY_START');
+    expect(block).toContain('Coding specialist');
     expect(block).toContain('SOUL_START');
     expect(block).toContain('truncated for live voice');
   });

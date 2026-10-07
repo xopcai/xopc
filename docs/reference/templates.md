@@ -1,16 +1,14 @@
 # Agent profile files
 
-xopc creates a small set of Markdown files for each Agent. They make the Agent's identity and operating guidance readable and editable without changing application code.
+xopc stores each Agent's name, description, type, language, emoji, and avatar in its structured profile. The Markdown files below hold personality and operating guidance.
 
 Default location: `~/.xopc/agents/<agent-id>/profile/`.
 
 | File | What to put there |
 | --- | --- |
 | [SOUL.md](./templates/SOUL.md) | Stable principles, tone, and values |
-| [IDENTITY.md](./templates/IDENTITY.md) | Name, role, description, language, and visible identity |
 | [TOOLS.md](./templates/TOOLS.md) | Local tool hints that are safe for the Agent to know |
 | [AGENTS.md](./templates/AGENTS.md) | Working rules, collaboration style, and red lines |
-| [HEARTBEAT.md](./templates/HEARTBEAT.md) | Short periodic-check guidance when Heartbeat is enabled |
 
 ## Edit safely
 

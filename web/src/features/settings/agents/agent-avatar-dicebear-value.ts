@@ -4,7 +4,7 @@ const XOPC_DICEBEAR_PREFIX = 'xopc:dicebear:';
 /** Styles offered in the avatar picker. */
 export type DicebearStyleId = 'adventurer' | 'bottts' | 'lorelei' | 'thumbs' | 'fun-emoji';
 
-/** Values that may still appear in saved IDENTITY (no longer selectable). */
+/** Previously saved avatar styles that may be present in structured profiles. */
 export type LegacyDicebearStyleId = 'pixel-art';
 
 export type StoredDicebearStyleId = DicebearStyleId | LegacyDicebearStyleId;

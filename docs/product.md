@@ -90,7 +90,7 @@ Observe only
 → automatically handle explicitly authorized, low-risk work
 ```
 
-The proactive foundation is evidence-first and suggestion-first. External writes and consequential actions require explicit policy or approval. See [Automations](./automations.md) and [Heartbeat](./heartbeat.md).
+The proactive foundation is evidence-first and suggestion-first. External writes and consequential actions require explicit policy or approval. See [Automations](./automations.md).
 
 ## Trust is a product surface
 

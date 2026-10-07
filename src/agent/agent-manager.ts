@@ -727,6 +727,7 @@ export class AgentManager implements AgentInstanceGateway {
       workspaceOverride: resolvedWorkspacePath,
       profileMarkdownPathRoot: resolveAgentProfileDir(instance.effectiveProfile.agentId),
       customInstructions: instance.effectiveProfile.customInstructions,
+      agentProfile: instance.effectiveProfile.config.profile,
       skillAllowlist: instance.effectiveProfile.skillsAllowlist,
       registeredToolNames,
       conversationId: instance.conversationId,
@@ -781,17 +782,14 @@ export class AgentManager implements AgentInstanceGateway {
   private resolveContextFilesForSession(
     conversationId: string,
     profile: EffectiveAgentProfile,
-    excludeHeartbeat?: boolean,
   ): EmbeddedContextFile[] {
     const cfg = this.config.config!;
     const profileDir = resolveAgentProfileDir(profile.agentId);
-    const heartbeatEnabled = cfg.gateway?.heartbeat?.includeSystemPromptSection ?? false;
     const contextInjection = 'always';
     const { contextFiles } = resolveBootstrapContextSync({
       profileDir,
       config: cfg,
       conversationId,
-      excludeHeartbeat: excludeHeartbeat ?? !heartbeatEnabled,
       contextInjection,
     });
     const shouldAppendProjectContext =
@@ -1042,6 +1040,7 @@ export class AgentManager implements AgentInstanceGateway {
         workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(instance.effectiveProfile.agentId),
         customInstructions: instance.effectiveProfile.customInstructions,
+        agentProfile: instance.effectiveProfile.config.profile,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
         conversationId: instance.conversationId,
@@ -1148,6 +1147,7 @@ export class AgentManager implements AgentInstanceGateway {
         workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(instance.effectiveProfile.agentId),
         customInstructions: instance.effectiveProfile.customInstructions,
+        agentProfile: instance.effectiveProfile.config.profile,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
         conversationId: instance.conversationId,
@@ -1313,6 +1313,7 @@ export class AgentManager implements AgentInstanceGateway {
       workspaceOverride: resolvedWorkspacePath,
       profileMarkdownPathRoot: resolveAgentProfileDir(instance.effectiveProfile.agentId),
       customInstructions: instance.effectiveProfile.customInstructions,
+      agentProfile: instance.effectiveProfile.config.profile,
       skillAllowlist: instance.effectiveProfile.skillsAllowlist,
       registeredToolNames: instance.registeredToolNames,
       conversationId,
@@ -1468,6 +1469,7 @@ export class AgentManager implements AgentInstanceGateway {
           workspaceOverride: resolvedWorkspacePath,
           profileMarkdownPathRoot: resolveAgentProfileDir(profile.agentId),
           customInstructions: profile.customInstructions,
+          agentProfile: profile.config.profile,
           skillAllowlist: profile.skillsAllowlist,
           registeredToolNames,
           conversationId,
@@ -1661,6 +1663,7 @@ export class AgentManager implements AgentInstanceGateway {
       workspaceOverride: resolvedWorkspacePath,
       profileMarkdownPathRoot: resolveAgentProfileDir(instance.effectiveProfile.agentId),
       customInstructions: instance.effectiveProfile.customInstructions,
+      agentProfile: instance.effectiveProfile.config.profile,
       skillAllowlist: instance.effectiveProfile.skillsAllowlist,
       registeredToolNames: instance.registeredToolNames,
       conversationId: instance.conversationId,
@@ -1713,6 +1716,7 @@ export class AgentManager implements AgentInstanceGateway {
         workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(instance.effectiveProfile.agentId),
         customInstructions: instance.effectiveProfile.customInstructions,
+        agentProfile: instance.effectiveProfile.config.profile,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
         conversationId,
