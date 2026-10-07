@@ -214,6 +214,22 @@ describe('AssistantResultTail product deliveries', () => {
     expect(container.querySelectorAll('[data-product-delivery="task"] button')).toHaveLength(1);
   });
 
+  it('opens a delegated task in the modal over the Personal AI conversation', () => {
+    const delivery: ProductDeliveryEnvelope = {
+      version: 2,
+      operation: 'started',
+      primary: { kind: 'task', id: 'task-1', title: 'Create an illustration', capabilities: ['open'] },
+    };
+    act(() => root.render(<MemoryRouter initialEntries={['/personal']}>
+      <LocationProbe />
+      {renderDelivery(delivery)}
+    </MemoryRouter>));
+
+    act(() => container.querySelector<HTMLButtonElement>('[data-product-delivery="task"] button')?.click());
+
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe('/personal?task=task-1');
+  });
+
   it('opens a generated Markdown file in the workspace preview', () => {
     const fileId = `space.${btoa('reports/personal-ai-2026-report.md').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
     act(() => root.render(<MemoryRouter>{renderDelivery({

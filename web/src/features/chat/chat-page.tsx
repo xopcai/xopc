@@ -121,6 +121,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const welcomeDraftSeq = useRef(0);
   const pendingSourceNoteSaveRef = useRef<PendingSourceNoteSave | null>(null);
   const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
+  const [personalCalibrationDismissed, setPersonalCalibrationDismissed] = useState(() =>
+    Boolean(conversationId && window.localStorage.getItem(`personal-calibration:${conversationId}`)));
   const [sourceNoteLoadedTitle, setSourceNoteLoadedTitle] = useState<string | null>(null);
   const [sourceNoteSaveDraft, setSourceNoteSaveDraft] = useState<SourceNoteSaveDraft | null>(null);
   const [sourceNoteSaveSubmitting, setSourceNoteSaveSubmitting] = useState(false);
@@ -193,6 +195,19 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       ACTIVE_RUN_STATUSES.has(workflowRunView.run.status),
   );
   const latestMessage = msgSlice.items.at(-1);
+  const showPersonalCalibration = personal && !personalCalibrationDismissed && !stream.streaming && !stream.sending
+    && latestMessage?.role === 'assistant'
+    && msgSlice.items.filter(item => item.role === 'user').length === 1
+    && msgSlice.items.filter(item => item.role === 'assistant').length === 1
+    && !msgSlice.items.some(item => item.role === 'task');
+  const dismissPersonalCalibration = (draft?: string) => {
+    setPersonalCalibrationDismissed(true);
+    if (conversationId) window.localStorage.setItem(`personal-calibration:${conversationId}`, '1');
+    if (draft) {
+      welcomeDraftSeq.current += 1;
+      setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text: draft });
+    }
+  };
   const latestBrowserSetup = latestMessage?.role === 'assistant'
     ? findLatestBrowserSetupRequired(latestMessage.content)
     : null;
@@ -1172,6 +1187,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                     sending={stream.sending}
                     progress={stream.progress}
                     reasoningLevel={session.reasoningLevel}
+                    showAssistantWorkLog={!personal}
                     registerListContentRef={registerListContentRef}
                     onPickWelcomePrompt={onPickWelcomePrompt}
                     welcomeSpotlight={welcomeSpotlight}
@@ -1180,7 +1196,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                         <div className="mx-auto flex w-full max-w-2xl flex-col items-start gap-3 px-4 py-8 text-fg">
                           <div className="flex size-16 items-center justify-center rounded-3xl bg-accent/10 text-3xl text-accent" aria-hidden>{personalWelcome.avatar ?? '✦'}</div>
                           <h2 className="text-2xl font-semibold">{language === 'zh' ? `你好${personalWelcome.addressAs ? `，${personalWelcome.addressAs}` : ''}。我们从哪里开始？` : `Hello${personalWelcome.addressAs ? `, ${personalWelcome.addressAs}` : ''}. Where should we start?`}</h2>
-                          <p className="max-w-xl text-sm leading-relaxed text-fg-muted">{personalWelcome.opening ?? (language === 'zh' ? '想讨论问题、整理思路或推进工作，都可以直接说。我会按你的偏好回应。' : 'You can bring a question, an idea, or work to move forward. I’ll respond in the way you prefer.')}</p>
+                          <p className="max-w-xl text-sm leading-relaxed text-fg-muted">{personalWelcome.opening ?? (language === 'zh' ? '想讨论问题、整理思路或推进工作，都可以直接说。' : 'Bring a question, an idea, or work to move forward.')}</p>
                         </div>
                       ) : agentSetup ? (
                         <AgentSetupWelcome
@@ -1220,6 +1236,17 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                       <BrowserExtensionNudge enabled={showBrowserSetupPrompt} />
                     ) : showBrowserSetupPrompt && latestBrowserSetup ? (
                       <BrowserSetupRequiredCard payload={latestBrowserSetup} />
+                    ) : showPersonalCalibration ? (
+                      <div className="mx-auto w-full max-w-2xl rounded-2xl border border-edge-subtle bg-surface-panel px-4 py-3 text-sm">
+                        <p className="text-fg-muted">{language === 'zh' ? '这个回答合适吗？点选后可以在输入框修改，再发给我。' : 'Did that response work for you? Pick an adjustment, edit it, then send.'}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {([
+                            [language === 'zh' ? '再短一点' : 'Make it shorter', language === 'zh' ? '这次回答再短一点。' : 'Please make this answer shorter.'],
+                            [language === 'zh' ? '更温和一点' : 'A little gentler', language === 'zh' ? '这次回答的语气更温和一点。' : 'Please make this answer a little gentler.'],
+                          ] as const).map(([label, draft]) => <button key={label} type="button" onClick={() => dismissPersonalCalibration(draft)} className="rounded-full border border-edge px-3 py-1.5 text-xs text-fg transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{label}</button>)}
+                          <button type="button" onClick={() => dismissPersonalCalibration()} className="rounded-full px-3 py-1.5 text-xs text-fg-muted transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{language === 'zh' ? '这样就好' : 'Looks good'}</button>
+                        </div>
+                      </div>
                     ) : null}
                   />
                 </>
@@ -1291,7 +1318,12 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
               ) : null}
               <ReadAloudDock />
               <ChatComposer
-                placeholder={agentSetup ? m.agentsSettings.setupComposerPlaceholder : skillDiscovery ? m.skills.findPlaceholder : undefined}
+                personal={personal}
+                placeholder={personal
+                  ? stream.streaming || stream.sending
+                    ? language === 'zh' ? '继续聊，或补充要求…' : 'Keep talking or add a detail…'
+                    : language === 'zh' ? `发消息给「${personalWelcome?.name || 'Personal AI'}」…` : `Message ${personalWelcome?.name || 'Personal AI'}…`
+                  : agentSetup ? m.agentsSettings.setupComposerPlaceholder : skillDiscovery ? m.skills.findPlaceholder : undefined}
                 composerContext={!agentSetup && !embedded && !taskId && !editingUserTurn && !showConversationLoading && msgSlice.items.length === 0 ? {
                   project: scopedProject,
                   disabled: updatingContext || projectComposer.busy || (isSessionTransitioning && !session.projectPreparation),
