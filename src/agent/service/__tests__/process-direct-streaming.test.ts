@@ -98,6 +98,17 @@ describe('direct stream input visibility', () => {
     expect(title).toHaveBeenCalledWith('agent:main:main', 'Check Gmail');
     expect(mocks.pending).toHaveBeenCalledOnce();
     expect(mocks.clearPending).toHaveBeenCalledOnce();
+    expect(mocks.run).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ requireVisibleReply: false }));
+  });
+
+  it('requires a visible reply for a direct endpoint message', async () => {
+    const { deps } = setup();
+    for await (const _event of runProcessDirectStreaming(deps, {
+      content: '你好', conversationId: 'agent:main:main', runId: 'endpoint-run',
+      origin: { type: 'endpoint', endpointId: 'web-ui' },
+    })) { /* consume stream */ }
+
+    expect(mocks.run).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ requireVisibleReply: true }));
   });
 
   it('projects inline context placeholders before model input and persists their authored order', async () => {

@@ -74,6 +74,7 @@ export type RunXopcEmbeddedTurnParams = {
   /** Continue from the persisted trailing user row instead of appending it again. */
   resumeLastUserMessage?: boolean;
   verifyChanges?: boolean;
+  requireVisibleReply?: boolean;
 };
 
 export type RunXopcEmbeddedTurnResult = {

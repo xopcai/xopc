@@ -84,12 +84,33 @@ describe('Personal AI send transition', () => {
     expect(container.querySelector<HTMLElement>('.chat-user-message')?.style.visibility).toBe('');
   });
 
-  it('ends the flight immediately if the user scrolls', async () => {
+  it('keeps the flight visible through automatic list scrolling', async () => {
     await act(async () => root.render(<Harness messages={[]} />));
     act(() => dispatch({ clientSubmissionId: 'send-1' }, source, draft));
     await act(async () => root.render(<Harness messages={[message]} />));
 
     act(() => container.querySelector('[data-viewport]')?.dispatchEvent(new Event('scroll')));
+    expect(container.querySelector<HTMLElement>('.chat-user-message')?.style.visibility).toBe('hidden');
+    expect(document.querySelector('[data-personal-send-ghost]')).not.toBeNull();
+    await act(async () => finishAnimation());
+    expect(container.querySelector<HTMLElement>('.chat-user-message')?.style.visibility).toBe('');
+    expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
+  });
+
+  it('animates multiline messages instead of silently skipping them', async () => {
+    await act(async () => root.render(<Harness messages={[]} />));
+    act(() => dispatch({ clientSubmissionId: 'send-1' }, source, { ...draft, text: 'First line\nSecond line' }));
+    await act(async () => root.render(<Harness messages={[message]} />));
+
+    expect(document.querySelector('[data-personal-send-ghost]')).not.toBeNull();
+  });
+
+  it('ends the flight when the user starts scrolling manually', async () => {
+    await act(async () => root.render(<Harness messages={[]} />));
+    act(() => dispatch({ clientSubmissionId: 'send-1' }, source, draft));
+    await act(async () => root.render(<Harness messages={[message]} />));
+
+    act(() => container.querySelector('[data-viewport]')?.dispatchEvent(new Event('wheel')));
     expect(container.querySelector<HTMLElement>('.chat-user-message')?.style.visibility).toBe('');
     expect(document.querySelector('[data-personal-send-ghost]')).toBeNull();
   });

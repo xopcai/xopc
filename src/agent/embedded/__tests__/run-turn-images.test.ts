@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   loadMessages: vi.fn(),
   acquireRunLease: vi.fn(),
   debug: vi.fn(),
+  lastText: 'done',
   session: undefined as any,
   leaseController: undefined as AbortController | undefined,
 }));
@@ -84,7 +85,7 @@ vi.mock('../runs.js', async (importOriginal) => ({
 
 vi.mock('../subscribe-session.js', () => ({
   subscribeEmbeddedSessionEvents: vi.fn().mockReturnValue(() => {}),
-  lastAssistantPlainText: vi.fn().mockReturnValue('done'),
+  lastAssistantPlainText: vi.fn(() => mocks.lastText),
 }));
 
 vi.mock('../../orchestration/run-agent-turn-with-timeout.js', () => ({
@@ -134,6 +135,7 @@ describe('runXopcEmbeddedTurn image input', () => {
       summary: 'Compacted context.',
     });
     mocks.loadMessages.mockResolvedValue([]);
+    mocks.lastText = 'done';
     delete process.env.XOPC_LOG_LLM_PAYLOAD;
   });
 
@@ -155,6 +157,41 @@ describe('runXopcEmbeddedTurn image input', () => {
     expect(mocks.customMessage).toHaveBeenCalledWith({
       customType: 'connection_resume', content: 'Resume the original Gmail request.', display: false,
     }, { triggerTurn: true });
+  });
+
+  it('retries a silent response to a direct user message once within the same turn', async () => {
+    mocks.waitForIdle.mockImplementationOnce(async () => { mocks.lastText = 'NO_REPLY'; })
+      .mockImplementationOnce(async () => { mocks.lastText = '我在，想让我做什么？'; });
+
+    const result = await runXopcEmbeddedTurn({
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0", runId: 'run-visible-reply',
+      userMessage: { role: 'user', content: '你好', timestamp: 1 } as AgentMessage,
+      model: { id: 'gpt-4o', provider: 'openai' } as any,
+      modelRef: 'openai/gpt-4o', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+      requireVisibleReply: true,
+    });
+
+    expect(result).toMatchObject({ ok: true, lastAssistantText: '我在，想让我做什么？' });
+    expect(mocks.prompt).toHaveBeenCalledOnce();
+    expect(mocks.customMessage).toHaveBeenCalledWith(expect.objectContaining({
+      customType: 'visible_reply_required', display: false,
+    }), { triggerTurn: true });
+  });
+
+  it('reports an error if the bounded retry is still silent', async () => {
+    mocks.lastText = 'NO_REPLY';
+    const result = await runXopcEmbeddedTurn({
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0", runId: 'run-still-silent',
+      userMessage: { role: 'user', content: '你好', timestamp: 1 } as AgentMessage,
+      model: { id: 'gpt-4o', provider: 'openai' } as any,
+      modelRef: 'openai/gpt-4o', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+      requireVisibleReply: true,
+    });
+
+    expect(result).toEqual({ ok: false, retryable: false, errorMessage: 'Assistant did not produce a visible reply' });
+    expect(mocks.customMessage).toHaveBeenCalledOnce();
   });
 
   it('passes hydrated params.images to session.prompt (not inline content blocks)', async () => {

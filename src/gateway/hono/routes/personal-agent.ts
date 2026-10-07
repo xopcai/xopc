@@ -17,6 +17,10 @@ const ProfileSchema = z.object({
   appearance: PersonalAppearanceSchema,
   preferences: PersonalPreferencesSchema,
 }).strict();
+const ActivityQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(20).default(5),
+  offset: z.coerce.number().int().min(0).default(0),
+});
 
 export function registerPersonalAgentRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const owner = (c: Parameters<typeof getGatewayPrincipal>[0]) => {
@@ -41,9 +45,12 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
   authenticated.get('/api/personal-agent/activity', c => {
     const ownerId = owner(c);
     if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const query = ActivityQuerySchema.safeParse({ limit: c.req.query('limit'), offset: c.req.query('offset') });
+    if (!query.success) return c.json({ ok: false, error: 'Invalid activity pagination' }, 400);
     const record = getPersonalAgent(ownerId);
     if (!record || record.state !== 'ready') return c.json({ ok: true, payload: { items: [], total: 0 } });
-    return c.json({ ok: true, payload: new TaskOriginRepository().list(record.conversationId, 50) });
+    return c.json({ ok: true, payload: new TaskOriginRepository().list(record.conversationId, query.data.limit,
+      { offset: query.data.offset, order: 'recent' }) });
   });
 
   authenticated.post('/api/personal-agent', deps.strictRateLimitMiddleware, async c => {

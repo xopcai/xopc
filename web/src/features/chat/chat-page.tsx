@@ -1195,6 +1195,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                     progress={stream.progress}
                     reasoningLevel={session.reasoningLevel}
                     showAssistantWorkLog={!personal}
+                    hideAssistantActions={personal}
                     registerListContentRef={registerListContentRef}
                     onPickWelcomePrompt={onPickWelcomePrompt}
                     welcomeSpotlight={welcomeSpotlight}

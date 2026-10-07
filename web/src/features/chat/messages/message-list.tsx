@@ -48,6 +48,7 @@ export const MessageList = memo(function MessageList({
   editRequiresTurnId = false,
   responseFeedbackEnabled,
   showAssistantWorkLog = true,
+  hideAssistantActions = false,
   trailingContent,
 }: {
   messages: Message[];
@@ -79,6 +80,8 @@ export const MessageList = memo(function MessageList({
   responseFeedbackEnabled?: boolean;
   /** Whether to show the assistant's reasoning and tool activity disclosure. */
   showAssistantWorkLog?: boolean;
+  /** Hide footer controls under assistant messages in focused conversation views. */
+  hideAssistantActions?: boolean;
   /** Ephemeral UI rendered after the latest transcript message; never persisted as a message. */
   trailingContent?: ReactNode;
 }) {
@@ -178,9 +181,8 @@ export const MessageList = memo(function MessageList({
               onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
               onExtractAssistantTask={onExtractAssistantTask}
               onForkAssistantTurn={onForkAssistantTurn}
-              // Do not unmount action footers from every prior assistant message
-              // when a new reply starts; only the live row has no actions.
-              suppressAssistantActions={isStreamRow}
+              // A live row has no actions; focused views can hide them for every reply.
+              suppressAssistantActions={hideAssistantActions || isStreamRow}
               onEditUserMessage={onEditUserMessage}
               userMessageCanEdit={
                 (!editLatestUserOnly || isLastUserRow)

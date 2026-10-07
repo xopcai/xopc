@@ -36,6 +36,7 @@ type ModelOption = { id: string; name: string };
 type ApiResult<T> = { ok: boolean; payload: T };
 type Activity = { items: Array<{ id: string; title: string; phase: string; runStatus?: string; updatedAt: number }>; total: number };
 type ActivityItem = Activity['items'][number];
+const ACTIVITY_PAGE_SIZE = 5;
 
 function activityTitle(title: string): string {
   const normalized = title.replace(/\s+/g, ' ').trim();
@@ -61,7 +62,7 @@ function activityStatus(item: ActivityItem, zh: boolean): { label: string; tone:
 
 function ActivityRow({ item, zh }: { item: ActivityItem; zh: boolean }) {
   const status = activityStatus(item, zh);
-  return <Link to={taskDetailModalHref('/personal', item.id)} className="group flex min-w-0 items-start gap-3 rounded-xl px-3 py-3.5 transition-colors duration-150 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+  return <Link to={taskDetailModalHref('/personal', item.id)} className="group flex min-w-0 items-start gap-3 rounded-2xl bg-surface-panel px-4 py-4 transition-colors duration-150 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
     <span className={`mt-2 size-1.5 shrink-0 rounded-full ${status.tone}`} aria-hidden />
     <span className="min-w-0 flex-1">
       <span className="line-clamp-2 break-words text-sm font-medium leading-5 text-fg">{activityTitle(item.title)}</span>
@@ -149,6 +150,10 @@ export function PersonalPage() {
   const [showActivity, setShowActivity] = useState(false);
   const [activity, setActivity] = useState<Activity | null>(null);
   const [activityError, setActivityError] = useState(false);
+  const [activityLoadingMore, setActivityLoadingMore] = useState(false);
+  const [activityMoreError, setActivityMoreError] = useState(false);
+  const [activityLoadedCount, setActivityLoadedCount] = useState(0);
+  const activityRequestRef = useRef(0);
 
   const refresh = useCallback(async () => {
     try {
@@ -215,16 +220,42 @@ export function PersonalPage() {
   };
 
   const openActivity = useCallback(async () => {
+    const request = ++activityRequestRef.current;
     setShowActivity(true);
     setActivity(null);
     setActivityError(false);
+    setActivityLoadingMore(false);
+    setActivityMoreError(false);
+    setActivityLoadedCount(0);
     try {
-      const response = await fetchJson<ApiResult<Activity>>(apiUrl('/api/personal-agent/activity'));
+      const response = await fetchJson<ApiResult<Activity>>(apiUrl(`/api/personal-agent/activity?limit=${ACTIVITY_PAGE_SIZE}&offset=0`));
+      if (request !== activityRequestRef.current) return;
       setActivity(response.payload);
+      setActivityLoadedCount(response.payload.items.length);
     } catch {
-      setActivityError(true);
+      if (request === activityRequestRef.current) setActivityError(true);
     }
   }, []);
+
+  const loadMoreActivity = useCallback(async () => {
+    if (!activity || activityLoadingMore || activityLoadedCount >= activity.total) return;
+    const request = activityRequestRef.current;
+    setActivityLoadingMore(true);
+    setActivityMoreError(false);
+    try {
+      const response = await fetchJson<ApiResult<Activity>>(apiUrl(`/api/personal-agent/activity?limit=${ACTIVITY_PAGE_SIZE}&offset=${activityLoadedCount}`));
+      if (request !== activityRequestRef.current) return;
+      setActivity(previous => previous ? {
+        total: response.payload.total,
+        items: [...previous.items, ...response.payload.items.filter(item => !previous.items.some(existing => existing.id === item.id))],
+      } : response.payload);
+      setActivityLoadedCount(previous => previous + response.payload.items.length);
+    } catch {
+      if (request === activityRequestRef.current) setActivityMoreError(true);
+    } finally {
+      if (request === activityRequestRef.current) setActivityLoadingMore(false);
+    }
+  }, [activity, activityLoadedCount, activityLoadingMore]);
 
   const save = async () => {
     if (!record) return;
@@ -266,24 +297,24 @@ export function PersonalPage() {
 
   if (loading) return <div className="mx-auto w-full max-w-2xl space-y-5 px-6 py-12"><Skeleton className="h-20 w-20 rounded-full" /><Skeleton className="h-9 w-72" /><Skeleton className="h-44 w-full rounded-2xl" /></div>;
 
-  const activeTasks = activity?.items.filter(item => item.phase !== 'closed') ?? [];
-  const finishedTasks = activity?.items.filter(item => item.phase === 'closed') ?? [];
-
   if (record?.state === 'ready' && !showSettings) return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-surface-panel">
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1"><ChatPage embedded personal personalWelcome={{ name: record.displayName, addressAs: record.preferences.addressAs, avatar: <PersonalAvatar appearance={record.appearance} className="size-14" />, opening: openingFor(record.preferences, zh) }} conversationId={record.conversationId} /></div>
-        {showActivity && <aside className="fixed inset-0 z-30 flex min-w-0 flex-col border-l border-edge bg-surface-panel sm:static sm:w-[min(25rem,42vw)]" aria-label={zh ? '派发的任务' : 'Delegated tasks'}>
-          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge-subtle px-5 py-5">
-            <div className="min-w-0"><h2 className="text-base font-semibold tracking-tight text-fg">{zh ? '交给我推进的事' : 'Delegated work'}</h2><p className="mt-1 text-xs text-fg-muted">{activity ? (zh ? `${activeTasks.length} 项进行中 · ${finishedTasks.length} 项已结束` : `${activeTasks.length} active · ${finishedTasks.length} finished`) : (zh ? '查看任务进展与结果' : 'Follow progress and results')}</p></div>
+        {showActivity && <aside className="fixed inset-0 z-30 flex min-w-0 flex-col bg-surface-inset shadow-lg sm:static sm:w-[min(25rem,42vw)] sm:shadow-none" aria-label={zh ? '派发的任务' : 'Delegated tasks'}>
+          <div className="flex shrink-0 items-start justify-between gap-3 px-6 pb-3 pt-6">
+            <div className="min-w-0"><h2 className="text-base font-semibold tracking-tight text-fg">{zh ? '交给我推进的事' : 'Delegated work'}</h2><p className="mt-1 text-xs text-fg-muted">{activity ? (zh ? `最近更新 · 共 ${activity.total} 项` : `Recently updated · ${activity.total} total`) : (zh ? '查看任务进展与结果' : 'Follow progress and results')}</p></div>
             <button type="button" onClick={() => setShowActivity(false)} className="touch-target -mr-2 -mt-1 rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭活动' : 'Close activity'}><X className="size-4" /></button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
-            {!activity && !activityError && <div className="space-y-2 px-2"><Skeleton className="h-16 rounded-xl" /><Skeleton className="h-16 rounded-xl" /><Skeleton className="h-16 rounded-xl" /></div>}
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-5 pt-3">
+            {!activity && !activityError && <div className="space-y-2"><Skeleton className="h-18 rounded-2xl" /><Skeleton className="h-18 rounded-2xl" /><Skeleton className="h-18 rounded-2xl" /></div>}
             {activityError && <div className="px-5 py-12 text-center"><p className="text-sm text-fg-muted">{zh ? '暂时无法读取任务' : 'Could not load tasks'}</p><button type="button" onClick={() => void openActivity()} className="mt-3 rounded-lg px-3 py-2 text-sm text-accent hover:bg-surface-hover">{zh ? '重试' : 'Try again'}</button></div>}
             {activity?.items.length === 0 && <div className="px-5 py-16 text-center"><ListTodo className="mx-auto size-7 text-fg-subtle" aria-hidden /><p className="mt-4 text-sm font-medium text-fg">{zh ? '还没有派发的任务' : 'No delegated work yet'}</p><p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '你可以在对话里直接告诉我想推进的事。' : 'Tell me what you would like to move forward in chat.'}</p></div>}
-            {activeTasks.length > 0 && <section aria-label={zh ? '进行中' : 'Active'}><h3 className="px-3 pb-1 text-[11px] font-medium tracking-wide text-fg-subtle">{zh ? '进行中' : 'ACTIVE'}</h3><div className="divide-y divide-edge-subtle">{activeTasks.map(item => <ActivityRow key={item.id} item={item} zh={zh} />)}</div></section>}
-            {finishedTasks.length > 0 && <section className={activeTasks.length ? 'mt-7' : ''} aria-label={zh ? '已结束' : 'Finished'}><h3 className="px-3 pb-1 text-[11px] font-medium tracking-wide text-fg-subtle">{zh ? '已结束' : 'FINISHED'}</h3><div className="divide-y divide-edge-subtle">{finishedTasks.map(item => <ActivityRow key={item.id} item={item} zh={zh} />)}</div></section>}
+            {activity && activity.items.length > 0 && <div className="space-y-2">{activity.items.map(item => <ActivityRow key={item.id} item={item} zh={zh} />)}</div>}
+            {activity && activityLoadedCount < activity.total && <div className="pt-4 text-center">
+              <button type="button" onClick={() => void loadMoreActivity()} disabled={activityLoadingMore} className="min-h-10 rounded-xl bg-surface-panel px-5 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50">{activityLoadingMore ? (zh ? '正在加载…' : 'Loading…') : (zh ? '加载更多' : 'Load more')}</button>
+              {activityMoreError && <p role="alert" className="mt-2 text-xs text-danger">{zh ? '加载失败，请重试' : 'Could not load more. Try again.'}</p>}
+            </div>}
           </div>
         </aside>}
       </div>
