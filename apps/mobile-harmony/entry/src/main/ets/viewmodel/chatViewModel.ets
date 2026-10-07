@@ -397,7 +397,7 @@ export class XopcChatViewModel {
   }
 
   async send(content: string, attachments: XopcChatAttachment[] = [], delivery: string = 'next', refs: XopcContextRef[] = [],
-    onEnqueued: () => void = (): void => {}): Promise<boolean> {
+    onEnqueued: (rowId: string) => void = (_rowId: string): void => {}): Promise<boolean> {
     if (this.disposed || this.loading || this.sending || this.cachedHistory || !this.selectedId || (!content.trim() && !attachments.length && !refs.length)) return false;
     if (delivery !== 'next' && delivery !== 'steer') return false;
     const id = this.repository.uuid();
@@ -411,7 +411,7 @@ export class XopcChatViewModel {
     this.outbox.set(id, input);
     if (!queuedWhileRunning) this.rows = this.rows.concat([row]);
     this.historyRequest++; this.recoveryRequest++; this.olderPending = false;
-    onEnqueued();
+    onEnqueued(id);
     return this.deliver(input);
   }
 
