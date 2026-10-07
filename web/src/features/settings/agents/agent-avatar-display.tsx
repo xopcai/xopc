@@ -134,6 +134,8 @@ export function AgentAvatarDisplay(props: {
     void import('./agent-avatar-dicebear').then(({ dicebearToDataUri }) => {
       if (cancelled) return;
       setSrc(dicebearToDataUri(resolved.styleId, resolved.seed, size));
+    }).catch(() => {
+      if (!cancelled) setSrc(resolved.fallbackSrc);
     });
     return () => {
       cancelled = true;
