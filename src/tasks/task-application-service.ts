@@ -21,6 +21,7 @@ import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
+import { TaskCriterionReviewRepository } from './task-criterion-review-repository.js';
 
 export type TaskApplicationResult =
   | { ok: true; model: TaskReadModel; runId?: string }
@@ -232,7 +233,12 @@ export class TaskApplicationService {
             : { ok: false, reason: 'invalid_transition', model };
           break;
         case 'close':
-          result = this.lifecycle(task.id, task.version, 'closed', input.command.resolution);
+          result = input.command.resolution === 'done'
+            && (!new TaskCriterionReviewRepository().allPassed(task)
+              || this.#runs.getActiveRoot(task.id) !== undefined
+              || this.#runs.listActiveWaits(task.id).length > 0)
+            ? { ok: false, reason: 'blocked', model }
+            : this.lifecycle(task.id, task.version, 'closed', input.command.resolution);
           break;
         case 'reopen':
           result = task.phase === 'closed'

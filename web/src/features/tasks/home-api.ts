@@ -76,6 +76,20 @@ export async function commandTask(
   return fetchTask(taskId);
 }
 
+export async function reviewTaskCriterion(
+  taskId: string,
+  criterionIndex: number,
+  status: 'passed' | 'failed',
+  expectedVersion: number,
+  contractVersion: number,
+): Promise<TaskDetail> {
+  await fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/criteria/${criterionIndex}/review`), {
+    method: 'PUT',
+    body: JSON.stringify({ status, expectedVersion, contractVersion }),
+  });
+  return fetchTask(taskId);
+}
+
 export async function cancelTaskRun(
   taskId: string,
   runId: string,
