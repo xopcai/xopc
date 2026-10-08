@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { runProcess } from '../../process/run-process.js';
@@ -25,6 +26,7 @@ export async function verifyInstalledCli(adapter: CliAdapter): Promise<string> {
   const path = cliExecutablePath(adapter);
   const [binary, digest] = await Promise.all([readFile(path), readFile(`${path}.sha256`, 'utf8')]);
   verifyIntegrity(binary, `sha256-${digest.trim()}`);
+  await access(path, constants.X_OK);
   return path;
 }
 

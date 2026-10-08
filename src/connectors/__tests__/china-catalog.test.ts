@@ -16,6 +16,14 @@ describe('China connector catalog', () => {
       'dingtalk-workspace',
       'wps365-workspace',
       'tencent-meeting',
+      'tencent-docs',
+      'yuque',
+      'amap-maps',
+      'bailian-web-search',
+      'dida365',
+      'flomo',
+      'railway-12306',
+      'antv-chart',
     ]);
     for (const connector of CHINA_CONNECTORS.filter((item) => item.runtime.type === 'mcp')) {
       expect(connector).toMatchObject({
@@ -53,6 +61,14 @@ describe('China connector catalog', () => {
       '/connector-icons/dingtalk-mark.svg',
       '/connector-icons/wps-docs.svg',
       '/connector-icons/tencent-meeting-mark.svg',
+      '/connector-icons/tencent-docs.ico',
+      '/connector-icons/yuque.png',
+      '/connector-icons/amap.ico',
+      '/connector-icons/bailian.png',
+      '/connector-icons/dida365.png',
+      '/connector-icons/flomo.png',
+      '/connector-icons/railway-12306.jpg',
+      '/connector-icons/antv-chart.png',
     ]);
     for (const connector of CHINA_CONNECTORS.filter(connector => connector.branding)) {
       expect(connector.branding?.source).toBe('builtin');
@@ -92,6 +108,47 @@ describe('China connector catalog', () => {
       { resolveApiKey: async () => 'stored-token' } as never,
     );
     expect(resolved).toEqual({ Authorization: 'Bearer stored-token' });
+  });
+
+  it.each([
+    ['tencent-docs', 'token', 'https://docs.qq.com/openapi/mcp', 'stored-token'],
+    ['bailian-web-search', 'apiKey', 'https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/mcp', 'Bearer stored-token'],
+    ['dida365', 'token', 'https://mcp.dida365.com', 'Bearer stored-token'],
+    ['flomo', 'token', 'https://flomoapp.com/mcp', 'Bearer stored-token'],
+  ])('preserves the official authentication contract for %s', async (id, key, url, authorization) => {
+    const definition = getConnectorDefinition(id)!;
+    const { server } = materializeConnectorMcpServer(definition, { secrets: { [key]: 'input-secret' } });
+    expect(server).toMatchObject({ url, transport: 'streamable-http' });
+    expect(JSON.stringify(server)).not.toContain('input-secret');
+    const resolved = await resolveConnectorSecretReferences(server, { resolveApiKey: async () => 'stored-token' } as never);
+    expect(resolved).toMatchObject({ headers: { Authorization: authorization } });
+  });
+
+  it.each([
+    ['yuque', 'token', 'yuque-mcp@1.0.0', 'YUQUE_PERSONAL_TOKEN'],
+    ['amap-maps', 'apiKey', '@amap/amap-maps-mcp-server@0.0.8', 'AMAP_MAPS_API_KEY'],
+  ])('uses the published package credential variable for %s', async (id, key, pkg, envKey) => {
+    const { server } = materializeConnectorMcpServer(getConnectorDefinition(id)!, { secrets: { [key]: 'input-secret' } });
+    expect(server).toMatchObject({ command: 'npx', args: ['-y', pkg] });
+    expect(JSON.stringify(server)).not.toContain('input-secret');
+    const resolved = await resolveConnectorSecretReferences(server, { resolveApiKey: async () => 'stored-token' } as never);
+    expect(resolved).toMatchObject({ env: { [envKey]: 'stored-token' } });
+  });
+
+  it.each(['tencent-docs', 'yuque', 'amap-maps', 'bailian-web-search', 'dida365', 'flomo'])('requires credentials before materializing %s', (id) => {
+    expect(() => materializeConnectorMcpServer(getConnectorDefinition(id)!, {})).toThrow('Missing required secret');
+  });
+
+  it.each([
+    ['railway-12306', '12306-mcp@0.3.10', 'experimental'],
+    ['antv-chart', '@antv/mcp-server-chart@0.9.10', 'beta'],
+  ])('materializes the credential-free utility %s', (id, pkg, verificationLevel) => {
+    const definition = getConnectorDefinition(id)!;
+    expect(definition).toMatchObject({ auth: { mode: 'none' }, verificationLevel });
+    const { server } = materializeConnectorMcpServer(definition, {});
+    expect(server).toMatchObject({ command: 'npx', args: ['-y', pkg] });
+    expect(server.headers).toBeUndefined();
+    expect(server.env).toBeUndefined();
   });
 
   it('uses CLI authorization for Feishu without an MCP fallback', () => {

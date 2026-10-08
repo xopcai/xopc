@@ -77,6 +77,41 @@ describe('connectors catalog', () => {
 });
 
 describe('connector install and instances', () => {
+  it.each([
+    ['railway-12306', 'railway_12306'],
+    ['antv-chart', 'antv_chart'],
+  ])('installs and removes the personal utility %s without credentials', async (id, serverId) => {
+    const config = { mcp: { servers: {} } } as Config;
+    const instance = await installConnector(config, id, {});
+    expect(instance).toMatchObject({ connectorId: id, materialized: { type: 'mcp', serverId } });
+    expect(config.mcp?.servers?.[serverId]?.xopcConnector).toMatchObject({ managed: true, connectorId: id });
+    expect(listConnectorInstances(config)).toHaveLength(1);
+    uninstallConnector(config, instance.instanceId);
+    expect(config.mcp?.servers?.[serverId]).toBeUndefined();
+  });
+
+  it.each([
+    ['tencent-docs', 'tencent_docs', 'token'],
+    ['yuque', 'yuque', 'token'],
+    ['amap-maps', 'amap_maps', 'apiKey'],
+    ['bailian-web-search', 'bailian_web_search', 'apiKey'],
+    ['dida365', 'dida365', 'token'],
+    ['flomo', 'flomo', 'token'],
+  ])('installs and removes %s using managed secret storage', async (id, serverId, key) => {
+    const config = { mcp: { servers: {} } } as Config;
+    const saveApiKey = vi.fn().mockResolvedValue(undefined);
+    const resolver = { saveApiKey } as unknown as CredentialResolver;
+    const instance = await installConnector(config, id, { secrets: { [key]: 'test-secret' } }, resolver);
+
+    expect(instance).toMatchObject({ connectorId: id, materialized: { type: 'mcp', serverId } });
+    expect(saveApiKey).toHaveBeenCalledWith(`connector-${id}-${key.toLowerCase()}`, 'test-secret', { profileName: 'default' });
+    expect(config.mcp?.servers?.[serverId]?.xopcConnector).toMatchObject({ managed: true, connectorId: id });
+    expect(JSON.stringify(config)).not.toContain('test-secret');
+    expect(listConnectorInstances(config)).toHaveLength(1);
+    expect(uninstallConnector(config, instance.instanceId).connectorId).toBe(id);
+    expect(config.mcp?.servers?.[serverId]).toBeUndefined();
+  });
+
   it('installs, lists, and uninstalls managed connectors', async () => {
     const config = { mcp: { servers: {} } } as Config;
 
