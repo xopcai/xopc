@@ -111,6 +111,7 @@ export class GatewayAgentRunner {
         }
         return result;
       },
+      onInputReceived: conversationId => opts.getAgentService().sessionStore.idleCompaction.interrupt(conversationId),
       prepareAttachments: async (conversationId, attachments) => {
         const media = await opts.getAgentService().prepareInboundAttachments(conversationId, attachments);
         if (!media?.length) return undefined;

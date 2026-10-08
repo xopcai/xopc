@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getSqliteDatabase } from '../transaction.js';
 import { seedTestDatabase } from '../../../../test/sqlite-fixture.js';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
@@ -540,6 +541,24 @@ describe('sqlite repositories', () => {
 
     expect(stale).toBeNull();
     expect(listCompactionBoundaries(CONVERSATION_ID)).toHaveLength(0);
+  });
+
+  it('rejects a compaction snapshot when an existing row changes without changing sequence count', () => {
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: 'main' });
+    const entry = appendTranscriptEntry(CONVERSATION_ID, userMessage('original'));
+    const snapshot = loadCompactionSourceSnapshot(CONVERSATION_ID)!;
+    getSqliteDatabase().prepare('UPDATE transcript_entries SET payload_json = ? WHERE entry_id = ?')
+      .run(JSON.stringify(userMessage('edited')), entry.entry_id);
+    expect(loadCompactionSourceSnapshot(CONVERSATION_ID)!.lastSeq).toBe(snapshot.lastSeq);
+    const stale = appendCompactionBoundaryIfUnchanged(CONVERSATION_ID, snapshot, {
+      type: 'compaction', at: new Date().toISOString(), plannerVersion: 3,
+      summaryModelRef: 'test/model', qualityAudit: 'passed',
+      handover: { version: 1, sourceThroughSeq: 1, items: [] },
+      audit: { status: 'passed', mode: 'structural', missingItemsFound: 0, repaired: false },
+      summary: 'stale', messages: [userMessage('summary')], firstKeptIndex: 1, tokensBefore: 10, tokensAfter: 5,
+    });
+    expect(stale).toBeNull();
+    expect(JSON.stringify(loadLlmMessagesForSession(CONVERSATION_ID))).toContain('edited');
   });
 
   it('recalls authoritative raw turns older than a compaction boundary', () => {

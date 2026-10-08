@@ -1134,6 +1134,7 @@ export class AgentService {
   }
 
   private dispose(): void {
+    this.sessionStore.idleCompaction.dispose();
     this.sessionTracker.dispose();
     this.sessionState.disposeAll();
     this.agentManager.dispose();

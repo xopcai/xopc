@@ -1,6 +1,8 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai/compat';
 
+import { IdleCompactionScheduler } from '../agent/memory/idle-compaction-scheduler.js';
+import type { ResolvedCompactionPolicy } from '../agent/memory/compaction-policy.js';
 import type { Config } from '../config/schema.js';
 import type { SessionAgentConfig } from './config-types.js';
 import { resolveStateDir } from '../config/paths-state.js';
@@ -152,7 +154,14 @@ function transcriptPrefixMatches(
   return expected.every((row, index) => JSON.stringify(row) === JSON.stringify(current[index]));
 }
 
+export interface PreparedCompaction {
+  conversationId: string;
+  snapshot: NonNullable<ReturnType<typeof loadCompactionSourceSnapshot>>;
+  result: CompactionResult;
+}
+
 export class SessionStore {
+  readonly idleCompaction = new IdleCompactionScheduler();
   private window: SlidingWindow;
   private compactor: SessionCompactor;
   private compactionHooks: SessionCompactionHooks = {};
@@ -189,6 +198,7 @@ export class SessionStore {
 
   /** Refresh policy for subsequent compactions without changing an in-flight request. */
   updateConfig(config: Config): void {
+    this.idleCompaction.cancelAll();
     this.options = { ...this.options, config };
     this.compactor = new SessionCompactor(resolveCompactionPolicy(config));
   }
@@ -522,6 +532,7 @@ export class SessionStore {
   }
 
   async reset(key: string): Promise<{ transcriptId: string; previousTranscriptId: string } | null> {
+    this.idleCompaction.interrupt(key);
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
       const cwd = this.resolveWorkspaceCwd(key);
@@ -535,6 +546,7 @@ export class SessionStore {
   }
 
   async delete(key: string): Promise<boolean> {
+    this.idleCompaction.interrupt(key);
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
       const ok = deleteSessionRecord(key);
@@ -882,6 +894,34 @@ export class SessionStore {
     });
   }
 
+  /** Generate against a fixed snapshot without holding the foreground compaction queue. */
+  async prepareCompaction(
+    key: string, model: Model<Api>, policy: ResolvedCompactionPolicy, signal: AbortSignal,
+  ): Promise<PreparedCompaction> {
+    signal.throwIfAborted();
+    const snapshot = loadCompactionSourceSnapshot(key);
+    if (!snapshot) throw new Error(`Session not found: ${key}`);
+    const result = await new SessionCompactor(policy).compact(snapshot.entries, model, undefined, false, {
+      conversationId: key, signal,
+      // Background requests never share durable progress with foreground recovery.
+    });
+    signal.throwIfAborted();
+    return { conversationId: key, snapshot, result };
+  }
+
+  async commitCompaction(candidate: PreparedCompaction, isCurrent: () => boolean): Promise<boolean> {
+    const { conversationId, result, snapshot } = candidate;
+    if (!result.compacted || !isCurrent()) return false;
+    return this.runCompactionExclusive(conversationId, async () => {
+      if (!isCurrent()) return false;
+      const current = loadCompactionSourceSnapshot(conversationId);
+      if (!current || current.transcriptId !== snapshot.transcriptId || current.lastSeq !== snapshot.lastSeq
+        || current.fingerprint !== snapshot.fingerprint) return false;
+      await this.applyCompaction(conversationId, result, snapshot);
+      return true;
+    });
+  }
+
   async compact(
     key: string,
     messages: AgentMessage[],
@@ -944,6 +984,7 @@ export class SessionStore {
   }
 
   async restoreBeforeCompactionBoundary(key: string, compactionId: string): Promise<void> {
+    this.idleCompaction.interrupt(key);
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
       if (!compactionId.trim()) throw new Error('compactionId is required');

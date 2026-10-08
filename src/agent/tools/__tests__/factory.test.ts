@@ -13,6 +13,7 @@ import {
   resolveAgentCapabilityCatalog,
 } from '../../capabilities/index.js';
 import { runWithEmbeddedExecutionSession } from '../../embedded/execution-context.js';
+import { PERSONAL_MAIN_TOOL_IDS } from '../../../personal-agent/policy.js';
 import { STARTER_AGENTS } from '../../starter-agents.js';
 import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
 import { AgentToolsFactory } from '../factory.js';
@@ -53,6 +54,16 @@ describe('AgentToolsFactory', () => {
     expect(factory.createCoreTools({ toolAllowlist: ['personal_task', 'personal_preference'] }).map(tool => tool.name))
       .toEqual(['personal_task', 'personal_preference']);
   });
+  it('exposes bounded local personal reads without network or directory scanning tools', () => {
+    const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,
+      dispatchTaskRuns: () => {}, getSessionStore: () => ({}) as never,
+      getPrimaryModel: () => ({ provider: 'test', id: 'fast', input: ['text'] }) as never });
+    const tools = factory.createCoreTools({ toolAllowlist: PERSONAL_MAIN_TOOL_IDS });
+    expect(tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['read_file', 'read_media', 'session_search', 'personal_read']));
+    expect(tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['web_search', 'web_fetch', 'find', 'grep', 'list_dir', 'exec_command']));
+    expect(tools.find(tool => tool.name === 'session_search')?.description).toContain('No model or network calls');
+  });
+
   it('provides Conductor with focused reads without file writes or shell access', () => {
     const factory = new AgentToolsFactory({
       workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,
