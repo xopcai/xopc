@@ -1,4 +1,7 @@
+import { createLogger } from '../utils/logger.js';
 import type { TraceRecord } from './types.js';
+
+const log = createLogger('Observability:Langfuse');
 
 function otlp(record: TraceRecord) {
   const attributes = Object.entries(record.attributes).map(([key, value]) => ({ key, value: typeof value === 'number' ? { doubleValue: value } : typeof value === 'boolean' ? { boolValue: value } : { stringValue: value } }));
@@ -19,6 +22,7 @@ export class LangfuseTarget {
   private sending?: Promise<void>;
   private controller?: AbortController;
   private closed = false;
+  private lastWarning = 0;
   dropped = 0;
   lastSuccess?: number;
   lastFailure?: number;
@@ -53,12 +57,24 @@ export class LangfuseTarget {
           headers: { 'Content-Type': 'application/json', Authorization: `Basic ${Buffer.from(`${this.publicKey}:${this.secretKey}`).toString('base64')}`, 'x-langfuse-ingestion-version': '4' },
           body: JSON.stringify({ resourceSpans: [{ resource: { attributes: [{ key: 'service.name', value: { stringValue: 'xopc' } }] }, scopeSpans: [{ scope: { name: 'xopc.observability' }, spans: records.map(otlp) }] }] }),
         });
-        // Avoid reading untrusted/unbounded response bodies or logging credentials.
-        await response.body?.cancel();
-        if (!response.ok) throw new Error(`Langfuse returned HTTP ${response.status}`);
+        if (!response.ok) { await response.body?.cancel(); throw new Error(`Langfuse returned HTTP ${response.status}`); }
+        if (response.body) {
+          const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let size = 0;
+          try {
+            while (true) {
+              const chunk = await reader.read(); if (chunk.done) break;
+              size += chunk.value.length;
+              if (size > 16384) { await reader.cancel(); throw new Error('Oversized ingestion response'); }
+              chunks.push(chunk.value);
+            }
+            const text = Buffer.concat(chunks).toString('utf8');
+            if (text && Number(JSON.parse(text).partialSuccess?.rejectedSpans ?? 0) > 0) throw new Error('Ingestion rejected spans');
+          } finally { reader.releaseLock(); }
+        }
         this.lastSuccess = Date.now(); this.lastError = undefined; return;
       } catch (error) {
         this.lastFailure = Date.now();
+        if (Date.now() - this.lastWarning > 60000) { this.lastWarning = Date.now(); log.warn({ phase: 'langfuse_export', attempt: attempt + 1 }, 'Langfuse trace export failed; local recording continues'); }
         this.lastError = error instanceof Error && /^Langfuse returned HTTP \d+$/.test(error.message) ? error.message : 'Langfuse export failed';
       } finally { clearTimeout(timeout); }
       if (attempt < 2 && !this.closed) await new Promise(resolve => { const t = setTimeout(resolve, 250 * 2 ** attempt); t.unref(); });

@@ -271,3 +271,4 @@ python3 - <<'PY'
 p='docs/design/technical/local-tracing-langfuse.md';s=open(p).read().replace('状态：设计提案，尚未实现。','状态：第一版已实现，落地范围及差异见第 13 节。');open(p,'w').write(s)
 PY
 pnpm -C web run type-check > /tmp/xopc-tracing-webcheck.log 2>&1
+最终验证：完整 unit suite 622 个文件 / 3812 个测试通过；相关回归集合 29 个文件 / 214 个测试通过；最后的生命周期与 API 回归 16 个文件 / 76 个测试通过。根 TypeScript、Web TypeScript、Web lint、Node/Web 构建通过；构建后的 Node 产物在独立临时 state root 完成本地记录 smoke test。

@@ -50,6 +50,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (method === 'GET' && path === '/api/connectors/approvals') return 'sessions.read';
   if (method === 'POST' && path === '/api/connectors/approvals/respond') return 'sessions.write';
   if (path === '/api/agent' || path.startsWith('/api/agent/')) return 'agents.run';
+  if (path === '/api/observability' || path.startsWith('/api/observability/')) return 'gateway.admin';
   if (path.startsWith('/api/usage')) return 'gateway.admin';
   if (path.startsWith('/api/agents') || path.startsWith('/api/models')) {
     return methodScope(method, 'agents.read', 'gateway.admin');

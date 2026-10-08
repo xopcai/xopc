@@ -1,10 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { context, trace, SpanStatusCode, type Span, type Attributes } from '@opentelemetry/api';
+import { context, trace, createContextKey, SpanStatusCode, type Context, type Span, type Attributes } from '@opentelemetry/api';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
 import { BasicTracerProvider, type ReadableSpan, type SpanProcessor } from '@opentelemetry/sdk-trace-base';
 
 import { CredentialResolver } from '../auth/credentials.js';
+import { createLogger } from '../utils/logger.js';
 import { runWithLogContext } from '../utils/logger/context.js';
 import { TracingConfigSchema, defaultTracingConfig, type TracingConfig } from './config.js';
 import { LangfuseTarget } from './langfuse.js';
@@ -12,8 +13,16 @@ import { LocalTraceStore } from './store.js';
 import { boundedJson, redactString } from './sanitize.js';
 import type { TraceRecord } from './types.js';
 
+const log = createLogger('Observability');
+let lastStorageWarning = 0;
+function storageWarning(message: string) {
+  if (Date.now() - lastStorageWarning < 60000) return;
+  lastStorageWarning = Date.now(); log.warn({ errorMessage: message, phase: 'local_trace_write' }, `Local trace recording unavailable: ${message}`);
+}
+
 export type TraceIdentity = { conversationId?: string; runId?: string; agentId?: string; transcriptId?: string };
 type Scope = { config: TracingConfig; target?: LangfuseTarget; identity: TraceIdentity; name: string; count: number; bytes: number; root?: Span; epoch?: Promise<number> };
+const localEpochKey = createContextKey('xopc.trace.localEpoch');
 const scopes = new AsyncLocalStorage<Scope>();
 let config = defaultTracingConfig();
 let store: LocalTraceStore | undefined;
@@ -22,6 +31,8 @@ let provider: BasicTracerProvider | undefined;
 let revision = 0;
 let active = 0;
 let dropped = 0;
+const pendingLocal = new Set<Promise<void>>();
+let pendingLocalBytes = 0;
 let remoteState = 'disabled';
 let knownSecrets: string[] = [];
 let configureVersion = 0;
@@ -48,27 +59,45 @@ function record(span: ReadableSpan, ended = true): TraceRecord {
   };
 }
 class TraceProcessor implements SpanProcessor {
-  onStart(span: ReadableSpan): void {
+  onStart(span: ReadableSpan, parentContext: Context): void {
     const scope = scopes.getStore();
     if (!(scope?.config ?? config).enabled) return;
     captured.set(span, true);
     if (scope?.target ?? target) targets.set(span, (scope?.target ?? target)!);
-    if (!span.parentSpanContext) {
-      const epoch = localStore().begin(record(span, false)).catch(() => -1);
+    if (!span.parentSpanContext || span.attributes['xopc.localRoot'] === true) {
+      const epoch = localStore().begin(record(span, false)).catch(() => { storageWarning('Trace root could not be persisted'); return -1; });
       localEpochs.set(span, epoch);
       if (scope) scope.epoch = epoch;
-    } else if (scope?.epoch) localEpochs.set(span, scope.epoch);
+    } else {
+      const epoch = scope?.epoch ?? parentContext.getValue(localEpochKey) as Promise<number> | undefined;
+      if (epoch) localEpochs.set(span, epoch);
+    }
   }
   onEnd(span: ReadableSpan): void {
     if (!captured.has(span)) return;
-    try { const value = record(span); void (localEpochs.get(span) ?? Promise.resolve(undefined)).then(epoch => localStore().write(value, epoch)); targets.get(span)?.enqueue(value); } catch { dropped++; }
+    try {
+      const value = record(span);
+      const bytes = Buffer.byteLength(JSON.stringify(value));
+      if (pendingLocal.size < 2000 && pendingLocalBytes + bytes <= 8 * 1048576) {
+        const destination = localStore();
+        pendingLocalBytes += bytes;
+        const pending = (localEpochs.get(span) ?? Promise.resolve(undefined))
+          .then(async epoch => { await destination.write(value, epoch); if (destination.lastError) storageWarning(destination.lastError); })
+          .catch(() => { dropped++; })
+          .finally(() => { pendingLocal.delete(pending); pendingLocalBytes -= bytes; });
+        pendingLocal.add(pending);
+      } else dropped++;
+      targets.get(span)?.enqueue(value);
+    } catch { dropped++; }
+
   }
-  async forceFlush(): Promise<void> { await Promise.allSettled([store?.flush(), target?.flush()]); }
+  async forceFlush(): Promise<void> { await Promise.allSettled([...pendingLocal]); await Promise.allSettled([store?.flush(), target?.flush()]); }
   async shutdown(): Promise<void> { await this.forceFlush(); target?.close(); await store?.close(); }
 }
 function tracer() {
   if (!provider) {
     context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
+    process.once('beforeExit', () => { void flushTracing(); });
     provider = new BasicTracerProvider({ spanProcessors: [new TraceProcessor()], spanLimits: { attributeCountLimit: 64, attributeValueLengthLimit: 65536, eventCountLimit: 0 } });
   }
   return provider.getTracer('xopc.observability');
@@ -97,14 +126,14 @@ export async function configureTracing(value?: unknown): Promise<void> {
 }
 export async function tracingStatus() {
   const local = await localStore().request('status').catch(() => ({ unavailable: true }));
-  return { local: { ...local, queueDropped: localStore().dropped, lastError: localStore().lastError }, langfuse: target?.status() ?? { state: remoteState, pending: 0, dropped: 0 }, active, dropped };
+  return { local: { ...local, pending: pendingLocal.size, pendingBytes: pendingLocalBytes, queueDropped: localStore().dropped, lastError: localStore().lastError }, langfuse: target?.status() ?? { state: remoteState, pending: 0, dropped: 0 }, active, dropped };
 }
 export function traceIds(): { traceId?: string; spanId?: string } {
   const current = trace.getSpan(context.active())?.spanContext();
   return current ? { traceId: current.traceId, spanId: current.spanId } : {};
 }
 function attrs(identity: TraceIdentity, type: string): Attributes {
-  const result: Attributes = { 'langfuse.observation.type': type, 'xopc.configRevision': revision };
+  const result: Attributes = { ...(type === 'agent' ? { 'xopc.localRoot': true } : {}), 'langfuse.observation.type': type, 'xopc.configRevision': revision };
   for (const [key, value] of Object.entries(identity)) if (value) { result[`xopc.${key}`] = value; result[`langfuse.trace.metadata.${key}`] = value; }
   if (scopes.getStore()?.name) result['langfuse.trace.name'] = scopes.getStore()!.name;
   if (identity.conversationId) result['langfuse.session.id'] = identity.conversationId;
@@ -118,7 +147,7 @@ export function startObservation(name: string, type: TraceRecord['type'], identi
   if (standalone && active >= 256) { dropped++; return { run: fn => fn(), finish() {}, input() {}, update() {} }; }
   if (standalone) active++;
   const span = tracer().startSpan(name.slice(0, 120), { attributes: attrs({ ...scope?.identity, ...identity }, type) });
-  const spanContext = trace.setSpan(context.active(), span);
+  const spanContext = trace.setSpan(context.active(), span).setValue(localEpochKey, localEpochs.get(span as unknown as ReadableSpan) ?? context.active().getValue(localEpochKey));
   let ended = false;
   const put = (key: string, value: unknown) => {
     const policy = scope?.config ?? config;
@@ -172,7 +201,7 @@ export function traceTools<T extends { name: string; execute: (...args: any[]) =
 }
 export async function flushTracing(): Promise<void> {
   const timer = new Promise<void>(resolve => { const t = setTimeout(resolve, 3000); t.unref(); });
-  await Promise.race([Promise.allSettled([store?.flush(), target?.flush()]).then(() => {}), timer]);
+  await Promise.race([(async () => { await Promise.allSettled([...pendingLocal]); await Promise.allSettled([store?.flush(), target?.flush()]); })(), timer]);
 }
 export async function testLangfuse(): Promise<boolean> {
   if (!target) return false;
