@@ -326,6 +326,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'observability',
+    match: (path) => startsWithAny(path, ['/api/observability']),
+    load: async () => {
+      const { registerObservabilityRoutes } = await import('./observability.js');
+      return { register: registerObservabilityRoutes };
+    },
+  },
+  {
     id: 'usage',
     match: (path) => startsWithAny(path, ['/api/usage']),
     load: async () => {

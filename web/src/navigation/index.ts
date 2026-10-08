@@ -94,7 +94,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   },
   {
     id: 'system',
-    tabs: ['settingsGateway', 'settingsRuntimes', 'settingsImports', 'sessions', 'usage', 'logs'],
+    tabs: ['settingsGateway', 'settingsRuntimes', 'settingsImports', 'sessions', 'usage', 'tracing', 'logs'],
   },
 ] as const;
 
@@ -150,7 +150,7 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'settingsSearch') return capabilitySettingsPath('search');
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
-  if (tab === 'sessions' || tab === 'usage' || tab === 'logs') {
+  if (tab === 'sessions' || tab === 'usage' || tab === 'tracing' || tab === 'logs') {
     return `/settings/${tab}`;
   }
   return `/${tab}`;
