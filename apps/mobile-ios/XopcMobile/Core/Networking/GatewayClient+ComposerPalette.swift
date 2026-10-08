@@ -6,7 +6,8 @@ extension GatewayClient {
         async let skillsRequest: GatewayEnvelope<ComposerSkillCatalog> = request(path: "/api/skills")
         let (commands, skills) = try await (commandsRequest, skillsRequest)
         guard commands.isSuccessful, skills.isSuccessful,
-              let commandCatalog = commands.payload, let skillCatalog = skills.payload else {
+              let commandCatalog = commands.payload, let skillCatalog = skills.payload
+        else {
             throw GatewayClientError.server("无法读取命令与技能")
         }
         let skillItems = skillCatalog.catalog.filter(\.enabled).map { skill in

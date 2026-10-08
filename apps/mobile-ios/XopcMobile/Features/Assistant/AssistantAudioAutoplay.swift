@@ -9,13 +9,19 @@ struct AssistantAudioObservation: Equatable {
     let key: String?
 }
 
+private struct PendingAssistantAudio {
+    let attachment: HistoryAttachment
+    let conversationID: String
+    let configuration: GatewayConfiguration
+}
+
 @MainActor @Observable final class AssistantAudioAutoplay: NSObject, AVAudioPlayerDelegate {
     private var previous: AssistantAudioObservation?
     private var lastSeenKey: String?
     private var wasStreaming = false
     private var player: AVAudioPlayer?
     private var loadTask: Task<Void, Never>?
-    private var pending: [(HistoryAttachment, String, GatewayConfiguration)] = []
+    private var pending: [PendingAssistantAudio] = []
     private var generation = 0
     private var ownsAudioSession = false
 
@@ -44,8 +50,14 @@ struct AssistantAudioObservation: Equatable {
         if completed, let attachment = current.attachment {
             lastSeenKey = current.key
             wasStreaming = false
-            if pending.count >= 8 { pending.removeFirst() }
-            pending.append((attachment, conversationID, configuration))
+            if pending.count >= 8 {
+                pending.removeFirst()
+            }
+            pending.append(PendingAssistantAudio(
+                attachment: attachment,
+                conversationID: conversationID,
+                configuration: configuration
+            ))
             playNext()
         } else {
             wasStreaming = awaiting
@@ -65,19 +77,23 @@ struct AssistantAudioObservation: Equatable {
 
     private func playNext() {
         guard player == nil, loadTask == nil, !pending.isEmpty else { return }
-        let (attachment, conversationID, configuration) = pending.removeFirst()
+        let next = pending.removeFirst()
         let current = generation
         loadTask = Task {
             defer {
                 if current == generation {
                     loadTask = nil
-                    if player == nil { playNext() }
-                    if player == nil, pending.isEmpty { deactivateAudioSession() }
+                    if player == nil {
+                        playNext()
+                    }
+                    if player == nil, pending.isEmpty {
+                        deactivateAudioSession()
+                    }
                 }
             }
             do {
-                let bytes = try await ChatAttachmentLoader(configuration: configuration)
-                    .load(attachment, conversationID: conversationID)
+                let bytes = try await ChatAttachmentLoader(configuration: next.configuration)
+                    .load(next.attachment, conversationID: next.conversationID)
                 guard current == generation, !Task.isCancelled else { return }
                 try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
                 try AVAudioSession.sharedInstance().setActive(true)
@@ -99,7 +115,9 @@ struct AssistantAudioObservation: Equatable {
             guard self.player.map(ObjectIdentifier.init) == identity else { return }
             self.player = nil
             self.playNext()
-            if self.player == nil, self.pending.isEmpty { self.deactivateAudioSession() }
+            if self.player == nil, self.pending.isEmpty {
+                self.deactivateAudioSession()
+            }
         }
     }
 

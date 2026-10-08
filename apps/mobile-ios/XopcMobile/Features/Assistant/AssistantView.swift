@@ -69,7 +69,7 @@ struct AssistantView<Dock: View>: View {
         .sheet(isPresented: $showingPersonalProfile) {
             if let personalAgent {
                 PersonalAgentProfileView(configuration: configuration, record: personalAgent,
-                    onSaved: onPersonalAgentUpdated)
+                                         onSaved: onPersonalAgentUpdated)
             }
         }
         .task(id: configuration) {
@@ -292,7 +292,9 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var conversationNavigationTitle: String {
-        if isPersonalConversation { return personalAgent?.displayName ?? "Ada" }
+        if isPersonalConversation {
+            return personalAgent?.displayName ?? "Ada"
+        }
         guard let title = conversation?.title, !showsConversationTitleInTimeline else {
             return AppLocalization.string("助手", locale: locale)
         }
@@ -501,7 +503,8 @@ struct AssistantView<Dock: View>: View {
 
         ToolbarItem(placement: .topBarTrailing) {
             if personalAgent?.isReady == true,
-               conversation?.id == personalAgent?.conversationId {
+               conversation?.id == personalAgent?.conversationId
+            {
                 Button("配置助手", systemImage: "slider.horizontal.3") {
                     showingPersonalProfile = true
                 }
@@ -541,7 +544,8 @@ private struct PersonalAgentProfileView: View {
     @State private var error: String?
 
     init(configuration: GatewayConfiguration, record: PersonalAgentRecord,
-         onSaved: @escaping (PersonalAgentRecord) -> Void) {
+         onSaved: @escaping (PersonalAgentRecord) -> Void)
+    {
         self.configuration = configuration
         self.onSaved = onSaved
         _record = State(initialValue: record)
@@ -567,7 +571,9 @@ private struct PersonalAgentProfileView: View {
                         Text("Loopi").tag("loopi")
                         Text("好奇").tag("loopi-curious")
                         Text("关怀").tag("loopi-care")
-                        if appearance == "custom" { Text("自定义").tag("custom") }
+                        if appearance == "custom" {
+                            Text("自定义").tag("custom")
+                        }
                     }
                     TextField("怎么称呼你", text: $addressAs)
                 }
@@ -611,7 +617,9 @@ private struct PersonalAgentProfileView: View {
                         }
                     }
                 }
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error {
+                    Text(error).foregroundStyle(.red)
+                }
             }
             .task {
                 do {
@@ -649,13 +657,12 @@ private struct PersonalAgentProfileView: View {
         preferences["detailLevel"] = detailLevel
         preferences["proactivity"] = proactivity
         preferences["humor"] = humor
-        let voicePreference: PersonalVoicePreference?
-        if let voiceProvider, let voiceModel {
-            voicePreference = selectedVoice.isEmpty ? nil : PersonalVoicePreference(
+        let voicePreference: PersonalVoicePreference? = if let voiceProvider, let voiceModel {
+            selectedVoice.isEmpty ? nil : PersonalVoicePreference(
                 provider: voiceProvider, model: voiceModel, voice: selectedVoice
             )
         } else {
-            voicePreference = record.voicePreference
+            record.voicePreference
         }
         do {
             let updated = try await GatewayClient(configuration: configuration).updatePersonalAgentProfile(

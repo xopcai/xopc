@@ -109,11 +109,17 @@ struct ChatAttachmentPreview: View {
             }
         }
         .onChange(of: previewURL) { _, value in
-            if value == nil { removeTemporaryFile() }
+            if value == nil {
+                removeTemporaryFile()
+            }
         }
         .alert("无法预览附件", isPresented: Binding(
             get: { error != nil },
-            set: { if !$0 { error = nil } }
+            set: {
+                if !$0 {
+                    error = nil
+                }
+            }
         )) {
             Button("好", role: .cancel) {}
         } message: {
@@ -124,7 +130,8 @@ struct ChatAttachmentPreview: View {
     @MainActor private func open() async {
         guard !isLoading else { return }
         if (attachment.uri ?? "").isEmpty, attachment.workspaceRelativePath == nil,
-           attachment.extractedText?.isEmpty == false {
+           attachment.extractedText?.isEmpty == false
+        {
             previewText = attachment.extractedText
             showsExtractedText = true
             return
@@ -140,7 +147,9 @@ struct ChatAttachmentPreview: View {
                 guard let text = String(data: bytes, encoding: .utf8) else {
                     throw ChatAttachmentPreviewError.unavailable
                 }
-                if isHTML, bytes.count > 4 * 1024 * 1024 { throw ChatAttachmentPreviewError.htmlTooLarge }
+                if isHTML, bytes.count > 4 * 1024 * 1024 {
+                    throw ChatAttachmentPreviewError.htmlTooLarge
+                }
                 previewText = isHTML ? text : String(text.prefix(100_000))
                 showsExtractedText = true
                 return
@@ -172,7 +181,9 @@ struct ChatAttachmentPreview: View {
     }
 
     private func removeTemporaryFile() {
-        if let temporaryDirectory { try? FileManager.default.removeItem(at: temporaryDirectory) }
+        if let temporaryDirectory {
+            try? FileManager.default.removeItem(at: temporaryDirectory)
+        }
         temporaryDirectory = nil
     }
 
@@ -246,7 +257,8 @@ struct ChatAttachmentLoader: Sendable {
     func resolveManagedFile(_ attachment: HistoryAttachment, conversationID: String?) async throws -> FileResource {
         let gateway = GatewayClient(configuration: configuration)
         if let uri = attachment.uri, uri.hasPrefix("xopc-file:"),
-           let id = String(uri.dropFirst("xopc-file:".count)).removingPercentEncoding {
+           let id = String(uri.dropFirst("xopc-file:".count)).removingPercentEncoding
+        {
             let result: FileResourceEnvelope = try await gateway.request(path: "/api/files/\(id)")
             return result.resource
         }
@@ -261,7 +273,9 @@ struct ChatAttachmentLoader: Sendable {
     }
 
     private func resolvedURI(_ attachment: HistoryAttachment, conversationID: String?) async throws -> String {
-        if let uri = attachment.uri, !uri.isEmpty { return uri }
+        if let uri = attachment.uri, !uri.isEmpty {
+            return uri
+        }
         let file = try await resolveManagedFile(attachment, conversationID: conversationID)
         return "xopc-file:\(file.id)"
     }
@@ -274,13 +288,15 @@ private struct ChatManagedShareRequest: Encodable {
     let audience = "friend"
 
     init(attachment: HistoryAttachment, conversationID: String?) throws {
-        self.conversationId = conversationID
+        conversationId = conversationID
         if let uri = attachment.uri, uri.hasPrefix("xopc-file:"),
-           let id = String(uri.dropFirst("xopc-file:".count)).removingPercentEncoding, !id.isEmpty {
+           let id = String(uri.dropFirst("xopc-file:".count)).removingPercentEncoding, !id.isEmpty
+        {
             fileId = id
             path = nil
         } else if let relativePath = attachment.workspaceRelativePath, !relativePath.isEmpty,
-                  conversationID != nil {
+                  conversationID != nil
+        {
             fileId = nil
             path = relativePath
         } else {
@@ -301,11 +317,10 @@ private struct ChatManagedShareEnvelope: Decodable {
         let reachabilityHint: String?
 
         var reachabilityText: String {
-            let label: String
-            switch reachability {
-            case "public": label = AppLocalization.resolve("公网可访问")
-            case "lan": label = AppLocalization.resolve("仅同一局域网可访问")
-            default: label = AppLocalization.resolve("目前仅本机可访问")
+            let label: String = switch reachability {
+            case "public": AppLocalization.resolve("公网可访问")
+            case "lan": AppLocalization.resolve("仅同一局域网可访问")
+            default: AppLocalization.resolve("目前仅本机可访问")
             }
             return reachabilityHint.map { "\(label)\n\($0)" } ?? label
         }
@@ -354,7 +369,9 @@ private final class ChatAttachmentRedirectBlocker: NSObject, URLSessionTaskDeleg
 private struct SafeHTMLAttachmentView: UIViewRepresentable {
     let html: String
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()

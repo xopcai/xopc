@@ -22,7 +22,9 @@ struct ComposerSkill: Decodable, Identifiable {
     let enabled: Bool
     let localizations: [String: ComposerSkillLocalization]?
 
-    var id: String { name }
+    var id: String {
+        name
+    }
 }
 
 struct ComposerSkillLocalization: Decodable {

@@ -22,7 +22,13 @@ struct PersonalAgentTests {
 
         let configured = try decoder.decode(
             GatewayEnvelope<PersonalAgentRecord>.self,
-            from: Data(#"{"ok":true,"payload":{"agentId":"personal","conversationId":"fixed","state":"ready","displayName":"Ada","appearance":"loopi-care","revision":4,"preferences":{"warmth":"gentle"},"voicePreference":{"provider":"alibaba","model":"tts","voice":"voice-a"},"errorMessage":null}}"#.utf8)
+            from: Data(#"""
+            {"ok":true,"payload":{"agentId":"personal","conversationId":"fixed","state":"ready",
+            "displayName":"Ada","appearance":"loopi-care","revision":4,
+            "preferences":{"warmth":"gentle"},
+            "voicePreference":{"provider":"alibaba","model":"tts","voice":"voice-a"},
+            "errorMessage":null}}
+            """#.utf8)
         )
         #expect(configured.payload?.revision == 4)
         #expect(configured.payload?.preferences?["warmth"] == "gentle")

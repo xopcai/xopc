@@ -10,10 +10,13 @@ enum TaskAcceptanceStatus: String {
         if detail.task.contract?.acceptancePolicy != "verified_auto",
            let review = detail.criterionReviews?.first(where: {
                $0.contractVersion == version && $0.criterionIndex == index
-           }) {
+           })
+        {
             return review.status == "passed" ? .passed : .failed
         }
-        if detail.task.contract?.acceptancePolicy == "manual" { return .pending }
+        if detail.task.contract?.acceptancePolicy == "manual" {
+            return .pending
+        }
 
         let runIDs = Set((detail.runs ?? []).filter { $0.contractVersion == version }.map(\.id))
         let receipts = (detail.receipts ?? [])
@@ -22,7 +25,9 @@ enum TaskAcceptanceStatus: String {
         for receipt in receipts {
             guard let check = receipt.verification?.checks.first(where: { $0.criterion == criterion }),
                   check.status != "unverified" else { continue }
-            if check.status == "failed" { return .failed }
+            if check.status == "failed" {
+                return .failed
+            }
             let hasVerifiedEvidence = (receipt.evidence ?? []).contains {
                 $0.strength == "verified" && check.evidenceTitles.contains($0.title)
             }
