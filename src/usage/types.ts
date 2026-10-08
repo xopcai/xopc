@@ -42,6 +42,8 @@ export type AiPricingSnapshot = {
 };
 
 export type AiUsageEvent = {
+  otelTraceId?: string;
+  otelSpanId?: string;
   id: string;
   traceId: string;
   parentEventId?: string;
@@ -74,6 +76,7 @@ export type AiUsageFinish = {
   status: Exclude<AiUsageStatus, 'running'>;
   usage?: Usage;
   errorSummary?: string;
+  output?: unknown;
   finishedAt?: number;
 };
 

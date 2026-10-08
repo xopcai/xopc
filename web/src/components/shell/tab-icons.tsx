@@ -25,6 +25,7 @@ import type { Tab } from '@/i18n/messages';
 const TAB_ICONS: Record<Tab, LucideIcon> = {
   sessions: FolderOpen,
   usage: ChartNoAxesColumn,
+  tracing: Activity,
   logs: FileText,
   settingsImports: FolderOpen,
   settingsOverview: Activity,

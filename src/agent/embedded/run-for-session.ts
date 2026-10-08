@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { traceRun, startObservation, traceOperation, setTraceIdentity } from '../../observability/runtime.js';
 import { voicePresentationPrompt } from '../prompt/voice-presentation.js';
 import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { parseTurnOutcome } from '@xopcai/gateway-contract';
@@ -16,7 +17,7 @@ import { applyStartupContextToUserMessage } from '../reply/apply-turn-user-enric
 import { createLogger } from '../../utils/logger.js';
 import { resolveModel } from '../../providers/index.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
-import { assessContext, recoverContext } from '../memory/context-recovery.js';
+import { assessContext, recoverContext as recoverContextUntraced } from '../memory/context-recovery.js';
 import { evaluateContextBudget } from '../memory/context-budget.js';
 import { resolveCompactionPolicy } from '../memory/compaction-policy.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
@@ -54,6 +55,11 @@ export type RunEmbeddedForSessionParams = {
 export async function runEmbeddedTurnForSession(
   params: RunEmbeddedForSessionParams,
 ): Promise<RunXopcEmbeddedTurnResult> {
+  const input = { ...params, runId: params.runId ?? crypto.randomUUID() };
+  return traceRun('agent.run', { conversationId: input.conversationId, runId: input.runId }, () => runEmbeddedTurnForSessionInner(input), input.userMessage);
+}
+
+async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParams): Promise<RunXopcEmbeddedTurnResult> {
   const { conversationId, agentManager, modelManager, sessionStore, userMessage } = params;
   const personal = isPersonalConversation(conversationId);
   const idleScheduler = sessionStore.idleCompaction;
@@ -62,6 +68,7 @@ export async function runEmbeddedTurnForSession(
   let turnCompleted = false;
   const runId = params.runId ?? crypto.randomUUID();
   const config = params.getConfig?.();
+  if (config) setTraceIdentity({ agentId: resolveEffectiveAgentProfileForSession(conversationId).agentId });
   const supervisor = new AgentRunSupervisor({
     timeoutMs: resolveAgentTurnTimeoutMs(config, conversationId),
     deadlineAtMs: params.deadlineAtMs,
@@ -278,8 +285,10 @@ export async function runEmbeddedTurnForSession(
         );
       }
 
+      const attempt = startObservation(isFallbackAttempt ? 'model.fallback' : 'model.attempt', 'span');
+      attempt.update({ 'xopc.attempt': i + 1, 'gen_ai.request.model': candidateModel.id, 'gen_ai.system': candidateModel.provider, 'xopc.fallback': isFallbackAttempt, 'xopc.fallbackReason': lastResult?.errorMessage ?? '' });
       try {
-        const turnResult = await runWithEmbeddedExecutionSession(
+        const turnResult = await attempt.run(() => runWithEmbeddedExecutionSession(
           conversationId,
           () => runXopcEmbeddedTurn({
             conversationId,
@@ -305,7 +314,8 @@ export async function runEmbeddedTurnForSession(
             requireVisibleReply: params.requireVisibleReply,
           }),
           runId,
-        );
+        ));
+        attempt.finish(turnResult.ok ? 'success' : 'error', turnResult.errorMessage);
 
         if (turnResult.ok) {
           if (isFallbackAttempt) {
@@ -341,6 +351,7 @@ export async function runEmbeddedTurnForSession(
             : 'Agent model turn failed, no fallback remains',
         );
       } catch (err) {
+        attempt.finish('error', err instanceof Error ? err.message : String(err));
         lastError = err;
         if (err instanceof DOMException && err.name === 'AbortError') {
           await finish({ ok: false, errorMessage: 'aborted' });
@@ -469,4 +480,8 @@ async function maybeAutoCompactBeforeTurn(opts: {
     if (started) log.info({ conversationId, phase: 'foreground_compaction',
       durationMs: Date.now() - recoveryStartedAt }, 'Foreground compaction wait finished');
   }
+}
+
+async function recoverContext(...args: Parameters<typeof recoverContextUntraced>) {
+  return traceOperation('context.compaction', () => recoverContextUntraced(...args));
 }

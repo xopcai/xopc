@@ -40,7 +40,8 @@
     "settingsSystem": "系统授权",
     "settingsDesktopPet": "宠物",
     "settingsDesktopApp": "应用数据",
-    "settingsImports": "导入能力"
+    "settingsImports": "导入能力",
+    "tracing": "运行追踪"
   },
   "productNavigation": {
     "primaryAria": "产品导航",

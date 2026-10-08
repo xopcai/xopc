@@ -46,6 +46,7 @@ import { syncElectronLocaleAfterHydration } from '@/stores/locale-store';
 import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/stores/theme-store';
 
 const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.SessionsPage })));
+const TracingSettingsPage = lazy(() => import('@/features/tracing/tracing-settings-page').then(m => ({ default: m.TracingSettingsPage })));
 const UsageSettingsPage = lazy(() => loadUsagePage().then((m) => ({ default: m.UsageSettingsPage })));
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
 const BrowserAutomationsPage = lazy(() => loadBrowserAutomationsPage().then((m) => ({ default: m.BrowserAutomationsPage })));
@@ -397,6 +398,10 @@ const router = createHashRouter([
                 <SessionsPage />
               </Suspense>
             ),
+          },
+          {
+            path: 'tracing',
+            element: <Suspense fallback={<SettingsRouteFallback />}><TracingSettingsPage /></Suspense>,
           },
           {
             path: 'usage',

@@ -85,15 +85,15 @@ export async function completeWithResolvedCredentials(
   usageContext: AiUsageContext,
 ): Promise<AssistantMessage> {
   const resolvedOptions = await resolveModelCallOptions(model, options, credentialOptions);
-  const usageCall = startAiUsageCall(model, usageContext);
+  const usageCall = startAiUsageCall(model, usageContext, { context, options: { reasoning: options.reasoning, temperature: options.temperature, maxTokens: options.maxTokens } });
   try {
     if (model.baseUrl === EXTENSION_PROVIDER_BASE_URL) {
-      const stream = await createExtensionAwareStreamFn()(model, normalizeContext(context), resolvedOptions);
+      const stream = await usageCall.run(() => createExtensionAwareStreamFn()(model, normalizeContext(context), resolvedOptions));
       const result = await stream.result();
       finishAiUsageFromMessage(usageCall, result);
       return result;
     }
-    const result = await completeSimple(model, context, resolvedOptions);
+    const result = await usageCall.run(() => completeSimple(model, context, resolvedOptions));
     finishAiUsageFromMessage(usageCall, result);
     return result;
   } catch (error) {
@@ -115,9 +115,9 @@ export async function createResolvedModelStream(
   usageContext: AiUsageContext,
 ) {
   const resolvedOptions = await resolveModelCallOptions(model, options, credentialOptions);
-  const usageCall = startAiUsageCall(model, usageContext);
+  const usageCall = startAiUsageCall(model, usageContext, { context, options: { reasoning: options.reasoning, temperature: options.temperature, maxTokens: options.maxTokens } });
   try {
-    const stream = await createExtensionAwareStreamFn()(model, normalizeContext(context), resolvedOptions);
+    const stream = await usageCall.run(() => createExtensionAwareStreamFn()(model, normalizeContext(context), resolvedOptions));
     return observeAiUsageStream(stream, usageCall);
   } catch (error) {
     usageCall?.finish({ status: 'failed', errorSummary: error instanceof Error ? error.message : String(error) });

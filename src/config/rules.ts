@@ -66,6 +66,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   },
   { prefix: 'gateway.enableHotReload', kind: 'hot', description: 'Hot reload toggle' },
   
+  { prefix: 'observability', kind: 'hot', description: 'Tracing storage and export' },
   // Channels - hot reload (channel-specific prefixes are registered by channel plugins)
   { prefix: 'channels', kind: 'hot', description: 'Any channel subtree (e.g. future extensions)' },
   

@@ -20,8 +20,8 @@ export function insertAiUsageEvent(event: AiUsageEvent): void {
       started_at, finished_at, duration_ms, input_tokens, output_tokens,
       cache_read_tokens, cache_write_tokens, reasoning_tokens, total_tokens,
       estimated_cost_microusd, cost_source, pricing_snapshot_json, error_summary,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      created_at, updated_at, otel_trace_id, otel_span_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(
         event.id, event.traceId, event.parentEventId ?? null, event.conversationId ?? null,
         event.runId ?? null, event.agentId ?? null, event.category, event.operation,
@@ -31,7 +31,7 @@ export function insertAiUsageEvent(event: AiUsageEvent): void {
         event.cacheWriteTokens ?? null, event.reasoningTokens ?? null, event.totalTokens ?? null,
         event.estimatedCostMicrousd ?? null, event.costSource,
         event.pricingSnapshot ? JSON.stringify(event.pricingSnapshot) : null,
-        boundedError(event.errorSummary) ?? null, event.startedAt, event.startedAt,
+        boundedError(event.errorSummary) ?? null, event.startedAt, event.startedAt, event.otelTraceId ?? null, event.otelSpanId ?? null,
       );
   });
 }
@@ -207,6 +207,8 @@ function eventFromRow(row: UsageRow) {
     : undefined;
   return {
     id: String(row.id), traceId: String(row.trace_id),
+    otelTraceId: row.otel_trace_id ? String(row.otel_trace_id) : undefined,
+    otelSpanId: row.otel_span_id ? String(row.otel_span_id) : undefined,
     parentEventId: row.parent_event_id ? String(row.parent_event_id) : undefined,
     conversationId: row.conversation_id ? String(row.conversation_id) : undefined,
     runId: row.run_id ? String(row.run_id) : undefined,

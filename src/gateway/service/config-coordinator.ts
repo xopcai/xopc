@@ -23,6 +23,7 @@
  * than holding our own copy so other coordinators (sessions, marketplace,
  * agent runner) see the latest config the moment a reload commits.
  */
+import { configureTracing } from '../../observability/runtime.js';
 import type { Config } from '../../config/schema.js';
 import type { Config as SurfaceConfig } from '../../config/config-surface.js';
 import type { AgentService } from '../../agent/service.js';
@@ -78,6 +79,7 @@ export class GatewayConfigCoordinator {
       this.opts.configPath,
       this.opts.getConfig(),
       {
+        onTracingReload: async (next) => { this.opts.setConfig(next); await configureTracing(next.observability?.tracing); },
         onModelsReload: (newConfig) => this.handleModelsReload(newConfig),
         onChannelsReload: (newConfig) => this.handleChannelsReload(newConfig),
         onCronReload: (newConfig) => this.handleAutomationReload(newConfig),
@@ -378,6 +380,7 @@ export class GatewayConfigCoordinator {
     await writeConfigToDisk(configToWrite, this.opts.configPath);
     const reloaded = loadConfig(this.opts.configPath);
     this.opts.setConfig(reloaded);
+    await configureTracing(reloaded.observability?.tracing);
     if (sanitizeTunnelConfig(reloaded)) {
       await writeConfigToDisk(reloaded, this.opts.configPath);
     }

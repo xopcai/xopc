@@ -27,6 +27,7 @@ export interface ReloadResult {
 export type ReloadCallback = (newConfig: Config) => void | Promise<void>;
 
 export interface ReloadCallbacks {
+  onTracingReload?: ReloadCallback;
   onModelsReload?: ReloadCallback;
   onChannelsReload?: ReloadCallback;
   onCronReload?: ReloadCallback;
@@ -234,6 +235,10 @@ export class ConfigHotReloader {
    * Apply a single hot-reloadable path
    */
   private async applyHotPath(path: string, newConfig: Config): Promise<void> {
+    if (path === 'observability' || path.startsWith('observability.')) {
+      await this.callbacks.onTracingReload?.(newConfig);
+      return;
+    }
     if (path.startsWith('models.')) {
       if (this.callbacks.onModelsReload) {
         await Promise.resolve(this.callbacks.onModelsReload(newConfig));

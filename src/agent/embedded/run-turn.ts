@@ -1,3 +1,4 @@
+import { traceRun, traceTools, traceOperation, setTraceIdentity } from '../../observability/runtime.js';
 import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
 import { isComputerControlActive, isComputerLeaseTool, stopComputerControl } from '../../computer/control-guard.js';
 import {
@@ -44,7 +45,7 @@ import { acquireEmbeddedSessionRunner, evictEmbeddedSessionRunner } from './sess
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { projectContextForModel } from '../memory/context-budget.js';
-import { assessContext, recoverContext } from '../memory/context-recovery.js';
+import { assessContext, recoverContext as recoverContextUntraced } from '../memory/context-recovery.js';
 import { resolveCompactionPolicy, type ResolvedCompactionPolicy } from '../memory/compaction-policy.js';
 import { isContextOverflowError } from '../orchestration/context-overflow.js';
 import {
@@ -320,12 +321,16 @@ async function maybeRecoverInterruptedContext(params: {
 }
 
 export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Promise<RunXopcEmbeddedTurnResult> {
+  return traceRun('agent.run', { conversationId: params.conversationId, runId: params.runId }, () => runXopcEmbeddedTurnInner(params), params.userMessage);
+}
+
+async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Promise<RunXopcEmbeddedTurnResult> {
   const {
     conversationId,
     runId,
     userMessage,
     model,
-    tools,
+    tools: rawTools,
     systemPrompt,
     thinkingLevel,
     workspaceDir,
@@ -333,6 +338,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     onEvent,
   } = params;
 
+  const tools = traceTools(rawTools);
   const timeoutMs = params.timeoutMs || resolveAgentTurnTimeoutMs();
   const resolvedModel = requireEmbeddedModel(model, params.modelRef);
   const configuredThinking = isXopcDatabaseOpen() && getSessionMetadata(conversationId)
@@ -352,6 +358,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     throw new Error('Embedded run requires a transcript runtime');
   }
 
+  setTraceIdentity({ transcriptId: transcriptRuntime.transcriptId });
   let runner: Awaited<ReturnType<typeof acquireEmbeddedSessionRunner>> | undefined;
   let unsubscribe: (() => void) | undefined;
   let quarantineRunner = false;
@@ -580,7 +587,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         conversationId,
         runId,
         traceId: runId,
-      }, () => streamFnWithXopcExtensions(streamModel, effectiveContext, { ...options }));
+      }, () => streamFnWithXopcExtensions(streamModel, effectiveContext, { ...options }), { context: effectiveContext, reasoning: options?.reasoning });
     };
     session.agent.streamFunction = loggingStreamFn;
     const verification = await RunVerification.open(workspaceDir);
@@ -804,3 +811,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 }
 
 export { abortEmbeddedRun, queueEmbeddedSteer } from './runs.js';
+
+async function recoverContext(...args: Parameters<typeof recoverContextUntraced>) {
+  return traceOperation('context.compaction', () => recoverContextUntraced(...args));
+}
