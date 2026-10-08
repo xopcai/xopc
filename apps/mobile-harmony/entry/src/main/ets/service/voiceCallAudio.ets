@@ -156,7 +156,7 @@ export class XopcVoiceCallAudio {
       }
       this.startPlaybackTimer(generation, playbackGeneration);
     }).catch((error: Error): void => {
-      if (generation === this.generation) {
+      if (generation === this.generation && playbackGeneration === this.playbackGeneration) {
         hilog.warn(0x0000, 'XopcVoice', 'Voice playback failed: %{public}s', error.message);
         this.callbacks?.onFailure('PLAYBACK_FAILED');
       }
@@ -169,6 +169,7 @@ export class XopcVoiceCallAudio {
     void this.playback.then(async (): Promise<void> => {
       const renderer = this.renderer;
       if (generation !== this.generation || playbackGeneration !== this.playbackGeneration || !renderer || this.responseId !== responseId) return;
+      this.clearPlaybackTimer();
       let timer: number = -1;
       try {
         await Promise.race<void>([renderer.drain(), new Promise<void>((_resolve, reject): void => {

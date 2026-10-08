@@ -13,6 +13,7 @@ struct AssistantView<Dock: View>: View {
     let onStartScopedConversation: (ProjectRecord?, String?, String) -> Void
     let onConversationUpdated: (ConversationSelection) -> Void
     let onQuickChatHandled: (UUID) -> Void
+    let onPersonalAgentUpdated: (PersonalAgentRecord) -> Void
     let onOpenSettings: () -> Void
     let onInputFocusChanged: (Bool) -> Void
     let bottomDock: (AssistantComposer, Bool) -> Dock
@@ -32,9 +33,11 @@ struct AssistantView<Dock: View>: View {
     @State private var referenceKind = ContextReferenceKind.note
     @State private var isActionPanelExpanded = false
     @State private var showingSessionActions = false
+    @State private var showingPersonalProfile = false
     @State private var executionPresentation: ExecutionActivityPresentation?
     @State private var handledQuickChatID: UUID?
     @State private var readAloud = ChatReadAloud()
+    @State private var assistantAudio = AssistantAudioAutoplay()
     @State private var startingVoice = false
     @State private var voiceStartError: String?
     @State private var voiceMaterializationIDs: [String: String] = [:]
@@ -63,6 +66,12 @@ struct AssistantView<Dock: View>: View {
         .navigationTitle(conversationNavigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
+        .sheet(isPresented: $showingPersonalProfile) {
+            if let personalAgent {
+                PersonalAgentProfileView(configuration: configuration, record: personalAgent,
+                    onSaved: onPersonalAgentUpdated)
+            }
+        }
         .task(id: configuration) {
             await state.load(using: GatewayClient(configuration: configuration))
         }
@@ -76,6 +85,7 @@ struct AssistantView<Dock: View>: View {
         }
         .onChange(of: conversation?.id) {
             readAloud.stop()
+            assistantAudio.stop()
             executionPresentation = nil
             draft = ""
             attachments = []
@@ -89,7 +99,11 @@ struct AssistantView<Dock: View>: View {
         .onAppear(perform: handleQuickChatHandoff)
         .onDisappear {
             readAloud.stop()
+            assistantAudio.stop()
             onInputFocusChanged(false)
+        }
+        .onChange(of: assistantAudioObservation, initial: true) { _, observation in
+            assistantAudio.observe(observation, configuration: configuration)
         }
         .modifier(AttachmentPickerModifier(
             attachments: $attachments,
@@ -138,11 +152,13 @@ struct AssistantView<Dock: View>: View {
         }
         .sheet(isPresented: $showingVoiceRecorder) {
             VoiceAttachmentRecorderView(configuration: configuration) { attachment in
-                guard attachments.count < AttachmentPolicy.maximumCount else {
-                    attachmentError = "最多添加 \(AttachmentPolicy.maximumCount) 个附件"
+                do {
+                    try AttachmentPolicy.validateChat(size: attachment.size, current: attachments)
+                    attachments.append(attachment)
+                } catch {
+                    attachmentError = error.localizedDescription
                     return
                 }
-                attachments.append(attachment)
             } onTranscribed: { text in
                 let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
                 draft = existing.isEmpty ? text : "\(existing) \(text)"
@@ -248,7 +264,8 @@ struct AssistantView<Dock: View>: View {
                         assistantState: state,
                         readAloud: readAloud,
                         canReadAloud: realtimeVoiceCall.phase == .idle,
-                        previewEligible: message.id != state.messages.last?.id
+                        previewEligible: message.id != state.messages.last?.id,
+                        onReuseUserText: { draft = $0 }
                     )
                 }
                 if state.isRunActive {
@@ -295,6 +312,21 @@ struct AssistantView<Dock: View>: View {
         isPersonalConversation
             ? (personalAgent?.displayName ?? "Ada")
             : (state.selectedAgent?.displayName ?? AppLocalization.string("未选择", locale: locale))
+    }
+
+    private var assistantAudioObservation: AssistantAudioObservation {
+        let audioMessage = state.messages.reversed().first {
+            $0.role == "assistant" && $0.attachments.contains(where: \.isAudio)
+        }
+        let attachment = audioMessage?.attachments.reversed().first(where: \.isAudio)
+        let key = attachment.map { "\(conversation?.id ?? ""):\(audioMessage?.id ?? ""):\($0.id)" }
+        return AssistantAudioObservation(
+            conversationID: conversation?.isDraft == false ? conversation?.id : nil,
+            streaming: state.runID != nil,
+            enabled: isActive && !state.isLoadingHistory && realtimeVoiceCall.phase == .idle && readAloud.state == .idle,
+            attachment: attachment,
+            key: key
+        )
     }
 
     private var readAloudBar: some View {
@@ -468,12 +500,176 @@ struct AssistantView<Dock: View>: View {
         }
 
         ToolbarItem(placement: .topBarTrailing) {
+            if personalAgent?.isReady == true,
+               conversation?.id == personalAgent?.conversationId {
+                Button("配置助手", systemImage: "slider.horizontal.3") {
+                    showingPersonalProfile = true
+                }
+            }
+        }
+
+        ToolbarItem(placement: .topBarTrailing) {
             Button {
                 showingSessionActions = true
             } label: {
                 Image(systemName: "ellipsis")
             }
             .accessibilityLabel("会话信息与设置")
+        }
+    }
+}
+
+private struct PersonalAgentProfileView: View {
+    let configuration: GatewayConfiguration
+    let onSaved: (PersonalAgentRecord) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var record: PersonalAgentRecord
+    @State private var name: String
+    @State private var appearance: String
+    @State private var addressAs: String
+    @State private var warmth: String
+    @State private var supportMode: String
+    @State private var detailLevel: String
+    @State private var proactivity: String
+    @State private var humor: String
+    @State private var selectedVoice: String
+    @State private var voiceProvider: String?
+    @State private var voiceModel: String?
+    @State private var voiceOptions: [PersonalVoiceOption] = []
+    @State private var saving = false
+    @State private var error: String?
+
+    init(configuration: GatewayConfiguration, record: PersonalAgentRecord,
+         onSaved: @escaping (PersonalAgentRecord) -> Void) {
+        self.configuration = configuration
+        self.onSaved = onSaved
+        _record = State(initialValue: record)
+        _name = State(initialValue: record.displayName)
+        _appearance = State(initialValue: record.appearance)
+        let preferences = record.preferences ?? [:]
+        _addressAs = State(initialValue: preferences["addressAs"] ?? "")
+        _warmth = State(initialValue: preferences["warmth"] ?? "balanced")
+        _supportMode = State(initialValue: preferences["supportMode"] ?? "untangle")
+        _detailLevel = State(initialValue: preferences["detailLevel"] ?? "balanced")
+        _proactivity = State(initialValue: preferences["proactivity"] ?? "decisions")
+        _humor = State(initialValue: preferences["humor"] ?? "none")
+        _selectedVoice = State(initialValue: record.voicePreference?.voice ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("助手") {
+                    TextField("名称", text: $name)
+                        .textInputAutocapitalization(.words)
+                    Picker("形象", selection: $appearance) {
+                        Text("Loopi").tag("loopi")
+                        Text("好奇").tag("loopi-curious")
+                        Text("关怀").tag("loopi-care")
+                        if appearance == "custom" { Text("自定义").tag("custom") }
+                    }
+                    TextField("怎么称呼你", text: $addressAs)
+                }
+                Section("对话风格") {
+                    Picker("语气", selection: $warmth) {
+                        Text("克制").tag("reserved")
+                        Text("平衡").tag("balanced")
+                        Text("温柔").tag("gentle")
+                    }
+                    Picker("支持方式", selection: $supportMode) {
+                        Text("倾听").tag("listen")
+                        Text("梳理").tag("untangle")
+                        Text("建议").tag("solutions")
+                    }
+                    Picker("回答长度", selection: $detailLevel) {
+                        Text("简短").tag("brief")
+                        Text("平衡").tag("balanced")
+                        Text("详细").tag("detailed")
+                    }
+                    Picker("主动程度", selection: $proactivity) {
+                        Text("由我决定").tag("decisions")
+                        Text("重要时提醒").tag("important")
+                        Text("开放建议").tag("open")
+                    }
+                    Picker("幽默程度", selection: $humor) {
+                        Text("无").tag("none")
+                        Text("偶尔").tag("occasional")
+                        Text("活泼").tag("playful")
+                    }
+                }
+                Section("通话声音") {
+                    if voiceOptions.isEmpty {
+                        Text("当前没有可用音色，请先在 Gateway 配置语音服务。")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Picker("音色", selection: $selectedVoice) {
+                            Text("默认声音").tag("")
+                            ForEach(voiceOptions) { option in
+                                Text(option.name).tag(option.id)
+                            }
+                        }
+                    }
+                }
+                if let error { Text(error).foregroundStyle(.red) }
+            }
+            .task {
+                do {
+                    if let options = try await GatewayClient(configuration: configuration).personalVoiceOptions() {
+                        voiceProvider = options.provider
+                        voiceModel = options.model
+                        voiceOptions = options.voices
+                    }
+                } catch {
+                    self.error = error.localizedDescription
+                }
+            }
+            .navigationTitle("配置我的助手")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") { Task { await save() } }
+                        .disabled(saving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        guard !saving else { return }
+        saving = true
+        defer { saving = false }
+        var preferences = record.preferences ?? [:]
+        preferences["addressAs"] = String(addressAs.prefix(60))
+        preferences["warmth"] = warmth
+        preferences["supportMode"] = supportMode
+        preferences["detailLevel"] = detailLevel
+        preferences["proactivity"] = proactivity
+        preferences["humor"] = humor
+        let voicePreference: PersonalVoicePreference?
+        if let voiceProvider, let voiceModel {
+            voicePreference = selectedVoice.isEmpty ? nil : PersonalVoicePreference(
+                provider: voiceProvider, model: voiceModel, voice: selectedVoice
+            )
+        } else {
+            voicePreference = record.voicePreference
+        }
+        do {
+            let updated = try await GatewayClient(configuration: configuration).updatePersonalAgentProfile(
+                record: record,
+                displayName: String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60)),
+                appearance: appearance,
+                preferences: preferences,
+                voicePreference: voicePreference
+            )
+            record = updated
+            onSaved(updated)
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

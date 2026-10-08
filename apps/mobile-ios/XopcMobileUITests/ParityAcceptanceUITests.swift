@@ -141,6 +141,65 @@ final class ParityAcceptanceUITests: XCTestCase {
         app.buttons["关闭"].tap()
     }
 
+    func testExistingChatDocumentMediaPreview() async throws {
+        guard let token = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_TOKEN"],
+              let conversationID = ProcessInfo.processInfo.environment["XOPC_E2E_MEDIA_CONVERSATION_ID"]
+        else { throw XCTSkip("An isolated media conversation and Gateway token are required") }
+        var request = try URLRequest(url: XCTUnwrap(URL(
+            string: "http://127.0.0.1:18790/api/sessions/\(conversationID)/history?limit=50"
+        )))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        let envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let session = try XCTUnwrap(envelope["session"] as? [String: Any])
+        let title = try XCTUnwrap(session["name"] as? String)
+        openTab("对话")
+        let search = app.textFields["conversations-search-field"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText(title)
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        row.tap()
+        let document = app.buttons["chat-attachment-preview-fixture-document"]
+        let timeline = app.scrollViews.firstMatch
+        for _ in 0 ..< 12 where !document.exists { timeline.swipeDown() }
+        XCTAssertTrue(document.waitForExistence(timeout: 12))
+        document.tap()
+        capture("chat-history-document-preview")
+        XCTAssertTrue(app.navigationBars["fixture.txt"].waitForExistence(timeout: 10))
+    }
+
+    func testIsolatedAssistantReadAloudControls() async throws {
+        guard let token = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_TOKEN"],
+              let conversationID = ProcessInfo.processInfo.environment["XOPC_E2E_MEDIA_CONVERSATION_ID"]
+        else { throw XCTSkip("An isolated media conversation and Gateway token are required") }
+        var request = try URLRequest(url: XCTUnwrap(URL(
+            string: "http://127.0.0.1:18790/api/sessions/\(conversationID)/history?limit=50"
+        )))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        let envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let session = try XCTUnwrap(envelope["session"] as? [String: Any])
+        let title = try XCTUnwrap(session["name"] as? String)
+        openTab("对话")
+        let search = app.textFields["conversations-search-field"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText(title)
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        row.tap()
+        let read = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chat-read-aloud-")).firstMatch
+        XCTAssertTrue(read.waitForExistence(timeout: 8))
+        read.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["chat-read-aloud-bar"].waitForExistence(timeout: 8))
+        app.buttons["chat-read-aloud-stop"].tap()
+        XCTAssertFalse(app.descendants(matching: .any)["chat-read-aloud-bar"].exists)
+    }
+
     func testExistingChatVoiceMediaRestored() async throws {
         guard let token = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_TOKEN"],
               let conversationID = ProcessInfo.processInfo.environment["XOPC_E2E_VOICE_CONVERSATION_ID"]
@@ -218,6 +277,22 @@ final class ParityAcceptanceUITests: XCTestCase {
         add.tap()
         app.buttons["关闭添加面板"].tap()
         XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 5))
+    }
+
+    func testAssistantVoiceRecordingPreview() {
+        openNewConversation()
+        app.buttons["mic"].tap()
+        let start = app.buttons["开始录音"]
+        XCTAssertTrue(start.waitForExistence(timeout: 8))
+        start.tap()
+        let consent = app.buttons["同意并开始"]
+        if consent.waitForExistence(timeout: 2) { consent.tap() }
+        XCTAssertTrue(app.buttons["完成"].waitForExistence(timeout: 8))
+        app.buttons["完成"].tap()
+        XCTAssertTrue(app.buttons["试听"].waitForExistence(timeout: 8))
+        app.buttons["试听"].tap()
+        XCTAssertTrue(app.buttons["试听"].waitForExistence(timeout: 8))
+        app.buttons["取消"].tap()
     }
 
     func testAssistantKeyboardAndAddPanelAreMutuallyExclusive() {

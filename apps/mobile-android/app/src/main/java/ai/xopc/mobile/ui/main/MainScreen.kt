@@ -381,12 +381,14 @@ fun MainScreen(
   onAddCapturedQuickAttachment: (String, Uri) -> Unit = { _, _ -> },
   onRemoveQuickAttachment: (String) -> Unit = {},
   onPreviewQuickImage: suspend (ChatAttachment) -> Bitmap? = { null },
+  onPreviewQuickFile: suspend (ChatAttachment) -> ByteArray? = { null },
   onQuickNavigationHandled: (String) -> Unit = {},
   onDraftChange: (String) -> Unit = {},
   onAddDraftAttachment: (String, String, Uri) -> Unit = { _, _, _ -> },
   onAddCapturedDraftAttachment: (String, String, Uri) -> Unit = { _, _, _ -> },
   onRemoveDraftAttachment: (String) -> Unit = {},
   onPreviewDraftImage: suspend (String, ChatAttachment) -> Bitmap? = { _, _ -> null },
+  onPreviewDraftFile: suspend (String, ChatAttachment) -> ByteArray? = { _, _ -> null },
   onRemoveDraftRef: (String, String) -> Unit = { _, _ -> },
   onLoadReferences: (String, String) -> Unit = { _, _ -> },
   onAddDraftRef: (ReferencePickerItem) -> Boolean = { false },
@@ -498,6 +500,8 @@ fun MainScreen(
   onLoadPersonal: () -> Unit = {},
   onLoadPersonalAgent: () -> Unit = {},
   onOpenPersonalAgent: () -> Unit = {},
+  onLoadPersonalVoiceChoices: () -> Unit = {},
+  onUpdatePersonalAgentProfile: (String, String, Map<String, String>, String?) -> Unit = { _, _, _, _ -> },
   onSavePersonalGoal: (String?, String, String, String, Long?) -> Unit = { _, _, _, _, _ -> },
   onLoadPersonalAssertions: (String, String, Boolean) -> Unit = { _, _, _ -> },
   onOpenPersonalAssertion: (String) -> Unit = {},
@@ -661,6 +665,7 @@ fun MainScreen(
     onQuickDraftChange = onQuickDraftChange, onQuickSubmit = onQuickSubmit,
     onRemoveQuickAttachment = onRemoveQuickAttachment,
     onPreviewQuickImage = onPreviewQuickImage,
+    onPreviewQuickFile = onPreviewQuickFile,
     onPickQuickAttachment = { kind ->
       val gatewayId = connection.profile?.gatewayId
       if (gatewayId != null) {
@@ -693,6 +698,7 @@ fun MainScreen(
     },
     onRemoveDraftAttachment = onRemoveDraftAttachment,
     onPreviewDraftImage = onPreviewDraftImage,
+    onPreviewDraftFile = onPreviewDraftFile,
     onLoadReferences = onLoadReferences, onAddDraftRef = onAddDraftRef,
     onSendMessage = onSendMessage,
     onRetryPendingInput = onRetryPendingInput, onStopRun = onStopRun,
@@ -768,6 +774,8 @@ fun MainScreen(
     onLoadPersonal = onLoadPersonal,
     onLoadPersonalAgent = onLoadPersonalAgent,
     onOpenPersonalAgent = onOpenPersonalAgent,
+    onLoadPersonalVoiceChoices = onLoadPersonalVoiceChoices,
+    onUpdatePersonalAgentProfile = onUpdatePersonalAgentProfile,
     onSavePersonalGoal = onSavePersonalGoal,
     onLoadPersonalAssertions = onLoadPersonalAssertions,
     onOpenPersonalAssertion = onOpenPersonalAssertion,
@@ -863,10 +871,12 @@ internal fun MainContent(
   onPickQuickAttachment: (String) -> Unit = {},
   onRemoveQuickAttachment: (String) -> Unit = {},
   onPreviewQuickImage: suspend (ChatAttachment) -> Bitmap? = { null },
+  onPreviewQuickFile: suspend (ChatAttachment) -> ByteArray? = { null },
   onDraftChange: (String) -> Unit = {},
   onPickDraftAttachment: (String) -> Unit = {},
   onRemoveDraftAttachment: (String) -> Unit = {},
   onPreviewDraftImage: suspend (String, ChatAttachment) -> Bitmap? = { _, _ -> null },
+  onPreviewDraftFile: suspend (String, ChatAttachment) -> ByteArray? = { _, _ -> null },
   onRemoveDraftRef: (String, String) -> Unit = { _, _ -> },
   onLoadReferences: (String, String) -> Unit = { _, _ -> },
   onAddDraftRef: (ReferencePickerItem) -> Boolean = { false },
@@ -978,6 +988,8 @@ internal fun MainContent(
   onLoadPersonal: () -> Unit = {},
   onLoadPersonalAgent: () -> Unit = {},
   onOpenPersonalAgent: () -> Unit = {},
+  onLoadPersonalVoiceChoices: () -> Unit = {},
+  onUpdatePersonalAgentProfile: (String, String, Map<String, String>, String?) -> Unit = { _, _, _, _ -> },
   onSavePersonalGoal: (String?, String, String, String, Long?) -> Unit = { _, _, _, _, _ -> },
   onLoadPersonalAssertions: (String, String, Boolean) -> Unit = { _, _, _ -> },
   onOpenPersonalAssertion: (String) -> Unit = {},
@@ -1323,7 +1335,8 @@ internal fun MainContent(
               assistantComposerValue = value
               onDraftChange(value.text)
             }, assistantComposerFocus, assistantActionsOpen, { assistantActionsOpen = it },
-              onRemoveDraftRef, onRemoveDraftAttachment, onPreviewDraftImage, onSendMessage, onStopRun,
+              onRemoveDraftRef, onRemoveDraftAttachment, onPreviewDraftImage, onPreviewDraftFile,
+              onSendMessage, onStopRun,
               inputVoiceMode, inputVoiceHeld, inputVoiceBusy, inputVoice.phase, inputVoiceError,
               inputVoiceDestination, inputVoiceElapsed,
               ::toggleInputVoice, onVoiceStart = {
@@ -1377,7 +1390,7 @@ internal fun MainContent(
           MainBottomSurface("secondary-bottom-surface") {
             QuickComposer(connection, selectedTab, onQuickDraftChange, onQuickSubmit,
               quickActionsOpen, { quickActionsOpen = it }, onRemoveQuickAttachment,
-              onPreviewQuickImage, onOpenChat = {
+              onPreviewQuickImage, onPreviewQuickFile, onOpenChat = {
                 quickActionsOpen = false
                 onCreateConversation()
                 onSelectTab(HomeTab.Assistant)
@@ -1553,6 +1566,8 @@ internal fun MainContent(
         else if (personalPage == "home") PersonalScreen(personal, rootInsets,
           connection.realtimeStatus == "connected", onLoadPersonal, onSavePersonalGoal,
           onOpenAgent = onOpenPersonalAgent,
+          onLoadAgentVoices = onLoadPersonalVoiceChoices,
+          onUpdateAgentProfile = onUpdatePersonalAgentProfile,
           onOpenSettings = { personalPage = "settings" },
           onOpenAbout = { personalStartSection = "overview"; personalPage = "about" },
           onOpenUnderstanding = { personalStartSection = "understanding"; personalPage = "about" },
@@ -1761,9 +1776,11 @@ private fun MainBottomSurface(tag: String, content: @Composable androidx.compose
 @Composable
 private fun DraftAttachmentStrip(items: List<ChatAttachment>, scopeKey: String?, tagPrefix: String,
   canRemove: Boolean, onRemove: (String) -> Unit,
-  onPreviewImage: suspend (ChatAttachment) -> Bitmap?) {
+  onPreviewImage: suspend (ChatAttachment) -> Bitmap?,
+  onPreviewFile: suspend (ChatAttachment) -> ByteArray?) {
   var previewId by remember(scopeKey) { mutableStateOf<String?>(null) }
   val previewItem = items.firstOrNull { it.id == previewId && it.type == "image" }
+  val previewFile = items.firstOrNull { it.id == previewId && it.type == "document" }
   val previewLabel = stringResource(R.string.assistant_attachment_preview)
   val removeLabel = stringResource(R.string.assistant_attachment_remove)
   if (items.isNotEmpty()) {
@@ -1802,6 +1819,7 @@ private fun DraftAttachmentStrip(items: List<ChatAttachment>, scopeKey: String?,
         } else {
           Row(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh,
             RoundedCornerShape(12.dp)).padding(start = 12.dp)
+            .clickable { previewId = item.id }
             .testTag("$tagPrefix-attachment-${item.id}"),
             verticalAlignment = Alignment.CenterVertically) {
             Text(item.name, modifier = Modifier.size(width = 130.dp, height = 48.dp)
@@ -1837,6 +1855,21 @@ private fun DraftAttachmentStrip(items: List<ChatAttachment>, scopeKey: String?,
       }
     }
   }
+  if (previewFile != null) {
+    ModalBottomSheet(onDismissRequest = { previewId = null },
+      modifier = Modifier.testTag("$tagPrefix-file-preview")) {
+      val loaded by produceState<Pair<Boolean, ByteArray?>>(false to null, scopeKey, previewFile.id) {
+        value = true to runCatching { onPreviewFile(previewFile) }.getOrNull()
+      }
+      Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(previewFile.name, style = MaterialTheme.typography.titleMedium)
+        if (!loaded.first) BrandLoadingIndicator()
+        else if (loaded.second != null) FilePreviewContent(previewFile.name, previewFile.mimeType, loaded.second!!,
+          modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp))
+        else Text(stringResource(R.string.message_preview_unavailable))
+      }
+    }
+  }
 }
 
 @Composable
@@ -1844,7 +1877,8 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
   onChange: (String) -> Unit, onSubmit: () -> Unit,
   actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit,
   onRemoveAttachment: (String) -> Unit,
-  onPreviewImage: suspend (ChatAttachment) -> Bitmap?, onOpenChat: () -> Unit) {
+  onPreviewImage: suspend (ChatAttachment) -> Bitmap?,
+  onPreviewFile: suspend (ChatAttachment) -> ByteArray?, onOpenChat: () -> Unit) {
   val context = LocalContext.current
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -1865,7 +1899,7 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
       color = MaterialTheme.colorScheme.error)
     DraftAttachmentStrip(connection.quickAttachments, connection.profile?.gatewayId,
       "quick", !connection.quickSending && !connection.quickAttachmentLoading,
-      onRemoveAttachment, onPreviewImage)
+      onRemoveAttachment, onPreviewImage, onPreviewFile)
     Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
       .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(18.dp))
       .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1930,6 +1964,7 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
   actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit,
   onRemoveDraftRef: (String, String) -> Unit, onRemoveDraftAttachment: (String) -> Unit,
   onPreviewImage: suspend (String, ChatAttachment) -> Bitmap?,
+  onPreviewFile: suspend (String, ChatAttachment) -> ByteArray?,
   onSendMessage: () -> Unit, onStopRun: () -> Unit,
   voiceMode: Boolean, voiceHeld: Boolean, voiceBusy: Boolean, voicePhase: String,
   voiceError: String, voiceDestination: String, voiceSeconds: Int,
@@ -1993,9 +2028,9 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
     DraftAttachmentStrip(connection.draftAttachments,
       "${connection.profile?.gatewayId}:${connection.selectedConversationId}", "assistant",
       !connection.attachmentLoading && !connection.sending && connection.pendingInput == null,
-      onRemoveDraftAttachment) { item ->
-      connection.selectedConversationId?.let { onPreviewImage(it, item) }
-    }
+      onRemoveDraftAttachment,
+      { item -> connection.selectedConversationId?.let { onPreviewImage(it, item) } },
+      { item -> connection.selectedConversationId?.let { onPreviewFile(it, item) } })
     }
     Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer,
       RoundedCornerShape(18.dp)).testTag("assistant-composer-shell")) {
@@ -2496,6 +2531,13 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             onOpenPreview = { media, gallery ->
               previewRequest = MessagePreviewRequest(connection.selectedConversationId, media, gallery)
             }, onOpenLink = openLink, onCopy = onCopyMessageText,
+            onReuseUserMessage = if (message.role == "user" && message.text.isNotBlank() &&
+              !message.hasNonTextContent) ({
+              if (onReuseMessage(message.id)) {
+                onActionsOpenChange(false)
+                onFocusDraft()
+              }
+            }) else null,
             previewEligible = message.id != latestMessageId,
             onViewMore = { messageDetailId = message.id },
             onSaveNote = if (message.role == "assistant" && message.text.isNotBlank())

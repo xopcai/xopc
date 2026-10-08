@@ -167,14 +167,16 @@ struct HistoryAttachment: Decodable, Equatable, Identifiable, Sendable {
     let size: Int?
     let uri: String?
     let duration: Double?
+    let workspaceRelativePath: String?
+    let extractedText: String?
 
     enum CodingKeys: String, CodingKey {
         case mediaID = "id"
-        case type, name, mimeType, size, uri, duration
+        case type, name, mimeType, size, uri, duration, workspaceRelativePath, extractedText
     }
 
     var id: String {
-        mediaID ?? uri ?? "\(name ?? "attachment")|\(mimeType ?? "application/octet-stream")"
+        mediaID ?? uri ?? workspaceRelativePath ?? "\(name ?? "attachment")|\(mimeType ?? "application/octet-stream")"
     }
 
     var isImage: Bool {

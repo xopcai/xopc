@@ -1,4 +1,5 @@
 import ImageIO
+import QuickLook
 import SwiftUI
 
 // swiftlint:disable:next type_body_length
@@ -31,6 +32,9 @@ struct AssistantComposer: View {
 
     @FocusState private var isComposerFocused: Bool
     @State private var previewAttachment: MessageAttachment?
+    @State private var previewFileURL: URL?
+    @State private var previewFileDirectory: URL?
+    @State private var previewFileError: String?
     @State private var palette: [ComposerPaletteItem] = []
     @State private var paletteError: String?
 
@@ -100,6 +104,21 @@ struct AssistantComposer: View {
                         }
                     }
             }
+        }
+        .quickLookPreview($previewFileURL)
+        .onChange(of: previewFileURL) { _, value in
+            if value == nil, let previewFileDirectory {
+                try? FileManager.default.removeItem(at: previewFileDirectory)
+                self.previewFileDirectory = nil
+            }
+        }
+        .alert("无法预览文件", isPresented: Binding(
+            get: { previewFileError != nil },
+            set: { if !$0 { previewFileError = nil } }
+        )) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(previewFileError ?? "未知错误")
         }
     }
 
@@ -271,8 +290,9 @@ struct AssistantComposer: View {
                     } else {
                         HStack(spacing: 6) {
                             Image(systemName: "doc")
-                            Text(attachment.name)
+                            Button(attachment.name) { previewFile(attachment) }
                                 .lineLimit(1)
+                                .accessibilityIdentifier("assistant-file-preview")
                             Button {
                                 attachments.removeAll { $0.id == attachment.id }
                             } label: {
@@ -294,6 +314,30 @@ struct AssistantComposer: View {
             }
         }
         .scrollIndicators(.hidden)
+    }
+
+    private func previewFile(_ attachment: MessageAttachment) {
+        guard let bytes = Data(base64Encoded: attachment.data), !bytes.isEmpty else {
+            previewFileError = "文件内容无法读取"
+            return
+        }
+        do {
+            let directory = FileManager.default.temporaryDirectory
+                .appending(path: "xopc-draft-preview-\(UUID().uuidString)", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+            let name = URL(fileURLWithPath: attachment.name).lastPathComponent
+            let fileURL = directory.appending(path: name.isEmpty ? "attachment" : name)
+            do {
+                try bytes.write(to: fileURL, options: .atomic)
+            } catch {
+                try? FileManager.default.removeItem(at: directory)
+                throw error
+            }
+            previewFileDirectory = directory
+            previewFileURL = fileURL
+        } catch {
+            previewFileError = error.localizedDescription
+        }
     }
 
     private var referenceStrip: some View {
