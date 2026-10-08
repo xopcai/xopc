@@ -3,11 +3,12 @@ import { audio } from '@kit.AudioKit';
 import { avSession } from '@kit.AVSessionKit';
 import { backgroundTaskManager } from '@kit.BackgroundTasksKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { systemDateTime } from '@kit.BasicServicesKit';
 
 export interface XopcVoiceAudioCallbacks {
-  onInput: (bytes: Uint8Array) => void;
+  onInput: (bytes: Uint8Array, capturedAtMs: number) => void;
   onBuffered: (responseId: string, milliseconds: number) => void;
-  onPlayed: (responseId: string, milliseconds: number) => void;
+  onPlayed: (responseId: string, milliseconds: number, source: string) => void;
   onRoute: (name: string) => void;
   onFailure: (reason: string) => void;
 }
@@ -32,6 +33,8 @@ export class XopcVoiceCallAudio {
   private context?: common.UIAbilityContext;
   private session?: avSession.AVSession;
   private backgroundRunning: boolean = false;
+  private ducked: boolean = false;
+  private duckVolume: number = 1;
 
   async start(context: common.UIAbilityContext, background: boolean, callbacks: XopcVoiceAudioCallbacks): Promise<void> {
     await this.stop();
@@ -59,8 +62,11 @@ export class XopcVoiceCallAudio {
       this.renderer.on('outputDeviceChange', (devices: audio.AudioDeviceDescriptors): void => {
         if (generation === this.generation) callbacks.onRoute(this.routeName(devices));
       });
-      this.capturer.on('audioInterrupt', (_event: audio.InterruptEvent): void => {
-        if (generation === this.generation) { hilog.warn(0x0000, 'XopcVoice', 'Voice capture interrupted'); callbacks.onFailure('CAPTURE_INTERRUPTED'); }
+      this.capturer.on('audioInterrupt', (event: audio.InterruptEvent): void => {
+        if (generation === this.generation && (event.hintType === audio.InterruptHint.INTERRUPT_HINT_STOP
+          || event.hintType === audio.InterruptHint.INTERRUPT_HINT_PAUSE)) {
+          hilog.warn(0x0000, 'XopcVoice', 'Voice capture interrupted'); callbacks.onFailure('CAPTURE_INTERRUPTED');
+        }
       });
       await this.renderer.start();
       await this.capturer.start();
@@ -106,7 +112,9 @@ export class XopcVoiceCallAudio {
         const data = await capturer.read(size, true);
         if (generation !== this.generation || !this.capturing) return;
         const bytes = new Uint8Array(data);
-        if (!this.muted && bytes.byteLength) this.callbacks?.onInput(bytes);
+        // Estimate the first sample from read completion; this is not a hardware capture timestamp.
+        const capturedAtMs = Math.max(0, systemDateTime.getUptime(systemDateTime.TimeType.STARTUP, false) - bytes.byteLength / 32);
+        if (!this.muted && bytes.byteLength) this.callbacks?.onInput(bytes, capturedAtMs);
       }
     } catch (error) {
       if (generation === this.generation && this.capturing) {
@@ -117,6 +125,18 @@ export class XopcVoiceCallAudio {
   }
 
   setMuted(value: boolean): void { this.muted = value; }
+
+  duck(value: boolean): void {
+    const renderer = this.renderer;
+    if (!renderer || this.ducked === value) return;
+    try {
+      if (value) this.duckVolume = renderer.getVolume();
+      renderer.setVolumeWithRamp(value ? this.duckVolume * 0.25 : this.duckVolume, value ? 60 : 120);
+      this.ducked = value;
+    } catch (error) {
+      hilog.warn(0x0000, 'XopcVoice', 'Voice ducking unavailable: %{public}s', (error as Error).message);
+    }
+  }
 
   async setSpeaker(value: boolean): Promise<void> {
     this.speaker = value;
@@ -179,7 +199,7 @@ export class XopcVoiceCallAudio {
       if (generation !== this.generation || playbackGeneration !== this.playbackGeneration || this.responseId !== responseId) return;
       this.clearPlaybackTimer();
       this.playedMs = Math.floor(this.writtenMs);
-      this.callbacks?.onPlayed(responseId, this.playedMs);
+      this.callbacks?.onPlayed(responseId, this.playedMs, 'drain');
     }).catch((error: Error): void => {
       if (generation === this.generation && playbackGeneration === this.playbackGeneration) {
         hilog.warn(0x0000, 'XopcVoice', 'Voice playback drain failed: %{public}s', error.message);
@@ -208,7 +228,7 @@ export class XopcVoiceCallAudio {
     const milliseconds = Math.min(Math.floor(this.writtenMs), Math.floor((framePosition - this.frameBase) / 24));
     if (milliseconds <= this.playedMs) return;
     this.playedMs = milliseconds;
-    this.callbacks?.onPlayed(responseId, milliseconds);
+    this.callbacks?.onPlayed(responseId, milliseconds, 'timestamp');
     if (this.playedMs >= this.writtenMs) this.clearPlaybackTimer();
   }
 
@@ -218,6 +238,7 @@ export class XopcVoiceCallAudio {
   }
 
   async flush(): Promise<void> {
+    this.duck(false);
     ++this.playbackGeneration; this.clearPlaybackTimer();
     this.responseId = ''; this.playedMs = 0; this.writtenMs = 0;
     this.playback = this.playback.then(async (): Promise<void> => {
@@ -238,6 +259,7 @@ export class XopcVoiceCallAudio {
   async stop(): Promise<void> {
     ++this.generation; ++this.playbackGeneration; this.clearPlaybackTimer();
     this.capturing = false;
+    this.ducked = false; this.duckVolume = 1;
     this.responseId = ''; this.playedMs = 0; this.writtenMs = 0;
     const capturer = this.capturer; const renderer = this.renderer;
     const context = this.context; const session = this.session; const backgroundRunning = this.backgroundRunning;

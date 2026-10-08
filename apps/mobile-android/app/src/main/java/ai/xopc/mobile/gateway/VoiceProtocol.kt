@@ -9,7 +9,7 @@ internal const val VOICE_WS_PATH = "/api/voice/realtime/v3/ws"
 internal const val VOICE_PROXY_WS_PATH = "/api/realtime/v1/ws?transport=voice-v3"
 data class VoiceCallConnection(val sessionId: String, val ticket: String, val websocketPath: String,
   val connectionEpoch: Int, val origin: String, val bearer: String, val maxSessionMs: Long,
-  val routeEngine: String)
+  val routeEngine: String, val bargeIn: Boolean = true)
 private const val MAGIC = 0x584f5033
 private const val HEADER_BYTES = 32
 private const val MAX_FRAME_BYTES = 64 * 1024

@@ -23,6 +23,11 @@ data class AutomationMetrics(val totalAutomations: Int, val enabledAutomations: 
 class AutomationRepository(private val gateway: GatewaySession) {
   fun list(): List<AutomationSummary> = parseList(gateway.request("/api/automations"))
 
+  fun listProject(projectId: String): List<AutomationSummary> {
+    requireValidId(projectId)
+    return parseList(gateway.request("/api/automations?projectId=$projectId"))
+  }
+
   fun metrics(): AutomationMetrics = parseMetrics(gateway.request("/api/automations/metrics"))
 
   fun detail(id: String): AutomationSummary {

@@ -6,6 +6,8 @@ import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.ProgressTask
 import ai.xopc.mobile.gateway.ProgressProject
 import ai.xopc.mobile.gateway.ProgressProjectSession
+import ai.xopc.mobile.gateway.WorkflowDetail
+import ai.xopc.mobile.gateway.WorkflowRun
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -70,9 +72,14 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onOpenTaskChat: (String) -> Unit,
   onSaveTask: (String, Int, String, String, String) -> Unit,
   onOpenChat: (String) -> Unit,
+  onOpenNote: (String) -> Unit = {},
   onCreateProjectChat: (String) -> Unit = {},
   onHomeAction: (ProgressHomeAction) -> Unit = {},
   onLoadAutomations: () -> Unit = {},
+  onWorkflowRuns: suspend () -> List<WorkflowRun> = { emptyList() },
+  onWorkflowDetail: suspend (String) -> WorkflowDetail = { throw IllegalStateException("WORKFLOW_UNAVAILABLE") },
+  onCancelWorkflow: suspend (String) -> Unit = {},
+  onCreateWorkflowChat: () -> Unit = {},
   onOpenAutomation: (String) -> Unit = {},
   onOpenAutomationRun: (String) -> Unit = {},
   onAutomationAction: (String, String) -> Unit = { _, _ -> },
@@ -100,6 +107,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var discardEditOpen by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf(false) }
   var selectedProjectId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var selectedAutomationId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
+  var automationReturnPage by rememberSaveable(state.gatewayId) { mutableStateOf("automations") }
   var selectedRunId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var automationName by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var automationInstruction by rememberSaveable(state.gatewayId) { mutableStateOf("") }
@@ -138,7 +146,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       "detail" -> page = detailReturnPage
       "project" -> page = "projects"
       "automation-run" -> page = "automation"
-      "automation" -> page = "automations"
+      "automation" -> page = automationReturnPage
       "automation-edit" -> if (automationEditDirty) discardAutomationEditOpen = true else page = "automation"
       "automation-create" -> if (automationName.isNotBlank() || automationInstruction.isNotBlank() ||
         automationCron != "0 9 * * *") discardAutomationOpen = true else page = "automations"
@@ -217,6 +225,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     onOpenProject(id)
   }
   fun openAutomation(id: String) {
+    automationReturnPage = page
     selectedAutomationId = id
     page = "automation"
     onOpenAutomation(id)
@@ -230,7 +239,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     if (page == "automation-run") state.automations.rerunNavigationId?.let(::openRun)
   }
   Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp)) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    if (page != "workflows") Row(modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween) {
       Text(when (page) {
         "tasks" -> stringResource(R.string.progress_tasks)
         "detail" -> stringResource(R.string.progress_task_detail)
@@ -239,6 +249,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         "project" -> state.project?.name ?: stringResource(R.string.progress_projects)
         "create" -> stringResource(R.string.progress_new_task)
         "automations" -> stringResource(R.string.progress_automations)
+        "workflows" -> stringResource(R.string.workflows)
         "automation-create" -> stringResource(R.string.automation_new)
         "automation-edit" -> stringResource(R.string.automation_edit)
         "automation" -> state.automations.detail?.name ?: stringResource(R.string.progress_automations)
@@ -278,6 +289,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         }
         state.project != null -> ProgressProjectDetail(state.project, state.projectTasks,
           state.projectSessions, state.projectSessionsLoading, state.projectSessionsError,
+          state.projectNotes, state.projectNotesLoading, state.projectNotesError,
+          state.projectAutomations, state.projectAutomationsLoading, state.projectAutomationsError,
           onCreate = {
             createTitle = ""
             createBody = ""
@@ -285,6 +298,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
             createStartedRevision = state.createSavedRevision
             page = "create"
           }, onOpenTask = ::openTask, onOpenChat = onOpenChat,
+          onOpenNote = onOpenNote, onOpenAutomation = ::openAutomation,
           onCreateChat = { onCreateProjectChat(state.project.id) }, chatBusy = chatBusy,
           onRetrySessions = { selectedProjectId?.let(onOpenProject) })
       }
@@ -324,6 +338,9 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         automationCreateStartedId = state.automations.createdId
         page = "automation-create"
       }
+      "workflows" -> WorkflowScreen(state.gatewayId.orEmpty(), onBack = { page = "overview" },
+        list = onWorkflowRuns, detail = onWorkflowDetail, cancel = onCancelWorkflow,
+        onCreateWithChat = onCreateWorkflowChat)
       "automation-create" -> AutomationCreateContent(automationName,
         { automationName = it; automationCreateKey = UUID.randomUUID().toString() },
         automationInstruction,
@@ -367,7 +384,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         { action -> selectedRunId?.let { onAutomationRunAction(it, action) } })
       else -> ProgressOverview(state, onRefreshHome, onOpenChat, { page = "tasks" },
         { page = "projects"; onLoadProjects() },
-        { page = "automations"; onLoadAutomations() }, ::openAutomation, ::openTask,
+        { page = "automations"; onLoadAutomations() }, { page = "workflows" },
+        ::openAutomation, ::openTask,
         { pendingHomeAction = it }, bottomChromeHeight)
     }
   }
@@ -438,7 +456,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
 @Composable
 private fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
   onOpenChat: (String) -> Unit, onOpenTaskList: () -> Unit, onOpenProjects: () -> Unit,
-  onOpenAutomations: () -> Unit, onOpenAutomation: (String) -> Unit,
+  onOpenAutomations: () -> Unit, onOpenWorkflows: () -> Unit,
+  onOpenAutomation: (String) -> Unit,
   onOpenTask: (String) -> Unit,
   onRequestAction: (ProgressHomeAction) -> Unit, bottomChromeHeight: Dp) {
   LazyColumn(modifier = Modifier.fillMaxSize().testTag("progress-overview-list"),
@@ -462,6 +481,8 @@ private fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
       }
       ProgressShortcut(R.string.progress_automations, onOpenAutomations,
         Modifier.fillMaxWidth().padding(top = 8.dp).testTag("progress-automations"))
+      ProgressShortcut(R.string.workflows, onOpenWorkflows,
+        Modifier.fillMaxWidth().padding(top = 8.dp).testTag("progress-workflows"))
     }
     if (state.homeLoading && state.needsUser.isEmpty() && state.background.isEmpty()) item {
       BrandLoadingPanel(modifier = Modifier.testTag("progress-loading"))
@@ -594,7 +615,11 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
 @Composable
 private fun ProgressProjectDetail(project: ProgressProject, tasks: List<ProgressTask>,
   sessions: List<ProgressProjectSession>, sessionsLoading: Boolean, sessionsError: Boolean,
+  notes: List<ai.xopc.mobile.gateway.NoteSummary>, notesLoading: Boolean, notesError: Boolean,
+  automations: List<ai.xopc.mobile.gateway.AutomationSummary>,
+  automationsLoading: Boolean, automationsError: Boolean,
   onCreate: () -> Unit, onOpenTask: (String) -> Unit, onOpenChat: (String) -> Unit,
+  onOpenNote: (String) -> Unit, onOpenAutomation: (String) -> Unit,
   onCreateChat: () -> Unit, chatBusy: Boolean,
   onRetrySessions: () -> Unit) {
   var section by rememberSaveable(project.id) { mutableStateOf("overview") }
@@ -624,6 +649,12 @@ private fun ProgressProjectDetail(project: ProgressProject, tasks: List<Progress
         FilterChip(selected = section == "tasks", onClick = { section = "tasks" },
           modifier = Modifier.testTag("progress-project-tab-tasks"),
           label = { Text("${stringResource(R.string.progress_tasks)} ${tasks.size}") })
+        FilterChip(selected = section == "notes", onClick = { section = "notes" },
+          modifier = Modifier.testTag("progress-project-tab-notes"),
+          label = { Text("${stringResource(R.string.tab_notes)} ${notes.size}") })
+        FilterChip(selected = section == "automations", onClick = { section = "automations" },
+          modifier = Modifier.testTag("progress-project-tab-automations"),
+          label = { Text("${stringResource(R.string.progress_automations)} ${automations.size}") })
       }
     }
     if (section == "overview" || section == "sessions") {
@@ -675,6 +706,51 @@ private fun ProgressProjectDetail(project: ProgressProject, tasks: List<Progress
         }
       }
     }
+    }
+    if (section == "overview" || section == "notes") {
+      item { ProgressSectionTitle(R.string.tab_notes) }
+      if (notesLoading) item { BrandLoadingPanel(modifier = Modifier.testTag("progress-project-notes-loading")) }
+      else if (notesError) item {
+        OutlinedButton(onClick = onRetrySessions, modifier = Modifier.testTag("progress-project-notes-retry")) {
+          Text(stringResource(R.string.progress_project_notes_error))
+        }
+      }
+      else if (notes.isEmpty()) item { Text(stringResource(R.string.progress_project_no_notes)) }
+      items(if (section == "overview") notes.take(3) else notes, key = { "note-${it.id}" }) { note ->
+        Card(onClick = { onOpenNote(note.id) },
+          modifier = Modifier.fillMaxWidth().testTag("progress-project-note-${note.id}")) {
+          Column(modifier = Modifier.padding(16.dp)) {
+            Text(note.title, style = MaterialTheme.typography.titleMedium)
+            if (note.snippet.isNotBlank()) Text(note.snippet, maxLines = 2,
+              overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+        }
+      }
+    }
+    if (section == "overview" || section == "automations") {
+      item { ProgressSectionTitle(R.string.progress_automations) }
+      if (automationsLoading) item {
+        BrandLoadingPanel(modifier = Modifier.testTag("progress-project-automations-loading"))
+      }
+      else if (automationsError) item {
+        OutlinedButton(onClick = onRetrySessions,
+          modifier = Modifier.testTag("progress-project-automations-retry")) {
+          Text(stringResource(R.string.progress_project_automations_error))
+        }
+      }
+      else if (automations.isEmpty()) item { Text(stringResource(R.string.progress_project_no_automations)) }
+      items(if (section == "overview") automations.take(3) else automations,
+        key = { "automation-${it.id}" }) { automation ->
+        Card(onClick = { onOpenAutomation(automation.id) },
+          modifier = Modifier.fillMaxWidth().testTag("progress-project-automation-${automation.id}")) {
+          Column(modifier = Modifier.padding(16.dp)) {
+            Text(automation.name, style = MaterialTheme.typography.titleMedium)
+            Text(if (automation.enabled) stringResource(R.string.automation_enabled)
+              else stringResource(R.string.automation_paused),
+              color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+        }
+      }
     }
   }
 }
