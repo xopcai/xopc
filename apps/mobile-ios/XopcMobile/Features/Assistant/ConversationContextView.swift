@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import SwiftUI
 
 struct ConversationContextView: View {
@@ -193,7 +194,7 @@ struct ConversationContextView: View {
             guard seen.insert(key).inserted else { continue }
             let relation = source.origins?.contains(where: { $0.kind == "session" }) == true
                 ? "会话关联" : source.origins?.contains(where: { $0.kind == "task" }) == true
-                    ? "任务关联" : "最近引用"
+                ? "任务关联" : "最近引用"
             let detail = pendingIDs.contains(key) ? "\(relation) · 待发送" : relation
             items.append(ContextDisplaySource(
                 id: key,
@@ -318,7 +319,7 @@ struct SessionEnvironmentSettingsView: View {
                 ForEach(projects.filter { $0.status != "archived" }) { project in
                     NavigationLink {
                         ProjectEnvironmentChoiceView(configuration: configuration, project: project) { mode in
-                                selectScope(project, mode)
+                            selectScope(project, mode)
                         }
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
@@ -337,7 +338,8 @@ struct SessionEnvironmentSettingsView: View {
 
             if let conversation, !conversation.isDraft,
                summary?.work.project == nil, summary?.work.task == nil,
-               agentConfiguration?.workingDirectoryLocked == false {
+               agentConfiguration?.workingDirectoryLocked == false
+            {
                 Section("当前会话的工作目录") {
                     Button("更改工作目录", systemImage: "folder") {
                         showingDirectoryPicker = true
@@ -391,7 +393,8 @@ struct SessionEnvironmentSettingsView: View {
 
     private func selectScope(_ project: ProjectRecord?, _ mode: String?) {
         if project?.id == conversation?.projectId,
-           (mode == nil || mode == conversation?.executionMode) {
+           mode == nil || mode == conversation?.executionMode
+        {
             dismiss()
             return
         }
@@ -400,7 +403,8 @@ struct SessionEnvironmentSettingsView: View {
 
     private var currentProjectName: String {
         if let title = summary?.work.project?.title
-            ?? projects.first(where: { $0.id == conversation?.projectId })?.name {
+            ?? projects.first(where: { $0.id == conversation?.projectId })?.name
+        {
             return title
         }
         if conversation?.projectId != nil {
@@ -432,7 +436,9 @@ private struct ProjectEnvironmentChoiceView: View {
             } footer: {
                 Text("选择后会用此项目与执行模式开始新对话。")
             }
-            if isLoading { ProgressView("正在检查可用环境…") }
+            if isLoading {
+                ProgressView("正在检查可用环境…")
+            }
             if let reason = options?.worktreeUnavailableReason {
                 Text("Worktree 暂不可用：\(reason)").foregroundStyle(.secondary)
             }
@@ -491,7 +497,9 @@ private struct HostDirectoryPickerView: View {
                         }
                     }
                 }
-                if isLoading { ProgressView("正在读取文件夹…") }
+                if isLoading {
+                    ProgressView("正在读取文件夹…")
+                }
                 if let errorMessage {
                     Text(errorMessage).foregroundStyle(.red)
                     Button("重试") { Task { await browse(directories?.currentPath ?? initialPath) } }

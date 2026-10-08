@@ -518,6 +518,7 @@ struct MobileUserAssertionPage: Decodable, Sendable {
     let items: [MobileUserAssertion]
     let nextCursor: String?
 }
+
 struct MobileUserAssertionEnvelope: Decodable, Sendable { let assertion: MobileUserAssertion }
 
 struct MobileShare: Decodable, Identifiable, Sendable {
@@ -528,10 +529,12 @@ struct MobileShare: Decodable, Identifiable, Sendable {
     let revoked: Bool
     let expired: Bool
 }
+
 struct MobileShareListEnvelope: Decodable, Sendable {
     let ok: Bool
     let payload: MobileShareList
 }
+
 struct MobileShareList: Decodable, Sendable { let shares: [MobileShare] }
 
 extension Int64 {

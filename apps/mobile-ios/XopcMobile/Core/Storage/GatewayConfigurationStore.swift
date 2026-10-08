@@ -140,7 +140,9 @@ final class GatewayConfigurationStore {
             _ = try activateProfile(id: next.id)
         }
         try saveToken("", account: profileTokenAccount(id))
-        if profiles.isEmpty { try saveToken("") }
+        if profiles.isEmpty {
+            try saveToken("")
+        }
     }
 
     private func configuration(for profile: GatewayProfile) -> GatewayConfiguration {

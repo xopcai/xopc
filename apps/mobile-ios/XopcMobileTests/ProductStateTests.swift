@@ -200,7 +200,7 @@ struct ProductStateTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let url = try #require(URL(string: "https://gateway.example.test"))
         let profile = GatewayProfile(id: "gateway-remove-test", name: "Gateway", baseURL: url)
-        defaults.set(try JSONEncoder().encode([profile]), forKey: "gateway.profiles")
+        try defaults.set(JSONEncoder().encode([profile]), forKey: "gateway.profiles")
         defaults.set(profile.id, forKey: "gateway.activeProfile")
         defaults.set(url.absoluteString, forKey: "gateway.baseURL")
         let store = GatewayConfigurationStore(defaults: defaults, tokenStore: MemoryGatewayTokenStore())

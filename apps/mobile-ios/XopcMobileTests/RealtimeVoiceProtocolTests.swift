@@ -5,7 +5,8 @@ import Testing
 struct RealtimeVoiceProtocolTests {
     @Test func voiceRecoveryMatchesHarmonyTransientFailures() {
         for reason in ["NETWORK", "network", "route_lost", "CAPTURE_FAILED", "PLAYBACK_FAILED",
-                       "CAPTURE_INTERRUPTED", "OMNI_CONNECTION_CLOSED", "OMNI_CONNECTION_FAILED"] {
+                       "CAPTURE_INTERRUPTED", "OMNI_CONNECTION_CLOSED", "OMNI_CONNECTION_FAILED"]
+        {
             #expect(VoiceRecoveryPolicy.shouldReconnect(reason))
         }
         for reason in ["PROTOCOL_ERROR", "TIME_LIMIT", "MICROPHONE_PERMISSION_DENIED", "user_finished"] {

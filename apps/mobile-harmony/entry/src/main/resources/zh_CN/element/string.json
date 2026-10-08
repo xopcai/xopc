@@ -4,7 +4,6 @@
     { "name": "personal_chat_entry_subtitle", "value": "想法、烦恼和要推进的事，都可以从这里开始。" },
     { "name": "personal_chat_resume_title", "value": "继续和%s聊聊" },
     { "name": "personal_chat_resume_subtitle", "value": "上次的对话还在，我们接着说。" },
-    { "name": "personal_chat_short", "value": "我的 AI" },
     { "name": "personal_chat_greeting", "value": "你好，我是%s。" },
     { "name": "personal_chat_invitation", "value": "想到什么就告诉我。下次回来，我们还会在这里接着聊。" },
     { "name": "connection_wait_title", "value": "等待连接" },

@@ -1,7 +1,9 @@
 import Foundation
+import Security
 import Testing
 @testable import XopcMobile
 
+// swiftlint:disable:next type_body_length
 struct GatewayModelsTests {
     @Test func decodesSessionContextRelations() throws {
         let summary = try JSONDecoder().decode(ConversationContextResponse.self, from: Data(#"""
@@ -23,7 +25,11 @@ struct GatewayModelsTests {
         let store = SystemGatewayTokenStore()
         defer { try? store.save("", account: account) }
 
-        try store.save("keychain-round-trip", account: account)
+        do {
+            try store.save("keychain-round-trip", account: account)
+        } catch GatewayConfigurationStoreError.keychain(errSecMissingEntitlement) {
+            try Test.cancel("Unsigned simulator builds cannot access Keychain")
+        }
         #expect(store.load(account: account) == "keychain-round-trip")
         try store.save("keychain-updated", account: account)
         #expect(store.load(account: account) == "keychain-updated")
@@ -76,7 +82,10 @@ struct GatewayModelsTests {
         ]
         let message = try GatewayPairingProof.message(action: "request", body: body)
 
-        #expect(message == "xopc-device-pairing-v3\nPOST\nrequest\n{\"device\":{\"displayName\":\"iPhone\",\"platform\":\"ios\",\"publicKeyJwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"x\",\"y\":\"y\"}},\"gatewayId\":\"gateway\",\"nonce\":\"nonce\",\"pairingToken\":\"token\",\"requestId\":\"request\",\"timestamp\":123}")
+        let expected = "xopc-device-pairing-v3\nPOST\nrequest\n"
+            + "{\"device\":{\"displayName\":\"iPhone\",\"platform\":\"ios\",\"publicKeyJwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"x\",\"y\":\"y\"}},"
+            + "\"gatewayId\":\"gateway\",\"nonce\":\"nonce\",\"pairingToken\":\"token\",\"requestId\":\"request\",\"timestamp\":123}"
+        #expect(message == expected)
     }
 
     @Test func decodesFileSpacesForNotesLibrary() throws {

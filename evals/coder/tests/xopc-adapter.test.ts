@@ -15,7 +15,7 @@ async function readJson(request: IncomingMessage): Promise<Record<string, any>> 
 
 async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' = 'success') {
   const requests: Array<{ method: string; url: string; body: Record<string, any> }> = [];
-  const sessionKey = "15bff135-c1f5-49d2-84fd-7354f2da218d";
+  let sessionKey = '';
   const turnToken = 't'.repeat(40);
   let registered: Record<string, any>;
   let signatureValid = false;
@@ -25,8 +25,12 @@ async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' = 'success'
     const body = method === 'POST' || method === 'PATCH' ? await readJson(req) : {};
     requests.push({ method, url, body });
     res.setHeader('Content-Type', 'application/json');
-    if (url === '/api/sessions' && method === 'POST') return res.end(JSON.stringify({ session: { key: sessionKey } }));
-    if (url.endsWith('/agent-config')) return res.end(JSON.stringify({ payload: { model: 'test/model', thinkingLevel: 'high', effectiveWorkspacePath: '/tmp/repo' } }));
+    if (url.endsWith('/materialize') && method === 'POST') {
+      sessionKey = url.split('/')[3] ?? '';
+      expect(body).toMatchObject({ purpose: 'session_resources', creation: { agentId: 'coder', model: 'test/model' } });
+      return res.end(JSON.stringify({ payload: { session: { transcriptId: 'transcript' } } }));
+    }
+    if (url.endsWith('/agent-config')) return res.end(JSON.stringify({ payload: { model: 'test/model', thinkingLevel: 'high', effectiveWorkspacePath: '/tmp/repo', configVersion: 1 } }));
     if (url.startsWith('/api/eval/runtime-identity')) return res.end(JSON.stringify({ payload: { manifestHash: 'manifest' } }));
     if (url === '/api/endpoint-tools/principals' && method === 'POST') {
       registered = endpointPrincipalRegistrationSchema.parse(body);
@@ -40,7 +44,7 @@ async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' = 'success'
     }
     if (url.endsWith('/inputs')) {
       if (!signatureValid || !endpointTurnClaimSchema.safeParse(body.origin).success || body.origin?.token !== turnToken) { res.statusCode = 401; return res.end('{}'); }
-      return res.end(JSON.stringify({ payload: { state: { activeRunId: 'xopc-run', activeInputId: 'input', inputs: [{ id: 'input', clientMessageId: body.clientMessageId, runId: 'xopc-run' }] } } }));
+      return res.end(JSON.stringify({ payload: { inputState: { activeRunId: 'xopc-run', activeInputId: 'input', inputs: [{ id: 'input', clientMessageId: body.clientMessageId, runId: 'xopc-run' }] } } }));
     }
     if (method === 'DELETE' || url === '/api/agent/abort') return res.end('{"ok":true}');
     res.statusCode = 404;
@@ -100,7 +104,7 @@ it('submits signed session input and captures ordered realtime replay without du
     await adapter.cleanup(f.request.runId);
     expect(result).toMatchObject({ status: 'completed', finalText: 'done', agentRunId: 'xopc-run', usage: { input: 5, output: 2 }, runtimeIdentity: { effectiveModelRef: 'test/model', manifestHash: 'manifest' } });
     expect(events.map(event => event.type)).toEqual(['agent.event', 'run.started', 'model.request', 'agent.event', 'model.response', 'run.completed']);
-    expect(f.requests.find(r => r.url.endsWith('/inputs'))?.body).toMatchObject({ content: 'Make the change', delivery: 'next', thinking: 'high', origin: { token: 't'.repeat(40) } });
+    expect(f.requests.find(r => r.url.endsWith('/inputs'))?.body).toMatchObject({ kind: 'append', expectedTranscriptId: 'transcript', configVersion: 1, input: { content: 'Make the change' }, delivery: 'next', origin: { token: 't'.repeat(40) } });
     expect(f.requests.some(r => r.url === '/api/agent')).toBe(false);
     expect(f.requests.filter(r => r.method === 'DELETE')).toHaveLength(2);
   } finally { await f.close(); }

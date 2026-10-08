@@ -20,6 +20,7 @@ describe('Agent voice interruption cleanup', () => {
     let emit!: (event: StreamingSttEvent) => void;
     const send = vi.fn();
     const sendAudio = vi.fn();
+    const onClose = vi.fn(async () => {});
     const release = vi.fn(async () => {});
     mocks.speak.mockImplementation(async () => ({
       outputFormat: 'pcm', release,
@@ -47,10 +48,10 @@ describe('Agent voice interruption cleanup', () => {
         },
         recordInterruption: async () => {},
       } as never,
-      signal: new AbortController().signal, send, sendAudio, onClose: async () => {},
+      signal: new AbortController().signal, send, sendAudio, onClose,
     });
     await engine.start();
-    return { send, sendAudio, release, delegate, emit, currentEmit: () => emit, final: (id: string) => emit({ type: 'transcript_final', utteranceId: id, revision: 1, text: id }) };
+    return { send, sendAudio, release, delegate, onClose, emit, currentEmit: () => emit, final: (id: string) => emit({ type: 'transcript_final', utteranceId: id, revision: 1, text: id }) };
   }
 
   it('runs a task update through the active call as an independent system turn', async () => {
@@ -234,6 +235,34 @@ describe('Agent voice interruption cleanup', () => {
     }));
     await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.anything()));
   });
+
+  it('clears the active task when the agent fails before run_end', async () => {
+    const test = await setup(async function* () {
+      yield { type: 'error', payload: { message: 'Agent unavailable' } };
+    });
+
+    test.final('first');
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('task.done', {
+      taskId: 'task:first', status: 'failed',
+    }));
+    expect(test.send).toHaveBeenCalledWith('response.done', expect.anything());
+    expect(test.send).toHaveBeenCalledWith('session.error', expect.objectContaining({ recoverable: true }));
+  });
+
+  it('keeps the call connected when too many voice turns queue behind a stalled response', async () => {
+    const test = await setup(async function* (_text, _conversationId, signal) {
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+    }, false);
+
+    for (let index = 0; index < 9; index += 1) {
+      test.final(`turn-${index}`);
+      await new Promise((resolve) => setTimeout(resolve, 380));
+    }
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('session.error', expect.objectContaining({
+      code: 'INPUT_BACKPRESSURE', recoverable: true,
+    })));
+    expect(test.onClose).not.toHaveBeenCalled();
+  }, 7_000);
 
   it('prefetches the next TTS segment before the current stream finishes', async () => {
     let finishFirst: (() => void) | undefined;

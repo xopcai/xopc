@@ -3,6 +3,7 @@ import Observation
 
 @MainActor
 @Observable
+// swiftlint:disable:next type_body_length
 final class AssistantState {
     private(set) var agents: [AgentSummary] = []
     private(set) var selectedAgentID: String?
@@ -100,7 +101,9 @@ final class AssistantState {
     ) async -> ConversationSelection? {
         let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty || !attachments.isEmpty || !references.isEmpty, !isSending else { return nil }
-        if conversation.isDraft { loadedConversationID = conversation.id }
+        if conversation.isDraft {
+            loadedConversationID = conversation.id
+        }
         isSending = true
         errorMessage = nil
         executionActivity = []

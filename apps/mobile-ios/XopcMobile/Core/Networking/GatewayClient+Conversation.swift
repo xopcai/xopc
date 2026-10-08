@@ -180,7 +180,9 @@ struct HostDirectoryEntry: Decodable, Identifiable, Sendable {
     let absolutePath: String
     let isDirectory: Bool
 
-    var id: String { absolutePath }
+    var id: String {
+        absolutePath
+    }
 }
 
 private struct WorkingDirectoryCommand: Encodable {

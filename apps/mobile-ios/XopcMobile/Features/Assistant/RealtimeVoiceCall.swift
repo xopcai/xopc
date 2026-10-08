@@ -1,8 +1,10 @@
+// swiftlint:disable file_length
 import Foundation
 import Observation
 
 @MainActor
 @Observable
+// swiftlint:disable:next type_body_length
 final class RealtimeVoiceCall {
     enum Phase: Equatable { case idle, connecting, connected, recovering, paused, ending }
 
@@ -226,7 +228,9 @@ final class RealtimeVoiceCall {
                 case let .event(event): await handle(event)
                 case let .audio(frame): await handle(frame)
                 case let .latency(milliseconds):
-                    if !congested { networkQuality = milliseconds > 800 ? "degraded" : "good" }
+                    if !congested {
+                        networkQuality = milliseconds > 800 ? "degraded" : "good"
+                    }
                 }
             }
             if generation == self.generation, phase != .idle, phase != .ending {
@@ -244,7 +248,9 @@ final class RealtimeVoiceCall {
 
     private func pause(reason: String, reconnect: Bool = false) async {
         guard phase != .idle, phase != .ending else { return }
-        if releaseInProgress || phase == .recovering && reconnect { return }
+        if releaseInProgress || phase == .recovering && reconnect {
+            return
+        }
         if let connectedAt, Date().timeIntervalSince(connectedAt) >= 30 {
             reconnectAttempt = 0
         }

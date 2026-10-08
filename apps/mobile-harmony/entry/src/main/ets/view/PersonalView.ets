@@ -4,15 +4,11 @@ import { XopcUnderstandingItem, XopcUnderstandingRule, XopcUserGoal } from '../m
 import { XopcPersonalViewModel } from '../viewmodel/homeViewModel';
 import { XopcListSkeleton, XopcPageHeader, XopcSectionLabel } from './MobileComponents';
 import { XopcLoopi } from './Loopi';
-import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
-import { XopcPersonalAgentRecord } from '../model/personalAgent';
 
 @ComponentV2
 export struct XopcPersonalView {
   @Param activePage: boolean = true;
   @Param bottomInset: number = 0;
-  @Param personalAgent: XopcPersonalAgentRecord | null = null;
-  @Param personalBusy: boolean = false;
   @Local colors: XopcThemeColors = appThemeColors;
   @Local model: XopcPersonalViewModel = new XopcPersonalViewModel();
   @Local goalEditorOpen: boolean = false;
@@ -23,7 +19,6 @@ export struct XopcPersonalView {
   @Local goalStatus: string = 'active';
   @Local goalDateError: boolean = false;
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
-  @Event onOpenPersonal: () => void = (): void => {};
 
   aboutToAppear(): void { this.model.refresh(); }
   aboutToDisappear(): void { this.model.dispose(); }
@@ -225,28 +220,6 @@ export struct XopcPersonalView {
             }.width(44)
           }.width('100%').padding(20).borderRadius(22).backgroundColor(this.colors.panel)
             .onClick((): void => { this.onNavigate({ page: 'about-you', itemId: '' }); })
-
-          Button({ type: ButtonType.Normal }) {
-            Row({ space: 14 }) {
-              XopcPersonalAgentAvatar({ extent: 54, activePage: this.activePage && !this.goalEditorOpen,
-                agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi' })
-              Column({ space: 5 }) {
-                Text(this.personalAgent?.state === 'ready'
-                  ? $r('app.string.personal_chat_resume_title', this.personalAgent.displayName)
-                  : $r('app.string.personal_chat_entry_title')).fontSize(16).fontWeight(FontWeight.Medium)
-                  .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                Text(this.personalAgent?.state === 'ready' ? $r('app.string.personal_chat_resume_subtitle')
-                  : $r('app.string.personal_chat_entry_subtitle')).fontSize(12).lineHeight(18)
-                  .fontColor(this.colors.secondary).maxLines(2)
-              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(17).fontColor([this.colors.accent])
-            }.width('100%').padding({ left: 18, right: 16, top: 14, bottom: 14 })
-          }.id('personal-ai-chat-entry').width('100%').padding(0).borderRadius(22)
-            .backgroundColor(this.colors.accentSoft).margin({ top: 16 })
-            .accessibilityText(this.personalAgent?.state === 'ready'
-              ? $r('app.string.personal_chat_resume_title', this.personalAgent.displayName)
-              : $r('app.string.personal_chat_entry_title'))
-            .enabled(!this.personalBusy).onClick((): void => { this.onOpenPersonal(); })
 
           if (this.model.loading) {
             Column() { XopcListSkeleton() }.width('100%').padding({ top: 24 })

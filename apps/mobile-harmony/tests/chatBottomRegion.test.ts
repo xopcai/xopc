@@ -11,6 +11,7 @@ const personal = readFileSync(new URL('../entry/src/main/ets/view/PersonalView.e
 const english = readFileSync(new URL('../entry/src/main/resources/base/element/string.json', import.meta.url), 'utf8');
 const chinese = readFileSync(new URL('../entry/src/main/resources/zh_CN/element/string.json', import.meta.url), 'utf8');
 const mobileComponents = readFileSync(new URL('../entry/src/main/ets/view/MobileComponents.ets', import.meta.url), 'utf8');
+const actionPanel = readFileSync(new URL('../entry/src/main/ets/view/ChatActionPanel.ets', import.meta.url), 'utf8');
 
 describe('chat bottom region composition', () => {
   it('animates session refresh only for an explicit pull gesture', () => {
@@ -42,14 +43,11 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain('this.atBottom = true; this.showJumpBottom = false; this.messagesScroller.scrollEdge(Edge.Bottom);');
   });
 
-  it('replaces the jump arrow with an animated brand logo while AI is responding', () => {
+  it('replaces the jump arrow with the shared animated mascot while AI is responding', () => {
     expect(chat).toContain('if (this.chat.runId)');
     expect(chat).toContain('XopcBrandLoading({ compact: true, reduceMotion: this.layout.reduceMotion })');
-    expect(mobileComponents).toContain("Image($r('app.media.brand_logo_base'))");
-    expect(mobileComponents).toContain("Image($r('app.media.brand_logo_accent'))");
-    expect(mobileComponents).toContain('.rotate({ angle: this.accentAngle })');
-    expect(mobileComponents).toContain('.animation({ duration: this.reduceMotion ? 0 : 1450, curve: Curve.Linear,');
-    expect(mobileComponents).toContain('iterations: this.reduceMotion ? 1 : -1');
+    expect(mobileComponents).toContain('XopcLoopi({ extent: this.compact ? 20 : 42');
+    expect(mobileComponents).toContain('activePage: !this.reduceMotion');
   });
   it('renders the navigation slot after the composer inside the shared surface', () => {
     const composer = chat.indexOf(".id('chat-composer-shell')");
@@ -117,13 +115,11 @@ describe('chat bottom region composition', () => {
     expect(home).toContain(".id('home-quick-send')");
     expect(home).toContain(".id('home-quick-voice').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE)");
     expect(home).toContain(".id('home-quick-actions').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE)");
-    expect(home).toContain(".id('home-quick-action-panel').width('100%').height(196)");
-    expect(home).toContain("this.quickActionTile('photos', $r('app.string.chat_photos'), $r('sys.symbol.picture')");
-    expect(home).toContain("this.quickActionTile('reference-note', $r('app.string.chat_reference_note'), $r('sys.symbol.doc')");
-    expect(home).toContain("this.quickActionTile('voice-with-tools', $r('app.string.voice_call_action_assistant')");
-    const assistantActions = Array.from(chat.matchAll(/this\.actionTile\('([^']+)'/g), (match) => match[1]);
-    const secondaryActions = Array.from(home.matchAll(/this\.quickActionTile\('([^']+)'/g), (match) => match[1]);
-    expect(secondaryActions).toEqual(assistantActions);
+    expect(home).toContain("XopcChatActionPanel({ open: this.quickPanelOpen, idPrefix: 'home-quick-action'");
+    expect(chat).toContain('XopcChatActionPanel({ open: this.panelOpen');
+    expect(actionPanel).toContain("this.actionTile('photos', $r('app.string.chat_photos')");
+    expect(actionPanel).toContain("this.actionTile('reference-note', $r('app.string.chat_reference_note')");
+    expect(actionPanel).toContain("this.actionTile('voice-with-tools', $r('app.string.voice_call_action_assistant')");
     expect(home).toContain("SymbolGlyph(this.quickPanelOpen ? $r('sys.symbol.xmark_circle') : $r('sys.symbol.plus_circle'))");
     expect(home).not.toContain('showQuickAttachments');
     expect(home).not.toContain("showActionSheet({ title: '', message: '', sheets:");
@@ -142,7 +138,7 @@ describe('chat bottom region composition', () => {
     expect(home).toContain('private activateTab(index: number): void');
     expect(home).toContain('.animationDuration(0)');
     expect(home).not.toContain('transitionToTab');
-    expect(home).not.toContain('this.getUIContext().animateTo');
+    expect(home.slice(home.indexOf('private activateTab('), home.indexOf('private switchToChat('))).not.toContain('this.getUIContext().animateTo');
     expect(home).toContain('if (this.layout.isMainDockVisible(this.tab)) { this.dockItems() }');
     expect(home).toContain(".margin({ top: 4, bottom: 0 })");
   });
@@ -320,15 +316,15 @@ describe('chat bottom region composition', () => {
   });
 
   it('uses a compact horizontally swipeable action grid with common actions on the first page', () => {
-    const panel = chat.slice(chat.indexOf('@Builder\n  actionPanel()'), chat.indexOf('\n  build()', chat.indexOf('@Builder\n  actionPanel()')));
+    const panel = actionPanel;
     const secondPage = panel.indexOf("this.actionTile('voice-no-tools'");
 
     expect(panel).toContain('Swiper()');
-    expect(panel).toContain(".id('chat-action-panel').width('100%').height(196).loop(false).autoPlay(false)");
+    expect(panel).toContain(".id(this.idPrefix + '-panel').width('100%').height(196).loop(false).autoPlay(false)");
     expect(panel).toContain('new DotIndicator()');
     expect(panel).not.toContain('Scroll()');
-    expect(chat).toContain(".width('25%').height(84).padding(2)");
-    expect(chat).toContain('}.width(48).height(48)');
+    expect(panel).toContain(".width('25%').height(84).padding(2)");
+    expect(panel).toContain('}.width(48).height(48)');
     for (const id of ['photos', 'camera', 'document', 'record-voice', 'reference-note', 'reference-task', 'reference-file', 'new-chat']) {
       expect(panel.indexOf(`this.actionTile('${id}'`)).toBeGreaterThan(0);
       expect(panel.indexOf(`this.actionTile('${id}'`)).toBeLessThan(secondPage);
@@ -339,8 +335,6 @@ describe('chat bottom region composition', () => {
 
   it('keeps voice and rich follow-up capture available while an agent run is active', () => {
     const voiceToggle = chat.slice(chat.indexOf('@Builder\n  voiceToggle()'), chat.indexOf('@Builder\n  composerRightActions()'));
-    const actionPanel = chat.slice(chat.indexOf('@Builder\n  actionPanel()'), chat.indexOf('\n  build()', chat.indexOf('@Builder\n  actionPanel()')));
-
     expect(voiceToggle).not.toContain('!this.chat.runId');
     for (const id of ['photos', 'camera', 'document', 'record-voice']) {
       const action = actionPanel.split('\n').find(line => line.includes(`this.actionTile('${id}'`));

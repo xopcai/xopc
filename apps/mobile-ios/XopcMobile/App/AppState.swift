@@ -63,13 +63,12 @@ final class AppState {
             return pairedGatewayID == connection.gatewayID
                 || (pairedGatewayID == nil && $0.baseURL == connection.baseURL)
         }
-        let profile: GatewayProfile
-        if let previousProfile {
-            profile = try configurationStore.updateProfile(
+        let profile: GatewayProfile = if let previousProfile {
+            try configurationStore.updateProfile(
                 id: previousProfile.id, name: previousProfile.name, configuration: configuration
             )
         } else {
-            profile = try configurationStore.saveProfile(name: connection.name, configuration: configuration)
+            try configurationStore.saveProfile(name: connection.name, configuration: configuration)
         }
         do {
             try GatewayPairingService.shared.save(connection, profileID: profile.id)
@@ -81,7 +80,9 @@ final class AppState {
             gatewayTokenExpiries[profile.id] = connection.accessTokenExpiresAt
             scheduleGatewayRefresh(expiry: connection.accessTokenExpiresAt)
         } catch {
-            if previousProfile == nil { try? configurationStore.removeProfile(id: profile.id) }
+            if previousProfile == nil {
+                try? configurationStore.removeProfile(id: profile.id)
+            }
             throw error
         }
     }

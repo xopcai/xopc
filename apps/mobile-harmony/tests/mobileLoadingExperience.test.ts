@@ -14,7 +14,8 @@ describe('mobile destination loading experience', () => {
 
   it('keeps list-to-chat navigation behind one stable branded loading surface', () => {
     const home = read('../entry/src/main/ets/view/HomeView.ets');
-    expect(home).toContain("this.pendingChatId = id === this.activeChatId ? '' : id");
+    expect(home).toContain("const pendingId = id === this.activeChatId ? '' : id");
+    expect(home).toContain('this.pendingChatId = pendingId;');
     expect(home).toContain("if (this.pendingChatId === id) this.pendingChatId = ''");
     expect(home).toContain(".id('chat-navigation-loading')");
     expect(home).toContain('XopcBrandLoading({ reduceMotion: this.layout.reduceMotion })');
@@ -23,8 +24,7 @@ describe('mobile destination loading experience', () => {
   it('uses one branded loading component for immediate detail destinations', () => {
     const components = read('../entry/src/main/ets/view/MobileComponents.ets');
     expect(components).toContain('export struct XopcBrandLoading');
-    expect(components).toContain("app.media.brand_logo_base");
-    expect(components).toContain("app.media.brand_logo_accent");
+    expect(components).toContain('XopcLoopi({ extent: this.compact ? 20 : 42');
     for (const file of ['NotesView.ets', 'WorkspaceView.ets', 'AboutYouView.ets', 'FilesView.ets', 'WorkflowView.ets']) {
       expect(read(`../entry/src/main/ets/view/${file}`)).toContain('XopcBrandLoading');
     }
