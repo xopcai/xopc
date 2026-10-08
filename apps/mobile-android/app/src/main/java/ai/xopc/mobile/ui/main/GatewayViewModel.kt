@@ -41,6 +41,9 @@ import ai.xopc.mobile.gateway.AutomationMetrics
 import ai.xopc.mobile.gateway.AutomationSummary
 import ai.xopc.mobile.gateway.AutomationRunSummary
 import ai.xopc.mobile.gateway.AutomationRunEvent
+import ai.xopc.mobile.gateway.WorkflowRepository
+import ai.xopc.mobile.gateway.WorkflowRun
+import ai.xopc.mobile.gateway.WorkflowDetail
 import ai.xopc.mobile.gateway.NoteRepository
 import ai.xopc.mobile.gateway.FileRepository
 import ai.xopc.mobile.gateway.ManagedFile
@@ -130,6 +133,12 @@ data class ProgressUiState(
   val projectSessions: List<ProgressProjectSession> = emptyList(),
   val projectSessionsLoading: Boolean = false,
   val projectSessionsError: Boolean = false,
+  val projectNotes: List<NoteSummary> = emptyList(),
+  val projectNotesLoading: Boolean = false,
+  val projectNotesError: Boolean = false,
+  val projectAutomations: List<AutomationSummary> = emptyList(),
+  val projectAutomationsLoading: Boolean = false,
+  val projectAutomationsError: Boolean = false,
   val projectLoading: Boolean = false,
   val projectError: Boolean = false,
   val createBusy: Boolean = false,
@@ -389,6 +398,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private val connectionWaitRepository = ConnectionWaitRepository(session)
   private val progressRepository = ProgressRepository(session)
   private val automationRepository = AutomationRepository(session)
+  private val workflowRepository = WorkflowRepository(session)
   private val noteRepository = NoteRepository(session)
   private val fileRepository = FileRepository(session)
   private val shareRepository = ShareRepository(session)
@@ -1120,7 +1130,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       VoiceCallConnection(result.getString("sessionId"), result.getString("ticket"),
         result.getString("websocketPath"), result.getInt("connectionEpoch"), auth.origin,
         auth.bearer, result.getJSONObject("limits").getLong("maxSessionMs"),
-        result.getJSONObject("route").getString("engine"))
+        result.getJSONObject("route").getString("engine"), result.optBoolean("bargeIn", true))
     }
 
   suspend fun cancelVoiceCall(call: VoiceCallConnection) = runInterruptible(Dispatchers.IO) {
@@ -1767,6 +1777,15 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  suspend fun workflowRuns(): List<WorkflowRun> =
+    runInterruptible(Dispatchers.IO) { workflowRepository.list() }
+
+  suspend fun workflowDetail(id: String): WorkflowDetail =
+    runInterruptible(Dispatchers.IO) { workflowRepository.detail(id) }
+
+  suspend fun cancelWorkflow(id: String) =
+    runInterruptible(Dispatchers.IO) { workflowRepository.cancel(id) }
+
   fun loadAutomations() {
     val gatewayId = mutableState.value.profile?.gatewayId ?: return
     automationJob?.cancel()
@@ -2187,7 +2206,9 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     val revision = ++projectDetailRevision
     mutableState.update { it.copy(progress = it.progress.copy(projectId = id, project = null,
       projectTasks = emptyList(), projectSessions = emptyList(), projectSessionsLoading = true,
-      projectSessionsError = false, projectLoading = true, projectError = false)) }
+      projectSessionsError = false, projectNotes = emptyList(), projectNotesLoading = true,
+      projectNotesError = false, projectAutomations = emptyList(), projectAutomationsLoading = true,
+      projectAutomationsError = false, projectLoading = true, projectError = false)) }
     projectDetailJob = viewModelScope.launch {
       try {
         val (project, tasks) = runInterruptible(Dispatchers.IO) {
@@ -2213,16 +2234,41 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
             it.copy(progress = it.progress.copy(projectSessionsLoading = false, projectSessionsError = true))
           }
-          return@launch
+          null
         }
-        if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+        if (sessions != null && revision == projectDetailRevision &&
+          mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
           it.copy(progress = it.progress.copy(projectSessions = sessions, projectSessionsLoading = false))
+        }
+        try {
+          val notes = runInterruptible(Dispatchers.IO) { noteRepository.listProject(id).items }
+          if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+            it.copy(progress = it.progress.copy(projectNotes = notes, projectNotesLoading = false))
+          }
+        } catch (error: CancellationException) { throw error }
+        catch (_: Exception) {
+          if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+            it.copy(progress = it.progress.copy(projectNotesLoading = false, projectNotesError = true))
+          }
+        }
+        try {
+          val automations = runInterruptible(Dispatchers.IO) { automationRepository.listProject(id) }
+          if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+            it.copy(progress = it.progress.copy(projectAutomations = automations,
+              projectAutomationsLoading = false))
+          }
+        } catch (error: CancellationException) { throw error }
+        catch (_: Exception) {
+          if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+            it.copy(progress = it.progress.copy(projectAutomationsLoading = false,
+              projectAutomationsError = true))
+          }
         }
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) {
         if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
           it.copy(progress = it.progress.copy(projectLoading = false, projectSessionsLoading = false,
-            projectError = true))
+            projectNotesLoading = false, projectAutomationsLoading = false, projectError = true))
         }
       }
     }
