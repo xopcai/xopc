@@ -827,7 +827,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.0.82;
+				MARKETING_VERSION = 0.0.83;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.xopc.xopc;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -983,7 +983,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.0.82;
+				MARKETING_VERSION = 0.0.83;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.xopc.xopc;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
