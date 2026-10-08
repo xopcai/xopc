@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { send: vi.fn(), enqueue: vi.fn(), finish: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}) };
+  return { request: vi.fn(), send: vi.fn(), enqueue: vi.fn(), finish: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), duck: vi.fn(), setMuted: vi.fn(), now: 1000 };
 });
 vi.mock('@kit.AbilityKit', () => ({}));
+vi.mock('@kit.BasicServicesKit', () => ({ systemDateTime: { TimeType: { STARTUP: 1 }, getUptime: () => mocks.now } }));
 vi.mock('@kit.ArkTS', () => ({ util: {} }));
-vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { info: vi.fn() } }));
-vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: {} }));
+vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { info: vi.fn(), warn: vi.fn() } }));
+vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request } }));
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {} }));
 vi.mock('../entry/src/main/ets/service/voiceCapture.ets', () => ({ voiceCapture: {} }));
 vi.mock('../entry/src/main/ets/service/chatReadAloud.ets', () => ({ chatReadAloud: {} }));
@@ -35,7 +36,7 @@ describe('Harmony continuous voice call response handoff', () => {
   let call: XopcVoiceCall;
   let harness: CallHarness;
   beforeEach(() => {
-    vi.clearAllMocks(); call = new XopcVoiceCall(); call.phase = 'connected';
+    vi.clearAllMocks(); mocks.now = 1000; call = new XopcVoiceCall(); call.phase = 'connected';
     harness = call as unknown as CallHarness;
     harness.transport = { send: mocks.send, close: async () => {} };
   });
@@ -97,4 +98,72 @@ describe('Harmony continuous voice call response handoff', () => {
     expect(call.responseId).toBe('first');
     expect(mocks.send).toHaveBeenCalledWith('response.stop_playback', { responseId: 'unexpected' });
   });
+  it('keeps user mute in force when congestion recovers', async () => {
+    vi.useFakeTimers();
+    try {
+      const state = call as any;
+      state.transport.inputDiagnostics = () => ({ oldestWaitMs: 150 });
+      state.transport.inputQueueAgeMs = () => 0;
+      state.applyQuality({ accepted: true, quality: 'degraded', queueAgeMs: 150 });
+      await call.setMuted(true);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(mocks.send).not.toHaveBeenCalledWith('input.mute', { muted: false });
+      expect(mocks.setMuted).toHaveBeenLastCalledWith(true);
+      await harness.release(false);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('keeps approval mute in force when congestion recovers', async () => {
+    vi.useFakeTimers();
+    try {
+      const state = call as any;
+      state.transport.inputDiagnostics = () => ({ oldestWaitMs: 150 });
+      state.transport.inputQueueAgeMs = () => 0;
+      state.applyQuality({ accepted: false, quality: 'critical', queueAgeMs: 300 });
+      state.approval = { id: 'pending' };
+      await vi.advanceTimersByTimeAsync(100);
+      expect(mocks.send).not.toHaveBeenCalledWith('input.mute', { muted: false });
+      expect(mocks.setMuted).toHaveBeenLastCalledWith(true);
+      await harness.release(false);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('ducks on server speech onset and ignores stale stop events from other utterances', () => {
+    (call as any).session = { bargeIn: true };
+    harness.onEvent(event('response.created', 'reply')); harness.onAudio(frame('reply'));
+    harness.onEvent(event('input.speech_started', '', { utteranceId: 'user' }));
+    expect(mocks.duck).toHaveBeenLastCalledWith(true);
+    harness.onEvent(event('input.speech_stopped', '', { utteranceId: 'old' }));
+    expect(mocks.duck).toHaveBeenLastCalledWith(true);
+    harness.onEvent(event('input.speech_stopped', '', { utteranceId: 'user' }));
+    expect(mocks.duck).toHaveBeenLastCalledWith(false);
+  });
+
+  it('emits receipt latency once and honors disabled barge-in', () => {
+    (call as any).session = { bargeIn: false };
+    harness.onEvent(event('input.speech_started', '', { utteranceId: 'user' }));
+    mocks.now = 1100;
+    harness.onEvent(event('input.speech_stopped', '', { utteranceId: 'user' }));
+    harness.onEvent(event('response.created', 'reply'));
+    mocks.now = 1300; harness.onAudio(frame('reply')); harness.onAudio(frame('reply'));
+    expect(mocks.send.mock.calls.filter(([type]) => type === 'session.metric')).toEqual([
+      ['session.metric', { responseId: 'reply', metric: 'speech_end_to_audio_received', durationMs: 200 }],
+    ]);
+    harness.onEvent(event('input.speech_started', '', { utteranceId: 'next' }));
+    expect(mocks.duck).toHaveBeenLastCalledWith(false);
+  });
+
+  it('ignores an approval fetch that resolves after releasing the call', async () => {
+    let resolve!: (value: string) => void;
+    mocks.request.mockImplementationOnce(() => new Promise<string>((r) => { resolve = r; }));
+    const state = call as any; state.target = { conversationId: 'conversation' };
+    const loading = state.loadApproval();
+    await harness.release(false);
+    resolve(JSON.stringify({ payload: { approvals: [{ id: 'stale', conversationId: 'conversation',
+      status: 'pending', expiresAt: new Date(Date.now() + 60000).toISOString() }] } }));
+    await loading;
+    expect(call.approval).toBeUndefined();
+    expect(mocks.send).not.toHaveBeenCalledWith('input.mute', { muted: true });
+  });
+
 });

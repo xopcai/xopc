@@ -29,6 +29,8 @@ import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.NoteMetadataPatch
 import ai.xopc.mobile.gateway.NoteAiPreview
 import ai.xopc.mobile.gateway.VoiceCallConnection
+import ai.xopc.mobile.gateway.WorkflowRun
+import ai.xopc.mobile.gateway.WorkflowDetail
 import ai.xopc.mobile.gateway.ManagedFile
 import ai.xopc.mobile.gateway.ManagedFileSpace
 import ai.xopc.mobile.gateway.PersonalAssertion
@@ -96,6 +98,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -152,6 +155,9 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -171,10 +177,13 @@ import androidx.core.content.ContextCompat
 import java.time.YearMonth
 import java.util.Locale
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.CancellationException
 
 /** The five top-level destinations mirror the current HarmonyOS home screen. */
@@ -413,6 +422,9 @@ fun MainScreen(
   onRefreshProgressHome: () -> Unit = {},
   onProgressHomeAction: (ProgressHomeAction) -> Unit = {},
   onLoadAutomations: () -> Unit = {},
+  onWorkflowRuns: suspend () -> List<WorkflowRun> = { emptyList() },
+  onWorkflowDetail: suspend (String) -> WorkflowDetail = { throw IllegalStateException("WORKFLOW_UNAVAILABLE") },
+  onCancelWorkflow: suspend (String) -> Unit = {},
   onOpenAutomation: (String) -> Unit = {},
   onOpenAutomationRun: (String) -> Unit = {},
   onAutomationAction: (String, String) -> Unit = { _, _ -> },
@@ -715,7 +727,10 @@ fun MainScreen(
     onRefreshProgress = onRefreshProgress, onLoadMoreProgressTasks = onLoadMoreProgressTasks,
     onRefreshProgressHome = onRefreshProgressHome, onRefreshProgressTasks = onRefreshProgressTasks,
     onProgressHomeAction = onProgressHomeAction,
-    onLoadAutomations = onLoadAutomations, onOpenAutomation = onOpenAutomation,
+    onLoadAutomations = onLoadAutomations,
+    onWorkflowRuns = onWorkflowRuns, onWorkflowDetail = onWorkflowDetail,
+    onCancelWorkflow = onCancelWorkflow,
+    onOpenAutomation = onOpenAutomation,
     onOpenAutomationRun = onOpenAutomationRun,
     onAutomationAction = onAutomationAction,
     onCreateAutomation = onCreateAutomation,
@@ -901,6 +916,9 @@ internal fun MainContent(
   onRefreshProgressHome: () -> Unit = {},
   onProgressHomeAction: (ProgressHomeAction) -> Unit = {},
   onLoadAutomations: () -> Unit = {},
+  onWorkflowRuns: suspend () -> List<WorkflowRun> = { emptyList() },
+  onWorkflowDetail: suspend (String) -> WorkflowDetail = { throw IllegalStateException("WORKFLOW_UNAVAILABLE") },
+  onCancelWorkflow: suspend (String) -> Unit = {},
   onOpenAutomation: (String) -> Unit = {},
   onOpenAutomationRun: (String) -> Unit = {},
   onAutomationAction: (String, String) -> Unit = { _, _ -> },
@@ -1027,7 +1045,10 @@ internal fun MainContent(
       { approval, allow -> currentRespondVoiceApproval(approval, allow) })
   }
   var voiceAnswer by remember(voiceCall) { mutableStateOf("") }
-  DisposableEffect(voiceCall) { onDispose { voiceScope.launch { voiceCall.stop() } } }
+  LaunchedEffect(voiceCall) {
+    try { awaitCancellation() }
+    finally { withContext(NonCancellable) { voiceCall.stop() } }
+  }
   val voiceMemo = remember(connection.profile?.gatewayId, connection.selectedConversationId) {
     VoiceMemoRecorder(voiceContext)
   }
@@ -1061,10 +1082,12 @@ internal fun MainContent(
       if (event == Lifecycle.Event.ON_STOP) {
         if (voiceMemo.phase == "recording" || voiceMemo.phase == "paused")
           voiceMemo.stopRecording()
-        if (voiceCall.phase != "idle") voiceScope.launch { voiceCall.stop() }
+        if (voiceCall.phase != "idle") voiceCall.onBackground()
         if (inputVoice.phase != "idle") {
           inputVoice.cancel(); inputVoiceHeld = false
         }
+      } else if (event == Lifecycle.Event.ON_START) {
+        voiceScope.launch { voiceCall.onForeground() }
       }
     }
     lifecycleOwner.lifecycle.addObserver(observer)
@@ -1519,6 +1542,12 @@ internal fun MainContent(
         onLoadProgressProjects, onOpenProgressProject, onCreateProgressTask,
         onOpenTaskChat, onSaveProgressTask, onHomeAction = onProgressHomeAction,
         onLoadAutomations = onLoadAutomations, onOpenAutomation = onOpenAutomation,
+        onWorkflowRuns = onWorkflowRuns, onWorkflowDetail = onWorkflowDetail,
+        onCancelWorkflow = onCancelWorkflow,
+        onCreateWorkflowChat = {
+          onCreateConversation()
+          onSelectTab(HomeTab.Assistant)
+        },
         onOpenAutomationRun = onOpenAutomationRun, onAutomationAction = onAutomationAction,
         onCreateAutomation = onCreateAutomation,
         onUpdateAutomation = onUpdateAutomation,
@@ -1528,6 +1557,9 @@ internal fun MainContent(
         onOpenChat = { id ->
         onSelectConversation(id)
         onSelectTab(HomeTab.Assistant)
+      }, onOpenNote = { id ->
+        onOpenNote(id)
+        onSelectTab(HomeTab.Notes)
       }, onCreateProjectChat = { projectId ->
         if (!connection.creatingConversation && connection.progress.project?.id == projectId) {
           onCreateProjectConversation(projectId)
@@ -1625,14 +1657,31 @@ internal fun MainContent(
     }
     }
   }
-  if (voiceCall.phase != "idle") AlertDialog(onDismissRequest = { voiceScope.launch { voiceCall.stop() } },
+  var voiceExpanded by remember(voiceCall) { mutableStateOf(true) }
+  var voiceMiniX by remember(voiceCall) { mutableStateOf(0f) }
+  var voiceMiniY by remember(voiceCall) { mutableStateOf(0f) }
+  val miniDensity = LocalDensity.current
+  val miniConfiguration = LocalConfiguration.current
+  val voiceMiniMaxX = with(miniDensity) { miniConfiguration.screenWidthDp.dp.toPx() * 0.05f }
+  val voiceMiniMaxY = with(miniDensity) { miniConfiguration.screenHeightDp.dp.toPx() * 0.75f }
+  LaunchedEffect(voiceCall.phase) { if (voiceCall.phase == "idle") voiceExpanded = true }
+  if (voiceCall.phase != "idle" && voiceExpanded) AlertDialog(
+    onDismissRequest = { voiceExpanded = false },
     modifier = Modifier.testTag("voice-call-dialog"),
-    title = { Text(stringResource(if (voiceCall.mode == "natural")
-      R.string.assistant_action_voice_natural else R.string.assistant_action_voice_assistant)) },
+    title = { Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically) {
+      Text(stringResource(if (voiceCall.mode == "natural")
+        R.string.assistant_action_voice_natural else R.string.assistant_action_voice_assistant))
+      TextButton(onClick = { voiceExpanded = false }, modifier = Modifier.testTag("voice-minimize")) {
+        Text(stringResource(R.string.voice_minimize))
+      }
+    } },
     text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Text(when (voiceCall.phase) {
         "connecting" -> stringResource(R.string.voice_connecting)
+        "recovering" -> stringResource(R.string.voice_reconnecting)
         "connected" -> stringResource(if (voiceCall.speaking) R.string.voice_speaking
+          else if (voiceCall.activity.isNotBlank() || voiceCall.taskId.isNotBlank()) R.string.voice_working
           else R.string.voice_listening)
         else -> stringResource(R.string.voice_paused)
       }, style = MaterialTheme.typography.titleMedium)
@@ -1684,7 +1733,17 @@ internal fun MainContent(
           }
         }
       }
-      if (voiceCall.error.isNotBlank()) Text(voiceCall.error,
+      if (voiceCall.error.isNotBlank()) Text(stringResource(when (voiceCall.error) {
+        "NETWORK", "route_lost", "OMNI_CONNECTION_CLOSED", "OMNI_CONNECTION_FAILED" ->
+          R.string.voice_error_network
+        "CAPTURE_FAILED", "CAPTURE_INTERRUPTED" -> R.string.voice_error_microphone
+        "PLAYBACK_FAILED", "PLAYBACK_STALLED", "AUDIO_QUEUE_FULL" -> R.string.voice_error_playback
+        "INPUT_DROPPED" -> R.string.voice_error_input_dropped
+        "ROUTE_CHANGE_FAILED" -> R.string.voice_error_route
+        "TIME_LIMIT" -> R.string.voice_error_time_limit
+        "background" -> R.string.voice_error_background
+        else -> R.string.voice_error_generic
+      }),
         color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("voice-call-error"))
       if (voiceCall.phase == "paused" && activeVoiceConversationId != null)
         TextButton(onClick = { voiceScope.launch {
@@ -1704,13 +1763,47 @@ internal fun MainContent(
           Text(stringResource(if (voiceCall.speaker) R.string.voice_earpiece else R.string.voice_speaker))
         }
         TextButton(onClick = voiceCall::stopReply,
-          enabled = voiceCall.phase == "connected", modifier = Modifier.testTag("voice-stop-reply")) {
-          Text(stringResource(R.string.voice_stop_reply))
+          enabled = voiceCall.phase == "connected" &&
+            (if (voiceCall.taskId.isNotBlank()) !voiceCall.taskCancelling else voiceCall.hasReply),
+          modifier = Modifier.testTag("voice-stop-reply")) {
+          Text(stringResource(if (voiceCall.taskId.isNotBlank()) R.string.voice_cancel_task
+            else R.string.voice_stop_reply))
         }
       }
     } },
     confirmButton = { TextButton(onClick = { voiceScope.launch { voiceCall.stop() } },
       modifier = Modifier.testTag("voice-end")) { Text(stringResource(R.string.voice_end)) } })
+  if (voiceCall.phase != "idle" && !voiceExpanded) Popup(
+    alignment = Alignment.BottomCenter,
+    offset = IntOffset(voiceMiniX.roundToInt(), voiceMiniY.roundToInt() - 110),
+    properties = PopupProperties(focusable = false)) {
+    Card(onClick = { voiceExpanded = true },
+      modifier = Modifier.fillMaxWidth(0.9f).navigationBarsPadding()
+        .pointerInput(voiceCall) { detectDragGestures { change, drag ->
+          change.consume()
+          voiceMiniX = (voiceMiniX + drag.x).coerceIn(-voiceMiniMaxX, voiceMiniMaxX)
+          voiceMiniY = (voiceMiniY + drag.y).coerceIn(-voiceMiniMaxY, 0f)
+        } }.testTag("voice-call-mini")) {
+      Row(modifier = Modifier.fillMaxWidth().padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text("◉", color = MaterialTheme.colorScheme.primary)
+        Column(modifier = Modifier.weight(1f)) {
+          Text(stringResource(if (voiceCall.mode == "natural")
+            R.string.assistant_action_voice_natural else R.string.assistant_action_voice_assistant),
+            maxLines = 1)
+          Text(stringResource(when (voiceCall.phase) {
+            "connecting" -> R.string.voice_connecting
+            "recovering" -> R.string.voice_reconnecting
+            "paused" -> R.string.voice_paused
+            else -> if (voiceCall.speaking) R.string.voice_speaking else R.string.voice_listening
+          }), style = MaterialTheme.typography.bodySmall)
+        }
+        TextButton(onClick = { voiceScope.launch { voiceCall.stop() } },
+          modifier = Modifier.testTag("voice-mini-end")) { Text(stringResource(R.string.voice_end)) }
+      }
+    }
+  }
   if (voiceMemo.phase != "idle") AlertDialog(onDismissRequest = voiceMemo::cancel,
     modifier = Modifier.testTag("voice-record-dialog"),
     title = { Text(stringResource(R.string.assistant_action_voice)) },
@@ -2253,7 +2346,10 @@ private fun AssistantComposerButtons(connection: ConnectionUiState, actionsOpen:
     }
   }
   if (connection.activeRunId != null) {
-    val stopLabel = stringResource(R.string.assistant_stop)
+    val stopLabel = stringResource(if (connection.stoppingRun) R.string.assistant_stopping
+      else R.string.assistant_stop)
+    if (connection.stoppingRun) Text(stopLabel, style = MaterialTheme.typography.labelSmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant)
     IconButton(onClick = onStopRun, modifier = Modifier.size(48.dp)
       .semantics { contentDescription = stopLabel }.testTag("assistant-stop")
       .background(MaterialTheme.colorScheme.onSurface, CircleShape),

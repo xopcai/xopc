@@ -15,6 +15,7 @@ import {
   AgentProfileEditor,
   type AgentProfileEditorHandle,
 } from '@/features/settings/agents/agent-profile-editor';
+import { ModelRouteEditor } from '@/features/settings/agents/agent-model-route-editor';
 import { updateGatewayAgent } from '@/features/settings/agents-admin-api';
 import { CREATURE_PRESETS } from '@/features/settings/agents/agent-profile-markdown';
 import type {
@@ -65,58 +66,6 @@ function SummaryCard({ label, value, detail }: { label: string; value: string; d
       <p className="text-xs font-medium text-fg-muted">{label}</p>
       <p className="mt-2 truncate text-sm font-semibold text-fg" title={value}>{value}</p>
       <p className="mt-1 text-xs text-fg-subtle">{detail}</p>
-    </div>
-  );
-}
-
-function ModelRouteEditor({
-  label,
-  inherited,
-  value,
-  zh,
-  allowChatFallback = false,
-  allowDisabled = false,
-  onChange,
-}: {
-  label: string;
-  inherited?: ModelRoute;
-  value: ModelRoute | null | undefined;
-  zh: boolean;
-  allowChatFallback?: boolean;
-  allowDisabled?: boolean;
-  onChange: (value: ModelRoute | null | undefined) => void;
-}) {
-  const customized = value !== undefined && value !== null;
-  return (
-    <div className="rounded-2xl border border-edge bg-surface-base p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h4 className="text-sm font-medium text-fg">{label}</h4>
-            {value === undefined ? <InheritedBadge>{zh ? '继承' : 'Inherited'}</InheritedBadge> : null}
-            {value === null ? <InheritedBadge>{allowDisabled ? (zh ? '已禁用' : 'Disabled') : (zh ? '使用 Chat' : 'Uses Chat')}</InheritedBadge> : null}
-          </div>
-          {value === undefined ? <p className="mt-1 truncate font-mono text-xs text-fg-muted">{inherited?.primary ?? (zh ? '全局未配置' : 'Not configured globally')}</p> : null}
-        </div>
-        <div className="flex gap-1">
-          {value !== undefined ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onChange(undefined)}>{zh ? '继承' : 'Inherit'}</Button> : null}
-          {allowChatFallback && value !== null ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onChange(null)}>{zh ? '使用 Chat' : 'Use Chat'}</Button> : null}
-          {allowDisabled && value !== null ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onChange(null)}>{zh ? '禁用' : 'Disable'}</Button> : null}
-          {!customized ? <Button className="px-2 py-1 text-xs" onClick={() => onChange({ primary: inherited?.primary ?? '', fallbacks: [...(inherited?.fallbacks ?? [])] })}>{zh ? '自定义' : 'Customize'}</Button> : null}
-        </div>
-      </div>
-      {customized ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
-          <label className="text-xs font-medium text-fg-muted">
-            {zh ? '主模型' : 'Primary model'}
-            <input className={`${inputClass} mt-1.5 font-mono`} value={value.primary} onChange={(event) => onChange({ ...value, primary: event.target.value })} />
-          </label>
-          <label className="text-xs font-medium text-fg-muted">
-            {zh ? '回退模型' : 'Fallbacks'}
-            <input className={`${inputClass} mt-1.5 font-mono`} value={value.fallbacks.join(', ')} onChange={(event) => onChange({ ...value, fallbacks: splitList(event.target.value) })} placeholder={zh ? '逗号分隔' : 'Comma separated'} />
-          </label>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -421,6 +370,7 @@ export function AgentEditor({
                       value={draft.models?.intents?.[intent]}
                       zh={zh}
                       allowChatFallback
+                      modelKind={intent === 'vision' ? 'vision' : 'text'}
                       onChange={(route) => setIntent(intent, route)}
                     />
                   ))}
@@ -431,6 +381,7 @@ export function AgentEditor({
                 <div className="space-y-3">
                   <ModelRouteEditor
                     label={zh ? '图片理解' : 'Image understanding'}
+                    modelKind="vision"
                     inherited={agent.effective.models.imageUnderstanding}
                     value={draft.models?.imageUnderstanding}
                     zh={zh}
@@ -444,6 +395,7 @@ export function AgentEditor({
                   />
                   <ModelRouteEditor
                     label={zh ? '图片生成' : 'Image generation'}
+                    modelKind="image"
                     inherited={agent.effective.models.imageGeneration}
                     value={draft.models?.imageGeneration}
                     zh={zh}

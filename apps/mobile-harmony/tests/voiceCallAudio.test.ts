@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@kit.AbilityKit', () => ({ abilityAccessCtrl: {}, common: {}, wantAgent: {} }));
+vi.mock('@kit.BasicServicesKit', () => ({ systemDateTime: { TimeType: { STARTUP: 1 }, getUptime: () => 1000 } }));
 vi.mock('@kit.AudioKit', () => ({ audio: {} }));
 vi.mock('@kit.AVSessionKit', () => ({ avSession: {} }));
 vi.mock('@kit.BackgroundTasksKit', () => ({ backgroundTaskManager: {} }));
@@ -55,7 +56,7 @@ describe('Harmony voice playback acknowledgement', () => {
     await vi.waitFor(() => expect(drain).toHaveBeenCalledOnce());
     expect(onPlayed).not.toHaveBeenCalled();
     finishDrain();
-    await vi.waitFor(() => expect(onPlayed).toHaveBeenCalledWith('response-1', 20));
+    await vi.waitFor(() => expect(onPlayed).toHaveBeenCalledWith('response-1', 20, 'drain'));
     expect(onFailure).not.toHaveBeenCalled();
     await call.stop();
   });
@@ -86,4 +87,12 @@ describe('Harmony voice playback acknowledgement', () => {
     expect(onPlayed).not.toHaveBeenCalled();
     await call.stop();
   });
+  it('ramps down once and restores the original renderer volume', () => {
+    const renderer = { getVolume: vi.fn(() => 0.8), setVolumeWithRamp: vi.fn() };
+    const call = new XopcVoiceCallAudio(); (call as any).renderer = renderer;
+    call.duck(true); call.duck(true); call.duck(false); call.duck(false);
+    expect(renderer.getVolume).toHaveBeenCalledOnce();
+    expect(renderer.setVolumeWithRamp.mock.calls).toEqual([[0.2, 60], [0.8, 120]]);
+  });
+
 });

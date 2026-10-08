@@ -127,6 +127,12 @@ class NoteRepository(private val gateway: GatewaySession) {
     return parseList(gateway.request(path), offset)
   }
 
+  fun listProject(projectId: String): NotePage {
+    requireValidId(projectId)
+    return parseList(gateway.request("/api/notes?projectId=$projectId&limit=30&offset=0" +
+      "&sortBy=updatedAt&sortOrder=desc"), 0)
+  }
+
   fun detail(id: String): NoteDetail {
     requireValidId(id)
     return parseDetail(id, gateway.request("/api/notes/$id"))

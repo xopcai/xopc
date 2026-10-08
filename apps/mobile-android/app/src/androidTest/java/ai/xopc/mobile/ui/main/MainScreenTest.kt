@@ -1405,6 +1405,32 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-project-detail").assertExists()
   }
 
+  @Test fun projectDetailExposesNotesAndAutomationsAndOpensTheirItems() {
+    val project = ProgressProject("project-1", "Alpha", "", "active", "Plan work")
+    val note = NoteSummary("note-1", "Plan", "Project brief", "inbox", "thought", 10,
+      false, emptyList())
+    val automation = AutomationSummary("auto-1", "Daily check", "", true, "schedule", "", "",
+      "project-1", null, null, null, null)
+    val state = mutableStateOf(ProgressUiState(projects = listOf(project), projectNotes = listOf(note),
+      projectAutomations = listOf(automation)))
+    var openedNote = ""
+    var openedAutomation = ""
+    composeTestRule.setContent {
+      ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, {},
+        {}, {}, {}, {}, {}, {}, { id -> state.value = state.value.copy(projectId = id, project = project) },
+        { _, _, _ -> }, {}, { _, _, _, _, _ -> }, {}, onOpenNote = { openedNote = it },
+        onOpenAutomation = { openedAutomation = it })
+    }
+    composeTestRule.onNodeWithTag("progress-projects").performClick()
+    composeTestRule.onNodeWithTag("progress-project-project-1").performClick()
+    composeTestRule.onNodeWithTag("progress-project-tab-notes").performClick()
+    composeTestRule.onNodeWithTag("progress-project-note-note-1").performClick()
+    assertEquals("note-1", openedNote)
+    composeTestRule.onNodeWithTag("progress-project-tab-automations").performClick()
+    composeTestRule.onNodeWithTag("progress-project-automation-auto-1").performClick()
+    assertEquals("auto-1", openedAutomation)
+  }
+
   @Test fun progressTaskCloseRequiresConfirmationAndUsesAllowedCommandsOnly() {
     val task = ProgressTask("task-ready", "Ready work", "", "ready", null, 10, null, null,
       version = 2, allowedCommands = listOf("close", "mark_ready"))
@@ -2031,7 +2057,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("tab-Assistant").assertExists()
   }
 
-  @Test fun assistantSecondActionPageShowsVoiceModesWithoutOfferingUnimplementedCalls() {
+  @Test fun assistantSecondActionPageOffersBothRealtimeVoiceModes() {
     val id = "11111111-2222-3333-4444-555555555555"
     composeTestRule.setContent {
       MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
@@ -2040,8 +2066,8 @@ class MainScreenTest {
     }
     composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
     composeTestRule.onNodeWithTag("assistant-action-panel").performTouchInput { swipeLeft() }
-    composeTestRule.onNodeWithTag("assistant-action-voice-natural").assertIsNotEnabled()
-    composeTestRule.onNodeWithTag("assistant-action-voice-assistant").assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("assistant-action-voice-natural").assertIsEnabled()
+    composeTestRule.onNodeWithTag("assistant-action-voice-assistant").assertIsEnabled()
   }
 
   @Test fun assistantKeepsConversationHeaderCompactAndMovesConfigurationIntoOptions() {
