@@ -94,10 +94,10 @@ class AutomationScreensTest {
   @Test fun automationDetailShowsInstructionAndOpensRun() {
     var openedRun = ""
     composeTestRule.setContent {
-      AutomationDetailContent(AutomationUiState(selectedId = "auto-1", detail = enabled,
+      AutomationDetailContent(AutomationUiState(selectedId = "auto-1", detail = enabled.copy(instruction = "**Summarize** my day"),
         runs = listOf(run)), {}, { openedRun = it })
     }
-    composeTestRule.onNodeWithText("Summarize my day").assertExists()
+    composeTestRule.onNodeWithText("Summarize my day", substring = true).assertExists()
     composeTestRule.onNodeWithTag("automation-run-run-1").performClick()
     assertEquals("run-1", openedRun)
   }

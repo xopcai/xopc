@@ -104,9 +104,10 @@ private fun MarkdownBlock(node: Node, linkColor: Color,
     is Heading -> MarkdownInlineText(node, linkColor, onOpenLink,
       modifier = Modifier.fillMaxWidth().testTag("markdown-heading"),
       style = when (node.level) {
-        1 -> MaterialTheme.typography.headlineSmall
-        2 -> MaterialTheme.typography.titleLarge
-        else -> MaterialTheme.typography.titleMedium
+        1 -> MaterialTheme.typography.bodyLarge.copy(fontSize = 24.sp, lineHeight = 32.sp)
+        2 -> MaterialTheme.typography.bodyLarge.copy(fontSize = 20.sp, lineHeight = 28.sp)
+        3 -> MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp, lineHeight = 26.sp)
+        else -> MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp)
       }, bold = true)
     is FencedCodeBlock -> MarkdownCodeBlock(node.literal, node.info, onCopyCode)
     is IndentedCodeBlock -> MarkdownCodeBlock(node.literal, "", onCopyCode)

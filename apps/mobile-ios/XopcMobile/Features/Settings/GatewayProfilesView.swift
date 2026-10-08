@@ -201,14 +201,14 @@ private struct GatewayProfileRow: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "link")
-                        .font(.title3)
+                        .mobileTextStyle(.sectionTitle)
                         .foregroundStyle(.blue)
                         .frame(width: 44, height: 44)
                         .background(.blue.opacity(0.1), in: .rect(cornerRadius: 14))
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(profile.name).font(.headline).foregroundStyle(.primary)
+                        Text(profile.name).mobileTextStyle(.rowTitle).foregroundStyle(.primary)
                         Text(profile.baseURL.host ?? profile.baseURL.absoluteString)
-                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            .mobileTextStyle(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer(minLength: 6)
                     if isActive {
@@ -228,11 +228,11 @@ private struct GatewayProfileRow: View {
                 Spacer()
                 Button("探测", action: onProbe)
             }
-            .font(.caption)
+            .mobileTextStyle(.caption)
             if expanded {
                 Divider()
                 Text(profile.baseURL.absoluteString)
-                    .font(.caption)
+                    .mobileTextStyle(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                 HStack(spacing: 12) {
@@ -241,10 +241,10 @@ private struct GatewayProfileRow: View {
                     Spacer()
                     Button("移除", role: .destructive, action: onRemove)
                 }
-                .font(.subheadline)
+                .mobileTextStyle(.secondary)
                 if !isActive {
                     Button("切换", action: onActivate)
-                        .font(.subheadline)
+                        .mobileTextStyle(.secondary)
                         .disabled(probe?.isOnline != true)
                 }
             }
@@ -284,7 +284,7 @@ private struct GatewayProfileDetailView: View {
             }
             Section {
                 Label("连接凭据保存在系统钥匙串中，不会在页面显示。", systemImage: "lock.shield")
-                    .font(.footnote)
+                    .mobileTextStyle(.footnote)
                     .foregroundStyle(.secondary)
             }
         }
@@ -350,7 +350,7 @@ struct GatewayProfileEditor: View {
                                 .font(.system(size: 40, weight: .semibold, design: .rounded))
                                 .tracking(5)
                             Text("确认电脑上显示相同的核对码后批准连接。")
-                                .font(.footnote)
+                                .mobileTextStyle(.footnote)
                                 .foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity)
@@ -360,7 +360,7 @@ struct GatewayProfileEditor: View {
 
                     if let errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(.footnote)
+                            .mobileTextStyle(.footnote)
                             .foregroundStyle(.red)
                     }
 

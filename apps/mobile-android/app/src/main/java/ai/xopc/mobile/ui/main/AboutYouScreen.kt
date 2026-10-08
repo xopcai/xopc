@@ -431,7 +431,7 @@ private fun AssertionDetail(state: PersonalUiState, onRetry: () -> Unit,
 
 @Composable private fun AboutCount(count: Int, label: String) {
   Column {
-    Text(count.toString(), style = MaterialTheme.typography.headlineSmall,
+    Text(count.toString(), style = MaterialTheme.typography.headlineMedium,
       fontWeight = FontWeight.Bold)
     AboutLabel(label)
   }

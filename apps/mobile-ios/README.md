@@ -2,7 +2,7 @@
 
 The SwiftUI app uses the existing `ai.xopc.xopc` App ID. Its Xcode project is generated from `project.yml` with XcodeGen.
 
-The app icon matches HarmonyOS `AppScope/resources/base/media/app_icon.png`. The static launch screen uses HarmonyOS's light and dark `launch_logo.svg` variants on matching `surface` colors through the iOS asset catalog and `LaunchScreen.storyboard`.
+The app icon uses the HarmonyOS artwork with a slightly smaller ring, matching Android’s visible launcher proportions. Regenerate it with `pnpm run assets:brand -- --target=ios`. The static launch screen uses HarmonyOS's light and dark `launch_logo.svg` variants on matching `surface` colors through the iOS asset catalog and `LaunchScreen.storyboard`.
 
 ## Local build
 

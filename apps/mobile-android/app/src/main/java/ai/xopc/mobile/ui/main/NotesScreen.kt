@@ -311,7 +311,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           Text("‹", style = MaterialTheme.typography.headlineMedium)
         }
         Text(if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
-          style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
+          style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
           modifier = Modifier.weight(1f))
         Text(if (fileBrowserOpen) "" else if (!editorOpen ||
           state.draft?.version == state.draftSyncedVersion) stringResource(R.string.notes_saved)
@@ -1130,12 +1130,7 @@ private fun NoteCard(note: NoteSummary, onOpen: (String) -> Unit) {
         if (note.snippet.isNotBlank()) Text(note.snippet, maxLines = 2,
           overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
           color = MaterialTheme.colorScheme.onSurfaceVariant)
-        val statusLabel = stringResource(when (note.status) {
-          "inbox" -> R.string.notes_inbox
-          "processed" -> R.string.notes_processed
-          "archived" -> R.string.notes_archived
-          else -> R.string.notes_all
-        })
+        val statusLabel = noteStatusLabel(note.status)
         Text("${DateFormat.getDateInstance().format(Date(note.updatedAt))} · $statusLabel",
           style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (note.tags.isNotEmpty()) Text(note.tags.take(2).joinToString("  ") { "#$it" },
@@ -1218,9 +1213,9 @@ private fun NoteDetailAction(symbol: String, label: String, onClick: () -> Unit,
 private fun NoteBody(note: NoteDetail, onOpenLink: (String) -> Unit,
   onPreviewAttachment: (NoteAttachment) -> Unit) {
   Text(note.title.ifBlank { stringResource(R.string.notes_untitled) },
-    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
+    style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
     modifier = Modifier.testTag("note-detail-title"))
-  Text("${DateFormat.getDateTimeInstance().format(Date(note.updatedAt))} · ${note.status}",
+  Text("${DateFormat.getDateTimeInstance().format(Date(note.updatedAt))} · ${noteStatusLabel(note.status)}",
     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
   if (note.tags.isNotEmpty()) Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1246,3 +1241,11 @@ private fun NoteBody(note: NoteDetail, onOpenLink: (String) -> Unit,
   else Text(stringResource(R.string.notes_empty_body),
     style = MaterialTheme.typography.bodyLarge, modifier = Modifier.testTag("note-detail-body"))
 }
+
+@Composable
+private fun noteStatusLabel(status: String): String = stringResource(when (status) {
+  "inbox" -> R.string.notes_inbox
+  "processed" -> R.string.notes_processed
+  "archived" -> R.string.notes_archived
+  else -> R.string.notes_all
+})

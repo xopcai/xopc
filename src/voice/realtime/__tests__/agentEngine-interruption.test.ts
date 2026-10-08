@@ -12,7 +12,7 @@ import { createAgentVoiceEngine } from '../agentEngine.js';
 describe('Agent voice interruption cleanup', () => {
   let engine: VoiceEngine;
   const cleanups: Array<() => void> = [];
-  afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await engine?.close(); vi.clearAllMocks(); });
+  afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await engine?.close(); vi.clearAllMocks(); vi.restoreAllMocks(); });
 
   type RunAgent = (text: string, conversationId: string, signal: AbortSignal) => AsyncIterable<VoiceAgentEvent>;
 
@@ -181,7 +181,7 @@ describe('Agent voice interruption cleanup', () => {
     expect(runAgent).toHaveBeenCalledOnce();
   });
 
-  it('ignores imperfect speaker echo finalized just after playback completes', async () => {
+  it.each(['completed', 'cancelled'])('ignores delayed echo after playback is %s', async (ending) => {
     const runAgent = vi.fn(async function* () {
       yield { type: 'assistant_delta' as const, payload: { delta: '今天天气怎么样？答案是晴天。' } };
     });
@@ -194,14 +194,20 @@ describe('Agent voice interruption cleanup', () => {
     await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
     const responseId = test.sendAudio.mock.calls[0]![0];
     const sentBytes = test.sendAudio.mock.calls.reduce((total, [, bytes]) => total + bytes.byteLength, 0);
-    engine.acknowledge(responseId, sentBytes / 48);
-    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.anything()));
-
-    test.emit({ type: 'speech_started', utteranceId: 'late-echo' });
+    if (ending === 'completed') {
+      test.emit({ type: 'speech_started', utteranceId: 'late-echo' });
+      engine.acknowledge(responseId, sentBytes / 48);
+      await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.anything()));
+    } else {
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_000);
+      engine.cancel(responseId, 'client_cancelled');
+      test.emit({ type: 'speech_started', utteranceId: 'late-echo' });
+    }
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_000);
     test.emit({ type: 'transcript_final', utteranceId: 'late-echo', revision: 1, text: '今天天汽怎么样答案晴天' });
 
     expect(test.send.mock.calls.filter(([type, payload]) => type === 'input.transcript.final' && payload.utteranceId === 'late-echo')).toEqual([]);
-    expect(test.send.mock.calls.filter(([type]) => type === 'response.cancelled')).toEqual([]);
+    expect(test.send.mock.calls.filter(([type, payload]) => type === 'response.cancelled' && payload.reason === 'barge_in')).toEqual([]);
     expect(runAgent).toHaveBeenCalledOnce();
   });
 
