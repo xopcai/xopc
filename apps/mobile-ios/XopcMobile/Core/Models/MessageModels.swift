@@ -36,7 +36,7 @@ struct HistoryToolCall: Decodable, Sendable {
 
 struct WireMessageMetadata: Decodable, Sendable {
     let sourceContexts: [SourceContextMetadata]?
-    var turnOutcome: HistoryTurnOutcome? = nil
+    var turnOutcome: HistoryTurnOutcome?
 }
 
 struct HistoryTurnOutcome: Decodable, Sendable {
