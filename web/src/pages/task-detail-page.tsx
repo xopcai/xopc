@@ -192,7 +192,7 @@ function readTaskChatPanelPercent(): number {
   }
 }
 
-type DetailStatusKey = 'captured' | 'ready' | 'queued' | 'running' | 'verifying' | 'waiting' | 'blocked' | 'needsUser' | 'review' | 'completed' | 'ended' | 'paused';
+type DetailStatusKey = 'captured' | 'ready' | 'queued' | 'running' | 'verifying' | 'waiting' | 'blocked' | 'failed' | 'cancelled' | 'needsUser' | 'review' | 'completed' | 'ended' | 'paused';
 type TaskEditConflict = 'title' | 'description' | null;
 type TaskPendingOperation = 'command' | 'phase' | 'priority' | 'dueAt' | 'delegateAgentId' | 'dependencies' | 'acceptance' | 'delete' | 'title';
 
@@ -208,6 +208,7 @@ function detailStatusKey(detail: TaskDetail): DetailStatusKey {
 }
 
 function detailStatusTone(status: DetailStatusKey): string {
+  if (status === 'failed') return 'bg-danger/10 text-danger';
   if (status === 'needsUser' || status === 'blocked') return 'bg-warning/10 text-warning';
   if (status === 'completed') return 'bg-success-soft text-success';
   if (status === 'running' || status === 'verifying' || status === 'review') return 'bg-accent-soft text-accent-fg';

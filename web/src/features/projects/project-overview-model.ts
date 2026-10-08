@@ -9,12 +9,14 @@ const PHASE_RANK: Record<ProjectTaskCard['phase'], number> = {
 };
 
 const OPERATIONAL_RANK: Record<ProjectTaskCard['operationalState'], number> = {
-  blocked: 0,
-  waiting: 1,
-  verifying: 2,
-  running: 3,
-  queued: 4,
-  idle: 5,
+  failed: 0,
+  blocked: 1,
+  waiting: 2,
+  verifying: 3,
+  running: 4,
+  queued: 5,
+  cancelled: 6,
+  idle: 7,
 };
 
 const PRIORITY_RANK: Record<ProjectTaskCard['priority'], number> = {

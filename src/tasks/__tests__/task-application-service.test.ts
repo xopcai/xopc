@@ -255,6 +255,36 @@ describe('TaskApplicationService', () => {
     ]);
   });
 
+  it('projects a failed run as failed and returns to queued when retried', () => {
+    const { service, task, run } = createRunningTask('failed-then-retry');
+    expect(new TaskReadModelProjector().get(task.id)).toMatchObject({
+      task: { phase: 'active' }, operationalState: 'running',
+    });
+    const failed = service.completeRun({
+      runId: run.id, expectedRunVersion: run.version,
+      receipt: { ...receipt, status: 'failed', verification: { status: 'failed', checks: [] },
+        completionVerdict: 'not_achieved', remainingWork: ['tests pass'] },
+    });
+    expect(failed).toMatchObject({ ok: true, model: {
+      task: { phase: 'active' }, operationalState: 'failed',
+      attention: [expect.objectContaining({ kind: 'verification_failed' })],
+    } });
+    const current = new TaskRepository().require(task.id);
+    expect(service.execute({ taskId: task.id, expectedVersion: current.version,
+      idempotencyKey: 'retry-failed', command: { type: 'start', executor: { kind: 'agent', agentId: 'main' } },
+    })).toMatchObject({ ok: true, model: { operationalState: 'queued' } });
+  });
+
+  it('projects a cancelled run as cancelled without closing the task', () => {
+    const { service, task, run } = createRunningTask('cancelled-run');
+    expect(service.completeRun({ runId: run.id, expectedRunVersion: run.version,
+      receipt: { ...receipt, status: 'cancelled', verification: { status: 'unverified', checks: [] },
+        completionVerdict: 'not_achieved', remainingWork: ['tests pass'] },
+    })).toMatchObject({ ok: true, model: {
+      task: { phase: 'active' }, operationalState: 'cancelled',
+    } });
+  });
+
   it.each([
     { completionVerdict: 'partial' as const },
     { remainingWork: ['Record narration'] },

@@ -1,6 +1,16 @@
 import Foundation
 
 extension GatewayClient {
+    func ensureTaskConversation(taskID: String) async throws -> String {
+        let response: TaskConversationCreation = try await request(
+            path: "/api/tasks/\(taskID)/conversation", method: "POST"
+        )
+        guard response.ok, !response.conversationId.isEmpty else {
+            throw GatewayClientError.server("无法创建任务对话")
+        }
+        return response.conversationId
+    }
+
     func fetchInputState(conversationID: String) async throws -> InputState {
         let envelope: GatewayEnvelope<InputState> = try await request(
             path: "/api/sessions/\(conversationID)/input-state"
@@ -157,6 +167,11 @@ extension GatewayClient {
     func deleteConversation(id: String) async throws {
         let _: IgnoredResponse = try await request(path: "/api/sessions/\(id)", method: "DELETE")
     }
+}
+
+private struct TaskConversationCreation: Decodable {
+    let ok: Bool
+    let conversationId: String
 }
 
 struct ProjectEnvironmentOptions: Decodable, Sendable {

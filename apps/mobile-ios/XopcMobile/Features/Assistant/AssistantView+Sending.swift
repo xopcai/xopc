@@ -29,6 +29,7 @@ extension AssistantView {
                 text,
                 attachments: selectedAttachments,
                 references: selectedReferences,
+                delivery: delivery,
                 to: conversation,
                 using: gateway,
                 onMaterialized: onConversationUpdated

@@ -6,6 +6,7 @@ struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var appState = AppState()
     @State private var realtimeVoiceCall = RealtimeVoiceCall()
+    @State private var personalAgent = PersonalAgentState()
     @State private var settingsPresented = false
     @State private var quickDraft = ""
     @State private var keyboardVisible = false
@@ -96,6 +97,7 @@ struct AppRootView: View {
                     isActive: appState.selectedTab == .assistant,
                     realtimeVoiceCall: realtimeVoiceCall,
                     conversation: appState.selectedConversation,
+                    personalAgent: personalAgent.record,
                     quickChatHandoff: appState.quickChatHandoff,
                     onStartConversation: appState.startConversation,
                     onStartScopedConversation: appState.startScopedConversation,
@@ -117,6 +119,21 @@ struct AppRootView: View {
                         configuration: appState.gatewayConfiguration,
                         onSelect: appState.open,
                         onStartNew: { appState.startConversation(agentId: "main") },
+                        personalAgent: personalAgent.record,
+                        personalAgentLoading: personalAgent.isLoading || personalAgent.isOpening,
+                        personalAgentError: personalAgent.errorMessage,
+                        onOpenPersonalAgent: {
+                            Task {
+                                let configuration = appState.gatewayConfiguration
+                                guard let record = await personalAgent.open(using: configuration),
+                                      configuration == appState.gatewayConfiguration else { return }
+                                appState.openConversation(
+                                    id: record.conversationId,
+                                    title: record.displayName,
+                                    agentId: record.agentId
+                                )
+                            }
+                        },
                         onOpenSettings: { settingsPresented = true },
                         bottomInset: secondaryDockHeight + 24
                     )
@@ -165,6 +182,14 @@ struct AppRootView: View {
             .tabItem { Label("我的", systemImage: "person.crop.circle") }
             .tag(AppTab.profile)
             .toolbar(.hidden, for: .tabBar)
+        }
+        .task(id: appState.gatewayConfiguration) {
+            await personalAgent.refresh(using: appState.gatewayConfiguration)
+        }
+        .onChange(of: appState.selectedTab) {
+            if appState.selectedTab == .conversations {
+                Task { await personalAgent.refresh(using: appState.gatewayConfiguration) }
+            }
         }
     }
 

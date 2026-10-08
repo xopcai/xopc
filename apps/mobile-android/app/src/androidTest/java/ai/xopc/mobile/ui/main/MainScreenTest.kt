@@ -101,6 +101,35 @@ import java.io.ByteArrayOutputStream
 class MainScreenTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
+  @Test fun personalAssistantEntryOpensFixedConversationAction() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    var opens = 0
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Me, onSelectTab = {},
+          connection = ConnectionUiState(profile = profile,
+            personal = PersonalUiState(gatewayId = "gateway")),
+          onOpenPersonalAgent = { opens++ })
+      }
+    }
+    composeTestRule.onNodeWithTag("personal-agent-open").performClick()
+    composeTestRule.runOnIdle { assertEquals(1, opens) }
+  }
+
+  @Test fun sendingTextIsVisibleBeforeAuthoritativeHistoryArrives() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val id = "11111111-2222-3333-4444-555555555555"
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+          connection = ConnectionUiState(profile = profile, selectedConversationId = id,
+            optimisticText = "Sending now", sending = true))
+      }
+    }
+    composeTestRule.onNodeWithTag("assistant-send-flight").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Sending now").assertIsDisplayed()
+  }
+
   @Test fun personalLoadingCentersLoopiInAvailableContent() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     composeTestRule.setContent {

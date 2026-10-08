@@ -4,6 +4,10 @@ struct ConversationsView: View {
     let configuration: GatewayConfiguration
     let onSelect: (ConversationSummary) -> Void
     let onStartNew: () -> Void
+    let personalAgent: PersonalAgentRecord?
+    let personalAgentLoading: Bool
+    let personalAgentError: String?
+    let onOpenPersonalAgent: () -> Void
     let onOpenSettings: () -> Void
     var bottomInset: CGFloat = 0
 
@@ -19,6 +23,10 @@ struct ConversationsView: View {
             conversationSearchField
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
+                .padding(.bottom, 8)
+
+            personalAgentEntry
+                .padding(.horizontal, 20)
                 .padding(.bottom, 12)
 
             Group {
@@ -119,6 +127,46 @@ struct ConversationsView: View {
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
     }
 
+    private var personalAgentEntry: some View {
+        Button(action: onOpenPersonalAgent) {
+            HStack(spacing: 14) {
+                PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 48, active: false)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(verbatim: personalAgent?.isReady == true
+                        ? (locale.language.languageCode?.identifier == "zh"
+                            ? "继续和\(personalAgent?.displayName ?? "Ada")对话"
+                            : "Continue with \(personalAgent?.displayName ?? "Ada")")
+                        : (locale.language.languageCode?.identifier == "zh" ? "创建我的助手" : "Create my assistant"))
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(verbatim: personalAgentError ?? (personalAgent?.isReady == true
+                        ? (locale.language.languageCode?.identifier == "zh"
+                            ? "回到你的固定主会话" : "Return to your ongoing conversation")
+                        : (locale.language.languageCode?.identifier == "zh"
+                            ? "保持同一个助手和持续的对话" : "One assistant, one ongoing conversation")))
+                        .font(.caption)
+                        .foregroundColor(personalAgentError == nil ? .secondary : .red)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 4)
+                if personalAgentLoading {
+                    ProgressView()
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.blue)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+            .background(Color.blue.opacity(0.08), in: .rect(cornerRadius: 20))
+        }
+        .buttonStyle(.plain)
+        .disabled(personalAgentLoading)
+        .accessibilityIdentifier("conversations-personal-agent-entry")
+    }
+
     private func conversationButton(for conversation: ConversationSummary) -> some View {
         Button {
             onSelect(conversation)
@@ -134,24 +182,28 @@ struct ConversationsView: View {
         .listRowSeparator(.hidden)
         .disabled(state.operatingConversationID != nil)
         .swipeActions(edge: .trailing) {
-            Button("删除", role: .destructive) { deleteTarget = conversation }
-            Button("归档") { archive(conversation) }.tint(.orange)
+            if conversation.id != personalAgent?.conversationId {
+                Button("删除", role: .destructive) { deleteTarget = conversation }
+                Button("归档") { archive(conversation) }.tint(.orange)
+            }
         }
         .contextMenu {
-            Button("重命名", systemImage: "pencil") {
-                renameText = conversation.displayName
-                renameTarget = conversation
-            }
-            Button { togglePin(conversation) } label: {
-                Label {
-                    Text(conversation.status == "pinned"
-                        ? LocalizedStringResource("取消置顶")
-                        : LocalizedStringResource("置顶"))
-                } icon: {
-                    Image(systemName: conversation.status == "pinned" ? "pin.slash" : "pin")
+            if conversation.id != personalAgent?.conversationId {
+                Button("重命名", systemImage: "pencil") {
+                    renameText = conversation.displayName
+                    renameTarget = conversation
                 }
+                Button { togglePin(conversation) } label: {
+                    Label {
+                        Text(conversation.status == "pinned"
+                            ? LocalizedStringResource("取消置顶")
+                            : LocalizedStringResource("置顶"))
+                    } icon: {
+                        Image(systemName: conversation.status == "pinned" ? "pin.slash" : "pin")
+                    }
+                }
+                Button("归档", systemImage: "archivebox") { archive(conversation) }
             }
-            Button("归档", systemImage: "archivebox") { archive(conversation) }
         }
     }
 
@@ -299,6 +351,8 @@ private struct ConversationRow: View {
 
 #Preview {
     NavigationStack {
-        ConversationsView(configuration: .local, onSelect: { _ in }, onStartNew: {}, onOpenSettings: {})
+        ConversationsView(configuration: .local, onSelect: { _ in }, onStartNew: {},
+                          personalAgent: nil, personalAgentLoading: false, personalAgentError: nil,
+                          onOpenPersonalAgent: {}, onOpenSettings: {})
     }
 }

@@ -38,6 +38,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -185,14 +188,16 @@ enum class HomeTab(@field:StringRes val label: Int, val icon: Int) {
 
 @Composable
 private fun XopcTabDock(selectedTab: HomeTab, onSelectTab: (HomeTab) -> Unit,
-  grouped: Boolean = false, attentionCount: Int = 0) {
+  grouped: Boolean = false, attentionCount: Int = 0,
+  personalAgent: PersonalUiState? = null) {
   Row(modifier = Modifier.fillMaxWidth().padding(horizontal = if (grouped) 0.dp else 8.dp)
     .height(52.dp)
     .padding(horizontal = 4.dp, vertical = 4.dp).testTag("main-tab-dock"),
     verticalAlignment = Alignment.CenterVertically) {
     HomeTab.entries.forEach { tab ->
       val selected = selectedTab == tab
-      val label = stringResource(tab.label)
+      val label = if (tab == HomeTab.Assistant && personalAgent?.agent?.state == "ready")
+        personalAgent.agent.displayName else stringResource(tab.label)
       val interactionSource = remember { MutableInteractionSource() }
       val attentionDescription = if (tab == HomeTab.Progress && attentionCount > 0)
         stringResource(R.string.progress_attention_count, attentionCount) else null
@@ -212,8 +217,13 @@ private fun XopcTabDock(selectedTab: HomeTab, onSelectTab: (HomeTab) -> Unit,
           Box(modifier = Modifier.fillMaxSize()
             .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
               RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-            if (tab == HomeTab.Assistant) LoopiIcon(extent = 28.dp, compact = true,
-              active = selected, modifier = Modifier.testTag("assistant-tab-loopi"))
+            if (tab == HomeTab.Assistant) {
+              if (personalAgent?.agent?.state == "ready") PersonalAgentAvatar(
+                personalAgent.agentAvatar, personalAgent.agent.appearance, 28.dp, selected,
+                modifier = Modifier.testTag("assistant-tab-personal-avatar"))
+              else LoopiIcon(extent = 28.dp, compact = true,
+                active = selected, modifier = Modifier.testTag("assistant-tab-loopi"))
+            }
             else Icon(painterResource(tab.icon), contentDescription = null,
               tint = if (selected) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -237,6 +247,19 @@ private fun XopcTabDock(selectedTab: HomeTab, onSelectTab: (HomeTab) -> Unit,
 }
 
 private data class WelcomeRecommendation(val title: String, val reason: String, val prompt: String)
+
+@Composable
+private fun thinkingLevelLabel(level: String): String = stringResource(when (level) {
+  "off" -> R.string.assistant_thinking_off
+  "minimal" -> R.string.assistant_thinking_minimal
+  "low" -> R.string.assistant_thinking_low
+  "medium" -> R.string.assistant_thinking_medium
+  "high" -> R.string.assistant_thinking_high
+  "xhigh" -> R.string.assistant_thinking_xhigh
+  "max" -> R.string.assistant_thinking_max
+  "ultra" -> R.string.assistant_thinking_ultra
+  else -> R.string.assistant_thinking_unknown
+})
 
 @Composable
 private fun taskRecommendation(info: TaskWelcomeInfo?): WelcomeRecommendation? {
@@ -372,6 +395,10 @@ fun MainScreen(
   onStopRun: () -> Unit = {},
   onReloadModels: () -> Unit = {},
   onSelectModel: (String) -> Unit = {},
+  onSelectThinking: (String) -> Unit = {},
+  onLoadQueuedInputs: () -> Unit = {},
+  onUpdateQueuedInput: (String, String?, Int?) -> Unit = { _, _, _ -> },
+  onCancelQueuedInput: (String) -> Unit = {},
   onReloadAgents: () -> Unit = {},
   onSwitchAgent: (String, Boolean) -> Unit = { _, _ -> },
   onReloadContext: () -> Unit = {},
@@ -469,6 +496,8 @@ fun MainScreen(
   onRevokeShare: (String) -> Unit = {},
   onExtendShare: (String, Int) -> Unit = { _, _ -> },
   onLoadPersonal: () -> Unit = {},
+  onLoadPersonalAgent: () -> Unit = {},
+  onOpenPersonalAgent: () -> Unit = {},
   onSavePersonalGoal: (String?, String, String, String, Long?) -> Unit = { _, _, _, _, _ -> },
   onLoadPersonalAssertions: (String, String, Boolean) -> Unit = { _, _, _ -> },
   onOpenPersonalAssertion: (String) -> Unit = {},
@@ -668,6 +697,10 @@ fun MainScreen(
     onSendMessage = onSendMessage,
     onRetryPendingInput = onRetryPendingInput, onStopRun = onStopRun,
     onReloadModels = onReloadModels, onSelectModel = onSelectModel,
+    onSelectThinking = onSelectThinking,
+    onLoadQueuedInputs = onLoadQueuedInputs,
+    onUpdateQueuedInput = onUpdateQueuedInput,
+    onCancelQueuedInput = onCancelQueuedInput,
     onReloadAgents = onReloadAgents, onSwitchAgent = onSwitchAgent,
     onReloadContext = onReloadContext, onLoadContextPanel = onLoadContextPanel,
     onSetContextDirectory = onSetContextDirectory, onAddContextFile = onAddContextFile,
@@ -733,6 +766,8 @@ fun MainScreen(
     onLoadShares = onLoadShares, onCloseShares = onCloseShares,
     onRevokeShare = onRevokeShare, onExtendShare = onExtendShare,
     onLoadPersonal = onLoadPersonal,
+    onLoadPersonalAgent = onLoadPersonalAgent,
+    onOpenPersonalAgent = onOpenPersonalAgent,
     onSavePersonalGoal = onSavePersonalGoal,
     onLoadPersonalAssertions = onLoadPersonalAssertions,
     onOpenPersonalAssertion = onOpenPersonalAssertion,
@@ -840,6 +875,10 @@ internal fun MainContent(
   onStopRun: () -> Unit = {},
   onReloadModels: () -> Unit = {},
   onSelectModel: (String) -> Unit = {},
+  onSelectThinking: (String) -> Unit = {},
+  onLoadQueuedInputs: () -> Unit = {},
+  onUpdateQueuedInput: (String, String?, Int?) -> Unit = { _, _, _ -> },
+  onCancelQueuedInput: (String) -> Unit = {},
   onReloadAgents: () -> Unit = {},
   onSwitchAgent: (String, Boolean) -> Unit = { _, _ -> },
   onReloadContext: () -> Unit = {},
@@ -937,6 +976,8 @@ internal fun MainContent(
   onRevokeShare: (String) -> Unit = {},
   onExtendShare: (String, Int) -> Unit = { _, _ -> },
   onLoadPersonal: () -> Unit = {},
+  onLoadPersonalAgent: () -> Unit = {},
+  onOpenPersonalAgent: () -> Unit = {},
   onSavePersonalGoal: (String?, String, String, String, Long?) -> Unit = { _, _, _, _, _ -> },
   onLoadPersonalAssertions: (String, String, Boolean) -> Unit = { _, _, _ -> },
   onOpenPersonalAssertion: (String) -> Unit = {},
@@ -1108,7 +1149,10 @@ internal fun MainContent(
     }
   }
   LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
-    if (selectedTab == HomeTab.Me && connection.profile != null) onLoadPersonal()
+    if (selectedTab == HomeTab.Me && connection.profile != null) {
+      onLoadPersonal()
+      onLoadPersonalAgent()
+    }
   }
   val latestConnectionWaitRefresh by rememberUpdatedState(onRefreshConnectionWait)
   LaunchedEffect(selectedTab, connection.profile?.gatewayId, connection.selectedConversationId) {
@@ -1325,7 +1369,9 @@ internal fun MainContent(
                 })
             }
             if (!assistantActionsOpen && !imeVisible) XopcTabDock(selectedTab, onSelectTab,
-              grouped = true, attentionCount = attentionCount)
+              grouped = true, attentionCount = attentionCount,
+              personalAgent = connection.personal.takeIf {
+                it.agent?.conversationId == connection.selectedConversationId })
           }
         } else if (showQuick) {
           MainBottomSurface("secondary-bottom-surface") {
@@ -1364,12 +1410,16 @@ internal fun MainContent(
                 }, tagPrefix = "quick")
             }
             if (!quickActionsOpen && !imeVisible) XopcTabDock(selectedTab, onSelectTab,
-              grouped = true, attentionCount = attentionCount)
+              grouped = true, attentionCount = attentionCount,
+              personalAgent = connection.personal.takeIf {
+                it.agent?.conversationId == connection.selectedConversationId })
           }
         } else if (!imeVisible) {
           MainBottomSurface("secondary-bottom-surface") {
             XopcTabDock(selectedTab, onSelectTab, grouped = true,
-              attentionCount = attentionCount)
+              attentionCount = attentionCount,
+              personalAgent = connection.personal.takeIf {
+                it.agent?.conversationId == connection.selectedConversationId })
           }
         }
         Spacer(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)
@@ -1401,7 +1451,9 @@ internal fun MainContent(
           onCreateConversation, onLoadOlderHistory, onLoadReferences, onAddDraftRef,
           onNoteFileContent,
           onRetryPendingInput,
-          onReloadModels, onSelectModel, onReloadAgents, onSwitchAgent, onReloadContext,
+          onReloadModels, onSelectModel, onSelectThinking, onLoadQueuedInputs,
+          onUpdateQueuedInput, onCancelQueuedInput, onReloadAgents, onSwitchAgent,
+          onReloadContext,
           onLoadContextPanel, onSetContextDirectory, onAddContextFile, onCreateContextConversation,
           onRefreshConnectionWait,
           onOpenExecution, onRetryExecution, onCloseExecution,
@@ -1500,6 +1552,7 @@ internal fun MainContent(
           onConnect = { personalPage = "pairing" })
         else if (personalPage == "home") PersonalScreen(personal, rootInsets,
           connection.realtimeStatus == "connected", onLoadPersonal, onSavePersonalGoal,
+          onOpenAgent = onOpenPersonalAgent,
           onOpenSettings = { personalPage = "settings" },
           onOpenAbout = { personalStartSection = "overview"; personalPage = "about" },
           onOpenUnderstanding = { personalStartSection = "understanding"; personalPage = "about" },
@@ -1564,7 +1617,8 @@ internal fun MainContent(
     text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Text(when (voiceCall.phase) {
         "connecting" -> stringResource(R.string.voice_connecting)
-        "connected" -> stringResource(R.string.voice_listening)
+        "connected" -> stringResource(if (voiceCall.speaking) R.string.voice_speaking
+          else R.string.voice_listening)
         else -> stringResource(R.string.voice_paused)
       }, style = MaterialTheme.typography.titleMedium)
       if (voiceCall.userText.isNotBlank()) Text(voiceCall.userText,
@@ -2185,6 +2239,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onSessionFileContent: suspend (String) -> ByteArray,
   onRetryPendingInput: () -> Unit,
   onReloadModels: () -> Unit, onSelectModel: (String) -> Unit,
+  onSelectThinking: (String) -> Unit,
+  onLoadQueuedInputs: () -> Unit,
+  onUpdateQueuedInput: (String, String?, Int?) -> Unit,
+  onCancelQueuedInput: (String) -> Unit,
   onReloadAgents: () -> Unit, onSwitchAgent: (String, Boolean) -> Unit,
   onReloadContext: () -> Unit,
   onLoadContextPanel: (String, String, String) -> Unit,
@@ -2224,6 +2282,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   }
   val selected = connection.conversations.firstOrNull { it.id == connection.selectedConversationId }
   var modelPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var thinkingPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var queueOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var editingQueuedId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
+  var editingQueuedContent by remember(connection.selectedConversationId) { mutableStateOf("") }
   var modelQuery by remember(connection.selectedConversationId) { mutableStateOf("") }
   var agentPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var agentQuery by remember(connection.selectedConversationId) { mutableStateOf("") }
@@ -2233,6 +2295,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   var contextInitialMode by remember(connection.selectedConversationId) { mutableStateOf("context") }
   var contextInitialKind by remember(connection.selectedConversationId) { mutableStateOf("note") }
   var optionsOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var sendFlightVisible by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  LaunchedEffect(connection.optimisticText, connection.selectedConversationId) {
+    sendFlightVisible = connection.optimisticText.isNotBlank()
+  }
   val optionsLabel = stringResource(R.string.assistant_options)
   var messageActionsId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   var messageDetailId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
@@ -2340,7 +2406,11 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically) {
-      Text(selected?.takeUnless { it.isLocalDraft }?.title
+      val personalAgent = connection.personal.agent?.takeIf { it.state == "ready" &&
+        it.conversationId == connection.selectedConversationId }
+      if (personalAgent != null) PersonalAgentAvatar(connection.personal.agentAvatar,
+        personalAgent.appearance, 32.dp, active = true)
+      Text(personalAgent?.displayName ?: selected?.takeUnless { it.isLocalDraft }?.title
         ?: stringResource(R.string.assistant_new_conversation),
         style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium,
         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -2388,7 +2458,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       if (connection.historyLoading && connection.messages.isEmpty()) {
         Box(modifier = Modifier.weight(1f)) { AssistantHistorySkeleton() }
       } else if (!connection.historyLoading && connection.messages.isEmpty() &&
-        connection.historyBefore == null && connection.activeRunId == null && connection.liveText.isBlank()) {
+        connection.historyBefore == null && connection.activeRunId == null &&
+        connection.liveText.isBlank() && connection.optimisticText.isBlank()) {
         Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
           AssistantWelcome(if (connection.contextLoading) null else
             taskRecommendation(connection.taskWelcome) ?: projectRecommendation(connection.projectWelcome)) { prompt ->
@@ -2434,6 +2505,17 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
               { executionReturnMessageId = null; onOpenExecution(message.id) }
             } else null,
             loadMedia = { media -> onLoadMessageMedia(connection.selectedConversationId, media) })
+        }
+        if (connection.optimisticText.isNotBlank()) item(key = "send-flight") {
+          AnimatedVisibility(visible = sendFlightVisible && connection.optimisticText.isNotBlank(),
+            enter = slideInVertically(initialOffsetY = { it * 5 }) + fadeIn()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+              Card(modifier = Modifier.fillMaxWidth(0.82f).testTag("assistant-send-flight")) {
+                Text(connection.optimisticText, modifier = Modifier.padding(12.dp),
+                  style = MaterialTheme.typography.bodyMedium)
+              }
+            }
+          }
         }
         if (connection.liveText.isNotBlank() && connection.activeRunId != null) item(key = "live-output") {
           Card(modifier = Modifier.fillMaxWidth(0.9f).testTag("assistant-live-output")) {
@@ -2560,17 +2642,36 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           optionsOpen = false; contextInitialMode = "context"; contextInitialKind = "note"
           contextOpen = true; onReloadContext()
         }
-        ContextRow(stringResource(R.string.assistant_agent),
-          connection.agents.firstOrNull { it.id == connection.selectedAgentId }?.name
-            ?: connection.selectedAgentId, "assistant-agent", iconRes = R.drawable.tab_assistant,
-          compact = true, enabled = !connection.creatingConversation) {
-          optionsOpen = false; agentPickerOpen = true; onReloadAgents()
+        val personalAgent = connection.personal.agent
+        val isPersonalConversation = personalAgent?.state == "ready" &&
+          personalAgent.conversationId == connection.selectedConversationId
+        if (!isPersonalConversation) {
+          ContextRow(stringResource(R.string.assistant_agent),
+            connection.agents.firstOrNull { it.id == connection.selectedAgentId }?.name
+              ?: connection.selectedAgentId, "assistant-agent", iconRes = R.drawable.tab_assistant,
+            compact = true, enabled = !connection.creatingConversation) {
+            optionsOpen = false; agentPickerOpen = true; onReloadAgents()
+          }
+          ContextRow(stringResource(R.string.assistant_model),
+            connection.models.firstOrNull { it.id == connection.selectedModelId }?.name
+              ?: connection.selectedModelId, "assistant-model", iconRes = R.drawable.action_waveform,
+            compact = true, enabled = !connection.modelSaving) {
+            optionsOpen = false; modelPickerOpen = true; onReloadModels()
+          }
+          val selectedModel = connection.models.firstOrNull { it.id == connection.selectedModelId }
+          if (selectedModel?.thinkingMode in setOf("levels", "toggle")) {
+            ContextRow(stringResource(R.string.assistant_thinking),
+              thinkingLevelLabel(connection.thinkingLevel),
+              "assistant-thinking", iconRes = R.drawable.action_waveform, compact = true,
+              enabled = !connection.modelSaving && !connection.sending && connection.activeRunId == null &&
+                connection.pendingInput == null) {
+              optionsOpen = false; thinkingPickerOpen = true
+            }
+          }
         }
-        ContextRow(stringResource(R.string.assistant_model),
-          connection.models.firstOrNull { it.id == connection.selectedModelId }?.name
-            ?: connection.selectedModelId, "assistant-model", iconRes = R.drawable.action_waveform,
-          compact = true, enabled = !connection.modelSaving) {
-          optionsOpen = false; modelPickerOpen = true; onReloadModels()
+        ContextRow(stringResource(R.string.assistant_queue), "", "assistant-queue",
+          iconRes = R.drawable.action_new_chat, compact = true) {
+          optionsOpen = false; queueOpen = true; onLoadQueuedInputs()
         }
       }
       ContextRow(stringResource(R.string.assistant_action_new_chat), "", "assistant-new",
@@ -2754,6 +2855,86 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     },
     confirmButton = { TextButton(onClick = { modelPickerOpen = false }) { Text(stringResource(R.string.assistant_model_close)) } },
   )
+  if (thinkingPickerOpen) AlertDialog(
+    onDismissRequest = { thinkingPickerOpen = false },
+    title = { Text(stringResource(R.string.assistant_thinking)) },
+    text = {
+      val choices = connection.models.firstOrNull { it.id == connection.selectedModelId }
+        ?.thinkingOptions.orEmpty()
+      LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+        items(choices) { level ->
+          TextButton(onClick = { onSelectThinking(level); thinkingPickerOpen = false },
+            enabled = !connection.modelSaving && !connection.sending && connection.activeRunId == null &&
+              connection.pendingInput == null,
+            modifier = Modifier.fillMaxWidth().testTag("thinking-$level")) {
+            Text("${if (level == connection.thinkingLevel) "✓ " else ""}${thinkingLevelLabel(level)}")
+          }
+        }
+      }
+    },
+    confirmButton = { TextButton(onClick = { thinkingPickerOpen = false }) {
+      Text(stringResource(R.string.assistant_model_close))
+    } },
+  )
+  if (queueOpen) ModalBottomSheet(onDismissRequest = { queueOpen = false }) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.assistant_queue), style = MaterialTheme.typography.titleLarge,
+          modifier = Modifier.weight(1f))
+        TextButton(onClick = onLoadQueuedInputs, enabled = !connection.queueBusy) {
+          Text(stringResource(R.string.personal_retry))
+        }
+      }
+      if (connection.queueLoading || connection.queueBusy) BrandLoadingIndicator()
+      if (connection.queueError) Text(stringResource(R.string.assistant_queue_error),
+        color = MaterialTheme.colorScheme.error)
+      if (!connection.queueLoading && connection.queuedInputs.isEmpty()) {
+        Text(stringResource(R.string.assistant_queue_empty),
+          color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
+      connection.queuedInputs.forEachIndexed { index, input ->
+        Card(modifier = Modifier.fillMaxWidth().testTag("queued-${input.id}")) {
+          Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Text(input.content.ifBlank { stringResource(R.string.assistant_queue_attachment) },
+              maxLines = 3, overflow = TextOverflow.Ellipsis)
+            val earlierLabel = stringResource(R.string.assistant_queue_earlier)
+            val laterLabel = stringResource(R.string.assistant_queue_later)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+              TextButton(onClick = {
+                editingQueuedId = input.id; editingQueuedContent = input.content
+              }, enabled = !connection.queueBusy) { Text(stringResource(R.string.progress_edit_task)) }
+              TextButton(onClick = { onUpdateQueuedInput(input.id, null, index - 1) },
+                enabled = !connection.queueBusy && index > 0,
+                modifier = Modifier.semantics { contentDescription = earlierLabel }) { Text("↑") }
+              TextButton(onClick = { onUpdateQueuedInput(input.id, null, index + 1) },
+                enabled = !connection.queueBusy && index < connection.queuedInputs.lastIndex,
+                modifier = Modifier.semantics { contentDescription = laterLabel }) { Text("↓") }
+              TextButton(onClick = { onCancelQueuedInput(input.id) },
+                enabled = !connection.queueBusy) { Text(stringResource(R.string.assistant_queue_remove)) }
+            }
+          }
+        }
+      }
+      Spacer(Modifier.height(16.dp))
+    }
+  }
+  editingQueuedId?.let { inputId ->
+    val input = connection.queuedInputs.firstOrNull { it.id == inputId }
+    AlertDialog(onDismissRequest = { editingQueuedId = null },
+      title = { Text(stringResource(R.string.assistant_queue_edit)) },
+      text = { OutlinedTextField(editingQueuedContent, { editingQueuedContent = it },
+        modifier = Modifier.fillMaxWidth(), maxLines = 5) },
+      confirmButton = { TextButton(onClick = {
+        onUpdateQueuedInput(inputId, editingQueuedContent, null)
+        editingQueuedId = null
+      }, enabled = !connection.queueBusy &&
+        (editingQueuedContent.isNotBlank() || (input?.attachmentCount ?: 0) > 0 ||
+          (input?.referenceCount ?: 0) > 0)) { Text(stringResource(R.string.progress_save)) } },
+      dismissButton = { TextButton(onClick = { editingQueuedId = null }) {
+        Text(stringResource(R.string.progress_cancel))
+      } })
+  }
   if (agentPickerOpen) AlertDialog(
     onDismissRequest = { agentPickerOpen = false },
     title = { Text(stringResource(R.string.assistant_agent)) },

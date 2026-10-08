@@ -424,6 +424,8 @@
         "closed": "Done"
       },
       "operationalStates": {
+        "failed": "Failed",
+        "cancelled": "Cancelled",
         "idle": "Idle",
         "queued": "Queued",
         "running": "Running",

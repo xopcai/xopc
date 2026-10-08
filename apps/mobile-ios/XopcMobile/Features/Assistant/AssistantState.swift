@@ -95,6 +95,7 @@ final class AssistantState {
         _ text: String,
         attachments: [MessageAttachment] = [],
         references: [ContextReference] = [],
+        delivery: MessageDelivery = .next,
         to conversation: ConversationSelection,
         using gateway: any GatewayServing,
         onMaterialized: ((ConversationSelection) -> Void)? = nil
@@ -120,7 +121,7 @@ final class AssistantState {
                 content,
                 attachments: attachments,
                 references: references,
-                delivery: .next,
+                delivery: delivery,
                 to: conversation
             )
             if let index = messages.firstIndex(where: { $0.id == optimisticID }) {

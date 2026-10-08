@@ -835,6 +835,44 @@ private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: 
       Text(task.body.ifBlank { stringResource(R.string.progress_no_description) },
         modifier = Modifier.fillMaxWidth().padding(16.dp), style = MaterialTheme.typography.bodyMedium)
     }
+    ProgressSectionTitle(R.string.progress_acceptance_criteria)
+    Card {
+      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (task.objective.isNotBlank()) Text(task.objective,
+          style = MaterialTheme.typography.bodyMedium)
+        if (task.criteria.isEmpty()) Text(stringResource(R.string.progress_no_acceptance_criteria),
+          color = MaterialTheme.colorScheme.onSurfaceVariant)
+        else {
+          Text(stringResource(R.string.progress_criteria_passed,
+            task.criteria.count { it.status == "passed" }, task.criteria.size),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+          task.criteria.forEachIndexed { index, criterion ->
+            Row(Modifier.fillMaxWidth().testTag("task-criterion-$index"),
+              horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+              Text(when (criterion.status) { "passed" -> "✓"; "failed" -> "!"; else -> "○" },
+                color = when (criterion.status) {
+                  "passed" -> MaterialTheme.colorScheme.primary
+                  "failed" -> MaterialTheme.colorScheme.error
+                  else -> MaterialTheme.colorScheme.onSurfaceVariant
+                })
+              Column {
+                Text(criterion.text, style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(when (criterion.status) {
+                  "passed" -> R.string.progress_criterion_passed
+                  "failed" -> R.string.progress_criterion_failed
+                  else -> R.string.progress_criterion_pending
+                }), style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (criterion.humanReviewed) Text(stringResource(R.string.progress_criterion_human),
+                  style = MaterialTheme.typography.labelSmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+            }
+          }
+        }
+      }
+    }
     ProgressSectionTitle(R.string.progress_details)
     Card {
       Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

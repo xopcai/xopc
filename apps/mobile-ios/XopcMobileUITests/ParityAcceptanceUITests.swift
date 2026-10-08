@@ -77,6 +77,20 @@ final class ParityAcceptanceUITests: XCTestCase {
         tapIfExists("关闭添加面板")
     }
 
+    func testSlashCommandAndSkillPalette() {
+        openNewConversation()
+        let composer = app.textFields["assistant-chat-composer"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 8))
+        composer.tap()
+        composer.typeText("/")
+        let suggestion = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "composer-palette-")
+        ).firstMatch
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 8))
+        suggestion.tap()
+        XCTAssertTrue((composer.value as? String)?.hasPrefix("/") == true)
+    }
+
     func testAssistantMessageReadAloudControls() {
         openTab("对话")
         XCTAssertTrue(openCell(at: 3))
@@ -983,7 +997,10 @@ final class ParityAcceptanceUITests: XCTestCase {
         app.buttons["任务"].tap()
         capture("16-tasks-list")
         checkTaskFilters()
-        if openCell(at: 1) {
+        let taskRow = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "task-")).firstMatch
+        if taskRow.waitForExistence(timeout: 2) {
+            taskRow.tap()
             capture("17-task-detail")
             XCTAssertTrue(app.staticTexts["详细信息"].waitForExistence(timeout: 8))
             checkTaskEditor()
@@ -997,7 +1014,10 @@ final class ParityAcceptanceUITests: XCTestCase {
         tapIfExists("项目")
         capture("19-projects-list")
         XCTAssertTrue(app.segmentedControls.buttons["已归档"].exists)
-        if openCell(at: 1) {
+        let projectRow = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-")).firstMatch
+        if projectRow.waitForExistence(timeout: 2) {
+            projectRow.tap()
             capture("20-project-detail")
             XCTAssertTrue(app.buttons["新建项目对话"].waitForExistence(timeout: 5))
             let sections = app.segmentedControls.firstMatch
@@ -1021,7 +1041,11 @@ final class ParityAcceptanceUITests: XCTestCase {
         capture("22-automations-list")
         XCTAssertTrue(app.buttons["automation-filter-paused"].exists)
         checkAutomationCreation()
-        if openCell(at: 1) {
+        let automationRow = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@ AND NOT identifier BEGINSWITH %@ AND identifier != %@",
+                                  "automation-", "automation-filter-", "automation-search")).firstMatch
+        if automationRow.waitForExistence(timeout: 2) {
+            automationRow.tap()
             capture("23-automation-detail")
             XCTAssertTrue(app.staticTexts["最近运行"].waitForExistence(timeout: 8))
         }
@@ -1052,7 +1076,7 @@ final class ParityAcceptanceUITests: XCTestCase {
     }
 
     private func checkTaskConversation() {
-        let taskConversation = app.buttons["打开任务对话"]
+        let taskConversation = app.buttons["进入任务对话"]
         if taskConversation.waitForExistence(timeout: 8) {
             taskConversation.tap()
             capture("18-task-conversation")

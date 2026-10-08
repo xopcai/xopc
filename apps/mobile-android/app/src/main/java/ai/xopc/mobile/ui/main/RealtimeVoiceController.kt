@@ -60,6 +60,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
   var error by mutableStateOf(""); private set
   var userText by mutableStateOf(""); private set
   var assistantText by mutableStateOf(""); private set
+  var speaking by mutableStateOf(false); private set
   var muted by mutableStateOf(false); private set
   var speaker by mutableStateOf(false); private set
   var mode by mutableStateOf("natural"); private set
@@ -79,13 +80,14 @@ internal class RealtimeVoiceController(private val context: Context, private val
   private var heartbeatJob: Job? = null
   private var approvalJob: Job? = null
   private var requestedMute = false
-  private var playbackQueue = Channel<ByteArray>(15)
+  private var playbackQueue = Channel<Pair<String, ByteArray>>(15)
   private var eventSequence = 0
   private var audioSequence = 0
   private var inputSequence = 0
   private var utteranceId = UUID.randomUUID().toString()
   private var responseId = ""
-  private var playedMs = 0
+  private var bufferedBytes = 0L
+  private var responseStartFrame = 0L
   private var audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
   private val voiceAttributes = AudioAttributes.Builder()
     .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
@@ -97,6 +99,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
     stop()
     val current = ++generation
     mode = selectedMode; phase = "connecting"; error = ""; userText = ""; assistantText = ""
+    speaking = false
     clarification = null; approval = null; requestedMute = false; muted = false
     try {
       require(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -165,12 +168,17 @@ internal class RealtimeVoiceController(private val context: Context, private val
               "input.transcript.final" -> userText = payload.optString("text")
               "response.created" -> {
                 responseId = payload.optString("responseId")
-                assistantText = ""; playedMs = 0
+                assistantText = ""; bufferedBytes = 0
+                responseStartFrame = (player?.playbackHeadPosition?.toLong() ?: 0L) and 0xffffffffL
+                speaking = false
               }
               "response.text.delta" -> if (payload.optString("responseId") == responseId)
                 assistantText = (assistantText + payload.optString("delta")).takeLast(32_000)
               "response.audio.started" -> require(payload.getJSONObject("format")
                 .getInt("sampleRate") == 24_000) { "UNSUPPORTED_FORMAT" }
+              "response.done" -> if (payload.optString("responseId") == responseId) {
+                playbackQueue.send(responseId to ByteArray(0))
+              }
               "response.clarification" -> if (payload.optString("responseId") == responseId) {
                 val rows = payload.optJSONArray("choices")
                 clarification = VoiceClarification(payload.getString("requestId"),
@@ -180,7 +188,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
                 updateMute()
               }
               "response.cancelled" -> if (payload.optString("responseId") == responseId) {
-                player?.flush(); responseId = ""
+                player?.flush(); responseId = ""; speaking = false
               }
               "session.error" -> if (!payload.optBoolean("recoverable"))
                 throw IllegalStateException(payload.optString("code", "VOICE_UNAVAILABLE"))
@@ -201,7 +209,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
               "PROTOCOL_ERROR"
             }
             audioSequence++
-            if (frame.responseId == responseId && !playbackQueue.trySend(frame.audio).isSuccess)
+            if (frame.responseId == responseId && !playbackQueue.trySend(frame.responseId to frame.audio).isSuccess)
               throw IllegalStateException("AUDIO_QUEUE_FULL")
           } catch (failure: Exception) { fail(failure.message ?: "PROTOCOL_ERROR", current) }
         }
@@ -267,14 +275,35 @@ internal class RealtimeVoiceController(private val context: Context, private val
       }
     }
     playbackJob = scope.launch(Dispatchers.IO) {
-      for (audio in playbackQueue) {
+      for ((id, audio) in playbackQueue) {
         if (current != generation) break
-        val written = player?.write(audio, 0, audio.size, AudioTrack.WRITE_BLOCKING) ?: break
-        if (written <= 0) break
-        playedMs += (written / 48)
-        val id = responseId
-        if (id.isNotEmpty()) send("response.audio.played", JSONObject().put("responseId", id)
-          .put("playedDurationMs", playedMs))
+        if (id != responseId) continue
+        if (audio.isEmpty()) {
+          val targetFrames = responseStartFrame + bufferedBytes / 2
+          val deadline = SystemClock.elapsedRealtime() + 15_000
+          while (current == generation && id == responseId &&
+            ((player?.playbackHeadPosition?.toLong() ?: 0L) and 0xffffffffL) < targetFrames &&
+            SystemClock.elapsedRealtime() < deadline) delay(40)
+          if (current == generation && id == responseId) withContext(Dispatchers.Main.immediate) {
+            speaking = false
+          }
+          continue
+        }
+        var offset = 0
+        while (offset < audio.size && current == generation && id == responseId) {
+          val written = player?.write(audio, offset, audio.size - offset,
+            AudioTrack.WRITE_BLOCKING) ?: break
+          if (written <= 0) break
+          offset += written
+          bufferedBytes += written
+          withContext(Dispatchers.Main.immediate) { speaking = true }
+          send("response.audio.played", JSONObject().put("responseId", id)
+            .put("playedDurationMs", bufferedBytes / 48))
+        }
+        if (offset < audio.size && current == generation && id == responseId) {
+          withContext(Dispatchers.Main.immediate) { fail("PLAYBACK_FAILED", current) }
+          break
+        }
       }
     }
   }
@@ -309,7 +338,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
   fun stopReply() {
     val id = responseId
     if (id.isEmpty()) return
-    responseId = ""; player?.pause(); player?.flush(); player?.play()
+    responseId = ""; speaking = false; player?.pause(); player?.flush(); player?.play()
     send("response.stop_playback", JSONObject().put("responseId", id))
   }
 
@@ -352,6 +381,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
   suspend fun stop() {
     ++generation
     phase = "idle"; error = ""; clarification = null; approval = null
+    speaking = false
     release()
   }
 

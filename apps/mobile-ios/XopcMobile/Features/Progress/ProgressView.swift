@@ -69,6 +69,11 @@ struct ProgressHubView: View {
                 } label: {
                     ProgressHubDestinationLabel(title: "自动化", systemImage: "clock")
                 }
+                NavigationLink {
+                    WorkflowRunsView(configuration: configuration)
+                } label: {
+                    ProgressHubDestinationLabel(title: "工作流", systemImage: "arrow.triangle.branch")
+                }
             }
             if let home, !home.needsUser.isEmpty {
                 Section("需要你处理") {
