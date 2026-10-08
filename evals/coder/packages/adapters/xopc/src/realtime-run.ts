@@ -8,6 +8,8 @@ export async function runRealtimeInput(input: {
   baseUrl: string;
   headers: Record<string, string>;
   conversationId: string;
+  transcriptId: string;
+  configVersion: number;
   message: string;
   thinking?: string;
   signal: AbortSignal;
@@ -95,12 +97,27 @@ export async function runRealtimeInput(input: {
     const origin = await ready;
     const clientMessageId = randomUUID();
     const response = await json(`/api/sessions/${encodeURIComponent(input.conversationId)}/inputs`, {
-      clientMessageId, content: input.message, delivery: 'next', origin,
-      ...(input.thinking ? { thinking: input.thinking } : {}),
+      kind: 'append', clientMessageId, expectedTranscriptId: input.transcriptId,
+      configVersion: input.configVersion, delivery: 'next', input: { content: input.message }, origin,
     });
-    const state = response.payload.state;
-    const ownInput = state?.inputs?.find((row: { clientMessageId: string }) => row.clientMessageId === clientMessageId);
-    runId = ownInput?.runId ?? (ownInput?.id === state?.activeInputId ? state?.activeRunId : undefined);
+    let state = response.payload.inputState;
+    const startedRunId = (snapshot: typeof state): string | undefined => {
+      const ownInput = snapshot?.inputs?.find((row: { clientMessageId: string }) => row.clientMessageId === clientMessageId);
+      return ownInput?.runId ?? (ownInput?.id === snapshot?.activeInputId ? snapshot?.activeRunId : undefined);
+    };
+    runId = startedRunId(state);
+    while (!runId) {
+      input.signal.throwIfAborted();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const status = await fetch(`${input.baseUrl}/api/sessions/${encodeURIComponent(input.conversationId)}/input-state`, {
+        headers: input.headers, signal: input.signal,
+      });
+      if (!status.ok) throw new Error(`xopc session input state returned HTTP ${status.status}`);
+      state = (await status.json()).payload;
+      runId = startedRunId(state);
+      const ownInput = state?.inputs?.find((row: { clientMessageId: string }) => row.clientMessageId === clientMessageId);
+      if (!runId && ownInput?.status === 'interrupted') throw new Error('Evaluation input was interrupted before starting a run');
+    }
     if (!runId) throw new Error('Evaluation input did not start a run in its fresh session');
     input.onRunId(runId);
     client.subscribe(`run:${runId}`, 0);

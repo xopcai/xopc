@@ -1,6 +1,7 @@
 import ImageIO
 import SwiftUI
 
+// swiftlint:disable:next type_body_length
 struct AssistantComposer: View {
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

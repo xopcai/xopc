@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { runRealtimeInput } from './realtime-run.js';
 
 import {
@@ -74,20 +76,30 @@ export class XopcGatewayAdapter implements AgentAdapter {
     const trace = new TraceEmitter(request.runId, onEvent);
     const requestHeaders = headers(token, 'application/json');
 
-    const createResponse = await requireOk(await fetch(`${baseUrl}/api/sessions`, {
+    const conversationId = randomUUID();
+    const thinkingLevel = config.thinking ?? request.variant.reasoning ?? 'off';
+    const createResponse = await requireOk(await fetch(`${baseUrl}/api/sessions/${conversationId}/materialize`, {
       method: 'POST',
       headers: requestHeaders,
       body: JSON.stringify({
-        channel: 'webchat',
-        agentId,
-        chat_id: `eval_${request.runId}`,
+        commandId: randomUUID(),
+        purpose: 'session_resources',
+        creation: {
+          agentId,
+          projectId: null,
+          execution: null,
+          temporary: true,
+          model: request.variant.model,
+          thinkingLevel,
+        },
       }),
       signal,
-    }), 'session creation');
+    }), 'session materialization');
     const createBody = record(await createResponse.json());
-    const session = record(createBody.session);
-    const conversationId = typeof session.key === 'string' ? session.key : undefined;
-    if (!conversationId) throw new Error('xopc session creation response did not include session.key');
+    const created = record(createBody.payload);
+    const session = record(created.session);
+    const transcriptId = typeof session.transcriptId === 'string' ? session.transcriptId : undefined;
+    if (!transcriptId) throw new Error('xopc session materialization response did not include session.transcriptId');
 
     this.activeRuns.set(request.runId, {
       baseUrl,
@@ -96,13 +108,12 @@ export class XopcGatewayAdapter implements AgentAdapter {
       cleanupSession: config.cleanupSession ?? true,
     });
 
-    const thinkingLevel = config.thinking ?? request.variant.reasoning;
     const sessionConfig = {
       workingDirectory: request.environment.workspace,
       ...(request.variant.model ? { model: request.variant.model } : {}),
       ...(thinkingLevel ? { thinkingLevel } : {}),
     };
-    await requireOk(await fetch(
+    const configResponse = await requireOk(await fetch(
       `${baseUrl}/api/sessions/${encodeURIComponent(conversationId)}/agent-config`,
       {
         method: 'PATCH',
@@ -111,6 +122,9 @@ export class XopcGatewayAdapter implements AgentAdapter {
         signal,
       },
     ), 'session configuration');
+    const configured = record(record(await configResponse.json()).payload);
+    const configVersion = typeof configured.configVersion === 'number' ? configured.configVersion : undefined;
+    if (configVersion === undefined) throw new Error('xopc session configuration response did not include configVersion');
 
     let runtimeIdentity: Record<string, unknown> | undefined;
     const [identityResponse, sessionConfigResponse] = await Promise.all([
@@ -153,7 +167,7 @@ export class XopcGatewayAdapter implements AgentAdapter {
     let failure: string | undefined;
     let usage: Record<string, number> | undefined;
     const agentRunId = await runRealtimeInput({
-      baseUrl, headers: requestHeaders, conversationId, message: request.evalCase.task, signal,
+      baseUrl, headers: requestHeaders, conversationId, transcriptId, configVersion, message: request.evalCase.task, signal,
       ...(thinkingLevel ? { thinking: thinkingLevel } : {}),
       onRunId: runId => {
         const active = this.activeRuns.get(request.runId);

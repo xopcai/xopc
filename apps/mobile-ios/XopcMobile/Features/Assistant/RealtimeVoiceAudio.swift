@@ -17,6 +17,7 @@ final class RealtimeVoiceAudio {
     private var onRouteFailure: (() -> Void)?
     private(set) var isMuted = false
 
+    // swiftlint:disable:next function_body_length
     func start(
         onPlayed: @escaping (String, Int) -> Void,
         onInterrupted: @escaping () -> Void,
@@ -145,8 +146,12 @@ final class RealtimeVoiceAudio {
             NotificationCenter.default.removeObserver(interruptionObserver)
             self.interruptionObserver = nil
         }
-        if let routeObserver { NotificationCenter.default.removeObserver(routeObserver); self.routeObserver = nil }
-        if let engineObserver { NotificationCenter.default.removeObserver(engineObserver); self.engineObserver = nil }
+        if let routeObserver {
+            NotificationCenter.default.removeObserver(routeObserver); self.routeObserver = nil
+        }
+        if let engineObserver {
+            NotificationCenter.default.removeObserver(engineObserver); self.engineObserver = nil
+        }
         onPlayed = nil
         onInterrupted = nil
         onRoute = nil

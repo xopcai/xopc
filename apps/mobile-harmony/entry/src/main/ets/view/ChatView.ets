@@ -52,7 +52,6 @@ import { chatMessageNeedsPreview, latestChatMessageId } from '../common/chatMess
 import { userTextBubbleWidth } from '../common/chatBubbleLayout';
 import { chatPresentationRows, chatNeedsWideBubble } from '../common/chatPresentation';
 import { XopcBrandLoading } from './MobileComponents';
-import { XopcLoopi } from './Loopi';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 
@@ -77,8 +76,6 @@ export struct XopcChatView {
   @Param activePage: boolean = true;
   @Param embedded: boolean = false;
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
-  @Param personalBusy: boolean = false;
-  @Event onOpenPersonal: () => void = (): void => {};
   @Computed get personalConversation(): boolean {
     return this.personalAgent?.state === 'ready' && this.chat.selectedId === this.personalAgent.conversationId;
   }
@@ -713,12 +710,15 @@ export struct XopcChatView {
     this.getUIContext().getFocusController().clearFocus();
   }
   private openSheet(mode: string): void { this.palette.close(); this.editor.stopEditing(); this.setPanel(false); this.sheetMode = mode; this.sheetOpen = true; }
+  @Monitor('chat.selectedId', 'activePage')
+  onSelectedConversation(): void {
+    if (this.activePage && this.chat.selectedId) this.onConversationChange(this.chat.selectedId);
+  }
   @Monitor('chat.loading', 'chat.agentId')
   onHistoryReady(): void {
     if (this.visible && !this.chat.loading && this.chat.selectedId) void this.connectionWait.refresh();
     const id = this.chat.selectedId + ':' + this.chat.agentId;
     if (this.visible && !this.chat.loading && this.chat.selectedId && this.optionsId !== id) {
-      this.onConversationChange(this.chat.selectedId);
       this.optionsId = id; this.options.load(this.chat.selectedId, this.chat.agentId); this.context.load(this.chat.selectedId); this.prompt.start(this.chat.selectedId);
     }
   }
@@ -1200,8 +1200,6 @@ export struct XopcChatView {
         contextPending: this.context.loading || this.options.loading,
         personal: this.personalConversation, personalName: this.personalAgent?.displayName ?? 'Ada',
         personalAgentId: this.personalAgent?.agentId ?? '', personalAppearance: this.personalAgent?.appearance ?? 'loopi',
-        personalReady: this.personalAgent?.state === 'ready',
-        personalBusy: this.personalBusy, onOpenPersonal: (): void => { this.onOpenPersonal(); },
         onDismissComposer: (): void => { this.dismissComposer(); },
         onChoose: (text: string): void => {
           if (this.restoringDraft) return;
@@ -1659,21 +1657,6 @@ export struct XopcChatView {
             .fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.layoutWeight(1).height(44).padding({ left: 8, right: 8 }).alignItems(VerticalAlign.Center)
-        if (!this.personalConversation && this.chat.selectedId) {
-          Button({ type: ButtonType.Normal }) {
-            Row({ space: 4 }) {
-              XopcPersonalAgentAvatar({ extent: 26, compact: true, activePage: this.activePage,
-                agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi' })
-              Text(this.personalAgent?.state === 'ready' ? this.personalAgent.displayName
-                : $r('app.string.personal_chat_short')).fontSize(12).fontWeight(FontWeight.Medium)
-                .fontColor(this.colors.accent).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                .constraintSize({ maxWidth: 84 })
-            }.padding({ left: 8, right: 8 }).alignItems(VerticalAlign.Center)
-          }.id('personal-chat-header-entry').height(40).padding(0).borderRadius(20)
-            .backgroundColor(this.colors.accentSoft).enabled(!this.personalBusy)
-            .accessibilityText($r('app.string.personal_chat_entry_title'))
-            .onClick((): void => { this.onOpenPersonal(); })
-        }
         if (this.chat.selectedId) {
           Button({ type: ButtonType.Normal }) {
             Text('···').fontSize(18).letterSpacing(-2).fontWeight(FontWeight.Medium)

@@ -30,6 +30,6 @@ describe('color-based visual hierarchy', () => {
 
     expect(components).toContain('.backgroundColor(this.colors.panel)');
     expect(settings).toContain('selected ? this.colors.accentSoft : this.colors.panel');
-    expect(settings).toContain('this.preferences.colorScheme === scheme ? this.colors.accentSoft : this.colors.panel');
+    expect(settings).toContain('this.selectedScheme === scheme ? this.colors.accentSoft : this.colors.panel');
   });
 });

@@ -111,7 +111,7 @@ struct MessageBubble: View {
                     isDetailPresented = true
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(.init(String(message.text.prefix(1_500))))
+                        Text(.init(String(message.text.prefix(1500))))
                             .lineLimit(8)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Text("查看更多")
@@ -139,10 +139,14 @@ struct MessageBubble: View {
         var lines = 0
         for rawLine in message.text.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.isEmpty { continue }
+            if line.isEmpty {
+                continue
+            }
             let units = line.reduce(0.0) { $0 + ($1.isASCII ? 0.55 : 1) }
             lines += max(1, Int(ceil(units / 15)))
-            if lines > 8 { return true }
+            if lines > 8 {
+                return true
+            }
         }
         return false
     }

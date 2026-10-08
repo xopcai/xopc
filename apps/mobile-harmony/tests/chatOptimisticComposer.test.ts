@@ -17,7 +17,7 @@ describe('optimistic composer handoff', () => {
       chat: { selectedId: 'one', send: vi.fn((_text, _files, _delivery, _refs, enqueued) => {
         enqueued(); return new Promise(resolve => { finish = resolve; });
       }) },
-      palette: { close: vi.fn() }, saveDraft: vi.fn(), setPanel: vi.fn(), visible: true,
+      palette: { close: vi.fn() }, enqueueSendFlight: vi.fn(), saveDraft: vi.fn(), setPanel: vi.fn(), visible: true,
       options: { loading: false, saving: false, modelId: 'provider/model', refreshQueue: vi.fn() },
     });
     const sending = view.send();

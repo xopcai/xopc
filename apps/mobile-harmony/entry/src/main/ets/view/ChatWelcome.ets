@@ -17,9 +17,6 @@ export struct XopcChatWelcome {
   @Param personalName: string = 'Ada';
   @Param personalAgentId: string = '';
   @Param personalAppearance: string = 'loopi';
-  @Param personalReady: boolean = false;
-  @Param personalBusy: boolean = false;
-  @Event onOpenPersonal: () => void = (): void => {};
   @Event onChoose: (prompt: string) => void = (_prompt: string): void => {};
   @Event onDismissComposer: () => void = (): void => {};
   @Local model: XopcChatWelcomeViewModel = new XopcChatWelcomeViewModel();
@@ -93,26 +90,6 @@ export struct XopcChatWelcome {
         if (this.personal) {
           Text($r('app.string.personal_chat_invitation')).fontSize(14).lineHeight(22)
             .fontColor(this.colors.secondary).width('100%').textAlign(TextAlign.Center)
-        } else {
-          Button({ type: ButtonType.Normal }) {
-            Row({ space: 12 }) {
-              XopcPersonalAgentAvatar({ extent: 46, compact: true, activePage: this.activePage,
-                agentId: this.personalAgentId, appearance: this.personalAppearance })
-              Column({ space: 4 }) {
-                Text(this.personalReady ? $r('app.string.personal_chat_resume_title', this.personalName)
-                  : $r('app.string.personal_chat_entry_title')).fontSize(15).fontWeight(FontWeight.Medium)
-                  .fontColor(this.colors.foreground).width('100%')
-                Text(this.personalReady ? $r('app.string.personal_chat_resume_subtitle')
-                  : $r('app.string.personal_chat_entry_subtitle')).fontSize(12).lineHeight(18)
-                  .fontColor(this.colors.secondary).width('100%').maxLines(2)
-              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([this.colors.accent])
-            }.width('100%').padding({ left: 14, right: 14, top: 12, bottom: 12 })
-          }.id('personal-chat-entry').width('100%').constraintSize({ maxWidth: 380, minHeight: 76 })
-            .padding(0).borderRadius(18).backgroundColor(this.colors.accentSoft)
-            .accessibilityText(this.personalReady ? $r('app.string.personal_chat_resume_title', this.personalName)
-              : $r('app.string.personal_chat_entry_title'))
-            .enabled(!this.personalBusy).onClick((): void => { this.onOpenPersonal(); })
         }
         if (!this.personal && this.model.model?.recommendation) {
           Button({ type: ButtonType.Normal }) {

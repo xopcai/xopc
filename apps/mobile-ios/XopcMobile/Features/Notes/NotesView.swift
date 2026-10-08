@@ -1,5 +1,6 @@
 import SwiftUI
 
+// swiftlint:disable:next type_body_length
 struct NotesView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
@@ -44,7 +45,7 @@ struct NotesView: View {
                     .accessibilityHint("打开本地待上传录音")
                 }
                 statusPicker
-                if (isLoading || isSearchingFiles), notes.isEmpty, matchedFiles.isEmpty {
+                if isLoading || isSearchingFiles, notes.isEmpty, matchedFiles.isEmpty {
                     loadingRows
                 } else if notes.isEmpty, matchedFiles.isEmpty {
                     ContentUnavailableView(
@@ -256,7 +257,11 @@ struct NotesView: View {
         let query = search
         let selectedStatus = status
         isLoading = true
-        defer { if revision == notesLoadRevision { isLoading = false } }
+        defer {
+            if revision == notesLoadRevision {
+                isLoading = false
+            }
+        }
         do {
             let loaded = try await GatewayClient(configuration: configuration)
                 .fetchNotes(search: query, status: selectedStatus).items
@@ -281,7 +286,11 @@ struct NotesView: View {
         fileSearchRevision += 1
         let revision = fileSearchRevision
         isSearchingFiles = true
-        defer { if revision == fileSearchRevision { isSearchingFiles = false } }
+        defer {
+            if revision == fileSearchRevision {
+                isSearchingFiles = false
+            }
+        }
         do {
             let files = try await GatewayClient(configuration: configuration).searchFiles(query: query)
             guard revision == fileSearchRevision,

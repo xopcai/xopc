@@ -21,6 +21,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.xopc.xopc
+        CODE_SIGN_ENTITLEMENTS: XopcMobile/XopcMobile.entitlements
         MARKETING_VERSION: 0.0.81
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
@@ -29,7 +30,8 @@ targets:
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: true
         INFOPLIST_KEY_NSCameraUsageDescription: "用于拍摄并发送给助手的图片。"
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: "用于录制语音消息和语音笔记。"
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "用于实时语音、语音助手、语音消息和语音笔记。"
+        INFOPLIST_KEY_UIBackgroundModes: audio
         INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
         TARGETED_DEVICE_FAMILY: "1,2"

@@ -103,6 +103,7 @@ export struct XopcHomeView {
     notificationNavigation.consume();
     this.attention.refresh();
     void this.personalAgent.refresh();
+    void this.restoreActiveChatId();
     this.attentionTimer = setInterval((): void => { this.attention.refresh(); }, 30000);
   }
   aboutToDisappear(): void {
@@ -258,6 +259,14 @@ export struct XopcHomeView {
     this.activateTab(0);
   }
 
+  private async restoreActiveChatId(): Promise<void> {
+    const revision = this.chatRequestRevision;
+    try {
+      const id = await this.chatRepository.mainConversation();
+      if (revision === this.chatRequestRevision && !this.activeChatId && id) this.activeChatId = id;
+    } catch (_) { /* The chat view still restores and reports its own selection. */ }
+  }
+
   private async openPersonalChat(): Promise<void> {
     if (this.personalOpening) return;
     this.personalOpening = true;
@@ -271,6 +280,7 @@ export struct XopcHomeView {
         return;
       }
       this.returnToConversations = false;
+      this.activeChatId = record.conversationId;
       this.switchToChat(record.conversationId, '');
     } finally {
       this.personalOpening = false;
@@ -642,8 +652,7 @@ export struct XopcHomeView {
       Column() {
       Tabs({ barPosition: BarPosition.End, index: this.tab }) {
         TabContent() { XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
-          personalAgent: this.personalAgent.record, personalBusy: this.personalAgent.creating,
-          onOpenPersonal: (): void => { void this.openPersonalChat(); },
+          personalAgent: this.personalAgent.record,
           focusRevision: this.chatFocusRevision,
           requestedAction: this.requestedChatAction, actionRevision: this.chatActionRevision,
           intakeRevision: this.intake.chatRevision, intakeText: this.requestedChatDraft,
@@ -655,7 +664,9 @@ export struct XopcHomeView {
             if (this.pendingChatId === id) this.pendingChatId = '';
           } }) }
         TabContent() { XopcSessionsView({ embedded: true, bottomInset: this.secondaryBottomRegionHeight, activePage: this.tab === 1 && !this.detailVisible,
-          currentId: this.activeChatId, onOpen: (id: string): void => { this.openConversationFromList(id, false); },
+          currentId: this.activeChatId, personalAgent: this.personalAgent.record, personalBusy: this.personalAgent.creating,
+          onOpenPersonal: (): void => { void this.openPersonalChat(); },
+          onOpen: (id: string): void => { this.openConversationFromList(id, false); },
           onNew: (id: string): void => { this.openConversationFromList(id, true); },
           onDelete: (id: string): void => { void this.replaceDeletedChat(id); },
           onUndoDelete: (id: string): void => {
@@ -668,8 +679,7 @@ export struct XopcHomeView {
           onStartVoice: (): void => { void this.startNoteCapture(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
         TabContent() { XopcPersonalView({ activePage: this.tab === 4 && !this.detailVisible,
-          bottomInset: this.secondaryBottomRegionHeight, personalAgent: this.personalAgent.record,
-          personalBusy: this.personalAgent.creating, onOpenPersonal: (): void => { void this.openPersonalChat(); },
+          bottomInset: this.secondaryBottomRegionHeight,
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
       }.scrollable(false).barHeight(0).barMode(BarMode.Fixed)
         .animationDuration(0)
