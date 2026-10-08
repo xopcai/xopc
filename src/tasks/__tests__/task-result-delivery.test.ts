@@ -113,6 +113,29 @@ describe('background task result delivery', () => {
     expect(decide).not.toHaveBeenCalled();
   });
 
+  it('preserves long report text, summary and title through delivery to the main transcript', async () => {
+    const { main, coordinator, runId } = task();
+    const outcome = await image(runId);
+    outcome.deliverables = [];
+    const summary = `Summary start ${'details '.repeat(500)} Summary end`;
+    const report = `# Report start\n${'Detailed findings.\n'.repeat(600)}\n## Report end`;
+    const title = 'Long task title '.repeat(30);
+    getSqliteDatabase().prepare('UPDATE tasks SET title = ? WHERE task_id = (SELECT task_id FROM task_runs WHERE run_id = ?)').run(title, runId);
+    coordinator.captureOutcome({ ...outcome, summary });
+    coordinator.finalize({ status: 'succeeded', summary, assistantText: report });
+    const row = getSqliteDatabase().prepare('SELECT payload_json FROM task_result_deliveries WHERE task_run_id = ?')
+      .get(runId) as { payload_json: string };
+    const delivery = JSON.parse(row.payload_json);
+    expect(delivery.text).toBe(report);
+    expect(delivery.outcome.summary).toBe(summary);
+    expect(delivery.taskTitle).toBe(title);
+    expect(await new TaskResultDeliveryService().drain(vi.fn())).toBe(1);
+    const detail = await new SessionStore(stateDir).getMessagePage(main.key, { includeContextRows: true });
+    const message = detail?.session.messages[0] as unknown as ClientHistoryMessage;
+    expect(JSON.stringify(message)).toContain('Report end');
+    expect(message.metadata?.turnOutcome?.summary).toBe(summary);
+  });
+
   it.each([
     { label: 'undefined', summaryFields: { summary: undefined } },
     { label: 'omitted', summaryFields: {} },
@@ -126,7 +149,7 @@ describe('background task result delivery', () => {
     coordinator.captureOutcome(outcome);
     const row = getSqliteDatabase().prepare('SELECT outcome_json FROM task_run_outcomes WHERE task_run_id = ?')
       .get(runId) as { outcome_json: string };
-    expect(JSON.parse(row.outcome_json).summary).toBe(summaryFields.summary?.slice(0, 2_000));
+    expect(JSON.parse(row.outcome_json).summary).toBe(summaryFields.summary);
     coordinator.finalize({ status: 'succeeded', summary: 'Report ready', assistantText: 'A useful news report.' });
     expect(await new TaskResultDeliveryService().drain(vi.fn())).toBe(1);
     const detail = await new SessionStore(stateDir).getMessagePage(main.key, { includeContextRows: true });

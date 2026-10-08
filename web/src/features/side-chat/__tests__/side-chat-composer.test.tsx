@@ -27,7 +27,7 @@ const { createSideChat, deleteSideChat, getSideChatMessages, promoteSideChat, re
     status: 'idle' as const,
     createdAt: new Date(0).toISOString(),
     lastActiveAt: new Date(0).toISOString(),
-    expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 6 * 60 * 60_000).toISOString(),
     messageCount: 0,
     context: {
       parentConversationId: 'parent', parentTranscriptId: 'parent-id', parentMessageCount: 0,
@@ -50,7 +50,7 @@ vi.mock('@/features/side-chat/side-chat-api', () => ({
     status: 'idle',
     createdAt: new Date(0).toISOString(),
     lastActiveAt: new Date(0).toISOString(),
-    expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 6 * 60 * 60_000).toISOString(),
     messageCount: 0,
     context: {
       parentConversationId: 'parent',
@@ -632,9 +632,9 @@ describe('SideChatConversation composer', () => {
     await act(async () => extend?.click());
     expect(container.textContent).toContain('Please retry');
     expect(container.textContent).toContain('Keep open');
-    vi.mocked(extendSideChat).mockResolvedValueOnce({ ...view, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() });
+    vi.mocked(extendSideChat).mockResolvedValueOnce({ ...view, expiresAt: new Date(Date.now() + 6 * 60 * 60_000).toISOString() });
     await act(async () => extend?.click());
-    expect(container.textContent).toContain('Kept open for another 30 minutes');
+    expect(container.textContent).toContain('Kept open for another 6 hours');
     expect(container.textContent).not.toContain('Keep open');
   });
 
