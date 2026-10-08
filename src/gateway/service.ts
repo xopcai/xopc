@@ -98,6 +98,8 @@ import {
 import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
 import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
 import { TaskRunDispatcher } from '../tasks/task-run-dispatcher.js';
+import { onTaskResultQueued } from '../tasks/task-result-delivery-repository.js';
+import { TaskResultDeliveryService } from '../tasks/task-result-delivery-service.js';
 import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { TaskSignalService } from '../tasks/task-signal-service.js';
 import { createRuntimeBrowserAutomationService, type BrowserAutomationService } from '../browser/automations/index.js';
@@ -314,6 +316,7 @@ export class GatewayService {
   private connectorLearningCoordinator: ConnectorLearningCoordinator | null = null;
   private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
+  private stopTaskResultQueued: (() => void) | null = null;
   private stopRealtimeLogBridge: (() => void) | null = null;
 
   /**
@@ -915,7 +918,17 @@ export class GatewayService {
     log.error({ err, errorMessage, phase: 'task_main_update_dispatch' }, `Main Agent update dispatch failed: ${errorMessage}`);
   });
 
+  private readonly taskResultDispatch = createBackgroundTask(async () => {
+    await new TaskResultDeliveryService().drain((conversationId, deliveryId) => {
+      this.realtime.broker.publish('sessions', 'session.task-result', { conversationId, deliveryId });
+      this.emit('session.transcript_updated', { key: conversationId, deliveryId });
+    });
+  }, (err) => {
+    log.error({ err, phase: 'task_result_dispatch' }, 'Task result dispatch failed');
+  });
+
   dispatchTaskRuns(): void {
+    this.taskResultDispatch();
     this.taskRunDispatch();
     this.taskMainUpdateDispatch();
   }
@@ -1002,6 +1015,12 @@ export class GatewayService {
     getConfig: () => this.config,
     saveConfig: (config) => this.saveConfig(config),
     drain: (conversationId) => { void this.agentRunner.inputs.drain(conversationId); },
+    onPersonalRequestDelivered: (conversationId, requestId) => {
+      this.realtime.broker.publish('sessions', 'session.task-result', {
+        conversationId, deliveryId: `personal-request:${requestId}`,
+      });
+      this.emit('session.transcript_updated', { key: conversationId, requestId });
+    },
   });
 
   submitSessionInput(...args: Parameters<GatewayAgentRunner['submitSessionInput']>) {
@@ -1278,6 +1297,7 @@ export class GatewayService {
     this.createNotificationService().start();
     this.startTime = Date.now();
     this.running = true;
+    this.stopTaskResultQueued = onTaskResultQueued(() => this.taskResultDispatch());
     this.taskRunDispatchTimer = setInterval(() => this.dispatchTaskRuns(), 1_000);
     this.taskRunDispatchTimer.unref?.();
     if (this.config.gateway?.scenes?.enabled === true) {
@@ -1733,6 +1753,8 @@ export class GatewayService {
     await this.automationService.stop();
     this.stopSessionTranscriptAutomationEvents?.();
     this.stopSessionTranscriptAutomationEvents = null;
+    this.stopTaskResultQueued?.();
+    this.stopTaskResultQueued = null;
 
     // Flush notes to disk
 

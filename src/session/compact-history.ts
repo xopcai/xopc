@@ -30,10 +30,12 @@ export function compactHistory(messages: ClientHistoryMessage[]): ClientHistoryM
     const deliveries = (message.toolCalls ?? []).filter(call => !call.isError).flatMap(productDeliveries);
     const outcome = message.metadata?.turnOutcome;
     if (!content && !mediaAndReview.length && !message.media?.length && !outcome && !deliveries.length) return [];
-    return [{ id: message.id, turnId: message.turnId, role: message.role, content, timestamp: message.timestamp,
+    return [{ id: message.id, turnId: message.turnId, startsNewBubble: message.startsNewBubble,
+      role: message.role, content, timestamp: message.timestamp,
       media: message.media, deliveries,
       rawContent: [...(content ? [{ type: 'text', text: content, presentation: narration ? 'narration' : 'answer' }] : []), ...mediaAndReview],
-      ...(outcome ? { metadata: { turnOutcome: { ...outcome, evidence: [], changeSet: undefined } } } : {}),
+      ...(outcome ? { metadata: { turnOutcome: { ...outcome, evidence: [], changeSet: undefined },
+        ...(message.metadata?.taskResultDelivery ? { taskResultDelivery: message.metadata.taskResultDelivery } : {}) } } : {}),
     }];
   });
 }

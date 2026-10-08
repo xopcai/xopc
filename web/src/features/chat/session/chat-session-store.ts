@@ -394,10 +394,14 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
           };
         }
         if (isSessionSliceLive(current)) {
+          const known = new Set(current.messages.map(message => message.taskResultDelivery?.deliveryId));
+          const deliveries = data.messages.filter(message => message.taskResultDelivery
+            && !known.has(message.taskResultDelivery.deliveryId));
           return {
             sessions: {
               ...state.sessions,
-              [key]: { ...current, ...meta, historyStatus: 'ready', hasMore },
+              [key]: { ...current, ...meta, messages: [...current.messages, ...cloneMessages(deliveries)],
+                historyStatus: 'ready', hasMore },
             },
           };
         }

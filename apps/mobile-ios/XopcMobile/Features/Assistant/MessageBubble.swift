@@ -19,7 +19,8 @@ struct MessageBubble: View {
     @State private var saveFeedback = ""
 
     var body: some View {
-        if !message.text.isEmpty || !message.references.isEmpty || !message.attachments.isEmpty {
+        if !message.text.isEmpty || !message.references.isEmpty || !message.attachments.isEmpty
+            || !message.resultLinks.isEmpty || !message.unavailableOutputs.isEmpty {
             messageContent
         }
     }
@@ -30,6 +31,14 @@ struct MessageBubble: View {
                 messageText
                 references
                 attachments
+                ForEach(message.resultLinks) { result in
+                    Link(destination: result.url) { Label(result.title, systemImage: "arrow.up.right.square") }
+                        .frame(minHeight: 44)
+                }
+                ForEach(message.unavailableOutputs, id: \.self) { title in
+                    Label(title, systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if message.role == "assistant", !message.text.isEmpty {
                     assistantActions
                 }

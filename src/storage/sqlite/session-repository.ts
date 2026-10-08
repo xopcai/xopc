@@ -1,4 +1,5 @@
 import { cancelConnectionObjective } from './connection-wait-repository.js';
+import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { randomUUID } from 'node:crypto';
 import { validateConversationId, validateTranscriptId } from '@xopcai/gateway-contract';
 import type { DatabaseSync } from 'node:sqlite';
@@ -480,6 +481,21 @@ export function deleteSessionRecord(conversationId: string): boolean {
     ).run(now, existing.active_transcript_id);
 
     cancelConnectionObjective(conversationId);
+    if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'personal_requests'").get()) {
+      const requests = db.prepare('SELECT task_id FROM personal_requests WHERE conversation_id = ? AND task_id IS NOT NULL')
+        .all(conversationId) as { task_id: string }[];
+      const runs = new TaskRunRepository();
+      for (const request of requests) {
+        const run = runs.getActiveRoot(request.task_id);
+        if (!run) continue;
+        for (const wait of runs.listActiveWaits(request.task_id)) {
+          runs.resolveWait({ waitId: wait.id, actor: { kind: 'user' }, resolution: { cancelled: true } });
+        }
+        runs.finalize({ runId: run.id, expectedVersion: run.version, actor: { kind: 'user' },
+          receipt: { status: 'cancelled', summary: 'Originating Personal conversation deleted', changes: [], evidence: [],
+            verification: { status: 'unverified', checks: [] }, remainingWork: [], needsUser: false, completionVerdict: 'not_achieved' } });
+      }
+    }
     db.prepare(`DELETE FROM sessions WHERE conversation_id = ?`).run(conversationId);
     return true;
   });

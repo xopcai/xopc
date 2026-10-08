@@ -11,7 +11,7 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/models-cloud-onboarding')).toBeUndefined();
   });
   it('maps personal Agent routes without catching neighboring paths', () => {
-    for (const path of ['/api/personal-agent', '/api/personal-agent/models', '/api/personal-agent/onboarding', '/api/personal-agent/profile', '/api/personal-agent/activity']) {
+    for (const path of ['/api/personal-agent', '/api/personal-agent/models', '/api/personal-agent/onboarding', '/api/personal-agent/profile', '/api/personal-agent/activity', '/api/personal-agent/requests', '/api/personal-agent/requests/request-id', '/api/personal-agent/requests/request-id/cancel']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('personal-agent');
     }
     expect(findAuthenticatedLazyRouteBundle('/api/personal-agent-other')).toBeUndefined();

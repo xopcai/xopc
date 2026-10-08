@@ -3,7 +3,7 @@ import type { Hono } from 'hono';
 import { resolveScopedMediaReference } from '../../media-access.js';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../../chat-limits.js';
 import { readMediaReference } from '../../../media/media-reference.js';
-import { mimeTypeFromMediaPath, saveMediaBuffer } from '../../../media/store.js';
+import { MEDIA_ARTIFACT_MAX_BYTES, mimeTypeFromMediaPath, saveMediaBuffer } from '../../../media/store.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -81,7 +81,7 @@ export function registerMediaRoutes(authenticated: Hono, deps: AuthenticatedRout
       const parsed = await resolveScopedMediaReference(deps.service, uriRaw.trim(), { conversationId, taskId });
       const { buffer, path } = await readMediaReference(
         parsed.uri,
-        MAX_WEBCHAT_ATTACHMENT_FILE_BYTES,
+        parsed.bucket === 'outbound' ? MEDIA_ARTIFACT_MAX_BYTES : MAX_WEBCHAT_ATTACHMENT_FILE_BYTES,
       );
       const contentType = mimeTypeFromMediaPath(path);
       const range = parseByteRange(c.req.header('Range'), buffer.byteLength);

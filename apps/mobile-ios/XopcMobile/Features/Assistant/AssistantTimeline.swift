@@ -5,7 +5,8 @@ extension AssistantState {
         messages.enumerated().compactMap { index, message in
             let text = message.content.text.trimmingCharacters(in: .whitespacesAndNewlines)
             var seenMedia = Set<String>()
-            let attachments = ((message.media ?? []) + (message.attachments ?? []))
+            let attachments = ((message.media ?? []) + (message.attachments ?? [])
+                + (message.metadata?.turnOutcome?.deliverables.compactMap(\.attachment) ?? []))
                 .filter { seenMedia.insert($0.id).inserted }
             let references = message.metadata?.sourceContexts?.compactMap { source -> ContextReference? in
                 guard let kind = ContextReferenceKind(rawValue: source.kind) else { return nil }
@@ -32,7 +33,9 @@ extension AssistantState {
                 markdownParts: message.role == "assistant" ? MarkdownBlock.parse(text).map(MarkdownPart.init) : [],
                 details: details,
                 attachments: attachments,
-                references: references
+                references: references,
+                resultLinks: message.metadata?.turnOutcome?.deliverables.compactMap(\.link) ?? [],
+                unavailableOutputs: message.metadata?.turnOutcome?.deliverables.filter { $0.availability != "available" }.map(\.title) ?? []
             )
         }
     }

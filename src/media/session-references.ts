@@ -1,4 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { TASK_RESULT_DELIVERY_TYPE, parseTaskResultDelivery } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase } from '../storage/sqlite/index.js';
 import { deleteMediaBuffer } from './store.js';
@@ -41,6 +42,23 @@ export function messagesReferenceMediaUri(messages: readonly AgentMessage[], uri
   return collectMediaUrisFromMessages(messages).has(uri.trim());
 }
 
+/** Published task results are display rows, so they are absent from provider history. */
+export function taskResultReferencesMediaUri(conversationId: string, uri: string): boolean {
+  const escaped = JSON.stringify(uri.trim()).replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+  const rows = getSqliteDatabase().prepare(`SELECT e.payload_json FROM transcript_entries e
+    JOIN transcripts t ON t.transcript_id = e.transcript_id
+    JOIN sessions s ON s.conversation_id = t.conversation_id
+    WHERE s.conversation_id = ? AND e.payload_json LIKE ? ESCAPE '\\'`)
+    .all(conversationId, `%${escaped}%`) as Array<{ payload_json: string }>;
+  return rows.some(row => {
+    const value = JSON.parse(row.payload_json) as { customType?: string; details?: unknown };
+    if (value.customType !== TASK_RESULT_DELIVERY_TYPE) return false;
+    const delivery = parseTaskResultDelivery(value.details);
+    return delivery?.conversationId === conversationId && delivery.outcome.deliverables.some(item =>
+      item.availability === 'available' && item.uri === uri.trim());
+  });
+}
+
 /**
  * A media object remains live while any non-deleted session references it,
  * including archived transcripts retained by a reset of that session key.
@@ -59,9 +77,13 @@ export function isMediaUriReferencedByLiveSession(uri: string): boolean {
        JOIN transcripts t ON t.transcript_id = e.transcript_id
        JOIN sessions s ON s.conversation_id = t.conversation_id
        WHERE e.payload_json LIKE ? ESCAPE '\\'
+       UNION ALL
+       SELECT 1 AS referenced FROM task_result_deliveries d
+       JOIN sessions s ON s.conversation_id = d.conversation_id
+       WHERE d.status IN ('pending', 'delivered') AND d.payload_json LIKE ? ESCAPE '\\'
        LIMIT 1`,
     )
-    .get(`%${escaped}%`) as { referenced?: number } | undefined;
+    .get(`%${escaped}%`, `%${escaped}%`) as { referenced?: number } | undefined;
   return row?.referenced === 1;
 }
 
