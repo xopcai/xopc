@@ -9,6 +9,10 @@ final class PersonalAgentState {
     private(set) var errorMessage: String?
     private var generation = 0
 
+    func applyProfile(_ updated: PersonalAgentRecord) {
+        record = updated
+    }
+
     func refresh(using configuration: GatewayConfiguration) async {
         generation += 1
         let current = generation

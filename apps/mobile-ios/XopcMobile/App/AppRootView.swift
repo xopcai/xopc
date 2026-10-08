@@ -103,6 +103,7 @@ struct AppRootView: View {
                     onStartScopedConversation: appState.startScopedConversation,
                     onConversationUpdated: appState.updateConversation,
                     onQuickChatHandled: appState.consumeQuickChatHandoff,
+                    onPersonalAgentUpdated: personalAgent.applyProfile,
                     onOpenSettings: { settingsPresented = true },
                     onInputFocusChanged: { assistantInputFocused = $0 }
                 ) { composer, isActionPanelExpanded in

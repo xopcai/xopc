@@ -60,6 +60,8 @@ import ai.xopc.mobile.gateway.ShareItem
 import ai.xopc.mobile.gateway.PersonalRepository
 import ai.xopc.mobile.gateway.PersonalAgentRepository
 import ai.xopc.mobile.gateway.PersonalAgentRecord
+import ai.xopc.mobile.gateway.PersonalVoiceChoices
+import ai.xopc.mobile.gateway.PersonalVoicePreference
 import ai.xopc.mobile.gateway.PersonalSummary
 import ai.xopc.mobile.gateway.PersonalAssertion
 import ai.xopc.mobile.gateway.PersonalProfile
@@ -215,6 +217,9 @@ data class NotesUiState(
 data class PersonalUiState(val gatewayId: String? = null, val summary: PersonalSummary? = null,
   val agent: PersonalAgentRecord? = null, val agentLoading: Boolean = false,
   val agentCreating: Boolean = false, val agentError: Boolean = false,
+  val agentProfileSaving: Boolean = false, val agentProfileError: Boolean = false,
+  val agentProfileSavedRevision: Int = 0,
+  val agentVoiceChoices: PersonalVoiceChoices? = null,
   val agentAvatar: Bitmap? = null,
   val loading: Boolean = false, val error: Boolean = false, val savingGoal: Boolean = false,
   val goalError: Boolean = false, val savedGoalRevision: Int = 0,
@@ -545,6 +550,53 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       catch (_: Exception) {
         if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
           it.copy(personal = it.personal.copy(agentCreating = false, agentError = true))
+        }
+      }
+    }
+  }
+
+  fun loadPersonalVoiceChoices() {
+    val gatewayId = mutableState.value.profile?.gatewayId ?: return
+    viewModelScope.launch {
+      val choices = runCatching { runInterruptible(Dispatchers.IO) {
+        personalAgentRepository.voiceChoices()
+      } }.getOrNull()
+      if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+        it.copy(personal = it.personal.copy(agentVoiceChoices = choices))
+      }
+    }
+  }
+
+  fun updatePersonalAgentProfile(name: String, appearance: String, preferences: Map<String, String>,
+    voiceId: String?) {
+    val gatewayId = mutableState.value.profile?.gatewayId ?: return
+    val agent = mutableState.value.personal.agent?.takeIf { it.state == "ready" } ?: return
+    if (mutableState.value.personal.agentProfileSaving) return
+    mutableState.update { it.copy(personal = it.personal.copy(agentProfileSaving = true,
+      agentProfileError = false)) }
+    viewModelScope.launch {
+      try {
+        val route = mutableState.value.personal.agentVoiceChoices
+        val voice = if (route == null || voiceId == null) agent.voicePreference
+          else if (voiceId.isEmpty()) null
+          else PersonalVoicePreference(route.provider, route.model, voiceId)
+        val updated = runInterruptible(Dispatchers.IO) {
+          personalAgentRepository.updateProfile(agent, name, appearance, preferences, voice)
+        }
+        if (mutableState.value.profile?.gatewayId != gatewayId) return@launch
+        mutableState.update { it.copy(personal = it.personal.copy(agent = updated,
+          agentProfileSaving = false, agentProfileError = false,
+          agentProfileSavedRevision = it.personal.agentProfileSavedRevision + 1)) }
+        if (updated.appearance == "custom") {
+          val avatar = runInterruptible(Dispatchers.IO) { loadPersonalAvatar(updated) }
+          if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+            it.copy(personal = it.personal.copy(agentAvatar = avatar))
+          }
+        } else mutableState.update { it.copy(personal = it.personal.copy(agentAvatar = null)) }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(personal = it.personal.copy(agentProfileSaving = false, agentProfileError = true))
         }
       }
     }
@@ -3461,6 +3513,22 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   suspend fun previewQuickImage(item: ChatAttachment): Bitmap? {
     if (mutableState.value.profile == null) return null
     return withContext(Dispatchers.IO) { conversations.quickImagePreview(item) }
+  }
+
+  suspend fun previewDraftFile(conversationId: String, item: ChatAttachment): ByteArray? {
+    if (mutableState.value.selectedConversationId != conversationId ||
+      mutableState.value.profile == null || item.type != "document") return null
+    return withContext(Dispatchers.IO) {
+      if (item.workspaceFileId != null) runCatching {
+        fileRepository.content(item.workspaceFileId).takeIf { it.size == item.size && it.size <= 10 * 1024 * 1024 }
+      }.getOrNull()
+      else conversations.composerFilePreview(conversationId, item)
+    }
+  }
+
+  suspend fun previewQuickFile(item: ChatAttachment): ByteArray? {
+    if (mutableState.value.profile == null || item.type != "document") return null
+    return withContext(Dispatchers.IO) { conversations.quickFilePreview(item) }
   }
 
   suspend fun speechChunk(text: String, language: String): ByteArray =

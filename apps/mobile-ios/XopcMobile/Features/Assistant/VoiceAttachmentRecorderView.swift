@@ -14,6 +14,9 @@ struct VoiceAttachmentRecorderView: View {
     @State private var recordedAudio: RecordedAudio?
     @State private var isTranscribing = false
     @State private var transcriptionError: String?
+    @State private var previewPlayer: AVAudioPlayer?
+    @State private var isPreviewPlaying = false
+    @State private var previewResetTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -44,6 +47,11 @@ struct VoiceAttachmentRecorderView: View {
                 }
                 HStack(spacing: 16) {
                     if recordedAudio != nil {
+                        Button(isPreviewPlaying ? "停止试听" : "试听", systemImage: isPreviewPlaying ? "stop.fill" : "play.fill") {
+                            togglePreview()
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isTranscribing)
                         Button("转为文字", systemImage: "text.cursor") {
                             Task { await transcribe() }
                         }
@@ -91,7 +99,7 @@ struct VoiceAttachmentRecorderView: View {
                     Button("取消") { recorder.cancel(); dismiss() }
                 }
             }
-            .onDisappear { recorder.cancel() }
+            .onDisappear { stopPreview(); recorder.cancel() }
             .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) {
                 recorder.handleAudioInterruption($0)
             }
@@ -104,8 +112,46 @@ struct VoiceAttachmentRecorderView: View {
         recordedAudio = recorder.finishRecording()
     }
 
+    private func togglePreview() {
+        if isPreviewPlaying {
+            stopPreview()
+            return
+        }
+        guard let recordedAudio else { return }
+        do {
+            let player = try AVAudioPlayer(data: recordedAudio.data)
+            player.prepareToPlay()
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+            guard player.play() else { throw GatewayClientError.invalidResponse }
+            previewPlayer = player
+            isPreviewPlaying = true
+            let identity = ObjectIdentifier(player)
+            previewResetTask = Task {
+                try? await Task.sleep(for: .seconds(player.duration))
+                guard !Task.isCancelled, previewPlayer.map(ObjectIdentifier.init) == identity else { return }
+                stopPreview()
+            }
+        } catch {
+            transcriptionError = error.localizedDescription
+        }
+    }
+
+    private func stopPreview() {
+        let wasPlaying = previewPlayer != nil
+        previewResetTask?.cancel()
+        previewResetTask = nil
+        previewPlayer?.stop()
+        previewPlayer = nil
+        isPreviewPlaying = false
+        if wasPlaying {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
+    }
+
     private func attachAudio() {
         guard let audio = recordedAudio else { return }
+        stopPreview()
         let attachment = MessageAttachment(
             type: "audio",
             name: audio.fileName,
@@ -119,6 +165,7 @@ struct VoiceAttachmentRecorderView: View {
 
     @MainActor private func transcribe() async {
         guard let recordedAudio, !isTranscribing else { return }
+        stopPreview()
         isTranscribing = true
         transcriptionError = nil
         defer { isTranscribing = false }
@@ -187,7 +234,15 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             isPaused = false
             errorMessage = nil
             timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                Task { @MainActor in self?.duration = recorder.currentTime }
+                Task { @MainActor in
+                    self?.duration = recorder.currentTime
+                    if recorder.currentTime >= 120 {
+                        recorder.pause()
+                        self?.isPaused = true
+                        self?.errorMessage = AppLocalization.resolve("录音最长 120 秒，请完成录制")
+                        self?.timer?.invalidate()
+                    }
+                }
             }
             scheduleInterruptionForUITest()
         } catch {

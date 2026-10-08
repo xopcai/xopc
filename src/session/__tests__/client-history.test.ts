@@ -5,6 +5,13 @@ import type { TranscriptStoredRow } from '../session-context-for-llm.js';
 import type { Message } from '../types.js';
 
 describe('messagesToClientHistory', () => {
+  it('preserves assistant audio media in live and persisted history', () => {
+    const media = [{ id: 'audio-1', type: 'audio', name: 'reply.m4a', mimeType: 'audio/mp4',
+      size: 128, uri: 'media://assistant/reply.m4a' }];
+    const row = { role: 'assistant', content: 'Listen to this', media } as never;
+    expect(messagesToClientHistory([row])[0]?.media).toEqual(media);
+    expect(transcriptRowsToClientHistory([row])[0]?.media).toEqual(media);
+  });
   it('hides internal task update triggers while keeping the Agent response', () => {
     const out = messagesToClientHistory([
       { role: 'user', content: 'Task update trigger', metadata: { hiddenFromClient: true } },

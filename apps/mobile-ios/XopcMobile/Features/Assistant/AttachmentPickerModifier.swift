@@ -6,6 +6,17 @@ import UniformTypeIdentifiers
 enum AttachmentPolicy {
     static let maximumCount = 10
     static let maximumBytes = 32 * 1024 * 1024
+    static let maximumChatBytes = 10 * 1024 * 1024
+    static let maximumChatTotalBytes = 20 * 1024 * 1024
+
+    static func validateChat(size: Int, current: [MessageAttachment]) throws {
+        guard current.count < maximumCount else { throw AttachmentImportError.tooMany }
+        guard size > 0 else { throw AttachmentImportError.unreadable }
+        guard size <= maximumChatBytes else { throw AttachmentImportError.tooLarge }
+        guard current.reduce(0, { $0 + $1.size }) + size <= maximumChatTotalBytes else {
+            throw AttachmentImportError.totalTooLarge
+        }
+    }
 }
 
 struct AttachmentPickerModifier: ViewModifier {
@@ -98,6 +109,9 @@ struct AttachmentPickerModifier: ViewModifier {
                         url.stopAccessingSecurityScopedResource()
                     }
                 }
+                if let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                    try AttachmentPolicy.validateChat(size: size, current: attachments)
+                }
                 let data = try Data(contentsOf: url)
                 let contentType = UTType(filenameExtension: url.pathExtension) ?? .data
                 try append(data: data, name: url.lastPathComponent, contentType: contentType)
@@ -109,9 +123,7 @@ struct AttachmentPickerModifier: ViewModifier {
 
     @MainActor
     private func append(data: Data, name: String, contentType: UTType) throws {
-        guard data.count <= AttachmentPolicy.maximumBytes else {
-            throw AttachmentImportError.tooLarge
-        }
+        try AttachmentPolicy.validateChat(size: data.count, current: attachments)
         attachments.append(MessageAttachment(
             type: contentType.conforms(to: .image) ? "image" : "file",
             name: name,
@@ -188,9 +200,10 @@ private struct CameraUnavailableView: View {
     }
 }
 
-private enum AttachmentImportError: LocalizedError {
+enum AttachmentImportError: LocalizedError {
     case unreadable
     case tooLarge
+    case totalTooLarge
     case tooMany
 
     var errorDescription: String? {
@@ -198,7 +211,9 @@ private enum AttachmentImportError: LocalizedError {
         case .unreadable:
             "无法读取所选附件"
         case .tooLarge:
-            "单个附件不能超过 32 MiB"
+            AppLocalization.resolve("聊天附件单个不能超过 10 MiB")
+        case .totalTooLarge:
+            AppLocalization.resolve("聊天附件合计不能超过 20 MiB")
         case .tooMany:
             "最多添加 10 个附件"
         }

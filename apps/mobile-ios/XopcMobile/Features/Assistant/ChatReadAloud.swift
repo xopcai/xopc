@@ -1,4 +1,5 @@
 import AVFAudio
+import MediaPlayer
 import SwiftUI
 
 enum ChatSpeechText {
@@ -79,13 +80,19 @@ enum ChatSpeechText {
     private(set) var errorMessage: String?
     private(set) var chunkIndex = 0
     private(set) var chunkCount = 0
+    private(set) var position: TimeInterval = 0
+    private(set) var duration: TimeInterval = 0
     private var chunks: [String] = []
     private var language = "en-US"
     private var player: AVAudioPlayer?
     private var fetchTask: Task<Void, Never>?
+    private var prefetchTask: Task<Data, Error>?
+    private var prefetchIndex = -1
     private var generation = 0
     private var activeGateway: GatewayClient?
     private var isAudioSessionActive = false
+    private var progressTimer: Timer?
+    private var remoteTargets: [(MPRemoteCommand, Any)] = []
 
     func toggle(id: String, text: String, locale: Locale, gateway: GatewayClient) {
         if sourceID == id {
@@ -93,10 +100,12 @@ enum ChatSpeechText {
             case .playing:
                 player?.pause()
                 state = .paused
+                updateNowPlaying()
                 return
             case .paused:
                 player?.play()
                 state = .playing
+                updateNowPlaying()
                 return
             case .loading:
                 stop()
@@ -120,8 +129,19 @@ enum ChatSpeechText {
         generation += 1
         fetchTask?.cancel()
         fetchTask = nil
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        prefetchIndex = -1
         player?.stop()
         player = nil
+        progressTimer?.invalidate()
+        progressTimer = nil
+        position = 0
+        duration = 0
+        let hadRemoteCommands = !remoteTargets.isEmpty
+        for (command, target) in remoteTargets { command.removeTarget(target) }
+        remoteTargets.removeAll()
+        if hadRemoteCommands { MPNowPlayingInfoCenter.default().nowPlayingInfo = nil }
         if isAudioSessionActive {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             isAudioSessionActive = false
@@ -139,7 +159,19 @@ enum ChatSpeechText {
         guard generation == self.generation, chunkIndex < chunks.count else { return }
         state = .loading
         do {
-            let data = try await gateway.synthesizeSpeech(text: chunks[chunkIndex], language: language)
+            let data: Data
+            if prefetchIndex == chunkIndex, let prefetchTask {
+                do {
+                    data = try await prefetchTask.value
+                } catch {
+                    guard generation == self.generation, !Task.isCancelled else { return }
+                    data = try await gateway.synthesizeSpeech(text: chunks[chunkIndex], language: language)
+                }
+                self.prefetchTask = nil
+                prefetchIndex = -1
+            } else {
+                data = try await gateway.synthesizeSpeech(text: chunks[chunkIndex], language: language)
+            }
             guard generation == self.generation, !Task.isCancelled else { return }
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
             try AVAudioSession.sharedInstance().setActive(true)
@@ -149,18 +181,98 @@ enum ChatSpeechText {
             player.prepareToPlay()
             guard player.play() else { throw GatewayClientError.invalidResponse }
             self.player = player
+            position = 0
+            duration = player.duration
             state = .playing
+            installRemoteCommands()
+            updateNowPlaying()
+            progressTimer?.invalidate()
+            progressTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, let player = self.player else { return }
+                    self.position = player.currentTime
+                    self.updateNowPlaying()
+                }
+            }
+            prefetchNext(gateway: gateway, generation: generation)
         } catch {
             guard generation == self.generation, !Task.isCancelled else { return }
+            let message = error.localizedDescription
+            stop()
             state = .failed
-            errorMessage = error.localizedDescription
+            errorMessage = message
         }
+    }
+
+    private func prefetchNext(gateway: GatewayClient, generation: Int) {
+        let next = chunkIndex + 1
+        guard generation == self.generation, next < chunks.count, prefetchIndex != next else { return }
+        prefetchTask?.cancel()
+        prefetchIndex = next
+        let text = chunks[next]
+        let language = language
+        prefetchTask = Task { try await gateway.synthesizeSpeech(text: text, language: language) }
+    }
+
+    func seek(to value: TimeInterval) {
+        guard let player else { return }
+        player.currentTime = min(max(0, value), player.duration)
+        position = player.currentTime
+        updateNowPlaying()
+    }
+
+    private func installRemoteCommands() {
+        guard remoteTargets.isEmpty else { return }
+        let center = MPRemoteCommandCenter.shared()
+        let play = center.playCommand.addTarget { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.state == .paused else { return }
+                self.player?.play()
+                self.state = .playing
+                self.updateNowPlaying()
+            }
+            return .success
+        }
+        let pause = center.pauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.state == .playing else { return }
+                self.player?.pause()
+                self.state = .paused
+                self.updateNowPlaying()
+            }
+            return .success
+        }
+        let stop = center.stopCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.stop() }
+            return .success
+        }
+        let seek = center.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            let position = event.positionTime
+            Task { @MainActor in self?.seek(to: position) }
+            return .success
+        }
+        remoteTargets = [(center.playCommand, play), (center.pauseCommand, pause),
+                         (center.stopCommand, stop), (center.changePlaybackPositionCommand, seek)]
+    }
+
+    private func updateNowPlaying() {
+        guard player != nil else { return }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = [
+            MPMediaItemPropertyTitle: "xopc",
+            MPMediaItemPropertyArtist: AppLocalization.resolve("朗读"),
+            MPMediaItemPropertyPlaybackDuration: duration,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
+            MPNowPlayingInfoPropertyPlaybackRate: state == .playing ? 1 : 0
+        ]
     }
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         let playerID = ObjectIdentifier(player)
         Task { @MainActor in
             guard self.player.map(ObjectIdentifier.init) == playerID else { return }
+            self.progressTimer?.invalidate()
+            self.progressTimer = nil
             self.player = nil
             if flag, self.chunkIndex + 1 < self.chunks.count {
                 self.chunkIndex += 1

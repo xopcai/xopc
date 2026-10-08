@@ -71,4 +71,30 @@ struct ChatImageSourceTests {
         #expect(message.content.text == "Done")
         #expect(message.details.isEmpty)
     }
+
+    @Test func chatHistoryKeepsDocumentResolutionAndPreviewText() throws {
+        let data = Data(#"{"type":"file","name":"report.pdf","mimeType":"application/pdf","size":128,"workspaceRelativePath":"reports/report.pdf","extractedText":"Report summary"}"#.utf8)
+        let attachment = try JSONDecoder().decode(HistoryAttachment.self, from: data)
+        #expect(attachment.id == "reports/report.pdf")
+        #expect(attachment.workspaceRelativePath == "reports/report.pdf")
+        #expect(attachment.extractedText == "Report summary")
+        #expect(attachment.isImage == false)
+        #expect(attachment.isAudio == false)
+    }
+
+    @Test func chatAttachmentsMatchHarmonySizeLimits() throws {
+        func attachment(size: Int) -> MessageAttachment {
+            MessageAttachment(type: "file", name: "file.txt", mimeType: "text/plain", size: size, data: "")
+        }
+        #expect(throws: AttachmentImportError.self) {
+            try AttachmentPolicy.validateChat(size: 10 * 1024 * 1024 + 1, current: [])
+        }
+        try AttachmentPolicy.validateChat(size: 10 * 1024 * 1024, current: [])
+        #expect(throws: AttachmentImportError.self) {
+            try AttachmentPolicy.validateChat(size: 1, current: [attachment(size: 20 * 1024 * 1024)])
+        }
+        #expect(throws: AttachmentImportError.self) {
+            try AttachmentPolicy.validateChat(size: 1, current: Array(repeating: attachment(size: 1), count: 10))
+        }
+    }
 }

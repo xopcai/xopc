@@ -10,6 +10,7 @@ struct MessageBubble: View {
     let readAloud: ChatReadAloud
     let canReadAloud: Bool
     let previewEligible: Bool
+    let onReuseUserText: (String) -> Void
     @Environment(\.locale) private var locale
     @State private var isActionsPresented = false
     @State private var isDetailPresented = false
@@ -24,60 +25,40 @@ struct MessageBubble: View {
     }
 
     private var messageContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            messageText
-            references
-            attachments
-            if message.role == "assistant", !message.text.isEmpty {
-                HStack(spacing: 2) {
+        VStack(alignment: message.role == "user" ? .trailing : .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 8) {
+                messageText
+                references
+                attachments
+                if message.role == "assistant", !message.text.isEmpty {
+                    assistantActions
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(message.role == "user" ? Color.blue.opacity(0.12) : Color.secondary.opacity(0.1))
+            .clipShape(.rect(cornerRadius: 18))
+            if message.role == "user", !message.text.isEmpty {
+                HStack(spacing: 4) {
                     Button("复制", systemImage: "doc.on.doc") {
                         UIPasteboard.general.string = message.text
                     }
-                    .frame(width: 40, height: 40)
-                    .contentShape(.rect)
-                    .accessibilityIdentifier("chat-copy-\(message.id)")
-                    Button("保存到笔记", systemImage: "bookmark") {
-                        Task { await saveAsNote() }
-                    }
-                    .disabled(isSavingNote)
-                    .frame(width: 40, height: 40)
-                    .contentShape(.rect)
-                    .accessibilityIdentifier("chat-save-note-\(message.id)")
-                    if !ChatSpeechText.chunks(from: message.text).isEmpty {
-                        Button {
-                            readAloud.toggle(id: message.id, text: message.text, locale: locale, gateway: GatewayClient(configuration: configuration))
-                        } label: {
-                            Label {
-                                Text(readAloud.sourceID == message.id && readAloud.state == .playing
-                                    ? LocalizedStringResource("暂停朗读")
-                                    : LocalizedStringResource("朗读"))
-                            } icon: {
-                                Image(systemName: "speaker.wave.2")
-                            }
+                    .frame(width: 44, height: 44)
+                    .accessibilityIdentifier("chat-user-copy-\(message.id)")
+                    if message.attachments.isEmpty, message.references.isEmpty {
+                        Button("再次编辑", systemImage: "pencil") {
+                            onReuseUserText(message.text)
                         }
-                        .frame(width: 40, height: 40)
-                        .contentShape(.rect)
-                        .accessibilityIdentifier("chat-read-aloud-\(message.id)")
-                        .disabled(!canReadAloud)
+                        .frame(width: 44, height: 44)
+                        .accessibilityIdentifier("chat-user-reuse-\(message.id)")
                     }
-                    Button("更多", systemImage: "ellipsis") {
-                        isActionsPresented = true
-                    }
-                    .frame(width: 40, height: 40)
-                    .contentShape(.rect)
-                    .accessibilityHint("查看消息详情和执行过程")
                 }
                 .labelStyle(.iconOnly)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .font(.caption.weight(.medium))
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
+                .padding(.trailing, 6)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(message.role == "user" ? Color.blue.opacity(0.12) : Color.secondary.opacity(0.1))
-        .clipShape(.rect(cornerRadius: 18))
         .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
         .opacity(message.isPending ? 0.65 : 1)
         .accessibilityElement(children: .contain)
@@ -101,6 +82,52 @@ struct MessageBubble: View {
         .alert(saveFeedback, isPresented: $isSaveFeedbackPresented) {
             Button("好", role: .cancel) {}
         }
+    }
+
+    private var assistantActions: some View {
+        HStack(spacing: 2) {
+            Button("复制", systemImage: "doc.on.doc") {
+                UIPasteboard.general.string = message.text
+            }
+            .frame(width: 40, height: 40)
+            .contentShape(.rect)
+            .accessibilityIdentifier("chat-copy-\(message.id)")
+            Button("保存到笔记", systemImage: "bookmark") {
+                Task { await saveAsNote() }
+            }
+            .disabled(isSavingNote)
+            .frame(width: 40, height: 40)
+            .contentShape(.rect)
+            .accessibilityIdentifier("chat-save-note-\(message.id)")
+            if !ChatSpeechText.chunks(from: message.text).isEmpty {
+                Button {
+                    readAloud.toggle(id: message.id, text: message.text, locale: locale, gateway: GatewayClient(configuration: configuration))
+                } label: {
+                    Label {
+                        Text(readAloud.sourceID == message.id && readAloud.state == .playing
+                            ? LocalizedStringResource("暂停朗读")
+                            : LocalizedStringResource("朗读"))
+                    } icon: {
+                        Image(systemName: "speaker.wave.2")
+                    }
+                }
+                .frame(width: 40, height: 40)
+                .contentShape(.rect)
+                .accessibilityIdentifier("chat-read-aloud-\(message.id)")
+                .disabled(!canReadAloud)
+            }
+            Button("更多", systemImage: "ellipsis") {
+                isActionsPresented = true
+            }
+            .frame(width: 40, height: 40)
+            .contentShape(.rect)
+            .accessibilityHint("查看消息详情和执行过程")
+        }
+        .labelStyle(.iconOnly)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .font(.caption.weight(.medium))
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
     }
 
     @ViewBuilder
@@ -192,10 +219,15 @@ struct MessageBubble: View {
                                         source: uri,
                                         configuration: configuration,
                                         conversationID: conversationID,
-                                        compact: true
+                                        compact: true,
+                                        gallery: images
                                     )
                                 } else {
-                                    attachmentLabel(attachment, systemImage: "photo")
+                                    ChatAttachmentPreview(
+                                        attachment: attachment,
+                                        configuration: configuration,
+                                        conversationID: conversationID
+                                    )
                                 }
                             }
                         }
@@ -203,27 +235,23 @@ struct MessageBubble: View {
                     .scrollIndicators(.hidden)
                 }
                 ForEach(message.attachments.filter { !$0.isImage }) { attachment in
-                    if attachment.isAudio, attachment.uri != nil, let conversationID {
+                    if attachment.isAudio, let conversationID,
+                       attachment.uri != nil || attachment.workspaceRelativePath != nil {
                         ChatAudioAttachmentView(
                             attachment: attachment,
                             configuration: configuration,
                             conversationID: conversationID
                         )
                     } else {
-                        attachmentLabel(attachment, systemImage: "doc")
+                        ChatAttachmentPreview(
+                            attachment: attachment,
+                            configuration: configuration,
+                            conversationID: conversationID
+                        )
                     }
                 }
             }
         }
-    }
-
-    private func attachmentLabel(_ attachment: HistoryAttachment, systemImage: String) -> some View {
-        Label(attachment.name ?? AppLocalization.string("附件", locale: locale), systemImage: systemImage)
-            .font(.caption)
-            .lineLimit(1)
-            .padding(.horizontal, 9)
-            .frame(minHeight: 44)
-            .background(Color.secondary.opacity(0.1), in: .capsule)
     }
 
     private func referenceAccessibilityLabel(_ reference: ContextReference) -> String {
@@ -251,7 +279,7 @@ struct MessageBubble: View {
     }
 }
 
-private struct ChatAudioAttachmentView: View {
+struct ChatAudioAttachmentView: View {
     let attachment: HistoryAttachment
     let configuration: GatewayConfiguration
     let conversationID: String
@@ -261,8 +289,7 @@ private struct ChatAudioAttachmentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Button {
-                guard let uri = attachment.uri else { return }
-                playback.toggle(uri: uri, conversationID: conversationID, configuration: configuration)
+                playback.toggle(attachment: attachment, conversationID: conversationID, configuration: configuration)
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: playback.isPlaying ? "stop.circle.fill" : "speaker.wave.2.fill")
@@ -287,8 +314,7 @@ private struct ChatAudioAttachmentView: View {
             if let error = playback.errorMessage {
                 Text(error).font(.caption).foregroundStyle(.red)
                 Button("重试") {
-                    guard let uri = attachment.uri else { return }
-                    playback.retry(uri: uri, conversationID: conversationID, configuration: configuration)
+                    playback.retry(attachment: attachment, conversationID: conversationID, configuration: configuration)
                 }
                 .frame(minHeight: 44)
             }
@@ -310,7 +336,7 @@ private final class ChatAudioPlayback: NSObject, AVAudioPlayerDelegate {
     private var generation = 0
     private var ownsAudioSession = false
 
-    func toggle(uri: String, conversationID: String, configuration: GatewayConfiguration) {
+    func toggle(attachment: HistoryAttachment, conversationID: String, configuration: GatewayConfiguration) {
         if isPlaying {
             stop()
             return
@@ -327,17 +353,17 @@ private final class ChatAudioPlayback: NSObject, AVAudioPlayerDelegate {
             }
             return
         }
-        retry(uri: uri, conversationID: conversationID, configuration: configuration)
+        retry(attachment: attachment, conversationID: conversationID, configuration: configuration)
     }
 
-    func retry(uri: String, conversationID: String, configuration: GatewayConfiguration) {
+    func retry(attachment: HistoryAttachment, conversationID: String, configuration: GatewayConfiguration) {
         stop()
         isLoading = true
         let current = generation
         fetchTask = Task {
             do {
-                let data = try await ChatAudioLoader(configuration: configuration)
-                    .load(uri: uri, conversationID: conversationID)
+                let data = try await ChatAttachmentLoader(configuration: configuration)
+                    .load(attachment, conversationID: conversationID)
                 guard current == generation, !Task.isCancelled else { return }
                 try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
                 try AVAudioSession.sharedInstance().setActive(true)
