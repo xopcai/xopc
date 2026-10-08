@@ -113,6 +113,27 @@ describe('background task result delivery', () => {
     expect(decide).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { label: 'undefined', summaryFields: { summary: undefined } },
+    { label: 'omitted', summaryFields: {} },
+    { label: 'long', summaryFields: { summary: 'x'.repeat(2_100) } },
+  ])('captures and delivers a successful text outcome with a $label summary', async ({ summaryFields }) => {
+    const { main, coordinator, runId } = task();
+    const outcome: TurnOutcome = {
+      version: 1, outcomeId: `outcome:${runId}`, runId, turnId: runId, status: 'succeeded',
+      deliverables: [], evidence: [], createdAt: new Date().toISOString(), ...summaryFields,
+    };
+    coordinator.captureOutcome(outcome);
+    const row = getSqliteDatabase().prepare('SELECT outcome_json FROM task_run_outcomes WHERE task_run_id = ?')
+      .get(runId) as { outcome_json: string };
+    expect(JSON.parse(row.outcome_json).summary).toBe(summaryFields.summary?.slice(0, 2_000));
+    coordinator.finalize({ status: 'succeeded', summary: 'Report ready', assistantText: 'A useful news report.' });
+    expect(await new TaskResultDeliveryService().drain(vi.fn())).toBe(1);
+    const detail = await new SessionStore(stateDir).getMessagePage(main.key, { includeContextRows: true });
+    expect(JSON.stringify(detail?.session.messages)).toContain('A useful news report.');
+    expect((detail?.session.messages[0] as unknown as ClientHistoryMessage)?.metadata?.turnOutcome?.status).toBe('succeeded');
+  });
+
   it('recovers after restart and retries a failed push without duplicate transcript rows', async () => {
     const { main, coordinator, runId } = task();
     coordinator.captureOutcome(await image(runId));
