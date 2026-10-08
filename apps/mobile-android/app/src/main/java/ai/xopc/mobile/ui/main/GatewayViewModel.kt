@@ -20,6 +20,8 @@ import ai.xopc.mobile.gateway.ConversationMedia
 import ai.xopc.mobile.gateway.ExecutionDetail
 import ai.xopc.mobile.gateway.PendingInput
 import ai.xopc.mobile.gateway.ConversationModel
+import ai.xopc.mobile.gateway.QueuedInput
+import ai.xopc.mobile.gateway.QueuedInputState
 import ai.xopc.mobile.gateway.ConversationAgent
 import ai.xopc.mobile.gateway.ConversationContext
 import ai.xopc.mobile.gateway.ContextEnvironmentOptions
@@ -56,6 +58,8 @@ import ai.xopc.mobile.gateway.NoteDraftStore
 import ai.xopc.mobile.gateway.ShareRepository
 import ai.xopc.mobile.gateway.ShareItem
 import ai.xopc.mobile.gateway.PersonalRepository
+import ai.xopc.mobile.gateway.PersonalAgentRepository
+import ai.xopc.mobile.gateway.PersonalAgentRecord
 import ai.xopc.mobile.gateway.PersonalSummary
 import ai.xopc.mobile.gateway.PersonalAssertion
 import ai.xopc.mobile.gateway.PersonalProfile
@@ -209,6 +213,9 @@ data class NotesUiState(
   val createdNoteId: String? = null,
 )
 data class PersonalUiState(val gatewayId: String? = null, val summary: PersonalSummary? = null,
+  val agent: PersonalAgentRecord? = null, val agentLoading: Boolean = false,
+  val agentCreating: Boolean = false, val agentError: Boolean = false,
+  val agentAvatar: Bitmap? = null,
   val loading: Boolean = false, val error: Boolean = false, val savingGoal: Boolean = false,
   val goalError: Boolean = false, val savedGoalRevision: Int = 0,
   val savingProfile: Boolean = false, val profileError: Boolean = false,
@@ -279,6 +286,8 @@ data class ConnectionUiState(
   val chatError: Boolean = false,
   val realtimeStatus: String = "offline",
   val sending: Boolean = false,
+  val optimisticText: String = "",
+  val optimisticPreviousUserId: String? = null,
   val sendError: Boolean = false,
   val sendErrorDetail: String? = null,
   val sendRejected: Boolean = false,
@@ -307,10 +316,16 @@ data class ConnectionUiState(
   val liveMessageId: String? = null,
   val models: List<ConversationModel> = emptyList(),
   val selectedModelId: String = "",
+  val thinkingLevel: String = "off",
   val modelConfigVersion: Long? = null,
   val modelsLoading: Boolean = false,
   val modelSaving: Boolean = false,
   val modelError: Boolean = false,
+  val queuedInputs: List<QueuedInput> = emptyList(),
+  val queuePositionOffset: Int = 0,
+  val queueLoading: Boolean = false,
+  val queueBusy: Boolean = false,
+  val queueError: Boolean = false,
   val agents: List<ConversationAgent> = emptyList(),
   val selectedAgentId: String = "",
   val defaultAgentId: String = "main",
@@ -373,6 +388,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private val fileRepository = FileRepository(session)
   private val shareRepository = ShareRepository(session)
   private val personalRepository = PersonalRepository(session)
+  private val personalAgentRepository = PersonalAgentRepository(session)
   private val noteDraftStore = NoteDraftStore(application)
   private val realtime = RealtimeClient(session)
   private val mutableState = MutableStateFlow(ConnectionUiState())
@@ -389,6 +405,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private var executionRevision = 0
   private var runStateJob: Job? = null
   private var modelJob: Job? = null
+  private var queueJob: Job? = null
   private var agentJob: Job? = null
   private var contextJob: Job? = null
   private var contextPanelJob: Job? = null
@@ -411,6 +428,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private var sharesJob: Job? = null
   private var sharesRevision = 0
   private var personalJob: Job? = null
+  private var personalAgentJob: Job? = null
   private var personalRevision = 0
   private var personalListJob: Job? = null
   private var personalListRevision = 0
@@ -469,6 +487,76 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       }
     }
   }
+
+  fun loadPersonalAgent() {
+    val gatewayId = mutableState.value.profile?.gatewayId ?: return
+    if (mutableState.value.personal.agentCreating) return
+    personalAgentJob?.cancel()
+    mutableState.update { state ->
+      val previous = state.personal.takeIf { it.gatewayId == gatewayId } ?: PersonalUiState(gatewayId)
+      state.copy(personal = previous.copy(agentLoading = true, agentError = false))
+    }
+    personalAgentJob = viewModelScope.launch {
+      try {
+        val agent = runInterruptible(Dispatchers.IO) { personalAgentRepository.get() }
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(personal = it.personal.copy(agent = agent, agentAvatar = null,
+            agentLoading = false))
+        }
+        if (agent?.appearance == "custom") {
+          val avatar = runInterruptible(Dispatchers.IO) { loadPersonalAvatar(agent) }
+          if (mutableState.value.profile?.gatewayId == gatewayId &&
+            mutableState.value.personal.agent?.agentId == agent.agentId) mutableState.update {
+            it.copy(personal = it.personal.copy(agentAvatar = avatar))
+          }
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(personal = it.personal.copy(agentLoading = false, agentError = true))
+        }
+      }
+    }
+  }
+
+  fun openPersonalAgent() {
+    val gatewayId = mutableState.value.profile?.gatewayId ?: return
+    if (mutableState.value.personal.agentCreating) return
+    personalAgentJob?.cancel()
+    mutableState.update { it.copy(personal = it.personal.copy(agentCreating = true,
+      agentLoading = false, agentError = false)) }
+    personalAgentJob = viewModelScope.launch {
+      try {
+        val agent = runInterruptible(Dispatchers.IO) { personalAgentRepository.openOrCreate() }
+        if (mutableState.value.profile?.gatewayId != gatewayId) return@launch
+        mutableState.update { it.copy(personal = it.personal.copy(agent = agent, agentAvatar = null,
+          agentCreating = false, agentError = false)) }
+        selectConversation(agent.conversationId)
+        mutableState.update { it.copy(quickOpenedConversationId = agent.conversationId) }
+        loadConversations()
+        if (agent.appearance == "custom") {
+          val avatar = runInterruptible(Dispatchers.IO) { loadPersonalAvatar(agent) }
+          if (mutableState.value.profile?.gatewayId == gatewayId &&
+            mutableState.value.personal.agent?.agentId == agent.agentId) mutableState.update {
+            it.copy(personal = it.personal.copy(agentAvatar = avatar))
+          }
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(personal = it.personal.copy(agentCreating = false, agentError = true))
+        }
+      }
+    }
+  }
+
+  private fun loadPersonalAvatar(agent: PersonalAgentRecord): Bitmap? = runCatching {
+    val bytes = personalAgentRepository.avatar(agent) ?: return null
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    require(bounds.outWidth in 1..1024 && bounds.outHeight in 1..1024) { "INVALID_PERSONAL_AVATAR" }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+  }.getOrNull()
 
   fun loadPersonalAssertions(filter: String, query: String, append: Boolean = false) {
     val gatewayId = mutableState.value.profile?.gatewayId ?: return
@@ -2680,6 +2768,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     executionRevision++
     runStateJob?.cancel()
     modelJob?.cancel()
+    queueJob?.cancel()
     agentJob?.cancel()
     contextJob?.cancel()
     contextRevision++
@@ -2701,10 +2790,14 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       draftModelLoading = false, draftModelReady = false, chatError = false, activeRunId = null,
       stoppingRun = false, stopError = false, runError = false, liveText = "", liveMessageId = null,
       pendingInput = null, sendError = false, sendErrorDetail = null, sendRejected = false,
+      optimisticText = "", optimisticPreviousUserId = null,
       referencePicker = ReferencePickerUiState(),
       contextPanel = ContextPanelUiState()) }
-    mutableState.update { it.copy(models = emptyList(), selectedModelId = "", modelConfigVersion = null,
-      modelsLoading = false, modelSaving = false, modelError = false, agents = emptyList(),
+    mutableState.update { it.copy(models = emptyList(), selectedModelId = "", thinkingLevel = "off",
+      modelConfigVersion = null,
+      modelsLoading = false, modelSaving = false, modelError = false,
+      queuedInputs = emptyList(), queuePositionOffset = 0, queueLoading = false,
+      queueBusy = false, queueError = false, agents = emptyList(),
       selectedAgentId = "", agentsLoading = false, agentError = false) }
     mutableState.update { it.copy(context = null, contextLoading = false, contextError = false,
       connectionWait = ConnectionWaitUiState(it.profile?.gatewayId, id),
@@ -3100,7 +3193,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
         val selection = runInterruptible(Dispatchers.IO) { conversations.modelSelection(id, agentId) }
         if (mutableState.value.selectedConversationId == id) mutableState.update { it.copy(
           models = selection.models, selectedModelId = selection.selectedId,
-          modelConfigVersion = selection.configVersion, modelsLoading = false) }
+          modelConfigVersion = selection.configVersion, thinkingLevel = selection.thinkingLevel,
+          modelsLoading = false) }
       } catch (error: CancellationException) {
         throw error
       } catch (_: Exception) {
@@ -3123,12 +3217,104 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
         val result = runInterruptible(Dispatchers.IO) { conversations.setModel(id, model, current.modelConfigVersion) }
         if (mutableState.value.selectedConversationId == id) mutableState.update { it.copy(
           selectedModelId = result.selectedId, modelConfigVersion = result.configVersion,
+          thinkingLevel = result.thinkingLevel,
           modelSaving = false, modelError = false) }
       } catch (error: CancellationException) {
         throw error
       } catch (_: Exception) {
         if (mutableState.value.selectedConversationId == id) {
           mutableState.update { it.copy(modelSaving = false, modelError = true) }
+        }
+      }
+    }
+  }
+
+  fun selectThinking(level: String) {
+    val current = mutableState.value
+    val id = current.selectedConversationId ?: return
+    val model = current.models.firstOrNull { it.id == current.selectedModelId } ?: return
+    if (model.thinkingMode !in setOf("levels", "toggle") || level !in model.thinkingOptions ||
+      current.modelSaving || current.modelsLoading || current.sending || current.activeRunId != null ||
+      current.pendingInput != null || level == current.thinkingLevel) return
+    mutableState.update { it.copy(modelSaving = true, modelError = false) }
+    viewModelScope.launch {
+      try {
+        val result = runInterruptible(Dispatchers.IO) {
+          conversations.setThinking(id, level, current.modelConfigVersion)
+        }
+        if (mutableState.value.selectedConversationId == id) mutableState.update { it.copy(
+          thinkingLevel = result.thinkingLevel, modelConfigVersion = result.configVersion,
+          modelSaving = false, modelError = false) }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.selectedConversationId == id) mutableState.update {
+          it.copy(modelSaving = false, modelError = true)
+        }
+      }
+    }
+  }
+
+  fun loadQueuedInputs() {
+    val id = mutableState.value.selectedConversationId ?: return
+    queueJob?.cancel()
+    mutableState.update { it.copy(queueLoading = true, queueError = false) }
+    queueJob = viewModelScope.launch {
+      try {
+        val queue = runInterruptible(Dispatchers.IO) { conversations.queuedInputs(id) }
+        if (mutableState.value.selectedConversationId == id) applyQueuedInputs(queue)
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.selectedConversationId == id) mutableState.update {
+          it.copy(queueLoading = false, queueError = true)
+        }
+      }
+    }
+  }
+
+  private fun applyQueuedInputs(queue: QueuedInputState) {
+    mutableState.update { it.copy(queuedInputs = queue.items,
+      queuePositionOffset = queue.positionOffset, queueLoading = false,
+      queueBusy = false, queueError = queue.preparationFailed) }
+  }
+
+  fun updateQueuedInput(inputId: String, content: String?, position: Int?) {
+    val current = mutableState.value
+    val id = current.selectedConversationId ?: return
+    val input = current.queuedInputs.firstOrNull { it.id == inputId } ?: return
+    if (current.queueBusy || current.queueLoading) return
+    val effectivePosition = position?.plus(current.queuePositionOffset)
+    mutableState.update { it.copy(queueBusy = true, queueError = false) }
+    queueJob?.cancel()
+    queueJob = viewModelScope.launch {
+      try {
+        val queue = runInterruptible(Dispatchers.IO) {
+          conversations.updateQueuedInput(id, input, content, effectivePosition)
+        }
+        if (mutableState.value.selectedConversationId == id) applyQueuedInputs(queue)
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.selectedConversationId == id) mutableState.update {
+          it.copy(queueBusy = false, queueError = true)
+        }
+      }
+    }
+  }
+
+  fun cancelQueuedInput(inputId: String) {
+    val current = mutableState.value
+    val id = current.selectedConversationId ?: return
+    val input = current.queuedInputs.firstOrNull { it.id == inputId } ?: return
+    if (current.queueBusy || current.queueLoading) return
+    mutableState.update { it.copy(queueBusy = true, queueError = false) }
+    queueJob?.cancel()
+    queueJob = viewModelScope.launch {
+      try {
+        val queue = runInterruptible(Dispatchers.IO) { conversations.cancelQueuedInput(id, input) }
+        if (mutableState.value.selectedConversationId == id) applyQueuedInputs(queue)
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.selectedConversationId == id) mutableState.update {
+          it.copy(queueBusy = false, queueError = true)
         }
       }
     }
@@ -3151,11 +3337,17 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           }
           val retainOlder = history != null && history.transcriptId != null &&
             history.transcriptId == state.historyTranscriptId && overlap != null
-          state.copy(messages = when {
+          val nextMessages = when {
               history == null -> state.messages
               retainOlder -> state.messages.take(overlap) + history.messages
               else -> history.messages
-            }, pendingInput = pending,
+            }
+          val latestUser = nextMessages.lastOrNull { it.role == "user" }
+          val optimisticConfirmed = state.optimisticText.isNotBlank() && latestUser != null &&
+            latestUser.id != state.optimisticPreviousUserId && latestUser.text == state.optimisticText
+          state.copy(messages = nextMessages, pendingInput = pending,
+            optimisticText = if (optimisticConfirmed) "" else state.optimisticText,
+            optimisticPreviousUserId = if (optimisticConfirmed) null else state.optimisticPreviousUserId,
             historyTranscriptId = history?.transcriptId ?: state.historyTranscriptId,
             historyBefore = when {
               history == null || retainOlder -> state.historyBefore
@@ -3940,7 +4132,9 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       mutableState.value.taskScopeLoading ||
       (!modelPrepared && !mutableState.value.draftModelReady) ||
       mutableState.value.realtimeStatus != "connected") return false
-    mutableState.update { it.copy(sending = true, sendError = false, sendErrorDetail = null, sendRejected = false) }
+    mutableState.update { it.copy(sending = true, sendError = false, sendErrorDetail = null,
+      sendRejected = false, optimisticText = content,
+      optimisticPreviousUserId = it.messages.lastOrNull { message -> message.role == "user" }?.id) }
     viewModelScope.launch {
       try {
         draftWriteJob?.join()
@@ -3974,6 +4168,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           catch (_: Exception) { null }
         if (mutableState.value.selectedConversationId == id) mutableState.update {
           it.copy(sending = false, sendError = true, pendingInput = pending,
+            optimisticText = "", optimisticPreviousUserId = null,
             sendErrorDetail = (error as? GatewayHttpException)?.detail,
             sendRejected = error is GatewayHttpException && error.status in 400..499)
         }

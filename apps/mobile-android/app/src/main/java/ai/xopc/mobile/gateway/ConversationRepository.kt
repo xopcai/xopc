@@ -71,8 +71,14 @@ data class PendingInput(val clientMessageId: String, val content: String, val ta
   val attachments: List<ChatAttachment> = emptyList())
 data class ConversationAgent(val id: String, val name: String, val description: String)
 data class AgentCatalog(val agents: List<ConversationAgent>, val defaultId: String)
-data class ConversationModel(val id: String, val name: String, val initialThinkingLevel: String)
-data class ModelSelection(val models: List<ConversationModel>, val selectedId: String, val configVersion: Long?)
+data class ConversationModel(val id: String, val name: String, val initialThinkingLevel: String,
+  val thinkingMode: String = "none", val thinkingOptions: List<String> = emptyList())
+data class ModelSelection(val models: List<ConversationModel>, val selectedId: String,
+  val configVersion: Long?, val thinkingLevel: String = "off")
+data class QueuedInput(val id: String, val content: String, val version: Int, val position: Int,
+  val attachmentCount: Int, val referenceCount: Int)
+data class QueuedInputState(val items: List<QueuedInput>, val positionOffset: Int,
+  val preparationFailed: Boolean)
 data class LocalConversationDraft(
   val conversationId: String,
   val agentId: String,
@@ -556,9 +562,12 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     val effectiveAgent = local?.agentId ?: agentId
     val query = effectiveAgent?.takeIf(String::isNotBlank)?.let { "?agentId=${encode(it)}" } ?: ""
     val models = parseModels(gateway.request("/api/models$query"))
-    if (local != null) return models.copy(selectedId = local.model.ifBlank { models.selectedId })
-    val config = parseModelConfig(gateway.request("/api/sessions/$conversationId/agent-config"))
-    return models.copy(selectedId = config.first, configVersion = config.second)
+    if (local != null) return models.copy(selectedId = local.model.ifBlank { models.selectedId },
+      thinkingLevel = local.thinkingLevel)
+    val raw = gateway.request("/api/sessions/$conversationId/agent-config")
+    val config = parseModelConfig(raw)
+    return models.copy(selectedId = config.first, configVersion = config.second,
+      thinkingLevel = JSONObject(raw).getJSONObject("payload").optString("thinkingLevel", "off"))
   }
 
   fun agents(): AgentCatalog = parseAgents(gateway.request("/api/agents"))
@@ -572,15 +581,61 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     if (local != null) {
       val updated = local.copy(model = model.id, thinkingLevel = model.initialThinkingLevel)
       pendingStore?.write(draftKey(profile.gatewayId, conversationId), draftJson(updated).toString())
-      return ModelSelection(emptyList(), model.id, null)
+      return ModelSelection(emptyList(), model.id, null, model.initialThinkingLevel)
     }
     val body = JSONObject().put("model", model.id)
     if (configVersion != null) body.put("configVersion", configVersion)
     val response = JSONObject(gateway.request("/api/sessions/$conversationId/agent-config", "PATCH", body.toString()))
     require(response.optBoolean("ok")) { "MODEL_UPDATE_FAILED" }
     val payload = response.getJSONObject("payload")
-    return ModelSelection(emptyList(), payload.getString("model"), payload.getLong("configVersion"))
+    return ModelSelection(emptyList(), payload.getString("model"), payload.getLong("configVersion"),
+      payload.optString("thinkingLevel", model.initialThinkingLevel))
   }
+
+  @Synchronized
+  fun setThinking(conversationId: String, level: String, configVersion: Long?): ModelSelection {
+    require(level in setOf("off", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")) {
+      "INVALID_THINKING_LEVEL"
+    }
+    require(pendingInput(conversationId) == null) { "INPUT_PENDING" }
+    val local = draft(conversationId)
+    if (local != null) {
+      val profile = gateway.currentProfile() ?: throw IllegalStateException("NOT_PAIRED")
+      pendingStore?.write(draftKey(profile.gatewayId, conversationId),
+        draftJson(local.copy(thinkingLevel = level)).toString())
+      return ModelSelection(emptyList(), local.model, null, level)
+    }
+    val body = JSONObject().put("thinkingLevel", level)
+    if (configVersion != null) body.put("configVersion", configVersion)
+    val response = JSONObject(gateway.request("/api/sessions/$conversationId/agent-config", "PATCH", body.toString()))
+    require(response.optBoolean("ok")) { "THINKING_UPDATE_FAILED" }
+    val payload = response.getJSONObject("payload")
+    return ModelSelection(emptyList(), payload.getString("model"), payload.getLong("configVersion"),
+      payload.getString("thinkingLevel"))
+  }
+
+  fun queuedInputs(conversationId: String): QueuedInputState {
+    if (draft(conversationId) != null) return QueuedInputState(emptyList(), 0, false)
+    return parseQueuedInputs(conversationId,
+      gateway.request("/api/sessions/$conversationId/input-state"))
+  }
+
+  fun updateQueuedInput(conversationId: String, input: QueuedInput,
+    content: String? = null, position: Int? = null): QueuedInputState {
+    require(content != null || position != null) { "INVALID_QUEUE_CHANGE" }
+    if (content != null) require(content.isNotBlank() || input.attachmentCount > 0 || input.referenceCount > 0) {
+      "EMPTY_QUEUED_INPUT"
+    }
+    val body = JSONObject().put("version", input.version)
+    if (content != null) body.put("content", content)
+    if (position != null) body.put("position", position)
+    return parseQueuedInputs(conversationId, gateway.request(
+      "/api/sessions/$conversationId/inputs/${encode(input.id)}", "PATCH", body.toString()))
+  }
+
+  fun cancelQueuedInput(conversationId: String, input: QueuedInput): QueuedInputState =
+    parseQueuedInputs(conversationId, gateway.request(
+      "/api/sessions/$conversationId/inputs/${encode(input.id)}?version=${input.version}", "DELETE"))
 
   fun abortRun(runId: String) {
     require(runId.isNotBlank()) { "INVALID_RUN_ID" }
@@ -772,8 +827,12 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         val item = array.getJSONObject(index)
         val id = item.getString("id")
         require(id.isNotBlank()) { "INVALID_MODELS" }
+        val thinking = item.optJSONObject("thinking")
+        val options = thinking?.optJSONArray("options")
         ConversationModel(id, item.optString("name").ifBlank { id },
-          item.optJSONObject("thinking")?.optString("initialValue")?.takeIf(String::isNotBlank) ?: "off")
+          thinking?.optString("initialValue")?.takeIf(String::isNotBlank) ?: "off",
+          thinking?.optString("mode") ?: "none",
+          (0 until (options?.length() ?: 0)).map { options!!.getString(it) })
       }
       return ModelSelection(models, payload.optString("defaultId").ifBlank { models.firstOrNull()?.id.orEmpty() }, null)
     }
@@ -786,6 +845,26 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       val version = payload.getLong("configVersion")
       require(model.isNotBlank() && version >= 0) { "INVALID_AGENT_CONFIG" }
       return model to version
+    }
+
+    fun parseQueuedInputs(conversationId: String, raw: String): QueuedInputState {
+      val root = JSONObject(raw)
+      require(root.optBoolean("ok")) { "INVALID_INPUT_STATE" }
+      val payload = root.getJSONObject("payload")
+      require(payload.getString("conversationId") == conversationId) { "INVALID_INPUT_STATE" }
+      val rows = payload.getJSONArray("inputs")
+      require(rows.length() <= 100) { "INVALID_INPUT_STATE" }
+      val queued = (0 until rows.length()).map { rows.getJSONObject(it) }
+        .filter { it.optString("kind") == "message" && it.optString("status") == "queued" }
+        .sortedBy { it.getInt("position") }
+      val failed = payload.optJSONObject("preparation")?.optString("state") == "preparation_failed"
+      val hasActiveRun = !payload.isNull("activeRunId") && payload.optString("activeRunId").isNotBlank()
+      val offset = if (!hasActiveRun && !failed && queued.isNotEmpty()) 1 else 0
+      return QueuedInputState(queued.drop(offset).map { item ->
+        QueuedInput(item.getString("id"), item.optString("content"), item.getInt("version"),
+          item.getInt("position"), item.optJSONArray("attachments")?.length() ?: 0,
+          item.optJSONArray("contextRefs")?.length() ?: 0)
+      }, offset, failed)
     }
 
     fun parsePendingInput(raw: String): PendingInput {

@@ -7,6 +7,7 @@ struct AssistantView<Dock: View>: View {
     let isActive: Bool
     let realtimeVoiceCall: RealtimeVoiceCall
     let conversation: ConversationSelection?
+    let personalAgent: PersonalAgentRecord?
     let quickChatHandoff: QuickChatHandoff?
     let onStartConversation: (String) -> Void
     let onStartScopedConversation: (ProjectRecord?, String?, String) -> Void
@@ -274,6 +275,7 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var conversationNavigationTitle: String {
+        if isPersonalConversation { return personalAgent?.displayName ?? "Ada" }
         guard let title = conversation?.title, !showsConversationTitleInTimeline else {
             return AppLocalization.string("助手", locale: locale)
         }
@@ -283,6 +285,16 @@ struct AssistantView<Dock: View>: View {
     private var showsConversationTitleInTimeline: Bool {
         guard let title = conversation?.title else { return false }
         return title.count > 14
+    }
+
+    private var isPersonalConversation: Bool {
+        personalAgent?.isReady == true && conversation?.id == personalAgent?.conversationId
+    }
+
+    private var currentAgentName: String {
+        isPersonalConversation
+            ? (personalAgent?.displayName ?? "Ada")
+            : (state.selectedAgent?.displayName ?? AppLocalization.string("未选择", locale: locale))
     }
 
     private var readAloudBar: some View {
@@ -331,12 +343,24 @@ struct AssistantView<Dock: View>: View {
 
     private var welcome: some View {
         VStack(spacing: 18) {
-            LoopiIcon(size: 108, active: isActive, interactive: true)
+            PersonalAgentAvatar(configuration: configuration, agent: isPersonalConversation ? personalAgent : nil,
+                                size: 108, active: isActive)
                 .accessibilityIdentifier("chat-welcome-loopi")
-            Text(verbatim: locale.language.languageCode?.identifier == "zh"
-                ? "今天想推进什么？" : "What do you want to move forward?")
+            Text(verbatim: isPersonalConversation
+                ? (locale.language.languageCode?.identifier == "zh"
+                    ? "你好，我是\(personalAgent?.displayName ?? "Ada")。" : "Hi, I'm \(personalAgent?.displayName ?? "Ada").")
+                : (locale.language.languageCode?.identifier == "zh"
+                    ? "今天想推进什么？" : "What do you want to move forward?"))
                 .font(.system(size: 20, weight: .medium))
                 .multilineTextAlignment(.center)
+            if isPersonalConversation {
+                Text(locale.language.languageCode?.identifier == "zh"
+                    ? "想聊一件事、理清思路，或让我帮你推进工作，都可以直接说。"
+                    : "Tell me what is on your mind, or what you would like to move forward.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
         }
         .padding(.vertical, 28)
         .frame(maxWidth: .infinity)
@@ -344,6 +368,7 @@ struct AssistantView<Dock: View>: View {
 
     private var composer: AssistantComposer {
         AssistantComposer(
+            configuration: configuration,
             draft: $draft,
             attachments: $attachments,
             references: $references,
@@ -435,14 +460,11 @@ struct AssistantView<Dock: View>: View {
                 }
             } label: {
                 Label(
-                    state.selectedAgent?.displayName ?? AppLocalization.string("选择助手", locale: locale),
+                    currentAgentName,
                     systemImage: "person.crop.circle"
                 )
             }
-            .accessibilityLabel(AppLocalization.resolve(
-                "当前助手：\(state.selectedAgent?.displayName ?? AppLocalization.string("未选择", locale: locale))",
-                locale: locale
-            ))
+            .accessibilityLabel(AppLocalization.resolve("当前助手：\(currentAgentName)", locale: locale))
         }
 
         ToolbarItem(placement: .topBarTrailing) {

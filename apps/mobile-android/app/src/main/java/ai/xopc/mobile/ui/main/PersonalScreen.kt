@@ -92,6 +92,7 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
   onOpenUnderstanding: () -> Unit = {},
   onOpenSettings: () -> Unit = {},
   onOpenAssertion: (String) -> Unit = {},
+  onOpenAgent: () -> Unit = {},
   bottomChromeHeight: Dp = 0.dp) {
   var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var editingId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
@@ -130,6 +131,30 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
       }
     }
     ProfileCard(state.summary, connected, onOpenAbout)
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+      modifier = Modifier.fillMaxWidth().testTag("personal-agent-card")) {
+      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+          PersonalAgentAvatar(state.agentAvatar, state.agent?.appearance ?: "loopi", 36.dp,
+            active = false)
+          Text(state.agent?.displayName ?: stringResource(R.string.personal_agent_title),
+            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        }
+        Text(stringResource(R.string.personal_agent_description),
+          style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Button(onClick = onOpenAgent, enabled = !state.agentCreating && !state.agentLoading,
+          modifier = Modifier.fillMaxWidth().testTag("personal-agent-open")) {
+          Text(stringResource(if (state.agent?.state == "ready") R.string.personal_agent_open
+            else R.string.personal_agent_create))
+        }
+        if (state.agentCreating || state.agentLoading) BrandLoadingIndicator()
+        if (state.agentError) {
+          Text(stringResource(R.string.personal_agent_error), color = MaterialTheme.colorScheme.error)
+          TextButton(onClick = onOpenAgent) { Text(stringResource(R.string.personal_retry)) }
+        }
+      }
+    }
     if (state.loading && state.summary == null) {
       BrandLoadingPanel(modifier = Modifier.testTag("personal-loading"), minHeight = loadingHeight)
     } else {

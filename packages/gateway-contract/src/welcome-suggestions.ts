@@ -1,3 +1,5 @@
+import type { TaskOperationalState } from './task-lifecycle.js';
+
 export type WelcomeSuggestionContext =
   | { kind: 'empty' }
   | {
@@ -13,7 +15,7 @@ export type WelcomeSuggestionContext =
       taskId: string;
       taskTitle: string;
       phase: 'backlog' | 'ready' | 'active' | 'review' | 'closed';
-      operationalState: 'idle' | 'queued' | 'running' | 'waiting' | 'verifying' | 'blocked';
+      operationalState: TaskOperationalState;
       attentionSummary?: string;
       nextAction?: string;
       recentFailure?: string;

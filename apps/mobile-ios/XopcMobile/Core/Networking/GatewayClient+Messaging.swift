@@ -16,6 +16,15 @@ extension GatewayClient {
             conversation: conversation
         )
 
+        if !conversation.isDraft {
+            let context = try await fetchContext(conversationID: conversation.id)
+            guard !context.unavailableSections.contains("work") else {
+                throw GatewayClientError.server("会话任务归属暂不可用，请稍后重试")
+            }
+            if context.work.task != nil, Self.isTaskDestructiveCommand(text) {
+                throw GatewayClientError.server("任务需要保留连续对话，不能在这里重置或归档")
+            }
+        }
         let envelope: GatewayEnvelope<SessionCommandResult> = try await request(
             path: "/api/sessions/\(conversation.id)/inputs",
             method: "POST",
@@ -25,6 +34,14 @@ extension GatewayClient {
             throw GatewayClientError.server(envelope.error?.message ?? "消息未被 Gateway 接受")
         }
         return result
+    }
+
+    static func isTaskDestructiveCommand(_ text: String) -> Bool {
+        let token = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: \.isWhitespace).first.map(String.init) ?? ""
+        guard token.hasPrefix("/") else { return false }
+        let name = token.dropFirst().split(separator: "@", maxSplits: 1).first?.lowercased() ?? ""
+        return ["new", "reset", "restart", "clear", "archive"].contains(name)
     }
 
     private func messageBody(
