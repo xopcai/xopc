@@ -10,7 +10,7 @@ import { fetchJson } from '@/lib/fetch';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 vi.mock('@/features/chat/chat-page', () => ({
-  ChatPage: () => <div data-testid="personal-chat" />,
+  ChatPage: ({ personalWelcome }: { personalWelcome?: { addressAs?: string } }) => <div data-testid="personal-chat" data-user-name={personalWelcome?.addressAs} />,
 }));
 vi.mock('@/features/voice/realtime/voice-call-context', () => ({
   useVoiceCall: () => ({ active: false, open: vi.fn() }),
@@ -39,6 +39,7 @@ describe('Personal AI editor', () => {
         conversationId: 'conversation-1',
         state: 'ready',
         displayName: body?.displayName ?? 'Ada',
+        userCallName: 'Shared name',
         appearance: body?.appearance ?? 'loopi',
         preferences: body?.preferences ?? {},
         revision: body ? ++revision : revision,
@@ -131,6 +132,10 @@ describe('Personal AI editor', () => {
 
     const name = document.querySelector<HTMLInputElement>('#personal-name');
     expect(name).not.toBeNull();
+    expect(name?.getAttribute('aria-label')).toBe('Assistant name');
+    expect(name?.parentElement?.querySelector('[data-testid="personal-avatar"]')).not.toBeNull();
+    expect(document.querySelector('#personal-address')).toBeNull();
+    expect(container.querySelector('[data-testid="personal-chat"]')?.getAttribute('data-user-name')).toBe('Shared name');
     await act(async () => {
       name?.focus();
       if (name) name.value = 'Nova';

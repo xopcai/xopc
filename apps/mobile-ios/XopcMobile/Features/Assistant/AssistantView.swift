@@ -67,9 +67,9 @@ struct AssistantView<Dock: View>: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
         .sheet(isPresented: $showingPersonalProfile) {
-            if let personalAgent {
+            if let personalAgent, let conversation {
                 PersonalAgentProfileView(configuration: configuration, record: personalAgent,
-                                         onSaved: onPersonalAgentUpdated)
+                                         conversation: conversation, onSaved: onPersonalAgentUpdated)
             }
         }
         .task(id: configuration) {
@@ -524,6 +524,7 @@ struct AssistantView<Dock: View>: View {
 
 private struct PersonalAgentProfileView: View {
     let configuration: GatewayConfiguration
+    let conversation: ConversationSelection
     let onSaved: (PersonalAgentRecord) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -543,10 +544,11 @@ private struct PersonalAgentProfileView: View {
     @State private var saving = false
     @State private var error: String?
 
-    init(configuration: GatewayConfiguration, record: PersonalAgentRecord,
+    init(configuration: GatewayConfiguration, record: PersonalAgentRecord, conversation: ConversationSelection,
          onSaved: @escaping (PersonalAgentRecord) -> Void)
     {
         self.configuration = configuration
+        self.conversation = conversation
         self.onSaved = onSaved
         _record = State(initialValue: record)
         _name = State(initialValue: record.displayName)
@@ -578,6 +580,24 @@ private struct PersonalAgentProfileView: View {
                     TextField("怎么称呼你", text: $addressAs)
                 }
                 Section("对话风格") {
+                    NavigationLink("对话模型与思考强度") {
+                        AssistantOptionsView(
+                            configuration: configuration,
+                            conversation: conversation,
+                            onSave: { _ in
+                                Task {
+                                    do {
+                                        if let updated = try await GatewayClient(configuration: configuration).fetchPersonalAgent() {
+                                            record = updated
+                                            onSaved(updated)
+                                        }
+                                    } catch {
+                                        self.error = error.localizedDescription
+                                    }
+                                }
+                            }
+                        )
+                    }
                     Picker("语气", selection: $warmth) {
                         Text("克制").tag("reserved")
                         Text("平衡").tag("balanced")

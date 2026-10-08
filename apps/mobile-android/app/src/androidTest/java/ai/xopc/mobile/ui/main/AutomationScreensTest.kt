@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -114,6 +115,16 @@ class AutomationScreensTest {
     assertEquals("chat-1", openedChat)
     composeTestRule.onNodeWithTag("automation-view-definition").performClick()
     assertEquals("auto-1", openedAutomation)
+  }
+
+  @Test fun automationRunSummaryRendersMarkdownLikeHarmony() {
+    composeTestRule.setContent {
+      AutomationRunContent(AutomationUiState(selectedRunId = "run-1",
+        run = run.copy(summary = "## Result\n\n**Done**")), {}, {}, {})
+    }
+    composeTestRule.onNodeWithTag("automation-run-summary").assertExists()
+    composeTestRule.onNodeWithTag("markdown-heading").assertTextEquals("Result")
+    composeTestRule.onNodeWithText("Done").assertExists()
   }
 
   @Test fun activeAutomationRunRequiresConfirmationToCancel() {

@@ -1112,8 +1112,8 @@ private fun NoteDraftCard(draft: NoteDraft, onOpen: (String) -> Unit) {
         style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
       Text(stringResource(R.string.notes_local_draft), style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.primary)
-      if (draft.markdown.isNotBlank()) Text(draft.markdown.take(200), maxLines = 2,
-        overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+      if (draft.markdown.isNotBlank()) MarkdownContent(draft.markdown.take(500),
+        modifier = Modifier.fillMaxWidth().testTag("note-draft-preview"), maxLines = 2)
     }
   }
 }

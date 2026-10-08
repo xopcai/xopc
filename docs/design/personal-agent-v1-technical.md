@@ -60,7 +60,7 @@ flowchart LR
 
 ### 复用现有存储
 
-个人身份、名称、形象、回应偏好及 revision 使用现有 `agents` 目录和 `profile`；创建状态使用 Agent Catalog 的 provisioning 状态。唯一主会话使用现有 `sessions`，以 `customData.personalAgent` 标记，并由本地所有者的稳定 Agent ID 定位。Agent 的 `runtime.thinkingLevel='off'` 决定运行策略，`session_config` 保存当前会话选择的模型和 thinking。不新增个人 Agent 身份表，也不复制一份权威偏好。长期责任继续复用现有 Task 与 Automation；推断性偏好及来源复用 User Model。
+个人身份、名称、形象、回应偏好及 revision 使用现有 `agents` 目录和 `profile`；创建状态使用 Agent Catalog 的 provisioning 状态。唯一主会话使用现有 `sessions`，以 `customData.personalAgent` 标记，并由本地所有者的稳定 Agent ID 定位。Agent 的 `models.chat.primary` 和 `runtime.thinkingLevel` 是主会话的模型偏好，thinking 初始为 `off`。读取会话配置时同步到 `session_config`，修正旧的固定模型快照；通过会话设置修改模型与 thinking 时，在同一事务中更新 Agent 和会话配置。不新增个人 Agent 身份表，也不复制一份权威偏好。长期责任继续复用现有 Task 与 Automation；推断性偏好及来源复用 User Model。
 
 ### 幂等创建状态机
 
@@ -85,7 +85,7 @@ Catalog provisioning 涉及文件系统，因此无法和 SQLite 创建放在同
 
 `src/providers/model-thinking.ts` 可提供模型的 thinking 能力。Personal AI 选择模型时必须满足 `getModelThinking(model).options.includes('off')`；推荐从已配置的快速模型中选，fallback 列表也逐项验证。若无兼容模型，初始化停在模型选择，不假装已关闭思考。
 
-Agent 配置中的 `runtime.thinkingLevel` 是通用的固定 thinking 策略。个人 Agent 设为 `off`；会话配置写入、模型切换和最终运行均按该策略校验模型能力，不能仅靠前端隐藏选择器。TaskRun 仍使用专业 Agent 自己的模型与 thinking 配置。
+个人 Agent 的 thinking 默认关闭，用户可在 Web 资料设置和 Android、iOS、鸿蒙的对话设置中调整模型与 thinking。设置值按模型能力校验；有运行或待处理输入时禁止修改，配置版本冲突时要求刷新。TaskRun 仍使用专业 Agent 自己的模型与 thinking 配置。
 
 推理关闭只是必要条件。首包速度还受模型、提示长度、上下文检索和工具往返影响：主 Agent 只带简短人格/协作档案、近期对话摘要、活跃责任和少量相关记忆；工具结果有大小上限；任务创建先落持久状态再异步派发。性能预算以真实 P50/P95 测量确定，不把尚未测得的毫秒值写成承诺。
 
@@ -153,7 +153,7 @@ Personal AI 默认选择 `assistant` 模式：STT → `DurableVoiceAgentBroker` 
 
 现有 `/api/sessions/...` 继续承担消息、历史、输入和语音的实际传输，避免新建第二套聊天协议。连接器和设备授权继续由各自现有 API 管理；个人 API 只汇总其可用状态。所有新认证路径同步更新 `src/gateway/hono/routes/lazy-bundles.ts`，并在映射测试中覆盖正例和邻近非匹配路径，再用运行中的 Gateway 验证真实鉴权路径。
 
-Web 新增 `web/src/features/personal-agent/`：初始化向导、个人会话壳、活动抽屉、形象定制、合作偏好和责任视图。`web/src/app.tsx` 增加稳定 `/personal` 路由；侧栏加入固定入口。复用 Chat 的消息渲染、composer、Realtime 订阅和 Task Detail 导航；避免复制聊天实现。当前全局 `OnboardingDialog` 先处理模型/工作空间，个人向导只在用户点击个人入口后出现，不自动覆盖每个页面。主会话隐藏 thinking 控件，展示与普通聊天不同的固定身份和活动入口。
+Web 新增 `web/src/features/personal-agent/`：初始化向导、个人会话壳、活动抽屉、形象定制、合作偏好和责任视图。`web/src/app.tsx` 增加稳定 `/personal` 路由；侧栏加入固定入口。复用 Chat 的消息渲染、composer、Realtime 订阅和 Task Detail 导航；避免复制聊天实现。当前全局 `OnboardingDialog` 先处理模型/工作空间，个人向导只在用户点击个人入口后出现，不自动覆盖每个页面。主会话在设置中提供模型与 thinking 控件，展示与普通聊天不同的固定身份和活动入口。
 
 ## 11. 实施顺序与验证
 

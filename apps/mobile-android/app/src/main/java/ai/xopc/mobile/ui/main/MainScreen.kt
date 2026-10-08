@@ -2790,21 +2790,21 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             compact = true, enabled = !connection.creatingConversation) {
             optionsOpen = false; agentPickerOpen = true; onReloadAgents()
           }
-          ContextRow(stringResource(R.string.assistant_model),
-            connection.models.firstOrNull { it.id == connection.selectedModelId }?.name
-              ?: connection.selectedModelId, "assistant-model", iconRes = R.drawable.action_waveform,
-            compact = true, enabled = !connection.modelSaving) {
-            optionsOpen = false; modelPickerOpen = true; onReloadModels()
-          }
-          val selectedModel = connection.models.firstOrNull { it.id == connection.selectedModelId }
-          if (selectedModel?.thinkingMode in setOf("levels", "toggle")) {
-            ContextRow(stringResource(R.string.assistant_thinking),
-              thinkingLevelLabel(connection.thinkingLevel),
-              "assistant-thinking", iconRes = R.drawable.action_waveform, compact = true,
-              enabled = !connection.modelSaving && !connection.sending && connection.activeRunId == null &&
-                connection.pendingInput == null) {
-              optionsOpen = false; thinkingPickerOpen = true
-            }
+        }
+        ContextRow(stringResource(R.string.assistant_model),
+          connection.models.firstOrNull { it.id == connection.selectedModelId }?.name
+            ?: connection.selectedModelId, "assistant-model", iconRes = R.drawable.action_waveform,
+          compact = true, enabled = !connection.modelSaving) {
+          optionsOpen = false; modelPickerOpen = true; onReloadModels()
+        }
+        val selectedModel = connection.models.firstOrNull { it.id == connection.selectedModelId }
+        if (selectedModel?.thinkingMode in setOf("levels", "toggle")) {
+          ContextRow(stringResource(R.string.assistant_thinking),
+            thinkingLevelLabel(connection.thinkingLevel),
+            "assistant-thinking", iconRes = R.drawable.action_waveform, compact = true,
+            enabled = !connection.modelSaving && !connection.sending && connection.activeRunId == null &&
+              connection.pendingInput == null) {
+            optionsOpen = false; thinkingPickerOpen = true
           }
         }
         ContextRow(stringResource(R.string.assistant_queue), "", "assistant-queue",

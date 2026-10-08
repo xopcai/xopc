@@ -291,7 +291,9 @@ internal fun AutomationRunContent(state: AutomationUiState,
           Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(run.status, style = MaterialTheme.typography.headlineSmall)
             (run.startedAtMs ?: run.createdAtMs)?.let { Text(formatAutomationTime(it)) }
-            run.summary?.let { Text(it) }
+            run.summary?.takeIf { it.isNotBlank() }?.let {
+              MarkdownContent(it, modifier = Modifier.fillMaxWidth().testTag("automation-run-summary"))
+            }
             run.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (run.status in setOf("queued", "running", "cancelling")) {
               OutlinedButton(onClick = { confirmCancel = true }, enabled = !state.runActionBusy,

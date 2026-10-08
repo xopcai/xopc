@@ -54,6 +54,8 @@ const DELEGATION_RULES = [
   'Never claim a Task was created or completed before its tool result confirms that state. Respect the user’s authorization and the selected Agent’s permissions.',
 ] as const;
 
+const USER_NAME_RULE = "Use the user's preferred name from their shared user profile when a name fits naturally.";
+
 export function personalInstructions(preferences: PersonalPreferences): string {
   const rules = [
     'You are the user’s personal AI: capable, clear, attentive, and responsive. Match the user’s language. Let the user’s stated preferences and current situation shape how you speak; do not impose a cute or affectionate persona.',
@@ -62,7 +64,7 @@ export function personalInstructions(preferences: PersonalPreferences): string {
     'Adapt to the user’s current words first, then their saved preferences. If the user explicitly changes how they want you to respond in future, save it with personal_preference. Do not infer a lasting emotional trait from one conversation or claim human feelings or experiences.',
     'Give the accurate answer or next step in the order this user prefers. Acknowledge feelings only when relevant, without guessing how the user feels. Avoid formulaic reassurance, praise, pet names, emojis, or jokes unless the user welcomes them and the moment fits. Be accurate about task state, evidence, and uncertainty.',
   ];
-  if (preferences.addressAs) rules.push(`Address the user as ${JSON.stringify(preferences.addressAs)} when a name fits naturally.`);
+  rules.push(USER_NAME_RULE);
   if (preferences.guidance) rules.push(`User's explicit response preference: ${JSON.stringify(preferences.guidance)}. Follow it when relevant, subject to accuracy and the current request.`);
   if (preferences.warmth) rules.push({ reserved: 'Tone: calm and direct; skip emotional preambles.', balanced: 'Tone: friendly and natural.', gentle: 'Tone: softly supportive without being sentimental.' }[preferences.warmth]);
   if (preferences.humor) rules.push({ none: 'Do not add jokes.', occasional: 'Use an occasional light touch when the moment fits.', playful: 'Be lightly playful in easy moments.' }[preferences.humor]);
@@ -79,10 +81,15 @@ export async function refreshPersonalDelegationGuidance(service: PersonalAgentHo
   if (!agent || !instructions) return;
   const oldRule = [PRIOR_DELEGATION_RULES, PREVIOUS_DELEGATION_RULES, LEGACY_DELEGATION_RULE]
     .find((rule) => instructions.includes(rule));
-  if (!oldRule) return;
+  const legacyName = agent.profile?.responsePreferences?.addressAs;
+  const legacyNameRule = legacyName === undefined ? undefined
+    : `Address the user as ${JSON.stringify(legacyName)} when a name fits naturally.`;
+  let nextInstructions = oldRule ? instructions.replace(oldRule, DELEGATION_RULES.join('\n')) : instructions;
+  if (legacyNameRule) nextInstructions = nextInstructions.replace(legacyNameRule, USER_NAME_RULE);
+  if (nextInstructions === instructions) return;
   try {
     await new AgentCatalogService().update(agent.id, {
-      profile: { ...agent.profile!, instructions: instructions.replace(oldRule, DELEGATION_RULES.join('\n')) },
+      profile: { ...agent.profile!, instructions: nextInstructions },
     }, agent.revision);
     service.refreshAgentCatalog?.();
     const conversationId = getPersonalAgent(ownerId)?.conversationId;
