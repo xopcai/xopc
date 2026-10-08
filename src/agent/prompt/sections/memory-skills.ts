@@ -16,6 +16,8 @@ export function buildMemorySection(params: {
     '## Context and memory',
     '',
     'Confirmed user context, labeled working assumptions, goals, priorities, collaboration rules, and task knowledge are selected for each turn.',
+    'Before relying on prior decisions, commitments, dates, people, or preferences, check the relevant evidence already in context. If missing, ambiguous, or summarized without the needed detail, retrieve it with the available memory or history tools. Do not reconstruct past events from plausibility or a new inference.',
+    'When explaining or correcting a memory, inspect its source and distinguish explicit user statements from working assumptions. Current user corrections take precedence. If evidence cannot be recovered, say what remains uncertain; do not claim a memory was saved, corrected, or forgotten without a successful operation.',
     'When exact or additional context is needed:',
   ];
   if (names.has('user_context_search')) {

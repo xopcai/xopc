@@ -30,6 +30,7 @@ import { createDevice, issueDeviceTokenPair } from '../../storage/sqlite/device-
 import { DEFAULT_MOBILE_SCOPES } from '../../gateway/security/gateway-scopes.js';
 import { getPersonalAgent, isPersonalConversation, personalAgentId, personalConversationId } from '../repository.js';
 import { createOrResumePersonalAgent, ensurePersonalConversationVisibility, personalInstructions, refreshPersonalDelegationGuidance, updatePersonalProfileRecord } from '../service.js';
+import { PERSONAL_RELIABILITY_RULES } from '../communication.js';
 
 describe('personal Agent identity', () => {
   it('keeps one identity and conversation and serves it through the authenticated Gateway', async () => {
@@ -199,6 +200,9 @@ describe('personal Agent identity', () => {
       expect(second.conversationId).toBe(first.conversationId);
       expect(new AgentCatalogRepository().get(first.agentId)?.toolAllowlist).toContain('personal_task');
       expect(new AgentCatalogRepository().get(first.agentId)?.toolAllowlist).not.toContain('exec_command');
+      for (const rule of PERSONAL_RELIABILITY_RULES) {
+        expect(new AgentCatalogRepository().get(first.agentId)?.profile?.instructions).toContain(rule);
+      }
       expect(new AgentCatalogRepository().get(first.agentId)?.skills).toEqual({ mode: 'replace', include: [] });
       expect(new AgentCatalogRepository().get(first.agentId)?.runtime?.thinkingLevel).toBe('off');
       expect(new AgentCatalogRepository().get(first.agentId)?.models?.chat).toMatchObject({ primary: 'test/fast', fallbacks: [] });
@@ -330,8 +334,21 @@ describe('personal Agent identity', () => {
       expect(refreshed.profile?.instructions).toContain('Do not include task progress links by default');
       expect(refreshed.profile?.instructions).toContain('it does not prove execution has started');
       expect(refreshed.profile?.instructions).toContain('Speak like an attentive, reliable collaborator');
+      for (const rule of PERSONAL_RELIABILITY_RULES) {
+        expect(refreshed.profile?.instructions?.split('\n').filter(line => line === rule)).toHaveLength(1);
+      }
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       expect(repository.get(agentId)?.revision).toBe(refreshed.revision);
+      await new AgentCatalogService().update(agentId, {
+        profile: { ...refreshed.profile!, instructions: refreshed.profile!.instructions!
+          .split('\n').filter(line => line !== PERSONAL_RELIABILITY_RULES[0]).join('\n') },
+      }, refreshed.revision);
+      await refreshPersonalDelegationGuidance(gateway, 'local-owner');
+      const repaired = repository.get(agentId)!;
+      expect(repaired.profile?.instructions?.split('\n').filter(line => line === PERSONAL_RELIABILITY_RULES[0])).toHaveLength(1);
+      expect(repaired.profile?.instructions).toContain('Keep my custom instruction.');
+      await refreshPersonalDelegationGuidance(gateway, 'local-owner');
+      expect(repository.get(agentId)?.revision).toBe(repaired.revision);
       const previousGuidance = [
         'Route by required capability, not task length. Answer directly only when your own tools and knowledge are sufficient. For current facts, web pages, or any tool you lack, call personal_task(command="agents"), choose an Agent with the needed availableTools, then create a Task. Your own lack of browsing does not mean xopc cannot browse. Never claim the system cannot help, ask the user to switch models, or ask them to paste sources before checking Agents.',
         'For current news, delegate to an Agent with web_search. Include the requested date or time window and topic in the brief; require source links, publication dates, and a distinction between confirmed news and uncertain reports. Tell the user briefly that you are checking. Stay available while the Task runs, then summarize verified results in their preferred style.',
@@ -340,7 +357,7 @@ describe('personal Agent identity', () => {
       ].join('\n');
       await new AgentCatalogService().update(agentId, {
         profile: { ...refreshed.profile!, instructions: previousGuidance },
-      }, refreshed.revision);
+      }, repaired.revision);
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       expect(repository.get(agentId)?.profile?.instructions).toContain('If the chosen Agent or tool cannot complete the Task');
       expect(repository.get(agentId)?.profile?.instructions).toContain('Keep my custom instruction.');
