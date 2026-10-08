@@ -734,4 +734,14 @@
     <string name="workflow_status_failed">Failed</string>
     <string name="workflow_status_cancelled">Cancelled</string>
     <string name="workflow_status_unknown">Unknown status</string>
+    <string name="progress_resolution_done">Completed</string>
+    <string name="progress_resolution_cancelled">Cancelled</string>
+    <string name="progress_resolution_wont_do">Won’t do</string>
+    <string name="progress_resolution_duplicate">Duplicate</string>
+    <string name="progress_priority_low">Low</string>
+    <string name="progress_priority_normal">Normal</string>
+    <string name="progress_priority_high">High</string>
+    <string name="progress_priority_critical">Critical</string>
+    <string name="progress_status_cancelling">Cancelling</string>
+    <string name="progress_status_timeout">Timed out</string>
 </resources>

@@ -21,7 +21,7 @@ struct ConversationContextView: View {
         List {
             if conversation?.isDraft != false {
                 Text("这里显示当前会话的关联与待发送引用；选择新的项目或执行模式会新建会话。")
-                    .font(.footnote)
+                    .mobileTextStyle(.footnote)
                     .foregroundStyle(.secondary)
                 workSection(nil)
                 environmentSection(nil)
@@ -124,7 +124,7 @@ struct ConversationContextView: View {
                     )
                 }
                 Text("发送第一条消息后显示实际运行目录。")
-                    .font(.footnote)
+                    .mobileTextStyle(.footnote)
                     .foregroundStyle(.secondary)
             }
         }
@@ -257,7 +257,7 @@ private struct ContextRow: View {
                 Text(title)
                 if let detail, !detail.isEmpty {
                     Text(detail)
-                        .font(.caption)
+                        .mobileTextStyle(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
@@ -325,7 +325,7 @@ struct SessionEnvironmentSettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(project.name)
                             if let root = project.workspaceRoot, !root.isEmpty {
-                                Text(root).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                Text(root).mobileTextStyle(.caption).foregroundStyle(.secondary).lineLimit(2)
                             }
                         }
                     }

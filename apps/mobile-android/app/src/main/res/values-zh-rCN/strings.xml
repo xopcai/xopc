@@ -734,4 +734,14 @@
     <string name="workflow_status_failed">失败</string>
     <string name="workflow_status_cancelled">已取消</string>
     <string name="workflow_status_unknown">未知状态</string>
+    <string name="progress_resolution_done">已完成</string>
+    <string name="progress_resolution_cancelled">已取消</string>
+    <string name="progress_resolution_wont_do">不再处理</string>
+    <string name="progress_resolution_duplicate">重复事项</string>
+    <string name="progress_priority_low">低</string>
+    <string name="progress_priority_normal">普通</string>
+    <string name="progress_priority_high">高</string>
+    <string name="progress_priority_critical">紧急</string>
+    <string name="progress_status_cancelling">取消中</string>
+    <string name="progress_status_timeout">已超时</string>
 </resources>

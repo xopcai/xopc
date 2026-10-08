@@ -375,7 +375,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
               setFinalTranscript([...dictationRef.current.values()].join(' '));
             }
           }
-          if (event.type === 'input.speech_stopped') { speechStoppedAtRef.current = performance.now(); playerRef.current?.duck(false); }
+          if (event.type === 'input.speech_stopped') speechStoppedAtRef.current = performance.now();
           if (event.type === 'response.created') {
             if (activeResponseIdRef.current) {
               // A new response cannot own playback until the previous one has
@@ -483,13 +483,12 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
           const encoded = (encoderRef.current ?? encoder).push(samples);
           if (encoded) client.sendAudio(encoded);
         },
-        onAudioLevel: ({ level, speaking }) => {
+        onAudioLevel: ({ level }) => {
           if (!isCurrent()) return;
           if (mutedRef.current) return;
           setAudioLevel(Math.min(1, level * 8));
-          if (purpose === 'conversation' && client.session.bargeIn && activeResponseIdRef.current) {
-            playerRef.current?.duck(speaking);
-          }
+          // Microphone energy also includes speaker echo. Playback changes only
+          // after the server confirms a non-echo interruption, or a user click.
         },
       });
       if (!isCurrent() || !isCapturePending(phaseRef.current)) {

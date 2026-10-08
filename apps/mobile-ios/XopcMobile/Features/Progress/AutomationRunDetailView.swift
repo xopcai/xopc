@@ -45,7 +45,7 @@ struct AutomationRunDetailView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         if !displayedRun.automationName.isEmpty {
                             Text(verbatim: displayedRun.automationName)
-                                .font(.headline)
+                                .mobileTextStyle(.rowTitle)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .accessibilityAddTraits(.isHeader)
                         }
@@ -118,7 +118,7 @@ struct AutomationRunDetailView: View {
                             Text(AutomationRunEventCopy.display(event.message, locale: locale))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             Text(event.createdAtMs.millisecondsDate, format: .dateTime.month().day().hour().minute().second())
-                                .font(.caption).foregroundStyle(.secondary)
+                                .mobileTextStyle(.caption).foregroundStyle(.secondary)
                         }
                         .padding(.vertical, 4)
                     }
@@ -174,7 +174,7 @@ struct AutomationRunDetailView: View {
                     ForEach(maintenance.metrics) { metric in
                         VStack(alignment: .leading, spacing: 3) {
                             Text(LocalizedStringKey(metric.label))
-                                .font(.caption)
+                                .mobileTextStyle(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                             Text(metric.count, format: .number)
@@ -202,11 +202,11 @@ struct AutomationRunDetailView: View {
     private func runStatus(_ run: AutomationRunRecord) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(LocalizedStringKey(run.status))
-                .font(.title2.bold())
+                .mobileTextStyle(.detailTitle)
                 .fixedSize(horizontal: false, vertical: true)
             Text((run.startedAtMs ?? run.createdAtMs).millisecondsDate,
                  format: .dateTime.month().day().hour().minute())
-                .font(.caption)
+                .mobileTextStyle(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

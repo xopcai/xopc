@@ -78,8 +78,8 @@ internal fun UnpairedPersonalScreen(insets: PaddingValues, onOpenSettings: () ->
     .padding(horizontal = 20.dp).testTag("personal-unpaired")) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
       verticalAlignment = Alignment.CenterVertically) {
-      Text(stringResource(R.string.tab_me), style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+      Text(stringResource(R.string.tab_me), style = MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
       IconButton(onClick = onOpenSettings,
         modifier = Modifier.semantics { contentDescription = settingsLabel }
           .testTag("personal-settings")) {
@@ -166,8 +166,8 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
     .padding(horizontal = 20.dp).testTag("personal-screen")) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
       verticalAlignment = Alignment.CenterVertically) {
-      Text(stringResource(R.string.tab_me), style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+      Text(stringResource(R.string.tab_me), style = MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
       IconButton(onClick = onOpenSettings,
         modifier = Modifier.semantics { contentDescription = settingsLabel }.testTag("personal-settings")) {
         Icon(painterResource(R.drawable.settings_gear), contentDescription = null,
@@ -451,7 +451,7 @@ private fun PersonalCard(onClick: (() -> Unit)? = null, tag: String? = null,
 @Composable
 private fun CountCell(count: Int, label: String) {
   Column(horizontalAlignment = Alignment.CenterHorizontally) {
-    Text(count.toString(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+    Text(count.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
     Text(label, style = MaterialTheme.typography.labelSmall,
       color = MaterialTheme.colorScheme.onSurfaceVariant)
   }

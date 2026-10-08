@@ -27,15 +27,15 @@ struct ProgressHubView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         if home != nil {
                             Text("\(pendingCount) 项待处理 · \(activeCount) 项进行中")
-                                .font(.headline)
+                                .mobileTextStyle(.rowTitle)
                         } else {
                             Text(isLoading
                                 ? LocalizedStringResource("正在读取工作状态…")
                                 : LocalizedStringResource("工作状态暂不可用"))
-                                .font(.headline)
+                                .mobileTextStyle(.rowTitle)
                         }
                         Text("需要你处理的事，以及正在推进的工作。")
-                            .font(.subheadline)
+                            .mobileTextStyle(.secondary)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -96,9 +96,9 @@ struct ProgressHubView: View {
                                              onOpenConversation: onOpenConversation)
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(nextAutomation.name).font(.headline)
+                            Text(nextAutomation.name).mobileTextStyle(.rowTitle)
                             Text(nextAutomation.runAtMs.millisecondsDate, format: .dateTime.month().day().hour().minute())
-                                .font(.caption).foregroundStyle(.secondary)
+                                .mobileTextStyle(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -178,13 +178,13 @@ struct ProgressHubView: View {
 
     private func homeRow(_ item: HomeItem, showsActions: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(item.title).font(.headline)
+            Text(item.title).mobileTextStyle(.rowTitle)
             if let status = item.statusLabel, !status.isEmpty {
                 Text(status).font(.caption.weight(.medium)).foregroundStyle(.blue)
             }
-            Text(item.summary).font(.subheadline).foregroundStyle(.secondary)
+            Text(item.summary).mobileTextStyle(.secondary).foregroundStyle(.secondary)
             if let recommendation = item.recommendation, !recommendation.isEmpty {
-                Text(recommendation).font(.caption).foregroundStyle(.secondary)
+                Text(recommendation).mobileTextStyle(.caption).foregroundStyle(.secondary)
             }
             if let open = item.openAction {
                 actionControl(open)
@@ -443,7 +443,7 @@ private struct ProjectsView: View {
                         ProgressRow(
                             title: project.name,
                             subtitle: project.brief ?? project.description,
-                            state: project.status,
+                            state: "project_status_" + project.status,
                             date: project.updatedAt.millisecondsDate,
                             symbol: "folder"
                         )

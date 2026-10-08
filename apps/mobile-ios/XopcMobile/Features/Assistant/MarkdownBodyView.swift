@@ -24,11 +24,10 @@ private struct MarkdownPartView: View {
     var body: some View {
         switch block {
         case let .paragraph(text):
-            inline(text).font(.body)
+            inline(text).mobileTextStyle(.body)
         case let .heading(level, text):
             inline(text)
-                .font(headingFont(level))
-                .fontWeight(.semibold)
+                .mobileTextStyle(headingStyle(level))
                 .padding(.top, level <= 2 ? 8 : 3)
                 .accessibilityAddTraits(.isHeader)
         case let .bullet(level, text):
@@ -94,11 +93,12 @@ private struct MarkdownPartView: View {
         Text(.init(text))
     }
 
-    private func headingFont(_ level: Int) -> Font {
+    private func headingStyle(_ level: Int) -> MobileTextStyle {
         switch level {
-        case 1: .title2
-        case 2: .title3
-        default: .headline
+        case 1: .heading
+        case 2: .heading2
+        case 3: .sectionTitle
+        default: .rowTitle
         }
     }
 

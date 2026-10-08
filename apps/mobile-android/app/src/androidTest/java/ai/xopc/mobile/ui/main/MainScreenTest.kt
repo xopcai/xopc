@@ -2065,7 +2065,11 @@ class MainScreenTest {
           selectedConversationId = id))
     }
     composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
+    val firstRowTop = composeTestRule.onNodeWithTag("assistant-action-photos").fetchSemanticsNode().boundsInRoot.top
     composeTestRule.onNodeWithTag("assistant-action-panel").performTouchInput { swipeLeft() }
+    composeTestRule.waitForIdle()
+    val secondRowTop = composeTestRule.onNodeWithTag("assistant-action-voice-natural").fetchSemanticsNode().boundsInRoot.top
+    org.junit.Assert.assertEquals(firstRowTop, secondRowTop, 1f)
     composeTestRule.onNodeWithTag("assistant-action-voice-natural").assertIsEnabled()
     composeTestRule.onNodeWithTag("assistant-action-voice-assistant").assertIsEnabled()
   }

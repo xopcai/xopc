@@ -143,3 +143,20 @@
 "保存失败：%@" = "保存失败：%@";
 "复制代码" = "复制代码";
 "自动化目标不存在或已被移除。" = "自动化目标不存在或已被移除。";
+
+"done" = "已完成";
+"duplicate" = "重复事项";
+"wont_do" = "不再处理";
+"critical" = "紧急";
+"waiting" = "等待中";
+"verifying" = "验证中";
+"blocked" = "受阻";
+"completed" = "已完成";
+"planned" = "规划中";
+"paused" = "已暂停";
+"project_status_active" = "进行中";
+"project_status_planned" = "规划中";
+"project_status_paused" = "已暂停";
+"project_status_completed" = "已完成";
+"project_status_cancelled" = "已取消";
+"project_status_archived" = "已归档";
