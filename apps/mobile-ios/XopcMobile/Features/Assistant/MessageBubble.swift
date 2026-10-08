@@ -20,7 +20,8 @@ struct MessageBubble: View {
 
     var body: some View {
         if !message.text.isEmpty || !message.references.isEmpty || !message.attachments.isEmpty
-            || !message.resultLinks.isEmpty || !message.unavailableOutputs.isEmpty {
+            || !message.resultLinks.isEmpty || !message.unavailableOutputs.isEmpty
+        {
             messageContent
         }
     }

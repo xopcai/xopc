@@ -84,7 +84,8 @@ struct AssistantView<Dock: View>: View {
             await state.loadConversation(conversation, using: GatewayClient(configuration: configuration))
         }
         .task(id: TaskResultObservationKey(configuration: configuration, conversationID: conversation?.id,
-                                          isActive: isActive)) {
+                                           isActive: isActive))
+        {
             guard isActive, let conversation, !conversation.isDraft else { return }
             await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
         }
