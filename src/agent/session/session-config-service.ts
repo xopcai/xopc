@@ -34,6 +34,8 @@ import type { ModelManager } from '../models/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
+import { isPersonalConversation } from '../../personal-agent/repository.js';
+import { savePersonalModelConfig } from '../../personal-agent/model-config.js';
 
 const log = createLogger('SessionConfigService');
 
@@ -83,7 +85,8 @@ export class SessionConfigService {
     conversationId: string,
     partial: PatchSessionAgentConfigInput,
   ): Promise<PatchSessionAgentConfigResult> {
-    const configuredThinking = resolveEffectiveAgentConfigForSession(conversationId).config.runtime.thinkingLevel;
+    const personal = isPersonalConversation(conversationId);
+    const configuredThinking = personal ? undefined : resolveEffectiveAgentConfigForSession(conversationId).config.runtime.thinkingLevel;
     if (configuredThinking && partial.thinkingLevel !== undefined && partial.thinkingLevel !== configuredThinking) {
       return { ok: false, code: 'INVALID_THINKING', error: `This agent uses thinking ${configuredThinking}` };
     }
@@ -111,11 +114,13 @@ export class SessionConfigService {
         }
         const thinkingLevel = requested ?? chooseModelThinking(capabilities, existing?.thinkingLevel);
         const modelRef = `${model.provider}/${model.id}`;
-        const updated = await this.opts.sessionConfigStore.update(conversationId, {
-          modelOverride: modelRef,
-          thinkingLevel,
-          fixedModel: partial.fixedModel ?? existing?.fixedModel ?? false,
-        });
+        const updated = personal
+          ? savePersonalModelConfig(conversationId, modelRef, thinkingLevel)
+          : await this.opts.sessionConfigStore.update(conversationId, {
+            modelOverride: modelRef,
+            thinkingLevel,
+            fixedModel: partial.fixedModel ?? existing?.fixedModel ?? false,
+          });
         this.opts.modelManager.restoreSessionModel(conversationId, modelRef, updated.fixedModel === true);
         try {
           if (this.opts.agentManager.getAgent(conversationId)) {
@@ -192,7 +197,7 @@ export class SessionConfigService {
 
   /** Materialize a restored/new chat choice; unavailable identities stay visible for repair. */
   async initializeModelSelection(conversationId: string, modelRef: string, thinkingLevel?: string, configVersion?: number): Promise<PatchSessionAgentConfigResult> {
-    const configuredThinking = resolveEffectiveAgentConfigForSession(conversationId).config.runtime.thinkingLevel;
+    const configuredThinking = isPersonalConversation(conversationId) ? undefined : resolveEffectiveAgentConfigForSession(conversationId).config.runtime.thinkingLevel;
     if (configuredThinking && thinkingLevel !== undefined && thinkingLevel !== configuredThinking) {
       return { ok: false, code: 'INVALID_THINKING', error: `This agent uses thinking ${configuredThinking}` };
     }
@@ -210,6 +215,7 @@ export class SessionConfigService {
         configVersion,
       });
     }
+    if (isPersonalConversation(conversationId)) return { ok: false, code: 'INVALID_MODEL', error: `Model unavailable: ${modelRef}` };
     if (configuredThinking) return { ok: false, code: 'INVALID_MODEL', error: `Select an available model that supports thinking ${configuredThinking}` };
     if (!modelRef.trim() || !modelRef.includes('/')) return { ok: false, code: 'INVALID_MODEL', error: 'Select a specific model' };
     await this.opts.sessionConfigStore.update(conversationId, {

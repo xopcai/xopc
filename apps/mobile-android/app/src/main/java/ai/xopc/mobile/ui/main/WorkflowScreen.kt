@@ -166,7 +166,8 @@ private fun workflowStatus(status: String): String = stringResource(when (status
 private fun WorkflowTextSection(label: Int, content: String) {
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
     Text(stringResource(label), style = MaterialTheme.typography.titleMedium)
-    if (content.isNotBlank()) Text(content)
+    if (content.isNotBlank()) MarkdownContent(content,
+      modifier = Modifier.fillMaxWidth().testTag("workflow-markdown-$label"))
   }
 }
 
