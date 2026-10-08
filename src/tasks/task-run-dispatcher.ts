@@ -14,6 +14,8 @@ export class TaskRunDispatcher {
   readonly #application = new TaskApplicationService();
   readonly #draining = new Set<string>();
   readonly #activeRunIds = new Set<string>();
+  readonly #heartbeats = new Set<ReturnType<typeof setInterval>>();
+  #stopped = false;
 
   constructor(private readonly deps: {
     workerId: string;
@@ -23,10 +25,20 @@ export class TaskRunDispatcher {
   }) {}
 
   dispatch(): void {
-    void this.drain();
+    void this.drain().catch((error) => {
+      if (this.#stopped) return;
+      log.error({ err: error }, `TaskRun dispatch failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
+
+  stop(): void {
+    this.#stopped = true;
+    for (const heartbeat of this.#heartbeats) clearInterval(heartbeat);
+    this.#heartbeats.clear();
   }
 
   async drain(): Promise<void> {
+    if (this.#stopped) return;
     this.reconcileExpiredRuns();
     const count = Math.max(1, Math.min(8, this.deps.maxConcurrency ?? 3));
     await Promise.all(Array.from({ length: count }, (_, slot) => this.drainSlot(`${this.deps.workerId}:${slot}`)));
@@ -58,7 +70,7 @@ export class TaskRunDispatcher {
     if (this.#draining.has(workerId)) return;
     this.#draining.add(workerId);
     try {
-      while (true) {
+      while (!this.#stopped) {
         const run = this.#runs.claimNext({
           owner: workerId,
           leaseMs: LEASE_MS,
@@ -80,21 +92,27 @@ export class TaskRunDispatcher {
           if (!executableRun) continue;
           const agentId = typeof run.executorRef.agentId === 'string' ? run.executorRef.agentId : undefined;
           const conversationId = await this.deps.ensureSession(task.id, run.id, agentId);
+          if (this.#stopped) return;
           this.#activeRunIds.add(run.id);
           const heartbeat = setInterval(() => {
             if (!this.#runs.heartbeat({ runId: run.id, owner: workerId, leaseMs: LEASE_MS })) {
               clearInterval(heartbeat);
+              this.#heartbeats.delete(heartbeat);
             }
           }, HEARTBEAT_MS);
           heartbeat.unref?.();
+          this.#heartbeats.add(heartbeat);
           try {
             await this.deps.runAgent(run.id, conversationId,
               buildTaskRunMessage(task.contract?.objective ?? task.title, run.trigger, task.body));
           } finally {
             clearInterval(heartbeat);
+            this.#heartbeats.delete(heartbeat);
             this.#activeRunIds.delete(run.id);
           }
         } catch (error) {
+          // Preserve the leased run for restart reconciliation after shutdown.
+          if (this.#stopped) return;
           const current = this.#runs.get(run.id);
           if (current && ['queued', 'running', 'waiting', 'verifying'].includes(current.status)) {
             this.#application.completeRun({
@@ -119,6 +137,7 @@ export class TaskRunDispatcher {
         }
       }
     } catch (error) {
+      if (this.#stopped) return;
       log.error({ err: error }, `TaskRun dispatch failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       this.#draining.delete(workerId);
