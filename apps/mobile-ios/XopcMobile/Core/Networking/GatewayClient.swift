@@ -35,7 +35,7 @@ protocol GatewayServing: Sendable {
 }
 
 extension GatewayServing {
-    func streamTaskResults(conversationID: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
+    func streamTaskResults(conversationID _: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
         AsyncThrowingStream { $0.finish() }
     }
 }
@@ -286,7 +286,7 @@ struct GatewayClient: GatewayServing, Sendable {
                     let clientID = "ios-results:\(UUID().uuidString.lowercased())"
                     let ticket = try await issueRealtimeTicket(clientID: clientID)
                     let socket = RealtimeRunSocket(configuration: configuration, session: session,
-                        ticket: ticket.ticket, clientID: clientID, runID: "", conversationID: conversationID)
+                                                   ticket: ticket.ticket, clientID: clientID, runID: "", conversationID: conversationID)
                     try await socket.consume(into: continuation)
                 } catch is CancellationError {
                     continuation.finish()
