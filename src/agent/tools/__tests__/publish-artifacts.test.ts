@@ -10,6 +10,7 @@ vi.mock('node:fs/promises', () => ({
 }));
 
 vi.mock('../../../media/store.js', () => ({
+  MEDIA_ARTIFACT_MAX_BYTES: 50 * 1024 * 1024,
   mimeTypeFromMediaPath: (filePath: string) => filePath.endsWith('.xlsx')
     ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     : 'application/octet-stream',

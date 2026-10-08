@@ -8,6 +8,7 @@ vi.mock('../../sandbox/fileAccess.js', () => ({ readWorkspaceFile: vi.fn() }));
 
 vi.mock('../../../media/store.js', () => ({
   MEDIA_MAX_BYTES: 5 * 1024 * 1024,
+  MEDIA_ARTIFACT_MAX_BYTES: 50 * 1024 * 1024,
   mimeTypeFromMediaPath: (filePath: string) =>
     filePath.endsWith('.svg') ? 'image/svg+xml' : 'application/octet-stream',
   saveMediaBuffer: (...args: unknown[]) => saveMediaBufferMock(...args),

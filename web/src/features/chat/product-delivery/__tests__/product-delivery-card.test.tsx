@@ -397,7 +397,7 @@ describe('AssistantResultTail product deliveries', () => {
     expect(container.querySelector('summary')?.textContent).toContain('2 个文件');
   });
 
-  it('combines product objects, outcome artifacts, and generated files in one tail', () => {
+  it('shows product objects and outcome files in the tail with generated images above it', () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 2,
       operation: 'created',
@@ -434,15 +434,10 @@ describe('AssistantResultTail product deliveries', () => {
     act(() => root.render(<MemoryRouter><AssistantResultTail view={view} /></MemoryRouter>));
 
     expect(container.querySelectorAll('[data-turn-tail]')).toHaveLength(1);
-    expect(container.querySelectorAll('[data-result-attachment]')).toHaveLength(2);
-    const attachmentGroup = container.querySelector<HTMLDetailsElement>('[data-result-attachment-group] details');
-    expect(attachmentGroup?.open).toBe(false);
-    expect(attachmentGroup?.querySelector('summary')?.textContent).toContain('2 个文件');
+    expect(container.querySelectorAll('[data-result-attachment]')).toHaveLength(1);
+    expect(container.querySelector('[data-result-attachment-group]')).toBeNull();
+    expect(container.querySelector('img[alt="cover.png"]')).not.toBeNull();
     expect(container.textContent).toContain('发布任务');
     expect(container.textContent).toContain('report.pdf');
-    expect(container.textContent).toContain('cover.png');
-
-    act(() => attachmentGroup?.querySelector('summary')?.click());
-    expect(attachmentGroup?.open).toBe(true);
   });
 });
