@@ -4,7 +4,7 @@ import { createLogger } from '../../utils/logger.js';
 import { speakStream, type SpeakStreamResult } from '../tts/speak-core.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
 import { TurnCoordinator } from './turnPolicy.js';
-import { isLikelyPlaybackEcho } from './playback-echo.js';
+import { PlaybackEchoCandidates } from './playback-echo.js';
 import { PcmFrameBuffer } from './pcmFrameBuffer.js';
 import { SpeakableSegmenter } from './speakable-segmenter.js';
 import type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
@@ -73,6 +73,7 @@ export function createAgentVoiceEngine(options: {
   let finalCount = 0;
   let committing = false;
   let recentPlayback: { responseId: string; text: string; expiresAt: number } | undefined;
+  const echoCandidates = new PlaybackEchoCandidates();
   const finalizedUtterances = new Set<string>();
   let pendingTurn: { turnId: string; text: string; cancelled: boolean } | undefined;
   let taskUpdateQueued = false;
@@ -100,6 +101,9 @@ export function createAgentVoiceEngine(options: {
   function cancelActiveResponse(reason: 'barge_in' | 'client_cancelled' | 'session_closed'): boolean {
     const response = activeResponse;
     if (!response) return false;
+    if (response.audioStarted && response.audibleText) {
+      recentPlayback = { responseId: response.id, text: response.audibleText, expiresAt: Date.now() + PLAYBACK_ECHO_TAIL_MS };
+    }
     activeResponse = undefined;
     response.abortController.abort(reason);
     send('response.cancelled', { responseId: response.id, reason });
@@ -427,6 +431,7 @@ export function createAgentVoiceEngine(options: {
     if (event.type === 'ready' || event.type === 'usage') return;
     if (event.type === 'error') {
       turn.reset();
+      echoCandidates.clear();
       log.warn({ err: event.error, sessionId: claim.sessionId, provider: stt!.route.provider }, 'Realtime STT failed');
       send('session.error', { code: 'PROVIDER_ERROR', message: 'Streaming transcription failed', recoverable: false });
       void options.onClose('provider_error', true);
@@ -435,6 +440,8 @@ export function createAgentVoiceEngine(options: {
     if (muted || finalizedUtterances.has(event.utteranceId)) return;
     if (event.type === 'speech_started') {
       lastUserSpeechAt = Date.now();
+      echoCandidates.remember(event.utteranceId, activeResponse?.audioStarted ? activeResponse.audibleText
+        : recentPlayback && recentPlayback.expiresAt >= Date.now() ? recentPlayback.text : undefined);
       if (claim.request.purpose === 'conversation') {
         if (pendingTurn) {
           pendingTurn.cancelled = true;
@@ -475,12 +482,11 @@ export function createAgentVoiceEngine(options: {
           ? recentPlayback
           : undefined;
       if (claim.request.purpose === 'conversation'
-        && playback
-        && isLikelyPlaybackEcho(text, playback.text)) {
+        && echoCandidates.matches(event.utteranceId, text, playback?.text)) {
         bufferFinal(event.utteranceId, '');
         log.debug({
           sessionId: claim.sessionId,
-          responseId: playback.responseId,
+          responseId: playback?.responseId,
           transcriptCharacters: text.length,
         }, 'Ignored finalized transcription matching recent voice playback');
         return;
@@ -504,6 +510,7 @@ export function createAgentVoiceEngine(options: {
 
   function discardInput(): Promise<void> {
     turn.reset();
+    echoCandidates.clear();
     pendingTurn = undefined;
     inputGeneration += 1;
     queuedTurns = 0;
@@ -602,6 +609,7 @@ export function createAgentVoiceEngine(options: {
       if (closing) return closing;
       closed = true;
       turn.reset();
+      echoCandidates.clear();
       cancelActiveResponse('session_closed');
       sttAbort.abort('session_closed');
       sttSession?.abort('session_closed');

@@ -196,7 +196,7 @@ struct AssistantView<Dock: View>: View {
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
                 Text("无法连接 Gateway")
-                    .font(.title2.bold())
+                    .mobileTextStyle(.detailTitle)
                 Text(errorMessage)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -252,7 +252,7 @@ struct AssistantView<Dock: View>: View {
             LazyVStack(spacing: 14) {
                 if showsConversationTitleInTimeline, let conversation {
                     Text(verbatim: conversation.title)
-                        .font(.headline)
+                        .mobileTextStyle(.rowTitle)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 4)
@@ -347,12 +347,12 @@ struct AssistantView<Dock: View>: View {
                 Text(readAloud.state == .failed
                     ? LocalizedStringResource("朗读失败")
                     : LocalizedStringResource("正在朗读"))
-                    .font(.subheadline.weight(.semibold))
+                    .mobileTextStyle(.secondary).fontWeight(.semibold)
                 if let error = readAloud.errorMessage {
-                    Text(error).font(.caption).foregroundStyle(.red).lineLimit(2)
+                    Text(error).mobileTextStyle(.caption).foregroundStyle(.red).lineLimit(2)
                 } else {
                     Text("\(readAloud.chunkIndex + 1)/\(readAloud.chunkCount)")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .mobileTextStyle(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 8)
@@ -399,7 +399,7 @@ struct AssistantView<Dock: View>: View {
                 Text(locale.language.languageCode?.identifier == "zh"
                     ? "想聊一件事、理清思路，或让我帮你推进工作，都可以直接说。"
                     : "Tell me what is on your mind, or what you would like to move forward.")
-                    .font(.subheadline)
+                    .mobileTextStyle(.secondary)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -716,7 +716,7 @@ private struct ErrorBanner: View {
 
     var body: some View {
         Label(message, systemImage: "exclamationmark.triangle.fill")
-            .font(.subheadline)
+            .mobileTextStyle(.secondary)
             .foregroundStyle(.red)
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)

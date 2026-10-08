@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.NoteDetail
 import ai.xopc.mobile.gateway.NoteSummary
 import ai.xopc.mobile.gateway.NoteDraft
@@ -121,6 +122,9 @@ class NotesScreenTest {
     }
     composeTestRule.onNodeWithTag("note-detail-body").assertExists()
     composeTestRule.onNodeWithText("Body").assertExists()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.notes_inbox),
+      substring = true).assertExists()
+    composeTestRule.onNodeWithText("inbox", substring = true, ignoreCase = false).assertDoesNotExist()
     composeTestRule.onNodeWithTag("note-detail-retry").performClick()
     assertEquals(1, retries)
   }

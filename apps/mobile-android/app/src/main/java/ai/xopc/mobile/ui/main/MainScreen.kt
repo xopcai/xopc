@@ -139,6 +139,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -2254,8 +2255,9 @@ private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () ->
   val pagerState = rememberPagerState(pageCount = { pages.size })
   Column(modifier = Modifier.fillMaxWidth().testTag("$tagPrefix-action-panel")
     .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(18.dp))
-    .padding(top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxWidth().height(178.dp)) { page ->
+    .padding(top = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    HorizontalPager(state = pagerState, verticalAlignment = Alignment.Top,
+      modifier = Modifier.fillMaxWidth().height(178.dp)) { page ->
       Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         pages[page].chunked(4).forEach { row ->
@@ -2279,7 +2281,7 @@ private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () ->
                 modifier = Modifier.weight(1f).height(84.dp).testTag("$tagPrefix-action-$id"),
                 contentPadding = PaddingValues(0.dp)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally,
-                  verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                  verticalArrangement = Arrangement.spacedBy(6.dp)) {
                   Box(modifier = Modifier.size(48.dp)
                     .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)),
                     contentAlignment = Alignment.Center) {
@@ -2287,7 +2289,8 @@ private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () ->
                       tint = if (enabled) MaterialTheme.colorScheme.onSurface
                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                   }
-                  Text(stringResource(label), style = MaterialTheme.typography.labelSmall,
+                  Text(stringResource(label), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Normal),
+                    textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
                       alpha = if (enabled) 1f else 0.65f),
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -3439,7 +3442,7 @@ private fun ConversationsScreen(
       verticalAlignment = Alignment.CenterVertically) {
       Text(if (selecting) stringResource(R.string.conversations_selected, selectedIds.size)
         else stringResource(R.string.tab_conversations), style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.Bold, fontSize = 30.sp, modifier = Modifier.weight(1f))
+        fontWeight = FontWeight.Bold, fontSize = 28.sp, modifier = Modifier.weight(1f))
       if (selecting) TextButton(onClick = { selecting = false; selectedIds = emptyList() },
         enabled = !connection.batchConversationBusy,
         modifier = Modifier.testTag("conversations-selection-cancel")) {

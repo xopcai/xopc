@@ -859,3 +859,20 @@
 "无法预览文件" = "Cannot preview file";
 "文件内容无法读取" = "File content is unavailable";
 "再次编辑" = "Edit again";
+
+"done" = "Completed";
+"duplicate" = "Duplicate";
+"wont_do" = "Won’t do";
+"critical" = "Critical";
+"waiting" = "Waiting";
+"verifying" = "Verifying";
+"blocked" = "Blocked";
+"completed" = "Completed";
+"planned" = "Planned";
+"paused" = "Paused";
+"project_status_active" = "Active";
+"project_status_planned" = "Planned";
+"project_status_paused" = "Paused";
+"project_status_completed" = "Completed";
+"project_status_cancelled" = "Cancelled";
+"project_status_archived" = "Archived";

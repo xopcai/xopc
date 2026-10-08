@@ -118,6 +118,27 @@ describe('Omni voice engine', () => {
     await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'reply' })));
   });
 
+  it('ignores delayed native echo after playback completes and the tail expires', async () => {
+    const test = await setup();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'user', transcript: '天气怎么样' });
+    await vi.waitFor(() => expect(test.received.some(event => event.type === 'response.create')).toBe(true));
+    test.emit({ type: 'response.created', response: { id: 'reply' } });
+    test.emit({ type: 'response.audio_transcript.delta', response_id: 'reply', delta: '今天天气晴朗。' });
+    test.emit({ type: 'response.audio.delta', response_id: 'reply', delta: Buffer.alloc(24_000).toString('base64') });
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(25));
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'echo' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('input.speech_started', { utteranceId: 'echo' }));
+    test.emit({ type: 'response.done', response: { id: 'reply', status: 'completed' } });
+    engine.acknowledge('reply', 500);
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'reply' })));
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_000);
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'echo' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'echo', transcript: '天气睛朗' });
+    await realDelay(500);
+    expect(test.record.mock.calls.some(([entry]) => entry.itemId === 'echo')).toBe(false);
+    expect(test.received.filter(event => event.type === 'response.create')).toHaveLength(1);
+  });
+
   it('cancels native speech only for a confirmed user interruption and starts the next reply', async () => {
     const test = await setup();
     test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'user', transcript: '你好' });

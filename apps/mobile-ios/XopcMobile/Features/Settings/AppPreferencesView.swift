@@ -75,10 +75,10 @@ private struct ShareCenterView: View {
             }
             ForEach(visibleShares) { share in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(share.fileName).font(.headline)
+                    Text(share.fileName).mobileTextStyle(.rowTitle)
                     Text(share.revoked ? "已撤销" : share.expired ? "已过期" : "有效")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(share.expiresAt).font(.caption2).foregroundStyle(.secondary)
+                        .mobileTextStyle(.caption).foregroundStyle(.secondary)
+                    Text(share.expiresAt).mobileTextStyle(.smallCaption).foregroundStyle(.secondary)
                     if let url = URL(string: share.shareUrl) {
                         ShareLink(item: url) { Label("分享链接", systemImage: "square.and.arrow.up") }
                     }

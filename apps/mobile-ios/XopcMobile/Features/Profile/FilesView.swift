@@ -247,7 +247,7 @@ private struct FileRow: View {
                         : ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
                     Text(file.modifiedAt.millisecondsDate, format: .dateTime.month().day())
                 }
-                .font(.caption).foregroundStyle(.secondary)
+                .mobileTextStyle(.caption).foregroundStyle(.secondary)
             }
         } icon: {
             Image(systemName: file.kind == "directory" ? "folder.fill" : file.mimeType.hasPrefix("image/") ? "photo" : "doc.text")

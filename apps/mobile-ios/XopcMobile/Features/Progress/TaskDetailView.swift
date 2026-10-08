@@ -25,14 +25,14 @@ struct TaskDetailView: View {
                                 .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(detail.task.title)
-                                    .font(.title2.bold())
+                                    .mobileTextStyle(.detailTitle)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Text(LocalizedStringKey(detail.task.phase))
-                                    .font(.subheadline)
+                                    .mobileTextStyle(.secondary)
                                     .foregroundStyle(.secondary)
                                 if let projectID = detail.task.projectId {
                                     Label(projectID, systemImage: "folder")
-                                        .font(.caption)
+                                        .mobileTextStyle(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -40,9 +40,12 @@ struct TaskDetailView: View {
                         .padding(.vertical, 10)
                     }
                     Section("说明") {
-                        Text(detail.task.body.flatMap { $0.isEmpty ? nil : $0 }
-                            ?? AppLocalization.string("暂无说明", locale: AppLocalization.selectedLocale))
-                            .foregroundStyle(detail.task.body?.isEmpty == false ? .primary : .secondary)
+                        if let body = detail.task.body, !body.isEmpty {
+                            MarkdownBodyView(parts: MarkdownBlock.parse(body).map(MarkdownPart.init),
+                                             configuration: configuration, conversationID: nil)
+                        } else {
+                            Text("暂无说明").foregroundStyle(.secondary)
+                        }
                     }
                     if let objective = detail.task.contract?.objective, !objective.isEmpty, objective != detail.task.title {
                         Section("目标") { Text(objective) }
@@ -66,7 +69,7 @@ struct TaskDetailView: View {
                                         Text(criterion.text)
                                             .fixedSize(horizontal: false, vertical: true)
                                         Text(label(for: status))
-                                            .font(.caption)
+                                            .mobileTextStyle(.caption)
                                             .foregroundStyle(.secondary)
                                     }
                                 }
@@ -108,7 +111,11 @@ struct TaskDetailView: View {
                         Section("执行结果") {
                             ForEach(receipts) { receipt in
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text(receipt.summary ?? receipt.status).font(.headline)
+                                    if let summary = receipt.summary, !summary.isEmpty {
+                                        Text(summary).mobileTextStyle(.rowTitle)
+                                    } else {
+                                        Text(LocalizedStringKey(receipt.status)).mobileTextStyle(.rowTitle)
+                                    }
                                     if receipt.needsUser == true {
                                         Label("需要你的参与", systemImage: "person.crop.circle.badge.exclamationmark").foregroundStyle(.orange)
                                     }
@@ -128,7 +135,7 @@ struct TaskDetailView: View {
                     if let runs = detail.runs, !runs.isEmpty {
                         Section("运行记录") {
                             ForEach(runs) { run in
-                                LabeledContent("第 \(run.attempt) 次", value: run.status)
+                                LabeledContent("第 \(run.attempt) 次") { Text(LocalizedStringKey(run.status)) }
                             }
                         }
                     }

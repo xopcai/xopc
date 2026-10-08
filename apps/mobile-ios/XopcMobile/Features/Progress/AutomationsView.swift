@@ -50,7 +50,7 @@ struct AutomationsView: View {
             .listRowBackground(Color.clear)
             VStack(alignment: .leading, spacing: 4) {
                 Text("管理定时运行、状态与最近结果").font(.subheadline.weight(.semibold))
-                Text("已加载 \(items.count) 项").font(.caption).foregroundStyle(.secondary)
+                Text("已加载 \(items.count) 项").mobileTextStyle(.caption).foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
@@ -121,7 +121,7 @@ struct AutomationsView: View {
         } label: {
             HStack(spacing: 5) {
                 Text(title).font(.subheadline.weight(.medium))
-                Text(count, format: .number).font(.caption)
+                Text(count, format: .number).mobileTextStyle(.caption)
             }
             .frame(minHeight: 48)
             .padding(.horizontal, 12)
@@ -155,24 +155,24 @@ private struct AutomationListRow: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "clock")
-                    .font(.title3)
+                    .mobileTextStyle(.sectionTitle)
                     .foregroundStyle(.blue)
                     .frame(width: 44, height: 44)
                     .background(Color.blue.opacity(0.1), in: .circle)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(automation.name).font(.headline).lineLimit(2)
+                    Text(automation.name).mobileTextStyle(.rowTitle).lineLimit(2)
                     if automation.enabled {
-                        Text("已启用").font(.subheadline).foregroundStyle(.secondary)
+                        Text("已启用").mobileTextStyle(.secondary).foregroundStyle(.secondary)
                     } else {
-                        Text("已暂停").font(.subheadline).foregroundStyle(.secondary)
+                        Text("已暂停").mobileTextStyle(.secondary).foregroundStyle(.secondary)
                     }
                 }
             }
             if let summary = automation.description ?? automation.action.instruction ?? automation.action.goal,
                !summary.isEmpty
             {
-                Text(summary).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                Text(summary).mobileTextStyle(.secondary).foregroundStyle(.secondary).lineLimit(2)
             }
             HStack(spacing: 8) {
                 Image(systemName: "calendar").accessibilityHidden(true)
@@ -188,7 +188,7 @@ private struct AutomationListRow: View {
                     Text(LocalizedStringKey(status))
                 }
             }
-            .font(.caption)
+            .mobileTextStyle(.caption)
             .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 8)
@@ -353,12 +353,12 @@ struct AutomationDetailView: View {
     private func automationIdentity(_ automation: AutomationRecord) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(automation.name)
-                .font(.title2.bold())
+                .mobileTextStyle(.detailTitle)
                 .fixedSize(horizontal: false, vertical: true)
             Text(automation.enabled
                 ? LocalizedStringResource("已启用")
                 : LocalizedStringResource("已暂停"))
-                .font(.subheadline)
+                .mobileTextStyle(.secondary)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

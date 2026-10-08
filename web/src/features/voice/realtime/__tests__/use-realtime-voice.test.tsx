@@ -407,7 +407,7 @@ describe('useRealtimeVoice', () => {
     expect(mocks.connect).toHaveBeenCalledOnce();
   });
 
-  it.each([true, false])('honors bargeIn=%s for ducking and waits for authoritative cancellation', async (enabled) => {
+  it.each([true, false])('ignores microphone echo with bargeIn=%s and waits for authoritative cancellation', async (enabled) => {
     await startResponse();
     bargeIn = enabled;
     act(() => {
@@ -415,7 +415,10 @@ describe('useRealtimeVoice', () => {
       onEvent({ type: 'input.speech_started', payload: { utteranceId: 'u1' } });
     });
     expect(mocks.playerClear).not.toHaveBeenCalled();
-    expect(mocks.playerDuck).toHaveBeenCalledTimes(enabled ? 1 : 0);
+    expect(mocks.playerDuck).not.toHaveBeenCalled();
+    expect(voice.audioLevel).toBe(1);
+    act(() => onEvent({ type: 'input.speech_stopped', payload: { utteranceId: 'u1' } }));
+    expect(mocks.playerDuck).not.toHaveBeenCalled();
     act(() => voice.interruptResponse());
     expect(cancelResponse).toHaveBeenCalledWith('r1');
   });

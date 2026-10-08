@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Resvg } from '@resvg/resvg-js';
+import sharp from 'sharp';
 import { optimize } from 'svgo';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -28,7 +29,7 @@ const [aiMarkSegment, humanMarkSegment] = markSegments;
 
 const check = process.argv.includes('--check');
 const requestedTarget = process.argv.find((argument) => argument.startsWith('--target='))?.slice('--target='.length);
-const validTargets = new Set(['all', 'web', 'docs', 'harmony', 'electron', 'browser-ext']);
+const validTargets = new Set(['all', 'web', 'docs', 'harmony', 'ios', 'electron', 'browser-ext']);
 const target = requestedTarget ?? 'all';
 
 if (!validTargets.has(target)) {
@@ -50,6 +51,8 @@ const MOBILE_MARK_SCALE = 0.76;
 // adaptive foreground. Give it its own optical scale so the mark keeps a calm
 // safe area after the launcher applies its mask.
 const HARMONY_MARK_SCALE = 0.86;
+// Match Android's 8% foreground inset after its adaptive 108dp canvas is cropped to 72dp.
+const IOS_MARK_SCALE = 0.84;
 const DESKTOP_MARK_SCALE = 0.78;
 
 const ROLE_LIGHT = { ai: AI_LIGHT, human: HUMAN_LIGHT };
@@ -272,7 +275,7 @@ function adaptiveBackgroundSvg() {
   return document(definitions, body);
 }
 
-function harmonyAppIconSvg() {
+function harmonyAppIconSvg(foregroundScale = 1) {
   const definitions = `
     <linearGradient id="harmony-surface" x1="92" y1="68" x2="934" y2="960" gradientUnits="userSpaceOnUse">
       <stop stop-color="#FFFFFF" />
@@ -329,7 +332,7 @@ function harmonyAppIconSvg() {
   <rect width="1024" height="1024" fill="url(#harmony-ambient)" />
   <rect width="1024" height="1024" fill="url(#harmony-bloom)" />
   <rect width="1024" height="1024" fill="url(#harmony-glass-sheen)" />
-  <circle cx="512" cy="512" r="224" fill="url(#harmony-lens)" filter="url(#harmony-lens-shadow)" />
+${foregroundScale === 1 ? '' : `  <g transform="translate(512 512) scale(${foregroundScale}) translate(-512 -512)">\n`}  <circle cx="512" cy="512" r="224" fill="url(#harmony-lens)" filter="url(#harmony-lens-shadow)" />
   <circle cx="512" cy="512" r="218" fill="url(#harmony-lens-glint)" />
   <circle cx="512" cy="512" r="222" fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="2" />
   <g filter="url(#harmony-shadow)" opacity="0.58">
@@ -339,7 +342,7 @@ ${markLayer({ ai: '#0C1423', human: '#004CA8' }, HARMONY_MARK_SCALE, 0, 6)}
 ${markLayer({ ai: '#FFFFFF', human: '#B9E2FF' }, HARMONY_MARK_SCALE, 0, -3)}
   </g>
 ${markLayer({ ai: 'url(#harmony-ai)', human: 'url(#harmony-human)' }, HARMONY_MARK_SCALE)}
-${markLayer({ ai: 'url(#harmony-highlight)', human: 'url(#harmony-highlight)' }, HARMONY_MARK_SCALE)}`;
+${markLayer({ ai: 'url(#harmony-highlight)', human: 'url(#harmony-highlight)' }, HARMONY_MARK_SCALE)}${foregroundScale === 1 ? '' : '\n  </g>'}`;
   return document(definitions, body);
 }
 
@@ -448,6 +451,7 @@ function renderSvg(scene, size = 1024) {
   if (scene === 'mobile-adaptive-monochrome') return mobileAdaptiveIconSvg(LIGHT);
   if (scene === 'mobile-adaptive-background') return adaptiveBackgroundSvg();
   if (scene === 'harmony-app-light') return harmonyAppIconSvg();
+  if (scene === 'ios-app-light') return harmonyAppIconSvg(IOS_MARK_SCALE / HARMONY_MARK_SCALE);
   if (scene === 'desktop-mac') return desktopIconSvg('mac', size);
   if (scene === 'desktop-windows') return desktopIconSvg('windows', size);
   if (scene === 'desktop-linux') return desktopIconSvg('linux', size);
@@ -590,6 +594,11 @@ queue('harmony', 'apps/mobile-harmony/agc-locales/zh-CN/app-icon-1024.png', rend
 for (const [appearance, qualifier] of [['light', 'base'], ['dark', 'dark']]) {
   queue('harmony', `apps/mobile-harmony/entry/src/main/resources/${qualifier}/media/brand_logo.svg`,
     readFileSync(join(root, `assets/brand/concepts/xopc-human-ai-loop-role-${appearance}.svg`)));
+}
+
+if (isEnabled('ios')) {
+  queue('ios', 'apps/mobile-ios/XopcMobile/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png',
+    await sharp(renderPng('ios-app-light', 1024)).removeAlpha().png().toBuffer());
 }
 
 // Desktop packaging and tray assets. The macOS tray image is a template image: Electron

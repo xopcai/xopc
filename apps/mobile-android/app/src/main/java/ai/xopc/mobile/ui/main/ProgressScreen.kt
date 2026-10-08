@@ -255,7 +255,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         "automation" -> state.automations.detail?.name ?: stringResource(R.string.progress_automations)
         "automation-run" -> state.automations.run?.automationName ?: stringResource(R.string.automation_run)
         else -> stringResource(R.string.tab_progress)
-      }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+      }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
       if (page == "overview") TextButton(onClick = { page = "tasks" },
         modifier = Modifier.testTag("progress-all-work")) { Text(stringResource(R.string.progress_all_work)) }
       else Row {
@@ -530,7 +530,7 @@ private fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
         Card(onClick = { onOpenTask(task.id) }, modifier = Modifier.fillMaxWidth().testTag("progress-closed-${task.id}")) {
           Column(modifier = Modifier.padding(16.dp)) {
             Text(task.title, style = MaterialTheme.typography.titleMedium)
-            Text(task.resolution ?: task.phase, style = MaterialTheme.typography.bodySmall,
+            Text(task.resolution?.let { taskResolutionLabel(it) } ?: progressPhaseLabel(task.phase), style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant)
           }
         }
@@ -806,7 +806,7 @@ private fun ProgressHomeRow(item: ProgressItem,
           modifier = Modifier.testTag("progress-review-${item.id}")) {
           Text(stringResource(if (reviewExpanded) R.string.progress_hide_review else R.string.progress_show_review))
         }
-        if (reviewExpanded) Text(item.reviewDetail, style = MaterialTheme.typography.bodyMedium,
+        if (reviewExpanded) MarkdownContent(item.reviewDetail,
           modifier = Modifier.testTag("progress-review-detail-${item.id}"))
       }
       item.primaryAction?.let { action ->
@@ -872,8 +872,7 @@ private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterCha
             overflow = TextOverflow.Ellipsis)
           Text(progressPhaseLabel(task.phase), style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-          if (task.body.isNotBlank()) Text(task.body, style = MaterialTheme.typography.bodyMedium,
-            maxLines = 2, overflow = TextOverflow.Ellipsis)
+          if (task.body.isNotBlank()) MarkdownContent(task.body, maxLines = 2)
         }
       }
     }
@@ -954,10 +953,10 @@ private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: 
     ProgressSectionTitle(R.string.progress_details)
     Card {
       Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        task.priority?.let { Text(stringResource(R.string.progress_task_priority, it)) }
+        task.priority?.let { Text(stringResource(R.string.progress_task_priority, taskPriorityLabel(it))) }
         Text(stringResource(R.string.progress_task_updated,
           DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(task.updatedAt))))
-        task.resolution?.let { Text(stringResource(R.string.progress_task_resolution, it)) }
+        task.resolution?.let { Text(stringResource(R.string.progress_task_resolution, taskResolutionLabel(it))) }
       }
     }
     if (task.version > 0) OutlinedButton(onClick = onEdit, enabled = !busy,
@@ -1071,9 +1070,10 @@ private fun projectStatusLabel(status: String): String {
 private fun progressPhaseLabel(phase: String): String = stringResource(when (phase) {
   "backlog" -> R.string.progress_phase_backlog
   "ready" -> R.string.progress_phase_ready
-  "active" -> R.string.progress_phase_active
+  "active", "in_progress" -> R.string.progress_phase_active
   "review" -> R.string.progress_phase_review
-  else -> R.string.progress_phase_closed
+  "closed" -> R.string.progress_phase_closed
+  else -> R.string.workflow_status_unknown
 })
 
 @Composable
