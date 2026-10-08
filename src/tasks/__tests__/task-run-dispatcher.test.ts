@@ -24,6 +24,8 @@ describe('TaskRunDispatcher', () => {
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
   });
   afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
@@ -36,6 +38,54 @@ describe('TaskRunDispatcher', () => {
     if (!created.ok || !created.runId) throw new Error('Expected queued TaskRun');
     return created.runId;
   }
+
+  it.each(['resolve', 'reject'] as const)('stops leases and database access when an active Agent later %ss', async (outcome) => {
+    const runId = queue('shutdown');
+    let finish!: () => void;
+    let fail!: (error: Error) => void;
+    const pending = new Promise<void>((resolve, reject) => { finish = resolve; fail = reject; });
+    const runAgent = vi.fn(() => {
+      const runs = new TaskRunRepository();
+      const run = runs.require(runId);
+      runs.setStatus({ runId, expectedVersion: run.version, from: ['queued'], to: 'running' });
+      return pending;
+    });
+    const dispatcher = new TaskRunDispatcher({ workerId: 'test', maxConcurrency: 1,
+      ensureSession: async () => 'conversation', runAgent });
+    vi.useFakeTimers();
+    const draining = dispatcher.drain();
+    await vi.waitFor(() => expect(runAgent).toHaveBeenCalledOnce());
+    const get = vi.spyOn(TaskRunRepository.prototype, 'get');
+    const claimNext = vi.spyOn(TaskRunRepository.prototype, 'claimNext');
+    const heartbeat = vi.spyOn(TaskRunRepository.prototype, 'heartbeat');
+    dispatcher.stop();
+    closeXopcDatabase();
+    await vi.advanceTimersByTimeAsync(60_000);
+    if (outcome === 'reject') fail(new Error('Agent interrupted during shutdown'));
+    else finish();
+    await draining;
+    await dispatcher.drain();
+    expect(get).not.toHaveBeenCalled();
+    expect(claimNext).not.toHaveBeenCalled();
+    expect(heartbeat).not.toHaveBeenCalled();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    expect(new TaskRunRepository().require(runId).status).toBe('running');
+  });
+
+  it('does not start an Agent if shutdown occurs while preparing its session', async () => {
+    queue('preparing');
+    let finish!: (conversationId: string) => void;
+    const ensureSession = vi.fn(() => new Promise<string>((resolve) => { finish = resolve; }));
+    const runAgent = vi.fn(async () => {});
+    const dispatcher = new TaskRunDispatcher({ workerId: 'test', maxConcurrency: 1, ensureSession, runAgent });
+    const draining = dispatcher.drain();
+    expect(ensureSession).toHaveBeenCalledOnce();
+    dispatcher.stop();
+    closeXopcDatabase();
+    finish('conversation');
+    await draining;
+    expect(runAgent).not.toHaveBeenCalled();
+  });
 
   it('executes two independent TaskRuns concurrently within its limit', async () => {
     queue('one'); queue('two');
