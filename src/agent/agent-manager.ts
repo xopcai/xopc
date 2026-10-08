@@ -1,3 +1,4 @@
+import { traceTools } from '../observability/runtime.js';
 import type { SceneAccess } from '../scenes/httpServices.js';
 /**
  * Agent Manager - Manages Agent instances per session
@@ -1480,7 +1481,7 @@ export class AgentManager implements AgentInstanceGateway {
         }),
         model,
         thinkingLevel,
-        tools,
+        tools: traceTools(tools),
         messages: [],
       },
       toolExecution: 'parallel',
@@ -1490,7 +1491,7 @@ export class AgentManager implements AgentInstanceGateway {
           : 'agent.answer',
         conversationId,
         agentId: profile.agentId,
-      }, () => providerStreamFn(streamModel, context, options)),
+      }, () => providerStreamFn(streamModel, context, options), { context, reasoning: options?.reasoning }),
       getApiKey: (provider: string) => this.resolveApiKeyWithCache(provider),
       finishTurn: context => turnPolicy.shouldStopAfterTurn(context) ? { action: 'end' } : undefined,
       beforeToolCall: turnPolicy.beforeToolCall,
