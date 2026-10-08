@@ -11,13 +11,27 @@ let config = workerData.config;
 let dropped = 0;
 let paused = false;
 let lastPruned = 0;
-if (Number(db.prepare('PRAGMA user_version').get().user_version) > 1) throw new Error('Trace database schema is newer than this runtime');
+function retryStartup(fn) {
+  const deadline = Date.now() + 1000;
+  const wait = new Int32Array(new SharedArrayBuffer(4));
+  while (true) {
+    try { return fn(); }
+    catch (error) {
+      if (!/database (?:table )?is locked/.test(String(error.message)) || Date.now() >= deadline) throw error;
+      Atomics.wait(wait, 0, 0, 25);
+    }
+  }
+}
 function limits() {
   db.exec('PRAGMA max_page_count=' + Math.floor((config.local.maxStoreMiB - 4) * 1048576 / 8192));
 }
-db.exec('PRAGMA busy_timeout=100; PRAGMA page_size=4096; PRAGMA auto_vacuum=INCREMENTAL; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA wal_autocheckpoint=128; PRAGMA journal_size_limit=1048576;');
+db.exec('PRAGMA busy_timeout=100;');
+retryStartup(() => {
+if (Number(db.prepare('PRAGMA user_version').get().user_version) > 1) throw new Error('Trace database schema is newer than this runtime');
+db.exec('PRAGMA page_size=4096; PRAGMA auto_vacuum=INCREMENTAL; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA wal_autocheckpoint=128; PRAGMA journal_size_limit=1048576;');
 db.exec('CREATE TABLE IF NOT EXISTS traces (trace_id TEXT PRIMARY KEY, started_at INTEGER NOT NULL, ended_at INTEGER, status TEXT NOT NULL, conversation_id TEXT, run_id TEXT, agent_id TEXT, owner TEXT, data TEXT NOT NULL, partial_reason TEXT); CREATE INDEX IF NOT EXISTS trace_time ON traces(started_at,trace_id); CREATE INDEX IF NOT EXISTS trace_conversation ON traces(conversation_id,started_at); CREATE TABLE IF NOT EXISTS spans (trace_id TEXT NOT NULL, span_id TEXT NOT NULL, data TEXT NOT NULL, bytes INTEGER NOT NULL, PRIMARY KEY(trace_id,span_id)); CREATE TABLE IF NOT EXISTS state (id INTEGER PRIMARY KEY, epoch INTEGER NOT NULL, window INTEGER NOT NULL, written INTEGER NOT NULL); INSERT OR IGNORE INTO state VALUES(1,0,0,0); CREATE TABLE IF NOT EXISTS leases (owner TEXT PRIMARY KEY, heartbeat INTEGER NOT NULL); PRAGMA user_version=1;');
 limits();
+});
 function size() {
   return ['', '-wal', '-shm'].reduce((sum, suffix) => { try { return sum + fs.statSync(file + suffix).size; } catch { return sum; } }, 0);
 }
@@ -117,7 +131,7 @@ function list(q) {
   const more=rows.length>limit; const page=rows.slice(0,limit);
   return { traces:page.map(row => { const r=JSON.parse(row.data); delete r.attributes['langfuse.observation.input']; delete r.attributes['langfuse.observation.output']; const stats={generations:0,tokens:0,knownCostUsd:0,unknownCostCalls:0}; for(const value of db.prepare('SELECT data FROM spans WHERE trace_id=?').all(row.trace_id)) { const span=JSON.parse(value.data); if(span.type!=='generation') continue; stats.generations++; stats.tokens+=Number(span.attributes['gen_ai.usage.input_tokens']||0)+Number(span.attributes['gen_ai.usage.output_tokens']||0); const cost=span.attributes['langfuse.observation.cost_details']; const total=cost ? JSON.parse(cost).total : undefined; if(typeof total==='number') stats.knownCostUsd+=total; else stats.unknownCostCalls++; } return {...r,partialReason:row.partial_reason,stats}; }), nextCursor:more? page.at(-1).started_at+':'+page.at(-1).trace_id:null };
 }
-heartbeat(); permissions();
+retryStartup(heartbeat); permissions();
 const timer=setInterval(() => { try { heartbeat(); prune(); } catch {} },60000); timer.unref();
 parentPort.on('message', msg => {
   try {
