@@ -257,7 +257,7 @@ private struct FileRow: View {
     }
 }
 
-private struct FilePreviewView: View {
+struct FilePreviewView: View {
     let configuration: GatewayConfiguration
     let file: FileResource
 

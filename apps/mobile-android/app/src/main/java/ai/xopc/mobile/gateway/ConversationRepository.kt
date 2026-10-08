@@ -115,9 +115,19 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     return attachmentStore?.previewImage(gatewayId, conversationId, item)
   }
 
+  fun composerFilePreview(conversationId: String, item: ChatAttachment): ByteArray? {
+    val gatewayId = gateway.currentProfile()?.gatewayId ?: return null
+    return attachmentStore?.previewFile(gatewayId, conversationId, item)
+  }
+
   fun quickImagePreview(item: ChatAttachment): Bitmap? {
     val gatewayId = gateway.currentProfile()?.gatewayId ?: return null
     return attachmentStore?.previewImage(gatewayId, QUICK_ATTACHMENT_SCOPE, item)
+  }
+
+  fun quickFilePreview(item: ChatAttachment): ByteArray? {
+    val gatewayId = gateway.currentProfile()?.gatewayId ?: return null
+    return attachmentStore?.previewFile(gatewayId, QUICK_ATTACHMENT_SCOPE, item)
   }
 
   fun addComposerAttachment(gatewayId: String, conversationId: String, uri: Uri): ChatAttachment {

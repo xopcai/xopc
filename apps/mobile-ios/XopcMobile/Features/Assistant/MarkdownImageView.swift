@@ -7,6 +7,7 @@ struct MarkdownImageView: View {
     let configuration: GatewayConfiguration
     let conversationID: String?
     var compact = false
+    var gallery: [HistoryAttachment] = []
 
     @Environment(\.displayScale) private var displayScale
     @Environment(\.locale) private var locale
@@ -53,22 +54,16 @@ struct MarkdownImageView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: requestIdentity) { await load() }
         .sheet(isPresented: $showsPreview) {
-            NavigationStack {
-                ScrollView([.horizontal, .vertical]) {
-                    if let image {
-                        Image(uiImage: image).resizable().scaledToFit()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .accessibilityLabel(alt.isEmpty ? AppLocalization.string("图片", locale: locale) : alt)
-                    }
-                }
-                .navigationTitle(alt.isEmpty ? AppLocalization.string("图片", locale: locale) : alt)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("关闭", systemImage: "xmark") { showsPreview = false }
-                    }
-                }
-            }
+            ChatImageGalleryView(
+                items: gallery.isEmpty
+                    ? [ChatImageGalleryItem(title: alt, source: source)]
+                    : gallery.compactMap { file in
+                        file.uri.map { ChatImageGalleryItem(title: file.name ?? "图片", source: $0) }
+                    },
+                initialSource: source,
+                configuration: configuration,
+                conversationID: conversationID
+            )
         }
     }
 

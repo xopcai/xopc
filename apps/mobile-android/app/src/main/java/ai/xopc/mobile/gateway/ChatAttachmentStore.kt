@@ -187,6 +187,24 @@ class ChatAttachmentStore(context: Context) {
     }
   }
 
+  /** Read a local draft file for preview from the encrypted snapshot. */
+  @Synchronized
+  fun previewFile(gatewayId: String, conversationId: String, item: ChatAttachment): ByteArray? {
+    checkScope(gatewayId, conversationId); checkId(item.id)
+    if (item.workspaceRelativePath != null || item.type != "document") return null
+    database.readableDatabase.query(TABLE, arrayOf("metadata", "payload"),
+      "gateway_id=? AND conversation_id=? AND attachment_id=?",
+      arrayOf(gatewayId, conversationId, item.id), null, null, null).use { rows ->
+      if (!rows.moveToFirst()) return null
+      val saved = parseMetadata(JSONObject(decrypt(gatewayId, conversationId, item.id,
+        "metadata", rows.getBlob(0)).toString(Charsets.UTF_8)))
+      require(saved == item) { "MISMATCHED_ATTACHMENT" }
+      val bytes = decrypt(gatewayId, conversationId, item.id, "payload", rows.getBlob(1))
+      require(bytes.size == item.size && bytes.size in 1..MAX_BYTES) { "INVALID_ATTACHMENT_DATA" }
+      return bytes
+    }
+  }
+
   /** Re-encrypts the quick composer snapshots under the newly created conversation atomically. */
   @Synchronized
   fun moveAll(gatewayId: String, fromConversationId: String,

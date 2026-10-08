@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { gatewaySession } from './gatewaySession';
 import { XopcChatRepository } from '../repository/chatRepository';
 import { voiceCapture } from './voiceCapture';
@@ -17,6 +18,11 @@ interface XopcClarificationBody {
   answer?: string;
   expectedVersion: number;
   idempotencyKey: string;
+}
+
+interface XopcVoicePendingReply {
+  event?: XopcVoiceServerEvent;
+  frame?: XopcVoiceAudioFrame;
 }
 
 @ObservedV2
@@ -52,6 +58,9 @@ export class XopcVoiceCall {
   private responseDone: boolean = false;
   private receivedMs: number = 0;
   private playedMs: number = 0;
+  private pendingResponseId: string = '';
+  private pendingReply: XopcVoicePendingReply[] = [];
+  private pendingReplyBytes: number = 0;
   private approvalTimer: number = -1;
   private limitTimer: number = -1;
 
@@ -135,6 +144,9 @@ export class XopcVoiceCall {
   }
 
   private onAudio(frame: XopcVoiceAudioFrame): void {
+    if (this.pendingResponseId && frame.responseId === this.pendingResponseId) {
+      this.deferReply({ frame }, frame.audio.byteLength); return;
+    }
     if (!this.responseId || frame.responseId !== this.responseId) return;
     this.receivedMs += frame.durationMs; this.responseStage = this.playedMs ? 'speaking' : 'buffering';
     voiceCallAudio.enqueue(frame.responseId, frame.audio);
@@ -154,13 +166,23 @@ export class XopcVoiceCall {
 
   private onEvent(event: XopcVoiceServerEvent): void {
     const payload = event.payload;
+    if (this.pendingResponseId && payload.responseId === this.pendingResponseId) {
+      this.deferReply({ event }, JSON.stringify(event).length * 2); return;
+    }
     if (event.type === 'input.transcript.final') this.userText = payload.text ?? '';
     else if (event.type === 'response.created') {
       if (this.responseId && payload.responseId !== this.responseId) {
+        // Server completion acknowledges buffered audio; the native renderer may still be draining.
+        if (this.responseDone && payload.responseId) {
+          hilog.info(0x0000, 'XopcVoice', 'Voice reply queued behind playback: %{public}s', payload.responseId);
+          this.pendingResponseId = payload.responseId;
+          this.deferReply({ event }, JSON.stringify(event).length * 2); return;
+        }
         if (payload.responseId) this.transport?.send('response.stop_playback', { responseId: payload.responseId });
         return;
       }
       this.responseId = payload.responseId ?? ''; this.assistantText = ''; this.activity = ''; this.error = '';
+      hilog.info(0x0000, 'XopcVoice', 'Voice reply started: %{public}s', this.responseId);
       this.responseStage = 'thinking'; this.receivedMs = 0; this.playedMs = 0; this.responseDone = false;
     } else if (event.type === 'response.text.delta' && payload.responseId === this.responseId) {
       this.assistantText = (this.assistantText + (payload.delta ?? '')).slice(-32000);
@@ -177,13 +199,28 @@ export class XopcVoiceCall {
     } else if (event.type === 'response.done' && payload.responseId === this.responseId) {
       this.responseDone = true;
       if (!payload.audio && this.assistantText) this.error = 'NO_RESPONSE_AUDIO';
-      if (!payload.audio || this.receivedMs === 0) this.finishResponse();
+      if (!payload.audio || this.playedMs >= this.receivedMs) this.finishResponse();
       else voiceCallAudio.finish(this.responseId);
     } else if (event.type === 'session.error' && payload.recoverable) this.error = payload.code ?? 'SERVICE_UNAVAILABLE';
   }
 
   private finishResponse(): void {
+    if (this.responseId) hilog.info(0x0000, 'XopcVoice', 'Voice reply playback finished: %{public}s', this.responseId);
     this.responseId = ''; this.responseStage = ''; this.activity = '';
+    this.responseDone = false; this.receivedMs = 0; this.playedMs = 0;
+    const pending = this.pendingReply;
+    this.pendingReply = []; this.pendingResponseId = ''; this.pendingReplyBytes = 0;
+    for (const item of pending) {
+      if (item.event) this.onEvent(item.event);
+      else if (item.frame) this.onAudio(item.frame);
+    }
+  }
+
+  private deferReply(item: XopcVoicePendingReply, bytes: number): void {
+    if (this.pendingReply.length >= 1024 || this.pendingReplyBytes + bytes > 256000) {
+      this.pause('PLAYBACK_FAILED'); return;
+    }
+    this.pendingReply.push(item); this.pendingReplyBytes += bytes;
   }
 
   async setMuted(value: boolean): Promise<void> {
@@ -198,8 +235,10 @@ export class XopcVoiceCall {
 
   async stopReply(): Promise<void> {
     const id = this.responseId; if (!id) return;
-    this.responseId = ''; this.responseStage = ''; await voiceCallAudio.flush();
+    const flushing = voiceCallAudio.flush();
+    this.finishResponse();
     this.transport?.send('response.stop_playback', { responseId: id });
+    await flushing;
   }
 
   cancelTask(): void {
@@ -278,6 +317,11 @@ export class XopcVoiceCall {
   }
 
   private async release(clearSession: boolean): Promise<void> {
+    ++this.generation;
+    clearInterval(this.queueTimer); this.queueTimer = -1;
+    this.pendingReply = []; this.pendingResponseId = ''; this.pendingReplyBytes = 0;
+    this.finishResponse(); this.taskId = ''; this.taskCancelling = false;
+    this.clarification = undefined; this.approval = undefined;
     clearInterval(this.approvalTimer); this.approvalTimer = -1;
     clearTimeout(this.limitTimer); this.limitTimer = -1;
     const transport = this.transport; this.transport = undefined;

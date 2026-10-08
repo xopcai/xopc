@@ -9,6 +9,27 @@ vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { warn: vi.fn() } }));
 import { XopcVoiceCallAudio } from '../entry/src/main/ets/service/voiceCallAudio.ets';
 
 describe('Harmony voice playback acknowledgement', () => {
+  it('ignores a rejected write from playback that the user has flushed', async () => {
+    let rejectWrite!: (error: Error) => void;
+    const renderer = {
+      getAudioTimestampInfoSync: () => ({ framePos: 0, timestamp: 0 }),
+      write: vi.fn(() => new Promise<number>((_resolve, reject) => { rejectWrite = reject; })),
+      flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), release: vi.fn(async () => {}), off: vi.fn(),
+    };
+    const onFailure = vi.fn();
+    const call = new XopcVoiceCallAudio();
+    const state = call as unknown as { renderer: typeof renderer; generation: number; callbacks: object };
+    state.renderer = renderer; state.generation = 1;
+    state.callbacks = { onInput: vi.fn(), onBuffered: vi.fn(), onPlayed: vi.fn(), onRoute: vi.fn(), onFailure };
+    call.enqueue('response-1', new Uint8Array(960));
+    await vi.waitFor(() => expect(renderer.write).toHaveBeenCalledOnce());
+    const flushed = call.flush();
+    rejectWrite(new Error('Write interrupted by flush'));
+    await flushed;
+    expect(onFailure).not.toHaveBeenCalled();
+    await call.stop();
+  });
+
   it('acknowledges renderer writes and waits for drain when the playback timestamp stalls', async () => {
     let finishDrain!: () => void;
     const drain = vi.fn(() => new Promise<void>((resolve) => { finishDrain = resolve; }));

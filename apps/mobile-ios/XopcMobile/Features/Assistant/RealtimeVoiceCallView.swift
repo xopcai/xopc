@@ -176,7 +176,7 @@ struct RealtimeVoiceCallView: View {
         let key: String = switch code {
         case "OMNI_CONNECTION_CLOSED", "PROVIDER_UNAVAILABLE", "SERVICE_UNAVAILABLE":
             "语音服务暂时不可用，请稍后重试"
-        case "NETWORK", "AUDIO_INTERRUPTED":
+        case "NETWORK", "CONNECT_TIMEOUT", "AUDIO_INTERRUPTED":
             "通话已中断，请重试"
         case "TIME_LIMIT":
             "本次通话已达到时长上限"

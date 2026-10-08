@@ -324,6 +324,7 @@ export function messagesToClientHistory(
           && hiddenTurnIds.has((m as unknown as { turnId: string }).turnId)
           ? { startsNewBubble: true } : {}),
         content: text,
+        ...(m.media?.length ? { media: m.media } : {}),
         timestamp: parseTimestamp(m.timestamp),
         toolCalls,
       });
@@ -781,6 +782,7 @@ export function transcriptRowsToClientHistory(
       role: 'assistant',
       kind: 'message',
       content: flattenMessageContent(messageRow.content ?? ''),
+      ...(messageRow.media?.length ? { media: messageRow.media } : {}),
       ...(rawContent ? { rawContent } : {}),
       ...(displayIndex !== undefined ? { displayIndex } : {}),
       timestamp: parseTimestampValue(messageRow.timestamp),

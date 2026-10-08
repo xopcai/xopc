@@ -60,10 +60,28 @@ struct MessageDetailView: View {
                         Text("附件").font(.headline).padding(.top, 18)
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(message.attachments) { attachment in
-                                Label(
-                                    attachment.name ?? AppLocalization.string("附件", locale: AppLocalization.selectedLocale),
-                                    systemImage: "paperclip"
-                                )
+                                if attachment.isImage, let uri = attachment.uri {
+                                    MarkdownImageView(
+                                        alt: attachment.name ?? "图片",
+                                        source: uri,
+                                        configuration: configuration,
+                                        conversationID: conversationID,
+                                        compact: true,
+                                        gallery: message.attachments.filter(\.isImage)
+                                    )
+                                } else if attachment.isAudio, let conversationID {
+                                    ChatAudioAttachmentView(
+                                        attachment: attachment,
+                                        configuration: configuration,
+                                        conversationID: conversationID
+                                    )
+                                } else {
+                                    ChatAttachmentPreview(
+                                        attachment: attachment,
+                                        configuration: configuration,
+                                        conversationID: conversationID
+                                    )
+                                }
                             }
                         }
                         .padding(.vertical, 14)

@@ -80,6 +80,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
   onOpenTarget: (ConversationTarget) -> Unit,
   onOpenPreview: (ConversationMedia, List<ConversationMedia>) -> Unit,
   onOpenLink: (String) -> Unit, onCopy: (String) -> Unit, showMore: Boolean = true,
+  onReuseUserMessage: (() -> Unit)? = null,
   previewEligible: Boolean = false, onViewMore: () -> Unit = onMore,
   onOpenExecution: (() -> Unit)? = null,
   onSaveNote: (() -> Unit)? = null,
@@ -154,6 +155,18 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
         MessageOutcome(message.outcome?.artifacts.orEmpty(), message.outcome?.status,
           message.outcome?.summary, { onOpenPreview(it, emptyList()) }, onOpenLink)
         MessageTargets(message.targets, onOpenTarget)
+      }
+    }
+    if (isUser && showMore && message.text.isNotBlank()) Row(
+      modifier = Modifier.padding(end = 8.dp, top = 2.dp),
+      horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+      TextButton(onClick = { onCopy(message.text) }, modifier = Modifier.heightIn(min = 44.dp)
+        .testTag("message-user-copy-${message.id}")) {
+        Text(stringResource(R.string.assistant_copy))
+      }
+      if (onReuseUserMessage != null) TextButton(onClick = onReuseUserMessage,
+        modifier = Modifier.heightIn(min = 44.dp).testTag("message-user-reuse-${message.id}")) {
+        Text(stringResource(R.string.assistant_reuse))
       }
     }
     if (!isUser && showMore && (message.text.isNotBlank() || contentCount > 0 ||
