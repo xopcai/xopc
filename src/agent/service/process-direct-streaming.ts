@@ -272,6 +272,7 @@ export async function* runProcessDirectStreaming(
   input: ProcessDirectStreamingInput,
 ): AsyncGenerator<ProcessDirectStreamEvent, void, unknown> {
   const conversationId = input.conversationId ?? resolveAgentMainConversationId({ agentId: resolveDefaultAgentId() });
+  deps.sessionStore?.idleCompaction?.interrupt(conversationId);
   const isConnectionResume = Boolean(input.runId && getConnectionResumeInput(conversationId, input.runId));
   const isClarificationResume = Boolean(input.runId && getClarificationResumeInput(conversationId, input.runId));
   const isInternalResume = isConnectionResume || isClarificationResume;

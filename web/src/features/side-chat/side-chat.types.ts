@@ -44,6 +44,7 @@ export type SideChatTab = {
   ended?: 'idle' | 'waiting' | 'unavailable' | 'promoted';
   promotedConversationId?: string;
   fresh?: boolean;
+  lastSelectedAt?: number;
 };
 
 export type SideChatConversation = {

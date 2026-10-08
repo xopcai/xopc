@@ -20,9 +20,9 @@ function formatMediaSize(bytes: number): string {
 }
 
 function mediaReadLimitError(id: string, actualBytes: number, maxBytes: number): Error {
-  return new Error(
+  return Object.assign(new Error(
     `Media ${JSON.stringify(id)} exceeds read limit: ${formatMediaSize(actualBytes)}, limit ${formatMediaSize(maxBytes)}`,
-  );
+  ), { code: 'MEDIA_READ_LIMIT', size: actualBytes, maxBytes });
 }
 
 const MIME_BY_EXT: Record<string, string> = {
