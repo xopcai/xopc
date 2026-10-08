@@ -213,9 +213,11 @@ struct MessageBubble: View {
             }
         }
     }
+}
 
+private extension MessageBubble {
     @ViewBuilder
-    private var attachments: some View {
+    var attachments: some View {
         if !message.attachments.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 let images = message.attachments.filter(\.isImage)
@@ -264,9 +266,7 @@ struct MessageBubble: View {
             }
         }
     }
-}
 
-private extension MessageBubble {
     func referenceAccessibilityLabel(_ reference: ContextReference) -> String {
         let format = AppLocalization.string("引用%@：%@", locale: locale)
         return String(
