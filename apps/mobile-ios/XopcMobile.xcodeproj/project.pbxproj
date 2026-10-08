@@ -21,7 +21,6 @@
 		124B70EBED2EFABA81F75A48 /* ProjectTaskEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93BAAB9A5E492AC5DF693C5A /* ProjectTaskEditorView.swift */; };
 		14DF591B12C7D14CF991550D /* AssistantOptionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25DA3228471D55EE4704F260 /* AssistantOptionsView.swift */; };
 		18B2209050FDA67F7596E881 /* GatewayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C6E75BB052D95075AC66B64 /* GatewayClient.swift */; };
-		A12B34C56D78E90F12A34B56 /* GatewayPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12B34C56D78E90F12A34B57 /* GatewayPairing.swift */; };
 		19234BB7B3E0F96251717E8C /* MarkdownBlocksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794BD953FB93FEDE80CB2A00 /* MarkdownBlocksTests.swift */; };
 		1DBAA23BDF065B11F12B33C8 /* NoteAttachmentsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE37390D9DE228209D0D9C2 /* NoteAttachmentsSection.swift */; };
 		1E933A6E8068947AF05AC34C /* MessageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F870C2254E2430F6C2D9D077 /* MessageModels.swift */; };
@@ -76,6 +75,7 @@
 		9BE40403A8FDBFC39CBFF641 /* ConversationContextButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6ECBAB709ED6B714607F120 /* ConversationContextButton.swift */; };
 		9BF9C32A317B8A5E428B6945 /* MarkdownNoteInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = D28D3A761AB72069F8013A72 /* MarkdownNoteInput.swift */; };
 		9C36ECCD41748134A9CAEC03 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 531D335060F09BBFF5ECBCB0 /* NotesView.swift */; };
+		A2782D63508D91F609C9853D /* GatewayPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E928EFA202655C95A0A39C2 /* GatewayPairing.swift */; };
 		A6A69590BE314D5487153752 /* ProjectTaskRoundTripUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 605A9AB9937FE45A97DB7F1B /* ProjectTaskRoundTripUITests.swift */; };
 		A6BFE24269BAEF055ED16452 /* MemoryMaintenanceSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 957ACD7A723FD34666E22AA7 /* MemoryMaintenanceSummary.swift */; };
 		A72C2C6F9AE30E9813D40BA2 /* RealtimeRunSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E5F7ECF0D5276CA41446DC4 /* RealtimeRunSocket.swift */; };
@@ -136,6 +136,7 @@
 		08B6383B58F71CBE8AC1F918 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		09373E594B14AFE76B9C5CA8 /* AutomationEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationEditorView.swift; sourceTree = "<group>"; };
 		096805868F759BC6CF8A4A07 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0E928EFA202655C95A0A39C2 /* GatewayPairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayPairing.swift; sourceTree = "<group>"; };
 		18359BD966C6EB92C033C1D4 /* MessageDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDetailView.swift; sourceTree = "<group>"; };
 		1995C988B9EAD43B5B5383A6 /* AppRootTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootTests.swift; sourceTree = "<group>"; };
 		1C831947C000F1C4E91EAED5 /* NoteAudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteAudioPlayerView.swift; sourceTree = "<group>"; };
@@ -155,6 +156,7 @@
 		3485BBEEAD9F312B96496FCD /* GatewayClient+TaskEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+TaskEditing.swift"; sourceTree = "<group>"; };
 		365D817669F3BB7FB0BBC518 /* GatewayModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayModels.swift; sourceTree = "<group>"; };
 		390E698F139D6E95B996C88A /* FeatureStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureStateTests.swift; sourceTree = "<group>"; };
+		3A2DFD3FEE245285A0EB8A7E /* XopcMobile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = XopcMobile.entitlements; sourceTree = "<group>"; };
 		3B5399156DB80FDFA0CC9CDF /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
 		3CD13446795B87ABD58F6150 /* RealtimeVoiceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceModels.swift; sourceTree = "<group>"; };
 		3D00F5B1AC3954D6C80EB6A9 /* XopcMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = XopcMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -177,7 +179,6 @@
 		626D1ED3CB8A067D90888730 /* ProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressView.swift; sourceTree = "<group>"; };
 		66D14A958D5D2CB04CF92AD4 /* PendingVoiceNoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingVoiceNoteStore.swift; sourceTree = "<group>"; };
 		6C6E75BB052D95075AC66B64 /* GatewayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayClient.swift; sourceTree = "<group>"; };
-		A12B34C56D78E90F12A34B57 /* GatewayPairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayPairing.swift; sourceTree = "<group>"; };
 		6D825661BEBDD6B5A541C267 /* ProjectCreationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCreationTests.swift; sourceTree = "<group>"; };
 		74B5BF8D4118453BB4A02656 /* TaskEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditorView.swift; sourceTree = "<group>"; };
 		794BD953FB93FEDE80CB2A00 /* MarkdownBlocksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownBlocksTests.swift; sourceTree = "<group>"; };
@@ -284,6 +285,7 @@
 		29BEE33080CC9F4D8C81B95F /* XopcMobile */ = {
 			isa = PBXGroup;
 			children = (
+				3A2DFD3FEE245285A0EB8A7E /* XopcMobile.entitlements */,
 				F2E7221B6EEBF65507E6315B /* App */,
 				A049ED59801AFA1E501CD8DD /* Core */,
 				09922921FC6DFBFAD9610A5D /* Features */,
@@ -313,13 +315,13 @@
 			children = (
 				8FDDA0C2E058A5B28288921F /* ChatImageLoader.swift */,
 				6C6E75BB052D95075AC66B64 /* GatewayClient.swift */,
-				A12B34C56D78E90F12A34B57 /* GatewayPairing.swift */,
 				5A21ADCB00C6EC5E7859AE32 /* GatewayClient+Conversation.swift */,
 				CC3AE6C51A0F9DED9CB7E227 /* GatewayClient+Messaging.swift */,
 				DF04AD3268C6808CA568CBAB /* GatewayClient+Products.swift */,
 				3485BBEEAD9F312B96496FCD /* GatewayClient+TaskEditing.swift */,
 				41B4EF63C8712AA9EE957726 /* GatewayClient+Voice.swift */,
 				AB3272B6C344527204C77174 /* GatewayCommands.swift */,
+				0E928EFA202655C95A0A39C2 /* GatewayPairing.swift */,
 				F0AF08714DC275A149E76AB4 /* NoteMutation.swift */,
 				AA672E8236C1ED26A94B8172 /* ProjectTaskMutation.swift */,
 				5E5F7ECF0D5276CA41446DC4 /* RealtimeRunSocket.swift */,
@@ -633,10 +635,10 @@
 				49A8FAF15003050B34221780 /* GatewayClient+TaskEditing.swift in Sources */,
 				9BC3836E08B47060F01E9735 /* GatewayClient+Voice.swift in Sources */,
 				18B2209050FDA67F7596E881 /* GatewayClient.swift in Sources */,
-				A12B34C56D78E90F12A34B56 /* GatewayPairing.swift in Sources */,
 				F10B6CDD8CB6BB6A7395DFDC /* GatewayCommands.swift in Sources */,
 				0302993FD1FDB80B9B34E311 /* GatewayConfigurationStore.swift in Sources */,
 				699CC30DBBE7B4F2147710D9 /* GatewayModels.swift in Sources */,
+				A2782D63508D91F609C9853D /* GatewayPairing.swift in Sources */,
 				FA4EA63AEACD1C8233385ED5 /* GatewayProfilesView.swift in Sources */,
 				09338A80E2FB99BD1C76D280 /* MarkdownBlocks.swift in Sources */,
 				BA6DB0BE4B57B8B8B89B878B /* MarkdownBodyView.swift in Sources */,
@@ -743,8 +745,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_ENTITLEMENTS = XopcMobile/XopcMobile.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = XopcMobile/Resources/Info.plist;
@@ -754,8 +756,8 @@
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄并发送给助手的图片。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于实时语音、语音助手、语音消息和语音笔记。";
-				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -899,8 +901,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_ENTITLEMENTS = XopcMobile/XopcMobile.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = XopcMobile/Resources/Info.plist;
@@ -910,8 +912,8 @@
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄并发送给助手的图片。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于实时语音、语音助手、语音消息和语音笔记。";
-				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

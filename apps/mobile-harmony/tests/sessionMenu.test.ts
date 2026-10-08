@@ -13,7 +13,7 @@ function setup(status = '') {
   return Object.assign(new Handler(), {
     menuOpen: true, menuItem: { key: 'conversation', status }, pendingMenuAction: '',
     sessions: { busy: false, act: vi.fn(), scheduleDelete: vi.fn(), select: vi.fn() },
-    renameItem: vi.fn(), shareSession: vi.fn(),
+    renameItem: vi.fn(), shareSession: vi.fn(), onDelete: vi.fn(),
   });
 }
 

@@ -149,7 +149,11 @@ struct AssistantView<Dock: View>: View {
         }
         .alert("无法开始语音", isPresented: Binding(
             get: { voiceStartError != nil },
-            set: { if !$0 { voiceStartError = nil } }
+            set: {
+                if !$0 {
+                    voiceStartError = nil
+                }
+            }
         )) {
             Button("好") { voiceStartError = nil }
         } message: {
@@ -379,7 +383,7 @@ struct AssistantView<Dock: View>: View {
                         return
                     }
                     voiceMaterializationIDs.removeValue(forKey: conversation.id)
-                    if selected.isDraft == false && conversation.isDraft {
+                    if selected.isDraft == false, conversation.isDraft {
                         onConversationUpdated(selected)
                     }
                     readAloud.stop()

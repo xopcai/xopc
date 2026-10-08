@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import SwiftUI
 
 struct ProfileView: View {
@@ -240,15 +241,21 @@ private struct UserUnderstandingView: View {
                                            description: Text("你与 xopc 协作时，有用的偏好和信息会出现在这里。"))
                 }
             }
-            if error != nil { Text("内容暂时无法读取，请下拉重试").foregroundStyle(.secondary) }
+            if error != nil {
+                Text("内容暂时无法读取，请下拉重试").foregroundStyle(.secondary)
+            }
         }
         .navigationTitle("关于你")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "搜索理解")
         .task(id: "\(section):\(filter):\(query)") {
             guard section == 1 else { return }
-            if !query.isEmpty { try? await Task.sleep(for: .milliseconds(300)) }
-            if !Task.isCancelled { await loadAssertions() }
+            if !query.isEmpty {
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+            if !Task.isCancelled {
+                await loadAssertions()
+            }
         }
         .refreshable { await loadAssertions() }
         .sheet(isPresented: $editingProfile) {
@@ -301,7 +308,9 @@ private struct GoalEditorView: View {
                     TextField("目标", text: $title)
                     TextField("期望结果", text: $outcome, axis: .vertical).lineLimit(3 ... 6)
                     Toggle("设置完成日期", isOn: $hasDueDate)
-                    if hasDueDate { DatePicker("日期", selection: $dueDate, displayedComponents: .date) }
+                    if hasDueDate {
+                        DatePicker("日期", selection: $dueDate, displayedComponents: .date)
+                    }
                     if goal != nil {
                         Picker("状态", selection: $status) {
                             Text("进行中").tag("active")
@@ -310,7 +319,9 @@ private struct GoalEditorView: View {
                         }
                     }
                 }
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error {
+                    Text(error).foregroundStyle(.red)
+                }
             }
             .navigationTitle(goal == nil ? "添加目标" : "编辑目标")
             .navigationBarTitleDisplayMode(.inline)
@@ -334,7 +345,7 @@ private struct GoalEditorView: View {
                         }
                     }
                     .disabled(busy || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                              || outcome.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        || outcome.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .onAppear {
@@ -375,7 +386,9 @@ private struct ProfileEditorView: View {
                         Text("English").tag("en")
                     }
                 }
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error {
+                    Text(error).foregroundStyle(.red)
+                }
             }
             .navigationTitle("编辑基本信息")
             .toolbar {
@@ -420,8 +433,11 @@ private struct UserAssertionDetailView: View {
         Form {
             if let item {
                 Section("xopc 的理解") {
-                    if editing { TextEditor(text: $statement).frame(minHeight: 160) }
-                    else { Text(item.statement).font(.title3) }
+                    if editing {
+                        TextEditor(text: $statement).frame(minHeight: 160)
+                    } else {
+                        Text(item.statement).font(.title3)
+                    }
                 }
                 Section("依据与范围") {
                     LabeledContent("来源", value: item.sources?.compactMap(\.label).joined(separator: " · ") ?? "系统推断")
@@ -440,8 +456,12 @@ private struct UserAssertionDetailView: View {
                         Button("删除这条理解", role: .destructive) { showDelete = true }
                     }
                 }
-            } else if error == nil { ProgressView() }
-            if let error { Text(error).foregroundStyle(.red) }
+            } else if error == nil {
+                ProgressView()
+            }
+            if let error {
+                Text(error).foregroundStyle(.red)
+            }
         }
         .navigationTitle("理解详情")
         .task { await load() }
@@ -454,6 +474,7 @@ private struct UserAssertionDetailView: View {
         do { item = try await GatewayClient(configuration: configuration).fetchUserAssertion(id: id) }
         catch { self.error = error.localizedDescription }
     }
+
     @MainActor private func save() async {
         do {
             try await GatewayClient(configuration: configuration).updateUserAssertion(id: id, statement: statement)
@@ -462,6 +483,7 @@ private struct UserAssertionDetailView: View {
             await load()
         } catch { self.error = error.localizedDescription }
     }
+
     @MainActor private func remove() async {
         do {
             try await GatewayClient(configuration: configuration).deleteUserAssertion(id: id)

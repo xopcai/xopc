@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import CryptoKit
 import Foundation
 import Security
@@ -13,7 +14,7 @@ struct GatewayPairingInvitation: Codable, Sendable {
     static func parse(_ link: String, allowExpired: Bool = false) throws -> Self {
         let prefix = "https://link.xopc.ai/c#"
         let text = link.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard text.hasPrefix(prefix), text.count <= 16_384,
+        guard text.hasPrefix(prefix), text.count <= 16384,
               let data = Data(base64URL: String(text.dropFirst(prefix.count))), data.count >= 102
         else { throw GatewayPairingError.invalidInvitation }
         let bytes = [UInt8](data)
@@ -25,13 +26,14 @@ struct GatewayPairingInvitation: Codable, Sendable {
         }
         guard try take(1) == [4] else { throw GatewayPairingError.invalidInvitation }
         let pairingID = try uuid(take(16))
-        let secret = Data(try take(32)).base64URLEncodedString()
+        let secret = try Data(take(32)).base64URLEncodedString()
         let gatewayID = try uuid(take(16))
-        let publicKey = Data(try take(32)).base64URLEncodedString()
+        let publicKey = try Data(take(32)).base64URLEncodedString()
         let expiry = try take(4).reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
-        let count = Int(try take(1)[0])
+        let count = try Int(take(1)[0])
         guard (1 ... 8).contains(count),
-              allowExpired || expiry > UInt64(Date().timeIntervalSince1970) else {
+              allowExpired || expiry > UInt64(Date().timeIntervalSince1970)
+        else {
             throw GatewayPairingError.invalidInvitation
         }
         var origins: [URL] = []
@@ -43,7 +45,7 @@ struct GatewayPairingInvitation: Codable, Sendable {
                   url.scheme == "https", url.host != nil,
                   url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
                   url.path.isEmpty || url.path == "/",
-                  url.port.map({ (1 ... 65_535).contains($0) }) ?? true,
+                  url.port.map({ (1 ... 65535).contains($0) }) ?? true,
                   url.absoluteString == string,
                   !origins.contains(url)
             else { throw GatewayPairingError.invalidInvitation }
@@ -107,7 +109,7 @@ private extension Data {
             .replacingOccurrences(of: "_", with: "/")
             .padding(toLength: ((base64URL.count + 3) / 4) * 4, withPad: "=", startingAt: 0)
         self.init(base64Encoded: padded)
-        guard self.base64URLEncodedString() == base64URL else { return nil }
+        guard base64URLEncodedString() == base64URL else { return nil }
     }
 
     func base64URLEncodedString() -> String {
@@ -131,6 +133,7 @@ enum GatewayPairingProof {
 }
 
 @MainActor
+// swiftlint:disable:next type_body_length
 final class GatewayPairingService {
     static let shared = GatewayPairingService()
 
@@ -138,6 +141,7 @@ final class GatewayPairingService {
     private var key: P256.Signing.PrivateKey?
     private var refreshTasks: [String: Task<GatewayPairedConnection?, Error>] = [:]
 
+    // swiftlint:disable:next function_body_length
     func pair(link: String, onCode: @escaping @MainActor (String) -> Void) async throws -> GatewayPairedConnection {
         let normalizedLink = link.trimmingCharacters(in: .whitespacesAndNewlines)
         if let pending = loadJournal(), pending.link != normalizedLink {
@@ -146,7 +150,10 @@ final class GatewayPairingService {
         let saved = loadJournal()
         let invitation = try GatewayPairingInvitation.parse(normalizedLink, allowExpired: saved?.link == normalizedLink)
         if let pin = readSecret("identity:\(invitation.gatewayID)"),
-           pin != invitation.gatewayPublicKey { throw GatewayPairingError.identityMismatch }
+           pin != invitation.gatewayPublicKey
+        {
+            throw GatewayPairingError.identityMismatch
+        }
         let journal: PairingJournal
         if let saved, saved.link == normalizedLink {
             journal = saved
@@ -182,7 +189,7 @@ final class GatewayPairingService {
             onCode(response.request.confirmationCode ?? "")
             try await Task.sleep(for: .milliseconds(1500))
             try Task.checkCancellation()
-            guard Date().timeIntervalSince1970 * 1_000 < Double(response.request.expiresAt) else {
+            guard Date().timeIntervalSince1970 * 1000 < Double(response.request.expiresAt) else {
                 throw GatewayPairingError.expired
             }
             response = try await pairingRequest(
@@ -259,7 +266,7 @@ final class GatewayPairingService {
     }
 
     private func saveJournal(_ journal: PairingJournal) throws {
-        try saveSecret(try JSONEncoder().encode(journal).base64EncodedString(), for: "pairing-journal")
+        try saveSecret(JSONEncoder().encode(journal).base64EncodedString(), for: "pairing-journal")
     }
 
     func save(_ connection: GatewayPairedConnection, profileID: String) throws {
@@ -280,7 +287,9 @@ final class GatewayPairingService {
     }
 
     func refresh(profileID: String) async throws -> GatewayPairedConnection? {
-        if let task = refreshTasks[profileID] { return try await task.value }
+        if let task = refreshTasks[profileID] {
+            return try await task.value
+        }
         let task = Task { try await refreshStoredProfile(profileID: profileID) }
         refreshTasks[profileID] = task
         defer { refreshTasks[profileID] = nil }
@@ -296,7 +305,8 @@ final class GatewayPairingService {
         let attempt: RefreshAttempt
         if let value = readSecret(attemptKey), let data = Data(base64Encoded: value),
            let saved = try? JSONDecoder().decode(RefreshAttempt.self, from: data),
-           saved.refreshToken == stored.refreshToken {
+           saved.refreshToken == stored.refreshToken
+        {
             attempt = saved
         } else {
             attempt = RefreshAttempt(
@@ -304,7 +314,7 @@ final class GatewayPairingService {
                 nextRefreshToken: "xopc_rt_\(UUID().uuidString.lowercased())_\(random(32))",
                 requestID: UUID().uuidString.lowercased()
             )
-            try saveSecret(try JSONEncoder().encode(attempt).base64EncodedString(), for: attemptKey)
+            try saveSecret(JSONEncoder().encode(attempt).base64EncodedString(), for: attemptKey)
         }
         let connection = try await refresh(
             gatewayID: stored.gatewayID, name: stored.name,
@@ -327,7 +337,7 @@ final class GatewayPairingService {
                 let proof: ProbeProof = try verify(envelope, publicKey: invitation.gatewayPublicKey)
                 guard proof.gatewayId == invitation.gatewayID,
                       proof.pairingId == invitation.pairingID,
-                      abs(Date().timeIntervalSince1970 * 1_000 - Double(proof.issuedAt)) < 300_000
+                      abs(Date().timeIntervalSince1970 * 1000 - Double(proof.issuedAt)) < 300_000
                 else { throw GatewayPairingError.identityMismatch }
                 return origin
             } catch GatewayPairingError.identityMismatch {
@@ -344,7 +354,7 @@ final class GatewayPairingService {
         requestID: String, extra: [String: Any]
     ) async throws -> PairingResponse {
         let nonce = random(24)
-        let timestamp = Int(Date().timeIntervalSince1970 * 1_000)
+        let timestamp = Int(Date().timeIntervalSince1970 * 1000)
         var body: [String: Any] = [
             "gatewayId": invitation.gatewayID, "requestId": requestID,
             "pairingToken": invitation.pairingToken, "timestamp": timestamp, "nonce": nonce
@@ -370,12 +380,12 @@ final class GatewayPairingService {
         let nextToken = nextToken ?? "xopc_rt_\(UUID().uuidString.lowercased())_\(random(32))"
         let requestID = requestID ?? UUID().uuidString.lowercased()
         let refreshNonce = random(24)
-        let timestamp = Int(Date().timeIntervalSince1970 * 1_000)
+        let timestamp = Int(Date().timeIntervalSince1970 * 1000)
         let proof = "xopc-device-refresh-v2\n\(credentialID)\n\(timestamp)\n\(refreshNonce)\n\(requestID)\n\(nextToken)"
-        let body: [String: Any] = [
+        let body: [String: Any] = try [
             "refreshToken": refreshToken, "nextRefreshToken": nextToken,
             "requestId": requestID, "timestamp": timestamp, "nonce": refreshNonce,
-            "signature": try deviceKey().signature(for: Data(proof.utf8)).rawRepresentation.base64URLEncodedString()
+            "signature": deviceKey().signature(for: Data(proof.utf8)).rawRepresentation.base64URLEncodedString()
         ]
         var lastError: Error = GatewayPairingError.noVerifiedRoute
         for origin in routes {
@@ -385,7 +395,7 @@ final class GatewayPairingService {
                 let challenge = try await post(["nonce": nonce], to: origin, path: "/api/gateway-identity/challenge")
                 let route: RouteProof = try verify(challenge, publicKey: publicKey)
                 guard route.purpose == "gateway-route-v1", route.gatewayId == gatewayID,
-                      route.nonce == nonce, Double(route.expiresAt) > Date().timeIntervalSince1970 * 1_000
+                      route.nonce == nonce, Double(route.expiresAt) > Date().timeIntervalSince1970 * 1000
                 else { throw GatewayPairingError.identityMismatch }
                 let envelope = try await post(body, to: origin, path: "/api/device-auth/refresh")
                 let result: RefreshProof = try verify(envelope, publicKey: publicKey)
@@ -397,7 +407,7 @@ final class GatewayPairingService {
                 return GatewayPairedConnection(
                     name: name, gatewayID: gatewayID, baseURL: origin,
                     accessToken: result.tokens.accessToken,
-                    accessTokenExpiresAt: Date(timeIntervalSince1970: Double(result.tokens.accessTokenExpiresAt) / 1_000),
+                    accessTokenExpiresAt: Date(timeIntervalSince1970: Double(result.tokens.accessTokenExpiresAt) / 1000),
                     refreshToken: nextToken, gatewayPublicKey: publicKey, routes: routes
                 )
             } catch GatewayPairingError.identityMismatch {
@@ -432,7 +442,9 @@ final class GatewayPairingService {
             default: break
             }
         }
-        if [401, 403].contains(http.statusCode) { throw GatewayPairingError.authenticationDenied }
+        if [401, 403].contains(http.statusCode) {
+            throw GatewayPairingError.authenticationDenied
+        }
         guard (200 ..< 300).contains(http.statusCode) else { throw GatewayPairingError.noVerifiedRoute }
         return try JSONDecoder().decode(SignedEnvelope.self, from: data)
     }
@@ -454,7 +466,9 @@ final class GatewayPairingService {
     }
 
     private func deviceKey() throws -> P256.Signing.PrivateKey {
-        if let key { return key }
+        if let key {
+            return key
+        }
         let privateKey: P256.Signing.PrivateKey
         if let stored = readSecret("device-key"), let data = Data(base64Encoded: stored) {
             privateKey = try P256.Signing.PrivateKey(rawRepresentation: data)

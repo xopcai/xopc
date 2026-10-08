@@ -21,6 +21,7 @@ private struct UserProfileMutation: Encodable {
     let timezone: String
     let locale: String
 }
+
 private struct MobileUserProfileEnvelope: Decodable { let profile: MobileUserProfile }
 private struct UserGoalScope: Encodable { let type: String }
 private struct UserGoalMutation: Encodable {
@@ -37,10 +38,14 @@ private struct UserGoalMutation: Encodable {
         try container.encode(desiredOutcome, forKey: .desiredOutcome)
         try container.encodeIfPresent(status, forKey: .status)
         try container.encodeIfPresent(scope, forKey: .scope)
-        if status != nil { try container.encode(targetAt, forKey: .targetAt) }
-        else { try container.encodeIfPresent(targetAt, forKey: .targetAt) }
+        if status != nil {
+            try container.encode(targetAt, forKey: .targetAt)
+        } else {
+            try container.encodeIfPresent(targetAt, forKey: .targetAt)
+        }
     }
 }
+
 private struct UserGoalEnvelope: Decodable { let goal: MobileUserGoal }
 private struct UserStatementMutation: Encodable { let statement: String }
 private struct UserMutationResult: Decodable {}
@@ -457,8 +462,12 @@ extension GatewayClient {
             URLQueryItem(name: "limit", value: "20"),
             URLQueryItem(name: "filter", value: filter)
         ]
-        if !query.isEmpty { items.append(URLQueryItem(name: "q", value: query)) }
-        if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }
+        if !query.isEmpty {
+            items.append(URLQueryItem(name: "q", value: query))
+        }
+        if let cursor {
+            items.append(URLQueryItem(name: "cursor", value: cursor))
+        }
         return try await request(path: "/api/user-model/assertions", queryItems: items)
     }
 

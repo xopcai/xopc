@@ -84,7 +84,7 @@ private struct ShareCenterView: View {
                     }
                 }
                 .swipeActions {
-                    if !share.revoked && !share.expired {
+                    if !share.revoked, !share.expired {
                         Button("撤销", role: .destructive) { Task { await revoke(share) } }
                         Menu("延长") {
                             ForEach([1, 3, 7], id: \.self) { days in
@@ -95,7 +95,7 @@ private struct ShareCenterView: View {
                     }
                 }
             }
-            if visibleShares.isEmpty && error == nil {
+            if visibleShares.isEmpty, error == nil {
                 ContentUnavailableView("暂无分享", systemImage: "square.and.arrow.up")
             }
         }
@@ -115,12 +115,14 @@ private struct ShareCenterView: View {
             error = nil
         } catch { self.error = error.localizedDescription }
     }
+
     @MainActor private func revoke(_ share: MobileShare) async {
         do {
             try await GatewayClient(configuration: configuration).revokeShare(id: share.id)
             await load()
         } catch { self.error = error.localizedDescription }
     }
+
     @MainActor private func extend(_ share: MobileShare, days: Int) async {
         do {
             try await GatewayClient(configuration: configuration).extendShare(id: share.id, days: days)

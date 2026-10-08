@@ -1,6 +1,7 @@
 import AVFoundation
 import SwiftUI
 
+// swiftlint:disable:next type_body_length
 struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var appState = AppState()
@@ -167,7 +168,7 @@ struct AppRootView: View {
         }
     }
 
-    private func secondaryTab<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+    private func secondaryTab(@ViewBuilder content: () -> some View) -> some View {
         ZStack(alignment: .bottom) {
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -403,6 +404,7 @@ struct LoopiIcon: View {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func runMotion() async {
         pose = LoopiPose()
         guard motionActive else { return }
@@ -422,18 +424,18 @@ struct LoopiIcon: View {
             move(to: LoopiPose(lift: -5, eyeOpen: 0.25), duration: 0.16)
             guard await pause(450) else { return }
             move(to: LoopiPose(), duration: 0.36)
-            guard await pause(1_650) else { return }
-        } else if !(await pause(120)) {
+            guard await pause(1650) else { return }
+        } else if await !pause(120) {
             return
         }
 
         while !Task.isCancelled {
             move(to: LoopiPose(lift: -4, ringAngle: -1.2, gaze: .random(in: -2.5 ... 2.5)), duration: 1.2)
-            guard await pause(1_400) else { return }
+            guard await pause(1400) else { return }
             move(to: LoopiPose(eyeOpen: 0.12), duration: 0.11)
             guard await pause(140) else { return }
             move(to: LoopiPose(), duration: 0.18)
-            guard await pause(Int.random(in: 1_860 ... 4_160)) else { return }
+            guard await pause(Int.random(in: 1860 ... 4160)) else { return }
         }
     }
 }

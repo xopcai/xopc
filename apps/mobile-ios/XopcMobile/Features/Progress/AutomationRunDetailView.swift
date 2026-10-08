@@ -1,5 +1,6 @@
 import SwiftUI
 
+// swiftlint:disable:next type_body_length
 struct AutomationRunDetailView: View {
     let configuration: GatewayConfiguration
     let runID: String

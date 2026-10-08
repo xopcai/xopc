@@ -136,11 +136,10 @@ struct FilesView: View {
         do {
             let client = GatewayClient(configuration: configuration)
             if search.isEmpty {
-                let loadedSpace: FileSpace
-                if let initialSpace {
-                    loadedSpace = initialSpace
+                let loadedSpace: FileSpace = if let initialSpace {
+                    initialSpace
                 } else {
-                    loadedSpace = try await client.fetchDefaultFileSpace()
+                    try await client.fetchDefaultFileSpace()
                 }
                 space = loadedSpace
                 items = try await client.fetchFiles(spaceID: loadedSpace.id)

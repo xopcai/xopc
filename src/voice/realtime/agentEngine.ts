@@ -40,6 +40,7 @@ interface ActiveVoiceResponse {
   firstTextSeen: boolean;
   awaitingClarification: boolean;
   taskId?: string;
+  taskDone: boolean;
   pcm: PcmFrameBuffer;
 }
 
@@ -83,8 +84,8 @@ export function createAgentVoiceEngine(options: {
     send('turn.decision', { turnId, disposition: decision.disposition, confidence: decision.confidence, source: decision.source, committed: true });
     send('turn.committed', { turnId });
     if (queuedTurns >= 8) {
-      send('session.error', { code: 'INPUT_BACKPRESSURE', message: 'Too many queued voice turns', recoverable: false });
-      void options.onClose('input_backpressure', true);
+      log.warn({ sessionId: claim.sessionId, queuedTurns, turnId }, 'Realtime voice turn dropped because the input queue is full');
+      send('session.error', { code: 'INPUT_BACKPRESSURE', message: 'Too many queued voice turns; please repeat the last request', recoverable: true });
       return;
     }
     queuedTurns += 1;
@@ -271,6 +272,7 @@ export function createAgentVoiceEngine(options: {
       startedAt: Date.now(),
       firstTextSeen: false,
       awaitingClarification: false,
+      taskDone: false,
       pcm: new PcmFrameBuffer(),
     };
     const taskUpdateExposed = () => Boolean(updateClientMessageId && response.text.trim());
@@ -316,7 +318,10 @@ export function createAgentVoiceEngine(options: {
         }
         if (event.type === 'run_end' || event.type === 'stream_end') {
           const status = event.payload?.status;
-          send('task.done', { taskId: task.taskId, status: status === 'cancelled' ? 'cancelled' : status === 'suspended' ? 'suspended' : status === 'error' ? 'failed' : 'completed' });
+          if (!response.taskDone) {
+            response.taskDone = true;
+            send('task.done', { taskId: task.taskId, status: status === 'cancelled' ? 'cancelled' : status === 'suspended' ? 'suspended' : status === 'error' ? 'failed' : 'completed' });
+          }
         }
         if (event.type === 'clarify_request' && typeof event.payload?.requestId === 'string' && typeof event.payload?.question === 'string') {
           response.awaitingClarification = true;
@@ -372,6 +377,10 @@ export function createAgentVoiceEngine(options: {
       if (!updateClientMessageId) {
         send('session.error', { code: 'RESPONSE_FAILED', message: 'Voice response failed', recoverable: true });
       }
+      if (response.taskId && !response.taskDone) {
+        response.taskDone = true;
+        send('task.done', { taskId: response.taskId, status: 'failed' });
+      }
       if (response.audioStarted) send('response.audio.done', { responseId: response.id });
       send('response.done', {
         responseId: response.id,
@@ -407,9 +416,9 @@ export function createAgentVoiceEngine(options: {
   }
 
   function bufferFinal(utteranceId: string, text: string): void {
-    try { turn.final(utteranceId, text); } catch {
-      send('session.error', { code: 'INPUT_BACKPRESSURE', message: 'Voice turn input limit reached', recoverable: false });
-      void options.onClose('input_backpressure', true);
+    try { turn.final(utteranceId, text); } catch (error) {
+      log.warn({ err: error, sessionId: claim.sessionId, utteranceId }, 'Realtime voice turn exceeded the input limit');
+      send('session.error', { code: 'INPUT_BACKPRESSURE', message: 'Voice turn input limit reached; please repeat the request', recoverable: true });
     }
   }
 

@@ -8,6 +8,8 @@ import { appSettings } from '../service/settings';
 import { XopcShareResult } from '../model/share';
 import { shareService } from '../service/shareService';
 import { XopcShareResultView } from './ShareResultView';
+import { XopcPersonalAgentRecord } from '../model/personalAgent';
+import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 
 interface XopcSessionDisplayRow {
   key: string;
@@ -134,11 +136,14 @@ export struct XopcSessionsView {
   @Param bottomInset: number = 0;
   @Param activePage: boolean = true;
   @Param currentId: string = '';
+  @Param personalAgent: XopcPersonalAgentRecord | null = null;
+  @Param personalBusy: boolean = false;
   @Event onExit: () => void = (): void => {};
   @Event onOpen: (id: string) => void = (_id: string): void => {};
   @Event onNew: (id: string) => void = (_id: string): void => {};
   @Event onDelete: (id: string) => void = (_id: string): void => {};
   @Event onUndoDelete: (id: string) => void = (_id: string): void => {};
+  @Event onOpenPersonal: () => void = (): void => {};
   @Local sessions: XopcSessionsViewModel = new XopcSessionsViewModel();
   @Local searchOpen: boolean = true;
   @Local expandedTaskParents: string[] = [];
@@ -399,6 +404,29 @@ export struct XopcSessionsView {
               .onClick(async (): Promise<void> => { await this.createConversation(); })
           }
         }.width('100%').padding({ left: this.embedded ? 20 : 12, right: 12, top: 12, bottom: 12 })
+        if (this.embedded && !this.sessions.selecting) {
+          Button({ type: ButtonType.Normal }) {
+            Row({ space: 14 }) {
+              XopcPersonalAgentAvatar({ extent: 54, activePage: this.activePage,
+                agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi' })
+              Column({ space: 5 }) {
+                Text(this.personalAgent?.state === 'ready'
+                  ? $r('app.string.personal_chat_resume_title', this.personalAgent.displayName)
+                  : $r('app.string.personal_chat_entry_title')).fontSize(16).fontWeight(FontWeight.Medium)
+                  .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                Text(this.personalAgent?.state === 'ready' ? $r('app.string.personal_chat_resume_subtitle')
+                  : $r('app.string.personal_chat_entry_subtitle')).fontSize(12).lineHeight(18)
+                  .fontColor(this.colors.secondary).maxLines(2)
+              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+              SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(17).fontColor([this.colors.accent])
+            }.width('100%').padding({ left: 18, right: 16, top: 14, bottom: 14 })
+          }.id('sessions-personal-ai-entry').width('calc(100% - 40vp)').padding(0).borderRadius(22)
+            .backgroundColor(this.colors.accentSoft).margin({ left: 20, right: 20, bottom: 12 })
+            .accessibilityText(this.personalAgent?.state === 'ready'
+              ? $r('app.string.personal_chat_resume_title', this.personalAgent.displayName)
+              : $r('app.string.personal_chat_entry_title'))
+            .enabled(!this.personalBusy).onClick((): void => { this.onOpenPersonal(); })
+        }
         if (this.searchOpen && !this.sessions.selecting) {
           Row({ space: 4 }) {
             TextInput({ text: this.sessions.search, placeholder: $r('app.string.sessions_search') }).id('sessions-search')

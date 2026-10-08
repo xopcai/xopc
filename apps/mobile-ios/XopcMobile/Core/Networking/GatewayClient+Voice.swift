@@ -51,7 +51,8 @@ extension GatewayClient {
         )
         guard envelope.isSuccessful, let result = envelope.payload,
               result.receipt.conversationId == conversation.id,
-              result.receipt.lifecycle == "ready" else {
+              result.receipt.lifecycle == "ready"
+        else {
             throw GatewayClientError.server(envelope.error?.message ?? "语音会话尚未准备好，请重试")
         }
         return conversation.materialized(transcriptId: result.receipt.transcriptId)
@@ -68,7 +69,7 @@ extension GatewayClient {
         }
         body.append(Data("--\(boundary)--\r\n".utf8))
 
-        var request = URLRequest(url: try makeURL(path: "/api/voice/transcriptions", queryItems: []))
+        var request = try URLRequest(url: makeURL(path: "/api/voice/transcriptions", queryItems: []))
         request.httpMethod = "POST"
         request.httpBody = body
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -93,7 +94,8 @@ extension GatewayClient {
             throw GatewayClientError.http(statusCode: httpResponse.statusCode, message: envelope.error?.message)
         }
         guard envelope.isSuccessful, let text = envelope.payload?.text.trimmingCharacters(in: .whitespacesAndNewlines),
-              !text.isEmpty else {
+              !text.isEmpty
+        else {
             throw GatewayClientError.server(envelope.error?.message ?? "没有识别出文字，请重试或发送语音")
         }
         return text

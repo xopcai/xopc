@@ -6,6 +6,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 
 export interface XopcVoiceAudioCallbacks {
   onInput: (bytes: Uint8Array) => void;
+  onBuffered: (responseId: string, milliseconds: number) => void;
   onPlayed: (responseId: string, milliseconds: number) => void;
   onRoute: (name: string) => void;
   onFailure: (reason: string) => void;
@@ -26,6 +27,7 @@ export class XopcVoiceCallAudio {
   private playbackTimer: number = -1;
   private frameBase: number = 0;
   private lastFramePosition: number = 0;
+  private playbackPositionAvailable: boolean = true;
   private playback: Promise<void> = Promise.resolve();
   private context?: common.UIAbilityContext;
   private session?: avSession.AVSession;
@@ -133,8 +135,11 @@ export class XopcVoiceCallAudio {
       if (generation !== this.generation || playbackGeneration !== this.playbackGeneration || !renderer) return;
       if (this.responseId !== responseId) {
         this.responseId = responseId; this.playedMs = 0; this.writtenMs = 0;
-        this.frameBase = renderer.getAudioTimestampInfoSync().framePos;
-        this.lastFramePosition = this.frameBase;
+        this.playbackPositionAvailable = true;
+        try {
+          this.frameBase = renderer.getAudioTimestampInfoSync().framePos;
+          this.lastFramePosition = this.frameBase;
+        } catch (_error) { this.playbackPositionAvailable = false; }
       }
       let offset = 0;
       while (offset < copy.byteLength) {
@@ -145,7 +150,9 @@ export class XopcVoiceCallAudio {
         offset += written;
         if (generation !== this.generation || playbackGeneration !== this.playbackGeneration) return;
         this.writtenMs += written / 48;
-        this.updatePlayed(renderer, responseId);
+        this.callbacks?.onBuffered(responseId, Math.floor(this.writtenMs));
+        try { this.updatePlayed(renderer, responseId); }
+        catch (_error) { this.playbackPositionAvailable = false; this.clearPlaybackTimer(); }
       }
       this.startPlaybackTimer(generation, playbackGeneration);
     }).catch((error: Error): void => {
@@ -156,19 +163,44 @@ export class XopcVoiceCallAudio {
     });
   }
 
+  finish(responseId: string): void {
+    const generation = this.generation;
+    const playbackGeneration = this.playbackGeneration;
+    void this.playback.then(async (): Promise<void> => {
+      const renderer = this.renderer;
+      if (generation !== this.generation || playbackGeneration !== this.playbackGeneration || !renderer || this.responseId !== responseId) return;
+      let timer: number = -1;
+      try {
+        await Promise.race<void>([renderer.drain(), new Promise<void>((_resolve, reject): void => {
+          timer = setTimeout((): void => reject(new Error('Voice playback drain timed out')), 15_000);
+        })]);
+      } finally { if (timer !== -1) clearTimeout(timer); }
+      if (generation !== this.generation || playbackGeneration !== this.playbackGeneration || this.responseId !== responseId) return;
+      this.clearPlaybackTimer();
+      this.playedMs = Math.floor(this.writtenMs);
+      this.callbacks?.onPlayed(responseId, this.playedMs);
+    }).catch((error: Error): void => {
+      if (generation === this.generation && playbackGeneration === this.playbackGeneration) {
+        hilog.warn(0x0000, 'XopcVoice', 'Voice playback drain failed: %{public}s', error.message);
+        this.callbacks?.onFailure('PLAYBACK_FAILED');
+      }
+    });
+  }
+
   private startPlaybackTimer(generation: number, playbackGeneration: number): void {
-    if (this.playbackTimer !== -1) return;
+    if (this.playbackTimer !== -1 || !this.playbackPositionAvailable) return;
     this.playbackTimer = setInterval((): void => {
       const renderer = this.renderer;
       if (generation !== this.generation || playbackGeneration !== this.playbackGeneration || !renderer || !this.responseId) {
         this.clearPlaybackTimer(); return;
       }
       try { this.updatePlayed(renderer, this.responseId); }
-      catch (error) { this.clearPlaybackTimer(); this.callbacks?.onFailure('PLAYBACK_FAILED'); }
+      catch (_error) { this.playbackPositionAvailable = false; this.clearPlaybackTimer(); }
     }, 40);
   }
 
   private updatePlayed(renderer: audio.AudioRenderer, responseId: string): void {
+    if (!this.playbackPositionAvailable) return;
     const framePosition = renderer.getAudioTimestampInfoSync().framePos;
     if (framePosition < this.lastFramePosition) this.frameBase -= this.lastFramePosition;
     this.lastFramePosition = framePosition;

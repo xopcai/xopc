@@ -7,8 +7,8 @@ export class XopcLayoutState {
   dismissChatOverlay?: () => boolean;
   dismissTabNavigation?: () => boolean;
 
-  isMainDockVisible(_tab: number): boolean {
-    return !this.keyboardVisible && !this.chatActionsOpen;
+  isMainDockVisible(tab: number): boolean {
+    return !this.keyboardVisible && (tab !== 0 || !this.chatActionsOpen);
   }
 }
 export const layoutState: XopcLayoutState = new XopcLayoutState();

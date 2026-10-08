@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AVFoundation
 import SwiftUI
 
@@ -462,7 +463,7 @@ struct GatewayProfileEditor: View {
 private struct GatewayQRScanner: UIViewControllerRepresentable {
     let onScan: (String) -> Void
 
-    func makeUIViewController(context: Context) -> ScannerController {
+    func makeUIViewController(context _: Context) -> ScannerController {
         let controller = ScannerController()
         controller.onScan = onScan
         return controller
@@ -472,7 +473,7 @@ private struct GatewayQRScanner: UIViewControllerRepresentable {
 
     final class ScannerController: UIViewController, @preconcurrency AVCaptureMetadataOutputObjectsDelegate {
         var onScan: ((String) -> Void)?
-        nonisolated(unsafe) private let session = AVCaptureSession()
+        private nonisolated(unsafe) let session = AVCaptureSession()
         private var didScan = false
 
         override func viewDidLoad() {

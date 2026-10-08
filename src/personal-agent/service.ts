@@ -8,7 +8,6 @@ import { getModelThinking } from '../providers/model-thinking.js';
 import { createConversation } from '../storage/sqlite/conversation-repository.js';
 import { getSessionMetadata, patchSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { setSessionConfig } from '../storage/sqlite/config-repository.js';
-import type { GatewayService } from '../gateway/service.js';
 import { PERSONAL_MAIN_TOOL_IDS } from './policy.js';
 import { completePersonalOnboarding } from './onboarding.js';
 import {
@@ -21,6 +20,11 @@ export const PersonalPreferencesSchema = ResponsePreferencesSchema;
 export type PersonalPreferences = z.infer<typeof PersonalPreferencesSchema>;
 export const PersonalAppearanceSchema = z.enum(['loopi', 'loopi-curious', 'loopi-care', 'custom']);
 export type PersonalAppearance = z.infer<typeof PersonalAppearanceSchema>;
+
+type PersonalAgentHost = {
+  refreshAgentCatalog(): void;
+  agentService: { evictSessionAgent(conversationId: string): void };
+};
 
 function appearanceEmoji(appearance: PersonalAppearance): string {
   return appearance === 'loopi-curious' ? '◌' : appearance === 'loopi-care' ? '♡' : '◉';
@@ -68,7 +72,7 @@ export function personalInstructions(preferences: PersonalPreferences): string {
   return rules.join('\n');
 }
 
-export async function refreshPersonalDelegationGuidance(service: GatewayService, ownerId: string): Promise<void> {
+export async function refreshPersonalDelegationGuidance(service: PersonalAgentHost, ownerId: string): Promise<void> {
   const repository = new AgentCatalogRepository();
   const agent = repository.get(personalAgentId(ownerId));
   const instructions = agent?.profile?.instructions;
@@ -108,7 +112,7 @@ export function ensurePersonalConversationVisibility(ownerId: string): void {
 }
 
 export function createOrResumePersonalAgent(
-  service: GatewayService,
+  service: PersonalAgentHost,
   ownerId: string,
   requestedModel?: string,
   availableModels: typeof listPersonalModels = listPersonalModels,
@@ -125,7 +129,7 @@ export function createOrResumePersonalAgent(
 }
 
 async function provisionPersonalAgent(
-  service: GatewayService,
+  service: PersonalAgentHost,
   ownerId: string,
   requestedModel?: string,
   availableModels: typeof listPersonalModels = listPersonalModels,
@@ -191,7 +195,7 @@ async function provisionPersonalAgent(
 }
 
 export async function patchPersonalProfile(
-  service: GatewayService,
+  service: PersonalAgentHost,
   ownerId: string,
   revision: number,
   displayName: string,

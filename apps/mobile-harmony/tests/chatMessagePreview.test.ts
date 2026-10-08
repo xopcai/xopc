@@ -25,10 +25,10 @@ describe('chat message previews', () => {
     expect(markdownPreviewBlockLines(long, 0, 8)).toBe(8);
   });
   it('uses a tighter limit for user messages than historical assistant responses', () => {
-    expect(USER_MESSAGE_PREVIEW_LINES).toBe(4);
-    expect(ASSISTANT_MESSAGE_PREVIEW_LINES).toBe(8);
-    expect(chatMessagePreviewLines({ id: 'u', role: 'user', text: 'hello' })).toBe(4);
-    expect(chatMessagePreviewLines({ id: 'a', role: 'assistant', text: 'hello' })).toBe(8);
+    expect(USER_MESSAGE_PREVIEW_LINES).toBe(6);
+    expect(ASSISTANT_MESSAGE_PREVIEW_LINES).toBe(12);
+    expect(chatMessagePreviewLines({ id: 'u', role: 'user', text: 'hello' })).toBe(6);
+    expect(chatMessagePreviewLines({ id: 'a', role: 'assistant', text: 'hello' })).toBe(12);
   });
 
   it('only sends content that exceeds the line budget to the details sheet', () => {

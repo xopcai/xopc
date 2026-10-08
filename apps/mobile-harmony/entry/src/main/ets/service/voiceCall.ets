@@ -85,6 +85,7 @@ export class XopcVoiceCall {
       this.session = session;
       await voiceCallAudio.start(context, target.background, {
         onInput: (bytes: Uint8Array): void => { if (generation === this.generation) this.sendAudio(bytes); },
+        onBuffered: (id: string, milliseconds: number): void => { if (generation === this.generation) this.buffered(id, milliseconds); },
         onPlayed: (id: string, milliseconds: number): void => { if (generation === this.generation) this.played(id, milliseconds); },
         onRoute: (route: string): void => { if (generation === this.generation) this.route = route; },
         onFailure: (reason: string): void => { if (generation === this.generation) { if (reason === 'ended') this.end(); else this.recover(reason); } }
@@ -142,8 +143,13 @@ export class XopcVoiceCall {
   private played(id: string, milliseconds: number): void {
     if (id !== this.responseId) return;
     this.playedMs = milliseconds; this.responseStage = 'speaking';
-    this.transport?.send('response.audio.played', { responseId: id, playedDurationMs: milliseconds });
     if (this.responseDone && milliseconds >= this.receivedMs) this.finishResponse();
+  }
+
+  private buffered(id: string, milliseconds: number): void {
+    if (id !== this.responseId) return;
+    // Ack renderer-owned audio so the server can finish sending; drain still gates the visible reply.
+    this.transport?.send('response.audio.played', { responseId: id, playedDurationMs: milliseconds });
   }
 
   private onEvent(event: XopcVoiceServerEvent): void {
@@ -171,7 +177,8 @@ export class XopcVoiceCall {
     } else if (event.type === 'response.done' && payload.responseId === this.responseId) {
       this.responseDone = true;
       if (!payload.audio && this.assistantText) this.error = 'NO_RESPONSE_AUDIO';
-      if (this.playedMs >= this.receivedMs) this.finishResponse();
+      if (!payload.audio || this.receivedMs === 0) this.finishResponse();
+      else voiceCallAudio.finish(this.responseId);
     } else if (event.type === 'session.error' && payload.recoverable) this.error = payload.code ?? 'SERVICE_UNAVAILABLE';
   }
 

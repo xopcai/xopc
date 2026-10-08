@@ -1190,7 +1190,9 @@ final class ParityAcceptanceUITests: XCTestCase {
         XCTAssertFalse(app.textFields["访问令牌"].exists)
         app.buttons["取消"].tap()
         let gatewayProfile = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "gateway-profile-")).firstMatch
-        if gatewayProfile.waitForExistence(timeout: 5) { gatewayProfile.tap() }
+        if gatewayProfile.waitForExistence(timeout: 5) {
+            gatewayProfile.tap()
+        }
         let details = app.buttons["详情"].firstMatch
         if details.waitForExistence(timeout: 5) {
             details.tap()
@@ -1714,11 +1716,12 @@ final class ParityAcceptanceUITests: XCTestCase {
 
 @MainActor
 final class GatewayPairingE2EUITests: XCTestCase {
+    // swiftlint:disable:next function_body_length
     func testPairsWithLocalGateway() async throws {
         guard let token = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_TOKEN"], !token.isEmpty else {
             throw XCTSkip("A local Gateway token is required")
         }
-        let baseURL = URL(string: "http://127.0.0.1:18790")!
+        let baseURL = try XCTUnwrap(URL(string: "http://127.0.0.1:18790"))
         let created = try await request(baseURL: baseURL, token: token, path: "/api/device-pairing/setups",
                                         method: "POST", body: ["targetKind": "mobile"])
         let setup = try XCTUnwrap(created["setup"] as? [String: Any])
@@ -1747,7 +1750,9 @@ final class GatewayPairingE2EUITests: XCTestCase {
             let status = try await request(baseURL: baseURL, token: token,
                                            path: "/api/device-pairing/setups/\(setupID)")
             pending = status["request"] as? [String: Any]
-            if pending != nil { break }
+            if pending != nil {
+                break
+            }
             let keychainError = app.staticTexts.matching(NSPredicate(
                 format: "label BEGINSWITH %@", "无法保存设备凭据"
             )).firstMatch
@@ -1773,7 +1778,9 @@ final class GatewayPairingE2EUITests: XCTestCase {
             let status = try await request(baseURL: baseURL, token: token,
                                            path: "/api/device-pairing/setups/\(setupID)")
             result = status["request"] as? [String: Any]
-            if result?["status"] as? String == "completed" { break }
+            if result?["status"] as? String == "completed" {
+                break
+            }
             try await Task.sleep(for: .seconds(1))
         }
         XCTAssertEqual(result?["status"] as? String, "completed")
@@ -1789,7 +1796,8 @@ final class GatewayPairingE2EUITests: XCTestCase {
     }
 
     private func request(baseURL: URL, token: String, path: String, method: String = "GET",
-                         body: [String: Any]? = nil) async throws -> [String: Any] {
+                         body: [String: Any]? = nil) async throws -> [String: Any]
+    {
         var request = URLRequest(url: baseURL.appending(path: path))
         request.httpMethod = method
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

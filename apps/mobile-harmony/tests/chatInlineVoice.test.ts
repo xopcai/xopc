@@ -27,6 +27,6 @@ describe('inline user voice messages', () => {
     expect(voiceBubble).not.toContain('chat_preview');
     expect(voiceBubble).not.toContain('download');
     expect(voiceBubble).not.toContain('this.expanded = true');
-    expect(media).toContain('if (!this.inlineVoice && !this.compact)');
+    expect(media).toContain('if (!this.inlineVoice && !this.compact && !this.noteInlineImage)');
   });
 });
