@@ -479,6 +479,10 @@ export class XopcChatViewModel {
   private event(event: XopcEvent): void {
     if (event.topic === 'gateway' || event.topic === 'sessions') {
       const state = event.data as XopcStreamEvent;
+      if (event.event === 'session.task-result' && state.conversationId === this.selectedId) {
+        this.loadHistory(false);
+        return;
+      }
       if (state.conversationId === this.selectedId && (event.event === 'session.input-state'
         || event.event === 'clarification.updated' || event.event === 'session.connection-wait.changed')) {
         this.auxiliaryRevision++;

@@ -6,11 +6,13 @@ import { TaskContextRepository } from './task-context-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
+import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
 
 export class TaskRunCoordinator {
   readonly #evidence: TaskEvidence[] = [];
   readonly #application = new TaskApplicationService();
   readonly #runs = new TaskRunRepository();
+  #hasDeliverables = false;
 
   private constructor(readonly runId: string) {}
 
@@ -82,6 +84,8 @@ export class TaskRunCoordinator {
   }
 
   captureOutcome(outcome: TurnOutcome): void {
+    new TaskResultDeliveryRepository().capture(this.runId, outcome);
+    this.#hasDeliverables ||= outcome.deliverables.some(item => item.availability === 'available');
     for (const item of outcome.evidence) {
       if (item.kind !== 'check') continue;
       this.addEvidence({ kind: 'test', title: item.label,
@@ -102,12 +106,14 @@ export class TaskRunCoordinator {
     const hasAssistantResult = Boolean(input.assistantText?.trim() && input.assistantText.trim() !== 'NO_REPLY');
     const hasBoardResult = new TaskCollaborationRepository().recent(run.taskId, undefined, 20)
       .some((entry) => entry.taskRunId === run.id && entry.kind === 'result');
-    const emptySuccess = input.status === 'succeeded' && !hasAssistantResult && !hasBoardResult && this.#evidence.length === 0;
+    const emptySuccess = input.status === 'succeeded' && !hasAssistantResult && !hasBoardResult
+      && !this.#hasDeliverables && this.#evidence.length === 0;
     const status = emptySuccess ? 'failed' : input.status;
     const summary = emptySuccess ? 'Agent run returned no result or evidence' : input.summary;
     this.#application.completeRun({
       runId: run.id,
       expectedRunVersion: run.version,
+      resultText: input.assistantText,
       receipt: {
         status,
         summary,

@@ -1,4 +1,4 @@
-import { isUserTurnDocument, parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
+import { isUserTurnDocument, parseTaskResultDelivery, parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
 
 import type {
   Message,
@@ -121,6 +121,7 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
     // connection/clarification resumes). The user row, not runId, is the
     // conversation bubble boundary.
     if (prev?.role === 'assistant'
+      && !prev.taskResultDelivery && !m.taskResultDelivery
       && !(m.startsNewBubble && prev.turnId !== m.turnId)) {
       prev.content = mergeAssistantContentFragments(prev.content, m.content);
       if (m.timestamp != null) prev.timestamp = m.timestamp;
@@ -392,6 +393,7 @@ function buildAssistantMessage(m: WireMessage): Message {
   const content = mergeAssistantContent(m);
   appendReviewFromMetadata(content, m.metadata);
   const outcome = parseTurnOutcome(asRecord(m.metadata)?.turnOutcome);
+  const taskResultDelivery = parseTaskResultDelivery(asRecord(m.metadata)?.taskResultDelivery);
   return {
     role: 'assistant',
     ...(m.turnId ? { turnId: m.turnId } : {}),
@@ -399,6 +401,7 @@ function buildAssistantMessage(m: WireMessage): Message {
     content,
     attachments: wireAttachmentsFromMessage(m),
     ...(outcome ? { outcome } : {}),
+    ...(taskResultDelivery ? { taskResultDelivery } : {}),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     usage: m.usage as Message['usage'],
   };

@@ -83,6 +83,11 @@ struct AssistantView<Dock: View>: View {
         )) {
             await state.loadConversation(conversation, using: GatewayClient(configuration: configuration))
         }
+        .task(id: TaskResultObservationKey(configuration: configuration, conversationID: conversation?.id,
+                                          isActive: isActive)) {
+            guard isActive, let conversation, !conversation.isDraft else { return }
+            await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
+        }
         .onChange(of: conversation?.id) {
             readAloud.stop()
             assistantAudio.stop()
@@ -226,6 +231,7 @@ struct AssistantView<Dock: View>: View {
                         }
                         clarificationCard
                         queueCard
+                        personalConnectionCard
                         welcome
                     }
                     .padding()
@@ -256,6 +262,7 @@ struct AssistantView<Dock: View>: View {
                 }
                 clarificationCard
                 queueCard
+                personalConnectionCard
                 ForEach(state.messages) { message in
                     MessageBubble(
                         message: message,
@@ -724,7 +731,20 @@ private struct ConversationLoadKey: Equatable {
     let isDraft: Bool?
 }
 
+private struct TaskResultObservationKey: Equatable {
+    let configuration: GatewayConfiguration
+    let conversationID: String?
+    let isActive: Bool
+}
+
 private extension AssistantView {
+    @ViewBuilder
+    var personalConnectionCard: some View {
+        if isPersonalConversation, let conversation, !conversation.isDraft {
+            PersonalConnectionCard(configuration: configuration, conversationID: conversation.id)
+        }
+    }
+
     @ViewBuilder
     var queueCard: some View {
         if !state.pendingInputs.isEmpty || state.queueError != nil, let conversation {

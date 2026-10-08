@@ -17,6 +17,10 @@ import { getInstalledConnectorDefinition, listConnectorInstances } from './insta
 import { getConnectorAccount } from '../storage/sqlite/connector-account-repository.js';
 import { canAccessConnectorAccount, currentAccountConnections } from './account-access.js';
 import { createLogger } from '../utils/logger.js';
+import { drainPersonalRequestContinuations, drainPersonalRequestResults } from '../personal-agent/request-delivery.js';
+import { resolvePersonalRequestConnection } from '../personal-agent/request-service.js';
+import { cancelPersonalRequest } from '../personal-agent/request-service.js';
+import { personalRequestForWait } from '../personal-agent/request-repository.js';
 import { getConfiguredComposioAuthConfigs, scopeForComposioAction, isComposioActionAllowedByCatalog } from './composio.js';
 import { ComposioSessionsAdapter } from './composio-sessions.js';
 import { connectorPrincipalForSession } from './principal.js';
@@ -41,18 +45,29 @@ function isConnectorNeed(need: ConnectionNeed): need is ConnectionNeed & { targe
 export class ConnectionRecoveryService {
   private readonly busy = new Set<string>();
   private timer?: ReturnType<typeof setInterval>;
+  private deliveryTimer?: ReturnType<typeof setInterval>;
   private polling = false;
   start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => { void this.poll(); }, 5_000);
     this.timer.unref();
+    this.deliveryTimer = setInterval(() => {
+      drainPersonalRequestContinuations(this.deps.onPersonalRequestDelivered);
+      drainPersonalRequestResults(this.deps.onPersonalRequestDelivered);
+    }, 1_000);
+    this.deliveryTimer.unref();
     void this.poll();
   }
-  stop(): void { clearInterval(this.timer); this.timer = undefined; }
+  stop(): void {
+    clearInterval(this.timer); this.timer = undefined;
+    clearInterval(this.deliveryTimer); this.deliveryTimer = undefined;
+  }
   async poll(): Promise<void> {
     if (this.polling) return;
     this.polling = true;
     try {
+      drainPersonalRequestContinuations(this.deps.onPersonalRequestDelivered);
+      drainPersonalRequestResults(this.deps.onPersonalRequestDelivered);
       for (const wait of listConnectionWaitsToCheck()) {
         if (this.busy.has(wait.conversationId)) continue;
         await this.act(wait.conversationId, { waitId: wait.id, expectedTranscriptId: wait.transcriptId,
@@ -65,6 +80,7 @@ export class ConnectionRecoveryService {
     getConfig: () => Config;
     saveConfig: (config: Config) => Promise<{ saved: boolean; error?: string }>;
     drain: (conversationId: string) => void;
+    onPersonalRequestDelivered?: (conversationId: string, requestId: string) => void;
     adapter?: ComposioSessionsAdapter;
     pluginMcp?: PluginMcpRecovery;
   }) {}
@@ -306,7 +322,9 @@ export class ConnectionRecoveryService {
       if (wait.status !== 'open' || wait.version !== action.expectedVersion) throw new Error('WAIT_CHANGED');
       wait = { ...wait, lastAction: { key: action.idempotencyKey, action: action.action } };
       if (action.action === 'cancel') {
-        cancelConnectionObjective(conversationId);
+        const request = personalRequestForWait(wait.id);
+        if (request) cancelPersonalRequest(request);
+        else cancelConnectionObjective(conversationId);
       } else if (action.action === 'replace_source') {
         const need = wait.needs.find(need => need.key === action.needKey);
         if (!need || !this.view(wait).needs.find(item => item.key === need.key)?.alternatives?.some(item => item.candidateRef === action.candidateRef)) throw new Error('Unsupported replacement.');
@@ -316,7 +334,7 @@ export class ConnectionRecoveryService {
           objectiveRevision: wait.objectiveRevision + 1, intent: undefined,
         }, wait.version);
       } else if (action.action === 'skip') {
-        queueConnectionResolution({ ...wait, intent: undefined }, 'skipped');
+        queueConnectionResolution({ ...wait, intent: undefined }, 'skipped', resolvePersonalRequestConnection);
         this.deps.drain(conversationId);
       } else if (action.action === 'install_complete') {
         const need = wait.needs.find(need => need.key === action.needKey);
@@ -340,7 +358,7 @@ export class ConnectionRecoveryService {
           : item), intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } }, wait.version);
         const view = this.view(wait);
         if (view.phase === 'ready') {
-          queueConnectionResolution({ ...wait, needs: view.needs.map(({ phase: _phase, accounts: _accounts, reason: _reason, alternatives: _alternatives, ...item }) => item) }, 'continued');
+          queueConnectionResolution({ ...wait, needs: view.needs.map(({ phase: _phase, accounts: _accounts, reason: _reason, alternatives: _alternatives, ...item }) => item) }, 'continued', resolvePersonalRequestConnection);
           log.info({ conversationId, waitId: wait.id, objectiveRevision: wait.objectiveRevision, phase: 'resume_queued' }, 'Connector installation continuation queued');
           this.deps.drain(conversationId);
         }
@@ -458,11 +476,12 @@ export class ConnectionRecoveryService {
         const view = this.view(wait, verified);
         const canResume = view.phase === 'ready' && wait.intent?.objectiveRevision === wait.objectiveRevision && wait.intent.validUntil > Date.now();
         if (canResume) {
-          wait = queueConnectionResolution({ ...wait, needs: view.needs.map(({ phase: _phase, accounts: _accounts, reason: _reason, alternatives: _alternatives, ...need }) => need) }, 'continued');
+          wait = queueConnectionResolution({ ...wait, needs: view.needs.map(({ phase: _phase, accounts: _accounts, reason: _reason, alternatives: _alternatives, ...need }) => need) }, 'continued', resolvePersonalRequestConnection);
           log.info({ conversationId, waitId: wait.id, objectiveRevision: wait.objectiveRevision, phase: 'resume_queued' }, 'Connection continuation queued');
           this.deps.drain(conversationId);
         }
       }
+      drainPersonalRequestContinuations(this.deps.onPersonalRequestDelivered);
       publishConnectionWait(conversationId);
       return { snapshot: this.snapshot(conversationId) };
     } catch (error) {

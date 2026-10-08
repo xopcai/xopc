@@ -5,6 +5,8 @@ import type { SessionDiscoveryQuery } from '@xopcai/gateway-contract';
 import type { TranscriptStoredRow } from './session-context-for-llm.js';
 
 export interface Message {
+  turnId?: string;
+  startsNewBubble?: boolean;
   role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
   /** Plain string or structured content blocks (tool calls, multimodal). */
   content: string | unknown[];

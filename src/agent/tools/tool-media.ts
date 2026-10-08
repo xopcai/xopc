@@ -1,11 +1,10 @@
 import { basename } from 'node:path';
 
 import { sniffImageMimeType } from '../image/generation/image-assets.js';
-import { mimeTypeFromMediaPath, saveMediaBuffer } from '../../media/store.js';
+import { MEDIA_ARTIFACT_MAX_BYTES, mimeTypeFromMediaPath, saveMediaBuffer } from '../../media/store.js';
 import type { MediaRef } from '../../media/types.js';
 
 export type ToolMediaType = 'photo' | 'video' | 'audio' | 'document';
-const MAX_TOOL_MEDIA_BYTES = 50 * 1024 * 1024;
 
 function hasImageMagic(buffer: Buffer): boolean {
   if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
@@ -51,7 +50,7 @@ export async function persistToolMedia(params: {
     bucket: 'outbound',
     contentType: mimeType,
     originalFilename: name,
-    maxBytes: MAX_TOOL_MEDIA_BYTES,
+    maxBytes: MEDIA_ARTIFACT_MAX_BYTES,
   });
   return {
     id: saved.id,

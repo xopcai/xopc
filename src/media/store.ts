@@ -8,6 +8,7 @@ import type { MediaBucket, SavedMedia } from './types.js';
 
 /** Default per-file cap for inbound staging (5 MiB). */
 export const MEDIA_MAX_BYTES = 5 * 1024 * 1024;
+export const MEDIA_ARTIFACT_MAX_BYTES = 50 * 1024 * 1024;
 
 const MEDIA_DIR_MODE = 0o700;
 const MEDIA_FILE_MODE = 0o644;

@@ -73,6 +73,9 @@ import {
 } from './index.js';
 import { createSessionSearchTool } from './session-search-tool.js';
 import { createPersonalTaskTool } from './personal-task-tool.js';
+import { createPersonalRequestTools } from './personal-request-tool.js';
+import { createPersonalRequestConnectionTool, createPersonalRequestResultTool } from './personal-request-result-tool.js';
+import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
 import { createPersonalPreferenceTool } from './personal-preference-tool.js';
 import { getPendingTranscriptUserText } from '../inbound/attachment-pipeline.js';
 import type { MemoryManager } from '../memory/manager.js';
@@ -112,6 +115,7 @@ import { getAgentCapabilityToolNames } from '../capabilities/index.js';
 import { sortToolsForPromptCache } from './cache-stability.js';
 import {
   getSessionMetadata,
+  patchSessionMetadata,
   getSessionTaskPlan,
   isXopcDatabaseOpen,
   setSessionTaskPlan,
@@ -340,7 +344,7 @@ export class AgentToolsFactory {
     const getMemMgr = options?.getMemoryManager ?? this.deps.getMemoryManager;
     const getSkillMgr = options?.getSkillManager;
     const disabled = options?.disabledTools;
-    const allowed = options?.toolAllowlist ? new Set(options.toolAllowlist) : undefined;
+    let allowed = options?.toolAllowlist ? new Set(options.toolAllowlist) : undefined;
     const personalToolsConfigured = Boolean(allowed?.has('personal_task') || allowed?.has('personal_preference'));
 
     const primary = getPrimary?.();
@@ -361,6 +365,20 @@ export class AgentToolsFactory {
     const agentId = options?.agentId;
     const resolvedAgentId = agentId ?? (cfg ? resolveDefaultAgentId() : 'main');
     const currentConversationId = () => options?.conversationId ?? this.deps.getCurrentContext?.()?.conversationId;
+    const executionConversationId = currentConversationId();
+    const personalExecution = executionConversationId ? personalRequestForExecution(executionConversationId) : undefined;
+    const personalExecutionMarker = executionConversationId && isXopcDatabaseOpen()
+      ? getSessionMetadata(executionConversationId)?.customData?.personalReadRequestId : undefined;
+    if (personalExecution && executionConversationId && personalExecutionMarker !== personalExecution.requestId) {
+      const metadata = getSessionMetadata(executionConversationId);
+      patchSessionMetadata(executionConversationId, { customData: { ...metadata?.customData, personalReadRequestId: personalExecution.requestId } });
+    }
+    if (personalExecution || personalExecutionMarker) {
+      allowed = new Set(['xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute']
+        .filter(name => !allowed || allowed.has(name)));
+      allowed.add('personal_request_result');
+      allowed.add('personal_request_connection');
+    }
     const deliveryContext = () => {
       if ((currentConversationId() && getSessionMetadata(currentConversationId()!)?.sessionType === 'heartbeat')) {
         throw new Error('Heartbeat notifications must be returned in the final response for policy-controlled delivery.');
@@ -628,6 +646,7 @@ export class AgentToolsFactory {
             createXopcUseTool(productToolDeps),
             ...(personalToolsConfigured ? [
               createPersonalTaskTool(productToolDeps),
+              ...createPersonalRequestTools(productToolDeps),
               createPersonalPreferenceTool({
                 getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
                 onAgentCatalogMutate: this.deps.onAgentCatalogMutate,
@@ -724,6 +743,7 @@ export class AgentToolsFactory {
           ]
         : []),
       ...optionalTools,
+      ...(personalExecution ? [createPersonalRequestResultTool(currentConversationId), createPersonalRequestConnectionTool(currentConversationId)] : []),
     ];
 
     if (['read_file', 'grep', 'exec_command', 'knowledge_search', 'knowledge_get', 'web_search', 'web_fetch', 'xopc_tool_execute'].some(name => !disabled?.has(name))) {

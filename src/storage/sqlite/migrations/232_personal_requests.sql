@@ -1,0 +1,28 @@
+CREATE TABLE personal_requests (
+  request_id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES sessions(conversation_id) ON DELETE CASCADE,
+  transcript_id TEXT NOT NULL,
+  input_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  objective TEXT NOT NULL,
+  connector_id TEXT NOT NULL,
+  executor_agent_id TEXT NOT NULL,
+  account_id TEXT,
+  parameters_json TEXT NOT NULL,
+  state TEXT NOT NULL CHECK(state IN ('preflighting','waiting_connection','queued','running','completed','failed','cancelled')),
+  connection_wait_id TEXT UNIQUE,
+  task_id TEXT UNIQUE REFERENCES tasks(task_id) ON DELETE SET NULL,
+  result_json TEXT,
+  result_run_id TEXT,
+  delivery_entry_id TEXT,
+  notified_at INTEGER,
+  delivery_attempts INTEGER NOT NULL DEFAULT 0,
+  delivery_next_attempt_at INTEGER NOT NULL DEFAULT 0,
+  delivery_error TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(conversation_id, transcript_id, idempotency_key)
+);
+CREATE INDEX idx_personal_requests_conversation ON personal_requests(conversation_id, created_at);

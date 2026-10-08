@@ -22,6 +22,7 @@ import { TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
 import { TaskCriterionReviewRepository } from './task-criterion-review-repository.js';
+import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
 
 export type TaskApplicationResult =
   | { ok: true; model: TaskReadModel; runId?: string }
@@ -109,6 +110,11 @@ export class TaskApplicationService {
           task.id, task.createdAt, input.originConversationId,
         );
         if (linked.changes !== 1) throw new Error('Task origin conversation not found');
+        db.prepare(`UPDATE task_origin_links SET
+          origin_transcript_id = (SELECT active_transcript_id FROM sessions WHERE conversation_id = ?),
+          request_input_id = (SELECT id FROM session_inputs WHERE conversation_id = ?
+            AND status = 'running' ORDER BY created_at_ms DESC LIMIT 1)
+          WHERE task_id = ?`).run(input.originConversationId, input.originConversationId, task.id);
         db.prepare(`INSERT INTO task_main_agent_links (task_id, agent_id, origin_conversation_id, created_at)
           SELECT ?, agent_id, conversation_id, ? FROM sessions WHERE conversation_id = ?`)
           .run(task.id, task.createdAt, input.originConversationId);
@@ -398,6 +404,7 @@ export class TaskApplicationService {
     terminalCode?: string;
     terminalMessage?: string;
     suppressAttention?: boolean;
+    resultText?: string;
   }): TaskApplicationResult {
     return runSqliteWriteTransaction((db) => {
       const run = this.#runs.get(input.runId);
@@ -437,6 +444,9 @@ export class TaskApplicationService {
         body: input.receipt.summary || (input.receipt.status === 'succeeded' ? 'TaskRun completed' : 'TaskRun failed'),
         idempotencyKey: `task-run-receipt:${run.id}`,
       });
+      if (input.receipt.status === 'succeeded' || input.receipt.status === 'failed') {
+        new TaskResultDeliveryRepository().enqueue(run.id, input.receipt.summary, input.receipt.status, input.resultText);
+      }
       if (input.receipt.status !== 'succeeded') {
         const model = this.#projector.project(task);
         if (!input.suppressAttention) enqueueTaskAttentionRequiredEvent(db, {

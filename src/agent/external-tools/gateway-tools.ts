@@ -7,7 +7,13 @@ import {
   parseStoreConnectorCandidateRef,
   searchStoreConnectorInstallCandidates,
 } from '../../capabilities/store-connector.js';
-import { listConnectorConnections } from '../../storage/sqlite/connector-repository.js';
+import { getConnectorConnection, getConnectorInstallation, listConnectorActionMetadata, listConnectorConnections } from '../../storage/sqlite/connector-repository.js';
+import { getConnectorAccount } from '../../storage/sqlite/connector-account-repository.js';
+import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
+import { isXopcDatabaseOpen } from '../../storage/sqlite/connection.js';
+import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
+import { parseExternalToolRef } from './refs.js';
+import { listConnectorInstances } from '../../connectors/instances.js';
 import { connectionCandidates, resolveConnectionCandidate } from '../../connectors/connection-candidates.js';
 import { parsePluginMcpCandidateRef, resolvePluginMcpConnectionCandidate } from '../../extensions/agent-plugins/connection.js';
 import { connectorPrincipalForSession } from '../../connectors/principal.js';
@@ -111,8 +117,35 @@ export function createExternalToolGatewayTools(
     description: 'Execute one external tool using its exact reference, contract revision, and validated arguments.',
     parameters: ToolExecuteSchema,
     async execute(toolCallId, params, signal, onUpdate) {
+      const conversationId = getContext?.()?.conversationId;
+      const request = conversationId ? personalRequestForExecution(conversationId) : undefined;
+      if (!request && conversationId && isXopcDatabaseOpen() && getSessionMetadata(conversationId)?.customData?.personalReadRequestId) {
+        throw new Error('Personal request is no longer active');
+      }
+      if (request) {
+        if (['cancelled', 'failed', 'completed'].includes(request.state)) throw new Error('Personal request is no longer active');
+        if (!request.accountId || params.arguments?.xopcAccountId !== request.accountId) throw new Error('Use the selected Personal request account');
+        const composio = parseExternalToolRef(params.toolRef, 'composio');
+        const cli = parseExternalToolRef(params.toolRef, 'cli');
+        const config = getConfig?.();
+        const connectorId = composio ? getConnectorInstallation(composio.namespace)?.connectorId
+          : cli && config ? listConnectorInstances(config).find(instance => instance.instanceId === cli.namespace)?.connectorId : undefined;
+        if (connectorId !== request.connectorId) throw new Error('Use only the selected Personal request connector');
+        if (composio && !listConnectorActionMetadata(connectorId).some(action => action.actionId === composio.toolName
+          && action.scope === 'read' && action.curated)) throw new Error('Personal requests permit only curated read operations');
+        const account = getConnectorAccount(request.accountId);
+        const connection = account?.currentConnectionId ? getConnectorConnection(account.currentConnectionId) : undefined;
+        if (!connection || connection.status !== 'active' || (connection.expiresAt && Date.parse(connection.expiresAt) <= Date.now())) {
+          const { requirePersonalWorkerConnection, publishPersonalRequest } = await import('../../personal-agent/request-service.js');
+          const waiting = requirePersonalWorkerConnection(conversationId!);
+          publishPersonalRequest(waiting);
+          return textResult({ status: 'waiting_connection', requestId: request.requestId,
+            instruction: 'Stop this turn. The selected account must be reconnected in the main chat; this Task will resume automatically.' });
+        }
+      }
       const result = await service.execute({
         ...params,
+        ...(request ? { readOnly: true } : {}),
         context: { toolCallId, signal, onUpdate },
       });
       return {

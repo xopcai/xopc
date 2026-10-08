@@ -36,6 +36,40 @@ struct HistoryToolCall: Decodable, Sendable {
 
 struct WireMessageMetadata: Decodable, Sendable {
     let sourceContexts: [SourceContextMetadata]?
+    var turnOutcome: HistoryTurnOutcome? = nil
+}
+
+struct HistoryTurnOutcome: Decodable, Sendable {
+    let deliverables: [HistoryDeliverable]
+}
+
+struct HistoryDeliverable: Decodable, Sendable {
+    let artifactId: String
+    let title: String
+    let kind: String
+    let mimeType: String?
+    let sizeBytes: Int?
+    let availability: String
+    let uri: String?
+    let shareUrl: String?
+
+    var attachment: HistoryAttachment? {
+        guard availability == "available", kind != "site", let uri else { return nil }
+        return HistoryAttachment(mediaID: artifactId, type: kind, name: title, mimeType: mimeType,
+                                 size: sizeBytes, uri: uri, duration: nil, workspaceRelativePath: nil, extractedText: nil)
+    }
+
+    var link: HistoryResultLink? {
+        guard availability == "available", kind == "site", let url = URL(string: shareUrl ?? uri ?? ""),
+              url.scheme == "https", url.user == nil, url.password == nil else { return nil }
+        return HistoryResultLink(id: artifactId, title: title, url: url)
+    }
+}
+
+struct HistoryResultLink: Equatable, Identifiable, Sendable {
+    let id: String
+    let title: String
+    let url: URL
 }
 
 struct SourceContextMetadata: Decodable, Sendable {
@@ -122,6 +156,8 @@ struct TimelineMessage: Equatable, Identifiable, Sendable {
     var details: [TimelineDetail] = []
     var attachments: [HistoryAttachment] = []
     var references: [ContextReference] = []
+    var resultLinks: [HistoryResultLink] = []
+    var unavailableOutputs: [String] = []
 }
 
 struct TimelineDetail: Equatable, Identifiable, Sendable {

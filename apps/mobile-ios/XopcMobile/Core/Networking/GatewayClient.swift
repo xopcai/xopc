@@ -28,9 +28,16 @@ protocol GatewayServing: Sendable {
     func fetchActiveRun(conversationID: String) async throws -> ActiveRun
     func abort(runID: String) async throws
     func streamRun(runID: String) -> AsyncThrowingStream<RunStreamEvent, Error>
+    func streamTaskResults(conversationID: String) -> AsyncThrowingStream<RunStreamEvent, Error>
     func renameConversation(id: String, name: String) async throws
     func mutateConversation(id: String, action: ConversationMutation) async throws
     func deleteConversation(id: String) async throws
+}
+
+extension GatewayServing {
+    func streamTaskResults(conversationID: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
 }
 
 extension GatewayClient {
@@ -261,6 +268,25 @@ struct GatewayClient: GatewayServing, Sendable {
                         clientID: clientID,
                         runID: runID
                     )
+                    try await socket.consume(into: continuation)
+                } catch is CancellationError {
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    func streamTaskResults(conversationID: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let clientID = "ios-results:\(UUID().uuidString.lowercased())"
+                    let ticket = try await issueRealtimeTicket(clientID: clientID)
+                    let socket = RealtimeRunSocket(configuration: configuration, session: session,
+                        ticket: ticket.ticket, clientID: clientID, runID: "", conversationID: conversationID)
                     try await socket.consume(into: continuation)
                 } catch is CancellationError {
                     continuation.finish()
