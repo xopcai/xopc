@@ -236,7 +236,8 @@ struct MessageBubble: View {
                 }
                 ForEach(message.attachments.filter { !$0.isImage }) { attachment in
                     if attachment.isAudio, let conversationID,
-                       attachment.uri != nil || attachment.workspaceRelativePath != nil {
+                       attachment.uri != nil || attachment.workspaceRelativePath != nil
+                    {
                         ChatAudioAttachmentView(
                             attachment: attachment,
                             configuration: configuration,
@@ -253,8 +254,10 @@ struct MessageBubble: View {
             }
         }
     }
+}
 
-    private func referenceAccessibilityLabel(_ reference: ContextReference) -> String {
+private extension MessageBubble {
+    func referenceAccessibilityLabel(_ reference: ContextReference) -> String {
         let format = AppLocalization.string("引用%@：%@", locale: locale)
         return String(
             format: format,
@@ -265,7 +268,7 @@ struct MessageBubble: View {
     }
 
     @MainActor
-    private func saveAsNote() async {
+    func saveAsNote() async {
         guard !isSavingNote else { return }
         isSavingNote = true
         defer { isSavingNote = false }

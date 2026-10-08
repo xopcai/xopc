@@ -141,10 +141,10 @@ struct ConversationsView: View {
                         .font(.headline)
                         .foregroundStyle(.primary)
                     Text(verbatim: personalAgentError ?? (personalAgent?.isReady == true
-                        ? (locale.language.languageCode?.identifier == "zh"
-                            ? "回到你的固定主会话" : "Return to your ongoing conversation")
-                        : (locale.language.languageCode?.identifier == "zh"
-                            ? "保持同一个助手和持续的对话" : "One assistant, one ongoing conversation")))
+                            ? (locale.language.languageCode?.identifier == "zh"
+                                ? "回到你的固定主会话" : "Return to your ongoing conversation")
+                            : (locale.language.languageCode?.identifier == "zh"
+                                ? "保持同一个助手和持续的对话" : "One assistant, one ongoing conversation")))
                         .font(.caption)
                         .foregroundColor(personalAgentError == nil ? .secondary : .red)
                         .multilineTextAlignment(.leading)
@@ -214,14 +214,16 @@ struct ConversationsView: View {
                 Task { await state.loadMore(using: GatewayClient(configuration: configuration)) }
             }
     }
+}
 
-    private func reload() {
+private extension ConversationsView {
+    func reload() {
         Task {
             await state.load(using: GatewayClient(configuration: configuration))
         }
     }
 
-    private var renamePresented: Binding<Bool> {
+    var renamePresented: Binding<Bool> {
         Binding(
             get: { renameTarget != nil },
             set: {
@@ -232,7 +234,7 @@ struct ConversationsView: View {
         )
     }
 
-    private var deletePresented: Binding<Bool> {
+    var deletePresented: Binding<Bool> {
         Binding(
             get: { deleteTarget != nil },
             set: {
@@ -243,7 +245,7 @@ struct ConversationsView: View {
         )
     }
 
-    private func rename() {
+    func rename() {
         guard let target = renameTarget else { return }
         renameTarget = nil
         Task {
@@ -251,19 +253,19 @@ struct ConversationsView: View {
         }
     }
 
-    private func archive(_ conversation: ConversationSummary) {
+    func archive(_ conversation: ConversationSummary) {
         Task {
             await state.archive(conversation, using: GatewayClient(configuration: configuration))
         }
     }
 
-    private func togglePin(_ conversation: ConversationSummary) {
+    func togglePin(_ conversation: ConversationSummary) {
         Task {
             await state.togglePin(conversation, using: GatewayClient(configuration: configuration))
         }
     }
 
-    private func deleteConversation() {
+    func deleteConversation() {
         guard let target = deleteTarget else { return }
         deleteTarget = nil
         Task {

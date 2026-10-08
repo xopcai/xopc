@@ -4,7 +4,9 @@ import SwiftUI
 struct ChatImageGalleryItem: Identifiable {
     let title: String
     let source: String
-    var id: String { source }
+    var id: String {
+        source
+    }
 }
 
 struct ChatImageGalleryView: View {
@@ -112,7 +114,7 @@ struct ChatImageGalleryView: View {
         }
     }
 
-    nonisolated private static func decodedImage(_ data: Data) -> CGImage? {
+    private nonisolated static func decodedImage(_ data: Data) -> CGImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               let info = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = info[kCGImagePropertyPixelWidth] as? Int,

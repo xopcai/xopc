@@ -11,7 +11,9 @@ struct PersonalAgentRecord: Decodable, Equatable, Sendable {
     let voicePreference: PersonalVoicePreference?
     let errorMessage: String?
 
-    var isReady: Bool { state == "ready" }
+    var isReady: Bool {
+        state == "ready"
+    }
 }
 
 struct PersonalVoicePreference: Codable, Equatable, Sendable {
@@ -48,6 +50,12 @@ private struct PersonalProfileUpdate: Encodable {
 struct PersonalVoiceOption: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
+}
+
+struct PersonalVoiceSelection: Sendable {
+    let provider: String
+    let model: String
+    let voices: [PersonalVoiceOption]
 }
 
 private struct PersonalVoiceOptions: Decodable, Sendable {
@@ -99,7 +107,7 @@ extension GatewayClient {
         return updated
     }
 
-    func personalVoiceOptions() async throws -> (provider: String, model: String, voices: [PersonalVoiceOption])? {
+    func personalVoiceOptions() async throws -> PersonalVoiceSelection? {
         let status: PersonalVoiceStatusEnvelope = try await request(path: "/api/voice/realtime/status")
         guard let route = status.payload.tts else { return nil }
         let queryAllowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
@@ -112,7 +120,11 @@ extension GatewayClient {
         guard response.isSuccessful else {
             throw GatewayClientError.server(response.error?.message ?? "无法获取声音列表")
         }
-        return (route.provider, route.model, response.payload?.voices ?? [])
+        return PersonalVoiceSelection(
+            provider: route.provider,
+            model: route.model,
+            voices: response.payload?.voices ?? []
+        )
     }
 }
 

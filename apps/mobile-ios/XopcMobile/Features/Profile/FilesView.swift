@@ -57,7 +57,7 @@ struct FileLibraryView: View {
             async let spacesRequest = client.fetchFileSpaces()
             async let recentRequest = client.fetchRecentFiles()
             spaces = try await spacesRequest
-            recentFiles = (try? await recentRequest) ?? []
+            recentFiles = await (try? recentRequest) ?? []
             error = nil
         } catch is CancellationError {
         } catch {

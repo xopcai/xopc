@@ -116,7 +116,8 @@ struct TaskDetailView: View {
                             }
                         }
                         if let latest = receipts.max(by: { ($0.finalizedAt ?? 0) < ($1.finalizedAt ?? 0) }),
-                           let artifacts = latest.evidence?.filter({ $0.kind == "artifact" }), !artifacts.isEmpty {
+                           let artifacts = latest.evidence?.filter({ $0.kind == "artifact" }), !artifacts.isEmpty
+                        {
                             Section("产出文件") {
                                 ForEach(artifacts, id: \.title) { artifact in
                                     Label(artifact.title, systemImage: "doc")
@@ -210,15 +211,17 @@ struct TaskDetailView: View {
             Button("好", role: .cancel) {}
         } message: { Text(error ?? "未知错误") }
     }
+}
 
+private extension TaskDetailView {
     @MainActor
-    private func load() async {
+    func load() async {
         do { detail = try await GatewayClient(configuration: configuration).fetchTask(id: taskID); error = nil }
         catch { self.error = error.localizedDescription }
     }
 
     @MainActor
-    private func apply(_ command: String, to task: TaskRecord) async {
+    func apply(_ command: String, to task: TaskRecord) async {
         isWorking = true
         defer { isWorking = false }
         do {
@@ -230,7 +233,7 @@ struct TaskDetailView: View {
     }
 
     @MainActor
-    private func openTaskConversation(_ task: TaskRecord) async {
+    func openTaskConversation(_ task: TaskRecord) async {
         guard !isWorking else { return }
         isWorking = true
         defer { isWorking = false }
@@ -243,7 +246,7 @@ struct TaskDetailView: View {
         }
     }
 
-    private func label(for command: String) -> LocalizedStringKey {
+    func label(for command: String) -> LocalizedStringKey {
         switch command {
         case "mark_ready": "设为可开始"
         case "start": "开始执行"
@@ -254,7 +257,7 @@ struct TaskDetailView: View {
         }
     }
 
-    private func label(for status: TaskAcceptanceStatus) -> LocalizedStringKey {
+    func label(for status: TaskAcceptanceStatus) -> LocalizedStringKey {
         switch status {
         case .passed: "已通过"
         case .failed: "未通过"
@@ -262,11 +265,11 @@ struct TaskDetailView: View {
         }
     }
 
-    private func isSupported(_ command: String) -> Bool {
+    func isSupported(_ command: String) -> Bool {
         ["mark_ready", "start", "request_review", "close", "reopen"].contains(command)
     }
 
-    private func availableCommands(for detail: TaskDetailEnvelope) -> [String] {
+    func availableCommands(for detail: TaskDetailEnvelope) -> [String] {
         detail.allowedCommands?.filter {
             isSupported($0)
                 && ($0 != "start" || detail.task.delegateAgentId != nil)
@@ -274,7 +277,7 @@ struct TaskDetailView: View {
         } ?? []
     }
 
-    private func primaryCommand(for detail: TaskDetailEnvelope) -> String? {
+    func primaryCommand(for detail: TaskDetailEnvelope) -> String? {
         let commands = availableCommands(for: detail)
         return ["mark_ready", "start", "request_review", "close", "reopen"].first(where: commands.contains)
     }
@@ -284,11 +287,15 @@ private struct TaskCriterionDisplay: Identifiable {
     let version: Int
     let index: Int
     let text: String
-    var id: String { "\(version):\(index)" }
+    var id: String {
+        "\(version):\(index)"
+    }
 }
 
 private struct TaskAttentionDisplay: Identifiable {
     let index: Int
     let text: String
-    var id: Int { index }
+    var id: Int {
+        index
+    }
 }
