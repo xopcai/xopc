@@ -1326,6 +1326,8 @@ export class SessionStore {
         typeof c === 'string' ? c : Array.isArray(c) ? c : this.extractTextContent(c);
       const row: Message = {
         role: m.role as Message['role'],
+        ...(typeof m.turnId === 'string' ? { turnId: m.turnId } : {}),
+        ...(m.startsNewBubble === true ? { startsNewBubble: true } : {}),
         content,
         timestamp: m.timestamp ? new Date(m.timestamp as string | number).toISOString() : undefined,
         tool_call_id: (m.tool_call_id as string | undefined) || (m.toolCallId as string | undefined),

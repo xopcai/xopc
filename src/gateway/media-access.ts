@@ -1,7 +1,7 @@
 import { pendingTranscriptReferencesMediaUri } from '../agent/inbound/attachment-pipeline.js';
 import { FileServiceError } from '../files/file-service.js';
 import { resolveMediaReference } from '../media/media-reference.js';
-import { messagesReferenceMediaUri } from '../media/session-references.js';
+import { messagesReferenceMediaUri, taskResultReferencesMediaUri } from '../media/session-references.js';
 import { TaskContextRepository } from '../tasks/task-context-repository.js';
 import { TaskRepository } from '../tasks/task-repository.js';
 import type { GatewayService } from './service.js';
@@ -18,6 +18,7 @@ export async function resolveScopedMediaReference(
   const sessionReferencesUri = conversationId
     ? messagesReferenceMediaUri(await service.sessionIndexInstance.loadMessages(conversationId), media.uri)
       || pendingTranscriptReferencesMediaUri(conversationId, media.uri)
+      || taskResultReferencesMediaUri(conversationId, media.uri)
     : false;
   const taskReferencesUri = taskId && new TaskRepository().get(taskId)
     ? new TaskContextRepository().list(taskId)

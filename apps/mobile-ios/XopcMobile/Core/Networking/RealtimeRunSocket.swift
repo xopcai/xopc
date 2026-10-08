@@ -6,6 +6,7 @@ actor RealtimeRunSocket {
     private let ticket: String
     private let clientID: String
     private let runID: String
+    private let conversationID: String?
     private var socket: URLSessionWebSocketTask?
 
     init(
@@ -13,13 +14,15 @@ actor RealtimeRunSocket {
         session: URLSession,
         ticket: String,
         clientID: String,
-        runID: String
+        runID: String,
+        conversationID: String? = nil
     ) {
         self.configuration = configuration
         self.session = session
         self.ticket = ticket
         self.clientID = clientID
         self.runID = runID
+        self.conversationID = conversationID
     }
 
     func consume(into continuation: AsyncThrowingStream<RunStreamEvent, Error>.Continuation) async throws {
@@ -56,6 +59,9 @@ actor RealtimeRunSocket {
             }
             lastSequence = sequence
             let eventData = frame.payload.data
+            if let conversationID {
+                guard eventName == "session.task-result", eventData?.conversationId == conversationID else { continue }
+            }
             let event = RunStreamEvent(
                 name: eventName,
                 sequence: sequence,
@@ -85,7 +91,7 @@ actor RealtimeRunSocket {
     }
 
     private var topic: String {
-        "run:\(runID)"
+        conversationID == nil ? "run:\(runID)" : "sessions"
     }
 
     private func sendPing() async throws {
@@ -124,7 +130,12 @@ actor RealtimeRunSocket {
     }
 
     private func receiveData(from socket: URLSessionWebSocketTask) async throws -> Data {
-        switch try await socket.receive() {
+        let received = try await withTaskCancellationHandler {
+            try await socket.receive()
+        } onCancel: {
+            socket.cancel(with: .goingAway, reason: nil)
+        }
+        switch received {
         case let .data(data):
             return data
         case let .string(text):
@@ -188,6 +199,7 @@ private struct RealtimeServerPayload: Decodable {
 private struct RealtimeRunEnvelope: Decodable {
     let type: String?
     let payload: RealtimeRunPayload?
+    let conversationId: String?
 }
 
 private struct RealtimeRunPayload: Decodable {

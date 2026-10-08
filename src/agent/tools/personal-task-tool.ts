@@ -8,6 +8,7 @@ import { resolveEffectiveAgentConfig, type EffectiveAgentConfig } from '../../ag
 import { resolveEffectiveAgentConfigForAgent } from '../../config/agent-profile.js';
 import { isProviderConfiguredSync, resolveModel } from '../../providers/index.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
+import { PERSONAL_WORKER_RESULT_GUIDANCE } from '../../personal-agent/communication.js';
 import { TaskOriginRepository } from '../../tasks/task-origin-repository.js';
 import { createXopcUseTool, type XopcUseToolDeps } from './xopc-use-tool.js';
 
@@ -31,16 +32,16 @@ const MAX_PERSONAL_TASK_TITLE = 60;
 const DISCOVERY_TOOLS = [
   'web_search', 'web_fetch', 'browser_use', 'read_file', 'write_file', 'exec_command',
   'image', 'image_generate', 'read_media', 'automation', 'workflow', 'xopc_use',
-  'xopc_tool_search', 'computer_use', 'send_message', 'text_to_speech',
+  'xopc_tool_search', 'xopc_tool_describe', 'xopc_tool_execute', 'computer_use', 'send_message', 'text_to_speech',
 ] as const;
 
-function availableAgentTools(config: EffectiveAgentConfig, deps: XopcUseToolDeps): string[] {
+export function getAvailablePersonalAgentTools(config: EffectiveAgentConfig, deps: XopcUseToolDeps): string[] {
   const names = config.toolAllowlist ? [...new Set([...DISCOVERY_TOOLS, ...config.toolAllowlist])] : DISCOVERY_TOOLS;
   return names.filter(name => (name !== 'browser_use' || deps.getConfig?.()?.browser?.enabled !== false)
     && (!config.toolAllowlist || config.toolAllowlist.includes(name)) && config.tools[name]?.mode !== 'deny');
 }
 
-function agentModelAvailability(config: EffectiveAgentConfig): { available: boolean; reason?: string } {
+export function personalAgentModelAvailability(config: EffectiveAgentConfig): { available: boolean; reason?: string } {
   for (const ref of [config.models.chat.primary, ...config.models.chat.fallbacks]) {
     try {
       const model = resolveModel(ref);
@@ -64,7 +65,7 @@ export function buildPersonalTaskBrief(input: { title?: string; objective: strin
   const body = fullObjective !== objective
     ? [fullObjective, description].filter(Boolean).join('\n\n')
     : description;
-  return { title, objective, ...(body ? { body } : {}) };
+  return { title, objective, body: [body, PERSONAL_WORKER_RESULT_GUIDANCE].filter(Boolean).join('\n\n') };
 }
 
 /** A narrow Task surface for the fast personal conversation. */
@@ -77,7 +78,7 @@ export function createPersonalTaskTool(deps: XopcUseToolDeps): AgentTool<typeof 
     parameters: PersonalTaskSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
-    requiresExclusiveWorkspaceLock: true,
+    requiresExclusiveWorkspaceLock: false,
     finalGuardRelevant: true,
     async execute(toolCallId, input, signal) {
       const conversationId = deps.getCurrentConversationId?.();
@@ -92,10 +93,10 @@ export function createPersonalTaskTool(deps: XopcUseToolDeps): AgentTool<typeof 
           .filter(agent => agent.enabled !== false && agent.id !== ownAgentId && !agent.id.startsWith('personal-'))
           .map(agent => {
             const config = resolveEffectiveAgentConfig({ defaults: catalog.defaults, agent }).config;
-            const availableTools = availableAgentTools(config, deps);
+            const availableTools = getAvailablePersonalAgentTools(config, deps);
             return { id: agent.id, name: agent.profile?.name ?? agent.id,
               description: agent.profile?.description ?? '', availableTools,
-              model: agentModelAvailability(config) };
+              model: personalAgentModelAvailability(config) };
           }).filter(agent => requiredTools.every(tool => agent.availableTools.includes(tool)));
         return { content: [{ type: 'text', text: JSON.stringify(agents) }], details: {} };
       }
@@ -111,9 +112,9 @@ export function createPersonalTaskTool(deps: XopcUseToolDeps): AgentTool<typeof 
           throw new Error(`Specialist Agent is unavailable: ${agentId}`);
         }
         const config = resolveEffectiveAgentConfigForAgent(agentId).config;
-        const model = agentModelAvailability(config);
+        const model = personalAgentModelAvailability(config);
         if (!model.available) throw new Error(`Agent ${agentId} cannot start: ${model.reason}. Find another available Agent.`);
-        const availableTools = availableAgentTools(config, deps);
+        const availableTools = getAvailablePersonalAgentTools(config, deps);
         const missingTools = (input.requiredTools ?? []).filter(tool => !availableTools.includes(tool));
         if (missingTools.length > 0) {
           throw new Error(`Agent ${agentId} lacks required tools: ${missingTools.join(', ')}. Find another Agent or approach.`);

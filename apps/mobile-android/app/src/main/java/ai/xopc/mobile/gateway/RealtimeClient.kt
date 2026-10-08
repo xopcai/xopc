@@ -76,12 +76,13 @@ class RealtimeClient(
   fun turnClaim(): TurnClaim = claim ?: throw IllegalStateException("REALTIME_NOT_READY")
 
   suspend fun run(onState: (String) -> Unit, onInvalidation: (String) -> Unit,
-    onRunEvent: (RunStreamEvent) -> Unit) {
+    onRunEvent: (RunStreamEvent) -> Unit,
+    onTaskResult: (String) -> Unit = { onInvalidation("sessions") }) {
     var attempt = 0
     while (currentCoroutineContext().isActive) {
       onState(if (attempt == 0) "connecting" else "reconnecting")
       try {
-        connectOnce(onState, onInvalidation, onRunEvent)
+        connectOnce(onState, onInvalidation, onRunEvent, onTaskResult)
         attempt = 0
       } catch (error: CancellationException) {
         throw error
@@ -95,7 +96,7 @@ class RealtimeClient(
   }
 
   private suspend fun connectOnce(onState: (String) -> Unit, onInvalidation: (String) -> Unit,
-    onRunEvent: (RunStreamEvent) -> Unit) {
+    onRunEvent: (RunStreamEvent) -> Unit, onTaskResult: (String) -> Unit) {
     val profile = gateway.currentProfile() ?: throw IllegalStateException("NOT_PAIRED")
     val clientId = "android:${profile.deviceId}"
     val displayName = "xopc Android"
@@ -162,7 +163,10 @@ class RealtimeClient(
           "realtime.event" -> {
             val payload = message.getJSONObject("payload")
             val topic = payload.getString("topic")
-            if (topic == "sessions" || topic == "gateway") onInvalidation(topic)
+            if (topic == "sessions" && payload.optString("event") == "session.task-result") {
+              val conversationId = payload.optJSONObject("data")?.optString("conversationId").orEmpty()
+              if (conversationId.isNotBlank()) onTaskResult(conversationId)
+            } else if (topic == "sessions" || topic == "gateway") onInvalidation(topic)
             else if (topic.startsWith("run:")) {
               val accepted = synchronized(this) {
                 val seq = payload.getLong("seq")

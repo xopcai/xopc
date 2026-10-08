@@ -141,6 +141,7 @@ export function buildTaskExecutionDirective(conversationId: string): string {
     collaboration.length ? `Recent task collaboration:\n${collaboration.map((entry) =>
       `- ${entry.sequence} ${entry.authorKind} ${entry.kind}: ${JSON.stringify(entry.body.slice(0, 1000))}`).join('\n')}` : '',
     'Report meaningful progress with xopc_use task collaboration_post. If blocked, post a question and stop this execution turn until answered.',
+    'For user-facing files, publish completed outputs with publish_artifacts before finishing. image_generate already publishes its images. Return structured artifact references rather than only local file paths. Published final outcomes are delivered automatically to the originating chat. Keep the final summary short and distinguish generated outputs from verified or accepted results.',
     'Take safe in-scope steps and produce inspectable evidence. Do not claim completion without verification.',
     '</xopc_task_execution>',
   ].filter(Boolean).join('\n');

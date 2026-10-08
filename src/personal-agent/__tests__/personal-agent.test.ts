@@ -327,6 +327,9 @@ describe('personal Agent identity', () => {
       expect(refreshed.profile?.instructions).toContain('Keep my custom instruction.');
       expect(refreshed.profile?.instructions).not.toContain('Legacy name');
       expect(refreshed.profile?.instructions).toContain('shared user profile');
+      expect(refreshed.profile?.instructions).toContain('Do not include task progress links by default');
+      expect(refreshed.profile?.instructions).toContain('it does not prove execution has started');
+      expect(refreshed.profile?.instructions).toContain('Speak like an attentive, reliable collaborator');
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       expect(repository.get(agentId)?.revision).toBe(refreshed.revision);
       const previousGuidance = [

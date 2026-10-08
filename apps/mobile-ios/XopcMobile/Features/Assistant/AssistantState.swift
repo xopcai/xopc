@@ -275,6 +275,35 @@ final class AssistantState {
 }
 
 extension AssistantState {
+    func observeTaskResults(in conversation: ConversationSelection, using gateway: any GatewayServing) async {
+        var delay = 1
+        while !Task.isCancelled {
+            do {
+                await refreshTaskResults(in: conversation, using: gateway)
+                for try await _ in gateway.streamTaskResults(conversationID: conversation.id) {
+                    delay = 1
+                    await refreshTaskResults(in: conversation, using: gateway)
+                }
+            } catch is CancellationError { return }
+            catch { /* Recover durable history on reconnect. */ }
+            do { try await Task.sleep(for: .seconds(delay)) }
+            catch { return }
+            delay = min(delay * 2, 30)
+        }
+    }
+
+    private func refreshTaskResults(in conversation: ConversationSelection, using gateway: any GatewayServing) async {
+        do {
+            let history = try await gateway.fetchHistory(conversationID: conversation.id)
+            guard loadedConversationID == conversation.id, !Task.isCancelled else { return }
+            let results = Self.timeline(from: history.session.messages).filter {
+                $0.turnId?.hasPrefix("task-result:") == true
+            }
+            let known = Set(messages.compactMap(\.turnId))
+            messages.append(contentsOf: results.filter { !known.contains($0.turnId ?? "") })
+        } catch { /* Background refresh must not erase the live reply. */ }
+    }
+
     func loadContext(
         for conversation: ConversationSelection,
         using gateway: any GatewayServing

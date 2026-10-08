@@ -4,6 +4,7 @@ import type { ConnectionCheckpoint, ConnectionNeed, ConnectionWait } from '@xopc
 
 import { createLogger } from '../../utils/logger.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
+import { personalRequestForExecution, personalRequestForWait, updatePersonalRequest } from '../../personal-agent/request-repository.js';
 import { isXopcDatabaseOpen } from './connection.js';
 import { getConnectorAccount } from './connector-account-repository.js';
 import { getConnectorConnection } from './connector-repository.js';
@@ -81,12 +82,15 @@ export function updateConnectionWait(wait: ConnectionWait, expectedVersion: numb
 }
 export function requireSessionConnection(input: {
   conversationId: string; principalId: string; agentId: string; summary: string; needs: ConnectionNeed[]; checkpoint?: Omit<ConnectionCheckpoint, 'entryId'>;
+  origin?: { inputId: string; runId: string };
 }): { status: 'connection_required' | 'skipped' | 'objective_conflict'; waitId?: string } {
   return runSqliteWriteTransaction(db => {
     const transcriptId = readCurrentTranscriptId(db, input.conversationId);
     const runtime = getSessionInputState(input.conversationId);
-    const origin = runtime.activeInputId ? getSessionInputById(input.conversationId, runtime.activeInputId) : undefined;
-    if (!transcriptId || !origin || !runtime.activeRunId) throw new Error('Connection recovery requires a queued chat execution.');
+    const originId = input.origin?.inputId ?? runtime.activeInputId;
+    const origin = originId ? getSessionInputById(input.conversationId, originId) : undefined;
+    const originRunId = input.origin?.runId ?? runtime.activeRunId;
+    if (!transcriptId || !origin || !originRunId || (origin.expectedTranscriptId && origin.expectedTranscriptId !== transcriptId)) throw new Error('Connection recovery requires a queued chat execution.');
     const resumed = origin.payload ? getConnectionWait(origin.payload.waitId) : undefined;
     if (resumed?.resolution === 'skipped') return { status: 'skipped' };
     const active = getActiveConnectionWait(input.conversationId);
@@ -102,10 +106,11 @@ export function requireSessionConnection(input: {
     }
     const lastEntry = db.prepare('SELECT entry_id FROM transcript_entries WHERE transcript_id = ? ORDER BY seq DESC LIMIT 1').get(transcriptId) as { entry_id: string } | undefined;
     const wait: ConnectionWait = {
-      ...input, needs: [...new Map(input.needs.map(need => [need.key, need])).values()], id: randomUUID(), transcriptId, objectiveId: resumed?.objectiveId ?? origin.id,
+      conversationId: input.conversationId, principalId: input.principalId, agentId: input.agentId,
+      needs: [...new Map(input.needs.map(need => [need.key, need])).values()], id: randomUUID(), transcriptId, objectiveId: resumed?.objectiveId ?? origin.id,
       objectiveRevision: (resumed?.objectiveRevision ?? 0) + 1,
       objectiveUpdatedAt: resumed?.objectiveUpdatedAt ?? origin.createdAtMs,
-      originInputId: origin.id, originRunId: runtime.activeRunId,
+      originInputId: origin.id, originRunId,
       taskRunId: origin.taskRunId,
       checkpoint: { entryId: lastEntry?.entry_id, completedSteps: input.checkpoint?.completedSteps ?? [],
         pendingSteps: input.checkpoint?.pendingSteps ?? [input.summary], timeRange: input.checkpoint?.timeRange ?? resumed?.checkpoint.timeRange },
@@ -129,10 +134,14 @@ export function requireSessionConnection(input: {
 }
 
 /** The input and the wait transition commit together, using the existing queue's unique key. */
-export function queueConnectionResolution(wait: ConnectionWait, resolution: 'continued' | 'skipped'): ConnectionWait {
+export function queueConnectionResolution(wait: ConnectionWait, resolution: 'continued' | 'skipped',
+  resolvePersonal?: (wait: ConnectionWait, resolution: 'continued' | 'skipped') => unknown): ConnectionWait {
   return runSqliteWriteTransaction(() => {
     const current = getConnectionWait(wait.id);
     if (!current || current.version !== wait.version || current.status !== 'open') throw new Error('WAIT_CHANGED');
+    if (resolvePersonal?.(wait, resolution)) {
+      return updateConnectionWait({ ...wait, status: 'closed', resolution, intent: undefined }, wait.version);
+    }
     const origin = getSessionInputById(wait.conversationId, wait.originInputId);
     if (!origin) throw new Error('Original input is unavailable.');
     const id = randomUUID();
@@ -178,6 +187,14 @@ export function consumeConnectionResume(input: SessionInput): boolean {
 
 export function connectionBindings(conversationId: string): ConnectionNeed[] {
   if (!isXopcDatabaseOpen()) return [];
+  const personalRequest = personalRequestForExecution(conversationId);
+  if (personalRequest?.accountId) {
+    const account = getConnectorAccount(personalRequest.accountId);
+    return [{ key: `${personalRequest.connectorId}:${personalRequest.accountId}`,
+      target: { type: 'connector', connectorId: personalRequest.connectorId },
+      label: personalRequest.connectorId, capabilities: [], accountId: personalRequest.accountId,
+      connectionId: account?.currentConnectionId }];
+  }
   let sessionContext = getConnectionSessionContext(conversationId);
   if (sessionContext?.sessionType === 'workflow-subagent' && sessionContext.parentConversationId) {
     sessionContext = getConnectionSessionContext(sessionContext.parentConversationId);
@@ -270,9 +287,11 @@ export function cancelConnectionObjective(conversationId: string): void {
   if (!wait) return;
   runSqliteWriteTransaction(() => {
     if (wait.queuedInputId) setSessionInputStatus(wait.queuedInputId, 'cancelled');
-    if (wait.taskRunId) {
-      const runs = new TaskRunRepository();
-      const run = runs.get(wait.taskRunId);
+    const personalRequest = personalRequestForWait(wait.id);
+    const runs = new TaskRunRepository();
+    const taskRunId = wait.taskRunId ?? (personalRequest?.taskId ? runs.getActiveRoot(personalRequest.taskId)?.id : undefined);
+    if (taskRunId) {
+      const run = runs.get(taskRunId);
       if (run?.status === 'waiting') {
         for (const taskWait of runs.listActiveWaits(run.taskId)) {
           if (taskWait.condition.connectionWaitId === wait.id) runs.resolveWait({ waitId: taskWait.id, actor: { kind: 'system' }, resolution: { cancelled: true } });
@@ -284,6 +303,7 @@ export function cancelConnectionObjective(conversationId: string): void {
       }
     }
     updateConnectionWait({ ...wait, status: 'closed', resolution: 'cancelled', intent: undefined }, wait.version);
+    if (personalRequest && personalRequest.state !== 'cancelled') updatePersonalRequest(personalRequest, { state: 'cancelled' });
   });
   publishConnectionWait(conversationId);
 }

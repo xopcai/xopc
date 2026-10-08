@@ -5,6 +5,21 @@ import Testing
 
 // swiftlint:disable:next type_body_length
 struct GatewayModelsTests {
+    @Test @MainActor func backgroundImageOutcomeBecomesAnInlineAttachment() throws {
+        let message = try JSONDecoder().decode(WireMessage.self, from: Data(#"""
+        {"id":"result-row","turnId":"task-result:delivery","role":"assistant","content":"图片已生成",
+         "metadata":{"turnOutcome":{"deliverables":[
+           {"artifactId":"image-1","title":"Sunset.png","kind":"image","mimeType":"image/png",
+            "sizeBytes":120,"availability":"available","uri":"media://outbound/sunset.png"},
+           {"artifactId":"image-2","title":"Missing.png","kind":"image","availability":"missing"}]}}}
+        """#.utf8))
+        let row = try #require(AssistantState.timeline(from: [message]).first)
+        #expect(row.turnId == "task-result:delivery")
+        #expect(row.attachments.count == 1)
+        #expect(row.attachments.first?.isImage == true)
+        #expect(row.attachments.first?.uri == "media://outbound/sunset.png")
+    }
+
     @Test func decodesSessionContextRelations() throws {
         let summary = try JSONDecoder().decode(ConversationContextResponse.self, from: Data(#"""
         {"summary":{"conversationId":"session-1","work":{"project":{"id":"project-1","title":"Project"},

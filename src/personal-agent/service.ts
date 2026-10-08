@@ -9,6 +9,7 @@ import { createConversation } from '../storage/sqlite/conversation-repository.js
 import { getSessionMetadata, patchSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { setSessionConfig } from '../storage/sqlite/config-repository.js';
 import { PERSONAL_MAIN_TOOL_IDS } from './policy.js';
+import { PERSONAL_COMMUNICATION_RULES } from './communication.js';
 import { completePersonalOnboarding } from './onboarding.js';
 import {
   DEFAULT_PERSONAL_PREFERENCES, getPersonalAgent, personalAgentId,
@@ -55,11 +56,16 @@ const DELEGATION_RULES = [
 ] as const;
 
 const USER_NAME_RULE = "Use the user's preferred name from their shared user profile when a name fits naturally.";
+const CONNECTED_APP_RULE = 'For read-only connected-app requests such as Gmail, first call personal_capability with the app or capability. Then use personal_request(command="submit") with the exact connectorId and specialist agentId returned, the full objective, and any absolute time range. This keeps connection and account selection in the main chat and automatically starts the worker after authorization. Return promptly after the tool confirms submission. Never claim mail was read before verified results arrive. If no executor is available, explain that specific blocker. Use personal_request to inspect or cancel these requests; cancellation requires the user’s instruction.';
+const RESULT_DELIVERY_RULE = 'For image generation, find a specialist with image_generate. For user-facing files, require the specialist to publish completed files with publish_artifacts (image_generate already publishes its images). Put expected deliverables, input artifact references, and acceptance requirements in the Task brief. Once creation is confirmed, give one short acknowledgement and finish your turn; do not poll or wait for the worker. Published results are delivered automatically to this chat. Never recreate an artifact just to deliver it, and do not repeat its attachments in a later summary. For edits, include the selected previous artifact URI and requested changes in the new brief.';
 
 export function personalInstructions(preferences: PersonalPreferences): string {
   const rules = [
     'You are the user’s personal AI: capable, clear, attentive, and responsive. Match the user’s language. Let the user’s stated preferences and current situation shape how you speak; do not impose a cute or affectionate persona.',
     ...DELEGATION_RULES,
+    CONNECTED_APP_RULE,
+    RESULT_DELIVERY_RULE,
+    ...PERSONAL_COMMUNICATION_RULES,
     'When creating a Task, provide a short title that names the work, a one-sentence objective, and a Markdown description with all detailed instructions. Keep the title free of checklists and long background. Preserve user requirements in the description.',
     'Adapt to the user’s current words first, then their saved preferences. If the user explicitly changes how they want you to respond in future, save it with personal_preference. Do not infer a lasting emotional trait from one conversation or claim human feelings or experiences.',
     'Give the accurate answer or next step in the order this user prefers. Acknowledge feelings only when relevant, without guessing how the user feels. Avoid formulaic reassurance, praise, pet names, emojis, or jokes unless the user welcomes them and the moment fits. Be accurate about task state, evidence, and uncertainty.',
@@ -86,10 +92,18 @@ export async function refreshPersonalDelegationGuidance(service: PersonalAgentHo
     : `Address the user as ${JSON.stringify(legacyName)} when a name fits naturally.`;
   let nextInstructions = oldRule ? instructions.replace(oldRule, DELEGATION_RULES.join('\n')) : instructions;
   if (legacyNameRule) nextInstructions = nextInstructions.replace(legacyNameRule, USER_NAME_RULE);
-  if (nextInstructions === instructions) return;
+  if (!nextInstructions.includes(RESULT_DELIVERY_RULE)) nextInstructions += `\n${RESULT_DELIVERY_RULE}`;
+  if (!nextInstructions.includes(CONNECTED_APP_RULE)) nextInstructions += `\n${CONNECTED_APP_RULE}`;
+  for (const rule of PERSONAL_COMMUNICATION_RULES) {
+    if (!nextInstructions.includes(rule)) nextInstructions += `\n${rule}`;
+  }
+  const toolAllowlist = agent.toolAllowlist?.includes('personal_task')
+    ? [...new Set([...agent.toolAllowlist, 'personal_capability', 'personal_request'])] : agent.toolAllowlist;
+  if (nextInstructions === instructions && JSON.stringify(toolAllowlist) === JSON.stringify(agent.toolAllowlist)) return;
   try {
     await new AgentCatalogService().update(agent.id, {
       profile: { ...agent.profile!, instructions: nextInstructions },
+      ...(toolAllowlist ? { toolAllowlist } : {}),
     }, agent.revision);
     service.refreshAgentCatalog?.();
     const conversationId = getPersonalAgent(ownerId)?.conversationId;

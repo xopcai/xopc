@@ -2428,7 +2428,10 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
             }
           }
         },
-        onRunEvent = ::handleRunEvent)
+        onRunEvent = ::handleRunEvent,
+        onTaskResult = { conversationId ->
+          if (mutableState.value.selectedConversationId == conversationId) refreshSelectedHistory(conversationId)
+        })
     }
   }
 

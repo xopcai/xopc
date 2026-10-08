@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
+import { AttachmentRenderer } from '@/features/chat/attachments/attachment-renderer';
 import {
   formatFileSize,
   getAttachmentBinaryPayload,
@@ -299,16 +300,22 @@ export function AssistantResultTail({
   const queryState = productDeliveryQueryState(visibleDeliveries);
   const supersededFileReferences = outcomeFileReferenceKeys(view.outcome);
   const productCount = productDeliveryReferences(visibleDeliveries, supersededFileReferences).length;
-  const attachments = [
+  const allAttachments = [
     ...outcomeAttachments(view.outcome, language),
     ...standaloneAttachments(view.attachments, language),
   ];
+  const images = allAttachments.filter(item => !item.failed && item.attachment.mimeType?.startsWith('image/'));
+  const attachments = allAttachments.filter(item => !images.includes(item));
   const hasTail = productCount > 0 || attachments.length > 0;
 
-  if (diffPresentations.length === 0 && inlineApps.length === 0 && inlinePreviews.length === 0 && !hasTail) return null;
+  if (diffPresentations.length === 0 && inlineApps.length === 0 && inlinePreviews.length === 0 && !hasTail && !images.length) return null;
 
   return (
     <>
+      {images.length > 0 ? (
+        <AttachmentRenderer attachments={images.map(item => item.attachment)} authToken={authToken}
+          conversationId={conversationId} workspaceConversationId={conversationId} layout="assistant" />
+      ) : null}
       {diffPresentations.map(({ key, presentation }) => (
         <ProductDeliveryDiffPreview key={key} presentation={presentation} />
       ))}

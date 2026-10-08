@@ -6,6 +6,8 @@ import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
 import { getPersonalAgent } from '../../../personal-agent/repository.js';
 import { finishPersonalWelcome, getPersonalOnboarding, PersonalOnboardingDraftSchema, PersonalOnboardingStepSchema, savePersonalOnboarding } from '../../../personal-agent/onboarding.js';
 import { TaskOriginRepository } from '../../../tasks/task-origin-repository.js';
+import { getPersonalRequest, listPersonalRequests } from '../../../personal-agent/request-repository.js';
+import { cancelPersonalRequest, personalRequestSnapshot, publishPersonalRequest } from '../../../personal-agent/request-service.js';
 import {
   createOrResumePersonalAgent, ensurePersonalConversationVisibility, listPersonalModels, patchPersonalProfile, refreshPersonalDelegationGuidance,
   PersonalAppearanceSchema, PersonalPreferencesSchema,
@@ -54,6 +56,36 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
   authenticated.get('/api/personal-agent/models', async c => {
     if (!owner(c)) return c.json({ ok: false, error: 'Owner access is required' }, 403);
     return c.json({ ok: true, payload: await listPersonalModels() });
+  });
+
+  authenticated.get('/api/personal-agent/requests', c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const record = getPersonalAgent(ownerId);
+    return c.json({ ok: true, payload: record ? listPersonalRequests(record.conversationId).map(personalRequestSnapshot) : [] });
+  });
+
+  authenticated.get('/api/personal-agent/requests/:requestId', c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const request = getPersonalRequest(c.req.param('requestId'));
+    if (!request || request.conversationId !== getPersonalAgent(ownerId)?.conversationId) return c.json({ ok: false, error: 'Request not found' }, 404);
+    return c.json({ ok: true, payload: personalRequestSnapshot(request) });
+  });
+
+  authenticated.post('/api/personal-agent/requests/:requestId/cancel', deps.strictRateLimitMiddleware, async c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const request = getPersonalRequest(c.req.param('requestId'));
+    if (!request || request.conversationId !== getPersonalAgent(ownerId)?.conversationId) return c.json({ ok: false, error: 'Request not found' }, 404);
+    const body = z.object({ expectedVersion: z.number().int().positive() }).strict().safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ ok: false, error: 'expectedVersion is required' }, 400);
+    if (body.data.expectedVersion !== request.version) return c.json({ ok: false, error: 'Request changed' }, 409);
+    try {
+      const cancelled = cancelPersonalRequest(request);
+      publishPersonalRequest(cancelled);
+      return c.json({ ok: true, payload: { ...cancelled, executionStopConfirmed: false } });
+    } catch (error) { return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 409); }
   });
 
   authenticated.get('/api/personal-agent/onboarding', c => {
