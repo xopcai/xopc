@@ -22,7 +22,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.xopc.xopc
         CODE_SIGN_ENTITLEMENTS: XopcMobile/XopcMobile.entitlements
-        MARKETING_VERSION: 0.0.81
+        MARKETING_VERSION: 0.0.82
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
         INFOPLIST_KEY_CFBundleDisplayName: xopc
