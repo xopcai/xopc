@@ -14,7 +14,9 @@ data class ProgressHome(val needsUser: List<ProgressItem>, val background: List<
 data class ProgressTask(val id: String, val title: String, val body: String, val phase: String,
   val resolution: String?, val updatedAt: Long, val closedAt: Long?, val projectId: String?,
   val priority: String? = null, val version: Int = 0,
-  val allowedCommands: List<String> = emptyList())
+  val allowedCommands: List<String> = emptyList(),
+  val objective: String = "", val criteria: List<TaskCriterion> = emptyList())
+data class TaskCriterion(val text: String, val status: String, val humanReviewed: Boolean)
 data class ProgressTaskPage(val items: List<ProgressTask>, val total: Int)
 data class ProgressProject(val id: String, val name: String, val description: String, val status: String,
   val brief: String, val defaultAgentId: String? = null, val workspaceRoot: String? = null,
@@ -256,7 +258,55 @@ class ProgressRepository(private val gateway: GatewaySession) {
       require(base.id == expectedId && base.version >= minimumVersion) { "MISMATCHED_PROGRESS_TASK" }
       val commands = root.getJSONArray("allowedCommands")
       require(commands.length() <= 30) { "INVALID_PROGRESS_TASK" }
-      return base.copy(allowedCommands = (0 until commands.length()).map { commands.getString(it) })
+      return base.copy(allowedCommands = (0 until commands.length()).map { commands.getString(it) },
+        objective = root.getJSONObject("task").optJSONObject("contract")?.optString("objective").orEmpty(),
+        criteria = parseTaskCriteria(root))
+    }
+
+    fun parseTaskCriteria(root: JSONObject): List<TaskCriterion> {
+      val task = root.getJSONObject("task")
+      val contract = task.optJSONObject("contract") ?: return emptyList()
+      val criteria = contract.optJSONArray("acceptanceCriteria") ?: return emptyList()
+      require(criteria.length() <= 100) { "INVALID_TASK_CRITERIA" }
+      val policy = contract.optString("acceptancePolicy")
+      val version = task.optInt("latestContractVersion")
+      val reviews = root.optJSONArray("criterionReviews")
+      val runs = root.optJSONArray("runs")
+      val currentRuns = (0 until (runs?.length() ?: 0)).map { runs!!.getJSONObject(it) }
+        .filter { it.optInt("contractVersion") == version }.map { it.optString("id") }.toSet()
+      val receipts = root.optJSONArray("receipts")
+      val currentReceipts = (0 until (receipts?.length() ?: 0)).map { receipts!!.getJSONObject(it) }
+        .filter { it.optString("runId") in currentRuns }.sortedByDescending { it.optLong("finalizedAt") }
+      return (0 until criteria.length()).map { index ->
+        val criterion = criteria.getString(index)
+        val review = (0 until (reviews?.length() ?: 0)).map { reviews!!.getJSONObject(it) }
+          .firstOrNull { it.optInt("contractVersion") == version && it.optInt("criterionIndex") == index }
+        if (review != null && policy != "verified_auto") {
+          TaskCriterion(criterion, review.optString("status", "pending"), true)
+        } else if (policy == "manual") {
+          TaskCriterion(criterion, "pending", false)
+        } else {
+          val receiptCheck = currentReceipts.firstNotNullOfOrNull { receipt ->
+            val checks = receipt.optJSONObject("verification")?.optJSONArray("checks")
+            val check = (0 until (checks?.length() ?: 0)).map { checks!!.getJSONObject(it) }
+              .firstOrNull { it.optString("criterion") == criterion && it.optString("status") != "unverified" }
+            if (check == null) null else receipt to check
+          }
+          if (receiptCheck == null) TaskCriterion(criterion, "pending", false)
+          else {
+            val (receipt, check) = receiptCheck
+            if (check.optString("status") == "failed") TaskCriterion(criterion, "failed", false)
+            else {
+              val titles = check.optJSONArray("evidenceTitles")
+              val accepted = (0 until (titles?.length() ?: 0)).map { titles!!.getString(it) }.toSet()
+              val evidence = receipt.optJSONArray("evidence")
+              val verified = (0 until (evidence?.length() ?: 0)).map { evidence!!.getJSONObject(it) }
+                .any { it.optString("strength") == "verified" && it.optString("title") in accepted }
+              TaskCriterion(criterion, if (verified) "passed" else "pending", false)
+            }
+          }
+        }
+      }
     }
 
     fun parseTaskUpdate(expectedId: String, previousVersion: Int, raw: String): ProgressTask {

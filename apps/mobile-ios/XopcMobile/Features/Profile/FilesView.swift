@@ -4,26 +4,42 @@ struct FileLibraryView: View {
     let configuration: GatewayConfiguration
 
     @State private var spaces: [FileSpace] = []
+    @State private var recentFiles: [FileResource] = []
     @State private var isLoading = true
     @State private var error: String?
 
     var body: some View {
         List {
             if isLoading, spaces.isEmpty {
-                ProgressView("正在读取文件空间…")
+                ProgressListSkeleton()
             } else if let error, spaces.isEmpty {
                 ContentUnavailableView("无法读取文件空间", systemImage: "exclamationmark.triangle", description: Text(error))
                 Button("重试") { Task { await load() } }
-            } else if spaces.isEmpty {
+            } else if spaces.isEmpty, recentFiles.isEmpty {
                 ContentUnavailableView("暂无文件空间", systemImage: "folder")
             } else {
-                ForEach(spaces) { space in
-                    NavigationLink {
-                        FilesView(configuration: configuration, initialSpace: space)
-                    } label: {
-                        Label(space.title, systemImage: "folder")
+                if !recentFiles.isEmpty {
+                    Section("最近文件") {
+                        ForEach(recentFiles) { file in
+                            NavigationLink {
+                                FileDestinationView(configuration: configuration, file: file)
+                            } label: {
+                                FileRow(file: file)
+                            }
+                        }
                     }
-                    .accessibilityIdentifier("file-space-\(space.id)")
+                }
+                if !spaces.isEmpty {
+                    Section("文件空间") {
+                        ForEach(spaces) { space in
+                            NavigationLink {
+                                FilesView(configuration: configuration, initialSpace: space)
+                            } label: {
+                                Label(space.title, systemImage: "folder")
+                            }
+                            .accessibilityIdentifier("file-space-\(space.id)")
+                        }
+                    }
                 }
             }
         }
@@ -37,7 +53,11 @@ struct FileLibraryView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            spaces = try await GatewayClient(configuration: configuration).fetchFileSpaces()
+            let client = GatewayClient(configuration: configuration)
+            async let spacesRequest = client.fetchFileSpaces()
+            async let recentRequest = client.fetchRecentFiles()
+            spaces = try await spacesRequest
+            recentFiles = (try? await recentRequest) ?? []
             error = nil
         } catch is CancellationError {
         } catch {

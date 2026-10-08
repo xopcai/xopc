@@ -157,4 +157,31 @@ describe('Personal AI editor', () => {
     expect(document.querySelector('[data-radix-popper-content-wrapper] [aria-label="Delegated tasks"]')).toBeNull();
     expect(headerContainer.querySelector('button[aria-label="Activity"]')?.getAttribute('aria-pressed')).toBe('false');
   });
+
+  it('refreshes an open delegated task when its run finishes', async () => {
+    let phase = 'active';
+    let runStatus = 'running';
+    let operationalState = 'running';
+    vi.mocked(fetchJson).mockImplementation(async (url) => String(url).includes('/activity')
+      ? { ok: true, payload: { items: [{ id: 'task-1', title: 'Research', phase, operationalState, runStatus, updatedAt: 1 }], total: 1 } }
+      : String(url).includes('/models')
+        ? { ok: true, payload: [] }
+        : { ok: true, payload: { agentId: 'personal', conversationId: 'conversation-1',
+          state: 'ready', displayName: 'Ada', appearance: 'loopi', preferences: {}, revision: 1 } });
+    await act(async () => root.render(<MemoryRouter><PersonalPage /></MemoryRouter>));
+    act(() => headerRoot.render(<MemoryRouter>{usePageHeaderStore.getState().end}</MemoryRouter>));
+    await act(async () => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Activity"]')?.click());
+    act(() => headerRoot.render(<MemoryRouter>{usePageHeaderStore.getState().end}</MemoryRouter>));
+    expect(document.querySelector('[aria-label="Delegated tasks"]')?.textContent).toContain('Working');
+
+    phase = 'closed';
+    runStatus = 'succeeded';
+    operationalState = 'idle';
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('task-changed-v2'));
+      await new Promise(resolve => setTimeout(resolve, 180));
+    });
+    act(() => headerRoot.render(<MemoryRouter>{usePageHeaderStore.getState().end}</MemoryRouter>));
+    expect(document.querySelector('[aria-label="Delegated tasks"]')?.textContent).toContain('Finished');
+  });
 });

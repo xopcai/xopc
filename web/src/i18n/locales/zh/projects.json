@@ -424,6 +424,8 @@
         "closed": "已完成"
       },
       "operationalStates": {
+        "failed": "执行失败",
+        "cancelled": "执行已取消",
         "idle": "空闲",
         "queued": "排队中",
         "running": "正在运行",

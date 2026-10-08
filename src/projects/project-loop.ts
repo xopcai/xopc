@@ -1,3 +1,5 @@
+import type { TaskOperationalState } from '@xopcai/gateway-contract';
+
 import type { KnowledgeItem } from '../knowledge-memory/index.js';
 import type { ProjectWithDetails } from './types.js';
 
@@ -33,7 +35,7 @@ export type ProjectTask = {
   id: string;
   title: string;
   phase: 'backlog' | 'ready' | 'active' | 'review' | 'closed';
-  operationalState: 'idle' | 'queued' | 'running' | 'waiting' | 'verifying' | 'blocked';
+  operationalState: TaskOperationalState;
   priority: 'low' | 'normal' | 'high' | 'critical';
   attention?: string[];
   updatedAt: number;
@@ -86,7 +88,8 @@ export function buildProjectLoopOverview(input: {
   const staleCutoff = nowMs - (input.staleAfterMs ?? DEFAULT_STALE_AFTER_MS);
   const projectTasks = [...input.tasks].sort(taskUpdatedAtDesc);
   const activeTasks = projectTasks.filter((task) => task.phase !== 'closed').slice(0, 6);
-  const blockedTasks = projectTasks.filter((task) => task.operationalState === 'blocked' || task.operationalState === 'waiting').slice(0, 4);
+  const blockedTasks = projectTasks.filter((task) => task.operationalState === 'blocked'
+    || task.operationalState === 'failed' || task.operationalState === 'waiting').slice(0, 4);
   const staleTasks = projectTasks
     .filter((task) => task.phase !== 'closed' && task.updatedAt < staleCutoff)
     .slice(0, 5);

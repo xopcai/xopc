@@ -100,9 +100,11 @@ export class TaskReadModelProjector {
     if (input.activeRun?.status === 'running') return 'running';
     if (input.activeRun?.status === 'verifying') return 'verifying';
     if (input.activeRun?.status === 'queued') return 'queued';
+    if (input.activeRun?.status === 'waiting') return 'waiting';
     if (input.waits.some((wait) => wait.kind !== 'dependency')) return 'waiting';
     if (input.waits.some((wait) => wait.kind === 'dependency')) return 'blocked';
-    if (input.latestRun?.status === 'failed') return 'blocked';
+    if (input.latestRun?.status === 'failed') return 'failed';
+    if (input.latestRun?.status === 'cancelled') return 'cancelled';
     if (input.hasIncompleteDependency) return 'blocked';
     return 'idle';
   }

@@ -63,32 +63,7 @@ struct AutomationRunDetailView: View {
                             }
                         }
                         if let summary = displayedRun.summary, !summary.isEmpty {
-                            if let maintenance = MemoryMaintenanceSummary(summary) {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    Text("记忆维护已完成")
-                                        .font(.subheadline.weight(.semibold))
-                                    LazyVGrid(columns: metricColumns, alignment: .leading, spacing: 10) {
-                                        ForEach(maintenance.metrics) { metric in
-                                            VStack(alignment: .leading, spacing: 3) {
-                                                Text(LocalizedStringKey(metric.label))
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .fixedSize(horizontal: false, vertical: true)
-                                                Text(metric.count, format: .number)
-                                                    .font(.subheadline.weight(.semibold))
-                                                    .monospacedDigit()
-                                            }
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                        }
-                                    }
-                                }
-                            } else {
-                                MarkdownBodyView(
-                                    parts: MarkdownBlock.parse(summary).map(MarkdownPart.init),
-                                    configuration: configuration,
-                                    conversationID: displayedRun.conversationId
-                                )
-                            }
+                            runSummary(summary, conversationID: displayedRun.conversationId)
                         }
                         if let message = displayedRun.error, !message.isEmpty {
                             Text(AutomationRunErrorCopy.display(message, locale: locale))
@@ -109,6 +84,11 @@ struct AutomationRunDetailView: View {
                     .padding(.vertical, 8)
                 }
                 Section("执行结果") {
+                    if let workflowRunID = displayedRun.workflowRunId {
+                        NavigationLink(destination: WorkflowRunDetailView(configuration: configuration, runID: workflowRunID)) {
+                            Label("查看工作流", systemImage: "arrow.triangle.branch")
+                        }
+                    }
                     if let conversationID = displayedRun.conversationId {
                         Button("打开会话", systemImage: "bubble.left.and.bubble.right") {
                             Task { await openConversation(conversationID) }
@@ -183,6 +163,32 @@ struct AutomationRunDetailView: View {
     private var metricColumns: [GridItem] {
         let count = dynamicTypeSize.isAccessibilitySize ? 1 : 2
         return Array(repeating: GridItem(.flexible()), count: count)
+    }
+
+    @ViewBuilder private func runSummary(_ summary: String, conversationID: String?) -> some View {
+        if let maintenance = MemoryMaintenanceSummary(summary) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("记忆维护已完成")
+                    .font(.subheadline.weight(.semibold))
+                LazyVGrid(columns: metricColumns, alignment: .leading, spacing: 10) {
+                    ForEach(maintenance.metrics) { metric in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(LocalizedStringKey(metric.label))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(metric.count, format: .number)
+                                .font(.subheadline.weight(.semibold))
+                                .monospacedDigit()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        } else {
+            MarkdownBodyView(parts: MarkdownBlock.parse(summary).map(MarkdownPart.init),
+                             configuration: configuration, conversationID: conversationID)
+        }
     }
 
     private var runStatusIcon: some View {

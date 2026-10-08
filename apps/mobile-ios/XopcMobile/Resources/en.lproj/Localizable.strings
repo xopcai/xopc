@@ -796,3 +796,9 @@
 "上一级" = "Parent Folder";
 "正在读取文件夹…" = "Loading folders…";
 "使用此目录" = "Use This Directory";
+"已通过" = "Passed";
+"未通过" = "Failed";
+"待核对" = "Pending review";
+"预期产出" = "Expected outputs";
+"需要留意" = "Needs attention";
+"产出文件" = "Deliverables";

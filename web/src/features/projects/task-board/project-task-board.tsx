@@ -109,6 +109,7 @@ function operationalStateTone(state: ProjectTaskCard['operationalState']): strin
   if (state === 'running' || state === 'queued') return 'border-accent/20 bg-accent-soft text-accent-fg';
   if (state === 'verifying') return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
   if (state === 'waiting') return 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300';
+  if (state === 'failed') return 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300';
   if (state === 'blocked') return 'border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300';
   return 'border-edge-subtle bg-surface-hover text-fg-muted';
 }

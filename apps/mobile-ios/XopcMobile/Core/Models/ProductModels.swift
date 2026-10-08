@@ -224,6 +224,7 @@ struct TaskRecord: Decodable, Identifiable, Hashable, Sendable {
     let updatedAt: Int64
     let closedAt: Int64?
     let contract: TaskContract?
+    let latestContractVersion: Int?
 }
 
 struct TaskContract: Decodable, Hashable, Sendable {
@@ -231,6 +232,7 @@ struct TaskContract: Decodable, Hashable, Sendable {
     let expectedOutputs: [String]?
     let acceptanceCriteria: [String]?
     let constraints: [String]?
+    let acceptancePolicy: String?
 }
 
 struct TaskDetailEnvelope: Decodable, Sendable {
@@ -241,6 +243,19 @@ struct TaskDetailEnvelope: Decodable, Sendable {
     let runs: [TaskRun]?
     let receipts: [TaskReceipt]?
     let conversation: TaskConversation?
+    let attention: [TaskAttention]?
+    let criterionReviews: [TaskCriterionReview]?
+}
+
+struct TaskAttention: Decodable, Sendable {
+    let kind: String
+    let summary: String
+}
+
+struct TaskCriterionReview: Decodable, Sendable {
+    let contractVersion: Int
+    let criterionIndex: Int
+    let status: String
 }
 
 struct TaskRun: Decodable, Identifiable, Sendable {
@@ -251,6 +266,7 @@ struct TaskRun: Decodable, Identifiable, Sendable {
     let queuedAt: Int64?
     let startedAt: Int64?
     let completedAt: Int64?
+    let contractVersion: Int?
 }
 
 struct TaskReceipt: Decodable, Identifiable, Sendable {
@@ -259,9 +275,29 @@ struct TaskReceipt: Decodable, Identifiable, Sendable {
     let summary: String?
     let remainingWork: [String]?
     let needsUser: Bool?
+    let finalizedAt: Int64?
+    let evidence: [TaskEvidence]?
+    let verification: TaskVerification?
     var id: String {
         runId
     }
+}
+
+struct TaskEvidence: Decodable, Sendable {
+    let kind: String
+    let title: String
+    let strength: String
+    let uri: String?
+}
+
+struct TaskVerification: Decodable, Sendable {
+    let checks: [TaskCriterionCheck]
+}
+
+struct TaskCriterionCheck: Decodable, Sendable {
+    let criterion: String
+    let status: String
+    let evidenceTitles: [String]
 }
 
 struct TaskConversation: Decodable, Sendable {

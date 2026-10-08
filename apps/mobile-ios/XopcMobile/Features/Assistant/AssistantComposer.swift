@@ -3,6 +3,7 @@ import SwiftUI
 
 // swiftlint:disable:next type_body_length
 struct AssistantComposer: View {
+    let configuration: GatewayConfiguration
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -30,6 +31,18 @@ struct AssistantComposer: View {
 
     @FocusState private var isComposerFocused: Bool
     @State private var previewAttachment: MessageAttachment?
+    @State private var palette: [ComposerPaletteItem] = []
+    @State private var paletteError: String?
+
+    private var paletteQuery: String? {
+        guard draft.hasPrefix("/"), !draft.contains(where: \.isNewline) else { return nil }
+        return String(draft.dropFirst())
+    }
+
+    private var paletteMatches: [ComposerPaletteItem] {
+        guard let paletteQuery else { return [] }
+        return Array(palette.filter { $0.matches(paletteQuery) }.prefix(8))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -47,6 +60,9 @@ struct AssistantComposer: View {
             }
             if isRunActive, hasPayload {
                 activeRunActions
+            }
+            if paletteQuery != nil, !isActionPanelExpanded {
+                paletteSuggestions
             }
             controls
             if isActionPanelExpanded {
@@ -70,6 +86,7 @@ struct AssistantComposer: View {
                 isActionPanelExpanded = false
             }
         }
+        .task(id: configuration) { await loadPalette() }
         .sheet(item: $previewAttachment) { attachment in
             NavigationStack {
                 ComposerAttachmentImage(attachment: attachment, maxPointSize: 900)
@@ -83,6 +100,49 @@ struct AssistantComposer: View {
                         }
                     }
             }
+        }
+    }
+
+    @ViewBuilder private var paletteSuggestions: some View {
+        if let paletteError {
+            Text(paletteError).font(.caption).foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+        } else if !paletteMatches.isEmpty {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(paletteMatches) { item in
+                        Button {
+                            draft = item.token
+                            isActionPanelExpanded = false
+                            isComposerFocused = true
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.title).font(.subheadline.weight(.semibold))
+                                Text(item.detail).font(.caption).foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("composer-palette-\(item.id)")
+                    }
+                }
+            }
+            .frame(maxHeight: 240)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 14))
+        }
+    }
+
+    @MainActor private func loadPalette() async {
+        do {
+            palette = try await GatewayClient(configuration: configuration)
+                .fetchComposerPalette(language: locale.identifier)
+            paletteError = nil
+        } catch is CancellationError {
+        } catch {
+            paletteError = error.localizedDescription
         }
     }
 

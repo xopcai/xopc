@@ -39,7 +39,7 @@ export type PersonalAgent = {
 };
 type ModelOption = { id: string; name: string };
 type ApiResult<T> = { ok: boolean; payload: T };
-type Activity = { items: Array<{ id: string; title: string; phase: string; runStatus?: string; updatedAt: number }>; total: number };
+type Activity = { items: Array<{ id: string; title: string; phase: string; operationalState?: string; runStatus?: string; updatedAt: number }>; total: number };
 type ActivityItem = Activity['items'][number];
 type ProfileChanges = {
   displayName?: string;
@@ -60,12 +60,15 @@ function activityTitle(title: string): string {
 
 function activityStatus(item: ActivityItem, zh: boolean): { label: string; tone: string } {
   if (item.phase === 'closed') return { label: zh ? '已结束' : 'Finished', tone: 'bg-fg-subtle' };
-  if (item.runStatus === 'running') return { label: zh ? '正在执行' : 'Working', tone: 'bg-accent' };
-  if (item.runStatus === 'queued') return { label: zh ? '等待开始' : 'Queued', tone: 'bg-fg-subtle' };
-  if (item.runStatus === 'failed') return { label: zh ? '需要关注' : 'Needs attention', tone: 'bg-danger' };
-  if (item.runStatus === 'waiting') return { label: zh ? '等待继续' : 'Waiting', tone: 'bg-warning' };
-  if (item.runStatus === 'verifying' || item.runStatus === 'succeeded' || item.phase === 'review') return { label: zh ? '等待验收' : 'In review', tone: 'bg-warning' };
-  if (item.runStatus === 'cancelled') return { label: zh ? '已暂停' : 'Stopped', tone: 'bg-fg-subtle' };
+  const state = item.operationalState ?? item.runStatus;
+  if (state === 'running') return { label: zh ? '正在执行' : 'Working', tone: 'bg-accent' };
+  if (state === 'queued') return { label: zh ? '等待开始' : 'Queued', tone: 'bg-fg-subtle' };
+  if (state === 'failed') return { label: zh ? '执行失败' : 'Failed', tone: 'bg-danger' };
+  if (state === 'waiting') return { label: zh ? '等待继续' : 'Waiting', tone: 'bg-warning' };
+  if (state === 'blocked') return { label: zh ? '已阻塞' : 'Blocked', tone: 'bg-warning' };
+  if (state === 'verifying') return { label: zh ? '正在验证' : 'Verifying', tone: 'bg-accent' };
+  if (state === 'cancelled') return { label: zh ? '执行已取消' : 'Cancelled', tone: 'bg-fg-subtle' };
+  if (item.phase === 'review') return { label: zh ? '等待验收' : 'In review', tone: 'bg-warning' };
   if (item.phase === 'active') return { label: zh ? '正在推进' : 'In progress', tone: 'bg-accent' };
   if (item.phase === 'ready') return { label: zh ? '准备开始' : 'Ready', tone: 'bg-fg-subtle' };
   return { label: zh ? '待处理' : 'Planned', tone: 'bg-fg-subtle' };
@@ -280,6 +283,35 @@ export function PersonalPage() {
       if (request === activityRequestRef.current) setActivityLoadingMore(false);
     }
   }, [activity, activityLoadedCount, activityLoadingMore]);
+
+  useEffect(() => {
+    if (!showActivity || !activity || activityLoadingMore) return;
+    let timer: number | undefined;
+    const refreshActivity = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(async () => {
+        const request = activityRequestRef.current;
+        try {
+          const limit = Math.max(ACTIVITY_PAGE_SIZE, Math.min(100, activityLoadedCount));
+          const response = await fetchJson<ApiResult<Activity>>(apiUrl(`/api/personal-agent/activity?limit=${limit}&offset=0`));
+          if (request !== activityRequestRef.current) return;
+          setActivity(response.payload);
+          setActivityLoadedCount(response.payload.items.length);
+        } catch {
+          // Keep the last known activity; the next event or poll can retry.
+        }
+      }, 120);
+    };
+    const interval = window.setInterval(refreshActivity, 5_000);
+    window.addEventListener('task-changed-v2', refreshActivity);
+    window.addEventListener('gateway-realtime-connected', refreshActivity);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+      window.removeEventListener('task-changed-v2', refreshActivity);
+      window.removeEventListener('gateway-realtime-connected', refreshActivity);
+    };
+  }, [activity, activityLoadedCount, activityLoadingMore, showActivity]);
 
   const uploadAvatar = async (file: File) => {
     if (!record || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {

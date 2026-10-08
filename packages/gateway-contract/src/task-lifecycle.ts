@@ -9,6 +9,8 @@ export const TaskOperationalStateSchema = z.enum([
   'waiting',
   'verifying',
   'blocked',
+  'failed',
+  'cancelled',
 ]);
 
 export const TaskWaitKindSchema = z.enum([

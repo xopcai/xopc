@@ -55,6 +55,31 @@ class ProgressRepositoryTest {
     }
   }
 
+  @Test fun criteriaRespectHumanReviewAndCurrentVerifiedEvidence() {
+    val raw = """{"ok":true,"task":{"id":"task-2","title":"Review","phase":"review",
+      "updatedAt":42,"version":3,"latestContractVersion":2,
+      "contract":{"objective":"Ship safely","acceptancePolicy":"verified_auto",
+        "acceptanceCriteria":["Build passes","Tests pass"]}},
+      "allowedCommands":[],
+      "criterionReviews":[{"contractVersion":2,"criterionIndex":0,"status":"passed"}],
+      "runs":[{"id":"old","contractVersion":1},{"id":"current","contractVersion":2}],
+      "receipts":[{"runId":"old","finalizedAt":99,"verification":{"checks":[
+        {"criterion":"Tests pass","status":"passed","evidenceTitles":["old"]}]},
+        "evidence":[{"title":"old","strength":"verified"}]},
+        {"runId":"current","finalizedAt":100,"verification":{"checks":[
+          {"criterion":"Build passes","status":"passed","evidenceTitles":["build"]},
+          {"criterion":"Tests pass","status":"failed","evidenceTitles":[]}]},
+          "evidence":[{"title":"build","strength":"verified"}]}]}"""
+    val task = ProgressRepository.parseTaskDetail("task-2", raw)
+    assertEquals("Ship safely", task.objective)
+    assertEquals(listOf("passed", "failed"), task.criteria.map { it.status })
+    assertEquals(false, task.criteria.first().humanReviewed)
+    val manual = raw.replace("verified_auto", "manual")
+    val manualTask = ProgressRepository.parseTaskDetail("task-2", manual)
+    assertEquals(listOf("passed", "pending"), manualTask.criteria.map { it.status })
+    assertEquals(true, manualTask.criteria.first().humanReviewed)
+  }
+
   @Test fun taskPatchMustConfirmIdentityAndNewVersion() {
     val raw = """{"ok":true,"task":{"id":"task-2","title":"Edited","phase":"ready",
       "updatedAt":22,"version":4}}"""

@@ -24,7 +24,7 @@ class ConversationRepositoryTest {
     assertEquals(false, list.hasMore)
     val id = list.items.single().id
     val history = ConversationRepository.parseHistory(id,
-      """{"session":{"key":"$id","transcriptId":"transcript-1","messages":[{"id":"1","role":"user","content":"Hello"},{"id":"2","role":"assistant","turnId":"turn-1","content":[{"type":"text","text":"Hi"},{"type":"toolCall","name":"search"}]},{"id":"3","role":"assistant","content":[{"type":"toolCall","name":"search"}]}]}}""")
+      """{"session":{"key":"$id","transcriptId":"transcript-1","messages":[{"id":"1","role":"user","content":"Hello"},{"id":"2","role":"assistant","turnId":"turn-1","content":[{"type":"text","presentation":"final","text":"Hi"},{"type":"toolCall","name":"search"}]},{"id":"3","role":"assistant","content":[{"type":"toolCall","name":"search"}]}]}}""")
     assertEquals(listOf("Hello", "Hi"), history.messages.map { it.text })
     assertEquals("transcript-1", history.transcriptId)
     assertEquals("turn-1", history.messages.last().turnId)
@@ -244,6 +244,27 @@ class ConversationRepositoryTest {
       """{"ok":true,"payload":{"model":"test/two","configVersion":12}}"""))
     assertThrows(IllegalArgumentException::class.java) {
       ConversationRepository.parseModels("""{"ok":true,"payload":{"models":[{"id":"","name":"Invalid"}]}}""")
+    }
+  }
+
+  @Test fun thinkingOptionsAndFollowUpQueueRespectGatewayState() {
+    val models = ConversationRepository.parseModels("""{"ok":true,"payload":{"models":[
+      {"id":"test/one","thinking":{"mode":"levels","initialValue":"low",
+      "options":["off","low","high"]}}]}}""")
+    assertEquals("levels", models.models.single().thinkingMode)
+    assertEquals(listOf("off", "low", "high"), models.models.single().thinkingOptions)
+    val id = "11111111-2222-3333-4444-555555555555"
+    val queue = ConversationRepository.parseQueuedInputs(id, """{"ok":true,"payload":{
+      "conversationId":"$id","activeRunId":null,"inputs":[
+      {"id":"pending","kind":"message","status":"queued","position":0,"version":1,"content":"first"},
+      {"id":"follow-up","kind":"message","status":"queued","position":1,"version":2,
+        "content":"second","attachments":[{}]}]}}""")
+    assertEquals(1, queue.positionOffset)
+    assertEquals("follow-up", queue.items.single().id)
+    assertEquals(1, queue.items.single().attachmentCount)
+    assertThrows(IllegalArgumentException::class.java) {
+      ConversationRepository.parseQueuedInputs("other", """{"ok":true,"payload":{
+        "conversationId":"$id","inputs":[]}}""")
     }
   }
 
