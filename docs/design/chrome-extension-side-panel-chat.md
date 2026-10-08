@@ -11,7 +11,7 @@
 核心决策如下：
 
 1. 使用 Chrome 原生 `chrome.sidePanel`，Side Panel UI 随扩展本地打包；不 iframe Gateway Console，不加载远程执行代码。
-2. 浏览器侧栏使用普通持久 Session，与 Web、Desktop、Mobile 共享历史、标题、模型配置和运行结果；不使用 30 分钟租约的 ephemeral side chat。
+2. 浏览器侧栏使用普通持久 Session，与 Web、Desktop、Mobile 共享历史、标题、模型配置和运行结果；不使用 6 小时租约的 ephemeral side chat。
 3. 会话读写走 Gateway REST；流式回答、endpoint tool 和浏览器控制统一走经身份验证的 Gateway Realtime。不再开启 `127.0.0.1:19820` 自定义控制桥。
 4. 浏览器扩展使用独立设备身份和最小权限 token。Native Messaging 只负责本机 Gateway 发现和一次性本机 enrollment grant，不代理聊天正文或长期凭证。
 5. 打开侧栏不会自动读取页面。页面正文、选中文本和截图仅在用户明确附加或授权 Agent 操作时采集。
