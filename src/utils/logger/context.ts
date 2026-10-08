@@ -8,7 +8,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { LogContext } from './types.js';
 
 /** Correlation fields merged into every log line while the store is active (via pino mixin). */
-const ASYNC_LOG_CORRELATION_KEYS = ['requestId', 'conversationId', 'transcriptId', 'userId', 'correlationId'] as const;
+const ASYNC_LOG_CORRELATION_KEYS = ['requestId', 'conversationId', 'transcriptId', 'userId', 'correlationId', 'traceId', 'spanId', 'runId'] as const;
 
 type AsyncLogCorrelationKey = (typeof ASYNC_LOG_CORRELATION_KEYS)[number];
 

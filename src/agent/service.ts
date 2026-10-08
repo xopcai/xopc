@@ -1,3 +1,4 @@
+import { configureTracing } from '../observability/runtime.js';
 import { resolveAgentIdFromConversationId } from '../routing/agent-session-key.js';
 import type { AgentEvent, AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../gateway/chat-limits.js';
@@ -855,6 +856,7 @@ export class AgentService {
   }
 
   async start(): Promise<void> {
+    await configureTracing(this.config.config?.observability?.tracing);
     await this.sessionConfigStore.initialize();
     await this.hookHandler.trigger('gateway_start', { port: 0, host: 'cli' });
     log.debug('Agent service started');

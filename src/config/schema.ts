@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import semver from 'semver';
+import { TracingConfigSchema } from '../observability/config.js';
 import { ComputerConfigSchema } from '../computer/config.js';
 
 import {
@@ -1155,6 +1156,7 @@ export type ExperimentalConfig = z.infer<typeof ExperimentalConfigSchema>;
 // ============================================
 
 export const ConfigSchema = z.object({
+  observability: z.object({ tracing: TracingConfigSchema.prefault({}) }).optional(),
   userContext: UserContextConfigSchema,
   session: SessionConfigSchema,
   channels: ChannelsConfigSchema,

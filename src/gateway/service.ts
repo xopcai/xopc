@@ -1,3 +1,4 @@
+import { flushTracing } from '../observability/runtime.js';
 import { patchSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { resolveAgentMainConversationId } from '../routing/agent-session-key.js';
@@ -1683,6 +1684,7 @@ export class GatewayService {
   }
 
   async stop(): Promise<void> {
+    await flushTracing();
     if (!this.running) return;
     this.stopping = true;
     this.taskRunDispatcher?.stop();

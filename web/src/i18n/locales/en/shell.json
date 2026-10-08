@@ -40,7 +40,8 @@
     "settingsSystem": "System permissions",
     "settingsDesktopPet": "Pet",
     "settingsDesktopApp": "Application data",
-    "settingsImports": "Import capabilities"
+    "settingsImports": "Import capabilities",
+    "tracing": "Runtime tracing"
   },
   "productNavigation": {
     "primaryAria": "Product navigation",

@@ -124,6 +124,7 @@ describe('runXopcEmbeddedTurn image input', () => {
       attach: vi.fn(),
       release: vi.fn(),
     });
+    mocks.baseStreamFn.mockReturnValue({ result: async () => ({ role: 'assistant', content: [], stopReason: 'stop' }) });
     mocks.waitForIdle.mockResolvedValue(undefined);
     mocks.retryTurn.mockResolvedValue(undefined);
     mocks.basePrepareRequest.mockResolvedValue(undefined);

@@ -55,6 +55,9 @@ export const LogLevelValue: Record<LogLevel, number> = {
  * Common log context fields
  */
 export interface LogContext {
+  traceId?: string;
+  spanId?: string;
+  runId?: string;
   /** Request/operation ID for tracing */
   requestId?: string;
   /** Session ID for user tracking */

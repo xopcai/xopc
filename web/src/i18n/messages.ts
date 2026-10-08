@@ -6,6 +6,7 @@ export type Tab =
   | 'sessions'
   | 'usage'
   | 'logs'
+  | 'tracing'
   | 'settingsImports'
   | 'settingsOverview'
   | 'settingsAppearance'
