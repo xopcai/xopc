@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.LanguagePreference
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.GatewayProfile
 import ai.xopc.mobile.gateway.GatewayProbe
@@ -93,7 +94,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
-import java.util.Locale
 import java.util.UUID
 
 data class ProgressUiState(
@@ -1725,7 +1725,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       state.copy(progress = previous.copy(homeLoading = true, homeError = false))
     }
     progressHomeJob = viewModelScope.launch {
-      val language = if (Locale.getDefault().language.startsWith("zh")) "zh" else "en"
+      val locale = LanguagePreference.localizedContext(getApplication()).resources.configuration.locales[0]
+      val language = if (locale.language.startsWith("zh")) "zh" else "en"
       try {
         val home = runInterruptible(Dispatchers.IO) { progressRepository.home(language) }
         if (revision == progressHomeRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {

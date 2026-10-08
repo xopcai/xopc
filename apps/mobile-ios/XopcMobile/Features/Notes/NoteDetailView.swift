@@ -34,14 +34,14 @@ struct NoteDetailView: View {
                         }
                         if note.pinned == true {
                             Label("已置顶", systemImage: "pin.fill")
-                                .font(.caption)
+                                .mobileTextStyle(.caption)
                                 .foregroundStyle(.blue)
                         }
                         HStack {
                             Label(note.status.noteStatusLabel, systemImage: "circle.fill")
                             Text(note.updatedAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
                         }
-                        .font(.caption).foregroundStyle(.secondary)
+                        .mobileTextStyle(.caption).foregroundStyle(.secondary)
                         if !note.markdown.isEmpty || note.kind != "voice" {
                             Group {
                                 if note.markdown.isEmpty {

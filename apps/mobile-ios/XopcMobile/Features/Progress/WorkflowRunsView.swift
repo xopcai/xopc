@@ -21,8 +21,8 @@ struct WorkflowRunsView: View {
                 } label: {
                     Label {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(run.title).font(.headline)
-                            Text(WorkflowStatusCopy.label(run.status)).font(.subheadline).foregroundStyle(.secondary)
+                            Text(run.title).mobileTextStyle(.rowTitle)
+                            Text(WorkflowStatusCopy.label(run.status)).mobileTextStyle(.secondary).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: WorkflowStatusCopy.symbol(run.status))
@@ -72,11 +72,11 @@ struct WorkflowRunDetailView: View {
             if let detail {
                 Section {
                     Label(detail.run.title, systemImage: WorkflowStatusCopy.symbol(detail.run.status))
-                        .font(.title3.bold())
+                        .mobileTextStyle(.detailTitle)
                     Text(WorkflowStatusCopy.label(detail.run.status))
                         .foregroundStyle(.secondary)
                     Text("已完成 \(completedCount) / \(detail.agents.count) 项 Agent 工作")
-                        .font(.subheadline)
+                        .mobileTextStyle(.secondary)
                     if detail.controls.canCancel {
                         Button("取消运行", role: .destructive) { confirmsCancel = true }
                             .disabled(isCancelling)
@@ -129,7 +129,7 @@ struct WorkflowRunDetailView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                 Text(step.error ?? step.resultPreview ?? WorkflowStatusCopy.label(step.status))
-                    .font(.subheadline).foregroundStyle(step.error == nil ? Color.secondary : Color.red)
+                    .mobileTextStyle(.secondary).foregroundStyle(step.error == nil ? Color.secondary : Color.red)
             }
         } icon: {
             Image(systemName: WorkflowStatusCopy.symbol(step.status))
@@ -170,14 +170,7 @@ struct WorkflowRunDetailView: View {
 
 private enum WorkflowStatusCopy {
     static func label(_ status: String) -> String {
-        switch status {
-        case "queued": "排队中"
-        case "running": "运行中"
-        case "succeeded", "done": "已完成"
-        case "failed": "失败"
-        case "cancelled": "已取消"
-        default: status
-        }
+        AppLocalization.string(status, locale: AppLocalization.selectedLocale)
     }
 
     static func symbol(_ status: String) -> String {

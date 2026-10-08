@@ -22,16 +22,16 @@ struct ProfileView: View {
                     } label: {
                         HStack(spacing: 14) {
                             Text(String((summary.profile.callName ?? summary.suggestedCallName ?? "X").prefix(2)))
-                                .font(.title2.bold()).foregroundStyle(.blue)
+                                .mobileTextStyle(.detailTitle).foregroundStyle(.blue)
                                 .frame(width: 64, height: 64)
                                 .background(.blue.opacity(0.1), in: .circle)
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(summary.profile.callName?.isEmpty == false ? summary.profile.callName ?? "你" : summary.suggestedCallName ?? "你")
-                                    .font(.title3.bold())
+                                    .mobileTextStyle(.detailTitle)
                                 Text(summary.profile.role?.isEmpty == false ? summary.profile.role ?? "" : "你的个人 AI 工作空间")
-                                    .font(.subheadline).foregroundStyle(.secondary)
+                                    .mobileTextStyle(.secondary).foregroundStyle(.secondary)
                                 Text("\(summary.counts.total) 条理解 · \(summary.counts.review) 条待确认")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                    .mobileTextStyle(.caption).foregroundStyle(.secondary)
                             }
                         }
                         .padding(.vertical, 8)
@@ -44,9 +44,9 @@ struct ProfileView: View {
                             goalEditorPresented = true
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(goal.title).font(.headline).foregroundStyle(.primary)
+                                Text(goal.title).mobileTextStyle(.rowTitle).foregroundStyle(.primary)
                                 if let outcome = goal.desiredOutcome {
-                                    Text(outcome).font(.subheadline).foregroundStyle(.secondary)
+                                    Text(outcome).mobileTextStyle(.secondary).foregroundStyle(.secondary)
                                 }
                             }
                         }
@@ -54,9 +54,9 @@ struct ProfileView: View {
                     if summary.goals.isEmpty {
                         if let focus = summary.primaryFocus {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(focus.title).font(.headline)
+                                Text(focus.title).mobileTextStyle(.rowTitle)
                                 if let outcome = focus.desiredOutcome {
-                                    Text(outcome).font(.subheadline).foregroundStyle(.secondary)
+                                    Text(outcome).mobileTextStyle(.secondary).foregroundStyle(.secondary)
                                 }
                             }
                         } else {
@@ -98,11 +98,11 @@ struct ProfileView: View {
             } else if error != nil {
                 Section {
                     HStack(spacing: 14) {
-                        Text("X").font(.title2.bold()).foregroundStyle(.blue)
+                        Text("X").mobileTextStyle(.detailTitle).foregroundStyle(.blue)
                             .frame(width: 64, height: 64).background(.blue.opacity(0.1), in: .circle)
                         VStack(alignment: .leading, spacing: 5) {
-                            Text("你").font(.title3.bold())
-                            Text("你的个人 AI 工作空间").font(.subheadline).foregroundStyle(.secondary)
+                            Text("你").mobileTextStyle(.detailTitle)
+                            Text("你的个人 AI 工作空间").mobileTextStyle(.secondary).foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 8)
@@ -112,7 +112,7 @@ struct ProfileView: View {
                 }
                 Section("xopc 如何理解你") {
                     Text("你提供的信息和协作中逐渐学到的内容").foregroundStyle(.secondary)
-                    Text("连接 Gateway 后可查看个人理解和工作记忆").font(.subheadline).foregroundStyle(.secondary)
+                    Text("连接 Gateway 后可查看个人理解和工作记忆").mobileTextStyle(.secondary).foregroundStyle(.secondary)
                 }
                 Section {
                     Label("个人理解暂时无法读取", systemImage: "wifi.slash")
@@ -148,8 +148,8 @@ struct ProfileView: View {
 
     private func understandingCount(_ value: Int, _ title: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("\(value)").font(.title2.bold())
-            Text(title).font(.caption2).foregroundStyle(.secondary)
+            Text("\(value)").mobileTextStyle(.heading)
+            Text(title).mobileTextStyle(.smallCaption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -230,7 +230,7 @@ private struct UserUnderstandingView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(item.statement)
                             Text(item.authority == "user_explicit" ? "你提供" : "逐渐学到")
-                                .font(.caption).foregroundStyle(.secondary)
+                                .mobileTextStyle(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -436,7 +436,7 @@ private struct UserAssertionDetailView: View {
                     if editing {
                         TextEditor(text: $statement).frame(minHeight: 160)
                     } else {
-                        Text(item.statement).font(.title3)
+                        Text(item.statement).mobileTextStyle(.sectionTitle)
                     }
                 }
                 Section("依据与范围") {

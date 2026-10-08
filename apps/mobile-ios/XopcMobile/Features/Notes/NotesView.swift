@@ -34,9 +34,9 @@ struct NotesView: View {
                     } label: {
                         Label {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(pendingVoiceTitle).font(.headline)
+                                Text(pendingVoiceTitle).mobileTextStyle(.rowTitle)
                                 Text(pendingVoiceDetail)
-                                    .font(.subheadline).foregroundStyle(.secondary)
+                                    .mobileTextStyle(.secondary).foregroundStyle(.secondary)
                             }
                         } icon: {
                             Image(systemName: "waveform")
@@ -117,7 +117,7 @@ struct NotesView: View {
             switch sheet {
             case .choice:
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("新建笔记").font(.title2.bold())
+                    Text("新建笔记").mobileTextStyle(.detailTitle)
                     Button {
                         pendingCreation = .create
                         presentedSheet = nil
@@ -235,8 +235,8 @@ struct NotesView: View {
     private var loadingRows: some View {
         ForEach(0 ..< 4, id: \.self) { _ in
             VStack(alignment: .leading, spacing: 8) {
-                Text("笔记标题占位").font(.headline)
-                Text("正在读取笔记内容摘要").font(.subheadline)
+                Text("笔记标题占位").mobileTextStyle(.rowTitle)
+                Text("正在读取笔记内容摘要").mobileTextStyle(.secondary)
             }
             .redacted(reason: .placeholder)
         }
@@ -344,7 +344,7 @@ struct NoteRow: View {
                     .foregroundStyle(.blue)
                     .accessibilityHidden(true)
                 Text(note.displayTitle)
-                    .font(.headline)
+                    .mobileTextStyle(.rowTitle)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Image(systemName: "chevron.right")
@@ -353,7 +353,7 @@ struct NoteRow: View {
             }
             if let snippet = note.snippet, !snippet.isEmpty {
                 Text(snippet)
-                    .font(.subheadline)
+                    .mobileTextStyle(.secondary)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -364,11 +364,11 @@ struct NoteRow: View {
                     HStack(spacing: 8) { noteMetadata }
                 }
             }
-            .font(.caption)
+            .mobileTextStyle(.caption)
             .foregroundStyle(.tertiary)
             if let tags = note.tags, !tags.isEmpty {
                 Text(tags.prefix(3).map { "#\($0)" }.joined(separator: "  "))
-                    .font(.caption)
+                    .mobileTextStyle(.caption)
                     .foregroundStyle(.blue)
                     .fixedSize(horizontal: false, vertical: true)
             }

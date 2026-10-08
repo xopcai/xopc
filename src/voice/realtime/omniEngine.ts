@@ -3,7 +3,7 @@ import WebSocket from 'ws';
 
 import { createLogger } from '../../utils/logger.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
-import { isLikelyPlaybackEcho } from './playback-echo.js';
+import { PlaybackEchoCandidates } from './playback-echo.js';
 import { TurnCoordinator } from './turnPolicy.js';
 import { PcmFrameBuffer } from './pcmFrameBuffer.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
@@ -80,6 +80,7 @@ export function createOmniVoiceEngine(options: {
   let failed = false;
   let platformRequestId: string | undefined;
   let active: ResponseState | undefined;
+  const echoCandidates = new PlaybackEchoCandidates();
   let recentPlayback: { text: string; expiresAt: number } | undefined;
   let waitingForCancellation: string | undefined;
   let responseCreateQueued = false;
@@ -157,6 +158,7 @@ export function createOmniVoiceEngine(options: {
   const cancel = (reason: 'barge_in' | 'client_cancelled' | 'session_closed') => {
     const response = active;
     if (!response) return false;
+    if (response.audio && response.text) recentPlayback = { text: response.text, expiresAt: Date.now() + PLAYBACK_ECHO_TAIL_MS };
     active = undefined;
     response.abort.abort(reason);
     response.release();
@@ -204,6 +206,7 @@ export function createOmniVoiceEngine(options: {
     failed = true;
     clearTimeout(responseStartTimer);
     turn.reset();
+    echoCandidates.clear();
     responseCreateQueued = false;
     log.warn({ sessionId: options.callId, platformRequestId, responseId: active?.id, code,
       provider: options.route.route.provider, upstreamHost: new URL(options.route.url).hostname,
@@ -216,6 +219,7 @@ export function createOmniVoiceEngine(options: {
   function discardInput() {
     clearTimeout(responseStartTimer);
     turn.reset();
+    echoCandidates.clear();
     responseCreateQueued = false;
     speaking.clear();
     turnSettled = false;
@@ -285,6 +289,8 @@ export function createOmniVoiceEngine(options: {
             } else if (event.type === 'input_audio_buffer.speech_started') {
               if (muted || clearingInput) { discardedInputs.add(String(event.item_id)); return; }
               if (recorded.has(String(event.item_id)) || pendingInputs.has(String(event.item_id))) return;
+              echoCandidates.remember(String(event.item_id), active?.audio ? active.text
+                : recentPlayback && recentPlayback.expiresAt >= Date.now() ? recentPlayback.text : undefined);
               inputBlocked = false;
               pendingInputs.add(String(event.item_id));
               clearTimeout(responseStartTimer);
@@ -306,7 +312,7 @@ export function createOmniVoiceEngine(options: {
               const text = event.transcript.trim();
               const playbackText = active?.audio ? active.text
                 : recentPlayback && recentPlayback.expiresAt >= Date.now() ? recentPlayback.text : undefined;
-              if (playbackText && isLikelyPlaybackEcho(text, playbackText)) {
+              if (echoCandidates.matches(event.item_id, text, playbackText)) {
                 turn.final(event.item_id, '');
                 log.debug({ sessionId: options.callId, responseId: active?.id, transcriptCharacters: text.length }, 'Ignored native voice playback echo');
                 return;
@@ -417,7 +423,7 @@ export function createOmniVoiceEngine(options: {
       if (closed) return writes;
       closed = true; cancel('session_closed'); clearTimeout(timer); clearTimeout(clearTimer); clearTimeout(uploadTimer);
       clearTimeout(responseStartTimer);
-      turn.reset(); speaking.clear();
+      turn.reset(); echoCandidates.clear(); speaking.clear();
       inputQueue = []; queuedInputBytes = 0;
       rejectStart?.(new Error('Omni connection closed')); rejectStart = undefined;
       socket?.terminate();

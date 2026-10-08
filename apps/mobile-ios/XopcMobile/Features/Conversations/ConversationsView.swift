@@ -138,14 +138,14 @@ struct ConversationsView: View {
                             ? "继续和\(personalAgent?.displayName ?? "Ada")对话"
                             : "Continue with \(personalAgent?.displayName ?? "Ada")")
                         : (locale.language.languageCode?.identifier == "zh" ? "创建我的助手" : "Create my assistant"))
-                        .font(.headline)
+                        .mobileTextStyle(.rowTitle)
                         .foregroundStyle(.primary)
                     Text(verbatim: personalAgentError ?? (personalAgent?.isReady == true
                             ? (locale.language.languageCode?.identifier == "zh"
                                 ? "回到你的固定主会话" : "Return to your ongoing conversation")
                             : (locale.language.languageCode?.identifier == "zh"
                                 ? "保持同一个助手和持续的对话" : "One assistant, one ongoing conversation")))
-                        .font(.caption)
+                        .mobileTextStyle(.caption)
                         .foregroundColor(personalAgentError == nil ? .secondary : .red)
                         .multilineTextAlignment(.leading)
                 }
@@ -331,10 +331,10 @@ private struct ConversationRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(conversation.displayName)
-                    .font(.headline)
+                    .mobileTextStyle(.rowTitle)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("\(conversation.agentId) · \(conversation.messageCount) 条消息 · \(String(conversation.updatedAt.prefix(10)))")
-                    .font(.caption)
+                    .mobileTextStyle(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

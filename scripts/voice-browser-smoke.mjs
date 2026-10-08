@@ -10,7 +10,11 @@ const root=fileURLToPath(new URL('../web',import.meta.url));
 process.chdir(root);
 const dir=await mkdtemp(root+'/.voice-smoke-');
 let browser,server;
+const micWav = Buffer.alloc(44 + 48_000 * 2 * 20);
+micWav.write('RIFF');micWav.writeUInt32LE(micWav.length - 8,4);micWav.write('WAVEfmt ',8);micWav.writeUInt32LE(16,16);micWav.writeUInt16LE(1,20);micWav.writeUInt16LE(1,22);micWav.writeUInt32LE(48_000,24);micWav.writeUInt32LE(96_000,28);micWav.writeUInt16LE(2,32);micWav.writeUInt16LE(16,34);micWav.write('data',36);micWav.writeUInt32LE(micWav.length - 44,40);
+for(let i=0;i<(micWav.length-44)/2;i++)micWav.writeInt16LE(Math.round(Math.sin(i/48_000*440*Math.PI*2)*8_000),44+i*2);
 try {
+await writeFile(dir+'/microphone.wav',micWav);
 await writeFile(dir+'/index.html','<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script type="module" src="./main.jsx"></script></body></html>');
 await writeFile(dir+'/main.jsx',`import React,{useState} from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter}from'react-router-dom';
 import{VoiceCallProvider}from'/src/features/voice/realtime/voice-call-provider';import{useVoiceCall}from'/src/features/voice/realtime/voice-call-context';import{useRealtimeVoice}from'/src/features/voice/realtime/use-realtime-voice';import{VoiceSettingsPanel}from'/src/features/settings/voice-settings';import{useGatewayStore}from'/src/stores/gateway-store';import{useLocaleStore}from'/src/stores/locale-store';import{useSettingsModeStore}from'/src/stores/settings-mode-store';import{messages}from'/src/i18n/messages';import'/src/styles/globals.css';
@@ -18,8 +22,14 @@ useGatewayStore.setState({conversationId:'synthetic-test'});useLocaleStore.setSt
 function Harness(){const call=useVoiceCall();const[page,setPage]=useState(false);const[draft,setDraft]=useState('原草稿');const[count,setCount]=useState(0);const voice=useRealtimeVoice({disabled:false,chat:messages('zh').chat,onTranscript:text=>setDraft(v=>v+' '+text)});return <main style={{padding:24,maxWidth:900}}><button onClick={()=>call.open({conversationId:'same-chat',name:'Ada'})}>测试通话</button><button onClick={()=>setPage(!page)}>切换页面</button>{page?<VoiceSettingsPanel/>:<><textarea aria-label="草稿" value={draft} onChange={e=>setDraft(e.target.value)}/><button onClick={voice.startVoiceInput}>听写测试</button><button onClick={voice.confirmVoiceInput}>完成听写</button><button onClick={voice.cancelVoiceInput}>取消听写</button><button onClick={()=>setCount(v=>v+1)}>发送</button><p data-count>{count}</p><p data-phase>{voice.phase}</p></>}</main>}
 createRoot(document.getElementById('root')).render(<MemoryRouter><VoiceCallProvider><Harness/></VoiceCallProvider></MemoryRouter>);`);
 server=await createServer({configFile:root+'/vite.config.ts',root,server:{port:3017,strictPort:true,open:false}});await server.listen();
-browser=await chromium.launch({executablePath:process.env.XOPC_VOICE_SMOKE_BROWSER || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
+browser=await chromium.launch({executablePath:process.env.XOPC_VOICE_SMOKE_BROWSER || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream',`--use-file-for-fake-audio-capture=${dir}/microphone.wav`,'--autoplay-policy=no-user-gesture-required']});
 const context=await browser.newContext({permissions:['microphone'],viewport:{width:1024,height:900}});const page=await context.newPage();page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',message=>{if(message.type()==='error')errors.push(`${message.location().url}: ${message.text()}`)});
+await page.addInitScript(() => {
+  window.__voiceGainChanges=[];
+  const original=AudioParam.prototype.setTargetAtTime;
+  AudioParam.prototype.setTargetAtTime=function(value,...args){window.__voiceGainChanges.push(value);return original.call(this,value,...args)};
+});
+let uplinkFrames=0;
 const controls=[],connections=[],answers=[];let current,session;
 const route={engine:'agent',stt:{provider:'alibaba',model:'test',managed:false},tts:{provider:'alibaba',model:'test',managed:false}};
 await page.route('**/api/**',async r=>{const path=new URL(r.request().url()).pathname;if(!path.startsWith('/api/'))return r.continue();let payload={};
@@ -34,15 +44,26 @@ if(path.includes('/approvals'))payload={approvals:[]};
 if(path.includes('/transcriptions/refine'))payload={text:'识别文本。'};
 await r.fulfill({json:{ok:true,payload}})});
 await page.routeWebSocket('**/api/voice/realtime/v3/ws',ws=>{let seq=0;const own=session;current={ws,emit:(type,payload)=>ws.send(JSON.stringify({protocolVersion:3,eventId:randomUUID(),seq:++seq,type,sentAt:Date.now(),sessionId:own.sessionId,payload}))};const conn=current;
-ws.onMessage(raw=>{if(typeof raw!=='string')return;const msg=JSON.parse(raw);controls.push(msg);if(msg.type==='session.start')conn.emit('session.ready',{purpose:own.purpose,...(own.mode?{mode:own.mode}:{}),connectionEpoch:own.connectionEpoch,inputMode:'server_vad',inputFormat:own.inputFormat,media:own.media,route:own.route,heartbeatIntervalMs:15000});if(msg.type==='input.commit')ws.close({code:1000,reason:'input_committed'});if(msg.type==='session.stop')ws.close({code:1000,reason:'user_finished'});});});
+ws.onMessage(raw=>{if(typeof raw!=='string'){uplinkFrames++;return;}const msg=JSON.parse(raw);controls.push(msg);if(msg.type==='session.start')conn.emit('session.ready',{purpose:own.purpose,...(own.mode?{mode:own.mode}:{}),connectionEpoch:own.connectionEpoch,inputMode:'server_vad',inputFormat:own.inputFormat,media:own.media,route:own.route,heartbeatIntervalMs:15000});if(msg.type==='input.commit')ws.close({code:1000,reason:'input_committed'});if(msg.type==='session.stop')ws.close({code:1000,reason:'user_finished'});});});
 await page.goto('http://localhost:3017/'+dir.split('/').at(-1)+'/index.html');
 await page.getByRole('button',{name:'测试通话',exact:true}).waitFor().catch(error=>{throw new Error(`Voice smoke page did not load: ${errors.join(' | ') || error.message}`)});
-await page.getByRole('button',{name:'测试通话',exact:true}).click();await page.getByText('我在听',{exact:true}).waitFor();
+await page.getByRole('button',{name:'测试通话',exact:true}).click();await page.getByRole('button',{name:'展开通话',exact:true}).click();await page.getByText('我在听',{exact:true}).waitFor().catch(async error=>{throw Error(error.message+' | '+await page.locator('body').innerText()+' | '+errors.join(' | ')+' | '+JSON.stringify(controls))});
 if(connections.length!==1||connections[0].mode!==undefined||connections[0].supportedProtocolVersions?.[0]!==3)throw Error('Call did not negotiate the v3 server default');
 current.emit('input.speech_stopped',{utteranceId:'u1'});current.emit('response.created',{responseId:'r1'});current.emit('response.text.delta',{responseId:'r1',delta:'你好，**今天**想聊什么？'});current.emit('response.audio.started',{responseId:'r1',format:{encoding:'pcm_s16le',sampleRate:24000,channels:1}});
 // Send one second of synthetic PCM through the real decoder and Web Audio player.
 const pcm=Buffer.alloc(48000);for(let i=0;i<24000;i++)pcm.writeInt16LE(Math.round(Math.sin(i/24000*440*Math.PI*2)*2000),i*2);
 for(let n=0;n<50;n++){const id=Buffer.from('r1');const frame=Buffer.alloc(32+id.length+960);frame.writeUInt32BE(0x584f5033,0);frame.writeUInt8(3,4);frame.writeUInt8(2,5);frame.writeUInt8(1,6);frame.writeUInt32BE(7,8);frame.writeUInt32BE(n+1,12);frame.writeDoubleBE(n*20,16);frame.writeUInt16BE(20,24);frame.writeUInt16BE(id.length,26);frame.writeUInt32BE(960,28);id.copy(frame,32);pcm.copy(frame,32+id.length,n*960,(n+1)*960);current.ws.send(frame)}
+// Raw VAD during loud captured audio must never duck or stop assistant playback.
+for(let i=0;i<3;i++){current.emit('input.speech_started',{utteranceId:`echo-${i}`});current.emit('input.speech_stopped',{utteranceId:`echo-${i}`});}
+await page.waitForFunction(()=>window.__voiceGainChanges!==undefined);
+await new Promise(resolve=>setTimeout(resolve,1400));
+if(!uplinkFrames)throw Error('Synthetic microphone did not reach the real worklet and uplink');
+if(await page.evaluate(()=>window.__voiceGainChanges.some(value=>Math.abs(value-1.7*0.15)<0.00001)))throw Error('Speaker echo ducked assistant playback');
+if(!controls.some(c=>c.type==='response.audio.played'&&c.payload.responseId==='r1'&&c.payload.playedDurationMs>=1000))throw Error('Echo prevented complete PCM playback');
+if(controls.some(c=>c.type==='response.stop_playback'))throw Error('Raw speech interrupted playback');
+current.emit('response.done',{responseId:'r1',audio:true,finishReason:'completed'});
+await page.getByText('我在听',{exact:true}).waitFor();
+current.emit('response.created',{responseId:'manual-stop'});current.emit('response.audio.started',{responseId:'manual-stop',format:{encoding:'pcm_s16le',sampleRate:24000,channels:1}});
 await page.getByRole('button',{name:'停止回复',exact:true}).click();if(!controls.some(c=>c.type==='session.metric'&&c.payload.metric==='speech_end_to_audio_received'))throw Error('PCM did not reach the player');
 if(!controls.some(c=>c.type==='response.stop_playback')||controls.some(c=>c.type==='input.commit'))throw Error('Stop submitted input');
 current.emit('response.created',{responseId:'r2'});current.emit('task.created',{responseId:'r2',taskId:'task1'});current.emit('task.activity',{taskId:'task1',toolCallId:'tool1',toolName:'clarify',status:'running'});current.emit('response.clarification',{responseId:'r2',requestId:'question1',kind:'input',question:'请选择路线',choices:['路线 A','路线 B'],version:1,createdAt:Date.now()});
@@ -55,5 +76,5 @@ await page.locator('[role="region"][aria-label="语音通话"] button').first().
 const dialog=page.getByRole('dialog');const box=await dialog.boundingBox();if(!box||box.x<0||box.x+box.width>391)throw Error('Call overflows mobile');
 await page.getByRole('button',{name:'挂断',exact:true}).click();await page.getByRole('button',{name:'切换页面',exact:true}).click();await page.getByRole('button',{name:'听写测试',exact:true}).click();await page.locator('[data-phase]').filter({hasText:'recording'}).waitFor();current.emit('input.transcript.final',{utteranceId:'dict1',revision:1,text:'识别文本'});await page.getByRole('button',{name:'取消听写',exact:true}).click();if(await page.getByRole('textbox',{name:'草稿'}).inputValue()!=='原草稿')throw Error('Cancel changed draft');
 await page.getByRole('button',{name:'听写测试',exact:true}).click();await page.locator('[data-phase]').filter({hasText:'recording'}).waitFor();current.emit('input.transcript.final',{utteranceId:'dict2',revision:1,text:'识别文本'});await page.getByRole('button',{name:'完成听写',exact:true}).click();await page.waitForFunction(()=>document.querySelector('textarea').value.includes('识别文本。'));if(await page.locator('[data-count]').textContent()!=='0')throw Error('Dictation submitted a message');
-if(errors.length)throw Error(errors.join('\n'));console.log(JSON.stringify({passed:true,connections:connections.length,controls:controls.map(c=>c.type),checks:'real React settings/call, fake Chrome microphone + PCM playback, one-click, stop, mute, navigation, mobile layout, explicit clarification, dictation cancel/finish/refine'}));
+if(errors.length)throw Error(errors.join('\n'));console.log(JSON.stringify({passed:true,connections:connections.length,controls:controls.map(c=>c.type),checks:'real React settings/call, loud synthetic Chrome microphone + real worklet/uplink + complete PCM playback without echo ducking, one-click, stop, mute, navigation, mobile layout, explicit clarification, dictation cancel/finish/refine'}));
 } finally {await browser?.close();await server?.close();await rm(dir,{recursive:true,force:true});}

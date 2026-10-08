@@ -46,3 +46,27 @@ export function isLikelyPlaybackEcho(transcript: string, assistantText: string):
   const distance = closestSubstringEditDistance(heard, spoken);
   return distance / Array.from(heard).length <= 0.22;
 }
+
+/** Retains the playback at speech onset while a provider finishes delayed ASR. */
+export class PlaybackEchoCandidates {
+  private readonly candidates = new Map<string, { text: string; expiresAt: number }>();
+
+  remember(utteranceId: string, text: string | undefined): void {
+    if (!text || this.candidates.has(utteranceId)) return;
+    const now = Date.now();
+    for (const [id, candidate] of this.candidates) {
+      if (candidate.expiresAt < now) this.candidates.delete(id);
+    }
+    if (this.candidates.size >= 256) this.candidates.delete(this.candidates.keys().next().value!);
+    this.candidates.set(utteranceId, { text: text.slice(-8_000), expiresAt: now + 30_000 });
+  }
+
+  matches(utteranceId: string, transcript: string, currentPlayback?: string): boolean {
+    const candidate = this.candidates.get(utteranceId);
+    this.candidates.delete(utteranceId);
+    return Boolean((currentPlayback && isLikelyPlaybackEcho(transcript, currentPlayback))
+      || (candidate && candidate.expiresAt >= Date.now() && isLikelyPlaybackEcho(transcript, candidate.text)));
+  }
+
+  clear(): void { this.candidates.clear(); }
+}

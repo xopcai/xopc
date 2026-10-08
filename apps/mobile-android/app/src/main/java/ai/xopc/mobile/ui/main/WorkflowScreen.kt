@@ -105,7 +105,7 @@ internal fun WorkflowScreen(gatewayId: String, onBack: () -> Unit,
             .padding(horizontal = 16.dp).testTag("workflow-run-${run.id}")) {
             Column(modifier = Modifier.padding(16.dp)) {
               Text(run.title, style = MaterialTheme.typography.titleMedium)
-              Text(workflowStatus(run.status), color = MaterialTheme.colorScheme.onSurfaceVariant)
+              Text(runStatusLabel(run.status), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
           }
         }
@@ -114,7 +114,7 @@ internal fun WorkflowScreen(gatewayId: String, onBack: () -> Unit,
           Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
               Text(record.run.title, style = MaterialTheme.typography.titleLarge)
-              Text(workflowStatus(record.run.status))
+              Text(runStatusLabel(record.run.status))
               Text(stringResource(R.string.workflow_progress,
                 record.agents.count { it.status in setOf("done", "succeeded") }, record.agents.size))
               if (record.canCancel) Button(onClick = { cancelOpen = true },
@@ -153,16 +153,6 @@ internal fun WorkflowScreen(gatewayId: String, onBack: () -> Unit,
 }
 
 @Composable
-private fun workflowStatus(status: String): String = stringResource(when (status) {
-  "queued" -> R.string.workflow_status_queued
-  "running" -> R.string.workflow_status_running
-  "done", "succeeded" -> R.string.workflow_status_done
-  "failed" -> R.string.workflow_status_failed
-  "cancelled" -> R.string.workflow_status_cancelled
-  else -> R.string.workflow_status_unknown
-})
-
-@Composable
 private fun WorkflowTextSection(label: Int, content: String) {
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
     Text(stringResource(label), style = MaterialTheme.typography.titleMedium)
@@ -174,7 +164,7 @@ private fun WorkflowTextSection(label: Int, content: String) {
 @Composable
 private fun WorkflowStepCard(step: WorkflowStep) {
   val summary = if (step.error.isNotBlank()) step.error else if (step.preview.isNotBlank()) step.preview
-    else workflowStatus(step.status)
+    else runStatusLabel(step.status)
   Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
     Column(modifier = Modifier.padding(14.dp)) {
       Text(step.title, style = MaterialTheme.typography.titleSmall)

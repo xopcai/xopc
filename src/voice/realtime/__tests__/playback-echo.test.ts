@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { isLikelyPlaybackEcho } from '../playback-echo.js';
+import { isLikelyPlaybackEcho, PlaybackEchoCandidates } from '../playback-echo.js';
 
 describe('realtime playback echo detection', () => {
   it.each([
@@ -20,5 +20,32 @@ describe('realtime playback echo detection', () => {
     ['北京天气怎么样', '上海天气怎么样，今天是晴天。'],
   ])('keeps genuine or ambiguous barge-in speech: %s', (heard, spoken) => {
     expect(isLikelyPlaybackEcho(heard, spoken)).toBe(false);
+  });
+});
+
+
+describe('playback echo candidates', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('checks delayed ASR against speech onset and consumes each candidate once', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    const guard = new PlaybackEchoCandidates();
+    guard.remember('echo', '今天天气晴朗。');
+    now.mockReturnValue(6_000);
+    expect(guard.matches('echo', '今天天气晴朗', '另一个回答。')).toBe(true);
+    expect(guard.matches('echo', '今天天气晴朗')).toBe(false);
+    guard.remember('user', '今天天气晴朗。');
+    expect(guard.matches('user', '停一下')).toBe(false);
+  });
+
+  it('expires and clears candidates so old playback cannot suppress later speech', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    const guard = new PlaybackEchoCandidates();
+    guard.remember('old', '今天天气晴朗。');
+    now.mockReturnValue(32_000);
+    expect(guard.matches('old', '今天天气晴朗')).toBe(false);
+    guard.remember('muted', '今天天气晴朗。');
+    guard.clear();
+    expect(guard.matches('muted', '今天天气晴朗')).toBe(false);
   });
 });

@@ -18,7 +18,7 @@ struct ProjectTaskEditorView: View {
                 }
                 Section {
                     Text("任务将加入当前项目的待办列表，不会立即启动助手执行。")
-                        .font(.footnote)
+                        .mobileTextStyle(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }

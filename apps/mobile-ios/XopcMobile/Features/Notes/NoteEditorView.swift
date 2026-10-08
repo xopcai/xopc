@@ -80,7 +80,7 @@ struct NoteEditorView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Text(statusLabel)
-                        .font(.caption)
+                        .mobileTextStyle(.caption)
                         .foregroundStyle(.secondary)
                 }
             }

@@ -28,6 +28,7 @@ struct AppRootView: View {
                 tabShell
             }
         }
+        .mobileTextStyle(.body)
         .tint(.blue)
         .environment(\.locale, (AppLanguage(rawValue: language) ?? .system).locale)
         .preferredColorScheme((AppAppearance(rawValue: appearance) ?? .system).colorScheme)

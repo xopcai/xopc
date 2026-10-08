@@ -62,7 +62,7 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
         "language" -> R.string.settings_language
         else -> R.string.settings_title
       }),
-        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
+        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(start = 4.dp))
     }
     AnimatedContent(targetState = section, modifier = Modifier.fillMaxSize(),

@@ -37,7 +37,7 @@ struct AutomationEditorView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     Text("使用五段 Cron 表达式，例如 0 9 * * 1 表示每周一 09:00。")
-                        .font(.footnote)
+                        .mobileTextStyle(.footnote)
                         .foregroundStyle(.secondary)
                     Toggle(isOn: $isEnabled) {
                         Text(existing == nil

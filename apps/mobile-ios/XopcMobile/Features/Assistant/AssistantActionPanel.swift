@@ -277,7 +277,7 @@ struct AssistantActionPanel: View {
 
     var body: some View {
         TabView {
-            LazyVGrid(columns: columns, spacing: 18) {
+            LazyVGrid(columns: columns, spacing: 4) {
                 ForEach(AssistantAction.allCases) { action in
                     Button {
                         onSelect(action)
@@ -292,8 +292,10 @@ struct AssistantActionPanel: View {
                         : "")
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 8)
+            .padding(.horizontal, 6)
+            .padding(.top, 4)
+            .padding(.bottom, 20)
+            .frame(maxHeight: .infinity, alignment: .top)
 
             HStack(alignment: .top, spacing: 8) {
                 ForEach(RealtimeVoiceMode.allCases, id: \.self) { mode in
@@ -310,28 +312,32 @@ struct AssistantActionPanel: View {
                 }
                 ForEach(0 ..< 2, id: \.self) { _ in Color.clear.frame(maxWidth: .infinity) }
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 8)
+            .padding(.horizontal, 6)
+            .padding(.top, 4)
+            .padding(.bottom, 20)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
-        .frame(height: dynamicTypeSize.isAccessibilitySize ? 258 : 205)
+        .frame(height: dynamicTypeSize.isAccessibilitySize ? 420 : 196)
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
         .padding(.bottom, 8)
         .accessibilityIdentifier("assistant-action-panel")
     }
 
     private func tile(title: Text, image: String) -> some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 6) {
             Image(systemName: image)
-                .font(.system(size: 23, weight: .regular))
-                .frame(width: 54, height: 54)
-                .background(Color(uiColor: .systemGray5), in: .rect(cornerRadius: 15))
+                .font(.system(size: 24, weight: .regular))
+                .frame(width: 48, height: 48)
+                .background(Color(uiColor: .systemGray5), in: .rect(cornerRadius: 14))
             title
-                .font(.caption)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                .mobileTextStyle(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
         }
         .foregroundStyle(.primary)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 84, alignment: .top)
         .contentShape(.rect)
     }
 }

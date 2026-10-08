@@ -56,7 +56,7 @@ internal fun GatewayProfilesScreen(state: ConnectionUiState, insets: PaddingValu
       IconButton(onClick = onBack, enabled = !state.gatewayBusy,
         modifier = Modifier.testTag("gateways-back")) { Text("‹", style = MaterialTheme.typography.headlineMedium) }
       Text(stringResource(R.string.gateways_title), modifier = Modifier.weight(1f).padding(start = 4.dp),
-        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
       IconButton(onClick = onRefresh, enabled = !state.gatewayBusy,
         modifier = Modifier.testTag("gateways-refresh")) { Text("↻", style = MaterialTheme.typography.titleLarge) }
       IconButton(onClick = onAdd, enabled = !state.gatewayBusy,

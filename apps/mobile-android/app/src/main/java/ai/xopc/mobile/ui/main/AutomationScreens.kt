@@ -34,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.text.DateFormat
 import java.util.Date
 import java.util.UUID
@@ -212,8 +213,7 @@ internal fun AutomationDetailContent(state: AutomationUiState,
             item.lastRunAtMs?.let { Text(stringResource(R.string.automation_last_run, formatAutomationTime(it))) }
             item.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (item.instruction.isNotBlank()) {
-              Text(item.instruction, maxLines = if (expanded) Int.MAX_VALUE else 6,
-                overflow = TextOverflow.Ellipsis)
+              MarkdownContent(item.instruction, maxLines = if (expanded) null else 6)
               TextButton(onClick = { expanded = !expanded }, modifier = Modifier.testTag("automation-definition-toggle")) {
                 Text(stringResource(if (expanded) R.string.automation_hide_definition
                   else R.string.automation_show_definition))
@@ -238,7 +238,7 @@ internal fun AutomationDetailContent(state: AutomationUiState,
         Card(onClick = { onOpenRun(run.id) }, enabled = !state.actionBusy,
           modifier = Modifier.fillMaxWidth().testTag("automation-run-${run.id}")) {
           Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(run.status, style = MaterialTheme.typography.titleMedium)
+            Text(runStatusLabel(run.status), style = MaterialTheme.typography.titleMedium)
             Text(run.error ?: run.summary.orEmpty(), maxLines = 2, overflow = TextOverflow.Ellipsis)
           }
         }
@@ -289,7 +289,8 @@ internal fun AutomationRunContent(state: AutomationUiState,
       item {
         Card(modifier = Modifier.fillMaxWidth()) {
           Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(run.status, style = MaterialTheme.typography.headlineSmall)
+            Text(runStatusLabel(run.status),
+              style = MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp, lineHeight = 30.sp))
             (run.startedAtMs ?: run.createdAtMs)?.let { Text(formatAutomationTime(it)) }
             run.summary?.takeIf { it.isNotBlank() }?.let {
               MarkdownContent(it, modifier = Modifier.fillMaxWidth().testTag("automation-run-summary"))
@@ -328,7 +329,7 @@ internal fun AutomationRunContent(state: AutomationUiState,
       }
       items(state.events, key = { it.id }) { event ->
         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-          Text(event.message)
+          Text(event.message, style = MaterialTheme.typography.bodyMedium)
           event.createdAtMs?.let { Text(formatAutomationTime(it),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }

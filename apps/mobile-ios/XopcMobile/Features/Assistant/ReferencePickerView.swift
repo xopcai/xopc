@@ -136,11 +136,11 @@ private struct ReferenceRow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)
-                    .font(.body.weight(.medium))
+                    .mobileTextStyle(.rowTitle)
                     .foregroundStyle(.primary)
                 if !item.description.isEmpty {
                     Text(item.description)
-                        .font(.caption)
+                        .mobileTextStyle(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }

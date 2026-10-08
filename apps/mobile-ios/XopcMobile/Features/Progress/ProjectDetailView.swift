@@ -28,18 +28,18 @@ struct ProjectDetailView: View {
                         Section {
                             VStack(alignment: .leading, spacing: 14) {
                                 Text(project.name)
-                                    .font(.title2.bold())
+                                    .mobileTextStyle(.detailTitle)
                                     .fixedSize(horizontal: false, vertical: true)
                                     .accessibilityAddTraits(.isHeader)
                                 HStack {
-                                    Text(LocalizedStringKey(project.status))
+                                    Text(LocalizedStringKey("project_status_" + project.status))
                                         .font(.subheadline.weight(.medium))
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 6)
                                         .background(Color.blue.opacity(0.1), in: .capsule)
                                     Spacer()
                                     if let health = project.health, health != "unknown" {
-                                        Text(health).font(.caption).foregroundStyle(.secondary)
+                                        Text(health).mobileTextStyle(.caption).foregroundStyle(.secondary)
                                     }
                                 }
                                 Text(project.brief ?? project.description
@@ -136,7 +136,7 @@ struct ProjectDetailView: View {
                                 Text(session.displayName)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Text("\(session.messageCount) 条消息")
-                                    .font(.caption)
+                                    .mobileTextStyle(.caption)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -206,11 +206,11 @@ struct ProjectDetailView: View {
             Text(count, format: .number)
             if let create {
                 Button { creationSheet = create } label: { Image(systemName: "plus.circle.fill") }
-                    .font(.title3)
+                    .mobileTextStyle(.sectionTitle)
                     .accessibilityLabel(create.actionTitle)
             }
         }
-        .font(.headline)
+        .mobileTextStyle(.rowTitle)
     }
 
     private func visible<T>(_ items: [T]) -> [T] {
