@@ -25,6 +25,7 @@
     "saveDraftDescription": "The current unsent draft will not be saved. Cancel if you want to send it first.",
     "saveDraftAction": "Save anyway",
     "creating": "Creating…",
+    "retryCreate": "Retry",
     "emptyDescription": "Ask without interrupting the main task.",
     "failed": "Side chat failed",
     "errorInvalidRequest": "The side chat request is invalid.",

@@ -153,3 +153,5 @@ export {
   generateDiffString,
   type FuzzyMatchResult,
 } from './edit-diff.js';
+
+export { createPersonalReadTool } from './personal-read-tool.js';

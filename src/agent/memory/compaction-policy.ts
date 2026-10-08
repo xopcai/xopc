@@ -1,3 +1,4 @@
+import { DEFAULT_PERSONAL_IDLE_COMPACTION } from '../../user-context/config.js';
 import type { Config } from '../../config/schema.js';
 import {
   DEFAULT_COMPACTION_CONFIG,
@@ -5,6 +6,7 @@ import {
 } from './compaction.js';
 
 export interface ResolvedCompactionPolicy extends CompactionConfig {
+  personalIdle: typeof DEFAULT_PERSONAL_IDLE_COMPACTION & { model?: string };
   reserveTokens: number;
   model?: string;
   minToolResultKeepChars: number;
@@ -14,6 +16,7 @@ export interface ResolvedCompactionPolicy extends CompactionConfig {
 
 const POLICY_DEFAULTS: ResolvedCompactionPolicy = {
   ...DEFAULT_COMPACTION_CONFIG,
+  personalIdle: { ...DEFAULT_PERSONAL_IDLE_COMPACTION },
   reserveTokens: 8_192,
   minToolResultKeepChars: 1_000,
   maxActiveTranscriptBytes: 2_000_000,

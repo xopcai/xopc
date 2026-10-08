@@ -1,3 +1,4 @@
+import { IdleCompactionScheduler } from '../../memory/idle-compaction-scheduler.js';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { EmbeddedStreamEvent } from '../types.js';
@@ -34,6 +35,8 @@ vi.mock('../../../providers/index.js', () => ({
 vi.mock('../../../config/agent-profile.js', () => ({
   resolveEffectiveAgentProfileForSession: () => ({ config: { runtime: {} } }),
 }));
+
+vi.mock('../../../personal-agent/repository.js', () => ({ isPersonalConversation: vi.fn(() => false) }));
 
 // ---- Helpers ----
 
@@ -157,6 +160,27 @@ describe('pre-turn auto-compaction', () => {
     mockRunXopcEmbeddedTurn.mockResolvedValue({ ok: true });
     const mod = await import('../run-for-session.js');
     runEmbeddedTurnForSession = mod.runEmbeddedTurnForSession;
+  });
+
+  it('lets personal chat reply above the soft threshold and keeps hard-limit recovery', async () => {
+    const { isPersonalConversation } = await import('../../../personal-agent/repository.js');
+    vi.mocked(isPersonalConversation).mockReturnValue(true);
+    const scheduler = new IdleCompactionScheduler();
+    const sessionStore = { ...createMockSessionStore({ needsCompaction: true }), idleCompaction: scheduler };
+    try {
+      const params = { conversationId: 'personal-chat', userMessage: { role: 'user', content: 'hello' } as AgentMessage,
+        sessionStore: sessionStore as any, agentManager: createMockAgentManager() as any,
+        modelManager: createMockModelManager() as any, getConfig: () => configWithCompaction(true) as any };
+      await runEmbeddedTurnForSession(params);
+      expect(sessionStore.compact).not.toHaveBeenCalled();
+      expect(mockRunXopcEmbeddedTurn).toHaveBeenCalledOnce();
+      sessionStore.load.mockResolvedValue([{ role: 'user', content: 'x'.repeat(600_000) }]);
+      await runEmbeddedTurnForSession(params);
+      expect(sessionStore.compact).toHaveBeenCalled();
+    } finally {
+      scheduler.dispose();
+      vi.mocked(isPersonalConversation).mockReturnValue(false);
+    }
   });
 
   it('triggers compaction when the full context budget crosses the threshold', async () => {

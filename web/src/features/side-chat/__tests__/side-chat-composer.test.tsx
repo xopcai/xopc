@@ -169,7 +169,7 @@ describe('SideChatConversation composer', () => {
 
   afterEach(() => {
     act(() => root.unmount());
-    useSideChatStore.setState({ panes: {}, tabs: [], pendingCreate: null, drafts: {}, readings: {} });
+    useSideChatStore.setState({ panes: {}, tabs: [], pendingCreate: null, creatingRequests: {}, drafts: {}, readings: {} });
     useLocaleStore.setState({ language: 'en' });
     container.remove();
     localStorage.removeItem('xopc:side-chat-close-confirm-disabled:v1');
@@ -512,6 +512,79 @@ describe('SideChatConversation composer', () => {
     expect(createSideChat).toHaveBeenCalledOnce();
     expect(createSideChat).toHaveBeenCalledWith('parent', []);
     expect(useSideChatStore.getState().tabs.map((tab) => tab.id)).toEqual(['side-1', 'side-2']);
+  });
+
+  async function flushAutoFocus() {
+    await act(async () => { await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())); });
+  }
+
+  function enableDesktopFocus() {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })));
+  }
+
+  it('automatically creates and focuses a chat when the pane opens', async () => {
+    enableDesktopFocus();
+    useSideChatStore.getState().setOpen('parent', true);
+    await act(async () => {
+      root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" /></MemoryRouter>);
+    });
+    await flushAutoFocus();
+    expect(createSideChat).toHaveBeenCalledExactlyOnceWith('parent', []);
+    expect(document.activeElement).toBe(container.querySelector('[role="textbox"]'));
+  });
+
+  it('restores and focuses the last selected chat without creating another', async () => {
+    enableDesktopFocus();
+    const store = useSideChatStore.getState();
+    store.addTab({ id: 'side-1', parentConversationId: 'parent', title: 'First' });
+    store.addTab({ id: 'side-2', parentConversationId: 'parent', title: 'Second' });
+    store.setActive('side-1');
+    store.setDraftText('side-1', 'unfinished question');
+    store.setOpen('parent', false);
+    await act(async () => {
+      root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" /></MemoryRouter>);
+    });
+    await act(async () => store.setOpen('parent', true));
+    await flushAutoFocus();
+    expect(createSideChat).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="textbox"]')?.textContent).toBe('unfinished question');
+    expect(document.activeElement).toBe(container.querySelector('[role="textbox"]'));
+  });
+
+  it('offers a retry after automatic creation fails', async () => {
+    createSideChat.mockRejectedValueOnce(new Error('try later'));
+    useSideChatStore.getState().setOpen('parent', true);
+    await act(async () => {
+      root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" /></MemoryRouter>);
+    });
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('try later');
+    await act(async () => {
+      [...container.querySelectorAll('button')].find((button) => button.textContent === 'Retry')?.click();
+    });
+    expect(createSideChat).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[role="textbox"]')).not.toBeNull();
+  });
+
+  it('reuses an in-flight creation after the pane is unmounted and reopened', async () => {
+    let resolveCreation!: (value: Awaited<ReturnType<typeof createSideChat>>) => void;
+    createSideChat.mockImplementationOnce(() => new Promise((resolve) => { resolveCreation = resolve; }));
+    const store = useSideChatStore.getState();
+    store.setOpen('parent', true);
+    await act(async () => {
+      root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" /></MemoryRouter>);
+    });
+    await act(async () => { store.setOpen('parent', false); root.render(null); });
+    store.setOpen('parent', true);
+    await act(async () => {
+      root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" /></MemoryRouter>);
+    });
+    expect(createSideChat).toHaveBeenCalledOnce();
+    expect(container.querySelector('button[aria-label="New side chat"]')?.hasAttribute('disabled')).toBe(true);
+    await act(async () => {
+      resolveCreation({ id: 'side-2', parentConversationId: 'parent', context: { selections: [] } });
+    });
+    expect(container.querySelector('[role="textbox"]')).not.toBeNull();
+    expect(useSideChatStore.getState().creatingRequests).toEqual({});
   });
   async function renderColumn() {
     useSideChatStore.getState().addTab({ id: 'side-1', parentConversationId: 'parent', title: 'Side chat' });

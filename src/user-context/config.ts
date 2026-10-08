@@ -3,6 +3,16 @@ import { z } from 'zod';
 import { ResponseLanguageSchema } from '../i18n/response-language.js';
 import type { KnowledgeReadPolicy } from '../knowledge-memory/domain.js';
 
+export const DEFAULT_PERSONAL_IDLE_COMPACTION = {
+  enabled: true,
+  idleMs: 10_000,
+  triggerThreshold: 0.6,
+  cooldownMs: 60_000,
+  timeoutMs: 30_000,
+  keepRecentTokens: 20_000,
+  summaryMaxTokens: 16_000,
+};
+
 export const DEFAULT_CONTEXT_COMPACTION_POLICY = {
   enabled: true,
   triggerThreshold: 0.8,
@@ -20,10 +30,21 @@ export const DEFAULT_CONTEXT_COMPACTION_POLICY = {
   minToolResultKeepChars: 1_000,
   maxActiveTranscriptBytes: 2_000_000,
   postCompactionSections: ['Session Startup', 'Red Lines'],
+  personalIdle: DEFAULT_PERSONAL_IDLE_COMPACTION,
 };
 
 export const ContextCompactionPolicySchema = z
   .object({
+    personalIdle: z.object({
+      enabled: z.boolean().default(true),
+      idleMs: z.number().int().min(1000).max(300_000).default(10_000),
+      triggerThreshold: z.number().min(0.1).max(0.9).default(0.6),
+      cooldownMs: z.number().int().min(1000).max(600_000).default(60_000),
+      timeoutMs: z.number().int().min(1000).max(120_000).default(30_000),
+      keepRecentTokens: z.number().int().min(1000).default(20_000),
+      summaryMaxTokens: z.number().int().min(256).default(16_000),
+      model: z.string().min(1).optional(),
+    }).strict().default(DEFAULT_PERSONAL_IDLE_COMPACTION),
     enabled: z.boolean().default(true),
     triggerThreshold: z.number().min(0.1).max(0.98).default(0.8),
     reserveTokens: z.number().int().min(1_024).default(8_192),

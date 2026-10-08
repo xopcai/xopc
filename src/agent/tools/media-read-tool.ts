@@ -33,13 +33,15 @@ function clampMaxBytes(raw: unknown): number {
   return Math.min(Math.floor(raw), HARD_MAX_BYTES);
 }
 
-export function createReadMediaTool(): AgentTool {
+export function createReadMediaTool(options?: { textOnly?: boolean; maxChars?: number; maxReadBytes?: number }): AgentTool {
   return {
     name: 'read_media',
     label: 'Read Media Attachment',
     description:
       'Read an attachment by media:// URI. Use this for xopc-media-uri attachments in user messages.',
     parameters: ReadMediaSchema,
+    supportsParallel: true,
+    idempotent: true,
 
     async execute(
       _toolCallId: string,
@@ -55,7 +57,7 @@ export function createReadMediaTool(): AgentTool {
       }
 
       try {
-        const maxBytes = clampMaxBytes(params.maxBytes);
+        const maxBytes = Math.min(clampMaxBytes(params.maxBytes), options?.maxReadBytes ?? HARD_MAX_BYTES);
         const { buffer, path } = await readMediaReference(uri, maxBytes);
         const mimeType = mimeTypeFromMediaPath(path);
         const metadata = {
@@ -67,11 +69,19 @@ export function createReadMediaTool(): AgentTool {
         };
 
         if (isLikelyText(mimeType)) {
-          const text = buffer.toString('utf8');
+          const fullText = buffer.toString('utf8');
+          const maxChars = options?.maxChars ?? fullText.length;
+          const truncated = fullText.length > maxChars;
+          const text = fullText.slice(0, maxChars) + (truncated ? '\n[Attachment truncated; delegate full analysis to a specialist.]' : '');
           return {
             content: [{ type: 'text', text }],
-            details: { ...metadata, kind: 'text' },
+            details: { ...metadata, kind: 'text', truncated, ...(truncated && options?.textOnly ? { requiresSpecialist: true, reason: 'large_attachment' } : {}) },
           };
+        }
+
+        if (options?.textOnly) {
+          return { content: [{ type: 'text', text: 'Binary attachment: delegate document parsing or media analysis to a specialist.' }],
+            details: { ...metadata, kind: 'binary', requiresSpecialist: true } };
         }
 
         return {
@@ -88,6 +98,11 @@ export function createReadMediaTool(): AgentTool {
           details: { ...metadata, kind: 'binary' },
         };
       } catch (err) {
+        if (options?.textOnly && (err as { code?: string })?.code === 'MEDIA_READ_LIMIT') {
+          const size = (err as { size: number }).size;
+          return { content: [{ type: 'text', text: `Attachment is large (${size} bytes; local read limit ${options.maxReadBytes ?? HARD_MAX_BYTES} bytes). Tell the user briefly, then delegate reading and processing with this URI: ${uri}` }],
+            details: { ok: true, uri, size, requiresSpecialist: true, reason: 'large_attachment' } };
+        }
         const message = err instanceof Error ? err.message : String(err);
         return {
           content: [{ type: 'text', text: `Media read error: ${message}` }],

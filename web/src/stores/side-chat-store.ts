@@ -71,8 +71,10 @@ type SideChatPaneState = StoredState & {
   replaceTab: (oldId: string, tab: SideChatTab) => void;
   reset: () => void;
   pendingCreate: PendingCreate | null;
+  creatingRequests: Record<string, string>;
   requestCreate: (parentConversationId: string, selections?: SideChatSelection[]) => void;
   claimPendingCreate: (parentConversationId: string, requestId: string) => PendingCreate | null;
+  finishCreate: (parentConversationId: string, requestId: string) => void;
   addTab: (tab: SideChatTab) => void;
   removeTab: (id: string) => void;
   setActive: (id: string) => void;
@@ -151,11 +153,13 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
       });
     },
     reset: () => {
-      set({ drafts: {}, readings: {}, pendingCreate: null });
+      set({ drafts: {}, readings: {}, pendingCreate: null, creatingRequests: {} });
       commit({ panes: {}, tabs: [] });
     },
     pendingCreate: null,
+    creatingRequests: {},
     requestCreate: (parentConversationId, selections = []) => {
+      if (get().creatingRequests[parentConversationId] || get().pendingCreate?.parentConversationId === parentConversationId) return;
       set({ pendingCreate: { requestId: crypto.randomUUID(), parentConversationId, selections } });
       updatePane(parentConversationId, { open: true });
     },
@@ -164,11 +168,17 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
       if (!pending || pending.parentConversationId !== parentConversationId || pending.requestId !== requestId) {
         return null;
       }
-      set({ pendingCreate: null });
+      set({ pendingCreate: null, creatingRequests: { ...get().creatingRequests, [parentConversationId]: requestId } });
       return pending;
     },
+    finishCreate: (parentConversationId, requestId) => {
+      if (get().creatingRequests[parentConversationId] !== requestId) return;
+      const creatingRequests = { ...get().creatingRequests };
+      delete creatingRequests[parentConversationId];
+      set({ creatingRequests });
+    },
     addTab: (tab) => {
-      const tabs = [...get().tabs.filter((existing) => existing.id !== tab.id), tab];
+      const tabs = [...get().tabs.filter((existing) => existing.id !== tab.id), { ...tab, lastSelectedAt: Date.now() }];
       const current = get().panes[tab.parentConversationId] ?? { open: false, activeId: null };
       commit({
         tabs,
@@ -200,12 +210,28 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
     },
     setActive: (id) => {
       const tab = get().tabs.find((candidate) => candidate.id === id);
-      if (tab) updatePane(tab.parentConversationId, { activeId: id, open: true });
+      if (tab) {
+        commit({ tabs: get().tabs.map((candidate) => candidate.id === id ? { ...candidate, lastSelectedAt: Date.now() } : candidate) });
+        updatePane(tab.parentConversationId, { activeId: id, open: true });
+      }
     },
     setTabRunId: (id, runId) => commit({
       tabs: get().tabs.map((tab) => tab.id === id ? { ...tab, runId } : tab),
     }),
-    setOpen: (parentConversationId, open) => updatePane(parentConversationId, { open }),
+    setOpen: (parentConversationId, open) => {
+      if (!open) {
+        updatePane(parentConversationId, { open });
+        return;
+      }
+      const state = get();
+      const tabs = state.tabs.filter((tab) => tab.parentConversationId === parentConversationId && !tab.ended && !tab.promotedConversationId);
+      const active = tabs.find((tab) => tab.id === state.panes[parentConversationId]?.activeId)
+        ?? tabs.reduce<SideChatTab | undefined>((latest, tab) => (
+          !latest || (tab.lastSelectedAt ?? 0) >= (latest.lastSelectedAt ?? 0) ? tab : latest
+        ), undefined);
+      updatePane(parentConversationId, { open, activeId: active?.id ?? null });
+      if (!active) state.requestCreate(parentConversationId);
+    },
     setWidthPx: (widthPx) => commit({ widthPx: clampWidth(widthPx) }),
   };
 });

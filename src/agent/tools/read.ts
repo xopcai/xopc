@@ -24,6 +24,9 @@ const ReadFileSchema = Type.Object({
 export interface CreateReadFileToolOptions {
   /** When set and the path is a bare profile filename (e.g. SOUL.md), try this root if not in workspace. */
   profileMarkdownRoot?: string;
+  defaultMaxLines?: number;
+  maxOutputBytes?: number;
+  maxReadBytes?: number;
 }
 
 type ReadFileParams = {
@@ -50,17 +53,19 @@ export function createReadFileTool(
       params: any,
       signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
-      return dataScheduler.run(workspace, signal, () => executeReadFile(workspace, options?.profileMarkdownRoot, params as ReadFileParams, signal));
+      return dataScheduler.run(workspace, signal, () => executeReadFile(workspace, options, params as ReadFileParams, signal));
     },
   } as any;
 }
 
 async function executeReadFile(
   workspace: string,
-  profileMarkdownRoot: string | undefined,
+  options: CreateReadFileToolOptions | undefined,
   params: ReadFileParams,
   signal?: AbortSignal,
 ): Promise<AgentToolResult<{}>> {
+  const profileMarkdownRoot = options?.profileMarkdownRoot;
+  const maxOutputBytes = options?.maxOutputBytes ?? DEFAULT_MAX_BYTES;
   try {
     const safety = checkFileSafety('read', params.path);
     if (!safety.allowed) {
@@ -92,6 +97,11 @@ async function executeReadFile(
       }
     }
 
+    if (options?.maxReadBytes && stats.size > options.maxReadBytes) {
+      return { content: [{ type: 'text', text: `File is large (${formatSize(stats.size)}; local read limit ${formatSize(options.maxReadBytes)}). Tell the user briefly, then delegate reading and processing. Path: ${normalized}` }],
+        details: { path: normalized, size: stats.size, requiresSpecialist: true, reason: 'large_file' } };
+    }
+
     if (stats.size > MAX_FILE_SIZE) {
       return { content: [{ type: 'text', text: `🚫 File too large: ${formatSize(stats.size)}` }], details: { status: 'failed' } };
     }
@@ -101,18 +111,20 @@ async function executeReadFile(
     const lines = content.split('\n');
     if (offset > lines.length) throw new Error(`Offset ${offset} exceeds ${lines.length} lines`);
     const selected = lines.slice(offset - 1).join('\n');
-    const truncation = truncateHead(selected, { maxLines: params.limit || DEFAULT_MAX_LINES, maxBytes: DEFAULT_MAX_BYTES });
+    const truncation = truncateHead(selected, { maxLines: params.limit || options?.defaultMaxLines || DEFAULT_MAX_LINES, maxBytes: maxOutputBytes });
 
     let outputText = truncation.content;
     if (truncation.truncated) {
       if (truncation.firstLineExceedsLimit) {
-        outputText = `(Line exceeds ${formatSize(DEFAULT_MAX_BYTES)})`;
+        outputText = `(Line exceeds ${formatSize(maxOutputBytes)})`;
       } else {
-        outputText += `\n\n[Lines ${offset}-${offset + truncation.outputLines - 1} of ${lines.length}; continue with offset=${offset + truncation.outputLines}]`;
+        outputText += options?.maxReadBytes
+          ? `\n\n[File excerpt only. Tell the user briefly and delegate full reading and processing. Path: ${normalized}]`
+          : `\n\n[Lines ${offset}-${offset + truncation.outputLines - 1} of ${lines.length}; continue with offset=${offset + truncation.outputLines}]`;
       }
     }
 
-    return { content: [{ type: 'text', text: outputText }], details: { path: normalized, offset, totalLines: lines.length, truncated: truncation.truncated } };
+    return { content: [{ type: 'text', text: outputText }], details: { path: normalized, offset, totalLines: lines.length, truncated: truncation.truncated, ...(options?.maxReadBytes && truncation.truncated ? { requiresSpecialist: true, reason: 'large_file' } : {}) } };
   } catch (error) {
     signal?.throwIfAborted();
     return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: { status: 'failed' } };
