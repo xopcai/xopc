@@ -1,4 +1,4 @@
-import { configureTracing } from '../observability/runtime.js';
+import { configureTracing, flushTracing } from '../observability/runtime.js';
 import { resolveAgentIdFromConversationId } from '../routing/agent-session-key.js';
 import type { AgentEvent, AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../gateway/chat-limits.js';
@@ -866,14 +866,14 @@ export class AgentService {
     });
   }
 
-  stop(): Promise<void> {
+  async stop(): Promise<void> {
     this.inboundLoop.stop();
     this.agentManager.dispose();
     this.dispose();
 
     this.hookHandler.trigger('gateway_stop', { reason: 'stopped' });
     log.debug('Agent service stopped');
-    return Promise.resolve();
+    await flushTracing();
   }
 
   /**
