@@ -134,6 +134,15 @@ describe('buildSafeWebConfigPayload', () => {
     } as never);
 
     expect(payload.userContext.contextPlanning.compaction).toEqual({
+      personalIdle: {
+        enabled: true,
+        idleMs: 10_000,
+        triggerThreshold: 0.6,
+        cooldownMs: 60_000,
+        timeoutMs: 30_000,
+        keepRecentTokens: 20_000,
+        summaryMaxTokens: 16_000,
+      },
       enabled: false,
       triggerThreshold: 0.7,
       reserveTokens: 12_000,
