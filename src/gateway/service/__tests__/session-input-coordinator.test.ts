@@ -38,7 +38,9 @@ describe('SessionInputCoordinator', () => {
     let finishFirst!: (value: { status: string; summary: string }) => void;
     const execute = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve; }))
       .mockResolvedValue({ status: 'ok', summary: 'done' });
+    const received = vi.fn();
     const coordinator = new SessionInputCoordinator({
+      onInputReceived: received,
       sessionExists: async () => true, execute,
       beforeExecute: async input => {
         if (input.clientMessageId === 'revoked') throw new Error('Resource no longer accessible');
@@ -52,6 +54,8 @@ describe('SessionInputCoordinator', () => {
       await coordinator.submit({ conversationId, clientMessageId: key, delivery: 'next', content: key, origin });
       ids.set(key, coordinator.snapshot(conversationId).inputs.find(row => row.clientMessageId === key)!.id);
     }
+    expect(received).toHaveBeenCalledTimes(4);
+    expect(received).toHaveBeenLastCalledWith(conversationId);
     finishFirst({ status: 'ok', summary: 'done' });
     await vi.waitFor(() => expect(coordinator.snapshot(conversationId).inputs).toEqual([]));
     expect(execute).toHaveBeenCalledTimes(2);

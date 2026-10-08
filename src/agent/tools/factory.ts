@@ -72,6 +72,7 @@ import {
   type MarketplaceSkillInstallToolResult,
 } from './index.js';
 import { createSessionSearchTool } from './session-search-tool.js';
+import { createPersonalReadTool } from './personal-read-tool.js';
 import { createPersonalTaskTool } from './personal-task-tool.js';
 import { createPersonalRequestTools } from './personal-request-tool.js';
 import { createPersonalRequestConnectionTool, createPersonalRequestResultTool } from './personal-request-result-tool.js';
@@ -413,6 +414,7 @@ export class AgentToolsFactory {
 
     const readTool = createReadFileTool(workspace, {
       profileMarkdownRoot: options?.profileMarkdownRoot,
+      ...(personalToolsConfigured ? { defaultMaxLines: 150, maxOutputBytes: 8000, maxReadBytes: 12000 } : {}),
     });
     const writeTool = createWriteFileTool(workspace, {
       profileMarkdownRoot: options?.profileMarkdownRoot,
@@ -539,7 +541,7 @@ export class AgentToolsFactory {
         : []),
       createSendMediaTool(workspace, bus, deliveryContext),
       createPublishArtifactsTool(workspace),
-      createReadMediaTool(),
+      createReadMediaTool(personalToolsConfigured ? { textOnly: true, maxChars: 8000, maxReadBytes: 12000 } : undefined),
       ...(isShareToolAvailable(cfg)
         ? [
             createCreateShareTool({
@@ -615,6 +617,7 @@ export class AgentToolsFactory {
       ...(this.deps.getSessionStore && getPrimary
         ? [
             createSessionSearchTool({
+              localOnly: personalToolsConfigured,
               getSessionStore: this.deps.getSessionStore,
               getPrimaryModel: getPrimary,
               getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
@@ -646,6 +649,7 @@ export class AgentToolsFactory {
             createXopcUseTool(productToolDeps),
             ...(personalToolsConfigured ? [
               createPersonalTaskTool(productToolDeps),
+              createPersonalReadTool(productToolDeps),
               ...createPersonalRequestTools(productToolDeps),
               createPersonalPreferenceTool({
                 getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,

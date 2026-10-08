@@ -319,7 +319,7 @@ describe('personal Agent identity', () => {
       const repository = new AgentCatalogRepository();
       repository.ensureInitialized();
       const agentId = personalAgentId('local-owner');
-      repository.create({ id: agentId, profile: { name: 'Personal AI', responsePreferences: { addressAs: 'Legacy name' }, instructions: [
+      repository.create({ id: agentId, toolAllowlist: ['personal_task'], profile: { name: 'Personal AI', responsePreferences: { addressAs: 'Legacy name' }, instructions: [
         'Answer simple requests directly. For complex work, use personal_task agents to find a suitable specialist, then create a Task and remain available to talk. Never claim a task was created before the tool confirms it.',
         'Keep my custom instruction.',
         'Address the user as "Legacy name" when a name fits naturally.',
@@ -327,6 +327,11 @@ describe('personal Agent identity', () => {
       const gateway = { refreshAgentCatalog: () => {}, agentService: { evictSessionAgent: () => {} } } as unknown as GatewayService;
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       const refreshed = repository.get(agentId)!;
+      expect(refreshed.toolAllowlist).toEqual(expect.arrayContaining(['read_media', 'read_file', 'session_search', 'personal_read']));
+      expect(refreshed.toolAllowlist).not.toEqual(expect.arrayContaining(['web_search', 'web_fetch', 'exec_command']));
+      expect(refreshed.profile?.instructions).toContain('Answer immediately');
+      expect(refreshed.profile?.instructions).toContain('without asking permission again');
+      expect(refreshed.profile?.instructions).toContain('do not read repeated chunks');
       expect(refreshed.profile?.instructions).toContain('For current news or other live facts');
       expect(refreshed.profile?.instructions).toContain('Keep my custom instruction.');
       expect(refreshed.profile?.instructions).not.toContain('Legacy name');

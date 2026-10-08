@@ -27,7 +27,7 @@ describe('side chat store session isolation', () => {
     useSideChatStore.getState().removeTab('side-a');
     expect(useSideChatStore.getState().panes['session-a']).toEqual({ open: false, activeId: null });
     expect(useSideChatStore.getState().panes['session-b']).toEqual({ open: true, activeId: 'side-b' });
-    expect(useSideChatStore.getState().tabs).toEqual([
+    expect(useSideChatStore.getState().tabs).toMatchObject([
       { id: 'side-b', parentConversationId: 'session-b', title: 'B' },
     ]);
   });
@@ -44,6 +44,48 @@ describe('side chat store session isolation', () => {
     expect(first).toEqual(pending);
     expect(second).toBeNull();
     expect(useSideChatStore.getState().pendingCreate).toBeNull();
+  });
+
+  it('creates on opening an empty pane and deduplicates pending and in-flight requests', async () => {
+    const { useSideChatStore } = await import('@/stores/side-chat-store');
+    const store = useSideChatStore.getState();
+    store.setOpen('parent', true);
+    const request = useSideChatStore.getState().pendingCreate!;
+    expect(request).toMatchObject({ parentConversationId: 'parent', selections: [] });
+    store.setOpen('parent', true);
+    expect(useSideChatStore.getState().pendingCreate).toEqual(request);
+    store.claimPendingCreate('parent', request.requestId);
+    store.setOpen('parent', false);
+    store.setOpen('parent', true);
+    expect(useSideChatStore.getState().pendingCreate).toBeNull();
+    store.finishCreate('parent', request.requestId);
+    store.requestCreate('parent');
+    expect(useSideChatStore.getState().pendingCreate).not.toBeNull();
+  });
+
+  it('restores the last selected usable chat for the current parent and preserves its draft', async () => {
+    const { useSideChatStore } = await import('@/stores/side-chat-store');
+    const store = useSideChatStore.getState();
+    store.addTab({ id: 'older', parentConversationId: 'parent', title: 'Older' });
+    store.addTab({ id: 'newer', parentConversationId: 'parent', title: 'Newer' });
+    store.addTab({ id: 'other', parentConversationId: 'other-parent', title: 'Other' });
+    store.setActive('older');
+    store.setDraftText('older', 'unfinished');
+    store.setOpen('parent', false);
+    store.setOpen('parent', true);
+    expect(useSideChatStore.getState().panes.parent).toEqual({ open: true, activeId: 'older' });
+    expect(useSideChatStore.getState().drafts.older.text).toBe('unfinished');
+    expect(useSideChatStore.getState().pendingCreate).toBeNull();
+    store.markEnded('older', 'idle');
+    store.setOpen('parent', false);
+    store.setOpen('parent', true);
+    expect(useSideChatStore.getState().panes.parent.activeId).toBe('newer');
+    store.markPromoted('newer', 'saved');
+    store.setOpen('parent', false);
+    store.setOpen('parent', true);
+    expect(useSideChatStore.getState().panes.parent.activeId).toBeNull();
+    expect(useSideChatStore.getState().pendingCreate?.parentConversationId).toBe('parent');
+    expect(useSideChatStore.getState().tabs).toHaveLength(3);
   });
   it('bounds reading copies, strips tool data, and never persists drafts or content', async () => {
     const { useSideChatStore } = await import('@/stores/side-chat-store');

@@ -145,6 +145,7 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
   const pendingCreate = useSideChatStore((state) => state.pendingCreate);
   const requestCreate = useSideChatStore((state) => state.requestCreate);
   const claimPendingCreate = useSideChatStore((state) => state.claimPendingCreate);
+  const finishCreate = useSideChatStore((state) => state.finishCreate);
   const addTab = useSideChatStore((state) => state.addTab);
   const removeTab = useSideChatStore((state) => state.removeTab);
   const setActive = useSideChatStore((state) => state.setActive);
@@ -154,7 +155,7 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
   const setTabRunId = useSideChatStore((state) => state.setTabRunId);
   const token = useGatewayStore((state) => state.conversationId);
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
-  const [creating, setCreating] = useState(false);
+  const creating = useSideChatStore((state) => Boolean(state.creatingRequests[parentConversationId]));
   const [createError, setCreateError] = useState<string | null>(null);
   const [resizing, setResizing] = useState(false);
   const [pendingCloseId, setPendingCloseId] = useState<string | null>(null);
@@ -164,21 +165,22 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
     if (!pendingCreate || pendingCreate.parentConversationId !== parentConversationId) return;
     const request = claimPendingCreate(parentConversationId, pendingCreate.requestId);
     if (!request) return;
-    setCreating(true);
     setCreateError(null);
     const gateway = useGatewayStore.getState();
     void createSideChat(request.parentConversationId, request.selections)
       .then((sideChat) => {
         if (useGatewayStore.getState().conversationId !== gateway.conversationId || useGatewayStore.getState().baseUrl !== gateway.baseUrl) return;
+        const wasOpen = useSideChatStore.getState().panes[sideChat.parentConversationId]?.open === true;
         addTab({ id: sideChat.id, parentConversationId: sideChat.parentConversationId, title: 'Side chat' });
+        if (!wasOpen) setOpen(sideChat.parentConversationId, false);
       })
       .catch((error) => {
         setCreateError(sideChatErrorMessage(error, m));
       })
       .finally(() => {
-        setCreating(false);
+        finishCreate(request.parentConversationId, request.requestId);
       });
-  }, [addTab, claimPendingCreate, m, parentConversationId, pendingCreate]);
+  }, [addTab, claimPendingCreate, finishCreate, m, parentConversationId, pendingCreate, setOpen]);
 
   const closeTab = useCallback((id: string) => {
     const promoted = useSideChatStore.getState().tabs.find((tab) => tab.id === id)?.promotedConversationId;
@@ -295,7 +297,12 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
           <h2 className="text-lg font-semibold text-fg">{m.title}</h2>
           <p className="mt-2 max-w-sm text-sm leading-6 text-fg-muted">{m.temporaryDescription}</p>
           {creating ? <Skeleton className="mt-4 h-4 w-32" /> : null}
-          {createError ? <p className="mt-4 text-xs text-red-600 dark:text-red-400">{createError}</p> : null}
+          {createError ? (
+            <>
+              <p className="mt-4 text-xs text-red-600 dark:text-red-400" role="alert">{createError}</p>
+              <Button className="mt-3" disabled={creating} onClick={() => requestCreate(parentConversationId)}>{m.retryCreate}</Button>
+            </>
+          ) : null}
         </div>
       )}
       <ConfirmDialog
@@ -799,6 +806,7 @@ export function SideChatConversation({
               <MessageSquarePlus className="mb-4 size-9 text-fg-muted" strokeWidth={1.5} />
               <h2 className="text-lg font-semibold text-fg">{sideChatMessages.title}</h2>
               <p className="mt-2 text-sm text-fg-muted">{fresh ? sideChatMessages.freshContext : sideChatMessages.emptyDescription}</p>
+              <p className="mt-2 max-w-sm text-xs leading-5 text-fg-muted">{sideChatMessages.temporaryDescription}</p>
             </div>
           ) : null}
           {truncated && ended ? <p className="mt-3 text-xs text-fg-muted">{sideChatMessages.partialReading}</p> : null}

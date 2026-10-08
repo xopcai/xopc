@@ -7,7 +7,7 @@ export type DelegationMode = 'inspect' | 'read' | 'research' | 'review' | 'imple
 /** Host-owned classifications. New tools fail closed until classified. */
 export const DELEGATION_TOOL_CAPABILITIES: Readonly<Record<string, DelegationCapability>> = {
   read_file: 'local_read', grep: 'local_read', find: 'local_read', list_dir: 'local_read', review_workspace: 'local_read',
-  read_media: 'local_read', image: 'local_read', tool_manual: 'local_read',
+  personal_read: 'local_read', read_media: 'local_read', image: 'local_read', tool_manual: 'local_read',
   web_search: 'web_read', web_fetch: 'web_read', web_extract: 'web_read',
   knowledge_search: 'knowledge_read', knowledge_get: 'knowledge_read', session_search: 'knowledge_read',
   session_recall: 'knowledge_read', user_context_search: 'knowledge_read', user_context_get: 'knowledge_read',

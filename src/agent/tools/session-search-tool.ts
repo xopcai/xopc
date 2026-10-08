@@ -140,6 +140,7 @@ export interface SessionSearchToolDeps {
   getPrimaryModel: () => Model<Api>;
   getCurrentConversationId?: () => string | undefined;
   canAccess?: () => boolean;
+  localOnly?: boolean;
 }
 
 type SessionSearchParams = {
@@ -153,9 +154,12 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
   return {
     name: 'session_search',
     label: 'Session search',
-    description:
-      'Search other chat sessions by keywords and get short summaries, or omit `query` to list recent sessions (no LLM cost). Uses the same session store as the gateway. Narrow with roleFilter if needed.',
+    description: deps.localOnly
+      ? 'Search other chats locally and return short matching transcript excerpts. Omit query to list recent chats. No model or network calls.'
+      : 'Search other chat sessions by keywords and get short summaries, or omit `query` to list recent sessions (no LLM cost). Uses the same session store as the gateway. Narrow with roleFilter if needed.',
     parameters: SessionSearchSchema,
+    supportsParallel: true,
+    idempotent: true,
 
     async execute(
       _toolCallId: string,
@@ -170,7 +174,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
       }
       const p = params as SessionSearchParams;
       const store = deps.getSessionStore();
-      const limit = Math.min(15, Math.max(1, p.limit ?? 5));
+      const limit = Math.min(deps.localOnly ? 5 : 15, Math.max(1, p.limit ?? (deps.localOnly ? 3 : 5)));
       const query = p.query?.trim() ?? '';
 
       try {
@@ -182,7 +186,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
           });
           const items = listed.items.slice(0, limit).map((s) => ({
             key: s.key,
-            name: s.name,
+            name: deps.localOnly ? s.name?.slice(0, 200) : s.name,
             updatedAt: s.updatedAt,
             messageCount: s.messageCount,
             sourceChannel: s.sourceChannel,
@@ -217,6 +221,24 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
         }
 
         const top = matches.slice(0, limit);
+
+        if (deps.localOnly) {
+          const results = top.map(({ key }) => ({
+            conversationId: key,
+            name: listed.items.find(item => item.key === key)?.name?.slice(0, 200),
+            excerpts: store.recallSession(key, query, { limit: 2 })
+              .filter(match => !p.roleFilter || match.role === p.roleFilter)
+              .map(match => {
+                const at = match.content.toLowerCase().indexOf(query.toLowerCase());
+                const start = Math.max(0, at - 200);
+                return { seq: match.seq, role: match.role,
+                  content: match.content.slice(start, start + 800),
+                  truncated: start > 0 || match.content.length > start + 800 };
+              }),
+          }));
+          return { content: [{ type: 'text', text: JSON.stringify({ success: true, mode: 'keyword', query, results }) }],
+            details: { localOnly: true, count: results.length } };
+        }
 
         const summaries = await Promise.all(
           top.map(async ({ key, score }) => {

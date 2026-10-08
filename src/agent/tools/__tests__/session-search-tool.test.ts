@@ -59,6 +59,19 @@ describe('session_search summary model', () => {
     vi.clearAllMocks();
   });
 
+  it('returns bounded local excerpts without loading conversations or calling a model', async () => {
+    const store = { ...createStore(), recallSession: vi.fn(() => [{ seq: 9, role: 'assistant', content: 'Friday ' + 'x'.repeat(5000) }]) };
+    const getPrimaryModel = vi.fn(() => model('test', 'fast'));
+    const tool = createSessionSearchTool({ getSessionStore: () => store as never, getPrimaryModel, localOnly: true });
+    const result = await tool.execute('local', { query: 'Friday', limit: 15 });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+    expect(payload.results[0].excerpts[0]).toMatchObject({ seq: 9, truncated: true });
+    expect(payload.results[0].excerpts[0].content).toHaveLength(800);
+    expect(store.load).not.toHaveBeenCalled();
+    expect(getPrimaryModel).not.toHaveBeenCalled();
+    expect(completeWithResolvedCredentials).not.toHaveBeenCalled();
+  });
+
   it('uses the current effective session model for every execution', async () => {
     let currentModel = model('deepseek', 'deepseek-v4-flash');
     const getPrimaryModel = () => currentModel;

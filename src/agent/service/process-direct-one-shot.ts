@@ -71,6 +71,7 @@ export async function runProcessDirect(
     deadlineAtMs?: number;
   },
 ): Promise<string> {
+  deps.sessionStore?.idleCompaction?.interrupt(input.conversationId);
   const { channel, chatId } = await deps.resolveSessionEndpoint(input.conversationId);
   deps.initSessionContext(input.conversationId, channel, chatId, input.origin);
 

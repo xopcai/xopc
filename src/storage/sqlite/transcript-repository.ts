@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
@@ -30,6 +30,7 @@ export interface TranscriptSourceEntry {
 }
 
 export interface CompactionSourceSnapshot {
+  fingerprint?: string;
   transcriptId: string;
   lastSeq: number;
   entries: TranscriptSourceEntry[];
@@ -183,9 +184,15 @@ export function appendTranscriptEntry(
   });
 }
 
+function compactionRowsFingerprint(rows: readonly TranscriptEntryRow[]): string {
+  const hash = createHash('sha256');
+  for (const row of rows) hash.update(JSON.stringify([row.entry_id, row.seq, row.payload_json, row.created_at]));
+  return hash.digest('hex');
+}
+
 export function appendCompactionBoundaryIfUnchanged(
   conversationId: string,
-  expected: Pick<CompactionSourceSnapshot, 'transcriptId' | 'lastSeq'>,
+  expected: Pick<CompactionSourceSnapshot, 'transcriptId' | 'lastSeq'> & { fingerprint?: string },
   row: Omit<XopcTranscriptCompactionEntry, 'baseSeq'>,
 ): TranscriptEntryRow | null {
   return runSqliteWriteTransaction((db) => {
@@ -194,6 +201,11 @@ export function appendCompactionBoundaryIfUnchanged(
     if (transcriptId !== expected.transcriptId) return null;
     const currentLastSeq = nextSeq(db, transcriptId) - 1;
     if (currentLastSeq !== expected.lastSeq) return null;
+    if (expected.fingerprint) {
+      const rows = db.prepare('SELECT entry_id, seq, payload_json, created_at FROM transcript_entries WHERE transcript_id = ? ORDER BY seq ASC')
+        .all(transcriptId) as TranscriptEntryRow[];
+      if (compactionRowsFingerprint(rows) !== expected.fingerprint) return null;
+    }
     const boundary = { ...row, baseSeq: expected.lastSeq };
     const inserted = insertEntry(db, { transcriptId, conversationId, row: boundary });
     const now = Date.now();
@@ -226,6 +238,7 @@ export function loadCompactionSourceSnapshot(conversationId: string): Compaction
   return {
     transcriptId,
     lastSeq: rows.at(-1)?.seq ?? 0,
+    fingerprint: compactionRowsFingerprint(rows),
     entries: rows.map((entry) => ({
       entryId: entry.entry_id,
       seq: entry.seq,

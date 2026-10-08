@@ -84,6 +84,7 @@ export class SessionInputCoordinator {
   private readonly submissionTails = new Map<string, Promise<void>>();
 
   constructor(private readonly deps: {
+    onInputReceived?: (conversationId: string) => void;
     beforeExecute?: (input: SessionInput) => Promise<boolean>;
     sessionExists: (conversationId: string) => Promise<boolean>;
     execute: (input: {
@@ -172,6 +173,7 @@ export class SessionInputCoordinator {
   > {
     input = structuredClone(input);
     const conversationId = input.conversationId.trim();
+    this.deps.onInputReceived?.(conversationId);
     try {
       return await this.runSubmissionExclusive(conversationId, () => this.submitLocked({ ...input, conversationId }));
     } catch (error) {
@@ -189,6 +191,7 @@ export class SessionInputCoordinator {
   > {
     input = structuredClone(input);
     const conversationId = input.conversationId.trim();
+    this.deps.onInputReceived?.(conversationId);
     return this.runSubmissionExclusive(conversationId, async () => {
       const clientMessageId = input.clientMessageId.trim();
       const content = input.content.trim();

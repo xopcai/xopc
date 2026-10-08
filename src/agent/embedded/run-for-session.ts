@@ -15,7 +15,9 @@ import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnParams, RunXopcEmbeddedTur
 import { applyStartupContextToUserMessage } from '../reply/apply-turn-user-enrichment.js';
 import { createLogger } from '../../utils/logger.js';
 import { resolveModel } from '../../providers/index.js';
-import { recoverContext } from '../memory/context-recovery.js';
+import { isPersonalConversation } from '../../personal-agent/repository.js';
+import { assessContext, recoverContext } from '../memory/context-recovery.js';
+import { evaluateContextBudget } from '../memory/context-budget.js';
 import { resolveCompactionPolicy } from '../memory/compaction-policy.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
@@ -53,6 +55,11 @@ export async function runEmbeddedTurnForSession(
   params: RunEmbeddedForSessionParams,
 ): Promise<RunXopcEmbeddedTurnResult> {
   const { conversationId, agentManager, modelManager, sessionStore, userMessage } = params;
+  const personal = isPersonalConversation(conversationId);
+  const idleScheduler = sessionStore.idleCompaction;
+  const idleGeneration = personal ? idleScheduler.beginTurn(conversationId) : undefined;
+  let idleJob: Parameters<typeof idleScheduler.endTurn>[2];
+  let turnCompleted = false;
   const runId = params.runId ?? crypto.randomUUID();
   const config = params.getConfig?.();
   const supervisor = new AgentRunSupervisor({
@@ -61,6 +68,7 @@ export async function runEmbeddedTurnForSession(
     parentSignal: params.abortSignal,
   });
   const finish = async (result: RunXopcEmbeddedTurnResult): Promise<RunXopcEmbeddedTurnResult> => {
+    turnCompleted = result.ok && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required';
     if (result.stopReason === 'connection_required' || result.stopReason === 'clarification_required') return result;
     try {
       const rows = await sessionStore.loadTranscriptRows(conversationId);
@@ -153,6 +161,31 @@ export async function runEmbeddedTurnForSession(
     const baseSystemPrompt = [agent.state.systemPrompt ?? '', params.presentation === 'voice' ? voicePresentationPrompt : '']
       .filter(Boolean).join('\n\n');
     const systemPrompt = appendDynamicPromptSection(baseSystemPrompt, params.dynamicSystemContext ?? '');
+    const idlePolicy = resolveCompactionPolicy(config);
+    if (personal && idlePolicy.enabled && idlePolicy.personalIdle.enabled) {
+      idleJob = async (signal, isCurrent) => {
+        const messages = await sessionStore.load(conversationId);
+        if (!isCurrent()) return 'stale';
+        const generationStartedAt = Date.now();
+        const budget = evaluateContextBudget({ messages, contextWindow: model.contextWindow ?? 128_000,
+          systemPrompt, tools, reserveTokens: idlePolicy.reserveTokens,
+          triggerThreshold: idlePolicy.personalIdle.triggerThreshold });
+        if (budget.estimatedTokens <= budget.triggerTokens || messages.length < idlePolicy.minMessagesBeforeCompact) return 'skipped';
+        const summaryModel = idlePolicy.personalIdle.model ?? idlePolicy.model;
+        const candidate = await sessionStore.prepareCompaction(conversationId,
+          summaryModel ? resolveModel(summaryModel) as typeof model : model,
+          { ...idlePolicy, keepRecentTokens: idlePolicy.personalIdle.keepRecentTokens,
+            summaryMaxTokens: idlePolicy.personalIdle.summaryMaxTokens,
+            summaryRetries: 0, summaryTimeoutMs: idlePolicy.personalIdle.timeoutMs }, signal);
+        log.info({ conversationId, phase: 'idle_generate', tokensBefore: candidate.result.tokensBefore,
+          tokensAfter: candidate.result.tokensAfter, durationMs: Date.now() - generationStartedAt }, 'Idle compaction candidate generated');
+        if (!candidate.result.compacted) return 'skipped';
+        if (!isCurrent()) return 'stale';
+        const committed = await sessionStore.commitCompaction(candidate, isCurrent);
+        if (committed && isCurrent()) agentManager.removeAgent(conversationId);
+        return committed ? 'committed' : 'stale';
+      };
+    }
     const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
     const workspaceDir = agentManager.getResolvedWorkspaceForSession(conversationId);
     const promptCachePolicy = resolvePromptCachePolicy(
@@ -288,7 +321,7 @@ export async function runEmbeddedTurnForSession(
               'Agent model fallback succeeded',
             );
           }
-          return finish(turnResult);
+          return await finish(turnResult);
         }
 
         lastResult = turnResult;
@@ -334,7 +367,7 @@ export async function runEmbeddedTurnForSession(
       }
     }
 
-    if (lastResult) return finish(lastResult);
+    if (lastResult) return await finish(lastResult);
     if (lastError != null) {
       const result = await finish({
         ok: false,
@@ -343,9 +376,13 @@ export async function runEmbeddedTurnForSession(
       if (lastError instanceof Error) throw lastError;
       throw new Error(result.errorMessage);
     }
-    return finish({ ok: false, errorMessage: 'No model candidates available' });
+    return await finish({ ok: false, errorMessage: 'No model candidates available' });
   } finally {
     supervisor.dispose();
+    if (idleGeneration !== undefined) {
+      const policy = resolveCompactionPolicy(config);
+      idleScheduler.endTurn(conversationId, idleGeneration, turnCompleted ? idleJob : undefined, policy.personalIdle);
+    }
   }
 }
 
@@ -383,7 +420,17 @@ async function maybeAutoCompactBeforeTurn(opts: {
   } = opts;
   const policy = resolveCompactionPolicy(config);
 
+  if (policy.enabled && policy.personalIdle.enabled && isPersonalConversation(conversationId)) {
+    const messages = await sessionStore.load(conversationId);
+    const assessed = assessContext({ messages, contextWindow: model.contextWindow ?? 128_000,
+      systemPrompt, currentUserMessage: userMessage, tools, imageCount,
+      reserveTokens: policy.reserveTokens, minToolResultKeepChars: policy.minToolResultKeepChars },
+      policy.maxActiveTranscriptBytes);
+    if (assessed.fits) return;
+  }
+
   let started = false;
+  const recoveryStartedAt = Date.now();
   try {
     const recovered = await recoverContext({
       conversationId,
@@ -418,5 +465,8 @@ async function maybeAutoCompactBeforeTurn(opts: {
     log.warn({ err, conversationId }, 'Pre-turn context recovery failed');
     if (started) onEvent?.({ type: 'compaction', status: 'skipped' });
     throw err;
+  } finally {
+    if (started) log.info({ conversationId, phase: 'foreground_compaction',
+      durationMs: Date.now() - recoveryStartedAt }, 'Foreground compaction wait finished');
   }
 }

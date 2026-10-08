@@ -10,6 +10,7 @@ import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { DurableState } from '../../storage/sqlite/durable-state.js';
 import {
+  loadCompactionSourceSnapshot,
   closeXopcDatabase,
   getSessionConfig,
   openXopcDatabase,
@@ -17,6 +18,8 @@ import {
   resetXopcDatabaseSingletonForTest,
   setSessionConfig,
 } from '../../storage/sqlite/index.js';
+import { SessionCompactor } from '../../agent/memory/compaction.js';
+import { resolveCompactionPolicy } from '../../agent/memory/compaction-policy.js';
 import { SessionStore } from '../store.js';
 import { isMediaUriReferencedByLiveSession } from '../../media/session-references.js';
 
@@ -516,6 +519,62 @@ describe('SessionStore', () => {
         auditDegradedCount: 0,
         auditMissingItemsFound: 0,
       });
+    });
+
+    it('generates idle candidates without occupying the foreground compaction queue', async () => {
+      const key = '01377d73-3e53-4c23-9517-cd7e0c4b9d53';
+      const messages = [{ role: 'user' as const, content: 'original' }];
+      await store.saveMessages(key, messages, { metadata: { agentId: 'main' } });
+      let release!: (value: any) => void;
+      const spy = vi.spyOn(SessionCompactor.prototype, 'compact')
+        .mockImplementationOnce(() => new Promise(resolve => { release = resolve; }))
+        .mockResolvedValueOnce(compactionResult(messages, 'foreground summary', 1, 10, 5));
+      try {
+        const model = { provider: 'test', id: 'model' } as any;
+        const candidatePromise = store.prepareCompaction(key, model, resolveCompactionPolicy(), new AbortController().signal);
+        await store.compact(key, messages, model);
+        expect(JSON.stringify(await store.load(key))).toContain('foreground summary');
+        release(compactionResult(messages, 'old background summary', 1, 10, 5));
+        expect(await store.commitCompaction(await candidatePromise, () => true)).toBe(false);
+      } finally { spy.mockRestore(); }
+    });
+
+    it('commits an idle handover while preserving the authoritative raw transcript for recall', async () => {
+      const key = 'a4a81387-0c80-4411-8d38-3ff140259e78';
+      const messages = [{ role: 'user' as const, content: 'Exact reference ORBIT-7429' }];
+      await store.saveMessages(key, messages, { metadata: { agentId: 'main' } });
+      const candidate = { conversationId: key, snapshot: loadCompactionSourceSnapshot(key)!,
+        result: compactionResult(messages, 'short handover', 1, 10, 5) };
+      expect(await store.commitCompaction(candidate, () => true)).toBe(true);
+      expect(JSON.stringify(await store.load(key))).toContain('short handover');
+      expect(store.recallSession(key, 'ORBIT-7429')).toHaveLength(1);
+      expect(store.recallSession(key, 'ORBIT-7429')[0]?.content).toContain('Exact reference ORBIT-7429');
+    });
+
+    it('rejects idle candidates after a new message or reset without losing history', async () => {
+      const key = '77162b89-3b09-49c2-a716-b796f5891f51';
+      const messages = [{ role: 'user' as const, content: 'original' }];
+      await store.saveMessages(key, messages, { metadata: { agentId: 'main' } });
+      const snapshot = loadCompactionSourceSnapshot(key)!;
+      const candidate = { conversationId: key, snapshot, result: compactionResult(messages, 'summary', 1, 10, 5) };
+      await store.appendTranscriptMessage(key, { role: 'user', content: 'new input', timestamp: Date.now() });
+      expect(await store.commitCompaction(candidate, () => true)).toBe(false);
+      expect(JSON.stringify(await store.load(key))).toContain('new input');
+      await store.reset(key);
+      expect(await store.commitCompaction(candidate, () => true)).toBe(false);
+    });
+
+    it('checks idle candidate validity after waiting for the foreground commit queue', async () => {
+      const key = '84756de5-4390-401b-85b6-f6a091b730b0';
+      const messages = [{ role: 'user' as const, content: 'original' }];
+      await store.saveMessages(key, messages, { metadata: { agentId: 'main' } });
+      const candidate = { conversationId: key, snapshot: loadCompactionSourceSnapshot(key)!,
+        result: compactionResult(messages, 'summary', 1, 10, 5) };
+      let current = true;
+      const commit = store.commitCompaction(candidate, () => current);
+      current = false;
+      expect(await commit).toBe(false);
+      expect(JSON.stringify(await store.load(key))).toContain('original');
     });
 
     it('emits unified before and after hooks around a successful compaction', async () => {
