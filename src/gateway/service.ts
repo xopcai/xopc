@@ -197,6 +197,7 @@ export class GatewayService {
   private homeIntelligenceHost: HomeIntelligenceHost | null = null;
   private sessionIndex: SessionIndex;
   private running = false;
+  private stopping = false;
   private startTime = Date.now();
   private workspacePath: string;
   private readonly configCoordinator: GatewayConfigCoordinator;
@@ -872,6 +873,7 @@ export class GatewayService {
       });
       return result.ok;
     });
+    if (this.stopping) return;
     this.createTaskRunDispatcher().dispatch();
     await this.createWorkflowRunService().dispatchTaskRuns();
   }, (err) => {
@@ -928,6 +930,7 @@ export class GatewayService {
   });
 
   dispatchTaskRuns(): void {
+    if (this.stopping) return;
     this.taskResultDispatch();
     this.taskRunDispatch();
     this.taskMainUpdateDispatch();
@@ -1255,6 +1258,8 @@ export class GatewayService {
 
   private async startRuntime(): Promise<void> {
     if (this.running) return;
+    this.stopping = false;
+    this.taskRunDispatcher = null;
 
     this.stopRealtimeLogBridge = subscribeToLogs((entry) => {
       this.realtime.broker.publish('logs', 'log.entry', entry);
@@ -1679,6 +1684,12 @@ export class GatewayService {
 
   async stop(): Promise<void> {
     if (!this.running) return;
+    this.stopping = true;
+    this.taskRunDispatcher?.stop();
+    if (this.taskRunDispatchTimer) {
+      clearInterval(this.taskRunDispatchTimer);
+      this.taskRunDispatchTimer = null;
+    }
     await this.sessionPreparations.stop();
 
     setPairingBroadcastSink(null);
@@ -1701,10 +1712,6 @@ export class GatewayService {
     await this.discussionSealer.stop();
     await this.discussionLiveWorker.stop();
     this.notificationService?.stop();
-    if (this.taskRunDispatchTimer) {
-      clearInterval(this.taskRunDispatchTimer);
-      this.taskRunDispatchTimer = null;
-    }
 
     await stopTailscaleExposure().catch((err) => {
       log.warn({ err }, 'Tailscale exposure shutdown failed');
