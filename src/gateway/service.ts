@@ -1745,7 +1745,7 @@ export class GatewayService {
     await disposeAllSessionMcpRuntimes().catch((err) => {
       log.warn({ err }, 'MCP runtime shutdown failed');
     });
-    this._agentService?.stop();
+    await this._agentService?.stop();
 
     // Unblock `consumeOutbound()` / `consumeInbound()` waiters before stopping channels (CLI agent does the same).
     this.running = false;

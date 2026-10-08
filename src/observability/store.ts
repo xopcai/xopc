@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 
 import { resolveStateDir } from '../config/paths-state.js';
+import { redactString } from './sanitize.js';
 import { traceStoreWorkerSource } from './storeWorker.js';
 import type { TracingConfig } from './config.js';
 import type { TraceRecord } from './types.js';
@@ -18,15 +19,15 @@ export class LocalTraceStore {
   lastError?: string;
   constructor(config: TracingConfig, file = join(resolveStateDir(), 'traces', 'traces.db')) {
     try {
-      this.worker = new Worker(traceStoreWorkerSource, { eval: true, workerData: { path: file, config, owner: randomUUID() } });
+      this.worker = new Worker(traceStoreWorkerSource, { eval: true, execArgv: process.execArgv.filter((arg, index, args) => !arg.startsWith('--input-type') && args[index - 1] !== '--input-type'), workerData: { path: file, config, owner: randomUUID() } });
       this.worker.on('message', ({ id, value, error }) => {
         const request = this.requests.get(id); if (!request) return;
         clearTimeout(request.timer); this.requests.delete(id); this.pendingBytes -= request.bytes;
         if (error) { this.lastError = error; request.reject(new Error(error)); } else { request.resolve(value); }
         if (!this.requests.size) this.worker?.unref();
       });
-      this.worker.on('error', () => this.fail('Trace worker unavailable'));
-      this.worker.on('exit', () => this.fail('Trace worker stopped'));
+      this.worker.on('error', error => this.fail(`Trace worker unavailable: ${redactString(error instanceof Error ? error.message : 'Worker startup failed').slice(0, 200)}`));
+      this.worker.on('exit', () => { if (this.worker) this.fail('Trace worker stopped'); });
       this.worker.unref();
       this.epochReady = this.request('status').then(s => { this.epoch = s.epoch; }).catch(() => {});
     } catch { this.lastError = 'Trace worker unavailable'; this.epochReady = Promise.resolve(); }
@@ -65,5 +66,5 @@ export class LocalTraceStore {
   }
   async clear(): Promise<void> { this.epoch = await this.request('clear'); }
   async flush(): Promise<void> { await this.request('status'); }
-  async close(): Promise<void> { const worker = this.worker; this.worker = undefined; await worker?.terminate(); }
+  async close(): Promise<void> { const worker = this.worker; this.fail('Trace store closed'); await worker?.terminate(); }
 }
