@@ -6,7 +6,7 @@ import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MarkdownView } from '@/components/markdown/markdown-view';
+import { TaskExpandableContent } from './task-expandable-content';
 
 type Entry = {
   id: string; sequence: number; kind: string; body: string; authorKind: string;
@@ -89,7 +89,7 @@ export function TaskCollaborationPanel({ taskId }: { taskId: string }) {
           {entry.deliveryStatus ? <span>· {entry.deliveryStatus}</span> : null}
         </div>
         <div className="mt-1 min-w-0 text-fg" data-task-collaboration-body>
-          <MarkdownView content={entry.body} compact breaks />
+          <TaskExpandableContent content={entry.body} contentKey={`${taskId}:update:${entry.id}`} language={language} breaks previewHeight={120} />
         </div>
         {entry.kind === 'question' && entry.authorKind === 'worker_agent' ? <button type="button"
           className="mt-2 text-xs text-accent hover:underline" onClick={() => setReplyTo(entry.id)}>
