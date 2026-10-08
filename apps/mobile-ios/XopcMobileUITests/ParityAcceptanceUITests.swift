@@ -164,7 +164,9 @@ final class ParityAcceptanceUITests: XCTestCase {
         row.tap()
         let document = app.buttons["chat-attachment-preview-fixture-document"]
         let timeline = app.scrollViews.firstMatch
-        for _ in 0 ..< 12 where !document.exists { timeline.swipeDown() }
+        for _ in 0 ..< 12 where !document.exists {
+            timeline.swipeDown()
+        }
         XCTAssertTrue(document.waitForExistence(timeout: 12))
         document.tap()
         capture("chat-history-document-preview")
@@ -286,7 +288,9 @@ final class ParityAcceptanceUITests: XCTestCase {
         XCTAssertTrue(start.waitForExistence(timeout: 8))
         start.tap()
         let consent = app.buttons["同意并开始"]
-        if consent.waitForExistence(timeout: 2) { consent.tap() }
+        if consent.waitForExistence(timeout: 2) {
+            consent.tap()
+        }
         XCTAssertTrue(app.buttons["完成"].waitForExistence(timeout: 8))
         app.buttons["完成"].tap()
         XCTAssertTrue(app.buttons["试听"].waitForExistence(timeout: 8))
@@ -1083,9 +1087,25 @@ final class ParityAcceptanceUITests: XCTestCase {
             checkTaskConversation()
         }
 
+        checkProgressProjects()
+
+        tapIfExists("自动化")
+        capture("22-automations-list")
+        XCTAssertTrue(app.buttons["automation-filter-paused"].exists)
+        checkAutomationCreation()
+        let automationRow = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@ AND NOT identifier BEGINSWITH %@ AND identifier != %@",
+                                  "automation-", "automation-filter-", "automation-search")).firstMatch
+        if automationRow.waitForExistence(timeout: 2) {
+            automationRow.tap()
+            capture("23-automation-detail")
+            XCTAssertTrue(app.staticTexts["最近运行"].waitForExistence(timeout: 8))
+        }
+    }
+
+    private func checkProgressProjects() {
         relaunch()
         openTab("进展")
-
         tapIfExists("项目")
         capture("19-projects-list")
         XCTAssertTrue(app.segmentedControls.buttons["已归档"].exists)
@@ -1110,19 +1130,6 @@ final class ParityAcceptanceUITests: XCTestCase {
             capture("21-project-new-conversation")
             relaunch()
             openTab("进展")
-        }
-
-        tapIfExists("自动化")
-        capture("22-automations-list")
-        XCTAssertTrue(app.buttons["automation-filter-paused"].exists)
-        checkAutomationCreation()
-        let automationRow = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "identifier BEGINSWITH %@ AND NOT identifier BEGINSWITH %@ AND identifier != %@",
-                                  "automation-", "automation-filter-", "automation-search")).firstMatch
-        if automationRow.waitForExistence(timeout: 2) {
-            automationRow.tap()
-            capture("23-automation-detail")
-            XCTAssertTrue(app.staticTexts["最近运行"].waitForExistence(timeout: 8))
         }
     }
 

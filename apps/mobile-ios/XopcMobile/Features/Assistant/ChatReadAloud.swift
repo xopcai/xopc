@@ -139,9 +139,13 @@ enum ChatSpeechText {
         position = 0
         duration = 0
         let hadRemoteCommands = !remoteTargets.isEmpty
-        for (command, target) in remoteTargets { command.removeTarget(target) }
+        for (command, target) in remoteTargets {
+            command.removeTarget(target)
+        }
         remoteTargets.removeAll()
-        if hadRemoteCommands { MPNowPlayingInfoCenter.default().nowPlayingInfo = nil }
+        if hadRemoteCommands {
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        }
         if isAudioSessionActive {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             isAudioSessionActive = false

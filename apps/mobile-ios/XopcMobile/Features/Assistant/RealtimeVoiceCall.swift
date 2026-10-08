@@ -153,13 +153,7 @@ final class RealtimeVoiceCall {
         let current = generation
         phase = recovering ? .recovering : .connecting
         errorCode = nil
-        connectTimeoutTask?.cancel()
-        connectTimeoutTask = Task {
-            try? await Task.sleep(for: .seconds(15))
-            guard !Task.isCancelled, generation == current,
-                  phase == .connecting || phase == .recovering else { return }
-            await pause(reason: "CONNECT_TIMEOUT")
-        }
+        scheduleConnectTimeout(for: current)
         do {
             let status = try await gateway.fetchRealtimeVoiceStatus()
             guard generation == current else { return }
@@ -198,6 +192,16 @@ final class RealtimeVoiceCall {
                 ?? error.localizedDescription
             await release()
             phase = .paused
+        }
+    }
+
+    private func scheduleConnectTimeout(for current: Int) {
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = Task {
+            try? await Task.sleep(for: .seconds(15))
+            guard !Task.isCancelled, generation == current,
+                  phase == .connecting || phase == .recovering else { return }
+            await pause(reason: "CONNECT_TIMEOUT")
         }
     }
 

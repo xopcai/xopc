@@ -19,7 +19,11 @@ final class PersonalAgentState {
         record = nil
         errorMessage = nil
         isLoading = true
-        defer { if current == generation { isLoading = false } }
+        defer {
+            if current == generation {
+                isLoading = false
+            }
+        }
         do {
             let result = try await GatewayClient(configuration: configuration).fetchPersonalAgent()
             guard current == generation, !Task.isCancelled else { return }
@@ -34,7 +38,9 @@ final class PersonalAgentState {
 
     func open(using configuration: GatewayConfiguration) async -> PersonalAgentRecord? {
         guard !isOpening else { return nil }
-        if let record, record.isReady { return record }
+        if let record, record.isReady {
+            return record
+        }
         isOpening = true
         errorMessage = nil
         let current = generation
