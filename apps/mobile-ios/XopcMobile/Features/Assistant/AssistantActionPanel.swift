@@ -24,20 +24,25 @@ struct PersonalConnectionWait: Decodable {
         }
     }
 
-    struct TimeRange: Decodable {
-        let from: String
-        let to: String
-        let timezone: String
-        let expression: String
-    }
-
     let id: String
     let transcriptId: String
     let version: Int
     let summary: String
     let phase: String
     let needs: [Need]
-    let timeRange: TimeRange?
+    let timeRange: PersonalConnectionTimeRange?
+}
+
+struct PersonalConnectionTimeRange: Decodable {
+    let from: String
+    let end: String
+    let timezone: String
+    let expression: String
+
+    enum CodingKeys: String, CodingKey {
+        case from, timezone, expression
+        case end = "to"
+    }
 }
 
 private struct PersonalConnectionAction: Encodable {
@@ -109,7 +114,7 @@ struct PersonalConnectionCard: View {
                         .font(.headline)
                     Text(verbatim: wait.summary).font(.subheadline)
                     if let range = wait.timeRange {
-                        Text(verbatim: "\(range.from) — \(range.to) · \(range.timezone)")
+                        Text(verbatim: "\(range.from) — \(range.end) · \(range.timezone)")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     ForEach(wait.needs) { need in

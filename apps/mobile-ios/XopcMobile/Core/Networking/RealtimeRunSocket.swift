@@ -62,23 +62,27 @@ actor RealtimeRunSocket {
             if let conversationID {
                 guard eventName == "session.task-result", eventData?.conversationId == conversationID else { continue }
             }
-            let event = RunStreamEvent(
-                name: eventName,
-                sequence: sequence,
-                messageId: eventData?.payload?.messageId,
-                delta: eventData?.payload?.delta,
-                offset: eventData?.payload?.offset,
-                status: eventData?.payload?.status,
-                errorMessage: eventData?.payload?.message,
-                toolName: eventData?.payload?.toolName,
-                stage: eventData?.payload?.stage
-            )
+            let event = makeEvent(name: eventName, sequence: sequence, data: eventData)
             continuation.yield(event)
             if event.isTerminal {
                 continuation.finish()
                 return
             }
         }
+    }
+
+    private func makeEvent(name: String, sequence: Int, data: RealtimeRunEnvelope?) -> RunStreamEvent {
+        RunStreamEvent(
+            name: name,
+            sequence: sequence,
+            messageId: data?.payload?.messageId,
+            delta: data?.payload?.delta,
+            offset: data?.payload?.offset,
+            status: data?.payload?.status,
+            errorMessage: data?.payload?.message,
+            toolName: data?.payload?.toolName,
+            stage: data?.payload?.stage
+        )
     }
 
     private func validate(_ frame: RealtimeServerFrame) throws {
