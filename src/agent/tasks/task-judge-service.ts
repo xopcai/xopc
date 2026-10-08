@@ -254,7 +254,7 @@ export class TaskJudgeService {
         expectedRunVersion: run.version,
         receipt: {
           status: 'succeeded',
-          summary: payload.assistantPlainText.slice(-2_000) || 'Agent run completed',
+          summary: payload.assistantPlainText || 'Agent run completed',
           changes: [], evidence,
           verification: { status: passed ? 'passed' : 'unverified', checks },
           remainingWork: checks.filter((check) => check.status !== 'passed').map((check) => check.criterion),

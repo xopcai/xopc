@@ -39,6 +39,25 @@ function createManager(params: { now?: () => number; maxPerClient?: number; mess
 }
 
 describe('EphemeralSideChatManager', () => {
+  it('defaults to six hours of inactivity and renews that window on extension', async () => {
+    let now = 0;
+    const ttl = 6 * 60 * 60_000;
+    const manager = createManager({ now: () => now, options: { idleTtlMs: undefined } });
+    try {
+      const chat = await manager.create({ parentConversationId: metadata().key, clientInstanceId: 'owner' });
+      expect(Date.parse(chat.expiresAt!)).toBe(ttl);
+      now = 30 * 60_000;
+      expect(manager.get(chat.id, 'owner').id).toBe(chat.id);
+      expect(Date.parse(manager.extend(chat.id, 'owner').expiresAt!)).toBe(now + ttl);
+      now += ttl - 1;
+      expect(manager.get(chat.id, 'owner').id).toBe(chat.id);
+      now += 1;
+      expect(() => manager.get(chat.id, 'owner')).toThrow(expect.objectContaining({ code: 'EXPIRED', reason: 'idle' }));
+    } finally {
+      await manager.disposeAll();
+    }
+  });
+
   it('forks an immutable parent snapshot into an in-memory transcript', async () => {
     const parentMessages: AgentMessage[] = [{ role: 'user', content: 'original', timestamp: 1 }];
     const manager = createManager({ messages: parentMessages });

@@ -28,8 +28,7 @@ export interface TaskResultDeliveryRow {
 
 export class TaskResultDeliveryRepository {
   capture(runId: string, value: TurnOutcome): void {
-    const outcome = TurnOutcomeSchema.parse({ ...value, evidence: [], changeSet: undefined,
-      summary: value.summary?.slice(0, 2000) });
+    const outcome = TurnOutcomeSchema.parse({ ...value, evidence: [], changeSet: undefined });
     if (outcome.deliverables.length > 50 || JSON.stringify(outcome).length > 256_000) {
       throw new Error('Task outcome exceeds delivery limits');
     }
@@ -67,16 +66,16 @@ export class TaskResultDeliveryRepository {
       artifacts.set(item.sourceFileId ?? item.artifactId, item);
     }
     const deliverables = [...artifacts.values()].slice(-50);
-    const text = resultText?.trim() && resultText.trim() !== 'NO_REPLY' ? resultText.trim().slice(0, 8000) : undefined;
+    const text = resultText?.trim() && resultText.trim() !== 'NO_REPLY' ? resultText.trim() : undefined;
     if (!deliverables.length && (!text || status !== 'succeeded')) return false;
     // Connected-app requests have their own structured text delivery.
     if (!deliverables.length && personalRequestForTask(run.taskId)) return false;
     const outcome: TurnOutcome = { ...latest, deliverables, evidence: [], changeSet: undefined,
-      summary: summary.slice(0, 2000),
+      summary,
       status: status === 'failed' || deliverables.some(item => item.availability !== 'available') ? 'partial' : 'succeeded' };
     const now = Date.now();
     const delivery = TaskResultDeliverySchema.parse({ version: 1, deliveryId: randomUUID(),
-      taskId: run.taskId, taskRunId: runId, taskTitle: origin.title.slice(0, 300),
+      taskId: run.taskId, taskRunId: runId, taskTitle: origin.title,
       conversationId: origin.conversation_id, originTranscriptId: origin.origin_transcript_id,
       ...(origin.request_input_id ? { requestInputId: origin.request_input_id } : {}),
       assignmentEpoch: state.assignmentEpoch, outcome, ...(text ? { text } : {}), createdAt: now });

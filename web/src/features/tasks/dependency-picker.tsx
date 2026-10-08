@@ -57,12 +57,12 @@ export function DependencyPicker({ candidates, selectedIds, labels, disabled, bo
                       {getTaskHref ? (
                         <Link
                           to={getTaskHref(task.id)}
-                          className="min-w-0 truncate rounded-sm outline-none transition-colors hover:text-fg hover:underline focus-visible:ring-2 focus-visible:ring-accent/50"
+                          className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] rounded-sm outline-none transition-colors hover:text-fg hover:underline focus-visible:ring-2 focus-visible:ring-accent/50"
                         >
                           {task.title}
                         </Link>
                       ) : (
-                        <span className="min-w-0 truncate">{task.title}</span>
+                        <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">{task.title}</span>
                       )}
                     </TooltipTrigger>
                     <TooltipPortal>
@@ -134,7 +134,7 @@ export function DependencyPicker({ candidates, selectedIds, labels, disabled, bo
                           <span className={cn('flex size-4 shrink-0 items-center justify-center rounded', borderless ? (selected ? 'bg-accent text-on-accent' : 'bg-surface-active') : (selected ? 'border border-accent bg-accent text-on-accent' : 'border border-edge'))}>
                             {selected ? <Check className="size-3" aria-hidden /> : null}
                           </span>
-                          <span className="min-w-0 flex-1 truncate">{task.title}</span>
+                          <span className="min-w-0 flex-1 whitespace-normal break-words [overflow-wrap:anywhere]">{task.title}</span>
                         </button>
                       );
                     })}

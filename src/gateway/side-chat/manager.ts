@@ -15,7 +15,8 @@ import {
 } from './context-snapshot.js';
 import type { CreateSideChatInput, SideChatConfig, SideChatStatus, SideChatView } from './types.js';
 
-const DEFAULT_IDLE_TTL_MS = 30 * 60 * 1000;
+const DEFAULT_IDLE_TTL_MS = 6 * 60 * 60 * 1000;
+const EXPIRED_RECORD_RETENTION_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_PER_CLIENT = 5;
 const DEFAULT_MAX_TOTAL = 50;
 const MAX_EXPIRED_RECORDS = 500;
@@ -335,7 +336,7 @@ export class EphemeralSideChatManager {
 
   private expireEntry(entry: SideChatEntry): Promise<boolean> {
     const reason = entry.status.startsWith('waiting-') ? 'waiting' : 'idle';
-    this.expired.set(entry.id, { clientInstanceId: entry.clientInstanceId, reason, removeAt: this.now() + DEFAULT_IDLE_TTL_MS });
+    this.expired.set(entry.id, { clientInstanceId: entry.clientInstanceId, reason, removeAt: this.now() + EXPIRED_RECORD_RETENTION_MS });
     this.pruneExpiredRecords(this.now());
     const cleanup = this.disposeEntry(entry.id, entry.clientInstanceId);
     try {

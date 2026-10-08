@@ -8,13 +8,13 @@ export const TaskResultDeliverySchema = z.object({
   deliveryId: z.string().min(1),
   taskId: z.string().min(1),
   taskRunId: z.string().min(1),
-  taskTitle: z.string().min(1).max(300),
+  taskTitle: z.string().min(1).max(500),
   conversationId: z.string().min(1),
   originTranscriptId: z.string().min(1),
   requestInputId: z.string().optional(),
   assignmentEpoch: z.number().int().nonnegative(),
   outcome: TurnOutcomeSchema,
-  text: z.string().max(8000).optional(),
+  text: z.string().optional(),
   createdAt: z.number(),
 });
 
