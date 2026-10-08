@@ -15,6 +15,7 @@ const saveMediaBufferMock = vi.fn();
 
 vi.mock('../../../media/store.js', () => ({
   MEDIA_MAX_BYTES: 5 * 1024 * 1024,
+  MEDIA_ARTIFACT_MAX_BYTES: 50 * 1024 * 1024,
   mimeTypeFromMediaPath: () => 'image/png',
   saveMediaBuffer: (...args: unknown[]) => saveMediaBufferMock(...args),
 }));
