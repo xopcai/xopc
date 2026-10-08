@@ -69,6 +69,7 @@ import type { StoredLanguage } from '@/lib/storage';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 
 import { revalidateModelsHubCaches } from './models-hub-cache';
+import { DefaultModelSuccessStep, type DefaultModelTarget } from './default-model-success-step';
 
 export interface AddProviderDialogMessages {
   title: string;
@@ -127,7 +128,8 @@ export interface AddProviderDialogMessages {
 type DialogStep =
   | { type: 'pick' }
   | { type: 'builtin'; providerId: string }
-  | { type: 'custom'; presetKey?: string };
+  | { type: 'custom'; presetKey?: string }
+  | { type: 'success'; target: DefaultModelTarget };
 
 const RECOMMENDED_PROVIDER_ID = 'xopc-cloud';
 
@@ -138,7 +140,7 @@ interface AddProviderDialogProps {
   customConfig: ModelsJsonConfig | null;
   labels: AddProviderDialogMessages;
   language: StoredLanguage;
-  onSaved: (providerId: string) => void;
+  onSaved: (providerId: string, modelIds?: string[]) => void;
 }
 
 export function AddProviderDialog({
@@ -168,10 +170,15 @@ export function AddProviderDialog({
     [onOpenChange],
   );
 
-  const handleSaved = useCallback((providerId: string) => {
+  const handleSaved = useCallback((providerId: string, modelIds?: string[]) => {
     onSaved(providerId);
-    handleOpenChange(false);
-  }, [onSaved, handleOpenChange]);
+    const existing = builtinRows.some(row => row.id === providerId && row.configured);
+    if (modelIds?.length === 0 || (modelIds === undefined && existing)) {
+      handleOpenChange(false);
+    } else {
+      setStep({ type: 'success', target: { providerId, modelIds } });
+    }
+  }, [onSaved, handleOpenChange, builtinRows]);
 
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
@@ -188,7 +195,9 @@ export function AddProviderDialog({
             SETTINGS_SHELL_CONTENT_Z,
           )}
         >
-          {step.type === 'pick' ? (
+          {step.type === 'success' ? (
+            <DefaultModelSuccessStep target={step.target} zh={language === 'zh'} onDone={() => handleOpenChange(false)} />
+          ) : step.type === 'pick' ? (
             <PickProviderStep
               builtinRows={builtinRows}
               searchQuery={searchQuery}
@@ -906,7 +915,7 @@ function ConfigureCustomStep({
   labels: AddProviderDialogMessages;
   language: StoredLanguage;
   onBack: () => void;
-  onSaved: (providerId: string) => void;
+  onSaved: (providerId: string, modelIds?: string[]) => void;
 }) {
   const [form, dispatch] = useReducer(customFormReducer, undefined as never, () =>
     customFormFromPreset(initialPresetKey),
@@ -952,7 +961,8 @@ function ConfigureCustomStep({
       };
 
       await saveModelsJson(updatedConfig);
-      onSaved(trimmedId);
+      const previousIds = new Set(existingProviders[trimmedId]?.models?.map(model => model.id) ?? []);
+      onSaved(trimmedId, newProvider.models?.filter(model => !previousIds.has(model.id) && !model.computerUse).map(model => model.id) ?? []);
     } catch (e) {
       dispatch({ type: 'setError', value: e instanceof Error ? e.message : labels.saveError });
     } finally {

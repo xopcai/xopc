@@ -55,6 +55,8 @@ import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
 import { messages } from '@/i18n/messages';
 
+import { DefaultModelSuccessStep, type DefaultModelTarget } from './default-model-success-step';
+
 export interface ProviderManageDialogMessages {
   apiKeyLabel: string;
   apiKeyPlaceholder: string;
@@ -115,8 +117,13 @@ export function ProviderManageDialog({
   language,
   onSaved,
 }: ProviderManageDialogProps) {
+  const [successTarget, setSuccessTarget] = useState<DefaultModelTarget | null>(null);
+  const handleOpenChange = (next: boolean) => {
+    if (!next) setSuccessTarget(null);
+    onOpenChange(next);
+  };
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay
           className={cn(
@@ -130,7 +137,9 @@ export function ProviderManageDialog({
             SETTINGS_SHELL_CONTENT_Z,
           )}
         >
-          {isCustom ? (
+          {successTarget ? (
+            <DefaultModelSuccessStep target={successTarget} zh={language === 'zh'} onDone={() => handleOpenChange(false)} />
+          ) : isCustom ? (
             <ManageCustomProvider
               providerId={providerId}
               customConfig={customConfig}
@@ -138,6 +147,7 @@ export function ProviderManageDialog({
               language={language}
               onClose={() => onOpenChange(false)}
               onSaved={onSaved}
+              onModelAdded={(modelId) => setSuccessTarget({ providerId, modelIds: [modelId] })}
             />
           ) : (
             <ManageBuiltinProvider
@@ -622,6 +632,7 @@ function ManageCustomProvider({
   language,
   onClose,
   onSaved,
+  onModelAdded,
 }: {
   providerId: string;
   customConfig: ModelsJsonConfig | null;
@@ -629,6 +640,7 @@ function ManageCustomProvider({
   language: StoredLanguage;
   onClose: () => void;
   onSaved: () => void;
+  onModelAdded: (modelId: string) => void;
 }) {
   const ms = messages(language).modelsSettings;
   const existingProvider = customConfig?.providers[providerId];
@@ -701,6 +713,7 @@ function ManageCustomProvider({
 
   const handleModelSaved = async (updated: CustomModel) => {
     if (!modelDialogCtx) return;
+    const isNew = modelDialogCtx.isNew && !models.some(model => model.id === updated.id);
     const nextModels = modelDialogCtx.isNew
       ? [...models, updated]
       : models.map((m) => (m.id === updated.id ? updated : m));
@@ -711,6 +724,7 @@ function ManageCustomProvider({
     try {
       await saveModelsJson(config);
       onSaved();
+      if (isNew && !updated.computerUse) onModelAdded(updated.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : labels.saveError);
     }
