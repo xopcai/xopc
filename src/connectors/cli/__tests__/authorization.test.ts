@@ -10,10 +10,14 @@ import type { ProcessResult } from '../../../process/process-spec.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../storage/sqlite/index.js';
 import { getConnectorDefinition } from '../../catalog.js';
 import { startCliAuthorization } from '../authorization.js';
+import { installCli } from '../installer.js';
 import { startCliProcess } from '../process.js';
 import { readCliAuthorization } from '../store.js';
 
-vi.mock('../installer.js', () => ({ verifyInstalledCli: vi.fn().mockResolvedValue('/test/lark-cli') }));
+vi.mock('../installer.js', () => ({
+  installCli: vi.fn().mockResolvedValue('/test/lark-cli'),
+  verifyInstalledCli: vi.fn().mockResolvedValue('/test/lark-cli'),
+}));
 vi.mock('../process.js', async importOriginal => ({
   ...await importOriginal<typeof import('../process.js')>(),
   startCliProcess: vi.fn(),
@@ -30,6 +34,7 @@ beforeEach(() => {
   config = { connectors: { instances: { [definition.id]: { runtime: definition.runtime,
     xopcConnector: { managed: true, connectorId: definition.id, definition, enabled: true } } } } } as unknown as Config;
   vi.mocked(startCliProcess).mockReset();
+  vi.mocked(installCli).mockReset().mockResolvedValue('/test/lark-cli');
 });
 afterEach(() => {
   closeXopcDatabase();
@@ -54,6 +59,7 @@ it.each([true, false])('requires a verified identity after partial consent (veri
   } as Awaited<ReturnType<typeof startCliProcess>>));
   const attempt = startCliAuthorization(config, 'feishu-workspace');
   await vi.waitFor(() => expect(readCliAuthorization(attempt.id)?.phase).toBe(verified ? 'succeeded' : 'failed'));
+  expect(installCli).toHaveBeenCalledWith(expect.objectContaining({ id: 'lark', binaryVersion: '1.0.96' }));
   expect(startCliProcess).toHaveBeenLastCalledWith(expect.objectContaining({ args: ['auth', 'status', '--json', '--verify'] }));
   expect(Boolean(readCliAuthorization(attempt.id)?.account_id)).toBe(verified);
   if (verified) {
@@ -65,6 +71,15 @@ it.each([true, false])('requires a verified identity after partial consent (veri
       ]));
     }
   }
+});
+
+it('fails authorization without launching the CLI when runtime recovery fails', async () => {
+  vi.mocked(installCli).mockRejectedValueOnce(new Error('CLI download failed (503).'));
+  const attempt = startCliAuthorization(config, 'feishu-workspace');
+  await vi.waitFor(() => expect(readCliAuthorization(attempt.id)?.phase).toBe('failed'));
+  expect(readCliAuthorization(attempt.id)?.error).toBe('CLI download failed (503).');
+  expect(startCliProcess).not.toHaveBeenCalled();
+  expect(readCliAuthorization(attempt.id)?.account_id).toBeNull();
 });
 
 it('commits WPS only after delegated user verification and exposes its read tools', async () => {
