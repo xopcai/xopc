@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -45,6 +46,24 @@ describe('bounded local tracing', () => {
     const next = await store.begin(row(101, { endedAt: undefined })); await store.write(row(101), next);
     expect(await store.request('detail', row(101).traceId)).not.toBeNull();
   });
+});
+
+it('retries startup while another writer holds the database lock', async () => {
+  const file = join(directory, 'locked.db');
+  const blocker = new DatabaseSync(file);
+  blocker.exec('PRAGMA journal_mode=WAL; CREATE TABLE bootstrap (id INTEGER); BEGIN IMMEDIATE;');
+  const release = setTimeout(() => blocker.exec('ROLLBACK'), 250);
+  const writer = new LocalTraceStore(defaultTracingConfig(), file);
+  try {
+    expect((await writer.request('status')).traces).toBe(0);
+    await writer.write(row(150));
+    expect((await writer.request('detail', row(150).traceId)).spans).toHaveLength(1);
+    expect(writer.lastError).toBeUndefined();
+  } finally {
+    clearTimeout(release);
+    await writer.close();
+    blocker.close();
+  }
 });
 
 it('bounds physical growth under oversized payloads and two independent writers', async () => {
