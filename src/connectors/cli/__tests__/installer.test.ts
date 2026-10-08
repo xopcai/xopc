@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -34,6 +34,20 @@ describe('managed CLI installation', () => {
     expect(first).toBe(second); expect(await readFile(first)).toEqual(binary);
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(await verifyInstalledCli(adapter)).toBe(first);
+    expect(await installCli(adapter)).toBe(first);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it.each(['missing', 'modified', 'not-executable'])('recovers a %s cached CLI on explicit installation', async state => {
+    const executable = await installCli(adapter);
+    if (state === 'missing') await rm(executable);
+    else if (state === 'modified') await writeFile(executable, 'modified');
+    else await chmod(executable, 0o600);
+    await expect(verifyInstalledCli(adapter)).rejects.toThrow();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(await installCli(adapter)).toBe(executable);
+    expect(await readFile(executable)).toEqual(binary);
+    expect(await verifyInstalledCli(adapter)).toBe(executable);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
   it('keeps the old pinned version usable when a new distribution is invalid', async () => {
     await installCli(adapter);

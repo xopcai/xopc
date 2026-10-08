@@ -7,7 +7,7 @@ import { getConnectorAccount } from '../../storage/sqlite/connector-account-repo
 import { createLogger } from '../../utils/logger.js';
 import { getConnectorInstance, getInstalledConnectorDefinition } from '../instances.js';
 import { getCliAdapter } from './adapterRegistry.js';
-import { verifyInstalledCli } from './installer.js';
+import { installCli } from './installer.js';
 import { cliContextPath, startCliProcess } from './process.js';
 import { cliAuthorizationView, commitCliIdentity, createCliAuthorization, readCliAuthorization, updateCliAuthorization, type CliAuthorization } from './store.js';
 import type { CliAdapter } from './types.js';
@@ -48,7 +48,8 @@ export function extractAuthorizationUrl(text: string, allowedHosts: readonly str
 async function authorize(adapter: CliAdapter, attempt: CliAuthorization, signal: AbortSignal): Promise<void> {
   let committed = false;
   try {
-    const executable = await verifyInstalledCli(adapter);
+    const executable = await installCli(adapter);
+    signal.throwIfAborted();
     const previous = attempt.expected_account_id ? getConnectorAccount(attempt.expected_account_id) : undefined;
     const previousConnection = previous?.currentConnectionId ? getConnectorConnection(previous.currentConnectionId) : undefined;
     if (previousConnection) {
