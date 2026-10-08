@@ -29,7 +29,7 @@ export interface TaskResultDeliveryRow {
 export class TaskResultDeliveryRepository {
   capture(runId: string, value: TurnOutcome): void {
     const outcome = TurnOutcomeSchema.parse({ ...value, evidence: [], changeSet: undefined,
-      summary: value.summary.slice(0, 2000) });
+      summary: value.summary?.slice(0, 2000) });
     if (outcome.deliverables.length > 50 || JSON.stringify(outcome).length > 256_000) {
       throw new Error('Task outcome exceeds delivery limits');
     }
