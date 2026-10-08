@@ -11,6 +11,7 @@ struct PersonalConnectionWait: Decodable {
         let id: String
         let label: String
     }
+
     struct Need: Decodable, Identifiable {
         let key: String
         let label: String
@@ -18,14 +19,18 @@ struct PersonalConnectionWait: Decodable {
         let authorizationMode: String
         let accounts: [Account]
         let reason: String?
-        var id: String { key }
+        var id: String {
+            key
+        }
     }
+
     struct TimeRange: Decodable {
         let from: String
         let to: String
         let timezone: String
         let expression: String
     }
+
     let id: String
     let transcriptId: String
     let version: Int
@@ -71,7 +76,7 @@ extension GatewayClient {
         )
         let envelope: GatewayEnvelope<PersonalConnectionActionResult> = try await request(
             path: "/api/sessions/\(conversationID)/connection-wait/actions",
-            method: "POST", body: try encoder.encode(command)
+            method: "POST", body: encoder.encode(command)
         )
         guard envelope.isSuccessful, let payload = envelope.payload else {
             throw GatewayClientError.server(envelope.error?.message ?? "无法完成连接操作")
@@ -131,7 +136,8 @@ struct PersonalConnectionCard: View {
             }
         }
         .task(id: ObservationKey(configuration: configuration, conversationID: conversationID,
-                                 isActive: scenePhase == .active)) {
+                                 isActive: scenePhase == .active))
+        {
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
                 await refresh()
@@ -141,7 +147,6 @@ struct PersonalConnectionCard: View {
         }
     }
 
-    @ViewBuilder
     private func needActions(_ need: PersonalConnectionWait.Need, wait: PersonalConnectionWait) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(verbatim: need.label).font(.subheadline.bold())
@@ -181,7 +186,8 @@ struct PersonalConnectionCard: View {
                 )
                 snapshot = result.snapshot
                 if let rawURL = result.authorizationUrl, let url = URL(string: rawURL),
-                   url.scheme == "https", url.user == nil, url.password == nil {
+                   url.scheme == "https", url.user == nil, url.password == nil
+                {
                     openURL(url)
                 }
             } catch is CancellationError {
@@ -202,7 +208,9 @@ struct PersonalConnectionCard: View {
         } catch is CancellationError {
             return
         } catch {
-            if snapshot?.wait != nil { errorMessage = error.localizedDescription }
+            if snapshot?.wait != nil {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }
