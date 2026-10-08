@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox';
 
 import { getPersonalAgentByConversation } from '../../personal-agent/repository.js';
 import { PersonalPreferencesSchema, updatePersonalProfileRecord } from '../../personal-agent/service.js';
+import { applyUserProfilePatch } from '../../user-model/profile.js';
 
 const PreferenceSchema = Type.Object({
   field: Type.Union([
@@ -29,6 +30,10 @@ export function createPersonalPreferenceTool(deps: {
         ...personal.preferences,
         [input.field]: input.value.trim(),
       });
+      if (input.field === 'addressAs') {
+        applyUserProfilePatch({ callName: next.addressAs ?? '' });
+        return { content: [{ type: 'text', text: 'Saved the preferred name in the shared user profile. It takes effect on the next reply.' }], details: {} };
+      }
       const updated = await updatePersonalProfileRecord(personal.ownerId, personal.revision, personal.displayName, next, personal.appearance);
       if (!updated) throw new Error('Preference changed concurrently; read the current profile and try again');
       deps.onAgentCatalogMutate?.();

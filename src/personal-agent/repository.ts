@@ -5,6 +5,7 @@ import type { StoredAgent } from '../agent-catalog/types.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/connection.js';
 import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
+import { getUserProfileSnapshot } from '../user-model/profile.js';
 
 export type PersonalAgentState = 'provisioning' | 'ready' | 'error';
 export type PersonalAppearance = 'loopi' | 'loopi-curious' | 'loopi-care' | 'custom';
@@ -15,6 +16,7 @@ export interface PersonalAgentRecord {
   conversationId: string;
   state: PersonalAgentState;
   displayName: string;
+  userCallName: string | null;
   appearance: PersonalAppearance;
   voicePreference: { provider: string; model: string; voice: string } | null;
   preferences: Record<string, unknown>;
@@ -55,14 +57,14 @@ function appearanceFrom(agent: StoredAgent): PersonalAppearance {
 
 function toRecord(ownerId: string, agent: StoredAgent, session: PersonalSession | null): PersonalAgentRecord {
   const config = session ? getSessionConfig(session.conversation_id) : null;
-  const ready = agent.provisioningState === 'ready' && agent.runtime?.thinkingLevel === 'off'
-    && session && config?.thinkingLevel === 'off' && config.fixedModel;
+  const ready = agent.provisioningState === 'ready' && session && config?.fixedModel;
   return {
     ownerId,
     agentId: agent.id,
     conversationId: session?.conversation_id ?? personalConversationId(ownerId),
     state: agent.provisioningState === 'error' ? 'error' : ready ? 'ready' : 'provisioning',
     displayName: agent.profile?.name ?? 'Ada',
+    userCallName: getUserProfileSnapshot().callName ?? null,
     appearance: appearanceFrom(agent),
     voicePreference: agent.profile?.voicePreference ?? null,
     preferences: agent.profile?.responsePreferences ?? DEFAULT_PERSONAL_PREFERENCES,

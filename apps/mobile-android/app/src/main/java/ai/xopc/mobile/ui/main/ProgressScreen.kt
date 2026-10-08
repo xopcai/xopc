@@ -908,8 +908,10 @@ private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: 
     }
     ProgressSectionTitle(R.string.progress_description)
     Card {
-      Text(task.body.ifBlank { stringResource(R.string.progress_no_description) },
+      if (task.body.isBlank()) Text(stringResource(R.string.progress_no_description),
         modifier = Modifier.fillMaxWidth().padding(16.dp), style = MaterialTheme.typography.bodyMedium)
+      else MarkdownContent(task.body,
+        modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("progress-task-body"))
     }
     ProgressSectionTitle(R.string.progress_acceptance_criteria)
     Card {

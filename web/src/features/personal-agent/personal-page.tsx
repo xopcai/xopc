@@ -17,6 +17,7 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 import { PersonalAvatar, type PersonalAppearance } from './personal-avatar';
 import { PersonalOnboarding } from './personal-onboarding';
 import { PersonalVoiceSetting } from './personal-voice-setting';
+import { PersonalModelSetting } from './personal-model-setting';
 
 type Preferences = {
   addressAs?: string;
@@ -31,6 +32,7 @@ export type PersonalAgent = {
   conversationId: string;
   state: 'provisioning' | 'ready' | 'error';
   displayName: string;
+  userCallName?: string | null;
   appearance: PersonalAppearance;
   voicePreference: { provider: string; model: string; voice: string } | null;
   preferences: Preferences;
@@ -137,7 +139,6 @@ export function PersonalPage() {
   const settingsButtonRef = useRef<HTMLButtonElement>(null!);
   const profileButtonRef = useRef<HTMLButtonElement>(null);
   const [displayName, setDisplayName] = useState('');
-  const [addressAs, setAddressAs] = useState('');
   const [supportMode, setSupportMode] = useState<Preferences['supportMode']>('untangle');
   const [humor, setHumor] = useState<Preferences['humor']>('none');
   const [detailLevel, setDetailLevel] = useState<Preferences['detailLevel']>('balanced');
@@ -181,7 +182,6 @@ export function PersonalPage() {
         setDisplayName(personal.payload.displayName);
         setAppearance(personal.payload.appearance);
         setSelectedStyle(styleId(personal.payload.preferences));
-        setAddressAs(personal.payload.preferences.addressAs ?? '');
         setSupportMode(personal.payload.preferences.supportMode ?? 'untangle');
         setHumor(personal.payload.preferences.humor ?? 'none');
         setDetailLevel(personal.payload.preferences.detailLevel ?? 'balanced');
@@ -410,7 +410,22 @@ export function PersonalPage() {
             <button type="button" disabled={uploadingAvatar} onClick={() => setShowAppearanceChoices(open => !open)} aria-expanded={showAppearanceChoices} aria-controls="personal-appearance-options" aria-label={zh ? '选择头像' : 'Choose avatar'} className="rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
               <PersonalAvatar appearance={appearance} agentId={record.agentId} className="size-20" />
             </button>
-            <h2 className="mt-3 max-w-full truncate text-lg font-semibold text-fg">{displayName || record.displayName}</h2>
+            <input id="personal-name" aria-label={zh ? '助手名称' : 'Assistant name'}
+              value={displayName} onChange={event => setDisplayName(event.target.value)}
+              onBlur={event => {
+                const next = event.currentTarget.value.trim();
+                if (next) { setDisplayName(next); void queueProfileUpdate({ displayName: next }); }
+                else setDisplayName(recordRef.current?.displayName ?? '');
+              }}
+              onKeyDown={event => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+                if (event.key === 'Escape') {
+                  event.currentTarget.value = recordRef.current?.displayName ?? '';
+                  setDisplayName(event.currentTarget.value);
+                  event.currentTarget.blur();
+                }
+              }} maxLength={60} placeholder="Ada"
+              className="mt-3 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 py-1 text-center text-lg font-semibold text-fg outline-none transition-colors hover:border-edge focus:border-edge focus:bg-surface-base focus-visible:ring-2 focus-visible:ring-accent" />
             {savingCount > 0 && <span className="absolute right-4 top-4 text-xs text-fg-muted">{zh ? '正在保存…' : 'Saving…'}</span>}
           </div>
           <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-5 py-5">
@@ -457,12 +472,13 @@ export function PersonalPage() {
                 { value: 'occasional', label: zh ? '偶尔轻松' : 'Sometimes' },
                 { value: 'playful', label: zh ? '活泼' : 'Playful' },
               ]} placeholder={zh ? '选择程度' : 'Choose level'} allowEmpty={false} onChange={value => { const next = value as Preferences['humor']; setHumor(next); void queueProfileUpdate({ preferences: { humor: next } }); }} /></div></details>
-              <h3 className="border-t border-edge pt-5 text-sm font-medium text-fg">{zh ? '称呼' : 'Name'}</h3>
-              <section className="grid grid-cols-2 gap-3">
-                <div><label htmlFor="personal-name" className="block text-xs text-fg-muted">{zh ? '助手名称' : 'Assistant name'}</label><input id="personal-name" value={displayName} onChange={event => setDisplayName(event.target.value)} onBlur={event => { const next = event.currentTarget.value.trim(); if (next) { setDisplayName(next); void queueProfileUpdate({ displayName: next }); } else setDisplayName(recordRef.current?.displayName ?? ''); }} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} maxLength={60} placeholder="Ada" className="mt-1.5 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent" /></div>
-                <div><label htmlFor="personal-address" className="block text-xs text-fg-muted">{zh ? '怎么称呼你' : 'Your name'}</label><input id="personal-address" value={addressAs} onChange={event => setAddressAs(event.target.value)} onBlur={event => { const next = event.currentTarget.value.trim(); setAddressAs(next); void queueProfileUpdate({ preferences: { addressAs: next || undefined } }); }} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} maxLength={60} placeholder={zh ? '可留空' : 'Optional'} className="mt-1.5 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent" /></div>
-              </section>
               <PersonalVoiceSetting record={record} zh={zh} onSelectVoice={voicePreference => queueProfileUpdate({ voicePreference })} />
+              <div className="border-t border-edge pt-5">
+                <PersonalModelSetting conversationId={record.conversationId} zh={zh} onSaved={async () => {
+                  const response = await fetchJson<ApiResult<PersonalAgent | null>>(apiUrl('/api/personal-agent'));
+                  if (response.ok && response.payload) { recordRef.current = response.payload; setRecord(response.payload); }
+                }} />
+              </div>
           </div>
         </Popover.Content>
       </Popover.Portal>
@@ -478,7 +494,7 @@ export function PersonalPage() {
         <button type="button" onClick={() => { setAvatarUploadFailed(false); openSettings(); }} className="shrink-0 text-accent hover:underline">{zh ? '打开设置' : 'Open settings'}</button>
       </div>}
       <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1"><ChatPage embedded personal personalWelcome={{ name: record.displayName, addressAs: record.preferences.addressAs, avatar: <PersonalAvatar appearance={record.appearance} agentId={record.agentId} className="size-14" />, opening: openingFor(record.preferences, zh), showSupportChoice: !welcomeDone, onChooseSupport: mode => void finishWelcome(mode), onSkipSupport: () => void finishWelcome(), supportChoiceError: error }} conversationId={record.conversationId} /></div>
+        <div className="min-w-0 flex-1"><ChatPage embedded personal personalWelcome={{ name: record.displayName, addressAs: record.userCallName ?? undefined, avatar: <PersonalAvatar appearance={record.appearance} agentId={record.agentId} className="size-14" />, opening: openingFor(record.preferences, zh), showSupportChoice: !welcomeDone, onChooseSupport: mode => void finishWelcome(mode), onSkipSupport: () => void finishWelcome(), supportChoiceError: error }} conversationId={record.conversationId} /></div>
       </div>
       {renderSettingsPopover()}
     </div>
@@ -487,6 +503,7 @@ export function PersonalPage() {
   return <PersonalOnboarding modelsAvailable={models.length > 0} onCreated={(created, avatarFailed) => {
     recordRef.current = created;
     setRecord(created);
+    setDisplayName(created.displayName);
     setWelcomeDone(false);
     setAvatarUploadFailed(avatarFailed);
     window.dispatchEvent(new CustomEvent('personal-agent-updated', { detail: created }));
