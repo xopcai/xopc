@@ -27,6 +27,7 @@ function heartbeat() {
   db.prepare('INSERT INTO leases VALUES (?,?) ON CONFLICT(owner) DO UPDATE SET heartbeat=excluded.heartbeat').run(workerData.owner, Date.now());
   const stale = db.prepare('SELECT trace_id,data FROM traces WHERE ended_at IS NULL AND (started_at < ? OR owner IN (SELECT owner FROM leases WHERE heartbeat < ?)) LIMIT 256').all(Date.now()-86400000, Date.now()-120000);
   for (const row of stale) { const data=JSON.parse(row.data); data.endedAt=Date.now(); data.status='interrupted'; db.prepare('UPDATE traces SET ended_at=?,status=?,data=? WHERE trace_id=?').run(data.endedAt,data.status,JSON.stringify(data),row.trace_id); }
+  db.prepare('DELETE FROM leases WHERE heartbeat < ? AND NOT EXISTS (SELECT 1 FROM traces WHERE traces.owner=leases.owner AND ended_at IS NULL)').run(Date.now()-120000);
 }
 function remove(ids) {
   for (const row of ids) { db.prepare('DELETE FROM spans WHERE trace_id=?').run(row.trace_id); db.prepare('DELETE FROM traces WHERE trace_id=?').run(row.trace_id); }
@@ -68,7 +69,7 @@ function put(records, epoch) {
     let c=counts();
     for(const source of records) {
       const r={ ...source, attributes:{ ...source.attributes } };
-      const root=!r.parentSpanId;
+      const root=!r.parentSpanId || r.attributes['xopc.localRoot']===true;
       if(written>=config.local.maxWriteMiBPerMinute*1048576+65536) { dropped++; continue; }
       let trace=db.prepare('SELECT * FROM traces WHERE trace_id=?').get(r.traceId);
       if(!trace) {

@@ -54,6 +54,8 @@ describe('gateway scopes', () => {
   });
 
   it('restricts AI usage and cost data to gateway administrators', () => {
+    expect(requiredGatewayScope('GET', '/api/observability/traces')).toBe('gateway.admin');
+    expect(requiredGatewayScope('PUT', '/api/observability/tracing/langfuse/credentials')).toBe('gateway.admin');
     expect(requiredGatewayScope('GET', '/api/usage/summary')).toBe('gateway.admin');
     expect(requiredGatewayScope('GET', '/api/usage/events')).toBe('gateway.admin');
     expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, 'gateway.admin')).toBe(false);
