@@ -45,6 +45,25 @@ describe('home workbench', () => {
     expect(workbench.backgroundCount).toBe(0);
   });
 
+  it('offers inline task review and retry while preserving detail navigation', () => {
+    const workbench = buildHomeWorkbench({
+      locale: 'zh',
+      decisions: [
+        { id: 'review', kind: 'task', title: 'Report', reason: 'decision_needed', urgency: 'now', href: '/tasks/review', updatedAt: 2,
+          response: { kind: 'task', taskId: 'review', canRetry: false } },
+        { id: 'failed', kind: 'task', title: 'Chart', reason: 'retry', urgency: 'now', href: '/tasks/failed', updatedAt: 1,
+          response: { kind: 'task', taskId: 'failed', canRetry: true } },
+        { id: 'waiting', kind: 'task', title: 'Waiting', reason: 'retry', urgency: 'now', href: '/tasks/waiting', updatedAt: 0,
+          response: { kind: 'task', taskId: 'waiting', canRetry: false } },
+      ],
+      attention: [], activeWorkflowRuns: [], runningTasks: [], scheduled: [], nowMs: 3,
+    });
+    expect(workbench.needsUser[0]?.primaryAction).toEqual({ type: 'task_review', taskId: 'review', label: '查看结果并验收' });
+    expect(workbench.needsUser[1]?.primaryAction).toEqual({ type: 'retry_task', taskId: 'failed', label: '重试' });
+    expect(workbench.needsUser[1]?.secondaryActions).toEqual([{ type: 'open', href: '/tasks/failed', label: '查看并处理' }]);
+    expect(workbench.needsUser[2]?.primaryAction?.type).toBe('open');
+  });
+
   it('allows a genuinely quiet empty state', () => {
     const workbench = buildHomeWorkbench({
       locale: 'en',
