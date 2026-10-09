@@ -47,6 +47,30 @@ describe('SQLite migrations', () => {
     rmSync(migrationsDir, { recursive: true, force: true });
   });
 
+  it('adds reply state directly to the existing outbox while preserving artifact deliveries', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 233 });
+      // This isolated migration test needs no execution fixture.
+      db.exec('PRAGMA foreign_keys = OFF');
+      db.prepare(`INSERT INTO task_result_deliveries
+        (delivery_id, task_run_id, conversation_id, payload_json, status, message_entry_id,
+          next_attempt_at, created_at, notified_at)
+        VALUES ('artifact', 'run-1', 'chat-1', '{}', 'delivered', 'artifact-entry', 0, 1, 10)`).run();
+      applyPendingMigrations(db);
+      expect(db.prepare(`SELECT delivery_id, status, message_entry_id, notified_at, reply_status,
+        reply_text, reply_notified_at, reply_attempts, reply_next_attempt_at, reply_lease_until
+        FROM task_result_deliveries`).all()).toEqual([
+        { delivery_id: 'artifact', status: 'delivered', message_entry_id: 'artifact-entry', notified_at: 10,
+          reply_status: null, reply_text: null, reply_notified_at: null,
+          reply_attempts: 0, reply_next_attempt_at: 0, reply_lease_until: 0 },
+      ]);
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'personal_reply_jobs'").get()).toBeUndefined();
+      expect(readSchemaVersion(db)).toBe(234);
+    } finally { db.close(); }
+  });
+
   it('adds home intelligence queues, projections, and append-only feedback', () => {
     const db = openEmptyDb();
     try {
