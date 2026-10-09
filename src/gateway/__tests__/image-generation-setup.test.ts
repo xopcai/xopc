@@ -47,17 +47,17 @@ describe('image generation setup', () => {
 
     const result = prepareDefaultImageGenerationSetup(config, {
       providerId: 'google',
-      modelId: 'gemini-3.1-flash-image',
+      modelId: 'gemini-nano-banana-2.1',
     });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     await applyImageGenerationCatalogUpdate(result.catalogUpdate);
     expect(getDefaultImageGenerationConfig().model?.primary).toBe(
-      'google/gemini-3.1-flash-image',
+      'google/gemini-nano-banana-2.1',
     );
     expect(getAgentImageGenerationConfig('main').model?.primary).toBe(
-      'google/gemini-3.1-flash-image',
+      'google/gemini-nano-banana-2.1',
     );
     expect(getAgentImageGenerationConfig('studio').model?.primary).toBe(
       'openai/gpt-image-1',
@@ -68,14 +68,14 @@ describe('image generation setup', () => {
     const config = createConfig();
     const result = prepareImageGenerationSetup(config, 'studio', {
       providerId: 'google',
-      modelId: 'gemini-3.1-flash-image',
+      modelId: 'gemini-nano-banana-2.1',
     });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     await applyImageGenerationCatalogUpdate(result.catalogUpdate);
     expect(getAgentImageGenerationConfig('studio').model?.primary).toBe(
-      'google/gemini-3.1-flash-image',
+      'google/gemini-nano-banana-2.1',
     );
     expect(getAgentImageGenerationConfig('main').model).toBeNull();
     expect(result.config.providers?.google).toEqual({});
@@ -90,7 +90,7 @@ describe('image generation setup', () => {
 
     const result = prepareImageGenerationSetup(config, 'studio', {
       providerId: 'google',
-      modelId: 'gemini-3.1-flash-image',
+      modelId: 'gemini-nano-banana-2.1',
     });
 
     expect(result.ok).toBe(true);
@@ -98,13 +98,13 @@ describe('image generation setup', () => {
     await applyImageGenerationCatalogUpdate(result.catalogUpdate);
     expect(new AgentCatalogRepository().get('studio')?.models).toEqual({
       imageGeneration: {
-        primary: 'google/gemini-3.1-flash-image',
+        primary: 'google/gemini-nano-banana-2.1',
         fallbacks: [],
         autoProviderFallback: false,
       },
     });
     expect(getAgentImageGenerationConfig('studio').model?.primary).toBe(
-      'google/gemini-3.1-flash-image',
+      'google/gemini-nano-banana-2.1',
     );
   });
 
@@ -174,7 +174,7 @@ describe('image generation setup', () => {
     expect(new AgentCatalogRepository().get('studio')?.models).toEqual({
       chat: { primary: 'google/gemini-3.1-pro', fallbacks: [] },
       imageGeneration: {
-        primary: 'google/gemini-3.1-flash-image',
+        primary: 'google/gemini-nano-banana-2.1',
         fallbacks: [],
         autoProviderFallback: false,
       },

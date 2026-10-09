@@ -1,8 +1,9 @@
+import { ImageProviderError } from '@xopcai/image-providers';
+
 import type { Config } from '../../../config/schema.js';
 import { PROVIDER_ENV_MAP } from '../../../providers/env-keys.js';
 import { createLogger } from '../../../utils/logger.js';
 import {
-  buildMediaGenerationNormalizationMetadata,
   buildNoCapabilityModelConfiguredMessage,
   recordCapabilityCandidateFailure,
   resolveCapabilityModelCandidates,
@@ -11,7 +12,7 @@ import {
 } from '../../media-generation/index.js';
 import { describeFailoverError, isFailoverError, type FallbackAttempt } from '../../failover-error.js';
 import { parseImageGenerationModelRef } from './model-ref.js';
-import { resolveImageGenerationOverrides } from './normalization.js';
+import { validateImageGenerationRequest } from './validation.js';
 import {
   getImageGenerationProvider,
   listImageGenerationProviders,
@@ -68,10 +69,11 @@ export async function generateImage(
     throw new Error(buildNoImageGenerationModelConfiguredMessage(params.cfg, deps));
   }
 
+  params = { ...params, signal: AbortSignal.any([AbortSignal.timeout(params.timeoutMs ?? 600_000), ...(params.signal ? [params.signal] : [])]) };
   const attempts: FallbackAttempt[] = [];
   let lastError: unknown;
 
-  for (const candidate of candidates) {
+  for (const candidate of candidates.slice(0, 3)) {
     const startedAt = Date.now();
     const provider = getProvider(candidate.provider, params.cfg);
     if (!provider) {
@@ -91,13 +93,15 @@ export async function generateImage(
     }
 
     try {
+      if (!provider.models.includes(candidate.model)) throw new ImageProviderError(`Unsupported image model: ${candidate.model}`, 400);
       const modelCapabilities = provider.modelCapabilities?.[candidate.model];
       const capabilityProvider = modelCapabilities
         ? { ...provider, capabilities: modelCapabilities }
         : provider;
-      const sanitized = resolveImageGenerationOverrides({
+      validateImageGenerationRequest({
         provider: capabilityProvider,
         size: params.size,
+        count: params.count,
         aspectRatio: params.aspectRatio,
         resolution: params.resolution,
         quality: params.quality,
@@ -110,7 +114,6 @@ export async function generateImage(
         provider,
         candidate,
         params,
-        sanitized,
       });
 
       log.debug(
@@ -118,10 +121,6 @@ export async function generateImage(
           provider: candidate.provider,
           model: candidate.model,
           phase: 'provider_invoked',
-          normalizationCount: sanitized.normalization
-            ? Object.keys(sanitized.normalization).length
-            : 0,
-          ignoredCount: sanitized.ignoredOverrides.length,
         },
         `image-generation provider invoked: ${candidate.provider}/${candidate.model}`,
       );
@@ -131,20 +130,16 @@ export async function generateImage(
         throw new Error('Image generation provider returned no images.');
       }
 
-      const normalizationMetadata = buildMediaGenerationNormalizationMetadata({
-        normalization: sanitized.normalization as Record<string, unknown> | undefined,
-      });
-
       return {
         images: result.images,
         provider: candidate.provider,
         model: result.model ?? candidate.model,
         attempts,
-        ...(sanitized.normalization ? { normalization: sanitized.normalization } : {}),
-        ignoredOverrides: sanitized.ignoredOverrides,
-        metadata: { ...(result.metadata ?? {}), ...normalizationMetadata },
+        metadata: result.metadata,
       };
     } catch (err) {
+      const status = err && typeof err === 'object' && 'status' in err ? err.status : undefined;
+      if (params.signal?.aborted || (err instanceof ImageProviderError && !err.retryable) || ![401, 403, 429].includes(Number(status))) throw err;
       lastError = err;
       const durationMs = Date.now() - startedAt;
       recordCapabilityCandidateFailure({
@@ -193,9 +188,8 @@ function buildProviderRequest(input: {
   provider: ImageGenerationProvider;
   candidate: { provider: string; model: string };
   params: GenerateImageParams;
-  sanitized: ReturnType<typeof resolveImageGenerationOverrides>;
 }): ImageGenerationRequest {
-  const { provider, candidate, params, sanitized } = input;
+  const { provider, candidate, params } = input;
   const inputImages = params.inputImages
     ? cloneInputImages(params.inputImages)
     : undefined;
@@ -210,12 +204,12 @@ function buildProviderRequest(input: {
     ...(typeof params.timeoutMs === 'number' ? { timeoutMs: params.timeoutMs } : {}),
     ...(params.signal ? { signal: params.signal } : {}),
     ...(typeof params.count === 'number' ? { count: params.count } : {}),
-    ...(sanitized.size !== undefined ? { size: sanitized.size } : {}),
-    ...(sanitized.aspectRatio !== undefined ? { aspectRatio: sanitized.aspectRatio } : {}),
-    ...(sanitized.resolution !== undefined ? { resolution: sanitized.resolution } : {}),
-    ...(sanitized.quality !== undefined ? { quality: sanitized.quality } : {}),
-    ...(sanitized.outputFormat !== undefined ? { outputFormat: sanitized.outputFormat } : {}),
-    ...(sanitized.background !== undefined ? { background: sanitized.background } : {}),
+    ...(params.size !== undefined ? { size: params.size } : {}),
+    ...(params.aspectRatio !== undefined ? { aspectRatio: params.aspectRatio } : {}),
+    ...(params.resolution !== undefined ? { resolution: params.resolution } : {}),
+    ...(params.quality !== undefined ? { quality: params.quality } : {}),
+    ...(params.outputFormat !== undefined ? { outputFormat: params.outputFormat } : {}),
+    ...(params.background !== undefined ? { background: params.background } : {}),
     ...(inputImages ? { inputImages } : {}),
     ...(params.providerOptions ? { providerOptions: params.providerOptions } : {}),
   };

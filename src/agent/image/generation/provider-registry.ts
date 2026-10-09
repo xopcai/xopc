@@ -1,13 +1,11 @@
+import { listImageProviderSpecs } from '@xopcai/image-providers';
+
 import { loadModelsJson } from '../../../config/models-json.js';
 import type { ModelsJsonConfig } from '../../../config/models-json.js';
 import { createLogger } from '../../../utils/logger.js';
 
 import { buildCustomOpenAiImagesProvider } from './custom-openai-images-provider.js';
-import { buildDashScopeImageGenerationProvider } from './providers/dashscope.js';
-import { buildFalImageGenerationProvider } from './providers/fal.js';
-import { buildGoogleImageGenerationProvider } from './providers/google.js';
-import { buildMinimaxImageGenerationProvider } from './providers/minimax.js';
-import { buildOpenAIImageGenerationProvider } from './providers/openai.js';
+import { buildNativeImageProvider } from './native-provider.js';
 import { buildXopcCloudImageGenerationProvider } from './providers/xopc-cloud.js';
 import type { ImageGenerationProvider, ImageGenerationProviderSummary } from './types.js';
 
@@ -17,11 +15,7 @@ function buildBuiltInProviders(): ImageGenerationProvider[] {
   const cloud = buildXopcCloudImageGenerationProvider();
   return [
     ...(cloud ? [cloud] : []),
-    buildOpenAIImageGenerationProvider(),
-    buildDashScopeImageGenerationProvider(),
-    buildMinimaxImageGenerationProvider(),
-    buildGoogleImageGenerationProvider(),
-    buildFalImageGenerationProvider(),
+    ...listImageProviderSpecs().map((spec) => buildNativeImageProvider(spec.id)),
   ];
 }
 
