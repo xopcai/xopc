@@ -43,3 +43,5 @@ export * from './chat-previews.js';
 export * from './usage.js';
 export * from './task-result-delivery.js';
 export { isSessionCommandRejected } from './session-command-rejection.js';
+
+export * from './personal-proactivity.js';
