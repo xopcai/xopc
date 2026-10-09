@@ -21,6 +21,8 @@ export function useAttachmentPreview({
     const fileConversationId = workspaceConversationId ?? conversationId;
     if (
       layout === 'assistant'
+      && attachment.type !== 'image'
+      && !attachment.mimeType?.startsWith('image/')
       && attachment.workspaceRelativePath?.trim()
       && (projectId?.trim() || fileConversationId?.trim())
     ) {
@@ -37,5 +39,6 @@ export function useAttachmentPreview({
     open: active !== null,
     openAttachment,
     closePreview,
+    selectAttachment: setActive,
   };
 }

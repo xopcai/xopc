@@ -3,7 +3,7 @@ import {
   markNotificationDelivered,
   wasNotificationDelivered,
 } from '@/features/notifications/notification-delivery-history';
-import { decideNotification } from '@/features/notifications/notification-policy';
+import { decideNotification, isPersonalNotificationViewed } from '@/features/notifications/notification-policy';
 import { isElectron } from '@/lib/electron-env';
 
 export async function deliverElectronNotification(notification: ProductNotificationPresentation): Promise<boolean> {
@@ -19,7 +19,7 @@ export async function deliverElectronNotification(notification: ProductNotificat
       failed: true,
     },
     permissionGranted: true,
-    appFocused: false,
+    appFocused: isPersonalNotificationViewed(notification),
     alreadyDelivered: wasNotificationDelivered(notification.id),
   });
   if (!decision.notify) return false;

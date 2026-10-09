@@ -89,6 +89,7 @@ export type PreviewRuntimeRenderProps = PreviewLoadedSource & {
   extractedTextTruncated?: boolean;
   actions: PreviewActions;
   controls?: PreviewRuntimeControls;
+  onImageSwipe?: (direction: 'previous' | 'next') => void;
 };
 
 export type PreviewRuntimeControls = {

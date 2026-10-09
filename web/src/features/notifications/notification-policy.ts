@@ -32,3 +32,9 @@ export function decideNotification(input: NotificationPolicyInput): Notification
   if (input.alreadyDelivered) return { notify: false, reason: 'duplicate' };
   return { notify: true };
 }
+
+export function isPersonalNotificationViewed(notification: ProductNotificationPresentation): boolean {
+  return notification.target.kind === 'chat' && notification.target.personal === true
+    && window.location.hash.split('?')[0] === '#/personal'
+    && document.visibilityState === 'visible' && document.hasFocus();
+}

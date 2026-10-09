@@ -12,6 +12,7 @@ import { BrowserExtensionNudge } from '@/features/chat/browser/browser-extension
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
 import { PageContextPreview } from '@/features/chat/context/page-context-preview';
 import { pageContextDrafts, pageContextDraftKey } from '@/features/chat/context/page-context-draft';
+import { usePersonalUnread } from '@/features/personal-agent/use-personal-unread';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { ProjectEnvironmentPicker } from '@/features/chat/composer/project-environment-picker';
 import { useProjectSessionComposer } from '@/features/chat/composer/use-project-session-composer';
@@ -532,6 +533,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
 
   const isCreatingSession = session.conversationPhase === 'creating-session';
   const isLoadingHistory = session.conversationPhase === 'loading-history';
+  usePersonalUnread(personal && !isLoadingHistory ? chatConversationId : null, personal);
   const isSessionTransitioning = isCreatingSession || isLoadingHistory;
   /** Match `MessageList` empty welcome: tighter vertical padding so the first screen fits without scrolling. */
   const showConversationLoading = isLoadingHistory;

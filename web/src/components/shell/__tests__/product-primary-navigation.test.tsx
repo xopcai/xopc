@@ -6,7 +6,12 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const extensionState = vi.hoisted(() => ({ items: [] as Array<Record<string, unknown>> }));
+const extensionState = vi.hoisted(() => ({ unreadCount: 0, items: [] as Array<Record<string, unknown>> }));
+
+vi.mock('@/features/personal-agent/use-personal-unread', () => ({
+  usePersonalUnread: () => extensionState.unreadCount,
+  personalUnreadLabel: (count: number) => count > 99 ? '99+' : String(count),
+}));
 
 vi.mock('@/features/extensions/extension-provider', () => ({
   useUiExtensions: () => extensionState.items,
@@ -22,6 +27,7 @@ afterEach(() => {
   act(unmount);
   container.remove();
   extensionState.items.length = 0;
+  extensionState.unreadCount = 0;
 });
 
 function renderAt(path: string, node: ReactNode) {
@@ -59,6 +65,19 @@ describe('product primary navigation', () => {
     expect(document.body.textContent).toContain('Apps');
     expect(document.body.textContent).toContain('App Studio');
     expect(document.body.textContent).not.toContain('Run history');
+  });
+
+  it.each([1, 9, 99, 100, 123])('shows %i unread replies beside Personal AI', count => {
+    extensionState.unreadCount = count;
+    renderAt('/', <SidebarNavItems />);
+    const badge = container.querySelector('a[href="/personal"] span[aria-label$="unread messages"]');
+    expect(badge?.textContent).toBe(count > 99 ? '99+' : String(count));
+  });
+
+  it('shows the unread badge with collapsed navigation', () => {
+    extensionState.unreadCount = 123;
+    renderAt('/', <SidebarNavItems collapsed />);
+    expect(container.querySelector('a[href="/personal"] span[aria-label$="unread messages"]')?.textContent).toBe('99+');
   });
 
   it('keeps Automations active while viewing its internal run history', () => {

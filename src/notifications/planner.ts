@@ -56,6 +56,26 @@ function chatPlan(payload: unknown): NotificationPlan | null {
   };
 }
 
+function personalReplyPlan(payload: unknown): NotificationPlan | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const event = payload as { conversationId?: string; deliveryId?: string; text?: string; failed?: boolean; displayName?: string };
+  if (typeof event.conversationId !== 'string' || !event.conversationId
+    || typeof event.deliveryId !== 'string' || !event.deliveryId.startsWith('reply:')) return null;
+  const preview = markdownNotificationPreview(typeof event.text === 'string' ? event.text : '', 180);
+  const displayName = typeof event.displayName === 'string' ? event.displayName.trim().slice(0, 120) : '';
+  return {
+    dedupeKey: `personal.reply:${event.deliveryId}`,
+    notification: {
+      type: event.failed === true ? 'chat.failed' : 'chat.completed',
+      target: { kind: 'chat', conversationId: event.conversationId, personal: true },
+      priority: event.failed === true ? 'high' : 'normal',
+      title: { en: displayName || 'Personal AI', zh: displayName || 'Personal AI' },
+      body: preview ? { en: preview, zh: preview } : { en: 'Your task result is ready.', zh: '你的任务有了新结果。' },
+      payload: { deliveryId: event.deliveryId },
+    },
+  };
+}
+
 function taskPlan(payload: unknown): NotificationPlan | null {
   if (!payload || typeof payload !== 'object') return null;
   const data = payload as TaskPayload;
@@ -185,6 +205,7 @@ function homeOpportunityPlan(payload: unknown): NotificationPlan | null {
 }
 
 export function notificationPlanFromGatewayEvent(type: string, payload: unknown): NotificationPlan | null {
+  if (type === 'personal.reply.delivered') return personalReplyPlan(payload);
   if (type === 'agent.run.ended') return chatPlan(payload);
   if (type === 'task.attention_required.v2' || type === 'task.phase_changed.v2') return taskPlan(payload);
   if (type === 'automation.run.completed') return automationPlan(payload);

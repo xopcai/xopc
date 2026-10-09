@@ -144,6 +144,8 @@ import { GatewaySceneHost } from './scenes/host.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { TaskCollaborationDelivery } from '../tasks/task-collaboration-delivery.js';
 import { TaskMainUpdateDelivery } from '../tasks/task-main-update-delivery.js';
+import { allowsPersonalTaskNotification, personalReplyNotification, personalRunDelegated } from '../personal-agent/notifications.js';
+import { getPersonalAgentByConversation } from '../personal-agent/repository.js';
 import { PersonalReplyComposer } from '../personal-agent/reply-composer.js';
 import { TaskMainUpdateDecisionService } from '../tasks/task-main-update-decision-service.js';
 import { selectTaskMainUpdateAttempt, submitAndConfirmTaskMainUpdate } from '../tasks/task-main-update-input.js';
@@ -851,6 +853,7 @@ export class GatewayService {
       this.notificationService = new NotificationService({
         publish: (type, payload) => this.realtime.broker.publish('gateway', type, payload),
         allowsNotification: notification => {
+          if (!allowsPersonalTaskNotification(notification)) return false;
           if (notification.target.kind !== 'task') return true;
           const taskId = notification.target.taskId;
           return (this.sceneHost?.http.activationAdapters.list() ?? [])
@@ -929,6 +932,8 @@ export class GatewayService {
     const notify = (conversationId: string, deliveryId: string) => {
       this.realtime.broker.publish('sessions', 'session.task-result', { conversationId, deliveryId });
       this.emit('session.transcript_updated', { key: conversationId, deliveryId });
+      const reply = personalReplyNotification(conversationId, deliveryId);
+      if (reply) this.emit('personal.reply.delivered', reply);
     };
     await new TaskResultDeliveryService().drain(notify);
     // Reply leases bound concurrency without delaying the next artifact dispatch.
@@ -2215,7 +2220,16 @@ export class GatewayService {
       }
     }
     this.realtime.broker.publish('gateway', type, payload);
-    this.createNotificationService().handleGatewayEvent(type, payload);
+    let notificationPayload = payload;
+    if (type === 'agent.run.ended' && payload && typeof payload === 'object') {
+      const event = payload as { conversationId?: string; runId?: string; status?: string; target?: unknown };
+      if (event.status === 'success' && event.conversationId && event.runId && getPersonalAgentByConversation(event.conversationId)
+        && personalRunDelegated(event.conversationId, event.runId)) return;
+      if (event.conversationId && getPersonalAgentByConversation(event.conversationId)) {
+        notificationPayload = { ...event, target: { kind: 'chat', conversationId: event.conversationId, personal: true } };
+      }
+    }
+    this.createNotificationService().handleGatewayEvent(type, notificationPayload);
   }
 
   private async handleAutomationRunCompleted(

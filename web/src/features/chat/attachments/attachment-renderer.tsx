@@ -188,6 +188,8 @@ export function AttachmentRenderer({
       <AttachmentPreviewDialog
         open={preview.open}
         attachment={preview.active}
+        images={images}
+        onAttachmentChange={preview.selectAttachment}
         authToken={authToken}
         conversationId={conversationId}
         onClose={preview.closePreview}

@@ -11,6 +11,7 @@ import {
   parseProductNotification,
   presentProductNotification,
 } from '@/features/notifications/product-notification';
+import { isPersonalNotificationViewed } from '@/features/notifications/notification-policy';
 import { showActivity } from '@/stores/activity-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -31,7 +32,7 @@ export function ProductNotificationCoordinator() {
       }
       seen.add(event.id);
       const notification = presentProductNotification(event, language);
-      showActivity({
+      if (!isPersonalNotificationViewed(notification)) showActivity({
         tone: notification.status === 'success' ? 'success' : 'error',
         title: notification.title,
         message: notification.body,
