@@ -6,6 +6,7 @@ import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SecretInput } from '@/components/ui/secret-input';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { useAutosave } from '@/lib/use-autosave';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -38,6 +39,7 @@ export function TracingSettingsPage() {
   const [savedConfig, setSavedConfig] = useState<TracingConfig>();
   const cfg = draft ?? savedConfig ?? settings.data?.config;
   const [publicKey, setPublicKey] = useState(''); const [secretKey, setSecretKey] = useState('');
+  const [credentialRevision, setCredentialRevision] = useState(0);
   const [busy, setBusy] = useState(false); const [notice, setNotice] = useState(''); const [failed, setFailed] = useState(false);
   const [filter, setFilter] = useState(''); const [days, setDays] = useState('7');
   const [identity, setIdentity] = useState({ conversationId: '', runId: '', agentId: '' });
@@ -100,6 +102,7 @@ export function TracingSettingsPage() {
       await traceRequest('tracing/langfuse/credentials', 'PUT', { ...(snapshot.publicKey ? { publicKey: snapshot.publicKey } : {}), ...(snapshot.secretKey ? { secretKey: snapshot.secretKey } : {}) });
       setPublicKey(current => current.trim() === snapshot.publicKey ? '' : current);
       setSecretKey(current => current.trim() === snapshot.secretKey ? '' : current);
+      setCredentialRevision(current => current + 1);
       await Promise.allSettled([settings.mutate(), status.mutate()]);
     },
   });
@@ -145,14 +148,28 @@ export function TracingSettingsPage() {
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={cfg.langfuse.enabled} onBlur={configAutosave.onBlurCapture} onChange={e => edit(c => { c.langfuse.enabled = e.target.checked; })} />{t('Also export new traces to Langfuse', '同时导出新采集的追踪到 Langfuse')}</label>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1 text-sm sm:col-span-2">Base URL<input className={inputClass} type="url" value={cfg.langfuse.baseUrl} onBlur={configAutosave.onBlurCapture} onChange={e => edit(c => { c.langfuse.baseUrl = e.target.value; })} /></label>
-          <label className="space-y-1 text-sm">Public Key<input autoComplete="off" className={inputClass} value={publicKey} onBlur={credentialAutosave.onBlurCapture} placeholder={settings.data?.credentials.publicKeyConfigured ? t('Configured · leave blank to keep', '已配置 · 留空保留') : 'pk-lf-…'} onChange={e => setPublicKey(e.target.value)} /></label>
-          <label className="space-y-1 text-sm">Secret Key<input autoComplete="new-password" type="password" className={inputClass} value={secretKey} onBlur={credentialAutosave.onBlurCapture} placeholder={settings.data?.credentials.secretKeyConfigured ? t('Configured · leave blank to keep', '已配置 · 留空保留') : 'sk-lf-…'} onChange={e => setSecretKey(e.target.value)} /></label>
+          {(['publicKey', 'secretKey'] as const).map(field => {
+            const label = field === 'publicKey' ? 'Public Key' : 'Secret Key';
+            const value = field === 'publicKey' ? publicKey : secretKey;
+            const configured = settings.data?.credentials[field === 'publicKey' ? 'publicKeyConfigured' : 'secretKeyConfigured'];
+            return <div key={field} className="space-y-1 text-sm" onBlurCapture={credentialAutosave.onBlurCapture}>
+              <label htmlFor={`langfuse-${field}`}>{label}</label>
+              <SecretInput key={credentialRevision} id={`langfuse-${field}`} value={value || (configured ? '••••••••••••' : '')}
+                allowUnrevealedCopy
+                onChange={next => (field === 'publicKey' ? setPublicKey : setSecretKey)(next.replace(/^•+/, ''))}
+                placeholder={field === 'publicKey' ? 'pk-lf-…' : 'sk-lf-…'}
+                labels={{ show: t(`Show ${label}`, `查看 ${label}`), hide: t(`Hide ${label}`, `隐藏 ${label}`), copy: t(`Copy ${label}`, `复制 ${label}`), copied: t('Copied', '已复制') }}
+                reveal={() => traceRequest<{ key: string | null }>(`tracing/langfuse/credentials/${field}/reveal`, 'POST').then(result => result.key)}
+                loadFailedLabel={t('Unable to load the configured key.', '无法读取已配置的 Key。')}
+                notInConfigFile={t('No configured key is available.', '暂无已配置的 Key。')} />
+            </div>;
+          })}
         </div>
         <p className="text-sm text-fg-muted">{t('Credential sources', '凭证来源')}：{settings.data?.credentials.publicKeySource} / {settings.data?.credentials.secretKeySource} · URL: {settings.data?.credentials.baseUrlSource}</p>
         {status.data && <p className="text-sm text-fg-muted">{status.data.langfuse.state} · {t('Pending', '待发送')} {status.data.langfuse.pending} · {t('Dropped', '丢弃')} {status.data.langfuse.dropped}{status.data.langfuse.lastSuccess ? ` · ${new Date(status.data.langfuse.lastSuccess).toLocaleString()}` : ''}</p>}
         {status.data?.langfuse.lastError && <p role="alert" className="text-sm">{status.data.langfuse.lastError}</p>}
         <p className="text-sm text-fg-muted">{t('Changes save automatically. Historical traces are not uploaded. Offline exports may be dropped.', '修改后自动保存。不会上传历史记录；断网或队列满时可能丢弃远端导出。')}</p>
-        <div className="flex gap-2"><Button disabled={busy || saving} onClick={() => void action(async () => { const r = await traceRequest<{ ok: boolean }>('tracing/langfuse/test', 'POST'); if (!r.ok) throw new Error(t('Connection test failed. Check saved configuration and credentials.', '连接测试失败，请检查已保存的配置和凭证。')); }, t('Diagnostic trace accepted by the ingestion endpoint', '采集端已接受诊断追踪'))}>{t('Test connection', '测试连接')}</Button><Button disabled={busy || saving} onClick={() => void action(async () => { await traceRequest('tracing/langfuse/credentials', 'DELETE'); setPublicKey(''); setSecretKey(''); })}>{t('Remove saved credentials', '移除已保存凭证')}</Button></div>
+        <div className="flex gap-2"><Button disabled={busy || saving} onClick={() => void action(async () => { const r = await traceRequest<{ ok: boolean }>('tracing/langfuse/test', 'POST'); if (!r.ok) throw new Error(t('Connection test failed. Check saved configuration and credentials.', '连接测试失败，请检查已保存的配置和凭证。')); }, t('Diagnostic trace accepted by the ingestion endpoint', '采集端已接受诊断追踪'))}>{t('Test connection', '测试连接')}</Button><Button disabled={busy || saving} onClick={() => void action(async () => { await traceRequest('tracing/langfuse/credentials', 'DELETE'); setPublicKey(''); setSecretKey(''); setCredentialRevision(current => current + 1); })}>{t('Remove saved credentials', '移除已保存凭证')}</Button></div>
       </section>
     </>)}
     {view === 'records' && <section className={panelClass}>

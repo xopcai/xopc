@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
+
+import { CredentialResolver } from '../../../../auth/credentials.js';
 
 import { auth } from '../../middleware/auth.js';
 import { registerAuthenticatedLazyRouteFallback, resetLazyRouteBundlesForTests } from '../lazy-fallback.js';
@@ -35,4 +37,33 @@ it('serves authenticated trace list/detail/export/clear through the real lazy HT
   expect((await fetch(`${base}/api/observability/tracing/status`, { headers })).status).toBe(200);
   expect((await fetch(`${base}/api/observability/traces`, { headers, method: 'DELETE' })).status).toBe(200);
   expect((await (await fetch(`${base}/api/observability/traces`, { headers })).json() as any).traces).toHaveLength(0);
+});
+
+it('reveals only the requested credential through authenticated uncached HTTP', async () => {
+  const publicEnv = process.env.LANGFUSE_PUBLIC_KEY;
+  const secretEnv = process.env.LANGFUSE_SECRET_KEY;
+  process.env.LANGFUSE_PUBLIC_KEY = 'pk-lf-environment-test';
+  delete process.env.LANGFUSE_SECRET_KEY;
+  const reveal = vi.spyOn(CredentialResolver.prototype, 'revealGatewayStoredApiKey').mockImplementation(async provider => provider === 'langfuse' ? 'sk-lf-stored-test' : null);
+  const prefix = `${base}/api/observability/tracing/langfuse/credentials`;
+  const headers = { Authorization: 'Bearer trace-test-credential' };
+  try {
+    expect((await fetch(`${prefix}/secretKey/reveal`, { method: 'POST' })).status).toBe(401);
+    for (const [field, key] of [['publicKey', 'pk-lf-environment-test'], ['secretKey', 'sk-lf-stored-test']]) {
+      const response = await fetch(`${prefix}/${field}/reveal`, { method: 'POST', headers });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(await response.json()).toEqual({ key });
+    }
+    expect((await fetch(`${prefix}/invalid/reveal`, { method: 'POST', headers })).status).toBe(400);
+    const settings = await (await fetch(`${base}/api/observability/tracing/settings`, { headers })).json();
+    expect(JSON.stringify(settings)).not.toContain('pk-lf-environment-test');
+    expect(JSON.stringify(settings)).not.toContain('sk-lf-stored-test');
+    reveal.mockResolvedValue(null);
+    expect(await (await fetch(`${prefix}/secretKey/reveal`, { method: 'POST', headers })).json()).toEqual({ key: null });
+  } finally {
+    reveal.mockRestore();
+    if (publicEnv === undefined) delete process.env.LANGFUSE_PUBLIC_KEY; else process.env.LANGFUSE_PUBLIC_KEY = publicEnv;
+    if (secretEnv === undefined) delete process.env.LANGFUSE_SECRET_KEY; else process.env.LANGFUSE_SECRET_KEY = secretEnv;
+  }
 });
