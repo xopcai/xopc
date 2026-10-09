@@ -172,7 +172,7 @@ struct HistoryAttachment: Decodable, Equatable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case mediaID = "id"
-        case type, name, mimeType, size, uri, duration, workspaceRelativePath, extractedText
+        case type, name, mimeType, size, uri, duration, durationSeconds, workspaceRelativePath, extractedText
     }
 
     var id: String {
@@ -191,4 +191,20 @@ struct HistoryAttachment: Decodable, Equatable, Identifiable, Sendable {
 enum MessageDelivery: String, Sendable {
     case next
     case steer
+}
+
+extension HistoryAttachment {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        mediaID = try container.decodeIfPresent(String.self, forKey: .mediaID)
+        type = try container.decodeIfPresent(String.self, forKey: .type)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        mimeType = try container.decodeIfPresent(String.self, forKey: .mimeType)
+        size = try container.decodeIfPresent(Int.self, forKey: .size)
+        uri = try container.decodeIfPresent(String.self, forKey: .uri)
+        duration = try container.decodeIfPresent(Double.self, forKey: .duration)
+            ?? container.decodeIfPresent(Double.self, forKey: .durationSeconds)
+        workspaceRelativePath = try container.decodeIfPresent(String.self, forKey: .workspaceRelativePath)
+        extractedText = try container.decodeIfPresent(String.self, forKey: .extractedText)
+    }
 }

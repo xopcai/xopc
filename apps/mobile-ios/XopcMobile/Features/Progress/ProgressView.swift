@@ -17,118 +17,83 @@ struct ProgressHubView: View {
     @State private var isPerformingAction = false
 
     var body: some View {
-        List {
-            Section {
-                HStack(spacing: 12) {
-                    Image(systemName: home == nil ? "circle.dotted" : pendingCount > 0 ? "exclamationmark.circle" : "checkmark.circle")
-                        .font(.title2)
-                        .foregroundStyle(.blue)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 6) {
-                        if home != nil {
-                            Text("\(pendingCount) 项待处理 · \(activeCount) 项进行中")
-                                .mobileTextStyle(.rowTitle)
-                        } else {
-                            Text(isLoading
-                                ? LocalizedStringResource("正在读取工作状态…")
-                                : LocalizedStringResource("工作状态暂不可用"))
-                                .mobileTextStyle(.rowTitle)
+        ScrollViewReader { scroller in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 0) {
+                        summaryButton(count: pendingCount, title: "待处理") {
+                            withAnimation { scroller.scrollTo("progress-section-needs-user", anchor: .top) }
                         }
-                        Text("需要你处理的事，以及正在推进的工作。")
-                            .mobileTextStyle(.secondary)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.blue.opacity(0.09), in: .rect(cornerRadius: 20))
-                .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            }
-            Section("常用工作") {
-                NavigationLink {
-                    TasksView(configuration: configuration, onOpenConversation: onOpenConversation)
-                        .navigationTitle("任务")
-                } label: {
-                    ProgressHubDestinationLabel(title: "任务", systemImage: "checkmark.circle")
-                }
-                NavigationLink {
-                    ProjectsView(
-                        configuration: configuration,
-                        onOpenConversation: onOpenConversation,
-                        onStartProjectConversation: onStartProjectConversation
-                    )
-                    .navigationTitle("项目")
-                } label: {
-                    ProgressHubDestinationLabel(title: "项目", systemImage: "folder")
-                }
-                NavigationLink {
-                    AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation)
-                        .navigationTitle("自动化")
-                } label: {
-                    ProgressHubDestinationLabel(title: "自动化", systemImage: "clock")
-                }
-                NavigationLink {
-                    WorkflowRunsView(configuration: configuration)
-                } label: {
-                    ProgressHubDestinationLabel(title: "工作流", systemImage: "arrow.triangle.branch")
-                }
-            }
-            if let home, !home.needsUser.isEmpty {
-                Section("需要你处理") {
-                    ForEach(home.needsUser) { item in
-                        homeRow(item, showsActions: true)
-                    }
-                }
-            }
-            if let home, !home.background.isEmpty {
-                Section("正在进行") {
-                    ForEach(home.background.prefix(5)) { item in
-                        homeRow(item, showsActions: false)
-                    }
-                }
-            }
-            if let nextAutomation {
-                Section("接下来") {
-                    NavigationLink {
-                        AutomationDetailView(configuration: configuration, automationID: nextAutomation.automationId,
-                                             onOpenConversation: onOpenConversation)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(nextAutomation.name).mobileTextStyle(.rowTitle)
-                            Text(nextAutomation.runAtMs.millisecondsDate, format: .dateTime.month().day().hour().minute())
-                                .mobileTextStyle(.caption).foregroundStyle(.secondary)
+                        Divider().frame(height: 32)
+                        summaryButton(count: activeCount, title: "进行中") {
+                            withAnimation { scroller.scrollTo("progress-section-running", anchor: .top) }
                         }
                     }
-                }
-            }
-            if !recentClosed.isEmpty {
-                Section("最近完成") {
-                    ForEach(recentClosed.prefix(2)) { item in
+                    .padding(16).background(Color.blue.opacity(0.09), in: .rect(cornerRadius: 20))
+                    if isLoading, home == nil {
+                        ProgressListSkeleton()
+                    }
+                    if let home, !home.needsUser.isEmpty {
+                        Text("需要你处理").mobileTextStyle(.rowTitle).padding(.top, 12).id("progress-section-needs-user")
+                        ForEach(home.needsUser) { item in homeRow(item, showsActions: true) }
+                    }
+                    if !runningItems.isEmpty {
+                        Text("正在进行").mobileTextStyle(.rowTitle).padding(.top, 12).id("progress-section-running")
+                        ForEach(runningItems.prefix(5)) { item in homeRow(item, showsActions: false) }
+                    }
+                    if !scheduledItems.isEmpty {
+                        Text("接下来").mobileTextStyle(.rowTitle).padding(.top, 12)
+                        ForEach(scheduledItems.prefix(5)) { item in homeRow(item, showsActions: false) }
+                    } else if let nextAutomation {
+                        Text("接下来").mobileTextStyle(.rowTitle).padding(.top, 12)
                         NavigationLink {
-                            TaskDetailView(configuration: configuration, taskID: item.id, onOpenConversation: onOpenConversation)
+                            AutomationDetailView(configuration: configuration, automationID: nextAutomation.automationId,
+                                                 onOpenConversation: onOpenConversation)
                         } label: {
-                            ProgressRow(title: item.task.title, subtitle: item.task.body,
-                                        state: item.task.resolution
-                                            ?? AppLocalization.string("已关闭", locale: locale),
-                                        date: item.task.updatedAt.millisecondsDate,
-                                        symbol: "checkmark.circle")
+                            compactRow(title: nextAutomation.name,
+                                       subtitle: nextAutomation.runAtMs.millisecondsDate.formatted(date: .abbreviated, time: .shortened), symbol: "clock")
+                        }.buttonStyle(.plain)
+                    }
+                    if !recentClosed.isEmpty {
+                        Text("最近完成").mobileTextStyle(.rowTitle).padding(.top, 12)
+                        ForEach(recentClosed.prefix(2)) { item in
+                            NavigationLink {
+                                TaskDetailView(configuration: configuration, taskID: item.id, onOpenConversation: onOpenConversation)
+                            } label: {
+                                compactRow(title: item.task.title, subtitle: item.task.resolution ?? "已完成", symbol: "checkmark.circle")
+                            }.buttonStyle(.plain)
                         }
                     }
+                    Text("常用工作").mobileTextStyle(.rowTitle).padding(.top, 12)
+                    HStack(spacing: 12) {
+                        NavigationLink {
+                            TasksView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("任务")
+                        } label: { toolRow("任务", symbol: "checkmark.circle") }
+                        NavigationLink {
+                            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation,
+                                         onStartProjectConversation: onStartProjectConversation).navigationTitle("项目")
+                        } label: { toolRow("项目", symbol: "folder") }
+                    }.buttonStyle(.plain)
+                    NavigationLink {
+                        AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("自动化")
+                    } label: { toolRow("自动化", symbol: "clock") }.buttonStyle(.plain)
+                    if let error {
+                        Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+                        Button("重试") { Task { await load() } }.frame(minHeight: 44)
+                    }
                 }
+                .padding(.horizontal, 20).padding(.vertical, 12)
             }
-            if isLoading {
-                Section { ProgressListSkeleton() }
-            }
-            if let error {
-                Section {
-                    Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
-                    Button("重试") { Task { await load() } }
-                }
+            .contentMargins(.bottom, bottomInset, for: .scrollContent)
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    TasksView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("全部工作")
+                } label: { Image(systemName: "square.grid.2x2").frame(width: 44, height: 44) }
+                    .accessibilityLabel("全部工作")
             }
         }
-        .contentMargins(.bottom, bottomInset, for: .scrollContent)
         .navigationTitle("进展")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
@@ -168,7 +133,15 @@ struct ProgressHubView: View {
     }
 
     private var activeCount: Int {
-        home?.backgroundCount ?? 0
+        runningItems.count
+    }
+
+    private var runningItems: [HomeItem] {
+        home?.background.filter { $0.kind != "scheduled" } ?? []
+    }
+
+    private var scheduledItems: [HomeItem] {
+        home?.background.filter { $0.kind == "scheduled" } ?? []
     }
 
     private var recentClosed: [TaskListItem] {
@@ -176,30 +149,45 @@ struct ProgressHubView: View {
             .sorted { $0.task.updatedAt > $1.task.updatedAt }
     }
 
+    @ViewBuilder
     private func homeRow(_ item: HomeItem, showsActions: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(item.title).mobileTextStyle(.rowTitle)
-            if let status = item.statusLabel, !status.isEmpty {
-                Text(status).font(.caption.weight(.medium)).foregroundStyle(.blue)
+        if !showsActions {
+            if let route = item.openAction?.href.flatMap({ HomeOpenRoute(href: $0) }) {
+                if case let .chat(id) = route {
+                    Button { onOpenConversation(id, item.title, "main") } label: {
+                        compactRow(title: item.title, subtitle: item.summary, symbol: "clock")
+                    }.buttonStyle(.plain)
+                } else {
+                    NavigationLink { destination(for: route) } label: {
+                        compactRow(title: item.title, subtitle: item.summary, symbol: "clock")
+                    }.buttonStyle(.plain)
+                }
+            } else {
+                compactRow(title: item.title, subtitle: item.summary, symbol: "clock")
             }
-            Text(item.summary).mobileTextStyle(.secondary).foregroundStyle(.secondary)
-            if let recommendation = item.recommendation, !recommendation.isEmpty {
-                Text(recommendation).mobileTextStyle(.caption).foregroundStyle(.secondary)
-            }
-            if let open = item.openAction {
-                actionControl(open)
-            }
-            if showsActions {
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 10) {
+                    Circle().fill(.orange).frame(width: 6, height: 6).padding(.top, 7)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(item.title).mobileTextStyle(.rowTitle).fontWeight(.semibold).lineLimit(3)
+                        Text(item.summary).mobileTextStyle(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                        if let recommendation = item.recommendation, !recommendation.isEmpty {
+                            Text(recommendation).mobileTextStyle(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if let open = item.openAction {
+                    actionControl(open)
+                }
                 if let primary = item.primaryAction, primary.type != "open" {
                     actionControl(primary)
                 }
-                ForEach(item.secondaryActions ?? []) { action in
-                    actionControl(action)
-                }
-            }
+                ForEach(item.secondaryActions ?? []) { action in actionControl(action) }
+            }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
+                .accessibilityIdentifier("progress-item-\(item.id)")
         }
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -254,25 +242,40 @@ struct ProgressHubView: View {
     }
 }
 
-private struct ProgressHubDestinationLabel: View {
-    let title: LocalizedStringKey
-    let systemImage: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .frame(width: 24)
-                .accessibilityHidden(true)
-            Text(title)
-                .lineLimit(nil)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-        }
-        .padding(.vertical, 8)
-    }
-}
-
 private extension ProgressHubView {
+    func summaryButton(count: Int, title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Text("\(count)").mobileTextStyle(.heading).fontWeight(.semibold)
+                Text(title).mobileTextStyle(.footnote)
+            }.frame(maxWidth: .infinity, minHeight: 52)
+        }.buttonStyle(.plain).disabled(home == nil)
+    }
+
+    func toolRow(_ title: LocalizedStringKey, symbol: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).font(.system(size: 18)).frame(width: 34, height: 34)
+                .background(Color.blue.opacity(0.08), in: .circle).accessibilityHidden(true)
+            Text(title).mobileTextStyle(.body).frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(.secondary)
+        }.padding(.horizontal, 14).frame(minHeight: 64)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 14))
+            .foregroundStyle(.primary)
+    }
+
+    func compactRow(title: String, subtitle: String, symbol: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).frame(width: 24).foregroundStyle(.blue).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).mobileTextStyle(.secondary).fontWeight(.medium).lineLimit(2)
+                Text(subtitle).mobileTextStyle(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(.secondary)
+        }.padding(14).frame(minHeight: 64)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 14))
+            .foregroundStyle(.primary)
+    }
+
     @MainActor func perform(_ action: HomeAction) async {
         guard !isPerformingAction else { return }
         isPerformingAction = true
@@ -376,6 +379,13 @@ private struct TasksView: View {
                     }
                     .accessibilityIdentifier("task-\(item.task.id)")
                 }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink { WorkflowRunsView(configuration: configuration) } label: {
+                    Image(systemName: "arrow.triangle.branch").frame(width: 44, height: 44)
+                }.accessibilityLabel("工作流")
             }
         }
         .refreshable { await load() }

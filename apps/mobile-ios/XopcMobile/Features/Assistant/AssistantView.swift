@@ -18,6 +18,7 @@ struct AssistantView<Dock: View>: View {
     let onInputFocusChanged: (Bool) -> Void
     let bottomDock: (AssistantComposer, Bool) -> Dock
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.locale) private var locale
 
     @State var state = AssistantState()
@@ -41,6 +42,8 @@ struct AssistantView<Dock: View>: View {
     @State private var startingVoice = false
     @State private var voiceStartError: String?
     @State private var voiceMaterializationIDs: [String: String] = [:]
+    @State private var isAtBottom = true
+    @State private var pendingStart: PendingConversationStart?
     @State private var bottomDockHeight: CGFloat = 0
 
     var body: some View {
@@ -74,6 +77,9 @@ struct AssistantView<Dock: View>: View {
         }
         .task(id: configuration) {
             await state.load(using: GatewayClient(configuration: configuration))
+            if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
+                state.select(agent)
+            }
         }
         .task(id: ConversationLoadKey(
             configuration: configuration,
@@ -93,6 +99,10 @@ struct AssistantView<Dock: View>: View {
             readAloud.stop()
             assistantAudio.stop()
             executionPresentation = nil
+            isAtBottom = true
+            if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
+                state.select(agent)
+            }
             draft = ""
             attachments = []
             references = []
@@ -123,6 +133,7 @@ struct AssistantView<Dock: View>: View {
                 configuration: configuration,
                 conversation: conversation,
                 state: state,
+                onStartConversation: { requestConversation($0) },
                 pendingReferences: references,
                 onAddReference: { reference in
                     guard references.count < 5,
@@ -131,7 +142,7 @@ struct AssistantView<Dock: View>: View {
                 },
                 onConversationUpdated: onConversationUpdated,
                 onStartScopedConversation: { project, mode in
-                    onStartScopedConversation(project, mode, conversation?.agentId ?? state.selectedAgentID ?? "main")
+                    requestStart(.scoped(project, mode, conversation?.agentId ?? state.selectedAgentID ?? "main"))
                 }
             )
         }
@@ -170,6 +181,21 @@ struct AssistantView<Dock: View>: View {
                 draft = existing.isEmpty ? text : "\(existing) \(text)"
             }
         }
+        .confirmationDialog("开始新对话？", isPresented: Binding(
+            get: { pendingStart != nil }, set: {
+                if !$0 {
+                    pendingStart = nil
+                }
+            }
+        )) {
+            Button("开始新对话", role: .destructive) {
+                if let start = pendingStart {
+                    performStart(start)
+                }
+                pendingStart = nil
+            }
+            Button("取消", role: .cancel) { pendingStart = nil }
+        } message: { Text("当前未发送的文字、附件和引用将被清空。") }
         .alert("无法开始语音", isPresented: Binding(
             get: { voiceStartError != nil },
             set: {
@@ -248,55 +274,98 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var messageTimeline: some View {
-        ScrollView {
-            LazyVStack(spacing: 14) {
-                if showsConversationTitleInTimeline, let conversation {
-                    Text(verbatim: conversation.title)
-                        .mobileTextStyle(.rowTitle)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 4)
-                        .accessibilityAddTraits(.isHeader)
-                }
-                if let errorMessage = state.errorMessage {
-                    ErrorBanner(message: errorMessage)
-                }
-                clarificationCard
-                queueCard
-                personalConnectionCard
-                ForEach(state.messages) { message in
-                    MessageBubble(
-                        message: message,
-                        configuration: configuration,
-                        conversationID: conversation?.isDraft == false ? conversation?.id : nil,
-                        assistantState: state,
-                        readAloud: readAloud,
-                        canReadAloud: realtimeVoiceCall.phase == .idle,
-                        previewEligible: message.id != state.messages.last?.id,
-                        onReuseUserText: { draft = $0 }
-                    )
-                }
-                if state.isRunActive {
-                    AssistantActivityView(
-                        label: state.activityLabel ?? AppLocalization.string("助手正在处理", locale: locale),
-                        items: state.executionActivity,
-                        runID: state.runID,
-                        onOpen: {
-                            executionPresentation = ExecutionActivityPresentation(
+        GeometryReader { viewport in
+            ScrollViewReader { scroller in
+                ScrollView {
+                    LazyVStack(spacing: 14) {
+                        if showsConversationTitleInTimeline, let conversation {
+                            Text(verbatim: conversation.title)
+                                .mobileTextStyle(.rowTitle)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 4)
+                                .accessibilityAddTraits(.isHeader)
+                        }
+                        if let errorMessage = state.errorMessage {
+                            ErrorBanner(message: errorMessage)
+                        }
+                        clarificationCard
+                        queueCard
+                        personalConnectionCard
+                        ForEach(state.messages) { message in
+                            MessageBubble(
+                                message: message,
+                                configuration: configuration,
                                 conversationID: conversation?.isDraft == false ? conversation?.id : nil,
-                                runID: state.runID,
-                                items: state.executionActivity
+                                assistantState: state,
+                                readAloud: readAloud,
+                                canReadAloud: realtimeVoiceCall.phase == .idle,
+                                previewEligible: message.id != state.messages.last?.id,
+                                onReuseUserText: { draft = $0 }
                             )
                         }
-                    )
+                        if state.isRunActive {
+                            AssistantActivityView(
+                                label: state.activityLabel ?? AppLocalization.string("助手正在处理", locale: locale),
+                                items: state.executionActivity,
+                                runID: state.runID,
+                                onOpen: {
+                                    executionPresentation = ExecutionActivityPresentation(
+                                        conversationID: conversation?.isDraft == false ? conversation?.id : nil,
+                                        runID: state.runID,
+                                        items: state.executionActivity
+                                    )
+                                }
+                            )
+                        }
+                        Color.clear.frame(height: 1)
+                            .id("chat-bottom")
+                            .onGeometryChange(for: CGFloat.self) { proxy in
+                                proxy.frame(in: .named("chat-scroll")).maxY
+                            } action: { bottom in
+                                isAtBottom = bottom <= viewport.size.height - bottomDockHeight + 32
+                            }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 16)
+                    .frame(maxWidth: 720)
+                    .frame(maxWidth: .infinity)
+                }
+                .defaultScrollAnchor(.bottom)
+                .contentMargins(.bottom, bottomDockHeight + 24, for: .scrollContent)
+                .coordinateSpace(name: "chat-scroll")
+                .onChange(of: state.messages.last) {
+                    if isAtBottom {
+                        scroller.scrollTo("chat-bottom", anchor: .bottom)
+                    }
+                }
+                .overlay(alignment: .bottom) {
+                    if state.isRunActive || !isAtBottom {
+                        Button {
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
+                                scroller.scrollTo("chat-bottom", anchor: .bottom)
+                            }
+                        } label: {
+                            Group {
+                                if state.isRunActive {
+                                    LoopiIcon(size: 20, active: true, compact: true, working: true)
+                                } else {
+                                    Image(systemName: "arrow.down").font(.system(size: 18, weight: .medium))
+                                }
+                            }
+                            .frame(width: 36, height: 36)
+                            .background(.regularMaterial, in: .circle)
+                            .frame(width: 44, height: 44).contentShape(.circle)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("回到最新消息")
+                        .accessibilityValue(AppLocalization.string(state.isRunActive ? "正在回答" : "最新消息", locale: locale))
+                        .accessibilityIdentifier("chat-jump-bottom")
+                        .padding(.bottom, bottomDockHeight + 8)
+                    }
                 }
             }
-            .padding()
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
         }
-        .defaultScrollAnchor(.bottom)
-        .contentMargins(.bottom, bottomDockHeight + 24, for: .scrollContent)
     }
 
     private var conversationNavigationTitle: String {
@@ -321,7 +390,8 @@ struct AssistantView<Dock: View>: View {
     private var currentAgentName: String {
         isPersonalConversation
             ? (personalAgent?.displayName ?? "Ada")
-            : (state.selectedAgent?.displayName ?? AppLocalization.string("未选择", locale: locale))
+            : (state.agents.first(where: { $0.id == conversation?.agentId })?.displayName
+                ?? state.selectedAgent?.displayName ?? AppLocalization.string("未选择", locale: locale))
     }
 
     private var assistantAudioObservation: AssistantAudioObservation {
@@ -432,7 +502,7 @@ struct AssistantView<Dock: View>: View {
             },
             onSend: { send(delivery: .next) },
             onSteer: { send(delivery: .steer) },
-            onNewConversation: { onStartConversation(state.selectedAgentID ?? "main") },
+            onNewConversation: { requestConversation(state.selectedAgentID ?? "main") },
             onRealtimeVoice: { mode in
                 guard let conversation, !startingVoice, !state.isRunActive, !state.isSending else { return }
                 startingVoice = true
@@ -480,6 +550,29 @@ struct AssistantView<Dock: View>: View {
         onQuickChatHandled(quickChatHandoff.id)
     }
 
+    private func requestConversation(_ agentID: String) {
+        requestStart(.agent(agentID))
+    }
+
+    private func requestStart(_ start: PendingConversationStart) {
+        if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty || !references.isEmpty {
+            pendingStart = start
+        } else {
+            performStart(start)
+        }
+    }
+
+    private func performStart(_ start: PendingConversationStart) {
+        switch start {
+        case let .agent(id):
+            if let agent = state.agents.first(where: { $0.id == id }) {
+                state.select(agent)
+            }
+            onStartConversation(id)
+        case let .scoped(project, mode, agent): onStartScopedConversation(project, mode, agent)
+        }
+    }
+
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
@@ -489,8 +582,7 @@ struct AssistantView<Dock: View>: View {
                 } else {
                     ForEach(state.agents) { agent in
                         Button {
-                            state.select(agent)
-                            onStartConversation(agent.id)
+                            requestConversation(agent.id)
                         } label: {
                             if agent.id == state.selectedAgentID {
                                 Label(agent.displayName, systemImage: "checkmark")
@@ -523,14 +615,15 @@ struct AssistantView<Dock: View>: View {
             Button {
                 showingSessionActions = true
             } label: {
-                Image(systemName: "ellipsis")
+                Image(systemName: "ellipsis").font(.system(size: 20)).frame(width: 44, height: 44)
             }
-            .accessibilityLabel("会话信息与设置")
+            .accessibilityLabel("会话选项")
+            .accessibilityIdentifier("assistant-options")
         }
     }
 }
 
-private struct PersonalAgentProfileView: View {
+struct PersonalAgentProfileView: View {
     let configuration: GatewayConfiguration
     let conversation: ConversationSelection
     let onSaved: (PersonalAgentRecord) -> Void
@@ -797,4 +890,9 @@ private extension AssistantView {
             .id(clarification.id)
         }
     }
+}
+
+private enum PendingConversationStart {
+    case agent(String)
+    case scoped(ProjectRecord?, String?, String)
 }

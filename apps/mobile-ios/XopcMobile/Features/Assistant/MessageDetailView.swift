@@ -6,135 +6,70 @@ struct MessageDetailView: View {
     let conversationID: String?
     let assistantState: AssistantState?
 
-    @Environment(\.dismiss) private var dismiss
-    @State private var path: [Destination] = []
-
-    private enum Destination: Hashable { case execution }
-
     var body: some View {
-        NavigationStack(path: $path) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if message.role == "assistant",
-                       conversationID != nil,
-                       !message.isPending || message.turnId != nil
-                    {
-                        Button {
-                            path.append(.execution)
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: message.isPending ? "circle.dotted" : "checkmark.circle")
-                                Text("执行过程")
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .font(.subheadline.weight(.medium))
-                            .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
-                        }
-                        Divider()
-                    }
-                    if !message.markdownParts.isEmpty {
-                        MarkdownBodyView(parts: message.markdownParts, configuration: configuration, conversationID: conversationID)
-                            .padding(.vertical, 22)
-                    } else if message.text.isEmpty {
-                        Text("无文本内容")
-                            .padding(.vertical, 22)
-                    } else {
-                        Text(verbatim: message.text)
-                            .textSelection(.enabled)
-                            .padding(.vertical, 22)
-                    }
-                    if !message.references.isEmpty {
-                        Divider()
-                        Text("引用").font(.headline).padding(.top, 18)
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(message.references) { reference in
-                                Label(reference.title, systemImage: reference.kind.systemImage)
-                            }
-                        }
-                        .padding(.vertical, 14)
-                    }
-                    if !message.attachments.isEmpty {
-                        Divider()
-                        Text("附件").font(.headline).padding(.top, 18)
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(message.attachments) { attachment in
-                                if attachment.isImage, let uri = attachment.uri {
-                                    MarkdownImageView(
-                                        alt: attachment.name ?? "图片",
-                                        source: uri,
-                                        configuration: configuration,
-                                        conversationID: conversationID,
-                                        compact: true,
-                                        gallery: message.attachments.filter(\.isImage)
-                                    )
-                                } else if attachment.isAudio, let conversationID {
-                                    ChatAudioAttachmentView(
-                                        attachment: attachment,
-                                        configuration: configuration,
-                                        conversationID: conversationID
-                                    )
-                                } else {
-                                    ChatAttachmentPreview(
-                                        attachment: attachment,
-                                        configuration: configuration,
-                                        conversationID: conversationID
-                                    )
-                                }
-                            }
-                        }
-                        .padding(.vertical, 14)
-                    }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if !message.markdownParts.isEmpty {
+                    MarkdownBodyView(parts: message.markdownParts, configuration: configuration, conversationID: conversationID)
+                        .padding(.vertical, 22)
+                } else if message.text.isEmpty {
+                    Text("无文本内容")
+                        .padding(.vertical, 22)
+                } else {
+                    Text(verbatim: message.text)
+                        .textSelection(.enabled)
+                        .padding(.vertical, 22)
+                }
+                if !message.references.isEmpty {
                     Divider()
-                    HStack {
-                        Text(message.role == "assistant"
-                            ? LocalizedStringResource("AI 回复")
-                            : LocalizedStringResource("我的消息"))
-                        Spacer()
-                        Text(message.isPending
-                            ? LocalizedStringResource("发送中")
-                            : LocalizedStringResource("已完成"))
+                    Text("引用").font(.headline).padding(.top, 18)
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(message.references) { reference in
+                            Label(reference.title, systemImage: reference.kind.systemImage)
+                        }
                     }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 18)
+                    .padding(.vertical, 14)
                 }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 28)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .background(Color(.systemBackground))
-            .navigationTitle("消息详情")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.headline)
-                            .frame(width: 44, height: 44)
-                            .background(Color.secondary.opacity(0.08), in: .circle)
+                if !message.attachments.isEmpty {
+                    Divider()
+                    Text("附件").font(.headline).padding(.top, 18)
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(message.attachments) { attachment in
+                            if attachment.isImage, let uri = attachment.uri {
+                                MarkdownImageView(
+                                    alt: attachment.name ?? "图片",
+                                    source: uri,
+                                    configuration: configuration,
+                                    conversationID: conversationID,
+                                    compact: true,
+                                    gallery: message.attachments.filter(\.isImage)
+                                )
+                            } else if attachment.isAudio, let conversationID {
+                                ChatAudioAttachmentView(
+                                    attachment: attachment,
+                                    configuration: configuration,
+                                    conversationID: conversationID
+                                )
+                            } else {
+                                ChatAttachmentPreview(
+                                    attachment: attachment,
+                                    configuration: configuration,
+                                    conversationID: conversationID
+                                )
+                            }
+                        }
                     }
-                    .accessibilityLabel("关闭")
-                }
-            }
-            .navigationDestination(for: Destination.self) { destination in
-                switch destination {
-                case .execution:
-                    if let conversationID {
-                        ExecutionProcessView(
-                            configuration: configuration,
-                            conversationID: conversationID,
-                            turnID: message.turnId ?? message.id,
-                            assistantState: assistantState
-                        )
-                    }
+                    .padding(.vertical, 14)
                 }
             }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 28)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .presentationDetents([.large])
+        .background(Color(.systemBackground))
+        .accessibilityIdentifier("message-detail-content")
+        .presentationDetents([.fraction(0.85)])
+        .presentationDragIndicator(.visible)
     }
 }
 

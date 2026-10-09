@@ -4,10 +4,16 @@ import SwiftUI
 struct ProfileView: View {
     let configuration: GatewayConfiguration
     let onOpenGatewaySettings: () -> Void
+    var personalAgent: PersonalAgentRecord?
+    var personalAgentLoading = false
+    var personalAgentError: String?
+    var onOpenPersonalAgent: () -> Void = {}
+    var onPersonalAgentUpdated: (PersonalAgentRecord) -> Void = { _ in }
     var bottomInset: CGFloat = 0
 
     @Environment(\.locale) private var locale
 
+    @State private var showingPersonalProfile = false
     @State private var summary: MobileUserSummary?
     @State private var error: String?
     @State private var goalEditorPresented = false
@@ -37,6 +43,7 @@ struct ProfileView: View {
                         .padding(.vertical, 8)
                     }
                 }
+                personalAgentSection
                 Section {
                     ForEach(summary.goals) { goal in
                         Button {
@@ -107,6 +114,7 @@ struct ProfileView: View {
                     }
                     .padding(.vertical, 8)
                 }
+                personalAgentSection
                 Section("我的目标") {
                     Text("连接 Gateway 后可查看和管理当前目标").foregroundStyle(.secondary)
                 }
@@ -125,8 +133,10 @@ struct ProfileView: View {
                 }
             } else {
                 Section { ProfileSkeleton() }
+                personalAgentSection
             }
         }
+        .listSectionSpacing(16)
         .contentMargins(.bottom, bottomInset, for: .scrollContent)
         .navigationTitle(AppLocalization.string("我的", locale: locale))
         .navigationBarTitleDisplayMode(.inline)
@@ -141,9 +151,45 @@ struct ProfileView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingPersonalProfile) {
+            if let personalAgent {
+                PersonalAgentProfileView(configuration: configuration, record: personalAgent,
+                                         conversation: ConversationSelection(summary: ConversationSummary(key: personalAgent.conversationId,
+                                                                                                          agentId: personalAgent.agentId, name: personalAgent.displayName, status: "active",
+                                                                                                          updatedAt: "", messageCount: 1, projectId: nil, transcriptId: nil)),
+                                         onSaved: onPersonalAgentUpdated)
+            }
+        }
         .sheet(isPresented: $goalEditorPresented) {
             GoalEditorView(configuration: configuration, goal: selectedGoal) { await load() }
         }
+    }
+
+    private var personalAgentSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 12) {
+                    PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 40, active: false)
+                    Text(personalAgent?.displayName ?? AppLocalization.string("我的助手", locale: locale)).mobileTextStyle(.rowTitle)
+                }
+                Text(personalAgentError ?? AppLocalization.string("与你的个人助手持续对话。", locale: locale))
+                    .mobileTextStyle(.secondary).foregroundStyle(personalAgentError == nil ? Color.secondary : .red)
+                Button(action: onOpenPersonalAgent) {
+                    Text(personalAgent?.isReady == true ? LocalizedStringResource("继续对话") : LocalizedStringResource("创建我的助手"))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(personalAgentLoading)
+                .accessibilityIdentifier("profile-personal-agent-open")
+                if personalAgent?.isReady == true {
+                    Button("配置我的助手") { showingPersonalProfile = true }
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .accessibilityIdentifier("profile-personal-agent-configure")
+                }
+            }
+            .padding(.vertical, 12)
+        }
+        .listSectionSpacing(16)
     }
 
     private func understandingCount(_ value: Int, _ title: String) -> some View {

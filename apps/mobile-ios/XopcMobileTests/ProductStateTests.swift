@@ -337,3 +337,50 @@ private final class MemoryGatewayTokenStore: GatewayTokenStoring {
         }
     }
 }
+
+extension ProductStateTests {
+    @Test func conversationHistorySkipsEmptyDraftPagesAndPreservesChildren() async {
+        func row(_ id: String, count: Int) -> ConversationSummary {
+            ConversationSummary(key: id, agentId: "main", name: id, status: "active",
+                                updatedAt: "2026-10-09T00:00:00Z", messageCount: count, projectId: nil, transcriptId: nil)
+        }
+        let group = SidebarTaskGroup(total: 1, activeCount: 1,
+                                     items: [SidebarTask(taskId: "task-1", title: "Research", phase: "active",
+                                                         runStatus: "running", activeConversationId: "child-1")])
+        var gateway = GatewayStub()
+        gateway.conversationPages = [
+            ConversationPage(items: [row("draft-1", count: 0)], total: 4, hasMore: true),
+            ConversationPage(items: [row("parent", count: 2)], total: 4, hasMore: true,
+                             childrenByConversationId: ["parent": group]),
+            ConversationPage(items: [row("draft-2", count: 0)], total: 4, hasMore: true),
+            ConversationPage(items: [row("history", count: 1)], total: 4, hasMore: false)
+        ]
+        let state = ConversationsState()
+        await state.load(using: gateway)
+        #expect(state.visibleConversations.map(\.id) == ["parent"])
+        #expect(state.childrenByConversationID["parent"] == group)
+        await state.loadMore(using: gateway)
+        #expect(state.visibleConversations.map(\.id) == ["parent", "history"])
+        #expect(!state.hasMore)
+        #expect(state.childrenByConversationID["parent"] == group)
+    }
+
+    @Test func sessionOptionSaveFailurePreservesSelectionAndAllowsRetry() async {
+        let summary = ConversationSummary(key: "session", agentId: "main", name: "Options", status: "active",
+                                          updatedAt: "", messageCount: 1, projectId: nil, transcriptId: nil)
+        let conversation = ConversationSelection(summary: summary)
+        let options = AssistantOptionsState()
+        await options.load(conversation, using: GatewayStub())
+        options.thinkingLevel = "high"
+        var failingGateway = GatewayStub()
+        failingGateway.modelSaveFails = true
+        let failed = await options.save(conversation, using: failingGateway)
+        #expect(failed == nil)
+        #expect(options.errorMessage != nil)
+        #expect(!options.isSaving)
+        #expect(options.thinkingLevel == "high")
+        let updated = await options.save(conversation, using: GatewayStub())
+        #expect(updated?.thinkingLevel == "high")
+        #expect(options.errorMessage == nil)
+    }
+}

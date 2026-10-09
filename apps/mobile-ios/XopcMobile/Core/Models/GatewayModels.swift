@@ -72,6 +72,24 @@ struct ConversationPage: Decodable, Equatable, Sendable {
     let items: [ConversationSummary]
     let total: Int
     let hasMore: Bool
+    var childrenByConversationId: [String: SidebarTaskGroup]?
+}
+
+struct SidebarTaskGroup: Decodable, Equatable, Sendable {
+    let total: Int
+    let activeCount: Int
+    let items: [SidebarTask]
+}
+
+struct SidebarTask: Decodable, Equatable, Identifiable, Sendable {
+    let taskId: String
+    let title: String
+    let phase: String
+    let runStatus: String?
+    let activeConversationId: String?
+    var id: String {
+        taskId
+    }
 }
 
 struct ConversationSummary: Decodable, Equatable, Identifiable, Sendable {

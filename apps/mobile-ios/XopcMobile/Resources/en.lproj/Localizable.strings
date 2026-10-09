@@ -876,3 +876,21 @@
 "project_status_completed" = "Completed";
 "project_status_cancelled" = "Cancelled";
 "project_status_archived" = "Archived";
+
+// Mobile layout parity
+"会话选项" = "Chat Options";
+"上下文" = "Context";
+"助手角色" = "Assistant Role";
+"思考档位" = "Thinking Level";
+"后续消息队列" = "Follow-up Queue";
+"默认模型" = "Default Model";
+"待处理" = "Needs Attention";
+"我的助手" = "My Assistant";
+"创建我的助手" = "Create My Assistant";
+"与你的个人助手持续对话。" = "Keep talking with your personal assistant.";
+"开始新对话？" = "Start a new chat?";
+"当前未发送的文字、附件和引用将被清空。" = "Your unsent text, attachments, and references will be cleared.";
+"展开子对话" = "Expand Sub-chats";
+"收起子对话" = "Collapse Sub-chats";
+"回到最新消息" = "Jump to Latest Message";
+"最新消息" = "Latest Message";
