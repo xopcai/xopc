@@ -1,4 +1,4 @@
-import { Copy, Package } from 'lucide-react';
+import { Copy, LoaderCircle, Package } from 'lucide-react';
 import { useCallback, useEffect, useReducer } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
@@ -87,6 +87,8 @@ type AppManagementMessages = {
   clearDataConfirmPhrase: string;
   clearDataConfirmLabel: string;
   clearDataConfirmHint: string;
+  clearDataProgress: string;
+  clearDataProgressHint: string;
   uninstall: string;
   uninstallDescDarwin: string;
   uninstallDescWin: string;
@@ -186,7 +188,7 @@ export function AppManagementSection({
   };
 
   const handleClearData = async () => {
-    if (!api?.clearUserData) {
+    if (!api?.clearUserData || busy) {
       return;
     }
     dispatch({ type: 'patch', patch: { busy: true, actionError: null } });
@@ -369,7 +371,7 @@ export function AppManagementSection({
       <Dialog.Root
         open={clearDialogOpen}
         onOpenChange={(open) => {
-          if (!open) {
+          if (!open && !busy) {
             dispatch({
               type: 'patch',
               patch: { clearDialogOpen: false, clearConfirmChecked: false, clearConfirmText: '' },
@@ -386,49 +388,74 @@ export function AppManagementSection({
           />
           <Dialog.Content
             className={cn(
-              'xopc-dialog-content fixed left-1/2 top-1/2 w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
+              'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(30rem,calc(100dvh-2rem))] w-[min(100%-2rem,28rem)] flex-col overflow-hidden -translate-x-1/2 -translate-y-1/2',
               SETTINGS_SHELL_CONTENT_Z,
               'rounded-2xl border border-edge bg-surface-overlay p-6 shadow-popover outline-none dark:border-edge',
             )}
             onOpenAutoFocus={(e) => e.preventDefault()}
+            onEscapeKeyDown={(e) => {
+              if (busy) e.preventDefault();
+            }}
+            onInteractOutside={(e) => {
+              if (busy) e.preventDefault();
+            }}
+            aria-busy={busy}
           >
             <Dialog.Title className="text-base font-semibold text-fg">
               {m.clearDataConfirmTitle}
             </Dialog.Title>
-            <Dialog.Description className="mt-2 text-sm text-fg-muted">
-              {m.clearDataConfirmDesc}
-            </Dialog.Description>
-            <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-fg">
-              <input
-                type="checkbox"
-                className="ui-checkbox mt-0.5"
-                checked={clearConfirmChecked}
-                onChange={(e) => dispatch({ type: 'patch', patch: { clearConfirmChecked: e.target.checked } })}
-              />
-              <span>{m.clearDataConfirmCheckbox}</span>
-            </label>
-            <div className="mt-4 space-y-2">
-              <label className="block text-sm font-medium text-fg" htmlFor="clear-data-confirm">
-                {m.clearDataConfirmLabel}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <Dialog.Description className="mt-2 text-sm text-fg-muted">
+                {m.clearDataConfirmDesc}
+              </Dialog.Description>
+              <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  className="ui-checkbox mt-0.5"
+                  disabled={busy}
+                  checked={clearConfirmChecked}
+                  onChange={(e) => dispatch({ type: 'patch', patch: { clearConfirmChecked: e.target.checked } })}
+                />
+                <span>{m.clearDataConfirmCheckbox}</span>
               </label>
-              <input
-                id="clear-data-confirm"
-                type="text"
-                autoComplete="off"
-                spellCheck={false}
-                className={cn(
-                  'w-full rounded-md border border-edge bg-surface-panel px-3 py-1.5 font-mono text-xs text-fg',
-                  'placeholder:text-fg-subtle',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
-                  'dark:border-edge',
+              <div className="mt-4 space-y-2">
+                <label className="block text-sm font-medium text-fg" htmlFor="clear-data-confirm">
+                  {m.clearDataConfirmLabel}
+                </label>
+                <input
+                  id="clear-data-confirm"
+                  disabled={busy}
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className={cn(
+                    'w-full rounded-md border border-edge bg-surface-panel px-3 py-1.5 font-mono text-xs text-fg',
+                    'placeholder:text-fg-subtle',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+                    'dark:border-edge',
+                  )}
+                  placeholder={m.clearDataConfirmPhrase}
+                  value={clearConfirmText}
+                  onChange={(e) => dispatch({ type: 'patch', patch: { clearConfirmText: e.target.value } })}
+                />
+                {busy ? (
+                  <div className="space-y-2" role="status" aria-live="polite">
+                    <p className="text-sm font-medium text-fg">{m.clearDataProgress}</p>
+                    <div
+                      role="progressbar"
+                      aria-label={m.clearDataProgress}
+                      className="h-1.5 overflow-hidden rounded-full bg-surface-active"
+                    >
+                      <div className="xopc-clear-data-progress h-full w-1/3 rounded-full bg-accent" />
+                    </div>
+                    <p className="text-xs text-fg-muted">{m.clearDataProgressHint}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-fg-muted">{m.clearDataConfirmHint}</p>
                 )}
-                placeholder={m.clearDataConfirmPhrase}
-                value={clearConfirmText}
-                onChange={(e) => dispatch({ type: 'patch', patch: { clearConfirmText: e.target.value } })}
-              />
-              <p className="text-xs text-fg-muted">{m.clearDataConfirmHint}</p>
+              </div>
             </div>
-            <div className="mt-6 flex justify-end gap-2">
+            <div className="mt-6 flex shrink-0 justify-end gap-2">
               <Button
                 type="button"
                 variant="secondary"
@@ -449,7 +476,8 @@ export function AppManagementSection({
                 disabled={busy || !clearConfirmReady}
                 onClick={() => void handleClearData()}
               >
-                {m.confirmClear}
+                {busy ? <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
+                {busy ? m.clearDataProgress : m.confirmClear}
               </Button>
             </div>
           </Dialog.Content>
