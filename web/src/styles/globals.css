@@ -2421,3 +2421,20 @@ html[data-desktop-pet="true"] body {
     min-height: 44px;
   }
 }
+
+@keyframes xopc-clear-data-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+.xopc-clear-data-progress {
+  animation: xopc-clear-data-progress 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xopc-clear-data-progress {
+    animation: none;
+    width: 100%;
+    opacity: 0.6;
+  }
+}

@@ -992,6 +992,8 @@
       "clearDataConfirmPhrase": "confirm delete",
       "clearDataConfirmLabel": "Type \"confirm delete\" to continue",
       "clearDataConfirmHint": "The delete button stays disabled until the phrase matches exactly.",
+      "clearDataProgress": "Deleting data…",
+      "clearDataProgressHint": "Large amounts of data may take a while. Keep the app open; it will restart automatically when finished.",
       "uninstall": "Uninstall app",
       "uninstallDescDarwin": "Opens Finder with xopc selected, then quits the app. Drag xopc.app to the Trash to finish uninstalling.",
       "uninstallDescWin": "Opens the Windows uninstall wizard and quits xopc.",

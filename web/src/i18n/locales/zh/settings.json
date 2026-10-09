@@ -992,6 +992,8 @@
       "clearDataConfirmPhrase": "确认删除",
       "clearDataConfirmLabel": "请输入「确认删除」以继续",
       "clearDataConfirmHint": "必须输入「确认删除」后才会启用删除按钮。",
+      "clearDataProgress": "正在清理数据…",
+      "clearDataProgressHint": "数据较多时可能需要一些时间，请保持应用打开。完成后将自动重启。",
       "uninstall": "卸载应用",
       "uninstallDescDarwin": "将在 Finder 中选中 xopc 并退出应用。请将 xopc.app 拖入废纸篓以完成卸载。",
       "uninstallDescWin": "将打开 Windows 卸载向导并退出 xopc。",
