@@ -55,7 +55,7 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
       verticalAlignment = Alignment.CenterVertically) {
       IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = backLabel }
         .testTag("settings-back")) {
-        Text("‹", style = MaterialTheme.typography.headlineMedium)
+        ActionIcon(R.drawable.action_chevron_left, size = 20.dp)
       }
       Text(stringResource(when (section) {
         "appearance" -> R.string.settings_appearance
@@ -204,7 +204,6 @@ private fun SettingsRow(title: String, summary: String, navigable: Boolean, onCl
         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
         overflow = TextOverflow.Ellipsis)
     }
-    if (navigable) Text("›", style = MaterialTheme.typography.titleLarge,
-      color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (navigable) ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 16.dp)
   }
 }

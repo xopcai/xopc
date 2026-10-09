@@ -9,7 +9,7 @@ data class ProgressHomeAction(val type: String, val label: String, val approvalI
 data class ProgressItem(val id: String, val title: String, val summary: String,
   val statusLabel: String?, val recommendation: String?, val openAction: ProgressAction?,
   val reviewDetail: String? = null, val primaryAction: ProgressHomeAction? = null,
-  val secondaryActions: List<ProgressHomeAction> = emptyList())
+  val secondaryActions: List<ProgressHomeAction> = emptyList(), val kind: String = "")
 data class ProgressHome(val needsUser: List<ProgressItem>, val background: List<ProgressItem>)
 data class ProgressTask(val id: String, val title: String, val body: String, val phase: String,
   val resolution: String?, val updatedAt: Long, val closedAt: Long?, val projectId: String?,
@@ -232,7 +232,7 @@ class ProgressRepository(private val gateway: GatewaySession) {
           ProgressItem(id, title.take(160), summary.take(500),
             row.optString("statusLabel").takeIf(String::isNotBlank)?.take(80),
             row.optString("recommendation").takeIf(String::isNotBlank)?.take(500), action,
-            reviewDetail, primary, secondary)
+            reviewDetail, primary, secondary, row.optString("kind").take(80))
         }
       }
       return ProgressHome(items("needsUser"), items("background"))

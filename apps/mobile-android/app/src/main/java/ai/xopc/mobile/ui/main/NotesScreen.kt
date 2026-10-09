@@ -308,7 +308,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         } else if (editorOpen) closeEditor() else selectedId = null
       },
           modifier = Modifier.width(72.dp).testTag("notes-back")) {
-          Text("‹", style = MaterialTheme.typography.headlineMedium)
+          ActionIcon(R.drawable.action_chevron_left, size = 20.dp)
         }
         Text(if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
           style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
@@ -328,7 +328,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         IconButton(onClick = { creationSheetOpen = true },
           enabled = !state.draftLoading && !state.draftSaving,
           modifier = Modifier.testTag("notes-new")) {
-          Text("+", style = MaterialTheme.typography.headlineLarge)
+          ActionIcon(R.drawable.action_add, size = 24.dp, contentDescription = stringResource(R.string.notes_new))
         }
       }
     }
@@ -580,7 +580,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           horizontalArrangement = Arrangement.spacedBy(14.dp)) {
           Icon(painterResource(R.drawable.tab_notes), contentDescription = null)
           Text(stringResource(R.string.notes_create_text), modifier = Modifier.weight(1f))
-          Text("›")
+          ActionIcon(R.drawable.action_chevron_right, size = 16.dp)
         }
       }
       Card(onClick = { creationSheetOpen = false; onStartVoice?.invoke() },
@@ -596,7 +596,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant)
           }
-          Text("›")
+          ActionIcon(R.drawable.action_chevron_right, size = 16.dp)
         }
       }
     }
@@ -1068,7 +1068,7 @@ private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<Manage
               horizontalArrangement = Arrangement.spacedBy(12.dp)) {
               Icon(painterResource(R.drawable.action_folder), contentDescription = null)
               Text(space.title, modifier = Modifier.weight(1f))
-              Text("›")
+              ActionIcon(R.drawable.action_chevron_right, size = 16.dp)
             }
           }
         }
@@ -1099,7 +1099,7 @@ private fun ManagedFileCard(file: ManagedFile, onOpen: (ManagedFile) -> Unit) {
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
-      Text("›")
+      ActionIcon(R.drawable.action_chevron_right, size = 16.dp)
     }
   }
 }
@@ -1137,8 +1137,7 @@ private fun NoteCard(note: NoteSummary, onOpen: (String) -> Unit) {
           style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary,
           maxLines = 1, overflow = TextOverflow.Ellipsis)
       }
-      Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant,
-        style = MaterialTheme.typography.titleLarge)
+      ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 16.dp)
     }
   }
 }
