@@ -61,7 +61,8 @@ describe('AgentToolsFactory', () => {
     const tools = factory.createCoreTools({ toolAllowlist: PERSONAL_MAIN_TOOL_IDS });
     expect(tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['read_file', 'read_media', 'session_search', 'personal_read', 'user_context_read', 'knowledge_read']));
     expect(tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['user_context_search', 'user_context_get', 'knowledge_search', 'knowledge_get']));
-    expect(PERSONAL_MAIN_TOOL_IDS).toHaveLength(11);
+    expect(PERSONAL_MAIN_TOOL_IDS).toContain('personal_attention');
+    expect(PERSONAL_MAIN_TOOL_IDS).toHaveLength(12);
     expect(tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['clarify', 'web_search', 'web_fetch', 'find', 'grep', 'list_dir', 'exec_command']));
     expect(tools.find(tool => tool.name === 'session_search')?.description).toContain('No model or network calls');
   });
