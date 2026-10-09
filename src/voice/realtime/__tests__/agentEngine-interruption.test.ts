@@ -16,7 +16,7 @@ describe('Agent voice interruption cleanup', () => {
 
   type RunAgent = (text: string, conversationId: string, signal: AbortSignal) => AsyncIterable<VoiceAgentEvent>;
 
-  async function setup(runAgent: RunAgent, bargeIn = true) {
+  async function setup(runAgent: RunAgent, bargeIn = true, sessionId = 'call') {
     let emit!: (event: StreamingSttEvent) => void;
     const send = vi.fn();
     const sendAudio = vi.fn();
@@ -33,7 +33,7 @@ describe('Agent voice interruption cleanup', () => {
     }));
     engine = createAgentVoiceEngine({
       claim: {
-        sessionId: 'call', conversationSessionId: 'stored-session',
+        sessionId, conversationSessionId: 'stored-session',
         request: { purpose: 'conversation', mode: 'assistant', conversationId: 'chat' },
         config: { voice: { realtime: { bargeIn } } }, silenceDurationMs: 1200, tts: { config: {} },
         stt: { model: 'test', route: { provider: 'test' }, plugin: { openAudioStream: async (request: { onEvent: typeof emit }) => {
@@ -452,4 +452,16 @@ describe('Agent voice interruption cleanup', () => {
     expect(test.sendAudio).not.toHaveBeenCalled();
     expect(test.send.mock.calls.filter(([type]) => type === 'response.done' || type === 'session.error')).toEqual([]);
   });
+  it('does not reuse durable input identity when ASR turn numbers restart in a new call', async () => {
+    const first = await setup(async function* () { yield { type: 'run_end' }; }, true, 'first-call');
+    first.final('3');
+    await vi.waitFor(() => expect(first.delegate).toHaveBeenCalledOnce());
+    await engine.close();
+    const second = await setup(async function* () { yield { type: 'run_end' }; }, true, 'second-call');
+    second.final('3');
+    await vi.waitFor(() => expect(second.delegate).toHaveBeenCalledOnce());
+    expect(first.delegate.mock.calls[0][0]).toMatchObject({ clientMessageId: 'voice:stored-session:first-call:0:3' });
+    expect(second.delegate.mock.calls[0][0]).toMatchObject({ clientMessageId: 'voice:stored-session:second-call:0:3' });
+  });
+
 });

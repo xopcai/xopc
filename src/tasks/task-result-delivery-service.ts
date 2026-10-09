@@ -8,6 +8,10 @@ import { appendTranscriptEntry } from '../storage/sqlite/transcript-repository.j
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { emitSessionTranscriptUpdate } from '../session/transcript-events.js';
 import { createLogger } from '../utils/logger.js';
+import { getPersonalAgentByConversation } from '../personal-agent/repository.js';
+import { enqueuePersonalReply } from '../personal-agent/reply-composer.js';
+import { personalRequestForTask } from '../personal-agent/request-repository.js';
+import { TaskRepository } from './task-repository.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
@@ -74,15 +78,20 @@ export class TaskResultDeliveryService {
             const statusText = zh
               ? `${delivery.taskTitle}：${available === deliverables.length ? '成果已生成' : available > 0 ? '部分成果已生成' : '成果暂不可用'}。`
               : `${delivery.taskTitle}: ${available === deliverables.length ? 'Results ready' : available > 0 ? 'Partial results ready' : 'Results unavailable'}.`;
-            const content = delivery.text ? `${statusText}\n\n${delivery.text}` : statusText;
+            const personal = getPersonalAgentByConversation(delivery.conversationId);
+            if (personal && !personalRequestForTask(delivery.taskId)) enqueuePersonalReply({ delivery: { ...delivery, outcome },
+              report: delivery.text?.trim() || delivery.outcome.summary?.trim() || statusText,
+              objective: new TaskRepository().get(delivery.taskId)?.contract?.objective ?? delivery.taskTitle });
+            const content = personal ? statusText : delivery.text ? `${statusText}\n\n${delivery.text}` : statusText;
             const details = { ...delivery, outcome };
-            const entry = appendTranscriptEntry(delivery.conversationId, {
+            if (personal) delete details.text;
+            const entry = !personal || deliverables.length ? appendTranscriptEntry(delivery.conversationId, {
               role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE, content, display: true,
               details, timestamp: Date.now(),
-            });
+            }) : undefined;
             db.prepare(`UPDATE task_result_deliveries SET status = 'delivered', payload_json = ?,
               message_entry_id = ?, delivered_at = ? WHERE delivery_id = ?`)
-              .run(JSON.stringify(details), entry.entry_id, Date.now(), row.delivery_id);
+              .run(JSON.stringify(details), entry?.entry_id ?? null, Date.now(), row.delivery_id);
             return true;
           });
           if (!persisted) continue;

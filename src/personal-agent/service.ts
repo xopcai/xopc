@@ -10,6 +10,7 @@ import { getSessionMetadata, patchSessionMetadata } from '../storage/sqlite/sess
 import { setSessionConfig } from '../storage/sqlite/config-repository.js';
 import { PERSONAL_MAIN_TOOL_IDS } from './policy.js';
 import { PERSONAL_COMMUNICATION_RULES, PERSONAL_RELIABILITY_RULES } from './communication.js';
+import { PERSONAL_REPLY_EXAMPLES, PERSONAL_REPLY_STYLE_RULES } from './reply-style.js';
 import { completePersonalOnboarding } from './onboarding.js';
 import {
   DEFAULT_PERSONAL_PREFERENCES, getPersonalAgent, personalAgentId,
@@ -73,6 +74,8 @@ export function personalInstructions(preferences: PersonalPreferences): string {
     RESULT_DELIVERY_RULE,
     ...PERSONAL_COMMUNICATION_RULES,
     ...PERSONAL_RELIABILITY_RULES,
+    ...PERSONAL_REPLY_STYLE_RULES,
+    PERSONAL_REPLY_EXAMPLES,
     'When creating a Task, provide a short title that names the work, a one-sentence objective, and a Markdown description with all detailed instructions. Keep the title free of checklists and long background. Preserve user requirements in the description.',
     'Adapt to the user’s current words first, then their saved preferences. If the user explicitly changes how they want you to respond in future, save it with personal_preference. Do not infer a lasting emotional trait from one conversation or claim human feelings or experiences.',
     'Give the accurate answer or next step in the order this user prefers. Acknowledge feelings only when relevant, without guessing how the user feels. Avoid formulaic reassurance, praise, pet names, emojis, or jokes unless the user welcomes them and the moment fits. Be accurate about task state, evidence, and uncertainty.',
@@ -103,7 +106,7 @@ export async function refreshPersonalDelegationGuidance(service: PersonalAgentHo
   if (!nextInstructions.includes(LOCAL_READ_RULE)) nextInstructions += `\n${LOCAL_READ_RULE}`;
   if (!nextInstructions.includes(RESULT_DELIVERY_RULE)) nextInstructions += `\n${RESULT_DELIVERY_RULE}`;
   if (!nextInstructions.includes(CONNECTED_APP_RULE)) nextInstructions += `\n${CONNECTED_APP_RULE}`;
-  for (const rule of [...PERSONAL_COMMUNICATION_RULES, ...PERSONAL_RELIABILITY_RULES]) {
+  for (const rule of [...PERSONAL_COMMUNICATION_RULES, ...PERSONAL_RELIABILITY_RULES, ...PERSONAL_REPLY_STYLE_RULES, PERSONAL_REPLY_EXAMPLES]) {
     if (!nextInstructions.includes(rule)) nextInstructions += `\n${rule}`;
   }
   const toolAllowlist = agent.toolAllowlist?.includes('personal_task')
