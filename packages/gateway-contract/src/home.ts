@@ -28,6 +28,7 @@ export const HomeDecisionSchema = z.object({
   updatedAt: z.number(),
   response: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('connector_approval'), approvalId: z.string() }),
+    z.object({ kind: z.literal('task'), taskId: z.string(), canRetry: z.boolean() }),
   ]).optional(),
 });
 
@@ -44,6 +45,8 @@ export const HomeAttentionSchema = z.object({
 });
 
 export const HomeActionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('task_review'), label: z.string(), taskId: z.string() }),
+  z.object({ type: z.literal('retry_task'), label: z.string(), taskId: z.string() }),
   z.object({
     type: z.literal('open'),
     label: z.string(),

@@ -146,6 +146,7 @@ export function decisionFromTask(
   if (task.phase === 'review') {
     return {
       id: `task:${task.id}:review`,
+      response: { kind: 'task', taskId: task.id, canRetry: false },
       kind: 'task',
       title: task.title,
       detail: isChinese ? '执行已经完成，正在等待你验收结果。' : 'The work is complete and ready for your review.',
@@ -179,6 +180,7 @@ export function decisionFromTask(
   if (!reason) return null;
   return {
     id: `task:${task.id}`,
+    response: { kind: 'task', taskId: task.id, canRetry: reason === 'retry' && model.allowedCommands.includes('start') },
     kind: 'task',
     title: task.title,
     detail: item.summary,
@@ -199,6 +201,7 @@ function homeActionCopy(locale?: string) {
         approve: '允许并继续',
         deny: '拒绝',
         review: '查看并处理',
+        reviewResult: '查看结果并验收',
         retry: '重试',
         acknowledge: '暂时忽略',
         viewProgress: '查看进度',
@@ -215,6 +218,7 @@ function homeActionCopy(locale?: string) {
         approve: 'Allow and continue',
         deny: 'Deny',
         review: 'Review',
+        reviewResult: 'Review result',
         retry: 'Retry',
         acknowledge: 'Dismiss',
         viewProgress: 'View progress',
@@ -283,7 +287,17 @@ export function buildHomeWorkbench(input: {
       dueAt: decision.dueAt,
       updatedAt: decision.updatedAt,
       openAction,
-      ...connectorActions,
+      ...(decision.response?.kind === 'task' && decision.reason === 'decision_needed'
+        ? {
+            primaryAction: { type: 'task_review' as const, label: copy.reviewResult, taskId: decision.response.taskId },
+            secondaryActions: [openAction],
+          }
+        : decision.response?.kind === 'task' && decision.response.canRetry
+          ? {
+              primaryAction: { type: 'retry_task' as const, label: copy.retry, taskId: decision.response.taskId },
+              secondaryActions: [openAction],
+            }
+          : connectorActions),
     };
   });
   const failures = input.attention.map((item): HomeWorkbenchItem => ({
