@@ -19,6 +19,7 @@ export type SessionInput = {
   conversationId: string;
   clientMessageId: string;
   expectedTranscriptId?: string;
+  interruptRequested?: boolean;
   requestedDelivery: SessionInputDelivery;
   effectiveDelivery: SessionInputDelivery;
   status: SessionInputStatus;
@@ -51,7 +52,7 @@ export type SessionInputState = {
 
 type InputRow = {
   id: string; conversation_id: string; client_message_id: string; expected_transcript_id: string | null;
-  requested_delivery: SessionInputDelivery; effective_delivery: SessionInputDelivery;
+  interrupt_requested: number; requested_delivery: SessionInputDelivery; effective_delivery: SessionInputDelivery;
   task_run_id: string | null;
   kind: SessionInput['kind']; payload_json: string | null;
   status: SessionInputStatus; content: string; attachments_json: string | null;
@@ -65,6 +66,7 @@ function mapInput(row: InputRow): SessionInput {
   return {
     id: row.id, conversationId: row.conversation_id, clientMessageId: row.client_message_id,
     expectedTranscriptId: row.expected_transcript_id ?? undefined,
+    interruptRequested: row.interrupt_requested === 1,
     requestedDelivery: row.requested_delivery, effectiveDelivery: row.effective_delivery,
     status: row.status, content: row.content, kind: row.kind,
     taskRunId: row.task_run_id ?? undefined,
@@ -80,7 +82,7 @@ function mapInput(row: InputRow): SessionInput {
   };
 }
 
-const SELECT_INPUTS = `SELECT id, conversation_id, client_message_id, expected_transcript_id, requested_delivery,
+const SELECT_INPUTS = `SELECT interrupt_requested, id, conversation_id, client_message_id, expected_transcript_id, requested_delivery,
   effective_delivery, status, content, attachments_json, context_refs_json, context_snapshots_json,
   thinking, origin_json, position, kind, payload_json, task_run_id,
   target_run_id, run_id, version, error, created_at_ms, updated_at_ms
@@ -218,6 +220,7 @@ export class SessionInstanceChangedError extends Error {
 
 export function insertSessionInput(input: {
   id: string; conversationId: string; clientMessageId: string; expectedTranscriptId?: string;
+  interruptRequested?: boolean;
   requestedDelivery: SessionInputDelivery; effectiveDelivery: SessionInputDelivery;
   status: 'queued' | 'injecting'; content: string; attachments?: unknown[];
   taskRunId?: string;
@@ -237,15 +240,15 @@ export function insertSessionInput(input: {
     db.prepare(`INSERT INTO session_inputs(id, conversation_id, client_message_id, expected_transcript_id,
       requested_delivery, effective_delivery, status, content, attachments_json,
       context_refs_json, context_snapshots_json, thinking, origin_json, position,
-      target_run_id, version, created_at_ms, updated_at_ms, kind, payload_json, task_run_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`)
+      target_run_id, version, created_at_ms, updated_at_ms, kind, payload_json, task_run_id, interrupt_requested)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`)
       .run(input.id, input.conversationId, input.clientMessageId, input.expectedTranscriptId ?? null, input.requestedDelivery,
         input.effectiveDelivery, input.status, input.content,
         input.attachments ? JSON.stringify(input.attachments) : null,
         input.contextRefs ? JSON.stringify(input.contextRefs) : null,
         input.contextSnapshots ? JSON.stringify(input.contextSnapshots) : null,
         input.thinking ?? null, JSON.stringify(input.origin), max.value + 1,
-        input.targetRunId ?? null, now, now, input.kind ?? 'message', input.payload ? JSON.stringify(input.payload) : null, input.taskRunId ?? null);
+        input.targetRunId ?? null, now, now, input.kind ?? 'message', input.payload ? JSON.stringify(input.payload) : null, input.taskRunId ?? null, input.interruptRequested ? 1 : 0);
     bumpSessionInputRevision(db, input.conversationId);
     return mapInput(db.prepare(`${SELECT_INPUTS} WHERE id = ?`).get(input.id) as InputRow);
   });
@@ -266,7 +269,7 @@ export function claimNextSessionInput(conversationId: string, runId: string, exp
       .run(Date.now(), conversationId, readCurrentTranscriptId(db, conversationId)).changes;
     if (changed) bumpSessionInputRevision(db, conversationId);
     const row = db.prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND effective_delivery = 'next'
-      AND status = 'queued' ORDER BY position, created_at_ms, id LIMIT 1`).get(conversationId) as InputRow | undefined;
+      AND status = 'queued' ORDER BY interrupt_requested DESC, position, created_at_ms, id LIMIT 1`).get(conversationId) as InputRow | undefined;
     if (!row) return undefined;
     if (expectedInputId && row.id !== expectedInputId) return undefined;
     const now = Date.now();
@@ -275,7 +278,24 @@ export function claimNextSessionInput(conversationId: string, runId: string, exp
     db.prepare(`UPDATE session_input_runtime SET active_run_id = ?, active_input_id = ?,
       revision = revision + 1, updated_at_ms = ? WHERE conversation_id = ?`)
       .run(runId, row.id, now, conversationId);
-    return mapInput(db.prepare(`${SELECT_INPUTS} WHERE id = ?`).get(row.id) as InputRow);
+    const claimed = mapInput(db.prepare(`${SELECT_INPUTS} WHERE id = ?`).get(row.id) as InputRow);
+    // Coalesce only contiguous, compatible conversational text. Original inputs remain durable.
+    const hasMaterial = (value: InputRow) => Boolean((value.attachments_json && JSON.parse(value.attachments_json).length)
+      || (value.context_snapshots_json && JSON.parse(value.context_snapshots_json).length));
+    if (row.interrupt_requested && !hasMaterial(row)) {
+      const pending = db.prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND status = 'queued'
+        ORDER BY interrupt_requested DESC, position, created_at_ms, id LIMIT 10`).all(conversationId) as InputRow[];
+      for (const next of pending) {
+        if (!next.interrupt_requested || next.kind !== 'message' || hasMaterial(next)
+          || next.thinking !== row.thinking || next.expected_transcript_id !== row.expected_transcript_id
+          || next.origin_json !== row.origin_json || next.created_at_ms - row.created_at_ms > 500
+          || claimed.content.length + next.content.length > 64_000) break;
+        db.prepare(`UPDATE session_inputs SET status = 'injecting', effective_delivery = 'steer', target_run_id = ?,
+          version = version + 1, updated_at_ms = ? WHERE id = ?`).run(runId, now, next.id);
+        claimed.content += `\n\n${next.content}`;
+      }
+    }
+    return claimed;
   });
 }
 

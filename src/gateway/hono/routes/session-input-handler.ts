@@ -79,6 +79,9 @@ export async function submitSessionInput(
   if (attachmentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: attachmentError } }, 400);
   const delivery = body.delivery === 'next' || body.delivery === 'steer' ? body.delivery : null;
   if (!delivery) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing delivery' } }, 400);
+  if (body.interrupt !== undefined && typeof body.interrupt !== 'boolean') {
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'interrupt must be a boolean' } }, 400);
+  }
   const origin = endpointTurnClaimSchema.safeParse(body.origin);
   if (!origin.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid endpoint origin' } }, 400);
   if (!deps.service.endpointTools.registry.verifyTurnClaim(origin.data.endpointId, origin.data.token)) {
@@ -134,6 +137,7 @@ export async function submitSessionInput(
       conversationId,
       clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : '',
       delivery,
+      interrupt: body.interrupt as boolean | undefined,
       content,
       attachments: attachments as UserTurnAttachment[] | undefined,
       contextRefs,

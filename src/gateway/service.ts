@@ -14,7 +14,7 @@ import { getBrowserTabBindingById } from '../storage/sqlite/browser-tab-binding-
 import crypto from 'node:crypto';
 import { WorkDiscoveryService } from '../work-discovery/service.js';
 
-import { findSessionInput, insertSessionInput } from '../storage/sqlite/session-input-repository.js';
+import { findSessionInput, insertSessionInput, bumpSessionInputRevision } from '../storage/sqlite/session-input-repository.js';
 import { ConnectionRecoveryService } from '../connectors/connection-recovery-service.js';
 
 import { buildVoiceMemoryContext } from '../voice/realtime/memory-context.js';
@@ -254,6 +254,9 @@ export class GatewayService {
         details: { callId, itemId: entry.itemId, role: entry.role, interrupted: entry.interrupted, engine: 'omni' },
       });
       this.emit('session.transcript_updated', { key: conversationId });
+    },
+    onConversationInput: conversationId => {
+      bumpSessionInputRevision(getSqliteDatabase(), conversationId);
     },
     getConfig: () => this.config,
     sessionExists: async (conversationId) => Boolean(await this.sessionIndex.getSessionMetadata(conversationId)),
@@ -887,7 +890,7 @@ export class GatewayService {
     await new TaskMainUpdateDelivery().drain({
       isAvailable: (conversationId) => {
         const state = this.agentRunner.inputs.snapshot(conversationId);
-        return !state.activeRunId && state.inputs.every((item) => item.status === 'interrupted')
+        return !this.agentRunner.inputs.isAcceptingInput(conversationId) && !state.activeRunId && state.inputs.every((item) => item.status === 'interrupted')
           && (!this.voiceRealtime.hasConversation(conversationId)
             || this.voiceRealtime.canOfferTaskUpdate(conversationId));
       },
@@ -929,7 +932,9 @@ export class GatewayService {
     };
     await new TaskResultDeliveryService().drain(notify);
     // Reply leases bound concurrency without delaying the next artifact dispatch.
-    void new PersonalReplyComposer().drain(notify).catch(err => {
+    void new PersonalReplyComposer().drain(notify, conversationId => !this.agentRunner.hasActiveRun(conversationId)
+      && !this.agentRunner.inputs.isAcceptingInput(conversationId)
+      && (!this.voiceRealtime.hasConversation(conversationId) || this.voiceRealtime.canPublishReply(conversationId))).catch(err => {
       log.error({ err, phase: 'task_result_reply' }, 'Task result reply delivery failed');
     });
   }, (err) => {
@@ -1035,6 +1040,10 @@ export class GatewayService {
 
   submitSessionInput(...args: Parameters<GatewayAgentRunner['submitSessionInput']>) {
     return this.agentRunner.submitSessionInput(...args);
+  }
+
+  withSessionInputSubmission<T>(conversationId: string, operation: () => Promise<T>): Promise<T> {
+    return this.agentRunner.inputs.withSubmission(conversationId, operation);
   }
 
   prepareSessionCommandInput(input: Parameters<GatewayAgentRunner['inputs']['prepareInput']>[0]) {

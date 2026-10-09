@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { ClarificationResponseAction } from '@xopcai/gateway-contract';
 
+import { isPersonalConversation } from '../../personal-agent/repository.js';
 import type { Config } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import type { AgentService } from '../../agent/service.js';
@@ -89,6 +90,12 @@ export class GatewayAgentRunner {
     });
     this.inputs = new SessionInputCoordinator({
       beforeExecute: opts.validateConnectionResume,
+      prioritizeInput: input => (input.origin.type !== 'system' || input.origin.source === 'cli') && isPersonalConversation(input.conversationId),
+      interrupt: async (conversationId, runId) => {
+        const execution = this.activeExecutionBySession.get(conversationId);
+        if (execution && execution.kind !== 'chat') return;
+        await this.abortAgentRun(runId);
+      },
       sessionExists: async (conversationId) => Boolean(await opts.sessionIndex.getSessionMetadata(conversationId)),
       execute: async (input) => {
         const generator = this.runAgent(
@@ -148,7 +155,10 @@ export class GatewayAgentRunner {
         );
       },
       steer: (conversationId, content) => opts.getAgentService().turnDispatcher.steerWebchatSession(conversationId, content),
-      emit: opts.emit,
+      emit: (type, payload) => {
+        opts.emit(type, payload);
+        if (type === 'session.input-interrupt') opts.publishRealtime('sessions', type, payload);
+      },
     });
   }
 

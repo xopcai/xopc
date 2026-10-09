@@ -34,6 +34,16 @@ describe('composer acceptance preserves drafts', () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
+  it('prioritizes personal follow-ups by default and preserves an explicit defer action', async () => {
+    const onAddPendingFollowUp = vi.fn(async () => {});
+    options = { ...options, personal: true, runBusy: true, onAddPendingFollowUp };
+    await render();
+    await act(async () => actions.flushSteeringDraft());
+    expect(onAddPendingFollowUp).toHaveBeenLastCalledWith('Original', undefined, undefined, true);
+    await act(async () => actions.flushSteeringDraft(false));
+    expect(onAddPendingFollowUp).toHaveBeenLastCalledWith('Original', undefined, undefined, false);
+  });
+
   it('clears an unchanged draft only after acceptance', async () => {
     actions.send();
     expect(options.resetEditor).not.toHaveBeenCalled();

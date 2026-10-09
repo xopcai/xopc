@@ -11,6 +11,8 @@ import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { getSessionMetadata, deleteSessionRecord } from '../../storage/sqlite/session-repository.js';
 import { getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { SessionInputCoordinator } from '../service/session-input-coordinator.js';
 import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 
@@ -26,7 +28,15 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
   resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(dir, 'xopc.db') });
   seedTestAgentCatalog();
   const token = 'session-command-test-token';
-  const drain = vi.fn(async () => {});
+  let finish!: (value: { status: string; summary: string }) => void;
+  const execute = vi.fn((_input: unknown) => new Promise<{ status: string; summary: string }>(resolve => { finish = resolve; }));
+  const interrupt = vi.fn(async () => { finish({ status: 'aborted', summary: '' }); });
+  const coordinator = new SessionInputCoordinator({
+    prioritizeInput: () => true, interrupt, coalesceWindowMs: 5,
+    sessionExists: async () => true, execute, emit: vi.fn(),
+    prepareAttachments: async (_id, attachments) => attachments,
+    prepareContexts: async () => [], steer: async () => false,
+  });
   const service = {
     currentConfig: ConfigSchema.parse({ gateway: { auth: { mode: 'token', token } } }),
     getResolvedAuth: () => ({ mode: 'token', token }), getAuthToken: () => token,
@@ -35,8 +45,10 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     sessions: { getSession: async (id: string) => getSessionMetadata(id), getAgentConfig: async () => ({ model: 'test/model', thinkingLevel: 'off', fixedModel: true }) },
     getSessionInputState,
     emit: vi.fn(),
-    prepareSessionCommandInput: async (input: { content: string; origin: object }) => ({ status: 'queued', requestedDelivery: 'next', effectiveDelivery: 'next', content: input.content, origin: input.origin }),
-    drainSessionInputs: drain, sessionPreparations: { wake: vi.fn() },
+    withSessionInputSubmission: coordinator.withSubmission.bind(coordinator),
+    prepareSessionCommandInput: coordinator.prepareInput.bind(coordinator),
+    dispatchAcceptedSessionInput: coordinator.dispatchAcceptedInput.bind(coordinator),
+    drainSessionInputs: coordinator.drain.bind(coordinator), sessionPreparations: { wake: vi.fn() },
   } as unknown as GatewayService;
   const app = createHonoApp({ service });
   const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
@@ -71,6 +83,27 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     expect((await post({ ...command, input: { content: 'changed' } })).status).toBe(409);
     const receiptPath = `${base}/api/sessions/${id}/input-receipts/${command.clientMessageId}`;
     expect((await fetch(receiptPath, { headers })).status).toBe(200);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    const configVersion = (getSqliteDatabase().prepare('SELECT updated_at FROM session_config WHERE conversation_id = ?').get(id) as { updated_at: number } | undefined)?.updated_at ?? 0;
+    const append = { kind: 'append', clientMessageId: randomUUID(),
+      expectedTranscriptId: getSessionMetadata(id)!.transcriptId, configVersion, delivery: 'next',
+      input: { content: 'Just the cost' }, origin: command.origin };
+    expect((await post({ ...append, configVersion: configVersion + 1 })).status).toBe(409);
+    expect(interrupt).not.toHaveBeenCalled();
+    const deferred = { ...append, clientMessageId: randomUUID(), interrupt: false, input: { content: 'Later' } };
+    expect((await post(deferred)).status).toBe(202);
+    expect(interrupt).not.toHaveBeenCalled();
+    const priority = await post(append);
+    expect(priority.status, await priority.clone().text()).toBe(202);
+    expect((await post(append)).status).toBe(202);
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+    expect(execute.mock.calls[1]![0]).toMatchObject({ content: 'Just the cost' });
+    finish({ status: 'ok', summary: '' });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(3));
+    expect(execute.mock.calls[2]![0]).toMatchObject({ content: 'Later' });
+    finish({ status: 'ok', summary: '' });
+    await vi.waitFor(() => expect(coordinator.snapshot(id).activeRunId).toBeUndefined());
     deleteSessionRecord(id);
     expect((await post(command)).status).toBe(410);
     expect((await fetch(receiptPath, { headers })).status).toBe(410);

@@ -518,6 +518,7 @@ export function createAgentVoiceEngine(options: {
         ...(event.language === 'zh' || event.language === 'en' ? { language: event.language } : {}),
       });
       if (claim.request.purpose === 'conversation') {
+        if (claim.request.conversationId) options.runtime.onConversationInput?.(claim.request.conversationId);
         if (activeResponse?.awaitingClarification) { turn.reset(); return; }
         // Partial ASR and VAD can be caused by the current playback. Only a
         // finalized, non-echo utterance may cancel the response.
@@ -553,14 +554,19 @@ export function createAgentVoiceEngine(options: {
     return inputReset;
   }
 
-  function canOfferTaskUpdateInput(): boolean {
-    return claim.request.purpose === 'conversation' && Boolean(claim.tts)
+  function isConversationIdle(): boolean {
+    return claim.request.purpose === 'conversation'
       && !closed && Boolean(sttSession) && !committing && !activeResponse
       && !pendingTurn && queuedTurns === 0 && turn.isIdle()
       && Date.now() - lastUserSpeechAt >= TASK_UPDATE_QUIET_MS;
   }
 
+  function canOfferTaskUpdateInput(): boolean {
+    return Boolean(claim.tts) && isConversationIdle();
+  }
+
   return {
+    isConversationIdle,
     canOfferTaskUpdate() {
       return !taskUpdateQueued && canOfferTaskUpdateInput();
     },

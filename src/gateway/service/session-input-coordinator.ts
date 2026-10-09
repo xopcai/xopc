@@ -67,6 +67,8 @@ export type SubmitSessionInput = {
   conversationId: string;
   clientMessageId: string;
   delivery: SessionInputDelivery;
+  /** False explicitly defers a Personal AI message or requests cooperative steering. */
+  interrupt?: boolean;
   content: string;
   attachments?: UserTurnAttachment[];
   contextRefs?: TurnContextRef[];
@@ -80,10 +82,15 @@ export type ReplaceLatestTurnInput = SubmitSessionInput & {
 };
 
 export class SessionInputCoordinator {
+  private readonly pendingSubmissions = new Map<string, number>();
+  private readonly resumeAfter = new Map<string, number>();
   private readonly draining = new Set<string>();
   private readonly submissionTails = new Map<string, Promise<void>>();
 
   constructor(private readonly deps: {
+    prioritizeInput?: (input: SubmitSessionInput) => boolean;
+    interrupt?: (conversationId: string, runId: string) => Promise<void>;
+    coalesceWindowMs?: number;
     onInputReceived?: (conversationId: string) => void;
     beforeExecute?: (input: SessionInput) => Promise<boolean>;
     sessionExists: (conversationId: string) => Promise<boolean>;
@@ -110,6 +117,10 @@ export class SessionInputCoordinator {
     emit: (type: string, payload: unknown) => void;
   }) {}
 
+  isAcceptingInput(conversationId: string): boolean {
+    return (this.pendingSubmissions.get(conversationId) ?? 0) > 0;
+  }
+
   snapshot(conversationId: string): SessionInputState {
     return getSessionInputState(conversationId);
   }
@@ -121,6 +132,7 @@ export class SessionInputCoordinator {
     return {
       status: 'queued' as const, requestedDelivery: input.delivery, effectiveDelivery: 'next' as const,
       content: input.content.trim(), attachments, contextRefs: contexts.map(summarizeSourceContext),
+      interruptRequested: input.interrupt !== false && this.deps.prioritizeInput?.(input) === true,
       contextSnapshots: contexts, thinking: input.thinking, origin: input.origin,
     };
   }
@@ -131,7 +143,12 @@ export class SessionInputCoordinator {
     await this.runSubmissionExclusive(input.conversationId, async () => {
       const row = getSessionInputById(conversationId, inputId);
       const state = this.snapshot(input.conversationId);
-      if (!row || row.status !== 'queued' || row.requestedDelivery !== 'steer'
+      if (!row || row.status !== 'queued') return;
+      if (row.interruptRequested) {
+        this.prioritizeAcceptedInput(row, state);
+        return;
+      }
+      if (row.requestedDelivery !== 'steer'
         || !state.activeRunId || row.attachments?.length || row.contextSnapshots?.length
         || (state.preparation && state.preparation.state !== 'ready')) return;
       setSessionInputStatus(row.id, 'injecting', { effectiveDelivery: 'steer', targetRunId: state.activeRunId });
@@ -145,6 +162,20 @@ export class SessionInputCoordinator {
       }
       this.publish(row.conversationId);
     });
+  }
+
+  private prioritizeAcceptedInput(row: SessionInput, runtime: SessionInputState): void {
+    const conversationId = row.conversationId;
+    this.resumeAfter.set(conversationId, Date.now() + (this.deps.coalesceWindowMs ?? 200));
+    this.publish(conversationId);
+    if (runtime.activeRunId && this.deps.interrupt) {
+      this.deps.emit('session.input-interrupt', { conversationId, runId: runtime.activeRunId, inputId: row.id });
+      // Only interrupt after validation and durable acceptance. Never cancel delegated Tasks here.
+      void this.deps.interrupt(conversationId, runtime.activeRunId).catch(err => {
+        log.warn({ err, conversationId, runId: runtime.activeRunId }, 'Conversation interruption failed; accepted input remains queued');
+      });
+    }
+    void this.drain(conversationId);
   }
 
   private publish(conversationId: string): SessionInputState {
@@ -168,15 +199,25 @@ export class SessionInputCoordinator {
     }
   }
 
+  async withSubmission<T>(conversationId: string, operation: () => Promise<T>): Promise<T> {
+    this.deps.onInputReceived?.(conversationId);
+    this.pendingSubmissions.set(conversationId, (this.pendingSubmissions.get(conversationId) ?? 0) + 1);
+    try { return await operation(); } finally {
+      const remaining = (this.pendingSubmissions.get(conversationId) ?? 1) - 1;
+      if (remaining) this.pendingSubmissions.set(conversationId, remaining);
+      else this.pendingSubmissions.delete(conversationId);
+    }
+  }
+
   async submit(input: SubmitSessionInput): Promise<
     | { ok: true; effectiveDelivery: SessionInputDelivery; state: SessionInputState }
     | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' | 'CONTEXT_UNAVAILABLE' | 'SESSION_CHANGED' }
   > {
     input = structuredClone(input);
     const conversationId = input.conversationId.trim();
-    this.deps.onInputReceived?.(conversationId);
     try {
-      return await this.runSubmissionExclusive(conversationId, () => this.submitLocked({ ...input, conversationId }));
+      return await this.withSubmission(conversationId, () =>
+        this.runSubmissionExclusive(conversationId, () => this.submitLocked({ ...input, conversationId })));
     } catch (error) {
       if (error instanceof SessionInstanceChangedError) return { ok: false, code: 'SESSION_CHANGED' };
       throw error;
@@ -286,7 +327,8 @@ export class SessionInputCoordinator {
       return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
     }
     const runtime = this.snapshot(conversationId);
-    const canSteer = input.delivery === 'steer'
+    const priority = input.interrupt !== false && this.deps.prioritizeInput?.(input) === true;
+    const canSteer = !priority && input.delivery === 'steer'
       && runtime.activeRunId !== undefined
       && !attachments?.length
       && !sourceContexts?.length;
@@ -297,6 +339,7 @@ export class SessionInputCoordinator {
       conversationId,
       clientMessageId,
       requestedDelivery: input.delivery,
+      interruptRequested: priority,
       effectiveDelivery,
       status: canSteer ? 'injecting' : 'queued',
       content,
@@ -310,6 +353,10 @@ export class SessionInputCoordinator {
 
     invalidateConnectionResumeIntent(conversationId);
     supersedeActiveClarification(conversationId);
+    if (priority) {
+      this.prioritizeAcceptedInput(row, runtime);
+      return { ok: true, effectiveDelivery: 'next', state: this.publish(conversationId) };
+    }
     if (canSteer) {
       const accepted = await this.deps.steer(conversationId, content);
       if (!accepted) {
@@ -329,6 +376,12 @@ export class SessionInputCoordinator {
     this.draining.add(conversationId);
     try {
       while (true) {
+        const delay = (this.resumeAfter.get(conversationId) ?? 0) - Date.now();
+        if (delay > 0) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        this.resumeAfter.delete(conversationId);
         const runId = crypto.randomUUID();
         const input = claimNextSessionInput(conversationId, runId);
         if (!input) return;
