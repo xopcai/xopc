@@ -68,8 +68,11 @@ export async function *runGatewayAgent(
   origin: TurnOrigin,
   attachments?: UserTurnAttachment[],
   thinking?: string,
-  runOptions?: { signal?: AbortSignal; runId?: string; taskRunId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
+  runOptions?: { inputReceivedAtMs?: number; signal?: AbortSignal; runId?: string; taskRunId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
 ): AsyncGenerator<RunGatewayAgentYield, { status: string; summary: string }, unknown> {
+  const runStartedAtMs = Date.now();
+  const inputReceivedAtMs = runOptions?.inputReceivedAtMs ?? runStartedAtMs;
+  let firstTextSeen = false;
   const cappedAttachments =
     attachments && attachments.length > MAX_CHAT_ATTACHMENTS
       ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
@@ -167,6 +170,12 @@ export async function *runGatewayAgent(
   };
   const emitAndYield = function *(events: ChatStreamEvent[]): Generator<ChatStreamEvent> {
     for (const event of events) {
+      if (!firstTextSeen && event.type === 'assistant_delta' && event.payload.delta.trim()) {
+        firstTextSeen = true;
+        log.info({ conversationId: streamConversationId, runId, channel, phase: 'first_response_text',
+          latencyMs: Date.now() - runStartedAtMs, inputToTextMs: Date.now() - inputReceivedAtMs,
+          queueMs: Math.max(0, runStartedAtMs - inputReceivedAtMs) }, 'Gateway first response text ready');
+      }
       if (taskRun) captureTaskEvent(event);
       if (channel === 'webchat') {
         publishRealtime(`run:${runId}`, event.type, event);

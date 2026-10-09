@@ -1,7 +1,17 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const latencyLogs = vi.hoisted(() => ({ info: vi.fn() }));
+vi.mock('../../../utils/logger.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../utils/logger.js')>();
+  return { ...actual, createLogger: (prefix: string) => {
+    const logger = actual.createLogger(prefix);
+    if (prefix === 'Gateway:Service') logger.info = latencyLogs.info;
+    return logger;
+  } };
+});
 
 import {
   closeXopcDatabase,
@@ -15,6 +25,7 @@ describe('runGatewayAgent', () => {
   let stateDir: string;
 
   beforeEach(() => {
+    latencyLogs.info.mockClear();
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-gateway-agent-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
@@ -214,10 +225,15 @@ describe('runGatewayAgent', () => {
       { type: 'system', source: 'internal' },
       undefined,
       undefined,
-      { runId: 'run-terminal' },
+      { runId: 'run-terminal', inputReceivedAtMs: Date.now() - 1000 },
     )) {
       // Drain the run.
     }
+    const firstTextLogs = latencyLogs.info.mock.calls.filter(([, message]) => message === 'Gateway first response text ready');
+    expect(firstTextLogs).toHaveLength(1);
+    expect(firstTextLogs[0]![0]).toMatchObject({ conversationId, runId: 'run-terminal', phase: 'first_response_text' });
+    expect(firstTextLogs[0]![0].inputToTextMs).toBeGreaterThanOrEqual(1000);
+    expect(firstTextLogs[0]![0].queueMs).toBeGreaterThanOrEqual(1000);
 
     expect(emitted.filter((event) => event.type === 'agent.run.ended')).toEqual([{
       type: 'agent.run.ended',

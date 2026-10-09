@@ -134,6 +134,10 @@ export class AgentCatalogRepository {
     });
   }
 
+  getRevision(): number {
+    return (getSqliteDatabase().prepare('SELECT revision FROM agent_catalog_settings WHERE singleton_id = 1').get() as { revision: number }).revision;
+  }
+
   getSettings(): AgentCatalogSettings {
     return requireSettings();
   }

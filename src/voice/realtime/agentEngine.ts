@@ -38,6 +38,9 @@ interface ActiveVoiceResponse {
   queuedSpeechCharacters: number;
   startedAt: number;
   firstTextSeen: boolean;
+  inputReceivedAtMs: number;
+  turnCommittedAtMs: number;
+  firstTextAtMs?: number;
   awaitingClarification: boolean;
   taskId?: string;
   taskDone: boolean;
@@ -75,11 +78,14 @@ export function createAgentVoiceEngine(options: {
   let recentPlayback: { responseId: string; text: string; expiresAt: number } | undefined;
   const echoCandidates = new PlaybackEchoCandidates();
   const finalizedUtterances = new Set<string>();
-  let pendingTurn: { turnId: string; text: string; cancelled: boolean } | undefined;
+  let pendingTurn: { turnId: string; text: string; cancelled: boolean; receivedAtMs: number; committedAtMs: number } | undefined;
+  let turnReceivedAtMs: number | undefined;
   let taskUpdateQueued = false;
   let lastUserSpeechAt = 0;
   const turn = new TurnCoordinator(claim.silenceDurationMs, (text, decision, turnId) => {
     if (closed || muted) return;
+    const receivedAtMs = turnReceivedAtMs ?? Date.now();
+    turnReceivedAtMs = undefined;
     log.info({ sessionId: claim.sessionId, turnId, disposition: decision.disposition, confidence: decision.confidence,
       source: decision.source, transcriptCharacters: text.length }, 'Realtime voice turn committed');
     send('turn.decision', { turnId, disposition: decision.disposition, confidence: decision.confidence, source: decision.source, committed: true });
@@ -91,11 +97,11 @@ export function createAgentVoiceEngine(options: {
     }
     queuedTurns += 1;
     const generation = inputGeneration;
-    const pending = { turnId, text, cancelled: false };
+    const pending = { turnId, text, cancelled: false, receivedAtMs, committedAtMs: Date.now() };
     pendingTurn = pending;
     conversationTail = conversationTail.then(() => {
       if (pendingTurn === pending) pendingTurn = undefined;
-      if (generation === inputGeneration && !pending.cancelled) return runAssistantTurn(text, turnId).then(() => {});
+      if (generation === inputGeneration && !pending.cancelled) return runAssistantTurn(text, turnId, undefined, pending.receivedAtMs, pending.committedAtMs).then(() => {});
     }).finally(() => { if (generation === inputGeneration) queuedTurns -= 1; });
   });
   function cancelActiveResponse(reason: 'barge_in' | 'client_cancelled' | 'session_closed'): boolean {
@@ -163,7 +169,11 @@ export function createAgentVoiceEngine(options: {
           log.info({
             sessionId: claim.sessionId,
             responseId: response.id,
+            conversationId: claim.request.conversationId,
+            phase: 'first_response_audio',
             latencyMs: Date.now() - response.startedAt,
+            inputToAudioMs: Date.now() - response.inputReceivedAtMs,
+            textToAudioMs: response.firstTextAtMs === undefined ? undefined : Date.now() - response.firstTextAtMs,
           }, 'Realtime voice first audio ready');
           send('response.audio.started', {
             responseId: response.id,
@@ -256,7 +266,7 @@ export function createAgentVoiceEngine(options: {
     else startSpeechWorker(response);
   }
 
-  async function runAssistantTurn(text: string, turnId: string, updateClientMessageId?: string): Promise<boolean> {
+  async function runAssistantTurn(text: string, turnId: string, updateClientMessageId?: string, receivedAtMs = Date.now(), committedAtMs = receivedAtMs): Promise<boolean> {
     if (!claim.tts || !claim.request.conversationId || !text.trim() || closed) return false;
     cancelActiveResponse('barge_in');
     const response: ActiveVoiceResponse = {
@@ -274,6 +284,8 @@ export function createAgentVoiceEngine(options: {
       speechQueue: [],
       queuedSpeechCharacters: 0,
       startedAt: Date.now(),
+      inputReceivedAtMs: receivedAtMs,
+      turnCommittedAtMs: committedAtMs,
       firstTextSeen: false,
       awaitingClarification: false,
       taskDone: false,
@@ -300,12 +312,18 @@ export function createAgentVoiceEngine(options: {
         }
         if (event.type === 'assistant_delta' && typeof event.payload?.delta === 'string') {
           if (response.text.length + event.payload.delta.length > 32_000) throw new Error('Voice response text limit reached');
-          if (!response.firstTextSeen) {
+          if (!response.firstTextSeen && event.payload.delta.trim()) {
             response.firstTextSeen = true;
+            response.firstTextAtMs = Date.now();
             log.info({
               sessionId: claim.sessionId,
               responseId: response.id,
+              conversationId: claim.request.conversationId,
+              phase: 'first_response_text',
               latencyMs: Date.now() - response.startedAt,
+              inputToTextMs: Date.now() - response.inputReceivedAtMs,
+              turnDecisionMs: Math.max(0, response.turnCommittedAtMs - response.inputReceivedAtMs),
+              queueMs: Math.max(0, response.startedAt - response.turnCommittedAtMs),
             }, 'Realtime voice first response text ready');
           }
           response.text += event.payload.delta;
@@ -420,6 +438,7 @@ export function createAgentVoiceEngine(options: {
   }
 
   function bufferFinal(utteranceId: string, text: string): void {
+    if (text && (turnReceivedAtMs === undefined || turn.isIdle())) turnReceivedAtMs = Date.now();
     try { turn.final(utteranceId, text); } catch (error) {
       log.warn({ err: error, sessionId: claim.sessionId, utteranceId }, 'Realtime voice turn exceeded the input limit');
       send('session.error', { code: 'INPUT_BACKPRESSURE', message: 'Voice turn input limit reached; please repeat the request', recoverable: true });
@@ -446,6 +465,7 @@ export function createAgentVoiceEngine(options: {
         if (pendingTurn) {
           pendingTurn.cancelled = true;
           turn.restore(pendingTurn.turnId, pendingTurn.text);
+          turnReceivedAtMs = pendingTurn.receivedAtMs;
           pendingTurn = undefined;
         }
         turn.start(event.utteranceId);
@@ -512,6 +532,7 @@ export function createAgentVoiceEngine(options: {
     turn.reset();
     echoCandidates.clear();
     pendingTurn = undefined;
+    turnReceivedAtMs = undefined;
     inputGeneration += 1;
     queuedTurns = 0;
     bufferedAudio = [];

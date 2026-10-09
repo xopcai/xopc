@@ -14,6 +14,7 @@ import type { Model, Api } from '@earendil-works/pi-ai';
 import { BROWSER_CONTROL_ENDPOINT_TOOL_NAME } from '@xopcai/browser-control-contract';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import type { Config } from '../../config/schema.js';
+import { PERSONAL_TOOL_DESCRIPTIONS } from '../../personal-agent/policy.js';
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { ExtensionRegistry } from '../../extensions/types/index.js';
@@ -46,9 +47,11 @@ import {
   createReadMediaTool,
   createCreateShareTool,
   isShareToolAvailable,
+  createUserContextReadTool,
   createUserContextSearchTool,
   createUserContextGetTool,
   createUserContextUpdateTool,
+  createKnowledgeReadTool,
   createKnowledgeSearchTool,
   createKnowledgeGetTool,
   createKnowledgeWriteTool,
@@ -550,6 +553,13 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
+      ...(personalToolsConfigured || allowed?.has('user_context_read') ? [createUserContextReadTool({
+        agentId: resolvedAgentId,
+        workspaceId: workspace,
+        getSessionId: currentConversationId,
+        getProjectId: currentProjectId,
+        canRead: () => currentAccess().userModel,
+      }, command => !disabled?.has(`user_context_${command}`) && (!isXopcDatabaseOpen() || resolveEffectiveAgentConfigForAgent(resolvedAgentId).config.tools[`user_context_${command}`]?.mode !== 'deny'))] : []),
       createUserContextSearchTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
@@ -576,6 +586,16 @@ export class AgentToolsFactory {
           return conversationId ? getPendingTranscriptUserText(conversationId) : undefined;
         },
       }),
+      ...(personalToolsConfigured || allowed?.has('knowledge_read') ? [createKnowledgeReadTool({
+        agentId: resolvedAgentId,
+        workspaceId: workspace,
+        getSessionId: currentConversationId,
+        getProjectId: currentProjectId,
+        canRead: () => currentAccess().knowledge,
+        canWrite: () => currentAccess().knowledge,
+        getWritePolicy: knowledgeWritePolicy,
+        getReadPolicy: () => currentAccess().knowledgePolicy,
+      }, command => !disabled?.has(`knowledge_${command}`) && (!isXopcDatabaseOpen() || resolveEffectiveAgentConfigForAgent(resolvedAgentId).config.tools[`knowledge_${command}`]?.mode !== 'deny'))] : []),
       createKnowledgeSearchTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
@@ -766,7 +786,10 @@ export class AgentToolsFactory {
         allowHostGit: () => getCommandIsolation()?.mode !== 'docker',
       }));
     }
-    return filterToolsByDisabledSet(core, disabled).filter((tool) => !allowed || allowed.has(tool.name));
+    return filterToolsByDisabledSet(core, disabled)
+      .filter(tool => (!allowed || allowed.has(tool.name)) && !(personalToolsConfigured && tool.name === 'clarify'))
+      .map(tool => personalToolsConfigured && PERSONAL_TOOL_DESCRIPTIONS[tool.name]
+        ? { ...tool, description: PERSONAL_TOOL_DESCRIPTIONS[tool.name] } : tool);
   }
 
   createCapabilityTools(
