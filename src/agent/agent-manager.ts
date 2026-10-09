@@ -474,6 +474,7 @@ export class AgentManager implements AgentInstanceGateway {
       getPrimaryModel: () => this.resolveModelStringToModel(this.pickDefaultModelRef()),
       getMemoryManager: () => this.getCurrentWorkspaceRuntime().memoryManager,
       getSkillManager: () => this.getCurrentWorkspaceRuntime().skillManager,
+      getAgentSkillAvailability: (agentId) => this.getAgentSkillAvailability(agentId),
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
       getAutomationService: this.config.getAutomationService,
@@ -629,7 +630,7 @@ export class AgentManager implements AgentInstanceGateway {
   prepareSkillTurn(conversationId: string, text: string): PreparedSkillTurn {
     this.getOrCreateAgent(conversationId);
     const inst = this.agents.get(conversationId);
-    if (!text.includes('/skill:')) {
+    if (isPersonalConversation(conversationId) || !text.includes('/skill:')) {
       return {
         text,
         activatedCapabilityNames: this.activeCapabilityNames(inst),

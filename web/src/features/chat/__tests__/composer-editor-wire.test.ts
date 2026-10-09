@@ -14,6 +14,7 @@ import {
   removeTrailingSkillTokenBeforeCaret,
   serializeEditorToWire,
 } from '@/features/chat/composer/composer-editor-wire';
+import { PERSONAL_COMPOSER_CAPABILITIES } from '@/features/chat/composer/composer-capabilities';
 import { refreshSlashCommandWireIndex } from '@/features/chat/palette/slash-command-wire';
 
 describe('removeSkillTokenAtOrBeforeCaret', () => {
@@ -259,5 +260,22 @@ describe('composer selection and atomic deletion', () => {
     expect(selection.anchorOffset).toBe(offset);
     applyWireToEditor(root, '/skill:summarize ');
     expect(root.querySelector('[data-skill]')?.textContent).toBe('/内容摘要');
+  });
+});
+
+describe('Personal AI plain slash input', () => {
+  it('renders commands and Skills as editable text while preserving reference pills', () => {
+    refreshSlashCommandWireIndex([{ name: 'new', aliases: [], acceptsArgs: false } as unknown as CommandEntry]);
+    const root = document.createElement('div');
+    document.body.append(root);
+    const text = `/new /skill:weather ${contextRefWireToken('ref-1')}`;
+    applyWireToEditor(root, text, undefined, PERSONAL_COMPOSER_CAPABILITIES);
+    expect(root.querySelector('[data-slash-command], [data-skill]')).toBeNull();
+    expect(root.querySelector('[data-context-ref-id]')).not.toBeNull();
+    expect(serializeEditorToWire(root)).toBe(text);
+    applyWireToEditor(root, '/new', 4);
+    expect(handleComposerBackspace(root)).toBe(false);
+    expect(serializeEditorToWire(root)).toBe('/new');
+    root.remove();
   });
 });
