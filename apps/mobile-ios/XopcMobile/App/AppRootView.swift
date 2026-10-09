@@ -124,18 +124,7 @@ struct AppRootView: View {
                         personalAgent: personalAgent.record,
                         personalAgentLoading: personalAgent.isLoading || personalAgent.isOpening,
                         personalAgentError: personalAgent.errorMessage,
-                        onOpenPersonalAgent: {
-                            Task {
-                                let configuration = appState.gatewayConfiguration
-                                guard let record = await personalAgent.open(using: configuration),
-                                      configuration == appState.gatewayConfiguration else { return }
-                                appState.openConversation(
-                                    id: record.conversationId,
-                                    title: record.displayName,
-                                    agentId: record.agentId
-                                )
-                            }
-                        },
+                        onOpenPersonalAgent: openPersonalAgent,
                         onOpenSettings: { settingsPresented = true },
                         bottomInset: secondaryDockHeight + 24
                     )
@@ -177,6 +166,11 @@ struct AppRootView: View {
                     ProfileView(
                         configuration: appState.gatewayConfiguration,
                         onOpenGatewaySettings: { settingsPresented = true },
+                        personalAgent: personalAgent.record,
+                        personalAgentLoading: personalAgent.isLoading || personalAgent.isOpening,
+                        personalAgentError: personalAgent.errorMessage,
+                        onOpenPersonalAgent: openPersonalAgent,
+                        onPersonalAgentUpdated: personalAgent.applyProfile,
                         bottomInset: secondaryDockHeight + 24
                     )
                 }
@@ -189,9 +183,18 @@ struct AppRootView: View {
             await personalAgent.refresh(using: appState.gatewayConfiguration)
         }
         .onChange(of: appState.selectedTab) {
-            if appState.selectedTab == .conversations {
+            if appState.selectedTab == .conversations || appState.selectedTab == .profile {
                 Task { await personalAgent.refresh(using: appState.gatewayConfiguration) }
             }
+        }
+    }
+
+    private func openPersonalAgent() {
+        Task {
+            let configuration = appState.gatewayConfiguration
+            guard let record = await personalAgent.open(using: configuration),
+                  configuration == appState.gatewayConfiguration else { return }
+            appState.openConversation(id: record.conversationId, title: record.displayName, agentId: record.agentId)
         }
     }
 
@@ -349,6 +352,7 @@ private struct LoopiPose {
 private struct LoopiMotionKey: Hashable {
     let active: Bool
     let compact: Bool
+    let working: Bool
     let greeting: Int
 }
 
@@ -356,6 +360,7 @@ struct LoopiIcon: View {
     let size: CGFloat
     let active: Bool
     var compact = false
+    var working = false
     var interactive = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -385,7 +390,7 @@ struct LoopiIcon: View {
                     .accessibilityHidden(true)
             }
         }
-        .task(id: LoopiMotionKey(active: motionActive, compact: compact, greeting: greeting)) {
+        .task(id: LoopiMotionKey(active: motionActive, compact: compact, working: working, greeting: greeting)) {
             await runMotion()
         }
     }
@@ -413,6 +418,7 @@ struct LoopiIcon: View {
             .offset(y: pose.lift * size / 200)
         }
         .frame(width: size, height: size)
+        .scaleEffect(working ? 1 - pose.lift / 100 : 1)
         .contentShape(.circle)
     }
 
@@ -436,6 +442,17 @@ struct LoopiIcon: View {
         pose = LoopiPose()
         guard motionActive else { return }
 
+        if compact, working {
+            while !Task.isCancelled {
+                move(to: LoopiPose(lift: -6), duration: 0.8)
+                guard await pause(850) else { return }
+                move(to: LoopiPose(lift: -4, eyeOpen: 0.12), duration: 0.11)
+                guard await pause(140) else { return }
+                move(to: LoopiPose(), duration: 0.8)
+                guard await pause(900) else { return }
+            }
+            return
+        }
         if compact {
             guard await pause(120) else { return }
             move(to: LoopiPose(lift: -2), duration: 0.22)
