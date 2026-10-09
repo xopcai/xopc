@@ -381,7 +381,10 @@ export class MessageSender {
     if (replaceTurnId && appContext) throw new Error('Application context requires a new input');
     const capturedContext = appContext === undefined ? undefined : parseAppContextEnvelope(appContext);
     attachments = attachments === undefined ? undefined : structuredClone(attachments);
-    contextRefs = contextRefs === undefined ? undefined : structuredClone(contextRefs);
+    // Composer references carry display metadata that the strict input protocol rejects.
+    contextRefs = contextRefs?.map(({ refId, kind, sourceId, expectedVersion }) => ({
+      refId, kind, sourceId, expectedVersion,
+    }));
     this._trackedRunId = undefined;
     const controller = new AbortController();
     this._abort = controller;

@@ -8,6 +8,7 @@ import {
   type AtMentionItem,
   type AtMentionItemKind,
 } from '@/features/chat/palette/at-mention-api';
+import { CHAT_COMPOSER_CAPABILITIES, type ComposerCapabilities } from '@/features/chat/composer/composer-capabilities';
 import { getRecentAtPaths } from '@/features/chat/palette/at-mention-recent';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -110,6 +111,7 @@ export function useAtMentionPicker(
   options: {
     conversationId: string | null;
     currentAgentId?: string;
+    capabilities?: Readonly<ComposerCapabilities>;
     slashPaletteOpen: boolean;
     isComposing?: boolean;
     selectedContextKeys?: ReadonlySet<string>;
@@ -118,6 +120,7 @@ export function useAtMentionPicker(
     precomputedAtRange?: AtRange | null;
   },
 ) {
+  const capabilities = options.capabilities ?? CHAT_COMPOSER_CAPABILITIES;
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [providerState, setProviderState] = useState<ProviderState>(() => emptyProviderState(false));
   const requestGeneration = useRef(0);
@@ -223,7 +226,7 @@ export function useAtMentionPicker(
     }
 
     setProviderState(emptyProviderState(true));
-    for (const provider of atMentionProviders) {
+    for (const provider of atMentionProviders.filter(provider => (provider.kind !== 'skill' || capabilities.skills) && (provider.kind !== 'agent' || capabilities.agentSwitch))) {
       void provider.search(debouncedQuery, context)
         .then((items) => {
           if (requestGeneration.current !== generation) return;
@@ -251,12 +254,14 @@ export function useAtMentionPicker(
     options.currentAgentId,
     options.prepareSession,
     selectedContextKeysKey,
+    capabilities.skills,
+    capabilities.agentSwitch,
   ]);
 
-  const sections = useMemo<AtMentionSection[]>(() => PROVIDER_ORDER.map((kind) => ({
+  const sections = useMemo<AtMentionSection[]>(() => PROVIDER_ORDER.filter(kind => (kind !== 'skill' || capabilities.skills) && (kind !== 'agent' || capabilities.agentSwitch)).map((kind) => ({
     kind,
     ...providerState[kind],
-  })), [providerState]);
+  })), [providerState, capabilities.skills, capabilities.agentSwitch]);
   const items = pickerActive ? sections.flatMap((section) => section.items) : [];
   const loading = pickerActive && sections.some((section) => section.loading);
   const errors = sections.flatMap((section) => section.error ? [section.error] : []);

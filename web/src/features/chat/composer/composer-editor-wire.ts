@@ -17,6 +17,10 @@ import {
   skillWireTokenRe,
 } from '@/features/chat/palette/skill-wire-pattern';
 
+import { CHAT_COMPOSER_CAPABILITIES, type ComposerCapabilities } from './composer-capabilities';
+
+const editorCapabilities = new WeakMap<HTMLElement, Readonly<ComposerCapabilities>>();
+
 const ZWSP = '\u200b';
 const CARET_PROBE = '\u2060';
 
@@ -249,7 +253,7 @@ function appendSlashCommandPill(root: HTMLElement, matchedKey: string): void {
   root.appendChild(document.createTextNode(ZWSP));
 }
 
-function collectWireTokenRanges(wire: string): Array<{ start: number; end: number }> {
+function collectWireTokenRanges(wire: string, capabilities = CHAT_COMPOSER_CAPABILITIES): Array<{ start: number; end: number }> {
   const ranges: Array<{ start: number; end: number }> = [];
   const pushAll = (re: RegExp) => {
     let m: RegExpExecArray | null;
@@ -258,17 +262,17 @@ function collectWireTokenRanges(wire: string): Array<{ start: number; end: numbe
       ranges.push({ start: m.index, end: m.index + m[0].length });
     }
   };
-  pushAll(skillWireTokenRe());
+  if (capabilities.skills) pushAll(skillWireTokenRe());
   pushAll(contextRefWireTokenRe());
-  for (const r of collectSlashCommandWireRanges(wire)) {
+  for (const r of capabilities.commands ? collectSlashCommandWireRanges(wire) : []) {
     ranges.push(r);
   }
   ranges.sort((a, b) => a.start - b.start);
   return ranges;
 }
 
-export function removeSkillTokenAtOrBeforeCaret(wire: string, caret: number): { wire: string; caret: number } | null {
-  for (const { start, end } of collectWireTokenRanges(wire)) {
+export function removeSkillTokenAtOrBeforeCaret(wire: string, caret: number, capabilities = CHAT_COMPOSER_CAPABILITIES): { wire: string; caret: number } | null {
+  for (const { start, end } of collectWireTokenRanges(wire, capabilities)) {
     if (caret > start && caret <= end) {
       return { wire: wire.slice(0, start) + wire.slice(end), caret: start };
     }
@@ -276,7 +280,7 @@ export function removeSkillTokenAtOrBeforeCaret(wire: string, caret: number): { 
   return null;
 }
 
-export function removeTrailingSkillTokenBeforeCaret(wire: string, caret: number): { wire: string; caret: number } | null {
+export function removeTrailingSkillTokenBeforeCaret(wire: string, caret: number, capabilities = CHAT_COMPOSER_CAPABILITIES): { wire: string; caret: number } | null {
   if (caret <= 0) {
     return null;
   }
@@ -292,20 +296,20 @@ export function removeTrailingSkillTokenBeforeCaret(wire: string, caret: number)
     return null;
   };
 
-  const plainMatchers = [SKILL_WIRE_TRAILING_PLAIN_RE];
+  const plainMatchers = capabilities.skills ? [SKILL_WIRE_TRAILING_PLAIN_RE] : [];
   for (const re of plainMatchers) {
     const hit = tryPlain(re);
     if (hit) return hit;
   }
 
-  const cmdPlain = slashCommandPlainSuffixAtEnd(head);
+  const cmdPlain = capabilities.commands ? slashCommandPlainSuffixAtEnd(head) : null;
   if (cmdPlain) {
     const start = cmdPlain.tokenStart;
     return { wire: wire.slice(0, start) + wire.slice(caret), caret: start };
   }
 
   if (caret === wire.length) {
-    const eowMatchers = [SKILL_WIRE_TRAILING_EOW_WS_RE];
+    const eowMatchers = capabilities.skills ? [SKILL_WIRE_TRAILING_EOW_WS_RE] : [];
     for (const re of eowMatchers) {
       const m = head.match(re);
       if (m?.[1]) {
@@ -314,7 +318,7 @@ export function removeTrailingSkillTokenBeforeCaret(wire: string, caret: number)
         return { wire: wire.slice(0, start) + wire.slice(caret), caret: start };
       }
     }
-    const cmdEow = slashCommandEowSuffixAtEnd(head);
+    const cmdEow = capabilities.commands ? slashCommandEowSuffixAtEnd(head) : null;
     if (cmdEow) {
       const start = cmdEow.tokenStart;
       return { wire: wire.slice(0, start) + wire.slice(caret), caret: start };
@@ -343,9 +347,10 @@ export function handleComposerBackspace(root: HTMLElement): boolean {
     caret = wire.length;
   }
 
-  let cut = removeSkillTokenAtOrBeforeCaret(wire, caret);
+  const capabilities = editorCapabilities.get(root) ?? CHAT_COMPOSER_CAPABILITIES;
+  let cut = removeSkillTokenAtOrBeforeCaret(wire, caret, capabilities);
   if (!cut) {
-    cut = removeTrailingSkillTokenBeforeCaret(wire, caret);
+    cut = removeTrailingSkillTokenBeforeCaret(wire, caret, capabilities);
   }
   if (!cut) {
     return false;
@@ -355,21 +360,22 @@ export function handleComposerBackspace(root: HTMLElement): boolean {
   return true;
 }
 
-function wireTokenMayStartAt(w: string, j: number): boolean {
+function wireTokenMayStartAt(w: string, j: number, capabilities: Readonly<ComposerCapabilities>): boolean {
   const tail = w.slice(j);
-  if (SKILL_HEAD_RE.test(tail)) return true;
+  if (capabilities.skills && SKILL_HEAD_RE.test(tail)) return true;
   const refRe = contextRefWireTokenRe();
   if (refRe.exec(tail)?.index === 0) return true;
-  return trySlashCommandTokenAt(w, j) != null;
+  return capabilities.commands && trySlashCommandTokenAt(w, j) != null;
 }
 
 function consumeNextToken(root: HTMLElement, w: string, i: number): number {
+  const capabilities = editorCapabilities.get(root) ?? CHAT_COMPOSER_CAPABILITIES;
   const rest = w.slice(i);
   type Cand = { len: number; apply: () => void };
   const cands: Cand[] = [];
 
   const skillM = rest.match(SKILL_HEAD_RE);
-  if (skillM?.[0]) {
+  if (capabilities.skills && skillM?.[0]) {
     cands.push({
       len: skillM[0].length,
       apply: () => appendSkillPill(root, skillM[1] ?? ''),
@@ -383,7 +389,7 @@ function consumeNextToken(root: HTMLElement, w: string, i: number): number {
       apply: () => appendContextRefPill(root, refM[1] ?? ''),
     });
   }
-  const cmdHit = trySlashCommandTokenAt(w, i);
+  const cmdHit = capabilities.commands ? trySlashCommandTokenAt(w, i) : null;
   if (cmdHit) {
     cands.push({
       len: cmdHit.len,
@@ -394,7 +400,7 @@ function consumeNextToken(root: HTMLElement, w: string, i: number): number {
   if (cands.length === 0) {
     let j = i + 1;
     while (j < w.length) {
-      if (wireTokenMayStartAt(w, j)) break;
+      if (wireTokenMayStartAt(w, j, capabilities)) break;
       j += 1;
     }
     const chunk = w.slice(i, j);
@@ -407,7 +413,8 @@ function consumeNextToken(root: HTMLElement, w: string, i: number): number {
   return i + cands[0].len;
 }
 
-export function applyWireToEditor(root: HTMLElement, wire: string, caretWireOffset?: number): void {
+export function applyWireToEditor(root: HTMLElement, wire: string, caretWireOffset?: number, capabilities?: Readonly<ComposerCapabilities>): void {
+  if (capabilities) editorCapabilities.set(root, capabilities);
   root.replaceChildren();
 
   let w = wire;

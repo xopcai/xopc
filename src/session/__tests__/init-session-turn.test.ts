@@ -1,8 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
+import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { initSessionTurn } from '../init-session-turn.js';
 import type { Config } from '../../config/schema.js';
 import { SessionStatus, type SessionMetadata } from '../types.js';
+
+vi.mock('../../personal-agent/repository.js', () => ({ isPersonalConversation: vi.fn(() => false) }));
 
 vi.mock('../../storage/sqlite/index.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../storage/sqlite/index.js')>();
@@ -61,7 +64,21 @@ function mockExistingEntry(sessionStartedAt: number) {
 
 describe('initSessionTurn', () => {
   beforeEach(() => {
+    vi.mocked(isPersonalConversation).mockReturnValue(false);
     vi.mocked(getSessionMetadata).mockReturnValue(null);
+  });
+
+  it('preserves the Personal AI transcript and reset text even when stale', async () => {
+    mockExistingEntry(Date.now() - 7 * 24 * 3600_000);
+    vi.mocked(isPersonalConversation).mockReturnValue(true);
+    const resetSession = vi.fn();
+    for (const body of ['/new', '/new keep this request', 'Continue']) {
+      const result = await initSessionTurn({ cfg: baseCfg, conversationId, body, resetSession });
+      expect(result).toMatchObject({ transcriptId: 'old-id', isNewSession: false,
+        resetTriggered: false, staleRollover: false, bareReset: false, bodyStripped: body });
+      expect(result.ackMessage).toBeUndefined();
+    }
+    expect(resetSession).not.toHaveBeenCalled();
   });
 
   it('calls resetSession on explicit /new trigger when session exists', async () => {

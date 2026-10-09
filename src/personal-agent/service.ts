@@ -75,6 +75,8 @@ const LARGE_READ_RULE = 'When an attachment is marked large, or a local read ret
 const FAST_CONVERSATION_RULE = 'Keep ordinary conversation flowing. For missing information, ask one short question directly in your reply and finish the turn; accept the next typed or spoken answer normally. Never use clarify or a blocking form for ordinary questions. Formal authorization for consequential actions still uses the host approval flow. Before tool discovery or delegation for lengthy work, immediately say one brief sentence describing your intent, then call the tools. Do not claim work has started or succeeded until confirmed. After successful delegation, finish without repeating an acknowledgement already given; report any failure or required action.';
 
 const USER_NAME_RULE = "Use the user's preferred name from their shared user profile when a name fits naturally.";
+const EXPLICIT_DELEGATION_RULE = 'When the user names a specialist Agent, preserve that choice and verify its availability before creating the Task; explain any blocker instead of silently substituting another Agent. When the user explicitly requests a Skill, call personal_task(command="agents", requiredSkills=[canonicalName]) to verify specialist access, then pass the same requiredSkills to create with the full objective and original materials. If verification is unavailable or no Agent can use it, explain the specific blocker. Never claim a Skill was used merely because the Task was created.';
+
 const CONNECTED_APP_RULE = 'For read-only connected-app requests such as Gmail, first call personal_capability with the app or capability. Then use personal_request(command="submit") with the exact connectorId and specialist agentId returned, the full objective, and any absolute time range. This keeps connection and account selection in the main chat and automatically starts the worker after authorization. Return promptly after the tool confirms submission. Never claim mail was read before verified results arrive. If no executor is available, explain that specific blocker. Use personal_request to inspect or cancel these requests; cancellation requires the user’s instruction.';
 const PREVIOUS_RESULT_DELIVERY_RULE = 'For image generation, find a specialist with image_generate. For user-facing files, require the specialist to publish completed files with publish_artifacts (image_generate already publishes its images). Put expected deliverables, input artifact references, and acceptance requirements in the Task brief. Once creation is confirmed, give one short acknowledgement and finish your turn; do not poll or wait for the worker. Published results are delivered automatically to this chat. Never recreate an artifact just to deliver it, and do not repeat its attachments in a later summary. For edits, include the selected previous artifact URI and requested changes in the new brief.';
 const RESULT_DELIVERY_RULE = 'For image generation, find a specialist with image_generate. For user-facing files, require the specialist to publish completed files with publish_artifacts (image_generate already publishes its images). Put expected deliverables, input artifact references, and acceptance requirements in the Task brief. Once creation is confirmed, finish your turn without repeating the earlier acknowledgement; do not poll or wait for the worker. Published results are delivered automatically to this chat. Never recreate an artifact just to deliver it, and do not repeat its attachments in a later summary. For edits, include the selected previous artifact URI and requested changes in the new brief.';
@@ -87,6 +89,7 @@ export function personalInstructions(preferences: PersonalPreferences): string {
     FAST_CONVERSATION_RULE,
     LARGE_READ_RULE,
     CONNECTED_APP_RULE,
+    EXPLICIT_DELEGATION_RULE,
     RESULT_DELIVERY_RULE,
     ...PERSONAL_COMMUNICATION_RULES,
     ...PERSONAL_RELIABILITY_RULES,
@@ -128,6 +131,7 @@ export async function refreshPersonalDelegationGuidance(service: PersonalAgentHo
   if (!nextInstructions.includes(LOCAL_READ_RULE)) nextInstructions += `\n${LOCAL_READ_RULE}`;
   if (!nextInstructions.includes(RESULT_DELIVERY_RULE)) nextInstructions += `\n${RESULT_DELIVERY_RULE}`;
   if (!nextInstructions.includes(CONNECTED_APP_RULE)) nextInstructions += `\n${CONNECTED_APP_RULE}`;
+  if (!nextInstructions.includes(EXPLICIT_DELEGATION_RULE)) nextInstructions += `\n${EXPLICIT_DELEGATION_RULE}`;
   for (const rule of [...PERSONAL_COMMUNICATION_RULES, ...PERSONAL_RELIABILITY_RULES, ...PERSONAL_REPLY_STYLE_RULES, PERSONAL_REPLY_EXAMPLES]) {
     if (!nextInstructions.includes(rule)) nextInstructions += `\n${rule}`;
   }

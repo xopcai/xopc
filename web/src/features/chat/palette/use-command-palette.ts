@@ -3,6 +3,7 @@ import { resolveSkillPresentation } from '@xopcai/composer-core/skill-localizati
 
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { listSkillNamesInWire } from '@/features/chat/composer/composer-editor-wire';
+import { CHAT_COMPOSER_CAPABILITIES, type ComposerCapabilities } from '@/features/chat/composer/composer-capabilities';
 import { ABORT_CLASS_NAMES } from '@/features/chat/composer/palette-item-handlers';
 import { fetchCommandsCached, getChatSkillsCached } from '@/features/chat/palette/command-palette-api';
 import {
@@ -182,6 +183,7 @@ export function buildPaletteSections(
     value: string;
     commandsAllowed: boolean;
     agentsAllowed: boolean;
+    skillsAllowed?: boolean;
   },
 ): { sections: PaletteSection[]; flatItems: PaletteItem[] } {
   const { query, value, commandsAllowed, agentsAllowed } = options;
@@ -192,6 +194,7 @@ export function buildPaletteSections(
   for (const item of allItems) {
     if (item.kind === 'command' && !commandsAllowed) continue;
     if (item.kind === 'agent' && !agentsAllowed) continue;
+    if (item.kind === 'skill' && options.skillsAllowed === false) continue;
     if (item.kind === 'skill' && alreadyPicked.has(item.canonicalName)) continue;
     if (item.kind === 'skill' && unfiltered && item.availability.status !== 'available') continue;
     const rank = paletteItemMatchRank(item, query);
@@ -225,6 +228,7 @@ export function useCommandPalette(
   cursor: number,
   options?: {
     suppress?: boolean;
+    capabilities?: Readonly<ComposerCapabilities>;
     isComposing?: boolean;
     currentAgentId?: string;
     conversationId?: string | null;
@@ -234,9 +238,11 @@ export function useCommandPalette(
   const [skillsVersion, setSkillsVersion] = useState(0);
   const language = useLocaleStore((s) => s.language);
 
+  const capabilities = options?.capabilities ?? CHAT_COMPOSER_CAPABILITIES;
+  const enabled = capabilities.commands || capabilities.skills || capabilities.agentSwitch;
   const slashRange = useMemo(
-    () => (options?.isComposing ? null : detectSlashRange(value, cursor)),
-    [value, cursor, options?.isComposing],
+    () => (!enabled || options?.isComposing ? null : detectSlashRange(value, cursor)),
+    [value, cursor, options?.isComposing, enabled],
   );
   const paletteActive = Boolean(slashRange && !options?.suppress);
 
@@ -333,13 +339,13 @@ export function useCommandPalette(
   const query = slashRange?.query ?? '';
 
   /** Slash commands only run when the token is at the start of the composer (`/new`). */
-  const commandsAllowed = slashRange !== null && slashRange.start === 0;
+  const commandsAllowed = capabilities.commands && slashRange !== null && slashRange.start === 0;
   /** Agents are sentence-level switches; only meaningful at the start of the composer. */
-  const agentsAllowed = commandsAllowed;
+  const agentsAllowed = capabilities.agentSwitch && slashRange !== null && slashRange.start === 0;
 
   const { sections, flatItems } = useMemo(
-    () => buildPaletteSections(allItems, { query, value, commandsAllowed, agentsAllowed }),
-    [allItems, commandsAllowed, agentsAllowed, query, value],
+    () => buildPaletteSections(allItems, { query, value, commandsAllowed, agentsAllowed, skillsAllowed: capabilities.skills }),
+    [allItems, commandsAllowed, agentsAllowed, capabilities.skills, query, value],
   );
 
   const selectionKey = slashRange ? query : '';

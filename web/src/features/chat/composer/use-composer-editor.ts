@@ -10,6 +10,7 @@ import {
 import type { ResetEditorOptions } from '@/features/chat/composer/composer.types';
 import { FILL_CHAT_COMPOSER_EVENT, type FillChatComposerDetail } from '@/features/chat/composer/fill-composer-dispatch';
 
+import { CHAT_COMPOSER_CAPABILITIES, type ComposerCapabilities } from './composer-capabilities';
 import { useSkillLabel } from '@/features/chat/palette/use-skill-label';
 
 const TEXTAREA_MAX_HEIGHT_PX = 128;
@@ -20,6 +21,7 @@ export function syncComposerPlaceholderClass(el: HTMLElement, wire: string): voi
 
 export interface UseComposerEditorOptions {
   disabled: boolean;
+  capabilities?: Readonly<ComposerCapabilities>;
   agentId?: string;
   conversationId?: string | null;
   /** Initial value for composer instances whose draft is owned by a parent store. */
@@ -67,7 +69,8 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     resolveContextRef,
   } = options;
 
-  const resolveSkillLabel = useSkillLabel(options.agentId, options.conversationId);
+  const capabilities = options.capabilities ?? CHAT_COMPOSER_CAPABILITIES;
+  const resolveSkillLabel = useSkillLabel(options.agentId, options.conversationId, capabilities.skills);
 
   const [value, setValue] = useState(initialValue);
   const [cursor, setCursor] = useState(initialValue.length);
@@ -108,10 +111,15 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     if (!el) return;
     initializedEditorRef.current = true;
     if (resolveContextRef) updateComposerContextRefLabels(el, resolveContextRef);
-    applyWireToEditor(el, initialValue, initialValue.length);
+    applyWireToEditor(el, initialValue, initialValue.length, capabilities);
     syncComposerPlaceholderClass(el, initialValue);
     adjustHeight();
-  }, [adjustHeight, initialValue, resolveContextRef]);
+  }, [adjustHeight, initialValue, resolveContextRef, capabilities]);
+
+  useLayoutEffect(() => {
+    const el = editorRef.current;
+    if (el) applyWireToEditor(el, valueRef.current, getWireCaretOffset(el), capabilities);
+  }, [capabilities]);
 
   const focusForExternalPaste = useCallback(() => {
     const el = editorRef.current;
@@ -132,8 +140,8 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
       return;
     }
 
-    applyWireToEditor(el, valueRef.current, cursorRef.current);
-  }, []);
+    applyWireToEditor(el, valueRef.current, cursorRef.current, capabilities);
+  }, [capabilities]);
 
   const resetEditor = useCallback(
     (opts?: ResetEditorOptions) => {
@@ -149,13 +157,13 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
 
       const el = editorRef.current;
       if (el) {
-        applyWireToEditor(el, nextText, caretOffset);
+        applyWireToEditor(el, nextText, caretOffset, capabilities);
         syncComposerPlaceholderClass(el, nextText);
         if (opts?.focus) el.focus({ preventScroll: true });
       }
       adjustHeight();
     },
-    [adjustHeight],
+    [adjustHeight, capabilities],
   );
 
   useEffect(() => {
