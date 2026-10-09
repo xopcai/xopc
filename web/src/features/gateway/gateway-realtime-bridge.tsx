@@ -5,6 +5,7 @@ import { clearChatSkillsCache, clearSkillPaletteCaches } from '@/features/chat/p
 import { clearConnectorPaletteCache } from '@/features/search/global-command-palette/connector-palette-api';
 import { startChatRunStateBridge } from '@/features/chat/session/chat-run-state-bridge';
 import { startAgentRunStreamEventBridge } from '@/features/gateway/agent-run-stream-event-bridge';
+import { isAgentCatalogCacheKey } from '@/features/gateway/agent-catalog-cache';
 import { configReloadSection } from '@/features/gateway/config-reload-event';
 import { useGatewayRealtime } from '@/features/gateway/use-gateway-realtime';
 import { subscribeRealtimeTopic } from '@/features/gateway/gateway-realtime';
@@ -12,22 +13,6 @@ import { createResourceChangeConsumer, isResourceCacheKey } from '@/features/gat
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
-
-const AGENT_CATALOG_CACHE_KEYS = new Set([
-  'automation-chat-agents',
-  'channel-routing-agents',
-  'gateway-chat-agents',
-  'picker-agents-list',
-  'settings-gateway-agents',
-  'setup-checklist-agents',
-  'workflow-agents',
-  'workflow-route-agents',
-]);
-
-export function isAgentCatalogCacheKey(key: unknown): boolean {
-  const root = Array.isArray(key) ? key[0] : key;
-  return typeof root === 'string' && AGENT_CATALOG_CACHE_KEYS.has(root);
-}
 
 export function GatewayRealtimeBridge() {
   useGatewayRealtime();

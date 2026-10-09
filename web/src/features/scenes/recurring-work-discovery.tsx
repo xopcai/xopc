@@ -8,22 +8,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getNote, listNotes } from '@/features/notes/notes-api';
 import { NoteMarkdownView } from '@/features/notes/note-markdown-view';
 import { messages } from '@/i18n/messages';
-import type { StoredLanguage } from '@/lib/storage';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { RECURRING_WORK_SPEC_TAG, recurringWorkStage } from './recurring-work-model';
+import { recurringWorkChatHref } from './recurring-work-chat-href';
 
 const PAGE_SIZE = 10;
-
-export function recurringWorkChatHref(language: StoredLanguage, noteId?: string, projectId?: string, intent: 'continue' | 'implement' = 'continue'): string {
-  const prompts = messages(language).recurringWork.prompts;
-  const request = (noteId ? prompts[intent] : prompts.start).replace('{noteId}', noteId ?? '');
-  const params = new URLSearchParams({ skill: 'design-recurring-work', draft: request, autoSend: '1' });
-  if (projectId?.trim()) params.set('projectId', projectId.trim());
-  else params.set('projectScope', 'none');
-  return `/chat/new?${params.toString()}`;
-}
 
 export function RecurringWorkDiscovery() {
   const language = useLocaleStore((state) => state.language);

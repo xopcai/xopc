@@ -8,17 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/api/registry-api';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import { fetchGlobalDefaults, updateGlobalDefaults, type GlobalDefaultsPayload } from '@/features/settings/global-defaults-api';
-
-export interface DefaultModelTarget {
-  providerId: string;
-  modelIds?: string[];
-}
-
-export function defaultModelCandidates(models: ConfiguredModel[], target: DefaultModelTarget) {
-  return models.filter(model => model.id.startsWith(`${target.providerId}/`)
-    && !model.computerUse
-    && (!target.modelIds || target.modelIds.includes(model.id.slice(target.providerId.length + 1))));
-}
+import { defaultModelCandidates, type DefaultModelTarget } from './default-model-candidates';
 
 /** Success content rendered inside the existing provider dialog. */
 export function DefaultModelSuccessStep({ target, zh, onDone }: {

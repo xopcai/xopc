@@ -705,17 +705,18 @@ export function SideChatConversation({
     editor.resetEditor({ nextText: text, focus: true });
   }, [editor.resetEditor]);
 
+  const currentPath = `${location.pathname}${location.search}`;
   const saveAssistantAsNote = useCallback(async (content: string) => {
     try {
       const note = await quickCapture(content.trim(), 'web');
       showComposerNotification('success', m.chat.messageSavedToNote, undefined, {
-        href: noteDetailHref(`${location.pathname}${location.search}`, note.id),
+        href: noteDetailHref(currentPath, note.id),
       });
     } catch (cause) {
       showComposerNotification('error', cause instanceof Error ? cause.message : m.notes.quickCaptureFailed);
       throw cause;
     }
-  }, [location.pathname, location.search, m.chat.messageSavedToNote, m.notes.quickCaptureFailed]);
+  }, [currentPath, m.chat.messageSavedToNote, m.notes.quickCaptureFailed]);
 
   const saveAsChat = useCallback(async () => {
     if (promotingRef.current || running || endedRef.current || messages.length === 0) return;
