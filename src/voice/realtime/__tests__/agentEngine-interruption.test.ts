@@ -106,8 +106,9 @@ describe('Agent voice interruption cleanup', () => {
     const textLog = mocks.info.mock.calls.find(([, message]) => message === 'Realtime voice first response text ready')?.[0];
     const audioLog = mocks.info.mock.calls.find(([, message]) => message === 'Realtime voice first audio ready')?.[0];
     expect(textLog).toMatchObject({ conversationId: 'chat', phase: 'first_response_text' });
-    expect(textLog.inputToTextMs).toBeGreaterThanOrEqual(350);
-    expect(textLog.turnDecisionMs).toBeGreaterThanOrEqual(350);
+    // The turn timer and latency timestamps sample Date.now() separately.
+    expect(textLog.inputToTextMs).toBeGreaterThanOrEqual(340);
+    expect(textLog.turnDecisionMs).toBeGreaterThanOrEqual(340);
     expect(textLog.queueMs).toBeGreaterThanOrEqual(0);
     expect(textLog.inputToTextMs).toBeGreaterThanOrEqual(textLog.latencyMs);
     expect(audioLog.inputToAudioMs).toBeGreaterThanOrEqual(textLog.inputToTextMs);
