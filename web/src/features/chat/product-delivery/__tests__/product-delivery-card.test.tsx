@@ -160,7 +160,7 @@ describe('AssistantResultTail product deliveries', () => {
 
     act(() => container.querySelector('button')?.click());
     expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
-      '/notes/note-1?returnTo=%2Fchat%2Fsession-1',
+      '/chat/session-1?note=note-1',
     );
   });
 

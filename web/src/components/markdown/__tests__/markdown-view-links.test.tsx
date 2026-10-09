@@ -22,19 +22,20 @@ afterEach(() => {
 
 function LocationProbe() {
   const location = useLocation();
-  return <output data-location>{location.pathname}</output>;
+  return <output data-location>{`${location.pathname}${location.search}`}</output>;
 }
 
 function renderMarkdown(
   content = '[Example](https://example.com)',
   onWorkspaceFileOpen?: (target: WorkspaceFileLinkTarget) => void,
+  initialEntry = '/',
 ): HTMLDivElement {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
   act(() => {
     root.render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <MarkdownView content={content} onWorkspaceFileOpen={onWorkspaceFileOpen} />
         <LocationProbe />
       </MemoryRouter>,
@@ -119,7 +120,32 @@ describe('MarkdownView links', () => {
     expect(anchor?.getAttribute('target')).toBeNull();
 
     act(() => anchor?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
-    expect(container.querySelector('[data-location]')?.textContent).toBe('/notes/note-1');
+    expect(container.querySelector('[data-location]')?.textContent).toBe('/notes/note-1?returnTo=%2F');
+  });
+
+  it.each(['xopc://open?kind=note&id=note-1', '/notes/note-1'])('previews a note link from chat: %s', (href) => {
+    const container = renderMarkdown(`[Note](${href})`, undefined, '/chat/session-1?view=full');
+    act(() => container.querySelector('a')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(container.querySelector('[data-location]')?.textContent).toBe('/chat/session-1?view=full&note=note-1');
+  });
+
+  it.each([
+    ['xopc://open?kind=project&id=p1', '/projects/p1'],
+    ['xopc://open?kind=automation&id=a1', '/automations?automation=a1'],
+    ['/workflows?run=r1&agent=coder', '/workflows/runs/r1?agentId=coder'],
+    ['xopc://open?kind=local_app&id=app1', '/local-apps/app1'],
+  ])('opens a product preview from chat: %s', (href, preview) => {
+    const container = renderMarkdown(`[Open](${href})`, undefined, '/chat/c1');
+    act(() => container.querySelector('a')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    const location = new URL(container.querySelector('[data-location]')!.textContent, 'https://xopc.local');
+    expect(location.pathname).toBe('/chat/c1');
+    expect(location.searchParams.get('preview')).toBe(preview);
+  });
+
+  it.each(['/settings/agent-browser', '/capabilities/skills', '/user-model', '/workflows/research/edit'])('keeps intentional page navigation from chat: %s', (href) => {
+    const container = renderMarkdown(`[Open](${href})`, undefined, '/chat/c1');
+    act(() => container.querySelector('a')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(container.querySelector('[data-location]')?.textContent).toBe(href);
   });
 
   it('uses the Electron bridge for external link clicks', async () => {
