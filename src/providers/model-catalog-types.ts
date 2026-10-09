@@ -26,15 +26,7 @@ export interface CatalogModel {
   priority?: number;
   tier?: string;
   bestEffort?: boolean;
-  imageGeneration?: {
-    maxCount: number;
-    sizes: string[];
-    aspectRatios?: string[];
-    qualities: Array<'low' | 'medium' | 'high' | 'auto'>;
-    formats: Array<'png' | 'jpeg' | 'webp'>;
-    backgrounds: Array<'transparent' | 'opaque' | 'auto'>;
-    maxInputImages: number;
-  };
+  imageGeneration?: import('../../packages/image-providers/src/types.js').ImageCapabilities;
   stt?: {
     inputFormats: string[];
     maxBytes: number;

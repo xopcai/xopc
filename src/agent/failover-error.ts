@@ -11,6 +11,8 @@
  * Step 1: pure model. Step 2 wires it into the new image-generation runtime.
  */
 
+import { ImageProviderError } from '@xopcai/image-providers';
+
 import { ProviderHttpError, isTimeoutAbortError } from '../media-shared/http/index.js';
 
 /**
@@ -34,7 +36,7 @@ export type FailoverReason =
 export interface FallbackAttempt {
   /** Provider id, e.g. "openai". */
   provider: string;
-  /** Model id, e.g. "gpt-image-2". */
+  /** Model id, e.g. "gpt-image-2.5-flare". */
   model: string;
   /** Short, human-readable failure summary. */
   error: string;
@@ -140,6 +142,7 @@ export function classifyAttemptError(e: unknown): {
   code?: string;
   message: string;
 } {
+  if (e instanceof ImageProviderError) return { reason: reasonFromHttpStatus(e.status), status: e.status, message: e.message };
   if (e instanceof ProviderHttpError) {
     return {
       reason: reasonFromHttpStatus(e.status),

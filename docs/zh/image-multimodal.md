@@ -18,6 +18,8 @@ xopc 可以理解聊天中附加的图片；配置兼容模型和凭据后，也
 4. 把模型分配给目标 Agent。
 5. 生成一张小型测试图片。
 
+目录包含 OpenAI、阿里百炼、MiniMax、Google、fal、Seedream、Ideogram、BFL、智谱、腾讯 TokenHub 和 Stability AI。参数严格按模型校验，不支持的尺寸和格式直接报错。退出目录的模型没有旧别名，升级后请重新选择当前型号。
+
 终端中使用 `xopc image status` 和 `xopc image providers` 查看可用性。
 
 ## 生成或编辑

@@ -14,8 +14,6 @@ import type { FallbackAttempt } from '../../failover-error.js';
 import type {
   GeneratedImageAsset,
   ImageGenerationBackground,
-  ImageGenerationIgnoredOverride,
-  ImageGenerationNormalization,
   ImageGenerationOutputFormat,
   ImageGenerationProvider,
   ImageGenerationProviderOptions,
@@ -25,7 +23,7 @@ import type {
 } from './types.js';
 
 export interface GenerateImageParams {
-  /** Active xopc config. Optional in Step 2 to keep tool-level callers compatible. */
+  /** Active xopc config. */
   cfg?: Config;
   prompt: string;
   agentId?: string;
@@ -55,8 +53,6 @@ export interface GenerateImageRuntimeResult {
   provider: string;
   model: string;
   attempts: FallbackAttempt[];
-  normalization?: ImageGenerationNormalization;
-  ignoredOverrides: ImageGenerationIgnoredOverride[];
   metadata?: Record<string, unknown>;
 }
 

@@ -1,3 +1,4 @@
+import { ImageProviderError } from '@xopcai/image-providers';
 import { describe, expect, it, vi } from 'vitest';
 
 import { isFailoverError } from '../../../failover-error.js';
@@ -22,7 +23,7 @@ function buildProviderMock(overrides: Partial<ImageGenerationProvider> & { id: s
 const baseModelConfig = { primary: 'mock/mock-default' };
 
 describe('generateImage runtime', () => {
-  it('returns provider/model/attempts on success and surfaces normalization metadata', async () => {
+  it('returns provider/model/attempts on success and provider metadata', async () => {
     const provider = buildProviderMock({
       id: 'mock',
       capabilities: {
@@ -45,7 +46,7 @@ describe('generateImage runtime', () => {
         agentId: 'studio',
         modelConfig: baseModelConfig,
         prompt: 'cat',
-        size: '1000x1000',
+        size: '1024x1024',
       },
       {
         getProvider: () => provider,
@@ -57,17 +58,14 @@ describe('generateImage runtime', () => {
     expect(result.model).toBe('mock-default');
     expect(result.images).toHaveLength(1);
     expect(result.attempts).toEqual([]);
-    expect(result.normalization?.size?.applied).toBe('1024x1024');
     expect(result.metadata?.providerId).toBe('mock');
-    expect(result.metadata?.normalization).toBeDefined();
-    expect(result.ignoredOverrides).toEqual([]);
   });
 
   it('records each candidate failure with provider/model/error/reason and walks fallbacks', async () => {
     const failing = buildProviderMock({
       id: 'failing',
       generateImage: vi.fn(async () => {
-        throw new Error('upstream 500');
+        throw new ImageProviderError('upstream 429', 429, true);
       }),
     });
     const succeeding = buildProviderMock({
@@ -97,7 +95,7 @@ describe('generateImage runtime', () => {
     expect(result.attempts[0]).toMatchObject({
       provider: 'failing',
       model: 'failing-default',
-      error: expect.stringContaining('upstream 500'),
+      error: expect.stringContaining('upstream 429'),
     });
     expect(result.attempts[0]?.reason).toBeDefined();
   });
@@ -106,7 +104,7 @@ describe('generateImage runtime', () => {
     const failing = buildProviderMock({
       id: 'failing',
       generateImage: vi.fn(async () => {
-        throw new Error('boom');
+        throw new ImageProviderError('boom', 401, true);
       }),
     });
 
