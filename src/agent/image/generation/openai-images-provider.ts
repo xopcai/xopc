@@ -1,5 +1,7 @@
 /** Strict implementation of the OpenAI Images REST protocol. */
 
+import { decodeBase64, imageFromBytes, ImageProviderError, validateImageRequest } from '@xopcai/image-providers';
+
 import { createLogger } from '../../../utils/logger.js';
 import {
   pickTimeoutMsOrFallback,
@@ -11,7 +13,6 @@ import {
 } from '../../../media-shared/http/index.js';
 import type { PrivateNetworkPolicy, SsrfGuardOptions } from '../../../media-shared/http/index.js';
 import {
-  imageAssetFromBase64,
   imageFileExtensionForMimeType,
 } from './image-assets.js';
 import type {
@@ -26,10 +27,8 @@ import type {
 
 const log = createLogger('ImageGen:OpenAIImages');
 
-const DEFAULT_OUTPUT_MIME = 'image/png';
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
-const MAX_IMAGE_BYTES = 32 * 1024 * 1024;
 const MAX_TOTAL_IMAGE_BYTES = 64 * 1024 * 1024;
 
 /** Subset of the official OpenAI image response we map. */
@@ -79,7 +78,7 @@ export interface OpenAiImagesProviderOptions {
   /** Default per-call timeout. Combined with provider-level config in provider-http. */
   defaultTimeoutMs?: number;
 
-  /** Default count clamp. Provider may also enforce via `capabilities.generate.maxCount`. */
+  /** Default image count. Provider may also enforce via `capabilities.generate.maxCount`. */
   defaultCount?: number;
   defaultSize?: string;
 }
@@ -87,9 +86,8 @@ export interface OpenAiImagesProviderOptions {
 export function createOpenAiImagesProvider(
   options: OpenAiImagesProviderOptions,
 ): ImageGenerationProvider {
-  const defaultMaxCount = options.capabilities.generate?.maxCount ?? 4;
   const defaultCount = options.defaultCount ?? 1;
-  const defaultSize = options.defaultSize ?? '1024x1024';
+  const defaultSize = options.defaultSize ?? options.capabilities.geometry?.sizes?.[0];
 
   return {
     id: options.id,
@@ -117,8 +115,12 @@ export function createOpenAiImagesProvider(
       );
 
       const isEdit = (req.inputImages?.length ?? 0) > 0;
-      const count = clampCount(req.count, defaultCount, defaultMaxCount);
-      const size = req.size?.trim() || defaultSize;
+      const count = req.count ?? defaultCount;
+      const size = req.size?.trim() || (req.aspectRatio || req.resolution || !options.capabilities.generate?.supportsSize ? undefined : defaultSize);
+      if (!options.models.includes(req.model)) throw new ImageProviderError(`Unsupported image model: ${req.model}`, 400);
+      validateImageRequest({ ...req, count, size, background: req.background ?? req.providerOptions?.openai?.background, openai: req.providerOptions?.openai,
+        inputImages: req.inputImages?.map((image, index) => ({ blob: new Blob([new Uint8Array(image.buffer)], { type: image.mimeType }), fileName: image.fileName ?? `input-${index}` })),
+      }, options.capabilities);
       const url = isEdit
         ? joinPath(endpoint.baseUrl, endpoint.editsPath ?? '/images/edits')
         : joinPath(endpoint.baseUrl, endpoint.generationsPath ?? '/images/generations');
@@ -156,7 +158,8 @@ export function createOpenAiImagesProvider(
             ssrfGuardOptions,
           });
 
-      const mapped = mapOpenAiImagesResponse(responseJson, req);
+      const mapped = mapOpenAiImagesResponse(responseJson, { ...req, count });
+      if (mapped.length > count) throw new ImageProviderError("Provider returned too many images", 502);
       if (mapped.length === 0) {
         throw new Error(`${options.id} returned no images.`);
       }
@@ -188,10 +191,10 @@ async function postGenerateRequest(params: PostHelperParams): Promise<unknown> {
     model: params.req.model,
     prompt: params.req.prompt,
     n: params.count,
-    size: params.size,
-    response_format: 'b64_json',
+    ...(params.size ? { size: params.size } : {}),
   };
   applyOpenAiOptions(body, params.req);
+  if (params.req.aspectRatio || params.req.resolution) body.xopc = { image: { aspectRatio: params.req.aspectRatio, resolution: params.req.resolution } };
 
   const timeoutMs = pickTimeoutMsOrFallback(
     params.req.timeoutMs,
@@ -215,9 +218,12 @@ async function postEditRequest(params: PostHelperParams): Promise<unknown> {
     model: params.req.model,
     prompt: params.req.prompt,
     n: String(params.count),
-    size: params.size,
-    response_format: 'b64_json',
+    ...(params.size ? { size: params.size } : {}),
   };
+  const options: Record<string, unknown> = {};
+  applyOpenAiOptions(options, params.req);
+  for (const [key, value] of Object.entries(options)) fields[key] = String(value);
+  if (params.req.aspectRatio || params.req.resolution) fields.xopc = JSON.stringify({ image: { aspectRatio: params.req.aspectRatio, resolution: params.req.resolution } });
   const form = new FormData();
   for (const [k, v] of Object.entries(fields)) {
     if (typeof v === 'string') form.append(k, v);
@@ -230,7 +236,7 @@ async function postEditRequest(params: PostHelperParams): Promise<unknown> {
     copy.set(u8);
     form.append(
       field,
-      new Blob([copy], { type: img.mimeType || DEFAULT_OUTPUT_MIME }),
+      new Blob([copy], { type: img.mimeType }),
       pickEditFileName(img, idx),
     );
   }
@@ -261,30 +267,18 @@ export function mapOpenAiImagesResponse(
   if (!raw || typeof raw !== 'object') return [];
   const data = (raw as OpenAiImagesResponse).data;
   if (!Array.isArray(data)) return [];
-  const ext = imageFileExtensionForMimeType(req.outputFormat ? `image/${req.outputFormat}` : DEFAULT_OUTPUT_MIME);
+  if (data.length > (req.count ?? 1)) throw new ImageProviderError('Provider returned too many images', 502);
   const out: GeneratedImageAsset[] = [];
   let totalBytes = 0;
-  data.forEach((entry, index) => {
-    const b64 = entry?.b64_json;
-    if (typeof b64 !== 'string' || b64.length === 0) return;
-    const estimatedBytes = Math.ceil(b64.replace(/\s+/g, '').length * 3 / 4);
-    if (estimatedBytes > MAX_IMAGE_BYTES) {
-      throw new Error(`OpenAI Images response image exceeds ${MAX_IMAGE_BYTES} bytes.`);
-    }
-    totalBytes += estimatedBytes;
-    if (totalBytes > MAX_TOTAL_IMAGE_BYTES) {
-      throw new Error(`OpenAI Images response images exceed ${MAX_TOTAL_IMAGE_BYTES} bytes total.`);
-    }
-    const asset = imageAssetFromBase64({
-      base64: b64,
-      mimeType: req.outputFormat ? `image/${req.outputFormat}` : undefined,
-      fileName: `image-${index + 1}.${ext}`,
-    });
-    out.push({
-      ...asset,
+  for (const [index, entry] of data.entries()) {
+    const image = imageFromBytes(decodeBase64(entry?.b64_json));
+    totalBytes += image.bytes.byteLength;
+    if (totalBytes > MAX_TOTAL_IMAGE_BYTES) throw new ImageProviderError('Generated images exceed total byte limit', 502);
+    out.push({ buffer: Buffer.from(image.bytes), mimeType: image.mimeType,
+      fileName: `image-${index + 1}.${imageFileExtensionForMimeType(image.mimeType)}`,
       ...(typeof entry.revised_prompt === 'string' ? { revisedPrompt: entry.revised_prompt } : {}),
     });
-  });
+  }
   return out;
 }
 
@@ -338,10 +332,6 @@ function pickEditFileName(img: ImageGenerationSourceImage, idx: number): string 
   return `image-${idx + 1}.${ext}`;
 }
 
-function clampCount(requested: number | undefined, fallback: number, max: number): number {
-  if (typeof requested !== 'number' || !Number.isFinite(requested) || requested <= 0) return fallback;
-  return Math.min(max, Math.max(1, Math.floor(requested)));
-}
 
 function joinPath(baseUrl: string, subPath: string): string {
   const left = baseUrl.replace(/\/+$/, '');

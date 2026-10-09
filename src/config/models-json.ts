@@ -58,33 +58,29 @@ export const OpenAICompatSchema = z.union([
 // ============================================
 
 const ImageGenerationResolutionSchema = z.enum(['1K', '2K', '4K']);
-const ImageGenerationQualitySchema = z.enum(['low', 'medium', 'high', 'auto']);
+const ImageGenerationQualitySchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max', 'auto']);
 const ImageGenerationOutputFormatSchema = z.enum(['png', 'jpeg', 'webp']);
 const ImageGenerationBackgroundSchema = z.enum(['transparent', 'opaque', 'auto']);
 
+const ImageGeometrySchema = z.object({
+ sizes: z.array(z.string().min(1)).optional(),
+ aspectRatios: z.array(z.string().min(1)).optional(),
+ resolutions: z.array(ImageGenerationResolutionSchema).optional(),
+ pixels: z.object({ minPixels: z.number().int().positive(), maxPixels: z.number().int().positive(),
+   minEdge: z.number().int().positive(), maxEdge: z.number().int().positive(),
+   step: z.number().int().positive(), maxRatio: z.number().positive() }).strict().optional(),
+}).strict();
 export const ImageGenerationCapabilitiesSchema = z.object({
-	generate: z.object({
-		maxCount: z.number().int().positive().optional(),
-		supportsSize: z.boolean().optional(),
-		supportsAspectRatio: z.boolean().optional(),
-		supportsResolution: z.boolean().optional(),
-	}).strict().optional(),
-	edit: z.object({
-		enabled: z.boolean(),
-		maxInputImages: z.number().int().positive().optional(),
-		supportsSize: z.boolean().optional(),
-		supportsAspectRatio: z.boolean().optional(),
-	}).strict().optional(),
-	geometry: z.object({
-		sizes: z.array(z.string().min(1)).optional(),
-		aspectRatios: z.array(z.string().min(1)).optional(),
-		resolutions: z.array(ImageGenerationResolutionSchema).optional(),
-	}).strict().optional(),
-	output: z.object({
-		qualities: z.array(ImageGenerationQualitySchema).optional(),
-		formats: z.array(ImageGenerationOutputFormatSchema).optional(),
-		backgrounds: z.array(ImageGenerationBackgroundSchema).optional(),
-	}).strict().optional(),
+ generate: z.object({ maxCount: z.number().int().positive().optional(), supportsSize: z.boolean().optional(),
+   supportsAspectRatio: z.boolean().optional(), supportsResolution: z.boolean().optional() }).strict().optional(),
+ edit: z.object({ enabled: z.boolean(), inputFormats: z.array(ImageGenerationOutputFormatSchema).optional(),
+    maxInputBytes: z.number().int().positive().optional(),
+    maxInputImages: z.number().int().nonnegative().optional(),
+   supportsSize: z.boolean().optional(), supportsAspectRatio: z.boolean().optional(), supportsResolution: z.boolean().optional(),
+   geometry: ImageGeometrySchema.optional() }).strict().optional(),
+ geometry: ImageGeometrySchema.optional(),
+ output: z.object({ qualities: z.array(ImageGenerationQualitySchema).optional(),
+   formats: z.array(ImageGenerationOutputFormatSchema).optional(), backgrounds: z.array(ImageGenerationBackgroundSchema).optional() }).strict().optional(),
 }).strict();
 
 export const ImageGenerationModelSchema = z.object({

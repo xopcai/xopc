@@ -33,7 +33,7 @@ import { buildCapabilityPlansForConfig } from '../../capabilities/readiness/inde
 
 const DEFAULT_COUNT = 1;
 const MAX_COUNT = 9;
-const ALLOWED_QUALITIES: ImageGenerationQuality[] = ['low', 'medium', 'high', 'auto'];
+const ALLOWED_QUALITIES: ImageGenerationQuality[] = ['low', 'medium', 'high', 'xhigh', 'max', 'auto'];
 const ALLOWED_OUTPUT_FORMATS: ImageGenerationOutputFormat[] = ['png', 'jpeg', 'webp'];
 const ALLOWED_BACKGROUNDS: ImageGenerationBackground[] = ['transparent', 'opaque', 'auto'];
 const ALLOWED_RESOLUTIONS: ImageGenerationResolution[] = ['1K', '2K', '4K'];
@@ -48,7 +48,7 @@ const ImageGenerateToolSchema = Type.Object({
   model: Type.Optional(
     Type.String({
       description:
-        'Optional provider/model override, e.g. openai/gpt-image-2 / dashscope/wan2.7-image-pro / minimax/image-01.',
+        'Optional provider/model override, e.g. openai/gpt-image-2.5-flare / dashscope/wan2.7-image-pro / minimax/image-01.',
     }),
   ),
   filename: Type.Optional(Type.String({ description: 'Optional basename hint for saved files.' })),
@@ -65,7 +65,7 @@ const ImageGenerateToolSchema = Type.Object({
     Type.Number({ minimum: 1, maximum: MAX_COUNT, description: `Number of images (1–${MAX_COUNT}).` }),
   ),
   quality: Type.Optional(
-    Type.String({ description: 'Optional quality: low / medium / high / auto.' }),
+    Type.String({ description: 'Optional quality: low / medium / high / xhigh / max / auto.' }),
   ),
   outputFormat: Type.Optional(
     Type.String({ description: 'Optional output format: png / jpeg / webp.' }),
@@ -402,9 +402,7 @@ export function createImageGenerateTool(options: {
           `Generated and attached ${paths.length} image(s) with ${result.provider}/${result.model}.`,
           ...paths.map((p) => `Saved: ${p}`),
         ];
-        for (const note of buildNormalizationNotes(result.normalization, result.ignoredOverrides)) {
-          lines.push(note);
-        }
+
 
         return {
           content: [{ type: 'text', text: lines.join('\n') }],
@@ -427,10 +425,6 @@ export function createImageGenerateTool(options: {
               workspaceRelativePath: workspaceRelativePaths[index],
             })),
             attempts: result.attempts,
-            ...(result.normalization ? { normalization: result.normalization } : {}),
-            ...(result.ignoredOverrides.length > 0
-              ? { ignoredOverrides: result.ignoredOverrides }
-              : {}),
             ...(result.metadata ? { metadata: result.metadata } : {}),
           },
         };
@@ -453,27 +447,4 @@ export function createImageGenerateTool(options: {
       }
     },
   } as any;
-}
-
-function buildNormalizationNotes(
-  normalization: import('../image/generation/types.js').ImageGenerationNormalization | undefined,
-  ignoredOverrides: ReadonlyArray<import('../image/generation/types.js').ImageGenerationIgnoredOverride>,
-): string[] {
-  const notes: string[] = [];
-  if (normalization) {
-    for (const [key, entry] of Object.entries(normalization)) {
-      if (!entry) continue;
-      const requested = entry.requested;
-      const applied = entry.applied;
-      if (requested !== undefined && applied !== undefined && requested !== applied) {
-        notes.push(`Note: requested ${key}="${requested}" → applied "${applied}".`);
-      } else if (applied !== undefined && entry.derivedFrom) {
-        notes.push(`Note: ${key}="${applied}" derived from ${entry.derivedFrom}.`);
-      }
-    }
-  }
-  for (const ig of ignoredOverrides) {
-    notes.push(`Note: ignored ${ig.key}="${ig.value}" (not supported by provider).`);
-  }
-  return notes;
 }

@@ -195,40 +195,24 @@ describe('createOpenAiImagesProvider', () => {
       prompt: 'p',
       quality: 'high',
       outputFormat: 'jpeg',
-      background: 'transparent',
+      background: 'opaque',
       providerOptions: { openai: { moderation: 'low', outputCompression: 80, user: 'user-1' } },
     } as ImageGenerationRequest);
 
     const body = (calls[0]?.options as providerHttp.PostJsonRequestOptions).body as Record<string, unknown>;
     expect(body.quality).toBe('high');
     expect(body.output_format).toBe('jpeg');
-    expect(body.background).toBe('transparent');
+    expect(body.background).toBe('opaque');
     expect(body.moderation).toBe('low');
     expect(body.output_compression).toBe(80);
     expect(body.user).toBe('user-1');
   });
 
-  it('clamps count between 1 and capability maxCount', async () => {
-    const calls: MockPostCall[] = [];
-    const postJson = stubPostJson(calls);
-
+  it('rejects invalid counts before submitting', async () => {
+    const postJson = stubPostJson([]);
     const provider = buildProvider();
-    await provider.generateImage({
-      provider: 'mock',
-      model: 'mock-model',
-      prompt: 'p',
-      count: 999,
-    } as ImageGenerationRequest);
-    expect((calls[0]?.options as providerHttp.PostJsonRequestOptions).body).toMatchObject({ n: 4 });
-
-    await provider.generateImage({
-      provider: 'mock',
-      model: 'mock-model',
-      prompt: 'p',
-      count: 0,
-    } as ImageGenerationRequest);
-    expect((calls[1]?.options as providerHttp.PostJsonRequestOptions).body).toMatchObject({ n: 1 });
-    expect(postJson).toHaveBeenCalledTimes(2);
+    for (const count of [999, 0, 1.5]) await expect(provider.generateImage({ provider: 'mock', model: 'mock-model', prompt: 'p', count })).rejects.toThrow(/count/);
+    expect(postJson).not.toHaveBeenCalled();
   });
 
   it('throws when provider returns no decodable images', async () => {
@@ -240,7 +224,7 @@ describe('createOpenAiImagesProvider', () => {
         model: 'mock-model',
         prompt: 'p',
       } as ImageGenerationRequest),
-    ).rejects.toThrow(/no images/);
+    ).rejects.toThrow(/base64/);
   });
 
   it('reports a clear error when an API key contains non-ByteString characters', async () => {

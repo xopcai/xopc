@@ -99,7 +99,6 @@ describe('image_generate tool — Step 2 input wiring', () => {
       provider: 'openai',
       model: 'gpt-image-2',
       attempts: [],
-      ignoredOverrides: [],
     });
     const tool = makeTool(ConfigSchema.parse({}));
 
@@ -125,7 +124,6 @@ describe('image_generate tool — Step 2 input wiring', () => {
       provider: 'mock',
       model: 'mock-default',
       attempts: [],
-      ignoredOverrides: [],
     });
     const tool = makeTool();
     const res = await tool.execute(
@@ -176,7 +174,6 @@ describe('image_generate tool — Step 2 input wiring', () => {
       provider: 'mock',
       model: 'mock-default',
       attempts: [],
-      ignoredOverrides: [],
     });
     const tool = makeTool();
     await tool.execute(
@@ -197,7 +194,6 @@ describe('image_generate tool — Step 2 input wiring', () => {
       provider: 'mock',
       model: 'mock-default',
       attempts: [],
-      ignoredOverrides: [],
     });
     const filePath = path.join(workspace, 'ref.png');
     await writeFile(filePath, PNG_HEADER);
@@ -242,17 +238,13 @@ describe('image_generate tool — Step 2 input wiring', () => {
     expect(generateImageMock).not.toHaveBeenCalled();
   });
 
-  it('writes images under workspace/media/generated and surfaces normalization notes', async () => {
+  it('writes images under workspace/media/generated and returns saved artifact paths', async () => {
     generateImageMock.mockResolvedValueOnce({
       images: [{ buffer: PNG_HEADER, mimeType: 'image/jpeg', fileName: 'a.jpg' }],
       provider: 'mock',
       model: 'mock-default',
       attempts: [],
-      normalization: {
-        size: { requested: '1000x1000', applied: '1024x1024' },
-        aspectRatio: { applied: '16:9', derivedFrom: 'size' },
-      },
-      ignoredOverrides: [{ key: 'background', value: 'transparent' }],
+
     });
     const tool = makeTool();
     const res = await tool.execute(
@@ -262,12 +254,7 @@ describe('image_generate tool — Step 2 input wiring', () => {
       () => {},
     );
 
-    expect(res.details?.normalization).toBeDefined();
-    expect(res.details?.ignoredOverrides).toEqual([{ key: 'background', value: 'transparent' }]);
-    const text = res.content[0]?.text ?? '';
-    expect(text).toMatch(/Note: requested size="1000x1000"/);
-    expect(text).toMatch(/Note: aspectRatio="16:9" derived from size/);
-    expect(text).toMatch(/Note: ignored background="transparent"/);
+    expect(res.details?.paths).toHaveLength(1);
 
     const dir = path.join(workspace, 'media', 'generated');
     await mkdir(dir, { recursive: true });

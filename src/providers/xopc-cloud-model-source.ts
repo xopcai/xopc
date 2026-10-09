@@ -1,3 +1,4 @@
+import { ImageGenerationCapabilitiesSchema } from '../config/models-json.js';
 import type { ComputerProfile } from '@xopcai/computer-control-contract';
 import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
 
@@ -293,24 +294,8 @@ function positiveInteger(value: unknown): number {
 }
 
 function parseImageGenerationCapabilities(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const raw = value as Record<string, unknown>;
-  const strings = <T extends string>(candidate: unknown, allowed?: readonly T[]): T[] =>
-    Array.isArray(candidate)
-      ? candidate.filter((item): item is T =>
-          typeof item === 'string' && (!allowed || allowed.includes(item as T)))
-      : [];
-  return {
-    maxCount: Number.isSafeInteger(raw.maxCount) && Number(raw.maxCount) > 0 ? Number(raw.maxCount) : 1,
-    sizes: strings<string>(raw.sizes),
-    aspectRatios: strings<string>(raw.aspectRatios),
-    qualities: strings(raw.qualities, ['low', 'medium', 'high', 'auto'] as const),
-    formats: strings(raw.formats, ['png', 'jpeg', 'webp'] as const),
-    backgrounds: strings(raw.backgrounds, ['transparent', 'opaque', 'auto'] as const),
-    maxInputImages: Number.isSafeInteger(raw.maxInputImages) && Number(raw.maxInputImages) > 0
-      ? Number(raw.maxInputImages)
-      : 0,
-  };
+  const parsed = ImageGenerationCapabilitiesSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
 }
 
 function parseDisplayNames(value: unknown): Pick<AvailableCatalogModel, 'displayNames'> {

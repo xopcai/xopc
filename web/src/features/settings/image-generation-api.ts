@@ -1,30 +1,7 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export type ImageModelCapabilities = {
-  generate?: {
-    maxCount?: number;
-    supportsSize?: boolean;
-    supportsAspectRatio?: boolean;
-    supportsResolution?: boolean;
-  };
-  edit?: {
-    enabled: boolean;
-    maxInputImages?: number;
-    supportsSize?: boolean;
-    supportsAspectRatio?: boolean;
-  };
-  geometry?: {
-    sizes?: string[];
-    aspectRatios?: string[];
-    resolutions?: Array<'1K' | '2K' | '4K'>;
-  };
-  output?: {
-    qualities?: Array<'low' | 'medium' | 'high' | 'auto'>;
-    formats?: Array<'png' | 'jpeg' | 'webp'>;
-    backgrounds?: Array<'transparent' | 'opaque' | 'auto'>;
-  };
-};
+export type ImageModelCapabilities = import('@xopcai/image-providers').ImageCapabilities;
 
 export type ImageProvider = {
   id: string;

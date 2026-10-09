@@ -41,6 +41,7 @@ export default defineConfig({
     alwaysBundle: [
       '@xopcai/endpoint-tools-protocol',
       '@xopcai/gateway-contract',
+      '@xopcai/image-providers',
       '@xopcai/realtime-client',
       '@xopcai/realtime-protocol',
     ],

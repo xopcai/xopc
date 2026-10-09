@@ -18,6 +18,8 @@ The selected Chat model may process the image directly, or xopc may use a separa
 4. Assign the model to the intended Agent.
 5. Generate a small test image.
 
+The image catalog includes OpenAI, Alibaba Model Studio, MiniMax, Google, fal, Seedream, Ideogram, BFL, Zhipu, Tencent TokenHub, and Stability AI. Model options are validated strictly; unsupported sizes and formats are rejected. Retired catalog models have no aliases: select a current model after upgrading.
+
 Use `xopc image status` and `xopc image providers` from a terminal to inspect availability.
 
 ## Generate or edit
