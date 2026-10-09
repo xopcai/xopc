@@ -36,6 +36,7 @@ import {
 } from '@/navigation/product-navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { useSidebarStore } from '@/stores/sidebar-store';
 
 const DEFAULT_VISIBLE_ITEMS = 3;
 const MAX_VISIBLE_ITEMS = 5;
@@ -224,7 +225,10 @@ export function SidebarNavItems({
         title={personal?.payload?.displayName || 'Ada'}
         onMouseEnter={() => preloadRouteForPath('/personal')}
         onFocus={() => preloadRouteForPath('/personal')}
-        onClick={() => onNavigate?.()}
+        onClick={() => {
+          useSidebarStore.getState().setCollapsed(true);
+          onNavigate?.();
+        }}
       >
         <span className="flex size-5 shrink-0 items-center justify-center" aria-hidden>
           <PersonalAvatar appearance={personal?.payload?.appearance ?? 'loopi'} agentId={personal?.payload?.agentId} className="size-5" />
