@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
@@ -29,6 +29,7 @@ import type { GatewayService } from '../../gateway/service.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { personalAgentId } from '../../personal-agent/repository.js';
+import { PERSONAL_PERSONA_GUIDANCE } from '../../personal-agent/persona.js';
 import { PersonalReplyComposer, buildPersonalReplyPrompt, parsePersonalReplyDraft, type PersonalReplyPacket } from '../../personal-agent/reply-composer.js';
 import * as modelCalls from '../../providers/model-call.js';
 import * as providers from '../../providers/index.js';
@@ -92,6 +93,13 @@ describe('background task result delivery', () => {
   it('composes personal text once, preserves sources, and recovers push failure without regenerating', async () => {
     const { main, coordinator, runId } = task();
     markPersonal(main.key);
+    const profileDir = join(stateDir, 'agents', personalAgentId('local-owner'), 'profile');
+    mkdirSync(profileDir, { recursive: true });
+    const soul = 'Use gentle, dry wit and a patient voice. CUSTOM_PERSONAL_SOUL';
+    writeFileSync(join(profileDir, 'SOUL.md'), soul);
+    const otherProfileDir = join(stateDir, 'agents', 'main', 'profile');
+    mkdirSync(otherProfileDir, { recursive: true });
+    writeFileSync(join(otherProfileDir, 'SOUL.md'), 'OTHER_AGENT_SOUL');
     const outcome = await image(runId);
     outcome.deliverables = [];
     coordinator.captureOutcome(outcome);
@@ -103,11 +111,15 @@ describe('background task result delivery', () => {
       expect(prompt).toContain('Ada');
       expect(prompt).toContain('gentle');
       expect(prompt).toContain('Draw sunset');
+      expect(prompt).toContain(PERSONAL_PERSONA_GUIDANCE);
+      expect(prompt).toContain('CUSTOM_PERSONAL_SOUL');
+      expect(prompt).not.toContain('OTHER_AGENT_SOUL');
       expect(prompt).not.toContain('UNTRUSTED_LONG_WORKER_INSTRUCTIONS');
       return parsePersonalReplyDraft(JSON.stringify({ text: 'The sunset finding is ready.', sourceIds: ['result'], limitationIds: ['status'] }), packet);
     });
     await new PersonalReplyComposer(compose).drain(() => { throw new Error('Disconnected'); });
     expect(loadTranscriptRowsForSession(main.key)).toHaveLength(1);
+    expect(readFileSync(join(profileDir, 'SOUL.md'), 'utf-8')).toBe(soul);
     closeXopcDatabase(); resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     getSqliteDatabase().prepare('UPDATE task_result_deliveries SET reply_next_attempt_at = 0').run();
