@@ -65,7 +65,7 @@ import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constant
 import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-workflow-run-links';
 import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
 import { appendNoteContent, createTaskNote, getNote, quickCapture } from '@/features/notes/notes-api';
-import { withDetailReturnTo } from '@/lib/navigation-return';
+import { noteDetailHref } from '@/features/notes/note-detail-route';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
@@ -843,13 +843,13 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     try {
       const note = await quickCapture(content.trim(), 'web');
       showComposerNotification('success', m.chat.messageSavedToNote, undefined, {
-        href: `/notes/${encodeURIComponent(note.id)}`,
+        href: noteDetailHref(`${location.pathname}${location.search}`, note.id),
       });
     } catch (err) {
       showComposerNotification('error', err instanceof Error ? err.message : m.notes.quickCaptureFailed);
       throw err;
     }
-  }, [m.chat.messageSavedToNote, m.notes.quickCaptureFailed]);
+  }, [location.pathname, location.search, m.chat.messageSavedToNote, m.notes.quickCaptureFailed]);
 
   const handleConfirmSourceNoteSave = useCallback(async () => {
     const pending = pendingSourceNoteSaveRef.current;
@@ -1087,7 +1087,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                   <span>{m.chat.sourceNoteDigestAction}</span>
                 </button>
                 <Link
-                  to={withDetailReturnTo(`/notes/${encodeURIComponent(sourceNoteId)}`, `${location.pathname}${location.search}`)}
+                  to={noteDetailHref(`${location.pathname}${location.search}`, sourceNoteId)}
                   className="font-medium text-accent transition-colors hover:text-accent-fg"
                 >
                   {m.chat.sourceNoteOpen}
