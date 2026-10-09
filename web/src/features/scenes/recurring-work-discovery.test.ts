@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildComposerDraftSeed } from '@/features/chat/session/composer-handoff-params';
 
-import { recurringWorkChatHref } from './recurring-work-discovery';
+import { recurringWorkChatHref } from './recurring-work-chat-href';
 
 describe('recurring work discovery handoff', () => {
   it('starts the bundled skill from the scene entry', () => {
