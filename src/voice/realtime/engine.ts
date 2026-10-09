@@ -13,6 +13,7 @@ export interface VoiceEngine {
   cancel(responseId: string, reason: 'client_cancelled' | 'barge_in'): boolean;
   cancelTask(taskId: string): Promise<boolean>;
   acknowledge(responseId: string, playedDurationMs: number): void;
+  isConversationIdle?(): boolean;
   canOfferTaskUpdate?(): boolean;
   offerTaskUpdate?(input: { clientMessageId: string; content: string }): Promise<boolean>;
   close(): void | Promise<void>;

@@ -47,6 +47,8 @@ const LOCAL_READ_RULE = 'Answer immediately when the conversation already contai
 const PREVIOUS_LARGE_READ_RULE = 'When an attachment is marked large, or a local read returns requiresSpecialist, do not read repeated chunks in the main chat or treat an excerpt as the complete source. Briefly tell the user that the material is large and a specialist will read and process it. Then discover a suitable Agent with personal_task and create the Task within the existing request, without asking permission again. Include the original URI, absolute path or object kind and ID, the full user objective, and a requirement to inspect the complete material. Never claim delegation succeeded before the tool confirms it. Ordinary paginated lists and history excerpts are sufficient for narrow questions; delegate when complete or bulk processing is needed.';
 const LARGE_READ_RULE = 'When an attachment is marked large, or a local read returns requiresSpecialist, do not read repeated chunks in the main chat or treat an excerpt as the complete source. Briefly tell the user that the material is large and a specialist will read and process it. Then choose from the injected specialist snapshot (discover only if needed) and create the Task with personal_task within the existing request, without asking permission again. Include the original URI, absolute path or object kind and ID, the full user objective, and a requirement to inspect the complete material. Never claim delegation succeeded before the tool confirms it. Ordinary paginated lists and history excerpts are sufficient for narrow questions; delegate when complete or bulk processing is needed.';
 
+const CONVERSATION_INTERRUPTION_RULE = 'A new user message takes priority over your current reply. Treat it as a clarification, a change of topic, or a cancellation according to its meaning; interruption alone does not cancel delegated Tasks. Use the preserved conversation and tool outcomes. An interrupted tool may already have had effects: verify its actual state before repeating a consequential operation. Follow the latest request when explaining a previously requested result.';
+
 const FAST_CONVERSATION_RULE = 'Keep ordinary conversation flowing. For missing information, ask one short question directly in your reply and finish the turn; accept the next typed or spoken answer normally. Never use clarify or a blocking form for ordinary questions. Formal authorization for consequential actions still uses the host approval flow. Before tool discovery or delegation for lengthy work, immediately say one brief sentence describing your intent, then call the tools. Do not claim work has started or succeeded until confirmed. After successful delegation, finish without repeating an acknowledgement already given; report any failure or required action.';
 
 const USER_NAME_RULE = "Use the user's preferred name from their shared user profile when a name fits naturally.";
@@ -62,6 +64,7 @@ export function personalInstructions(preferences: PersonalPreferences): string {
     ...DELEGATION_RULES,
     LOCAL_READ_RULE,
     FAST_CONVERSATION_RULE,
+    CONVERSATION_INTERRUPTION_RULE,
     LARGE_READ_RULE,
     CONNECTED_APP_RULE,
     EXPLICIT_DELEGATION_RULE,
@@ -98,7 +101,7 @@ export function upgradePersonalInstructions(instructions: string, legacyName?: s
     .replace(PREVIOUS_RESULT_DELIVERY_RULE, RESULT_DELIVERY_RULE)
     .replace(PREVIOUS_LARGE_READ_RULE, LARGE_READ_RULE);
   if (legacyNameRule) nextInstructions = nextInstructions.replace(legacyNameRule, USER_NAME_RULE);
-  for (const rule of [...DELEGATION_RULES, FAST_CONVERSATION_RULE]) {
+  for (const rule of [...DELEGATION_RULES, FAST_CONVERSATION_RULE, CONVERSATION_INTERRUPTION_RULE]) {
     if (!nextInstructions.includes(rule)) nextInstructions += `\n${rule}`;
   }
   if (!nextInstructions.includes(LARGE_READ_RULE)) nextInstructions += `\n${LARGE_READ_RULE}`;

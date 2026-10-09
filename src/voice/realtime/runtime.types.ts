@@ -46,6 +46,8 @@ export interface ResolvedStreamingTts {
 }
 
 export interface VoiceRealtimeRuntimeOptions {
+  /** Confirmed non-echo speech invalidates background reply drafts before turn commit. */
+  onConversationInput?: (conversationId: string) => void;
   isPrincipalActive?: (principalId: string) => boolean;
   recordOmniTranscript?: (conversationId: string, callId: string, entry: OmniTranscript, expectedTranscriptId: string) => Promise<void>;
   getConversationContext?: (conversationId: string, expectedTranscriptId: string) => Promise<VoiceConversationContext>;

@@ -44,6 +44,7 @@ function harvestDraft(opts: {
 
 export interface UseComposerActionsOptions {
   chat: ChatMessages;
+  personal?: boolean;
   runBusy: boolean;
   voiceActive: boolean;
   cancelVoiceInput: () => void;
@@ -57,7 +58,7 @@ export interface UseComposerActionsOptions {
 
   onSend: ComposerSendHandler;
   onDispatched?: (receipt: ComposerDispatchReceipt, draft: ComposerDraft) => void;
-  onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | Promise<void>;
+  onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], interrupt?: boolean) => void | Promise<void>;
   onSteeringInterrupt?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void;
   onCommitEditFollowUp: (
     id: string,
@@ -79,7 +80,7 @@ export interface UseComposerActionsOptions {
 
 export interface UseComposerActionsReturn {
   send: () => void;
-  flushSteeringDraft: () => Promise<void>;
+  flushSteeringDraft: (interrupt?: boolean) => Promise<void>;
   interruptDraft: () => void;
 }
 
@@ -163,7 +164,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     getContextRefs,
   ]);
 
-  const flushSteeringDraft = useCallback(async () => {
+  const flushSteeringDraft = useCallback(async (interrupt = options.personal ? true : undefined) => {
     if (!runBusy && pendingFollowUpsCount === 0) return;
     const draft = harvestDraft({
       voiceActive,
@@ -197,11 +198,11 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
 
     followUpSubmissionRef.current = true;
     try {
-      await onAddPendingFollowUp(
-        draft.text,
+      const args: Parameters<NonNullable<typeof onAddPendingFollowUp>> = [draft.text,
         draft.attachments.length > 0 ? draft.attachments : undefined,
-        draft.contextRefs.length > 0 ? draft.contextRefs : undefined,
-      );
+        draft.contextRefs.length > 0 ? draft.contextRefs : undefined];
+      if (interrupt !== undefined) args.push(interrupt);
+      await onAddPendingFollowUp(...args);
       onUserTextCommitted?.(draft.text);
       resetEditor();
       clearAttachments();
@@ -222,6 +223,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     onAddPendingFollowUp,
     onCommitEditFollowUp,
     getThinkingLevel,
+    options.personal,
     m.followUpQueueMaxReached,
     m.followUpQueueSubmitFailed,
     clearEditFollowUpRef,
