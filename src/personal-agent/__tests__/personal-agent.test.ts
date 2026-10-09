@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -32,6 +32,10 @@ import { getPersonalAgent, isPersonalConversation, personalAgentId, personalConv
 import { createOrResumePersonalAgent, ensurePersonalConversationVisibility, personalInstructions, refreshPersonalDelegationGuidance, updatePersonalProfileRecord } from '../service.js';
 import { PERSONAL_RELIABILITY_RULES } from '../communication.js';
 import { PERSONAL_REPLY_STYLE_RULES, PERSONAL_REPLY_EXAMPLES } from '../reply-style.js';
+import {
+  PERSONAL_PERSONA_GUIDANCE, PREVIOUS_PERSONAL_PERSONA_GUIDANCE,
+  PREVIOUS_PERSONAL_EMOTIONAL_STYLE_RULE, PREVIOUS_PERSONAL_IDENTITY_CONTINUITY_RULE,
+} from '../persona.js';
 
 describe('personal Agent identity', () => {
   it('keeps one identity and conversation and serves it through the authenticated Gateway', async () => {
@@ -326,9 +330,16 @@ describe('personal Agent identity', () => {
       const repository = new AgentCatalogRepository();
       repository.ensureInitialized();
       const agentId = personalAgentId('local-owner');
-      repository.create({ id: agentId, toolAllowlist: ['personal_task', 'clarify', 'user_context_get', 'knowledge_search'], profile: { name: 'Personal AI', responsePreferences: { addressAs: 'Legacy name' }, instructions: [
+      const profileDir = join(dir, 'agents', agentId, 'profile');
+      mkdirSync(profileDir, { recursive: true });
+      const customSoul = '# My Soul\n\nKeep a quiet voice and use my own metaphors.';
+      writeFileSync(join(profileDir, 'SOUL.md'), customSoul);
+      repository.create({ id: agentId, toolAllowlist: ['personal_task', 'clarify', 'user_context_get', 'knowledge_search'], profile: { name: 'Personal AI', responsePreferences: { addressAs: 'Legacy name', humor: 'none', warmth: 'reserved' }, instructions: [
         'Answer simple requests directly. For complex work, use personal_task agents to find a suitable specialist, then create a Task and remain available to talk. Never claim a task was created before the tool confirms it.',
         'Keep my custom instruction.',
+        PREVIOUS_PERSONAL_PERSONA_GUIDANCE,
+        PREVIOUS_PERSONAL_EMOTIONAL_STYLE_RULE,
+        PREVIOUS_PERSONAL_IDENTITY_CONTINUITY_RULE,
         'Address the user as "Legacy name" when a name fits naturally.',
       ].join('\n') } }, { ready: true });
       const gateway = { refreshAgentCatalog: () => {}, agentService: { evictSessionAgent: () => {} } } as unknown as GatewayService;
@@ -350,6 +361,12 @@ describe('personal Agent identity', () => {
       expect(refreshed.profile?.instructions).toContain('Do not include task progress links by default');
       expect(refreshed.profile?.instructions).toContain('it does not prove execution has started');
       expect(refreshed.profile?.instructions).toContain('Speak like an attentive, reliable collaborator');
+      expect(refreshed.profile?.instructions).toContain(PERSONAL_PERSONA_GUIDANCE);
+      expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_PERSONA_GUIDANCE);
+      expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_EMOTIONAL_STYLE_RULE);
+      expect(refreshed.profile?.instructions).not.toContain(PREVIOUS_PERSONAL_IDENTITY_CONTINUITY_RULE);
+      expect(refreshed.profile?.responsePreferences).toEqual({ addressAs: 'Legacy name', humor: 'none', warmth: 'reserved' });
+      expect(readFileSync(join(profileDir, 'SOUL.md'), 'utf-8')).toBe(customSoul);
       for (const rule of PERSONAL_RELIABILITY_RULES) {
         expect(refreshed.profile?.instructions?.split('\n').filter(line => line === rule)).toHaveLength(1);
       }
@@ -359,6 +376,7 @@ describe('personal Agent identity', () => {
       expect(refreshed.profile?.instructions).toContain(PERSONAL_REPLY_EXAMPLES);
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       expect(repository.get(agentId)?.revision).toBe(refreshed.revision);
+      expect(readFileSync(join(profileDir, 'SOUL.md'), 'utf-8')).toBe(customSoul);
       await new AgentCatalogService().update(agentId, {
         profile: { ...refreshed.profile!, instructions: refreshed.profile!.instructions!
           .split('\n').filter(line => line !== PERSONAL_RELIABILITY_RULES[0]).join('\n') },
