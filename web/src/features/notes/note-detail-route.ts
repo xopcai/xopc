@@ -1,3 +1,4 @@
+import { isChatPreviewPath } from '@/lib/chat-preview-origin';
 import { withDetailReturnTo } from '@/lib/navigation-return';
 
 export const NOTE_PREVIEW_MODAL_PARAM = 'note';
@@ -12,7 +13,7 @@ export function closeNotePreviewModalHref(pathname: string, rawSearch: string): 
 /** Keep chat mounted while previewing a note. Other origins open the full page. */
 export function noteDetailHref(backgroundPath: string, noteId: string): string {
   const [pathname, rawSearch = ''] = backgroundPath.split('?');
-  if (pathname !== '/chat' && !pathname.startsWith('/chat/')) {
+  if (!isChatPreviewPath(pathname)) {
     return withDetailReturnTo(`/notes/${encodeURIComponent(noteId)}`, backgroundPath);
   }
   const search = new URLSearchParams(rawSearch);

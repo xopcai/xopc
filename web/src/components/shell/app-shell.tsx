@@ -40,6 +40,7 @@ import {
   closeWorkDiscoveryOverlaySearch,
   isWorkDiscoveryOverlaySearch,
 } from '@/features/work-discovery/work-discovery-navigation';
+import { isChatPreviewPath } from '@/lib/chat-preview-origin';
 import { cn } from '@/lib/cn';
 import { isElectronDarwin } from '@/lib/electron-window-chrome';
 import { loadTaskDetailPage, loadWorkDiscoveryOverlay } from '@/lib/route-preload';
@@ -116,11 +117,11 @@ function AppShellContent() {
   const taskModalId = pathname.startsWith('/tasks/')
     ? null
     : new URLSearchParams(search).get(TASK_DETAIL_MODAL_PARAM);
-  const productPreviewRoute = pathname === '/chat' || pathname.startsWith('/chat/')
+  const productPreviewRoute = isChatPreviewPath(pathname)
     ? new URLSearchParams(search).get(PRODUCT_PREVIEW_PARAM) : null;
   const productPreviewTarget = productPreviewRoute && !taskModalId ? resolveProductPreviewTarget(productPreviewRoute) : null;
   const productPreviewBackgroundPath = closeProductPreviewHref(pathname, search);
-  const noteModalId = !taskModalId && !productPreviewTarget && (pathname === '/chat' || pathname.startsWith('/chat/'))
+  const noteModalId = !taskModalId && !productPreviewTarget && isChatPreviewPath(pathname)
     ? new URLSearchParams(search).get(NOTE_PREVIEW_MODAL_PARAM)
     : null;
   const noteModalBackgroundPath = closeNotePreviewModalHref(pathname, search);

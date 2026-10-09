@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { noteDetailHref, closeNotePreviewModalHref } from '@/features/notes/note-detail-route';
+import { isChatPreviewPath } from '@/lib/chat-preview-origin';
+
 import { chatProductHref, closeProductPreviewHref, resolveProductPreviewTarget } from '../product-preview-route';
 
 const background = '/chat/session-1?view=full';
@@ -34,6 +37,24 @@ describe('chat product preview navigation', () => {
     '/projects/project-1/settings', '/extensions/app-1', '/automations?action=new', '/scenes/scene-1',
   ])('keeps intentional page navigation for %s', (href) => {
     expect(chatProductHref(background, href)).toBe(href);
+  });
+
+  it('recognizes Personal AI as a conversation preview origin', () => {
+    expect(isChatPreviewPath('/personal')).toBe(true);
+    expect(isChatPreviewPath('/settings/personal')).toBe(false);
+    expect(isChatPreviewPath('/personal-settings')).toBe(false);
+    const noteHref = noteDetailHref('/personal?view=full', 'n1');
+    expect(noteHref).toBe('/personal?view=full&note=n1');
+    const noteUrl = new URL(noteHref, 'https://xopc.local');
+    expect(closeNotePreviewModalHref(noteUrl.pathname, noteUrl.search)).toBe('/personal?view=full');
+    const projectHref = chatProductHref('/personal?view=full', '/projects/p1');
+    const projectUrl = new URL(projectHref, 'https://xopc.local');
+    expect(projectUrl.pathname).toBe('/personal');
+    expect(closeProductPreviewHref(projectUrl.pathname, projectUrl.search)).toBe('/personal?view=full');
+  });
+
+  it('keeps Personal AI settings navigation on a page', () => {
+    expect(chatProductHref('/personal', '/settings/capabilities/models')).toBe('/settings/capabilities/models');
   });
 
   it('does not modalize viewing from outside chat', () => {

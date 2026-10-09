@@ -323,6 +323,13 @@ describe('background task result delivery', () => {
     expect(page?.session.messages[0]?.content).toBe('正文在下面。\n\nExact original prose.');
   });
 
+  it('accepts omitted acknowledgement fields while preserving source links', () => {
+    const packet = { report: 'https://example.test/source' } as PersonalReplyPacket;
+    expect(parsePersonalReplyDraft(JSON.stringify({ text: 'Done' }), packet)).toBe('Done\n\n[Source](<https://example.test/source>)');
+    expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'https://invented.test' }), packet)).toThrow('invented');
+    expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'Done', limitationIds: [] }), packet)).toThrow('contract');
+  });
+
   it('rejects fabricated links and drafts that omit the result contract', () => {
     const packet = { report: 'https://example.test/source' } as PersonalReplyPacket;
     expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'https://invented.test', sourceIds: ['result'], limitationIds: ['status'] }), packet)).toThrow('invented');
