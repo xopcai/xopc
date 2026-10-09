@@ -12,8 +12,10 @@ struct MessageBubble: View {
     let previewEligible: Bool
     let onReuseUserText: (String) -> Void
     @Environment(\.locale) private var locale
+    @ScaledMetric(relativeTo: .body) private var previewHeight: CGFloat = 160
     @State private var isActionsPresented = false
     @State private var isDetailPresented = false
+    @State private var isExecutionPresented = false
     @State private var isSavingNote = false
     @State private var isSaveFeedbackPresented = false
     @State private var saveFeedback = ""
@@ -40,36 +42,27 @@ struct MessageBubble: View {
                     Label(title, systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                if message.role == "assistant", !message.text.isEmpty {
-                    assistantActions
-                }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .frame(maxWidth: message.role == "assistant" ? .infinity : nil, alignment: .leading)
+            .padding(.horizontal, message.role == "assistant" ? 12 : isUserAudioBubble ? 4 : 14)
+            .padding(.vertical, isUserAudioBubble ? 0 : 10)
             .background(message.role == "user" ? Color.blue.opacity(0.12) : Color.secondary.opacity(0.1))
             .clipShape(.rect(cornerRadius: 18))
-            if message.role == "user", !message.text.isEmpty {
-                HStack(spacing: 4) {
-                    Button("复制", systemImage: "doc.on.doc") {
-                        UIPasteboard.general.string = message.text
-                    }
-                    .frame(width: 44, height: 44)
-                    .accessibilityIdentifier("chat-user-copy-\(message.id)")
-                    if message.attachments.isEmpty, message.references.isEmpty {
-                        Button("再次编辑", systemImage: "pencil") {
-                            onReuseUserText(message.text)
-                        }
-                        .frame(width: 44, height: 44)
-                        .accessibilityIdentifier("chat-user-reuse-\(message.id)")
-                    }
-                }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .padding(.trailing, 6)
+            if message.role == "assistant", !message.text.isEmpty {
+                assistantActions
             }
         }
         .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
+        .contextMenu {
+            if message.role == "user", !message.text.isEmpty {
+                Button("复制", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.text }
+                    .accessibilityIdentifier("chat-user-copy-\(message.id)")
+                if message.attachments.isEmpty, message.references.isEmpty {
+                    Button("再次编辑", systemImage: "pencil") { onReuseUserText(message.text) }
+                        .accessibilityIdentifier("chat-user-reuse-\(message.id)")
+                }
+            }
+        }
         .opacity(message.isPending ? 0.65 : 1)
         .accessibilityElement(children: .contain)
         .sheet(isPresented: $isDetailPresented) {
@@ -80,8 +73,20 @@ struct MessageBubble: View {
                 assistantState: assistantState
             )
         }
+        .sheet(isPresented: $isExecutionPresented) {
+            if let conversationID {
+                NavigationStack {
+                    ExecutionProcessView(configuration: configuration, conversationID: conversationID,
+                                         turnID: message.turnId ?? message.id, assistantState: assistantState)
+                }
+                .presentationDetents([.large])
+            }
+        }
         .confirmationDialog("消息操作", isPresented: $isActionsPresented, titleVisibility: .visible) {
             Button("消息详情", systemImage: "info.circle") { isDetailPresented = true }
+            if conversationID != nil {
+                Button("执行过程", systemImage: "list.bullet.rectangle") { isExecutionPresented = true }
+            }
             if !codeBlocks.isEmpty {
                 Button("复制代码", systemImage: "chevron.left.forwardslash.chevron.right") {
                     UIPasteboard.general.string = codeBlocks
@@ -94,19 +99,23 @@ struct MessageBubble: View {
         }
     }
 
+    private var isUserAudioBubble: Bool {
+        message.role == "user" && message.text.isEmpty && message.attachments.contains(where: \.isAudio)
+    }
+
     private var assistantActions: some View {
         HStack(spacing: 2) {
             Button("复制", systemImage: "doc.on.doc") {
                 UIPasteboard.general.string = message.text
             }
-            .frame(width: 40, height: 40)
+            .frame(width: 44, height: 44)
             .contentShape(.rect)
             .accessibilityIdentifier("chat-copy-\(message.id)")
             Button("保存到笔记", systemImage: "bookmark") {
                 Task { await saveAsNote() }
             }
             .disabled(isSavingNote)
-            .frame(width: 40, height: 40)
+            .frame(width: 44, height: 44)
             .contentShape(.rect)
             .accessibilityIdentifier("chat-save-note-\(message.id)")
             if !ChatSpeechText.chunks(from: message.text).isEmpty {
@@ -121,7 +130,7 @@ struct MessageBubble: View {
                         Image(systemName: "speaker.wave.2")
                     }
                 }
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
                 .contentShape(.rect)
                 .accessibilityIdentifier("chat-read-aloud-\(message.id)")
                 .disabled(!canReadAloud)
@@ -129,9 +138,10 @@ struct MessageBubble: View {
             Button("更多", systemImage: "ellipsis") {
                 isActionsPresented = true
             }
-            .frame(width: 40, height: 40)
+            .frame(width: 44, height: 44)
             .contentShape(.rect)
             .accessibilityHint("查看消息详情和执行过程")
+            .accessibilityIdentifier("chat-more-\(message.id)")
         }
         .labelStyle(.iconOnly)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -148,9 +158,18 @@ struct MessageBubble: View {
                     isDetailPresented = true
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(.init(String(message.text.prefix(1500))))
-                            .lineLimit(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        MarkdownBodyView(parts: Array(message.markdownParts.prefix(8)),
+                                         configuration: configuration, conversationID: conversationID)
+                            .frame(height: previewHeight, alignment: .top)
+                            .clipped()
+                            .mask {
+                                VStack(spacing: 0) {
+                                    Color.black
+                                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                                        .frame(height: 20)
+                                }
+                            }
+                            .allowsHitTesting(false)
                         Text("查看更多")
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.blue)
@@ -164,9 +183,10 @@ struct MessageBubble: View {
                 .accessibilityHint("打开完整消息")
             } else if message.role == "assistant", !message.markdownParts.isEmpty {
                 MarkdownBodyView(parts: message.markdownParts, configuration: configuration, conversationID: conversationID)
+            } else if message.role == "user" {
+                Text(verbatim: message.text).accessibilityIdentifier("chat-user-text-\(message.id)")
             } else {
-                Text(message.text)
-                    .textSelection(.enabled)
+                Text(verbatim: message.text).textSelection(.enabled)
             }
         }
     }
@@ -253,7 +273,7 @@ private extension MessageBubble {
                         ChatAudioAttachmentView(
                             attachment: attachment,
                             configuration: configuration,
-                            conversationID: conversationID
+                            conversationID: conversationID, compact: message.role == "user"
                         )
                     } else {
                         ChatAttachmentPreview(
@@ -296,6 +316,7 @@ struct ChatAudioAttachmentView: View {
     let attachment: HistoryAttachment
     let configuration: GatewayConfiguration
     let conversationID: String
+    var compact = false
 
     @State private var playback = ChatAudioPlayback()
 
@@ -314,7 +335,8 @@ struct ChatAudioAttachmentView: View {
                             .font(.caption.monospacedDigit())
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 48)
+                .frame(width: compact ? 104 : nil)
+                .frame(maxWidth: compact ? nil : .infinity, minHeight: 48)
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
@@ -333,7 +355,7 @@ struct ChatAudioAttachmentView: View {
             }
         }
         .padding(.horizontal, 10)
-        .background(Color.secondary.opacity(0.08), in: .rect(cornerRadius: 12))
+        .background(Color.secondary.opacity(compact ? 0 : 0.08), in: .rect(cornerRadius: 12))
         .onDisappear { playback.stop() }
     }
 }

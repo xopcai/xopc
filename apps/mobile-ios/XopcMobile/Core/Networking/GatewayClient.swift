@@ -204,6 +204,8 @@ struct GatewayClient: GatewayServing, Sendable {
         ]
         if !search.isEmpty {
             query.append(URLQueryItem(name: "search", value: search))
+        } else {
+            query.append(URLQueryItem(name: "rootConversationsOnly", value: "true"))
         }
         return try await request(path: "/api/sessions", queryItems: query)
     }

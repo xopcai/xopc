@@ -54,8 +54,10 @@ final class ParityAcceptanceUITests: XCTestCase {
             more.tap()
             capture("11-message-actions")
             app.buttons.matching(NSPredicate(format: "label == %@", "消息详情")).firstMatch.tap()
-            XCTAssertTrue(app.navigationBars["消息详情"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.descendants(matching: .any)["message-detail-content"].waitForExistence(timeout: 5))
             capture("12-message-detail")
+            dismissSheet()
+            more.tap()
             let execution = app.buttons["执行过程"]
             XCTAssertTrue(execution.waitForExistence(timeout: 5))
             execution.tap()
@@ -66,7 +68,6 @@ final class ParityAcceptanceUITests: XCTestCase {
                 groupedSearch.tap()
                 capture("14-step-detail")
             }
-            navigateBack()
             dismissSheet()
         }
 
@@ -1914,5 +1915,157 @@ final class GatewayPairingE2EUITests: XCTestCase {
         let (data, response) = try await URLSession.shared.data(for: request)
         XCTAssertTrue((200 ..< 300).contains((response as? HTTPURLResponse)?.statusCode ?? 0))
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+}
+
+@MainActor
+final class MobileLayoutParityUITests: XCTestCase {
+    private var app: XCUIApplication!
+
+    override func setUp() async throws {
+        continueAfterFailure = false
+        app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "chinese"
+        app.launchEnvironment["XOPC_E2E_GATEWAY_TOKEN"] = "synthetic-layout-fixture"
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = "http://127.0.0.1:18791"
+        app.launch()
+        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
+    }
+
+    func testConversationDraftFilteringChildrenAndPersonalEntry() {
+        tab("conversations")
+        XCTAssertTrue(app.buttons["conversations-personal-agent-entry"].waitForExistence(timeout: 10))
+        let expand = app.buttons["conversation-expand-11111111-1111-4111-8111-111111111111"]
+        XCTAssertTrue(expand.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["丢弃草稿"].exists)
+        XCTAssertFalse(app.staticTexts["新对话"].exists)
+        expand.tap()
+        let child = app.buttons["conversation-child-task-child"]
+        XCTAssertTrue(child.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(child.frame.height, 52)
+        XCTAssertLessThanOrEqual(child.frame.height, 60)
+        XCTAssertLessThan(abs(expand.frame.midY - app.staticTexts["移动端布局检查"].frame.midY), 12)
+        capture("conversations-children")
+        child.tap()
+        XCTAssertTrue(app.buttons["assistant-options"].waitForExistence(timeout: 5))
+    }
+
+    func testWorkingLogoAndCompactVoicePlayback() async throws {
+        tab("conversations")
+        let expand = app.buttons["conversation-expand-11111111-1111-4111-8111-111111111111"]
+        XCTAssertTrue(expand.waitForExistence(timeout: 10))
+        expand.tap()
+        app.buttons["conversation-child-task-child"].tap()
+        let jump = app.buttons["chat-jump-bottom"]
+        XCTAssertTrue(jump.waitForExistence(timeout: 10))
+        XCTAssertEqual(jump.value as? String, "正在回答")
+        XCTAssertEqual(jump.frame.midX, app.frame.midX, accuracy: 3)
+        let first = jump.screenshot().pngRepresentation
+        try await Task.sleep(for: .milliseconds(900))
+        let second = jump.screenshot().pngRepresentation
+        XCTAssertNotEqual(first, second)
+        capture("working-logo-animation")
+        let voice = app.buttons["chat-audio-voice"]
+        XCTAssertTrue(voice.waitForExistence(timeout: 5))
+        XCTAssertEqual(voice.frame.height, 48, accuracy: 2)
+        XCTAssertLessThan(voice.frame.width, 133)
+        voice.tap()
+        let playing = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "停止播放语音"), object: voice)
+        await fulfillment(of: [playing], timeout: 5)
+        capture("voice-inline-playing")
+        voice.tap()
+        XCTAssertEqual(voice.label, "播放语音")
+    }
+
+    func testMessageLongPressDetailOptionsAndJump() {
+        openChat()
+        let user = app.staticTexts["请整理移动端布局"].firstMatch
+        XCTAssertTrue(user.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["chat-user-copy-user-1"].exists)
+        XCTAssertFalse(app.buttons["chat-user-reuse-user-1"].exists)
+        user.press(forDuration: 1)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label == %@", "再次编辑")).firstMatch.waitForExistence(timeout: 5))
+        capture("message-long-press")
+        app.buttons.matching(NSPredicate(format: "label == %@", "再次编辑")).firstMatch.tap()
+        XCTAssertEqual(app.textFields["assistant-chat-composer"].value as? String, "请整理移动端布局")
+        let more = app.buttons["chat-more-ai-1"]
+        XCTAssertTrue(more.waitForExistence(timeout: 5))
+        more.tap()
+        app.buttons.matching(NSPredicate(format: "label == %@", "消息详情")).firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["message-detail-content"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.navigationBars["消息详情"].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label == %@", "执行过程")).firstMatch.isHittable)
+        capture("message-content-detail")
+        let detail = app.descendants(matching: .any)["message-detail-content"].firstMatch
+        let handle = app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: app.frame.midX, dy: detail.frame.minY + 8))
+        handle.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)))
+        let options = app.buttons["assistant-options"]
+        let visible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: options)
+        XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 5), .completed)
+        options.tap()
+        XCTAssertTrue(app.navigationBars["会话选项"].waitForExistence(timeout: 5))
+        capture("conversation-options")
+        app.staticTexts["思考档位"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label == %@", "高")).firstMatch.waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label == %@", "高")).firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["会话选项"].waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label == %@", "关闭")).firstMatch.tap()
+        app.swipeDown()
+        let jump = app.buttons["chat-jump-bottom"]
+        XCTAssertTrue(jump.waitForExistence(timeout: 5))
+        XCTAssertEqual(jump.frame.midX, app.frame.midX, accuracy: 3)
+        capture("message-jump-centered")
+        jump.tap()
+        app.buttons["assistant-options"].tap()
+        app.staticTexts["新建会话"].tap()
+        let confirmation = app.buttons.matching(NSPredicate(format: "label == %@", "开始新对话")).firstMatch
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+        let cancel = app.buttons.matching(NSPredicate(format: "label == %@", "取消")).firstMatch
+        if cancel.exists {
+            cancel.tap()
+        } else {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertEqual(app.textFields["assistant-chat-composer"].value as? String, "请整理移动端布局")
+    }
+
+    func testProgressNotesAndProfileLayout() {
+        tab("progress")
+        XCTAssertTrue(app.staticTexts["需要验收"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["进行中的工作"].exists)
+        XCTAssertTrue(app.staticTexts["明日计划"].exists)
+        XCTAssertFalse(app.staticTexts["不应重复显示的计划"].exists)
+        XCTAssertLessThan(app.staticTexts["需要你处理"].frame.minY, app.staticTexts["正在进行"].frame.minY)
+        XCTAssertLessThan(app.staticTexts["正在进行"].frame.minY, app.staticTexts["接下来"].frame.minY)
+        capture("progress-sections")
+        tab("notes")
+        XCTAssertTrue(app.staticTexts["布局检查笔记"].waitForExistence(timeout: 10))
+        capture("notes-search-icons")
+        tab("profile")
+        XCTAssertTrue(app.buttons["profile-personal-agent-configure"].waitForExistence(timeout: 10))
+        XCTAssertGreaterThan(app.staticTexts["Ada"].frame.minY - app.staticTexts["工程师"].frame.maxY, 16)
+        capture("profile-card-spacing")
+        app.buttons["profile-personal-agent-configure"].tap()
+        capture("profile-personal-configuration")
+    }
+
+    private func openChat() {
+        tab("conversations")
+        let title = app.staticTexts["移动端布局检查"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 10))
+        title.tap()
+    }
+
+    private func tab(_ name: String) {
+        app.buttons["home-tab-\(name)"].tap()
+    }
+
+    private func capture(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }

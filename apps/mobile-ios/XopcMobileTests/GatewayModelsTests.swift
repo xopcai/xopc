@@ -5,6 +5,31 @@ import Testing
 
 // swiftlint:disable:next type_body_length
 struct GatewayModelsTests {
+    @Test func voiceAttachmentAcceptsGatewayDurationSeconds() throws {
+        let attachment = try JSONDecoder().decode(HistoryAttachment.self,
+                                                  from: Data(#"{"id":"voice","type":"audio","durationSeconds":3.5}"#.utf8))
+        #expect(attachment.duration == 3.5)
+        let preferred = try JSONDecoder().decode(HistoryAttachment.self,
+                                                 from: Data(#"{"id":"voice","type":"audio","duration":2,"durationSeconds":3.5}"#.utf8))
+        #expect(preferred.duration == 2)
+    }
+
+    @Test func decodesSidebarChildrenAndScheduledHomeItems() throws {
+        let page = try JSONDecoder().decode(ConversationPage.self, from: Data(#"""
+        {"items":[],"total":0,"hasMore":false,"childrenByConversationId":{"parent":{
+          "total":1,"activeCount":1,"items":[{"taskId":"task","title":"Research","phase":"active",
+          "runStatus":"running","activeConversationId":"child"}]}}}
+        """#.utf8))
+        #expect(page.childrenByConversationId?["parent"]?.items.first?.activeConversationId == "child")
+        let home = try JSONDecoder().decode(HomeSnapshot.self, from: Data(#"""
+        {"needsUser":[],"backgroundCount":2,"background":[
+          {"id":"scheduled","kind":"scheduled","title":"Later","summary":"Tomorrow"},
+          {"id":"running","kind":"task","title":"Running","summary":"Working"}]}
+        """#.utf8))
+        #expect(home.background.filter { $0.kind != "scheduled" }.count == 1)
+        #expect(home.background.filter { $0.kind == "scheduled" }.first?.id == "scheduled")
+    }
+
     @Test @MainActor func backgroundImageOutcomeBecomesAnInlineAttachment() throws {
         let message = try JSONDecoder().decode(WireMessage.self, from: Data(#"""
         {"id":"result-row","turnId":"task-result:delivery","role":"assistant","content":"图片已生成",
