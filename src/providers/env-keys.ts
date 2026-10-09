@@ -38,6 +38,12 @@ export const PROVIDER_ENV_MAP: Record<string, string[]> = {
 	'vercel-ai-gateway': ['AI_GATEWAY_API_KEY', 'VERCEL_AI_GATEWAY_API_KEY'],
 	'github-copilot': ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'GITHUB_COPILOT_TOKEN'],
 	/** DashScope HTTP APIs (image gen, STT, TTS) — not an LLM KnownProvider. */
+	seedream: ['ARK_API_KEY', 'VOLCENGINE_API_KEY'],
+	ideogram: ['IDEOGRAM_API_KEY'],
+	bfl: ['BFL_API_KEY'],
+	tokenhub: ['TOKENHUB_API_KEY'],
+	stability: ['STABILITY_API_KEY'],
+	fal: ['FAL_KEY', 'FAL_API_KEY'],
 	dashscope: ['DASHSCOPE_API_KEY', 'QWEN_API_KEY'],
 	'dashscope-cn': ['DASHSCOPE_API_KEY', 'QWEN_API_KEY'],
 	'dashscope-intl': ['DASHSCOPE_API_KEY', 'QWEN_API_KEY'],

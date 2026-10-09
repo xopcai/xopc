@@ -30,7 +30,7 @@ describe('built-in image generation provider catalog', () => {
       'dashscope',
       'minimax',
       'google',
-      'fal',
+      'fal', 'seedream', 'ideogram', 'bfl', 'zhipu-cn', 'tokenhub', 'stability',
     ]);
   });
 
@@ -46,6 +46,7 @@ describe('built-in image generation provider catalog', () => {
       id: 'image-model',
       name: 'Image Model',
       kind: 'image',
+      imageGeneration: { generate: { maxCount: 1 } },
       input: ['text'],
       output: ['image'],
       operations: ['images.generate'],
@@ -62,7 +63,7 @@ describe('built-in image generation provider catalog', () => {
       'dashscope',
       'minimax',
       'google',
-      'fal',
+      'fal', 'seedream', 'ideogram', 'bfl', 'zhipu-cn', 'tokenhub', 'stability',
     ]);
   });
 
@@ -153,7 +154,7 @@ describe('built-in image generation provider catalog', () => {
     vi.spyOn(providerHttp, 'postJsonRequest').mockImplementation(async (url, options) => {
       calls.push({ url: String(url), body: options.body });
       return new Response(
-        JSON.stringify({ data: [{ b64_json: Buffer.from('image').toString('base64') }] }),
+        JSON.stringify({ data: [{ b64_json: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64') }] }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       );
     });
@@ -174,7 +175,7 @@ describe('built-in image generation provider catalog', () => {
               },
               {
                 id: 'large',
-                capabilities: { generate: { maxCount: 2 } },
+                capabilities: { generate: { maxCount: 2, supportsSize: true }, geometry: { sizes: ['1024x1024'] }, output: { formats: ['png'] } },
                 defaults: { count: 2, size: '1024x1024', outputFormat: 'png' },
               },
             ],
