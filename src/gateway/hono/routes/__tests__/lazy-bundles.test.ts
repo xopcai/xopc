@@ -7,7 +7,7 @@ import {
 
 describe('lazy route bundles', () => {
   it('maps tracing routes without capturing usage or neighboring paths', () => {
-    for (const path of ['/api/observability/tracing/settings', '/api/observability/tracing/status', '/api/observability/tracing/langfuse/credentials', '/api/observability/tracing/langfuse/test', '/api/observability/traces', '/api/observability/traces/prune', '/api/observability/traces/id', '/api/observability/traces/id/export']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('observability');
+    for (const path of ['/api/observability/tracing/settings', '/api/observability/tracing/status', '/api/observability/tracing/langfuse/credentials', '/api/observability/tracing/langfuse/credentials/publicKey/reveal', '/api/observability/tracing/langfuse/credentials/secretKey/reveal', '/api/observability/tracing/langfuse/test', '/api/observability/traces', '/api/observability/traces/prune', '/api/observability/traces/id', '/api/observability/traces/id/export']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('observability');
     expect(findAuthenticatedLazyRouteBundle('/api/observability-other/traces')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/usage/traces/id')?.id).toBe('usage');
   });

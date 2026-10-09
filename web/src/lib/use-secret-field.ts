@@ -16,7 +16,7 @@ type SecretFieldUiAction =
   | { type: 'reset-reveal' }
   | { type: 'toggle-show' }
   | { type: 'reveal-start' }
-  | { type: 'reveal-success'; value: string | null }
+  | { type: 'reveal-success'; value: string | null; show?: boolean }
   | { type: 'reveal-error'; message: string }
   | { type: 'copied' }
   | { type: 'clear-copied' }
@@ -43,7 +43,7 @@ function secretFieldUiReducer(state: SecretFieldUiState, action: SecretFieldUiAc
         ...state,
         revealed: action.value,
         revealLoading: false,
-        showKey: true,
+        showKey: action.show ?? true,
         revealErr: null,
       };
     case 'reveal-error':
@@ -68,8 +68,9 @@ export function useSecretField(options: {
   loadFailedLabel?: string;
   /** When set and equal to `value`, hide plaintext until the user toggles show. */
   baselineValue?: string;
+  allowUnrevealedCopy?: boolean;
 }) {
-  const { value, reveal, loadFailedLabel = 'Failed to load secret', baselineValue } = options;
+  const { value, reveal, loadFailedLabel = 'Failed to load secret', baselineValue, allowUnrevealedCopy = false } = options;
   const [ui, dispatch] = useReducer(secretFieldUiReducer, initialSecretFieldUi);
 
   const masked = isMaskedSecret(value);
@@ -115,15 +116,27 @@ export function useSecretField(options: {
     return '';
   })();
 
-  const copyEnabled = copyText.length > 0;
+  const copyEnabled = copyText.length > 0 || (allowUnrevealedCopy && masked && Boolean(reveal));
 
   const copySecret = useCallback(async () => {
-    if (!copyText) return;
-    const ok = await copyTextToClipboard(copyText);
+    let text = copyText;
+    if (!text && allowUnrevealedCopy && masked && revealRef.current) {
+      dispatch({ type: 'reveal-start' });
+      try {
+        const plaintext = await revealRef.current();
+        dispatch({ type: 'reveal-success', value: plaintext, show: false });
+        text = plaintext ?? '';
+      } catch (error) {
+        dispatch({ type: 'reveal-error', message: error instanceof Error ? error.message : loadFailedLabel });
+        return;
+      }
+    }
+    if (!text) return;
+    const ok = await copyTextToClipboard(text);
     if (!ok) return;
     dispatch({ type: 'copied' });
     window.setTimeout(() => dispatch({ type: 'clear-copied' }), 2000);
-  }, [copyText]);
+  }, [allowUnrevealedCopy, copyText, loadFailedLabel, masked]);
 
   const toggleEye = useCallback(async () => {
     if (unchangedConcealed || !masked) {
