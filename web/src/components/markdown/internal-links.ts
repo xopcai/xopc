@@ -37,11 +37,12 @@ export function xopcWorkspaceFileUrlToHref(raw: string): string | null {
   }
 }
 
-export function rewriteWorkspaceFileLinksInMarkdown(markdown: string, normalizeLinkedPaths = true): string {
+export function rewriteWorkspaceFileLinksInMarkdown(markdown: string, normalizeLinkedPaths = true, normalizeImagePaths = false): string {
   const xopcUrlPattern = String.raw`xopc:\/\/workspace\/file[^\s[\]()<>"']*`;
   const bareUrlPattern = new RegExp(xopcUrlPattern, 'gi');
+  const linkPattern = normalizeImagePaths ? /\[([^\]\n]*)\]\(([^)\n]+)\)/g : /(?<!!)\[([^\]\n]*)\]\(([^)\n]+)\)/g;
   const rewrittenLinks = normalizeLinkedPaths
-    ? markdown.replace(/(?<!!)\[([^\]\n]*)\]\(([^)\n]+)\)/g, (match, label: string, raw: string) => {
+    ? markdown.replace(linkPattern, (match, label: string, raw: string) => {
         const unwrapped = raw.trim().replace(/^<|>$/g, '');
         const target = parseWorkspaceFileLinkTarget(unwrapped);
         if (!target) return match;
@@ -85,7 +86,7 @@ export function parseWorkspaceFileLinkTarget(raw: string): WorkspaceFileLinkTarg
   if (absolute) return absolute;
 
   if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return null;
-  if (path.startsWith('/') || path.startsWith('\\') || path.includes('..')) return null;
+  if (path.startsWith('/') || path.startsWith('\\')) return null;
   return normalizeWorkspaceFilePath(path);
 }
 
@@ -120,7 +121,7 @@ export function findWorkspaceRelativeFileMentions(text: string): WorkspaceFileLi
 
 function normalizeWorkspaceFilePath(raw: string, lineFromParam?: number): WorkspaceFileLinkTarget | null {
   let path = raw.trim().replace(/\\/g, '/');
-  if (!path || path.includes('..')) return null;
+  if (!path) return null;
 
   let line = lineFromParam;
   const hashLine = path.match(/#L(\d+)$/i);
@@ -149,7 +150,7 @@ function normalizeAbsoluteFilePath(raw: string): WorkspaceFileLinkTarget | null 
   let path = raw.trim().replace(/\\/g, '/');
   if (!path) return null;
   if (/^[A-Za-z]:\/{2,}/.test(path)) return null;
-  const isAbs = path.startsWith('/') || /^[A-Za-z]:\//.test(path);
+  const isAbs = path.startsWith('~/') || path.startsWith('/') || /^[A-Za-z]:\//.test(path);
   if (!isAbs) return null;
 
   let line: number | undefined;

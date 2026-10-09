@@ -3,10 +3,11 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageBubble } from '@/features/chat/messages/message-bubble';
 import type { Message } from '@/features/chat/messages/messages.types';
+import * as workspaceApi from '@/features/workspace/workspace-api';
 import { useLocaleStore } from '@/stores/locale-store';
 
 describe('Personal AI message styling', () => {
@@ -23,6 +24,7 @@ describe('Personal AI message styling', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     act(() => root.unmount());
     container.remove();
   });
@@ -34,6 +36,17 @@ describe('Personal AI message styling', () => {
       </MemoryRouter>,
     ));
   }
+
+  it('opens personal task result links using their producing run', async () => {
+    const resolveFile = vi.spyOn(workspaceApi, 'resolveWorkspaceFileReference').mockResolvedValue({
+      inputPath: 'report.html', displayName: 'report.html', scope: 'external', exists: true,
+      absolutePath: '/worker/report.html', capabilities: ['preview'],
+    });
+    render({ role: 'assistant', content: [{ type: 'text', text: '[HTML](xopc://workspace/file?path=report.html)' }],
+      taskResultDelivery: { taskRunId: 'producing-run' } as never }, true, false);
+    await act(async () => { container.querySelector<HTMLAnchorElement>('a')?.click(); });
+    expect(resolveFile).toHaveBeenCalledWith('report.html', expect.objectContaining({ taskRunId: 'producing-run' }));
+  });
 
   it('tightens only the Personal AI user bubble corner', () => {
     const message: Message = { role: 'user', content: [{ type: 'text', text: 'Hello' }] };

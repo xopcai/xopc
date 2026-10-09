@@ -31,10 +31,10 @@ describe('MessageBubble context reference attachment', () => {
     container.remove();
   });
 
-  it('renders as an attachment card and opens the referenced Note with a chat return path', () => {
+  it.each(['/chat/session-1', '/personal'])('previews a referenced Note without leaving %s', (origin) => {
     act(() => {
       root.render(
-        <MemoryRouter initialEntries={['/chat/session-1?view=full']}>
+        <MemoryRouter initialEntries={[`${origin}?view=full`]}>
           <Routes>
             <Route
               path="*"
@@ -68,7 +68,7 @@ describe('MessageBubble context reference attachment', () => {
 
     act(() => card?.click());
     expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
-      '/chat/session-1?view=full&note=note-1',
+      `${origin}?view=full&note=note-1`,
     );
   });
 
