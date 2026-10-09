@@ -5,6 +5,7 @@ import Observation
 @Observable
 final class ConversationsState {
     private(set) var conversations: [ConversationSummary] = []
+    private(set) var childrenByConversationID: [String: SidebarTaskGroup] = [:]
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
     private(set) var hasMore = false
@@ -18,9 +19,9 @@ final class ConversationsState {
     var visibleConversations: [ConversationSummary] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard query == activeSearch else { return [] }
-        guard !query.isEmpty else { return conversations }
-        let titleMatches = conversations.filter { $0.displayName.localizedCaseInsensitiveContains(query) }
-        let otherMatches = conversations.filter { !$0.displayName.localizedCaseInsensitiveContains(query) }
+        guard !query.isEmpty else { return conversations.filter { $0.messageCount > 0 } }
+        let titleMatches = conversations.filter { $0.messageCount > 0 && $0.displayName.localizedCaseInsensitiveContains(query) }
+        let otherMatches = conversations.filter { $0.messageCount > 0 && !$0.displayName.localizedCaseInsensitiveContains(query) }
         return titleMatches + otherMatches
     }
 
@@ -44,11 +45,17 @@ final class ConversationsState {
         }
 
         do {
-            let page = try await gateway.fetchConversations(search: query, offset: 0)
-            guard current == generation, !Task.isCancelled else { return }
-            conversations = page.items
-            nextOffset = page.items.count
-            hasMore = page.hasMore
+            conversations = []
+            childrenByConversationID = [:]
+            nextOffset = 0
+            repeat {
+                let page = try await gateway.fetchConversations(search: query, offset: nextOffset)
+                guard current == generation, !Task.isCancelled else { return }
+                conversations.append(contentsOf: page.items)
+                childrenByConversationID.merge(page.childrenByConversationId ?? [:]) { _, new in new }
+                nextOffset += page.items.count
+                hasMore = page.hasMore && !page.items.isEmpty
+            } while hasMore && visibleConversations.isEmpty
         } catch is CancellationError {
             return
         } catch {
@@ -65,7 +72,6 @@ final class ConversationsState {
               activeSearch == searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         else { return }
         let current = generation
-        let offset = nextOffset
         isLoadingMore = true
         defer {
             if current == generation {
@@ -73,12 +79,16 @@ final class ConversationsState {
             }
         }
         do {
-            let page = try await gateway.fetchConversations(search: activeSearch, offset: offset)
-            guard current == generation, !Task.isCancelled else { return }
-            let existing = Set(conversations.map(\.id))
-            conversations.append(contentsOf: page.items.filter { !existing.contains($0.id) })
-            nextOffset += page.items.count
-            hasMore = page.hasMore && !page.items.isEmpty
+            let visibleCount = visibleConversations.count
+            repeat {
+                let page = try await gateway.fetchConversations(search: activeSearch, offset: nextOffset)
+                guard current == generation, !Task.isCancelled else { return }
+                let existing = Set(conversations.map(\.id))
+                conversations.append(contentsOf: page.items.filter { !existing.contains($0.id) })
+                childrenByConversationID.merge(page.childrenByConversationId ?? [:]) { _, new in new }
+                nextOffset += page.items.count
+                hasMore = page.hasMore && !page.items.isEmpty
+            } while hasMore && visibleConversations.count == visibleCount
         } catch is CancellationError {
             return
         } catch {

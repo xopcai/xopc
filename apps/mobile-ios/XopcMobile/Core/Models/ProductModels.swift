@@ -150,6 +150,7 @@ struct HomeSnapshot: Decodable, Sendable {
 }
 
 struct HomeItem: Decodable, Identifiable, Sendable {
+    var kind: String?
     let id: String
     let title: String
     let summary: String

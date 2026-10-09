@@ -16,22 +16,23 @@ struct ConversationsView: View {
     @State private var state = ConversationsState()
     @State private var renameTarget: ConversationSummary?
     @State private var renameText = ""
+    @State private var expandedConversations: Set<String> = []
     @State private var deleteTarget: ConversationSummary?
 
     var body: some View {
         VStack(spacing: 0) {
-            conversationSearchField
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 8)
-
             personalAgentEntry
                 .padding(.horizontal, 20)
+                .padding(.top, 8)
                 .padding(.bottom, 12)
 
+            conversationSearchField
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+
             Group {
-                if state.isLoading, state.conversations.isEmpty {
-                    ProgressView("正在读取对话…")
+                if state.isLoading, state.visibleConversations.isEmpty {
+                    ConversationLoadingSkeleton()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let errorMessage = state.errorMessage, state.conversations.isEmpty {
                     ContentUnavailableView {
@@ -130,7 +131,7 @@ struct ConversationsView: View {
     private var personalAgentEntry: some View {
         Button(action: onOpenPersonalAgent) {
             HStack(spacing: 14) {
-                PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 48, active: false)
+                PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 54, active: false)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(verbatim: personalAgent?.isReady == true
@@ -160,7 +161,7 @@ struct ConversationsView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
-            .background(Color.blue.opacity(0.08), in: .rect(cornerRadius: 20))
+            .background(Color.blue.opacity(0.08), in: .rect(cornerRadius: 22))
         }
         .buttonStyle(.plain)
         .disabled(personalAgentLoading)
@@ -172,9 +173,7 @@ struct ConversationsView: View {
             onSelect(conversation)
         } label: {
             ConversationRow(conversation: conversation)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+                .frame(maxWidth: .infinity, minHeight: 64)
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
@@ -208,11 +207,56 @@ struct ConversationsView: View {
     }
 
     private func conversationListRow(_ conversation: ConversationSummary) -> some View {
-        conversationButton(for: conversation)
-            .onAppear {
-                guard conversation.id == state.visibleConversations.last?.id else { return }
-                Task { await state.loadMore(using: GatewayClient(configuration: configuration)) }
+        Group {
+            HStack(spacing: 0) {
+                if let group = state.childrenByConversationID[conversation.id], !group.items.isEmpty {
+                    Button {
+                        if !expandedConversations.insert(conversation.id).inserted {
+                            expandedConversations.remove(conversation.id)
+                        }
+                    } label: {
+                        Image(systemName: expandedConversations.contains(conversation.id) ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 16, weight: .medium))
+                            .frame(width: 32, height: 44)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(AppLocalization.string(expandedConversations.contains(conversation.id) ? "收起子对话" : "展开子对话", locale: locale))
+                    .accessibilityIdentifier("conversation-expand-\(conversation.id)")
+                }
+                conversationButton(for: conversation)
             }
+            .padding(.horizontal, 16)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+            if expandedConversations.contains(conversation.id), let group = state.childrenByConversationID[conversation.id] {
+                ForEach(group.items) { child in
+                    Button {
+                        guard let id = child.activeConversationId else { return }
+                        onSelect(ConversationSummary(key: id, agentId: conversation.agentId,
+                                                     name: child.title, status: "active", updatedAt: conversation.updatedAt,
+                                                     messageCount: 1, projectId: conversation.projectId, transcriptId: nil))
+                    } label: {
+                        HStack(spacing: 10) {
+                            Circle().stroke(.secondary, lineWidth: 1.2).frame(width: 10, height: 10)
+                            Text(child.title).mobileTextStyle(.secondary).lineLimit(2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(AppLocalization.string(child.phase == "closed" ? "已完成" : child.runStatus == "running" ? "进行中" : "待处理", locale: locale))
+                                .mobileTextStyle(.caption).foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 24).frame(minHeight: 52)
+                        .background(Color(uiColor: .tertiarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+                    }
+                    .buttonStyle(.plain).disabled(child.activeConversationId == nil)
+                    .accessibilityIdentifier("conversation-child-\(child.id)")
+                }
+            }
+        }
+        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+        .listRowBackground(Color.clear).listRowSeparator(.hidden)
+        .onAppear {
+            guard conversation.id == state.visibleConversations.last?.id else { return }
+            Task { await state.loadMore(using: GatewayClient(configuration: configuration)) }
+        }
     }
 }
 
@@ -324,25 +368,15 @@ private struct ConversationRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: conversation.status == "pinned" ? "pin.fill" : "bubble.left")
-                .foregroundStyle(conversation.status == "pinned" ? .blue : .secondary)
-                .frame(width: 28)
-                .accessibilityHidden(true)
-
             VStack(alignment: .leading, spacing: 4) {
                 Text(conversation.displayName)
                     .mobileTextStyle(.rowTitle)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("\(conversation.agentId) · \(conversation.messageCount) 条消息 · \(String(conversation.updatedAt.prefix(10)))")
-                    .mobileTextStyle(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
+            Text(conversation.updatedAtDate, style: .relative)
+                .mobileTextStyle(.caption).foregroundStyle(.secondary)
+                .lineLimit(1)
         }
         .padding(.vertical, 6)
         .contentShape(.rect)
@@ -356,5 +390,24 @@ private struct ConversationRow: View {
         ConversationsView(configuration: .local, onSelect: { _ in }, onStartNew: {},
                           personalAgent: nil, personalAgentLoading: false, personalAgentError: nil,
                           onOpenPersonalAgent: {}, onOpenSettings: {})
+    }
+}
+
+private extension ConversationSummary {
+    var updatedAtDate: Date {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return parser.date(from: updatedAt) ?? ISO8601DateFormatter().date(from: updatedAt) ?? .now
+    }
+}
+
+private struct ConversationLoadingSkeleton: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            ForEach(0 ..< 5) { _ in
+                RoundedRectangle(cornerRadius: 16).fill(.quaternary).frame(height: 64)
+            }
+            Spacer()
+        }.padding(20).accessibilityLabel("正在读取对话")
     }
 }
