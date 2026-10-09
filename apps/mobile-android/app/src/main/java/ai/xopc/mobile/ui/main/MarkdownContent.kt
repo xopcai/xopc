@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import org.commonmark.ext.gfm.strikethrough.Strikethrough
 import org.commonmark.ext.gfm.strikethrough.StrikethroughExtension
@@ -131,13 +132,16 @@ private fun MarkdownBlock(node: Node, linkColor: Color,
 @Composable
 private fun MarkdownInlineText(node: Node, linkColor: Color,
   onOpenLink: ((String) -> Unit)?, modifier: Modifier = Modifier,
-  style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
-  bold: Boolean = false) {
-  val content = remember(node, linkColor, onOpenLink) {
-    buildAnnotatedString { node.children().forEach { appendInline(it, linkColor, onOpenLink) } }
+  style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
+  bold: Boolean = false, prefix: String = "") {
+  val content = remember(node, linkColor, onOpenLink, prefix) {
+    buildAnnotatedString {
+      append(prefix)
+      node.children().forEach { appendInline(it, linkColor, onOpenLink) }
+    }
   }
   SelectionContainer {
-    Text(content, modifier = modifier, style = style.copy(lineHeight = 24.sp),
+    Text(content, modifier = modifier, style = style,
       fontWeight = if (bold) FontWeight.SemiBold else null)
   }
 }
@@ -167,16 +171,26 @@ private fun MarkdownCodeBlock(code: String, info: String, onCopyCode: ((String) 
 
 @Composable
 private fun MarkdownList(node: Node, linkColor: Color,
-  onOpenLink: ((String) -> Unit)?, onCopyCode: ((String) -> Unit)?) {
+  onOpenLink: ((String) -> Unit)?, onCopyCode: ((String) -> Unit)?, depth: Int = 0) {
   val start = (node as? OrderedList)?.markerStartNumber ?: 1
+  // Inline markers keep wrapped lines readable without accumulating marker gutters.
+  val indentation = (depth.coerceAtMost(3) * 12).dp
   Column(verticalArrangement = Arrangement.spacedBy(4.dp),
-    modifier = Modifier.testTag("markdown-list")) {
+    modifier = Modifier.fillMaxWidth().testTag("markdown-list")) {
     node.children().filterIsInstance<ListItem>().forEachIndexed { index, item ->
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(if (node is OrderedList) "${start + index}." else "•",
-          style = MaterialTheme.typography.bodyLarge)
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-          item.children().forEach { MarkdownBlock(it, linkColor, onOpenLink, onCopyCode) }
+      val marker = if (node is OrderedList) "${start + index}. " else "• "
+      item.children().forEachIndexed { childIndex, child ->
+        when (child) {
+          is BulletList, is OrderedList -> MarkdownList(child, linkColor, onOpenLink,
+            onCopyCode, depth + 1)
+          is Paragraph -> MarkdownInlineText(child, linkColor, onOpenLink,
+            modifier = Modifier.fillMaxWidth().padding(start = indentation)
+              .testTag("markdown-list-paragraph"),
+            prefix = if (childIndex == 0) marker else "")
+          else -> Column(modifier = Modifier.fillMaxWidth().padding(start = indentation)) {
+            if (childIndex == 0) Text(marker.trimEnd(), style = MaterialTheme.typography.bodyLarge)
+            MarkdownBlock(child, linkColor, onOpenLink, onCopyCode)
+          }
         }
       }
     }
@@ -210,8 +224,8 @@ private fun AnnotatedString.Builder.appendInline(node: Node, linkColor: Color,
   onOpenLink: ((String) -> Unit)?) {
   when (node) {
     is MarkdownTextNode -> append(node.literal)
-    is Code -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace,
-      background = Color.LightGray.copy(alpha = 0.35f))) { append(node.literal) }
+    is Code -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, fontSize = 0.9.em,
+      background = Color.Gray.copy(alpha = 0.12f))) { append(node.literal) }
     is Emphasis -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
       node.children().forEach { appendInline(it, linkColor, onOpenLink) }
     }

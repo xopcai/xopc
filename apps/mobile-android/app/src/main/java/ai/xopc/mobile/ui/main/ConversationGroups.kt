@@ -13,6 +13,9 @@ data class ConversationAge(val unit: String, val count: Long = 0, val date: Loca
 
 /** Match the HarmonyOS session date buckets using the device's local calendar. */
 object ConversationGroups {
+  fun visibleHistory(items: List<ConversationSummary>): List<ConversationSummary> =
+    items.filter { !it.isLocalDraft && it.messageCount > 0 }
+
   fun group(items: List<ConversationSummary>, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): List<ConversationGroup> {
     val today = now.atZone(zone).toLocalDate()
     val week = today.minusDays((today.dayOfWeek.value - 1).toLong())
