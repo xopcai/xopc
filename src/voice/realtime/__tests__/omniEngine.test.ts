@@ -30,15 +30,16 @@ describe('Omni voice engine', () => {
         if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated', session: {input_sample_rate:16000, output_sample_rate:24000} }));
       });
     });
+    const onUserInput = vi.fn();
     const send = vi.fn(); const sendAudio = vi.fn(); const record = vi.fn(recordOverride ?? (async () => {}));
     engine = createOmniVoiceEngine({
       callId: 'test-call',
       route: { url: `ws://127.0.0.1:${(server.address() as { port: number }).port}`, apiKey: 'test', voice: 'Cherry', instructions: 'Test', route: { provider: 'test', model: 'test', managed } },
-      silenceDurationMs: 700, bargeIn, send, sendAudio, record,
+      silenceDurationMs: 700, bargeIn, send, sendAudio, record, onUserInput,
       onClose: vi.fn(async () => engine.close()),
     });
     await engine.start();
-    return { received, send, sendAudio, record, emit: (event: object) => upstream.send(JSON.stringify(event)) };
+    return { received, send, sendAudio, record, onUserInput, emit: (event: object) => upstream.send(JSON.stringify(event)) };
   }
 
   function delayUploadCompletion() {
@@ -52,6 +53,19 @@ describe('Omni voice engine', () => {
     });
     return callbacks;
   }
+
+  it('holds outbox replies during speech and advances context only for confirmed user input', async () => {
+    const test = await setup();
+    expect(engine.isConversationIdle?.()).toBe(true);
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'user' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('input.speech_started', { utteranceId: 'user' }));
+    expect(engine.isConversationIdle?.()).toBe(false);
+    expect(test.onUserInput).not.toHaveBeenCalled();
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'user' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'user', transcript: 'Just the price' });
+    await vi.waitFor(() => expect(test.onUserInput).toHaveBeenCalledTimes(1));
+    expect(engine.isConversationIdle?.()).toBe(false);
+  });
 
   it('reports a stalled upstream instead of waiting forever after successful transcription', async () => {
     const test = await setup(undefined, false, true);
@@ -113,6 +127,7 @@ describe('Omni voice engine', () => {
     expect(test.received.filter((event) => event.type === 'response.create')).toHaveLength(1);
     expect(test.send.mock.calls.some(([type]) => type === 'response.cancelled')).toBe(false);
     expect(test.record.mock.calls.some(([entry]) => entry.itemId === 'echo')).toBe(false);
+    expect(test.onUserInput).toHaveBeenCalledTimes(1);
     test.emit({ type: 'response.done', response: { id: 'reply', status: 'completed' } });
     engine.acknowledge('reply', 500);
     await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'reply' })));
@@ -136,6 +151,7 @@ describe('Omni voice engine', () => {
     test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'echo', transcript: '天气睛朗' });
     await realDelay(500);
     expect(test.record.mock.calls.some(([entry]) => entry.itemId === 'echo')).toBe(false);
+    expect(test.onUserInput).toHaveBeenCalledTimes(1);
     expect(test.received.filter(event => event.type === 'response.create')).toHaveLength(1);
   });
 

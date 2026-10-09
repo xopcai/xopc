@@ -23,7 +23,7 @@ export function PersonalComposerAttachButton({ disabled, attachmentCount, maxAtt
 }
 
 export function PersonalComposerActions({ disabled, voiceActive, runBusy, hasDraft, chat, onStartVoiceInput,
-  onSend, onQueue, onAbort, onInterrupt }: {
+  onSend, onQueue, onDefer, onAbort, onInterrupt }: {
   disabled: boolean;
   voiceActive: boolean;
   runBusy: boolean;
@@ -32,13 +32,14 @@ export function PersonalComposerActions({ disabled, voiceActive, runBusy, hasDra
   onStartVoiceInput: () => void;
   onSend: () => void;
   onQueue?: () => void | Promise<void>;
+  onDefer?: () => void | Promise<void>;
   onAbort: () => void;
   onInterrupt?: () => void;
 }) {
   if (voiceActive) return null;
   const canQueue = runBusy && hasDraft && Boolean(onQueue);
   const stop = runBusy && !hasDraft;
-  const actionLabel = stop ? chat.abort : canQueue ? chat.followUpQueueAdd : chat.sendMessage;
+  const actionLabel = stop ? chat.abort : chat.sendMessage;
   return <div className="flex shrink-0 items-center gap-0.5">
     <button type="button" className={controlClass} disabled={disabled} title={chat.voiceInput}
       aria-label={chat.voiceInput} onClick={onStartVoiceInput}>
@@ -50,6 +51,7 @@ export function PersonalComposerActions({ disabled, voiceActive, runBusy, hasDra
       </button></DropdownMenu.Trigger>
       <DropdownMenu.Portal><DropdownMenu.Content side="top" align="end" sideOffset={8}
         className="z-50 min-w-44 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover">
+        {onDefer && <DropdownMenu.Item onSelect={() => void onDefer()} className="cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none focus:bg-surface-hover">{chat.followUpQueueAdd}</DropdownMenu.Item>}
         {onInterrupt && <DropdownMenu.Item onSelect={onInterrupt} className="cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none focus:bg-surface-hover">{chat.steeringInterruptSend}</DropdownMenu.Item>}
         <DropdownMenu.Item onSelect={onAbort} className="cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none focus:bg-surface-hover">{chat.abort}</DropdownMenu.Item>
       </DropdownMenu.Content></DropdownMenu.Portal>

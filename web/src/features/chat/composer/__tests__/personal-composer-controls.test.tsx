@@ -25,7 +25,7 @@ describe('Personal composer controls', () => {
     container.remove();
   });
 
-  it('sends a draft when idle, queues it while busy, and stops an empty active run', () => {
+  it('sends a draft immediately while busy and stops an empty active run', () => {
     const onSend = vi.fn();
     const onQueue = vi.fn();
     const onAbort = vi.fn();
@@ -36,7 +36,7 @@ describe('Personal composer controls', () => {
     expect(onSend).toHaveBeenCalledOnce();
 
     act(() => root.render(<PersonalComposerActions {...common} runBusy hasDraft />));
-    act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${chat.followUpQueueAdd}"]`)?.click());
+    act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${chat.sendMessage}"]`)?.click());
     expect(onQueue).toHaveBeenCalledOnce();
 
     act(() => root.render(<PersonalComposerActions {...common} runBusy hasDraft={false} />));

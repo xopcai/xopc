@@ -12,7 +12,7 @@ import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest 
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { deleteSessionRecord, getSessionMetadata, patchSessionMetadata, resetSessionRecord } from '../../storage/sqlite/session-repository.js';
-import { claimNextSessionInput, insertSessionInput } from '../../storage/sqlite/session-input-repository.js';
+import { claimNextSessionInput, insertSessionInput, finishSessionInputRun } from '../../storage/sqlite/session-input-repository.js';
 import { getActiveConnectionWait, getConnectionWait, queueConnectionResolution, updateConnectionWait } from '../../storage/sqlite/connection-wait-repository.js';
 import { upsertConnectorConnection, upsertConnectorInstallation, upsertConnectorActionMetadata } from '../../storage/sqlite/connector-repository.js';
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
@@ -238,6 +238,9 @@ describe('Personal connected-app requests', () => {
     expect(loadTranscriptRowsForSession(conversationId).filter(row => 'customType' in row && row.customType === 'task_result_delivery')).toHaveLength(0);
     const compose = vi.fn(async () => '有一封邮件值得先看，需要在周五前回复。');
     await new PersonalReplyComposer(compose).drain(notify);
+    expect(compose).not.toHaveBeenCalled();
+    finishSessionInputRun(conversationId, 'main-run', 'completed');
+    await new PersonalReplyComposer(compose).drain(notify);
     await new PersonalReplyComposer(compose).drain(notify);
     expect(compose).toHaveBeenCalledTimes(1);
     const rows = loadTranscriptRowsForSession(conversationId);
@@ -266,6 +269,7 @@ describe('Personal connected-app requests', () => {
     expect(db.prepare('SELECT status, reply_status FROM task_result_deliveries WHERE task_run_id = ?').all(run.id))
       .toEqual([{ status: 'pending', reply_status: 'pending' }]);
     await new TaskResultDeliveryService().drain(vi.fn());
+    finishSessionInputRun(conversationId, 'main-run', 'completed');
     await new PersonalReplyComposer(compose).drain(vi.fn());
     drainPersonalRequestResults();
     expect(compose).toHaveBeenCalledTimes(1);

@@ -151,8 +151,16 @@ export function startChatRunStateBridge(): () => void {
     const run = parseCompletedSessionRun((event as CustomEvent<unknown>).detail);
     if (run) recordCompleted(run);
   };
+  const onInterrupted = (event: Event) => {
+    const run = parseSessionRun((event as CustomEvent<unknown>).detail);
+    if (!run) return;
+    // Detach presentation immediately; the server cooperatively cancels execution separately.
+    terminalRuns.set(runKey(run), Date.now());
+    recordInactive(run);
+  };
   const onConnected = () => void reconcile();
 
+  window.addEventListener('session-input-interrupt', onInterrupted);
   window.addEventListener('run-started', onStarted);
   window.addEventListener('run-completed', onCompleted);
   window.addEventListener('agent-run-ended', onCompleted);
@@ -162,6 +170,7 @@ export function startChatRunStateBridge(): () => void {
   return () => {
     disposed = true;
     if (timer !== undefined) window.clearTimeout(timer);
+    window.removeEventListener('session-input-interrupt', onInterrupted);
     window.removeEventListener('run-started', onStarted);
     window.removeEventListener('run-completed', onCompleted);
     window.removeEventListener('agent-run-ended', onCompleted);

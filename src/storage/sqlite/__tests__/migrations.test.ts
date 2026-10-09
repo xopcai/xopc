@@ -67,7 +67,7 @@ describe('SQLite migrations', () => {
           reply_attempts: 0, reply_next_attempt_at: 0, reply_lease_until: 0 },
       ]);
       expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'personal_reply_jobs'").get()).toBeUndefined();
-      expect(readSchemaVersion(db)).toBe(234);
+      expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
     } finally { db.close(); }
   });
 

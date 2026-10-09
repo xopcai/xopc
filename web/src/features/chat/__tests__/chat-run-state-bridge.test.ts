@@ -58,6 +58,20 @@ describe('chat run state bridge', () => {
     });
   });
 
+  it('stops the interrupted presentation without clearing a newer run', async () => {
+    const cleanup = startChatRunStateBridge();
+    cleanups.push(cleanup);
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    window.dispatchEvent(new CustomEvent('run-started', { detail: { conversationId, runId: 'old' } }));
+    window.dispatchEvent(new CustomEvent('session-input-interrupt', { detail: { conversationId, runId: 'old' } }));
+    expect(hasPendingAgentRunForChat(conversationId)).toBe(false);
+    window.dispatchEvent(new CustomEvent('run-started', { detail: { conversationId, runId: 'old' } }));
+    expect(hasPendingAgentRunForChat(conversationId)).toBe(false);
+    window.dispatchEvent(new CustomEvent('run-started', { detail: { conversationId, runId: 'new' } }));
+    window.dispatchEvent(new CustomEvent('session-input-interrupt', { detail: { conversationId, runId: 'old' } }));
+    expect(hasPendingAgentRunForChat(conversationId)).toBe(true);
+  });
+
   it('clears stale pending state from an authoritative inactive snapshot', async () => {
     setPendingAgentRun(conversationId, 'run-stale');
     const cleanup = startChatRunStateBridge();

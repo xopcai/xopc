@@ -29,7 +29,7 @@ function validateCreation(service: GatewayService, creation: SessionCreation): v
 export async function receiveSessionCommand(service: GatewayService, conversationId: string, principalId: string,
   command: SessionInputCommand | SessionMaterializeCommand,
   prepareSourceContexts: () => Promise<AgentSourceContext[]> = async () => []) {
-  return withModelConfigLock(conversationId, async () => {
+  const receive = () => withModelConfigLock(conversationId, async () => {
     const personal = getPersonalAgentByConversation(conversationId);
     if (personal && 'creation' in command && command.creation.agentId !== personal.agentId) {
       throw new SessionCommandError('BAD_REQUEST', 'Personal AI identity is fixed');
@@ -55,6 +55,7 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
     }
     const preparedInput = 'input' in command ? await service.prepareSessionCommandInput({
       conversationId, clientMessageId, delivery: command.kind === 'start' ? 'next' : command.delivery,
+      interrupt: command.kind === 'append' ? command.interrupt : undefined,
       content: command.input.content, attachments: command.input.attachments, contextRefs: command.input.contextRefs,
       sourceContexts: await prepareSourceContexts(),
       thinking: configuredThinking ?? (command.kind === 'start' ? command.creation.thinkingLevel : (await service.sessions.getAgentConfig(conversationId)).thinkingLevel),
@@ -62,11 +63,12 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
     }) : undefined;
     const receipt = acceptSessionCommand({ conversationId, principalId, command, preparedInput,
       attachProject: (id, projectId) => service.projects.attachSession(id, projectId) });
-    if ('kind' in command && command.kind === 'append' && command.delivery === 'steer' && receipt.inputId) {
+    if ('kind' in command && command.kind === 'append' && receipt.inputId) {
       await service.dispatchAcceptedSessionInput(conversationId, receipt.inputId);
     }
     return sessionCommandSnapshot(service, receipt);
   });
+  return service.withSessionInputSubmission(conversationId, receive);
 }
 
 export async function sessionCommandSnapshot(service: GatewayService, receipt: SessionInputReceipt) {

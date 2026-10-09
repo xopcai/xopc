@@ -19,6 +19,8 @@ import { apiFetch } from '@/lib/fetch';
 import { waitForEndpointTurnClaim } from '@/features/endpoint-tools/turn-claim';
 import { apiUrl } from '@/lib/url';
 
+import { readLocalSessionDraft, readSessionTranscript } from './local-session-drafts';
+
 export type ChatFollowUpClarifyApi = {
   clarifyPrompt: ClarifyPromptState | null;
   clarifySubmitting: boolean;
@@ -34,6 +36,7 @@ export type ChatFollowUpClarifyApi = {
     attachments?: PendingFollowUp['attachments'],
     contextRefs?: ComposerContextRef[],
     appContext?: AppContextEnvelope,
+    interrupt?: boolean,
   ) => Promise<void>;
   beginEditFollowUp: (id: string) => void;
   cancelEditFollowUp: () => void;
@@ -271,13 +274,13 @@ export function useChatFollowUpClarify(options: {
       attachments?: PendingFollowUp['attachments'],
       contextRefs?: ComposerContextRef[],
       appContext?: AppContextEnvelope,
+      interrupt?: boolean,
     ) => {
       const trimmed = content.trim();
       if (!trimmed && !attachments?.length && !contextRefs?.length) return;
       if (pendingFollowUpsRef.current.length >= MAX_PENDING_FOLLOW_UPS) {
         throw new Error(`At most ${MAX_PENDING_FOLLOW_UPS} pending messages are allowed`);
       }
-      const effectiveThinking = modelSupportsThinking ? thinkingLevel : 'off';
       const key = conversationIdRef.current;
       if (!key) throw new Error('No active session');
       const origin = await waitForEndpointTurnClaim();
@@ -285,26 +288,27 @@ export function useChatFollowUpClarify(options: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          kind: 'append', expectedTranscriptId: await readSessionTranscript(key),
           configVersion: useChatSessionStore.getState().sessions[key]?.configVersion,
-          clientMessageId: crypto.randomUUID(), delivery: 'next', content: trimmed || content,
-          attachments: attachments?.length ? attachments : undefined, thinking: effectiveThinking,
-          contextRefs: contextRefs?.map(({ refId, kind, sourceId, expectedVersion }) => ({ refId, kind, sourceId, expectedVersion })),
-          appContext,
-        origin,
+          clientMessageId: crypto.randomUUID(), delivery: 'next', interrupt,
+          input: { content: trimmed || content, attachments: attachments?.length ? attachments : undefined,
+            contextRefs: contextRefs?.map(({ refId, kind, sourceId, expectedVersion }) => ({ refId, kind, sourceId, expectedVersion })),
+            appContext },
+          origin,
         }),
       });
       const json = await res.json().catch(() => null) as {
-        payload?: { state?: unknown };
+        payload?: { inputState?: unknown };
         error?: string | { message?: string };
       } | null;
       if (!res.ok) {
         const message = typeof json?.error === 'string' ? json.error : json?.error?.message;
         throw new Error(message ?? 'Message was not accepted');
       }
-      if (!json?.payload?.state) throw new Error('Gateway returned an invalid input state');
-      applyState(json.payload.state);
+      if (!json?.payload?.inputState) throw new Error('Gateway returned an invalid input state');
+      applyState(json.payload.inputState);
     },
-    [applyState, modelSupportsThinking, conversationIdRef, thinkingLevel],
+    [applyState, conversationIdRef],
   );
 
   const beginEditFollowUp = useCallback((id: string) => {
@@ -413,11 +417,14 @@ export function useChatFollowUpClarify(options: {
       const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientMessageId: crypto.randomUUID(), delivery: 'steer', content: row.text.trim(), origin }),
+        body: JSON.stringify({ kind: 'append', clientMessageId: crypto.randomUUID(),
+          expectedTranscriptId: await readSessionTranscript(key),
+          configVersion: useChatSessionStore.getState().sessions[key]?.configVersion,
+          delivery: 'steer', interrupt: false, input: { content: row.text.trim() }, origin }),
       });
       if (res.ok) {
-        const json = await res.json().catch(() => null) as { payload?: { state?: unknown } } | null;
-        applyState(json?.payload?.state);
+        const json = await res.json().catch(() => null) as { payload?: { inputState?: unknown } } | null;
+        applyState(json?.payload?.inputState);
         removePendingFollowUp(id);
       }
     } catch {
@@ -493,4 +500,3 @@ export function useChatFollowUpClarify(options: {
     makeOnClarifyRequest,
   };
 }
-import { readLocalSessionDraft } from './local-session-drafts';
