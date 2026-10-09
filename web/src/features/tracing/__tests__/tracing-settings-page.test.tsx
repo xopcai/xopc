@@ -4,7 +4,8 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { queries, request } = vi.hoisted(() => ({ queries: [] as URLSearchParams[], request: vi.fn() }));
+const { queries, request, credentialState, copy } = vi.hoisted(() => ({ queries: [] as URLSearchParams[], request: vi.fn(), credentialState: { configured: false }, copy: vi.fn(async () => true) }));
+vi.mock('@/lib/copy-to-clipboard', () => ({ copyTextToClipboard: copy }));
 vi.mock('@/stores/locale-store', () => ({ useLocaleStore: (selector: (state: { language: string }) => unknown) => selector({ language: 'en' }) }));
 vi.mock('../tracing-api', () => ({ traceUrl: (path: string) => `http://localhost/api/observability/${path}`, traceRequest: request }));
 vi.mock('@/components/ui/popover-select', () => ({
@@ -20,7 +21,7 @@ vi.mock('swr', () => ({ default: (key: string | null) => {
     const count = Number(url.searchParams.get('limit'));
     data = { traces: Array.from({ length: Math.min(count, 25 - start) }, (_, offset) => ({ traceId: String(start + offset), spanId: 'test', name: `Run ${start + offset + 1}`, type: 'agent', status: 'success', startedAt: 1000, endedAt: 1100, attributes: {} })), nextCursor: start + count < 25 ? String(start + count) : null };
   } else if (url.pathname.endsWith('/settings')) {
-    data = { config: { enabled: true, capture: 'redacted', local: { retentionDays: 7, maxStoreMiB: 256, maxTraces: 10000, maxSpans: 100000, maxTraceKiB: 1024, maxWriteMiBPerMinute: 2 }, langfuse: { enabled: false, baseUrl: 'https://cloud.langfuse.com' } }, credentials: { publicKeySource: 'none', secretKeySource: 'none', baseUrlSource: 'config' } };
+    data = { config: { enabled: true, capture: 'redacted', local: { retentionDays: 7, maxStoreMiB: 256, maxTraces: 10000, maxSpans: 100000, maxTraceKiB: 1024, maxWriteMiBPerMinute: 2 }, langfuse: { enabled: false, baseUrl: 'https://cloud.langfuse.com' } }, credentials: { publicKeyConfigured: credentialState.configured, secretKeyConfigured: credentialState.configured, publicKeySource: 'none', secretKeySource: 'none', baseUrlSource: 'config' } };
   } else {
     data = { local: { physicalBytes: 0, bytes: 0, traces: 25, spans: 25 }, langfuse: { state: 'disabled', pending: 0, dropped: 0 } };
   }
@@ -41,6 +42,8 @@ const results = () => container.querySelector('[aria-label="Execution results"]'
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   queries.length = 0;
+  credentialState.configured = false;
+  copy.mockClear();
   request.mockReset();
   request.mockImplementation(async (_path: string, method: string, body: unknown) => method === 'PATCH' ? { config: body } : { ok: true });
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
@@ -105,12 +108,12 @@ describe('tracing autosave', () => {
   it('automatically saves entered credentials and clears them after success', async () => {
     vi.useFakeTimers();
     act(() => button('Capture settings').click());
-    const secret = container.querySelector<HTMLInputElement>('input[type="password"]')!;
+    const secret = container.querySelector<HTMLInputElement>('#langfuse-secretKey')!;
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
     act(() => { setter.call(secret, 'sk-lf-test-key'); secret.dispatchEvent(new Event('input', { bubbles: true })); });
     await act(async () => { await vi.advanceTimersByTimeAsync(1100); });
     expect(request).toHaveBeenCalledWith('tracing/langfuse/credentials', 'PUT', { secretKey: 'sk-lf-test-key' });
-    expect(secret.value).toBe('');
+    expect(container.querySelector<HTMLInputElement>('#langfuse-secretKey')!.value).toBe('');
   });
   it('preserves newer edits while an earlier automatic save is still in flight', async () => {
     vi.useFakeTimers();
@@ -135,5 +138,36 @@ describe('tracing autosave', () => {
     expect(container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(false);
     expect(container.textContent).toContain('Connection unavailable');
     expect(button('Retry autosave')).toBeDefined();
+  });
+});
+
+
+describe('Langfuse key viewing and copying', () => {
+  it.each(['publicKey', 'secretKey'] as const)('reveals, hides and copies configured %s without saving it', async field => {
+    credentialState.configured = true;
+    const label = field === 'publicKey' ? 'Public Key' : 'Secret Key';
+    request.mockResolvedValue({ key: 'configured-test-key' });
+    act(() => button('Capture settings').click());
+    const input = () => container.querySelector<HTMLInputElement>(`#langfuse-${field}`)!;
+    expect(input().type).toBe('password');
+    expect(request).not.toHaveBeenCalled();
+    await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="Copy ${label}"]`)!.click());
+    expect(copy).toHaveBeenCalledWith('configured-test-key');
+    expect(input().type).toBe('password');
+    expect(input().value).not.toBe('configured-test-key');
+    await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="Show ${label}"]`)!.click());
+    expect(input().type).toBe('text');
+    expect(input().value).toBe('configured-test-key');
+    act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="Hide ${label}"]`)!.click());
+    expect(input().type).toBe('password');
+    expect(request.mock.calls).toEqual([[`tracing/langfuse/credentials/${field}/reveal`, 'POST']]);
+  });
+  it('shows reveal failures without copying a masked placeholder', async () => {
+    credentialState.configured = true;
+    request.mockRejectedValue(new Error('Reveal unavailable'));
+    act(() => button('Capture settings').click());
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Copy Secret Key"]')!.click());
+    expect(copy).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Reveal unavailable');
   });
 });

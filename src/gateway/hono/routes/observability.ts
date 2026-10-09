@@ -51,6 +51,14 @@ export function registerObservabilityRoutes(authenticated: Hono, { service, stri
     await configureTracing(service.currentConfig.observability?.tracing);
     return c.json({ ok: true });
   });
+  app.post('/tracing/langfuse/credentials/:field/reveal', strictRateLimitMiddleware, async c => {
+    const field = z.enum(['publicKey', 'secretKey']).parse(c.req.param('field'));
+    const environmentKey = field === 'publicKey' ? 'LANGFUSE_PUBLIC_KEY' : 'LANGFUSE_SECRET_KEY';
+    const provider = field === 'publicKey' ? 'langfuse-public' : 'langfuse';
+    const key = process.env[environmentKey] || await new CredentialResolver().revealGatewayStoredApiKey(provider);
+    c.header('Cache-Control', 'no-store');
+    return c.json({ key: key || null });
+  });
   app.delete('/tracing/langfuse/credentials', strictRateLimitMiddleware, async c => {
     const resolver = new CredentialResolver();
     await resolver.deleteProviderCredential('langfuse'); await resolver.deleteProviderCredential('langfuse-public');

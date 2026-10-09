@@ -27,6 +27,7 @@ export type SecretInputProps = {
   inputClassName?: string;
   labels: SecretInputLabels;
   reveal?: () => Promise<string | null>;
+  allowUnrevealedCopy?: boolean;
   loadFailedLabel?: string;
   maskedHelp?: string;
   notInConfigFile?: string;
@@ -58,6 +59,7 @@ export function SecretInput({
   inputClassName,
   labels,
   reveal,
+  allowUnrevealedCopy,
   loadFailedLabel,
   maskedHelp,
   notInConfigFile,
@@ -81,7 +83,7 @@ export function SecretInput({
     toggleEye,
     onInputChange,
     eyeDisabled,
-  } = useSecretField({ value, reveal, loadFailedLabel, baselineValue });
+  } = useSecretField({ value, reveal, loadFailedLabel, baselineValue, allowUnrevealedCopy });
 
   const readOnly = readOnlyProp || concealedReadOnly;
 
@@ -118,7 +120,7 @@ export function SecretInput({
               )}
               title={copied ? labels.copied : labels.copy}
               aria-label={copied ? labels.copied : labels.copy}
-              disabled={disabled}
+              disabled={disabled || revealLoading}
               onClick={() => void copySecret()}
             >
               {copied ? <CheckCircle2 className="size-3.5" /> : <Copy className="size-3.5" />}
