@@ -76,7 +76,7 @@ import {
 } from './index.js';
 import { createSessionSearchTool } from './session-search-tool.js';
 import { createPersonalReadTool } from './personal-read-tool.js';
-import { createPersonalTaskTool } from './personal-task-tool.js';
+import { createPersonalTaskTool, type PersonalTaskToolDeps } from './personal-task-tool.js';
 import { createPersonalRequestTools } from './personal-request-tool.js';
 import { createPersonalRequestConnectionTool, createPersonalRequestResultTool } from './personal-request-result-tool.js';
 import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
@@ -148,6 +148,7 @@ export interface ToolFactoryDeps {
   getMemoryManager?: () => MemoryManager;
   /** Skill runtime for the current workspace/session. */
   getSkillManager?: () => SkillManager;
+  getAgentSkillAvailability?: PersonalTaskToolDeps['getAgentSkillAvailability'];
   /** Session store for `session_search`. */
   getSessionStore?: () => SessionStore;
   /** When set (gateway webchat), enables the `clarify` tool. */
@@ -428,6 +429,7 @@ export class AgentToolsFactory {
     const find = createFindTool(workspace);
 
     const productToolDeps = {
+      getAgentSkillAvailability: this.deps.getAgentSkillAvailability,
       getWorkspace: () => this.deps.workspace,
       getConfig: () => this.deps.getConfig?.(),
       getCurrentAgentId: () => options?.agentId,

@@ -25,9 +25,31 @@ const PersonalTaskSchema = Type.Object({
   expectedOutputs: Type.Optional(Type.Array(Type.String())),
   acceptanceCriteria: Type.Optional(Type.Array(Type.String())),
   constraints: Type.Optional(Type.Array(Type.String())),
+  requiredSkills: Type.Optional(Type.Array(Type.String({ minLength: 1, description: 'Canonical Skill names explicitly requested by the user. Verify through agents before creation.' }))),
   requiredTools: Type.Optional(Type.Array(Type.String({ description: 'Tool names needed for this Task. Use names returned by agents; omit when matching by role or expertise.' }))),
   idempotencyKey: Type.Optional(Type.String()),
 });
+
+export interface PersonalTaskToolDeps extends XopcUseToolDeps {
+  getAgentSkillAvailability?: (agentId: string) => {
+    skills: Array<{ name: string; availableForCurrentAgent: boolean; unavailableReason?: string | null }>;
+  };
+}
+
+class PersonalSkillUnavailableError extends Error {}
+
+function resolveRequiredSkills(deps: PersonalTaskToolDeps, agentId: string, requested: string[]): string[] {
+  if (requested.length === 0) return [];
+  if (!deps.getAgentSkillAvailability) throw new Error('Specialist Skill availability cannot be verified');
+  const skills = deps.getAgentSkillAvailability(agentId).skills;
+  return [...new Set(requested.map(name => name.trim().toLowerCase()))].map(name => {
+    const skill = skills.find(item => item.name.toLowerCase() === name);
+    if (!skill?.availableForCurrentAgent) {
+      throw new PersonalSkillUnavailableError(`Agent ${agentId} cannot use required Skill ${name}: ${skill?.unavailableReason ?? 'not-installed'}. Do not substitute the requested Skill without the user’s direction.`);
+    }
+    return skill.name;
+  });
+}
 
 const MAX_PERSONAL_TASK_TITLE = 60;
 export function buildPersonalTaskBrief(input: { title?: string; objective: string; description?: string }): {
@@ -48,12 +70,12 @@ export function buildPersonalTaskBrief(input: { title?: string; objective: strin
 }
 
 /** A narrow Task surface for the fast personal conversation. */
-export function createPersonalTaskTool(deps: XopcUseToolDeps): AgentTool<typeof PersonalTaskSchema, Record<string, never>> {
+export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<typeof PersonalTaskSchema, Record<string, never>> {
   const productTool = createXopcUseTool(deps);
   return {
     name: 'personal_task',
     label: 'Personal Task',
-    description: 'Find specialist Agents by role, availableTools, and model.available; delegate work, inspect Tasks, send instructions, or answer worker questions. Choose an Agent whose model.available is true. Before saying you cannot do a request, inspect another Agent. If a candidate fails, try another suitable Agent or approach within the user’s authorization. agents can filter by requiredTools; if none match, inspect unfiltered Agents. Return to the user quickly after creation.',
+    description: 'Find specialist Agents by role, availableTools, and model.available; delegate work, inspect Tasks, send instructions, or answer worker questions. Choose an Agent whose model.available is true. Before saying you cannot do a request, inspect another Agent. If a candidate fails, retry alternatives within the user’s authorization only when the user has not required a particular Agent or Skill. For explicitly requested Skills, use requiredSkills in agents and create; creation validates availability and includes them in the worker brief. agents can filter by requiredTools or requiredSkills; if none match, inspect unfiltered Agents. Return to the user quickly after creation.',
     parameters: PersonalTaskSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -67,16 +89,24 @@ export function createPersonalTaskTool(deps: XopcUseToolDeps): AgentTool<typeof 
       }
       if (input.command === 'agents') {
         const requiredTools = input.requiredTools ?? [];
-        const catalog = new AgentCatalogRepository().snapshot();
+        if (input.requiredSkills?.length && !deps.getAgentSkillAvailability) throw new Error('Specialist Skill availability cannot be verified');
+        const repository = new AgentCatalogRepository();
+        const catalog = repository.snapshot();
         const agents = catalog.agents
           .filter(agent => agent.enabled !== false && agent.id !== ownAgentId && !agent.id.startsWith('personal-'))
           .map(agent => {
             const config = resolveEffectiveAgentConfig({ defaults: catalog.defaults, agent }).config;
             const availableTools = getAvailablePersonalAgentTools(config, deps);
-            return { id: agent.id, name: agent.profile?.name ?? agent.id,
+            let requiredSkills: string[];
+            try { requiredSkills = resolveRequiredSkills(deps, agent.id, input.requiredSkills ?? []); }
+            catch (error) {
+              if (error instanceof PersonalSkillUnavailableError) return null;
+              throw error;
+            }
+            return { ...(requiredSkills.length ? { verifiedSkills: requiredSkills } : {}), id: agent.id, name: agent.profile?.name ?? agent.id,
               description: agent.profile?.description ?? '', availableTools,
               model: personalAgentModelAvailability(config) };
-          }).filter(agent => requiredTools.every(tool => agent.availableTools.includes(tool)));
+          }).filter(agent => agent !== null && requiredTools.every(tool => agent.availableTools.includes(tool)));
         return { content: [{ type: 'text', text: JSON.stringify(agents) }], details: {} };
       }
       let command: string = input.command;
@@ -98,9 +128,14 @@ export function createPersonalTaskTool(deps: XopcUseToolDeps): AgentTool<typeof 
         if (missingTools.length > 0) {
           throw new Error(`Agent ${agentId} lacks required tools: ${missingTools.join(', ')}. Find another Agent or approach.`);
         }
+        const requiredSkills = resolveRequiredSkills(deps, agentId, input.requiredSkills ?? []);
         const brief = buildPersonalTaskBrief({ title: input.title, objective, description: input.description });
         args = {
-          ...brief, agentId, createMode: 'start',
+          ...brief,
+          body: [brief.body, requiredSkills.length
+            ? `## Required Skills\n\n${requiredSkills.map(name => `- ${name}`).join('\n')}\n\nRead and follow these Skills before performing the task. Report any availability failure; do not claim a Skill was used without actually following it.`
+            : undefined].filter(Boolean).join('\n\n'),
+          agentId, createMode: 'start',
           includeConversationContext: false,
           expectedOutputs: input.expectedOutputs ?? [],
           acceptanceCriteria: input.acceptanceCriteria ?? [],

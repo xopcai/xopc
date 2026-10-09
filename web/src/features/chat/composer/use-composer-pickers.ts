@@ -21,7 +21,10 @@ import {
 } from '@/features/chat/palette/use-at-mention-picker';
 import { commandRowDisabled, useCommandPalette } from '@/features/chat/palette/use-command-palette';
 
+import { CHAT_COMPOSER_CAPABILITIES, type ComposerCapabilities } from './composer-capabilities';
+
 export interface UseComposerPickersOptions {
+  capabilities?: Readonly<ComposerCapabilities>;
   conversationId: string | null;
   editorValue: string;
   editorCursor: number;
@@ -145,12 +148,14 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     commandPalettePanelRef,
   } = opts;
 
+  const capabilities = opts.capabilities ?? CHAT_COMPOSER_CAPABILITIES;
   const atRangeRaw = useMemo(
     () => detectAtRange(editorValue, editorCursor),
     [editorValue, editorCursor],
   );
   const palette = useCommandPalette(editorValue, editorCursor, {
     suppress: atRangeRaw != null,
+    capabilities,
     isComposing,
     currentAgentId,
     conversationId,
@@ -159,6 +164,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     conversationId,
     currentAgentId,
     slashPaletteOpen: palette.open,
+    capabilities,
     isComposing,
     precomputedAtRange: atRangeRaw,
     selectedContextKeys: new Set(contextRefs.map((ref) => `${ref.kind}:${ref.sourceId}`)),
@@ -212,9 +218,12 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
 
   const applyPalette = useCallback(
     (item: PaletteItem) => {
+      if (!capabilities.commands && item.kind === 'command') return;
+      if (!capabilities.skills && item.kind === 'skill') return;
+      if (!capabilities.agentSwitch && item.kind === 'agent') return;
       applyPaletteItem(item, buildPaletteCtx());
     },
-    [buildPaletteCtx],
+    [buildPaletteCtx, capabilities],
   );
 
   const applyAtMention = useCallback(
@@ -239,6 +248,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
       }
 
       if (item.kind === 'skill') {
+        if (!capabilities.skills) return;
         const insert = `/skill:${item.canonicalName} `;
         const next = replaceRange(valueRef.current, range.start, range.end, insert);
         resetEditor({ nextText: next, caretOffset: range.start + insert.length, focus: true });
@@ -246,6 +256,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
       }
 
       if (item.kind === 'agent') {
+        if (!capabilities.agentSwitch) return;
         const next = replaceRange(valueRef.current, range.start, range.end, '');
         resetEditor({ nextText: next, caretOffset: range.start, focus: true });
         onChatAgentChange?.(item.agentId);
@@ -273,6 +284,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     },
     [
       atPicker.atRange,
+      capabilities,
       onAddContextRef,
       conversationId,
       onChatAgentChange,

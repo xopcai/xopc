@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { SessionConfigSchema, type Config } from '../config/schema.js';
+import { isPersonalConversation } from '../personal-agent/repository.js';
 import { createLogger } from '../utils/logger.js';
 import { requireXopcDatabase } from '../storage/sqlite/index.js';
 import { resolveSessionLifecycleTimestamps } from './lifecycle-timestamps.js';
@@ -56,6 +57,12 @@ export async function initSessionTurn(
     conversationId: opts.conversationId,
   });
   const key = conversationId?.trim() ?? opts.conversationId.trim();
+
+  if (isPersonalConversation(key)) {
+    return { conversationId: key, transcriptId: sessionMetadata?.transcriptId,
+      isNewSession: false, resetTriggered: false, staleRollover: false,
+      bodyStripped: rawBody, bareReset: false };
+  }
 
   const routing = sessionMetadata?.routing;
   const peerKind = routing?.peerKind;

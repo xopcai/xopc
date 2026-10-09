@@ -117,7 +117,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const navigate = useNavigate();
   const location = useLocation();
   const { pathname } = location;
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   /** Dedupe applying the same `?skill=` / `?slash=` seed for a session (StrictMode-safe). */
   const routeComposerSeedMarkerRef = useRef<string | null>(null);
 
@@ -139,10 +139,18 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     taskId: taskId ?? undefined,
   });
 
-  const skillDiscovery = !embedded && !taskId && searchParams.get('scene') === 'find-skills';
+  const skillDiscovery = !personal && !embedded && !taskId && searchParams.get('scene') === 'find-skills';
   const agentSetup = !embedded && !taskId && searchParams.get('agentSetup') === '1';
-  const skillQuery = searchParams.get('skill')?.trim() ?? '';
-  const slashQuery = searchParams.get('slash')?.trim() ?? '';
+  const skillQuery = personal ? '' : searchParams.get('skill')?.trim() ?? '';
+  const slashQuery = personal ? '' : searchParams.get('slash')?.trim() ?? '';
+  useEffect(() => {
+    if (!personal || (!searchParams.has('skill') && !searchParams.has('slash'))) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('skill');
+    next.delete('slash');
+    setSearchParams(next, { replace: true });
+  }, [personal, searchParams, setSearchParams]);
+
   const draftQuery = searchParams.get('draft') ?? '';
   const autoSendQuery = searchParams.get('autoSend') === '1';
   const attachmentHandoffId = searchParams.get('attachmentHandoff');

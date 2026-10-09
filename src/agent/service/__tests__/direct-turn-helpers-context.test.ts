@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { commandRegistry } from '../../../chat-commands/registry.js';
 import { tryRunSlashCommand } from '../direct-turn-helpers.js';
 
+vi.mock('../../../personal-agent/repository.js', () => ({ isPersonalConversation: (id: string) => id === 'personal-conversation' }));
+
 const sourceContexts = [{
   kind: 'note' as const,
   sourceId: 'note-1',
@@ -81,5 +83,24 @@ describe('slash command source context policy', () => {
     expect(unknown).toMatchObject({ matched: true, command: 'does-not-exist' });
     expect(unknown.aggregatedText).toContain('Unknown command');
     expect(skill.matched).toBe(false);
+  });
+});
+
+describe('personal slash input', () => {
+  afterEach(() => commandRegistry.clear());
+  const deps = { commandHandler: { executeCommandAndAggregateReply: vi.fn() }, log: { warn: vi.fn() } };
+  const personal = { ...commandContext, conversationId: 'personal-conversation' };
+
+  it.each(['/Users/me/file.md', '/', '/unknown text', '请比较 A/B', 'Discuss this:\n/new', 'https://example.com/path'])('keeps ordinary slash text: %s', async text => {
+    expect(await tryRunSlashCommand(deps, personal, text)).toMatchObject({ matched: false });
+  });
+
+  it('blocks Skills and registered reset commands even when reset-overlap skipping is enabled', async () => {
+    commandRegistry.register({ id: 'session.new', name: 'new', aliases: ['reset'], category: 'session', scope: ['global'], description: 'Reset', handler: vi.fn() });
+    for (const text of ['/new', '/reset', '/skill:weather Paris']) {
+      const result = await tryRunSlashCommand(deps, personal, text, { skipResetCommands: true });
+      expect(result).toMatchObject({ matched: true, aggregatedText: expect.stringContaining('Personal AI does not support') });
+    }
+    expect(deps.commandHandler.executeCommandAndAggregateReply).not.toHaveBeenCalled();
   });
 });

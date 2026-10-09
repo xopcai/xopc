@@ -70,6 +70,8 @@ import {
 } from '@/features/voice/voice-input-shortcut-events';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+
+import { CHAT_COMPOSER_CAPABILITIES, PERSONAL_COMPOSER_CAPABILITIES } from './composer-capabilities';
 import { useLocaleStore } from '@/stores/locale-store';
 
 function composerAttachmentFromWire(attachment: WireAttachment): Attachment {
@@ -328,6 +330,7 @@ export const ChatComposer = memo(function ChatComposer({
   );
 
   const editor = useComposerEditor({
+    capabilities: personal ? PERSONAL_COMPOSER_CAPABILITIES : CHAT_COMPOSER_CAPABILITIES,
     disabled,
     agentId: currentAgentId,
     conversationId,
@@ -395,6 +398,7 @@ export const ChatComposer = memo(function ChatComposer({
   );
 
   const pickers = useComposerPickers({
+    capabilities: personal ? PERSONAL_COMPOSER_CAPABILITIES : CHAT_COMPOSER_CAPABILITIES,
     conversationId,
     editorValue: editor.value,
     editorCursor: editor.cursor,

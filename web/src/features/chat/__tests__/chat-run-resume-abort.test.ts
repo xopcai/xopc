@@ -14,7 +14,8 @@ import {
   publishEndpointTurnClaim,
 } from '@/features/endpoint-tools/turn-claim';
 import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
-import type { AppContextEnvelope } from '@xopcai/gateway-contract';
+import { contextRefWireToken, sessionInputCommandSchema, type AppContextEnvelope } from '@xopcai/gateway-contract';
+import { savePendingSessionCommand } from '@/features/chat/session/local-session-drafts';
 
 const realtimeState = vi.hoisted(() => ({
   listener: undefined as undefined | {
@@ -209,6 +210,31 @@ describe('MessageSender terminal state', () => {
       clear: () => storage.clear(),
     });
     publishEndpointTurnClaim('web-test', 'test-turn-token');
+  });
+
+  it.each(['file', 'session'] as const)('sends @ %s references without composer display fields and preserves them on retry', async kind => {
+    const sender = new MessageSender();
+    const reference = { refId: 'ref-1', kind, sourceId: 'source-1', expectedVersion: 'revision-1',
+      title: '追踪验收测试', ...(kind === 'file' ? { fileKind: 'file' as const } : {}) };
+    const original = structuredClone(reference);
+    const content = `${contextRefWireToken(reference.refId)} hello`;
+    vi.mocked(apiFetch).mockImplementation(async (_url, init) => acceptedInput(conversationId, JSON.parse(String(init?.body)).clientMessageId));
+
+    await expect(sender.send(content, conversationId, undefined, undefined, undefined, undefined, undefined, [reference])).resolves.toBeUndefined();
+    const body = JSON.parse(String(vi.mocked(apiFetch).mock.calls[0]?.[1]?.body));
+    expect(sessionInputCommandSchema.safeParse(body).success).toBe(true);
+    expect(body.input.contextRefs).toEqual([{ refId: 'ref-1', kind, sourceId: 'source-1', expectedVersion: 'revision-1' }]);
+    expect(body.input.content).toBe(content);
+    expect(reference).toEqual(original);
+    expect(savePendingSessionCommand).toHaveBeenCalledWith(conversationId, expect.objectContaining({ input: body.input }));
+
+    vi.mocked(apiFetch).mockClear();
+    vi.mocked(apiFetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'Forbidden' } }), { status: 403 }));
+    await expect(sender.send(content, conversationId, undefined, undefined, undefined, undefined, undefined, [reference])).rejects.toThrow('Forbidden');
+    expect(sender.isSending).toBe(false);
+    await sender.send(content, conversationId, undefined, undefined, undefined, undefined, undefined, [reference]);
+    const retried = JSON.parse(String(vi.mocked(apiFetch).mock.calls[1]?.[1]?.body));
+    expect(retried.input).toEqual(body.input);
   });
 
   it('freezes page context and attachments before waiting for an endpoint', async () => {

@@ -12,6 +12,7 @@ import type {
   CommandResult,
 } from './types.js';
 import { normalizeTelegramCommandName, parseSlashCommand } from './command-parse.js';
+import { personalCommandRejection } from './personal-command-policy.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('CommandRegistry');
@@ -154,6 +155,9 @@ export class CommandRegistry {
         success: false,
       };
     }
+
+    const rejection = personalCommandRejection(context.conversationId, command.id, name);
+    if (rejection) return { content: rejection, success: false };
 
     // Check scope
     const scope = context.isGroup ? 'group' : 'private';
