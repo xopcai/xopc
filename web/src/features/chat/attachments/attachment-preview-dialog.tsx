@@ -1,6 +1,7 @@
 import { parseFileResourceArtifactUri } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
@@ -21,6 +22,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 export function AttachmentPreviewDialog({
   open,
   attachment,
+  images = [],
+  onAttachmentChange,
   authToken,
   conversationId,
   layerClassName = 'z-[81]',
@@ -28,6 +31,8 @@ export function AttachmentPreviewDialog({
 }: {
   open: boolean;
   attachment: MessageAttachment | null;
+  images?: MessageAttachment[];
+  onAttachmentChange?: (attachment: MessageAttachment) => void;
   authToken?: string;
   conversationId?: string | null;
   layerClassName?: string;
@@ -41,6 +46,17 @@ export function AttachmentPreviewDialog({
   const [openingLocalApp, setOpeningLocalApp] = useState(false);
 
   const { preview, fileType, hasExtractedText } = resolved;
+  const imageIndex = attachment ? images.findIndex((image) =>
+    image === attachment || (image.id && image.id === attachment.id)
+    || (image.uri && image.uri === attachment.uri)
+    || (!image.id && !image.uri && image.name === attachment.name && Boolean(image.data) && image.data === attachment.data),
+  ) : -1;
+  const hasGallery = fileType === 'image' && images.length > 1 && imageIndex >= 0 && Boolean(onAttachmentChange);
+  const navigateImage = (direction: 'previous' | 'next') => {
+    if (!hasGallery || share.dialogOpen) return;
+    const next = imageIndex + (direction === 'previous' ? -1 : 1);
+    if (next >= 0 && next < images.length) onAttachmentChange?.(images[next]);
+  };
   const showToggle =
     fileType !== 'image' && fileType !== 'text' && fileType !== 'pptx' && hasExtractedText;
 
@@ -119,6 +135,15 @@ export function AttachmentPreviewDialog({
       <Dialog.Portal>
         <Dialog.Content
           aria-describedby={undefined}
+          onKeyDown={(event) => {
+            if (!hasGallery || share.dialogOpen || event.altKey || event.ctrlKey || event.metaKey) return;
+            const target = event.target as HTMLElement;
+            if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.preventDefault();
+              navigateImage(event.key === 'ArrowLeft' ? 'previous' : 'next');
+            }
+          }}
           className={cn(
             'xopc-dialog-content-fullscreen fixed inset-0 flex h-[100dvh] w-full flex-row overflow-hidden',
             electronPreviewViewportClass(),
@@ -164,6 +189,7 @@ export function AttachmentPreviewDialog({
                 conversationId,
                 createFile: async () => new File([resolved.downloadBuffer!], resolved.fileName, { type: resolved.descriptor.mimeType }),
               } : undefined}
+              onImageSwipe={hasGallery ? navigateImage : undefined}
               language={language}
               descriptor={resolved.descriptor}
               loading={resolved.loading}
@@ -175,6 +201,21 @@ export function AttachmentPreviewDialog({
               extractedTextTruncated={resolved.extractedTextTruncated}
               actions={previewActions}
             />
+            {hasGallery ? (
+              <div className="flex shrink-0 items-center justify-center gap-4 border-t border-edge bg-surface-panel px-3 py-2">
+                <button type="button" aria-label={labels.attachmentPreviewPreviousImage}
+                  disabled={imageIndex === 0} onClick={() => navigateImage('previous')}
+                  className={cn('flex size-11 touch-manipulation items-center justify-center rounded-lg hover:bg-surface-hover disabled:opacity-30', interaction.focusRingBase)}>
+                  <ChevronLeft size={20} aria-hidden="true" />
+                </button>
+                <span role="status" className="min-w-16 text-center text-sm tabular-nums text-fg-muted">{imageIndex + 1} / {images.length}</span>
+                <button type="button" aria-label={labels.attachmentPreviewNextImage}
+                  disabled={imageIndex === images.length - 1} onClick={() => navigateImage('next')}
+                  className={cn('flex size-11 touch-manipulation items-center justify-center rounded-lg hover:bg-surface-hover disabled:opacity-30', interaction.focusRingBase)}>
+                  <ChevronRight size={20} aria-hidden="true" />
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <button

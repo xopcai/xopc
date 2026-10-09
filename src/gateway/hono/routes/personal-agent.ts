@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
+import { markPersonalRead, personalUnreadSnapshot } from '../../../personal-agent/unread.js';
 import { getPersonalAgent } from '../../../personal-agent/repository.js';
 import { finishPersonalWelcome, getPersonalOnboarding, PersonalOnboardingDraftSchema, PersonalOnboardingStepSchema, savePersonalOnboarding } from '../../../personal-agent/onboarding.js';
 import { TaskOriginRepository } from '../../../tasks/task-origin-repository.js';
@@ -51,6 +52,26 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
     await refreshPersonalDelegationGuidance(deps.service, ownerId);
     ensurePersonalConversationVisibility(ownerId);
     return c.json({ ok: true, payload: getPersonalAgent(ownerId) });
+  });
+
+  authenticated.get('/api/personal-agent/unread', c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const record = getPersonalAgent(ownerId);
+    return c.json({ ok: true, payload: record ? personalUnreadSnapshot(record.conversationId) : null });
+  });
+
+  authenticated.post('/api/personal-agent/read', async c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const parsed = z.object({ transcriptId: z.string().min(1), lastSeq: z.number().int().nonnegative() })
+      .strict().safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid read snapshot' }, 400);
+    const record = getPersonalAgent(ownerId);
+    if (!record) return c.json({ ok: false, error: 'Personal Agent is unavailable' }, 404);
+    markPersonalRead(record.conversationId, parsed.data.transcriptId, parsed.data.lastSeq);
+    deps.service.emit('personal.unread.updated', { conversationId: record.conversationId });
+    return c.json({ ok: true, payload: personalUnreadSnapshot(record.conversationId) });
   });
 
   authenticated.get('/api/personal-agent/models', async c => {

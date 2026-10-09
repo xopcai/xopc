@@ -48,7 +48,7 @@ export function InteractiveImagePreview(props: PreviewRuntimeRenderProps) {
   }, [props.binaryBuffer, props.descriptor.fileName, props.descriptor.mimeType]);
   const imageObjectUrl = useBlobObjectUrl(imageBlob);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const dragRef = useRef<{ pointerId: number; x: number; y: number; ox: number; oy: number } | null>(null);
+  const dragRef = useRef<{ pointerId: number; x: number; y: number; ox: number; oy: number; swipe: boolean } | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const zoom = props.controls?.zoom ?? 1;
   const rotation = props.controls?.rotation ?? 0;
@@ -64,17 +64,31 @@ export function InteractiveImagePreview(props: PreviewRuntimeRenderProps) {
       ref={stageRef}
       className="flex min-h-0 flex-1 touch-none items-center justify-center overflow-hidden bg-surface-base px-3 py-4 dark:bg-surface-hover/20"
       onPointerDown={(e) => {
+        if (!e.isPrimary) {
+          dragRef.current = null;
+          return;
+        }
         if (e.button !== 0) return;
-        dragRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+        dragRef.current = {
+          pointerId: e.pointerId, x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y,
+          swipe: e.pointerType === 'touch' && zoom <= 1 && Boolean(props.onImageSwipe),
+        };
         e.currentTarget.setPointerCapture(e.pointerId);
       }}
       onPointerMove={(e) => {
         const drag = dragRef.current;
-        if (!drag || drag.pointerId !== e.pointerId) return;
+        if (!drag || drag.pointerId !== e.pointerId || drag.swipe) return;
         setOffset({ x: drag.ox + e.clientX - drag.x, y: drag.oy + e.clientY - drag.y });
       }}
       onPointerUp={(e) => {
-        if (dragRef.current?.pointerId === e.pointerId) dragRef.current = null;
+        const drag = dragRef.current;
+        if (!drag || drag.pointerId !== e.pointerId) return;
+        dragRef.current = null;
+        const dx = e.clientX - drag.x;
+        const dy = e.clientY - drag.y;
+        if (drag.swipe && Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+          props.onImageSwipe?.(dx < 0 ? 'next' : 'previous');
+        }
       }}
       onPointerCancel={(e) => {
         if (dragRef.current?.pointerId === e.pointerId) dragRef.current = null;
