@@ -56,6 +56,7 @@ export type AutomationAction =
       kind: 'system';
       capability:
         | 'home.advisor.refresh'
+        | 'personal.proactivity.tick'
         | 'memory.temporal_sweep'
         | 'memory.daily_reconciliation'
         | 'memory.weekly_knowledge';

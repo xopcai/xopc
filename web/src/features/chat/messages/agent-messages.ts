@@ -1,3 +1,4 @@
+import { PersonalProvenanceSchema } from '@xopcai/gateway-contract';
 import { isUserTurnDocument, parseTaskResultDelivery, parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
 
 import type {
@@ -122,6 +123,7 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
     // conversation bubble boundary.
     if (prev?.role === 'assistant'
       && !prev.taskResultDelivery && !m.taskResultDelivery
+      && !prev.personalProvenance && !m.personalProvenance
       && !(m.startsNewBubble && prev.turnId !== m.turnId)) {
       prev.content = mergeAssistantContentFragments(prev.content, m.content);
       if (m.timestamp != null) prev.timestamp = m.timestamp;
@@ -393,6 +395,7 @@ function buildAssistantMessage(m: WireMessage): Message {
   const content = mergeAssistantContent(m);
   appendReviewFromMetadata(content, m.metadata);
   const outcome = parseTurnOutcome(asRecord(m.metadata)?.turnOutcome);
+  const personalProvenance = PersonalProvenanceSchema.safeParse(asRecord(m.metadata)?.personalProvenance);
   const taskResultDelivery = parseTaskResultDelivery(asRecord(m.metadata)?.taskResultDelivery);
   return {
     role: 'assistant',
@@ -402,6 +405,7 @@ function buildAssistantMessage(m: WireMessage): Message {
     attachments: wireAttachmentsFromMessage(m),
     ...(outcome ? { outcome } : {}),
     ...(taskResultDelivery ? { taskResultDelivery } : {}),
+    ...(personalProvenance.success ? { personalProvenance: personalProvenance.data, startsNewBubble: true } : {}),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     usage: m.usage as Message['usage'],
   };

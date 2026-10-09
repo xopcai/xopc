@@ -1,3 +1,4 @@
+import { createPersonalAttentionTool } from './personal-attention-tool.js';
 import type { SceneAccess } from '../../scenes/httpServices.js';
 import { resolveEffectiveAgentConfigForAgent } from '../../config/agent-profile.js';
 /**
@@ -673,6 +674,7 @@ export class AgentToolsFactory {
               createPersonalTaskTool(productToolDeps),
               createPersonalReadTool(productToolDeps),
               ...createPersonalRequestTools(productToolDeps),
+              createPersonalAttentionTool({ getConversationId: () => this.deps.getCurrentContext()?.conversationId, getConfig: () => this.deps.getConfig?.() }),
               createPersonalPreferenceTool({
                 getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
                 onAgentCatalogMutate: this.deps.onAgentCatalogMutate,

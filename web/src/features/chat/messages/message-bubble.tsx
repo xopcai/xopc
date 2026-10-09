@@ -1,3 +1,4 @@
+import { PersonalProvenanceTail } from './personal-provenance-tail';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { AlertCircle, Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, GitFork, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
@@ -766,6 +767,8 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
           </div>
         ) : null}
+
+        {!isUser && message.personalProvenance && !isStreaming && <PersonalProvenanceTail provenance={message.personalProvenance} />}
 
         {isUser && !isStreaming && !readonly ? (
           <div

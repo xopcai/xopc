@@ -76,6 +76,7 @@ export function personalInstructions(preferences: PersonalPreferences): string {
     'When creating a Task, provide a short title that names the work, a one-sentence objective, and a Markdown description with all detailed instructions. Keep the title free of checklists and long background. Preserve user requirements in the description.',
     PERSONAL_IDENTITY_CONTINUITY_RULE,
     PERSONAL_EMOTIONAL_STYLE_RULE,
+    PERSONAL_ATTENTION_RULE, PERSONAL_ATTENTION_VERIFICATION_RULE, PERSONAL_GROWTH_RULE,
   ];
   rules.push(USER_NAME_RULE);
   if (preferences.guidance) rules.push(`User's explicit response preference: ${JSON.stringify(preferences.guidance)}. Follow it when relevant, subject to accuracy and the current request.`);
@@ -87,12 +88,21 @@ export function personalInstructions(preferences: PersonalPreferences): string {
   return rules.join('\n');
 }
 
+const PREVIOUS_PERSONAL_ATTENTION_RULE = 'Use personal_attention to persist explicitly requested follow-up, inspect existing attention, or pause/end/resume it when the user asks. A saved topic is not an action authorization or a delivery guarantee: checks require a running Gateway and enabled policies. Do not duplicate an existing scheduled automation, promise an exact reminder for a vague date, or create attention from your own suggestions. For feedback on an identifiable proactive message, respect the smallest stated scope; silence is not rejection.';
+
+const PERSONAL_ATTENTION_RULE = 'Use personal_attention to save explicit requests to check again later and proactively tell the user about useful developments, including requests phrased without the word follow-up. The running Gateway checks saved attention automatically while the user is away and can post in this chat; do not ask the user to return or create a separate scheduler. Prefer nextCheckLocal in the configured timezone; for a vague tomorrow afternoon, use 15:00 and state that check time. A check is not a guaranteed notification or action authorization. Only claim follow-up saved after a successful tool result, and only claim memory written after a successful write; user_context_read is read-only. If a tool fails, explain the actual failure without inventing missing product capabilities. When there is no useful development, stay silent rather than posting no progress. Do not duplicate an existing scheduled automation or create attention from your own suggestions. For feedback, respect the smallest stated scope; silence is not rejection.';
+
+const PERSONAL_ATTENTION_VERIFICATION_RULE = 'For follow-up capability, use current system rules and tool descriptions, never prior assistant claims. When asked whether a follow-up is arranged or still active, query personal_attention(command="list"); query command="settings" when proactive settings are needed. Base status answers on current tool results. Do not substitute memory or notes for saved attention.';
+
+const PERSONAL_GROWTH_RULE = 'Topic feedback such as prepare fully next time changes only that attention thread: query personal_attention(list) to identify it, then feedback, never a global personal_preference. If the topic is ambiguous, clarify. Use rollback only on an explicit undo request and the latest version ID. interests returns inferred, silent candidates with user evidence; do not treat confidence as confirmation or activate them without explicit follow-up. Keep growth state in the durable store, not personality files.';
+
 /** Refresh known generated rules without replacing custom instructions. */
 export function upgradePersonalInstructions(instructions: string, legacyName?: string): string {
   const oldRule = [PREVIOUS_FAST_DELEGATION_RULES.join('\n'), PREVIOUS_MAIN_DELEGATION_RULES, PRIOR_DELEGATION_RULES, PREVIOUS_DELEGATION_RULES, LEGACY_DELEGATION_RULE]
     .find((rule) => instructions.includes(rule));
   const legacyNameRule = legacyName === undefined ? undefined
     : `Address the user as ${JSON.stringify(legacyName)} when a name fits naturally.`;
+  instructions = instructions.replace(PREVIOUS_PERSONAL_ATTENTION_RULE, PERSONAL_ATTENTION_RULE);
   let nextInstructions = oldRule ? instructions.replace(oldRule, DELEGATION_RULES.join('\n')) : instructions;
   nextInstructions = nextInstructions.replace(PREVIOUS_PERSONAL_PERSONA_GUIDANCE, PERSONAL_PERSONA_GUIDANCE)
     .replace(PREVIOUS_PERSONAL_EMOTIONAL_STYLE_RULE, PERSONAL_EMOTIONAL_STYLE_RULE)
@@ -110,7 +120,7 @@ export function upgradePersonalInstructions(instructions: string, legacyName?: s
   if (!nextInstructions.includes(CONNECTED_APP_RULE)) nextInstructions += `\n${CONNECTED_APP_RULE}`;
   if (!nextInstructions.includes(EXPLICIT_DELEGATION_RULE)) nextInstructions += `\n${EXPLICIT_DELEGATION_RULE}`;
   for (const rule of [...PERSONAL_COMMUNICATION_RULES, ...PERSONAL_RELIABILITY_RULES, ...PERSONAL_REPLY_STYLE_RULES, PERSONAL_REPLY_EXAMPLES,
-    PERSONAL_IDENTITY_CONTINUITY_RULE, PERSONAL_EMOTIONAL_STYLE_RULE]) {
+    PERSONAL_IDENTITY_CONTINUITY_RULE, PERSONAL_EMOTIONAL_STYLE_RULE, PERSONAL_ATTENTION_RULE, PERSONAL_ATTENTION_VERIFICATION_RULE, PERSONAL_GROWTH_RULE]) {
     if (!nextInstructions.includes(rule)) nextInstructions += `\n${rule}`;
   }
   return nextInstructions;

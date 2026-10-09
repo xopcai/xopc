@@ -1,3 +1,4 @@
+import { PERSONAL_PROACTIVE_MESSAGE_TYPE, parsePersonalProactiveMessage } from '@xopcai/gateway-contract';
 /**
  * Transcript rows persisted on disk may include non-LLM entries (e.g. `kind: 'context'`).
  * {@link buildSessionContextForLlm} is the single choke point for provider-facing history.
@@ -564,6 +565,11 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
     }
     if (isTranscriptCustomMessageEntry(r)) {
       if (r.customType === 'personal_request_status') continue;
+      if (r.customType === PERSONAL_PROACTIVE_MESSAGE_TYPE) {
+        const message = parsePersonalProactiveMessage(r.details);
+        if (message) out.push({ role: 'assistant', content: [{ type: 'text', text: message.text }], timestamp: message.createdAt } as AgentMessage);
+        continue;
+      }
       if (r.customType === TASK_RESULT_DELIVERY_TYPE) {
         const delivery = parseTaskResultDelivery(r.details);
         if (delivery) out.push({ role: 'user', timestamp: typeof r.timestamp === 'number' ? r.timestamp : Date.now(),
@@ -600,6 +606,13 @@ export function buildSessionDisplayMessages(rows: TranscriptStoredRow[]): AgentM
       if (r.customType === 'personal_request_status') {
         out.push({ role: 'assistant', content: [{ type: 'text', text: typeof r.content === 'string' ? r.content : '' }],
           timestamp: typeof r.timestamp === 'number' ? r.timestamp : 0 } as AgentMessage);
+        continue;
+      }
+      if (r.customType === PERSONAL_PROACTIVE_MESSAGE_TYPE) {
+        const message = parsePersonalProactiveMessage(r.details);
+        if (message) out.push({ role: 'assistant', content: [{ type: 'text', text: message.text }], timestamp: message.createdAt,
+          turnId: `personal-outreach:${message.outreachId}`, startsNewBubble: true,
+          metadata: { personalProvenance: message.provenance } } as unknown as AgentMessage);
         continue;
       }
       if (r.customType === TASK_RESULT_DELIVERY_TYPE) {

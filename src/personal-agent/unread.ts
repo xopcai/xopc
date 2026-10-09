@@ -26,6 +26,7 @@ export function personalUnreadSnapshot(conversationId: string): PersonalUnreadSn
         AND COALESCE(json_extract(payload_json, '$.stopReason'), '') != 'toolUse'
         AND EXISTS (SELECT 1 FROM json_each(payload_json, '$.content')
           WHERE json_extract(value, '$.type') = 'text' AND length(trim(json_extract(value, '$.text'))) > 0))
+      OR (json_extract(payload_json, '$.customType') = 'personal_proactive_message')
       OR (json_extract(payload_json, '$.customType') = ?
         AND json_extract(payload_json, '$.details.deliveryId') LIKE 'reply:%')
     )`).get(session.transcriptId, session.transcriptId, readSeq, TASK_RESULT_DELIVERY_TYPE) as { lastSeq: number; unreadCount: number };
