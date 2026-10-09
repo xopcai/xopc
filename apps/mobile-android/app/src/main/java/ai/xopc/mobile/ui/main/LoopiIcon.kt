@@ -96,7 +96,7 @@ internal fun LoopiIcon(extent: Dp, active: Boolean, compact: Boolean = false,
 
 @Composable
 private fun AnimatedLoopiArtwork(extent: Dp, compact: Boolean, greeting: Boolean, working: Boolean) {
-  if (compact) {
+  if (compact && !working) {
     CompactLoopiArtwork(extent)
     return
   }
@@ -116,9 +116,10 @@ private fun AnimatedLoopiArtwork(extent: Dp, compact: Boolean, greeting: Boolean
     animationSpec = tween(if (greeting) 160 else 360), label = "loopi-greeting-lift")
   val greetingEyes by animateFloatAsState(if (greeting) 0.25f else 1f,
     animationSpec = tween(if (greeting) 160 else 180), label = "loopi-greeting-eyes")
-  LoopiArtwork(extent, ringLift = -4f * breathing,
-    faceLift = -4f * breathing + greetingLift,
-    ringAngle = (if (working) 2f else -1.2f) * breathing,
+  val lift = if (compact) -2f else -4f
+  LoopiArtwork(extent, ringLift = lift * breathing,
+    faceLift = lift * breathing + greetingLift,
+    ringAngle = (if (compact) 0f else if (working) 2f else -1.2f) * breathing,
     eyeOpen = blink * greetingEyes)
 }
 

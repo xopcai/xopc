@@ -45,7 +45,8 @@ data class ProjectWelcomeInfo(val projectName: String, val blockedReason: String
   val recentFailure: String?, val recommendedAction: String?)
 
 data class ConversationMedia(val id: String, val name: String, val type: String, val mimeType: String,
-  val size: Long, val uri: String, val workspaceRelativePath: String? = null)
+  val size: Long, val uri: String, val workspaceRelativePath: String? = null,
+  val durationSeconds: Double? = null)
 data class ConversationReference(val kind: String, val sourceId: String, val version: String,
   val title: String, val url: String? = null)
 data class ConversationTarget(val kind: String, val id: String, val title: String,
@@ -1202,7 +1203,9 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         ConversationMedia(row.optString("id").ifBlank { "media-$index" }.take(256), name,
           row.optString("type", "file").take(40), row.optString("mimeType").take(160),
           row.optLong("size").coerceAtLeast(0), uri,
-          row.optString("workspaceRelativePath").takeIf(String::isNotBlank)?.take(2_048))
+          row.optString("workspaceRelativePath").takeIf(String::isNotBlank)?.take(2_048),
+          row.optDouble("duration", row.optDouble("durationSeconds", Double.NaN))
+            .takeIf { it.isFinite() && it > 0 })
       }
     }
 

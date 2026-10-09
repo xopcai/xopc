@@ -197,11 +197,11 @@ private fun PdfFilePreview(bytes: ByteArray, modifier: Modifier) {
   }
   Column(modifier.testTag("file-preview-pdf"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-      OutlinedButton(onClick = { pageIndex-- }, enabled = pageIndex > 0) { Text("‹") }
+      OutlinedButton(onClick = { pageIndex-- }, enabled = pageIndex > 0) { ActionIcon(R.drawable.action_chevron_left, size = 20.dp) }
       Text("${pageIndex + 1} / ${handle.renderer.pageCount}",
         modifier = Modifier.padding(top = 12.dp))
       OutlinedButton(onClick = { pageIndex++ }, enabled = pageIndex + 1 < handle.renderer.pageCount) {
-        Text("›")
+        ActionIcon(R.drawable.action_chevron_right, size = 16.dp)
       }
     }
     if (page != null) Image(page!!.asImageBitmap(), contentDescription = nameForPdfPage(pageIndex),

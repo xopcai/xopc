@@ -71,6 +71,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
@@ -79,6 +80,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -92,6 +94,7 @@ import androidx.compose.material3.ripple
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -103,6 +106,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.DisposableEffect
@@ -1187,8 +1191,10 @@ internal fun MainContent(
   LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
     if (selectedTab == HomeTab.Me && connection.profile != null) {
       onLoadPersonal()
-      onLoadPersonalAgent()
     }
+  }
+  LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
+    if (connection.profile != null && selectedTab in setOf(HomeTab.Me, HomeTab.Conversations)) onLoadPersonalAgent()
   }
   val latestConnectionWaitRefresh by rememberUpdatedState(onRefreshConnectionWait)
   LaunchedEffect(selectedTab, connection.profile?.gatewayId, connection.selectedConversationId) {
@@ -1527,10 +1533,10 @@ internal fun MainContent(
         }, { taskId, id ->
           onSelectTaskChildConversation(taskId, id)
           onSelectTab(HomeTab.Assistant)
-        }, onDiscardDraft, onBeginRename, onRenameDraftChange, onSaveRename, onCancelRename,
+        }, onBeginRename, onRenameDraftChange, onSaveRename, onCancelRename,
           onTogglePin, onToggleArchive, onBatchConversations,
           onBeginConversationShare, onConfirmConversationShare,
-          onDismissConversationShare, onScheduleDelete, onUndoDelete)
+          onDismissConversationShare, onScheduleDelete, onUndoDelete, onOpenPersonalAgent)
       }
       HomeTab.Progress -> if (connection.profile == null) PairingScreen(
         stringResource(R.string.tab_progress), connection, onPair, onCancelPairing, onScanPairing,
@@ -2417,6 +2423,22 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   val selected = connection.conversations.firstOrNull { it.id == connection.selectedConversationId }
   var modelPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var thinkingPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var pendingModelChoice by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
+  var pendingThinkingChoice by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
+  LaunchedEffect(connection.modelSaving, connection.modelError, connection.selectedModelId, connection.thinkingLevel,
+    pendingModelChoice, pendingThinkingChoice) {
+    if (!connection.modelSaving) {
+      if (pendingModelChoice == connection.selectedModelId) {
+        modelPickerOpen = false
+        pendingModelChoice = null
+      }
+      if (pendingThinkingChoice == connection.thinkingLevel) {
+        thinkingPickerOpen = false
+        pendingThinkingChoice = null
+      }
+      if (connection.modelError) { pendingModelChoice = null; pendingThinkingChoice = null }
+    }
+  }
   var queueOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var editingQueuedId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   var editingQueuedContent by remember(connection.selectedConversationId) { mutableStateOf("") }
@@ -2436,23 +2458,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   val optionsLabel = stringResource(R.string.assistant_options)
   var messageActionsId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   var messageDetailId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
-  var executionReturnMessageId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
-  val messageDetailScroll = remember(connection.selectedConversationId) { ScrollState(0) }
-  var messageDetailScrollOwnerId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
-  var messageDetailRestoreId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
-  var messageDetailRestoreOffset by remember(connection.selectedConversationId) { mutableIntStateOf(0) }
-  LaunchedEffect(messageDetailId) {
-    if (messageDetailId != null) {
-      if (messageDetailId == messageDetailRestoreId) {
-        withFrameNanos { }
-        messageDetailScroll.scrollTo(messageDetailRestoreOffset)
-        messageDetailRestoreId = null
-      } else if (messageDetailId != messageDetailScrollOwnerId) {
-        messageDetailScroll.scrollTo(0)
-      }
-      messageDetailScrollOwnerId = messageDetailId
-    }
-  }
+  val messageDetailScroll = remember(connection.selectedConversationId, messageDetailId) { ScrollState(0) }
   var previewRequest by remember(connection.selectedConversationId) { mutableStateOf<MessagePreviewRequest?>(null) }
   var externalUrl by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   val openLink: (String) -> Unit = { link ->
@@ -2536,9 +2542,9 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         }
       }
     }.testTag("assistant-content-area")) {
-  Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
+  Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically) {
       val personalAgent = connection.personal.agent?.takeIf { it.state == "ready" &&
         it.conversationId == connection.selectedConversationId }
@@ -2550,7 +2556,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
       IconButton(onClick = { optionsOpen = true },
         modifier = Modifier.semantics { contentDescription = optionsLabel }.testTag("assistant-options")) {
-        Text("···", style = MaterialTheme.typography.titleLarge)
+        Icon(painterResource(R.drawable.action_more_horizontal), contentDescription = null,
+          tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
       }
     }
     if (connection.selectedConversationId == null) {
@@ -2630,20 +2637,13 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             onOpenPreview = { media, gallery ->
               previewRequest = MessagePreviewRequest(connection.selectedConversationId, media, gallery)
             }, onOpenLink = openLink, onCopy = onCopyMessageText,
-            onReuseUserMessage = if (message.role == "user" && message.text.isNotBlank() &&
-              !message.hasNonTextContent) ({
-              if (onReuseMessage(message.id)) {
-                onActionsOpenChange(false)
-                onFocusDraft()
-              }
-            }) else null,
             previewEligible = message.id != latestMessageId,
             onViewMore = { messageDetailId = message.id },
             onSaveNote = if (message.role == "assistant" && message.text.isNotBlank())
               ({ onSaveMessageAsNote(message.id) }) else null,
             onOpenExecution = if (message.role == "assistant" &&
               (message.turnId != null || message.hasNonTextContent)) {
-              { executionReturnMessageId = null; onOpenExecution(message.id) }
+              { onOpenExecution(message.id) }
             } else null,
             loadMedia = { media -> onLoadMessageMedia(connection.selectedConversationId, media) })
         }
@@ -2659,8 +2659,11 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           }
         }
         if (connection.liveText.isNotBlank() && connection.activeRunId != null) item(key = "live-output") {
-          Card(modifier = Modifier.fillMaxWidth(0.9f).testTag("assistant-live-output")) {
-            MarkdownContent(connection.liveText, modifier = Modifier.fillMaxWidth().padding(16.dp),
+          Card(modifier = Modifier.fillMaxWidth().testTag("assistant-live-output"),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = RoundedCornerShape(18.dp)) {
+            MarkdownContent(connection.liveText, modifier = Modifier.fillMaxWidth()
+              .padding(horizontal = 12.dp, vertical = 14.dp),
               onOpenLink = openLink, onCopyCode = onCopyMessageText)
           }
         }
@@ -2693,12 +2696,20 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     IconButton(onClick = {
       followBottom = true
       messageScrollScope.launch { scrollMessagesToBottom() }
-    }, modifier = Modifier.align(Alignment.BottomEnd)
-      .padding(end = 20.dp, bottom = bottomChromeHeight + if (showConnectionWait) 112.dp else 12.dp)
-      .size(44.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+    }, modifier = Modifier.align(Alignment.BottomCenter)
+      .padding(bottom = bottomChromeHeight + if (showConnectionWait) 108.dp else 4.dp)
+      .size(44.dp)
       .semantics { contentDescription = jumpLabel }.testTag("assistant-jump-bottom")) {
-      if (connection.activeRunId != null) BrandLoadingIndicator(extent = 22.dp)
-      else Text("↓", style = MaterialTheme.typography.titleLarge)
+      Box(modifier = Modifier.size(36.dp)
+        .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+        contentAlignment = Alignment.Center) {
+        if (connection.activeRunId != null || connection.sending)
+          BrandLoadingIndicator(extent = 20.dp, compact = true,
+            modifier = Modifier.testTag("assistant-jump-working"))
+        else ActionIcon(R.drawable.action_arrow_down,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.testTag("assistant-jump-arrow"))
+      }
     }
   }
   }
@@ -2759,9 +2770,87 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       }
     }
   }
-  if (optionsOpen || contextOpen) ModalBottomSheet(onDismissRequest = {
-    optionsOpen = false; contextOpen = false
-  }) {
+  val closeOptions: () -> Unit = {
+    optionsOpen = false; contextOpen = false; modelPickerOpen = false
+    thinkingPickerOpen = false; agentPickerOpen = false
+    pendingModelChoice = null; pendingThinkingChoice = null
+  }
+  if (optionsOpen || contextOpen || modelPickerOpen || thinkingPickerOpen || agentPickerOpen)
+    ModalBottomSheet(onDismissRequest = closeOptions,
+      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    if (modelPickerOpen) {
+      ChatOptionsPanel(stringResource(R.string.assistant_model), 620.dp, closeOptions) {
+        OutlinedTextField(modelQuery, { modelQuery = it }, modifier = Modifier.fillMaxWidth(),
+          label = { Text(stringResource(R.string.assistant_model_search)) }, singleLine = true)
+        if (connection.modelsLoading) ChatOptionsSkeleton()
+        if (connection.modelError) Text(stringResource(R.string.assistant_model_error),
+          color = MaterialTheme.colorScheme.error)
+        if (connection.modelError) TextButton(onClick = onReloadModels) {
+          Text(stringResource(R.string.assistant_model_retry))
+        }
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          if (!connection.modelsLoading) items(connection.models.filter {
+            modelQuery.isBlank() || it.name.contains(modelQuery, true) || it.id.contains(modelQuery, true)
+          }, key = { it.id }) { model ->
+            ContextRow("${if (model.id == connection.selectedModelId) "✓ " else ""}${model.name}",
+              model.id, "model-${model.id}",
+              enabled = !connection.modelSaving && !connection.sending && connection.activeRunId == null &&
+                connection.pendingInput == null,
+              flat = true, showChevron = false) {
+              if (model.id == connection.selectedModelId) closeOptions()
+              else { pendingModelChoice = model.id; onSelectModel(model.id) }
+            }
+          }
+        }
+      }
+    } else if (thinkingPickerOpen) {
+      val model = connection.models.firstOrNull { it.id == connection.selectedModelId }
+      ChatOptionsPanel(stringResource(R.string.assistant_thinking),
+        (136 + model?.thinkingOptions.orEmpty().size * 60).coerceIn(280, 620).dp, closeOptions) {
+        if (connection.modelError) Text(stringResource(R.string.assistant_model_error),
+          color = MaterialTheme.colorScheme.error)
+        if (connection.modelError) TextButton(onClick = onReloadModels) {
+          Text(stringResource(R.string.assistant_model_retry))
+        }
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          if (model?.thinkingMode in setOf("levels", "toggle")) items(model?.thinkingOptions.orEmpty()) { level ->
+            ContextRow(thinkingLevelLabel(level), if (level == connection.thinkingLevel) "✓" else "",
+              "thinking-$level", flat = true,
+              enabled = !connection.modelsLoading && !connection.modelSaving && !connection.sending &&
+                connection.activeRunId == null && connection.pendingInput == null && connection.queuedInputs.isEmpty()) {
+              if (level == connection.thinkingLevel) closeOptions()
+              else { pendingThinkingChoice = level; onSelectThinking(level) }
+            }
+          } else item { Text(stringResource(if (model?.thinkingMode == "fixed")
+            R.string.assistant_thinking_fixed else R.string.assistant_thinking_unsupported),
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(12.dp)) }
+        }
+      }
+    } else if (agentPickerOpen) {
+      ChatOptionsPanel(stringResource(R.string.assistant_agent), 620.dp, closeOptions) {
+        OutlinedTextField(agentQuery, { agentQuery = it }, modifier = Modifier.fillMaxWidth(),
+          label = { Text(stringResource(R.string.assistant_agent_search)) }, singleLine = true)
+        if (connection.agentsLoading) ChatOptionsSkeleton()
+        if (connection.agentError) Text(stringResource(R.string.assistant_agent_error),
+          color = MaterialTheme.colorScheme.error)
+        if (connection.agentError) TextButton(onClick = onReloadAgents) {
+          Text(stringResource(R.string.assistant_agent_retry))
+        }
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          if (!connection.agentsLoading) items(connection.agents.filter {
+            agentQuery.isBlank() || it.name.contains(agentQuery, true) || it.id.contains(agentQuery, true)
+          }, key = { it.id }) { agent ->
+            ContextRow("${if (agent.id == connection.selectedAgentId) "✓ " else ""}${agent.name}",
+              agent.description.ifBlank { agent.id }, "agent-${agent.id}", flat = true,
+              enabled = !connection.creatingConversation) {
+              if (connection.draftText.isNotBlank() || connection.draftAttachments.isNotEmpty() || connection.draftRefs.isNotEmpty())
+                pendingAgentId = agent.id
+              else { closeOptions(); onSwitchAgent(agent.id, false) }
+            }
+          }
+        }
+      }
+    } else
     if (contextOpen) {
       ContextDetails(connection, onReloadContext, onLoadContextPanel, onSetContextDirectory,
         onAddContextFile, onCreateContextConversation, onLoadReferences, onAddDraftRef,
@@ -2772,59 +2861,57 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     val contextSummary = listOfNotNull(connection.context?.project?.title?.takeIf(String::isNotBlank),
       connection.context?.environment?.let { if (it.kind == "managed_worktree") "Worktree" else "Local" })
       .joinToString(" · ")
-    Column(modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp)
-      .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 16.dp),
-      verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      Text(stringResource(R.string.assistant_options), style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-      if (connection.selectedConversationId != null) {
-        ContextRow(stringResource(R.string.assistant_context), contextSummary, "assistant-context",
-          iconRes = R.drawable.action_folder, compact = true) {
-          optionsOpen = false; contextInitialMode = "context"; contextInitialKind = "note"
-          contextOpen = true; onReloadContext()
-        }
-        val personalAgent = connection.personal.agent
-        val isPersonalConversation = personalAgent?.state == "ready" &&
-          personalAgent.conversationId == connection.selectedConversationId
-        if (!isPersonalConversation) {
-          ContextRow(stringResource(R.string.assistant_agent),
-            connection.agents.firstOrNull { it.id == connection.selectedAgentId }?.name
-              ?: connection.selectedAgentId, "assistant-agent", iconRes = R.drawable.tab_assistant,
-            compact = true, enabled = !connection.creatingConversation) {
-            optionsOpen = false; agentPickerOpen = true; onReloadAgents()
+    ChatOptionsPanel(stringResource(R.string.assistant_options), onClose = closeOptions) {
+      Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (connection.selectedConversationId != null) {
+          ContextRow(stringResource(R.string.assistant_context), contextSummary, "assistant-context",
+            iconRes = R.drawable.action_folder, compact = true, flat = true) {
+            optionsOpen = false; contextInitialMode = "context"; contextInitialKind = "note"
+            contextOpen = true; onReloadContext()
           }
-        }
-        ContextRow(stringResource(R.string.assistant_model),
-          connection.models.firstOrNull { it.id == connection.selectedModelId }?.name
-            ?: connection.selectedModelId, "assistant-model", iconRes = R.drawable.action_waveform,
-          compact = true, enabled = !connection.modelSaving) {
-          optionsOpen = false; modelPickerOpen = true; onReloadModels()
-        }
-        val selectedModel = connection.models.firstOrNull { it.id == connection.selectedModelId }
-        if (selectedModel?.thinkingMode in setOf("levels", "toggle")) {
+          val personalAgent = connection.personal.agent
+          val isPersonalConversation = personalAgent?.state == "ready" &&
+            personalAgent.conversationId == connection.selectedConversationId
+          if (!isPersonalConversation) {
+            ContextRow(stringResource(R.string.assistant_agent),
+              connection.agents.firstOrNull { it.id == connection.selectedAgentId }?.name
+                ?: connection.selectedAgentId, "assistant-agent", iconRes = R.drawable.tab_assistant,
+              compact = true, flat = true, enabled = !connection.creatingConversation) {
+              optionsOpen = false; agentQuery = ""; agentPickerOpen = true; onReloadAgents()
+            }
+          }
+          ContextRow(stringResource(R.string.assistant_model),
+            connection.models.firstOrNull { it.id == connection.selectedModelId }?.name
+              ?: connection.selectedModelId, "assistant-model", iconRes = R.drawable.action_waveform,
+            compact = true, flat = true, enabled = !connection.modelSaving) {
+            optionsOpen = false; modelQuery = ""; modelPickerOpen = true; onReloadModels()
+          }
+          val selectedModel = connection.models.firstOrNull { it.id == connection.selectedModelId }
           ContextRow(stringResource(R.string.assistant_thinking),
-            thinkingLevelLabel(connection.thinkingLevel),
-            "assistant-thinking", iconRes = R.drawable.action_waveform, compact = true,
-            enabled = !connection.modelSaving && !connection.sending && connection.activeRunId == null &&
-              connection.pendingInput == null) {
+            when (selectedModel?.thinkingMode) {
+              "levels", "toggle" -> thinkingLevelLabel(connection.thinkingLevel)
+              "fixed" -> stringResource(R.string.assistant_thinking_fixed)
+              else -> stringResource(R.string.assistant_thinking_unsupported)
+            }, "assistant-thinking", iconRes = R.drawable.action_waveform, compact = true, flat = true) {
             optionsOpen = false; thinkingPickerOpen = true
           }
+          if (connection.queuedInputs.isNotEmpty() || connection.queueError) ContextRow(stringResource(R.string.assistant_queue), "", "assistant-queue",
+            iconRes = R.drawable.action_new_chat, compact = true, flat = true) {
+            optionsOpen = false; queueOpen = true; onLoadQueuedInputs()
+          }
         }
-        ContextRow(stringResource(R.string.assistant_queue), "", "assistant-queue",
-          iconRes = R.drawable.action_new_chat, compact = true) {
-          optionsOpen = false; queueOpen = true; onLoadQueuedInputs()
+        ContextRow(stringResource(R.string.assistant_action_new_chat), "", "assistant-new",
+          iconRes = R.drawable.action_new_chat, compact = true, flat = true,
+          enabled = !connection.creatingConversation) {
+          optionsOpen = false; onCreateConversation()
         }
-      }
-      ContextRow(stringResource(R.string.assistant_action_new_chat), "", "assistant-new",
-        iconRes = R.drawable.action_new_chat, compact = true,
-        enabled = !connection.creatingConversation) {
-        optionsOpen = false; onCreateConversation()
-      }
-      if (connection.selectedConversationId != null) {
-        ContextRow(stringResource(R.string.assistant_session_files), "", "assistant-session-files",
-          iconRes = R.drawable.action_folder, compact = true) {
-          optionsOpen = false; sessionFilesOpen = true
-          onLoadContextPanel("files", "", "")
+        if (connection.selectedConversationId != null) {
+          ContextRow(stringResource(R.string.assistant_session_files), "", "assistant-session-files",
+            iconRes = R.drawable.action_folder, compact = true, flat = true) {
+            optionsOpen = false; sessionFilesOpen = true
+            onLoadContextPanel("files", "", "")
+          }
         }
       }
     }
@@ -2900,12 +2987,9 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   val detailMessage = connection.messages.firstOrNull { it.id == messageDetailId }
   if (detailMessage != null) ModalBottomSheet(onDismissRequest = { messageDetailId = null },
     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      Text(stringResource(R.string.assistant_message_detail), style = MaterialTheme.typography.titleLarge)
-      Text(stringResource(if (detailMessage.role == "user") R.string.message_you else R.string.tab_assistant),
-        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-      Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(messageDetailScroll)
+    Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f)
+      .padding(start = 12.dp, end = 12.dp, bottom = 16.dp).testTag("message-detail-panel")) {
+      Column(modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(messageDetailScroll)
         .testTag("message-detail-scroll")) {
         ChatMessageCard(detailMessage, onMore = {}, onOpenTarget = onOpenMessageTarget,
           onOpenPreview = { media, gallery -> connection.selectedConversationId?.let {
@@ -2914,24 +2998,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           previewEligible = false,
           loadMedia = { media -> onLoadMessageMedia(requireNotNull(connection.selectedConversationId), media) })
       }
-      if (detailMessage.role == "assistant") {
-        OutlinedButton(onClick = {
-          messageDetailRestoreId = detailMessage.id
-          messageDetailRestoreOffset = messageDetailScroll.value
-          executionReturnMessageId = detailMessage.id
-          messageDetailId = null
-          onOpenExecution(detailMessage.id)
-        }, modifier = Modifier.fillMaxWidth().testTag("message-execution")) {
-          Text(stringResource(R.string.assistant_execution))
-        }
-      }
-      TextButton(onClick = { messageDetailId = null }) { Text(stringResource(R.string.assistant_close)) }
     }
   }
   if (connection.executionMessageId != null) ModalBottomSheet(onDismissRequest = {
     onCloseExecution()
-    messageDetailId = executionReturnMessageId
-    executionReturnMessageId = null
   }) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2940,11 +3010,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         connection.activeRunId != null, onRetryExecution, openLink)
       TextButton(onClick = {
         onCloseExecution()
-        messageDetailId = executionReturnMessageId
-        executionReturnMessageId = null
       }, modifier = Modifier.testTag("execution-back")) {
-        Text(stringResource(if (executionReturnMessageId != null) R.string.assistant_back_to_message
-          else R.string.assistant_close))
+        Text(stringResource(R.string.assistant_close))
       }
     }
   }
@@ -2970,94 +3037,48 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       sessionFilesOpen = false
     }
   }
-  if (modelPickerOpen) AlertDialog(
-    onDismissRequest = { modelPickerOpen = false },
-    title = { Text(stringResource(R.string.assistant_model)) },
-    text = {
-      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(value = modelQuery, onValueChange = { modelQuery = it },
-          label = { Text(stringResource(R.string.assistant_model_search)) }, singleLine = true)
-        if (connection.modelsLoading) BrandLoadingPanel(minHeight = 120.dp)
-        if (connection.modelError) TextButton(onClick = onReloadModels) {
-          Text(stringResource(R.string.assistant_model_retry))
-        }
-        LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-          items(connection.models.filter { modelQuery.isBlank() ||
-            it.name.contains(modelQuery, ignoreCase = true) || it.id.contains(modelQuery, ignoreCase = true) },
-            key = { it.id }) { model ->
-            TextButton(onClick = { onSelectModel(model.id); modelPickerOpen = false },
-              enabled = !connection.modelSaving && !connection.sending && connection.activeRunId == null &&
-                connection.pendingInput == null, modifier = Modifier.fillMaxWidth().testTag("model-${model.id}")) {
-              Text("${if (model.id == connection.selectedModelId) "✓ " else ""}${model.name} · ${model.id}")
-            }
-          }
-        }
-      }
-    },
-    confirmButton = { TextButton(onClick = { modelPickerOpen = false }) { Text(stringResource(R.string.assistant_model_close)) } },
-  )
-  if (thinkingPickerOpen) AlertDialog(
-    onDismissRequest = { thinkingPickerOpen = false },
-    title = { Text(stringResource(R.string.assistant_thinking)) },
-    text = {
-      val choices = connection.models.firstOrNull { it.id == connection.selectedModelId }
-        ?.thinkingOptions.orEmpty()
-      LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-        items(choices) { level ->
-          TextButton(onClick = { onSelectThinking(level); thinkingPickerOpen = false },
-            enabled = !connection.modelSaving && !connection.sending && connection.activeRunId == null &&
-              connection.pendingInput == null,
-            modifier = Modifier.fillMaxWidth().testTag("thinking-$level")) {
-            Text("${if (level == connection.thinkingLevel) "✓ " else ""}${thinkingLevelLabel(level)}")
-          }
-        }
-      }
-    },
-    confirmButton = { TextButton(onClick = { thinkingPickerOpen = false }) {
-      Text(stringResource(R.string.assistant_model_close))
-    } },
-  )
   if (queueOpen) ModalBottomSheet(onDismissRequest = { queueOpen = false }) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-      verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(R.string.assistant_queue), style = MaterialTheme.typography.titleLarge,
-          modifier = Modifier.weight(1f))
+    ChatOptionsPanel(stringResource(R.string.assistant_queue),
+      (156 + connection.queuedInputs.size * 92).coerceIn(240, 620).dp,
+      onClose = { queueOpen = false }) {
+      Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
         TextButton(onClick = onLoadQueuedInputs, enabled = !connection.queueBusy) {
           Text(stringResource(R.string.personal_retry))
         }
-      }
-      if (connection.queueLoading || connection.queueBusy) BrandLoadingIndicator()
-      if (connection.queueError) Text(stringResource(R.string.assistant_queue_error),
-        color = MaterialTheme.colorScheme.error)
-      if (!connection.queueLoading && connection.queuedInputs.isEmpty()) {
-        Text(stringResource(R.string.assistant_queue_empty),
-          color = MaterialTheme.colorScheme.onSurfaceVariant)
-      }
-      connection.queuedInputs.forEachIndexed { index, input ->
-        Card(modifier = Modifier.fillMaxWidth().testTag("queued-${input.id}")) {
-          Column(Modifier.fillMaxWidth().padding(12.dp)) {
-            Text(input.content.ifBlank { stringResource(R.string.assistant_queue_attachment) },
-              maxLines = 3, overflow = TextOverflow.Ellipsis)
-            val earlierLabel = stringResource(R.string.assistant_queue_earlier)
-            val laterLabel = stringResource(R.string.assistant_queue_later)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-              TextButton(onClick = {
-                editingQueuedId = input.id; editingQueuedContent = input.content
-              }, enabled = !connection.queueBusy) { Text(stringResource(R.string.progress_edit_task)) }
-              TextButton(onClick = { onUpdateQueuedInput(input.id, null, index - 1) },
-                enabled = !connection.queueBusy && index > 0,
-                modifier = Modifier.semantics { contentDescription = earlierLabel }) { Text("↑") }
-              TextButton(onClick = { onUpdateQueuedInput(input.id, null, index + 1) },
-                enabled = !connection.queueBusy && index < connection.queuedInputs.lastIndex,
-                modifier = Modifier.semantics { contentDescription = laterLabel }) { Text("↓") }
-              TextButton(onClick = { onCancelQueuedInput(input.id) },
-                enabled = !connection.queueBusy) { Text(stringResource(R.string.assistant_queue_remove)) }
+        if (connection.queueLoading) ChatOptionsSkeleton()
+        else if (connection.queueBusy) BrandLoadingIndicator()
+        if (connection.queueError) Text(stringResource(R.string.assistant_queue_error),
+          color = MaterialTheme.colorScheme.error)
+        if (!connection.queueLoading && connection.queuedInputs.isEmpty()) {
+          Text(stringResource(R.string.assistant_queue_empty),
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        connection.queuedInputs.forEachIndexed { index, input ->
+          Card(modifier = Modifier.fillMaxWidth().testTag("queued-${input.id}")) {
+            Column(Modifier.fillMaxWidth().padding(12.dp)) {
+              Text(input.content.ifBlank { stringResource(R.string.assistant_queue_attachment) },
+                maxLines = 3, overflow = TextOverflow.Ellipsis)
+              val earlierLabel = stringResource(R.string.assistant_queue_earlier)
+              val laterLabel = stringResource(R.string.assistant_queue_later)
+              Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = {
+                  editingQueuedId = input.id; editingQueuedContent = input.content
+                }, enabled = !connection.queueBusy) { Text(stringResource(R.string.progress_edit_task)) }
+                TextButton(onClick = { onUpdateQueuedInput(input.id, null, index - 1) },
+                  enabled = !connection.queueBusy && index > 0,
+                  modifier = Modifier.semantics { contentDescription = earlierLabel }) { Text("↑") }
+                TextButton(onClick = { onUpdateQueuedInput(input.id, null, index + 1) },
+                  enabled = !connection.queueBusy && index < connection.queuedInputs.lastIndex,
+                  modifier = Modifier.semantics { contentDescription = laterLabel }) { Text("↓") }
+                TextButton(onClick = { onCancelQueuedInput(input.id) },
+                  enabled = !connection.queueBusy) { Text(stringResource(R.string.assistant_queue_remove)) }
+              }
             }
           }
         }
+        Spacer(Modifier.height(16.dp))
       }
-      Spacer(Modifier.height(16.dp))
     }
   }
   editingQueuedId?.let { inputId ->
@@ -3076,39 +3097,11 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         Text(stringResource(R.string.progress_cancel))
       } })
   }
-  if (agentPickerOpen) AlertDialog(
-    onDismissRequest = { agentPickerOpen = false },
-    title = { Text(stringResource(R.string.assistant_agent)) },
-    text = {
-      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(value = agentQuery, onValueChange = { agentQuery = it },
-          label = { Text(stringResource(R.string.assistant_agent_search)) }, singleLine = true)
-        if (connection.agentsLoading) BrandLoadingPanel(minHeight = 120.dp)
-        if (connection.agentError) TextButton(onClick = onReloadAgents) {
-          Text(stringResource(R.string.assistant_agent_retry))
-        }
-        LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-          items(connection.agents.filter { agentQuery.isBlank() ||
-            it.name.contains(agentQuery, ignoreCase = true) || it.id.contains(agentQuery, ignoreCase = true) },
-            key = { it.id }) { agent ->
-            TextButton(onClick = {
-              agentPickerOpen = false
-              if (connection.draftText.isNotBlank()) pendingAgentId = agent.id
-              else onSwitchAgent(agent.id, false)
-            }, enabled = !connection.creatingConversation, modifier = Modifier.fillMaxWidth().testTag("agent-${agent.id}")) {
-              Text("${if (agent.id == connection.selectedAgentId) "✓ " else ""}${agent.name} · ${agent.id}")
-            }
-          }
-        }
-      }
-    },
-    confirmButton = { TextButton(onClick = { agentPickerOpen = false }) { Text(stringResource(R.string.assistant_model_close)) } },
-  )
   pendingAgentId?.let { agentId ->
     AlertDialog(onDismissRequest = { pendingAgentId = null },
       title = { Text(stringResource(R.string.assistant_discard_draft_title)) },
       text = { Text(stringResource(R.string.assistant_discard_draft_message)) },
-      confirmButton = { TextButton(onClick = { pendingAgentId = null; onSwitchAgent(agentId, true) },
+      confirmButton = { TextButton(onClick = { pendingAgentId = null; closeOptions(); onSwitchAgent(agentId, true) },
         modifier = Modifier.testTag("agent-discard-confirm")) { Text(stringResource(R.string.assistant_discard_draft_confirm)) } },
       dismissButton = { TextButton(onClick = { pendingAgentId = null }) { Text(stringResource(R.string.assistant_discard_draft_cancel)) } })
   }
@@ -3229,7 +3222,6 @@ private fun ConversationsScreen(
   onCreateConversation: () -> Unit,
   onSelectConversation: (String) -> Unit,
   onSelectTaskChild: (String, String) -> Unit,
-  onDiscardDraft: (String) -> Unit,
   onBeginRename: (String) -> Unit,
   onRenameDraftChange: (String) -> Unit,
   onSaveRename: () -> Unit,
@@ -3242,8 +3234,8 @@ private fun ConversationsScreen(
   onDismissShare: () -> Unit,
   onScheduleDelete: (String) -> Unit,
   onUndoDelete: () -> Unit,
+  onOpenPersonal: () -> Unit,
 ) {
-  var pendingDiscardId by rememberSaveable { mutableStateOf<String?>(null) }
   var menuConversationId by rememberSaveable { mutableStateOf<String?>(null) }
   var searchOpen by rememberSaveable { mutableStateOf(true) }
   var expandedTaskParents by rememberSaveable { mutableStateOf(emptyList<String>()) }
@@ -3269,6 +3261,10 @@ private fun ConversationsScreen(
     connection.conversationsLoadingMore, connection.conversationsMoreError) {
     if (!connection.conversationsHasMore || connection.conversationsLoading ||
       connection.conversationsLoadingMore || connection.conversationsMoreError) return@LaunchedEffect
+    if (ConversationGroups.visibleHistory(connection.conversations).isEmpty()) {
+      currentLoadMore()
+      return@LaunchedEffect
+    }
     snapshotFlow {
       val layout = listState.layoutInfo
       layout.totalItemsCount > 0 &&
@@ -3387,20 +3383,6 @@ private fun ConversationsScreen(
       }
     }
   }
-  if (pendingDiscardId != null) AlertDialog(
-    onDismissRequest = { pendingDiscardId = null },
-    title = { Text(stringResource(R.string.conversations_discard_title)) },
-    text = { Text(stringResource(R.string.conversations_discard_message)) },
-    confirmButton = { TextButton(onClick = {
-      pendingDiscardId?.let(onDiscardDraft)
-      pendingDiscardId = null
-    }, modifier = Modifier.testTag("conversations-confirm-discard")) {
-      Text(stringResource(R.string.conversations_discard))
-    } },
-    dismissButton = { TextButton(onClick = { pendingDiscardId = null }) {
-      Text(stringResource(R.string.conversations_cancel))
-    } },
-  )
   if (connection.renameDraftId != null) AlertDialog(
     onDismissRequest = onCancelRename,
     title = { Text(stringResource(R.string.conversations_rename)) },
@@ -3464,6 +3446,7 @@ private fun ConversationsScreen(
           modifier = Modifier.size(24.dp).testTag("conversations-new-icon"))
       }
     }
+    if (!selecting) PersonalChatEntry(connection.personal, onOpenPersonal)
     if (searchOpen) Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       BasicTextField(value = connection.conversationSearch, onValueChange = onSearchChange,
@@ -3554,7 +3537,8 @@ private fun ConversationsScreen(
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("conversations-list"),
       contentPadding = PaddingValues(bottom = bottomChromeHeight + 20.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      ConversationGroups.group(connection.conversations.filterNot { it.id == connection.pendingDeleteId }).forEach { group ->
+      ConversationGroups.group(ConversationGroups.visibleHistory(connection.conversations)
+        .filterNot { it.id == connection.pendingDeleteId }).forEach { group ->
         item(key = "section-${group.id}") {
           Text(conversationGroupLabel(group.id), style = MaterialTheme.typography.labelSmall, fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -3579,19 +3563,18 @@ private fun ConversationsScreen(
                   expandedTaskParents = expandedTaskParents + conversation.id
                 }
               }),
-              onDiscard = if (conversation.isLocalDraft) ({ pendingDiscardId = conversation.id }) else null,
-              onMenu = if (conversation.isLocalDraft || selecting) null else ({ menuConversationId = conversation.id }),
+              onMenu = if (selecting) null else ({ menuConversationId = conversation.id }),
               selected = conversation.id == connection.selectedConversationId,
-              selectionMode = selecting && !conversation.isLocalDraft,
+              selectionMode = selecting,
               selectionSelected = conversation.id in selectedIds,
               discardEnabled = connection.discardingDraftId == null && !connection.creatingConversation && !connection.sending,
               onClick = {
-                if (selecting && !conversation.isLocalDraft) selectedIds = if (conversation.id in selectedIds)
+                if (selecting) selectedIds = if (conversation.id in selectedIds)
                   selectedIds - conversation.id else selectedIds + conversation.id
                 else onSelectConversation(conversation.id)
               })
           }
-          if (taskGroup != null && taskExpanded && connection.conversationSearch.isBlank()) {
+          if (taskGroup != null && taskExpanded && !selecting && connection.conversationSearch.isBlank()) {
             items(taskGroup.items, key = { "task-${conversation.id}-${it.taskId}" }) { child ->
               ConversationTaskRow(child, onOpen = { id -> onSelectTaskChild(child.taskId, id) })
             }
@@ -3638,16 +3621,24 @@ private fun ConversationCard(conversation: ConversationSummary, showTime: Boolea
     shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
       else MaterialTheme.colorScheme.surfaceContainer)) {
-    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         if (selectionMode) Text(if (selectionSelected) "☑" else "□",
           style = MaterialTheme.typography.titleMedium,
           color = MaterialTheme.colorScheme.primary)
-        if (taskGroup != null && onToggleTasks != null) IconButton(onClick = onToggleTasks,
-          modifier = Modifier.size(48.dp).testTag("conversation-tasks-${conversation.id}").semantics {
-            contentDescription = if (taskExpanded) taskCollapseLabel else taskExpandLabel
-          }) {
-          Text(if (taskExpanded) "⌄" else "›", style = MaterialTheme.typography.titleLarge)
+        if (taskGroup != null && onToggleTasks != null && !selectionMode) {
+          Box(modifier = Modifier.width(32.dp).height(40.dp), contentAlignment = Alignment.Center) {
+            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+              IconButton(onClick = onToggleTasks,
+                modifier = Modifier.fillMaxSize().testTag("conversation-tasks-${conversation.id}").semantics {
+                  contentDescription = if (taskExpanded) taskCollapseLabel else taskExpandLabel
+                }) {
+                Icon(painterResource(if (taskExpanded) R.drawable.action_chevron_down else R.drawable.action_chevron_right),
+                  contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                  modifier = Modifier.size(16.dp).testTag("conversation-task-chevron-${conversation.id}"))
+              }
+            }
+          }
         }
         Text(if (conversation.isLocalDraft) stringResource(R.string.assistant_new_conversation) else conversation.title,
           style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -3680,16 +3671,16 @@ private fun ConversationTaskRow(child: ConversationTaskChild, onOpen: (String) -
     else -> status
   }
   Row(modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
-    .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp))
+    .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(12.dp))
     .clickable(enabled = child.activeConversationId != null) {
       child.activeConversationId?.let(onOpen)
-    }.padding(start = 56.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
-    .testTag("conversation-task-${child.taskId}"),
+    }.testTag("conversation-task-${child.taskId}")
+    .padding(start = 24.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
     horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-    Text("•", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
-    Text(child.title, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+    Box(modifier = Modifier.size(10.dp).border(1.dp, MaterialTheme.colorScheme.primary, CircleShape))
+    Text(child.title, modifier = Modifier.weight(1f).testTag("conversation-task-title-${child.taskId}"), maxLines = 1, overflow = TextOverflow.Ellipsis,
       style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Text(label, maxLines = 1, style = MaterialTheme.typography.labelSmall,
+    Text(label, maxLines = 1, style = MaterialTheme.typography.bodySmall,
       color = MaterialTheme.colorScheme.onSurfaceVariant)
   }
 }
@@ -3783,7 +3774,7 @@ private fun ContextDetails(connection: ConnectionUiState, onRetry: () -> Unit,
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
       TextButton(onClick = { if (mode == "context") onBackToOptions() else mode = "context" },
-        modifier = Modifier.testTag("context-back")) { Text("‹") }
+        modifier = Modifier.testTag("context-back")) { ActionIcon(R.drawable.action_chevron_left, size = 20.dp) }
       Text(stringResource(R.string.assistant_context), modifier = Modifier.weight(1f),
         style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
       TextButton(onClick = onClose, modifier = Modifier.testTag("context-close")) {
@@ -3950,7 +3941,7 @@ private fun SessionFilesDetails(panel: ContextPanelUiState,
           path = path.substringBeforeLast('/', "")
           onLoadPanel("files", path, query)
         } else onClose()
-      }, modifier = Modifier.testTag("session-files-back")) { Text("‹") }
+      }, modifier = Modifier.testTag("session-files-back")) { ActionIcon(R.drawable.action_chevron_left, size = 20.dp) }
       Text(stringResource(R.string.assistant_session_files),
         style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
         modifier = Modifier.weight(1f))
@@ -4021,10 +4012,12 @@ private fun SessionFilesDetails(panel: ContextPanelUiState,
 @Composable
 private fun ContextRow(title: String, subtitle: String, tag: String, enabled: Boolean = true,
   iconRes: Int? = null, compact: Boolean = false, navigable: Boolean = true,
+  flat: Boolean = false, showChevron: Boolean = true,
   onClick: () -> Unit) {
   TextButton(onClick = onClick, enabled = enabled,
     modifier = Modifier.fillMaxWidth().heightIn(min = if (compact) 52.dp else 64.dp)
-      .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(if (compact) 12.dp else 14.dp))
+      .background(if (flat) Color.Transparent else MaterialTheme.colorScheme.surface,
+        RoundedCornerShape(if (compact) 12.dp else 14.dp))
       .testTag(tag), contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 16.dp,
       vertical = if (compact) 6.dp else 12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
@@ -4034,14 +4027,16 @@ private fun ContextRow(title: String, subtitle: String, tag: String, enabled: Bo
         tint = MaterialTheme.colorScheme.onSurfaceVariant)
       Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(title, color = MaterialTheme.colorScheme.onSurface,
-          style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
+          style = if (compact && flat) MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 21.sp)
+            else if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
           fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall,
+        if (subtitle.isNotBlank()) Text(subtitle, style = if (flat)
+          MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp)
+          else MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
           overflow = TextOverflow.Ellipsis)
       }
-      if (navigable) Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant,
-        style = MaterialTheme.typography.titleMedium)
+      if (navigable && showChevron) ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 16.dp)
     }
   }
 }
@@ -4080,7 +4075,7 @@ private fun PairingScreen(
       verticalAlignment = Alignment.CenterVertically) {
       if (secondary) IconButton(onClick = closeSecondary, enabled = !busy,
         modifier = Modifier.size(44.dp).testTag("pairing-back")) {
-        Text("‹", style = MaterialTheme.typography.headlineMedium)
+        ActionIcon(R.drawable.action_chevron_left, size = 20.dp)
       } else {
         Image(painterResource(R.drawable.brand_mark), contentDescription = "xopc",
           modifier = Modifier.size(32.dp))

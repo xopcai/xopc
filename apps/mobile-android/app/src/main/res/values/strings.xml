@@ -312,6 +312,7 @@
     <string name="progress_back">Back</string>
     <string name="progress_task_missing">Task unavailable. Refresh and try again.</string>
     <string name="progress_summary">%1$d need you · %2$d moving</string>
+    <string name="progress_action_required">Action required</string>
     <string name="progress_hint">Things that need your attention and work in progress.</string>
     <string name="progress_frequent_tools">Frequent work</string>
     <string name="progress_projects">Projects</string>
@@ -744,4 +745,10 @@
     <string name="progress_priority_critical">Critical</string>
     <string name="progress_status_cancelling">Cancelling</string>
     <string name="progress_status_timeout">Timed out</string>
+    <string name="assistant_thinking_unsupported">Not supported by this model</string>
+    <string name="assistant_thinking_fixed">Fixed by this model</string>
+    <string name="personal_chat_entry_title">Meet your personal AI</string>
+    <string name="personal_chat_entry_subtitle">A familiar place to think aloud and get things moving.</string>
+    <string name="personal_chat_resume_title">Continue with %1$s</string>
+    <string name="personal_chat_resume_subtitle">Your conversation is right where you left it.</string>
 </resources>

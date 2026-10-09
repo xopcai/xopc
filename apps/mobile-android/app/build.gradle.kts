@@ -24,6 +24,7 @@ android {
         applicationId = "ai.xopc.xopc"
         minSdk = 26
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 84
         versionName = "0.0.84"
     }

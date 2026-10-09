@@ -112,6 +112,10 @@ class MainScreenTest {
           onOpenPersonalAgent = { opens++ })
       }
     }
+    val profileBounds = composeTestRule.onNodeWithTag("personal-profile").fetchSemanticsNode().boundsInRoot
+    val agentBounds = composeTestRule.onNodeWithTag("personal-agent-card").fetchSemanticsNode().boundsInRoot
+    assertTrue("Profile and assistant cards must remain visually separate",
+      agentBounds.top - profileBounds.bottom >= 12f * composeTestRule.density.density)
     composeTestRule.onNodeWithTag("personal-agent-open").performClick()
     composeTestRule.runOnIdle { assertEquals(1, opens) }
   }
@@ -232,6 +236,13 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
     composeTestRule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
+    val jumpBounds = composeTestRule.onNodeWithTag("assistant-jump-bottom")
+      .fetchSemanticsNode().boundsInRoot
+    val viewportBounds = composeTestRule.onNodeWithTag("assistant-content-area")
+      .fetchSemanticsNode().boundsInRoot
+    assertEquals(viewportBounds.center.x, jumpBounds.center.x, 1f)
+    composeTestRule.onNodeWithTag("assistant-jump-arrow", useUnmergedTree = true).assertExists()
+    composeTestRule.onNodeWithTag("assistant-jump-working", useUnmergedTree = true).assertDoesNotExist()
     composeTestRule.runOnIdle {
       state.value = state.value.copy(messages = state.value.messages +
         ConversationMessage("message-31", "assistant", "Reply 31"))
@@ -265,6 +276,11 @@ class MainScreenTest {
     composeTestRule.runOnIdle { state.value = state.value.copy(liveText = stream + "\n\nMore output") }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
     composeTestRule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-jump-working", useUnmergedTree = true).assertExists()
+    composeTestRule.onNodeWithTag("assistant-jump-arrow", useUnmergedTree = true).assertDoesNotExist()
+    composeTestRule.runOnIdle { state.value = state.value.copy(activeRunId = null, liveText = "") }
+    composeTestRule.onNodeWithTag("assistant-jump-arrow", useUnmergedTree = true).assertExists()
+    composeTestRule.onNodeWithTag("assistant-jump-working", useUnmergedTree = true).assertDoesNotExist()
   }
 
   @Test fun assistantOlderPageKeepsVisibleMessageAfterPrepend() {
@@ -388,11 +404,11 @@ class MainScreenTest {
       selectedTab = HomeTab.Assistant
     }
     composeTestRule.onNodeWithTag("message-media-media-1").performClick()
-    composeTestRule.onNodeWithTag("message-media-preview-text").assertTextContains("hello")
+    composeTestRule.onNodeWithTag("file-preview-text").assertTextContains("hello")
     saveAcceptanceScreenshot("message-parity-preview.png", "message-media-preview")
     composeTestRule.onNodeWithTag("message-media-preview-close").performClick()
     composeTestRule.onNodeWithTag("message-artifact-artifact-1").performScrollTo().performClick()
-    composeTestRule.onNodeWithTag("message-media-preview-text").assertTextContains("hello")
+    composeTestRule.onNodeWithText("hello").assertExists()
     composeTestRule.onNodeWithTag("message-media-preview-close").performClick()
     composeTestRule.onNodeWithTag("message-target-task-task-1").performScrollTo().performClick()
     composeTestRule.runOnIdle {
@@ -452,8 +468,8 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-media-preview-close").performClick()
 
     composeTestRule.onNodeWithTag("message-audio-audio-1").performScrollTo().performClick()
-    composeTestRule.onNodeWithTag("message-media-preview-audio").assertExists()
-    saveAcceptanceScreenshot("message-audio-preview.png", "message-media-preview")
+    composeTestRule.onNodeWithTag("message-media-preview-audio").assertDoesNotExist()
+    saveAcceptanceScreenshot("message-inline-audio.png")
   }
 
   @Test fun failedAssistantOutcomeKeepsAVisibleStatusInsideItsCard() {
@@ -1597,7 +1613,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("conversations-load-more").assertIsNotEnabled()
   }
 
-  @Test fun localDraftDiscardRequiresConfirmationAndDoesNotOpenConversation() {
+  @Test fun unstartedDraftsAreHiddenFromConversationHistory() {
     val id = "11111111-2222-3333-4444-555555555555"
     var discarded: String? = null
     var selected: String? = null
@@ -1608,15 +1624,9 @@ class MainScreenTest {
           conversations = listOf(ConversationSummary(id, "New conversation", Instant.now().toString(), 0, "main", true))),
         onSelectConversation = { selected = it }, onDiscardDraft = { discarded = it })
     }
-    composeTestRule.onNodeWithTag("discard-draft-$id").performClick()
-    assert(discarded == null)
-    assert(selected == null)
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.conversations_cancel)).performClick()
-    assert(discarded == null)
-    composeTestRule.onNodeWithTag("discard-draft-$id").performClick()
-    composeTestRule.onNodeWithTag("conversations-confirm-discard").performClick()
-    assert(discarded == id)
-    assert(selected == null)
+    composeTestRule.onNodeWithTag("discard-draft-$id").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("conversation-row-$id").assertDoesNotExist()
+    composeTestRule.runOnIdle { assertEquals(null, discarded); assertEquals(null, selected) }
   }
 
   @Test fun conversationsListShowsTodaySectionAndRelativeTime() {
@@ -1723,6 +1733,22 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("conversation-task-task-1").assertDoesNotExist()
     composeTestRule.onNodeWithTag("conversation-tasks-$parent").performClick()
     composeTestRule.onNodeWithText("Research task").assertExists()
+    val parentBounds = composeTestRule.onNodeWithTag("conversation-row-$parent").fetchSemanticsNode().boundsInRoot
+    val buttonBounds = composeTestRule.onNodeWithTag("conversation-tasks-$parent").fetchSemanticsNode().boundsInRoot
+    val arrowBounds = composeTestRule.onNodeWithTag("conversation-task-chevron-$parent", useUnmergedTree = true)
+      .fetchSemanticsNode().boundsInRoot
+    assertTrue(kotlin.math.abs(arrowBounds.center.x - buttonBounds.center.x) < 1f)
+    assertTrue("Arrow $arrowBounds should be centered in parent $parentBounds",
+      kotlin.math.abs(arrowBounds.center.y - parentBounds.center.y) < 1f)
+    val childBounds = composeTestRule.onNodeWithTag("conversation-task-task-1").fetchSemanticsNode().boundsInRoot
+    val titleBounds = composeTestRule.onNodeWithTag("conversation-task-title-task-1", useUnmergedTree = true)
+      .fetchSemanticsNode().boundsInRoot
+    val density = composeTestRule.density.density
+    assertTrue("Parent rows should remain compact", parentBounds.height <= 65f * density)
+    assertTrue("Child titles should retain mobile reading space", titleBounds.left - childBounds.left <= 45f * density)
+    composeTestRule.onNodeWithTag("conversation-tasks-$parent").performClick()
+    composeTestRule.onNodeWithTag("conversation-task-task-1").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("conversation-tasks-$parent").performClick()
     composeTestRule.mainClock.advanceTimeBy(600)
     composeTestRule.waitForIdle()
     saveAcceptanceScreenshot("conversation-task-expanded.png")
@@ -2170,7 +2196,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("delete-conversation-$id").assertIsNotEnabled()
   }
 
-  @Test fun assistantMessageDetailOpensGroupedExecutionAndReturns() {
+  @Test fun assistantMessageDetailShowsOnlyContentAndKeepsExecutionInChat() {
     val id = "11111111-2222-3333-4444-555555555555"
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val ui = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = id,
@@ -2182,8 +2208,15 @@ class MainScreenTest {
     }
     composeTestRule.onNodeWithTag("message-more-message-1").performClick()
     composeTestRule.onNodeWithTag("message-detail-action").performClick()
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_message_detail)).assertExists()
-    composeTestRule.onNodeWithTag("message-execution").performClick()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_message_detail)).assertDoesNotExist()
+    composeTestRule.onNode(hasText(composeTestRule.activity.getString(R.string.tab_assistant)) and
+      hasAnyAncestor(hasTestTag("message-detail-panel"))).assertDoesNotExist()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_close)).assertDoesNotExist()
+    composeTestRule.onNodeWithTag("message-execution").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("message-detail-scroll").assertIsDisplayed()
+    Espresso.pressBack()
+    composeTestRule.onNodeWithTag("message-detail-scroll").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("message-steps-message-1").performClick()
     composeTestRule.onNodeWithTag("execution-loading").assertExists()
     composeTestRule.runOnIdle {
       ui.value = ui.value.copy(executionLoading = false, executionDetail = ExecutionDetail("turn-1", listOf(
@@ -2193,10 +2226,10 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("execution-group-step-1").performClick()
     composeTestRule.onNodeWithTag("execution-preview-step-2").assertExists()
     composeTestRule.onNodeWithTag("execution-back").performClick()
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_message_detail)).assertExists()
+    composeTestRule.onNodeWithTag("message-detail-scroll").assertDoesNotExist()
   }
 
-  @Test fun messageDetailKeepsScrollPositionAfterExecutionReturn() {
+  @Test fun messageDetailLongAnswerScrollsAndDismissesWithoutFooter() {
     val id = "11111111-2222-3333-4444-555555555555"
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val answer = (1..24).joinToString("\n\n") { "Paragraph $it" }
@@ -2212,18 +2245,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-detail-action").performClick()
     val lastParagraph = hasText("Paragraph 24") and hasAnyAncestor(hasTestTag("message-detail-scroll"))
     composeTestRule.onNode(lastParagraph).performScrollTo().assertIsDisplayed()
-    val before = composeTestRule.onNodeWithTag("message-detail-scroll").fetchSemanticsNode()
-      .config[SemanticsProperties.VerticalScrollAxisRange].value()
-    val beforeBounds = composeTestRule.onNode(lastParagraph).fetchSemanticsNode().boundsInRoot
-    composeTestRule.onNodeWithTag("message-execution").performClick()
-    composeTestRule.onNodeWithTag("execution-back").performClick()
-    val after = composeTestRule.onNodeWithTag("message-detail-scroll").fetchSemanticsNode()
-      .config[SemanticsProperties.VerticalScrollAxisRange].value()
-    assertTrue("detail scroll before=$before after=$after", before > 0f && after >= before - 1f)
-    val afterBounds = composeTestRule.onNode(lastParagraph).fetchSemanticsNode().boundsInRoot
-    val viewport = composeTestRule.onNodeWithTag("message-detail-scroll").fetchSemanticsNode().boundsInRoot
-    assertTrue("detail bounds before=$beforeBounds after=$afterBounds viewport=$viewport scroll=$before/$after",
-      composeTestRule.onNode(lastParagraph).isDisplayed())
+    composeTestRule.onNodeWithTag("message-execution").assertDoesNotExist()
+    Espresso.pressBack()
+    composeTestRule.onNodeWithTag("message-detail-scroll").assertDoesNotExist()
   }
 
   @Test fun mediaOnlyAssistantAnswerStillExposesDetailWithoutEmptyCopy() {
@@ -2256,7 +2280,7 @@ class MainScreenTest {
     }
     composeTestRule.onNodeWithTag("message-preview-answer-long", useUnmergedTree = true).assertExists()
     composeTestRule.onNodeWithTag("message-assistant-card-answer-long").performClick()
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_message_detail)).assertExists()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_message_detail)).assertDoesNotExist()
     composeTestRule.onNode(hasText("第9行内容", substring = true) and
       hasAnyAncestor(hasTestTag("message-detail-scroll"))).assertExists()
     composeTestRule.onNodeWithTag("message-view-more-answer-latest").assertDoesNotExist()
@@ -2370,7 +2394,13 @@ class MainScreenTest {
           true
         }, onSendMessage = { sends++ })
     }
-    composeTestRule.onNodeWithTag("message-more-user-1").performClick()
+    composeTestRule.onNodeWithTag("message-user-copy-user-1").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("message-user-reuse-user-1").assertDoesNotExist()
+    composeTestRule.onNodeWithText("Original request").performTouchInput { click() }
+    composeTestRule.onNodeWithTag("message-copy-action").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("message-reuse-action").assertDoesNotExist()
+    composeTestRule.onNodeWithText("Original request").performTouchInput { longClick() }
+    composeTestRule.onNodeWithTag("message-copy-action").assertExists()
     composeTestRule.onNodeWithTag("message-reuse-action").performClick()
     composeTestRule.onNodeWithTag("assistant-input").assertTextEquals("Original request")
     composeTestRule.runOnIdle {
@@ -2390,10 +2420,10 @@ class MainScreenTest {
     composeTestRule.setContent {
       MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value)
     }
-    composeTestRule.onNodeWithTag("message-more-media").performClick()
+    composeTestRule.onNodeWithTag("message-more-media").performTouchInput { longClick() }
     composeTestRule.onNodeWithTag("message-reuse-action").assertDoesNotExist()
     composeTestRule.onNodeWithTag("message-copy-action").performClick()
-    composeTestRule.onNodeWithTag("message-more-plain").performClick()
+    composeTestRule.onNodeWithTag("message-more-plain").performTouchInput { longClick() }
     composeTestRule.onNodeWithTag("message-reuse-action").assertIsNotEnabled()
   }
 
@@ -2543,7 +2573,7 @@ class MainScreenTest {
           selectedConversationId = id, context = context))
     }
     composeTestRule.onNodeWithTag("assistant-options").performClick()
-    val tags = listOf("assistant-context", "assistant-agent", "assistant-model", "assistant-new",
+    val tags = listOf("assistant-context", "assistant-agent", "assistant-model", "assistant-thinking", "assistant-new",
       "assistant-session-files")
     val tops = tags.map { composeTestRule.onNodeWithTag(it).fetchSemanticsNode().boundsInRoot.top }
     assertTrue(tops.zipWithNext().all { (a, b) -> a < b })
@@ -2751,4 +2781,77 @@ class MainScreenTest {
     assert(chosen == "research")
     assert(discarded)
   }
+
+  @Test fun modelChoiceStaysOpenOnFailureAndClosesOnlyAfterSaved() {
+    val state = mutableStateOf(ConnectionUiState(
+      profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+      selectedConversationId = "11111111-2222-3333-4444-555555555555", selectedModelId = "test/one",
+      models = listOf(ConversationModel("test/one", "One", "off"), ConversationModel("test/two", "Two", "low"))))
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value,
+        onSelectModel = { state.value = state.value.copy(modelSaving = true, modelError = false) })
+    }
+    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("assistant-model").performClick()
+    composeTestRule.onNodeWithTag("model-test/two").performClick()
+    composeTestRule.onNodeWithTag("model-test/two").assertIsNotEnabled()
+    composeTestRule.runOnIdle { state.value = state.value.copy(modelSaving = false, modelError = true) }
+    composeTestRule.onNodeWithTag("model-test/two").assertIsEnabled()
+    composeTestRule.onNodeWithTag("chat-options-panel").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("model-test/two").performClick()
+    composeTestRule.runOnIdle {
+      state.value = state.value.copy(modelSaving = false, selectedModelId = "test/two")
+    }
+    composeTestRule.onNodeWithTag("chat-options-panel").assertDoesNotExist()
+  }
+
+  @Test fun thinkingChoiceUsesSameSheetAndClosesAfterSaved() {
+    val state = mutableStateOf(ConnectionUiState(
+      profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+      selectedConversationId = "11111111-2222-3333-4444-555555555555", selectedModelId = "test/one",
+      thinkingLevel = "low", models = listOf(ConversationModel("test/one", "One", "low", "levels", listOf("low", "high")))))
+    var chosen = ""
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value,
+        onSelectThinking = { chosen = it; state.value = state.value.copy(modelSaving = true) })
+    }
+    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("assistant-thinking").performClick()
+    composeTestRule.onNodeWithTag("thinking-high").performClick()
+    composeTestRule.runOnIdle { assertEquals("high", chosen) }
+    composeTestRule.onNodeWithTag("chat-options-panel").assertIsDisplayed()
+    composeTestRule.runOnIdle { state.value = state.value.copy(modelSaving = false, thinkingLevel = "high") }
+    composeTestRule.onNodeWithTag("chat-options-panel").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-options-close").performClick()
+    composeTestRule.onNodeWithTag("chat-options-panel").assertDoesNotExist()
+  }
+
+
+  @Test fun conversationsPersonalAiEntryLoadsAndOpensExistingFlow() {
+    var loads = 0
+    var opens = 0
+    val state = mutableStateOf(ConnectionUiState(
+      profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+      personal = PersonalUiState(gatewayId = "gateway")))
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Conversations, onSelectTab = {}, connection = state.value,
+        onLoadPersonalAgent = { loads++ }, onOpenPersonalAgent = { opens++ })
+    }
+    composeTestRule.onNodeWithTag("conversations-personal-ai-entry").performClick()
+    composeTestRule.runOnIdle { assertEquals(1, loads); assertEquals(1, opens) }
+    composeTestRule.runOnIdle { state.value = state.value.copy(personal = state.value.personal.copy(agentCreating = true)) }
+    composeTestRule.onNodeWithTag("conversations-personal-ai-entry").assertIsNotEnabled()
+    composeTestRule.runOnIdle { state.value = state.value.copy(personal = state.value.personal.copy(agentCreating = false, agentError = true)) }
+    composeTestRule.onNodeWithTag("conversations-personal-ai-error").assertExists()
+    composeTestRule.onNodeWithTag("conversations-personal-ai-entry").assertIsEnabled().performClick()
+    composeTestRule.runOnIdle {
+      assertEquals(2, opens)
+      state.value = state.value.copy(personal = state.value.personal.copy(agentError = false,
+        agent = ai.xopc.mobile.gateway.PersonalAgentRecord("personal", "11111111-2222-3333-4444-555555555555",
+          "ready", "Ada", "loopi", null)))
+    }
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.personal_chat_resume_title, "Ada")).assertExists()
+  }
+
 }

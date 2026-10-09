@@ -99,7 +99,7 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
     Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp),
       verticalAlignment = Alignment.CenterVertically) {
       TextButton(onClick = onBack, modifier = Modifier.testTag("about-you-back")) {
-        Text("‹", style = MaterialTheme.typography.headlineMedium)
+        ActionIcon(R.drawable.action_chevron_left, size = 20.dp)
       }
       Text(stringResource(if (page == "detail") R.string.about_you_details else R.string.about_you_title),
         style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,

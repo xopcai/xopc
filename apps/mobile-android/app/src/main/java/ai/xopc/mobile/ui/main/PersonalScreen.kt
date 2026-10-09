@@ -175,7 +175,9 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
       }
     }
     ProfileCard(state.summary, connected, onOpenAbout)
+    Spacer(Modifier.height(16.dp))
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+      shape = RoundedCornerShape(22.dp),
       modifier = Modifier.fillMaxWidth().testTag("personal-agent-card")) {
       Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically,
