@@ -81,8 +81,8 @@ describe('XopcCloudModelSource', () => {
               capabilities: {
                 input: ['text'], output: ['image'], reasoning: false,
                 imageGeneration: {
-                  maxCount: 2, sizes: ['1024x1024'], qualities: ['high'],
-                  formats: ['png'], backgrounds: [], maxInputImages: 0,
+                  generate: { maxCount: 2, supportsSize: true }, geometry: { sizes: ['1024x1024'] },
+                  output: { qualities: ['high'], formats: ['png'] },
                 },
               },
             },
@@ -130,7 +130,7 @@ describe('XopcCloudModelSource', () => {
           id: 'model-b', kind: 'image', input: ['text'],
           output: ['image'], operations: ['images.generate'], reasoning: false,
           maxOutputTokens: null,
-          imageGeneration: expect.objectContaining({ maxCount: 2, sizes: ['1024x1024'] }),
+          imageGeneration: expect.objectContaining({ generate: { maxCount: 2, supportsSize: true }, geometry: { sizes: ['1024x1024'] } }),
           stability: 'stable', priority: 100, tier: 'free', bestEffort: false,
         },
         {

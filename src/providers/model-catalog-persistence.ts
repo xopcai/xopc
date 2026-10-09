@@ -1,3 +1,4 @@
+import { ImageGenerationCapabilitiesSchema } from '../config/models-json.js';
 import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
 import { readFileSync, rmSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
@@ -11,15 +12,7 @@ import type { CatalogModel, CatalogSource } from './model-catalog-types.js';
 
 const MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
-const imageGenerationSchema = z.object({
-  maxCount: z.number().int().positive(),
-  sizes: z.array(z.string()),
-  aspectRatios: z.array(z.string()).optional(),
-  qualities: z.array(z.enum(['low', 'medium', 'high', 'auto'])),
-  formats: z.array(z.enum(['png', 'jpeg', 'webp'])),
-  backgrounds: z.array(z.enum(['transparent', 'opaque', 'auto'])),
-  maxInputImages: z.number().int().nonnegative(),
-}).strict();
+const imageGenerationSchema = ImageGenerationCapabilitiesSchema;
 
 const sttSchema = z.object({
   inputFormats: z.array(z.string()),

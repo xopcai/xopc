@@ -1,3 +1,4 @@
+import { listImageProviderSpecs } from '@xopcai/image-providers';
 import { input } from '@inquirer/prompts';
 import { Command } from 'commander';
 
@@ -25,14 +26,7 @@ import { colors } from '../utils/colors.js';
 import { runCliOAuthLogin } from '../utils/oauth-login.js';
 import { disconnectProvider } from '../../providers/provider-disconnect.js';
 
-const IMAGE_GENERATION_IDS = new Set([
-  'gpt-image-2',
-  'wan2.6-t2i',
-  'wan2.7-image-pro',
-  'wan2.7-image',
-  'image-01',
-  'image-01-live',
-]);
+const IMAGE_GENERATION_IDS = new Set(listImageProviderSpecs().flatMap(provider => provider.models.map(model => model.id)));
 
 const VISION_IDS = new Set([
   'gpt-5.6',

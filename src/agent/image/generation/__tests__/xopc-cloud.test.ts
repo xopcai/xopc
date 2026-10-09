@@ -35,19 +35,15 @@ describe('XOPC Cloud image generation provider', () => {
       contextWindow: 128_000,
       maxOutputTokens: null,
       imageGeneration: {
-        maxCount: 2,
-        sizes: ['1024x1024'],
-        aspectRatios: [],
-        qualities: ['high'],
-        formats: ['png'],
-        backgrounds: [],
-        maxInputImages: 0,
+        generate: { maxCount: 2, supportsSize: true },
+        geometry: { sizes: ['1024x1024'] },
+        output: { qualities: ['high'], formats: ['png'] },
       },
     }]);
     const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
       expect(String(input)).toBe('https://example.com/v1/images/generations');
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer oauth-access');
-      return Response.json({ data: [{ b64_json: 'aW1hZ2U=' }] });
+      return Response.json({ data: [{ b64_json: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJYQAAAAASUVORK5CYII=' }] });
     });
     vi.stubGlobal('fetch', fetchMock);
 

@@ -89,16 +89,7 @@ export class ModelCatalogStore {
         input: [...model.input],
         output: [...model.output],
         operations: [...model.operations],
-        ...(model.imageGeneration ? {
-          imageGeneration: {
-            ...model.imageGeneration,
-            sizes: [...model.imageGeneration.sizes],
-            aspectRatios: [...(model.imageGeneration.aspectRatios ?? [])],
-            qualities: [...model.imageGeneration.qualities],
-            formats: [...model.imageGeneration.formats],
-            backgrounds: [...model.imageGeneration.backgrounds],
-          },
-        } : {}),
+        ...(model.imageGeneration ? { imageGeneration: structuredClone(model.imageGeneration) } : {}),
         ...(model.voice ? { voice: structuredClone(model.voice) } : {}),
         ...(model.stt ? { stt: { ...model.stt, inputFormats: [...model.stt.inputFormats], languages: [...model.stt.languages], timestamps: [...model.stt.timestamps] } } : {}),
         ...(model.tts ? { tts: { ...model.tts, languages: [...model.tts.languages], outputFormats: [...model.tts.outputFormats] } } : {}),

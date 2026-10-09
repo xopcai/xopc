@@ -1,58 +1,17 @@
 import type { Config } from '../../../config/schema.js';
 import type { AuthProfileStore } from '../../../providers/auth-runtime/index.js';
-import type { MediaNormalizationEntry } from '../../media-generation/normalization.types.js';
 
 // ============================================
 // Capability dimensions (Step 2 — new model)
 // ============================================
 
 export type ImageGenerationResolution = '1K' | '2K' | '4K';
-export type ImageGenerationQuality = 'low' | 'medium' | 'high' | 'auto';
+export type ImageGenerationQuality = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'auto';
 export type ImageGenerationOutputFormat = 'png' | 'jpeg' | 'webp';
 export type ImageGenerationBackground = 'transparent' | 'opaque' | 'auto';
 
-/** Generation-mode (text → image) capability slice. */
-export interface ImageGenerationGenerateCapability {
-  /** Maximum images per call (defaults to 1 when omitted). */
-  maxCount?: number;
-  /** Provider supports an explicit `size` parameter. */
-  supportsSize?: boolean;
-  /** Provider supports `aspectRatio` parameter. */
-  supportsAspectRatio?: boolean;
-  /** Provider supports `resolution` parameter. */
-  supportsResolution?: boolean;
-}
-
-/** Edit-mode (image → image) capability slice. */
-export interface ImageGenerationEditCapability {
-  enabled: boolean;
-  /** Max number of input reference images (1 = single ref). */
-  maxInputImages?: number;
-  supportsSize?: boolean;
-  supportsAspectRatio?: boolean;
-}
-
-/** Geometry constraints (allowed values for size / aspectRatio / resolution). */
-export interface ImageGenerationGeometryCapability {
-  sizes?: string[];
-  aspectRatios?: string[];
-  resolutions?: ImageGenerationResolution[];
-}
-
-/** Output / styling capability slice. */
-export interface ImageGenerationOutputCapability {
-  qualities?: ImageGenerationQuality[];
-  formats?: ImageGenerationOutputFormat[];
-  backgrounds?: ImageGenerationBackground[];
-}
-
-/** New nested capability shape. */
-export interface ImageGenerationProviderCapabilities {
-  generate?: ImageGenerationGenerateCapability;
-  edit?: ImageGenerationEditCapability;
-  geometry?: ImageGenerationGeometryCapability;
-  output?: ImageGenerationOutputCapability;
-}
+export type { ImageGeometry as ImageGenerationGeometryCapability } from '../../../../packages/image-providers/src/types.js';
+export type ImageGenerationProviderCapabilities = import('../../../../packages/image-providers/src/types.js').ImageCapabilities;
 
 export interface ImageGenerationProviderConfiguredContext {
   cfg?: Config;
@@ -136,33 +95,6 @@ export interface ImageGenerationSourceImage {
   fileName?: string;
   metadata?: Record<string, unknown>;
 }
-
-// ============================================
-// Normalization output
-// ============================================
-
-export type ImageGenerationIgnoredOverrideKey =
-  | 'size'
-  | 'aspectRatio'
-  | 'resolution'
-  | 'quality'
-  | 'outputFormat'
-  | 'background';
-
-export interface ImageGenerationIgnoredOverride {
-  key: ImageGenerationIgnoredOverrideKey;
-  value: string;
-}
-
-export interface ImageGenerationNormalization {
-  size?: MediaNormalizationEntry<string>;
-  aspectRatio?: MediaNormalizationEntry<string>;
-  resolution?: MediaNormalizationEntry<ImageGenerationResolution>;
-}
-
-// ============================================
-// Request / result (after normalization)
-// ============================================
 
 export interface ImageGenerationRequest {
   provider: string;
