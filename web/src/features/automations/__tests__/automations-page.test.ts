@@ -8,7 +8,7 @@ import {
 } from '../automation-form';
 import type { Automation, AutomationInput } from '../automation-api';
 import type { WorkflowDefinition } from '@/features/workflows/workflow-api';
-import { isSystemManagedAutomation } from '../automations-workspace';
+import { isSystemManagedAutomation } from '../automation-management';
 
 const workflow: WorkflowDefinition = {
   id: 'wf-report',
