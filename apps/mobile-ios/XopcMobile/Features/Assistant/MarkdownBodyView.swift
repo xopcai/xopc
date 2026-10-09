@@ -31,17 +31,15 @@ private struct MarkdownPartView: View {
                 .padding(.top, level <= 2 ? 8 : 3)
                 .accessibilityAddTraits(.isHeader)
         case let .bullet(level, text):
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("•").accessibilityHidden(true)
-                inline(text).frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.leading, CGFloat(level) * 16)
+            (Text("• ") + inline(text))
+                .mobileTextStyle(.body)
+                .padding(.leading, CGFloat(min(max(level, 0), 3)) * 12)
+                .fixedSize(horizontal: false, vertical: true)
         case let .numbered(number, level, text):
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("\(number).").accessibilityHidden(true)
-                inline(text).frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.leading, CGFloat(level) * 16)
+            (Text("\(number). ") + inline(text))
+                .mobileTextStyle(.body)
+                .padding(.leading, CGFloat(min(max(level, 0), 3)) * 12)
+                .fixedSize(horizontal: false, vertical: true)
         case let .quote(text):
             HStack(alignment: .top, spacing: 10) {
                 RoundedRectangle(cornerRadius: 2)
