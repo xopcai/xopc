@@ -4,7 +4,9 @@ import { basename, join } from 'node:path';
 import type { FileResource, FileSpace } from '@xopcai/gateway-contract';
 import type { Context, Hono } from 'hono';
 
+import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
 import { FileServiceError, type FileSpaceService, fileResourceFromPath, parseFileResourceId, resolveFilePath } from '../../../files/file-service.js';
+import { buildFilePathClassifierContext, resolveFileReferenceCandidate } from '../../file-path-classifier.js';
 import { getGatewayFileSpaceService } from '../../file-space-service.js';
 import { fuzzySubsequenceScore, fuzzySearchWorkspaceFiles } from '../../workspace-file-search.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -126,11 +128,17 @@ export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRout
 
   authenticated.post('/api/files/resolve', async (c) => {
     try {
-      const body = await c.req.json<{ spaceId?: string; path?: string }>();
+      const body = await c.req.json<{ spaceId?: string; path?: string; taskRunId?: string }>();
       if (!body.spaceId || !body.path) throw new FileServiceError(400, 'spaceId and path are required');
       const space = await files.get(body.spaceId);
-      const absolutePath = await resolveFilePath(space.root, body.path);
-      return c.json({ resource: await fileResourceFromPath(space, absolutePath) });
+      // Forwarded task replies keep relative links from the worker's workspace.
+      const sourceConversationId = body.taskRunId ? new TaskRunRepository().get(body.taskRunId)?.conversationId : undefined;
+      if (body.taskRunId && !sourceConversationId) throw new FileServiceError(404, 'Task file context not found');
+      const sourceSpace = sourceConversationId ? await files.forContext('session', sourceConversationId) : space;
+      const ctx = { ...buildFilePathClassifierContext(deps.service.currentConfig, sourceConversationId), workspaceRoot: sourceSpace.root };
+      const { candidate, invalid } = await resolveFileReferenceCandidate(body.path, sourceSpace.root, ctx);
+      if (!candidate || invalid) throw new FileServiceError(400, 'Invalid file path');
+      return c.json(await files.resolveLocalResource(space, candidate));
     } catch (error) { return errorResponse(c, error); }
   });
 

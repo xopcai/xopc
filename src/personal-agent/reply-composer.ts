@@ -25,7 +25,7 @@ import { loadProfileBootstrapFiles } from '../agent/bootstrap/load-bootstrap-fil
 const log = createLogger('PersonalReplyComposer');
 const TIMEOUT_MS = 12_000;
 const DraftSchema = z.object({ text: z.string().trim().min(1).max(32_000),
-  sourceIds: z.array(z.literal('result')), limitationIds: z.array(z.literal('status')) }).strict();
+  sourceIds: z.array(z.literal('result')).default(['result']), limitationIds: z.array(z.literal('status')).default(['status']) }).strict();
 const PacketSchema = z.object({ delivery: TaskResultDeliverySchema, report: z.string().min(1), objective: z.string(),
   preservedText: z.string().optional(), requestId: z.string().optional(), taskVersion: z.number().int() });
 

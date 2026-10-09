@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigSchema } from '../../../../config/schema.js';
 import { seedTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
@@ -19,6 +19,7 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
 import type { GatewayService } from '../../../service.js';
+import { TaskRunRepository } from '../../../../tasks/task-run-repository.js';
 import { registerFilesRoutes } from '../files.js';
 
 describe('files routes', () => {
@@ -35,6 +36,7 @@ describe('files routes', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     if (previousStateDir === undefined) delete process.env.XOPC_STATE_DIR;
@@ -46,7 +48,7 @@ describe('files routes', () => {
     seedTestAgentCatalog({ agents });
     const config = ConfigSchema.parse({});
     const projects = new ProjectService();
-    const project = projects.create({ name: 'Files', workspaceRoot });
+    const project = projects.findByWorkspaceRoot(workspaceRoot) ?? projects.create({ name: 'Files', workspaceRoot });
     const service = {
       currentConfig: config,
       projects,
@@ -247,8 +249,8 @@ describe('files routes', () => {
     expect((await app.request(`/api/files/${spaceId + '.' + Buffer.from('../report.pdf').toString('base64url')}/content`)).status).toBe(400);
     const missing = await resolveReference(join(stateDir, 'missing.pdf'));
     expect(await missing.json()).toMatchObject({ reference: { scope: 'missing', exists: false } });
-    const invalid = await resolveReference('../report.pdf');
-    expect(await invalid.json()).toMatchObject({ reference: { scope: 'invalid', exists: false } });
+    const parent = await resolveReference('../report.pdf');
+    expect(await parent.json()).toMatchObject({ reference: { scope: 'external', exists: true } });
   });
 
   it('serializes edits across a symlink and its target', async () => {
@@ -327,7 +329,36 @@ describe('files routes', () => {
     expect(response.headers.get('content-disposition')).toContain(`filename*=UTF-8''${encodeURIComponent(fileName)}`);
   });
 
-  it('resolves absolute file paths only when they stay inside the selected workspace', async () => {
+  it('resolves forwarded relative links against the producing task workspace, including name collisions', async () => {
+    const root = join(stateDir, 'personal');
+    const workerRoot = join(stateDir, 'coder');
+    mkdirSync(root);
+    mkdirSync(workerRoot);
+    writeFileSync(join(root, 'report.html'), 'unrelated personal file');
+    writeFileSync(join(workerRoot, 'report.html'), 'worker result');
+    writeFileSync(join(workerRoot, 'report.png'), 'worker image');
+    const { app } = appFor(root, [{ id: 'main', workspace: root }, { id: 'coder', workspace: workerRoot }]);
+    const workerId = 'cd747d63-04e8-45dc-963f-6e910de8f7b2';
+    ensureSessionRecord(workerId, workerRoot, { agentId: 'coder' });
+    vi.spyOn(TaskRunRepository.prototype, 'get').mockReturnValue({ conversationId: workerId } as never);
+    for (const name of ['report.html', 'report.png']) {
+      const response = await app.request('/api/files/resolve', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ spaceId: fileSpaceId(realpathSync(root)), path: name, taskRunId: 'producing-run' }),
+      });
+      expect(response.status).toBe(200);
+      const { resource, absolutePath } = await response.json() as { resource: { id: string }; absolutePath: string };
+      expect(absolutePath).toBe(realpathSync(join(workerRoot, name)));
+      expect(await (await app.request(`/api/files/${resource.id}/content`)).text()).toBe(name.endsWith('.html') ? 'worker result' : 'worker image');
+    }
+    vi.spyOn(TaskRunRepository.prototype, 'get').mockReturnValue(undefined);
+    expect((await app.request('/api/files/resolve', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ spaceId: fileSpaceId(realpathSync(root)), path: 'report.html', taskRunId: 'missing-run' }),
+    })).status).toBe(404);
+  });
+
+  it('previews local files outside the workspace without granting write access', async () => {
     const workspace = join(stateDir, 'workspace');
     const inside = join(workspace, 'result.xlsx');
     const outside = join(stateDir, 'outside.xlsx');
@@ -345,7 +376,23 @@ describe('files routes', () => {
     });
 
     expect((await resolvePath(inside)).status).toBe(200);
-    expect((await resolvePath(outside)).status).toBe(400);
+    expect((await resolvePath('../outside.xlsx')).status).toBe(200);
+    const response = await resolvePath(outside);
+    expect(response.status).toBe(200);
+    const { resource, absolutePath } = await response.json() as { resource: { id: string; revision: string; capabilities: string[] }; absolutePath: string };
+    expect(absolutePath).toBe(realpathSync(outside));
+    expect(resource.capabilities).toContain('preview');
+    expect(resource.capabilities).not.toContain('edit');
+    expect(await (await app.request(`/api/files/${resource.id}/content`)).text()).toBe('outside');
+    const edit = await app.request(`/api/files/${resource.id}/content`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: 'changed', revision: resource.revision }),
+    });
+    expect(edit.status).toBe(403);
+    expect((await app.request(`/api/files/${resource.id}`, { method: 'DELETE' })).status).toBe(403);
+    // Host IDs remain readable after a new service instance is created.
+    expect(await (await appFor(workspace).app.request(`/api/files/${resource.id}/content`)).text()).toBe('outside');
+    expect((await resolvePath(join(stateDir, 'missing.xlsx'))).status).toBe(404);
   });
 
   it('uses revisions for edits and never overwrites uploads', async () => {

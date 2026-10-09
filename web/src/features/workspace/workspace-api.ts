@@ -26,6 +26,7 @@ export type WorkspaceEditorRequestOptions = {
   projectId?: string;
   conversationId?: string;
   agentId?: string;
+  taskRunId?: string;
 };
 
 export type FileReferenceScope = 'workspace' | 'external' | 'agent-profile' | 'missing' | 'invalid';
@@ -93,7 +94,7 @@ async function resolveResource(path: string, options?: WorkspaceEditorRequestOpt
   const space = await resolveSpace(options);
   const body = await requestJson('/api/files/resolve', {
     method: 'POST',
-    body: JSON.stringify({ spaceId: space.id, path }),
+    body: JSON.stringify({ spaceId: space.id, path, taskRunId: options?.taskRunId }),
   }) as { resource?: unknown };
   return FileResourceSchema.parse(body.resource);
 }
@@ -176,15 +177,16 @@ export async function resolveWorkspaceFileReference(
   try { space = await resolveSpace(options); } catch { return null; }
   try {
     const body = await requestJson('/api/files/resolve', {
-      method: 'POST', body: JSON.stringify({ spaceId: space.id, path }),
-    }) as { resource?: unknown };
+      method: 'POST', body: JSON.stringify({ spaceId: space.id, path, taskRunId: options?.taskRunId }),
+    }) as { resource?: unknown; absolutePath?: string };
     const resource = FileResourceSchema.parse(body.resource);
     return {
+      absolutePath: body.absolutePath,
       fileId: resource.id,
       inputPath: path,
       displayName: resource.name,
-      scope: 'workspace',
-      locationKind: 'workspace',
+      scope: body.absolutePath ? 'external' : 'workspace',
+      locationKind: body.absolutePath ? 'host' : 'workspace',
       exists: true,
       isDirectory: resource.kind === 'directory',
       workspaceRelativePath: resource.relativePath,

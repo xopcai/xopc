@@ -10,6 +10,14 @@ import {
 } from '../internal-links';
 
 describe('markdown internal links', () => {
+  it('recognizes parent-directory file links', () => {
+    expect(parseWorkspaceFileLinkTarget('../report.html')).toMatchObject({ path: '../report.html', kind: 'workspace-relative' });
+  });
+
+  it('recognizes home-directory file links', () => {
+    expect(parseWorkspaceFileLinkTarget('~/Downloads/report.html')).toMatchObject({ path: '~/Downloads/report.html', kind: 'absolute' });
+  });
+
   it('maps xopc workspace file deep links to internal hrefs', () => {
     expect(xopcWorkspaceFileUrlToHref('xopc://workspace/file?path=src%2Fapp.ts&line=3')).toBe(
       '/xopc/workspace/file?path=src%2Fapp.ts&line=3',

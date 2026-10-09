@@ -148,6 +148,18 @@ describe('MarkdownView links', () => {
     expect(container.querySelector('[data-location]')?.textContent).toBe(href);
   });
 
+  it.each(['xopc://open?kind=note&id=note-1', '/notes/note-1'])('previews a note from Personal AI without leaving the conversation: %s', (href) => {
+    const container = renderMarkdown(`[Note](${href})`, undefined, '/personal?view=full');
+    act(() => container.querySelector('a')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(container.querySelector('[data-location]')?.textContent).toBe('/personal?view=full&note=note-1');
+  });
+
+  it('previews related products from Personal AI', () => {
+    const container = renderMarkdown('[Project](/projects/p1)', undefined, '/personal');
+    act(() => container.querySelector('a')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(container.querySelector('[data-location]')?.textContent).toBe('/personal?preview=%2Fprojects%2Fp1');
+  });
+
   it('uses the Electron bridge for external link clicks', async () => {
     const openExternalUrl = vi.fn(async () => ({ ok: true as const }));
     Object.defineProperty(window, 'electronAPI', {

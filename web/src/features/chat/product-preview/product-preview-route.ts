@@ -1,3 +1,4 @@
+import { isChatPreviewPath } from '@/lib/chat-preview-origin';
 import { modalizeNoteDetailHref } from '@/features/notes/note-detail-route';
 import { modalizeTaskDetailHref } from '@/features/tasks/task-detail-route';
 
@@ -48,8 +49,7 @@ export function closeProductPreviewHref(pathname: string, rawSearch: string): st
 
 export function chatProductHref(backgroundPath: string, href: string): string {
   const [pathname, rawSearch = ''] = backgroundPath.split('?');
-  const isChat = pathname === '/chat' || pathname.startsWith('/chat/');
-  const target = isChat ? resolveProductPreviewTarget(href) : null;
+  const target = isChatPreviewPath(pathname) ? resolveProductPreviewTarget(href) : null;
   if (!target) return modalizeNoteDetailHref(backgroundPath, modalizeTaskDetailHref(backgroundPath, href));
   const params = new URLSearchParams(rawSearch);
   params.delete('note');
