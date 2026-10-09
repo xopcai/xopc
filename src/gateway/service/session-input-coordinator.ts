@@ -88,6 +88,7 @@ export class SessionInputCoordinator {
     beforeExecute?: (input: SessionInput) => Promise<boolean>;
     sessionExists: (conversationId: string) => Promise<boolean>;
     execute: (input: {
+      inputReceivedAtMs?: number;
       runId: string;
       taskRunId?: string;
       conversationId: string;
@@ -352,6 +353,7 @@ export class SessionInputCoordinator {
         let result: { status: string; summary: string };
         try {
           result = await this.deps.execute({
+            inputReceivedAtMs: input.createdAtMs,
             runId,
             taskRunId: input.taskRunId,
             conversationId,

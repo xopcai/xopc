@@ -98,7 +98,7 @@ export class GatewayAgentRunner {
           input.origin,
           input.attachments,
           input.thinking,
-          { runId: input.runId, taskRunId: input.taskRunId, sourceContexts: input.sourceContexts,
+          { inputReceivedAtMs: input.inputReceivedAtMs, runId: input.runId, taskRunId: input.taskRunId, sourceContexts: input.sourceContexts,
             ...(input.origin.type === 'channel' && input.origin.channel === 'voice' ? { presentation: 'voice' as const } : {}) },
         );
         let result: { status: string; summary: string } | undefined;
@@ -231,7 +231,7 @@ export class GatewayAgentRunner {
     origin: TurnOrigin,
     attachments?: UserTurnAttachment[],
     thinking?: string,
-    runOptions?: { signal?: AbortSignal; runId?: string; taskRunId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
+    runOptions?: { inputReceivedAtMs?: number; signal?: AbortSignal; runId?: string; taskRunId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
   ): AsyncGenerator<
     { type: string; [key: string]: unknown },
     { status: string; summary: string },

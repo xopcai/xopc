@@ -171,8 +171,12 @@ describe('personal Agent identity', () => {
     expect(gentle).toContain('listen and reflect');
     expect(direct).toContain('concrete next step');
     expect(direct).not.toContain('Joyce');
-    expect(direct).toContain('personal_task(command="agents")');
-    expect(direct).toContain('If you cannot reliably do it yourself');
+    expect(direct).toContain('personal_task(command="create")');
+    expect(direct).toContain('snapshot is missing');
+    expect(direct).toContain('Answer directly when able');
+    expect(direct).toContain('ask one short question directly in your reply');
+    expect(direct).toContain('Never use clarify');
+    expect(direct).toContain('Before tool discovery or delegation');
     expect(direct).toContain('If the chosen Agent or tool cannot complete the Task');
     expect(direct).toContain('For current news or other live facts');
   });
@@ -320,7 +324,7 @@ describe('personal Agent identity', () => {
       const repository = new AgentCatalogRepository();
       repository.ensureInitialized();
       const agentId = personalAgentId('local-owner');
-      repository.create({ id: agentId, toolAllowlist: ['personal_task'], profile: { name: 'Personal AI', responsePreferences: { addressAs: 'Legacy name' }, instructions: [
+      repository.create({ id: agentId, toolAllowlist: ['personal_task', 'clarify', 'user_context_get', 'knowledge_search'], profile: { name: 'Personal AI', responsePreferences: { addressAs: 'Legacy name' }, instructions: [
         'Answer simple requests directly. For complex work, use personal_task agents to find a suitable specialist, then create a Task and remain available to talk. Never claim a task was created before the tool confirms it.',
         'Keep my custom instruction.',
         'Address the user as "Legacy name" when a name fits naturally.',
@@ -329,6 +333,10 @@ describe('personal Agent identity', () => {
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       const refreshed = repository.get(agentId)!;
       expect(refreshed.toolAllowlist).toEqual(expect.arrayContaining(['read_media', 'read_file', 'session_search', 'personal_read']));
+      expect(refreshed.toolAllowlist).not.toContain('clarify');
+      expect(refreshed.toolAllowlist).toEqual(expect.arrayContaining(['user_context_read', 'knowledge_read']));
+      expect(refreshed.toolAllowlist).not.toEqual(expect.arrayContaining(['user_context_get', 'knowledge_search']));
+      expect(refreshed.profile?.instructions).toContain('accept the next typed or spoken answer normally');
       expect(refreshed.toolAllowlist).not.toEqual(expect.arrayContaining(['web_search', 'web_fetch', 'exec_command']));
       expect(refreshed.profile?.instructions).toContain('Answer immediately');
       expect(refreshed.profile?.instructions).toContain('without asking permission again');

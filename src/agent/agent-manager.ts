@@ -36,6 +36,8 @@ import { continuesAfterTool, trackAiUsageStream } from '../usage/recorder.js';
 import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
 import { extractTextContent } from './context/workspace.js';
+import { PersonalPromptContext } from '../personal-agent/prompt-context.js';
+import { isPersonalConversation } from '../personal-agent/repository.js';
 import { buildExecutionScopeContextForPrompt } from './context/execution-scope.js';
 import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
 import { loadProjectAgentsContextFile } from './bootstrap/project-agents-context.js';
@@ -1405,7 +1407,12 @@ export class AgentManager implements AgentInstanceGateway {
       .join('\n\n') || undefined;
   }
 
+  private readonly personalPromptContext = new PersonalPromptContext();
+
   private buildExecutionScopeContext(conversationId: string): string | undefined {
+    if (isXopcDatabaseOpen() && isPersonalConversation(conversationId)) {
+      return this.personalPromptContext.build(this.config.config, conversationId);
+    }
     const access = resolveUserContextSessionAccess(this.config.config, conversationId);
     return buildExecutionScopeContextForPrompt(conversationId, {
       includeKnowledge: access.knowledge,
@@ -1602,6 +1609,21 @@ export class AgentManager implements AgentInstanceGateway {
     args: unknown,
   ): ({ id: string; mode: 'allow' | 'ask' | 'deny'; maxCallsPerTurn?: number; timeoutMs?: number }) | undefined {
     const gatewayPolicy = profile.config.tools[toolName];
+    if (toolName === 'user_context_read' || toolName === 'knowledge_read') {
+      const command = (args as { command?: unknown })?.command;
+      if (command === 'search' || command === 'get') {
+        const legacyId = `${toolName.slice(0, -5)}_${command}`;
+        const legacyPolicy = profile.config.tools[legacyId];
+        const policies = [gatewayPolicy && { id: toolName, ...gatewayPolicy }, legacyPolicy && { id: legacyId, ...legacyPolicy }]
+          .filter((policy): policy is NonNullable<typeof policy> => Boolean(policy));
+        const rank = { allow: 0, ask: 1, deny: 2 };
+        policies.sort((a, b) => rank[b.mode] - rank[a.mode]);
+        const selected = policies[0];
+        if (!selected) return undefined;
+        const limits = policies.flatMap(policy => policy.maxCallsPerTurn ? [policy.maxCallsPerTurn] : []);
+        return { ...selected, ...(limits.length ? { maxCallsPerTurn: Math.min(...limits) } : {}) };
+      }
+    }
     if (gatewayPolicy && gatewayPolicy.mode !== 'allow') return { id: toolName, ...gatewayPolicy };
     if (toolName !== 'xopc_tool_execute') {
       const policy = profile.config.tools[toolName];

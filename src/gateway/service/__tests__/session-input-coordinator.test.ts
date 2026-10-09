@@ -59,6 +59,8 @@ describe('SessionInputCoordinator', () => {
     finishFirst({ status: 'ok', summary: 'done' });
     await vi.waitFor(() => expect(coordinator.snapshot(conversationId).inputs).toEqual([]));
     expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute.mock.calls[1]![0]).toMatchObject({ inputReceivedAtMs:
+      getSessionInputById(conversationId, ids.get('allowed')!)!.createdAtMs });
     expect(getSessionInputById(conversationId, ids.get('revoked')!)?.status).toBe('failed');
     expect(getSessionInputById(conversationId, ids.get('denied')!)?.status).toBe('cancelled');
     expect(getSessionInputById(conversationId, ids.get('allowed')!)?.status).toBe('completed');

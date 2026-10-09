@@ -29,12 +29,14 @@ export {
 
 // Memory tools
 export {
+  createUserContextReadTool,
   createUserContextSearchTool,
   createUserContextGetTool,
   createUserContextUpdateTool,
   type UserContextToolOptions,
 } from './user-context-tool.js';
 export {
+  createKnowledgeReadTool,
   createKnowledgeSearchTool,
   createKnowledgeGetTool,
   createKnowledgeWriteTool,

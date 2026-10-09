@@ -4,7 +4,8 @@ import type { StreamingSttEvent } from '../../../media-understanding/types.js';
 import type { VoiceAgentEvent } from '../agentBroker.js';
 import type { VoiceEngine } from '../engine.js';
 
-const mocks = vi.hoisted(() => ({ speak: vi.fn() }));
+const mocks = vi.hoisted(() => ({ speak: vi.fn(), info: vi.fn(), warn: vi.fn() }));
+vi.mock('../../../utils/logger.js', () => ({ createLogger: () => ({ info: mocks.info, warn: mocks.warn, debug: vi.fn() }) }));
 vi.mock('../../tts/speak-core.js', () => ({ speakStream: mocks.speak }));
 
 import { createAgentVoiceEngine } from '../agentEngine.js';
@@ -72,6 +73,32 @@ describe('Agent voice interruption cleanup', () => {
     }));
     expect(test.send).toHaveBeenCalledWith('response.done', expect.anything());
     expect(engine.canOfferTaskUpdate?.()).toBe(true);
+  });
+
+  it('keeps spoken follow-up questions conversational and records first text/audio latency', async () => {
+    const test = await setup(async function* (text) {
+      yield { type: 'assistant_delta', payload: { delta: text === 'first' ? 'Which city?' : 'Checking Shanghai.' } };
+      yield { type: 'run_end', payload: { status: 'success' } };
+    });
+    mocks.speak.mockImplementation(async () => ({ outputFormat: 'pcm', release: vi.fn(async () => {}),
+      audioStream: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array(480)); controller.close(); } }) }));
+    test.final('first');
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce(), { timeout: 3000 });
+    engine.acknowledge(test.sendAudio.mock.calls[0]![0], test.sendAudio.mock.calls[0]![1].byteLength / 48);
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.anything()), { timeout: 3000 });
+    expect(test.send.mock.calls.some(([type]) => type === 'response.clarification')).toBe(false);
+    const textLog = mocks.info.mock.calls.find(([, message]) => message === 'Realtime voice first response text ready')?.[0];
+    const audioLog = mocks.info.mock.calls.find(([, message]) => message === 'Realtime voice first audio ready')?.[0];
+    expect(textLog).toMatchObject({ conversationId: 'chat', phase: 'first_response_text' });
+    expect(textLog.inputToTextMs).toBeGreaterThanOrEqual(350);
+    expect(textLog.turnDecisionMs).toBeGreaterThanOrEqual(350);
+    expect(textLog.queueMs).toBeGreaterThanOrEqual(0);
+    expect(textLog.inputToTextMs).toBeGreaterThanOrEqual(textLog.latencyMs);
+    expect(audioLog.inputToAudioMs).toBeGreaterThanOrEqual(textLog.inputToTextMs);
+    expect(audioLog.textToAudioMs).toBeGreaterThanOrEqual(0);
+    test.emit({ type: 'transcript_final', utteranceId: 'answer', revision: 1, text: 'Shanghai' });
+    await vi.waitFor(() => expect(test.delegate).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    expect(test.delegate).toHaveBeenLastCalledWith(expect.objectContaining({ text: 'Shanghai' }));
   });
 
   it('holds a task update while the user is speaking', async () => {
