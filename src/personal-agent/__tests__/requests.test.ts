@@ -37,6 +37,7 @@ import { personalCapabilities } from '../capability-service.js';
 import { submitPersonalRequest, resolvePersonalRequestConnection, cancelPersonalRequest, requirePersonalWorkerConnection } from '../request-service.js';
 import { getPersonalRequest, listPersonalRequests } from '../request-repository.js';
 import { drainPersonalRequestContinuations, drainPersonalRequestResults } from '../request-delivery.js';
+import { PersonalReplyComposer } from '../reply-composer.js';
 
 describe('Personal connected-app requests', () => {
   let directory: string;
@@ -233,12 +234,17 @@ describe('Personal connected-app requests', () => {
     expect(submitAndConfirm).not.toHaveBeenCalled();
     const notify = vi.fn();
     drainPersonalRequestResults(notify); drainPersonalRequestResults(notify);
+    expect(loadTranscriptRowsForSession(conversationId).filter(row => 'customType' in row && row.customType === 'task_result_delivery')).toHaveLength(0);
+    const compose = vi.fn(async () => '有一封邮件值得先看，需要在周五前回复。');
+    await new PersonalReplyComposer(compose).drain(notify);
+    await new PersonalReplyComposer(compose).drain(notify);
+    expect(compose).toHaveBeenCalledTimes(1);
     const rows = loadTranscriptRowsForSession(conversationId);
     expect(rows.filter(row => 'customType' in row && row.customType === 'task_result_delivery')).toHaveLength(1);
     expect(JSON.stringify(rows)).toContain('查询尚未覆盖全部邮件');
     expect(notify).toHaveBeenCalledTimes(1);
     expect(getPersonalRequest(request.requestId)?.state).toBe('completed');
-    expect(JSON.stringify(buildSessionContextForLlm(rows))).toContain('有一封需要回复');
+    expect(JSON.stringify(buildSessionContextForLlm(rows))).toContain('有一封邮件值得先看');
   });
 
   it('retains results without inserting them into a reset transcript', async () => {

@@ -99,7 +99,7 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
   const body = [request.objective, `Selected connector: ${request.connectorId}; xopcAccountId: ${accountId}.`,
     `Preserved query parameters: ${JSON.stringify(request.parameters)}.`,
     'Search and describe the external tools before executing read-only operations. Deliver results to the originating chat through the Task result. Do not claim no important mail if the query was incomplete.'].join('\n\n');
-  const deliveryBody = `${body}\n\n${PERSONAL_WORKER_RESULT_GUIDANCE}\n\nBefore finishing, call personal_request_result with the verified summary and, for mail, message items and coverage. The host delivers it directly to the main chat.`;
+  const deliveryBody = `${body}\n\n${PERSONAL_WORKER_RESULT_GUIDANCE}\n\nBefore finishing, call personal_request_result with the verified summary and, for mail, message items and coverage. The host composes the final explanation and preserves structured items in the main chat.`;
   const result = new TaskApplicationService().create(TaskCreateRequestSchema.parse({
     idempotencyKey: `personal-request:${request.requestId}`, title: request.objective.slice(0, 60), body: deliveryBody,
     originConversationId: request.conversationId, delegateAgentId: request.executorAgentId,

@@ -19,6 +19,6 @@ export const PERSONAL_COMMUNICATION_RULES = [
 
 export const PERSONAL_WORKER_RESULT_GUIDANCE = [
   '## Result for the originating conversation',
-  'Your result is delivered directly to the user in their main conversation. Match the user’s language and requested depth. Lead with the requested deliverable or conclusion, followed by only the explanation needed to use it. Preserve relevant sources, verified data cutoffs, uncertainty, and partial failures.',
+  'Provide a complete, evidence-grounded result for the originating conversation. The personal assistant may synthesize its final reply from your report. Match the user’s language and requested depth; preserve requested content, relevant sources, verified data cutoffs, uncertainty, and partial failures. Distinguish reported findings from verified facts. Do not invent a friendly opening or assume a new user request.',
   'Keep internal planning, Agent names, tool logs, and task progress links out of the result unless the user specifically requested them or they are necessary to explain a blocker. Never substitute a progress page, a plan, or a promise for the requested result. Publish required files through the available artifact tools; do not repeat the same attachments or send the user to a Task page to collect them.',
 ].join('\n');
