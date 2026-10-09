@@ -20,6 +20,7 @@ import { Link, useLocation } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { useUiExtensions } from '@/features/extensions/extension-provider';
+import { personalUnreadLabel, usePersonalUnread } from '@/features/personal-agent/use-personal-unread';
 import { PersonalAvatar, type PersonalAppearance } from '@/features/personal-agent/personal-avatar';
 import { resolveLucideIcon, type LucideIcon } from '@/features/extensions/extension-nav-icon';
 import { extensionPagePath } from '@/features/extensions/extension-paths';
@@ -159,6 +160,7 @@ export function SidebarNavItems({
     window.addEventListener('personal-agent-updated', onProfileUpdated);
     return () => window.removeEventListener('personal-agent-updated', onProfileUpdated);
   }, [refreshPersonal]);
+  const personalUnreadCount = usePersonalUnread();
   const [popoverOpen, setPopoverOpen] = useState(false);
   const builtins: MenuItem[] = ALL_SECTION_IDS.map((sectionId) => {
     const section = SECTION_BY_ID.get(sectionId)!;
@@ -221,7 +223,7 @@ export function SidebarNavItems({
       <Link
         to="/personal"
         aria-current={pathname === '/personal' ? 'page' : undefined}
-        className={rowClass(collapsed, pathname === '/personal')}
+        className={cn('relative', rowClass(collapsed, pathname === '/personal'))}
         title={personal?.payload?.displayName || 'Ada'}
         onMouseEnter={() => preloadRouteForPath('/personal')}
         onFocus={() => preloadRouteForPath('/personal')}
@@ -233,7 +235,12 @@ export function SidebarNavItems({
         <span className="flex size-5 shrink-0 items-center justify-center" aria-hidden>
           <PersonalAvatar appearance={personal?.payload?.appearance ?? 'loopi'} agentId={personal?.payload?.agentId} className="size-5" />
         </span>
-        {!collapsed && <span className="truncate">{personal?.payload?.displayName || 'Ada'}</span>}
+        {!collapsed && <span className="min-w-0 flex-1 truncate">{personal?.payload?.displayName || 'Ada'}</span>}
+        {personalUnreadCount > 0 && <span
+          aria-label={language === 'zh' ? `${personalUnreadCount} 条未读消息` : `${personalUnreadCount} unread messages`}
+          className={cn('shrink-0 rounded-full bg-accent/15 px-1.5 text-center text-[10px] font-semibold leading-5 tabular-nums text-accent',
+            collapsed ? 'absolute right-0 top-0 min-w-4 leading-4' : 'min-w-5')}
+        >{personalUnreadLabel(personalUnreadCount)}</span>}
       </Link>
       {visibleItems.map((item) => renderLink(item))}
       <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>

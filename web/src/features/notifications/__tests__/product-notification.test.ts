@@ -34,6 +34,11 @@ describe('product notification presentation', () => {
     expect(presentProductNotification({ ...event, payload: { deliveryChannel: 'telegram' } }, 'en').systemAllowed).toBe(false);
   });
 
+  it('opens Personal AI for its replies', () => {
+    expect(presentProductNotification({ ...event, type: 'chat.completed',
+      target: { kind: 'chat', conversationId: 'personal-chat', personal: true } }, 'zh').route).toBe('/personal');
+  });
+
   it('rejects malformed realtime payloads', () => {
     expect(parseProductNotification({ ...event, target: { kind: 'chat', conversationId: '' } })).toBeNull();
   });

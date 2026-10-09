@@ -580,6 +580,8 @@
     "scrollToBottom": "回到底部",
     "pastedText": "粘贴的文本",
     "attachmentPreviewOpen": "预览附件",
+    "attachmentPreviewPreviousImage": "上一张图片",
+    "attachmentPreviewNextImage": "下一张图片",
     "attachmentPreviewClose": "关闭",
     "attachmentPreviewDownload": "下载",
     "attachmentPreviewRemove": "移除",

@@ -160,6 +160,20 @@ describe('notificationPlanFromGatewayEvent', () => {
   });
 
 
+  it('notifies once per delivered Personal reply and routes back to Personal AI', () => {
+    const payload = { conversationId: 'personal-chat', deliveryId: 'reply:delivery-1',
+      text: '**Finished** the requested work.', displayName: 'Joyce' };
+    const plan = notificationPlanFromGatewayEvent('personal.reply.delivered', payload);
+    expect(plan).toMatchObject({ dedupeKey: 'personal.reply:reply:delivery-1', notification: {
+      type: 'chat.completed', target: { kind: 'chat', conversationId: 'personal-chat', personal: true },
+      title: { en: 'Joyce', zh: 'Joyce' }, body: { en: 'Finished the requested work.', zh: 'Finished the requested work.' },
+    } });
+    expect(notificationPlanFromGatewayEvent('personal.reply.delivered', payload)).toEqual(plan);
+    expect(notificationPlanFromGatewayEvent('personal.reply.delivered', { ...payload, failed: true }))
+      .toMatchObject({ notification: { type: 'chat.failed', priority: 'high' } });
+    expect(notificationPlanFromGatewayEvent('personal.reply.delivered', { ...payload, deliveryId: 'artifact' })).toBeNull();
+  });
+
   it('ignores unrelated and malformed events', () => {
     expect(notificationPlanFromGatewayEvent('session.updated', {})).toBeNull();
     expect(notificationPlanFromGatewayEvent('task.attention_required.v2', {

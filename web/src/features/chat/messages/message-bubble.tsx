@@ -1090,6 +1090,12 @@ export const MessageBubble = memo(function MessageBubble({
       <AttachmentPreviewDialog
         open={inlineImagePreview !== null}
         attachment={inlineImagePreview}
+        images={(message.content ?? []).flatMap((block, index) => {
+          if (block.type !== 'image') return [];
+          const image = imageBlockToMessageAttachment(block, index);
+          return image ? [image] : [];
+        })}
+        onAttachmentChange={setInlineImagePreview}
         authToken={authToken}
         conversationId={conversationId}
         onClose={() => setInlineImagePreview(null)}
