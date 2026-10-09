@@ -1,3 +1,4 @@
+import { PersonalProactivitySetting } from './personal-proactivity-setting';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { ArrowUpRight, ListTodo, Phone, Settings2, Upload, X } from 'lucide-react';
@@ -472,6 +473,7 @@ export function PersonalPage() {
                 { value: 'occasional', label: zh ? '偶尔轻松' : 'Sometimes' },
                 { value: 'playful', label: zh ? '活泼' : 'Playful' },
               ]} placeholder={zh ? '选择程度' : 'Choose level'} allowEmpty={false} onChange={value => { const next = value as Preferences['humor']; setHumor(next); void queueProfileUpdate({ preferences: { humor: next } }); }} /></div></details>
+              <PersonalProactivitySetting zh={zh} />
               <PersonalVoiceSetting record={record} zh={zh} onSelectVoice={voicePreference => queueProfileUpdate({ voicePreference })} />
               <div className="border-t border-edge pt-5">
                 <PersonalModelSetting conversationId={record.conversationId} zh={zh} onSaved={async () => {

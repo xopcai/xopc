@@ -1,3 +1,4 @@
+import type { PersonalProvenance } from '@xopcai/gateway-contract';
 import type { AppContextEnvelope, TaskResultDelivery, ToolActivity, TurnOutcome, UserTurnDocument } from '@xopcai/gateway-contract';
 
 /** Canonical chat message model for the web UI (gateway chat + embedded agent chat). */
@@ -150,6 +151,7 @@ export interface Message {
   /** Structured completion result for this run. */
   outcome?: TurnOutcome;
   taskResultDelivery?: TaskResultDelivery;
+  personalProvenance?: PersonalProvenance;
   contextRefs?: MessageContextRef[];
   /** Authored ordering of explicit @ references within the user message. */
   userTurnDocument?: UserTurnDocument;

@@ -1,3 +1,5 @@
+import { PersonalProactivityService } from '../personal-agent/proactivity/service.js';
+import { reconcilePersonalProactivityAutomation } from '../personal-agent/proactivity/automation.js';
 import { flushTracing } from '../observability/runtime.js';
 import { patchSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
@@ -928,6 +930,16 @@ export class GatewayService {
     log.error({ err, errorMessage, phase: 'task_main_update_dispatch' }, `Main Agent update dispatch failed: ${errorMessage}`);
   });
 
+  private readonly personalProactivity = new PersonalProactivityService({
+    getConfig: () => this.config,
+    isAvailable: conversationId => !this.stopping && !this.agentRunner.hasActiveRun(conversationId)
+      && !this.agentRunner.inputs.isAcceptingInput(conversationId)
+      && (!this.voiceRealtime.hasConversation(conversationId) || this.voiceRealtime.canPublishReply(conversationId)),
+    notify: (conversationId, outreachId) => {
+      this.emit('session.transcript_updated', { key: conversationId, outreachId });
+    },
+  });
+
   private readonly taskResultDispatch = createBackgroundTask(async () => {
     const notify = (conversationId: string, deliveryId: string) => {
       this.realtime.broker.publish('sessions', 'session.task-result', { conversationId, deliveryId });
@@ -1509,6 +1521,9 @@ export class GatewayService {
 
     await trace.measure('automations.initialize', () => this.automationService.initialize());
     await trace.measure('homeIntelligence.reconcileAutomation', () => reconcileHomeIntelligenceAutomation(this.automationService));
+    this.personalProactivity.start();
+    await trace.measure('personalProactivity.reconcile', () => reconcilePersonalProactivityAutomation(this.automationService));
+    this.personalProactivity.tick();
     await trace.measure('memoryMaintenance.reconcile', () => this.reconcileMemoryMaintenanceAutomations());
 
     await this.notesService.initialize();
@@ -1779,6 +1794,7 @@ export class GatewayService {
 
     await this.extensionLoader?.shutdown();
 
+    await this.personalProactivity.stop();
     await this.automationService.stop();
     this.stopSessionTranscriptAutomationEvents?.();
     this.stopSessionTranscriptAutomationEvents = null;
@@ -2127,6 +2143,10 @@ export class GatewayService {
     capability: Extract<AutomationAction, { kind: 'system' }>['capability'];
     runId: string;
   }): { summary: string } {
+    if (input.capability === 'personal.proactivity.tick') {
+      this.personalProactivity.tick();
+      return { summary: 'Personal attention checks queued' };
+    }
     if (input.capability === 'home.advisor.refresh') {
       const generationId = this.homeIntelligence.requestRefresh('scheduled_refresh', `automation:${input.runId}`);
       return { summary: generationId === 'disabled' ? 'Home AI suggestions are disabled' : `Home advice refresh queued: ${generationId}` };
@@ -2267,6 +2287,7 @@ export class GatewayService {
   }
 
   private projectAutomationEvent(event: AutomationEventEnvelope): void {
+    this.personalProactivity.ingestEvent(event);
     if (event.source === 'local_apps') this.emit(event.type, event.payload);
     if (event.type === 'project.deleted' && typeof event.payload.projectId === 'string') {
       const runIds = event.payload.deletedUnderstandingRunIds;

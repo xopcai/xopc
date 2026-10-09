@@ -1,3 +1,4 @@
+import { registerProactivityRoutes } from '../../../personal-agent/proactivity/routes.js';
 import type { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -45,6 +46,8 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
     const platform = getDevice(principal.deviceId)?.platform;
     return platform === 'harmonyos' || platform === 'ios' || platform === 'android' ? 'local-owner' : null;
   };
+
+  registerProactivityRoutes(authenticated, deps, owner);
 
   authenticated.get('/api/personal-agent', async c => {
     const ownerId = owner(c);
