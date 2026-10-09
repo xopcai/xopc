@@ -33,7 +33,7 @@ import { PERSONAL_PERSONA_GUIDANCE } from '../../personal-agent/persona.js';
 import { PersonalReplyComposer, buildPersonalReplyPrompt, parsePersonalReplyDraft, type PersonalReplyPacket } from '../../personal-agent/reply-composer.js';
 import * as modelCalls from '../../providers/model-call.js';
 import * as providers from '../../providers/index.js';
-import { insertSessionInput } from '../../storage/sqlite/session-input-repository.js';
+import { insertSessionInput, claimNextSessionInput, finishSessionInputRun, bumpSessionInputRevision } from '../../storage/sqlite/session-input-repository.js';
 
 describe('background task result delivery', () => {
   let stateDir: string;
@@ -132,6 +132,77 @@ describe('background task result delivery', () => {
     expect(detail?.session.messages).toHaveLength(1);
     expect(JSON.stringify(detail)).toContain('The sunset finding is ready.');
     expect(JSON.stringify(detail)).toContain('https://example.test/source');
+  });
+
+  it('waits for foreground work and voice availability while artifacts still arrive', async () => {
+    const { main, coordinator, runId } = task();
+    markPersonal(main.key);
+    coordinator.captureOutcome(await image(runId));
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Report' });
+    insertSessionInput({ id: 'foreground', conversationId: main.key, clientMessageId: 'foreground',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'New question',
+      origin: { type: 'endpoint', endpointId: 'test' } });
+    claimNextSessionInput(main.key, 'foreground-run');
+    await new TaskResultDeliveryService().drain(vi.fn());
+    const compose = vi.fn(async () => 'Ready');
+    await new PersonalReplyComposer(compose).drain(vi.fn());
+    expect(compose).not.toHaveBeenCalled();
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(1);
+    finishSessionInputRun(main.key, 'foreground-run', 'completed');
+    await new PersonalReplyComposer(compose).drain(vi.fn(), () => false);
+    expect(compose).not.toHaveBeenCalled();
+    await new PersonalReplyComposer(compose).drain(vi.fn(), () => true);
+    expect(compose).toHaveBeenCalledTimes(1);
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(2);
+  });
+
+  it('discards an old-context draft after new user input and composes again after the foreground turn', async () => {
+    const { main, coordinator, runId } = task();
+    markPersonal(main.key);
+    const outcome = await image(runId);
+    outcome.deliverables = [];
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Detailed report' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    const compose = vi.fn(async (): Promise<string> => {
+      if (compose.mock.calls.length === 1) {
+        insertSessionInput({ id: 'new-input', conversationId: main.key, clientMessageId: 'new-input',
+          requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'Only the conclusion',
+          origin: { type: 'endpoint', endpointId: 'test' } });
+        return 'Stale detailed introduction';
+      }
+      return 'Latest concise conclusion';
+    });
+    const notify = vi.fn();
+    await new PersonalReplyComposer(compose).drain(notify);
+    expect(notify).not.toHaveBeenCalled();
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(0);
+    await new PersonalReplyComposer(compose).drain(notify);
+    expect(compose).toHaveBeenCalledTimes(1);
+    claimNextSessionInput(main.key, 'new-run');
+    finishSessionInputRun(main.key, 'new-run', 'completed');
+    await new PersonalReplyComposer(compose).drain(notify);
+    expect(compose).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).toContain('Latest concise conclusion');
+    expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).not.toContain('Stale detailed introduction');
+    expect(getSqliteDatabase().prepare('SELECT reply_attempts FROM task_result_deliveries').get()).toMatchObject({ reply_attempts: 0 });
+  });
+
+  it('invalidates a draft when confirmed voice input arrives before a durable turn is committed', async () => {
+    const { main, coordinator, runId } = task();
+    markPersonal(main.key);
+    const outcome = await image(runId);
+    outcome.deliverables = [];
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Report' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    await new PersonalReplyComposer(async () => {
+      bumpSessionInputRevision(getSqliteDatabase(), main.key);
+      return 'Old voice context';
+    }).drain(vi.fn());
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(0);
+    await new PersonalReplyComposer(async () => 'Fresh voice context').drain(vi.fn());
+    expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).toContain('Fresh voice context');
   });
 
   it('delivers artifacts before composition and leases only one composer for the same reply', async () => {

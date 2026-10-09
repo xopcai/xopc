@@ -65,6 +65,7 @@ export function createOmniVoiceEngine(options: {
   bargeIn: boolean;
   send: VoiceEventSink;
   sendAudio: (responseId: string, bytes: Uint8Array) => void;
+  onUserInput?: () => void;
   record: (entry: OmniTranscript) => Promise<void>;
   onClose: (reason: string, notify: boolean) => Promise<void>;
 }): VoiceEngine {
@@ -79,6 +80,7 @@ export function createOmniVoiceEngine(options: {
   const pendingInputs = new Set<string>();
   let failed = false;
   let platformRequestId: string | undefined;
+  let lastInputAt = 0;
   let active: ResponseState | undefined;
   const echoCandidates = new PlaybackEchoCandidates();
   let recentPlayback: { text: string; expiresAt: number } | undefined;
@@ -287,6 +289,7 @@ export function createOmniVoiceEngine(options: {
               clearingInput = false;
               clearTimeout(clearTimer);
             } else if (event.type === 'input_audio_buffer.speech_started') {
+              lastInputAt = Date.now();
               if (muted || clearingInput) { discardedInputs.add(String(event.item_id)); return; }
               if (recorded.has(String(event.item_id)) || pendingInputs.has(String(event.item_id))) return;
               echoCandidates.remember(String(event.item_id), active?.audio ? active.text
@@ -300,6 +303,7 @@ export function createOmniVoiceEngine(options: {
               if (active && !active.published) cancel('barge_in');
               options.send('input.speech_started', { utteranceId: String(event.item_id) });
             } else if (event.type === 'input_audio_buffer.speech_stopped') {
+              lastInputAt = Date.now();
               if (muted || inputBlocked || discardedInputs.has(String(event.item_id)) || recorded.has(String(event.item_id))) return;
               speaking.delete(String(event.item_id));
               turn.stop(String(event.item_id));
@@ -323,6 +327,7 @@ export function createOmniVoiceEngine(options: {
                 cancel('barge_in');
               }
               turn.final(event.item_id, text);
+              if (text) { lastInputAt = Date.now(); options.onUserInput?.(); }
               save({ itemId: event.item_id, role: 'user', text: event.transcript, interrupted: false });
               options.send('input.transcript.final', { utteranceId: event.item_id, revision: 1, text: event.transcript });
             } else if (event.type === 'conversation.item.input_audio_transcription.failed') {
@@ -410,6 +415,11 @@ export function createOmniVoiceEngine(options: {
         queuedInputBytes += chunk.length;
       }
       pumpInput();
+    },
+    isConversationIdle() {
+      return ready && !closed && !failed && !active && !speaking.size && !pendingInputs.size
+        && !responseCreateQueued && !waitingForCancellation && !clearingInput && !inputBlocked
+        && Date.now() - lastInputAt >= 750;
     },
     async commit() { throw new Error('Natural conversation uses automatic turn detection'); },
     cancel(responseId, reason) {

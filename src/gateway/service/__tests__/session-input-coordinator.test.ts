@@ -34,6 +34,72 @@ describe('SessionInputCoordinator', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  it('prioritizes accepted personal input with attachments while preserving explicit deferral and deduplication', async () => {
+    let finish!: (value: { status: string; summary: string }) => void;
+    const execute = vi.fn((_input: unknown) => new Promise<{ status: string; summary: string }>(resolve => { finish = resolve; }));
+    const interrupt = vi.fn(async () => { finish({ status: 'aborted', summary: '' }); });
+    const emit = vi.fn();
+    const coordinator = new SessionInputCoordinator({
+      prioritizeInput: input => input.origin.type !== 'system', interrupt, coalesceWindowMs: 5,
+      sessionExists: async () => true, execute, emit,
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => [], steer: async () => true,
+    });
+    await coordinator.submit({ conversationId, clientMessageId: 'active', delivery: 'next', content: 'Explain', origin });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    await coordinator.submit({ conversationId, clientMessageId: 'deferred', delivery: 'next', interrupt: false, content: 'Later', origin });
+    expect(interrupt).not.toHaveBeenCalled();
+    const attachments = [{ id: 'file', type: 'file' as const, uri: 'media://inbound/file', mimeType: 'text/plain' }];
+    await coordinator.submit({ conversationId, clientMessageId: 'priority', delivery: 'next', content: 'Just the cost', attachments, origin });
+    await coordinator.submit({ conversationId, clientMessageId: 'priority', delivery: 'next', content: 'Just the cost', attachments, origin });
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith('session.input-interrupt', expect.objectContaining({ conversationId }));
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+    expect(execute.mock.calls[1]![0]).toMatchObject({ content: 'Just the cost', attachments });
+    finish({ status: 'ok', summary: '' });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(3));
+    expect(execute.mock.calls[2]![0]).toMatchObject({ content: 'Later' });
+    finish({ status: 'ok', summary: '' });
+    await vi.waitFor(() => expect(coordinator.snapshot(conversationId).activeRunId).toBeUndefined());
+  });
+
+  it('coalesces a burst of personal text without dropping its durable inputs', async () => {
+    const execute = vi.fn(async (_input: unknown) => ({ status: 'ok', summary: '' }));
+    const coordinator = new SessionInputCoordinator({
+      prioritizeInput: () => true, coalesceWindowMs: 20,
+      sessionExists: async () => true, execute, emit: () => {},
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => [], steer: async () => false,
+    });
+    await coordinator.submit({ conversationId, clientMessageId: 'first', delivery: 'next', content: 'Plan a trip', origin });
+    const second = await coordinator.submit({ conversationId, clientMessageId: 'second', delivery: 'next', content: 'Under 500', origin });
+    const secondId = second.ok ? second.state.inputs.find(input => input.clientMessageId === 'second')!.id : '';
+    await coordinator.waitForCompletion(conversationId, 'second');
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0]![0]).toMatchObject({ content: 'Plan a trip\n\nUnder 500' });
+    expect(getSessionInputById(conversationId, secondId)).toMatchObject({ content: 'Under 500', status: 'completed' });
+  });
+
+  it('rejects invalid personal context without interrupting the current reply', async () => {
+    let finish!: (value: { status: string; summary: string }) => void;
+    const interrupt = vi.fn(async () => {});
+    const coordinator = new SessionInputCoordinator({
+      prioritizeInput: () => true, interrupt, coalesceWindowMs: 0,
+      sessionExists: async () => true,
+      execute: () => new Promise(resolve => { finish = resolve; }), emit: () => {},
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async (_key, refs) => { if (refs?.length) throw new Error('Revoked'); return []; },
+      steer: async () => false,
+    });
+    await coordinator.submit({ conversationId, clientMessageId: 'active', delivery: 'next', content: 'Explain', origin });
+    const result = await coordinator.submit({ conversationId, clientMessageId: 'invalid', delivery: 'next', content: 'New',
+      contextRefs: [{ kind: 'note', sourceId: 'revoked' }], origin });
+    expect(result).toMatchObject({ ok: false, code: 'CONTEXT_UNAVAILABLE' });
+    expect(interrupt).not.toHaveBeenCalled();
+    finish({ status: 'ok', summary: '' });
+    await coordinator.waitForCompletion(conversationId, 'active');
+  });
+
   it('fails closed on preflight exceptions and continues draining later inputs', async () => {
     let finishFirst!: (value: { status: string; summary: string }) => void;
     const execute = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve; }))

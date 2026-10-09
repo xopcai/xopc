@@ -370,6 +370,12 @@ export class VoiceRealtimeRuntime {
     return this.conversationReservations.has(conversationId);
   }
 
+  canPublishReply(conversationId: string): boolean {
+    const sessionId = this.conversationReservations.get(conversationId);
+    const session = sessionId ? this.activeSessions.get(sessionId) : undefined;
+    return session?.engine?.isConversationIdle?.() === true;
+  }
+
   canOfferTaskUpdate(conversationId: string): boolean {
     const sessionId = this.conversationReservations.get(conversationId);
     const session = sessionId ? this.activeSessions.get(sessionId) : undefined;
@@ -571,6 +577,7 @@ export class VoiceRealtimeRuntime {
           callId: consumed.sessionId,
           route: consumed.omni, silenceDurationMs: consumed.silenceDurationMs,
           bargeIn: consumed.config.voice?.realtime?.bargeIn ?? true, send, sendAudio,
+          onUserInput: () => this.options.onConversationInput?.(consumed.request.conversationId!),
           record: (entry) => this.options.recordOmniTranscript!(consumed.request.conversationId!, consumed.sessionId, entry, consumed.conversationSessionId!),
           onClose: shutdown,
         }) : createAgentVoiceEngine({

@@ -17,6 +17,13 @@ describe('session input commands', () => {
   it('requires transcript and configuration for append', () => {
     expect(sessionInputCommandSchema.safeParse({ kind: 'append', clientMessageId: '1', input: start.input, origin: start.origin, delivery: 'next' }).success).toBe(false);
   });
+  it('accepts explicit deferral and includes it in command identity', () => {
+    const append = { kind: 'append' as const, clientMessageId: '1', expectedTranscriptId: 'transcript',
+      configVersion: 0, delivery: 'next' as const, input: start.input, origin: start.origin };
+    expect(sessionInputCommandSchema.safeParse({ ...append, interrupt: false }).success).toBe(true);
+    expect(sessionInputCommandSchema.safeParse({ ...append, interrupt: 'false' }).success).toBe(false);
+    expect(sessionCommandIdentity({ ...append, interrupt: false })).not.toBe(sessionCommandIdentity(append));
+  });
   it('preserves identity across reconnect but detects content and selection changes', () => {
     expect(sessionCommandIdentity({ ...start, origin: { ...start.origin, endpointId: 'reconnected', token: 'new' } })).toBe(sessionCommandIdentity(start));
     expect(sessionCommandIdentity({ ...start, input: { content: 'different' } })).not.toBe(sessionCommandIdentity(start));

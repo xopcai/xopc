@@ -17,6 +17,7 @@ import { TaskConversationRepository } from '../tasks/task-conversation-repositor
 import { createLogger } from '../utils/logger.js';
 import { getPersonalAgentByConversation } from './repository.js';
 import { PERSONAL_REPLY_EXAMPLES, PERSONAL_REPLY_STYLE_RULES } from './reply-style.js';
+import { personalConversationState } from './conversation-state.js';
 import { PERSONAL_PERSONA_GUIDANCE } from './persona.js';
 import { resolveAgentProfileDir } from '../agent/agent-scope.js';
 import { loadProfileBootstrapFiles } from '../agent/bootstrap/load-bootstrap-files.js';
@@ -38,7 +39,7 @@ export interface PersonalReplyPacket {
   taskVersion: number;
 }
 type ReplyRow = { delivery_id: string; payload_json: string; status: string; lease_token: string | null;
-  text: string | null; draft_transcript_id: string | null; message_entry_id: string | null; attempts: number };
+  text: string | null; draft_transcript_id: string | null; context_revision: number | null; message_entry_id: string | null; attempts: number };
 
 /** Enqueue inside the caller's result transaction; model calls never run there. */
 export function enqueuePersonalReply(packet: Omit<PersonalReplyPacket, 'taskVersion'>): void {
@@ -98,10 +99,14 @@ export function parsePersonalReplyDraft(raw: string, packet: PersonalReplyPacket
 
 function originalRequest(packet: PersonalReplyPacket): string {
   const input = packet.delivery.requestInputId
-    ? getSqliteDatabase().prepare('SELECT content FROM session_inputs WHERE conversation_id = ? AND (id = ? OR client_message_id = ?)')
-      .get(packet.delivery.conversationId, packet.delivery.requestInputId, packet.delivery.requestInputId) as { content: string } | undefined
+    ? getSqliteDatabase().prepare('SELECT content, run_id FROM session_inputs WHERE conversation_id = ? AND (id = ? OR client_message_id = ?)')
+      .get(packet.delivery.conversationId, packet.delivery.requestInputId, packet.delivery.requestInputId) as { content: string; run_id: string | null } | undefined
     : undefined;
-  return input?.content ?? packet.objective;
+  if (!input) return packet.objective;
+  const additions = input.run_id ? getSqliteDatabase().prepare(`SELECT content FROM session_inputs
+    WHERE conversation_id = ? AND target_run_id = ? AND interrupt_requested = 1
+    ORDER BY position, created_at_ms, id`).all(packet.delivery.conversationId, input.run_id) as Array<{ content: string }> : [];
+  return [input.content, ...additions.map(row => row.content)].join('\n\n');
 }
 
 export function buildPersonalReplyPrompt(packet: PersonalReplyPacket): string {
@@ -151,25 +156,34 @@ async function completeReply(packet: PersonalReplyPacket, signal: AbortSignal): 
 export class PersonalReplyComposer {
   constructor(private readonly compose = completeReply, private readonly timeoutMs = TIMEOUT_MS) {}
 
-  async drain(notify: (conversationId: string, deliveryId: string) => void): Promise<void> {
+  async drain(notify: (conversationId: string, deliveryId: string) => void, isAvailable: (conversationId: string) => boolean = () => true): Promise<void> {
     const db = getSqliteDatabase();
     // At most two independent model calls across concurrent drain invocations.
     const deliveries = runSqliteWriteTransaction(() => {
-      const busy = (db.prepare("SELECT count(*) AS n FROM task_result_deliveries WHERE reply_status = 'generating' AND reply_lease_until > ?")
-        .get(Date.now()) as { n: number }).n;
+      const active = db.prepare("SELECT conversation_id FROM task_result_deliveries WHERE reply_status = 'generating' AND reply_lease_until > ?")
+        .all(Date.now()) as Array<{ conversation_id: string }>;
+      const claimedConversations = new Set(active.map(row => row.conversation_id));
       const rows = db.prepare(`SELECT delivery_id, reply_payload_json AS payload_json,
-        reply_status AS status, reply_lease_token AS lease_token, reply_text AS text,
+        conversation_id, reply_context_revision AS context_revision, reply_status AS status, reply_lease_token AS lease_token, reply_text AS text,
         reply_draft_transcript_id AS draft_transcript_id, reply_message_entry_id AS message_entry_id,
         reply_attempts AS attempts FROM task_result_deliveries WHERE status = 'delivered' AND reply_attempts < 8 AND reply_next_attempt_at <= ? AND reply_lease_until <= ? AND
         (reply_status IN ('pending','ready') OR (reply_status = 'generating' AND reply_lease_until <= ?) OR (reply_status = 'delivered' AND reply_notified_at IS NULL))
-        ORDER BY created_at LIMIT ?`).all(Date.now(), Date.now(), Date.now(), Math.max(0, 2 - busy)) as unknown as ReplyRow[];
+        ORDER BY created_at LIMIT ?`).all(Date.now(), Date.now(), Date.now(), 128) as unknown as Array<ReplyRow & { conversation_id: string }>;
+      const available: typeof rows = [];
       for (const row of rows) {
+        if (available.length >= Math.max(0, 2 - active.length)) break;
+        if (row.status !== 'delivered' && (claimedConversations.has(row.conversation_id)
+          || !personalConversationState(row.conversation_id).idle || !isAvailable(row.conversation_id))) continue;
+        available.push(row);
+        claimedConversations.add(row.conversation_id);
+      }
+      for (const row of available) {
         row.lease_token = randomUUID();
         db.prepare(`UPDATE task_result_deliveries SET reply_lease_token = ?, reply_lease_until = ?, reply_status = CASE
           WHEN reply_status IN ('pending','generating') THEN 'generating' ELSE reply_status END WHERE delivery_id = ?`)
           .run(row.lease_token, Date.now() + this.timeoutMs + 5000, row.delivery_id);
       }
-      return rows;
+      return available;
     });
     await Promise.all(deliveries.map(async row => {
       const startedAt = Date.now();
@@ -180,8 +194,14 @@ export class PersonalReplyComposer {
             db.prepare("UPDATE task_result_deliveries SET reply_status = 'stale' WHERE delivery_id = ? AND reply_lease_token = ?").run(row.delivery_id, row.lease_token);
             return;
           }
+          const conversation = personalConversationState(packet.delivery.conversationId);
+          if (!conversation.idle || !isAvailable(packet.delivery.conversationId)) {
+            db.prepare("UPDATE task_result_deliveries SET reply_status = 'pending', reply_lease_until = 0 WHERE delivery_id = ? AND reply_lease_token = ?")
+              .run(row.delivery_id, row.lease_token);
+            return;
+          }
           const transcriptId = readCurrentTranscriptId(db, packet.delivery.conversationId);
-          let text = row.draft_transcript_id === transcriptId ? row.text : null;
+          let text = row.draft_transcript_id === transcriptId && row.context_revision === conversation.revision ? row.text : null;
           if (!text) {
             const controller = new AbortController();
             let timer: ReturnType<typeof setTimeout> | undefined;
@@ -209,8 +229,8 @@ export class PersonalReplyComposer {
               text = `${/[\u3400-\u9fff]/u.test(packet.objective) ? status === 'partial' ? '这次只完成了部分内容。' : '这次未能完成请求。'
                 : status === 'partial' ? 'Only part of the request was completed.' : 'The request could not be completed.'}\n\n${text}`;
             }
-            db.prepare("UPDATE task_result_deliveries SET reply_text = ?, reply_draft_transcript_id = ?, reply_status = 'ready' WHERE delivery_id = ? AND reply_lease_token = ?")
-              .run(text, transcriptId, row.delivery_id, row.lease_token);
+            db.prepare("UPDATE task_result_deliveries SET reply_text = ?, reply_draft_transcript_id = ?, reply_context_revision = ?, reply_status = 'ready' WHERE delivery_id = ? AND reply_lease_token = ?")
+              .run(text, transcriptId, conversation.revision, row.delivery_id, row.lease_token);
             log.info({ replyId: row.delivery_id, conversationId: packet.delivery.conversationId, durationMs: Date.now() - startedAt },
               'Personal reply prepared');
           }
@@ -222,8 +242,11 @@ export class PersonalReplyComposer {
               db.prepare("UPDATE task_result_deliveries SET reply_status = 'stale' WHERE delivery_id = ?").run(row.delivery_id);
               return false;
             }
-            if (transcriptId !== readCurrentTranscriptId(db, packet.delivery.conversationId)) {
-              db.prepare("UPDATE task_result_deliveries SET reply_status = 'pending', reply_text = NULL, reply_lease_until = 0 WHERE delivery_id = ?").run(row.delivery_id);
+            const currentConversation = personalConversationState(packet.delivery.conversationId);
+            if (transcriptId !== readCurrentTranscriptId(db, packet.delivery.conversationId)
+              || currentConversation.revision !== conversation.revision || !currentConversation.idle
+              || !isAvailable(packet.delivery.conversationId)) {
+              db.prepare("UPDATE task_result_deliveries SET reply_status = 'pending', reply_text = NULL, reply_context_revision = NULL, reply_lease_until = 0 WHERE delivery_id = ?").run(row.delivery_id);
               return false;
             }
             const delivery = TaskResultDeliverySchema.parse({ ...packet.delivery, deliveryId: `reply:${packet.delivery.deliveryId}`, text,

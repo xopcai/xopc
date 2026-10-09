@@ -27,6 +27,7 @@ describe('Agent voice interruption cleanup', () => {
       outputFormat: 'pcm', release,
       audioStream: new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } }),
     }));
+    const onConversationInput = vi.fn();
     const delegate = vi.fn(async ({ text, conversationId, signal }) => ({
       taskId: `task:${text}`,
       runId: `run:${text}`,
@@ -43,6 +44,7 @@ describe('Agent voice interruption cleanup', () => {
         } } },
       } as never,
       runtime: {
+        onConversationInput,
         agentBroker: {
           delegate,
           cancel: async () => true,
@@ -52,8 +54,22 @@ describe('Agent voice interruption cleanup', () => {
       signal: new AbortController().signal, send, sendAudio, onClose,
     });
     await engine.start();
-    return { send, sendAudio, release, delegate, onClose, emit, currentEmit: () => emit, final: (id: string) => emit({ type: 'transcript_final', utteranceId: id, revision: 1, text: id }) };
+    return { send, sendAudio, release, delegate, onClose, onConversationInput, emit, currentEmit: () => emit, final: (id: string) => emit({ type: 'transcript_final', utteranceId: id, revision: 1, text: id }) };
   }
+
+  it('marks only confirmed user speech as new conversation input and defers replies while a turn is pending', async () => {
+    const test = await setup(async function* () {
+      yield { type: 'assistant_delta', payload: { delta: 'Hello.' } };
+      yield { type: 'run_end', payload: { status: 'success' } };
+    });
+    expect(engine.isConversationIdle?.()).toBe(true);
+    test.emit({ type: 'speech_started', utteranceId: 'speech' });
+    expect(test.onConversationInput).not.toHaveBeenCalled();
+    expect(engine.isConversationIdle?.()).toBe(false);
+    test.emit({ type: 'speech_stopped', utteranceId: 'speech' });
+    test.emit({ type: 'transcript_final', utteranceId: 'speech', revision: 1, text: 'Hello' });
+    expect(test.onConversationInput).toHaveBeenCalledWith('chat');
+  });
 
   it('runs a task update through the active call as an independent system turn', async () => {
     const test = await setup(async function* () {

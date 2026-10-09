@@ -49,7 +49,7 @@ export const sessionInputCommandSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('append'), clientMessageId: z.string().min(1).max(128),
     expectedTranscriptId: z.string().min(1).max(128), configVersion: z.number().int().nonnegative(),
-    delivery: z.enum(['next', 'steer']), input: sessionInputContentSchema, origin: originSchema,
+    delivery: z.enum(['next', 'steer']), interrupt: z.boolean().optional(), input: sessionInputContentSchema, origin: originSchema,
   }),
 ]);
 
