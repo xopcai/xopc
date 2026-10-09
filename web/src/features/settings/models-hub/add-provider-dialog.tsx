@@ -69,7 +69,8 @@ import type { StoredLanguage } from '@/lib/storage';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 
 import { revalidateModelsHubCaches } from './models-hub-cache';
-import { DefaultModelSuccessStep, type DefaultModelTarget } from './default-model-success-step';
+import { type DefaultModelTarget } from './default-model-candidates';
+import { DefaultModelSuccessStep } from './default-model-success-step';
 
 export interface AddProviderDialogMessages {
   title: string;
