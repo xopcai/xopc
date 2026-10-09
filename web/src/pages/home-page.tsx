@@ -19,7 +19,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,8 @@ import { HomeAdvisorCard, type HomeAdvisorReceipt } from '@/features/tasks/home-
 import { HomeAdvisorHistoryDialog } from '@/features/tasks/home-advisor-history-dialog';
 import { HomeAdvisorStatusControl, type HomeAdvisorStatusCopy } from '@/features/tasks/home-advisor-status-control';
 import { modalizeTaskDetailHref } from '@/features/tasks/task-detail-route';
+import { HomeTaskReview } from '@/features/tasks/home-task-review';
+import { retryHomeTask } from '@/features/tasks/home-task-actions';
 import { taskCopy } from '@/features/tasks/task-copy';
 import {
   type VoiceInputShortcutTarget,
@@ -85,6 +87,7 @@ function DecisionCard({
   failureLabel,
   locale,
   onAction,
+  onComplete,
 }: {
   item: HomeWorkbenchItem;
   busy: boolean;
@@ -93,7 +96,17 @@ function DecisionCard({
   failureLabel: string;
   locale: 'en' | 'zh';
   onAction: HomeActionRunner;
+  onComplete: () => void;
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reviewAction = item.primaryAction?.type === 'task_review' ? item.primaryAction : undefined;
+  const reviewOpen = Boolean(reviewAction && searchParams.get('reviewTask') === reviewAction.taskId);
+  const setReviewOpen = (open: boolean) => {
+    const next = new URLSearchParams(searchParams);
+    if (open && reviewAction) next.set('reviewTask', reviewAction.taskId);
+    else next.delete('reviewTask');
+    setSearchParams(next);
+  };
   const due = item.dueAt ? `${dueLabel} ${formatMediumDateTime(new Date(item.dueAt), locale)}` : null;
   const kicker = item.kind === 'failure' ? failureLabel : due;
   return (
@@ -127,7 +140,8 @@ function DecisionCard({
               variant="primary"
               className="h-9 rounded-lg px-3.5 text-xs"
               disabled={busy}
-              onClick={() => onAction(item.primaryAction!, item.id)}
+              aria-expanded={reviewAction ? reviewOpen : undefined}
+              onClick={() => reviewAction ? setReviewOpen(!reviewOpen) : onAction(item.primaryAction!, item.id)}
             >
               {item.primaryAction.label}
             </Button>
@@ -146,6 +160,7 @@ function DecisionCard({
           ))}
         </div>
       ) : null}
+      {reviewOpen && reviewAction ? <HomeTaskReview taskId={reviewAction.taskId} language={locale} onComplete={() => { setReviewOpen(false); onComplete(); }} /> : null}
     </article>
   );
 }
@@ -185,6 +200,7 @@ export function HomePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [conversationOpen, setConversationOpen] = useState(false);
   const [intent, setIntent] = useState('');
+  const actionPendingRef = useRef(false);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [advisorBusy, setAdvisorBusy] = useState(false);
   const [advisorReceipt, setAdvisorReceipt] = useState<HomeAdvisorReceipt>();
@@ -403,11 +419,15 @@ export function HomePage() {
       navigate(modalizeTaskDetailHref('/', action.href));
       return;
     }
+    if (action.type === 'task_review' || actionPendingRef.current) return;
+    actionPendingRef.current = true;
     setBusyItemId(itemId);
     setLoadError(null);
     void (async () => {
       try {
-        if (action.type === 'connector_decision') {
+        if (action.type === 'retry_task') {
+          await retryHomeTask(action.taskId, language);
+        } else if (action.type === 'connector_decision') {
           await respondToWorkDecision({ kind: 'connector_approval', approvalId: action.approvalId }, action.decision);
         } else if (action.type === 'retry_run') {
           await retryWorkAttention({ kind: action.subjectKind, runId: action.runId });
@@ -418,10 +438,11 @@ export function HomePage() {
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : String(error));
       } finally {
+        actionPendingRef.current = false;
         setBusyItemId(null);
       }
     })();
-  }, [load, navigate]);
+  }, [language, load, navigate]);
 
   const refreshAdvisor = useCallback(() => {
     setAdvisorBusy(true);
@@ -700,12 +721,13 @@ export function HomePage() {
                   <DecisionCard
                     key={item.id}
                     item={item}
-                    busy={busyItemId === item.id}
+                    busy={busyItemId !== null}
                     recommendationLabel={t.home.recommendationLabel}
                     dueLabel={t.home.dueLabel}
                     failureLabel={copy.runAttention}
                     locale={language}
                     onAction={runAction}
+                    onComplete={() => void load()}
                   />
                 ))}
               </div>

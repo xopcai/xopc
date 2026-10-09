@@ -210,7 +210,7 @@ export function undoHomeOpportunityFeedback(
 }
 
 export function respondToWorkDecision(
-  response: NonNullable<HomeDecision['response']>,
+  response: Extract<NonNullable<HomeDecision['response']>, { kind: 'connector_approval' }>,
   decision: 'approve' | 'deny',
 ): Promise<{ ok: true; status: string }> {
   return fetchJson(apiUrl('/api/home/decisions/respond'), {
