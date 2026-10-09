@@ -136,6 +136,7 @@ describe('useRealtimeVoice', () => {
     act(() => root.unmount());
     container.remove();
     delete window.electronAPI;
+    vi.useRealTimers();
   });
 
   function render(onTranscript = vi.fn()) {
@@ -490,6 +491,85 @@ describe('useRealtimeVoice', () => {
     await act(async () => { resolve({ sampleRate: 48_000, cancel: cancelCapture }); await pending; });
     expect(sendAudio).not.toHaveBeenCalled();
     expect(cancelCapture).toHaveBeenCalled();
+  });
+
+  it('times out a stalled preflight and releases capture ownership for retry', async () => {
+    vi.useFakeTimers();
+    mocks.preflight.mockImplementationOnce(() => new Promise(() => {}));
+    render();
+    let pending!: Promise<void>;
+    await act(async () => { pending = voice.startVoiceInput(); });
+    expect(voice.phase).toBe('connecting');
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); await pending; });
+    expect(voice.phase).toBe('error');
+    expect(voice.failureKind).toBe('session');
+    expect(voice.error).toBe(chat.voiceConnectionTimeout);
+    expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+    await act(async () => voice.retryVoiceInput());
+    expect(voice.phase).toBe('recording');
+  });
+
+  it('times out device startup and stops a stream that arrives after retry', async () => {
+    vi.useFakeTimers();
+    let grant!: (stream: MediaStream) => void;
+    vi.mocked(navigator.mediaDevices.getUserMedia).mockImplementationOnce(() => new Promise((resolve) => { grant = resolve; }));
+    render();
+    let pending!: Promise<void>;
+    await act(async () => { pending = voice.startVoiceInput(); });
+    expect(voice.phase).toBe('starting');
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_000); await pending; });
+    expect(voice.error).toBe(chat.voiceMicrophoneTimeout);
+    expect(voice.failureKind).toBe('device');
+    expect(mocks.connect).not.toHaveBeenCalled();
+    await act(async () => voice.startVoiceInput());
+    const lateStop = vi.fn();
+    await act(async () => grant({ getTracks: () => [{ stop: lateStop }] } as unknown as MediaStream));
+    expect(lateStop).toHaveBeenCalledOnce();
+    expect(voice.phase).toBe('recording');
+  });
+
+  it('bounds session creation and closes a client returned after timeout', async () => {
+    vi.useFakeTimers();
+    let connect!: (client: unknown) => void;
+    mocks.connect.mockImplementationOnce(() => new Promise((resolve) => { connect = resolve; }));
+    render();
+    let pending!: Promise<void>;
+    await act(async () => { pending = voice.startVoiceInput(); });
+    expect(voice.phase).toBe('connecting');
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); await pending; });
+    expect(voice.error).toBe(chat.voiceConnectionTimeout);
+    expect(track.stop).toHaveBeenCalled();
+    const lateStop = vi.fn();
+    await act(async () => connect({ stop: lateStop }));
+    expect(lateStop).toHaveBeenCalledWith('surface_closed');
+  });
+
+  it('settles cancellation even if the microphone API never completes', async () => {
+    vi.mocked(navigator.mediaDevices.getUserMedia).mockImplementationOnce(() => new Promise(() => {}));
+    render();
+    let pending!: Promise<void>;
+    await act(async () => { pending = voice.startVoiceInput(); });
+    await act(async () => { voice.cancelVoiceInput(); await pending; });
+    expect(voice.phase).toBe('idle');
+    expect(voice.error).toBeNull();
+    expect(mocks.connect).not.toHaveBeenCalled();
+  });
+
+  it('releases the session and discards late recorder startup after timeout', async () => {
+    vi.useFakeTimers();
+    let start!: (capture: unknown) => void;
+    mocks.startCapture.mockImplementationOnce(() => new Promise((resolve) => { start = resolve; }));
+    render();
+    let pending!: Promise<void>;
+    await act(async () => { pending = voice.startVoiceInput(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_000); await pending; });
+    expect(voice.error).toBe(chat.voiceMicrophoneTimeout);
+    expect(voice.failureKind).toBe('recorder');
+    expect(track.stop).toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledWith('surface_closed');
+    const cancel = vi.fn();
+    await act(async () => start({ cancel }));
+    expect(cancel).toHaveBeenCalledOnce();
   });
 
   it('rejects unavailable capabilities before asking for the microphone', async () => {
