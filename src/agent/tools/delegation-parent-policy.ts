@@ -12,6 +12,10 @@ export function createDelegationParentPolicy(options: { getConfig: () => Config 
     const resolved = options.conversationId ? resolveEffectiveAgentConfigForSession(options.conversationId)
       : options.agentId ? resolveEffectiveAgentConfigForAgent(options.agentId) : resolveEffectiveAgentConfigForSession(undefined);
     const names = [name];
+    const command = (args as { command?: unknown })?.command;
+    if ((name === 'user_context_read' || name === 'knowledge_read') && (command === 'search' || command === 'get')) {
+      names.push(`${name.slice(0, -5)}_${command}`);
+    }
     if (name === 'xopc_tool_execute') {
       const parsed = parseExternalToolRef(String((args as { toolRef?: unknown })?.toolRef ?? ''), 'mcp');
       const ref = String((args as { toolRef?: unknown })?.toolRef ?? '');

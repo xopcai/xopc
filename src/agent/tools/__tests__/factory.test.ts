@@ -59,9 +59,18 @@ describe('AgentToolsFactory', () => {
       dispatchTaskRuns: () => {}, getSessionStore: () => ({}) as never,
       getPrimaryModel: () => ({ provider: 'test', id: 'fast', input: ['text'] }) as never });
     const tools = factory.createCoreTools({ toolAllowlist: PERSONAL_MAIN_TOOL_IDS });
-    expect(tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['read_file', 'read_media', 'session_search', 'personal_read']));
-    expect(tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['web_search', 'web_fetch', 'find', 'grep', 'list_dir', 'exec_command']));
+    expect(tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['read_file', 'read_media', 'session_search', 'personal_read', 'user_context_read', 'knowledge_read']));
+    expect(tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['user_context_search', 'user_context_get', 'knowledge_search', 'knowledge_get']));
+    expect(PERSONAL_MAIN_TOOL_IDS).toHaveLength(11);
+    expect(tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['clarify', 'web_search', 'web_fetch', 'find', 'grep', 'list_dir', 'exec_command']));
     expect(tools.find(tool => tool.name === 'session_search')?.description).toContain('No model or network calls');
+  });
+
+  it('blocks ordinary clarification on personal Agents even with a stale allowlist, preserving specialist tools', () => {
+    const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,
+      dispatchTaskRuns: () => {} });
+    expect(factory.createCoreTools({ toolAllowlist: ['personal_task', 'clarify'] }).map(tool => tool.name)).toEqual(['personal_task']);
+    expect(factory.createCoreTools({ toolAllowlist: ['clarify'] }).map(tool => tool.name)).toEqual(['clarify']);
   });
 
   it('provides Conductor with focused reads without file writes or shell access', () => {

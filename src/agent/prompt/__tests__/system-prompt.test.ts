@@ -7,6 +7,13 @@ import { buildSystemPrompt, splitBuiltSystemPrompt } from '../system-prompt.js';
 const BASE_TOOLS = ['read_file', 'write_file', 'exec_command', 'skills_list', 'skill_view'];
 
 describe('buildSystemPrompt section order', () => {
+  it('keeps changing personal snapshots below the cache boundary', () => {
+    const first = splitBuiltSystemPrompt(buildSystemPrompt('/ws', { toolNames: ['personal_task'], activeProjectContext: 'Specialists: researcher' }))!;
+    const next = splitBuiltSystemPrompt(buildSystemPrompt('/ws', { toolNames: ['personal_task'], activeProjectContext: 'Specialists: coder' }))!;
+    expect(first.stablePrefix).toBe(next.stablePrefix);
+    expect(first.dynamicSuffix).toContain('Specialists: researcher');
+    expect(next.dynamicSuffix).toContain('Specialists: coder');
+  });
   it('places Tooling before Safety and Project Context before cache boundary', () => {
     const prompt = buildSystemPrompt('/workspace/main', {
       toolNames: BASE_TOOLS,
