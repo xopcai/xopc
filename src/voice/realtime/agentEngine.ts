@@ -288,8 +288,8 @@ export function createAgentVoiceEngine(options: {
       if (!claim.conversationSessionId) throw new Error('Conversation identity is unavailable');
       const task = await options.runtime.agentBroker.delegate({ text, turnId, conversationId: claim.request.conversationId,
         expectedTranscriptId: claim.conversationSessionId, signal: response.abortController.signal,
-        ...(updateClientMessageId ? { clientMessageId: updateClientMessageId,
-          origin: { type: 'system' as const, source: 'task_update' } } : {}) });
+        clientMessageId: updateClientMessageId ?? `voice:${claim.conversationSessionId}:${claim.sessionId}:${inputGeneration}:${turnId}`,
+        ...(updateClientMessageId ? { origin: { type: 'system' as const, source: 'task_update' } } : {}) });
       response.taskId = task.taskId;
       send('task.created', { responseId: response.id, taskId: task.taskId });
       for await (const event of task.events) {
