@@ -839,17 +839,18 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     [language, m.chat.sourceNoteAppendHeading, m.chat.sourceNoteAppendSourceLine, sourceNoteId],
   );
 
+  const currentPath = `${location.pathname}${location.search}`;
   const handleSaveAssistantAsNote = useCallback(async (content: string) => {
     try {
       const note = await quickCapture(content.trim(), 'web');
       showComposerNotification('success', m.chat.messageSavedToNote, undefined, {
-        href: noteDetailHref(`${location.pathname}${location.search}`, note.id),
+        href: noteDetailHref(currentPath, note.id),
       });
     } catch (err) {
       showComposerNotification('error', err instanceof Error ? err.message : m.notes.quickCaptureFailed);
       throw err;
     }
-  }, [location.pathname, location.search, m.chat.messageSavedToNote, m.notes.quickCaptureFailed]);
+  }, [currentPath, m.chat.messageSavedToNote, m.notes.quickCaptureFailed]);
 
   const handleConfirmSourceNoteSave = useCallback(async () => {
     const pending = pendingSourceNoteSaveRef.current;

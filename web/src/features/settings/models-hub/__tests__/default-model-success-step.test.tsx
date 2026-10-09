@@ -16,7 +16,8 @@ vi.mock('@/features/chat/model/model-selector', () => ({
     <div>{models.map(model => <button key={model.id} onClick={() => onChange(model.id)}>{model.id}</button>)}</div>,
 }));
 
-import { defaultModelCandidates, DefaultModelSuccessStep, type DefaultModelTarget } from '../default-model-success-step';
+import { defaultModelCandidates, type DefaultModelTarget } from '../default-model-candidates';
+import { DefaultModelSuccessStep } from '../default-model-success-step';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: ReturnType<typeof createRoot> | undefined;

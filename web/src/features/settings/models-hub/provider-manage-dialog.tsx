@@ -55,7 +55,8 @@ import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
 import { messages } from '@/i18n/messages';
 
-import { DefaultModelSuccessStep, type DefaultModelTarget } from './default-model-success-step';
+import { type DefaultModelTarget } from './default-model-candidates';
+import { DefaultModelSuccessStep } from './default-model-success-step';
 
 export interface ProviderManageDialogMessages {
   apiKeyLabel: string;

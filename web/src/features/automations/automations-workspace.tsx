@@ -66,6 +66,7 @@ import {
   type AutomationNotificationPolicy,
   type AutomationTaskOption,
 } from './automation-api';
+import { isSystemManagedAutomation } from './automation-management';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import {
   automationIntervalMs,
@@ -206,10 +207,6 @@ function automationTaskSummary(automation: Automation, labels: AutomationsMessag
   }
   if (automation.action.kind === 'task_command') return actionLabel(automation.action, labels);
   return actionLabel(automation.action, labels);
-}
-
-export function isSystemManagedAutomation(automation: Automation): boolean {
-  return automation.management !== undefined;
 }
 
 function visibleAutomationDescription(automation: Automation): string {

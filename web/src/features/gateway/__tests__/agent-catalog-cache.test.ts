@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isAgentCatalogCacheKey } from '@/features/gateway/gateway-realtime-bridge';
+import { isAgentCatalogCacheKey } from '@/features/gateway/agent-catalog-cache';
 
 describe('Agent catalog cache invalidation', () => {
   it('matches every Agent-backed SWR cache without invalidating unrelated resources', () => {
