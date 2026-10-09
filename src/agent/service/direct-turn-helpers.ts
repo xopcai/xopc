@@ -17,6 +17,8 @@ import type { AgentSourceContext } from '../source-context/types.js';
 import { injectSourceContextsIntoUserMessage } from '../source-context/injector.js';
 
 import { commandRegistry } from '../../chat-commands/index.js';
+import { isPersonalConversation } from '../../personal-agent/repository.js';
+import { personalCommandRejection } from '../../chat-commands/personal-command-policy.js';
 import { parseSlashCommand } from '../../chat-commands/command-parse.js';
 import { shouldSkipResetOverlapCommand } from '../../session/reset-triggers.js';
 import { hydrateUserTurnForLlm, type TranscriptUserMessage } from '../inbound/attachment-pipeline.js';
@@ -87,9 +89,19 @@ export async function tryRunSlashCommand(
     sourceContexts?: AgentSourceContext[];
   },
 ): Promise<SlashCommandTask> {
-  const parsed = parseSlashCommand(content);
+  const personal = isPersonalConversation(ctx.conversationId);
+  // Personal chat treats paths, inline slashes and unregistered slash text as ordinary input.
+  const parsed = personal
+    ? (/^\/[a-z][a-z0-9_:-]*(?:\s|$)/i.test(content.trim()) ? parseSlashCommand(content.trim().split(/\r?\n/)[0]!) : null)
+    : parseSlashCommand(content);
   if (!parsed) {
     return { matched: false, aggregatedText: '' };
+  }
+  if (personal) {
+    const command = commandRegistry.findByName(parsed.command);
+    if (!command && !parsed.command.startsWith('skill:')) return { matched: false, aggregatedText: '' };
+    const rejection = personalCommandRejection(ctx.conversationId, command?.id ?? 'skill.invoke', parsed.command);
+    if (rejection) return { matched: true, aggregatedText: rejection, command: parsed.command };
   }
   if (options?.skipResetCommands && shouldSkipResetOverlapCommand(parsed.command, true)) {
     return { matched: false, aggregatedText: '' };
