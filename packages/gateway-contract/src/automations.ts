@@ -51,6 +51,7 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
     kind: z.literal('system'),
     capability: z.enum([
       'home.advisor.refresh',
+      'personal.proactivity.tick',
       'memory.temporal_sweep',
       'memory.daily_reconciliation',
       'memory.weekly_knowledge',

@@ -1,5 +1,5 @@
 export const PERSONAL_MAIN_TOOL_IDS = [
-  'personal_task', 'personal_capability', 'personal_request', 'personal_preference', 'session_recall',
+  'personal_task', 'personal_attention', 'personal_capability', 'personal_request', 'personal_preference', 'session_recall',
   'read_media', 'read_file', 'session_search', 'personal_read',
   'user_context_read', 'knowledge_read',
 ] as const;
@@ -8,6 +8,7 @@ export const PERSONAL_TOOL_DESCRIPTIONS: Readonly<Record<string, string>> = {
   personal_task: 'Choose from the injected specialist snapshot; discover only when missing or after failure. Delegate work, inspect own Tasks, send instructions or answer worker questions. Use an available Agent. Announce intent before discovery; claim success only after confirmation.',
   personal_capability: 'Check verified app connection and specialist availability before connected-app work.',
   personal_request: 'Submit, inspect or cancel connected-app requests. Submit using the connectorId and agentId returned by personal_capability.',
+  personal_attention: 'Save explicit requests to check later and proactively report useful developments. The running Gateway checks while the user is away and posts in this chat. Prefer nextCheckLocal; confirm the returned local time and claim saved only after success. No useful development means silence. Valid commands: follow, list, settings, pause, end, resume, interests, feedback, rollback. interests reads silent candidates. feedback applies explicit topic stop/defer/preparation preferences; rollback explicitly undoes the latest strategy version. Query list for IDs and versions. Requires running Gateway; no action authorization or guaranteed notification.',
   personal_preference: 'Save only explicitly requested lasting response preferences.',
   session_recall: 'Find exact facts in this conversation, including compacted history. Cannot access other chats.',
   session_search: 'Search other chats locally for short matching excerpts. No model or network calls.',
