@@ -19,6 +19,10 @@ import { GatewayRestartBanner } from '@/features/gateway/gateway-restart-banner'
 import { UpdateReminderBar } from '@/features/updater/update-reminder-bar';
 import { useUpdateReminder } from '@/features/updater/use-update-reminder';
 import { GlobalCommandPaletteHost } from '@/features/search/global-command-palette/global-command-palette-host';
+import { closeNotePreviewModalHref, NOTE_PREVIEW_MODAL_PARAM } from '@/features/notes/note-detail-route';
+import { ProductPreviewModal } from '@/features/chat/product-preview/product-preview-modal';
+import { closeProductPreviewHref, PRODUCT_PREVIEW_PARAM, resolveProductPreviewTarget } from '@/features/chat/product-preview/product-preview-route';
+import { NotePreviewModal } from '@/features/notes/note-preview-modal';
 import { GlobalQuickCaptureHost } from '@/features/notes/global-quick-capture';
 import { GlobalDiscussionCaptureHost } from '@/features/discussions/global-discussion-capture';
 import { GatewayRealtimeBridge } from '@/features/gateway/gateway-realtime-bridge';
@@ -112,6 +116,14 @@ function AppShellContent() {
   const taskModalId = pathname.startsWith('/tasks/')
     ? null
     : new URLSearchParams(search).get(TASK_DETAIL_MODAL_PARAM);
+  const productPreviewRoute = pathname === '/chat' || pathname.startsWith('/chat/')
+    ? new URLSearchParams(search).get(PRODUCT_PREVIEW_PARAM) : null;
+  const productPreviewTarget = productPreviewRoute && !taskModalId ? resolveProductPreviewTarget(productPreviewRoute) : null;
+  const productPreviewBackgroundPath = closeProductPreviewHref(pathname, search);
+  const noteModalId = !taskModalId && !productPreviewTarget && (pathname === '/chat' || pathname.startsWith('/chat/'))
+    ? new URLSearchParams(search).get(NOTE_PREVIEW_MODAL_PARAM)
+    : null;
+  const noteModalBackgroundPath = closeNotePreviewModalHref(pathname, search);
   const taskModalBackgroundPath = closeTaskDetailModalHref(pathname, search);
   const [workDiscoveryOverlayMounted, setWorkDiscoveryOverlayMounted] = useState(showWorkDiscoveryOverlay);
 
@@ -205,6 +217,12 @@ function AppShellContent() {
       <SideChatSelectionLauncher />
       <TokenDialog />
       <OnboardingDialog />
+      {productPreviewTarget ? (
+        <ProductPreviewModal target={productPreviewTarget} backgroundPath={productPreviewBackgroundPath} onClose={() => navigate(productPreviewBackgroundPath, { replace: true })} />
+      ) : null}
+      {noteModalId ? (
+        <NotePreviewModal noteId={noteModalId} backgroundPath={noteModalBackgroundPath} onClose={() => navigate(noteModalBackgroundPath, { replace: true })} />
+      ) : null}
       {taskModalId ? (
         <Suspense fallback={null}>
           <TaskDetailModal taskId={taskModalId} backgroundPath={taskModalBackgroundPath} onClose={closeTaskDetailModal} />

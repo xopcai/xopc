@@ -13,10 +13,11 @@
  */
 
 import { memo, useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Copy, Check, GitBranch, Save } from 'lucide-react';
 
 import type { ToolUseContent } from '@/features/chat/messages/messages.types';
+import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { interaction } from '@/lib/interaction';
@@ -100,6 +101,7 @@ export const WorkflowCard = memo(function WorkflowCard({
   const status = resolveCardStatus(block);
   const snapshot = useMemo(() => extractSnapshot(block), [block]);
   const navigate = useNavigate();
+  const location = useLocation();
   const failureKind = status === 'failed' ? classifyFailure(block) : null;
   const errorReason = status === 'failed' ? readErrorText(block) : '';
 
@@ -164,17 +166,17 @@ export const WorkflowCard = memo(function WorkflowCard({
   const openInWorkflows = useCallback(() => {
     const runId = snapshot?.runId?.trim();
     if (runId) {
-      navigate(workflowBoardHref(runId));
+      navigate(chatProductHref(`${location.pathname}${location.search}`, workflowBoardHref(runId)));
       return;
     }
     const name = snapshot?.name?.trim();
-    if (name) navigate(`/workflows?def=${encodeURIComponent(name)}`);
-  }, [navigate, snapshot?.name, snapshot?.runId]);
+    if (name) navigate(chatProductHref(`${location.pathname}${location.search}`, `/workflows?def=${encodeURIComponent(name)}`));
+  }, [location.pathname, location.search, navigate, snapshot?.name, snapshot?.runId]);
 
   const openWorkflowCopyEditor = useCallback(() => {
     const name = snapshot?.name?.trim();
     if (!name) return;
-    navigate(`/workflows?def=${encodeURIComponent(name)}&copy=1`);
+    navigate(`/workflows/new?copy=${encodeURIComponent(name)}`);
   }, [navigate, snapshot?.name]);
 
   const handleCardClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
@@ -185,8 +187,8 @@ export const WorkflowCard = memo(function WorkflowCard({
       const interactive = target.closest('button,a,input,textarea,select,summary,[role="button"],[data-workflow-inline-detail]');
       if (interactive) return;
     }
-    navigate(workflowBoardHref(runId));
-  }, [navigate, snapshot?.runId]);
+    navigate(chatProductHref(`${location.pathname}${location.search}`, workflowBoardHref(runId)));
+  }, [location.pathname, location.search, navigate, snapshot?.runId]);
 
   // ----- render -----
   if (isWorkflowFailureTask(block) || (status === 'completed' && !snapshot)) {

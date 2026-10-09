@@ -1,7 +1,7 @@
 import type { ChatPreviewDiagnostic, ProductReference } from '@xopcai/gateway-contract';
 import { AlertTriangle, RefreshCw, Save, Wrench } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import {
   buildChatPreviewSrcDoc,
 } from '@/features/chat-previews/runtime';
 import { useInlinePreviewLease } from '@/features/chat/product-delivery/inline-preview-scheduler';
+import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
 import { cn } from '@/lib/cn';
 
 type RuntimeState = 'booting' | 'healthy' | 'failed' | 'timeout';
@@ -35,6 +36,7 @@ export function InlineChatPreview({
   language: 'en' | 'zh';
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [runtimeState, setRuntimeState] = useState<RuntimeState>('booting');
@@ -101,7 +103,7 @@ export function InlineChatPreview({
     setActionError(null);
     try {
       const app = await promoteChatPreview(reference.id, sourceHash);
-      navigate(`/local-apps/${encodeURIComponent(app.id)}`);
+      navigate(chatProductHref(`${location.pathname}${location.search}`, `/local-apps/${encodeURIComponent(app.id)}`));
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {

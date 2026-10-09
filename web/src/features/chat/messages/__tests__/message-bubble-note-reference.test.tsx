@@ -68,7 +68,7 @@ describe('MessageBubble context reference attachment', () => {
 
     act(() => card?.click());
     expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
-      '/notes/note-1?returnTo=%2Fchat%2Fsession-1%3Fview%3Dfull',
+      '/chat/session-1?view=full&note=note-1',
     );
   });
 

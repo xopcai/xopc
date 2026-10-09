@@ -8,7 +8,8 @@ import type { ComposerAttachmentSummary, ComposerContextRef } from '@/features/c
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
-import { withDetailReturnTo } from '@/lib/navigation-return';
+import { noteDetailHref } from '@/features/notes/note-detail-route';
+import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { mergeContextSources } from './merge-context-sources';
@@ -86,7 +87,7 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
             <div className="flex items-center justify-between px-2 py-2 text-sm text-fg-muted"><span>{copy.unavailable}</span>{retry()}</div>
           ) : <div className="space-y-3">
             <section aria-label={copy.work}>
-              {currentProject ? <Link className={rowClass} to={withDetailReturnTo(`/projects/${encodeURIComponent(currentProject.id)}`, returnTo)} onClick={close}>
+              {currentProject ? <Link className={rowClass} to={chatProductHref(returnTo, `/projects/${encodeURIComponent(currentProject.id)}`)} onClick={close}>
                 <FolderKanban className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={currentProject.title}>{currentProject.title}</span>
               </Link> : null}
               {task ? <Link className={rowClass} to={taskDetailModalHref(returnTo, task.id)} onClick={close}>
@@ -125,7 +126,7 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
                           : source.kind === 'attachment' ? Paperclip : FileText;
                 const title = source.unavailable ? copy.unavailable : source.title || (source.kind === 'note' ? copy.untitled : copy.untitledSource);
                 const body = <><SourceIcon className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={source.unavailable ? undefined : source.title}>{title}</span><span className="shrink-0 text-xs text-fg-muted">{label}</span></>;
-                const target = source.kind === 'note' ? withDetailReturnTo(`/notes/${encodeURIComponent(source.id)}`, returnTo)
+                const target = source.kind === 'note' ? noteDetailHref(returnTo, source.id)
                   : source.kind === 'session' ? `/chat/${encodeURIComponent(source.id)}` : null;
                 const key = `${source.kind}:${source.id}`;
                 return !source.unavailable && target ? <Link key={key} className={rowClass} to={target} onClick={close}>{body}</Link>

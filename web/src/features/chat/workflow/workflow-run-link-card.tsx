@@ -1,9 +1,10 @@
 import { ArrowUpRight, GitBranch } from 'lucide-react';
 import { memo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import type { WorkflowRunLinkEntry } from '@/features/workflows/parse-workflow-run-links';
 import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
+import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
@@ -25,12 +26,13 @@ export const WorkflowRunLinkCard = memo(function WorkflowRunLinkCard({
   const language = useLocaleStore((s) => s.language);
   const labels = messages(language).workflows;
   const navigate = useNavigate();
+  const location = useLocation();
   const title = link.goal.trim() || link.definitionId;
 
   return (
     <button
       type="button"
-      onClick={() => navigate(workflowBoardHref(link.runId, { ownerAgentId: link.ownerAgentId }))}
+      onClick={() => navigate(chatProductHref(`${location.pathname}${location.search}`, workflowBoardHref(link.runId, { ownerAgentId: link.ownerAgentId })))}
       className={cn(
         'flex w-full items-start gap-3 rounded-2xl border border-edge bg-surface-panel px-4 py-3 text-left',
         'transition-colors hover:bg-surface-hover/60',

@@ -158,11 +158,11 @@ describe('SideChatConversation composer', () => {
   async function renderConversation() {
     await act(async () => {
       root.render(
-        <SideChatConversation
+        <MemoryRouter initialEntries={['/chat/parent']}><SideChatConversation
           sideChatId="side-1"
           onRunIdChange={() => {}}
           parentConversationId="parent"
-        />,
+        /></MemoryRouter>,
       );
     });
   }

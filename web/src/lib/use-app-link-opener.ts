@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { modalizeTaskDetailHref } from '@/features/tasks/task-detail-route';
+import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
 
 import { withDetailReturnTo } from './navigation-return';
 import { openExternalHttpLink, resolveAppLink } from './app-link';
@@ -18,7 +18,7 @@ export function useAppLinkOpener() {
     const intent = resolveAppLink(href);
     if (intent.kind === 'internal-route') {
       const backgroundPath = `${location.pathname}${location.search}`;
-      navigate(withDetailReturnTo(modalizeTaskDetailHref(backgroundPath, intent.route), backgroundPath));
+      navigate(withDetailReturnTo(chatProductHref(backgroundPath, intent.route), backgroundPath));
       return { ok: true, kind: intent.kind };
     }
     if (intent.kind === 'external-http') {
