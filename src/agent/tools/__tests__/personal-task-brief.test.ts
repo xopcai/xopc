@@ -15,7 +15,7 @@ describe('personal task brief', () => {
     expect(brief.body).toContain(requirement);
     expect(brief.body).toContain('## 交付物');
     expect(brief.body).toContain('## Result for the originating conversation');
-    expect(brief.body).toContain('Preserve relevant sources');
+    expect(brief.body).toContain('preserve requested content, relevant sources');
   });
 
   it('includes direct delivery guidance even without a detailed description', () => {
