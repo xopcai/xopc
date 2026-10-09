@@ -87,7 +87,7 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
       verticalAlignment = Alignment.CenterVertically) {
       IconButton(onClick = onBack, modifier = Modifier.testTag("shares-back")) {
-        Text("‹", style = MaterialTheme.typography.headlineMedium)
+        ActionIcon(R.drawable.action_chevron_left, size = 20.dp)
       }
       Text(stringResource(R.string.share_center), modifier = Modifier.weight(1f),
         style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)

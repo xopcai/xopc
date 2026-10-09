@@ -5,6 +5,15 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class ProgressRepositoryTest {
+  @Test fun preservesScheduledHomeItemKind() {
+    val home = ProgressRepository.parseHome("""{"needsUser":[],"background":[
+      {"id":"next","kind":"scheduled","title":"Morning brief","summary":"Tomorrow",
+        "openAction":{"type":"open","label":"Open automation","href":"/automations/auto-1"}},
+      {"id":"running","title":"Research","summary":"Working"}]}""")
+    assertEquals("scheduled", home.background.first().kind)
+    assertEquals("/automations/auto-1", home.background.first().openAction?.href)
+    assertEquals("", home.background.last().kind)
+  }
   @Test fun parsesHomeWorkbenchActionsAndReviewDetail() {
     val home = ProgressRepository.parseHome("""{
       "needsUser":[{"id":"wait-1","title":"Review plan","summary":"Awaiting approval",

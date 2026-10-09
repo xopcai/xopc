@@ -21,11 +21,12 @@ import androidx.compose.ui.unit.dp
 
 /** Shared Loopi loading mark for short, local operations. */
 @Composable
-internal fun BrandLoadingIndicator(modifier: Modifier = Modifier, extent: Dp = 24.dp) {
+internal fun BrandLoadingIndicator(modifier: Modifier = Modifier, extent: Dp = 24.dp,
+  compact: Boolean = false) {
   val label = stringResource(R.string.brand_loading)
   Box(modifier.defaultMinSize(minWidth = extent, minHeight = extent)
     .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
-    LoopiIcon(extent = extent, active = true, working = true,
+    LoopiIcon(extent = extent, active = true, working = true, compact = compact,
       modifier = Modifier.testTag("brand-loading-logo"))
   }
 }

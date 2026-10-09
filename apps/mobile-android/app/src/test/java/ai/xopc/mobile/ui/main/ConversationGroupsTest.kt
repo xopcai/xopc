@@ -35,4 +35,12 @@ class ConversationGroupsTest {
     assertEquals(ConversationAge("hour", 2), ConversationGroups.age("2026-10-22T10:00:00Z", now, zone))
     assertEquals(ConversationAge("invalid"), ConversationGroups.age("invalid", now, zone))
   }
+
+  @Test fun historyHidesLocalDraftsAndEmptyRemoteConversations() {
+    val started = item("started", "2026-10-22T11:00:00Z").copy(messageCount = 2)
+    val empty = item("empty", "2026-10-22T11:00:00Z")
+    val draft = empty.copy(id = "draft", isLocalDraft = true)
+    assertEquals(listOf(started), ConversationGroups.visibleHistory(listOf(draft, empty, started)))
+  }
+
 }

@@ -32,6 +32,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -40,8 +42,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,7 +60,7 @@ import java.util.UUID
 
 /** Only known internal destinations may be opened from a Gateway-supplied home item. */
 internal fun progressDestination(href: String): Pair<String, String>? {
-  val match = Regex("^/(chat|tasks)/([A-Za-z0-9_-]{1,128})$").matchEntire(href) ?: return null
+  val match = Regex("^/(chat|tasks|automations)/([A-Za-z0-9_-]{1,128})$").matchEntire(href) ?: return null
   return match.groupValues[1] to match.groupValues[2]
 }
 
@@ -240,7 +245,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   }
   Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp)) {
     if (page != "workflows") Row(modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.SpaceBetween) {
+      horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
       Text(when (page) {
         "tasks" -> stringResource(R.string.progress_tasks)
         "detail" -> stringResource(R.string.progress_task_detail)
@@ -255,10 +260,16 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         "automation" -> state.automations.detail?.name ?: stringResource(R.string.progress_automations)
         "automation-run" -> state.automations.run?.automationName ?: stringResource(R.string.automation_run)
         else -> stringResource(R.string.tab_progress)
-      }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-      if (page == "overview") TextButton(onClick = { page = "tasks" },
-        modifier = Modifier.testTag("progress-all-work")) { Text(stringResource(R.string.progress_all_work)) }
+      }, style = if (page == "overview") MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold)
+      if (page == "overview") IconButton(onClick = { page = "tasks" },
+        modifier = Modifier.testTag("progress-all-work")) {
+        Icon(painterResource(R.drawable.tab_progress), contentDescription = stringResource(R.string.progress_all_work),
+          modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface)
+      }
       else Row {
+        if (page == "tasks") TextButton(onClick = { page = "workflows" },
+          modifier = Modifier.testTag("progress-workflows")) { Text(stringResource(R.string.workflows)) }
         if (page == "tasks") TextButton(onClick = onCreateTaskWithChat,
           enabled = !state.creatingTaskChat,
           modifier = Modifier.testTag("progress-create-task-chat")) {
@@ -384,7 +395,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         { action -> selectedRunId?.let { onAutomationRunAction(it, action) } })
       else -> ProgressOverview(state, onRefreshHome, onOpenChat, { page = "tasks" },
         { page = "projects"; onLoadProjects() },
-        { page = "automations"; onLoadAutomations() }, { page = "workflows" },
+        { page = "automations"; onLoadAutomations() },
         ::openAutomation, ::openTask,
         { pendingHomeAction = it }, bottomChromeHeight)
     }
@@ -450,108 +461,6 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       }, dismissButton = {
         TextButton(onClick = { pendingHomeAction = null }) { Text(stringResource(R.string.progress_cancel)) }
       })
-  }
-}
-
-@Composable
-private fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
-  onOpenChat: (String) -> Unit, onOpenTaskList: () -> Unit, onOpenProjects: () -> Unit,
-  onOpenAutomations: () -> Unit, onOpenWorkflows: () -> Unit,
-  onOpenAutomation: (String) -> Unit,
-  onOpenTask: (String) -> Unit,
-  onRequestAction: (ProgressHomeAction) -> Unit, bottomChromeHeight: Dp) {
-  LazyColumn(modifier = Modifier.fillMaxSize().testTag("progress-overview-list"),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
-    contentPadding = PaddingValues(bottom = bottomChromeHeight + 20.dp)) {
-    item {
-      Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-          Text(stringResource(R.string.progress_summary, state.needsUser.size, state.background.size),
-            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-          Text(stringResource(R.string.progress_hint), style = MaterialTheme.typography.bodySmall)
-        }
-      }
-    }
-    item {
-      Text(stringResource(R.string.progress_frequent_tools), style = MaterialTheme.typography.titleSmall)
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ProgressShortcut(R.string.progress_tasks, onOpenTaskList, Modifier.weight(1f))
-        ProgressShortcut(R.string.progress_projects, onOpenProjects,
-          Modifier.weight(1f).testTag("progress-projects"))
-      }
-      ProgressShortcut(R.string.progress_automations, onOpenAutomations,
-        Modifier.fillMaxWidth().padding(top = 8.dp).testTag("progress-automations"))
-      ProgressShortcut(R.string.workflows, onOpenWorkflows,
-        Modifier.fillMaxWidth().padding(top = 8.dp).testTag("progress-workflows"))
-    }
-    if (state.homeLoading && state.needsUser.isEmpty() && state.background.isEmpty()) item {
-      BrandLoadingPanel(modifier = Modifier.testTag("progress-loading"))
-    }
-    if (state.homeError) item {
-      OutlinedButton(onClick = onRefresh, modifier = Modifier.testTag("progress-retry")) {
-        Text(stringResource(R.string.progress_load_failed))
-      }
-    }
-    if (state.homeActionError) item {
-      Text(stringResource(R.string.progress_home_action_error), color = MaterialTheme.colorScheme.error,
-        modifier = Modifier.testTag("progress-home-action-error"))
-    }
-    if (state.needsUser.isNotEmpty()) {
-      item { ProgressSectionTitle(R.string.progress_needs_you) }
-      items(state.needsUser, key = { "needs-${it.id}" }) { item ->
-        ProgressHomeRow(item, state.homeActionBusy, onOpenChat, onOpenTask, onRequestAction)
-      }
-    }
-    if (state.background.isNotEmpty()) {
-      item { ProgressSectionTitle(R.string.progress_ongoing) }
-      items(state.background.take(5), key = { "ongoing-${it.id}" }) { item ->
-        ProgressHomeRow(item, state.homeActionBusy, onOpenChat, onOpenTask, onRequestAction)
-      }
-    }
-    state.automationMetrics?.nextRun?.let { next ->
-      item { ProgressSectionTitle(R.string.progress_upcoming) }
-      item {
-        Card(onClick = { onOpenAutomation(next.automationId) },
-          modifier = Modifier.fillMaxWidth().testTag("progress-upcoming-${next.automationId}")) {
-          Column(modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(next.name, style = MaterialTheme.typography.titleMedium)
-            Text(DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
-              .format(Date(next.runAtMs)), style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant)
-          }
-        }
-      }
-    }
-    val closed = state.recentClosedTasks
-    if (closed.isNotEmpty()) {
-      item { ProgressSectionTitle(R.string.progress_recent_closed) }
-      items(closed, key = { "closed-${it.id}" }) { task ->
-        Card(onClick = { onOpenTask(task.id) }, modifier = Modifier.fillMaxWidth().testTag("progress-closed-${task.id}")) {
-          Column(modifier = Modifier.padding(16.dp)) {
-            Text(task.title, style = MaterialTheme.typography.titleMedium)
-            Text(task.resolution?.let { taskResolutionLabel(it) } ?: progressPhaseLabel(task.phase), style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant)
-          }
-        }
-      }
-    }
-    if (state.tasksError) item {
-      Text(stringResource(R.string.progress_tasks_error), color = MaterialTheme.colorScheme.error)
-    }
-  }
-}
-
-@Composable
-private fun ProgressShortcut(label: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
-  Card(onClick = onClick, modifier = modifier.heightIn(min = 64.dp),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 20.dp),
-      horizontalArrangement = Arrangement.SpaceBetween) {
-      Text(stringResource(label), style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Medium)
-      Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
   }
 }
 
@@ -779,47 +688,6 @@ private fun ProgressTaskCreate(title: String, onTitleChange: (String) -> Unit,
       Text(stringResource(R.string.progress_save))
     }
     if (busy) BrandLoadingIndicator(modifier = Modifier.fillMaxWidth().testTag("progress-create-busy"))
-  }
-}
-
-@Composable
-private fun ProgressHomeRow(item: ProgressItem,
-  actionBusy: Boolean, onOpenChat: (String) -> Unit, onOpenTask: (String) -> Unit,
-  onRequestAction: (ProgressHomeAction) -> Unit) {
-  var reviewExpanded by rememberSaveable(item.id) { mutableStateOf(false) }
-  val destination = item.openAction?.href?.let(::progressDestination)
-  val canOpen = destination != null
-  Card(onClick = {
-    if (destination?.first == "chat") onOpenChat(destination.second)
-    else if (destination?.first == "tasks") onOpenTask(destination.second)
-  }, enabled = canOpen, modifier = Modifier.fillMaxWidth().testTag("progress-item-${item.id}")) {
-    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      Text(item.title, style = MaterialTheme.typography.titleMedium)
-      Text(listOfNotNull(item.statusLabel, item.summary).joinToString(" · "),
-        style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-      item.recommendation?.let {
-        Text(it, style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-      }
-      if (!item.reviewDetail.isNullOrBlank() && item.reviewDetail != item.summary) {
-        TextButton(onClick = { reviewExpanded = !reviewExpanded },
-          modifier = Modifier.testTag("progress-review-${item.id}")) {
-          Text(stringResource(if (reviewExpanded) R.string.progress_hide_review else R.string.progress_show_review))
-        }
-        if (reviewExpanded) MarkdownContent(item.reviewDetail,
-          modifier = Modifier.testTag("progress-review-detail-${item.id}"))
-      }
-      item.primaryAction?.let { action ->
-        Button(onClick = { onRequestAction(action) }, enabled = !actionBusy,
-          modifier = Modifier.fillMaxWidth().testTag("progress-home-primary-${item.id}")) { Text(action.label) }
-      }
-      item.secondaryActions.forEachIndexed { index, action ->
-        TextButton(onClick = { onRequestAction(action) }, enabled = !actionBusy,
-          modifier = Modifier.fillMaxWidth().testTag("progress-home-secondary-${item.id}-$index")) {
-          Text(action.label)
-        }
-      }
-    }
   }
 }
 
