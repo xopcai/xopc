@@ -651,6 +651,7 @@ export const MessageBubble = memo(function MessageBubble({
                   style={isUser && !userMessageExpanded ? { maxHeight: 'calc(10lh)' } : undefined}
                 >
                   <ChunkedContent
+                    taskRunId={message.taskResultDelivery?.taskRunId}
                     content={displayForFlow}
                     isUser={isUser}
                     isAssistantMessageStreaming={isAssistant && isStreaming}

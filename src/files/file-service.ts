@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { access, lstat, open, opendir, realpath, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, parse, relative, resolve, sep } from 'node:path';
 
 import type { FileCapability, FileResource, FileSpace, FileSpaceBinding } from '@xopcai/gateway-contract';
 
@@ -345,7 +345,38 @@ export class FileSpaceService {
     return this.forContext('agent', resolveDefaultAgentId());
   }
 
+  /** Host spaces support explicit local file links without adding whole disks to discovery. */
+  private async hostSpace(path: string): Promise<ResolvedFileSpace> {
+    const root = parse(resolve(path)).root;
+    return {
+      id: `host-${Buffer.from(root).toString('base64url')}`,
+      title: 'Local files', kind: 'workspace', bindings: [], writable: false, root,
+    };
+  }
+
+  async resolveLocalResource(space: ResolvedFileSpace, candidate: string): Promise<{ resource: FileResource; absolutePath?: string }> {
+    const absolutePath = await realpath(candidate).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') throw new FileServiceError(404, 'File not found');
+      if (error.code === 'EACCES' || error.code === 'EPERM') throw new FileServiceError(403, 'File access denied');
+      throw error;
+    });
+    const info = await stat(absolutePath);
+    if (!info.isFile() && !info.isDirectory()) throw new FileServiceError(400, 'Not a file or directory');
+    await access(absolutePath, constants.R_OK).catch(() => { throw new FileServiceError(403, 'File access denied'); });
+    if (isWithin(await realpath(space.root), absolutePath)) {
+      return { resource: await fileResourceFromPath(space, absolutePath) };
+    }
+    const host = await this.hostSpace(absolutePath);
+    return { resource: await fileResourceFromPath(host, absolutePath), absolutePath };
+  }
+
   async get(id: string): Promise<ResolvedFileSpace> {
+    if (id.startsWith('host-')) {
+      const root = Buffer.from(id.slice(5), 'base64url').toString('utf8');
+      const space = await this.hostSpace(root);
+      if (space.id !== id || space.root !== root) throw new FileServiceError(400, 'Invalid host file space');
+      return space;
+    }
     const hadCache = this.cache !== null;
     let space = (await this.list()).find((item) => item.id === id);
     if (!space && hadCache) {
@@ -360,6 +391,8 @@ export class FileSpaceService {
     const locator = parseFileResourceId(id);
     const space = await this.get(locator.spaceId);
     const absolutePath = await resolveFilePath(space.root, locator.relativePath);
+    const info = await stat(absolutePath);
+    if (!info.isFile() && !info.isDirectory()) throw new FileServiceError(400, 'Not a file or directory');
     return { space, resource: await fileResourceFromPath(space, absolutePath, resolve(space.root, locator.relativePath)), absolutePath };
   }
 

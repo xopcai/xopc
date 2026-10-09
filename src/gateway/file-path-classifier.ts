@@ -1,4 +1,5 @@
 import { stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { basename, isAbsolute, resolve } from 'node:path';
 
 import { resolveAgentProfileDir } from '../agent/agent-scope.js';
@@ -10,7 +11,7 @@ import { extractProfileAgentId } from '../config/agent-profile.js';
 import { resolveConfigPath, resolveSkillsDir } from '../config/paths.js';
 import { resolveStateDir } from '../config/paths-state.js';
 import type { Config } from '../config/schema.js';
-import { isPathUnderWorkspace, resolveWorkspaceSafePath } from './workspace-editor-path.js';
+import { isPathUnderWorkspace } from './workspace-editor-path.js';
 import type { FileReferenceLocationKind, FileReferenceScope } from './file-reference-registry.js';
 
 export type { FileReferenceLocationKind };
@@ -122,14 +123,16 @@ export async function resolveFileReferenceCandidate(
   const displayRoot = workspaceRoot;
   ctx = { ...ctx, workspaceRoot: displayRoot };
 
+  if (rawPath.includes('\0')) return { candidate: null, invalid: true };
+  if (rawPath === '~' || rawPath.startsWith('~/')) {
+    return { candidate: resolve(homedir(), rawPath.slice(2)), invalid: false };
+  }
   if (looksLikeHostAbsolutePath(rawPath)) {
     return { candidate: resolve(rawPath), invalid: false };
   }
 
-  const wsPath = resolveWorkspaceSafePath(workspaceRoot, rawPath);
-  if (!wsPath) {
-    return { candidate: null, invalid: true };
-  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(rawPath)) return { candidate: null, invalid: true };
+  const wsPath = resolve(workspaceRoot, rawPath);
 
   try {
     await stat(wsPath);

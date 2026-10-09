@@ -330,6 +330,7 @@ export interface MarkdownViewProps {
   codeCopy?: boolean;
   /** Called when a chat/workspace file link should open in the local preview pane. */
   onWorkspaceFileOpen?: (target: WorkspaceFileLinkTarget) => void;
+  onWorkspaceImageLoad?: (target: WorkspaceFileLinkTarget) => Promise<Blob>;
   /** Convert fenced Mermaid blocks to diagrams. */
   renderMermaid?: boolean;
   /** Add preview and image download actions to rendered Mermaid diagrams. */
@@ -345,6 +346,7 @@ function MarkdownViewImpl({
   className,
   codeCopy = true,
   onWorkspaceFileOpen,
+  onWorkspaceImageLoad,
   renderMermaid = true,
   mermaidActions = false,
   streamingMetricsKey,
@@ -382,6 +384,7 @@ function MarkdownViewImpl({
     const normalized = rewriteWorkspaceFileLinksInMarkdown(
       content,
       Boolean(onWorkspaceFileOpen),
+      Boolean(onWorkspaceImageLoad),
     );
     const raw = parseMarkdown(normalized, breaks ? { breaks: true } : undefined);
     const sanitized = sanitizeMarkdownHtml(raw);
@@ -389,7 +392,7 @@ function MarkdownViewImpl({
       recordStreamingParse(streamingMetricsKey, performance.now() - startedAt);
     }
     return sanitized;
-  }, [content, breaks, onWorkspaceFileOpen, streamingMetricsKey]);
+  }, [content, breaks, onWorkspaceFileOpen, onWorkspaceImageLoad, streamingMetricsKey]);
 
   const hostRef = useRef<HTMLDivElement>(null);
   const [mermaidPreview, setMermaidPreview] = useState<MermaidPreviewState | null>(null);
@@ -402,6 +405,29 @@ function MarkdownViewImpl({
     setMermaidPreview(null);
     setLinkError(false);
   }, [safeHtml]);
+
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el || !onWorkspaceImageLoad) return;
+    let disposed = false;
+    const objectUrls: string[] = [];
+    for (const img of el.querySelectorAll<HTMLImageElement>('img')) {
+      const source = img.dataset.xopcImageSource ?? img.getAttribute('src') ?? '';
+      const target = parseWorkspaceFileLinkTarget(source);
+      if (!target) continue;
+      img.dataset.xopcImageSource = source;
+      void onWorkspaceImageLoad(target).then((blob) => {
+        if (disposed) return;
+        const url = URL.createObjectURL(blob);
+        objectUrls.push(url);
+        img.src = url;
+      }).catch(() => { /* Keep the image alt text when the local file is unavailable. */ });
+    }
+    return () => {
+      disposed = true;
+      for (const url of objectUrls) URL.revokeObjectURL(url);
+    };
+  }, [safeHtml, onWorkspaceImageLoad]);
 
   useLayoutEffect(() => {
     const el = hostRef.current;

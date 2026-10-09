@@ -32,6 +32,23 @@ describe('resolveWorkspaceFileReference', () => {
     });
   });
 
+  it('sends the producing task id for forwarded result links', async () => {
+    apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({ space })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ resource, absolutePath: '/worker/file.html' })));
+    await resolveWorkspaceFileReference('file.html', { projectId: 'project one', taskRunId: 'producing-run' });
+    expect(apiFetch).toHaveBeenNthCalledWith(2, '/api/files/resolve', {
+      method: 'POST', body: JSON.stringify({ spaceId: space.id, path: 'file.html', taskRunId: 'producing-run' }),
+    });
+  });
+
+  it('preserves the absolute host path for external previews', async () => {
+    apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({ space })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ resource: { ...resource, capabilities: ['preview', 'download'] }, absolutePath: '/tmp/file.html' })));
+    await expect(resolveWorkspaceFileReference('/tmp/file.html')).resolves.toMatchObject({
+      scope: 'external', locationKind: 'host', absolutePath: '/tmp/file.html', capabilities: ['preview'],
+    });
+  });
+
   it('resolves an unscoped path using the configured default space', async () => {
     apiFetch
       .mockResolvedValueOnce(new Response(JSON.stringify({ space })))

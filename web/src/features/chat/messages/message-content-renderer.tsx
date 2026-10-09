@@ -24,6 +24,7 @@ import { stripUserMessageForDisplay } from '@/features/chat/messages/wire-text-s
 import { ProviderSetupRequiredCard } from '@/features/chat/messages/provider-setup-required-banner';
 import { parseProviderSetupRequired } from '@/features/chat/messages/provider-setup-required.parser';
 import {
+  fetchWorkspaceFileBlob,
   resolveWorkspaceFileReference,
   resolveFileReferenceAction,
   type WorkspaceFileReference,
@@ -253,6 +254,7 @@ const fileActionButtonClass = cn(
 );
 
 function ChatMarkdownView({
+  taskRunId,
   content,
   compact,
   conversationId,
@@ -262,6 +264,7 @@ function ChatMarkdownView({
   onProgressiveRenderComplete,
 }: {
   content: string;
+  taskRunId?: string;
   compact?: boolean;
   conversationId?: string | null;
   projectId?: string | null;
@@ -310,6 +313,19 @@ function ChatMarkdownView({
   const fileReferenceMessages = messages(language).chat.fileReference;
   const [resolution, setResolution] = useState<MarkdownFileResolution | null>(null);
 
+  const loadFileImage = useCallback(async (target: WorkspaceFileLinkTarget) => {
+    try {
+      return await fetchWorkspaceFileBlob(target.path, {
+        projectId: projectId?.trim() || undefined,
+        conversationId: conversationId?.trim() || undefined,
+        taskRunId,
+      });
+    } catch (error) {
+      if (taskRunId || projectId || !conversationId) throw error;
+      return fetchWorkspaceFileBlob(target.path);
+    }
+  }, [projectId, conversationId, taskRunId]);
+
   const openFile = useCallback(
     (target: WorkspaceFileLinkTarget) => {
       if (target.kind === 'workspace-relative') {
@@ -318,19 +334,20 @@ function ChatMarkdownView({
           const scoped = await resolveWorkspaceFileReference(target.path, {
             projectId: projectId?.trim() || undefined,
             conversationId: conversationId?.trim() || undefined,
+            taskRunId,
           });
-          if (scoped?.scope === 'workspace' && scoped.workspaceRelativePath) {
-            setPreview(scoped.workspaceRelativePath, target.line, projectId, conversationId);
+          if (scoped?.capabilities.includes('preview') && (scoped.absolutePath || scoped.workspaceRelativePath)) {
+            setPreview(scoped.absolutePath || scoped.workspaceRelativePath!, target.line, projectId, conversationId);
             setResolution(null);
             return;
           }
           // A delegated result may be saved in the default workspace while its
           // message is delivered in another Agent's conversation.
-          const fallback = !projectId && conversationId
+          const fallback = !taskRunId && !projectId && conversationId
             ? await resolveWorkspaceFileReference(target.path)
             : null;
-          if (fallback?.scope === 'workspace' && fallback.workspaceRelativePath) {
-            setPreview(fallback.workspaceRelativePath, target.line);
+          if (fallback?.capabilities.includes('preview') && (fallback.absolutePath || fallback.workspaceRelativePath)) {
+            setPreview(fallback.absolutePath || fallback.workspaceRelativePath!, target.line);
             setResolution(null);
             return;
           }
@@ -348,6 +365,7 @@ function ChatMarkdownView({
       void resolveWorkspaceFileReference(target.path, {
         projectId: projectId?.trim() || undefined,
         conversationId: conversationId?.trim() || undefined,
+        taskRunId,
       })
         .then((ref) => {
           if (!ref) {
@@ -358,8 +376,8 @@ function ChatMarkdownView({
             });
             return;
           }
-          if (ref.scope === 'workspace' && ref.workspaceRelativePath) {
-            setPreview(ref.workspaceRelativePath, target.line, projectId, conversationId);
+          if (ref.capabilities.includes('preview') && (ref.absolutePath || ref.workspaceRelativePath)) {
+            setPreview(ref.absolutePath || ref.workspaceRelativePath!, target.line, projectId, conversationId);
             setResolution(null);
             return;
           }
@@ -373,7 +391,7 @@ function ChatMarkdownView({
           });
         });
     },
-    [fileReferenceMessages.resolveFailedDescription, projectId, conversationId, setPreview],
+    [fileReferenceMessages.resolveFailedDescription, projectId, conversationId, taskRunId, setPreview],
   );
 
   return (
@@ -394,6 +412,7 @@ function ChatMarkdownView({
                 block.isTail && 'markdown-stream-tail',
               )}
               onWorkspaceFileOpen={openFile}
+              onWorkspaceImageLoad={loadFileImage}
               renderMermaid={!progressivelyRevealing || !block.isTail}
               mermaidActions
               streamingMetricsKey={metricsKey}
@@ -405,6 +424,7 @@ function ChatMarkdownView({
           content={content}
           compact={compact}
           onWorkspaceFileOpen={openFile}
+          onWorkspaceImageLoad={loadFileImage}
           mermaidActions
         />
       )}
@@ -434,6 +454,7 @@ function renderTextOrImageBlock(
   onProgressiveRenderComplete?: () => void,
   userTurnDocument?: UserTurnDocument,
   contextRefs?: MessageContextRef[],
+  taskRunId?: string,
 ) {
   if (block.type === 'text') {
     if (isUser) {
@@ -464,6 +485,7 @@ function renderTextOrImageBlock(
       <div key={key} className="assistant-markdown-content markdown-content min-w-0">
         <ChatMarkdownView
           content={block.text}
+          taskRunId={taskRunId}
           compact
           conversationId={workspaceConversationId ?? conversationId}
           projectId={projectId}
@@ -515,6 +537,7 @@ function renderTextOrImageBlock(
 }
 
 export function ChunkedContent({
+  taskRunId,
   content,
   isUser,
   isAssistantMessageStreaming,
@@ -529,6 +552,7 @@ export function ChunkedContent({
   contextRefs,
 }: {
   content: MessageContent[];
+  taskRunId?: string;
   isUser: boolean;
   isAssistantMessageStreaming: boolean;
   imagePreviewLabel: string;
@@ -583,6 +607,7 @@ export function ChunkedContent({
         onProgressiveRenderComplete,
         isUser && i === 0 ? userTurnDocument : undefined,
         isUser && i === 0 ? contextRefs : undefined,
+        taskRunId,
       );
       if (el) nodes.push(el);
       i++;
