@@ -78,6 +78,35 @@ describe('PCM WAV recorder helpers', () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it.each(['module', 'resume'])('releases audio resources when %s startup never settles', async (stage) => {
+    vi.useFakeTimers();
+    const close = vi.fn(() => new Promise(() => {}));
+    const disconnect = vi.fn();
+    class FakeAudioContext {
+      sampleRate = 48_000;
+      audioWorklet = { addModule: vi.fn(() => stage === 'module' ? new Promise(() => {}) : Promise.resolve()) };
+      destination = {};
+      createMediaStreamSource = () => ({ connect: vi.fn(), disconnect });
+      createGain = () => ({ gain: { value: 1 }, connect: vi.fn(), disconnect });
+      resume = () => new Promise(() => {});
+      close = close;
+    }
+    class FakeAudioWorkletNode {
+      port = { onmessage: null, postMessage: vi.fn() };
+      onprocessorerror = null;
+      connect = vi.fn();
+      disconnect = disconnect;
+    }
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    vi.stubGlobal('AudioWorkletNode', FakeAudioWorkletNode);
+    const pending = PcmFrameCapture.start({} as MediaStream, { onSamples: vi.fn() });
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'TimeoutError' });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await rejected;
+    expect(close).toHaveBeenCalledOnce();
+    expect(disconnect).toHaveBeenCalledTimes(stage === 'module' ? 0 : 3);
+  });
+
   it('encodes mono samples as a valid 16 kHz PCM16 WAV file', () => {
     const encoded = encodePcm16Wav(new Float32Array([-1, 0, 1]));
     const view = new DataView(encoded);

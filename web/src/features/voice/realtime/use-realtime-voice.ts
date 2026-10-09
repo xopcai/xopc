@@ -1,3 +1,4 @@
+import { awaitVoiceStartupStep } from './startup-step';
 import { acceptTranscriptRevision } from './transcript-revisions';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -14,7 +15,7 @@ import { PcmFrameCapture, PcmStreamEncoder } from '@xopcai/composer-core/pcm-wav
 
 import { acquireMicrophoneLease, releaseMicrophoneLease } from '../microphone-lease';
 
-export type VoiceInputPhase = 'idle' | 'requesting' | 'starting' | 'recording' | 'transcribing' | 'error';
+export type VoiceInputPhase = 'idle' | 'requesting' | 'connecting' | 'starting' | 'recording' | 'transcribing' | 'error';
 type VoiceCaptureStartStage = 'permission' | 'media' | 'session' | 'recorder';
 type VoiceCaptureFailureKind = 'permission' | 'device' | 'session' | 'recorder';
 
@@ -39,7 +40,7 @@ function formatElapsed(sec: number): string {
 }
 
 function isCapturePending(phase: VoiceInputPhase): boolean {
-  return phase === 'requesting' || phase === 'starting';
+  return phase === 'requesting' || phase === 'connecting' || phase === 'starting';
 }
 
 async function getMicrophonePermissionState(): Promise<PermissionState | null> {
@@ -305,25 +306,29 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     setCallConnectionStage(purpose === 'conversation' ? 'preparing' : null);
     callModeRef.current = callMode;
     setResponseText('');
-    updatePhase('starting');
+    updatePhase('connecting');
+    const startedAt = performance.now();
+    const wait = <T,>(pending: Promise<T>, timeoutMs: number, onLateResult?: (value: T) => void) =>
+      awaitVoiceStartupStep(pending, controller.signal, timeoutMs, onLateResult);
     let stage: VoiceCaptureStartStage = 'permission';
     try {
       if (purpose === 'conversation') {
+        stage = 'recorder';
         const player = new PcmPlayer();
         playerRef.current = player;
-        await player.start();
+        await wait(player.start(), 10_000);
         if (!isCurrent()) { void player.close(); return; }
       }
       stage = 'session';
-      await VoiceSessionClient.preflight({ purpose, ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}), signal: controller.signal });
+      await wait(VoiceSessionClient.preflight({ purpose, ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}), signal: controller.signal }), 20_000);
       if (!isCurrent()) return;
       stage = 'permission';
       const electronSystem = window.electronAPI?.system;
-      const permissionState = await getMicrophonePermissionState();
+      const permissionState = await wait(getMicrophonePermissionState(), 5_000);
       if (!isCurrent() || !isCapturePending(phaseRef.current)) return;
       if (electronSystem && permissionState !== 'granted') {
         updatePhase('requesting');
-        const permission = await electronSystem.requestMicrophone();
+        const permission = await wait(electronSystem.requestMicrophone(), 60_000);
         if (!isCurrent()) return;
         const requiresMacosReauthorization = window.electronAPI?.platform === 'darwin' && permission.status !== 'granted';
         if (permission.status === 'denied' || requiresMacosReauthorization) throw new Error('Microphone permission denied');
@@ -334,9 +339,9 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       updatePhase('starting');
       window.dispatchEvent(new Event('xopc-voice-recording-start'));
       stage = 'media';
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const stream = await wait(navigator.mediaDevices.getUserMedia({
         audio: voiceInputConstraints(),
-      });
+      }), 15_000, (lateStream) => lateStream.getTracks().forEach((track) => track.stop()));
       if (!isCurrent() || !isCapturePending(phaseRef.current)) {
         stream.getTracks().forEach((track) => track.stop());
         return;
@@ -353,8 +358,9 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         }, 12_000);
       }
       stage = 'session';
+      updatePhase('connecting');
       dictationRef.current.clear();
-      const client = await VoiceSessionClient.connect({
+      const client = await wait(VoiceSessionClient.connect({
         purpose,
         signal: controller.signal,
         ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}),
@@ -463,7 +469,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
           });
         },
         onClose: (reason) => { if (isCurrent()) handleSessionClose(reason); },
-      });
+      }), 20_000, (lateClient) => lateClient.stop('surface_closed'));
       if (!isCurrent()) { client.stop('surface_closed'); return; }
       playerRef.current?.stopRingback();
       if (slowConnectionTimerRef.current !== null) clearTimeout(slowConnectionTimerRef.current);
@@ -471,9 +477,10 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       clientRef.current = client;
       maxSessionMsRef.current = client.session.limits.maxSessionMs;
       stage = 'recorder';
+      updatePhase('starting');
       let encoder: PcmStreamEncoder | undefined;
       const pendingSamples: Float32Array[] = [];
-      const capture = await PcmFrameCapture.start(stream, {
+      const capture = await wait(PcmFrameCapture.start(stream, {
         onSamples: (samples) => {
           if (!isCurrent() || mutedRef.current) return;
           if (!encoder) {
@@ -490,7 +497,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
           // Microphone energy also includes speaker echo. Playback changes only
           // after the server confirms a non-echo interruption, or a user click.
         },
-      });
+      }), 15_000, (lateCapture) => lateCapture.cancel());
       if (!isCurrent() || !isCapturePending(phaseRef.current)) {
         capture.cancel();
         client.stop('surface_closed');
@@ -511,6 +518,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       const failureKind = classifyVoiceCaptureFailure(stage, error);
       console.error('[chat:voice] realtime capture start failed', {
         stage,
+        durationMs: Math.round(performance.now() - startedAt),
         kind: failureKind,
         errorName: errorName(error),
         errorMessage: error instanceof Error ? error.message : String(error),
@@ -519,7 +527,9 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       reset();
       updatePhase(failureKind === 'session' ? 'error' : 'idle');
       const needsSettings = failureKind === 'session' && isVoiceConfigurationError(error);
-      const message = failureKind === 'permission'
+      const message = errorName(error) === 'TimeoutError'
+        ? stage === 'session' ? m.voiceConnectionTimeout : m.voiceMicrophoneTimeout
+        : failureKind === 'permission'
         ? m.voiceMicDenied
         : failureKind === 'device'
           ? m.voiceMicUnavailable

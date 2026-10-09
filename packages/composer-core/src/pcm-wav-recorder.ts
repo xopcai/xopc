@@ -131,6 +131,7 @@ export class PcmStreamEncoder {
 
 const WORKLET_NAME = 'xopc-pcm-capture';
 const WORKLET_FLUSH_TIMEOUT_MS = 1_000;
+const CAPTURE_START_TIMEOUT_MS = 10_000;
 
 type CaptureMessage =
   | { type: 'samples'; buffer: ArrayBuffer }
@@ -180,21 +181,31 @@ export class PcmFrameCapture {
       throw new Error('PCM audio recording is not supported in this browser');
     }
     const context = new AudioContext();
+    let capture: PcmFrameCapture | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(() => {
+        reject(new DOMException('PCM audio capture startup timed out', 'TimeoutError'));
+      }, CAPTURE_START_TIMEOUT_MS);
+    });
     try {
-      await context.audioWorklet.addModule(pcmCaptureWorkletUrl);
+      await Promise.race([context.audioWorklet.addModule(pcmCaptureWorkletUrl), deadline]);
       const source = context.createMediaStreamSource(stream);
       const node = new AudioWorkletNode(context, WORKLET_NAME);
       const mutedOutput = context.createGain();
       mutedOutput.gain.value = 0;
-      const capture = new PcmFrameCapture(context, source, node, mutedOutput, options);
+      capture = new PcmFrameCapture(context, source, node, mutedOutput, options);
       source.connect(node);
       node.connect(mutedOutput);
       mutedOutput.connect(context.destination);
-      await context.resume();
+      await Promise.race([context.resume(), deadline]);
       return capture;
     } catch (error) {
-      await context.close().catch(() => undefined);
+      if (capture) capture.cancel();
+      else void context.close().catch(() => undefined);
       throw error;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

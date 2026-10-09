@@ -47,17 +47,19 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
 }: ComposerVoiceInputBarProps) {
   const transcribing = phase === 'transcribing';
   const requesting = phase === 'requesting';
+  const connecting = phase === 'connecting';
   const starting = phase === 'starting';
   const failed = phase === 'error';
   const status = failed
     ? error || m.voiceTranscribeFailed
     : requesting ? m.voiceRequestingMicrophone
-      : starting ? m.voiceStartingMicrophone
+      : connecting ? m.voiceConnectingService
+        : starting ? m.voiceStartingMicrophone
         : transcribing ? m.voiceTranscribing : m.voiceRecordingStatus;
   const transcript = [finalTranscript, partialTranscript].filter(Boolean).join(' ');
 
   return (
-    <section className="w-full space-y-3 py-3" aria-label={m.voiceInput} aria-busy={requesting || starting || transcribing}>
+    <section className="w-full space-y-3 py-3" aria-label={m.voiceInput} aria-busy={requesting || connecting || starting || transcribing}>
       <div className="flex items-center gap-3 px-1">
         {phase === 'recording' ? (
           <div className="flex h-5 shrink-0 items-center gap-0.5" aria-hidden>
