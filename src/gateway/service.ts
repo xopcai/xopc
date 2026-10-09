@@ -923,27 +923,22 @@ export class GatewayService {
   });
 
   private readonly taskResultDispatch = createBackgroundTask(async () => {
-    await new TaskResultDeliveryService().drain((conversationId, deliveryId) => {
+    const notify = (conversationId: string, deliveryId: string) => {
       this.realtime.broker.publish('sessions', 'session.task-result', { conversationId, deliveryId });
       this.emit('session.transcript_updated', { key: conversationId, deliveryId });
+    };
+    await new TaskResultDeliveryService().drain(notify);
+    // Reply leases bound concurrency without delaying the next artifact dispatch.
+    void new PersonalReplyComposer().drain(notify).catch(err => {
+      log.error({ err, phase: 'task_result_reply' }, 'Task result reply delivery failed');
     });
   }, (err) => {
     log.error({ err, phase: 'task_result_dispatch' }, 'Task result dispatch failed');
   });
 
-  private readonly personalReplyDispatch = createBackgroundTask(async () => {
-    await new PersonalReplyComposer().drain((conversationId, deliveryId) => {
-      this.realtime.broker.publish('sessions', 'session.task-result', { conversationId, deliveryId });
-      this.emit('session.transcript_updated', { key: conversationId, deliveryId });
-    });
-  }, (err) => {
-    log.error({ err, phase: 'personal_reply_dispatch' }, 'Personal reply dispatch failed');
-  });
-
   dispatchTaskRuns(): void {
     if (this.stopping) return;
     this.taskResultDispatch();
-    this.personalReplyDispatch();
     this.taskRunDispatch();
     this.taskMainUpdateDispatch();
   }

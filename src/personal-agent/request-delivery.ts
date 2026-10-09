@@ -59,7 +59,7 @@ export function drainPersonalRequestContinuations(notify?: (conversationId: stri
   }
 }
 
-/** The request itself is the durable outbox; append and delivery marker commit together. */
+/** Stage personal results in the shared delivery outbox; legacy requests retain their own delivery marker. */
 export function drainPersonalRequestResults(notify?: (conversationId: string, requestId: string) => void): void {
   const db = getSqliteDatabase();
   const rows = db.prepare(`SELECT request_id, delivery_attempts FROM personal_requests request WHERE task_id IS NOT NULL
@@ -68,7 +68,7 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
       AND run.status IN ('succeeded','failed','cancelled')
       AND NOT EXISTS (SELECT 1 FROM task_runs newer WHERE newer.task_id = run.task_id
         AND newer.parent_run_id IS NULL AND newer.queued_at > run.queued_at))
-    AND NOT EXISTS (SELECT 1 FROM personal_reply_jobs reply WHERE reply.reply_id = 'reply:personal-request:' || request.request_id)
+    AND NOT EXISTS (SELECT 1 FROM task_result_deliveries delivery WHERE json_extract(delivery.reply_payload_json, '$.requestId') = request.request_id)
     ORDER BY created_at LIMIT 50`).all(Date.now()) as { request_id: string; delivery_attempts: number }[];
   for (const row of rows) {
     try {
