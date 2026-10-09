@@ -78,7 +78,7 @@ function WindowsTitlebarMenu({ groups }: { groups: ElectronMenuGroupModel[] }) {
               align="start"
               sideOffset={4}
               className={cn(
-                'windows-titlebar-interactive z-[90] min-w-52 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover outline-none',
+                'windows-titlebar-interactive z-[90] min-w-52 rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover outline-none',
                 APP_CHROME_NO_DRAG_CLASS,
               )}
             >
