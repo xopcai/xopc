@@ -1,3 +1,4 @@
+import { PERSONAL_PROACTIVE_MESSAGE_TYPE, PersonalProvenanceSchema, parsePersonalProactiveMessage, type PersonalProvenance } from '@xopcai/gateway-contract';
 import { isUserTurnDocument, parseTurnOutcome, parseTaskResultDelivery, TASK_RESULT_DELIVERY_TYPE,
   type TaskResultDelivery, type TurnOutcome, type UserTurnDocument } from '@xopcai/gateway-contract';
 
@@ -42,6 +43,7 @@ export interface ClientHistoryMessage {
     userTurnDocument?: UserTurnDocument;
     turnOutcome?: TurnOutcome;
     taskResultDelivery?: TaskResultDelivery;
+    personalProvenance?: PersonalProvenance;
   };
   kind?: 'message' | 'compaction' | 'context' | 'bash' | 'custom' | 'branch';
   tokensBefore?: number;
@@ -319,6 +321,8 @@ export function messagesToClientHistory(
       );
       out.push({
         role: 'assistant',
+        ...(PersonalProvenanceSchema.safeParse((m.metadata as Record<string, unknown> | undefined)?.personalProvenance).success
+          ? { startsNewBubble: true, metadata: { personalProvenance: PersonalProvenanceSchema.parse((m.metadata as Record<string, unknown>)?.personalProvenance) } } : {}),
         ...(parseTaskResultDelivery((m.metadata as Record<string, unknown> | undefined)?.taskResultDelivery)
           ? { startsNewBubble: true, metadata: m.metadata as ClientHistoryMessage['metadata'] } : {}),
         ...(typeof (m as unknown as { turnId?: unknown }).turnId === 'string'
@@ -517,6 +521,14 @@ function customRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessag
     return { role: 'assistant', kind: 'message', startsNewBubble: true,
       content, rawContent: [{ type: 'text', text: content }],
       timestamp: parseTimestampValue(typeof r.timestamp === 'number' ? r.timestamp : undefined) };
+  }
+  if (customType === PERSONAL_PROACTIVE_MESSAGE_TYPE) {
+    const message = parsePersonalProactiveMessage(r.details);
+    if (!message) return null;
+    return { role: 'assistant', kind: 'message', startsNewBubble: true,
+      turnId: `personal-outreach:${message.outreachId}`, content: message.text,
+      rawContent: [{ type: 'text', text: message.text }], timestamp: parseTimestampValue(message.createdAt),
+      metadata: { personalProvenance: message.provenance } };
   }
   if (customType === TASK_RESULT_DELIVERY_TYPE) {
     const delivery = parseTaskResultDelivery(r.details);
@@ -796,6 +808,8 @@ export function transcriptRowsToClientHistory(
     out.push({
       id,
       ...(messageRow.turnId ? { turnId: messageRow.turnId } : {}),
+      ...(PersonalProvenanceSchema.safeParse((messageRow.metadata as Record<string, unknown> | undefined)?.personalProvenance).success
+        ? { startsNewBubble: true, metadata: { personalProvenance: PersonalProvenanceSchema.parse((messageRow.metadata as Record<string, unknown>).personalProvenance) } } : {}),
       ...(messageRow.turnId && opts?.startsNewBubbleTurnIds?.has(messageRow.turnId)
         ? { startsNewBubble: true } : {}),
       role: 'assistant',
