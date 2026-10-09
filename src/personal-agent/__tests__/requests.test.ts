@@ -37,6 +37,7 @@ import { personalCapabilities } from '../capability-service.js';
 import { submitPersonalRequest, resolvePersonalRequestConnection, cancelPersonalRequest, requirePersonalWorkerConnection } from '../request-service.js';
 import { getPersonalRequest, listPersonalRequests } from '../request-repository.js';
 import { drainPersonalRequestContinuations, drainPersonalRequestResults } from '../request-delivery.js';
+import { TaskResultDeliveryService } from '../../tasks/task-result-delivery-service.js';
 import { PersonalReplyComposer } from '../reply-composer.js';
 
 describe('Personal connected-app requests', () => {
@@ -245,6 +246,33 @@ describe('Personal connected-app requests', () => {
     expect(notify).toHaveBeenCalledTimes(1);
     expect(getPersonalRequest(request.requestId)?.state).toBe('completed');
     expect(JSON.stringify(buildSessionContextForLlm(rows))).toContain('有一封邮件值得先看');
+  });
+
+  it('shares a connected request reply and its artifacts in the same outbox row', async () => {
+    const { request, worker: chat, coordinator } = worker();
+    const run = new TaskRunRepository().getLatestRoot(request.taskId!)!;
+    await createPersonalRequestResultTool(() => chat.key).execute('publish', { summary: 'Mail ready', items: [],
+      coverage: { from: '2026-10-02T00:00:00+08:00', to: '2026-10-08T00:00:00+08:00', scannedCount: 0, partial: false } }, undefined, undefined);
+    coordinator.captureOutcome({ version: 1, outcomeId: 'mail-site', runId: run.id, turnId: run.id,
+      status: 'succeeded', summary: 'Published site', evidence: [], createdAt: new Date().toISOString(),
+      deliverables: [{ artifactId: 'mail-site', title: 'Mail report', kind: 'site', availability: 'available',
+        location: 'external_host', shareUrl: 'https://example.test/report', capabilities: ['open'] }] });
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Published' });
+    drainPersonalRequestResults();
+    const compose = vi.fn(async () => 'Your mail report is ready.');
+    await new PersonalReplyComposer(compose).drain(vi.fn());
+    expect(compose).not.toHaveBeenCalled();
+    const db = getSqliteDatabase();
+    expect(db.prepare('SELECT status, reply_status FROM task_result_deliveries WHERE task_run_id = ?').all(run.id))
+      .toEqual([{ status: 'pending', reply_status: 'pending' }]);
+    await new TaskResultDeliveryService().drain(vi.fn());
+    await new PersonalReplyComposer(compose).drain(vi.fn());
+    drainPersonalRequestResults();
+    expect(compose).toHaveBeenCalledTimes(1);
+    expect(db.prepare('SELECT status, reply_status FROM task_result_deliveries WHERE task_run_id = ?').all(run.id))
+      .toEqual([{ status: 'delivered', reply_status: 'delivered' }]);
+    expect(loadTranscriptRowsForSession(conversationId).filter(row => 'customType' in row && row.customType === 'task_result_delivery'))
+      .toHaveLength(2);
   });
 
   it('retains results without inserting them into a reset transcript', async () => {

@@ -110,7 +110,7 @@ describe('background task result delivery', () => {
     expect(loadTranscriptRowsForSession(main.key)).toHaveLength(1);
     closeXopcDatabase(); resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
-    getSqliteDatabase().prepare('UPDATE personal_reply_jobs SET next_attempt_at = 0').run();
+    getSqliteDatabase().prepare('UPDATE task_result_deliveries SET reply_next_attempt_at = 0').run();
     const notify = vi.fn();
     await new PersonalReplyComposer(compose).drain(notify);
     await new PersonalReplyComposer(compose).drain(notify);
@@ -140,6 +140,27 @@ describe('background task result delivery', () => {
     const detail = await new SessionStore(stateDir).getMessagePage(main.key, { includeContextRows: true });
     expect(detail?.session.messages).toHaveLength(2);
     expect((detail?.session.messages[1] as unknown as ClientHistoryMessage).metadata?.turnOutcome?.deliverables).toEqual([]);
+  });
+
+  it('keeps artifact and reply retries independent in one outbox row', async () => {
+    const { main, coordinator, runId } = task();
+    markPersonal(main.key);
+    coordinator.captureOutcome(await image(runId));
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Recorded report' });
+    await new TaskResultDeliveryService().drain(() => { throw new Error('Artifact push disconnected'); });
+    const compose = vi.fn(async () => 'Here is your image.');
+    await new PersonalReplyComposer(compose).drain(vi.fn());
+    const db = getSqliteDatabase();
+    expect(db.prepare(`SELECT status, attempts, notified_at, reply_status, reply_attempts,
+      reply_notified_at FROM task_result_deliveries`).all()).toEqual([
+      { status: 'delivered', attempts: 1, notified_at: null, reply_status: 'delivered',
+        reply_attempts: 0, reply_notified_at: expect.any(Number) },
+    ]);
+    db.prepare('UPDATE task_result_deliveries SET next_attempt_at = 0').run();
+    await new TaskResultDeliveryService().drain(vi.fn());
+    await new PersonalReplyComposer(compose).drain(vi.fn());
+    expect(compose).toHaveBeenCalledTimes(1);
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(2);
   });
 
   it.each(['cancel', 'reassign', 'edit', 'delete'] as const)('discards a composed late reply after %s', async change => {
@@ -172,7 +193,7 @@ describe('background task result delivery', () => {
     coordinator.captureOutcome(outcome);
     coordinator.finalize({ status: 'succeeded', summary: 'Report ready', assistantText: 'Full result with an important limitation.' });
     await new TaskResultDeliveryService().drain(vi.fn());
-    getSqliteDatabase().prepare("UPDATE personal_reply_jobs SET status = 'generating', lease_until = 0").run();
+    getSqliteDatabase().prepare("UPDATE task_result_deliveries SET reply_status = 'generating', reply_lease_until = 0").run();
     const compose = vi.fn((_packet: PersonalReplyPacket, signal: AbortSignal) => new Promise<string>((_resolve, reject) => {
       signal.addEventListener('abort', () => reject(new Error('Aborted')), { once: true });
     }));

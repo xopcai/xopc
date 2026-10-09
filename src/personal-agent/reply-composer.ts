@@ -34,18 +34,24 @@ export interface PersonalReplyPacket {
   requestId?: string;
   taskVersion: number;
 }
-type ReplyRow = { reply_id: string; payload_json: string; status: string; lease_token: string | null;
+type ReplyRow = { delivery_id: string; payload_json: string; status: string; lease_token: string | null;
   text: string | null; draft_transcript_id: string | null; message_entry_id: string | null; attempts: number };
 
 /** Enqueue inside the caller's result transaction; model calls never run there. */
 export function enqueuePersonalReply(packet: Omit<PersonalReplyPacket, 'taskVersion'>): void {
   const db = getSqliteDatabase();
   const task = db.prepare('SELECT version FROM tasks WHERE task_id = ?').get(packet.delivery.taskId) as { version: number };
-  const replyId = `reply:${packet.delivery.deliveryId}`;
-  db.prepare(`INSERT INTO personal_reply_jobs(reply_id, conversation_id, task_run_id, payload_json, created_at)
-    VALUES (?, ?, ?, ?, ?) ON CONFLICT(reply_id) DO NOTHING`)
-    .run(replyId, packet.delivery.conversationId, packet.delivery.taskRunId,
-      JSON.stringify({ ...packet, taskVersion: task.version }), Date.now());
+  const now = Date.now();
+  // Connected requests also use this outbox; an existing artifact row keeps its own delivery state.
+  db.prepare(`INSERT INTO task_result_deliveries
+    (delivery_id, conversation_id, task_run_id, payload_json, status, next_attempt_at, created_at, notified_at,
+      reply_payload_json, reply_status)
+    VALUES (?, ?, ?, ?, 'delivered', ?, ?, ?, ?, 'pending')
+    ON CONFLICT(task_run_id, conversation_id) DO UPDATE SET
+      reply_payload_json = excluded.reply_payload_json, reply_status = 'pending'
+    WHERE task_result_deliveries.reply_payload_json IS NULL`)
+    .run(packet.delivery.deliveryId, packet.delivery.conversationId, packet.delivery.taskRunId,
+      JSON.stringify(packet.delivery), now, now, now, JSON.stringify({ ...packet, taskVersion: task.version }));
 }
 
 function valid(packet: PersonalReplyPacket): boolean {
@@ -141,27 +147,30 @@ export class PersonalReplyComposer {
   async drain(notify: (conversationId: string, deliveryId: string) => void): Promise<void> {
     const db = getSqliteDatabase();
     // At most two independent model calls across concurrent drain invocations.
-    const jobs = runSqliteWriteTransaction(() => {
-      const busy = (db.prepare("SELECT count(*) AS n FROM personal_reply_jobs WHERE status = 'generating' AND lease_until > ?")
+    const deliveries = runSqliteWriteTransaction(() => {
+      const busy = (db.prepare("SELECT count(*) AS n FROM task_result_deliveries WHERE reply_status = 'generating' AND reply_lease_until > ?")
         .get(Date.now()) as { n: number }).n;
-      const rows = db.prepare(`SELECT * FROM personal_reply_jobs WHERE attempts < 8 AND next_attempt_at <= ? AND lease_until <= ? AND
-        (status IN ('pending','ready') OR (status = 'generating' AND lease_until <= ?) OR (status = 'delivered' AND notified_at IS NULL))
+      const rows = db.prepare(`SELECT delivery_id, reply_payload_json AS payload_json,
+        reply_status AS status, reply_lease_token AS lease_token, reply_text AS text,
+        reply_draft_transcript_id AS draft_transcript_id, reply_message_entry_id AS message_entry_id,
+        reply_attempts AS attempts FROM task_result_deliveries WHERE status = 'delivered' AND reply_attempts < 8 AND reply_next_attempt_at <= ? AND reply_lease_until <= ? AND
+        (reply_status IN ('pending','ready') OR (reply_status = 'generating' AND reply_lease_until <= ?) OR (reply_status = 'delivered' AND reply_notified_at IS NULL))
         ORDER BY created_at LIMIT ?`).all(Date.now(), Date.now(), Date.now(), Math.max(0, 2 - busy)) as unknown as ReplyRow[];
       for (const row of rows) {
         row.lease_token = randomUUID();
-        db.prepare(`UPDATE personal_reply_jobs SET lease_token = ?, lease_until = ?, status = CASE
-          WHEN status IN ('pending','generating') THEN 'generating' ELSE status END WHERE reply_id = ?`)
-          .run(row.lease_token, Date.now() + this.timeoutMs + 5000, row.reply_id);
+        db.prepare(`UPDATE task_result_deliveries SET reply_lease_token = ?, reply_lease_until = ?, reply_status = CASE
+          WHEN reply_status IN ('pending','generating') THEN 'generating' ELSE reply_status END WHERE delivery_id = ?`)
+          .run(row.lease_token, Date.now() + this.timeoutMs + 5000, row.delivery_id);
       }
       return rows;
     });
-    await Promise.all(jobs.map(async row => {
+    await Promise.all(deliveries.map(async row => {
       const startedAt = Date.now();
       try {
         const packet = PacketSchema.parse(JSON.parse(row.payload_json));
         if (row.status !== 'delivered') {
           if (!valid(packet)) {
-            db.prepare("UPDATE personal_reply_jobs SET status = 'stale' WHERE reply_id = ? AND lease_token = ?").run(row.reply_id, row.lease_token);
+            db.prepare("UPDATE task_result_deliveries SET reply_status = 'stale' WHERE delivery_id = ? AND reply_lease_token = ?").run(row.delivery_id, row.lease_token);
             return;
           }
           const transcriptId = readCurrentTranscriptId(db, packet.delivery.conversationId);
@@ -193,42 +202,42 @@ export class PersonalReplyComposer {
               text = `${/[\u3400-\u9fff]/u.test(packet.objective) ? status === 'partial' ? '这次只完成了部分内容。' : '这次未能完成请求。'
                 : status === 'partial' ? 'Only part of the request was completed.' : 'The request could not be completed.'}\n\n${text}`;
             }
-            db.prepare("UPDATE personal_reply_jobs SET text = ?, draft_transcript_id = ?, status = 'ready' WHERE reply_id = ? AND lease_token = ?")
-              .run(text, transcriptId, row.reply_id, row.lease_token);
-            log.info({ replyId: row.reply_id, conversationId: packet.delivery.conversationId, durationMs: Date.now() - startedAt },
+            db.prepare("UPDATE task_result_deliveries SET reply_text = ?, reply_draft_transcript_id = ?, reply_status = 'ready' WHERE delivery_id = ? AND reply_lease_token = ?")
+              .run(text, transcriptId, row.delivery_id, row.lease_token);
+            log.info({ replyId: row.delivery_id, conversationId: packet.delivery.conversationId, durationMs: Date.now() - startedAt },
               'Personal reply prepared');
           }
           const persisted = runSqliteWriteTransaction(() => {
-            const current = db.prepare('SELECT status, lease_token FROM personal_reply_jobs WHERE reply_id = ?').get(row.reply_id) as
+            const current = db.prepare('SELECT reply_status AS status, reply_lease_token AS lease_token FROM task_result_deliveries WHERE delivery_id = ?').get(row.delivery_id) as
               { status: string; lease_token: string } | undefined;
             if (!current || current.status !== 'ready' || current.lease_token !== row.lease_token) return false;
             if (!valid(packet)) {
-              db.prepare("UPDATE personal_reply_jobs SET status = 'stale' WHERE reply_id = ?").run(row.reply_id);
+              db.prepare("UPDATE task_result_deliveries SET reply_status = 'stale' WHERE delivery_id = ?").run(row.delivery_id);
               return false;
             }
             if (transcriptId !== readCurrentTranscriptId(db, packet.delivery.conversationId)) {
-              db.prepare("UPDATE personal_reply_jobs SET status = 'pending', text = NULL, lease_until = 0 WHERE reply_id = ?").run(row.reply_id);
+              db.prepare("UPDATE task_result_deliveries SET reply_status = 'pending', reply_text = NULL, reply_lease_until = 0 WHERE delivery_id = ?").run(row.delivery_id);
               return false;
             }
-            const delivery = TaskResultDeliverySchema.parse({ ...packet.delivery, deliveryId: row.reply_id, text,
+            const delivery = TaskResultDeliverySchema.parse({ ...packet.delivery, deliveryId: `reply:${packet.delivery.deliveryId}`, text,
               outcome: { ...packet.delivery.outcome, deliverables: [], summary: text!.slice(0, 2000) } });
             const entry = appendTranscriptEntry(delivery.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
               content: text!, details: delivery, display: true, timestamp: Date.now() });
-            db.prepare("UPDATE personal_reply_jobs SET status = 'delivered', message_entry_id = ? WHERE reply_id = ?").run(entry.entry_id, row.reply_id);
+            db.prepare("UPDATE task_result_deliveries SET reply_status = 'delivered', reply_message_entry_id = ? WHERE delivery_id = ?").run(entry.entry_id, row.delivery_id);
             if (packet.requestId) db.prepare('UPDATE personal_requests SET delivery_entry_id = ? WHERE request_id = ?').run(entry.entry_id, packet.requestId);
             return true;
           });
           if (!persisted) return;
         }
         emitSessionTranscriptUpdate({ conversationId: packet.delivery.conversationId });
-        notify(packet.delivery.conversationId, row.reply_id);
-        db.prepare('UPDATE personal_reply_jobs SET notified_at = ?, lease_until = 0 WHERE reply_id = ?').run(Date.now(), row.reply_id);
+        notify(packet.delivery.conversationId, `reply:${packet.delivery.deliveryId}`);
+        db.prepare('UPDATE task_result_deliveries SET reply_notified_at = ?, reply_lease_until = 0 WHERE delivery_id = ?').run(Date.now(), row.delivery_id);
         if (packet.requestId) db.prepare('UPDATE personal_requests SET notified_at = ? WHERE request_id = ?').run(Date.now(), packet.requestId);
       } catch (err) {
-        db.prepare(`UPDATE personal_reply_jobs SET attempts = attempts + 1, next_attempt_at = ?, last_error = ?, lease_until = 0
-          WHERE reply_id = ? AND lease_token = ?`).run(Date.now() + Math.min(60_000, 1000 * 2 ** Math.min(row.attempts, 6)),
-            (err instanceof Error ? err.message : String(err)).slice(0, 500), row.reply_id, row.lease_token);
-        if (row.attempts === 0 || row.attempts === 7) log.warn({ err, replyId: row.reply_id },
+        db.prepare(`UPDATE task_result_deliveries SET reply_attempts = reply_attempts + 1, reply_next_attempt_at = ?, reply_last_error = ?, reply_lease_until = 0
+          WHERE delivery_id = ? AND reply_lease_token = ?`).run(Date.now() + Math.min(60_000, 1000 * 2 ** Math.min(row.attempts, 6)),
+            (err instanceof Error ? err.message : String(err)).slice(0, 500), row.delivery_id, row.lease_token);
+        if (row.attempts === 0 || row.attempts === 7) log.warn({ err, replyId: row.delivery_id },
           row.attempts === 7 ? 'Personal reply delivery exhausted retries' : 'Personal reply delivery will retry');
       }
     }));
