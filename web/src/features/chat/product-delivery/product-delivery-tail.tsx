@@ -32,6 +32,8 @@ import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import { noteDetailHref } from '@/features/notes/note-detail-route';
+import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
 import { withDetailReturnTo } from '@/lib/navigation-return';
 import {
   productDeliveryReferences,
@@ -205,7 +207,16 @@ function DeliveryRow({
       navigate(taskDetailHref(`${location.pathname}${location.search}`, reference.id));
       return;
     }
-    if (route) navigate(withDetailReturnTo(route, `${location.pathname}${location.search}`));
+    if (reference.kind === 'note') {
+      navigate(noteDetailHref(`${location.pathname}${location.search}`, reference.id));
+      return;
+    }
+    if (route) {
+      const target = new URL(route, 'https://xopc.local');
+      if (reference.projectId) target.searchParams.set('projectId', reference.projectId);
+      if (reference.kind === 'local_app' && reference.revision && /^[a-f0-9]{64}$/.test(reference.revision)) target.searchParams.set('sourceHash', reference.revision);
+      navigate(withDetailReturnTo(chatProductHref(`${location.pathname}${location.search}`, `${target.pathname}${target.search}`), `${location.pathname}${location.search}`));
+    }
   };
 
   return (

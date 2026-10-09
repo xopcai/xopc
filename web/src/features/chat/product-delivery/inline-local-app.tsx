@@ -20,7 +20,7 @@ import {
   type LocalAppRuntimeIssue,
 } from '@/features/local-apps/runtime-health';
 import { cn } from '@/lib/cn';
-import { withDetailReturnTo } from '@/lib/navigation-return';
+import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
 import { apiUrl } from '@/lib/url';
 
 type RuntimeHealth = 'booting' | 'healthy' | 'failed' | 'timeout';
@@ -116,7 +116,7 @@ export function InlineLocalApp({
 
   const open = () => {
     const route = productReferenceOpenRoute(reference);
-    if (route) navigate(withDetailReturnTo(route, `${location.pathname}${location.search}`));
+    if (route) navigate(chatProductHref(`${location.pathname}${location.search}`, `${route}&sourceHash=${encodeURIComponent(sourceHash)}`));
   };
 
   if (!lease.active) {
@@ -133,7 +133,7 @@ export function InlineLocalApp({
           </div>
           <Button variant="ghost" className="min-h-9 px-2.5 text-xs" onClick={open}>
             <ExternalLink className="size-4" />
-            {language === 'zh' ? '打开' : 'Open'}
+            {language === 'zh' ? '查看预览' : 'Preview'}
           </Button>
         </header>
         <div className="grid place-items-center bg-surface-base" style={{ height }}>
@@ -225,7 +225,7 @@ export function InlineLocalApp({
         </Button>
         <Button variant="ghost" className="min-h-9 px-2.5 text-xs" onClick={open}>
           <ExternalLink className="size-4" />
-          {language === 'zh' ? '打开' : 'Open'}
+          {language === 'zh' ? '查看预览' : 'Preview'}
         </Button>
       </header>
       <div className="relative bg-surface-base" style={{ height }}>

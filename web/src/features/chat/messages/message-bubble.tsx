@@ -47,7 +47,7 @@ import {
   ResponseContextDialog,
   type ResponsePersonalContext,
 } from '@/features/chat/messages/response-context-dialog';
-import { withDetailReturnTo } from '@/lib/navigation-return';
+import { noteDetailHref } from '@/features/notes/note-detail-route';
 
 const messageActionIconButton = cn(
   'inline-flex size-11 shrink-0 items-center justify-center rounded-lg sm:size-9',
@@ -202,7 +202,7 @@ export const MessageBubble = memo(function MessageBubble({
   const deliveryStatus = isUserMessageFailed ? 'failed' : 'sending';
   const openReferencedNote = useCallback((sourceId: string) => {
     const returnTo = `${location.pathname}${location.search}`;
-    navigate(withDetailReturnTo(`/notes/${encodeURIComponent(sourceId)}`, returnTo));
+    navigate(noteDetailHref(returnTo, sourceId));
   }, [location.pathname, location.search, navigate]);
 
   const toolLabels = useMemo(

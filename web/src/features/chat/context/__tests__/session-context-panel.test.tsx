@@ -28,7 +28,7 @@ describe('session context panel', () => {
   });
   const render = async (props: Partial<SessionContextPanelProps> = {}) => {
     const merged = { conversationId: 'one', ...props };
-    await act(async () => root.render(<SWRConfig value={{ provider: () => cache, dedupingInterval: 0 }}><MemoryRouter>
+    await act(async () => root.render(<SWRConfig value={{ provider: () => cache, dedupingInterval: 0 }}><MemoryRouter initialEntries={['/chat/one?view=full']}>
       <SessionContextPanel key={merged.conversationId ?? 'new'} {...merged} />
     </MemoryRouter></SWRConfig>));
   };
@@ -88,11 +88,11 @@ describe('session context panel', () => {
   it('shows provenance, actual detached HEAD and existing navigation', async () => {
     await render({ draftRefs: [{ kind: 'note', sourceId: 'note-a', title: 'Draft source', expectedVersion: 'v2' }] });
     await toggle();
-    expect(document.querySelectorAll('a[href*="notes/note-a"]')).toHaveLength(1);
+    expect(Array.from(document.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toContain('/chat/one?view=full&note=note-a');
     expect(document.body.textContent).toContain('Linked to chat · Pending send');
     expect(document.body.textContent).toContain('Detached HEAD · 12345678');
     expect(document.body.textContent).not.toContain('Linked sources do not mean');
-    expect(document.querySelector('a[href*="projects/one"]')).not.toBeNull();
+    expect(Array.from(document.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toContain('/chat/one?view=full&preview=%2Fprojects%2Fone');
     expect(document.querySelector('[aria-label="Copy environment path"]')).not.toBeNull();
   });
 
@@ -134,7 +134,7 @@ describe('session context panel', () => {
     await toggle();
     expect(document.body.textContent).not.toContain('Stale draft');
     expect(document.body.textContent).toContain('Temporarily unavailable');
-    expect(document.querySelector('a[href*="notes/note-a"]')).toBeNull();
+    expect(Array.from(document.querySelectorAll('a')).map((a) => a.getAttribute('href'))).not.toContain('/chat/one?view=full&note=note-a');
   });
 
   it('hides cached object titles after a failed refresh', async () => {

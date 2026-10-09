@@ -5,6 +5,9 @@ import {
 
 const INTERNAL_ROUTE_ROOTS = new Set([
   'agents',
+  'capabilities',
+  'personal',
+  'user-model',
   'automations',
   'browser-automations',
   'channels',

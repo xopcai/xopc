@@ -7,6 +7,8 @@ export function taskChatHref(taskId: string): string {
 export function taskDetailModalHref(backgroundPath: string, taskId: string): string {
   const [pathname, rawSearch = ''] = backgroundPath.split('?');
   const search = new URLSearchParams(rawSearch);
+  search.delete('note');
+  search.delete('preview');
   search.set(TASK_DETAIL_MODAL_PARAM, taskId);
   return `${pathname}?${search.toString()}`;
 }
