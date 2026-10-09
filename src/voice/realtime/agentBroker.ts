@@ -77,7 +77,7 @@ export class DurableVoiceAgentBroker implements VoiceAgentBroker {
     this.runByTask.set(row.id, runId);
     if (this.runByTask.size > MAX_TRACKED_TASKS) this.runByTask.delete(this.runByTask.keys().next().value!);
     const afterSeq = result.effectiveDelivery === 'steer' && runId === activeRunId ? activeRunCursor : 0;
-    return { taskId: row.id, runId, events: this.events(row.id, runId, afterSeq, input.signal) };
+    return { taskId: row.id, runId, events: this.events(row.id, runId, afterSeq, input.signal, ['completed', 'cancelled', 'failed', 'interrupted'].includes(row.status)) };
   }
 
   async cancel(taskId: string): Promise<boolean> {
@@ -88,7 +88,7 @@ export class DurableVoiceAgentBroker implements VoiceAgentBroker {
     return true;
   }
 
-  private async *events(taskId: string, runId: string, afterSeq: number, signal: AbortSignal): AsyncGenerator<VoiceAgentEvent> {
+  private async *events(taskId: string, runId: string, afterSeq: number, signal: AbortSignal, ended: boolean): AsyncGenerator<VoiceAgentEvent> {
     const queued: RealtimeDelivery[] = [];
     let wake: (() => void) | undefined;
     const push = (event: RealtimeDelivery) => { queued.push(event); wake?.(); wake = undefined; };
@@ -97,6 +97,10 @@ export class DurableVoiceAgentBroker implements VoiceAgentBroker {
     const abort = () => { wake?.(); wake = undefined; };
     signal.addEventListener('abort', abort, { once: true });
     try {
+      if (ended && !subscription.initial.some((delivery) => {
+        const event = eventData(delivery);
+        return event?.type === 'run_end' || event?.type === 'stream_end';
+      })) throw new Error('Completed voice task event history is unavailable');
       while (!signal.aborted) {
         if (!queued.length) await new Promise<void>(resolve => { wake = resolve; });
         if (signal.aborted) return;

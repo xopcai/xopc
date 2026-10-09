@@ -144,6 +144,7 @@ import { GatewaySceneHost } from './scenes/host.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { TaskCollaborationDelivery } from '../tasks/task-collaboration-delivery.js';
 import { TaskMainUpdateDelivery } from '../tasks/task-main-update-delivery.js';
+import { PersonalReplyComposer } from '../personal-agent/reply-composer.js';
 import { TaskMainUpdateDecisionService } from '../tasks/task-main-update-decision-service.js';
 import { selectTaskMainUpdateAttempt, submitAndConfirmTaskMainUpdate } from '../tasks/task-main-update-input.js';
 import type { SceneAccess } from '../scenes/httpServices.js';
@@ -930,9 +931,19 @@ export class GatewayService {
     log.error({ err, phase: 'task_result_dispatch' }, 'Task result dispatch failed');
   });
 
+  private readonly personalReplyDispatch = createBackgroundTask(async () => {
+    await new PersonalReplyComposer().drain((conversationId, deliveryId) => {
+      this.realtime.broker.publish('sessions', 'session.task-result', { conversationId, deliveryId });
+      this.emit('session.transcript_updated', { key: conversationId, deliveryId });
+    });
+  }, (err) => {
+    log.error({ err, phase: 'personal_reply_dispatch' }, 'Personal reply dispatch failed');
+  });
+
   dispatchTaskRuns(): void {
     if (this.stopping) return;
     this.taskResultDispatch();
+    this.personalReplyDispatch();
     this.taskRunDispatch();
     this.taskMainUpdateDispatch();
   }

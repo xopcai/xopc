@@ -9,6 +9,8 @@ import { TaskConversationRepository } from '../tasks/task-conversation-repositor
 import { createLogger } from '../utils/logger.js';
 import { getPersonalRequest, updatePersonalRequest } from './request-repository.js';
 import { PersonalRequestResultSchema, renderPersonalRequestResult } from './request-result.js';
+import { getPersonalAgentByConversation } from './repository.js';
+import { enqueuePersonalReply } from './reply-composer.js';
 
 const log = createLogger('PersonalRequestDelivery');
 
@@ -66,6 +68,7 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
       AND run.status IN ('succeeded','failed','cancelled')
       AND NOT EXISTS (SELECT 1 FROM task_runs newer WHERE newer.task_id = run.task_id
         AND newer.parent_run_id IS NULL AND newer.queued_at > run.queued_at))
+    AND NOT EXISTS (SELECT 1 FROM personal_reply_jobs reply WHERE reply.reply_id = 'reply:personal-request:' || request.request_id)
     ORDER BY created_at LIMIT 50`).all(Date.now()) as { request_id: string; delivery_attempts: number }[];
   for (const row of rows) {
     try {
@@ -91,7 +94,7 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
         const fallback = assistant?.role === 'assistant'
           ? assistant.content.filter(part => part.type === 'text').map(part => part.text).join('\n').trim() : '';
         const content = parsed?.success ? renderPersonalRequestResult(parsed.data)
-          : fallback && fallback !== 'NO_REPLY' ? fallback.slice(0, 16000) : receipt?.summary ?? 'Request finished without a readable result.';
+          : fallback && fallback !== 'NO_REPLY' ? fallback.slice(0, 16000) : receipt?.summary?.trim() || 'Request finished without a readable result.';
         const failed = run.status !== 'succeeded';
         const display = failed ? `查询未完成。\n\n${content}` : content;
         const now = Date.now();
@@ -102,11 +105,15 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
           outcome: { version: 1, outcomeId: `personal-request:${request.requestId}`, runId: run.id,
             turnId: `personal-request:${request.requestId}`, status: failed ? 'failed' : parsed?.success && parsed.data.coverage?.partial ? 'partial' : 'succeeded',
             summary: content.slice(0, 2000), deliverables: [], evidence: [], createdAt: new Date(now).toISOString() }, createdAt: now });
-        const entry = appendTranscriptEntry(request.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
+        const personal = getPersonalAgentByConversation(request.conversationId);
+        if (personal) enqueuePersonalReply({ delivery, objective: request.objective, requestId: request.requestId,
+          report: parsed?.success ? parsed.data.summary : content,
+          ...(parsed?.success ? { preservedText: renderPersonalRequestResult({ ...parsed.data, summary: '' }).trim() } : {}) });
+        const entry = personal ? undefined : appendTranscriptEntry(request.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
           content: display, details: delivery, display: true, timestamp: now });
         updatePersonalRequest(request, { state: run.status === 'cancelled' ? 'cancelled' : failed ? 'failed' : 'completed' });
-        db.prepare('UPDATE personal_requests SET delivery_entry_id = ? WHERE request_id = ?').run(entry.entry_id, request.requestId);
-        // The direct result replaces a second main-model summary for this run.
+        if (entry) db.prepare('UPDATE personal_requests SET delivery_entry_id = ? WHERE request_id = ?').run(entry.entry_id, request.requestId);
+        // The result/composition outbox owns the final reply instead of a second main Agent turn.
         db.prepare(`UPDATE task_main_update_deliveries SET status = 'delivered', decision = 'silent',
           decision_reason = 'Personal request result delivered', updated_at = ? WHERE entry_id IN
           (SELECT entry_id FROM task_collaboration_entries WHERE task_run_id = ? AND kind IN ('result','failure','progress'))`)

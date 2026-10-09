@@ -97,4 +97,14 @@ describe('DurableVoiceAgentBroker', () => {
     await expect(broker.cancel(task.taskId)).resolves.toBe(true);
     expect(deps.cancelRun).toHaveBeenCalledWith('run-1');
   });
+  it('fails promptly when a completed task has lost its realtime history', async () => {
+    const { broker, deps, unsubscribe } = setup({ row: input({ status: 'completed' }) });
+    deps.subscribe.mockReturnValue({ initial: [], cursor: 0, unsubscribe });
+    const task = await broker.delegate({ conversationId: 'chat', expectedTranscriptId: 'session',
+      turnId: 'turn', text: 'hello', signal: new AbortController().signal });
+    const iterator = task.events[Symbol.asyncIterator]();
+    await expect(iterator.next()).rejects.toThrow('event history is unavailable');
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
 });

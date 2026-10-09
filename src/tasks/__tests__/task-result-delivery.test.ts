@@ -27,6 +27,12 @@ import { resetSessionRecord } from '../../storage/sqlite/session-repository.js';
 import { createHonoApp } from '../../gateway/hono/app.js';
 import type { GatewayService } from '../../gateway/service.js';
 import { ConfigSchema } from '../../config/schema.js';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
+import { personalAgentId } from '../../personal-agent/repository.js';
+import { PersonalReplyComposer, buildPersonalReplyPrompt, parsePersonalReplyDraft, type PersonalReplyPacket } from '../../personal-agent/reply-composer.js';
+import * as modelCalls from '../../providers/model-call.js';
+import * as providers from '../../providers/index.js';
+import { insertSessionInput } from '../../storage/sqlite/session-input-repository.js';
 
 describe('background task result delivery', () => {
   let stateDir: string;
@@ -38,6 +44,7 @@ describe('background task result delivery', () => {
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
   });
   afterEach(() => {
+    vi.restoreAllMocks();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     vi.unstubAllEnvs();
@@ -71,6 +78,190 @@ describe('background task result delivery', () => {
         location: 'artifact_store', uri: media.uri, mimeType: 'image/png', sizeBytes: media.size,
         capabilities: ['preview', 'download'], workspaceRelativePath: '/private/worker/secret.png' }] };
   }
+
+  function markPersonal(conversationId: string) {
+    const repository = new AgentCatalogRepository();
+    repository.ensureInitialized();
+    const agentId = personalAgentId('local-owner');
+    repository.create({ id: agentId, models: { chat: { primary: 'test/personal', fallbacks: [] } }, profile: { name: 'Ada', style: 'Natural and clear',
+      responsePreferences: { warmth: 'gentle', detailLevel: 'brief' } } }, { ready: true });
+    getSqliteDatabase().prepare("UPDATE sessions SET agent_id = ?, custom_data_json = json_set(COALESCE(custom_data_json, '{}'), '$.personalAgent', 1) WHERE conversation_id = ?")
+      .run(agentId, conversationId);
+  }
+
+  it('composes personal text once, preserves sources, and recovers push failure without regenerating', async () => {
+    const { main, coordinator, runId } = task();
+    markPersonal(main.key);
+    const outcome = await image(runId);
+    outcome.deliverables = [];
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: 'Report ready', assistantText: 'Finding: sunset. https://example.test/source' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(0);
+    const compose = vi.fn(async (packet: PersonalReplyPacket) => {
+      const prompt = buildPersonalReplyPrompt(packet);
+      expect(prompt).toContain('Ada');
+      expect(prompt).toContain('gentle');
+      expect(prompt).toContain('Draw sunset');
+      expect(prompt).not.toContain('UNTRUSTED_LONG_WORKER_INSTRUCTIONS');
+      return parsePersonalReplyDraft(JSON.stringify({ text: 'The sunset finding is ready.', sourceIds: ['result'], limitationIds: ['status'] }), packet);
+    });
+    await new PersonalReplyComposer(compose).drain(() => { throw new Error('Disconnected'); });
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(1);
+    closeXopcDatabase(); resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    getSqliteDatabase().prepare('UPDATE personal_reply_jobs SET next_attempt_at = 0').run();
+    const notify = vi.fn();
+    await new PersonalReplyComposer(compose).drain(notify);
+    await new PersonalReplyComposer(compose).drain(notify);
+    expect(compose).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledTimes(1);
+    const detail = await new SessionStore(stateDir).getMessagePage(main.key, { includeContextRows: true });
+    expect(detail?.session.messages).toHaveLength(1);
+    expect(JSON.stringify(detail)).toContain('The sunset finding is ready.');
+    expect(JSON.stringify(detail)).toContain('https://example.test/source');
+  });
+
+  it('delivers artifacts before composition and leases only one composer for the same reply', async () => {
+    const { main, coordinator, runId } = task();
+    markPersonal(main.key);
+    coordinator.captureOutcome(await image(runId));
+    coordinator.finalize({ status: 'succeeded', summary: 'Image ready', assistantText: 'Worker report.' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(1);
+    expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).not.toContain('Worker report.');
+    let finish!: (value: string) => void;
+    const compose = vi.fn(() => new Promise<string>(resolve => { finish = resolve; }));
+    const first = new PersonalReplyComposer(compose).drain(vi.fn());
+    await new PersonalReplyComposer(compose).drain(vi.fn());
+    expect(compose).toHaveBeenCalledTimes(1);
+    finish('Here is the sunset image you asked for.');
+    await first;
+    const detail = await new SessionStore(stateDir).getMessagePage(main.key, { includeContextRows: true });
+    expect(detail?.session.messages).toHaveLength(2);
+    expect((detail?.session.messages[1] as unknown as ClientHistoryMessage).metadata?.turnOutcome?.deliverables).toEqual([]);
+  });
+
+  it.each(['cancel', 'reassign', 'edit', 'delete'] as const)('discards a composed late reply after %s', async change => {
+    const { main, coordinator, runId, taskId } = task();
+    markPersonal(main.key);
+    const outcome = await image(runId);
+    outcome.deliverables = [];
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: 'Report ready', assistantText: 'Original result' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    const compose = vi.fn(async () => {
+      const db = getSqliteDatabase();
+      if (change === 'cancel') db.prepare("UPDATE tasks SET phase = 'closed', resolution = 'cancelled' WHERE task_id = ?").run(taskId);
+      if (change === 'reassign') db.prepare('UPDATE task_conversation_state SET assignment_epoch = assignment_epoch + 1 WHERE task_id = ?').run(taskId);
+      if (change === 'edit') db.prepare('UPDATE tasks SET version = version + 1 WHERE task_id = ?').run(taskId);
+      if (change === 'delete') db.prepare('DELETE FROM sessions WHERE conversation_id = ?').run(main.key);
+      return 'Late result';
+    });
+    const notify = vi.fn();
+    await new PersonalReplyComposer(compose).drain(notify);
+    expect(notify).not.toHaveBeenCalled();
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(0);
+  });
+
+  it('recovers expired generation leases and uses a complete fallback when composition times out', async () => {
+    const { main, coordinator, runId } = task();
+    markPersonal(main.key);
+    const outcome = await image(runId);
+    outcome.deliverables = [];
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: 'Report ready', assistantText: 'Full result with an important limitation.' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    getSqliteDatabase().prepare("UPDATE personal_reply_jobs SET status = 'generating', lease_until = 0").run();
+    const compose = vi.fn((_packet: PersonalReplyPacket, signal: AbortSignal) => new Promise<string>((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('Aborted')), { once: true });
+    }));
+    await new PersonalReplyComposer(compose, 10).drain(vi.fn());
+    expect(compose).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).toContain('Full result with an important limitation.');
+  });
+
+  it('preserves code exactly while composing its explanation', async () => {
+    const { main, coordinator, runId } = task();
+    markPersonal(main.key);
+    const outcome = await image(runId);
+    outcome.deliverables = [];
+    coordinator.captureOutcome(outcome);
+    const code = '```ts\nconst unchanged = 42;\n```';
+    coordinator.finalize({ status: 'succeeded', summary: 'Code ready', assistantText: code });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    await new PersonalReplyComposer(async packet => {
+      expect(packet.preservedText).toBe(code);
+      return 'The code is ready.';
+    }).drain(vi.fn());
+    const page = await new SessionStore(stateDir).getMessagePage(main.key, { includeContextRows: true });
+    expect(page?.session.messages[0]?.content).toBe(`The code is ready.\n\n${code}`);
+  });
+
+  it('uses the original user request to preserve exact prose even when the Task objective omits that requirement', async () => {
+    const { main, coordinator, runId, taskId } = task();
+    markPersonal(main.key);
+    insertSessionInput({ id: 'original-request', conversationId: main.key, clientMessageId: 'original-request',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'completed', content: '请原样输出正文',
+      origin: { type: 'endpoint', endpointId: 'test' } });
+    getSqliteDatabase().prepare('UPDATE task_origin_links SET request_input_id = ? WHERE task_id = ?').run('original-request', taskId);
+    const outcome = await image(runId);
+    outcome.deliverables = [];
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Exact original prose.' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    await new PersonalReplyComposer(async packet => {
+      expect(packet.preservedText).toBe('Exact original prose.');
+      expect(buildPersonalReplyPrompt(packet)).toContain('请原样输出正文');
+      return '正文在下面。';
+    }).drain(vi.fn());
+    const page = await new SessionStore(stateDir).getMessagePage(main.key, { includeContextRows: true });
+    expect(page?.session.messages[0]?.content).toBe('正文在下面。\n\nExact original prose.');
+  });
+
+  it('rejects fabricated links and drafts that omit the result contract', () => {
+    const packet = { report: 'https://example.test/source' } as PersonalReplyPacket;
+    expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'https://invented.test', sourceIds: ['result'], limitationIds: ['status'] }), packet)).toThrow('invented');
+    expect(() => parsePersonalReplyDraft(JSON.stringify({ text: 'Done', sourceIds: [], limitationIds: ['status'] }), packet)).toThrow('contract');
+  });
+
+  it('uses the personal model in one tool-free call and falls back on an invalid model draft', async () => {
+    const { main, coordinator, runId } = task();
+    markPersonal(main.key);
+    const outcome = await image(runId);
+    outcome.deliverables = [];
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: 'Report ready', assistantText: 'Grounded result.' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    const resolve = vi.spyOn(providers, 'resolveModel').mockReturnValue({ id: 'personal' } as ReturnType<typeof providers.resolveModel>);
+    const complete = vi.spyOn(modelCalls, 'completeWithResolvedCredentials').mockResolvedValue({
+      role: 'assistant', content: [{ type: 'text', text: 'not JSON' }], stopReason: 'stop',
+    } as Awaited<ReturnType<typeof modelCalls.completeWithResolvedCredentials>>);
+    await new PersonalReplyComposer().drain(vi.fn());
+    expect(resolve).toHaveBeenCalledWith('test/personal');
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(complete.mock.calls[0]![1].tools).toBeUndefined();
+    expect(complete.mock.calls[0]![4]).toMatchObject({ operation: 'personal.reply_composition', conversationId: main.key });
+    expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).toContain('Grounded result.');
+  });
+
+  it('regenerates instead of publishing old-context prose when reset happens during composition', async () => {
+    const { main, coordinator, runId } = task();
+    markPersonal(main.key);
+    const outcome = await image(runId);
+    outcome.deliverables = [];
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: 'Report ready', assistantText: 'Recorded result.' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    await new PersonalReplyComposer(async () => {
+      resetSessionRecord(main.key, stateDir);
+      return 'Old context';
+    }).drain(vi.fn());
+    expect(loadTranscriptRowsForSession(main.key)).toHaveLength(0);
+    await new PersonalReplyComposer(async () => 'Fresh reply').drain(vi.fn());
+    expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).toContain('Fresh reply');
+    expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).not.toContain('Old context');
+  });
 
   it('delivers image-only outcomes while main is busy, with no notification model', async () => {
     const { main, coordinator, runId } = task();
@@ -201,14 +392,16 @@ describe('background task result delivery', () => {
 
   it('delivers to the active transcript after reset and serves only scoped media through authenticated Gateway', async () => {
     const { main, coordinator, runId } = task();
+    markPersonal(main.key);
     const outcome = await image(runId);
     coordinator.captureOutcome(outcome);
     coordinator.finalize({ status: 'succeeded', summary: 'Ready' });
     const reset = resetSessionRecord(main.key, stateDir)!;
     await new TaskResultDeliveryService().drain(vi.fn());
+    await new PersonalReplyComposer(async () => 'Here is the image you requested.').drain(vi.fn());
     const db = getSqliteDatabase();
     expect(db.prepare('SELECT transcript_id FROM transcript_entries WHERE role = ?').all('custom'))
-      .toEqual([{ transcript_id: reset.transcriptId }]);
+      .toEqual([{ transcript_id: reset.transcriptId }, { transcript_id: reset.transcriptId }]);
     const store = new SessionStore(stateDir);
     const token = 'task-result-test-auth-token';
     const app = createHonoApp({ service: {
@@ -227,8 +420,11 @@ describe('background task result delivery', () => {
       const headers = { Authorization: `Bearer ${token}` };
       const history = await fetch(`${base}/api/sessions/${main.key}/history?view=compact`, { headers });
       expect(history.status).toBe(200);
-      expect((await history.json()).session.messages[0]).toMatchObject({ startsNewBubble: true,
+      const historyBody = await history.json();
+      expect(historyBody.session.messages[0]).toMatchObject({ startsNewBubble: true,
         metadata: { taskResultDelivery: { taskRunId: runId }, turnOutcome: { deliverables: [{ kind: 'image' }] } } });
+      expect(historyBody.session.messages[1]).toMatchObject({ content: 'Here is the image you requested.', startsNewBubble: true,
+        metadata: { taskResultDelivery: { deliveryId: expect.stringMatching(/^reply:/) }, turnOutcome: { deliverables: [] } } });
       const query = `/api/media/read?uri=${encodeURIComponent(outcome.deliverables[0]!.uri!)}&conversationId=`;
       expect((await fetch(base + query + main.key)).status).toBe(401);
       const media = await fetch(base + query + main.key, { headers });

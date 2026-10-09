@@ -31,6 +31,7 @@ import { DEFAULT_MOBILE_SCOPES } from '../../gateway/security/gateway-scopes.js'
 import { getPersonalAgent, isPersonalConversation, personalAgentId, personalConversationId } from '../repository.js';
 import { createOrResumePersonalAgent, ensurePersonalConversationVisibility, personalInstructions, refreshPersonalDelegationGuidance, updatePersonalProfileRecord } from '../service.js';
 import { PERSONAL_RELIABILITY_RULES } from '../communication.js';
+import { PERSONAL_REPLY_STYLE_RULES, PERSONAL_REPLY_EXAMPLES } from '../reply-style.js';
 
 describe('personal Agent identity', () => {
   it('keeps one identity and conversation and serves it through the authenticated Gateway', async () => {
@@ -342,6 +343,10 @@ describe('personal Agent identity', () => {
       for (const rule of PERSONAL_RELIABILITY_RULES) {
         expect(refreshed.profile?.instructions?.split('\n').filter(line => line === rule)).toHaveLength(1);
       }
+      for (const rule of PERSONAL_REPLY_STYLE_RULES) {
+        expect(refreshed.profile?.instructions?.split('\n').filter(line => line === rule)).toHaveLength(1);
+      }
+      expect(refreshed.profile?.instructions).toContain(PERSONAL_REPLY_EXAMPLES);
       await refreshPersonalDelegationGuidance(gateway, 'local-owner');
       expect(repository.get(agentId)?.revision).toBe(refreshed.revision);
       await new AgentCatalogService().update(agentId, {
