@@ -580,6 +580,8 @@
     "scrollToBottom": "Scroll to bottom",
     "pastedText": "Pasted text",
     "attachmentPreviewOpen": "Preview attachment",
+    "attachmentPreviewPreviousImage": "Previous image",
+    "attachmentPreviewNextImage": "Next image",
     "attachmentPreviewClose": "Close",
     "attachmentPreviewDownload": "Download",
     "attachmentPreviewRemove": "Remove",

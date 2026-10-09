@@ -13,7 +13,8 @@ vi.mock('../attachment-tile', () => ({
   ),
 }));
 vi.mock('../attachment-preview-dialog', () => ({
-  AttachmentPreviewDialog: ({ open }: { open: boolean }) => open ? <dialog open /> : null,
+  AttachmentPreviewDialog: ({ open, images, attachment }: { open: boolean; images?: MessageAttachment[]; attachment?: MessageAttachment }) => open
+    ? <dialog open data-image-count={images?.length} data-active-image={attachment?.id} /> : null,
 }));
 
 import { AttachmentRenderer } from '../attachment-renderer';
@@ -87,6 +88,18 @@ describe('file preview entry points', () => {
       path: 'output/report.md',
       conversationId: 'parent-session-id',
     });
+  });
+
+  it('opens the complete generated image gallery from the overflow tile, including workspace images', () => {
+    const images: MessageAttachment[] = Array.from({ length: 25 }, (_, index) => ({
+      ...file, id: `image-${index}`, name: `image-${index}.png`, type: 'image', mimeType: 'image/png',
+    }));
+    act(() => root.render(<AttachmentRenderer attachments={images} conversationId="session-images" />));
+    const tiles = container.querySelectorAll<HTMLButtonElement>('button');
+    expect(tiles).toHaveLength(9);
+    act(() => tiles[8].click());
+    expect(useWorkspacePreviewStore.getState().path).toBeNull();
+    expect(container.querySelector('dialog')?.dataset).toMatchObject({ imageCount: '25', activeImage: 'image-8' });
   });
 
   it.each([
