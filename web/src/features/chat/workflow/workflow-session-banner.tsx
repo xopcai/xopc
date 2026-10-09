@@ -14,6 +14,7 @@ import { cancelWorkflowRun, type WorkflowRunStatus, type WorkflowRunView } from 
 import { runViewToSnapshot } from '@/features/workflows/run-view-to-snapshot';
 import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constants';
 import { isWorkflowResultEnvelope, workflowBoardHref } from '@/features/workflows/workflow-page.utils';
+import { resolveProductPreviewTarget } from '@/features/chat/product-preview/product-preview-route';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -140,7 +141,7 @@ export const WorkflowSessionBanner = memo(function WorkflowSessionBanner({
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <Button asChild type="button" variant="ghost" className="h-8 px-2 text-xs">
-                  <Link to={workflowBoardHref(view.run.id, { ownerAgentId })}>
+                  <Link to={resolveProductPreviewTarget(workflowBoardHref(view.run.id, { ownerAgentId }))!.href}>
                     <ExternalLink className="size-3.5" aria-hidden />
                     {live.openRun}
                   </Link>
@@ -260,7 +261,7 @@ export const WorkflowSessionBanner = memo(function WorkflowSessionBanner({
                   </Button>
                 ) : null}
                 <Button asChild type="button" variant="primary" className="h-8 text-xs">
-                  <Link to={workflowBoardHref(view.run.id, { ownerAgentId })}>
+                  <Link to={resolveProductPreviewTarget(workflowBoardHref(view.run.id, { ownerAgentId }))!.href}>
                     <ExternalLink className="size-3.5" aria-hidden />
                     {live.openRun}
                   </Link>

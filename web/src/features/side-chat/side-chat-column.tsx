@@ -1,6 +1,8 @@
 import { ChevronRight, MessageSquarePlus, MessageSquareText, Plus, Save, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useLocation } from 'react-router-dom';
 
+import { noteDetailHref } from '@/features/notes/note-detail-route';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -345,6 +347,7 @@ export function SideChatConversation({
   onRunIdChange: (id: string, runId?: string) => void;
   parentConversationId?: string;
 }) {
+  const location = useLocation();
   const [view, setView] = useState<SideChatView | null>(null);
   const [messages, setMessages] = useState<Message[]>(() => useSideChatStore.getState().readings[sideChatId]?.messages ?? []);
   const draftText = useSideChatStore((state) => state.drafts[sideChatId]?.text ?? '');
@@ -706,13 +709,13 @@ export function SideChatConversation({
     try {
       const note = await quickCapture(content.trim(), 'web');
       showComposerNotification('success', m.chat.messageSavedToNote, undefined, {
-        href: `/notes/${encodeURIComponent(note.id)}`,
+        href: noteDetailHref(`${location.pathname}${location.search}`, note.id),
       });
     } catch (cause) {
       showComposerNotification('error', cause instanceof Error ? cause.message : m.notes.quickCaptureFailed);
       throw cause;
     }
-  }, [m.chat.messageSavedToNote, m.notes.quickCaptureFailed]);
+  }, [location.pathname, location.search, m.chat.messageSavedToNote, m.notes.quickCaptureFailed]);
 
   const saveAsChat = useCallback(async () => {
     if (promotingRef.current || running || endedRef.current || messages.length === 0) return;
