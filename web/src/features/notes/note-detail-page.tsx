@@ -12,7 +12,7 @@ export function NoteDetailPage() {
   const returnPath = useMemo(() => safeInternalReturnPath(
     searchParams.get("returnTo"),
     "/notes",
-    ["/chat", "/projects", "/notes", "/tasks"],
+    ["/chat", "/personal", "/projects", "/notes", "/tasks"],
   ), [searchParams]);
 
   const handleBack = useCallback(() => {

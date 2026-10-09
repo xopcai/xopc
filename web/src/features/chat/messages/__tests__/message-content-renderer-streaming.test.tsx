@@ -88,6 +88,7 @@ describe('streaming assistant Markdown rendering', () => {
     workLog?: AssistantTurnWorkLogPresentation,
     workspaceConversationId?: string,
     pendingStatus?: 'sending' | 'waiting',
+    taskRunId?: string,
   ) {
     act(() => {
       root.render(
@@ -106,6 +107,7 @@ describe('streaming assistant Markdown rendering', () => {
               />
             ) : null}
             <ChunkedContent
+              taskRunId={taskRunId}
               content={content}
               isUser={false}
               isAssistantMessageStreaming={streaming}
@@ -249,6 +251,27 @@ describe('streaming assistant Markdown rendering', () => {
 
     act(() => disclosure?.click());
     expect(container.textContent).toContain('/Users/example/.xopc/workspace/main/proposal.md');
+  });
+
+  it('passes the producing task context when opening a forwarded relative file link', async () => {
+    const resolveFile = vi.spyOn(workspaceApi, 'resolveWorkspaceFileReference').mockResolvedValue({
+      inputPath: 'report.html', displayName: 'report.html', scope: 'external', exists: true,
+      absolutePath: '/worker/report.html', capabilities: ['preview'],
+    });
+    render([{ type: 'text', text: '[HTML](xopc://workspace/file?path=report.html)' }], false, false, undefined, undefined, undefined, 'producing-run');
+    await act(async () => { container.querySelector<HTMLAnchorElement>('a')?.click(); });
+    expect(resolveFile).toHaveBeenCalledWith('report.html', expect.objectContaining({ taskRunId: 'producing-run', conversationId: 'side-chat-id' }));
+    expect(useWorkspacePreviewStore.getState().path).toBe('/worker/report.html');
+  });
+
+  it('opens external host files in the preview pane', async () => {
+    vi.spyOn(workspaceApi, 'resolveWorkspaceFileReference').mockResolvedValue({
+      inputPath: '/tmp/report.html', displayName: 'report.html', scope: 'external',
+      absolutePath: '/private/tmp/report.html', exists: true, capabilities: ['preview'],
+    });
+    render([{ type: 'text', text: '[Open page](/tmp/report.html)' }], false, false, undefined, 'parent-conversation-id');
+    await act(async () => { container.querySelector<HTMLAnchorElement>('a')?.click(); });
+    expect(useWorkspacePreviewStore.getState()).toMatchObject({ path: '/private/tmp/report.html', conversationId: 'parent-conversation-id' });
   });
 
   it('opens Sidechat workspace links against the parent conversation', async () => {
