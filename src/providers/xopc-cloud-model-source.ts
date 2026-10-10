@@ -182,7 +182,7 @@ export class XopcCloudModelSource {
         baseUrl: this.routerUrl,
         api: 'openai-completions',
         etag: response.headers.get('x-xopc-model-catalog-version'),
-        recommendedModel: models.find(model => !isDedicatedComputerProfile(model.computerUse?.profile))?.id ?? null,
+        recommendedModel: models.find(model => model.id === 'auto')?.id ?? models.find(model => !isDedicatedComputerProfile(model.computerUse?.profile))?.id ?? null,
         ...(Object.keys(recommended).length > 0 ? { recommended } : {}),
         ...(search ? { search } : {}),
         lastSuccessAt: Date.now(),

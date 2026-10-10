@@ -33,9 +33,11 @@ export function OnboardingDialog() {
   const isSettingsRoute = pathname.startsWith('/settings') || pathname === '/personal';
   const [workDiscovery, setWorkDiscovery] = useState<WorkDiscoveryOnboardingSnapshot | null>(null);
   const [experienceClosed, setExperienceClosed] = useState(false);
+  const [setupInProgress, setSetupInProgress] = useState(false);
 
   useEffect(() => {
     setExperienceClosed(false);
+    setSetupInProgress(false);
     if (!token) {
       setWorkDiscovery(null);
       return;
@@ -54,7 +56,7 @@ export function OnboardingDialog() {
     desktop: isElectron(),
     settingsRoute: isSettingsRoute,
     modelSetupReady: modelSetup.ready,
-    needsModelSetup: modelSetup.needsSetup,
+    needsModelSetup: modelSetup.needsSetup || setupInProgress,
     modelGuideDismissed: modelSetup.guideDismissed,
     cloudOnboardingReady: cloudOnboarding.ready,
     cloudOnboardingPending: cloudOnboarding.pending,
@@ -62,7 +64,12 @@ export function OnboardingDialog() {
     closed: experienceClosed,
   });
 
+  useEffect(() => {
+    if (experience.open && experience.stage === 'setup') setSetupInProgress(true);
+  }, [experience.open, experience.stage]);
+
   const closeExperience = () => {
+    setSetupInProgress(false);
     setExperienceClosed(true);
   };
 
@@ -121,6 +128,7 @@ export function OnboardingDialog() {
                   await cloudOnboarding.dismiss().catch(() => undefined);
                   cloudPromptPending = false;
                 }
+                setSetupInProgress(false);
                 if (!hasPendingWorkDiscovery(workDiscovery) && !cloudPromptPending) leaveExperience();
               }}
               onDismiss={dismissExperience}

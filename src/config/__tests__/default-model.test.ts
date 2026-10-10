@@ -14,7 +14,7 @@ describe('default model config', () => {
   beforeEach(() => initializeTestAgentCatalog());
   afterEach(() => closeXopcDatabase());
 
-  it('uses DeepSeek V4 Flash as the built-in default model', () => {
+  it('uses XOPC Cloud Auto as the built-in default model', () => {
     const catalog = initializeTestAgentCatalog().getSettings();
 
     expect(catalog.defaults.models.chat).toEqual({ primary: DEFAULT_MODEL_REF, fallbacks: [] });

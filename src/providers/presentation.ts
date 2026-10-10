@@ -115,6 +115,7 @@ const PROVIDER_HINTS: Record<string, string> = {
 };
 
 const RECOMMENDED_MODEL_PATTERNS: Record<string, RegExp[]> = {
+  'xopc-cloud': [/^auto$/],
   openai: [/^gpt-5\.6$/i, /^gpt-5\.6-sol$/i, /^gpt-5\.6-terra$/i, /^gpt-5\.6-luna$/i, /^gpt-5\.5$/i, /^gpt-5\.5-pro$/i],
   'openai-codex': [/^gpt-5\.6-sol$/i, /^gpt-5\.6-terra$/i, /^gpt-5\.6-luna$/i, /^gpt-5\.5$/i],
   anthropic: [/^claude-sonnet-5$/i, /^claude-opus-4-8$/i, /^claude-fable-5$/i, /^claude-sonnet-4-6$/i, /^claude-sonnet-4-5$/i],

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const DEFAULT_AGENT_MODEL_REF = 'deepseek/deepseek-flash';
+export const DEFAULT_AGENT_MODEL_REF = 'xopc-cloud/auto';
 export const DEFAULT_CORE_SKILLS = [
   'doc-coauthoring',
   'define-task',
