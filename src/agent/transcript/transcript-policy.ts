@@ -35,7 +35,6 @@ const OPENAI_MODEL_APIS = new Set([
   "openai",
   "openai-completions",
   "openai-responses",
-  "openai-codex-responses",
 ]);
 
 function isOpenAiApi(modelApi?: string | null): boolean {

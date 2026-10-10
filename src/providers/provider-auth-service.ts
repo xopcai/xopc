@@ -9,8 +9,9 @@ import { XopcModelCredentialStore } from '../auth/model-credential-store.js';
 import { resolveModelsJsonPath } from '../config/paths.js';
 import { registerBundledOAuthFlows } from './register-bundled-oauth-flows.js';
 import { registerRuntimeProviders } from './register-runtime-providers.js';
+import { assertCurrentModelProvider } from './provider-policy.js';
 
-type ApiKeyResolver = Pick<CredentialResolver, 'resolveApiKey'>;
+type ApiKeyResolver = Pick<CredentialResolver, 'resolveApiKey'> & Partial<Pick<CredentialResolver, 'resolveApiKeySource'>>;
 
 export interface ProviderAuthServiceOptions {
   credentials?: XopcModelCredentialStore;
@@ -45,11 +46,16 @@ export class ProviderAuthService {
   }
 
   async resolveApiKey(providerId: string, signal?: AbortSignal): Promise<string | null> {
+    assertCurrentModelProvider(providerId);
+    const source = await this.resolver.resolveApiKeySource?.(providerId);
+    if (source === 'agent' || source === 'global' || source === 'env') {
+      return await this.resolver.resolveApiKey(providerId);
+    }
     const stored = await this.credentials.read(providerId, { signal });
     if (stored?.type === 'oauth') {
       const runtime = await this.getRuntime();
       const provider = runtime.getProvider(providerId);
-      if (provider?.auth.oauth && !provider.auth.apiKey) {
+      if (provider?.auth.oauth && (source === 'oauth' || providerId === 'openai' || !provider.auth.apiKey)) {
         const result = await runtime.getAuth(providerId, { signal });
         return result?.auth.apiKey ?? null;
       }

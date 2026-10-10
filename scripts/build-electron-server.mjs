@@ -58,11 +58,11 @@ const gatewayBuild = await esbuild.build({
   metafile: true,
 });
 
-const bundledOpenAiCodexOAuth = Object.keys(gatewayBuild.metafile.inputs).some((input) =>
-  input.endsWith('/@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js'),
+const bundledOpenAiChatGPTOAuth = Object.keys(gatewayBuild.metafile.inputs).some((input) =>
+  input.endsWith('/@earendil-works/pi-ai/dist/auth/oauth/openai-chatgpt.js'),
 );
-if (!bundledOpenAiCodexOAuth) {
-  console.error('[build-electron-server] OpenAI Codex OAuth flow was not bundled into the gateway.');
+if (!bundledOpenAiChatGPTOAuth) {
+  console.error('[build-electron-server] OpenAI ChatGPT OAuth flow was not bundled into the gateway.');
   process.exit(1);
 }
 

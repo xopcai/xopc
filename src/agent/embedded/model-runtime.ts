@@ -8,12 +8,14 @@ import { resolveModelsJsonPath } from '../../config/paths.js';
 import { getApiKeySync } from '../../providers/index.js';
 import { registerBundledOAuthFlows } from '../../providers/register-bundled-oauth-flows.js';
 import { registerRuntimeProviders } from '../../providers/register-runtime-providers.js';
+import { assertCurrentModelProvider } from '../../providers/provider-policy.js';
 
 export function resolveEmbeddedProviderApiKeySync(providerId: string): string | undefined {
   return resolveProviderApiKeySync(providerId) ?? getApiKeySync(providerId);
 }
 
 export async function createEmbeddedModelRuntime(providerId: string): Promise<ModelRuntime> {
+  assertCurrentModelProvider(providerId);
   registerBundledOAuthFlows();
   const resolver = new CredentialResolver();
   const credentials = new XopcModelCredentialStore(resolver);
@@ -28,7 +30,8 @@ export async function createEmbeddedModelRuntime(providerId: string): Promise<Mo
 
   const runtimeProvider = modelRuntime.getProvider(providerId);
   const storedCredential = await credentials.read(providerId);
-  if (!(runtimeProvider?.auth.oauth && storedCredential?.type === 'oauth')) {
+  const source = await resolver.resolveApiKeySource(providerId);
+  if (source !== 'oauth' || !(runtimeProvider?.auth.oauth && storedCredential?.type === 'oauth')) {
     const key = await resolver.resolveApiKey(providerId) ?? getApiKeySync(providerId);
     if (key && key !== 'extension-managed') {
       await modelRuntime.setRuntimeApiKey(providerId, key);

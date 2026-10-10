@@ -24,11 +24,11 @@ import {
 
 function model(overrides: Partial<Model<Api>> = {}): Model<Api> {
   return {
-    provider: 'openai-codex',
+    provider: 'openai',
     id: 'gpt-5.6-luna',
     name: 'GPT-5.6 Luna',
-    api: 'openai-codex-responses' as Api,
-    baseUrl: 'https://chatgpt.com/backend-api/codex',
+    api: 'openai-responses' as Api,
+    baseUrl: 'https://api.openai.com/v1',
     reasoning: true,
     input: ['text'],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -44,11 +44,11 @@ describe('model-call', () => {
     vi.mocked(getApiKey).mockResolvedValue('oauth-token');
   });
 
-  it('injects resolved OAuth credentials and omits temperature for Codex Responses', async () => {
+  it('injects resolved OAuth credentials for OpenAI Responses', async () => {
     const options = await resolveModelCallOptions(model(), { maxTokens: 1000, temperature: 0.2 });
 
-    expect(getApiKey).toHaveBeenCalledWith('openai-codex');
-    expect(options).toEqual({ maxTokens: 1000, apiKey: 'oauth-token' });
+    expect(getApiKey).toHaveBeenCalledWith('openai');
+    expect(options).toEqual({ maxTokens: 1000, apiKey: 'oauth-token', temperature: 0.2 });
   });
 
   it('uses the extension provider bridge instead of pi-ai HTTP completion', async () => {

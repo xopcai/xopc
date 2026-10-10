@@ -113,7 +113,7 @@ export function getEmbeddedSessionRunnerIdleTtlMs(): number {
 }
 
 function createEmbeddedSettingsManager(cwd: string): SettingsManager {
-  const sm = SettingsManager.inMemory({ compaction: { enabled: false } });
+  const sm = SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false } });
   sm.setCompactionEnabled(false);
   void cwd;
   return sm;

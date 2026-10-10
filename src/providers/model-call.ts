@@ -35,11 +35,6 @@ export function isLocalModelBaseUrl(baseUrl: string | undefined): boolean {
   }
 }
 
-/** Codex Responses rejects the temperature request parameter. */
-export function supportsModelTemperature(model: Model<Api>): boolean {
-  return model.api !== 'openai-codex-responses';
-}
-
 export async function resolveModelCallApiKey(
   model: Model<Api>,
   credentialOptions?: CredentialResolverOptions,
@@ -70,7 +65,7 @@ export async function resolveModelCallOptions(
   return {
     ...rest,
     apiKey,
-    ...(temperature !== undefined && supportsModelTemperature(model) ? { temperature } : {}),
+    ...(temperature !== undefined ? { temperature } : {}),
   };
 }
 

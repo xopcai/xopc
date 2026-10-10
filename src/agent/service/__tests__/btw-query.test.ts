@@ -84,9 +84,9 @@ describe('runBtwQuery', () => {
   it('returns a clear error without invoking the model when provider credentials are unavailable', async () => {
     vi.mocked(getApiKey).mockResolvedValue(undefined);
     vi.mocked(resolveModel).mockReturnValue({
-      provider: 'openai-codex',
+      provider: 'openai',
       id: 'gpt-5.6-luna',
-      api: 'openai-codex-responses',
+      api: 'openai-responses',
     } as never);
     const log = makeLog();
 
@@ -94,14 +94,14 @@ describe('runBtwQuery', () => {
       conversationId: 'agent:main:main',
       question: 'quick check',
       sessionStore: makeSessionStore([]) as never,
-      modelForSession: 'openai-codex/gpt-5.6-luna',
+      modelForSession: 'openai/gpt-5.6-luna',
       log,
     });
 
-    expect(result).toEqual({ text: '', error: 'No API key for provider: openai-codex' });
+    expect(result).toEqual({ text: '', error: 'No API key for provider: openai' });
     expect(completeSimple).not.toHaveBeenCalled();
     expect(log.warn).toHaveBeenCalledWith(
-      { modelRef: 'openai-codex/gpt-5.6-luna', provider: 'openai-codex' },
+      { modelRef: 'openai/gpt-5.6-luna', provider: 'openai' },
       'btwQuery: provider credentials are not configured',
     );
   });
@@ -179,7 +179,7 @@ describe('runBtwQuery', () => {
       conversationId: 'agent:main:main',
       question: 'quick check',
       sessionStore: makeSessionStore([]) as never,
-      modelForSession: 'openai-codex/gpt-5.6-luna',
+      modelForSession: 'openai/gpt-5.6-luna',
       log: makeLog(),
     });
 

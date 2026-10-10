@@ -28,6 +28,7 @@ import { createLogger } from '../utils/logger.js';
 import { getApiKeyFromEnv } from './env-keys.js';
 import { getModelCatalogStore, type CatalogSource, type ModelCatalogStore } from './model-catalog-store.js';
 import { splitProviderModelRef } from './model-ref.js';
+import { isRetiredModelProvider } from './provider-policy.js';
 
 const log = createLogger('ModelRegistry');
 
@@ -343,7 +344,7 @@ export class ModelRegistry {
 			return [];
 		}
 
-		return Object.values(sources).flatMap((source) => source.models
+		return Object.values(sources).filter((source) => !isRetiredModelProvider(source.providerId)).flatMap((source) => source.models
 			.filter((model) => model.availability === 'available' && model.kind === 'language')
 			.map((model) => ({
 				id: model.id,
@@ -367,7 +368,7 @@ export class ModelRegistry {
 		overrides: Map<string, ProviderOverride>,
 		modelOverrides: Map<string, Map<string, ModelOverride>>,
 	): Model<Api>[] {
-		return getPiAiProviders().flatMap((provider) => {
+		return getPiAiProviders().filter((provider) => !isRetiredModelProvider(provider)).flatMap((provider) => {
 			try {
 				const models = getPiAiModels(provider as any) as Model<Api>[];
 				const providerOverride = overrides.get(provider);

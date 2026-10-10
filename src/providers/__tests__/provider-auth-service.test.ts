@@ -109,4 +109,17 @@ describe('ProviderAuthService', () => {
     await expect(service.resolveApiKey('anthropic')).resolves.toBe('configured-api-key');
     expect(resolver.resolveApiKey).toHaveBeenCalledWith('anthropic');
   });
+
+  it('uses stored ChatGPT OAuth for openai and honors an explicitly configured API key', async () => {
+    const repository = createRepository(Date.now() + 60 * 60_000, 'openai');
+    const resolver = {
+      resolveApiKey: vi.fn(async () => 'configured-api-key'),
+      resolveApiKeySource: vi.fn(async (): Promise<'oauth' | 'global'> => 'oauth'),
+    };
+    const service = new ProviderAuthService({ credentials: new XopcModelCredentialStore(repository), resolver });
+    await expect(service.resolveApiKey('openai')).resolves.toBe('access-1');
+    expect(resolver.resolveApiKey).not.toHaveBeenCalled();
+    resolver.resolveApiKeySource.mockResolvedValue('global');
+    await expect(service.resolveApiKey('openai')).resolves.toBe('configured-api-key');
+  });
 });

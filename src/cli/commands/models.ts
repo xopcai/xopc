@@ -29,7 +29,7 @@ import { disconnectProvider } from '../../providers/provider-disconnect.js';
 const IMAGE_GENERATION_IDS = new Set(listImageProviderSpecs().flatMap(provider => provider.models.map(model => model.id)));
 
 const VISION_IDS = new Set([
-  'gpt-5.6',
+  'gpt-6-sol',
   'gpt-5.6-luna',
   'gpt-5.6-sol',
   'gpt-5.6-terra',

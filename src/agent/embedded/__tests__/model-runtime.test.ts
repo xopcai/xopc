@@ -10,13 +10,13 @@ const resolveApiKey = vi.fn(async (provider: string) =>
       ? 'openai-api-key'
       : null,
 );
-const loadOAuthToken = vi.fn(async (provider: string) =>
-  provider === 'openai-codex' || provider === 'xopc-cloud' || provider === 'anthropic'
+const getOAuthToken = async (provider: string) =>
+  provider === 'openai' || provider === 'xopc-cloud' || provider === 'anthropic'
     ? {
         type: 'oauth' as const,
         provider,
-        access: provider === 'openai-codex'
-          ? 'codex-oauth-access-token'
+        access: provider === 'openai'
+          ? 'openai-oauth-access-token'
           : provider === 'anthropic'
             ? 'anthropic-oauth-access-token'
             : 'oauth-access-token',
@@ -25,8 +25,8 @@ const loadOAuthToken = vi.fn(async (provider: string) =>
         createdAt: '2026-08-11T00:00:00.000Z',
         updatedAt: '2026-08-11T00:00:00.000Z',
       }
-    : null,
-);
+    : null;
+const loadOAuthToken = vi.fn(getOAuthToken);
 const loadOAuthTokenRecord = vi.fn(loadOAuthToken);
 const { registerBunOAuthFlows } = vi.hoisted(() => ({
   registerBunOAuthFlows: vi.fn(),
@@ -39,6 +39,7 @@ vi.mock('@earendil-works/pi-ai/bun-oauth', () => ({
 vi.mock('../../../auth/credentials.js', () => ({
   CredentialResolver: class {
     resolveApiKey = resolveApiKey;
+    resolveApiKeySource = async (provider: string) => (await loadOAuthToken(provider)) ? 'oauth' : 'global';
     loadOAuthToken = loadOAuthToken;
     loadOAuthTokenRecord = loadOAuthTokenRecord;
     listOAuthTokens = vi.fn(async () => []);
@@ -119,19 +120,21 @@ describe('embedded model runtime', () => {
   });
 
   it('loads regular API-key provider credentials as runtime API keys', async () => {
+    loadOAuthToken.mockImplementation(async () => null);
     const runtime = await createEmbeddedModelRuntime('openai');
 
     await expect(runtime.getAuth('openai')).resolves.toMatchObject({
       auth: { apiKey: 'openai-api-key' },
     });
+    loadOAuthToken.mockImplementation(getOAuthToken);
   });
 
-  it('loads OAuth-only provider tokens as OAuth credentials', async () => {
-    const runtime = await createEmbeddedModelRuntime('openai-codex');
+  it('loads OpenAI subscription tokens as OAuth credentials', async () => {
+    const runtime = await createEmbeddedModelRuntime('openai');
 
-    expect(runtime.hasConfiguredAuth('openai-codex')).toBe(true);
-    await expect(runtime.getAuth('openai-codex')).resolves.toMatchObject({
-      auth: { apiKey: 'codex-oauth-access-token' },
+    expect(runtime.hasConfiguredAuth('openai')).toBe(true);
+    await expect(runtime.getAuth('openai')).resolves.toMatchObject({
+      auth: { apiKey: 'openai-oauth-access-token' },
       source: 'OAuth',
     });
   });

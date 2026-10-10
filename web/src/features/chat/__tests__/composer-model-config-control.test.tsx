@@ -13,7 +13,7 @@ const { models } = vi.hoisted(() => ({ models: [
     thinking: { mode: 'none', options: ['off'], initialValue: 'off', supportsAdaptive: false } },
   { id: 'fixed/three', name: 'Model Three', provider: 'fixed', reasoning: true,
     thinking: { mode: 'fixed', options: ['high'], initialValue: 'high', supportsAdaptive: false } },
-  { id: 'xopc-cloud/openai-codex/gpt-5.6-luna', name: 'openai-codex/gpt-5.6-luna', provider: 'xopc-cloud', reasoning: true,
+  { id: 'xopc-cloud/openai/gpt-6-luna', name: 'openai/gpt-6-luna', provider: 'xopc-cloud', reasoning: true,
     thinking: { mode: 'levels', options: ['low', 'high'], initialValue: 'low', supportsAdaptive: false } },
 ] }));
 vi.mock('swr', () => ({ default: () => ({ data: models, isLoading: false, mutate: vi.fn() }) }));
@@ -58,13 +58,13 @@ describe('composer model configuration', () => {
   });
 
   it('shows only the model name for a provider-routed model and retains its identity in the picker', async () => {
-    await render({ sessionModel: 'xopc-cloud/openai-codex/gpt-5.6-luna', thinkingLevel: 'low' });
+    await render({ sessionModel: 'xopc-cloud/openai/gpt-6-luna', thinkingLevel: 'low' });
     const trigger = container.querySelector('button')!;
-    expect(trigger.textContent).toBe('gpt-5.6-luna· Low');
-    expect(trigger.title).toBe('gpt-5.6-luna');
-    expect(trigger.getAttribute('aria-label')).not.toContain('openai-codex');
-    await click(button('openai-codex/gpt-5.6-lunaxopc-cloud'));
-    expect(button('openai-codex/gpt-5.6-lunaxopc-cloud').getAttribute('aria-pressed')).toBe('true');
+    expect(trigger.textContent).toBe('gpt-6-luna· Low');
+    expect(trigger.title).toBe('gpt-6-luna');
+    expect(trigger.getAttribute('aria-label')).not.toContain('openai');
+    await click(button('openai/gpt-6-lunaxopc-cloud'));
+    expect(button('openai/gpt-6-lunaxopc-cloud').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('shows concrete identity and only supported thinking levels in one popover', async () => {
