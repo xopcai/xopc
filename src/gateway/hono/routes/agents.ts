@@ -20,6 +20,7 @@ import {
   listAgentProfileFiles,
   listGatewayAgents,
   readAgentAvatarFile,
+  resolveAgentAvatarImage,
   readAgentProfileFile,
   updateGatewayAgent,
   writeAgentAvatarFromBase64,
@@ -245,7 +246,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.get('/api/agents/:id/avatar', async (c) => {
     const id = normalizeAgentId(c.req.param('id') ?? '');
-    const res = await readAgentAvatarFile(id);
+    const res = c.req.query('resolve') === '1' ? await resolveAgentAvatarImage(id) : await readAgentAvatarFile(id);
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }
@@ -253,7 +254,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       status: 200,
       headers: {
         'Content-Type': res.data.contentType,
-        'Cache-Control': 'private, max-age=3600',
+        'Cache-Control': c.req.query('resolve') === '1' ? 'private, no-store' : 'private, max-age=3600',
       },
     });
   });

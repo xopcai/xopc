@@ -565,7 +565,7 @@
     },
     {
       "name": "agent_id",
-      "value": "执行 Agent ID"
+      "value": "执行助手标识"
     },
     {
       "name": "edit",
@@ -812,10 +812,10 @@
     { "name": "automation_run", "value": "自动化运行" },
     { "name": "workflow_overview", "value": "运行概览" },
     { "name": "workflow_run_unavailable", "value": "这条运行记录已不可用，请刷新列表后继续。" },
-    { "name": "workflow_progress", "value": "%d / %d 个 Agent 已完成" },
+    { "name": "workflow_progress", "value": "%d / %d 个助手已完成" },
     { "name": "goal", "value": "目标" },
     { "name": "phases", "value": "阶段" },
-    { "name": "agent_work", "value": "Agent 执行" },
+    { "name": "agent_work", "value": "助手执行" },
     {
       "name": "library_hint",
       "value": "文件、笔记，以及值得保留的资料。"

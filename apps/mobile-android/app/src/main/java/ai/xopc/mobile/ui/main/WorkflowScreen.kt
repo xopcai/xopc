@@ -74,9 +74,7 @@ internal fun WorkflowScreen(gatewayId: String, onBack: () -> Unit,
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
       horizontalArrangement = Arrangement.SpaceBetween) {
-      TextButton(onClick = ::back, modifier = Modifier.testTag("workflow-back")) {
-        Text(stringResource(R.string.progress_back))
-      }
+
       Text(if (selectedId == null) stringResource(R.string.workflow_recent)
         else stringResource(R.string.workflow_overview),
         style = MaterialTheme.typography.titleSmall,
@@ -148,7 +146,7 @@ internal fun WorkflowScreen(gatewayId: String, onBack: () -> Unit,
       Text(stringResource(R.string.workflow_cancel))
     } },
     dismissButton = { TextButton(onClick = { cancelOpen = false }) {
-      Text(stringResource(R.string.progress_back))
+      Text(stringResource(R.string.progress_cancel))
     } })
 }
 

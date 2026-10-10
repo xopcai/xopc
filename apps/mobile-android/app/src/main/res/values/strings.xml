@@ -764,4 +764,21 @@
     <string name="chat_personal_saved">Saved</string>
     <string name="chat_personal_search">Search messages</string>
     <string name="chat_personal_search_loaded">Search loaded messages; load older history for more</string>
+    <string name="personal_agent_done">Cancel</string>
+    <string name="personal_agent_saving">Saving…</string>
+    <string name="personal_agent_outreach_hint">Quiet hours follow your Gateway settings.</string>
+    <string name="personal_agent_advanced_hint">Manage personality, models and other advanced settings in Gateway.</string>
+    <string name="personal_agent_outreach_load_error">Could not load proactive messages. Other preferences can still be saved.</string>
+    <string name="personal_agent_outreach_save_error">Could not save proactive messages. Your edits are kept; please retry.</string>
+    <string name="personal_goal_title_hint">e.g. Launch the new app</string>
+    <string name="personal_goal_outcome_hint">What result would mean this goal is achieved?</string>
+    <string name="personal_goal_date_optional">Target date · optional</string>
+    <string name="personal_goal_date_none">No target date</string>
+    <string name="personal_goal_date_clear">Remove date</string>
+    <string name="voice_input_keyboard">Switch to keyboard</string>
+    <string name="chat_search_messages">Messages</string>
+    <string name="chat_search_files">Files</string>
+    <string name="chat_search_links">Links</string>
+    <string name="chat_search_images">Images</string>
+    <string name="chat_search_empty">No results</string>
 </resources>

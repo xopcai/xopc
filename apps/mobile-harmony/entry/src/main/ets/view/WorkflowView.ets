@@ -79,7 +79,7 @@ export struct XopcWorkflowView {
     try {
       const result = await this.getUIContext().getPromptAction().showDialog({
         title: $r('app.string.cancel'), message: $r('app.string.confirm_action_help'),
-        buttons: [{ text: $r('app.string.back'), color: this.colors.secondary }, { text: $r('app.string.confirm'), color: this.colors.danger }]
+        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary }, { text: $r('app.string.confirm'), color: this.colors.danger }]
       });
       if (result.index !== 1 || this.busy) return;
       this.busy = true;

@@ -178,22 +178,13 @@ export struct XopcAboutYouView {
   @Builder
   private header(title: ResourceStr, back: () => void) {
     Row({ space: 8 }) {
-      Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(21).fontColor([this.colors.foreground]) }
-        .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.back')).onClick((): void => { back(); })
       Text(title).fontSize(21).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
-    }.width('100%').height(60).padding({ left: 8, right: 20 })
+    }.width('100%').height(60).padding({ left: 20, right: 20 })
   }
 
   @Builder
   private mainHeader() {
     Row({ space: 8 }) {
-      Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(21).fontColor([this.colors.foreground]) }
-        .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.back')).onClick((): void => {
-          if (this.searchOpen) this.closeSearch();
-          else this.onExit();
-        })
       if (this.searchOpen && this.section === 1) {
         Search({ value: this.model.query, placeholder: $r('app.string.about_you_search_placeholder') })
           .id('about-you-search').layoutWeight(1).height(44).padding({ left: 4, right: 4 })

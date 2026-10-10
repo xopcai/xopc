@@ -140,9 +140,6 @@ export struct XopcProjectSpaceView {
     NavDestination() {
       Column() {
         Row({ space: 8 }) {
-          Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
-            .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-            .accessibilityText($r('app.string.back')).onClick((): void => { this.onExit(); })
           Text(this.model.project?.name ?? $r('app.string.projects')).fontSize(21).fontWeight(FontWeight.Bold)
             .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           Button() { SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(22).fontColor([this.colors.secondary]) }

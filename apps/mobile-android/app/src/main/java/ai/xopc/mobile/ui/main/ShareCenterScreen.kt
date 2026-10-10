@@ -12,6 +12,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -86,9 +87,6 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
   Column(Modifier.fillMaxSize().padding(insets).testTag("share-center")) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
       verticalAlignment = Alignment.CenterVertically) {
-      IconButton(onClick = onBack, modifier = Modifier.testTag("shares-back")) {
-        ActionIcon(R.drawable.action_chevron_left, size = 20.dp)
-      }
       Text(stringResource(R.string.share_center), modifier = Modifier.weight(1f),
         style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
       TextButton(onClick = { showInactive = !showInactive },
@@ -215,7 +213,7 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
       Text(stringResource(R.string.share_revoke), color = MaterialTheme.colorScheme.error)
     } },
     dismissButton = { TextButton(onClick = { revokeId = null }) {
-      Text(stringResource(R.string.progress_back))
+      Text(stringResource(R.string.progress_cancel))
     } })
   if (previewItem != null) SharePreviewSheet(previewItem, onClose = { previewId = null })
 }
@@ -228,12 +226,9 @@ private fun SharePreviewSheet(item: ShareItem, onClose: () -> Unit) {
   var mode by remember(item.id) { mutableStateOf("summary") }
   ModalBottomSheet(onDismissRequest = onClose, modifier = Modifier.fillMaxHeight(0.92f)
     .testTag("share-preview-sheet")) {
+    BackHandler(enabled = mode != "summary") { mode = "summary" }
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        if (mode != "summary") TextButton(onClick = { mode = "summary" },
-          modifier = Modifier.testTag("share-preview-back")) {
-          Text(stringResource(R.string.progress_back))
-        }
         Text(item.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
         TextButton(onClick = onClose, modifier = Modifier.testTag("share-preview-close")) {
           Text(stringResource(R.string.assistant_close))

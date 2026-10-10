@@ -70,7 +70,7 @@ data class ConversationContextRef(val kind: String, val sourceId: String,
 data class PendingInput(val clientMessageId: String, val content: String, val taskId: String? = null,
   val contextRefs: List<ConversationContextRef> = emptyList(),
   val attachments: List<ChatAttachment> = emptyList())
-data class ConversationAgent(val id: String, val name: String, val description: String)
+data class ConversationAgent(val id: String, val name: String, val description: String, val avatar: String = "")
 data class AgentCatalog(val agents: List<ConversationAgent>, val defaultId: String)
 data class ConversationModel(val id: String, val name: String, val initialThinkingLevel: String,
   val thinkingMode: String = "none", val thinkingOptions: List<String> = emptyList())
@@ -195,6 +195,12 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
     return (attachmentStore ?: throw IllegalStateException("NO_ATTACHMENT_STORE"))
       .import(gatewayId, QUICK_ATTACHMENT_SCOPE, uri)
+  }
+
+  fun addQuickVoice(gatewayId: String, bytes: ByteArray, durationSeconds: Int): ChatAttachment {
+    require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
+    return (attachmentStore ?: throw IllegalStateException("NO_ATTACHMENT_STORE"))
+      .addVoiceBytes(gatewayId, QUICK_ATTACHMENT_SCOPE, bytes, durationSeconds)
   }
 
   fun removeQuickAttachment(gatewayId: String, attachmentId: String) {
@@ -581,6 +587,35 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       thinkingLevel = JSONObject(raw).getJSONObject("payload").optString("thinkingLevel", "off"))
   }
 
+  fun agentAvatar(agent: ConversationAgent): ByteArray? {
+    if (agent.avatar.startsWith("xopc:loopi:")) return null
+    val bytes = if (agent.avatar.startsWith("https://")) {
+      val connection = java.net.URI(agent.avatar).toURL().openConnection() as java.net.HttpURLConnection
+      connection.instanceFollowRedirects = false
+      connection.connectTimeout = 8_000
+      connection.readTimeout = 12_000
+      try {
+        if (connection.responseCode != 200) return null
+        connection.inputStream.use { input ->
+          val output = java.io.ByteArrayOutputStream()
+          val chunk = ByteArray(8192)
+          while (true) {
+            val count = input.read(chunk)
+            if (count < 0) break
+            require(output.size() + count <= 512 * 1024) { "AVATAR_TOO_LARGE" }
+            output.write(chunk, 0, count)
+          }
+          output.toByteArray()
+        }
+      } finally { connection.disconnect() }
+    } else {
+      val id = java.net.URLEncoder.encode(agent.id, "UTF-8")
+      gateway.requestBytes("/api/agents/$id/avatar?resolve=1")
+    }
+    require(bytes.size in 1..512 * 1024) { "INVALID_AVATAR" }
+    return bytes
+  }
+
   fun agents(): AgentCatalog = parseAgents(gateway.request("/api/agents"))
 
   @Synchronized
@@ -821,7 +856,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         val item = items.getJSONObject(index)
         val id = item.getString("id")
         require(id.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,63}"))) { "INVALID_AGENTS" }
-        ConversationAgent(id, item.optString("name").ifBlank { id }, item.optString("description"))
+        ConversationAgent(id, item.optString("name").ifBlank { id }, item.optString("description"), item.optString("avatar"))
       }
       val defaultId = payload.getString("defaultId")
       require(agents.any { it.id == defaultId }) { "INVALID_AGENTS" }

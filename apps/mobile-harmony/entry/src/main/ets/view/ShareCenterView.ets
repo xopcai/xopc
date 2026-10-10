@@ -64,8 +64,6 @@ export struct XopcShareCenterView {
     NavDestination() {
       Column() {
         Row({ space: 8 }) {
-          Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
-            .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back')).onClick(this.onExit)
           Text($r('app.string.share_center')).fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
           Button(this.model.showInactive ? $r('app.string.share_hide_inactive') : $r('app.string.share_show_inactive'))
             .height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)

@@ -383,11 +383,6 @@ export struct XopcSessionsView {
   content() {
     Column() {
         Row({ space: 8 }) {
-          if (!this.embedded) {
-            Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
-              .id('sessions-back').width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back'))
-              .onClick((): void => { if (!this.back()) this.onExit(); })
-          }
           Text(this.sessions.selecting ? $r('app.string.sessions_selected', this.sessions.selected.length)
             : this.embedded ? $r('app.string.conversations') : $r('app.string.history'))
             .fontSize(this.embedded ? 30 : 24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)

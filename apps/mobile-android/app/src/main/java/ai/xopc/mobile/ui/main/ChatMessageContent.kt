@@ -55,6 +55,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -83,6 +85,9 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
   previewEligible: Boolean = false, onViewMore: () -> Unit = onMore,
   onOpenExecution: (() -> Unit)? = null,
   onSaveNote: (() -> Unit)? = null,
+  savingNote: Boolean = false,
+  onReadAloud: (() -> Unit)? = null,
+  readAloudPhase: String = "idle",
   loadMedia: (suspend (ConversationMedia) -> ByteArray)? = null) {
   val isUser = message.role == "user"
   val showPreview = previewEligible && messageNeedsPreview(message.role, message.text)
@@ -166,21 +171,36 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
     if (!isUser && showMore && (message.text.isNotBlank() || contentCount > 0 ||
       message.outcome != null || onOpenExecution != null)) Row(
       modifier = Modifier.padding(start = 8.dp, top = 2.dp),
-      horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-      IconButton(onClick = onViewMore, modifier = Modifier.size(44.dp)
-        .testTag("message-detail-${message.id}")) {
-        Icon(painterResource(R.drawable.tab_notes), stringResource(R.string.assistant_message_detail),
+      horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+      IconButton(onClick = { onCopy(message.text) }, enabled = message.text.isNotBlank(), modifier = Modifier.size(44.dp)
+        .testTag("message-copy-${message.id}")) {
+        Icon(painterResource(R.drawable.message_copy), stringResource(R.string.assistant_copy),
           tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(21.dp))
       }
-      if (onSaveNote != null) IconButton(onClick = onSaveNote, modifier = Modifier.size(44.dp)
+      if (onSaveNote != null) IconButton(onClick = onSaveNote, enabled = !savingNote, modifier = Modifier.size(44.dp)
         .testTag("message-save-note-${message.id}")) {
         Icon(painterResource(R.drawable.message_bookmark),
           stringResource(R.string.assistant_save_note), tint = MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.size(21.dp))
       }
+      if (onReadAloud != null && message.media.none { it.mimeType.startsWith("audio/") }) {
+        val readLabel = stringResource(when (readAloudPhase) {
+          "playing" -> R.string.assistant_pause
+          "paused" -> R.string.assistant_resume
+          else -> R.string.assistant_read_aloud
+        })
+        IconButton(onClick = onReadAloud, enabled = message.text.isNotBlank() && readAloudPhase != "loading",
+          modifier = Modifier.size(44.dp).testTag("message-read-aloud-${message.id}")
+            .semantics { contentDescription = readLabel }) {
+          if (readAloudPhase == "loading") BrandLoadingIndicator(extent = 18.dp)
+          else Icon(painterResource(if (readAloudPhase == "playing") R.drawable.message_pause
+            else R.drawable.action_speaker),
+            contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(21.dp))
+        }
+      }
       IconButton(onClick = onMore, modifier = Modifier.size(44.dp)
         .testTag("message-more-${message.id}")) {
-        ActionIcon(R.drawable.action_more_horizontal, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 20.dp,
+        ActionIcon(R.drawable.message_more, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 21.dp,
           contentDescription = stringResource(R.string.conversations_more_actions))
       }
     }

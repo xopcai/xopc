@@ -34,9 +34,6 @@ export struct XopcShareResultView {
   build() {
     Column({ space: 12 }) {
       Row({ space: 6 }) {
-        Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(20).fontColor([this.colors.secondary]) }
-          .width(44).height(44).padding(0).backgroundColor(Color.Transparent).visibility(this.mode === 'summary' ? Visibility.Hidden : Visibility.Visible)
-          .onClick((): void => { this.mode = 'summary'; })
         Text(this.share.title || this.share.fileName || $r('app.string.share_title')).fontSize(19).fontWeight(FontWeight.Medium)
           .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         Button() { SymbolGlyph($r('sys.symbol.xmark')).fontSize(20).fontColor([this.colors.secondary]) }

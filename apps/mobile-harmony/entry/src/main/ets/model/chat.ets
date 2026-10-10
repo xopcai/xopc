@@ -98,7 +98,7 @@ export interface XopcChatModel { id: string; name?: string; description?: string
 export interface XopcChatModels { defaultId?: string; models?: XopcChatModel[]; items?: XopcChatModel[]; }
 export interface XopcAgentSkillConfig { mode?: string; include?: string[]; }
 export interface XopcAgentEffective { skills?: XopcAgentSkillConfig; }
-export interface XopcChatAgent { id: string; name?: string; description?: string; effective?: XopcAgentEffective; }
+export interface XopcChatAgent { id: string; name?: string; description?: string; avatar?: string; effective?: XopcAgentEffective; }
 export interface XopcChatAgents { defaultId: string; agents: XopcChatAgent[]; }
 export interface XopcAgentConfig { model?: string; thinkingLevel?: string; reasoningLevel?: string; effectiveWorkspacePath?: string; workingDirectoryLocked?: boolean; configVersion?: number; }
 export interface XopcQueuedInput {

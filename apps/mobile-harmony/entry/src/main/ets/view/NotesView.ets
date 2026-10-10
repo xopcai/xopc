@@ -177,9 +177,6 @@ export struct XopcNotesView {
   @Builder
   header() {
     Row({ space: 8 }) {
-      Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
-        .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.back')).onClick((): void => { this.back(); })
       Text(this.model.selected || this.model.draft || this.model.openingId ? $r('app.string.notes') : $r('app.string.library'))
         .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
       if (this.model.draft) {

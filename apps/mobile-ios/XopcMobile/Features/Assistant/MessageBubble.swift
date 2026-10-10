@@ -55,7 +55,7 @@ struct MessageBubble: View {
         .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
         .contextMenu {
             if message.role == "user", !message.text.isEmpty {
-                Button("复制", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.text }
+                Button("复制", systemImage: "doc.plaintext") { UIPasteboard.general.string = message.text }
                     .accessibilityIdentifier("chat-user-copy-\(message.id)")
                 if message.attachments.isEmpty, message.references.isEmpty {
                     Button("再次编辑", systemImage: "pencil") { onReuseUserText(message.text) }
@@ -78,8 +78,16 @@ struct MessageBubble: View {
                 NavigationStack {
                     ExecutionProcessView(configuration: configuration, conversationID: conversationID,
                                          turnID: message.turnId ?? message.id, assistantState: assistantState)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("完成") { isExecutionPresented = false }
+                            }
+                        }
                 }
-                .presentationDetents([.large])
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .presentationDetents([.fraction(0.92)])
+                .presentationDragIndicator(.hidden)
+                .presentationContentInteraction(.scrolls)
             }
         }
         .confirmationDialog("消息操作", isPresented: $isActionsPresented, titleVisibility: .visible) {
@@ -105,7 +113,7 @@ struct MessageBubble: View {
 
     private var assistantActions: some View {
         HStack(spacing: 2) {
-            Button("复制", systemImage: "doc.on.doc") {
+            Button("复制", systemImage: "doc.plaintext") {
                 UIPasteboard.general.string = message.text
             }
             .frame(width: 44, height: 44)
@@ -118,24 +126,30 @@ struct MessageBubble: View {
             .frame(width: 44, height: 44)
             .contentShape(.rect)
             .accessibilityIdentifier("chat-save-note-\(message.id)")
-            if !ChatSpeechText.chunks(from: message.text).isEmpty {
+            if !message.attachments.contains(where: \.isAudio) && !ChatSpeechText.chunks(from: message.text).isEmpty {
                 Button {
                     readAloud.toggle(id: message.id, text: message.text, locale: locale, gateway: GatewayClient(configuration: configuration))
                 } label: {
                     Label {
                         Text(readAloud.sourceID == message.id && readAloud.state == .playing
                             ? LocalizedStringResource("暂停朗读")
-                            : LocalizedStringResource("朗读"))
+                            : readAloud.sourceID == message.id && readAloud.state == .paused
+                                ? LocalizedStringResource("继续朗读") : LocalizedStringResource("朗读"))
                     } icon: {
-                        Image(systemName: "speaker.wave.2")
+                        if readAloud.sourceID == message.id && readAloud.state == .loading {
+                            ProgressView().controlSize(.mini)
+                        } else {
+                            Image(systemName: readAloud.sourceID == message.id && readAloud.state == .playing
+                                ? "pause" : "speaker.wave.2")
+                        }
                     }
                 }
                 .frame(width: 44, height: 44)
                 .contentShape(.rect)
                 .accessibilityIdentifier("chat-read-aloud-\(message.id)")
-                .disabled(!canReadAloud)
+                .disabled(!canReadAloud || (readAloud.sourceID == message.id && readAloud.state == .loading))
             }
-            Button("更多", systemImage: "ellipsis") {
+            Button("更多", systemImage: "ellipsis.circle") {
                 isActionsPresented = true
             }
             .frame(width: 44, height: 44)
@@ -145,7 +159,7 @@ struct MessageBubble: View {
         }
         .labelStyle(.iconOnly)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .font(.caption.weight(.medium))
+        .font(.system(size: 18))
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
     }

@@ -137,20 +137,14 @@ export struct XopcSettingsView {
     Column() {
       if (this.section) {
         Row({ space: 8 }) {
-          Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
-            .id('preference-back').width(44).height(44).backgroundColor(Color.Transparent)
-            .accessibilityText($r('app.string.back')).onClick((): void => { if (this.useNavigation) this.onExit(); else this.section = ''; })
           Text(this.section === 'language' ? $r('app.string.language') : this.section === 'appearance' ? $r('app.string.appearance') :
             this.section === 'connection' ? $r('app.string.connection') : $r('app.string.notifications'))
             .fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-        }.width('100%').padding({ left: 8, right: 20, top: 12, bottom: 12 })
+        }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 })
       } else if (this.useNavigation) {
         Row({ space: 8 }) {
-          Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
-            .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back'))
-            .onClick((): void => { this.onExit(); })
           Text($r('app.string.settings')).fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-        }.id('settings-navigation-title').width('100%').padding({ left: 8, right: 20, top: 12, bottom: 12 })
+        }.id('settings-navigation-title').width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 })
       } else {
         XopcPageHeader({ heading: $r('app.string.settings') }).id('settings-title')
       }

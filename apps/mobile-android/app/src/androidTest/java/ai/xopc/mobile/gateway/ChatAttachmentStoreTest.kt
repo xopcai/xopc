@@ -20,6 +20,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatAttachmentStoreTest {
+  @Test fun workspaceFileReferenceSurvivesDraftReloadAndSendsRelativePath() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val gatewayId = UUID.randomUUID().toString()
+    val conversationId = UUID.randomUUID().toString()
+    val store = ChatAttachmentStore(context)
+    try {
+      val file = ManagedFile("brief", "workspace", "brief.pdf", "docs/brief.pdf", "file", "application/pdf", 200)
+      val attachment = store.addWorkspaceFile(gatewayId, conversationId, file)
+      val restored = ChatAttachmentStore(context).list(gatewayId, conversationId).single()
+      assertEquals(attachment, restored)
+      val payload = store.wirePayloads(gatewayId, conversationId, listOf(restored)).getJSONObject(0)
+      assertEquals("docs/brief.pdf", payload.getString("workspaceRelativePath"))
+      assertEquals("document", payload.getString("type"))
+      assertEquals("", payload.getString("data"))
+      assertTrue(store.list(gatewayId, UUID.randomUUID().toString()).isEmpty())
+      store.remove(gatewayId, conversationId, attachment.id)
+      assertTrue(store.list(gatewayId, conversationId).isEmpty())
+    } finally { store.removeGateway(gatewayId) }
+  }
+
   @Test fun voiceRecordingKeepsDurationInEncryptedDraftAndWirePayload() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val gatewayId = UUID.randomUUID().toString()

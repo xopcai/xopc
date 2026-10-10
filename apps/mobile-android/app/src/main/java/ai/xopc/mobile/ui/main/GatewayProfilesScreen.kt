@@ -53,8 +53,6 @@ internal fun GatewayProfilesScreen(state: ConnectionUiState, insets: PaddingValu
   Column(Modifier.fillMaxSize().padding(insets).testTag("gateway-profiles-screen")) {
     Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
       verticalAlignment = Alignment.CenterVertically) {
-      IconButton(onClick = onBack, enabled = !state.gatewayBusy,
-        modifier = Modifier.testTag("gateways-back")) { ActionIcon(R.drawable.action_chevron_left, size = 20.dp) }
       Text(stringResource(R.string.gateways_title), modifier = Modifier.weight(1f).padding(start = 4.dp),
         style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
       IconButton(onClick = onRefresh, enabled = !state.gatewayBusy,

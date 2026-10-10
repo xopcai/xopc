@@ -497,3 +497,42 @@ export async function deleteAgentAvatarFile(agentId: string): Promise<AgentAdmin
   }
   return { ok: true, data: { agentId: id } };
 }
+
+
+const renderedAvatarCache = new Map<string, Buffer>();
+
+/** Rasterize configured generated avatars locally for native mobile clients. */
+export async function resolveAgentAvatarImage(agentId: string): Promise<AgentAdminResult<{ buffer: Buffer; contentType: string }>> {
+  const missing = assertAgentExistsForAvatar(agentId);
+  if (missing) return missing;
+  const id = normalizeAgentId(agentId);
+  const reference = listAgentEntries().find((entry) => normalizeAgentId(entry.id) === id)?.profile?.avatar?.trim() ?? '';
+  if (reference === 'xopc:custom') return readAgentAvatarFile(id);
+  if (reference.startsWith('xopc:loopi:') || /^https?:\/\//i.test(reference)) {
+    return { ok: false, status: 404, error: 'Avatar is rendered by the client' };
+  }
+  const match = /^xopc:dicebear:(adventurer|bottts|lorelei|thumbs|fun-emoji|pixel-art):(.+)$/.exec(reference);
+  const style = match?.[1] ?? 'adventurer';
+  const seed = match?.[2] ?? id;
+  const key = JSON.stringify([style, seed]);
+  const cached = renderedAvatarCache.get(key);
+  if (cached) return { ok: true, data: { buffer: cached, contentType: 'image/png' } };
+  const [{ createAvatar }, collection, { default: sharp }] = await Promise.all([
+    import('@dicebear/core'), import('@dicebear/collection'), import('sharp'),
+  ]);
+  const options = { seed, size: 128 };
+  const svg = (() => {
+    switch (style) {
+      case 'bottts': return createAvatar(collection.bottts, options).toString();
+      case 'lorelei': return createAvatar(collection.lorelei, options).toString();
+      case 'thumbs': return createAvatar(collection.thumbs, options).toString();
+      case 'fun-emoji': return createAvatar(collection.funEmoji, options).toString();
+      case 'pixel-art': return createAvatar(collection.pixelArt, options).toString();
+      default: return createAvatar(collection.adventurer, options).toString();
+    }
+  })();
+  const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
+  if (renderedAvatarCache.size >= 64) renderedAvatarCache.delete(renderedAvatarCache.keys().next().value!);
+  renderedAvatarCache.set(key, buffer);
+  return { ok: true, data: { buffer, contentType: 'image/png' } };
+}

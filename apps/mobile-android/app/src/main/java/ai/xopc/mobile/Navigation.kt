@@ -175,6 +175,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onPendingVoiceApproval = gateway::pendingVoiceApproval,
             onRespondVoiceApproval = gateway::respondToVoiceApproval,
             onAddVoiceAttachment = gateway::addVoiceDraftAttachment,
+            onSendQuickVoiceRecording = gateway::sendQuickVoiceRecording,
             onSendVoiceRecording = gateway::sendVoiceRecording,
             onMessageNoteFeedbackHandled = gateway::messageNoteFeedbackHandled,
             modifier = Modifier.safeDrawingPadding())
