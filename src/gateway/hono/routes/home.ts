@@ -26,7 +26,7 @@ export { buildHomeWorkbench, decisionFromTask } from '../../../tasks/home-query-
 /** Register the unified work-home read model and its decision actions. */
 export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
-  const home = new HomeQueryService(service, () => service.homeIntelligence.getAdvisor());
+  const home = new HomeQueryService(service, (locale) => service.homeIntelligence.getAdvisor(locale));
 
   authenticated.get('/api/home', async (c) => {
     const locale = c.req.query('locale');

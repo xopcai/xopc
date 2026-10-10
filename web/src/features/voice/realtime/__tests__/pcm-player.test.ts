@@ -107,6 +107,15 @@ describe('PcmPlayer', () => {
     await player.close();
   });
 
+  it('reports the scheduled start delay including buffered audio', () => {
+    const player = new PcmPlayer();
+    const played = vi.fn();
+    expect(player.enqueue(new ArrayBuffer(960), played)).toBeCloseTo(80);
+    expect(player.enqueue(new ArrayBuffer(960), played)).toBeCloseTo(100);
+    player.clear();
+    expect(player.enqueue(new ArrayBuffer(960), played)).toBeCloseTo(80);
+  });
+
   it('keeps a fast audio burst and acknowledges only completed playback', () => {
     const player = new PcmPlayer();
     const played = vi.fn();

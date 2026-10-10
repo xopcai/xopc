@@ -751,4 +751,18 @@
     <string name="personal_chat_entry_subtitle">A familiar place to think aloud and get things moving.</string>
     <string name="personal_chat_resume_title">Continue with %1$s</string>
     <string name="personal_chat_resume_subtitle">Your conversation is right where you left it.</string>
+    <string name="chat_personal_model_thinking">Conversation model and thinking</string>
+    <string name="chat_personal_upload_avatar">Upload avatar</string>
+    <string name="chat_personal_outreach">Proactive messages</string>
+    <string name="chat_personal_outreach_mode">Participation</string>
+    <string name="chat_personal_outreach_off">Off</string>
+    <string name="chat_personal_outreach_followup">Requested follow-ups</string>
+    <string name="chat_personal_outreach_balanced">Thoughtful participation</string>
+    <string name="chat_personal_quiet_start">Quiet from</string>
+    <string name="chat_personal_quiet_end">Quiet until</string>
+    <string name="chat_personal_timezone">IANA timezone, e.g. Asia/Shanghai</string>
+    <string name="chat_personal_outreach_save">Save proactive settings</string>
+    <string name="chat_personal_saved">Saved</string>
+    <string name="chat_personal_search">Search messages</string>
+    <string name="chat_personal_search_loaded">Search loaded messages; load older history for more</string>
 </resources>

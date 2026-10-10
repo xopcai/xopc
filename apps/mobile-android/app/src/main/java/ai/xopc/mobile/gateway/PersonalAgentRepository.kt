@@ -5,12 +5,19 @@ import org.json.JSONObject
 data class PersonalAgentRecord(val agentId: String, val conversationId: String,
   val state: String, val displayName: String, val appearance: String, val errorMessage: String?,
   val revision: Int = 0, val preferences: Map<String, String> = emptyMap(),
-  val voicePreference: PersonalVoicePreference? = null)
+  val voicePreference: PersonalVoicePreference? = null, val userCallName: String? = null)
 
 data class PersonalVoicePreference(val provider: String, val model: String, val voice: String)
 data class PersonalVoiceOption(val id: String, val name: String)
 data class PersonalVoiceChoices(val provider: String, val model: String,
   val voices: List<PersonalVoiceOption>)
+
+data class PersonalProactivitySettings(val revision: Int, val mode: String, val timezone: String,
+  val quietStart: Int, val quietEnd: Int, val dailyMessages: Int, val dailyModelCalls: Int) {
+  fun json(): JSONObject = JSONObject().put("revision", revision).put("mode", mode).put("timezone", timezone)
+    .put("quietStart", quietStart).put("quietEnd", quietEnd).put("dailyMessages", dailyMessages)
+    .put("dailyModelCalls", dailyModelCalls)
+}
 
 class PersonalAgentRepository(private val gateway: GatewaySession) {
   fun get(): PersonalAgentRecord? = parse(gateway.request("/api/personal-agent"))
@@ -69,7 +76,32 @@ class PersonalAgentRepository(private val gateway: GatewaySession) {
     })
   }
 
+  fun proactivity(): PersonalProactivitySettings = parseProactivity(gateway.request("/api/personal-agent/proactivity"))
+
+  fun updateProactivity(settings: PersonalProactivitySettings): PersonalProactivitySettings {
+    require(settings.revision > 0 && settings.mode in setOf("off", "follow_up", "balanced") &&
+      settings.quietStart in 0..23 && settings.quietEnd in 0..23 && settings.timezone.isNotBlank()) { "INVALID_PROACTIVITY_SETTINGS" }
+    java.time.ZoneId.of(settings.timezone)
+    return parseProactivity(gateway.request("/api/personal-agent/proactivity", "PATCH", settings.json().toString()))
+  }
+
+  fun uploadAvatar(bytes: ByteArray) {
+    require(bytes.size in 1..(512 * 1024)) { "INVALID_PERSONAL_AVATAR" }
+    val body = JSONObject().put("base64", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP))
+      .put("mimeType", "image/jpeg")
+    val response = JSONObject(gateway.request("/api/personal-agent/avatar", "PUT", body.toString()))
+    require(response.optBoolean("ok")) { "PERSONAL_AVATAR_UPLOAD_FAILED" }
+  }
+
   companion object {
+    fun parseProactivity(raw: String): PersonalProactivitySettings {
+      val response = JSONObject(raw)
+      require(response.optBoolean("ok")) { response.optString("error", "PERSONAL_AGENT_UNAVAILABLE") }
+      val value = response.getJSONObject("payload")
+      return PersonalProactivitySettings(value.getInt("revision"), value.getString("mode"), value.getString("timezone"),
+        value.getInt("quietStart"), value.getInt("quietEnd"), value.getInt("dailyMessages"), value.getInt("dailyModelCalls"))
+    }
+
     fun parse(raw: String): PersonalAgentRecord? {
       val response = JSONObject(raw)
       require(response.optBoolean("ok")) { response.optString("error", "PERSONAL_AGENT_UNAVAILABLE") }
@@ -89,7 +121,7 @@ class PersonalAgentRepository(private val gateway: GatewaySession) {
         payload.optString("displayName").ifBlank { "Ada" },
         payload.optString("appearance").ifBlank { "loopi" },
         payload.optString("errorMessage").takeIf { !payload.isNull("errorMessage") && it.isNotBlank() },
-        payload.optInt("revision"), preferences, voice)
+        payload.optInt("revision"), preferences, voice, payload.optString("userCallName").takeIf { !payload.isNull("userCallName") && it.isNotBlank() })
     }
   }
 }

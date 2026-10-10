@@ -42,3 +42,30 @@ it('loads batch paths and surfaces newly discovered nested search instructions',
     expect(await loader.forTool('data_batch', { operations: [{ id: 'r', kind: 'file_read', path: 'notes/a.md' }] })).toBe('');
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+it('allows explicit reads of oversized instructions and reloads notices when they change', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'large-instructions-'));
+  try {
+    await mkdir(join(root, 'src'));
+    const file = join(root, 'AGENTS.md');
+    const content = 'Large repository rule.\n'.repeat(2_000);
+    await writeFile(file, content);
+    await writeFile(join(root, 'src/AGENTS.md'), 'nested rule');
+    const loader = await RepositoryInstructions.open(root);
+    const notice = await loader.forTool('exec_command', { cwd: '.' });
+    expect(notice).toContain('32 KiB automatic inclusion limit');
+    expect(notice).toContain(file);
+    expect(notice).not.toContain(content);
+    // Reading the file must not throw, even before the notice is acknowledged.
+    expect(await loader.forTool('read_file', { path: file })).toContain('Read');
+    loader.acknowledge();
+    expect(await loader.forTool('read_file', { path: file })).toBe('');
+    expect(await loader.forTool('write_file', { path: 'src/a.ts' })).toContain('nested rule');
+    loader.acknowledge();
+    await writeFile(file, `${content}updated rule`);
+    expect(await loader.load('.', true)).toContain('automatic inclusion limit');
+    loader.acknowledge();
+    await writeFile(file, 'shortened rule');
+    expect(await loader.load('.', true)).toContain('shortened rule');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

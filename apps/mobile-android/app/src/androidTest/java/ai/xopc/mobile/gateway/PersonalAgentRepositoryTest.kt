@@ -20,4 +20,18 @@ class PersonalAgentRepositoryTest {
         "agentId":"personal","conversationId":"not-a-uuid","state":"ready"}}""")
     }
   }
+  @Test fun proactiveSettingsRetainRevisionAndUnexposedDailyLimits() {
+    val settings = PersonalAgentRepository.parseProactivity("""{"ok":true,"payload":{
+      "revision":9,"mode":"balanced","timezone":"Asia/Shanghai","quietStart":22,"quietEnd":8,
+      "dailyMessages":4,"dailyModelCalls":20}}""")
+    val patch = settings.copy(mode = "off", timezone = "UTC", quietStart = 0).json()
+    assertEquals(9, patch.getInt("revision"))
+    assertEquals(4, patch.getInt("dailyMessages"))
+    assertEquals(20, patch.getInt("dailyModelCalls"))
+    assertEquals(0, patch.getInt("quietStart"))
+    assertThrows(IllegalArgumentException::class.java) {
+      PersonalAgentRepository.parseProactivity("""{"ok":false,"error":"Settings changed; reload before saving"}""")
+    }
+  }
+
 }

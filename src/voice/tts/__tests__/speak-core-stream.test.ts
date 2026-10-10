@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   primaryStream: vi.fn(),
+  openSession: vi.fn(),
   fallbackStream: vi.fn(),
 }));
 
@@ -10,7 +11,7 @@ vi.mock('../factory.js', () => {
     providerId: 'alibaba',
     providerConfig: {},
     timeoutMs: 1_000,
-    plugin: { id: 'alibaba', synthesizeStream: mocks.primaryStream },
+    plugin: { id: 'alibaba', synthesizeStream: mocks.primaryStream, openStreamSession: mocks.openSession },
   };
   const fallback = {
     providerId: 'edge',
@@ -24,7 +25,7 @@ vi.mock('../factory.js', () => {
   };
 });
 
-import { speakStream } from '../speak-core.js';
+import { prepareSpeechStreamSession, speakStream } from '../speak-core.js';
 import type { TTSConfig } from '../types.js';
 
 const config = {
@@ -51,6 +52,7 @@ function streamResult() {
 describe('speakStream fallback control', () => {
   beforeEach(() => {
     mocks.primaryStream.mockReset();
+    mocks.openSession.mockReset();
     mocks.fallbackStream.mockReset();
   });
 
@@ -100,6 +102,29 @@ describe('speakStream fallback control', () => {
     await expect(speakStream('hello', config, { signal: controller.signal })).rejects.toBe('client_cancelled');
     expect(release).toHaveBeenCalledOnce();
     expect(mocks.fallbackStream).not.toHaveBeenCalled();
+  });
+
+  it('keeps preparation under reply cancellation with separate provider stage timeouts', async () => {
+    const controller = new AbortController();
+    const synthesize = vi.fn(async () => streamResult());
+    const close = vi.fn(async () => {});
+    mocks.openSession.mockResolvedValue({ synthesize, close });
+    const session = await prepareSpeechStreamSession(config, { signal: controller.signal });
+    const request = mocks.openSession.mock.calls[0][0];
+    expect(request.signal).toBe(controller.signal);
+    expect(request.timeoutMs).toBe(1_000);
+    await session!.synthesize('**Hello**   world!');
+    expect(synthesize).toHaveBeenCalledWith('Hello world!');
+    await session!.close();
+    expect(close).toHaveBeenCalledOnce();
+    expect(mocks.primaryStream).not.toHaveBeenCalled();
+  });
+
+  it('does not prepare a connection for an already cancelled reply', () => {
+    const controller = new AbortController();
+    controller.abort('barge_in');
+    expect(() => prepareSpeechStreamSession(config, { signal: controller.signal })).toThrow('barge_in');
+    expect(mocks.openSession).not.toHaveBeenCalled();
   });
 
 });

@@ -348,6 +348,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     atBottom,
     registerListContentRef,
     scrollToBottom,
+    replySpaceRef,
+    reserveReplySpace,
     onScroll: onChatViewportScroll,
   } = useChatScrollViewport({
     hasToken: auth.hasToken,
@@ -681,6 +683,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
         pageContextDraft?.envelope,
         (clientSubmissionId, messageRenderKey) => {
           dispatched = true;
+          reserveReplySpace(messageRenderKey ?? clientSubmissionId);
           sendOptions?.onDispatched?.({ clientSubmissionId, messageRenderKey });
         },
       );
@@ -688,7 +691,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       if (pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
       return true;
     },
-    [editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage, pageContextDraft, pageContextKey, m.chat.pageContext.pending],
+    [editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage, pageContextDraft, pageContextKey, m.chat.pageContext.pending, reserveReplySpace],
   );
 
   const projectComposer = useProjectSessionComposer({
@@ -1211,6 +1214,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                     showAssistantWorkLog={!personal}
                     hideAssistantActions={personal}
                     registerListContentRef={registerListContentRef}
+                    replySpaceRef={replySpaceRef}
                     onPickWelcomePrompt={onPickWelcomePrompt}
                     welcomeSpotlight={welcomeSpotlight}
                     welcomeOverlay={

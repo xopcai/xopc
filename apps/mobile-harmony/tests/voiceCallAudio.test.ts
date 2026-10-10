@@ -10,6 +10,20 @@ vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { warn: vi.fn() } }));
 import { XopcVoiceCallAudio } from '../entry/src/main/ets/service/voiceCallAudio.ets';
 
 describe('Harmony voice playback acknowledgement', () => {
+  it('reads exactly one 20 ms uplink frame even when the hardware buffer is larger', async () => {
+    const call = new XopcVoiceCallAudio();
+    const read = vi.fn(async () => new ArrayBuffer(640));
+    const state = call as unknown as { capturer: object; generation: number; capturing: boolean;
+      callbacks: object; captureLoop: (generation: number) => Promise<void> };
+    const onInput = vi.fn(() => { state.capturing = false; });
+    state.generation = 1; state.capturing = true;
+    state.capturer = { getBufferSizeSync: () => 4096, read };
+    state.callbacks = { onInput, onFailure: vi.fn() };
+    await state.captureLoop(1);
+    expect(read).toHaveBeenCalledWith(640, true);
+    expect(onInput).toHaveBeenCalledWith(expect.any(Uint8Array), 980);
+  });
+
   it('ignores a rejected write from playback that the user has flushed', async () => {
     let rejectWrite!: (error: Error) => void;
     const renderer = {

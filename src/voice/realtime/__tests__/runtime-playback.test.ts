@@ -12,6 +12,7 @@ import { alibabaTranscriptionProvider } from '../../stt/providers/alibaba-transc
 import { VoiceRealtimeRuntime } from '../runtime.js';
 
 vi.mock('../../tts/speak-core.js', () => ({
+  prepareSpeechStreamSession: vi.fn(),
   speakStream: vi.fn(async () => ({
     outputFormat: 'pcm',
     audioStream: new ReadableStream<Uint8Array>({

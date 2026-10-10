@@ -45,4 +45,25 @@ describe('SpeakableSegmenter', () => {
     expect(segmenter.push('好的。')).toEqual([]);
     expect(segmenter.push('马上处理。')).toEqual(['好的。马上处理。']);
   });
+  it('releases a first short phrase without dropping the remaining text', () => {
+    const segmenter = new SpeakableSegmenter(180, 24, 0);
+    expect(segmenter.push('我先帮你检查一下现在的配置，然后我们')).toEqual([]);
+    expect(segmenter.flushFirstPhrase()).toEqual(['我先帮你检查一下现在的配置，']);
+    expect(segmenter.flushFirstPhrase()).toEqual([]);
+    expect(segmenter.flush()).toEqual(['然后我们']);
+  });
+
+  it.each([
+    '```ts\nconst hidden = 1;\n',
+    '| hidden table content |',
+    'See [a rather long label with spaces',
+    'See `some rather long code with spaces',
+    'https://example.com/long/path/without/end',
+    '没有自然停顿也不能随意截断正在输出的文字',
+  ])('does not cut incomplete syntax or arbitrary text: %s', text => {
+    const segmenter = new SpeakableSegmenter(180, 24, 0);
+    segmenter.push(text);
+    expect(segmenter.flushFirstPhrase()).toEqual([]);
+  });
+
 });

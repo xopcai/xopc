@@ -28,6 +28,8 @@ describe('gateway scopes', () => {
     expect(requiredGatewayScope('GET', '/api/personal-agent')).toBe('sessions.read');
     expect(requiredGatewayScope('POST', '/api/personal-agent')).toBe('sessions.write');
     expect(requiredGatewayScope('PATCH', '/api/personal-agent/profile')).toBe('sessions.write');
+    expect(requiredGatewayScope('PUT', '/api/personal-agent/avatar')).toBe('sessions.write');
+    expect(requiredGatewayScope('PUT', '/api/agents/personal/avatar')).toBe('gateway.admin');
     expect(requiredGatewayScope('GET', '/api/personal-agent/activity')).toBe('tasks.read');
     expect(requiredGatewayScope('GET', '/api/personal-agent-other')).toBe('gateway.admin');
     expect(requiredGatewayScope('POST', '/api/automations/simulate')).toBe('automations.read');

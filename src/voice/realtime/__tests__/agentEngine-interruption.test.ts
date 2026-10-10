@@ -4,9 +4,9 @@ import type { StreamingSttEvent } from '../../../media-understanding/types.js';
 import type { VoiceAgentEvent } from '../agentBroker.js';
 import type { VoiceEngine } from '../engine.js';
 
-const mocks = vi.hoisted(() => ({ speak: vi.fn(), info: vi.fn(), warn: vi.fn() }));
+const mocks = vi.hoisted(() => ({ speak: vi.fn(), prepare: vi.fn(), info: vi.fn(), warn: vi.fn() }));
 vi.mock('../../../utils/logger.js', () => ({ createLogger: () => ({ info: mocks.info, warn: mocks.warn, debug: vi.fn() }) }));
-vi.mock('../../tts/speak-core.js', () => ({ speakStream: mocks.speak }));
+vi.mock('../../tts/speak-core.js', () => ({ speakStream: mocks.speak, prepareSpeechStreamSession: mocks.prepare }));
 
 import { createAgentVoiceEngine } from '../agentEngine.js';
 
@@ -23,6 +23,7 @@ describe('Agent voice interruption cleanup', () => {
     const sendAudio = vi.fn();
     const onClose = vi.fn(async () => {});
     const release = vi.fn(async () => {});
+    mocks.prepare.mockReturnValue(undefined);
     mocks.speak.mockImplementation(async () => ({
       outputFormat: 'pcm', release,
       audioStream: new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } }),
@@ -56,6 +57,58 @@ describe('Agent voice interruption cleanup', () => {
     await engine.start();
     return { send, sendAudio, release, delegate, onClose, onConversationInput, emit, currentEmit: () => emit, final: (id: string) => emit({ type: 'transcript_final', utteranceId: id, revision: 1, text: id }) };
   }
+
+  it('prepares TTS before the first Agent delta and releases it for a text-only reply', async () => {
+    let resolveAgent!: () => void;
+    const wait = new Promise<void>(resolve => { resolveAgent = resolve; });
+    const test = await setup(async function* () {
+      expect(mocks.prepare).toHaveBeenCalledOnce();
+      await wait;
+      yield { type: 'run_end', payload: { status: 'success' } };
+    });
+    const close = vi.fn(async () => {});
+    const synthesize = vi.fn();
+    mocks.prepare.mockResolvedValue({ close, synthesize });
+    const running = engine.offerTaskUpdate!({ clientMessageId: 'update', content: 'Update' });
+    await vi.waitFor(() => expect(test.delegate).toHaveBeenCalledOnce());
+    expect(synthesize).not.toHaveBeenCalled();
+    resolveAgent();
+    await running;
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('cancels preparation immediately when a reply finishes without speech', async () => {
+    await setup(async function* () { yield { type: 'run_end', payload: { status: 'success' } }; });
+    const cancelled = vi.fn();
+    mocks.prepare.mockImplementation((_config, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => { cancelled(); reject(new Error('Aborted')); }, { once: true });
+    }));
+    await engine.offerTaskUpdate!({ clientMessageId: 'update', content: 'Update' });
+    expect(cancelled).toHaveBeenCalledOnce();
+  });
+
+  it('speaks a first natural phrase while Agent text is still streaming', async () => {
+    let resolveAgent!: () => void;
+    const wait = new Promise<void>(resolve => { resolveAgent = resolve; });
+    const test = await setup(async function* () {
+      yield { type: 'assistant_delta', payload: { delta: '我先帮你检查一下现在的配置，然后我们' } };
+      await wait;
+      yield { type: 'assistant_delta', payload: { delta: '再继续。' } };
+      yield { type: 'run_end', payload: { status: 'success' } };
+    });
+    const close = vi.fn(async () => {});
+    const synthesize = vi.fn(async (_text: string) => ({ outputFormat: 'pcm', release: vi.fn(async () => {}),
+      audioStream: new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } }) }));
+    mocks.prepare.mockResolvedValue({ close, synthesize });
+    const running = engine.offerTaskUpdate!({ clientMessageId: 'update', content: 'Update' });
+    await vi.waitFor(() => expect(synthesize).toHaveBeenCalledWith('我先帮你检查一下现在的配置，'));
+    expect(test.send).not.toHaveBeenCalledWith('response.done', expect.anything());
+    resolveAgent();
+    await running;
+    expect(synthesize.mock.calls.map(([text]) => text)).toEqual(['我先帮你检查一下现在的配置，', '然后我们再继续。']);
+    expect(mocks.speak).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledOnce();
+  });
 
   it('marks only confirmed user speech as new conversation input and defers replies while a turn is pending', async () => {
     const test = await setup(async function* () {

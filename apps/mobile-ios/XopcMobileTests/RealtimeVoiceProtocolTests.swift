@@ -3,6 +3,43 @@ import Testing
 @testable import XopcMobile
 
 struct RealtimeVoiceProtocolTests {
+    @Test func firstAudioTimingSeparatesReceiptAndPlaybackSubmission() {
+        var timing = RealtimeVoiceFirstAudioTiming()
+        timing.speechStopped(100)
+        timing.created("reply")
+        #expect(timing.buffered("reply", now: 200) == nil)
+        #expect(timing.received("reply", now: 300) == 200)
+        #expect(timing.received("reply", now: 320) == nil)
+        timing.created("reply")
+        #expect(timing.buffered("reply", now: 350) == 250)
+        #expect(timing.buffered("reply", now: 370) == nil)
+        timing.finish("reply")
+        #expect(timing.buffered("reply", now: 400) == nil)
+    }
+
+    @Test func timingDoesNotReuseAnEarlierUtteranceOrCall() {
+        var timing = RealtimeVoiceFirstAudioTiming()
+        timing.speechStopped(100)
+        timing.speechStarted()
+        timing.created("reply")
+        #expect(timing.received("reply", now: 300) == nil)
+        timing.speechStopped(400)
+        timing.reset()
+        timing.created("new-call")
+        #expect(timing.received("new-call", now: 500) == nil)
+    }
+
+    @Test func encodesNativePlaybackSubmissionMetric() throws {
+        let data = try JSONEncoder().encode(RealtimeVoiceControlMessage(
+            type: "session.metric", payload: .init(responseId: "reply",
+                metric: "speech_end_to_audio_buffered", durationMs: 123.5)
+        ))
+        let message = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let payload = try #require(message["payload"] as? [String: Any])
+        #expect(payload["metric"] as? String == "speech_end_to_audio_buffered")
+        #expect(payload["durationMs"] as? Double == 123.5)
+    }
+
     @Test func voiceRecoveryMatchesHarmonyTransientFailures() {
         for reason in ["NETWORK", "network", "route_lost", "CAPTURE_FAILED", "PLAYBACK_FAILED",
                        "CAPTURE_INTERRUPTED", "OMNI_CONNECTION_CLOSED", "OMNI_CONNECTION_FAILED"]

@@ -5,7 +5,7 @@ import type { HomeAdviceMetrics, HomeAdvisor, HomeOpportunityHistoryItem } from 
 import type { HomeOpportunityActionRequest, HomeOpportunityActionResponse, HomeOpportunityFeedbackRequest } from '@xopcai/gateway-contract';
 
 import { createLogger } from '../utils/logger.js';
-import { HomeAdviceBudgetExceededError, type HomeAdviceGenerator, type HomeModelGeneration } from './generator.js';
+import { HomeAdviceBudgetExceededError, isHomeProseLocalized, type HomeAdviceGenerator, type HomeModelGeneration } from './generator.js';
 import { HomeAdvicePolicy } from './policy.js';
 import {
   HomeIntelligenceRepository,
@@ -72,6 +72,7 @@ export class HomeIntelligenceHost {
   private stopped = false;
   private abortController = new AbortController();
   private localeHint: 'en' | 'zh';
+  private advisorLocale: 'en' | 'zh';
   private contextRefreshTimer?: NodeJS.Timeout;
   private readonly pendingContextReasons = new Set<HomeGenerationReason>();
 
@@ -80,6 +81,7 @@ export class HomeIntelligenceHost {
     this.opportunities = new HomeOpportunityApplicationService(db, deps.principal, () => deps.capabilities().agentId);
     this.now = deps.now ?? Date.now;
     this.localeHint = deps.locale();
+    this.advisorLocale = this.localeHint;
   }
 
   start(): void {
@@ -101,9 +103,24 @@ export class HomeIntelligenceHost {
     this.pendingContextReasons.clear();
   }
 
-  getAdvisor(): HomeAdvisor {
+  getAdvisor(locale?: string): HomeAdvisor {
     if (this.deps.enabled?.() === false) return { state: 'disabled' };
-    return this.repository.getAdvisor(this.deps.principal, this.now());
+    if (locale) {
+      const requestedLocale = locale.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+      if (requestedLocale !== this.localeHint) {
+        this.requestRefresh('manual_refresh', `locale:${requestedLocale}:${this.now()}`, requestedLocale);
+      }
+    }
+    const advisor = this.repository.getAdvisor(this.deps.principal, this.now());
+    const prose = advisor.state === 'ready'
+      ? [advisor.primary, ...advisor.alternatives].flatMap((item) => [item.title, item.outcome, item.rationale])
+      : advisor.state === 'clarification' ? [advisor.question.question] : [];
+    if ((prose.length > 0 && this.advisorLocale !== this.localeHint) || !isHomeProseLocalized(prose, this.localeHint)) {
+      return advisor.state === 'ready' && advisor.stale
+        ? { state: 'refreshing', requestedAt: this.now() }
+        : { state: 'quiet', reason: 'generation_failed' };
+    }
+    return advisor;
   }
 
   getMetrics(since = Math.max(0, this.now() - 30 * 24 * 60 * 60_000)): HomeAdviceMetrics {
@@ -300,6 +317,7 @@ export class HomeIntelligenceHost {
         outcomeReason: result.state === 'quiet' ? result.reason : result.state,
         completedAt,
       });
+      this.advisorLocale = snapshot.locale;
       this.deps.publish('home.advisor.updated', { state: result.state, completedAt });
       if (result.state === 'ready') {
         const notification = buildHomeOpportunityNotification(

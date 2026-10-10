@@ -301,6 +301,9 @@ data class ConnectionUiState(
   val realtimeStatus: String = "offline",
   val sending: Boolean = false,
   val optimisticText: String = "",
+  val chatSendSequence: Long = 0,
+  val chatSendPreviousUserId: String? = null,
+  val chatSendQueued: Boolean = false,
   val optimisticPreviousUserId: String? = null,
   val sendError: Boolean = false,
   val sendErrorDetail: String? = null,
@@ -565,7 +568,29 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  suspend fun loadPersonalProactivity(): ai.xopc.mobile.gateway.PersonalProactivitySettings {
+    val gatewayId = mutableState.value.profile?.gatewayId
+    val result = runInterruptible(Dispatchers.IO) { personalAgentRepository.proactivity() }
+    check(mutableState.value.profile?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
+    return result
+  }
+
+  suspend fun savePersonalProactivity(settings: ai.xopc.mobile.gateway.PersonalProactivitySettings): ai.xopc.mobile.gateway.PersonalProactivitySettings {
+    val gatewayId = mutableState.value.profile?.gatewayId
+    val result = runInterruptible(Dispatchers.IO) { personalAgentRepository.updateProactivity(settings) }
+    check(mutableState.value.profile?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
+    return result
+  }
+
+  suspend fun uploadPersonalAvatar(bytes: ByteArray) {
+    val gatewayId = mutableState.value.profile?.gatewayId
+    requireNotNull(mutableState.value.personal.agent)
+    runInterruptible(Dispatchers.IO) { personalAgentRepository.uploadAvatar(bytes) }
+    check(mutableState.value.profile?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
+  }
+
   fun loadPersonalVoiceChoices() {
+    loadPersonalAgent()
     val gatewayId = mutableState.value.profile?.gatewayId ?: return
     viewModelScope.launch {
       val choices = runCatching { runInterruptible(Dispatchers.IO) {
@@ -587,7 +612,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     viewModelScope.launch {
       try {
         val route = mutableState.value.personal.agentVoiceChoices
-        val voice = if (route == null || voiceId == null) agent.voicePreference
+        val voice = if (route == null || voiceId == null || voiceId == agent.voicePreference?.voice) agent.voicePreference
           else if (voiceId.isEmpty()) null
           else PersonalVoicePreference(route.provider, route.model, voiceId)
         val updated = runInterruptible(Dispatchers.IO) {
@@ -1120,7 +1145,9 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
         .put("conversationId", conversationId).put("mode", mode)
         .put("supportedProtocolVersions", org.json.JSONArray().put(3))
         .put("mediaPreferences", org.json.JSONArray().put("websocket-pcm")).toString()
-      session.request("/api/voice/realtime/preflight", "POST", body)
+      val timing = org.json.JSONObject(session.request("/api/voice/realtime/preflight", "POST", body))
+        .optJSONArray("timingMetrics")
+      val timingMetrics = (0 until (timing?.length() ?: 0)).map { timing!!.getString(it) }
       val result = org.json.JSONObject(session.request("/api/voice/realtime/sessions", "POST", body))
         .getJSONObject("payload")
       require(result.getInt("protocolVersion") == 3 &&
@@ -1130,7 +1157,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       VoiceCallConnection(result.getString("sessionId"), result.getString("ticket"),
         result.getString("websocketPath"), result.getInt("connectionEpoch"), auth.origin,
         auth.bearer, result.getJSONObject("limits").getLong("maxSessionMs"),
-        result.getJSONObject("route").getString("engine"), result.optBoolean("bargeIn", true))
+        result.getJSONObject("route").getString("engine"), result.optBoolean("bargeIn", true), timingMetrics)
     }
 
   suspend fun cancelVoiceCall(call: VoiceCallConnection) = runInterruptible(Dispatchers.IO) {
@@ -4251,6 +4278,9 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       (!modelPrepared && !mutableState.value.draftModelReady) ||
       mutableState.value.realtimeStatus != "connected") return false
     mutableState.update { it.copy(sending = true, sendError = false, sendErrorDetail = null,
+      chatSendSequence = it.chatSendSequence + 1,
+      chatSendPreviousUserId = it.messages.lastOrNull { message -> message.role == "user" }?.id,
+      chatSendQueued = it.activeRunId != null,
       sendRejected = false, optimisticText = content,
       optimisticPreviousUserId = it.messages.lastOrNull { message -> message.role == "user" }?.id) }
     viewModelScope.launch {

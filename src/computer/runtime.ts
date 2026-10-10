@@ -104,7 +104,7 @@ export class ComputerRuntime {
       if (!profile) throw new Error('COMPUTER_MODEL_CAPABILITY_REQUIRED');
       const apiKey = await getApiKey(model.provider, { agentId: effective.id, appConfig: config });
       if (!apiKey) throw new Error('COMPUTER_MODEL_KEY_MISSING');
-      let deployment: { revision: string; origin: string } | undefined;
+      let deployment: { revision: string; origin?: string } | undefined;
       let serviceLimits: ComputerServiceLimits | undefined;
       if (model.provider === 'xopc-cloud') {
         const response = await fetch(`${model.baseUrl.replace(/\/$/, '')}/models`, { headers: { Authorization: `Bearer ${apiKey}` },
@@ -112,7 +112,7 @@ export class ComputerRuntime {
         if (!response.ok) { await response.body?.cancel(); throw new Error('COMPUTER_DEPLOYMENT_UNAVAILABLE'); }
         const body = await readComputerJson(response, 2 * 1024 * 1024) as { data?: Array<{ id: string; xopc?: { computerDeployment?: unknown; computerLimits?: unknown } }> };
         const metadata = body.data?.find(item => item.id === model.id)?.xopc;
-        const parsedDeployment = z.object({ revision: z.string().regex(/^[a-f0-9]{64}$/), origin: z.string().url() }).safeParse(metadata?.computerDeployment);
+        const parsedDeployment = z.object({ revision: z.string().regex(/^[a-f0-9]{64}$/), origin: z.string().url().optional() }).safeParse(metadata?.computerDeployment);
         const parsedLimits = ComputerServiceLimitsSchema.optional().safeParse(metadata?.computerLimits);
         if (!parsedDeployment.success || !parsedLimits.success) throw new Error('COMPUTER_DEPLOYMENT_UNAVAILABLE');
         deployment = parsedDeployment.data; serviceLimits = parsedLimits.data;
@@ -122,7 +122,7 @@ export class ComputerRuntime {
       signal.throwIfAborted();
       s = { id: randomUUID(), owner, appRef: input.appRef, mode: input.mode, prepare: input.prepare, windowRef: input.windowRef, endpointId: endpoint.endpointId, adapter,
         binding: { modelRef: ref, profile, origin: new URL(model.baseUrl).origin, runtimeLocation: 'unknown',
-          ...(deployment ? { upstreamOrigin: deployment.origin } : {}) },
+          ...(deployment?.origin ? { upstreamOrigin: deployment.origin } : {}) },
         createdAt: Date.now(), actions: 0, modelRequests: 0, controller: new AbortController(), task: new ComputerTaskState(), serviceLimits };
       this.sessions.set(owner, s);
       enterComputerControl(owner, async () => { await this.close(owner); });

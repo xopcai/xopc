@@ -45,10 +45,12 @@ export class XopcVoiceTiming {
     return response.stoppedAt === undefined ? undefined : Math.max(0, now - response.stoppedAt);
   }
 
-  buffered(id: string, milliseconds: number, now: number): void {
-    const response = this.find(id); if (!response) return;
-    if (response.bufferedAt === undefined) response.bufferedAt = now;
+  buffered(id: string, milliseconds: number, now: number): number | undefined {
+    const response = this.find(id); if (!response) return undefined;
+    const first = response.bufferedAt === undefined;
+    if (first) response.bufferedAt = now;
     response.bufferedMs = Math.max(response.bufferedMs, milliseconds);
+    return first ? this.elapsed(response.stoppedAt, now) : undefined;
   }
 
   played(id: string, milliseconds: number, now: number, source: string): void {

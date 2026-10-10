@@ -7,7 +7,8 @@ describe('Harmony voice phase timing', () => {
     timing.speechStopped(100); timing.created('first', 300);
     expect(timing.received('first', 400)).toBe(300);
     expect(timing.received('first', 420)).toBeUndefined();
-    timing.buffered('first', 20, 450); timing.buffered('first', 40, 460);
+    expect(timing.buffered('first', 20, 450)).toBe(350);
+    expect(timing.buffered('first', 40, 460)).toBeUndefined();
     timing.played('first', 20, 500, 'timestamp'); timing.played('first', 40, 550, 'drain');
     expect(timing.finish('first', 'natural', 'speaker', 'completed')).toMatchObject({
       speechStopToResponseMs: 200, speechStopToAudioReceivedMs: 300,

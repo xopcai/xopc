@@ -28,16 +28,28 @@ describe('useChatScrollViewport', () => {
     resizeObserver = null;
     viewport = null;
     observers = new Map();
+    const frames = new Map<number, FrameRequestCallback>();
+    let frameId = 0;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.set(++frameId, callback);
+      return frameId;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
+    const flushFrames = () => {
+      const callbacks = [...frames.values()];
+      frames.clear();
+      callbacks.forEach((callback) => callback(0));
+    };
 
     class ResizeObserverMock implements ResizeObserver {
       constructor(private callback: ResizeObserverCallback) {
-        resizeCallback = callback;
+        resizeCallback = (...args) => { callback(...args); flushFrames(); };
         resizeObserver = this;
       }
 
       disconnect() {}
       observe(target: Element) {
-        observers.set(target, () => this.callback([], this));
+        observers.set(target, () => { this.callback([], this); flushFrames(); });
       }
       unobserve() {}
     }
@@ -54,11 +66,11 @@ describe('useChatScrollViewport', () => {
     vi.unstubAllGlobals();
   });
 
-  function Harness({ messages = chatMessages }: { messages?: Message[] }) {
+  function Harness({ messages = chatMessages, conversationId = 'session-1' }: { messages?: Message[]; conversationId?: string }) {
     viewport = useChatScrollViewport({
       hasToken: true,
       showSessionLoading: false,
-      conversationId: 'session-1',
+      conversationId,
       chatMessages: messages,
       hasMore: false,
       loadingMore: false,
@@ -66,10 +78,69 @@ describe('useChatScrollViewport', () => {
     });
     return (
       <div ref={viewport.scrollRef} onScroll={viewport.onScroll}>
-        <div ref={viewport.registerListContentRef} />
+        <div ref={viewport.registerListContentRef}>
+          {messages.map((message, index) => <div key={index} data-chat-message-row data-message-render-key={message.renderKey} />)}
+          <div ref={viewport.replySpaceRef} data-chat-reply-space />
+        </div>
       </div>
     );
   }
+
+  it.each([[600, 60], [800, 64], [200, 20]])('bounds reply space for a %ipx viewport to %ipx and preserves history', (height, budget) => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    const spacer = el.querySelector<HTMLDivElement>('[data-chat-reply-space]')!;
+    let replyHeight = 0;
+    let top = 1000 - height;
+    Object.defineProperties(el, {
+      clientHeight: { configurable: true, value: height },
+      scrollHeight: { configurable: true, get: () => 1000 + replyHeight + (parseFloat(spacer.style.height) || 0) },
+      scrollTop: { configurable: true, get: () => top, set: (value: number) => { top = Math.min(value, el.scrollHeight - el.clientHeight); } },
+    });
+    spacer.getBoundingClientRect = () => ({ top: 1000 + replyHeight } as DOMRect);
+    act(() => viewport?.reserveReplySpace('sent-user'));
+    const sent: Message = { role: 'user', renderKey: 'sent-user', content: [{ type: 'text', text: 'New question' }] };
+    // The optimistic row is measured in the same layout pass as dispatch.
+    const original = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.dataset.messageRenderKey === 'sent-user') return { bottom: 1000 } as DOMRect;
+      return original.call(this);
+    });
+    act(() => root.render(<Harness messages={[...chatMessages, sent]} />));
+    expect(spacer.style.height).toBe(`${budget}px`);
+    expect(top).toBe(1000 - height + budget);
+
+    replyHeight = 10;
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(spacer.style.height).toBe(`${budget - 10}px`);
+    expect(top).toBe(1000 - height + budget);
+    // Repeated resize notifications and turn completion do not remove the unused space.
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(spacer.style.height).toBe(`${budget - 10}px`);
+
+    top = 100;
+    act(() => viewport?.onScroll());
+    act(() => viewport?.reserveReplySpace('history-send'));
+    replyHeight = 160;
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(spacer.style.height).toBe(`${budget - 10}px`);
+    expect(top).toBe(100);
+    act(() => root.render(<Harness conversationId="session-2" />));
+    expect(spacer.style.height).toBe('0px');
+    vi.restoreAllMocks();
+  });
+
+  it('does not reserve space when a message is sent while reading history', () => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    Object.defineProperties(el, { clientHeight: { value: 400 }, scrollHeight: { value: 1000 } });
+    el.scrollTop = 100;
+    act(() => viewport?.onScroll());
+    act(() => viewport?.reserveReplySpace('history-send'));
+    act(() => root.render(<Harness messages={[...chatMessages, { role: 'user', renderKey: 'history-send', content: [] }]} />));
+    expect(el.querySelector<HTMLDivElement>('[data-chat-reply-space]')?.style.height).toBe('0px');
+    expect(el.scrollTop).toBe(100);
+  });
 
 
   it('follows content growth before paint and respects the next real user scroll', () => {

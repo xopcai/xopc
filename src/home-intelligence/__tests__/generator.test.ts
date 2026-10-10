@@ -121,6 +121,58 @@ describe('HomeAdviceGenerator', () => {
     expect(correction?.content).toContain('Return the corrected JSON object only');
   });
 
+  it('repairs English recommendations generated from English evidence for a Chinese user', async () => {
+    const english = readyResult();
+    english.candidates[0]!.title = 'Stop lane replay from contaminating shared dev validation';
+    english.candidates[0]!.rationale = 'The calendar issue was traced to lane branches.';
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce(modelResponse(english))
+      .mockResolvedValueOnce(modelResponse(readyResult()));
+
+    const generation = await new HomeAdviceGenerator(() => config).generate(snapshot, {
+      agentId: 'main', connectors: new Set(), skills: new Set(),
+    });
+    expect(generation.result).toEqual(readyResult());
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[1]?.[1].messages[1]?.content)
+      .toContain('User-visible prose must be in Simplified Chinese');
+  });
+
+  it('rejects English prose when the correction still ignores the requested language', async () => {
+    const english = readyResult();
+    english.candidates[0]!.outcome = 'Establish whether the lane environment is replaying events.';
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(modelResponse(english));
+    await expect(new HomeAdviceGenerator(() => config).generate(snapshot, {
+      agentId: 'main', connectors: new Set(), skills: new Set(),
+    })).rejects.toThrow('User-visible prose must be in Simplified Chinese');
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
+  });
+
+  it('decodes HTML entities only in prose, preserving evidence and capability identifiers', async () => {
+    const encoded = readyResult();
+    encoded.candidates[0]!.rationale = '&#x5F53;前项目 &amp; PR #9173 需要推进';
+    encoded.candidates[0]!.evidenceIds = ['project:atlas:&amp;'];
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(modelResponse(encoded));
+    const generation = await new HomeAdviceGenerator(() => config).generate(snapshot, {
+      agentId: 'main', connectors: new Set(), skills: new Set(),
+    });
+    expect(generation.result).toMatchObject({
+      state: 'ready', candidates: [{ rationale: '当前项目 & PR #9173 需要推进', evidenceIds: ['project:atlas:&amp;'] }],
+    });
+    expect(completeWithResolvedCredentials).toHaveBeenCalledOnce();
+  });
+
+  it('accepts English prose for an English locale', async () => {
+    const english = readyResult();
+    english.candidates[0]!.title = 'Stop lane replay';
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(modelResponse(english));
+    const generation = await new HomeAdviceGenerator(() => config).generate({ ...snapshot, locale: 'en' }, {
+      agentId: 'main', connectors: new Set(), skills: new Set(),
+    });
+    expect(generation.result).toEqual(english);
+    expect(completeWithResolvedCredentials).toHaveBeenCalledOnce();
+  });
+
   it('checks the provider budget again before a JSON correction call', async () => {
     vi.mocked(completeWithResolvedCredentials).mockResolvedValue(modelResponse({
       state: 'ready', candidates: [{ ...readyResult().candidates[0], confidence: 'invalid' }],

@@ -1,3 +1,4 @@
+import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatView } from './ChatView';
 import { CHAT_ACTION_PANEL_CLOSE_MS, CHAT_ACTION_PANEL_OPEN_MS, XopcChatActionPanel } from './ChatActionPanel';
@@ -488,7 +489,7 @@ export struct XopcHomeView {
               && this.personalAgent.record.conversationId === this.activeChatId) {
               XopcPersonalAgentAvatar({ extent: 28, compact: true, activePage: this.tab === 0 && !this.detailVisible,
                 agentId: this.personalAgent.record.agentId,
-                appearance: this.personalAgent.record.appearance }).id('assistant-tab-personal-avatar')
+                appearance: this.personalAgent.record.appearance, revision: this.personalAgent.record.revision ?? 0 }).id('assistant-tab-personal-avatar')
             } else {
               XopcLoopi({ extent: 28, compact: true, activePage: this.tab === 0 && !this.detailVisible }).id('assistant-tab-loopi')
             }
@@ -653,6 +654,7 @@ export struct XopcHomeView {
       Tabs({ barPosition: BarPosition.End, index: this.tab }) {
         TabContent() { XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
           personalAgent: this.personalAgent.record,
+          onPersonalAgentSaved: (record: XopcPersonalAgentRecord): void => { this.personalAgent.record = record; },
           focusRevision: this.chatFocusRevision,
           requestedAction: this.requestedChatAction, actionRevision: this.chatActionRevision,
           intakeRevision: this.intake.chatRevision, intakeText: this.requestedChatDraft,
