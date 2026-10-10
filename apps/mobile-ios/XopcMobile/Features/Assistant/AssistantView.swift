@@ -37,7 +37,6 @@ struct AssistantView<Dock: View>: View {
     @State private var showingSessionActions = false
     @State private var showingPersonalProfile = false
     @State private var showingMessageSearch = false
-    @State private var messageSearchQuery = ""
     @State private var executionPresentation: ExecutionActivityPresentation?
     @State private var handledQuickChatID: UUID?
     @State private var readAloud = ChatReadAloud()
@@ -80,28 +79,10 @@ struct AssistantView<Dock: View>: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
-        .sheet(isPresented: $showingMessageSearch) {
-            NavigationStack {
-                VStack(spacing: 12) {
-                    HStack {
-                        Text("搜索消息").font(.headline)
-                        Spacer()
-                        Button("完成") { showingMessageSearch = false }
-                            .accessibilityIdentifier("chat-search-close")
-                    }.padding(.horizontal).padding(.top)
-                    TextField("搜索消息", text: $messageSearchQuery)
-                        .textFieldStyle(.roundedBorder).padding(.horizontal)
-                        .accessibilityIdentifier("chat-message-search-input")
-                    List {
-                        Text("搜索已加载的消息").foregroundStyle(.secondary)
-                        ForEach(state.messages.filter { !messageSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                && $0.text.localizedCaseInsensitiveContains(messageSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines))
-                        }) { message in
-                            Text(message.text).textSelection(.enabled)
-                        }
-                    }.accessibilityIdentifier("chat-message-search-sheet")
-                }.toolbar(.hidden, for: .navigationBar)
-            }
+        .fullScreenCover(isPresented: $showingMessageSearch) {
+            ChatMessageSearchView(messages: state.messages, configuration: configuration,
+                conversationID: conversation?.id, assistantState: state, readAloud: readAloud,
+                canReadAloud: realtimeVoiceCall.phase == .idle)
         }
         .sheet(isPresented: $showingPersonalProfile) {
             if let personalAgent, let conversation {
@@ -692,7 +673,7 @@ struct AssistantView<Dock: View>: View {
                 Button { showingPersonalProfile = true } label: {
                     HStack(spacing: 8) {
                         PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 36, active: isActive)
-                        Text(currentAgentName).font(.system(size: 16, weight: .medium)).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                        Text(verbatim: currentAgentName).font(.system(size: 16, weight: .medium)).lineLimit(1).fixedSize(horizontal: true, vertical: false)
                     }
                     .padding(.leading, 6).padding(.trailing, 14).frame(height: 48)
                     .background(.ultraThinMaterial, in: Capsule())
@@ -701,12 +682,14 @@ struct AssistantView<Dock: View>: View {
             } else {
                 Menu {
                     ForEach(state.agents) { agent in
-                        Button(agent.displayName) { requestConversation(agent.id) }
+                        Button { requestConversation(agent.id) } label: { Text(verbatim: agent.displayName) }
                     }
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "person.crop.circle").font(.system(size: 28))
-                        Text(conversationNavigationTitle).font(.system(size: 16, weight: .medium)).lineLimit(1)
+                        ConfiguredAgentAvatar(configuration: configuration,
+                            agent: state.agents.first(where: { $0.id == conversation?.agentId }) ?? state.selectedAgent,
+                            size: 36, active: isActive)
+                        Text(verbatim: conversationNavigationTitle).font(.system(size: 16, weight: .medium)).lineLimit(1)
                     }.padding(.horizontal, 12).frame(height: 48)
                         .background(.ultraThinMaterial, in: Capsule())
                 }
@@ -715,7 +698,7 @@ struct AssistantView<Dock: View>: View {
         ToolbarItem(placement: .topBarTrailing) {
             HStack(spacing: 0) {
                 Button {
-                    messageSearchQuery = ""; showingMessageSearch = true
+                    showingMessageSearch = true
                 } label: { Image(systemName: "magnifyingglass").font(.system(size: 22)).frame(width: 44, height: 44) }
                     .accessibilityLabel("搜索消息").accessibilityIdentifier("chat-header-search")
                 Button {
@@ -1122,5 +1105,110 @@ private struct PersonalProactivitySection: View {
         defer { busy = false }
         do { self.settings = try await GatewayClient(configuration: configuration).updatePersonalProactivity(settings); error = nil; saved = true }
         catch { self.error = error.localizedDescription }
+    }
+}
+
+
+private struct ChatMessageSearchView: View {
+    let messages: [TimelineMessage]
+    let configuration: GatewayConfiguration
+    let conversationID: String?
+    let assistantState: AssistantState
+    let readAloud: ChatReadAloud
+    let canReadAloud: Bool
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
+    @State private var query = ""
+    @State private var category = "messages"
+    @State private var selectedMessage: TimelineMessage?
+    @FocusState private var focused: Bool
+
+    private var categories: [(String, String)] {
+        let chinese = locale.language.languageCode?.identifier == "zh"
+        return [("messages", chinese ? "消息" : "Messages"), ("files", chinese ? "文件" : "Files"),
+                ("links", chinese ? "链接" : "Links"), ("images", chinese ? "图片" : "Images")]
+    }
+
+    private func content(_ message: TimelineMessage) -> String {
+        switch category {
+        case "files": return message.attachments.filter { !$0.isImage }.map { $0.name ?? "File" }.joined(separator: "\n")
+        case "images": return message.attachments.filter { $0.isImage }.map { $0.name ?? "Image" }.joined(separator: "\n")
+        case "links":
+            guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return "" }
+            return detector.matches(in: message.text, range: NSRange(message.text.startIndex..., in: message.text))
+                .compactMap { $0.url?.absoluteString }.filter { $0.hasPrefix("http") }.joined(separator: "\n") + "\n"
+                + message.resultLinks.map { $0.url.absoluteString }.joined(separator: "\n")
+        default: return message.text
+        }
+    }
+
+    private var results: [TimelineMessage] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return messages.filter { message in
+            let text = content(message)
+            return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && (needle.isEmpty ? category != "messages" : text.localizedCaseInsensitiveContains(needle))
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                ForEach(results) { message in
+                    Button {
+                        focused = false
+                        selectedMessage = message
+                    } label: {
+                        Text(content(message)).lineLimit(4).frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(16).background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+                    }.buttonStyle(.plain).accessibilityIdentifier("chat-search-result-\(message.id)")
+                }
+                if !query.isEmpty && results.isEmpty {
+                    Text(locale.language.languageCode?.identifier == "zh" ? "没有找到相关内容" : "No results")
+                        .foregroundStyle(.secondary)
+                }
+            }.padding(20)
+        }
+        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    ForEach(categories, id: \.0) { item in
+                        Button { category = item.0; focused = true } label: {
+                            Text(item.1).foregroundStyle(category == item.0 ? Color.accentColor : Color.primary)
+                                .padding(.horizontal, 14).frame(minHeight: 44)
+                                .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
+                        }.buttonStyle(.plain).accessibilityIdentifier("chat-search-category-\(item.0)")
+                            .accessibilityAddTraits(category == item.0 ? .isSelected : [])
+                    }
+                }
+                HStack(spacing: 10) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                        TextField("搜索", text: $query).focused($focused).submitLabel(.search)
+                            .onSubmit { focused = false }
+                            .accessibilityIdentifier("chat-message-search-input")
+                    }.padding(.horizontal, 16).frame(minHeight: 48)
+                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .capsule)
+                    Button { focused = false; dismiss() } label: {
+                        Image(systemName: "xmark").frame(width: 48, height: 48)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .circle)
+                    }.buttonStyle(.plain).accessibilityLabel("关闭")
+                        .accessibilityIdentifier("chat-search-close")
+                }
+            }.padding(.horizontal, 16).padding(.vertical, 8)
+                .background(Color(uiColor: .systemGroupedBackground))
+        }
+        .task { focused = true }
+        .sheet(item: $selectedMessage) { message in
+            NavigationStack {
+                ScrollView {
+                    MessageBubble(message: message, configuration: configuration, conversationID: conversationID,
+                        assistantState: assistantState, readAloud: readAloud, canReadAloud: canReadAloud,
+                        previewEligible: false, onReuseUserText: { _ in }).padding()
+                }.toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("完成") { selectedMessage = nil } }
+                }
+            }.presentationDetents([.fraction(0.92)])
+        }
     }
 }

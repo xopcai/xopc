@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,19 +30,34 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -54,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
@@ -108,7 +125,7 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
   var outcome by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var date by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var status by rememberSaveable(state.gatewayId) { mutableStateOf("active") }
-  var dateError by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  var datePickerOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var saveStartedRevision by rememberSaveable(state.gatewayId) { mutableStateOf(state.savedGoalRevision) }
   fun openEditor(goal: PersonalGoal?) {
     editingId = goal?.id
@@ -116,7 +133,7 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
     outcome = goal?.outcome.orEmpty()
     date = goal?.targetAt?.let(::goalDateText).orEmpty()
     status = goal?.status ?: "active"
-    dateError = false
+    datePickerOpen = false
     saveStartedRevision = state.savedGoalRevision
     editorOpen = true
   }
@@ -183,46 +200,112 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
     Spacer(Modifier.height(bottomChromeHeight + 24.dp))
   }
   if (agentEditorOpen) PersonalAgentProfileSheet(state, { agentEditorOpen = false }, onLoadAgentVoices,
-    onUpdateAgentProfile, onLoadProactivity, onSaveProactivity, onUploadAvatar, { agentEditorOpen = false; onModel() })
-  if (editorOpen) ModalBottomSheet(onDismissRequest = { if (!state.savingGoal) editorOpen = false },
-    modifier = Modifier.testTag("personal-goal-sheet")) {
-    Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())
-      .padding(horizontal = 20.dp).padding(bottom = 24.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      Text(stringResource(if (editingId == null) R.string.personal_goal_add else R.string.personal_goal_edit),
-        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-      Text(stringResource(R.string.personal_goal_help), style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant)
-      OutlinedTextField(title, { title = it.take(120) }, Modifier.fillMaxWidth().testTag("goal-title"),
-        label = { Text(stringResource(R.string.personal_goal_title)) }, singleLine = true)
-      OutlinedTextField(outcome, { outcome = it.take(600) }, Modifier.fillMaxWidth().height(140.dp)
-        .testTag("goal-outcome"), label = { Text(stringResource(R.string.personal_goal_outcome)) })
-      OutlinedTextField(date, { date = it; dateError = false }, Modifier.fillMaxWidth().testTag("goal-date"),
-        label = { Text(stringResource(R.string.personal_goal_date)) }, singleLine = true,
-        isError = dateError)
-      if (dateError) Text(stringResource(R.string.personal_goal_date_error),
-        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-      if (editingId != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf("active" to R.string.personal_active, "paused" to R.string.personal_paused,
-          "achieved" to R.string.personal_achieved).forEach { (value, label) ->
-          FilterChip(selected = status == value, onClick = { status = value },
-            label = { Text(stringResource(label)) })
+    onUpdateAgentProfile, onLoadProactivity, onSaveProactivity, onUploadAvatar)
+  if (editorOpen) {
+    val currentSaving by rememberUpdatedState(state.savingGoal)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,
+      confirmValueChange = { it != SheetValue.Hidden || !currentSaving })
+    val keyboard = LocalSoftwareKeyboardController.current
+    val outcomeFocus = remember { FocusRequester() }
+    val fieldColors = TextFieldDefaults.colors(
+      focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+      unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+      disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+      focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+      disabledIndicatorColor = Color.Transparent)
+    ModalBottomSheet(onDismissRequest = { if (!state.savingGoal) editorOpen = false },
+      sheetState = sheetState, containerColor = MaterialTheme.colorScheme.surface,
+      modifier = Modifier.testTag("personal-goal-sheet")) {
+      Column(Modifier.fillMaxWidth()
+        .height(minOf(600.dp, LocalConfiguration.current.screenHeightDp.dp * 0.86f)).imePadding()
+        .padding(horizontal = 24.dp).padding(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text(stringResource(if (editingId == null) R.string.personal_goal_add else R.string.personal_goal_edit),
+            style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+          Text(stringResource(R.string.personal_goal_help), style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).testTag("goal-form"),
+          verticalArrangement = Arrangement.spacedBy(20.dp)) {
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.personal_goal_title), style = MaterialTheme.typography.labelLarge)
+            TextField(title, { title = it.take(120) },
+              Modifier.fillMaxWidth().testTag("goal-title"), enabled = !state.savingGoal,
+              placeholder = { Text(stringResource(R.string.personal_goal_title_hint)) },
+              singleLine = true, shape = RoundedCornerShape(16.dp), colors = fieldColors,
+              keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+              keyboardActions = KeyboardActions(onNext = { outcomeFocus.requestFocus() }))
+          }
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.personal_goal_outcome), style = MaterialTheme.typography.labelLarge)
+            TextField(outcome, { outcome = it.take(600) },
+              Modifier.fillMaxWidth().focusRequester(outcomeFocus).testTag("goal-outcome"),
+              enabled = !state.savingGoal, minLines = 3, maxLines = 5,
+              placeholder = { Text(stringResource(R.string.personal_goal_outcome_hint)) },
+              shape = RoundedCornerShape(16.dp), colors = fieldColors)
+          }
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.personal_goal_date_optional), style = MaterialTheme.typography.labelLarge)
+            Card(onClick = { keyboard?.hide(); datePickerOpen = true }, enabled = !state.savingGoal,
+              modifier = Modifier.fillMaxWidth().testTag("goal-date"),
+              shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+              Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(date.ifBlank { stringResource(R.string.personal_goal_date_none) },
+                  modifier = Modifier.weight(1f), color = if (date.isBlank())
+                    MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+                ActionIcon(R.drawable.action_chevron_right, size = 18.dp)
+              }
+            }
+            if (date.isNotBlank()) TextButton(onClick = { date = "" }, enabled = !state.savingGoal,
+              modifier = Modifier.testTag("goal-date-clear")) {
+              Text(stringResource(R.string.personal_goal_date_clear))
+            }
+          }
+          if (editingId != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("active" to R.string.personal_active, "paused" to R.string.personal_paused,
+              "achieved" to R.string.personal_achieved).forEach { (value, label) ->
+              FilterChip(selected = status == value, onClick = { status = value },
+                enabled = !state.savingGoal, label = { Text(stringResource(label)) })
+            }
+          }
+          if (state.goalError) Text(stringResource(R.string.personal_goal_save_error),
+            color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.testTag("goal-save-error"))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+          TextButton(onClick = { editorOpen = false }, enabled = !state.savingGoal,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("goal-cancel")) {
+            Text(stringResource(R.string.progress_cancel))
+          }
+          Button(onClick = {
+            keyboard?.hide()
+            onSaveGoal(editingId, title.trim(), outcome.trim(), status, goalDateTimestamp(date))
+          }, enabled = title.isNotBlank() && outcome.isNotBlank() && !state.savingGoal,
+            modifier = Modifier.weight(2f).heightIn(min = 48.dp).testTag("goal-save")) {
+            Text(stringResource(if (state.savingGoal) R.string.personal_agent_saving else R.string.progress_save))
+          }
         }
       }
-      if (state.goalError) Text(stringResource(R.string.personal_goal_save_error),
-        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        TextButton(onClick = { editorOpen = false }, enabled = !state.savingGoal,
-          modifier = Modifier.weight(1f)) { Text(stringResource(R.string.progress_cancel)) }
-        Button(onClick = {
-          val target = goalDateTimestamp(date)
-          dateError = date.isNotBlank() && target == null
-          if (!dateError) onSaveGoal(editingId, title, outcome, status, target)
-        }, enabled = title.isNotBlank() && outcome.isNotBlank() && !state.savingGoal,
-          modifier = Modifier.weight(1f).testTag("goal-save")) {
+    }
+    if (datePickerOpen) {
+      val picker = rememberDatePickerState(initialSelectedDateMillis = date.takeIf { it.isNotBlank() }
+        ?.let { LocalDate.parse(it).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() })
+      DatePickerDialog(onDismissRequest = { datePickerOpen = false },
+        modifier = Modifier.testTag("goal-date-picker"),
+        confirmButton = { TextButton(onClick = {
+          picker.selectedDateMillis?.let {
+            date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString()
+          }
+          datePickerOpen = false
+        }, enabled = picker.selectedDateMillis != null, modifier = Modifier.testTag("goal-date-confirm")) {
           Text(stringResource(R.string.progress_save))
-        }
-      }
+        } },
+        dismissButton = { TextButton(onClick = { datePickerOpen = false }) {
+          Text(stringResource(R.string.progress_cancel))
+        } }) { DatePicker(state = picker) }
     }
   }
 }

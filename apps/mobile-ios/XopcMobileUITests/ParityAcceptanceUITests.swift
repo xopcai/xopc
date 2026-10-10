@@ -1933,6 +1933,29 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
     }
 
+    func testMessageSearchBottomControlsAndClose() {
+        tab("conversations")
+        let personal = app.buttons["conversations-personal-agent-entry"]
+        XCTAssertTrue(personal.waitForExistence(timeout: 10))
+        personal.tap()
+        let search = app.buttons["chat-header-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap()
+        let input = app.textFields["chat-message-search-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        let tabs = ["messages", "files", "links", "images"].map { app.buttons["chat-search-category-\($0)"] }
+        tabs.forEach { XCTAssertTrue($0.exists) }
+        XCTAssertLessThanOrEqual(tabs[0].frame.maxY, input.frame.minY)
+        XCTAssertLessThanOrEqual(input.frame.maxY, app.keyboards.firstMatch.frame.minY + 4)
+        input.typeText("检查结果")
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "所有改动均已记录")).firstMatch.waitForExistence(timeout: 5))
+        capture("message-search-bottom-controls")
+        app.buttons["chat-search-close"].tap()
+        XCTAssertTrue(app.buttons["chat-header-search"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["chat-message-search-input"].exists)
+    }
+
     func testPersonalChatHeaderSearchAndSettings() {
         tab("conversations")
         let personal = app.buttons["conversations-personal-agent-entry"]

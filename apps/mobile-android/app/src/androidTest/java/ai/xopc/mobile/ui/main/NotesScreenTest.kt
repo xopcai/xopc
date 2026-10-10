@@ -279,7 +279,9 @@ class NotesScreenTest {
       baseRemoteVersion = 1), selectedId = remote.id, detail = remote,
       draftSyncedVersion = local.version) }
     composeTestRule.onNodeWithTag("notes-draft-body").assertExists().assertIsEnabled()
-    composeTestRule.onNodeWithTag("notes-back").performClick()
+    composeTestRule.onNodeWithTag("notes-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("note-detail-title").assertExists()
   }
 
@@ -294,7 +296,9 @@ class NotesScreenTest {
     }
     composeTestRule.onNodeWithTag("notes-new").performClick()
     composeTestRule.onNodeWithTag("notes-create-text").performClick()
-    composeTestRule.onNodeWithTag("notes-back").performClick()
+    composeTestRule.onNodeWithTag("notes-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     assertEquals(1, saves)
     composeTestRule.onNodeWithTag("notes-draft-body").assertExists()
   }

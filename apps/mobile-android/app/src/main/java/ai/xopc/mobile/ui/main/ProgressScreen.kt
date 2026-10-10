@@ -9,6 +9,14 @@ import ai.xopc.mobile.gateway.ProgressProjectSession
 import ai.xopc.mobile.gateway.WorkflowDetail
 import ai.xopc.mobile.gateway.WorkflowRun
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -100,6 +108,21 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   LaunchedEffect(page) { onTopLevelChange(page == "overview") }
   var selectedTaskId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var detailReturnPage by rememberSaveable(state.gatewayId) { mutableStateOf("overview") }
+  var taskSearchOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  val focusManager = LocalFocusManager.current
+  val keyboardController = LocalSoftwareKeyboardController.current
+  fun closeTaskSearch() {
+    if (state.taskSearchText.isNotEmpty()) { onSearchChange(""); onSubmitSearch() }
+    taskSearchOpen = false
+    focusManager.clearFocus(force = true)
+    keyboardController?.hide()
+  }
+  LaunchedEffect(page, state.taskSearchText, state.taskSearch) {
+    if (page == "tasks" && state.taskSearchText.trim() != state.taskSearch) {
+      kotlinx.coroutines.delay(250)
+      onSubmitSearch()
+    }
+  }
   var taskFilter by rememberSaveable(state.gatewayId) { mutableStateOf("all") }
   var editTitle by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf("") }
   var editBody by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf("") }
@@ -161,6 +184,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   BackHandler(enabled = page != "overview") {
     goBack()
   }
+  BackHandler(enabled = page == "tasks" && taskSearchOpen) { closeTaskSearch() }
   LaunchedEffect(page, selectedTaskId, state.detailTaskId) {
     val id = selectedTaskId
     if ((page == "detail" || page == "edit") && id != null &&
@@ -265,22 +289,20 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         fontWeight = FontWeight.Bold)
       if (page == "overview") IconButton(onClick = { page = "tasks" },
         modifier = Modifier.testTag("progress-all-work")) {
-        Icon(painterResource(R.drawable.tab_progress), contentDescription = stringResource(R.string.progress_all_work),
+        Icon(painterResource(R.drawable.action_task_list), contentDescription = stringResource(R.string.progress_tasks),
           modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface)
       }
-      else Row {
-        if (page == "tasks") TextButton(onClick = { page = "workflows" },
-          modifier = Modifier.testTag("progress-workflows")) { Text(stringResource(R.string.workflows)) }
-        if (page == "tasks") TextButton(onClick = onCreateTaskWithChat,
-          enabled = !state.creatingTaskChat,
-          modifier = Modifier.testTag("progress-create-task-chat")) {
-          Text(stringResource(R.string.progress_new_task))
+      else if (page == "tasks") Row {
+        if (!taskSearchOpen) IconButton(onClick = { taskSearchOpen = true },
+          modifier = Modifier.size(48.dp).testTag("progress-open-search")) {
+          Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.progress_search),
+            modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
         }
-        TextButton(onClick = ::goBack,
-          enabled = !state.commandBusy && !state.editBusy && !state.createBusy &&
-            !state.automations.createBusy && !state.automations.editBusy &&
-            !state.automations.deleteBusy && !state.creatingTaskChat,
-          modifier = Modifier.testTag("progress-back")) { Text(stringResource(R.string.progress_back)) }
+        IconButton(onClick = onCreateTaskWithChat, enabled = !state.creatingTaskChat,
+          modifier = Modifier.size(48.dp).testTag("progress-create-task-chat")) {
+          Icon(painterResource(R.drawable.action_add), contentDescription = stringResource(R.string.progress_new_task),
+            modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
+        }
       }
     }
     if (state.createTaskChatError && page == "tasks") Text(
@@ -340,7 +362,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         }
       }
       "tasks" -> ProgressTaskList(state, taskFilter, { taskFilter = it }, onRefreshTasks,
-        onLoadMore, onSearchChange, onSubmitSearch) { task -> openTask(task.id) }
+        onLoadMore, onSearchChange, onSubmitSearch, taskSearchOpen, ::closeTaskSearch) { task -> openTask(task.id) }
       "automations" -> AutomationListContent(state.automations, state.gatewayId, onLoadAutomations,
         ::openAutomation) {
         automationName = ""
@@ -696,21 +718,35 @@ private fun ProgressTaskCreate(title: String, onTitleChange: (String) -> Unit,
 private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterChange: (String) -> Unit,
   onRefresh: () -> Unit,
   onLoadMore: () -> Unit, onSearchChange: (String) -> Unit, onSubmitSearch: () -> Unit,
-  onOpenTask: (ProgressTask) -> Unit) {
+  searchOpen: Boolean, onCloseSearch: () -> Unit, onOpenTask: (ProgressTask) -> Unit) {
   val shown = state.tasks.filter { task -> when (filter) {
     "open" -> task.phase != "closed"
     "closed" -> task.phase == "closed"
     else -> true
   } }
   Column(modifier = Modifier.fillMaxSize()) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      OutlinedTextField(value = state.taskSearchText, onValueChange = onSearchChange,
-        modifier = Modifier.weight(1f).testTag("progress-task-search"),
-        placeholder = { Text(stringResource(R.string.progress_search)) }, singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { onSubmitSearch() }))
-      TextButton(onClick = onSubmitSearch, enabled = !state.loading,
-        modifier = Modifier.testTag("progress-task-refresh")) { Text(stringResource(R.string.progress_refresh)) }
+    if (searchOpen) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      BasicTextField(value = state.taskSearchText, onValueChange = onSearchChange,
+        modifier = Modifier.weight(1f).heightIn(min = 44.dp)
+          .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(24.dp))
+          .padding(horizontal = 16.dp, vertical = 10.dp).testTag("progress-task-search"),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onSubmitSearch() }),
+        decorationBox = { innerTextField ->
+          Box {
+            if (state.taskSearchText.isEmpty()) Text(stringResource(R.string.progress_search),
+              style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            innerTextField()
+          }
+        })
+      val clearLabel = stringResource(R.string.conversations_clear)
+      IconButton(onClick = onCloseSearch,
+        modifier = Modifier.size(48.dp).semantics { contentDescription = clearLabel }
+          .testTag("progress-search-clear")) {
+        Text("×", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       FilterChip(selected = filter == "all", onClick = { onFilterChange("all") },
