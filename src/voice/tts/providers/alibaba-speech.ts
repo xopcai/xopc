@@ -25,7 +25,7 @@ import {
   postJsonRequest,
 } from '../../../media-shared/http/index.js';
 import { createLogger } from '../../../utils/logger.js';
-import { openDashScopeStreamingTts } from '../../dashscope/streaming-tts-stream.js';
+import { openDashScopeStreamingTts, openDashScopeTtsSession } from '../../dashscope/streaming-tts-stream.js';
 import { registerSpeechProvider } from '../speech-registry.js';
 import { alibabaVoicesForModel } from './alibaba-voices.js';
 import type {
@@ -228,6 +228,18 @@ export const alibabaSpeechProvider: SpeechProviderPlugin = {
       // wav is NOT a Telegram voice-note format → ffmpeg compresses downstream.
       voiceCompatible: false,
     };
+  },
+  openStreamSession: async (req) => {
+    const config = readProviderConfig(req.providerConfig);
+    const apiKey = resolveApiKey(config);
+    if (!apiKey) throw new Error('Alibaba TTS API key missing');
+    const overrides = req.providerOverrides ?? {};
+    const instructions = trimToUndefined(overrides.instructions);
+    return openDashScopeTtsSession({
+      apiKey, baseUrl: config.baseUrl, model: ALIBABA_REALTIME_TTS_MODEL,
+      voice: trimToUndefined(overrides.voice ?? overrides.voiceId) ?? config.voice,
+      ...(instructions ? { instructions } : {}), signal: req.signal, timeoutMs: req.timeoutMs,
+    });
   },
   synthesizeStream: async (req): Promise<SpeechSynthesisStreamResult> => {
     const config = readProviderConfig(req.providerConfig);

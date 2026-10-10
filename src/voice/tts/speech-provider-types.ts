@@ -102,6 +102,14 @@ export interface SpeechSynthesisRequest {
 
 export type SpeechSynthesisStreamRequest = SpeechSynthesisRequest;
 
+/** A prepared connection owned by one reply; syntheses must be consumed in order. */
+export interface SpeechStreamSession {
+  synthesize(text: string): Promise<SpeechSynthesisStreamResult>;
+  close(): Promise<void>;
+}
+
+export type SpeechStreamSessionRequest = Omit<SpeechSynthesisStreamRequest, 'text'>;
+
 /** Voice catalog entry returned by `listVoices`. */
 export interface SpeechVoiceOption {
   id: string;
@@ -176,6 +184,9 @@ export interface SpeechProviderPlugin {
    * + `wrapBufferAsStream` (single-chunk stream). See speak-core §8.1.
    */
   synthesizeStream?(req: SpeechSynthesisStreamRequest): Promise<SpeechSynthesisStreamResult>;
+
+  /** Optional connection preparation and reuse for live conversation replies. */
+  openStreamSession?(req: SpeechStreamSessionRequest): Promise<SpeechStreamSession>;
 
   /** Voice discovery for Web UI / CLI. Optional; orchestrator returns [] when missing. */
   listVoices?(req: SpeechListVoicesRequest): Promise<SpeechVoiceOption[]>;

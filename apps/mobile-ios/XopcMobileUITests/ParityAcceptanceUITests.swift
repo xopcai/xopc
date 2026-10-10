@@ -1933,6 +1933,36 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
     }
 
+    func testPersonalChatHeaderSearchAndSettings() {
+        tab("conversations")
+        let personal = app.buttons["conversations-personal-agent-entry"]
+        XCTAssertTrue(personal.waitForExistence(timeout: 10))
+        personal.tap()
+        let search = app.buttons["chat-header-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        XCTAssertGreaterThanOrEqual(search.frame.height, 44)
+        XCTAssertTrue(app.buttons["assistant-options"].exists)
+        capture("personal-chat-capsule-header")
+        search.tap()
+        XCTAssertTrue(app.textFields["chat-message-search-input"].waitForExistence(timeout: 5))
+        app.textFields["chat-message-search-input"].tap()
+        app.textFields["chat-message-search-input"].typeText("检查结果")
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "所有改动均已记录")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["chat-search-close"].waitForExistence(timeout: 5))
+        app.buttons["chat-search-close"].tap()
+        app.buttons["assistant-options"].tap()
+        XCTAssertTrue(app.textFields["名称"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["上传头像"].exists)
+        capture("personal-ai-profile-settings")
+        app.swipeUp()
+        app.swipeUp()
+        XCTAssertTrue(app.buttons["personal-agent-voice-choice"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Gateway 请求失败（404）"].exists)
+        XCTAssertTrue(app.staticTexts["主动联系"].waitForExistence(timeout: 5))
+        capture("personal-ai-proactive-settings")
+        app.buttons["取消"].firstMatch.tap()
+    }
+
     func testConversationDraftFilteringChildrenAndPersonalEntry() {
         tab("conversations")
         XCTAssertTrue(app.buttons["conversations-personal-agent-entry"].waitForExistence(timeout: 10))

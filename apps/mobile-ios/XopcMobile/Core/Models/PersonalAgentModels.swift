@@ -7,6 +7,7 @@ struct PersonalAgentRecord: Decodable, Equatable, Sendable {
     let displayName: String
     let appearance: String
     let revision: Int?
+    let userCallName: String?
     let preferences: [String: String]?
     let voicePreference: PersonalVoicePreference?
     let errorMessage: String?
@@ -110,12 +111,11 @@ extension GatewayClient {
     func personalVoiceOptions() async throws -> PersonalVoiceSelection? {
         let status: PersonalVoiceStatusEnvelope = try await request(path: "/api/voice/realtime/status")
         guard let route = status.payload.tts else { return nil }
-        let queryAllowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
-        guard let provider = route.provider.addingPercentEncoding(withAllowedCharacters: queryAllowed),
-              let model = route.model.addingPercentEncoding(withAllowedCharacters: queryAllowed)
-        else { return nil }
         let response: GatewayEnvelope<PersonalVoiceOptions> = try await request(
-            path: "/api/voice/tts-voices?provider=\(provider)&model=\(model)&purpose=realtime"
+            path: "/api/voice/tts-voices",
+            queryItems: [URLQueryItem(name: "provider", value: route.provider),
+                         URLQueryItem(name: "model", value: route.model),
+                         URLQueryItem(name: "purpose", value: "realtime")]
         )
         guard response.isSuccessful else {
             throw GatewayClientError.server(response.error?.message ?? "无法获取声音列表")
@@ -137,5 +137,42 @@ private struct PersonalVoiceStatus: Decodable, Sendable {
     struct Route: Decodable, Sendable {
         let provider: String
         let model: String
+    }
+}
+
+struct PersonalProactivitySettings: Codable, Equatable, Sendable {
+    let revision: Int
+    var mode: String
+    var timezone: String
+    var quietStart: Int
+    var quietEnd: Int
+    let dailyMessages: Int
+    let dailyModelCalls: Int
+}
+
+extension GatewayClient {
+    func fetchPersonalProactivity() async throws -> PersonalProactivitySettings {
+        let response: GatewayEnvelope<PersonalProactivitySettings> = try await request(path: "/api/personal-agent/proactivity")
+        guard response.isSuccessful, let settings = response.payload else {
+            throw GatewayClientError.server(response.error?.message ?? "无法读取主动联系设置")
+        }
+        return settings
+    }
+
+    func updatePersonalProactivity(_ settings: PersonalProactivitySettings) async throws -> PersonalProactivitySettings {
+        let response: GatewayEnvelope<PersonalProactivitySettings> = try await request(
+            path: "/api/personal-agent/proactivity", method: "PATCH", body: JSONEncoder().encode(settings)
+        )
+        guard response.isSuccessful, let settings = response.payload else {
+            throw GatewayClientError.server(response.error?.message ?? "无法保存主动联系设置")
+        }
+        return settings
+    }
+
+    func uploadPersonalAvatar(data: Data) async throws {
+        guard !data.isEmpty, data.count <= 512 * 1024 else { throw GatewayClientError.invalidResponse }
+        let body = try JSONSerialization.data(withJSONObject: ["base64": data.base64EncodedString(), "mimeType": "image/jpeg"])
+        let response: GatewayEnvelope<[String: String]> = try await request(path: "/api/personal-agent/avatar", method: "PUT", body: body)
+        guard response.isSuccessful else { throw GatewayClientError.server(response.error?.message ?? "无法上传头像") }
     }
 }

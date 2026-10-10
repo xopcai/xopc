@@ -11,6 +11,7 @@ private struct RealtimeVoiceCancellation: Encodable {
 
 private struct RealtimeVoiceAcknowledgement: Decodable {
     let ok: Bool
+    let timingMetrics: [String]?
 }
 
 private struct RealtimeVoiceClarificationResponse: Encodable {
@@ -106,12 +107,13 @@ extension GatewayClient {
         return result.payload
     }
 
-    func preflightRealtimeVoice(conversationID: String, mode: RealtimeVoiceMode) async throws {
+    func preflightRealtimeVoice(conversationID: String, mode: RealtimeVoiceMode) async throws -> [String] {
         let body = try encoder.encode(RealtimeVoiceSessionRequest(conversationId: conversationID, mode: mode))
         let result: RealtimeVoiceAcknowledgement = try await request(
             path: "/api/voice/realtime/preflight", method: "POST", body: body
         )
         guard result.ok else { throw GatewayClientError.invalidResponse }
+        return result.timingMetrics ?? []
     }
 
     func createRealtimeVoiceSession(conversationID: String, mode: RealtimeVoiceMode) async throws -> RealtimeVoiceSession {
