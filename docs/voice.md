@@ -12,7 +12,7 @@ The call has its own window. Minimize it to keep talking while visiting other pa
 
 Choose **XOPC hosted** or **Your API key** once under **Settings → Capabilities → Voice**. This configures dictation, Agent speech and natural conversation together, without changing ordinary message readout. Natural voice defaults to the shared input credential; independent endpoints, keys and instructions are optional advanced settings. If setup is missing, the call window links to Voice settings, with a return link to the original Chat. Capability validation precedes microphone permission; it does not prove a live provider connection will succeed.
 
-Natural chat uses `qwen3-omni-flash-realtime`. Each connection restores the selected Agent's configured name/instructions and a bounded text projection of the same Chat's history. It has no tools. Older context may be excerpted; full records remain in Chat. Interrupted generated replies remain visible in records, but are omitted from subsequent model context because the exact portion heard is unknown.
+With your Alibaba key, natural chat uses the configured compatible realtime model. XOPC Cloud uses the catalog’s public realtime service and available voices. Each connection restores the selected Agent's configured name/instructions and a bounded text projection of the same Chat's history. It has no tools. Older context may be excerpted; full records remain in Chat. Interrupted generated replies remain visible in records, but are omitted from subsequent model context because the exact portion heard is unknown.
 
 Use the composer’s call button to start or continue voice in the same Chat. Network failure, a call time limit or a page reload ends the connection; start again to continue the conversation. Minimize/route navigation does not end it. There is no silent microphone reopening or automatic indefinite connection renewal.
 
@@ -29,7 +29,7 @@ Hosted natural calls require a published conversation route on XOPC Platform. Ga
 
 ### Realtime dictation and conversation
 
-Open **Settings → Capabilities → Voice** and choose **XOPC hosted** or **Your API key** (Alibaba Qwen). Hosted voice requires a signed-in account and available realtime models. For Alibaba, dictation and conversation share the input credential; existing Edge message readout stays unchanged.
+Open **Settings → Capabilities → Voice** and choose **XOPC hosted** or **Your API key** (Alibaba Qwen). Hosted voice requires a signed-in account and available speech/realtime services. Voice names follow the display language; select from the current catalog rather than copying a supplier voice ID. For Alibaba, dictation and conversation share the input credential; existing Edge message readout stays unchanged.
 
 Choose a conversation voice, then use **Test voice**. The test opens the microphone only after a click, displays a real final transcript, plays a fixed sample through the native streaming speech provider, and asks you to confirm that you heard it. It does not create a chat or call an Agent. **Not tested** means a route is configured, not that a live connection has succeeded. Testing may incur provider usage. When only input is configured, use **Test dictation**.
 

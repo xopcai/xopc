@@ -1,6 +1,6 @@
 **FRP 远程访问安全加固技术方案 — 保持现有连接体验**
 
-日期：2026-09-13。状态：技术提案，尚未实现或部署。依据：[安全调查](/Users/micjoyce/develop/github/xopc/docs/security/frp-security-review-2026-09-13.md) 与 [手机连接工作电脑方案](/Users/micjoyce/develop/github/xopc/docs/design/mobile-work-computer-connection.md)。
+日期：2026-09-13。状态：技术提案，尚未实现或部署。依据：[安全调查](security/frp-security-review-2026-09-13.md) 与 [手机连接工作电脑方案](mobile-work-computer-connection.md)。
 
 建议分阶段交付：先修复已确认的实现漏洞，保持当前连接协议和用户流程；再增加手机到 Gateway 的端到端安全通道。安全检查由系统完成，正常连接不增加人工步骤。证书/身份异常、明确撤销和不可兼容的旧版本必须中断或提示，不能承诺所有情况下都完全无感。
 
@@ -43,7 +43,7 @@ Web 的代码由浏览器加载，必须额外信任代码发布来源；仅给�
 - 缓存按版本/架构/摘要命名；旧缓存可校验则直接迁移，否则后台下载。下载大小、解压内容、超时、并发去重、临时文件、原子替换均有边界；执行前确认实际二进制属于清单。
 - 用户看到的仍是原有准备进度；正常第二次启动不重新下载。校验失败的文案为“连接组件验证失败，正在重新下载”，最终失败才显示恢复动作。首次额外耗时需测量。
 
-主要改动：[frpc-config.ts](/Users/micjoyce/develop/github/xopc/src/tunnel/frpc-config.ts)、[frpc-binary.ts](/Users/micjoyce/develop/github/xopc/src/tunnel/frpc-binary.ts)、平台 [frps.toml](/Users/micjoyce/develop/github/xopc-platform/deploy/broker/frps.toml) 与发布/镜像脚本。
+主要改动：[frpc-config.ts](../../src/tunnel/frpc-config.ts)、[frpc-binary.ts](../../src/tunnel/frpc-binary.ts)、平台 [frps.toml](/Users/micjoyce/develop/github/xopc-platform/deploy/broker/frps.toml) 与发布/镜像脚本。
 
 **3.2 地址长期归属与短期在线租约分开**
 
@@ -69,7 +69,7 @@ Broker 新增两个独立概念；以下为拟议数据结构，不是现有字�
 - 已被清理而缺少可靠归属证据的旧地址不得凭账号/hash 自动认领。停止在历史不明的旧命名空间发放新地址；新注册使用干净命名空间或有完整签发记录的新地址集合。具体域名由平台配置，不在此假定某个未部署域名可用。
 - 已升级手机通过“Gateway 签名的路由清单”获得新地址，无需重新扫码；保留现有可信公钥。未升级且固定在旧地址的手机可能需要升级。历史身份已发生冲突时明确提示，不承诺可无感安全迁移。
 
-主要改动：[Broker db.ts](/Users/micjoyce/develop/github/xopc-platform/apps/broker/src/db.ts)、[tunnel-service.ts](/Users/micjoyce/develop/github/xopc-platform/apps/broker/src/tunnel-service.ts)、[Gateway identity](/Users/micjoyce/develop/github/xopc/src/storage/sqlite/gateway-identity-repository.ts)、[本地持久化](/Users/micjoyce/develop/github/xopc/src/tunnel/tunnel-persist.ts)。
+主要改动：[Broker db.ts](/Users/micjoyce/develop/github/xopc-platform/apps/broker/src/db.ts)、[tunnel-service.ts](/Users/micjoyce/develop/github/xopc-platform/apps/broker/src/tunnel-service.ts)、[Gateway identity](../../src/storage/sqlite/gateway-identity-repository.ts)、[本地持久化](../../src/tunnel/tunnel-persist.ts)。
 
 **3.3 撤销、轮换、网络故障采用不同语义**
 
@@ -112,7 +112,7 @@ Web 头像改成带认证 header 的 fetch → blob URL，缓存按 Gateway/agen
 
 **3.6 手机持续身份校验与 Web 会话迁移**
 
-手机新增共享 `GatewayTransport` 适配边界，覆盖普通 API、refresh、配对、realtime ticket、WebSocket、上传、下载、图片与语音；现有 query 层和页面保持调用形式。不能只改 apiFetch，因为 [realtime ticket](/Users/micjoyce/develop/github/xopc/retired mobile client/src/features/gateway/use-gateway-realtime.ts:47) 目前还有直接 fetch。
+手机新增共享 `GatewayTransport` 适配边界，覆盖普通 API、refresh、配对、realtime ticket、WebSocket、上传、下载、图片与语音；现有 query 层和页面保持调用形式。不能只改 apiFetch，因为 [realtime ticket](../../retired mobile client/src/features/gateway/use-gateway-realtime.ts:47) 目前还有直接 fetch。
 
 一期在首次连接/重连/切换路由前取得新鲜 challenge，由已固定 Gateway 公钥签名验证 gatewayId、nonce、用途、能力版本、路由 epoch；失败不发送凭据或正文。并发请求共用一次验证，不能每个请求多握手。refresh 响应也需验证签名及请求绑定，不因形状合法就接受。身份固定值迁到 SecureStore；普通路由缓存可以在 MMKV，但必须验证签名才能用于发送。此阶段能识别假端点，不能阻止能中继挑战的恶意平台读取后续 Bearer 流量，二期负责闭环。
 
@@ -155,7 +155,7 @@ flowchart LR
 - HTTP 载体的序号、重复批次、丢失响应、确认与重传规范必须先形成测试向量；密文重传不触发第二次业务执行。尚未完成此能力时，二期只能试点，不能全量替代现有入口。
 - Realtime 保留 cursor/resume，断线重连重建安全会话、恢复 endpoint，再继续原事件流。写操作沿用持久 clientMessageId/idempotencyKey，响应丢失先查结果，不在两条路由并行发送。
 
-普通 REST/TLS 透传也是可选技术路线，但当前 [tls-server.ts](/Users/micjoyce/develop/github/xopc/src/gateway/tls-server.ts) 只是配置解析，Broker DNS challenge 服务也未接入现行 app 路由，不能当作开关式切换。每台 Gateway 独立证书还涉及首次 DNS 验证、休眠期间续期、CA 配额、原生 pinning、私钥轮换和浏览器信任边界；Let's Encrypt 对注册域名有签发配额，子域分散并不自动解决该限制。[配额说明](https://letsencrypt.org/docs/rate-limits/)
+普通 REST/TLS 透传也是可选技术路线，但当前 [tls-server.ts](../../src/gateway/tls-server.ts) 只是配置解析，Broker DNS challenge 服务也未接入现行 app 路由，不能当作开关式切换。每台 Gateway 独立证书还涉及首次 DNS 验证、休眠期间续期、CA 配额、原生 pinning、私钥轮换和浏览器信任边界；Let's Encrypt 对注册域名有签发配额，子域分散并不自动解决该限制。[配额说明](https://letsencrypt.org/docs/rate-limits/)
 
 因此不把“每台电脑发公网证书”设为一期前置。DPoP 可减少 token 脱离设备后的重放，但不能提供正文保密，也不能取代端到端通道；不为完成一期额外引入一次重复认证协议迁移。[RFC 9449](https://www.rfc-editor.org/info/rfc9449/)
 

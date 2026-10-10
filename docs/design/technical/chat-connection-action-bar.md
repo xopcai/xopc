@@ -2,7 +2,7 @@
 
 状态：待实现的完整设计。决策日期：2026-09-07。源码核查基线：`aa6a22c15`。
 
-用户已选择「历史提示 + 单一连接操作区」。本文替代前一版逐卡片维护状态的产品方案；[竞品调研与源码背景](/Users/micjoyce/develop/github/xopc/docs/design/technical/chat-capability-recovery.md)仅作为研究记录。
+用户已选择「历史提示 + 单一连接操作区」。本文替代前一版逐卡片维护状态的产品方案；[竞品调研与源码背景](chat-capability-recovery.md)仅作为研究记录。
 
 ## 1. 产品决定
 
@@ -272,7 +272,7 @@ type ConnectionCandidate = {
 
 ### 7.1 已有真实落点
 
-当前 [run-turn.ts](/Users/micjoyce/develop/github/xopc/src/agent/embedded/run-turn.ts) 已装配 `beforeToolCall`、`afterToolCall` 和 `shouldStopAfterTurn`，可在现有 turnPolicy 上组合一个 connection-wait policy。不要另开无期限 Promise，也不要伪装成用户 abort。
+当前 [run-turn.ts](../../../src/agent/embedded/run-turn.ts) 已装配 `beforeToolCall`、`afterToolCall` 和 `shouldStopAfterTurn`，可在现有 turnPolicy 上组合一个 connection-wait policy。不要另开无期限 Promise，也不要伪装成用户 abort。
 
 处理顺序：
 
@@ -282,11 +282,11 @@ type ConnectionCandidate = {
 4. 不触发默认的「验证代码修改后再继续」循环，不因正常等待重试模型。
 5. gateway 把本次执行标为 `suspended`，关闭 run stream 并释放 lease；领域目标仍在等待。
 
-现有 [run-gateway-agent.ts](/Users/micjoyce/develop/github/xopc/src/gateway/service/run-gateway-agent.ts) 目前会将无异常返回映射为 success；必须贯通修改 turn dispatcher、stream mapper、run-end 通知、TaskRunCoordinator、session-input coordinator，而不是只改前端文案。
+现有 [run-gateway-agent.ts](../../../src/gateway/service/run-gateway-agent.ts) 目前会将无异常返回映射为 success；必须贯通修改 turn dispatcher、stream mapper、run-end 通知、TaskRunCoordinator、session-input coordinator，而不是只改前端文案。
 
 ### 7.2 复用现有输入队列
 
-[SessionInputCoordinator](/Users/micjoyce/develop/github/xopc/src/gateway/service/session-input-coordinator.ts) 与 [session-input-repository.ts](/Users/micjoyce/develop/github/xopc/src/storage/sqlite/session-input-repository.ts) 已提供持久化输入、expectedSessionId、`UNIQUE(session_key, client_message_id)` 和串行领取。
+[SessionInputCoordinator](../../../src/gateway/service/session-input-coordinator.ts) 与 [session-input-repository.ts](../../../src/storage/sqlite/session-input-repository.ts) 已提供持久化输入、expectedSessionId、`UNIQUE(session_key, client_message_id)` 和串行领取。
 
 新增可信的 internal input kind：`connection_resume`，其 payload 引用 waitId、objectiveRevision、resolution、checkpointEntryId 和绑定账号。不是伪造一条用户聊天消息「已授权，请继续」；内部 payload 也不能由公共输入 API 任意提交。
 
@@ -335,13 +335,13 @@ worker 领取 `connection_resume` 后检查 wait / session / objective 是否匹
 
 ### 点击时生成链接
 
-前端同步预留 popup，然后调用后端 action；复用 [oauth-authorization-window.ts](/Users/micjoyce/develop/github/xopc/web/src/features/settings/oauth-authorization-window.ts)。没有跳转必要时关闭空白 popup。Electron 走系统浏览器；popup 被拦截时提供明确的“打开授权页面”链接，链接仅属于当前 attempt。
+前端同步预留 popup，然后调用后端 action；复用 [oauth-authorization-window.ts](../../../web/src/features/settings/oauth-authorization-window.ts)。没有跳转必要时关闭空白 popup。Electron 走系统浏览器；popup 被拦截时提供明确的“打开授权页面”链接，链接仅属于当前 attempt。
 
 `Connect` 的 GET 展示不执行授权。实际授权由用户 POST action 发起。授权 URL 不存进 transcript，不出现在长期等待快照。每项需求至多关联一个当前有效 attempt；重复点击复用，失败/超时则替换，旧 attempt 的回调不能覆盖新绑定。
 
 ### 授权与验证
 
-复用 [auth-provider-registry.ts](/Users/micjoyce/develop/github/xopc/src/connectors/auth-provider-registry.ts)，但入口要显式接收已认证的 principal、目标 installation 和账号上下文。不能沿用面向本地 owner 的隐式默认值处理其他用户的聊天。
+复用 [auth-provider-registry.ts](../../../src/connectors/auth-provider-registry.ts)，但入口要显式接收已认证的 principal、目标 installation 和账号上下文。不能沿用面向本地 owner 的隐式默认值处理其他用户的聊天。
 
 OAuth adapter 返回状态不直接表示目标可运行。需要验证：
 
@@ -414,7 +414,7 @@ stream `run_end.status` 增加 `suspended`（协同升级 contract 与所有 con
 | `web/src/features/connectors/use-connector-authorization.ts` | 抽取设置页/Chat 共用授权窗口交互 |
 | `packages/gateway-contract/src/connection-wait.ts` | DTO、Zod schema、事件和 action 类型 |
 
-在 [chat-composer.tsx](/Users/micjoyce/develop/github/xopc/web/src/features/chat/composer/chat-composer.tsx:561) 的现有 composer 布局添加一个槽位，不增加消息 renderer 的特殊卡片分支。若有旧版本卡片数据，历史 renderer 只显示其静态摘要。
+在 [chat-composer.tsx](../../../web/src/features/chat/composer/chat-composer.tsx:561) 的现有 composer 布局添加一个槽位，不增加消息 renderer 的特殊卡片分支。若有旧版本卡片数据，历史 renderer 只显示其静态摘要。
 
 交互细节：
 
@@ -461,7 +461,7 @@ stream `run_end.status` 增加 `suspended`（协同升级 contract 与所有 con
 | Connectors 页面连接 | 无当前有效继续意图时只显示 ready |
 | 用户跳过 | 将 suppression 带入原目标后续上下文；不重复制造等待 |
 
-继续意图只决定能否调度，不能提升数据权限。外部写动作沿用 [connector policy](/Users/micjoyce/develop/github/xopc/src/connectors/policy.ts) 与一次性 approval。目标中若包含发送邮件，必须保留收件人、内容和原授权边界；连接成功不能扩大授权。
+继续意图只决定能否调度，不能提升数据权限。外部写动作沿用 [connector policy](../../../src/connectors/policy.ts) 与一次性 approval。目标中若包含发送邮件，必须保留收件人、内容和原授权边界；连接成功不能扩大授权。
 
 ## 13. 验收与交付顺序
 

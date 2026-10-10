@@ -97,6 +97,8 @@ function ResultAttachmentRow({
   projectId?: string | null;
   onOpen: (attachment: MessageAttachment) => void;
 }) {
+  const language = useLocaleStore(state => state.language);
+  const fileLabel = messages(language).chat.productDelivery.kinds.file;
   const image = useAttachmentImageSrc(item.attachment, { authToken, conversationId });
   const Icon = resultAttachmentIcon(item.attachment);
   const canPreview = canPreviewAttachment(item.attachment, conversationId, projectId);
@@ -123,8 +125,8 @@ function ResultAttachmentRow({
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-fg" title={item.attachment.name ?? 'File'}>
-          {item.attachment.name ?? 'File'}
+        <span className="block truncate text-sm font-medium text-fg" title={item.attachment.name ?? fileLabel}>
+          {item.attachment.name ?? fileLabel}
         </span>
         <span className="mt-0.5 block truncate text-xs leading-5 text-fg-muted" title={item.meta}>{item.meta}</span>
       </span>
@@ -340,7 +342,7 @@ export function AssistantResultTail({
         />
       ))}
       {hasTail ? (
-        <TurnTail label={language === 'zh' ? '本轮交付结果' : 'Turn deliverables'}>
+        <TurnTail label={messages(language).chat.productDelivery.heading}>
           <ul className="m-0 list-none divide-y divide-edge-subtle p-0">
             <ProductDeliveryRows
               deliveries={visibleDeliveries}
@@ -373,7 +375,7 @@ export function AssistantResultTail({
           </ul>
           {queryState.truncated ? (
             <p role="status" className="border-t border-edge-subtle px-3 py-2 text-xs text-fg-muted">
-              {language === 'zh' ? '仅显示部分结果' : 'Showing partial results'}
+              {messages(language).chat.productDelivery.partialResults}
             </p>
           ) : null}
         </TurnTail>

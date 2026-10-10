@@ -2,7 +2,7 @@
 
 > 2026-09-21 架构修订：当前实现以[通用场景任务跟进方案](./scene-task-follow-up.md)为准。Slack 编码只是首个验证配置；执行复用现有 embedded Agent harness，文档无需 Git，文件修改无需 Docker。下文早期 Slack 专用执行器／强制验证安排不再作为实现约束，长期需求与历史分析保留。
 
-初稿：2026-09-19。更新：2026-09-21。本文保留 Scene 通用技术基础与历史迁移设计，不是已实现能力清单。当前 Slack 开发场景的专项协议以[产品与技术方案](/Users/micjoyce/develop/github/xopc/docs/design/ai-native-scenes-product-technical-design.md)为准，交付事实见[实施记录](./scenes-implementation-progress.md)。
+初稿：2026-09-19。更新：2026-09-21。本文保留 Scene 通用技术基础与历史迁移设计，不是已实现能力清单。当前 Slack 开发场景的专项协议以[产品与技术方案](ai-native-scenes-product-technical-design.md)为准，交付事实见[实施记录](./scenes-implementation-progress.md)。
 
 产品依据：[场景产品北极星](./scenes-product-north-star.md)。本文确定实现边界、协议、直接切换和验收方案；此前 Proactive 平台提案中的兼容适配、旧入口转发和双轨演进不再适用。
 
@@ -21,7 +21,7 @@
 
 首版允许明确授权的工作区修改和约定验证，默认不 push、PR、Slack 回写、合并或部署。worktree 不是安全沙箱，shell／测试脚本仍需命令、网络、文件和凭据边界。权限沿 Task／Workflow／执行器收窄，不能回退普通聊天的完整工具集。
 
-当前按 S0 样本预检 → S1 thread 接手／排查 → S2 资源绑定／编码 → S3 持续更新／恢复／验收 → S4 分支关联／有限发现 → S5 真实试用推进，详见[当前计划](/Users/micjoyce/develop/github/xopc/docs/design/scenes-launch-plan.md)。Gmail／家庭场景保留原门禁，其专属验收不是 Slack 原型开发前提。
+当前按 S0 样本预检 → S1 thread 接手／排查 → S2 资源绑定／编码 → S3 持续更新／恢复／验收 → S4 分支关联／有限发现 → S5 真实试用推进，详见[当前计划](scenes-launch-plan.md)。Gmail／家庭场景保留原门禁，其专属验收不是 Slack 原型开发前提。
 
 ## 1. 通用原则与历史替换决定
 

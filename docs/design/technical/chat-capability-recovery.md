@@ -1,6 +1,6 @@
 # Chat 内连接器能力恢复：竞品研究与 xopc 方案
 
-> **产品方案已替代**：用户选择了「历史提示 + 单一连接操作区」。当前实施依据为 [完整产品与技术方案](/Users/micjoyce/develop/github/xopc/docs/design/technical/chat-connection-action-bar.md)。本文第 1–3 节保留研究证据，第 4 节及以后是旧版逐卡片请求方案及讨论记录，不作为现行实施要求。
+> **产品方案已替代**：用户选择了「历史提示 + 单一连接操作区」。当前实施依据为 [完整产品与技术方案](chat-connection-action-bar.md)。本文第 1–3 节保留研究证据，第 4 节及以后是旧版逐卡片请求方案及讨论记录，不作为现行实施要求。
 
 研究日期：2026-09-07。源码基线：`8c165027e`。状态：设计提案，未实现。核查期间工作区存在其他并行修改，本文不将它们计为本次产出。
 
@@ -53,23 +53,23 @@ MCP 2025-11-25 的 URL elicitation 提供 `elicitationId` 与可选的 `notifica
 
 | 链路 | 当前实现 | 需要补齐 |
 |---|---|---|
-| 统一工具入口 | [gateway-tools.ts](/Users/micjoyce/develop/github/xopc/src/agent/external-tools/gateway-tools.ts:7) 定义 search / describe / execute；[types.ts](/Users/micjoyce/develop/github/xopc/src/agent/external-tools/types.ts:11) 搜索结果只含工具引用、来源和摘要 | 区分工具命中与可连接候选；增加结构化可用性和恢复原因 |
-| Composio 发现 | [composio-provider.ts](/Users/micjoyce/develop/github/xopc/src/agent/external-tools/composio-provider.ts:204) 只搜索当前身份和 agent 可用的已安装 toolkit；没有安装时返回空 | 从允许展示的 connector catalog 找到未安装候选；不能放开执行权限 |
+| 统一工具入口 | [gateway-tools.ts](../../../src/agent/external-tools/gateway-tools.ts:7) 定义 search / describe / execute；[types.ts](../../../src/agent/external-tools/types.ts:11) 搜索结果只含工具引用、来源和摘要 | 区分工具命中与可连接候选；增加结构化可用性和恢复原因 |
+| Composio 发现 | [composio-provider.ts](../../../src/agent/external-tools/composio-provider.ts:204) 只搜索当前身份和 agent 可用的已安装 toolkit；没有安装时返回空 | 从允许展示的 connector catalog 找到未安装候选；不能放开执行权限 |
 | 现有连接工具 | 同一文件 `search` 会产生 `Connect <toolkit>`；`execute` 返回 URL、connectionId，提示用户打开后再检查 | 原生卡片、持久化请求、自动验证与续跑；在远端搜索失败时仍能生成本地恢复信息 |
-| 连接目录与状态 | [types.ts](/Users/micjoyce/develop/github/xopc/src/connectors/types.ts) 已区分 definition、installation policy、account、connection、instance；有 authStatus、connectionStatus、health | 聚合成面向任务的 readiness；不要把 installed 等同于 ready |
-| 认证基础设施 | [auth-provider-registry.ts](/Users/micjoyce/develop/github/xopc/src/connectors/auth-provider-registry.ts:17) 分发 MCP / Composio；[routes/connectors.ts](/Users/micjoyce/develop/github/xopc/src/gateway/hono/routes/connectors.ts:519) 有 auth/start | 绑定发起者、session、请求和授权 attempt；通用入口不能只按 connectorId 关联 |
-| UI OAuth | [oauth-authorization-window.ts](/Users/micjoyce/develop/github/xopc/web/src/features/settings/oauth-authorization-window.ts) 支持浏览器 popup、Electron 外部浏览器；[connectors-api.ts](/Users/micjoyce/develop/github/xopc/web/src/features/connectors/connectors-api.ts:453) 有 120 秒轮询 | 抽成聊天和设置共用流程；窗口关闭、超时与后台成功分离；服务端负责最终状态 |
-| 普通问答等待 | [clarification-wait-repository.ts](/Users/micjoyce/develop/github/xopc/src/storage/sqlite/clarification-wait-repository.ts) 持久化等待与续跑输入；推荐答案不会自动采用 | 认证应使用有 TTL 的 approval，不能把普通问答等待当作认证授权 |
-| 持久化任务等待 | [task-lifecycle.ts](/Users/micjoyce/develop/github/xopc/packages/gateway-contract/src/task-lifecycle.ts:14) 有 TaskWait；[task-run-repository.ts](/Users/micjoyce/develop/github/xopc/src/tasks/task-run-repository.ts:469) 有创建 / 解决等待；[task-application-service.ts](/Users/micjoyce/develop/github/xopc/src/tasks/task-application-service.ts:224) 设置 run waiting | 增加 capability 请求与 wait 的确定关联，使用既有应用服务而非散落写状态 |
-| 任务续跑 | [task-run-dispatcher.ts](/Users/micjoyce/develop/github/xopc/src/tasks/task-run-dispatcher.ts) 可领取等待已解决的 run；[task-run-coordinator.ts](/Users/micjoyce/develop/github/xopc/src/tasks/task-run-coordinator.ts:96) 避免有 active wait 时 finalize | 恢复输入需包含解决结果与已完成步骤，而不是只重发原 objective；增加 durable resume intent 与去重 |
-| 普通 Chat 状态 | [chat-run-presence-store.ts](/Users/micjoyce/develop/github/xopc/web/src/features/chat/session/chat-run-presence-store.ts:3) 仅 running / completed / failed；[agent-stream.ts](/Users/micjoyce/develop/github/xopc/packages/gateway-contract/src/agent-stream.ts:102) run end 为 success / error / cancelled | 表达 awaiting_connection，明确一次模型执行结束与整个任务完成不同 |
+| 连接目录与状态 | [types.ts](../../../src/connectors/types.ts) 已区分 definition、installation policy、account、connection、instance；有 authStatus、connectionStatus、health | 聚合成面向任务的 readiness；不要把 installed 等同于 ready |
+| 认证基础设施 | [auth-provider-registry.ts](../../../src/connectors/auth-provider-registry.ts:17) 分发 MCP / Composio；[routes/connectors.ts](../../../src/gateway/hono/routes/connectors.ts:519) 有 auth/start | 绑定发起者、session、请求和授权 attempt；通用入口不能只按 connectorId 关联 |
+| UI OAuth | [oauth-authorization-window.ts](../../../web/src/features/settings/oauth-authorization-window.ts) 支持浏览器 popup、Electron 外部浏览器；[connectors-api.ts](../../../web/src/features/connectors/connectors-api.ts:453) 有 120 秒轮询 | 抽成聊天和设置共用流程；窗口关闭、超时与后台成功分离；服务端负责最终状态 |
+| 普通问答等待 | [clarification-wait-repository.ts](../../../src/storage/sqlite/clarification-wait-repository.ts) 持久化等待与续跑输入；推荐答案不会自动采用 | 认证应使用有 TTL 的 approval，不能把普通问答等待当作认证授权 |
+| 持久化任务等待 | [task-lifecycle.ts](../../../packages/gateway-contract/src/task-lifecycle.ts:14) 有 TaskWait；[task-run-repository.ts](../../../src/tasks/task-run-repository.ts:469) 有创建 / 解决等待；[task-application-service.ts](../../../src/tasks/task-application-service.ts:224) 设置 run waiting | 增加 capability 请求与 wait 的确定关联，使用既有应用服务而非散落写状态 |
+| 任务续跑 | [task-run-dispatcher.ts](../../../src/tasks/task-run-dispatcher.ts) 可领取等待已解决的 run；[task-run-coordinator.ts](../../../src/tasks/task-run-coordinator.ts:96) 避免有 active wait 时 finalize | 恢复输入需包含解决结果与已完成步骤，而不是只重发原 objective；增加 durable resume intent 与去重 |
+| 普通 Chat 状态 | [chat-run-presence-store.ts](../../../web/src/features/chat/session/chat-run-presence-store.ts:3) 仅 running / completed / failed；[agent-stream.ts](../../../packages/gateway-contract/src/agent-stream.ts:102) run end 为 success / error / cancelled | 表达 awaiting_connection，明确一次模型执行结束与整个任务完成不同 |
 
 两个容易误用的基础：
 
-1. [interaction-state.ts](/Users/micjoyce/develop/github/xopc/src/user-context/interaction-state.ts) 表达倾听、澄清、建议、行动等沟通状态，不应承载认证交互。
+1. [interaction-state.ts](../../../src/user-context/interaction-state.ts) 表达倾听、澄清、建议、行动等沟通状态，不应承载认证交互。
 2. `TaskRunCoordinator.start` 需要 `context.taskId`。普通 Chat 并不保证有领域 TaskRun，不能把所有聊天等待都强行塞进 `task_waits`，也不应为了连邮箱自动创建用户可见任务。
 
-另外，[composio-sessions.ts](/Users/micjoyce/develop/github/xopc/src/connectors/composio-sessions.ts:202) 已设置 `manageConnections.enable=true`、`waitForConnections=false`，并支持多账号；连接等待正适合由 xopc 负责。现有 provider 在没有指定账号时会选默认账号或第一个 active 账号，恢复阶段应改为绑定明确账号，避免连接 A 却在 B 上执行。
+另外，[composio-sessions.ts](../../../src/connectors/composio-sessions.ts:202) 已设置 `manageConnections.enable=true`、`waitForConnections=false`，并支持多账号；连接等待正适合由 xopc 负责。现有 provider 在没有指定账号时会选默认账号或第一个 active 账号，恢复阶段应改为绑定明确账号，避免连接 A 却在 B 上执行。
 
 ## 4. 产品设计
 
@@ -225,7 +225,7 @@ Connect 输入至少有 expectedVersion / 幂等键；响应提供宿主生成�
 - 点击两次、重复 webhook、同时打开多个标签，只产生一个有效 continuation。
 - 撤销、session reset、任务取消或修改了目标后，回调只能更新连接状态，不能盲目续跑旧任务。
 - 重新连接只恢复授权前尚未执行的动作。对结果不明的写操作，先查询业务结果或检查 provider 幂等键，不能无条件重放。
-- OAuth 允许访问服务，不等于用户批准发送某一封邮件。继续复用 [policy.ts](/Users/micjoyce/develop/github/xopc/src/connectors/policy.ts) 和一次性 connector approval。
+- OAuth 允许访问服务，不等于用户批准发送某一封邮件。继续复用 [policy.ts](../../../src/connectors/policy.ts) 和一次性 connector approval。
 - 独立步骤可继续执行，只有真正依赖缺失能力的执行单元进入等待。
 
 ## 6. 前端与多渠道落点
@@ -289,7 +289,7 @@ MCP auth challenge / URL elicitation、其他连接器、多渠道、多个依�
 
 卡片创建时只持久化 requestId、展示快照和任务关联，不提前创建或保存可直接点击的 OAuth URL。用户点击按钮后，向 xopc 提交 requestId，后端重新校验，再生成有效授权链接。可复用仍有效且匹配的当前 attempt；失效时生成新 attempt，不为重复点击无限创建尝试。渠道链接同样先到 xopc 处理页，登录并验证请求归属后开始 OAuth；查看链接本身不启动授权或恢复任务。
 
-当前 xopc 的 [MCP OAuth session](/Users/micjoyce/develop/github/xopc/src/agent/mcp/oauth/mcp-oauth-session.ts:6) 默认 TTL 为 10 分钟。这是该本地 MCP 流程的期限，不是 Gmail / Composio 的统一期限，也不是聊天卡片的期限。授权页已经打开后放置过久，则提示「这次授权已超时，任务已保留」，提供「重新打开授权」。过期 attempt 不能把仍有效的恢复请求永久变成 expired。
+当前 xopc 的 [MCP OAuth session](../../../src/agent/mcp/oauth/mcp-oauth-session.ts:6) 默认 TTL 为 10 分钟。这是该本地 MCP 流程的期限，不是 Gmail / Composio 的统一期限，也不是聊天卡片的期限。授权页已经打开后放置过久，则提示「这次授权已超时，任务已保留」，提供「重新打开授权」。过期 attempt 不能把仍有效的恢复请求永久变成 expired。
 
 ### 历史卡片的状态矩阵
 

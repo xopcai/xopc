@@ -14,8 +14,8 @@ The desktop app is the simplest choice for most people. See the [desktop guide](
 
 ## What you need
 
-- A supported model account and its API key, or a local model server such as Ollama.
-- Node.js 22 or newer only when installing the command-line package.
+- An XOPC Cloud account, a supported provider API key, or a local model server such as Ollama.
+- Node.js 22.22.3 or newer only when installing the command-line package.
 - Docker only when choosing the container installation.
 
 You do not need to configure channels, tools, extra Agents, or remote access before the first chat.

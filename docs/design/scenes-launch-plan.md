@@ -6,7 +6,7 @@
 
 当前交付通用来源接口、目标／指令／能力授权、原 Task 持续推进、三类任务资源及本地分支关联；后续先使用真实业务样本验证长期跟进价值，再推进频道事项发现。更多来源和可安装能力包不能以替换当前主链路的方式另建执行器。早期首版见[历史实现说明](./slack-development-implementation.md)。
 
-本计划以用户自己的 Slack → 排查 → 编码 → 分支管理闭环为第一目标，取代此前以 Gmail／家庭只读场景或其他目标人群验证为新增能力主线的顺序。已完成的场景基础不重做，历史事实见[实施记录](/Users/micjoyce/develop/github/xopc/docs/design/scenes-implementation-progress.md)及[只读场景发布评审](/Users/micjoyce/develop/github/xopc/docs/design/scenes-production-readiness-review.md)。
+本计划以用户自己的 Slack → 排查 → 编码 → 分支管理闭环为第一目标，取代此前以 Gmail／家庭只读场景或其他目标人群验证为新增能力主线的顺序。已完成的场景基础不重做，历史事实见[实施记录](scenes-implementation-progress.md)及[只读场景发布评审](scenes-production-readiness-review.md)。
 
 当前产品与技术范围以[通用场景任务跟进方案](./scene-task-follow-up.md)为准。
 

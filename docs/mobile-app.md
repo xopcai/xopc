@@ -39,3 +39,11 @@ Revoke a phone from **Devices** on the computer. The phone must scan again and r
 | Cannot verify computer identity | Generate a new code on the intended computer; do not bypass certificate checks |
 
 See [Remote access](./remote-access.md) for advanced configuration.
+
+## Daily destinations
+
+The phone has five main destinations: Assistant, Conversations, Progress, Notes and Me. Give work to the Assistant, return to existing chats in Conversations, inspect Tasks and pending decisions in Progress, save material in Notes, and check connection settings and preferences in Me.
+
+Versions with source references let you use the Chat plus menu to reference a Note, Task or file. Verify the active work computer and source scope first. Images can be opened for preview; asking the Agent to understand them also requires a compatible vision model. See [Voice](./voice.md) for audio setup and permissions.
+
+Specific Android, iOS and HarmonyOS capabilities vary by version. Update both the phone and work computer and use the current interface as the guide. Successful pairing does not establish that every recording, background or media feature has been verified on your device.

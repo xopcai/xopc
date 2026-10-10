@@ -28,7 +28,8 @@ Use `xopc session info <session-key>` when you need details about a specific Ses
 
 | Action | Use it when | Result |
 | --- | --- | --- |
-| New chat / reset | You want a clean conversation under the same route | The old transcript is archived and a fresh conversation starts |
+| New chat | You have a different goal | Creates a separate conversation |
+| Reset | You want fresh context in the existing conversation | Archives the current transcript, preserving conversation identity and per-session overrides |
 | Delete | You no longer want the Session listed or stored | The Session is removed from the index and its data is deleted |
 
 Reset is the safer default. Delete only when you intend to remove the saved conversation.
@@ -63,3 +64,11 @@ To publish a reviewed, read-only snapshot of a conversation, see [Share a conver
 | Resume opens the wrong Agent | Inspect the Session details and the configured default Agent |
 | A long conversation loses older detail | Summarize important facts in the Session or move durable material into a Task, Note, or workspace file |
 | Sessions fail to load | Run `xopc doctor --deep`, then inspect `xopc logs tail` |
+
+## Models and project environments
+
+The composer shows the concrete selected model and its supported thinking level. That selection is saved to the conversation; a provider error does not silently switch models. Finish active or queued input before changing the model. If an old selection is unavailable, explicitly choose an available model.
+
+When starting Chat from a Project with a configured workspace, choose **Local** or **New local worktree**. Local means the Gateway's machine. Selecting an option creates no directory; the first send creates the conversation and its execution environment. A new worktree starts at current HEAD and does not copy uncommitted edits.
+
+If creation fails, the draft is retained. Fix the cause or explicitly select another environment before sending again. Existing conversations retain their environment; start another conversation to use a different one.

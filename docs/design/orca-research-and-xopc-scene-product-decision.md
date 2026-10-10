@@ -10,7 +10,7 @@
 
 上一版“先聚焦独立顾问／客户交付、先访谈 8—12 位用户再决定是否建设”的建议不再作为本轮计划。跨用户的增长与付费仍是未来假设，但不能代替已经存在的个人需求。
 
-当前范围见[产品与技术方案](/Users/micjoyce/develop/github/xopc/docs/design/ai-native-scenes-product-technical-design.md)，推进顺序见[计划](/Users/micjoyce/develop/github/xopc/docs/design/scenes-launch-plan.md)。本报告保留 Orca 的事实及启发，不承担另一套路线图。
+当前范围见[产品与技术方案](ai-native-scenes-product-technical-design.md)，推进顺序见[计划](scenes-launch-plan.md)。本报告保留 Orca 的事实及启发，不承担另一套路线图。
 
 ## 2. 调研方法与证据边界
 
@@ -119,10 +119,10 @@ BYOK 与本地状态控制有价值，也有配置和常在线成本。内部 Ag
 - [旧 Coordinator 类](/Users/micjoyce/develop/github/orca/src/main/runtime/orchestration/coordinator.ts)
 - [来源与执行上下文](/Users/micjoyce/develop/github/orca/src/shared/task-source-context.ts)
 - [Plugin manifest](/Users/micjoyce/develop/github/orca/src/shared/plugins/plugin-manifest.ts)
-- [xopc Scene 只读执行器](/Users/micjoyce/develop/github/xopc/src/scenes/agentExecutor.ts)
-- [Task 内部 Agent 派发](/Users/micjoyce/develop/github/xopc/src/tasks/task-run-dispatcher.ts)
-- [Gateway Agent 接入](/Users/micjoyce/develop/github/xopc/src/gateway/service.ts:695)
-- [Task 等待信号](/Users/micjoyce/develop/github/xopc/src/tasks/task-signal-service.ts)
-- [Workflow 定义](/Users/micjoyce/develop/github/xopc/src/workflows/domain/definition.ts)
-- [Workflow 运行状态](/Users/micjoyce/develop/github/xopc/src/workflows/domain/run.ts)
-- [Workflow 回执桥接](/Users/micjoyce/develop/github/xopc/src/tasks/task-workflow-coordinator.ts)
+- [xopc Scene 只读执行器](../../src/scenes/agentExecutor.ts)
+- [Task 内部 Agent 派发](../../src/tasks/task-run-dispatcher.ts)
+- [Gateway Agent 接入](../../src/gateway/service.ts:695)
+- [Task 等待信号](../../src/tasks/task-signal-service.ts)
+- [Workflow 定义](../../src/workflows/domain/definition.ts)
+- [Workflow 运行状态](../../src/workflows/domain/run.ts)
+- [Workflow 回执桥接](../../src/tasks/task-workflow-coordinator.ts)

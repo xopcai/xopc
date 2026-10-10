@@ -1,5 +1,85 @@
 {
   "chat": {
+    "referenceFallback": "Reference",
+    "reviewCard": {
+      "running": "Reviewing changes",
+      "finished": "Code review finished",
+      "collecting": "Collecting changes",
+      "assistant": "Review assistant",
+      "basedOn": "Based on {{target}}",
+      "preparing": "Preparing an isolated review context…",
+      "checking": "The review assistant is checking the changes…",
+      "error": "The review assistant could not complete: {{error}}",
+      "noModelFindings": "No model findings were produced.",
+      "noFindings": "No findings.",
+      "correctness": {
+        "patch is correct": "Patch is correct",
+        "patch is incorrect": "Patch is incorrect",
+        "unknown": "Unknown"
+      }
+    },
+    "provenanceErrors": {
+      "load": "Unable to load provenance",
+      "save": "Unable to save feedback",
+      "undo": "Unable to undo strategy"
+    },
+    "productDelivery": {
+    "heading": "Turn deliverables",
+    "partialResults": "Showing partial results",
+    "diffPreview": "Edit preview",
+    "proposedChanges": "Proposed changes (not applied)",
+    "replaceRange": "Replace range",
+    "partialDiff": "Partial content shown. Inspect the full tool result.",
+    "loadingAppPreview": "Loading app preview",
+    "previewTimeout": "Preview did not report ready within 7 seconds.",
+      "kinds": {
+        "task": "Task",
+        "project": "Project",
+        "note": "Note",
+        "workflow_definition": "Workflow",
+        "workflow_run": "Workflow run",
+        "automation": "Automation",
+        "scene": "Monitor",
+        "local_app": "App",
+        "chat_preview": "Chat preview",
+        "file": "File",
+        "session": "Conversation",
+        "settings": "Settings"
+      },
+      "operations": {
+        "created": "Created",
+        "updated": "Updated",
+        "opened": "Ready",
+        "started": "Started",
+        "completed": "Completed",
+        "failed": "Failed"
+      },
+      "statuses": {
+        "active": "Active",
+        "completed": "Completed",
+        "disabled": "Disabled",
+        "enabled": "Enabled",
+        "failed": "Failed",
+        "inbox": "Inbox",
+        "paused": "Paused",
+        "ready": "Ready",
+        "running": "Running"
+      },
+      "taskStates": {
+        "queued": "Starting soon",
+        "running": "In progress",
+        "verifying": "Checking the result",
+        "waiting": "Waiting",
+        "blocked": "Needs attention",
+        "completed": "Completed",
+        "closed": "Closed",
+        "failed": "Ran into a problem",
+        "assigned": "Assigned",
+        "ready": "Ready to start"
+      },
+      "continue": "Continue",
+      "continuePrompt": "Continue working on {{kind}} \"{{title}}\" (ID: {{id}}): "
+    },
     "taskTrigger": {
       "about": "About",
       "progress": "has an update", "question": "needs an answer",
@@ -611,6 +691,7 @@
     "attachmentPreviewOpenLocalFailed": "Could not open this spreadsheet in a local application",
     "attachmentPreviewImage": "Preview image",
     "turnOutcome": {
+    "evidenceCount": "{{count}} checks",
       "heading": "Result from this turn",
       "statusPartial": "Partially complete",
       "checkedRevision": "Checked revision",

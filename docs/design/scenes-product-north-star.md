@@ -4,7 +4,7 @@
 
 初稿：2026-09-19。更新：2026-09-21。状态：长期产品方向；当前迭代收敛为用户自己的 Slack 开发事项闭环。
 
-本文定义 xopc「场景」的长期用户价值、产品承诺、能力轮廓、指标和领域边界；不要求一次实现长期轮廓。当前交付范围以 [Slack 开发事项产品与技术方案](/Users/micjoyce/develop/github/xopc/docs/design/ai-native-scenes-product-technical-design.md)及[推进计划](/Users/micjoyce/develop/github/xopc/docs/design/scenes-launch-plan.md)为准。第 12、13、15 节保留早期探索／迁移背景，不再作为本轮排期或重新清理数据的依据。
+本文定义 xopc「场景」的长期用户价值、产品承诺、能力轮廓、指标和领域边界；不要求一次实现长期轮廓。当前交付范围以 [Slack 开发事项产品与技术方案](ai-native-scenes-product-technical-design.md)及[推进计划](scenes-launch-plan.md)为准。第 12、13、15 节保留早期探索／迁移背景，不再作为本轮排期或重新清理数据的依据。
 
 旧主动服务实验已下线，当前沿用 Scene、Automation、Workflow、Skill、TaskRun、成果和通知基础。本文长期轮廓不表示全部已实现，具体状态以交付记录和代码为准。
 

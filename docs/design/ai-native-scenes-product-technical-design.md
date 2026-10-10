@@ -6,7 +6,7 @@
 
 本方案依据用户自己的真实问题：Slack 消息跟进不过来；给 Codex 开发需要反复复制上下文并观察 thread；分支与 Slack 需求对应不清。**先解决这个工作闭环，再从实际复用中推广到通用场景。** 不以其他人群访谈、客户交付场景验证或能力包平台建设作为启动前提。
 
-文档分工：本文是当前迭代产品与技术范围依据；[推进计划](/Users/micjoyce/develop/github/xopc/docs/design/scenes-launch-plan.md)定义交付批次；[技术基础](/Users/micjoyce/develop/github/xopc/docs/design/scenes-technical-design.md)保留通用可靠性约束；[实施记录](/Users/micjoyce/develop/github/xopc/docs/design/scenes-implementation-progress.md)记录实际实现与验证；[Orca 调研](/Users/micjoyce/develop/github/xopc/docs/design/orca-research-and-xopc-scene-product-decision.md)提供借鉴依据。范围冲突以本文及当前推进计划为准。
+文档分工：本文是当前迭代产品与技术范围依据；[推进计划](scenes-launch-plan.md)定义交付批次；[技术基础](scenes-technical-design.md)保留通用可靠性约束；[实施记录](scenes-implementation-progress.md)记录实际实现与验证；[Orca 调研](orca-research-and-xopc-scene-product-decision.md)提供借鉴依据。范围冲突以本文及当前推进计划为准。
 
 ## 1. 产品决定
 
