@@ -1713,8 +1713,8 @@ export struct XopcChatView {
                 .fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
                 .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: 140 })
             }.padding({ left: 6, right: 14 })
-          }.height(48).borderRadius(24).backgroundColor(this.colors.panel)
-            .border({ width: 1, color: this.colors.border }).onClick((): void => {
+          }.height(48).backgroundColor(this.colors.panel)
+            .border({ width: 1, color: this.colors.border }).borderRadius(24).clip(true).onClick((): void => {
               if (this.personalConversation) this.personalSettingsOpen = true; else this.openSheet('agent');
             })
           Blank().layoutWeight(1)
