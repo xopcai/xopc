@@ -42,9 +42,6 @@ export struct XopcGatewayProfilesView {
   build() {
     Column() {
       Row({ space: 8 }) {
-        Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
-          .id('gateways-back').width(44).height(44).backgroundColor(Color.Transparent).enabled(!this.connection.busy)
-          .accessibilityText($r('app.string.back')).onClick((): void => { this.connection.closeGateways(); })
         Text($r('app.string.gateways_title')).fontSize(24).fontWeight(FontWeight.Bold)
           .fontColor(this.colors.foreground).layoutWeight(1)
         Button() { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(21).fontColor([this.colors.accent]) }
