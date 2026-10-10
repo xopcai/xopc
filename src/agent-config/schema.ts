@@ -113,6 +113,17 @@ export const WorkflowPolicySchema = z.object({
 }).strict();
 
 export const RuntimePolicySchema = z.object({
+  toolDiscovery: z.object({
+    enabled: z.boolean().default(false),
+    mcpServer: z.string().trim().min(1).optional(),
+  }).strict().optional(),
+  codemode: z.object({
+    enabled: z.boolean().default(false),
+    timeoutMs: z.number().int().min(1).max(60_000).default(60_000),
+    maxConcurrentCalls: z.number().int().min(1).max(4).default(4),
+    maxCalls: z.number().int().min(1).max(32).default(32),
+    maxOutputTokens: z.number().int().min(1).max(4_000).default(4_000),
+  }).strict().optional(),
   thinkingLevel: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
   commandIsolation: z.discriminatedUnion('mode', [
     z.object({ mode: z.literal('host') }).strict(),

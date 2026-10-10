@@ -1,6 +1,6 @@
 # pi 0.87.0 → 1.1.0 升级方案
 
-日期：2026-10-10。状态：阶段 1 已完成开发与本地验收；在 main 工作区保留未提交变更，由用户统一 commit。阶段 2/3 尚未实施，未发布或部署。
+日期：2026-10-10。状态：阶段 1 已提交；阶段 2、3、4 已完成开发与本地验收，在 main 工作区保留未提交变更，由用户统一 commit。阶段 4 的真实模型评估未达到推广门槛，默认继续关闭。未发布或部署。
 
 ## 决策与范围
 
@@ -152,7 +152,7 @@ pnpm run test:startup:gateway:check
 
 底座发布后至少观察一个完整的日常使用周期；以失败率、提前完成、重试次数、取消耗时、runner 数量、数据库检查和启动耗时判断是否继续。`xopc doctor --deep` 应对隔离验证数据及发布后的目标数据通过。若出现数据完整性、凭据错误或持续运行故障，停止推广并按对应阶段回退。
 
-阶段 1 的本地验收已完成，发布时间由用户决定。Codemode 的 hook、持久化和打包适配仍需阶段 2 的 SDK 验证，再据此确定实施工期。
+各阶段的本地验收记录如下，发布时间由用户决定。Codemode 和工具发现保持默认关闭；阶段 4 已完成真实模型评估，本轮未达到推广门槛。
 
 ## 阶段 1 实施记录
 
@@ -179,7 +179,76 @@ pnpm run test:startup:gateway:check
 | Electron server 构建 | 通过，新 OpenAI ChatGPT OAuth 确认包含在 bundle 中 |
 | Electron server bundle + 本机模拟模型服务 | 同样完成鉴权输入、工具调用、取消、进程重启及 SQLite 恢复，4 次模型请求全部在本机处理 |
 
-OAuth token 服务和模型响应均使用模拟服务；OAuth 回调使用真实本机 callback server。没有消费真实模型额度，也没有进行真实 ChatGPT 账户登录、系统浏览器/原生桌面辅助工具验收或应用安装包发布。阶段 2/3 的 Codemode、子调用和按需工具发现验收仍待实施。
+OAuth token 服务和模型响应均使用模拟服务；OAuth 回调使用真实本机 callback server。没有消费真实模型额度，也没有进行真实 ChatGPT 账户登录、系统浏览器/原生桌面辅助工具验收或应用安装包发布。
+
+## 阶段 2 实施记录
+
+- 接入公开 `createCodemodeExtension({ mode: 'on', models: false })`，显式绑定到 embedded SDK；通过 SQLite Agent catalog 的 `runtime.codemode` 配置控制，默认关闭。控制台全局运行策略提供开关，Agent API 支持覆盖。说明见 [Codemode 读取试点](../../codemode.md)。
+- 只开放核心工厂标记且当前会话已授权的读取工具；发现和执行使用同一集合。外部扩展仅声明相同名称或只读 annotation 不会获得访问权。`data_batch` 嵌套权限取交集，不能借 Git、外部操作或 MCP 扩大权限。
+- 嵌套调用补接 xopc 的 before/after 策略、目录指令和取消信号，复用原执行器与工具锁；修正新版 `afterToolCall` 的结果返回契约。宿主强制总期限、并发、调用次数和输出预算，超限终止 worker；脚本参数只能降低上限。
+- `codemode-store` 经现有 transcript append 事件写入 SQLite，验证进程重启、压缩和 reset。状态限制为 64 键 / 64 KiB，不增加 turn-end 全量保存。
+- 子调用父 ID、耗时穿过 realtime、共享协议和 Web，并从父 `nestedCalls` 恢复历史展示。子调用不作为独立 LLM toolResult；合成 usage 验证父结果只汇总一次。
+- runner 指纹覆盖开关、预算、工具描述和核心读取身份。关闭开关或修改工具授权中止活动运行并释放 runner；Gateway 从 embedded aborted outcome 产生 `cancelled` 业务终态，避免错误报告成功。
+- 固定直接运行依赖 `quickjs-wasi@3.6.2`；Electron server 复制上游 release worker，并把 WASM 纳入最小运行依赖和 unpack 验证清单。
+
+| 本地检查 | 结果 |
+| --- | --- |
+| 根 / Web 类型检查 | 通过 |
+| 真实 QuickJS 沙箱行为测试 | 5 项通过，覆盖允许读取、越权、嵌套权限、费用、预算、取消、状态和默认关闭 |
+| 相关回归 | 32 个文件、260 项测试通过；另有 3 个文件、30 项取消/SQLite/Gateway 终态测试通过 |
+| 全量 Vitest | 1,487 个文件、8,869 项测试通过；3 个文件、12 项测试按原配置跳过 |
+| Node、声明、Web、Electron server 构建 | 通过；Web 保留既有 chunk 和静态/动态导入警告 |
+| 发布包清单 / bootstrap 导入 | 通过 |
+| 实际 Node Gateway / Electron server Gateway | 均通过带鉴权 REST + realtime、真实 worker、子调用父 ID/耗时、模型收到结果、取消、SQLite 重启恢复、reset 隔离、关闭开关后 cancelled 终态及工具移除；各 9 次本机模型请求 |
+| 发布包安装后的 Gateway | 本地 pnpm pack 后在临时目录安装，完整 Gateway/QuickJS 验证通过，9 次本机模型请求；依赖构建脚本被跳过，不覆盖原生辅助工具安装 |
+| 文档检查 | 通过 |
+
+未使用真实模型额度，尚未测量模型任务的成本和速度收益。未重建完整 Electron 应用安装器或验收原生桌面 UI；本轮验证的是实际 server bundle。按需工具发现、deferred MCP 和远程输出下载入口不在本阶段。
+
+## 阶段 3 实施记录
+
+- 显式接入公开 `createToolSearchExtension()`，通过 SQLite Agent catalog 的 `runtime.toolDiscovery` 控制，默认关闭。控制台提供开关及一个试点 MCP 服务名称，Agent API 支持覆盖。配置及使用见 [按需工具发现与 MCP 试点](../../tool-discovery.md)。
+- 所选服务的已授权 MCP 工具作为 deferred SDK 工具注册，映射 namespace、instructions、annotations、输入/输出 schema；名字归一化碰撞或超过 64 字符明确拒绝。其他服务及原有外部工具网关继续使用现有路径。
+- 沿用现有 MCP runtime、OAuth、TTL 和销毁。别名调用复用原始 `xopc_tool_execute` 执行器，策略身份映射回其原始 toolRef/revision；describe、读取策略及执行明确绑定当前 conversation，避免嵌套运行使用父会话的上下文。
+- 只有宿主明确设置 `readOnly: true` 的读取契约进入 Codemode；远端 readOnlyHint 不授予权限。直接调用仍执行原有 allow/ask/deny、限次、超时、参数校验、个人请求和 extension hooks。MCP structuredContent 传入 SDK，isError 映射为失败；输出 schema 和 annotations 的变化同样使契约 revision 失效。
+- SDK 的 `tools` 参数同时过滤注册和初始展示；注册时保留完整授权集合，再单独设置当前展示集合，避免冷启动载入一个 MCP 工具后丢失其他 deferred 工具。
+- pi 的 system 工具声明不进入 xopc 的 SQLite transcript。通过独立 `xopc-tool-discovery` custom entry 保存已载入工具的名字与 SHA-256 契约指纹；冷启动和压缩后仅恢复仍被授权且契约一致的声明，reset 不带入旧状态。没有增加 turn-end 全量保存或旧版本兼容分支。
+- MCP list_changed 和断线使活动试点运行取消并淘汰 runner，下一次输入由原 runtime 重连、重建目录；失败目录缓存 5 秒后允许重试。不会自动重放失败或已经执行的脚本。
+- 超长文本从 pi 自己的 spill 文件保留到工作区私有目录，输出使用相对路径；Web 通过现有鉴权文件 API 预览和下载，刷新后仍可访问。没有新增 Gateway 路由或必填协议字段，TUI/移动端保留标准父工具结果及终态，图片临时文件尚未接入远程附件链路。
+
+| 本地检查 | 结果 |
+| --- | --- |
+| 根 / Web 类型检查及 Web lint | 通过 |
+| 真实 QuickJS + 公开 SDK 行为测试 | 7 项通过，包含未载入 MCP 搜索、授权读取、结构化输出、冷启动后其他 deferred 工具仍可调用、越权阻断和费用汇总 |
+| 最终 MCP / 外部工具回归 | 16 个文件、59 项通过；覆盖会话作用域、标识符冲突、目录变更/断线、失败缓存重试、契约 revision 和 MCP 错误状态 |
+| 全量 Vitest | 1,490 个文件、8,878 项通过；3 个文件、12 项按原配置跳过；最终失败缓存关闭顺序修正另由上述 59 项回归验证 |
+| Node、声明、Web、Electron server 构建 | 通过；Web 保留既有 chunk 和静态/动态导入警告 |
+| 发布包清单 / bootstrap 导入 / 文档检查 | 通过 |
+| 实际 Node Gateway / Electron server Gateway | 均通过带鉴权 REST + realtime、真实 QuickJS 和 stdio MCP、deferred 声明、搜索、结构化结果、长输出预览及鉴权下载、SQLite 冷启动载入恢复、工具移除、断线取消及重连、reset 和关闭开关；各 19 次本机模型请求 |
+| 发布包安装后的 Gateway | 最终本地 pnpm pack 工件在临时目录安装后完成相同链路验证，19 次本机模型请求；安装跳过依赖构建脚本，不覆盖原生辅助工具安装 |
+
+未消费真实模型额度，真实成本和速度收益留在阶段 4。没有重建完整 Electron 安装器或验收原生桌面 UI；本轮使用实际 server bundle 验证。未新增移动端专用呈现，其共享协议和标准父结果路径由现有回归覆盖。
+
+## 阶段 4 实施记录
+
+- 新增 `pnpm run eval:codemode` 与独立脚本类型检查，固定 30 个合成任务、每种策略 3 次，共 270 个真实模型样本；覆盖文件、搜索、知识、多项目进展、Git、MCP、部分缺失和拒绝访问。通过生产 embedded SDK、真实 QuickJS、工具、SQLite FTS 和 stdio MCP 执行，不读取用户文件或生产 MCP 数据。
+- 复用用户本地百炼凭据，正式对照固定 `dashscope-cn/qwen3.7-flash-2026-07-15`、thinking off、相同数据/权限和输出要求，并轮换策略顺序。三组沿用原有外部工具网关，Codemode 组额外启用第三阶段的 deferred 发现；记录这项混合因素。
+- 记录请求、输入/输出/缓存、费用、中位数/P95、成功率、来源证据、父/子调用与实际脚本使用；manifest 固定数据、模型、价格、策略和源码哈希。断点恢复不混合条件变化的结果。Provider 错误保留为无效比较，停止派发在途请求之外的新样本，不重放脚本。
+- 正式 270 项完成、854 次模型请求，Provider 错误为零；估算费用 $0.051870。direct、batch、codemode 成功率分别为 82.2%、86.7%、82.2%，中位耗时 4.153s、3.836s、5.200s，P95 为 11.849s、7.385s、13.414s。组合任务的速度与输入收益均未达标，Codemode 相对 batch 质量更低，保留默认关闭和按 Agent opt-in，没有扩大生产开启范围。
+- 两个 MCP 查询任务有局部改善，但样本不足以推广；没有将整套策略收益单独归因于工具发现。MiniMax 套餐 429 和 Qwen 初次模型定义 400 的无效轮次保留记录，不用快速拒绝的时延作收益证据。
+- 详细方法、按场景结果、置信区间、失败分类、价格依据与复现命令见 [第四阶段评估报告](./codemode-evaluation-2026-10-10.md) 和 [聚合 JSON](./codemode-evaluation-2026-10-10.summary.json)。开发直接在 main，无新增提交，不修改实际 Agent 配置或凭据。
+
+| 本地检查 | 结果 |
+| --- | --- |
+| 根类型检查 / 独立评测脚本类型检查 | 通过 |
+| 评分、推广门槛及真实 QuickJS/SDK/MCP 回归 | 4 个文件、15 项通过 |
+| 真实 CLI 429 故障注入 | 并发 3 仅执行 3 个在途请求后停止，退出码 2，比较无效，runner/MCP 为零，SQLite 完整性通过 |
+| 正式真实模型样本 | 270 项完整，无 Provider 错误；任务失败计入评分与耗时 |
+| 隔离状态审计 | 受限内容哨兵和初始跨会话状态泄漏为零；runner/MCP 残留为零；SQLite integrity_check 为 ok |
+| 文档检查 / diff 空白检查 | 通过 |
+| 全量 Vitest | 1,491 个文件、8,882 项通过；3 个文件、12 项按原配置跳过 |
+
+本轮为单模型和固定合成任务评估，未代表其他模型或生产账户，未开启日常 Agent 试点；由于推广门槛未通过，该试点不作为后续发布底座的前置条件。脚本与文档不改变 runtime 分发，沿用第三阶段已验证的 Node/Web/Electron server 产物与安装工件。
 
 ## 官方依据
 

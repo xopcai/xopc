@@ -2,6 +2,7 @@ import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/s
 import { isClarificationSuspended } from '../../storage/sqlite/clarification-wait-repository.js';
 import crypto from 'crypto';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
+import { parseTurnOutcome } from '@xopcai/gateway-contract';
 
 import type { AgentService } from '../../agent/service.js';
 import type { Config } from '../../config/schema.js';
@@ -220,6 +221,7 @@ export async function *runGatewayAgent(
         publishRealtime('sessions', 'run.started', { conversationId, runId });
       }
       let streamError: string | undefined;
+      let embeddedAborted = false;
       try {
         const eventStream = agentService.turnDispatcher.processDirectStreaming(
           stampedMessage,
@@ -239,6 +241,7 @@ export async function *runGatewayAgent(
 
         const mappedEvents = (async function* (): AsyncGenerator<ChatStreamEvent> {
           for await (const event of eventStream) {
+            if (event.type === 'turn_outcome' && parseTurnOutcome(event.outcome)?.summary === 'aborted') embeddedAborted = true;
             yield* mapper.map(event);
           }
         })();
@@ -249,22 +252,23 @@ export async function *runGatewayAgent(
         const connectionSuspended = isConnectionSuspended(conversationId, runId);
         const clarificationSuspended = isClarificationSuspended(conversationId, runId);
         const suspended = connectionSuspended || clarificationSuspended;
-        const endStatus = mergedSignal.aborted ? 'cancelled' : suspended ? 'suspended' : 'success';
-        const endSummary = mergedSignal.aborted
+        const cancelled = mergedSignal.aborted || embeddedAborted;
+        const endStatus = cancelled ? 'cancelled' : suspended ? 'suspended' : 'success';
+        const endSummary = cancelled
           ? 'Interrupted'
           : connectionSuspended
             ? 'Waiting for connection'
             : clarificationSuspended
               ? 'Waiting for user input'
               : 'Message processed successfully';
-        taskRunStatus = mergedSignal.aborted ? 'cancelled' : 'succeeded';
+        taskRunStatus = cancelled ? 'cancelled' : 'succeeded';
         terminalStatus = endStatus;
         taskRunSummary = endSummary;
         yield* emitAndYield(mapper.end(endStatus, endSummary));
         completeRealtimeTopic(`run:${runId}`);
         runTopicCompleted = true;
         return {
-          status: mergedSignal.aborted ? 'aborted' : suspended ? 'suspended' : 'ok',
+          status: cancelled ? 'aborted' : suspended ? 'suspended' : 'ok',
           summary: endSummary,
         };
       } catch (error) {

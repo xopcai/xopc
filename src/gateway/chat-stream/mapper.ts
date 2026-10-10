@@ -307,6 +307,7 @@ export class ChatStreamMapper {
     this.toolCallToMessageId.set(toolCallId, messageId);
     const events: ChatStreamEvent[] = [
       this.make('tool_start', {
+        ...toolExecutionMetadata(event),
         messageId,
         toolCallId,
         toolName,
@@ -338,6 +339,7 @@ export class ChatStreamMapper {
     const toolName = String(event.toolName ?? 'unknown');
     const events: ChatStreamEvent[] = [
       this.make('tool_update', {
+        ...toolExecutionMetadata(event),
         messageId,
         toolCallId,
         toolName,
@@ -367,6 +369,7 @@ export class ChatStreamMapper {
     const toolName = String(event.toolName ?? 'unknown');
     const events: ChatStreamEvent[] = [
       this.make('tool_end', {
+        ...toolExecutionMetadata(event),
         messageId,
         toolCallId,
         toolName,
@@ -638,6 +641,13 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function toolExecutionMetadata(event: Record<string, unknown>) {
+  return {
+    ...(typeof event.parentToolCallId === 'string' ? { parentToolCallId: event.parentToolCallId } : {}),
+    ...(typeof event.durationMs === 'number' ? { durationMs: event.durationMs } : {}),
+  };
 }
 
 function normalizeToolResult(value: unknown): ToolResultEnvelope | undefined {

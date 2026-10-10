@@ -3,7 +3,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { ToolListChangedNotificationSchema, type CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv-provider.js";
 import type {
   JsonSchemaType,
@@ -245,6 +245,14 @@ export function createSessionMcpRuntime(params: {
   let catalog: McpToolCatalog | null = null;
   let catalogInFlight: Promise<McpToolCatalog> | undefined;
   const sessions = new Map<string, BundleMcpSession>();
+  const invalidationListeners = new Set<() => void>();
+  let catalogDirty = false;
+  let catalogVersion = 0;
+  const invalidateCatalog = () => {
+    if (disposed) return;
+    catalogDirty = true;
+    for (const listener of invalidationListeners) listener();
+  };
   const failIfDisposed = () => {
     if (disposed) {
       throw createDisposedError(params.sessionId);
@@ -254,12 +262,19 @@ export function createSessionMcpRuntime(params: {
   const getCatalog = async (): Promise<McpToolCatalog> => {
     failIfDisposed();
     if (catalog) {
-      return catalog;
+      const retryFailed = Object.values(catalog.servers).some(server => server.error)
+        && Date.now() - catalog.generatedAt > 5000;
+      if (!catalogDirty && !retryFailed) return catalog;
     }
     if (catalogInFlight) {
       return catalogInFlight;
     }
     catalogInFlight = (async () => {
+      const stale = [...sessions.values()];
+      sessions.clear();
+      await Promise.allSettled(stale.map(session => disposeSession(session)));
+      catalog = null;
+      catalogDirty = false;
       if (Object.keys(loaded.mcpServers).length === 0) {
         return {
           version: 1,
@@ -323,6 +338,10 @@ export function createSessionMcpRuntime(params: {
             detachStderr: resolved.detachStderr,
           };
           sessions.set(serverName, session);
+          client.onclose = () => {
+            if (sessions.get(serverName) === session) invalidateCatalog();
+          };
+          client.setNotificationHandler(ToolListChangedNotificationSchema, () => invalidateCatalog());
 
           try {
             failIfDisposed();
@@ -347,6 +366,7 @@ export function createSessionMcpRuntime(params: {
               toolCount: listedTools.length,
               resourceCount: listedResources.length,
               promptCount: listedPrompts.length,
+              instructions: client.getInstructions?.(),
             };
             for (const tool of listedTools) {
               const toolName = tool.name.trim();
@@ -361,6 +381,7 @@ export function createSessionMcpRuntime(params: {
                 description:
                   normalizeOptionalString(tool.description) ?? normalizeOptionalString(tool.title),
                 inputSchema: tool.inputSchema,
+                outputSchema: tool.outputSchema,
                 annotations: tool.annotations,
                 fallbackDescription: `Provided by bundle MCP server "${serverName}" (${resolved.description}).`,
               });
@@ -405,15 +426,15 @@ export function createSessionMcpRuntime(params: {
                 `bundle-mcp: failed to start server "${serverName}" (${resolved.description}): ${redactErrorUrls(error)}`,
               );
             }
-            await disposeSession(session);
             sessions.delete(serverName);
+            await disposeSession(session);
             failIfDisposed();
           }
         }
 
         failIfDisposed();
         return {
-          version: 1,
+          version: ++catalogVersion,
           generatedAt: Date.now(),
           servers,
           tools,
@@ -464,6 +485,7 @@ export function createSessionMcpRuntime(params: {
       };
     },
     getCatalog,
+    onCatalogInvalidated(listener) { invalidationListeners.add(listener); },
     markUsed() {
       lastUsedAt = Date.now();
     },
@@ -509,6 +531,7 @@ export function createSessionMcpRuntime(params: {
         return;
       }
       disposed = true;
+      invalidationListeners.clear();
       catalog = null;
       catalogInFlight = undefined;
       const sessionsToClose = Array.from(sessions.values());

@@ -10,7 +10,9 @@ const executionTools = new AsyncLocalStorage<ReadonlySet<string>>();
 const log = createLogger('DataAcquisition');
 
 export function withDataToolPermissions<T>(names: ReadonlySet<string>, run: () => T): T {
-  return executionTools.run(names, run);
+  const parent = executionTools.getStore();
+  const allowed = parent ? new Set([...names].filter(name => parent.has(name))) : names;
+  return executionTools.run(allowed, run);
 }
 
 export function createDataBatchTool(workspace: string, getAllowedTools: () => ReadonlySet<string>, options: DataSourceOptions = {}): AgentTool {

@@ -63,6 +63,8 @@ function verifyUnpackedAppLayout(asarPath) {
   const unpackedDir = join(dirname(asarPath), 'app.asar.unpacked');
   const required = [
     'out/server/index.js',
+    'out/server/codemode-worker.js',
+    'node_modules/quickjs-wasi/quickjs.wasm',
     'dist/electron/extensions',
     'dist/gateway/static/root/index.html',
     'skills/tools/find-skills/SKILL.md',

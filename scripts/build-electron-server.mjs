@@ -42,6 +42,7 @@ const gatewayBuild = await esbuild.build({
   outfile,
   external,
   format: 'esm',
+  define: { PI_BUNDLED_NODE: 'true' },
   // ESM bundle: dependents (e.g. @larksuiteoapi/node-sdk) use `__dirname` / CJS `require`.
   banner: {
     js: [
@@ -57,6 +58,10 @@ const gatewayBuild = await esbuild.build({
   sourcemap: false,
   metafile: true,
 });
+
+// Use pi's release worker, which is self-contained and supports data: URL startup.
+const piEntry = fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'));
+cpSync(join(dirname(piEntry), 'bundle/chunks/codemode-worker.js'), join(root, 'out/server/codemode-worker.js'));
 
 const bundledOpenAiChatGPTOAuth = Object.keys(gatewayBuild.metafile.inputs).some((input) =>
   input.endsWith('/@earendil-works/pi-ai/dist/auth/oauth/openai-chatgpt.js'),

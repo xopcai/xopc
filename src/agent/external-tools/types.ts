@@ -28,6 +28,8 @@ export interface ExternalConnectionCandidate {
 export interface ExternalToolDescriptor extends ExternalToolSearchHit {
   description: string;
   inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
+  annotations?: import('@earendil-works/pi-coding-agent').ToolAnnotations;
   /** Host-curated contract; never copied from remote readOnlyHint annotations. */
   batchRead?: boolean;
 }

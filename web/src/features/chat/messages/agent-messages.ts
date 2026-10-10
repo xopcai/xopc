@@ -565,6 +565,20 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
   const text = extractToolResultText(m.content);
   const isError = Boolean(m.isError);
   const completedAt = parseOptionalTs(m.timestamp);
+  const nested = m.nestedCalls as { calls?: unknown[] } | undefined;
+  for (const value of nested?.calls ?? []) {
+    if (!value || typeof value !== 'object') continue;
+    const call = value as { id?: unknown; name?: unknown; status?: unknown; durationMs?: unknown; arguments?: unknown; error?: unknown };
+    if (typeof call.id !== 'string' || typeof call.name !== 'string') continue;
+    if (lastAssistant.content.some(item => item.type === 'tool_use' && item.toolCallId === call.id)) continue;
+    lastAssistant.content.push({
+      type: 'tool_use', id: call.id, toolCallId: call.id, parentToolCallId: id, name: call.name,
+      input: call.arguments, status: call.status === 'ok' ? 'done' : 'error',
+      ...(typeof call.durationMs === 'number' ? { durationMs: call.durationMs } : {}),
+      ...(typeof call.error === 'string' ? { result: call.error } : {}),
+      completedAt,
+    });
+  }
 
   const block = id
     ? lastAssistant.content.find(
@@ -585,6 +599,7 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
     if (block.startedAt != null && completedAt != null) {
       block.durationMs = Math.max(0, completedAt - block.startedAt);
     }
+    if (typeof m.durationMs === 'number') block.durationMs = m.durationMs;
     return;
   }
 

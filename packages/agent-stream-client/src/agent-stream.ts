@@ -15,10 +15,18 @@ import type {
   AgentStreamTurnPlanUpdatedPayload,
   AgentStreamUserTranscriptAttachment,
   AgentStreamUserTranscriptPayload,
+  AgentStreamToolExecutionMetadata,
   PetFeedback,
 } from '@xopcai/gateway-contract';
 
 export type ProgressState = AgentStreamProgressState;
+function toolMetadataArgs(payload: Record<string, unknown>): [] | [AgentStreamToolExecutionMetadata] {
+  const metadata: AgentStreamToolExecutionMetadata = {
+    ...(typeof payload.parentToolCallId === 'string' ? { parentToolCallId: payload.parentToolCallId } : {}),
+    ...(typeof payload.durationMs === 'number' ? { durationMs: payload.durationMs } : {}),
+  };
+  return Object.keys(metadata).length ? [metadata] : [];
+}
 export type UserTranscriptAttachment = AgentStreamUserTranscriptAttachment;
 export type CommandStartedPayload = AgentStreamCommandStartedPayload;
 export type CommandOutputDeltaPayload = AgentStreamCommandOutputDeltaPayload;
@@ -48,9 +56,9 @@ export type AgentStreamCallbacks = {
   ) => void;
   onThinking: (content: string, isDelta: boolean, messageId?: string) => void;
   onThinkingEnd: (messageId?: string) => void;
-  onToolStart: (toolName: string, args?: unknown, toolCallId?: string) => void;
-  onToolUpdate?: (toolName: string, toolCallId: string | undefined, details: unknown) => void;
-  onToolEnd: (toolName: string, isError: boolean, result?: unknown, toolCallId?: string) => void;
+  onToolStart: (toolName: string, args?: unknown, toolCallId?: string, metadata?: AgentStreamToolExecutionMetadata) => void;
+  onToolUpdate?: (toolName: string, toolCallId: string | undefined, details: unknown, metadata?: AgentStreamToolExecutionMetadata) => void;
+  onToolEnd: (toolName: string, isError: boolean, result?: unknown, toolCallId?: string, metadata?: AgentStreamToolExecutionMetadata) => void;
   onCommandStarted?: (payload: CommandStartedPayload) => void;
   onCommandOutputDelta?: (payload: CommandOutputDeltaPayload) => void;
   onCommandCompleted?: (payload: CommandCompletedPayload) => void;
@@ -224,7 +232,7 @@ export function dispatchAgentStreamEvent(
       const toolCallId = typeof p.toolCallId === 'string' ? p.toolCallId : undefined;
       if (toolName === 'exec_command') break;
       if (toolName === 'clarify') break;
-      cb?.onToolStart(toolName, p.args, toolCallId);
+      cb?.onToolStart(toolName, p.args, toolCallId, ...toolMetadataArgs(p));
       break;
     }
     case 'tool_update': {
@@ -234,7 +242,7 @@ export function dispatchAgentStreamEvent(
         ? p.details as Record<string, unknown>
         : undefined;
       if (toolName === 'exec_command' && details?.kind === 'command_output_delta') break;
-      if (p.details !== undefined) cb?.onToolUpdate?.(toolName, toolCallId, p.details);
+      if (p.details !== undefined) cb?.onToolUpdate?.(toolName, toolCallId, p.details, ...toolMetadataArgs(p));
       if (typeof p.textDelta === 'string' && p.textDelta) {
         cb?.onToolUpdate?.(toolName, toolCallId, { textDelta: p.textDelta });
       }
@@ -250,6 +258,7 @@ export function dispatchAgentStreamEvent(
         isError,
         serializePayload(p.result),
         typeof p.toolCallId === 'string' ? p.toolCallId : undefined,
+        ...toolMetadataArgs(p),
       );
       break;
     }

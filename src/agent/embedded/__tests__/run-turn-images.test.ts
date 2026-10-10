@@ -309,7 +309,7 @@ describe('runXopcEmbeddedTurn image input', () => {
       abortSignal: controller.signal,
     });
 
-    expect(result).toEqual({ ok: false, errorMessage: 'aborted' });
+    expect(result).toEqual({ ok: false, retryable: false, errorMessage: 'aborted' });
   });
 
   it('propagates run-lease cancellation through model recovery', async () => {
@@ -330,7 +330,7 @@ describe('runXopcEmbeddedTurn image input', () => {
       timeoutMs: 60_000,
     });
 
-    expect(result).toEqual({ ok: false, errorMessage: 'aborted' });
+    expect(result).toEqual({ ok: false, retryable: false, errorMessage: 'aborted' });
     expect(mocks.retryTurn).toHaveBeenCalledOnce();
     const retryOptions = mocks.retryTurn.mock.calls[0]?.[1] as { signal?: AbortSignal };
     expect(retryOptions.signal).toBeInstanceOf(AbortSignal);
