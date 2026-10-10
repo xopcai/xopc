@@ -94,7 +94,7 @@ export function BrowserAutomationsPage() {
       let endpointId = recordingEndpoint;
       if (!finishing) {
         const availability = await browserAutomationApi.recordingAvailability();
-        if (availability.endpoints.length === 1) endpointId = availability.endpoints[0]!.endpointId;
+        if (availability.endpoints.length === 1) endpointId = availability.endpoints[0].endpointId;
         else if (!availability.endpoints.some((endpoint) => endpoint.endpointId === endpointId)) endpointId = undefined;
         setRecordingEndpoint(endpointId);
         if (!endpointId) { setConnectionGuide(availability); return; }
@@ -112,7 +112,7 @@ export function BrowserAutomationsPage() {
   const refreshConnection = useCallback(async () => {
     const availability = await browserAutomationApi.recordingAvailability();
     setConnectionGuide(availability);
-    setRecordingEndpoint((current) => availability.endpoints.length === 1 ? availability.endpoints[0]!.endpointId
+    setRecordingEndpoint((current) => availability.endpoints.length === 1 ? availability.endpoints[0].endpointId
       : availability.endpoints.some((endpoint) => endpoint.endpointId === current) ? current : undefined);
   }, []);
   useEffect(() => {
@@ -122,7 +122,7 @@ export function BrowserAutomationsPage() {
       void browserAutomationApi.recordingAvailability().then((availability) => {
         if (disposed) return;
         setConnectionGuide(availability);
-        setRecordingEndpoint((current) => availability.endpoints.length === 1 ? availability.endpoints[0]!.endpointId
+        setRecordingEndpoint((current) => availability.endpoints.length === 1 ? availability.endpoints[0].endpointId
           : availability.endpoints.some((endpoint) => endpoint.endpointId === current) ? current : undefined);
       }).catch(() => undefined);
     }, 3000);
