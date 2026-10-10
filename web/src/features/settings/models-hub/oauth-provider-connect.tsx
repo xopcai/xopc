@@ -1,7 +1,9 @@
 import { CheckCircle2, Cloud, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { CLOUD_ONBOARDING_SWR_KEY } from '@/features/onboarding/onboarding-constants';
 import { isElectron } from '@/lib/electron-env';
 import { useLocaleStore } from '@/stores/locale-store';
 import {
@@ -24,6 +26,7 @@ export function OAuthProviderConnect({
   onConnected?: () => void;
 }) {
   const language = useLocaleStore((state) => state.language);
+  const { mutate } = useSWRConfig();
   const zh = language === 'zh';
   const [status, setStatus] = useState<'idle' | 'waiting' | 'connected'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +73,7 @@ export function OAuthProviderConnect({
           throw new Error(current.error ?? current.message ?? 'OAuth authorization failed');
         }
         if (current.status !== 'completed') continue;
+        if (providerId === 'xopc-cloud') await mutate(CLOUD_ONBOARDING_SWR_KEY);
         await revalidateModelsHubCaches();
         popupRef.current?.close();
         popupRef.current = null;
