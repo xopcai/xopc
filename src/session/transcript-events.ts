@@ -4,6 +4,7 @@ export type SessionTranscriptUpdate = {
   conversationId?: string;
   message?: unknown;
   messageId?: string;
+  customEntry?: { customType: string; data?: unknown; timestamp: string };
 };
 
 type SessionTranscriptListener = (update: SessionTranscriptUpdate) => void;
@@ -25,6 +26,7 @@ export function emitSessionTranscriptUpdate(update: SessionTranscriptUpdate): vo
   const nextUpdate: SessionTranscriptUpdate = {
     ...(conversationId ? { conversationId } : {}),
     ...(update.message !== undefined ? { message: update.message } : {}),
+    ...(update.customEntry ? { customEntry: update.customEntry } : {}),
     ...(normalizeOptionalString(update.messageId)
       ? { messageId: normalizeOptionalString(update.messageId) }
       : {}),

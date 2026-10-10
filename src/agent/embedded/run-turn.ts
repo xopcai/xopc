@@ -42,6 +42,7 @@ import { detectToolLoops, type RecentToolCall } from '../orchestration/loop-guar
 import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygiene.js';
 import { restoreCurrentTurnImages } from './current-turn-images.js';
 import { acquireEmbeddedSessionRunner, evictEmbeddedSessionRunner } from './session-runner.js';
+import { externalPolicyContext } from './tool-metadata.js';
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { projectContextForModel } from '../memory/context-budget.js';
@@ -381,6 +382,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       model: resolvedModel,
       modelRef: params.modelRef,
       tools,
+      codemode: params.codemode,
+      toolDiscovery: params.toolDiscovery,
       systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
       thinkingLevel: configuredThinking ?? thinkingLevel ?? 'medium',
       transcriptRuntime,
@@ -615,7 +618,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       }
       if (connectionStopped) return { block: true, reason: 'Waiting for the user to connect an app.', terminate: true };
       if (clarificationStopped) return { block: true, reason: 'Waiting for the user to answer.', terminate: true };
-      const decision = await params.turnPolicy?.beforeToolCall(context, signal);
+      const decision = await params.turnPolicy?.beforeToolCall(externalPolicyContext(context, tools), signal);
       if (decision?.block) {
         policyStopped ||= decision.terminate === true;
         return decision;
@@ -636,8 +639,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (scoped && context.toolCall.name === 'data_batch') {
         checked.result = { content: [{ type: 'text', text: `${scoped}\n\nNew directory instructions were discovered. Apply them before retrying the affected data queries; this result is not evidence of a complete search.` }], details: { status: 'retry_required' } };
       } else if (scoped) checked.result.content.unshift({ type: 'text', text: scoped });
-      await params.turnPolicy?.afterToolCall({ ...context, ...checked });
-      return checked;
+      await params.turnPolicy?.afterToolCall({ ...externalPolicyContext(context, tools), ...checked });
+      return { ...checked.result, isError: checked.isError };
     };
     const baseFinishTurn = session.agent.finishTurn;
     session.agent.finishTurn = async (context, signal): Promise<AgentTurnDecision | undefined> => {
@@ -740,7 +743,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       runner.piSm.appendCustomEntry('coding_verification', { runId, workspace: workspaceDir, required: params.verifyChanges ?? false, ...await verification.summary() });
 
       if (runAbortSignal.aborted) {
-        return { ok: false, errorMessage: 'aborted' };
+        return { ok: false, retryable: false, errorMessage: 'aborted' };
       }
       if (isAssistantTurnAborted(session.agent)) {
         return { ok: true, lastAssistantText: lastAssistantPlainText(session) };

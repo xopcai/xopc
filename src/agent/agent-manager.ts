@@ -61,6 +61,7 @@ import {
 } from './mcp/bundle-mcp-tools.js';
 import { getEmbeddedExecutionRunId } from './embedded/execution-context.js';
 import { evictAllEmbeddedSessionRunners, evictEmbeddedSessionRunner } from './embedded/session-runner.js';
+import { abortEmbeddedRun } from './embedded/runs.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import { consumeClarificationApproval } from '../storage/sqlite/clarification-wait-repository.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
@@ -442,6 +443,15 @@ export class AgentManager implements AgentInstanceGateway {
    */
   updateRuntimeConfiguration(config: Config): void {
     this.config.config = config;
+    for (const instance of this.agents.values()) {
+      const before = instance.effectiveProfile.config;
+      const after = resolveEffectiveAgentProfileForSession(instance.conversationId).config;
+      if (JSON.stringify([before.runtime.codemode, before.runtime.toolDiscovery, before.tools, before.toolAllowlist])
+        !== JSON.stringify([after.runtime.codemode, after.runtime.toolDiscovery, after.tools, after.toolAllowlist])) {
+        void abortEmbeddedRun(instance.conversationId);
+        evictEmbeddedSessionRunner(instance.conversationId, 'agent_tool_configuration_changed');
+      }
+    }
     const ref = getAgentDefaultModelRef();
     this.config.model = ref;
     this.defaultModel = ref || getDefaultModelSync(config);

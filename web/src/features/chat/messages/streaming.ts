@@ -1,4 +1,4 @@
-import { resolveToolActivity, type ToolActivity } from '@xopcai/gateway-contract';
+import { resolveToolActivity, type AgentStreamToolExecutionMetadata, type ToolActivity } from '@xopcai/gateway-contract';
 
 import type { Message, MessageContent, ReviewContent, ToolUseContent } from '@/features/chat/messages/messages.types';
 
@@ -335,6 +335,7 @@ export function appendToolStart(
   toolCallId: string | undefined,
   startedAt: number,
   activity?: ToolActivity,
+  metadata?: AgentStreamToolExecutionMetadata,
 ): void {
   closeStreamingThinkingIfAny(content);
 
@@ -342,6 +343,7 @@ export function appendToolStart(
     type: 'tool_use',
     id: crypto.randomUUID(),
     toolCallId,
+    ...metadata,
     name: toolName,
     activity: activity ?? resolveToolActivity(toolName, 'running'),
     input: args,
@@ -359,6 +361,7 @@ export function completeTool(
   toolCallId: string | undefined,
   completedAt: number,
   activity?: ToolActivity,
+  metadata?: AgentStreamToolExecutionMetadata,
 ): void {
   for (let i = content.length - 1; i >= 0; i--) {
     const b = content[i];
@@ -369,9 +372,11 @@ export function completeTool(
     b.result = result;
     b.activity = activity ?? resolveToolActivity(toolName, isError ? 'failed' : 'completed', result);
     b.completedAt = completedAt;
+    if (metadata?.parentToolCallId) b.parentToolCallId = metadata.parentToolCallId;
     if (b.startedAt != null) {
       b.durationMs = Math.max(0, completedAt - b.startedAt);
     }
+    if (metadata?.durationMs != null) b.durationMs = metadata.durationMs;
     return;
   }
 }

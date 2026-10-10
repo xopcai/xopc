@@ -27,6 +27,7 @@ export type ToolUseContent = {
    * (or tools) run in the same assistant turn.
    */
   toolCallId?: string;
+  parentToolCallId?: string;
   name: string;
   activity?: ToolActivity;
   input?: unknown;

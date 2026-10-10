@@ -173,6 +173,23 @@ describe('ExternalToolService', () => {
     await expect(service.describe(['a', 'b', 'c', 'd'])).rejects.toThrow('Describe between 1 and 3');
   });
 
+  it.each(['outputSchema', 'annotations'] as const)('rejects a loaded MCP contract after its %s changes', async field => {
+    const contract: ExternalToolDescriptor = { ...descriptor, source: 'mcp', toolRef: 'mcp:docs:lookup' };
+    const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'done' }], details: {} }));
+    const service = new ExternalToolService([provider({ source: 'mcp', descriptor: contract, execute })]);
+    const previous = (await service.describe([contract.toolRef])).tools[0]!;
+    if (field === 'outputSchema') contract.outputSchema = { type: 'object', properties: { records: { type: 'number' } } };
+    else contract.annotations = { readOnlyHint: true };
+    const current = (await service.describe([contract.toolRef])).tools[0]!;
+    expect(current.revision).not.toBe(previous.revision);
+    await expect(service.execute({ toolRef: contract.toolRef, revision: previous.revision,
+      arguments: { value: 1 }, context: { toolCallId: 'stale' } })).rejects.toThrow('Tool contract changed');
+    expect(execute).not.toHaveBeenCalled();
+    await service.execute({ toolRef: contract.toolRef, revision: current.revision,
+      arguments: { value: 1 }, context: { toolCallId: 'fresh' } });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
   it('requires a host-curated read contract and changes revision when that policy changes', async () => {
     const contract = { ...descriptor };
     const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'read' }], details: {} }));

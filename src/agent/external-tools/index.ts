@@ -14,6 +14,7 @@ import { EndpointToolProvider } from './endpoint-provider.js';
 import type { ExternalToolProvider, ExternalToolTurnContext } from './types.js';
 import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { withExternalReadPolicy } from './read-policy.js';
+import { getEmbeddedExecutionSession } from '../embedded/execution-context.js';
 
 export interface DefaultExternalToolGatewayDeps {
   workspace: string;
@@ -30,12 +31,13 @@ export interface DefaultExternalToolGatewayDeps {
 }
 
 export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolGatewayDeps) {
+  const getConversationId = () => getEmbeddedExecutionSession() ?? deps.getCurrentContext()?.conversationId;
   const providers: ExternalToolProvider[] = [
     new CliToolProvider({ getConfig: deps.getConfig, getCurrentContext: deps.getCurrentContext, agentId: deps.agentId }),
     new McpToolProvider({
       workspace: deps.workspace,
       getConfig: deps.getConfig,
-      getConversationId: () => deps.getCurrentContext()?.conversationId,
+      getConversationId,
       agentId: deps.agentId,
       hookRunner: deps.hookRunner,
     }),
@@ -70,11 +72,11 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
   return createExternalToolGatewayTools(providers.map(provider => withExternalReadPolicy(provider, toolRef => {
     const config = deps.getConfig();
     if (!config) return undefined;
-    const conversationId = deps.getCurrentContext()?.conversationId;
+    const conversationId = getConversationId();
     const profile = conversationId ? resolveEffectiveAgentConfigForSession(conversationId)
       : deps.agentId ? resolveEffectiveAgentConfigForAgent(deps.agentId) : resolveEffectiveAgentConfigForSession(undefined);
     return profile.config.tools[toolRef];
-  })), deps.getCurrentContext, deps.getConfig);
+  })), deps.getCurrentContext, deps.getConfig, getConversationId);
 }
 
 export { ExternalToolService } from './service.js';

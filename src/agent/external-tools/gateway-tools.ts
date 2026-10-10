@@ -66,6 +66,7 @@ export function createExternalToolGatewayTools(
   providers: ExternalToolProvider[],
   getContext?: () => ExternalToolTurnContext | null,
   getConfig?: () => Config | undefined,
+  getExecutionConversationId?: () => string | undefined,
 ): AgentTool[] {
   const service = new ExternalToolService(providers);
   const searchTool: AgentTool<typeof ToolSearchSchema, Record<string, unknown>> = {
@@ -117,7 +118,7 @@ export function createExternalToolGatewayTools(
     description: 'Execute one external tool using its exact reference, contract revision, and validated arguments.',
     parameters: ToolExecuteSchema,
     async execute(toolCallId, params, signal, onUpdate) {
-      const conversationId = getContext?.()?.conversationId;
+      const conversationId = getExecutionConversationId?.() ?? getContext?.()?.conversationId;
       const request = conversationId ? personalRequestForExecution(conversationId) : undefined;
       if (!request && conversationId && isXopcDatabaseOpen() && getSessionMetadata(conversationId)?.customData?.personalReadRequestId) {
         throw new Error('Personal request is no longer active');
