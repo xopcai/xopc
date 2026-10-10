@@ -34,12 +34,11 @@ describe('voice input lifecycle', () => {
     expect(chrome.tabs.create).toHaveBeenCalledWith({ url: 'chrome-extension://test/dist/sidepanel.html?microphone-permission' });
     expect(mocks.start).not.toHaveBeenCalled();
   });
-  it('requests permission only on click and immediately releases the microphone', async () => {
+  it('requests permission on opening the authorization page and releases the microphone', async () => {
     const stop = vi.fn();
     mocks.getUserMedia.mockResolvedValue({ getTracks: () => [{ stop }] });
     await act(async () => root.render(<MicrophonePermission />));
-    expect(mocks.getUserMedia).not.toHaveBeenCalled();
-    await act(async () => button('voicePermissionOpen').click());
+    expect(mocks.getUserMedia).toHaveBeenCalledOnce();
     expect(stop).toHaveBeenCalledOnce();
     expect(container.textContent).toContain('voicePermissionGranted');
     expect(mocks.start).not.toHaveBeenCalled();
