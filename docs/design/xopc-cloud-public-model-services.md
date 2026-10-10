@@ -206,4 +206,5 @@ DB 修改在事务中完成并更新 revision。xopc.json 等文件使用备份�
 - 阿里云首选：STT HTTP `qwen-audio-3.1-asr-flash`、WS `qwen-audio-3.1-asr-flash-streaming`；TTS HTTP `qwen-audio-3.0-tts-plus`、WS `qwen3-tts-instruct-flash-realtime`；实时对话 `qwen3.8-omni-flash-realtime`。现有密钥连接验证通过。
 - 客户端新增 `src/migrations/cloud-public-models.ts`，在应用启动、严格加载配置之前运行，备份 JSON/SQLite、转换旧引用、清除旧目录缓存并写入一次性完成标记。工作流通过现有 Catalog 保存为新修订；历史修订与会话正文保持原样。
 - 客户端专项测试 29 项通过，TypeScript 检查通过。云端专项测试、控制台测试通过；全量测试中的 2 个并行超时用单 worker 重跑通过。
+- i18n 补充：云端提交 `68a5e30`，公共能力名称通过 `xopc.displayNames` 返回 `zh-CN`/`en`，音色通过 `displayNames` 返回“默认音色 / Default voice”。客户端透传元数据，按界面语言在渲染时选择名称，缺少翻译时回退 `name`，调用 ID 不变。线上目录和音色接口验证通过。
 - 客户端尚未发版；用户升级到包含本次实现的新版本后，首次启动自动迁移。

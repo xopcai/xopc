@@ -5,6 +5,7 @@ export type VoiceConfigFieldType = 'string' | 'password' | 'number' | 'boolean' 
 export interface VoiceOptionMetadata {
   id: string;
   name: string;
+  displayNames?: Partial<Record<'zh-CN' | 'en', string>>;
   description?: string;
   gender?: string;
   style?: string;

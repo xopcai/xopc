@@ -1,6 +1,7 @@
 import { voiceSettingsCatalogSchema } from '@xopcai/realtime-protocol/voice';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { modelDisplayName } from '@/lib/model-display-name';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
@@ -10,6 +11,7 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { VoiceSettingsMessages } from '@/i18n/messages';
 import { selectTriggerClass } from '@/lib/form-field-width';
+import { useLocaleStore } from '@/stores/locale-store';
 
 import { VoiceApiKeyField, type VoiceApiKeyFieldLabels } from './voice-api-key-field';
 import { fetchRealtimeVoiceStatus, fetchTtsVoices } from './voice-config-api';
@@ -27,6 +29,7 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
   sttProviders: SttProviderListEntry[];
   onChange: (form: VoiceSettingsState) => void;
 }) {
+  const language = useLocaleStore((state) => state.language);
   const s = v.setup;
   const [editingKey, setEditingKey] = useState(false);
   const signature = JSON.stringify(form);
@@ -110,7 +113,7 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
         }}>
           {!native ? <SelectOption value="">{s.defaultVoice}</SelectOption> : null}
           {currentVoice && !voiceOptions.some((voice) => voice.id === currentVoice) ? <SelectOption value={currentVoice}>{currentVoice}</SelectOption> : null}
-          {voiceOptions.map((voice) => <SelectOption key={voice.id} value={voice.id}>{voice.name}{'gender' in voice && voice.gender ? ` · ${voice.gender === 'female' ? '女声' : '男声'}` : ''}{'style' in voice && voice.style ? ` · ${voice.style}` : ''}</SelectOption>)}
+          {voiceOptions.map((voice) => <SelectOption key={voice.id} value={voice.id}>{modelDisplayName(voice, language)}{'gender' in voice && voice.gender ? ` · ${voice.gender === 'female' ? '女声' : '男声'}` : ''}{'style' in voice && voice.style ? ` · ${voice.style}` : ''}</SelectOption>)}
         </Select>
         {(() => {
           const selected = voiceOptions.find((voice) => voice.id === currentVoice);

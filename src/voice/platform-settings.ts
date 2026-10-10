@@ -19,7 +19,7 @@ export function voiceSettingsCatalog(config: Config): VoiceSettingsCatalog {
   add('conversation', config.voice?.realtime?.omni);
   const revision = createHash('sha256').update(JSON.stringify([config.voice, audio, tts])).digest('hex');
   return { revision, catalogVersion: source?.etag ?? null, selections,
-    models: (source?.models ?? []).flatMap(model => model.availability === 'available' && model.voice ? [{id: model.id, name: model.name, voice: model.voice}] : []) };
+    models: (source?.models ?? []).flatMap(model => model.availability === 'available' && model.voice ? [{id: model.id, name: model.name, ...(model.displayNames ? { displayNames: model.displayNames } : {}), voice: model.voice}] : []) };
 }
 
 export function selectPlatformVoice(config: Config, selection: VoiceSelection): Config {

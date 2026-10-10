@@ -27,6 +27,7 @@ import {
   type VoiceApiKeyFieldLabels,
 } from '@/features/settings/voice-api-key-field';
 import { apiUrl } from '@/lib/url';
+import { modelDisplayName } from '@/lib/model-display-name';
 import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
@@ -988,6 +989,7 @@ function VoiceProviderConfigFields({
   onPatch: (patch: Record<string, unknown>) => void;
   resetVoiceOnModelChange?: boolean;
 }) {
+  const language = useLocaleStore((state) => state.language);
   return fields.map((field) => {
     if (field.key === 'apiKey') {
       return (
@@ -1038,7 +1040,7 @@ function VoiceProviderConfigFields({
               <SelectOption value={currentVoice}>{currentVoice} · unavailable</SelectOption>
             ) : null}
             {voices.map((voice) => (
-              <SelectOption key={voice.id} value={voice.id}>{voice.name}{voice.gender ? ` · ${voice.gender === 'female' ? '女声' : '男声'}` : ''}{voice.style ? ` · ${voice.style}` : ''}</SelectOption>
+              <SelectOption key={voice.id} value={voice.id}>{modelDisplayName(voice, language)}{voice.gender ? ` · ${voice.gender === 'female' ? '女声' : '男声'}` : ''}{voice.style ? ` · ${voice.style}` : ''}</SelectOption>
             ))}
           </Select>
           {voices.find((voice) => voice.id === currentVoice)?.description ? (
