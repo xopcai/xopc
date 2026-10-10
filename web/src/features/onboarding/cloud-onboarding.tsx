@@ -3,13 +3,14 @@ import { useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { CLOUD_ONBOARDING_SWR_KEY } from '@/features/onboarding/onboarding-constants';
 import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 
 type CloudOnboardingStatus = { status: 'unseen' | 'dismissed'; hasGrant: boolean };
-const KEY = '/api/models/cloud-onboarding';
+const KEY = CLOUD_ONBOARDING_SWR_KEY;
 
 async function fetchStatus(): Promise<CloudOnboardingStatus> {
   const response = await apiFetch(apiUrl(KEY));
