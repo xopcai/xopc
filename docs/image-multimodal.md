@@ -15,7 +15,7 @@ The selected Chat model may process the image directly, or xopc may use a separa
 1. Open **Settings → Capabilities → Image**.
 2. Choose a provider and generation model.
 3. Add the requested credential.
-4. Assign the model to the intended Agent.
+4. Save the default image model. Agents inherit it unless an Agent has an override.
 5. Generate a small test image.
 
 The image catalog includes OpenAI, Alibaba Model Studio, MiniMax, Google, fal, Seedream, Ideogram, BFL, Zhipu, Tencent TokenHub, and Stability AI. Model options are validated strictly; unsupported sizes and formats are rejected. Retired catalog models have no aliases: select a current model after upgrading.
@@ -43,3 +43,13 @@ Generated files are saved in the configured workspace or media output location. 
 - Generation is unavailable: configure an image provider and assign its model to the Agent.
 - Edit behaves like a new image: the selected model may not support image editing.
 - Output is missing: check the Agent workspace and Gateway logs.
+
+## Options, results and upgrades
+
+For XOPC Cloud, sign in and select the catalog's image service. For your own key, select the provider, region where required, and model in Image settings. Chat and image generation are configured separately.
+
+Pixel size, aspect ratio and resolution are different options. Only combinations supported by the selected model are accepted. Reference-image count, output format and batch size also have limits. Verify the connection with one image before increasing the workload.
+
+Chat images can be previewed and browsed within their group. For edits, identify the source and what must remain; choose another model if editing is unsupported.
+
+Retired model IDs have no aliases or automatic replacements. Reselect an available catalog entry after upgrading. An asynchronous generation failure or timeout does not prove the provider did no work or charged nothing; inspect output and provider records before retrying.

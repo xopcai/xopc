@@ -19,6 +19,7 @@ import {
   parseLocalAppRuntimeMessage,
   type LocalAppRuntimeIssue,
 } from '@/features/local-apps/runtime-health';
+import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
 import { apiUrl } from '@/lib/url';
@@ -147,7 +148,7 @@ export function InlineLocalApp({
 
   if (snapshotQuery.isLoading) {
     return (
-      <section ref={lease.containerRef} className="mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" aria-label="Loading app preview">
+      <section ref={lease.containerRef} className="mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" aria-label={messages(language).chat.productDelivery.loadingAppPreview}>
         <div className="flex items-center justify-between gap-3 border-b border-edge-subtle px-4 py-3">
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-9 w-24" />
@@ -172,7 +173,7 @@ export function InlineLocalApp({
     phase: 'build', code: issue.code, message: issue.message,
   })) ?? [];
   const timeoutDiagnostics: LocalAppDiagnostic[] = runtimeHealth === 'timeout'
-    ? [{ phase: 'boot', code: 'boot_timeout', message: 'Preview did not report ready within 7 seconds.' }]
+    ? [{ phase: 'boot', code: 'boot_timeout', message: messages(language).chat.productDelivery.previewTimeout }]
     : [];
   const diagnostics = [...staticDiagnostics, ...runtimeDiagnostics, ...timeoutDiagnostics];
   const validationFailed = snapshot.status === 'invalid' || snapshot.validation.status === 'failed';
