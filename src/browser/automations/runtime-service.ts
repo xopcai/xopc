@@ -16,12 +16,12 @@ export function createRuntimeBrowserAutomationService(deps: {
     allowedUploadRoots: [process.cwd()],
     emit: deps.emit,
   });
-  return new BrowserAutomationService(async ({ definition, inputs, signal, onStep }) => {
-    const taskKey = `browser-automation:${crypto.randomUUID()}`;
+  return new BrowserAutomationService(async ({ runId, definition, inputs, signal, onStep }) => {
+    const taskKey = `browser-automation:${runId}`;
     try {
       const result = await runBrowserAutomation({ definition, inputs, runtime, taskKey, signal, onStep: onStep as never });
       return result.ok
-        ? { ok: true, result: result.receipt }
+        ? { ok: true, result: result.receipt.outputs ?? {}, businessOutcome: result.receipt.businessOutcome }
         : { ok: false, error: 'error' in result ? result.error.message : 'Browser automation failed.' };
     } finally {
       await runtime.closeTaskSession(taskKey);

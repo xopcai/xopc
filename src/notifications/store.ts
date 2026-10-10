@@ -242,6 +242,7 @@ export function notificationDeliveryMetrics(): {
   accepted: number;
   delivered: number;
   dead: number;
+  cancelled: number;
   due: number;
   devices: { deliverable: number; expired: number; disabled: number };
   oldestPendingAt: number | null;
@@ -282,6 +283,7 @@ export function notificationDeliveryMetrics(): {
     accepted: counts.accepted ?? 0,
     delivered: counts.delivered ?? 0,
     dead: counts.dead ?? 0,
+    cancelled: counts.cancelled ?? 0,
     due: due.count,
     devices: {
       deliverable: devices.deliverable ?? 0,
@@ -332,4 +334,10 @@ export function deferNotificationDelivery(eventId: string, deviceId: string, nex
 export function getNotificationEvent(id: string): ProductNotification | null {
   const row = getSqliteDatabase().prepare('SELECT * FROM notification_events WHERE event_id = ?').get(id) as NotificationEventRow | undefined;
   return row ? eventFromRow(row) : null;
+}
+
+export function cancelNotificationDelivery(eventId: string, deviceId: string): void {
+  getSqliteDatabase().prepare(`UPDATE notification_deliveries SET status = 'cancelled',
+    last_error = 'Clarification is no longer actionable', updated_at = ?
+    WHERE event_id = ? AND device_id = ? AND status = 'pending'`).run(Date.now(), eventId, deviceId);
 }

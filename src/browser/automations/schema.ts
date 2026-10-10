@@ -12,6 +12,8 @@ const TargetSchema = z.object({
   role: z.string().min(1),
   name: z.string().min(1).optional(),
   nameIncludes: z.string().min(1).optional(),
+  testId: z.string().min(1).optional(),
+  scope: z.object({ role: z.string().min(1), name: z.string().min(1) }).strict().optional(),
 }).strict().superRefine((target, ctx) => {
   if (target.name && target.nameIncludes) ctx.addIssue({ code: 'custom', message: 'Use name or nameIncludes, not both.' });
 });
@@ -21,6 +23,7 @@ const StepSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('click'), target: TargetSchema, expect: ExpectationSchema.optional() }).strict(),
   z.object({ action: z.literal('fill'), target: TargetSchema, value: z.string(), submit: z.boolean().optional(), expect: ExpectationSchema.optional() }).strict(),
   z.object({ action: z.literal('select'), target: TargetSchema, value: z.string(), expect: ExpectationSchema.optional() }).strict(),
+  z.object({ action: z.literal('check'), target: TargetSchema, checked: z.boolean() }).strict(),
   z.object({ action: z.literal('press'), target: TargetSchema.optional(), key: z.string().min(1), expect: ExpectationSchema.optional() }).strict(),
   z.object({ action: z.literal('scroll'), target: TargetSchema.optional(), deltaY: z.number(), expect: ExpectationSchema.optional() }).strict(),
   z.object({
@@ -64,9 +67,26 @@ export const BrowserAutomationDefinitionSchema = z.object({
   risk: z.enum(['read', 'draft', 'external_effect', 'destructive', 'sensitive']),
   inputs: z.record(z.string(), InputSchema).default({}),
   steps: z.array(StepSchema).min(1).max(100),
+  successCriteria: z.array(z.object({
+    target: TargetSchema.optional(), field: z.enum(['text', 'value', 'url', 'title', 'checked']),
+    equals: z.union([z.string(), z.boolean()]).optional(), includes: z.string().optional(),
+  }).strict().superRefine((assertion, ctx) => {
+    if ((assertion.equals === undefined) === (assertion.includes === undefined)) ctx.addIssue({ code: 'custom', message: 'Specify exactly one comparison.' });
+    if (assertion.field === 'checked' && typeof assertion.equals !== 'boolean') ctx.addIssue({ code: 'custom', message: 'Checked assertions require a boolean comparison.' });
+    if (assertion.field !== 'checked' && typeof assertion.equals === 'boolean') ctx.addIssue({ code: 'custom', message: 'Text assertions require a string comparison.' });
+    if (!['url', 'title'].includes(assertion.field) && !assertion.target) ctx.addIssue({ code: 'custom', message: 'Element assertions require a target.' });
+  })).max(20).optional(),
+  outputs: z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]*$/), z.object({
+    target: TargetSchema.optional(), field: z.enum(['text', 'value', 'url', 'title', 'href']),
+  }).strict().superRefine((output, ctx) => {
+    if (!['url', 'title'].includes(output.field) && !output.target) ctx.addIssue({ code: 'custom', message: 'Element outputs require a target.' });
+  })).optional(),
 }).strict().superRefine((definition, ctx) => {
   if (new Set(definition.allowedDomains).size !== definition.allowedDomains.length) {
     ctx.addIssue({ code: 'custom', path: ['allowedDomains'], message: 'Domains must be unique.' });
+  }
+  for (const spec of Object.values(definition.inputs)) {
+    if (spec.default !== undefined && spec.choices && !spec.choices.includes(spec.default)) ctx.addIssue({ code: 'custom', message: 'Default must be an allowed choice.' });
   }
   for (const [index, step] of definition.steps.entries()) {
     const values = step.action === 'navigate' ? [step.url]
@@ -83,6 +103,14 @@ export const BrowserAutomationDefinitionSchema = z.object({
             message: `Unknown input template: ${match[1]}.`,
           });
         }
+      }
+    }
+  }
+  for (const [index, assertion] of (definition.successCriteria ?? []).entries()) {
+    for (const value of [assertion.equals, assertion.includes]) {
+      if (typeof value !== 'string') continue;
+      for (const match of value.matchAll(/\$\{input\.([a-zA-Z][a-zA-Z0-9_]*)\}/g)) {
+        if (!definition.inputs[match[1]!]) ctx.addIssue({ code: 'custom', path: ['successCriteria', index], message: `Unknown input template: ${match[1]}.` });
       }
     }
   }

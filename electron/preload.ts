@@ -547,6 +547,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       title: string;
       body: string;
       target: import('@xopcai/gateway-contract').NotificationTarget;
+      allowWhenFocused?: boolean;
     }) => ipcRenderer.invoke("system-settings:show-product-notification", input),
     requestScreen: () => ipcRenderer.invoke("system-settings:request-screen"),
     getUninstallInfo: () =>

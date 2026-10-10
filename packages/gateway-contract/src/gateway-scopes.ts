@@ -44,6 +44,8 @@ export const DEFAULT_BROWSER_EXTENSION_SCOPES = [
   'sessions.read',
   'sessions.write',
   'device.self',
+  'automations.read',
+  'automations.write',
 ] as const satisfies readonly GatewayScope[];
 
 export function isGatewayScope(value: unknown): value is GatewayScope {

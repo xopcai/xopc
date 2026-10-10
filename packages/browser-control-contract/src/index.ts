@@ -1,4 +1,6 @@
 export type BrowserVisualMode = 'never' | 'auto' | 'always';
+export * from './automation.js';
+import type { BrowserSemanticTarget } from './automation.js';
 export type BrowserRiskLevel = 'read' | 'draft' | 'external_effect' | 'destructive' | 'sensitive';
 
 export type BrowserTarget =
@@ -55,38 +57,17 @@ export const BROWSER_CONTROL_ENDPOINT_DESCRIPTOR = {
   resultKinds: ['json'],
 } as const;
 
-export interface BrowserWireChallenge {
-  type: 'auth_challenge';
-  protocolVersion: typeof BROWSER_EXTENSION_PROTOCOL_VERSION;
-  connectionId: string;
-  challenge: string;
-  issuedAt: number;
-}
-
-export interface BrowserWireAuthenticate {
-  type: 'authenticate';
-  protocolVersion: typeof BROWSER_EXTENSION_PROTOCOL_VERSION;
-  connectionId: string;
-  principalId: string;
-  extensionId: string;
-  extensionVersion: string;
-  signature: string;
-}
-
-export function browserWireAuthenticationPayload(input: Omit<BrowserWireAuthenticate, 'type' | 'signature'> & {
-  challenge: string;
-  issuedAt: number;
-}): string {
-  return [
-    'xopc-browser-extension-v4',
-    input.connectionId,
-    input.challenge,
-    String(input.issuedAt),
-    input.principalId,
-    input.extensionId,
-    input.extensionVersion,
-  ].join('\n');
-}
+export const BROWSER_RECORDING_ENDPOINT_INPUT_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['operation'],
+  properties: { operation: { type: 'string', enum: ['start', 'pause', 'resume', 'finish', 'status'] } },
+} as const;
+export const BROWSER_RECORDING_ENDPOINT_DESCRIPTOR = {
+  ...BROWSER_CONTROL_ENDPOINT_DESCRIPTOR,
+  name: 'browser.recording', title: 'Browser workflow recording',
+  description: 'Record a workflow in the active browser tab and save it as an automation.',
+  inputSchema: BROWSER_RECORDING_ENDPOINT_INPUT_SCHEMA,
+  maxConcurrency: 1,
+} as const;
 
 export interface BrowserExpectation {
   urlIncludes?: string;
@@ -131,6 +112,16 @@ export interface BrowserFillInput extends BrowserRefInput {
 export interface BrowserSelectInput extends BrowserRefInput {
   action: 'select';
   value: string;
+}
+
+export interface BrowserResolveInput extends BrowserInputBase {
+  action: 'resolve';
+  semanticTarget: BrowserSemanticTarget;
+}
+
+export interface BrowserCheckInput extends BrowserRefInput {
+  action: 'check';
+  checked: boolean;
 }
 
 export interface BrowserPressInput extends BrowserInputBase {
@@ -194,6 +185,8 @@ export type BrowserActionInput =
   | BrowserClickInput
   | BrowserFillInput
   | BrowserSelectInput
+  | BrowserResolveInput
+  | BrowserCheckInput
   | BrowserPressInput
   | BrowserScrollInput
   | BrowserWaitInput
@@ -208,6 +201,7 @@ export interface BrowserNode {
   name: string;
   value?: string;
   description?: string;
+  href?: string;
   states: string[];
   parent?: string;
   bounds?: { x: number; y: number; width: number; height: number };
@@ -257,6 +251,8 @@ export interface BrowserActionReceipt {
   risk: BrowserRiskLevel;
   durationMs: number;
   verified: boolean;
+  businessOutcome?: 'completed' | 'verified' | 'unknown';
+  outputs?: Record<string, string>;
   observation?: BrowserObservation;
   tabs?: BrowserTab[];
 }

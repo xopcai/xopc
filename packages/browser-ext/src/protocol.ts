@@ -2,8 +2,6 @@ export type {
   BrowserActionInput,
   BrowserControlResult,
   BrowserExtensionStatus,
-  BrowserWireAuthenticate,
-  BrowserWireChallenge,
   BrowserNode,
   BrowserObservation,
   BrowserTab,
@@ -13,7 +11,6 @@ export type {
 } from '@xopcai/browser-control-contract';
 export {
   BROWSER_EXTENSION_PROTOCOL_VERSION,
-  browserWireAuthenticationPayload,
 } from '@xopcai/browser-control-contract';
 
 export const WS_RECONNECT_BASE_DELAY = 2_000;

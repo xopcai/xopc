@@ -4,7 +4,7 @@ import {
   markNotificationDelivered,
   wasNotificationDelivered,
 } from '@/features/notifications/notification-delivery-history';
-import { decideNotification, isPersonalNotificationViewed } from '@/features/notifications/notification-policy';
+import { decideNotification, isPersonalNotificationViewed, isClarificationNotificationViewed } from '@/features/notifications/notification-policy';
 import { isElectron } from '@/lib/electron-env';
 
 export function browserNotificationsSupported(): boolean {
@@ -26,7 +26,7 @@ export async function deliverBrowserNotification(notification: ProductNotificati
     notification,
     preferences: getBrowserNotificationPreferences(),
     permissionGranted: Notification.permission === 'granted',
-    appFocused: notification.target.kind === 'chat' && notification.target.personal
+    appFocused: notification.waitId ? isClarificationNotificationViewed(notification) : notification.target.kind === 'chat' && notification.target.personal
       ? isPersonalNotificationViewed(notification) : document.visibilityState === 'visible' && document.hasFocus(),
     alreadyDelivered: wasNotificationDelivered(notification.id),
   });

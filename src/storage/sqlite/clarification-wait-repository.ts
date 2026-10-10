@@ -261,6 +261,8 @@ export function createClarificationWait(input: CreateClarificationInput): Clarif
       wait.originRunId,
       wait.originToolCallId,
     );
+    db.prepare('INSERT INTO clarification_notification_outbox(wait_id, created_at) VALUES (?, ?)')
+      .run(wait.id, wait.createdAt);
     markTaskWaiting(wait);
     bumpSessionInputRevision(db, input.conversationId);
     return wait;

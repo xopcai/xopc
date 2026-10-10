@@ -1,3 +1,4 @@
+import { browserDom } from '@xopcai/browser-control-contract';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -240,6 +241,18 @@ export class PlaywrightDriver implements BrowserDriver {
     try {
       throwIfAborted(signal);
       const state = await this.activeState(sessionId);
+      if (input.action === 'resolve') {
+        const resolved = await state.page.evaluate(browserDom, { operation: 'resolve', target: input.semanticTarget });
+        if (resolved.matches !== 1) return { ok: false, error: { code: 'TARGET_NOT_FOUND', message: `Semantic target must match exactly one element; matched ${resolved.matches}.` } };
+        const handle = await state.page.locator(`[data-xopc-ref="${resolved.node.ref}"]`).elementHandle();
+        if (!handle) return targetNotFound(resolved.node.ref);
+        state.refs.set(resolved.node.ref, handle);
+        state.revision += 1;
+        const observation: BrowserObservation = { sessionId, tabId: state.id, revision: state.revision,
+          documentId: state.documentId, url: state.page.url(), title: await state.page.title(),
+          nodes: [resolved.node], changes: { added: [resolved.node], changed: [], removed: [] } };
+        return { ok: true, receipt: { action: 'resolve', risk: 'read', durationMs: Date.now() - startedAt, verified: true, observation } };
+      }
       if ('revision' in input && input.revision !== state.revision) {
         return stale(await this.observe(sessionId, { action: 'observe', visual: 'never' }, signal));
       }
@@ -253,6 +266,9 @@ export class PlaywrightDriver implements BrowserDriver {
         case 'fill':
           await handle!.fill(input.value, { timeout: this.options.actionTimeoutMs });
           if (input.submit) await handle!.press('Enter');
+          break;
+        case 'check':
+          await handle!.setChecked(input.checked, { timeout: this.options.actionTimeoutMs });
           break;
         case 'select':
           await handle!.selectOption(input.value);

@@ -24,6 +24,7 @@ export type NotificationSurface = 'web' | 'mobile';
 export const ProductNotificationTypeSchema = z.enum([
   'scene.result',
   'scene.digest',
+  'chat.needs_input',
   'chat.completed',
   'chat.failed',
   'task.needs_input',

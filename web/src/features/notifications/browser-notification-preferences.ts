@@ -5,6 +5,7 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   enabled: false,
   completed: true,
   failed: true,
+  needsInput: true,
 };
 
 export function getBrowserNotificationPreferences(): NotificationPreferences {
@@ -13,6 +14,7 @@ export function getBrowserNotificationPreferences(): NotificationPreferences {
     return {
       enabled: typeof value.enabled === 'boolean' ? value.enabled : DEFAULT_PREFERENCES.enabled,
       completed: typeof value.completed === 'boolean' ? value.completed : DEFAULT_PREFERENCES.completed,
+      needsInput: typeof value.needsInput === 'boolean' ? value.needsInput : true,
       failed: typeof value.failed === 'boolean' ? value.failed : DEFAULT_PREFERENCES.failed,
     };
   } catch {
