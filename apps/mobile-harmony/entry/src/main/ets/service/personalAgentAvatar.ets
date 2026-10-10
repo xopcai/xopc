@@ -13,16 +13,18 @@ function avatarMime(bytes: Uint8Array): string {
   return '';
 }
 
-export async function fetchPersonalAgentAvatar(agentId: string): Promise<string> {
+export async function fetchPersonalAgentAvatar(agentId: string, reference: string | undefined = undefined): Promise<string> {
   if (!agentId) return '';
   const revision = gatewaySession.connectionRevision();
   const auth = await gatewaySession.transferAuth();
   gatewaySession.assertConnection(revision);
   const request = http.createHttp();
+  const headers: Record<string, string> = {};
+  if (!reference?.startsWith('https://')) headers['Authorization'] = 'Bearer ' + auth.token;
   try {
-    const response = await request.request(auth.origin + '/api/agents/' + encodeURIComponent(agentId) + '/avatar', {
+    const response = await request.request(reference?.startsWith('https://') ? reference : auth.origin + '/api/agents/' + encodeURIComponent(agentId) + '/avatar' + (reference !== undefined ? '?resolve=1' : ''), {
       method: http.RequestMethod.GET,
-      header: { Authorization: 'Bearer ' + auth.token },
+      header: headers,
       expectDataType: http.HttpDataType.ARRAY_BUFFER,
       maxRedirects: 0,
       maxLimit: AVATAR_LIMIT,

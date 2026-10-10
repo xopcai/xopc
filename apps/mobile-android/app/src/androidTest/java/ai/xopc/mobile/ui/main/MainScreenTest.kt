@@ -24,6 +24,7 @@ import ai.xopc.mobile.gateway.ConversationReference
 import ai.xopc.mobile.gateway.ConversationTarget
 import ai.xopc.mobile.gateway.ConversationArtifact
 import ai.xopc.mobile.gateway.ConversationOutcome
+import ai.xopc.mobile.gateway.ManagedFile
 import ai.xopc.mobile.gateway.ExecutionDetail
 import ai.xopc.mobile.gateway.ExecutionStep
 import ai.xopc.mobile.gateway.ContextWorkItem
@@ -56,6 +57,8 @@ import ai.xopc.mobile.gateway.ShareItem
 import java.time.Instant
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -87,6 +90,8 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.test.espresso.Espresso
 import androidx.test.platform.app.InstrumentationRegistry
@@ -763,18 +768,26 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("settings-screen").assertExists()
     composeTestRule.onNodeWithText("Language").performClick()
     composeTestRule.onNodeWithTag("language-zh-CN").assertExists()
-    composeTestRule.onNodeWithTag("settings-back").performClick()
+    composeTestRule.onNodeWithTag("settings-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithText("Appearance").performClick()
     composeTestRule.onNodeWithTag("appearance-dark").assertExists()
-    composeTestRule.onNodeWithTag("settings-back").performClick()
-    composeTestRule.onNodeWithTag("settings-back").performClick()
+    composeTestRule.onNodeWithTag("settings-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
+    composeTestRule.onNodeWithTag("settings-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("pairing-scan").assertExists()
     composeTestRule.onNodeWithTag("pairing-help").performClick()
     composeTestRule.onNodeWithTag("pairing-ready").performClick()
     composeTestRule.onNodeWithTag("pairing-manual").performClick()
     composeTestRule.onNodeWithTag("pairing-link").assertExists()
     composeTestRule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("pairing-back").performClick()
+    composeTestRule.onNodeWithTag("pairing-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("pairing-scan").assertExists()
     assert(pairCalls == 0)
   }
@@ -798,7 +811,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("pairing-submit").assertIsEnabled().performClick()
     assertEquals("test-link", pairedLink)
     composeTestRule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("pairing-back").performClick()
+    composeTestRule.onNodeWithTag("pairing-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("pairing-scan").assertExists()
   }
 
@@ -845,7 +860,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("share-share-1").assertExists()
     composeTestRule.onNodeWithTag("tab-Me").assertDoesNotExist()
     composeTestRule.runOnIdle { assert(loads == 1) }
-    composeTestRule.onNodeWithTag("shares-back").performClick()
+    composeTestRule.onNodeWithTag("shares-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("settings-screen").assertExists()
     composeTestRule.runOnIdle { assert(closes == 1) }
   }
@@ -878,7 +895,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("personal-profile").performClick()
     composeTestRule.onNodeWithTag("about-you-screen").assertExists()
     composeTestRule.onNodeWithTag("tab-Me").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("about-you-back").performClick()
+    composeTestRule.onNodeWithTag("about-you-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("personal-profile").assertExists()
     composeTestRule.onNodeWithTag("tab-Me").assertExists()
   }
@@ -903,9 +922,13 @@ class MainScreenTest {
     assert(chosenMode == "dark")
     composeTestRule.onNodeWithTag("scheme-porcelain").performScrollTo().performClick()
     assert(chosenScheme == "porcelain")
-    composeTestRule.onNodeWithTag("settings-back").performClick()
+    composeTestRule.onNodeWithTag("settings-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithText("Current Gateway").assertExists()
-    composeTestRule.onNodeWithTag("settings-back").performClick()
+    composeTestRule.onNodeWithTag("settings-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("personal-profile").assertExists()
     composeTestRule.onNodeWithTag("tab-Me").assertExists()
   }
@@ -925,7 +948,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("language-zh-CN").performClick()
     assert(selected.value == "zh-CN")
     composeTestRule.onNodeWithTag("tab-Me").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("settings-back").performClick()
+    composeTestRule.onNodeWithTag("settings-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithText("中文").assertExists()
     composeTestRule.onNodeWithTag("language-en-US").assertDoesNotExist()
   }
@@ -995,7 +1020,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("gateway-remove-gateway-b").performClick()
     composeTestRule.onNodeWithTag("gateway-remove-confirm").performClick()
     assert(removed == "gateway-b" && switched.isEmpty())
-    composeTestRule.onNodeWithTag("gateways-back").performClick()
+    composeTestRule.onNodeWithTag("gateways-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("settings-screen").assertExists()
   }
 
@@ -1082,27 +1109,147 @@ class MainScreenTest {
     assert(sends == 1)
   }
 
-  @Test fun goalEditorValidatesDateAndKeepsDraftUntilConfirmed() {
+  @Test fun assistantFileReferenceBrowsesSearchesAndStagesWorkspaceAttachment() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val folder = ManagedFile("docs", "workspace", "docs", "docs", "directory", "", 0)
+    val file = ManagedFile("brief", "workspace", "brief.pdf", "docs/brief.pdf", "file", "application/pdf", 200)
+    val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = id,
+      realtimeStatus = "connected", draftModelReady = true))
+    val paths = mutableListOf<String>()
+    var sends = 0
+    var selected: ManagedFile? = null
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value,
+          onLoadContextPanel = { mode, path, query ->
+            paths += path
+            state.value = state.value.copy(contextPanel = ContextPanelUiState("gateway", id, mode,
+              files = if (path.isBlank() && query.isBlank()) listOf(folder) else listOf(file),
+              filePath = path, fileQuery = query))
+          }, onAddContextFile = {
+            selected = it
+            state.value = state.value.copy(draftAttachments = listOf(ChatAttachment("workspace-brief", "document",
+              it.name, it.mimeType, it.size.toInt(), workspaceRelativePath = it.relativePath, workspaceFileId = it.id)))
+          }, onSendMessage = { sends++ })
+      }
+    }
+    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
+    composeTestRule.onNodeWithTag("assistant-action-reference-file").assertIsEnabled().performClick()
+    composeTestRule.onNodeWithTag("assistant-reference-file-docs").performClick()
+    composeTestRule.onNodeWithTag("assistant-reference-file-brief").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-reference-file-parent").performClick()
+    composeTestRule.onNodeWithTag("assistant-reference-file-docs").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-reference-search").performTextInput("brief")
+    composeTestRule.waitUntil(5_000) { state.value.contextPanel.fileQuery == "brief" }
+    composeTestRule.onNodeWithTag("assistant-reference-file-brief").performClick()
+    composeTestRule.onNodeWithTag("assistant-attachment-remove-workspace-brief").assertExists()
+    composeTestRule.onNodeWithTag("assistant-reference-search").assertDoesNotExist()
+    composeTestRule.runOnIdle {
+      assertEquals(file, selected)
+      assertTrue(paths.contains("docs"))
+      assertEquals(0, sends)
+      assertTrue(state.value.draftRefs.isEmpty())
+    }
+    composeTestRule.onNodeWithTag("assistant-send").assertIsEnabled().performClick()
+    composeTestRule.runOnIdle { assertEquals(1, sends) }
+  }
+
+  @Test fun allTabVoiceEntriesStayLeftAndToggleTheSameRecordingPad() {
+    androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+      .grantRuntimePermission(composeTestRule.activity.packageName, android.Manifest.permission.RECORD_AUDIO)
+    var tab by mutableStateOf(HomeTab.Assistant)
+    var draft by mutableStateOf("")
+    var created = 0
+    composeTestRule.setContent {
+      MainContent(selectedTab = tab, onSelectTab = { tab = it },
+        connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+          selectedConversationId = "conversation", draftText = draft),
+        onCreateConversation = { created++ }, onDraftChange = { draft = it })
+    }
+    val voice = composeTestRule.onNodeWithTag("assistant-voice-toggle").fetchSemanticsNode().boundsInRoot
+    val field = composeTestRule.onNodeWithTag("assistant-input").fetchSemanticsNode().boundsInRoot
+    assert(voice.right <= field.left)
+    composeTestRule.onNodeWithTag("assistant-input").performTextInput("A longer draft")
+    val expandedVoice = composeTestRule.onNodeWithTag("assistant-voice-toggle").fetchSemanticsNode().boundsInRoot
+    val shell = composeTestRule.onNodeWithTag("assistant-composer-shell").fetchSemanticsNode().boundsInRoot
+    assert(expandedVoice.left < shell.center.x)
+    Espresso.closeSoftKeyboard()
+    for (next in HomeTab.entries) {
+      composeTestRule.runOnIdle { tab = next }
+      val tag = if (next == HomeTab.Assistant) "assistant-voice-toggle" else "quick-voice"
+      if (next != HomeTab.Assistant) {
+        val entry = composeTestRule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+        val input = composeTestRule.onNodeWithTag("quick-composer").fetchSemanticsNode().boundsInRoot
+        assert(entry.right <= input.left)
+      }
+      composeTestRule.onNodeWithTag(tag).performClick()
+      composeTestRule.onNodeWithTag("assistant-voice-record").assertExists()
+      assert(tab == next && created == 0)
+      composeTestRule.onNodeWithTag(tag).performClick()
+      composeTestRule.onNodeWithTag("assistant-voice-record").assertDoesNotExist()
+      composeTestRule.onNodeWithTag(if (next == HomeTab.Assistant) "assistant-input" else "quick-composer")
+        .assertIsFocused()
+      Espresso.closeSoftKeyboard()
+    }
+    composeTestRule.onNodeWithTag("quick-voice").performClick()
+    composeTestRule.runOnIdle { tab = HomeTab.Assistant }
+    composeTestRule.onNodeWithTag("assistant-voice-record").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-input").assertTextContains("A longer draft")
+  }
+
+  @Test fun goalEditorPicksOptionalDateAndKeepsDraftAfterSaveFailure() {
     val summary = PersonalSummary("Mia", "Designer", PersonalCounts(0, 0, 0, 0, 0),
       "", "", emptyList(), emptyList(), emptyList())
     val state = mutableStateOf(PersonalUiState("gateway", summary))
     var saved = ""
+    var attempts = 0
     composeTestRule.setContent {
       PersonalScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), true,
         onRefresh = {}, onSaveGoal = { id, title, outcome, _, target ->
           assert(id == null)
           saved = "$title|$outcome|$target"
-          state.value = state.value.copy(savedGoalRevision = state.value.savedGoalRevision + 1)
+          attempts++
+          state.value = if (attempts == 1) state.value.copy(goalError = true)
+          else state.value.copy(goalError = false, savedGoalRevision = state.value.savedGoalRevision + 1)
         })
     }
     composeTestRule.onNodeWithTag("goal-add").performClick()
+    composeTestRule.onNodeWithTag("goal-save").assertIsNotEnabled()
     composeTestRule.onNodeWithTag("goal-title").performTextInput("Ship app")
     composeTestRule.onNodeWithTag("goal-outcome").performTextInput("Launch")
-    composeTestRule.onNodeWithTag("goal-date").performTextInput("2025-13-40")
+    Espresso.closeSoftKeyboard()
+    fun captureGoal(name: String, tag: String) {
+      val screenshotValues = android.content.ContentValues().apply {
+        put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name)
+        put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+        put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/xopc-test")
+      }
+      val resolver = composeTestRule.activity.contentResolver
+      val screenshotUri = requireNotNull(resolver.insert(
+        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, screenshotValues))
+      resolver.openOutputStream(screenshotUri)!!.use {
+        composeTestRule.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
+          .compress(Bitmap.CompressFormat.PNG, 100, it)
+      }
+    }
+    captureGoal("goal-editor.png", "personal-goal-sheet")
+    composeTestRule.onNodeWithTag("goal-date").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("goal-date-picker").assertExists()
+    captureGoal("goal-calendar.png", "goal-date-picker")
+    composeTestRule.onNodeWithContentDescription("Switch to text input mode").performClick()
+    val chosenDate = java.time.LocalDate.now().withDayOfMonth(15)
+    composeTestRule.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("goal-date-picker")))
+      .performTextInput(chosenDate.format(java.time.format.DateTimeFormatter.ofPattern("MMddyyyy")))
+    composeTestRule.onNodeWithTag("goal-date-confirm").performClick()
+    val date = java.time.LocalDate.now().withDayOfMonth(15).toString()
+    composeTestRule.onNodeWithText(date).assertExists()
     composeTestRule.onNodeWithTag("goal-save").performClick()
-    assert(saved.isEmpty())
-    composeTestRule.onNodeWithText("Enter a valid date in YYYY-MM-DD format.").assertExists()
-    composeTestRule.onNodeWithTag("goal-date").performTextClearance()
+    assert(saved == "Ship app|Launch|${goalDateTimestamp(date)}")
+    composeTestRule.onNodeWithTag("personal-goal-sheet").assertExists()
+    composeTestRule.onNodeWithTag("goal-save-error").performScrollTo().assertExists()
+    composeTestRule.onNodeWithTag("goal-title").performScrollTo().assertTextContains("Ship app")
+    composeTestRule.onNodeWithTag("goal-date-clear").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("goal-save").performClick()
     composeTestRule.waitForIdle()
     assert(saved == "Ship app|Launch|null")
@@ -1168,7 +1315,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("note-detail-body").assertExists()
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
     composeTestRule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("notes-back").performClick()
+    composeTestRule.onNodeWithTag("notes-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("note-note-1").assertExists()
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertExists()
     composeTestRule.onNodeWithTag("main-tab-dock").assertExists()
@@ -1186,14 +1335,19 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
     composeTestRule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("progress-back").assertDoesNotExist()
+    Espresso.pressBack()
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertExists()
     composeTestRule.onNodeWithTag("progress-projects").performClick()
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("progress-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("progress-automations").performClick()
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("progress-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertExists()
   }
 
@@ -1225,7 +1379,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("automation-edit").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("automation-edit-name").performTextClearance()
     composeTestRule.onNodeWithTag("automation-edit-name").performTextInput("Morning brief updated")
-    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("progress-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("automation-edit-discard-confirm").assertExists()
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.progress_cancel)).performClick()
     composeTestRule.onNodeWithTag("automation-edit-save").performScrollTo().performClick()
@@ -1252,7 +1408,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-task-task-1").performClick()
     assert(openedTask == "task-1")
     composeTestRule.onNodeWithText("Verify build").assertExists()
-    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("progress-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("progress-task-task-1").assertExists()
   }
 
@@ -1291,7 +1449,9 @@ class MainScreenTest {
     assert(requested == "task-2")
     composeTestRule.onNodeWithTag("progress-detail-retry").performClick()
     assert(requests == 2)
-    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("progress-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("progress-item-wait-2").assertExists()
   }
 
@@ -1341,10 +1501,15 @@ class MainScreenTest {
     composeTestRule.setContent {
       ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, {},
         { state.value = state.value.copy(taskSearchText = it) },
-        { submitted = state.value.taskSearchText }, {}, {}, {}, {}, {}, { _, _, _ -> },
+        { submitted = state.value.taskSearchText; state.value = state.value.copy(taskSearch = submitted.trim()) },
+        {}, {}, {}, {}, {}, { _, _, _ -> },
         {}, { _, _, _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-workflows").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("progress-back").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("progress-create-task-chat").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("progress-task-search").assertDoesNotExist()
     composeTestRule.onNodeWithTag("progress-filter-open").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-open").assertExists()
     composeTestRule.onNodeWithTag("progress-task-task-closed").assertDoesNotExist()
@@ -1352,12 +1517,23 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-task-task-open").assertDoesNotExist()
     composeTestRule.onNodeWithTag("progress-task-task-closed").assertExists()
     composeTestRule.onNodeWithTag("progress-task-task-closed").performClick()
-    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("progress-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("progress-task-task-open").assertDoesNotExist()
     composeTestRule.onNodeWithTag("progress-task-task-closed").assertExists()
+    composeTestRule.onNodeWithTag("progress-open-search").performClick()
     composeTestRule.onNodeWithTag("progress-task-search").performTextInput("release")
-    composeTestRule.onNodeWithTag("progress-task-refresh").performClick()
-    assert(submitted == "release")
+    composeTestRule.waitUntil(5_000) { submitted == "release" }
+    composeTestRule.onNodeWithTag("progress-task-refresh").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("progress-search-clear").performClick()
+    composeTestRule.onNodeWithTag("progress-task-search").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("progress-open-search").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("progress-filter-closed").assertIsSelected()
+    composeTestRule.runOnIdle {
+      assertEquals("", state.value.taskSearchText)
+      assertEquals("", submitted)
+    }
   }
 
   @Test fun progressOverviewKeepsRecentClosedWhenTaskSearchChanges() {
@@ -1411,7 +1587,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-create-save").assertIsNotEnabled()
     composeTestRule.onNodeWithTag("progress-create-title").performTextInput("New task")
     composeTestRule.onNodeWithTag("progress-create-body").performTextInput("Description")
-    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("progress-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("progress-create-discard-confirm").assertExists()
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.progress_cancel)).performClick()
     composeTestRule.onNodeWithTag("progress-task-create").assertExists()
@@ -1535,7 +1713,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-task-edit").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("progress-edit-title").performTextClearance()
     composeTestRule.onNodeWithTag("progress-edit-title").performTextInput("Edited task")
-    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("progress-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("progress-discard-confirm").assertExists()
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.progress_cancel)).performClick()
     composeTestRule.onNodeWithTag("progress-task-editor").assertExists()
@@ -1559,7 +1739,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-task-task-discard").performClick()
     composeTestRule.onNodeWithTag("progress-task-edit").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("progress-edit-title").performTextInput(" changed")
-    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.onNodeWithTag("progress-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("progress-discard-confirm").performClick()
     composeTestRule.onNodeWithTag("progress-task-detail").assertExists()
     assert(opens == 2)
@@ -2117,6 +2299,83 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-context").assertExists()
   }
 
+  @Test fun chatHeaderUsesSelectedAgentsActualAvatar() {
+    val first = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }
+    val second = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.BLUE) }
+    val state = mutableStateOf(ConnectionUiState(
+      profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+      selectedConversationId = "avatar-conversation", selectedAgentId = "main",
+      agents = listOf(ConversationAgent("main", "我的助手", "", "xopc:custom"),
+        ConversationAgent("review", "Review", "", "xopc:custom")),
+      agentAvatars = mapOf("main" to first, "review" to second)))
+    composeTestRule.setContent {
+      XopcTheme { MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value) }
+    }
+    fun centerColor(): Int {
+      val bitmap = composeTestRule.onNodeWithTag("chat-agent-avatar", useUnmergedTree = true)
+        .captureToImage().asAndroidBitmap()
+      return bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)
+    }
+    org.junit.Assert.assertEquals(android.graphics.Color.RED, centerColor())
+    composeTestRule.runOnIdle { state.value = state.value.copy(selectedAgentId = "review") }
+    org.junit.Assert.assertEquals(android.graphics.Color.BLUE, centerColor())
+  }
+
+  @Test fun messageSearchUsesBottomControlsAndFiltersEachCategory() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+          connection = ConnectionUiState(profile = profile, selectedConversationId = "search-conversation",
+            messages = listOf(
+              ConversationMessage("text", "assistant", "Project plan https://example.com/docs"),
+              ConversationMessage("file", "user", "Budget", media = listOf(
+                ConversationMedia("pdf", "budget.pdf", "file", "application/pdf", 10, "file"))),
+              ConversationMessage("image", "user", "Diagram", media = listOf(
+                ConversationMedia("png", "diagram.png", "image", "image/png", 10, "image"))))))
+      }
+    }
+    composeTestRule.onNodeWithTag("chat-header-search").performClick()
+    val input = composeTestRule.onNodeWithTag("chat-message-search-input")
+    input.assertIsFocused()
+    val resolver = composeTestRule.activity.contentResolver
+    val screenshot = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+      ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, "chat-search-aligned.png")
+        put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+        put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/xopc-test")
+      }))
+    resolver.openOutputStream(screenshot).use { output ->
+      composeTestRule.onNodeWithTag("chat-message-search-screen").captureToImage().asAndroidBitmap()
+        .compress(Bitmap.CompressFormat.PNG, 100, output!!)
+    }
+    composeTestRule.onNodeWithTag("chat-search-result-text").assertDoesNotExist()
+    val tabs = listOf("messages", "files", "links", "images").map {
+      composeTestRule.onNodeWithTag("chat-search-category-$it").fetchSemanticsNode().boundsInRoot
+    }
+    tabs.zipWithNext().forEach { (left, right) -> assertTrue(left.right <= right.left) }
+    assertTrue(tabs.first().bottom <= input.fetchSemanticsNode().boundsInRoot.top)
+    input.performTextInput("project")
+    composeTestRule.onNodeWithTag("chat-search-result-text").assertExists()
+    composeTestRule.onNodeWithTag("chat-search-result-file").assertDoesNotExist()
+    input.performTextClearance()
+    composeTestRule.onNodeWithTag("chat-search-category-files").performClick()
+    composeTestRule.onNodeWithTag("chat-search-result-file").assertExists()
+    composeTestRule.onNodeWithTag("chat-search-result-image").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("chat-search-category-images").performClick()
+    composeTestRule.onNodeWithTag("chat-search-result-image").assertExists()
+    composeTestRule.onNodeWithTag("chat-search-category-links").performClick()
+    composeTestRule.onNodeWithTag("chat-search-result-text").assertExists().performClick()
+    composeTestRule.onNodeWithTag("chat-message-search-screen").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("message-detail-panel").assertExists()
+    Espresso.closeSoftKeyboard()
+    Espresso.pressBack()
+    composeTestRule.onNodeWithTag("chat-header-search").performClick()
+    composeTestRule.onNodeWithTag("chat-search-close").performClick()
+    composeTestRule.onNodeWithTag("chat-message-search-screen").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-composer-shell").assertExists()
+  }
+
   @Test fun emptyAssistantShowsWelcomeButNeverTreatsItAsAChatMessage() {
     val id = "11111111-2222-3333-4444-555555555555"
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
@@ -2125,7 +2384,28 @@ class MainScreenTest {
       MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = ui.value)
     }
     composeTestRule.onNodeWithTag("assistant-welcome").assertExists()
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_welcome)).assertExists()
+    val greeting = composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_welcome))
+    greeting.assertExists()
+    val viewport = composeTestRule.onNodeWithTag("assistant-welcome-viewport").fetchSemanticsNode().boundsInRoot
+    val logo = composeTestRule.onNodeWithTag("assistant-welcome-loopi").fetchSemanticsNode().boundsInRoot
+    val headline = greeting.fetchSemanticsNode().boundsInRoot
+    val composer = composeTestRule.onNodeWithTag("assistant-composer-shell").fetchSemanticsNode().boundsInRoot
+    val density = composeTestRule.activity.resources.displayMetrics.density
+    assertTrue(viewport.bottom <= composer.top)
+    assertEquals(viewport.center.x, logo.center.x, 1f)
+    assertEquals(if (viewport.height / density < 620f) 88f else 108f, logo.width / density, 1f)
+    assertEquals(18f, (headline.top - logo.bottom) / density, 1f)
+    assertEquals(viewport.center.y - 6f * density, (logo.top + headline.bottom) / 2f, 2f)
+    val screenshotValues = ContentValues().apply {
+      put(MediaStore.Images.Media.DISPLAY_NAME, "chat-welcome-aligned.png")
+      put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+      put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/xopc-test")
+    }
+    val resolver = composeTestRule.activity.contentResolver
+    val screenshot = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, screenshotValues))
+    resolver.openOutputStream(screenshot).use { output ->
+      composeTestRule.onNode(isRoot()).captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, output!!)
+    }
     composeTestRule.runOnIdle { ui.value = ui.value.copy(historyLoading = true) }
     composeTestRule.onNodeWithTag("assistant-welcome").assertDoesNotExist()
     composeTestRule.runOnIdle {
@@ -2218,6 +2498,13 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-detail-scroll").assertDoesNotExist()
     composeTestRule.onNodeWithTag("message-steps-message-1").performClick()
     composeTestRule.onNodeWithTag("execution-loading").assertExists()
+    val sheetBounds = composeTestRule.onNodeWithTag("execution-sheet").fetchSemanticsNode().boundsInRoot
+    val closeBounds = composeTestRule.onNodeWithTag("execution-back").fetchSemanticsNode().boundsInRoot
+    fun assertStableExecutionSheet() {
+      composeTestRule.onNodeWithTag("execution-back").assertIsDisplayed()
+      assertEquals(sheetBounds, composeTestRule.onNodeWithTag("execution-sheet").fetchSemanticsNode().boundsInRoot)
+      assertEquals(closeBounds, composeTestRule.onNodeWithTag("execution-back").fetchSemanticsNode().boundsInRoot)
+    }
     composeTestRule.runOnIdle {
       ui.value = ui.value.copy(executionLoading = false, executionDetail = ExecutionDetail("turn-1", listOf(
         ExecutionStep("step-1", "tool", "search", "", "first query", "", "done"),
@@ -2225,6 +2512,21 @@ class MainScreenTest {
     }
     composeTestRule.onNodeWithTag("execution-group-step-1").performClick()
     composeTestRule.onNodeWithTag("execution-preview-step-2").assertExists()
+    assertStableExecutionSheet()
+    composeTestRule.runOnIdle {
+      ui.value = ui.value.copy(executionDetail = ExecutionDetail("turn-1", (1..40).map {
+        ExecutionStep("many-$it", "tool", if (it % 2 == 0) "search" else "web", "", "Preview $it", "", "done")
+      }))
+    }
+    composeTestRule.onNodeWithTag("execution-scroll").performScrollToIndex(39)
+    composeTestRule.onNodeWithTag("execution-group-many-40").assertIsDisplayed()
+    assertStableExecutionSheet()
+    composeTestRule.runOnIdle { ui.value = ui.value.copy(executionDetail = null, executionError = true) }
+    composeTestRule.onNodeWithTag("execution-retry").assertIsDisplayed()
+    assertStableExecutionSheet()
+    composeTestRule.runOnIdle { ui.value = ui.value.copy(executionError = false) }
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_execution_empty)).assertIsDisplayed()
+    assertStableExecutionSheet()
     composeTestRule.onNodeWithTag("execution-back").performClick()
     composeTestRule.onNodeWithTag("message-detail-scroll").assertDoesNotExist()
   }
@@ -2340,6 +2642,37 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-more-message-1").performClick()
     composeTestRule.onNodeWithTag("message-copy-action").assertExists()
     composeTestRule.onNodeWithTag("message-copy-code-action").assertDoesNotExist()
+  }
+
+  @Test fun assistantMessageActionsFollowHarmonyOrderAndDispatchTheirOwnActions() {
+    val phase = mutableStateOf("idle")
+    val saving = mutableStateOf(false)
+    val actions = mutableListOf<String>()
+    composeTestRule.setContent {
+      ChatMessageCard(ConversationMessage("answer-actions", "assistant", "Useful answer"),
+        onMore = { actions += "more" }, onOpenTarget = {}, onOpenPreview = { _, _ -> },
+        onOpenLink = {}, onCopy = { actions += "copy:$it" }, onViewMore = { actions += "detail" },
+        onSaveNote = { actions += "save" }, savingNote = saving.value,
+        onReadAloud = { actions += "read" }, readAloudPhase = phase.value)
+    }
+    val tags = listOf("message-copy-answer-actions", "message-save-note-answer-actions",
+      "message-read-aloud-answer-actions", "message-more-answer-actions")
+    val bounds = tags.map { composeTestRule.onNodeWithTag(it).fetchSemanticsNode().boundsInRoot }
+    bounds.zipWithNext().forEach { (left, right) -> assertTrue(left.right <= right.left) }
+    tags.forEach { composeTestRule.onNodeWithTag(it).performClick() }
+    composeTestRule.runOnIdle {
+      assertEquals(listOf("copy:Useful answer", "save", "read", "more"), actions)
+      phase.value = "loading"
+      saving.value = true
+    }
+    composeTestRule.onNodeWithTag(tags[1]).assertIsNotEnabled()
+    composeTestRule.onNodeWithTag(tags[2]).assertIsNotEnabled()
+    composeTestRule.runOnIdle { phase.value = "playing" }
+    composeTestRule.onNodeWithContentDescription(composeTestRule.activity.getString(R.string.assistant_pause))
+      .assertExists()
+    composeTestRule.runOnIdle { phase.value = "paused" }
+    composeTestRule.onNodeWithContentDescription(composeTestRule.activity.getString(R.string.assistant_resume))
+      .assertExists()
   }
 
   @Test fun assistantMessageMenuSavesOnlyNonblankAnswerAndClosesOnSelection() {
@@ -2558,7 +2891,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("Brief").assertExists()
     composeTestRule.onNodeWithTag("context-project").assertExists()
     composeTestRule.onNodeWithTag("context-add-reference").assertExists()
-    composeTestRule.onNodeWithTag("context-back").performClick()
+    composeTestRule.onNodeWithTag("context-back").assertDoesNotExist()
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("assistant-session-files").assertExists()
   }
 

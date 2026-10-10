@@ -160,6 +160,8 @@
   },
   "dependencies": {
     "@composio/core": "0.21.0",
+    "@dicebear/collection": "9.4.2",
+    "@dicebear/core": "9.4.2",
     "@earendil-works/pi-agent-core": "0.87.0",
     "@earendil-works/pi-ai": "0.87.0",
     "@earendil-works/pi-coding-agent": "0.87.0",

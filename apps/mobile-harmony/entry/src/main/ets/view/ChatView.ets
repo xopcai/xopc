@@ -3,7 +3,7 @@ import { userErrorMessage } from '../common/userError';
 import { quickChatIntake, XopcQuickChatIntake } from '../service/quickChatIntake';
 import { XopcChatViewModel } from '../viewmodel/chatViewModel';
 import { XopcChatRow, XopcChatAttachment, XopcChatBlock, XopcContextRef, XopcReferenceItem,
-  XopcHistoryMedia, XopcHostDirectory, XopcQueuedInput, XopcExecutionDetail } from '../model/chat';
+  XopcHistoryMedia, XopcArtifact, XopcChatAgent, XopcHostDirectory, XopcQueuedInput, XopcExecutionDetail } from '../model/chat';
 import { XopcChatMessageContent } from './ChatMessageContent';
 import { CHAT_ACTION_PANEL_CLOSE_MS, CHAT_ACTION_PANEL_OPEN_MS, XopcChatActionPanel } from './ChatActionPanel';
 import { XopcChatExecutionDetailView } from './ChatExecutionDetailView';
@@ -83,6 +83,8 @@ export struct XopcChatView {
   @Local personalSettingsNextMode: string = '';
   @Local searchOpen: boolean = false;
   @Local searchQuery: string = '';
+  @Local searchCategory: string = 'messages';
+  private searchInput: TextInputController = new TextInputController();
   @Computed get personalConversation(): boolean {
     return this.personalAgent?.state === 'ready' && this.chat.selectedId === this.personalAgent.conversationId;
   }
@@ -724,7 +726,7 @@ export struct XopcChatView {
   private bindBack(): void { layoutState.dismissChatOverlay = (): boolean => { return this.dismissOverlay(); }; }
   private dismissOverlay(): boolean {
     if (this.personalSettingsOpen) { this.personalSettingsOpen = false; return true; }
-    if (this.searchOpen) { this.searchOpen = false; return true; }
+    if (this.searchOpen) { this.closeMessageSearch(); return true; }
     if (this.panelOpen) { this.setPanel(false); return true; }
     return false;
   }
@@ -1702,9 +1704,11 @@ export struct XopcChatView {
           Button({ type: ButtonType.Normal }) {
             Row({ space: 8 }) {
               XopcPersonalAgentAvatar({ extent: 36, compact: true, activePage: this.activePage,
-                agentId: this.personalConversation ? this.personalAgent?.agentId ?? '' : this.chat.agentId,
-                appearance: this.personalConversation ? this.personalAgent?.appearance ?? 'loopi' : 'loopi',
-                revision: this.personalAgent?.revision ?? 0 })
+                agentId: this.personalConversation ? this.personalAgent?.agentId ?? '' : this.chat.agentId || this.options.agentId,
+                appearance: this.personalConversation ? this.personalAgent?.appearance ?? 'loopi'
+                  : this.options.agents.find((agent: XopcChatAgent): boolean => agent.id === (this.chat.agentId || this.options.agentId))?.avatar?.startsWith('xopc:loopi:') ? 'loopi' : 'configured',
+                avatarReference: this.options.agents.find((agent: XopcChatAgent): boolean => agent.id === (this.chat.agentId || this.options.agentId))?.avatar ?? '',
+                revision: this.personalConversation ? this.personalAgent?.revision ?? 0 : gatewaySession.connectionRevision() })
               Text(this.personalConversation ? this.personalAgent?.displayName ?? 'Ada' : this.chat.title || $r('app.string.untitled'))
                 .fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
                 .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: 140 })
@@ -1718,7 +1722,7 @@ export struct XopcChatView {
             Button({ type: ButtonType.Circle }) {
               SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(22).fontColor([this.colors.foreground])
             }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).id('chat-header-search')
-              .accessibilityText($r('app.string.search')).onClick((): void => { this.searchOpen = true; this.searchQuery = ''; })
+              .accessibilityText($r('app.string.search')).onClick((): void => { this.dismissComposer(); this.searchQuery = ''; this.searchCategory = 'messages'; this.searchOpen = true; })
             Button({ type: ButtonType.Circle }) {
               SymbolGlyph($r('sys.symbol.gearshape')).fontSize(22).fontColor([this.colors.foreground])
             }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).id('chat-header-actions')
@@ -1757,9 +1761,6 @@ export struct XopcChatView {
           showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => {
             if (this.personalSettingsNextMode) { const mode = this.personalSettingsNextMode; this.personalSettingsNextMode = ''; this.openSheet(mode); }
           } })
-      Column().width('100%').height(0)
-        .bindSheet($$this.searchOpen, this.messageSearchSheet, { height: '80%', dragBar: true,
-          backgroundColor: this.colors.panel })
       Column().id('chat-image-editor-sheet-host').width('100%').height(0)
         .bindSheet($$this.imageEditorOpen, this.imageEditorSheet, { height: '75%', dragBar: false,
           backgroundColor: this.colors.panel, onDisappear: (): void => { this.imageEditorError = ''; } })
@@ -1789,6 +1790,7 @@ export struct XopcChatView {
         .scale({ x: this.sendFlightScale, y: this.sendFlightScale })
         .opacity(this.sendFlightOpacity).hitTestBehavior(HitTestMode.None)
     }
+    if (this.searchOpen) { this.messageSearchSheet() }
     }.width('100%').height('100%')
       .onAreaChange((_previous: Area, current: Area): void => { this.sendFlightRoot = this.sendFlightRect(current); })
       .bindSheet($$this.executionOpen, this.executionDetailSheet, { height: '92%', dragBar: false,
@@ -1895,24 +1897,101 @@ export struct XopcChatView {
       onActions: (): void => { this.personalSettingsNextMode = 'actions'; this.personalSettingsOpen = false; } })
   }
 
+  private closeMessageSearch(): void {
+    this.searchInput.stopEditing();
+    this.searchOpen = false;
+    layoutState.chatActionsOpen = false;
+  }
+
+  private messageSearchContent(row: XopcChatRow): string {
+    if (this.searchCategory === 'files' || this.searchCategory === 'images') {
+      const images = this.searchCategory === 'images';
+      const names = (row.media ?? []).filter((media: XopcHistoryMedia): boolean =>
+        media.mimeType.startsWith('image/') === images).map((media: XopcHistoryMedia): string => media.name);
+      const artifacts = (row.outcome?.deliverables ?? []).filter((artifact: XopcArtifact): boolean =>
+        artifact.kind !== 'site' && (!!artifact.mimeType?.startsWith('image/') || artifact.kind === 'image') === images)
+        .map((artifact: XopcArtifact): string => artifact.title);
+      return names.concat(artifacts).join('\n');
+    }
+    if (this.searchCategory === 'links') {
+      const links: string[] = row.text.match(/https?:\/\/[^\s<>]+/gi) ?? [];
+      const artifacts = (row.outcome?.deliverables ?? []).map((artifact: XopcArtifact): string =>
+        artifact.shareUrl ?? artifact.uri ?? '').filter((url: string): boolean => /^https?:\/\//i.test(url));
+      return links.concat(artifacts).join('\n');
+    }
+    return row.text;
+  }
+
+  private messageSearchMatches(row: XopcChatRow): boolean {
+    const text = this.messageSearchContent(row);
+    const query = this.searchQuery.trim().toLowerCase();
+    return !!text && (query ? text.toLowerCase().includes(query) : this.searchCategory !== 'messages');
+  }
+
+  private messageSearchLabel(category: string): string {
+    const zh = appSettings.effectiveLanguage().startsWith('zh');
+    if (category === 'files') return zh ? '文件' : 'Files';
+    if (category === 'links') return zh ? '链接' : 'Links';
+    if (category === 'images') return zh ? '图片' : 'Images';
+    return zh ? '消息' : 'Messages';
+  }
+
   @Builder
   messageSearchSheet() {
-    Column({ space: 12 }) {
-      TextInput({ text: this.searchQuery, placeholder: $r('app.string.search') })
-        .onChange((text: string): void => { this.searchQuery = text; })
-      Text(appSettings.effectiveLanguage().startsWith('zh') ? '搜索已加载消息；可加载更早记录' : 'Search loaded messages; load older history for more')
-        .fontSize(12).fontColor(this.colors.secondary)
-      if (this.chat.hasOlder) { Button($r('app.string.refresh')).enabled(!this.chat.loading)
-        .onClick((): void => { void this.chat.loadHistory(true); }) }
+    Column() {
       List({ space: 12 }) {
-        ForEach(this.presentationRows.filter((row: XopcChatRow): boolean => !!this.searchQuery.trim()
-          && row.text.toLowerCase().includes(this.searchQuery.trim().toLowerCase())), (row: XopcChatRow) => {
-          ListItem() { Text(row.text).fontSize(14).fontColor(this.colors.foreground).padding(12)
-            .width('100%').backgroundColor(this.colors.input).borderRadius(12) }
-        }, (row: XopcChatRow): string => row.id)
-      }.layoutWeight(1).width('100%')
-      Button($r('app.string.chat_close')).onClick((): void => { this.searchOpen = false; })
-    }.width('100%').height('100%').padding(20)
+        ForEach(this.presentationRows.filter((row: XopcChatRow): boolean => this.messageSearchMatches(row)),
+          (row: XopcChatRow) => {
+            ListItem() {
+              Text(this.messageSearchContent(row)).fontSize(16).fontColor(this.colors.foreground)
+                .maxLines(4).textOverflow({ overflow: TextOverflow.Ellipsis }).padding(16)
+                .width('100%').backgroundColor(this.colors.panel).borderRadius(16)
+                .onClick((): void => { this.closeMessageSearch(); this.openMessageDetail(row); })
+            }
+          }, (row: XopcChatRow): string => row.id)
+        if (this.searchQuery.trim() && !this.presentationRows.some((row: XopcChatRow): boolean => this.messageSearchMatches(row))) {
+          ListItem() {
+            Text(appSettings.effectiveLanguage().startsWith('zh') ? '没有找到相关内容' : 'No results')
+              .fontSize(14).fontColor(this.colors.secondary)
+          }
+        }
+        if (this.chat.hasOlder && (this.searchQuery.trim() || this.searchCategory !== 'messages')) {
+          ListItem() {
+            Button($r('app.string.older_messages')).height(44).backgroundColor(Color.Transparent)
+              .fontColor(this.colors.accent).enabled(!this.chat.loading)
+              .onClick((): void => { void this.chat.loadHistory(true); })
+          }
+        }
+      }.layoutWeight(1).width('100%').padding(20)
+      Column({ space: 10 }) {
+        Row({ space: 6 }) {
+          ForEach(['messages', 'files', 'links', 'images'], (category: string) => {
+            Button(this.messageSearchLabel(category), { type: ButtonType.Normal })
+              .height(44).padding({ left: 14, right: 14 }).borderRadius(18).backgroundColor(this.colors.panel)
+              .fontColor(this.searchCategory === category ? this.colors.accent : this.colors.foreground)
+              .onClick((): void => { this.searchCategory = category; this.getUIContext().getFocusController().requestFocus('chat-message-search-input'); })
+          }, (category: string): string => category)
+        }.width('100%')
+        Row({ space: 10 }) {
+          Row({ space: 10 }) {
+            SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(20).fontColor([this.colors.secondary])
+            TextInput({ text: this.searchQuery, placeholder: $r('app.string.search'), controller: this.searchInput })
+              .id('chat-message-search-input').layoutWeight(1).height(48).fontSize(16)
+              .backgroundColor(Color.Transparent).padding(0).defaultFocus(true)
+              .onChange((text: string): void => { this.searchQuery = text.slice(0, 500); })
+          }.layoutWeight(1).padding({ left: 16, right: 16 }).height(48).borderRadius(24).backgroundColor(this.colors.panel)
+          Button({ type: ButtonType.Circle }) {
+            SymbolGlyph($r('sys.symbol.xmark')).fontSize(18).fontColor([this.colors.foreground])
+          }.id('chat-search-close').width(48).height(48).padding(0).backgroundColor(this.colors.panel)
+            .accessibilityText($r('app.string.chat_close')).onClick((): void => { this.closeMessageSearch(); })
+        }.width('100%')
+      }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
+    }.id('chat-message-search-screen').width('100%').height('100%').backgroundColor(this.colors.surface)
+      .onAppear((): void => {
+        layoutState.chatActionsOpen = true;
+        setTimeout((): void => { if (this.searchOpen) this.getUIContext().getFocusController().requestFocus('chat-message-search-input'); }, 50);
+      })
+      .onDisAppear((): void => { layoutState.chatActionsOpen = false; })
   }
 
   @Builder

@@ -56,6 +56,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -326,14 +327,18 @@ private fun projectRecommendation(info: ProjectWelcomeInfo?): WelcomeRecommendat
 }
 
 @Composable
-private fun AssistantWelcome(recommendation: WelcomeRecommendation?, onChoose: (String) -> Unit) {
-  Column(modifier = Modifier.fillMaxWidth().testTag("assistant-welcome"),
+private fun AssistantWelcome(viewportHeight: androidx.compose.ui.unit.Dp,
+  recommendation: WelcomeRecommendation?, onChoose: (String) -> Unit) {
+  Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+    .heightIn(min = viewportHeight).padding(start = 8.dp, end = 8.dp,
+      top = if (viewportHeight < 620.dp) 16.dp else 28.dp, bottom = 28.dp)
+    .testTag("assistant-welcome"),
     horizontalAlignment = Alignment.CenterHorizontally,
-    verticalArrangement = Arrangement.spacedBy(16.dp)) {
-    LoopiIcon(extent = 108.dp, active = true, interactive = true,
+    verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically)) {
+    LoopiIcon(extent = if (viewportHeight < 620.dp) 88.dp else 108.dp, active = true, interactive = true,
       modifier = Modifier.testTag("assistant-welcome-loopi"))
-    Text(stringResource(R.string.assistant_welcome), style = MaterialTheme.typography.titleLarge,
-      fontWeight = FontWeight.SemiBold)
+    Text(stringResource(R.string.assistant_welcome), fontSize = 20.sp, lineHeight = 28.sp,
+      fontWeight = FontWeight.Medium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     if (recommendation != null) {
       Card(onClick = { onChoose(recommendation.prompt) },
         modifier = Modifier.fillMaxWidth().testTag("assistant-welcome-recommendation")) {
@@ -475,6 +480,7 @@ fun MainScreen(
   onAddVoiceAttachment: suspend (ByteArray, Int) -> Unit = { _, _ ->
     throw IllegalStateException("VOICE_UNAVAILABLE")
   },
+  onSendQuickVoiceRecording: suspend (ByteArray, Int) -> Unit = { _, _ -> error("VOICE_UNAVAILABLE") },
   onSendVoiceRecording: suspend (ByteArray, Int) -> Unit = { _, _ ->
     throw IllegalStateException("VOICE_UNAVAILABLE")
   },
@@ -767,6 +773,7 @@ fun MainScreen(
     onPendingVoiceApproval = onPendingVoiceApproval,
     onRespondVoiceApproval = onRespondVoiceApproval,
     onAddVoiceAttachment = onAddVoiceAttachment,
+    onSendQuickVoiceRecording = onSendQuickVoiceRecording,
     onSendVoiceRecording = onSendVoiceRecording,
     onCopyMessageText = { value ->
       (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
@@ -975,6 +982,7 @@ internal fun MainContent(
   onAddVoiceAttachment: suspend (ByteArray, Int) -> Unit = { _, _ ->
     throw IllegalStateException("VOICE_UNAVAILABLE")
   },
+  onSendQuickVoiceRecording: suspend (ByteArray, Int) -> Unit = { _, _ -> error("VOICE_UNAVAILABLE") },
   onSendVoiceRecording: suspend (ByteArray, Int) -> Unit = { _, _ ->
     throw IllegalStateException("VOICE_UNAVAILABLE")
   },
@@ -1067,10 +1075,10 @@ internal fun MainContent(
     VoiceMemoRecorder(voiceContext)
   }
   DisposableEffect(voiceMemo) { onDispose { voiceMemo.cancel() } }
-  val inputVoice = remember(connection.profile?.gatewayId, connection.selectedConversationId) {
+  val inputVoice = remember(connection.profile?.gatewayId, connection.selectedConversationId, selectedTab) {
     VoiceMemoRecorder(voiceContext)
   }
-  var inputVoiceMode by remember(connection.profile?.gatewayId, connection.selectedConversationId) {
+  var inputVoiceMode by remember(connection.profile?.gatewayId, connection.selectedConversationId, selectedTab) {
     mutableStateOf(false)
   }
   var inputVoiceHeld by remember(inputVoice) { mutableStateOf(false) }
@@ -1233,11 +1241,21 @@ internal fun MainContent(
   var assistantReferenceQuery by remember(connection.profile?.gatewayId, connection.selectedConversationId) {
     mutableStateOf("")
   }
+  val quickComposerFocus = remember { FocusRequester() }
   val keyboardController = LocalSoftwareKeyboardController.current
+  val currentTab by rememberUpdatedState(selectedTab)
   val currentComposerConnection by rememberUpdatedState(connection)
+  var restoreInputKeyboard by remember(inputVoice) { mutableStateOf(false) }
   LaunchedEffect(inputVoiceMode) {
+    if (!inputVoiceMode && restoreInputKeyboard) {
+      restoreInputKeyboard = false
+      if (selectedTab == HomeTab.Assistant) assistantComposerFocus.requestFocus()
+      else quickComposerFocus.requestFocus()
+      keyboardController?.show()
+    }
     if (inputVoiceMode) {
       assistantActionsOpen = false
+      quickActionsOpen = false
       voiceFocusManager.clearFocus(force = true)
       keyboardController?.hide()
     }
@@ -1246,12 +1264,12 @@ internal fun MainContent(
     if (inputVoiceBusy || inputVoiceHeld || inputVoice.phase != "idle") return
     inputVoiceError = ""
     if (inputVoiceMode) {
+      restoreInputKeyboard = true
       inputVoiceMode = false
-      assistantComposerFocus.requestFocus()
-      keyboardController?.show()
     } else if (ContextCompat.checkSelfPermission(voiceContext, Manifest.permission.RECORD_AUDIO) ==
       PackageManager.PERMISSION_GRANTED) {
       assistantActionsOpen = false
+      quickActionsOpen = false
       voiceFocusManager.clearFocus(force = true)
       keyboardController?.hide()
       inputVoiceMode = true
@@ -1259,6 +1277,7 @@ internal fun MainContent(
   }
   fun deliverInputVoice(destination: String) {
     if (inputVoiceBusy || inputVoice.phase != "ready") return
+    val targetTab = selectedTab
     val targetGatewayId = connection.profile?.gatewayId
     val targetConversationId = connection.selectedConversationId
     inputVoiceRetryDestination = destination
@@ -1270,25 +1289,43 @@ internal fun MainContent(
           val lang = when { language.startsWith("zh") -> "zh"; language.startsWith("en") -> "en"; else -> "" }
           val transcript = onTranscribeAudio(bytes, lang)
           if (inputVoice.phase != "ready" || currentComposerConnection.profile?.gatewayId != targetGatewayId ||
-            currentComposerConnection.selectedConversationId != targetConversationId) return@launch
-          val next = if (assistantComposerValue.text.isBlank()) transcript
-            else assistantComposerValue.text + "\n" + transcript
-          assistantComposerValue = TextFieldValue(next, selection = TextRange(next.length))
-          onDraftChange(next)
+            currentComposerConnection.selectedConversationId != targetConversationId || currentTab != targetTab) return@launch
+          if (targetTab == HomeTab.Assistant) {
+            val next = if (assistantComposerValue.text.isBlank()) transcript
+              else assistantComposerValue.text + "\n" + transcript
+            assistantComposerValue = TextFieldValue(next, selection = TextRange(next.length))
+            onDraftChange(next)
+          } else {
+            val draft = currentComposerConnection.quickDraftText
+            onQuickDraftChange(if (draft.isBlank()) transcript else "$draft\n$transcript")
+          }
+          restoreInputKeyboard = true
           inputVoiceMode = false
-          assistantComposerFocus.requestFocus()
-          keyboardController?.show()
         } else {
           if (inputVoice.phase != "ready" || currentComposerConnection.profile?.gatewayId != targetGatewayId ||
-            currentComposerConnection.selectedConversationId != targetConversationId) return@launch
-          onSendVoiceRecording(bytes, seconds)
+            currentComposerConnection.selectedConversationId != targetConversationId || currentTab != targetTab) return@launch
+          if (targetTab == HomeTab.Assistant) onSendVoiceRecording(bytes, seconds)
+          else onSendQuickVoiceRecording(bytes, seconds)
         }
         inputVoice.cancel()
         inputVoiceError = ""
       } catch (failure: Exception) {
+        if (failure is CancellationException) throw failure
         inputVoiceError = failure.message ?: voiceContext.getString(R.string.voice_record_error)
       } finally { inputVoiceBusy = false }
     }
+  }
+  fun startInputVoice(): Boolean {
+    if (inputVoiceBusy || inputVoice.phase != "idle" || connection.sending ||
+      (selectedTab != HomeTab.Assistant && (connection.quickSending || connection.quickAttachmentLoading))) return false
+    inputVoiceError = ""; inputVoiceDestination = "send"; inputVoiceElapsed = 0
+    inputVoice.start()
+    inputVoiceHeld = inputVoice.phase == "recording"
+    if (!inputVoiceHeld) {
+      inputVoiceError = inputVoice.error
+      inputVoice.cancel()
+    }
+    return inputVoiceHeld
   }
   fun finishInputVoice(destination: String) {
     if (!inputVoiceHeld) return
@@ -1318,6 +1355,7 @@ internal fun MainContent(
   }
   LaunchedEffect(showBottomChrome) {
     if (!showBottomChrome) {
+      inputVoice.cancel(); inputVoiceHeld = false; inputVoiceMode = false
       assistantActionsOpen = false
       quickActionsOpen = false
       focusManager.clearFocus(force = true)
@@ -1347,6 +1385,7 @@ internal fun MainContent(
   LaunchedEffect(assistantReferenceKind, assistantReferenceQuery, connection.profile?.gatewayId,
     connection.selectedConversationId) {
     val kind = assistantReferenceKind ?: return@LaunchedEffect
+    if (kind == "file") return@LaunchedEffect
     if (assistantReferenceQuery.isNotEmpty()) delay(250)
     onLoadReferences(kind, assistantReferenceQuery)
   }
@@ -1379,19 +1418,7 @@ internal fun MainContent(
               onSendMessage, onStopRun,
               inputVoiceMode, inputVoiceHeld, inputVoiceBusy, inputVoice.phase, inputVoiceError,
               inputVoiceDestination, inputVoiceElapsed,
-              ::toggleInputVoice, onVoiceStart = {
-                if (inputVoiceBusy || inputVoice.phase != "idle" || connection.sending) false
-                else {
-                  inputVoiceError = ""; inputVoiceDestination = "send"; inputVoiceElapsed = 0
-                  inputVoice.start()
-                  inputVoiceHeld = inputVoice.phase == "recording"
-                  if (!inputVoiceHeld) {
-                    inputVoiceError = inputVoice.error
-                    inputVoice.cancel()
-                  }
-                  inputVoiceHeld
-                }
-              }, onVoiceMove = { dx, dy ->
+              ::toggleInputVoice, onVoiceStart = ::startInputVoice, onVoiceMove = { dx, dy ->
                 inputVoiceDestination = voiceRecordingDestination(dx, dy, inputVoiceDestination)
               }, onVoiceFinish = ::finishInputVoice, onVoiceCancel = {
                 inputVoice.cancel(); inputVoiceError = ""; inputVoiceHeld = false
@@ -1430,10 +1457,14 @@ internal fun MainContent(
           MainBottomSurface("secondary-bottom-surface") {
             QuickComposer(connection, selectedTab, onQuickDraftChange, onQuickSubmit,
               quickActionsOpen, { quickActionsOpen = it }, onRemoveQuickAttachment,
-              onPreviewQuickImage, onPreviewQuickFile, onOpenChat = {
-                quickActionsOpen = false
-                onCreateConversation()
-                onSelectTab(HomeTab.Assistant)
+              onPreviewQuickImage, onPreviewQuickFile, quickComposerFocus,
+              inputVoiceMode, inputVoiceBusy || inputVoiceHeld, inputVoice.phase, inputVoiceError,
+              ::toggleInputVoice, voicePad = { modifier ->
+                VoiceInputPad(modifier, inputVoiceHeld, inputVoiceBusy, inputVoice.phase,
+                  inputVoiceDestination, inputVoiceElapsed, ::startInputVoice,
+                  { dx, dy -> inputVoiceDestination = voiceRecordingDestination(dx, dy, inputVoiceDestination) },
+                  ::finishInputVoice, { inputVoice.cancel(); inputVoiceError = ""; inputVoiceHeld = false },
+                  { deliverInputVoice(inputVoiceRetryDestination) })
               })
             AnimatedVisibility(visible = quickActionsOpen,
               enter = expandVertically(animationSpec = tween(220), expandFrom = Alignment.Bottom) +
@@ -1991,12 +2022,14 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
   actionsOpen: Boolean, onActionsOpenChange: (Boolean) -> Unit,
   onRemoveAttachment: (String) -> Unit,
   onPreviewImage: suspend (ChatAttachment) -> Bitmap?,
-  onPreviewFile: suspend (ChatAttachment) -> ByteArray?, onOpenChat: () -> Unit) {
+  onPreviewFile: suspend (ChatAttachment) -> ByteArray?, composerFocus: FocusRequester,
+  voiceMode: Boolean, voiceBusy: Boolean, voicePhase: String, voiceError: String,
+  onVoiceToggle: () -> Unit, voicePad: @Composable (Modifier) -> Unit) {
   val context = LocalContext.current
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val hasPayload = connection.quickDraftText.isNotBlank() || connection.quickAttachments.isNotEmpty()
-  val canSend = hasPayload && !connection.quickSending && !connection.quickAttachmentLoading &&
+  val canSend = hasPayload && !voiceBusy && !connection.quickSending && !connection.quickAttachmentLoading &&
     !connection.creatingConversation && !connection.sending && connection.realtimeStatus == "connected"
   val placeholder = when (tab) {
     HomeTab.Progress -> R.string.quick_progress_hint
@@ -2004,9 +2037,10 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
     HomeTab.Me -> R.string.quick_me_hint
     else -> R.string.quick_composer_hint
   }
-  val assistantLabel = stringResource(R.string.tab_assistant)
   val sendLabel = stringResource(R.string.quick_send)
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
+    if (voiceError.isNotBlank()) Text(voiceError, color = MaterialTheme.colorScheme.error,
+      modifier = Modifier.testTag("assistant-voice-error"))
     if (connection.quickError) Text(stringResource(R.string.quick_send_error), color = MaterialTheme.colorScheme.error)
     if (connection.quickAttachmentError) Text(stringResource(R.string.assistant_attachment_error),
       color = MaterialTheme.colorScheme.error)
@@ -2016,18 +2050,16 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
     Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
       .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(18.dp))
       .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-      IconButton(onClick = onOpenChat, enabled = !connection.quickSending,
-        modifier = Modifier.size(48.dp).semantics { contentDescription = assistantLabel }
-          .testTag("quick-voice")) {
-        Icon(painterResource(R.drawable.action_microphone), contentDescription = null,
-          tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-      }
-      BasicTextField(value = connection.quickDraftText, onValueChange = onChange,
+      VoiceInputToggle(voiceMode, voiceBusy || voicePhase != "idle" || connection.quickSending,
+        onVoiceToggle, tag = "quick-voice")
+      if (voiceMode || voicePhase != "idle") voicePad(Modifier.weight(1f))
+      else BasicTextField(value = connection.quickDraftText, onValueChange = onChange,
         modifier = Modifier.weight(1f).heightIn(min = 48.dp)
           .onFocusChanged { if (it.isFocused) onActionsOpenChange(false) }
+          .focusRequester(composerFocus)
           .padding(horizontal = 4.dp, vertical = 12.dp).testTag("quick-composer"),
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-        singleLine = true, enabled = !connection.quickSending,
+        singleLine = true, enabled = !voiceBusy && !connection.quickSending,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = { if (canSend) onSubmit() }),
         decorationBox = { innerTextField ->
@@ -2045,7 +2077,7 @@ private fun QuickComposer(connection: ConnectionUiState, tab: HomeTab,
           keyboardController?.hide()
         }
         onActionsOpenChange(!actionsOpen)
-      }, enabled = !connection.quickSending,
+      }, enabled = !voiceBusy && !connection.quickSending,
         modifier = Modifier.size(48.dp).semantics {
           contentDescription = if (actionsOpen) {
             context.getString(R.string.composer_close_actions)
@@ -2089,11 +2121,6 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
   val expandedComposer = composerValue.text.isNotEmpty() || connection.draftRefs.isNotEmpty() ||
     connection.draftAttachments.isNotEmpty()
   val showVoicePad = voiceMode || voicePhase != "idle"
-  val density = LocalDensity.current
-  val currentVoiceStart by rememberUpdatedState(onVoiceStart)
-  val currentVoiceMove by rememberUpdatedState(onVoiceMove)
-  val currentVoiceFinish by rememberUpdatedState(onVoiceFinish)
-  val currentVoiceCancel by rememberUpdatedState(onVoiceCancel)
   val toggleActions: () -> Unit = {
     if (!actionsOpen) {
       focusManager.clearFocus(force = true)
@@ -2147,54 +2174,14 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
     }
     Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer,
       RoundedCornerShape(18.dp)).testTag("assistant-composer-shell")) {
-      if (voiceHeld) Row(modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text("✕", color = if (voiceDestination == "cancel") MaterialTheme.colorScheme.error
-          else MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("◖))  %02d:%02d".format(voiceSeconds / 60, voiceSeconds % 60),
-          color = MaterialTheme.colorScheme.primary)
-        Text("☷", color = if (voiceDestination == "text") MaterialTheme.colorScheme.primary
-          else MaterialTheme.colorScheme.onSurfaceVariant)
-      }
       Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.Bottom) {
+        if (!expandedComposer) VoiceInputToggle(voiceMode,
+          voiceBusy || voicePhase != "idle" || connection.sending, onVoiceToggle)
         if (showVoicePad) {
-          if (voicePhase == "ready" && !voiceBusy) Row(modifier = Modifier.weight(1f).height(48.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onVoiceCancel, modifier = Modifier.weight(1f)
-              .testTag("assistant-voice-cancel")) { Text(stringResource(R.string.progress_cancel)) }
-            TextButton(onClick = onVoiceRetry, modifier = Modifier.weight(1f)
-              .testTag("assistant-voice-retry")) { Text(stringResource(R.string.voice_input_retry)) }
-          } else Box(modifier = Modifier.weight(1f).height(48.dp)
-            .pointerInput(voiceBusy, connection.sending) {
-              awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                if (!currentVoiceStart()) return@awaitEachGesture
-                var destination = "send"
-                var released = false
-                do {
-                  val event = awaitPointerEvent()
-                  val change = event.changes.firstOrNull { it.id == down.id }
-                  if (change == null) break
-                  val dx = (change.position.x - down.position.x) / density.density
-                  val dy = (change.position.y - down.position.y) / density.density
-                  destination = voiceRecordingDestination(dx, dy, destination)
-                  currentVoiceMove(dx, dy)
-                  released = !change.pressed
-                } while (!released)
-                if (released) currentVoiceFinish(destination) else currentVoiceCancel()
-              }
-            }.semantics { contentDescription = "Hold to speak" }
-            .testTag("assistant-voice-record"), contentAlignment = Alignment.Center) {
-            Text(when {
-              voiceBusy -> stringResource(R.string.voice_input_working)
-              voiceDestination == "cancel" -> stringResource(R.string.voice_input_release_cancel)
-              voiceDestination == "text" -> stringResource(R.string.voice_input_release_text)
-              voiceHeld -> stringResource(R.string.voice_input_release_send)
-              else -> stringResource(R.string.voice_input_hold)
-            }, color = if (voiceDestination == "cancel") MaterialTheme.colorScheme.error
-              else MaterialTheme.colorScheme.onSurface)
-          }
+          VoiceInputPad(Modifier.weight(1f), voiceHeld, voiceBusy, voicePhase,
+            voiceDestination, voiceSeconds, onVoiceStart, onVoiceMove, onVoiceFinish,
+            onVoiceCancel, onVoiceRetry)
         } else BasicTextField(value = composerValue, onValueChange = onComposerValueChange,
           modifier = Modifier.weight(1f).heightIn(min = 48.dp).focusRequester(composerFocus)
             .onFocusChanged { if (it.isFocused) onActionsOpenChange(false) }
@@ -2210,19 +2197,79 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
             }
           })
         if (!expandedComposer) {
-          VoiceInputToggle(voiceMode, voiceBusy || voicePhase != "idle" || connection.sending, onVoiceToggle)
           AssistantComposerButtons(connection, actionsOpen,
-            toggleActions, onSendMessage, onStopRun)
+            toggleActions, onSendMessage, onStopRun, voiceBusy || voiceHeld)
         }
       }
       if (expandedComposer) {
-        Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp),
+        Row(modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp),
           horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
           VoiceInputToggle(voiceMode, voiceBusy || voicePhase != "idle" || connection.sending, onVoiceToggle)
+          Spacer(Modifier.weight(1f))
           AssistantComposerButtons(connection, actionsOpen,
-            toggleActions, onSendMessage, onStopRun)
+            toggleActions, onSendMessage, onStopRun, voiceBusy || voiceHeld)
         }
       }
+    }
+  }
+}
+
+@Composable
+private fun VoiceInputPad(modifier: Modifier, voiceHeld: Boolean, voiceBusy: Boolean,
+  voicePhase: String, voiceDestination: String, voiceSeconds: Int,
+  onVoiceStart: () -> Boolean, onVoiceMove: (Float, Float) -> Unit,
+  onVoiceFinish: (String) -> Unit, onVoiceCancel: () -> Unit, onVoiceRetry: () -> Unit) {
+  val holdLabel = stringResource(R.string.voice_input_hold)
+  val density = LocalDensity.current
+  val currentVoiceStart by rememberUpdatedState(onVoiceStart)
+  val currentVoiceMove by rememberUpdatedState(onVoiceMove)
+  val currentVoiceFinish by rememberUpdatedState(onVoiceFinish)
+  val currentVoiceCancel by rememberUpdatedState(onVoiceCancel)
+  Column(modifier) {
+    if (voiceHeld) Row(modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 16.dp),
+      horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+      Text("✕", color = if (voiceDestination == "cancel") MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.onSurfaceVariant)
+      Text("◖))  %02d:%02d".format(voiceSeconds / 60, voiceSeconds % 60),
+        color = MaterialTheme.colorScheme.primary)
+      Text("☷", color = if (voiceDestination == "text") MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    if (voicePhase == "ready" && !voiceBusy) Row(modifier = Modifier.fillMaxWidth().height(48.dp),
+      verticalAlignment = Alignment.CenterVertically) {
+      TextButton(onClick = onVoiceCancel, modifier = Modifier.weight(1f)
+        .testTag("assistant-voice-cancel")) { Text(stringResource(R.string.progress_cancel)) }
+      TextButton(onClick = onVoiceRetry, modifier = Modifier.weight(1f)
+        .testTag("assistant-voice-retry")) { Text(stringResource(R.string.voice_input_retry)) }
+    } else Box(modifier = Modifier.fillMaxWidth().height(48.dp)
+      .pointerInput(voiceBusy) {
+        awaitEachGesture {
+          val down = awaitFirstDown(requireUnconsumed = false)
+          if (!currentVoiceStart()) return@awaitEachGesture
+          var destination = "send"
+          var released = false
+          do {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull { it.id == down.id }
+            if (change == null) break
+            val dx = (change.position.x - down.position.x) / density.density
+            val dy = (change.position.y - down.position.y) / density.density
+            destination = voiceRecordingDestination(dx, dy, destination)
+            currentVoiceMove(dx, dy)
+            released = !change.pressed
+          } while (!released)
+          if (released) currentVoiceFinish(destination) else currentVoiceCancel()
+        }
+      }.semantics { contentDescription = holdLabel }
+      .testTag("assistant-voice-record"), contentAlignment = Alignment.Center) {
+      Text(when {
+        voiceBusy -> stringResource(R.string.voice_input_working)
+        voiceDestination == "cancel" -> stringResource(R.string.voice_input_release_cancel)
+        voiceDestination == "text" -> stringResource(R.string.voice_input_release_text)
+        voiceHeld -> stringResource(R.string.voice_input_release_send)
+        else -> stringResource(R.string.voice_input_hold)
+      }, color = if (voiceDestination == "cancel") MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.onSurface)
     }
   }
 }
@@ -2238,11 +2285,13 @@ private fun voiceRecordingDestination(dx: Float, dy: Float, current: String): St
 }
 
 @Composable
-private fun VoiceInputToggle(active: Boolean, disabled: Boolean, onClick: () -> Unit) {
+private fun VoiceInputToggle(active: Boolean, disabled: Boolean, onClick: () -> Unit,
+  tag: String = "assistant-voice-toggle") {
+  val label = stringResource(if (active) R.string.voice_input_keyboard else R.string.assistant_action_voice)
   IconButton(onClick = onClick, enabled = !disabled,
     modifier = Modifier.size(48.dp).semantics {
-      contentDescription = if (active) "Switch to keyboard" else "Voice input"
-    }.testTag("assistant-voice-toggle")) {
+      contentDescription = label
+    }.testTag(tag)) {
     if (active) Text("⌨", color = MaterialTheme.colorScheme.primary,
       style = MaterialTheme.typography.titleLarge)
     else Icon(painterResource(R.drawable.action_microphone), contentDescription = null,
@@ -2272,11 +2321,11 @@ private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () ->
   )
   val pages = listOf(firstPage, secondPage)
   val pagerState = rememberPagerState(pageCount = { pages.size })
-  Column(modifier = Modifier.fillMaxWidth().testTag("$tagPrefix-action-panel")
-    .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(18.dp))
-    .padding(top = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+  Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).testTag("$tagPrefix-action-panel")
+    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(18.dp))
+    .height(196.dp).padding(top = 4.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
     HorizontalPager(state = pagerState, verticalAlignment = Alignment.Top,
-      modifier = Modifier.fillMaxWidth().height(178.dp)) { page ->
+      modifier = Modifier.fillMaxWidth().height(172.dp)) { page ->
       Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         pages[page].chunked(4).forEach { row ->
@@ -2285,6 +2334,7 @@ private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () ->
               val enabled = (id == "new-chat" && canCreate) ||
                 (id in setOf("voice", "voice-natural", "voice-assistant") && canCreate) ||
                 (id in setOf("reference-note", "reference-task") && canReference) ||
+                (id == "reference-file" && canPick) ||
                 (id in setOf("photos", "camera", "local-files") && canPick)
               TextButton(onClick = {
                 if (id == "new-chat") onCreateConversation()
@@ -2295,7 +2345,11 @@ private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () ->
                     else -> "natural"
                   })
                 else if (id in setOf("photos", "camera", "local-files")) onPick(id)
-                else onOpenReference(if (id == "reference-note") "note" else "task")
+                else onOpenReference(when (id) {
+                  "reference-note" -> "note"
+                  "reference-file" -> "file"
+                  else -> "task"
+                })
               }, enabled = enabled,
                 modifier = Modifier.weight(1f).height(84.dp).testTag("$tagPrefix-action-$id"),
                 contentPadding = PaddingValues(0.dp)) {
@@ -2326,7 +2380,7 @@ private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () ->
       pages.indices.forEach { page ->
         Box(modifier = Modifier.padding(horizontal = 4.dp).size(6.dp)
           .background(if (pagerState.currentPage == page) MaterialTheme.colorScheme.onSurfaceVariant
-            else MaterialTheme.colorScheme.outlineVariant, CircleShape))
+            else MaterialTheme.colorScheme.outline, CircleShape))
       }
     }
   }
@@ -2334,13 +2388,14 @@ private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () ->
 
 @Composable
 private fun AssistantComposerButtons(connection: ConnectionUiState, actionsOpen: Boolean,
-  onToggleActions: () -> Unit, onSendMessage: () -> Unit, onStopRun: () -> Unit) {
+  onToggleActions: () -> Unit, onSendMessage: () -> Unit, onStopRun: () -> Unit,
+  voiceBusy: Boolean = false) {
   val hasPayload = connection.draftText.isNotBlank() || connection.draftRefs.isNotEmpty() ||
     connection.draftAttachments.isNotEmpty()
   if (connection.activeRunId == null || !hasPayload) {
     val context = LocalContext.current
     IconButton(onClick = onToggleActions,
-      enabled = !connection.sending && connection.pendingDeleteId != connection.selectedConversationId,
+      enabled = !voiceBusy && !connection.sending && connection.pendingDeleteId != connection.selectedConversationId,
       modifier = Modifier.size(48.dp).semantics {
         contentDescription = if (actionsOpen) {
           context.getString(R.string.composer_close_actions)
@@ -2358,7 +2413,7 @@ private fun AssistantComposerButtons(connection: ConnectionUiState, actionsOpen:
       .semantics { contentDescription = sendLabel }.testTag("assistant-send")
       .background(if (connection.sending) MaterialTheme.colorScheme.surfaceContainerHigh
         else MaterialTheme.colorScheme.onSurface, CircleShape),
-      enabled = !connection.sending && !connection.taskScopeLoading &&
+      enabled = !voiceBusy && !connection.sending && !connection.taskScopeLoading &&
         !connection.attachmentLoading &&
         connection.draftModelReady && connection.realtimeStatus == "connected" &&
         connection.pendingInput == null && connection.pendingDeleteId != connection.selectedConversationId) {
@@ -2441,7 +2496,6 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   val selected = connection.conversations.firstOrNull { it.id == connection.selectedConversationId }
   var personalSettingsOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var messageSearchOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
-  var messageSearchQuery by remember(connection.selectedConversationId) { mutableStateOf("") }
   var modelPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var thinkingPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var pendingModelChoice by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
@@ -2624,8 +2678,11 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         .clickable { if (personalAgent != null) personalSettingsOpen = true else agentPickerOpen = true }
         .padding(start = 6.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        PersonalAgentAvatar(connection.personal.agentAvatar.takeIf { personalAgent != null },
-          personalAgent?.appearance ?: "loopi", 36.dp, active = true)
+        if (personalAgent != null) PersonalAgentAvatar(connection.personal.agentAvatar,
+          personalAgent.appearance, 36.dp, active = true)
+        else AgentAvatar(connection.agentAvatars[connection.selectedAgentId],
+          connection.agents.firstOrNull { it.id == connection.selectedAgentId }?.avatar.orEmpty(),
+          connection.selectedAgentId, 36.dp, true, Modifier.testTag("chat-agent-avatar"))
         Text(personalAgent?.displayName ?: selected?.takeUnless { it.isLocalDraft }?.title
           ?: stringResource(R.string.assistant_new_conversation),
           style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
@@ -2637,7 +2694,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f))
         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
         .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { messageSearchQuery = ""; messageSearchOpen = true }, modifier = Modifier.testTag("chat-header-search")) {
+        IconButton(onClick = { messageSearchOpen = true }, modifier = Modifier.testTag("chat-header-search")) {
           Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.chat_personal_search), modifier = Modifier.size(22.dp))
         }
         IconButton(onClick = { if (personalAgent != null) personalSettingsOpen = true else optionsOpen = true },
@@ -2688,9 +2745,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       } else if (!connection.historyLoading && connection.messages.isEmpty() &&
         connection.historyBefore == null && connection.activeRunId == null &&
         connection.liveText.isBlank() && connection.optimisticText.isBlank()) {
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()
-          .onSizeChanged { messageViewportHeight = it.height }, contentAlignment = Alignment.Center) {
-          AssistantWelcome(if (connection.contextLoading) null else
+        BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()
+          .onSizeChanged { messageViewportHeight = it.height }
+          .padding(bottom = bottomChromeHeight).testTag("assistant-welcome-viewport")) {
+          AssistantWelcome(maxHeight, if (connection.contextLoading) null else
             taskRecommendation(connection.taskWelcome) ?: projectRecommendation(connection.projectWelcome)) { prompt ->
             onActionsOpenChange(false)
             onComposerValueChange(TextFieldValue(prompt, selection = TextRange(prompt.length)))
@@ -2731,6 +2789,13 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             onViewMore = { messageDetailId = message.id },
             onSaveNote = if (message.role == "assistant" && message.text.isNotBlank())
               ({ onSaveMessageAsNote(message.id) }) else null,
+            savingNote = connection.savingMessageNoteId != null,
+            readAloudPhase = if (reader.state.sourceId == message.id) reader.state.phase else "idle",
+            onReadAloud = if (message.role == "assistant" && message.text.isNotBlank()) ({
+              if (reader.state.sourceId == message.id && reader.state.phase in listOf("playing", "paused"))
+                reader.toggle()
+              else reader.speak(message.text, message.id, Locale.getDefault().toLanguageTag())
+            }) else null,
             onOpenExecution = if (message.role == "assistant" &&
               (message.turnId != null || message.hasNonTextContent)) {
               { onOpenExecution(message.id) }
@@ -2805,86 +2870,131 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     }
   }
   }
-  if (referenceKind != null) ModalBottomSheet(onDismissRequest = { onReferenceKindChange(null) }) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+  val referenceFileSaving by rememberUpdatedState(referenceKind == "file" && connection.contextPanel.saving)
+  if (referenceKind != null) ModalBottomSheet(onDismissRequest = { if (!referenceFileSaving) onReferenceKindChange(null) },
+    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,
+      confirmValueChange = { it != androidx.compose.material3.SheetValue.Hidden || !referenceFileSaving })) {
+    var filePath by remember(connection.selectedConversationId) { mutableStateOf("") }
+    var fileAttachmentCount by remember { mutableIntStateOf(-1) }
+    val panel = connection.contextPanel
+    LaunchedEffect(referenceKind, referenceQuery, filePath) {
+      if (referenceKind == "file") {
+        if (referenceQuery.isNotEmpty()) delay(250)
+        onLoadContextPanel("files", filePath, referenceQuery)
+      }
+    }
+    LaunchedEffect(connection.draftAttachments.size, panel.saving) {
+      if (fileAttachmentCount >= 0 && !panel.saving &&
+        connection.draftAttachments.size > fileAttachmentCount) onReferenceKindChange(null)
+    }
+    Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(horizontal = 20.dp, vertical = 12.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text(stringResource(R.string.assistant_reference_title), style = MaterialTheme.typography.titleMedium)
+      Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.assistant_reference_title), style = MaterialTheme.typography.titleMedium,
+          modifier = Modifier.weight(1f))
+        TextButton(onClick = { onReferenceKindChange(null) }, enabled = !panel.saving) { Text(stringResource(R.string.assistant_close)) }
+      }
       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf("note" to R.string.assistant_action_reference_note,
-          "task" to R.string.assistant_action_reference_task).forEach { (kind, label) ->
-          TextButton(onClick = { onReferenceQueryChange(""); onReferenceKindChange(kind) },
+          "task" to R.string.assistant_action_reference_task,
+          "file" to R.string.assistant_action_reference_file).forEach { (kind, label) ->
+          TextButton(onClick = { filePath = ""; onReferenceQueryChange(""); onReferenceKindChange(kind) },
+            enabled = !panel.saving,
             modifier = Modifier.weight(1f).testTag("assistant-reference-tab-$kind")) {
             Text(stringResource(label), color = if (referenceKind == kind) MaterialTheme.colorScheme.primary
               else MaterialTheme.colorScheme.onSurfaceVariant)
           }
         }
-        TextButton(onClick = {}, enabled = false, modifier = Modifier.weight(1f)) {
-          Text(stringResource(R.string.assistant_action_reference_file))
-        }
       }
       OutlinedTextField(value = referenceQuery, onValueChange = { if (it.length <= 4096) onReferenceQueryChange(it) },
         label = { Text(stringResource(R.string.assistant_reference_search)) },
-        modifier = Modifier.fillMaxWidth().testTag("assistant-reference-search"), singleLine = true)
-      if (connection.draftRefs.size >= 5) Text(stringResource(R.string.assistant_reference_limit),
+        modifier = Modifier.fillMaxWidth().testTag("assistant-reference-search"), singleLine = true, enabled = !panel.saving)
+      if (referenceKind != "file" && connection.draftRefs.size >= 5) Text(stringResource(R.string.assistant_reference_limit),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-      val picker = connection.referencePicker
-      val matching = picker.gatewayId == connection.profile?.gatewayId &&
-        picker.conversationId == connection.selectedConversationId &&
-        picker.kind == referenceKind && picker.query == referenceQuery.trim()
-      if (!matching || picker.loading) BrandLoadingPanel(minHeight = 120.dp)
-      else if (picker.error) {
-        Text(stringResource(R.string.assistant_reference_error), color = MaterialTheme.colorScheme.error)
-        TextButton(onClick = { onLoadReferences(referenceKind, referenceQuery) },
-          modifier = Modifier.testTag("assistant-reference-retry")) {
-          Text(stringResource(R.string.assistant_context_retry))
+      if (referenceKind == "file") {
+        if (filePath.isNotBlank()) TextButton(onClick = {
+          filePath = filePath.substringBeforeLast('/', "")
+          onReferenceQueryChange("")
+        }, enabled = !panel.saving, modifier = Modifier.testTag("assistant-reference-file-parent")) {
+          Text("‹ $filePath", maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-      } else if (picker.items.isEmpty()) {
-        Text(stringResource(R.string.assistant_reference_empty),
-          color = MaterialTheme.colorScheme.onSurfaceVariant)
-      } else LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
-        items(picker.items, key = { it.kind + ":" + it.id }) { item ->
-          val alreadyAdded = connection.draftRefs.any { it.kind == item.kind && it.sourceId == item.id }
-          TextButton(onClick = { if (onAddDraftRef(item)) onReferenceKindChange(null) },
-            enabled = !alreadyAdded && connection.draftRefs.size < 5 && !connection.sending &&
-              connection.pendingInput == null,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-              .testTag("assistant-reference-${item.kind}-${item.id}")) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-              Text(item.title.ifBlank { stringResource(R.string.notes_untitled) }, maxLines = 1,
-                overflow = TextOverflow.Ellipsis)
-              if (item.description.isNotBlank()) Text(item.description,
-                style = MaterialTheme.typography.bodySmall, maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val matchingFiles = panel.gatewayId == connection.profile?.gatewayId &&
+          panel.conversationId == connection.selectedConversationId && panel.mode == "files" &&
+          panel.filePath == filePath && panel.fileQuery == referenceQuery
+        if (!matchingFiles || panel.loading) BrandLoadingPanel(minHeight = 120.dp)
+        else {
+          if (panel.error) {
+            Text(stringResource(R.string.assistant_reference_error), color = MaterialTheme.colorScheme.error)
+            TextButton(onClick = { onLoadContextPanel("files", filePath, referenceQuery) }, enabled = !panel.saving,
+              modifier = Modifier.testTag("assistant-reference-retry")) {
+              Text(stringResource(R.string.assistant_context_retry))
+            }
+          }
+          if (!panel.error && panel.files.isEmpty()) Text(stringResource(R.string.assistant_reference_empty),
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+          if (panel.saving) BrandLoadingPanel(minHeight = 48.dp)
+          LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            items(panel.files, key = { it.id }) { file ->
+              val directory = file.kind == "directory"
+              val added = connection.draftAttachments.any { it.workspaceRelativePath == file.relativePath }
+              ContextRow(file.name, file.relativePath, "assistant-reference-file-${file.id}",
+                iconRes = if (directory) R.drawable.action_folder else R.drawable.tab_notes,
+                enabled = !panel.saving && !connection.sending && !connection.attachmentLoading &&
+                  connection.pendingInput == null && (directory || (!added && connection.draftAttachments.size < 10))) {
+                if (directory) { filePath = file.relativePath; onReferenceQueryChange("") }
+                else { fileAttachmentCount = connection.draftAttachments.size; onAddContextFile(file) }
+              }
+            }
+          }
+        }
+      } else {
+        val picker = connection.referencePicker
+        val matching = picker.gatewayId == connection.profile?.gatewayId &&
+          picker.conversationId == connection.selectedConversationId &&
+          picker.kind == referenceKind && picker.query == referenceQuery.trim()
+        if (!matching || picker.loading) BrandLoadingPanel(minHeight = 120.dp)
+        else if (picker.error) {
+          Text(stringResource(R.string.assistant_reference_error), color = MaterialTheme.colorScheme.error)
+          TextButton(onClick = { onLoadReferences(referenceKind, referenceQuery) },
+            modifier = Modifier.testTag("assistant-reference-retry")) {
+            Text(stringResource(R.string.assistant_context_retry))
+          }
+        } else if (picker.items.isEmpty()) {
+          Text(stringResource(R.string.assistant_reference_empty),
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+          items(picker.items, key = { it.kind + ":" + it.id }) { item ->
+            val alreadyAdded = connection.draftRefs.any { it.kind == item.kind && it.sourceId == item.id }
+            TextButton(onClick = { if (onAddDraftRef(item)) onReferenceKindChange(null) },
+              enabled = !alreadyAdded && connection.draftRefs.size < 5 && !connection.sending &&
+                connection.pendingInput == null,
+              modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                .testTag("assistant-reference-${item.kind}-${item.id}")) {
+              Column(modifier = Modifier.fillMaxWidth()) {
+                Text(item.title.ifBlank { stringResource(R.string.notes_untitled) }, maxLines = 1,
+                  overflow = TextOverflow.Ellipsis)
+                if (item.description.isNotBlank()) Text(item.description,
+                  style = MaterialTheme.typography.bodySmall, maxLines = 2,
+                  overflow = TextOverflow.Ellipsis,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
             }
           }
         }
       }
     }
   }
+
   val closeOptions: () -> Unit = {
     optionsOpen = false; contextOpen = false; modelPickerOpen = false
     thinkingPickerOpen = false; agentPickerOpen = false
     pendingModelChoice = null; pendingThinkingChoice = null
   }
   if (personalSettingsOpen) PersonalAgentProfileSheet(connection.personal, { personalSettingsOpen = false },
-    onLoadAgentVoices, onUpdateAgentProfile, onLoadProactivity, onSaveProactivity, onUploadAvatar,
-    { personalSettingsOpen = false; optionsOpen = true })
-  if (messageSearchOpen) ModalBottomSheet(onDismissRequest = { messageSearchOpen = false }) {
-    Column(Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      OutlinedTextField(messageSearchQuery, { messageSearchQuery = it }, Modifier.fillMaxWidth(),
-        label = { Text(stringResource(R.string.chat_personal_search)) })
-      Text(stringResource(R.string.chat_personal_search_loaded), style = MaterialTheme.typography.bodySmall)
-      if (connection.historyBefore != null) TextButton(onClick = onLoadOlderHistory, enabled = !connection.historyLoadingOlder) {
-        Text(stringResource(R.string.progress_refresh))
-      }
-      androidx.compose.foundation.lazy.LazyColumn {
-        items(connection.messages.filter { messageSearchQuery.isNotBlank() && it.text.contains(messageSearchQuery.trim(), ignoreCase = true) }, key = { it.id }) { message ->
-          Text(message.text, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
-        }
-      }
-    }
-  }
+    onLoadAgentVoices, onUpdateAgentProfile, onLoadProactivity, onSaveProactivity, onUploadAvatar)
+  if (messageSearchOpen) ChatMessageSearch(connection.messages, connection.historyBefore != null,
+    connection.historyLoadingOlder, onLoadOlderHistory, onClose = { messageSearchOpen = false },
+    onSelect = { id -> messageSearchOpen = false; messageDetailId = id })
   if (optionsOpen || contextOpen || modelPickerOpen || thinkingPickerOpen || agentPickerOpen)
     ModalBottomSheet(onDismissRequest = closeOptions,
       sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -3110,19 +3220,19 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       }
     }
   }
-  if (connection.executionMessageId != null) ModalBottomSheet(onDismissRequest = {
-    onCloseExecution()
-  }) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      Text(stringResource(R.string.assistant_execution), style = MaterialTheme.typography.titleLarge)
-      ExecutionDetails(connection.executionDetail, connection.executionLoading, connection.executionError,
-        connection.activeRunId != null, onRetryExecution, openLink)
-      TextButton(onClick = {
-        onCloseExecution()
-      }, modifier = Modifier.testTag("execution-back")) {
-        Text(stringResource(R.string.assistant_close))
+  if (connection.executionMessageId != null) ModalBottomSheet(onDismissRequest = onCloseExecution,
+    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), dragHandle = null) {
+    Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f).testTag("execution-sheet")) {
+      Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        TextButton(onClick = onCloseExecution, modifier = Modifier.testTag("execution-back")) {
+          Text(stringResource(R.string.assistant_close))
+        }
+        Text(stringResource(R.string.assistant_execution), style = MaterialTheme.typography.titleLarge)
       }
+      HorizontalDivider()
+      ExecutionDetails(connection.executionDetail, connection.executionLoading, connection.executionError,
+        connection.activeRunId != null, onRetryExecution, openLink, Modifier.weight(1f))
     }
   }
   previewRequest?.let { request ->
@@ -3219,20 +3329,27 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
 
 @Composable
 private fun ExecutionDetails(detail: ExecutionDetail?, loading: Boolean, error: Boolean, live: Boolean,
-  onRetry: () -> Unit, onOpenLink: (String) -> Unit) {
+  onRetry: () -> Unit, onOpenLink: (String) -> Unit, modifier: Modifier = Modifier) {
   var expandedGroupId by remember(detail?.turnId) { mutableStateOf<String?>(null) }
   val groups = remember(detail, live) { ExecutionGroups.group(detail?.steps.orEmpty(), live) }
-  if (loading && detail == null) BrandLoadingPanel(modifier = Modifier.testTag("execution-loading"))
-  if (error) {
-    Text(stringResource(R.string.assistant_execution_error), color = MaterialTheme.colorScheme.error)
-    TextButton(onClick = onRetry, modifier = Modifier.testTag("execution-retry")) {
-      Text(stringResource(R.string.assistant_execution_retry))
-    }
-  }
-  if (!loading && !error && groups.isEmpty()) Text(stringResource(R.string.assistant_execution_empty))
-  if (groups.isNotEmpty()) LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp),
+  LazyColumn(modifier = modifier.fillMaxWidth().testTag("execution-scroll"),
+    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
     verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    items(groups, key = { it.id }) { group ->
+    if (loading && detail == null) item(key = "loading") {
+      BrandLoadingPanel(modifier = Modifier.testTag("execution-loading"))
+    }
+    if (error) item(key = "error") {
+      Column {
+        Text(stringResource(R.string.assistant_execution_error), color = MaterialTheme.colorScheme.error)
+        TextButton(onClick = onRetry, modifier = Modifier.testTag("execution-retry")) {
+          Text(stringResource(R.string.assistant_execution_retry))
+        }
+      }
+    }
+    if (!loading && !error && groups.isEmpty()) item(key = "empty") {
+      Text(stringResource(R.string.assistant_execution_empty))
+    }
+    items(groups, key = { "group-${it.id}" }) { group ->
       if (group.kind == "progress") {
         SelectionContainer { Text(group.steps.first().text, style = MaterialTheme.typography.bodyMedium) }
       } else {
@@ -3454,7 +3571,7 @@ private fun ConversationsScreen(
     title = { Text(stringResource(R.string.conversations_share)) },
     text = { Text(stringResource(R.string.conversations_share_error)) },
     confirmButton = { TextButton(onClick = onDismissShare) {
-      Text(stringResource(R.string.progress_back))
+      Text(stringResource(R.string.assistant_close))
     } })
   val share = connection.conversationShareResult
   if (share != null) {
@@ -3879,12 +3996,13 @@ private fun ContextDetails(connection: ConnectionUiState, onRetry: () -> Unit,
     if (fileAttachmentCount >= 0 && !panel.saving &&
       connection.draftAttachments.size > fileAttachmentCount) onClose()
   }
+  BackHandler {
+    if (mode != "context") mode = "context" else onBackToOptions()
+  }
   Column(modifier = Modifier.fillMaxWidth().height(sheetHeight)
     .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 24.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-      TextButton(onClick = { if (mode == "context") onBackToOptions() else mode = "context" },
-        modifier = Modifier.testTag("context-back")) { ActionIcon(R.drawable.action_chevron_left, size = 20.dp) }
       Text(stringResource(R.string.assistant_context), modifier = Modifier.weight(1f),
         style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
       TextButton(onClick = onClose, modifier = Modifier.testTag("context-close")) {
@@ -4041,17 +4159,17 @@ private fun SessionFilesDetails(panel: ContextPanelUiState,
       catch (error: CancellationException) { throw error }
       catch (_: Exception) { byteArrayOf() }
   }
+  BackHandler(enabled = selected != null || path.isNotBlank()) {
+    if (selected != null) selected = null
+    else {
+      path = path.substringBeforeLast('/', "")
+      onLoadPanel("files", path, query)
+    }
+  }
   Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f)
     .padding(horizontal = 20.dp, vertical = 8.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-      TextButton(onClick = {
-        if (selected != null) selected = null
-        else if (path.isNotBlank()) {
-          path = path.substringBeforeLast('/', "")
-          onLoadPanel("files", path, query)
-        } else onClose()
-      }, modifier = Modifier.testTag("session-files-back")) { ActionIcon(R.drawable.action_chevron_left, size = 20.dp) }
       Text(stringResource(R.string.assistant_session_files),
         style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
         modifier = Modifier.weight(1f))
@@ -4183,10 +4301,7 @@ private fun PairingScreen(
     Row(modifier = Modifier.fillMaxWidth().height(56.dp)
       .padding(start = 16.dp, end = 12.dp),
       verticalAlignment = Alignment.CenterVertically) {
-      if (secondary) IconButton(onClick = closeSecondary, enabled = !busy,
-        modifier = Modifier.size(44.dp).testTag("pairing-back")) {
-        ActionIcon(R.drawable.action_chevron_left, size = 20.dp)
-      } else {
+      if (!secondary) {
         Image(painterResource(R.drawable.brand_mark), contentDescription = "xopc",
           modifier = Modifier.size(32.dp))
         Text("xopc", style = MaterialTheme.typography.titleLarge,

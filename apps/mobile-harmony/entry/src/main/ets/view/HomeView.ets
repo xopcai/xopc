@@ -425,13 +425,10 @@ export struct XopcHomeView {
       NavDestination() {
         Column() {
           Row({ space: 8 }) {
-            Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
-              .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-              .accessibilityText($r('app.string.back')).onClick((): void => { this.pathStack.pop(); })
             Text((param as XopcMobileRoute).title || $r('app.string.task_open_conversation'))
               .fontSize(18).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
               .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          }.width('100%').padding({ left: 8, right: 20, top: 8, bottom: 4 })
+          }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 4 })
           Column() {
             XopcChatView({ requestedId: (param as XopcMobileRoute).prompt ?? '',
               taskId: (param as XopcMobileRoute).itemId, activePage: true, embedded: true,

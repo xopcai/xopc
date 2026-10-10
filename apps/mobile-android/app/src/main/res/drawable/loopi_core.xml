@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- HarmonyOS loopi_core.svg geometry shares the ring's animation viewport. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:width="108dp" android:height="108dp" android:viewportWidth="304" android:viewportHeight="304">
+  <group android:translateX="-48" android:translateY="-38">
+    <group android:translateY="6"><path android:pathData="M130,190 C130,153 156,131 200,131 C244,131 270,153 270,190 C270,229 244,250 200,250 C156,250 130,229 130,190 Z" android:fillColor="#33667078" /></group>
+    <path android:pathData="M130,190 C130,153 156,131 200,131 C244,131 270,153 270,190 C270,229 244,250 200,250 C156,250 130,229 130,190 Z" android:strokeColor="#BFFFFEF9" android:strokeWidth="1.2">
+      <aapt:attr name="android:fillColor"><gradient android:type="radial" android:centerX="173" android:centerY="153" android:gradientRadius="136">
+        <item android:offset="0" android:color="#FFFEF9" /><item android:offset="0.62" android:color="#F9F6EF" /><item android:offset="1" android:color="#DDDAD2" />
+      </gradient></aapt:attr>
+    </path>
+    <path android:pathData="M143,171 C155,143 176,135 201,135 C223,135 244,145 256,165" android:fillColor="@android:color/transparent" android:strokeColor="#59FFFFFF" android:strokeWidth="2" android:strokeLineCap="round" />
+    <path android:pathData="M160,207 A8,3.2 0,1 0,176,207 A8,3.2 0,1 0,160,207 M224,207 A8,3.2 0,1 0,240,207 A8,3.2 0,1 0,224,207" android:fillColor="#80EAC1AE" />
+    <path android:pathData="M193,207 Q200,215 207,207" android:fillColor="@android:color/transparent" android:strokeColor="#293438" android:strokeWidth="2.6" android:strokeLineCap="round" />
+  </group>
+</vector>

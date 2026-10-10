@@ -33,3 +33,16 @@ internal fun PersonalAgentAvatar(avatar: Bitmap?, appearance: String, extent: Dp
     }
   }
 }
+
+
+@Composable
+internal fun AgentAvatar(avatar: Bitmap?, reference: String, agentId: String, extent: Dp, active: Boolean,
+  modifier: Modifier = Modifier) {
+  if (avatar != null) PersonalAgentAvatar(avatar, "custom", extent, active, modifier)
+  else if (reference.startsWith("xopc:loopi:")) PersonalAgentAvatar(null,
+    when (reference.substringAfterLast(':')) { "care" -> "loopi-care"; "curious" -> "loopi-curious"; else -> "loopi" }, extent, active, modifier)
+  else Box(modifier.size(extent).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
+    contentAlignment = Alignment.Center) {
+    androidx.compose.material3.Text(agentId.take(1).uppercase(), color = MaterialTheme.colorScheme.onSecondaryContainer)
+  }
+}

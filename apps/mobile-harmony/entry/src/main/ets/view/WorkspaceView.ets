@@ -941,9 +941,6 @@ export struct XopcWorkspaceView {
     NavDestination() {
     Column() {
       Row({ space: 12 }) {
-        Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
-          .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back'))
-          .enabled(!this.model.busy || !!this.model.openingId).onClick((): void => { this.goBack(); })
         Text(this.heading).layoutWeight(1).fontSize(22).lineHeight(30).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
         if (!this.model.selected && !this.model.openingId) {
           Button({ type: ButtonType.Circle }) {

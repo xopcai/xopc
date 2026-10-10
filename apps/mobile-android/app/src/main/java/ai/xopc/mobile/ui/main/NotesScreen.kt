@@ -297,19 +297,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically) {
       if (fileBrowserOpen || editorOpen || selectedId != null) {
-        TextButton(onClick = {
-        if (fileBrowserOpen) {
-          when {
-            selectedFile != null -> selectedFile = null
-            filePath.isNotEmpty() -> filePath = filePath.substringBeforeLast('/', "")
-            fileSpaceId != null -> fileSpaceId = null
-            else -> fileBrowserOpen = false
-          }
-        } else if (editorOpen) closeEditor() else selectedId = null
-      },
-          modifier = Modifier.width(72.dp).testTag("notes-back")) {
-          ActionIcon(R.drawable.action_chevron_left, size = 20.dp)
-        }
+
         Text(if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
           style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
           modifier = Modifier.weight(1f))
@@ -439,7 +427,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           content, modifier = Modifier.heightIn(max = 420.dp))
       } },
       confirmButton = { TextButton(onClick = { previewAttachment = null }) {
-        Text(stringResource(R.string.progress_back))
+        Text(stringResource(R.string.assistant_close))
       } })
   }
   if (aiOpen) ModalBottomSheet(onDismissRequest = { aiOpen = false },
@@ -604,6 +592,10 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   val detail = state.detail?.takeIf { it.id == selectedId }
   if (historyOpen && detail != null) ModalBottomSheet(onDismissRequest = { historyOpen = false },
     modifier = Modifier.testTag("note-history-sheet")) {
+    BackHandler(enabled = historyTimestamp != null) {
+      historyTimestamp = null
+      onLoadHistory()
+    }
     Column(modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp)
       .padding(horizontal = 20.dp, vertical = 12.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -620,10 +612,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           Text(stringResource(R.string.progress_refresh))
         }
       } else if (state.snapshot?.noteId == detail.id) {
-        OutlinedButton(onClick = { historyTimestamp = null; onLoadHistory() },
-          modifier = Modifier.testTag("note-history-list-back")) {
-          Text(stringResource(R.string.progress_back))
-        }
+
         Text(state.snapshot.title ?: detail.title, style = MaterialTheme.typography.titleMedium)
         Column(modifier = Modifier.weight(1f, fill = false)
           .verticalScroll(rememberScrollState()).testTag("note-history-preview")) {
@@ -658,7 +647,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       Text(stringResource(R.string.notes_restore_version))
     } },
     dismissButton = { TextButton(onClick = { restoreConfirmOpen = false }) {
-      Text(stringResource(R.string.progress_back))
+      Text(stringResource(R.string.progress_cancel))
     } })
   if (deleteConfirmOpen) AlertDialog(onDismissRequest = { deleteConfirmOpen = false },
     title = { Text(stringResource(R.string.notes_delete)) },
@@ -669,7 +658,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     } },
     dismissButton = { TextButton(onClick = { deleteConfirmOpen = false },
       modifier = Modifier.testTag("note-cancel-delete")) {
-      Text(stringResource(R.string.progress_back))
+      Text(stringResource(R.string.progress_cancel))
     } })
   if (moreOpen && detail != null) ModalBottomSheet(onDismissRequest = { moreOpen = false },
     modifier = Modifier.testTag("note-more-sheet")) {
@@ -717,7 +706,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   if (state.shareError) AlertDialog(onDismissRequest = onDismissShare,
     title = { Text(stringResource(R.string.notes_share)) },
     text = { Text(stringResource(R.string.notes_share_error)) },
-    confirmButton = { TextButton(onClick = onDismissShare) { Text(stringResource(R.string.progress_back)) } })
+    confirmButton = { TextButton(onClick = onDismissShare) { Text(stringResource(R.string.assistant_close)) } })
   val share = state.share?.takeIf { it.noteId == selectedId && detail?.id == selectedId }
   if (share != null) ModalBottomSheet(onDismissRequest = onDismissShare,
     modifier = Modifier.testTag("note-share-sheet")) {
@@ -766,7 +755,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       Text(stringResource(R.string.notes_tags_save))
     } },
     dismissButton = { TextButton(onClick = { tagsOpen = false }) {
-      Text(stringResource(R.string.progress_back))
+      Text(stringResource(R.string.assistant_close))
     } })
 }
 

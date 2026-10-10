@@ -85,9 +85,6 @@ export struct XopcFilesView {
   @Builder
   header() {
     Row({ space: 8 }) {
-      Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground]) }
-        .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back'))
-        .enabled(!this.model.busy).onClick((): void => { this.goBack(); })
       Text($r('app.string.files')).fontSize(24).fontWeight(FontWeight.Bold).layoutWeight(1).fontColor(this.colors.foreground)
       if (this.model.space?.writable && !this.model.selected) {
         Button() {

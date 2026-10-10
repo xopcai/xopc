@@ -78,7 +78,10 @@ struct AssistantExecutionSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .presentationDetents([.fraction(0.92)])
+        .presentationDragIndicator(.hidden)
+        .presentationContentInteraction(.scrolls)
     }
 
     private func symbol(for status: String) -> String {

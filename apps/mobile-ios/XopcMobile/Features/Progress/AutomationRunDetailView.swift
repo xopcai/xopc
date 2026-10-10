@@ -95,7 +95,6 @@ struct AutomationRunDetailView: View {
                         }
                         .disabled(isWorking)
                     }
-                    Button("返回自动化", systemImage: "clock") { dismiss() }
                 }
             } else if isLoading {
                 ProgressListSkeleton()
