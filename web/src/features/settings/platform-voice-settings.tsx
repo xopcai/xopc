@@ -6,11 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { modelDisplayName } from '@/lib/model-display-name';
 import { useLocaleStore } from '@/stores/locale-store';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 
 export function PlatformVoiceSettings({ disabled = false }: { disabled?: boolean }) {
-  const zh = useLocaleStore(state => state.language) === 'zh';
+  const language = useLocaleStore(state => state.language);
+  const zh = language === 'zh';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const { data, mutate, error: loadError } = useSWR(apiUrl('/api/voice/catalog'), async (url: string) => {
@@ -44,10 +46,10 @@ export function PlatformVoiceSettings({ disabled = false }: { disabled?: boolean
         <label className="space-y-1 text-sm"><span>{labels[mode]}</span><Select className="w-full" value={selected?.model ?? ''} disabled={busy || disabled || !models.length} onChange={event => void request({ mode, model: event.target.value })}>
           <SelectOption value="" disabled>{zh ? '选择模型' : 'Choose model'}</SelectOption>
           {selected && !model ? <SelectOption value={selected.model} disabled>{selected.model} · {zh ? '不可用' : 'Unavailable'}</SelectOption> : null}
-          {models.map(model => <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>)}
+          {models.map(model => <SelectOption key={model.id} value={model.id}>{modelDisplayName(model, language)}</SelectOption>)}
         </Select>{!models.length ? <span className="text-xs text-fg-muted">{zh ? '暂无可用模型' : 'No available model'}</span> : null}</label>
         {model && model.voice.voices.length > 0 ? <label className="space-y-1 text-sm"><span>{zh ? '音色' : 'Voice'}</span><Select className="w-full" value={selected?.voice ?? ''} disabled={busy || disabled} onChange={event => void request({ mode, model: model.id, voice: event.target.value })}>
-          {model.voice.voices.map(voice => <SelectOption key={voice.id} value={voice.id}>{voice.name}{voice.gender ? ` · ${zh ? voice.gender === 'female' ? '女声' : '男声' : voice.gender}` : ''}{voice.style ? ` · ${voice.style}` : ''}</SelectOption>)}
+          {model.voice.voices.map(voice => <SelectOption key={voice.id} value={voice.id}>{modelDisplayName(voice, language)}{voice.gender ? ` · ${zh ? voice.gender === 'female' ? '女声' : '男声' : voice.gender}` : ''}{voice.style ? ` · ${voice.style}` : ''}</SelectOption>)}
         </Select>{model.voice.voices.find(voice => voice.id === (selected?.voice ?? model.voice.defaultVoice))?.description ? <span className="block text-xs text-fg-muted">{model.voice.voices.find(voice => voice.id === (selected?.voice ?? model.voice.defaultVoice))?.description}</span> : null}</label> : null}
       </div>;
     })}
