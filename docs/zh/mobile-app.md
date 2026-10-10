@@ -2,6 +2,16 @@
 
 在自己的电脑上运行 xopc，用手机继续同一份工作。电脑保存工作区和会话，手机负责查看、补充要求和处理工作。
 
+## 下载与平台差异
+
+| 平台 | 当前获取方式 |
+| --- | --- |
+| Android | [官网移动端下载](https://xopc.ai/zh#mobile-download)或 [Android Releases](https://github.com/xopcai/xopc/releases?q=mobile-android)中的 APK；发布页附有校验文件 |
+| iOS | 以[官网当前分发渠道](https://xopc.ai/zh#mobile-download)为准，不代表已在 App Store 全面上架 |
+| HarmonyOS | 官网目前标为内测，暂未开放公开下载 |
+
+同时更新手机与电脑。各平台录音、通话、后台运行和媒体能力可能不同；配对成功不代表功能完全相同。手机是连接现有 xopc 实例的客户端，电脑休眠或网关退出会中断连接。
+
 ## 连接工作电脑
 
 1. 在电脑上打开 xopc，点击侧栏的 **连接手机**。

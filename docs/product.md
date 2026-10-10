@@ -1,12 +1,14 @@
 # Product philosophy
 
-> **Personal AI for the one-person company.**
+> **Open-source, local-first personal AI. Chat with Ada, delegate tasks, and work with files and projects.**
 
 xopc is personal AI for the one-person company. It runs in your environment, remembers your goals and context, and helps move work forward across conversations, tools, and time. Instead of starting over every time, xopc picks up where you left off—so it becomes more useful the longer you work together.
 
 Working independently should not mean working alone. xopc brings memory, context, and intelligence into everything you do while keeping direction, judgment, creativity, and final decisions with you.
 
 It is not an AI employee waiting for a job description, a coding agent confined to one repository, or a task manager that expects you to organize everything first. Models, Agents, Tasks, Projects, Workflows, and Automations are supporting capabilities. The product is the long-term relationship they make possible.
+
+Ada is the personal Agent included in xopc: a conversation for goals, preferences, delegation, and returned results. The workspace is the direct path for files and projects. Both support independent work in the same installation.
 
 ## Let AI carry the execution. Keep the direction human.
 
@@ -137,3 +139,7 @@ Message volume and automatic task count are not the north-star measure. The more
 Equally important: did xopc reduce the repeatable work the person had to carry without weakening their sense of control, and return meaningful time and attention to them?
 
 > **One person. One AI. A new kind of company.**
+
+## Start from the current experience
+
+[Meet Ada](./personal-ai.md) · [Delegate and receive results](./task-delegation.md) · [Work with files and projects](./workspace-guide.md) · [Task acceptance](./task-review.md).

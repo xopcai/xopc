@@ -239,3 +239,7 @@ xopc `v0.0.268` 修复了一个问题：没有 tab binding 的浏览器动作会
 需要保存可重复网页任务时，继续阅读[浏览器自动化](./browser-automations.md)。实现细节和威胁模型见仓库中的 [Chrome 扩展 Side Panel 技术方案](https://github.com/xopcai/xopc/blob/main/docs/design/chrome-extension-side-panel-chat.md)。
 
 麦克风授权失败时，点击“授权麦克风”打开扩展授权页。授权页仅请求权限并立即释放麦克风；完成后返回侧栏重新点击录音。若仍被拒绝，请检查浏览器和系统的麦克风权限。
+
+## 录制与回放
+
+扩展侧栏提供浏览器录制，可选择目标网页、开始、暂停并完成保存，然后检查参数并测试回放。需要录制功能的扩展版本与兼容网关；完整步骤和边界见[浏览器自动化](./browser-automations.md#录制自己的操作)。

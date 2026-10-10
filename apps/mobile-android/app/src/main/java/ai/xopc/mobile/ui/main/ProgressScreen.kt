@@ -244,7 +244,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     if (page == "automation-run") state.automations.rerunNavigationId?.let(::openRun)
   }
   Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp)) {
-    if (page != "workflows") Row(modifier = Modifier.fillMaxWidth(),
+    if (page != "workflows") Row(modifier = Modifier.fillMaxWidth()
+      .padding(bottom = if (page == "overview") 12.dp else 0.dp).testTag("progress-header"),
       horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
       Text(when (page) {
         "tasks" -> stringResource(R.string.progress_tasks)

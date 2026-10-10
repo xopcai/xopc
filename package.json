@@ -1,7 +1,7 @@
 {
   "name": "@xopcai/xopc",
   "version": "0.0.369",
-  "description": "Local-first personal AI for the one-person company, with durable context, tasks, workflows, automations, and local or cloud models.",
+  "description": "Local-first personal AI with Ada, task delegation, files, projects, workflows, and automations. Use cloud or local models.",
   "packageManager": "pnpm@11.9.0",
   "type": "module",
   "main": "dist/src/index.js",
@@ -129,6 +129,7 @@
     "ai-memory",
     "automation",
     "byok",
+    "browser-automation",
     "cli",
     "desktop-app",
     "electron",

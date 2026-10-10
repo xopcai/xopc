@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="brand_surface">#EEF1F5</color>
+    <!-- Launcher artwork stays light in both system appearances, matching HarmonyOS. -->
+    <color name="launcher_surface">#EEF1F5</color>
 </resources>

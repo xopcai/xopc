@@ -8,7 +8,7 @@ The primary five-tab dock uses the HarmonyOS compact rounded hierarchy and brand
 
 ## Build
 
-The Android 26+ adaptive launcher icon now uses the HarmonyOS Human–AI Loop mark, with a monochrome themed-icon layer. Android 12+ uses the platform splash screen; Android 8–11 uses a matching window background. Both select the HarmonyOS light/dark launch mark and surface colors. The older Android Studio starter icon assets remain in the source tree but are not selected on the supported API range.
+The Android 26+ adaptive launcher icon uses the same fixed light artwork as the HarmonyOS app icon, generated with `pnpm assets:brand --target=android`, with a monochrome themed-icon layer. Its artwork and background do not change with system dark mode. Android 12+ uses the platform splash screen; Android 8–11 uses a matching window background. Both splash screens select the HarmonyOS light/dark launch mark and surface colors. The older Android Studio starter icon assets remain in the source tree but are not selected on the supported API range.
 
 Open `apps/mobile-android` in Android Studio, or run `./gradlew :app:assembleDebug` in this directory. The application ID is `ai.xopc.xopc`; minimum Android API is 26. No secrets or local SDK path should be committed.
 
