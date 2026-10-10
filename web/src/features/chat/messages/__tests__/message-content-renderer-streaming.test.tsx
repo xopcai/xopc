@@ -9,6 +9,7 @@ import { ChunkedContent } from '@/features/chat/messages/message-content-rendere
 import { AssistantStepsBlock } from '@/features/chat/messages/assistant-steps-block';
 import type { AssistantTurnWorkLogPresentation } from '@/features/chat/messages/assistant-turn-view-model';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
+import { useLocaleStore } from '@/stores/locale-store';
 import { useDevViewStore } from '@/stores/dev-view-store';
 import { messages } from '@/i18n/messages';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
@@ -79,6 +80,37 @@ describe('streaming assistant Markdown rendering', () => {
     useDevViewStore.setState({ showRawToolData: false });
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it.each([
+    ['preparing', 'unknown', 'Collecting changes', '正在收集修改'],
+    ['reviewing', 'unknown', 'Review assistant', '审查助手'],
+    ['complete', 'patch is correct', 'Patch is correct', '修改正确'],
+    ['complete', 'patch is incorrect', 'Patch is incorrect', '修改有误'],
+    ['error', 'unknown', 'Unknown', '尚未确定'],
+  ] as const)('localizes the %s review card and responds to language changes', (status, correctness, en, zh) => {
+    const previousLanguage = useLocaleStore.getState().language;
+    useLocaleStore.setState({ language: 'en' });
+    const content: MessageContent[] = [{
+      type: 'review', target: 'main', summary: '', findings: [],
+      overallCorrectness: correctness, overallExplanation: '', status,
+      errorMessage: status === 'error' ? 'Example error' : undefined,
+    }];
+    render(content, false);
+    expect(container.textContent).toContain(en);
+    expect(container.textContent).toContain('Based on main');
+
+    act(() => useLocaleStore.setState({ language: 'zh' }));
+    expect(container.textContent).toContain(zh);
+    expect(container.textContent).toContain('基于 main');
+    expect(container.textContent).not.toContain(en);
+    if (status === 'error') expect(container.textContent).toContain('审查助手未能完成：Example error');
+    if (status === 'complete') expect(container.textContent).toContain('未发现问题。');
+
+    act(() => useLocaleStore.setState({ language: 'en' }));
+    expect(container.textContent).toContain(en);
+    expect(container.textContent).not.toContain(zh);
+    act(() => useLocaleStore.setState({ language: previousLanguage }));
   });
 
   function render(

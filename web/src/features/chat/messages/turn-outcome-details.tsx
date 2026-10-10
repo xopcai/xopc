@@ -29,7 +29,7 @@ export function TurnOutcomeDetails({ outcome }: { outcome: TurnOutcome }) {
       : null,
     passed > 0 ? t.passedCount.replace('{{count}}', String(passed)) : null,
     failed > 0 ? t.failedCount.replace('{{count}}', String(failed)) : null,
-    hasEvidence && passed === 0 && failed === 0 ? `${outcome.evidence.length} ${t.evidence}` : null,
+    hasEvidence && passed === 0 && failed === 0 ? t.evidenceCount.replace('{{count}}', String(outcome.evidence.length)) : null,
   ].filter(Boolean).join(' · ');
 
   return (

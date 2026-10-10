@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
@@ -11,18 +11,44 @@ function fail(message) {
   failures.push(message);
 }
 
-function markdownFilesFromGit() {
+function markdownFiles() {
   const output = execFileSync('git', ['ls-files', 'docs/**/*.md', 'README.md', 'README.zh-CN.md'], {
     cwd: root,
     encoding: 'utf8',
   });
-  return output
+  const tracked = output
     .split('\n')
-    .filter(Boolean)
+    .filter(Boolean);
+  const localDocs = readdirSync(join(root, 'docs'), { recursive: true })
+    .filter((file) => file.endsWith('.md') && !file.startsWith('.vitepress/'))
+    .map((file) => `docs/${file}`);
+  return [...new Set([...tracked, ...localDocs])]
     .filter((file) => existsSync(join(root, file)))
     // The public docs check validates user-facing pages. Internal RFCs, ADRs,
     // and archived implementation references are not part of the VitePress site.
-    .filter((file) => !file.startsWith('docs/design/') && !file.startsWith('docs/adr/'));
+    .filter((file) => !file.startsWith('docs/design/') && !file.startsWith('docs/adr/') && !file.startsWith('docs/mobile-reference/'));
+}
+
+function checkNavigation() {
+  const config = readFileSync(join(root, 'docs/.vitepress/config.ts'), 'utf8');
+  const links = [...config.matchAll(/\blink:\s*'([^']+)'/g)]
+    .map((match) => match[1])
+    .filter((link) => link.startsWith('/'));
+  for (const link of new Set(links)) {
+    const path = link.split(/[?#]/)[0].replace(/^\//, '').replace(/\/$/, '');
+    const candidates = path ? [`${path}.md`, `${path}/index.md`] : ['index.md'];
+    if (!candidates.some((file) => existsSync(join(root, 'docs', file)))) {
+      fail(`docs navigation points to a missing page: ${link}`);
+    }
+  }
+  const english = new Set(links.filter((link) => !link.startsWith('/zh/')));
+  const chinese = new Set(links.filter((link) => link.startsWith('/zh/') && link !== '/zh/').map((link) => link.slice(3)));
+  for (const link of english) {
+    if (!chinese.has(link)) fail(`docs navigation misses Chinese counterpart: ${link}`);
+  }
+  for (const link of chinese) {
+    if (!english.has(link)) fail(`docs navigation misses English counterpart: /zh${link}`);
+  }
 }
 
 function findJsonBlocks(markdown) {
@@ -139,7 +165,7 @@ function detectDuplicateKeys(source) {
 }
 
 function checkJsonBlocks() {
-  for (const file of markdownFilesFromGit()) {
+  for (const file of markdownFiles()) {
     const fullPath = join(root, file);
     const markdown = readFileSync(fullPath, 'utf8');
     for (const block of findJsonBlocks(markdown)) {
@@ -212,6 +238,7 @@ function checkCliOverview() {
 
 checkJsonBlocks();
 checkCliOverview();
+checkNavigation();
 
 if (failures.length > 0) {
   console.error('Docs check failed:');

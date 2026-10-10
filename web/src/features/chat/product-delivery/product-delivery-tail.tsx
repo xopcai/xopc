@@ -56,46 +56,11 @@ const KIND_ICON = {
   settings: Settings,
 } satisfies Record<ProductReferenceKind, typeof FileText>;
 
-const KIND_LABELS: Record<ProductReferenceKind, { en: string; zh: string }> = {
-  task: { en: 'Task', zh: '任务' },
-  project: { en: 'Project', zh: '项目' },
-  note: { en: 'Note', zh: '笔记' },
-  workflow_definition: { en: 'Workflow', zh: '工作流' },
-  workflow_run: { en: 'Workflow run', zh: '工作流运行' },
-  automation: { en: 'Automation', zh: '自动化' },
-  scene: { en: 'Monitor', zh: '智能关注' },
-  local_app: { en: 'App', zh: '应用' },
-  chat_preview: { en: 'Chat preview', zh: '对话预览' },
-  file: { en: 'File', zh: '文件' },
-  session: { en: 'Conversation', zh: '对话' },
-  settings: { en: 'Settings', zh: '设置' },
-};
-
-const OPERATION_LABELS = {
-  created: { en: 'Created', zh: '已创建' },
-  updated: { en: 'Updated', zh: '已更新' },
-  opened: { en: 'Ready', zh: '已就绪' },
-  started: { en: 'Started', zh: '已启动' },
-  completed: { en: 'Completed', zh: '已完成' },
-  failed: { en: 'Failed', zh: '失败' },
-} satisfies Record<ProductDeliveryEnvelope['operation'], { en: string; zh: string }>;
-
-const STATUS_LABELS: Record<string, { en: string; zh: string }> = {
-  active: { en: 'Active', zh: '运行中' },
-  completed: { en: 'Completed', zh: '已完成' },
-  disabled: { en: 'Disabled', zh: '已停用' },
-  enabled: { en: 'Enabled', zh: '已启用' },
-  failed: { en: 'Failed', zh: '失败' },
-  inbox: { en: 'Inbox', zh: '收件箱' },
-  paused: { en: 'Paused', zh: '已暂停' },
-  ready: { en: 'Ready', zh: '已就绪' },
-  running: { en: 'Running', zh: '运行中' },
-};
-
 function localizedStatus(status: string | undefined, language: 'en' | 'zh'): string | null {
   const value = status?.trim();
   if (!value) return null;
-  return STATUS_LABELS[value.toLowerCase()]?.[language] ?? value;
+  const labels: Record<string, string> = messages(language).chat.productDelivery.statuses;
+  return labels[value.toLowerCase()] ?? value;
 }
 
 function deliveryMeta(
@@ -103,8 +68,9 @@ function deliveryMeta(
   reference: ProductReference,
   language: 'en' | 'zh',
 ): string {
-  const kind = KIND_LABELS[reference.kind][language];
-  const operation = OPERATION_LABELS[delivery.operation][language];
+  const labels = messages(language).chat.productDelivery;
+  const kind = labels.kinds[reference.kind];
+  const operation = labels.operations[delivery.operation];
   const status = localizedStatus(reference.status, language);
   const state = status && delivery.operation === 'opened'
     ? status
@@ -119,33 +85,33 @@ function taskDeliveryMeta(
   state: { phase?: string; resolution?: string; operationalState?: string; attention?: readonly unknown[] },
   language: 'en' | 'zh',
 ): string {
+  const labels = messages(language).chat.productDelivery.taskStates;
   if (state.phase === 'closed') {
-    return state.resolution === 'done'
-      ? (language === 'zh' ? '已完成' : 'Completed')
-      : (language === 'zh' ? '已结束' : 'Closed');
+    return state.resolution === 'done' ? labels.completed : labels.closed;
   }
-  if (state.attention?.length) return language === 'zh' ? '需要处理' : 'Needs attention';
-  if (state.operationalState === 'completed') return language === 'zh' ? '已完成' : 'Completed';
-  const labels: Record<string, { en: string; zh: string }> = {
-    queued: { en: 'Starting soon', zh: '即将开始' },
-    running: { en: 'In progress', zh: '正在进行' },
-    verifying: { en: 'Checking the result', zh: '正在核对结果' },
-    waiting: { en: 'Waiting', zh: '暂时等待' },
-    blocked: { en: 'Needs attention', zh: '需要处理' },
+  if (state.attention?.length) return labels.blocked;
+  const states: Record<string, string> = {
+    queued: labels.queued,
+    running: labels.running,
+    verifying: labels.verifying,
+    waiting: labels.waiting,
+    blocked: labels.blocked,
+    completed: labels.completed,
   };
-  const knownState = state.operationalState && labels[state.operationalState]?.[language];
+  const knownState = state.operationalState && states[state.operationalState];
   if (knownState) return knownState;
-  if (delivery.operation === 'completed') return language === 'zh' ? '已完成' : 'Completed';
-  if (delivery.operation === 'failed') return language === 'zh' ? '遇到问题' : 'Ran into a problem';
-  return delivery.operation === 'started'
-    ? (language === 'zh' ? '已交办' : 'Assigned')
-    : (language === 'zh' ? '待开始' : 'Ready to start');
+  if (delivery.operation === 'completed') return labels.completed;
+  if (delivery.operation === 'failed') return labels.failed;
+  return delivery.operation === 'started' ? labels.assigned : labels.ready;
 }
 
 function continuePrompt(reference: ProductReference, language: 'en' | 'zh'): string {
-  return language === 'zh'
-    ? `继续处理${KIND_LABELS[reference.kind].zh}「${reference.title}」（ID: ${reference.id}）：`
-    : `Continue working on ${KIND_LABELS[reference.kind].en.toLowerCase()} "${reference.title}" (ID: ${reference.id}): `;
+  const labels = messages(language).chat.productDelivery;
+  return labels.continuePrompt.replace(/\{\{(kind|title|id)\}\}/g, (_match, key: 'kind' | 'title' | 'id') => ({
+    kind: language === 'en' ? labels.kinds[reference.kind].toLowerCase() : labels.kinds[reference.kind],
+    title: reference.title,
+    id: reference.id,
+  })[key]);
 }
 
 function DeliveryRow({
@@ -266,7 +232,7 @@ function DeliveryRow({
           )}
           onClick={() => dispatchFillChatComposer(continuePrompt(reference, language))}
         >
-          {language === 'zh' ? '继续' : 'Continue'}
+          {messages(language).chat.productDelivery.continue}
         </button>
       ) : null}
     </li>
