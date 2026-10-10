@@ -369,7 +369,9 @@ private extension RealtimeVoiceCall {
         } else if event.type.hasPrefix("task.") {
             handleTask(event.type, payload: payload)
         } else if event.type == "input.speech_started", !muted, !congested, clarification == nil, approval == nil {
-            if let id = payload.utteranceId { speakingUtteranceIDs.insert(id) }
+            if let id = payload.utteranceId {
+                speakingUtteranceIDs.insert(id)
+            }
             firstAudioTiming.speechStarted()
         } else if event.type == "input.speech_stopped", !muted, !congested, clarification == nil, approval == nil {
             if let id = payload.utteranceId, speakingUtteranceIDs.remove(id) != nil, speakingUtteranceIDs.isEmpty {
@@ -505,7 +507,9 @@ private extension RealtimeVoiceCall {
         }
     }
 
-    static var monotonicMilliseconds: Double { ProcessInfo.processInfo.systemUptime * 1000 }
+    static var monotonicMilliseconds: Double {
+        ProcessInfo.processInfo.systemUptime * 1000
+    }
 
     func reportFirstAudioMetrics(id: String, receivedMs: Double?, bufferedMs: Double?) {
         guard receivedMs != nil || bufferedMs != nil else { return }

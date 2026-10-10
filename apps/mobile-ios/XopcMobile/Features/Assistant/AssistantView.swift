@@ -1,5 +1,5 @@
-import SwiftUI
 import PhotosUI
+import SwiftUI
 
 // swiftlint:disable file_length
 // swiftlint:disable:next type_body_length
@@ -95,7 +95,8 @@ struct AssistantView<Dock: View>: View {
                     List {
                         Text("搜索已加载的消息").foregroundStyle(.secondary)
                         ForEach(state.messages.filter { !messageSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            && $0.text.localizedCaseInsensitiveContains(messageSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)) }) { message in
+                                && $0.text.localizedCaseInsensitiveContains(messageSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines))
+                        }) { message in
                             Text(message.text).textSelection(.enabled)
                         }
                     }.accessibilityIdentifier("chat-message-search-sheet")
@@ -369,7 +370,9 @@ struct AssistantView<Dock: View>: View {
                                 proxy.frame(in: .named("chat-scroll")).maxY
                             } action: { bottom in
                                 isAtBottom = bottom <= viewport.size.height - bottomDockHeight - replySpace.remaining + 32
-                                if userScrollingMessages { followingBottom = isAtBottom }
+                                if userScrollingMessages {
+                                    followingBottom = isAtBottom
+                                }
                             }
                     }
                     .padding(.horizontal, 12)
@@ -387,15 +390,21 @@ struct AssistantView<Dock: View>: View {
                     }
                 }
                 .onChange(of: replySpace.remaining) {
-                    if followingBottom { scroller.scrollTo("chat-bottom", anchor: .bottom) }
+                    if followingBottom {
+                        scroller.scrollTo("chat-bottom", anchor: .bottom)
+                    }
                 }
                 .onChange(of: bottomDockHeight) {
                     updateReplySpace()
-                    if followingBottom { scroller.scrollTo("chat-bottom", anchor: .bottom) }
+                    if followingBottom {
+                        scroller.scrollTo("chat-bottom", anchor: .bottom)
+                    }
                 }
                 .onChange(of: viewport.size.height) {
                     updateReplySpace()
-                    if followingBottom { scroller.scrollTo("chat-bottom", anchor: .bottom) }
+                    if followingBottom {
+                        scroller.scrollTo("chat-bottom", anchor: .bottom)
+                    }
                 }
                 .modifier(ChatScrollInteraction(onStart: {
                     userScrollingMessages = true
@@ -457,7 +466,8 @@ struct AssistantView<Dock: View>: View {
         if replySpace.anchorID != nil,
            !state.messages.contains(where: { $0.id == replySpace.anchorID }),
            let replyUserText,
-           let confirmed = state.messages.last(where: { $0.role == "user" && $0.text == replyUserText }) {
+           let confirmed = state.messages.last(where: { $0.role == "user" && $0.text == replyUserText })
+        {
             replySpace.reanchor(confirmed.id)
         }
         guard let anchor = state.messages.firstIndex(where: { $0.id == replySpace.anchorID }) else { return }
@@ -709,8 +719,11 @@ struct AssistantView<Dock: View>: View {
                 } label: { Image(systemName: "magnifyingglass").font(.system(size: 22)).frame(width: 44, height: 44) }
                     .accessibilityLabel("搜索消息").accessibilityIdentifier("chat-header-search")
                 Button {
-                    if isPersonalConversation { showingPersonalProfile = true }
-                    else { showingSessionActions = true }
+                    if isPersonalConversation {
+                        showingPersonalProfile = true
+                    } else {
+                        showingSessionActions = true
+                    }
                 } label: { Image(systemName: "gearshape").font(.system(size: 22)).frame(width: 44, height: 44) }
                     .accessibilityLabel(isPersonalConversation ? "配置助手" : "会话选项")
                     .accessibilityIdentifier("assistant-options")
@@ -1071,10 +1084,10 @@ private struct PersonalProactivitySection: View {
                     Text("适度主动").tag("balanced")
                 }
                 Picker("静默开始", selection: binding(\.quietStart, fallback: 22)) {
-                    ForEach(0..<24, id: \.self) { hour in Text(String(format: "%02d:00", hour)).tag(hour) }
+                    ForEach(0 ..< 24, id: \.self) { hour in Text(String(format: "%02d:00", hour)).tag(hour) }
                 }
                 Picker("静默结束", selection: binding(\.quietEnd, fallback: 8)) {
-                    ForEach(0..<24, id: \.self) { hour in Text(String(format: "%02d:00", hour)).tag(hour) }
+                    ForEach(0 ..< 24, id: \.self) { hour in Text(String(format: "%02d:00", hour)).tag(hour) }
                 }
                 Picker("时区", selection: binding(\.timezone, fallback: "Asia/Shanghai")) {
                     ForEach(Array(Set(TimeZone.knownTimeZoneIdentifiers + [settings?.timezone ?? "UTC", "UTC"])).sorted(), id: \.self) { zone in
@@ -1091,15 +1104,18 @@ private struct PersonalProactivitySection: View {
             }
         }.disabled(busy).task { await load() }
     }
+
     private func binding<Value>(_ path: WritableKeyPath<PersonalProactivitySettings, Value>, fallback: Value) -> Binding<Value> {
         Binding(get: { settings?[keyPath: path] ?? fallback }, set: { settings?[keyPath: path] = $0; saved = false })
     }
+
     private func load() async {
         loading = true
         defer { loading = false }
         do { settings = try await GatewayClient(configuration: configuration).fetchPersonalProactivity(); error = nil }
         catch { self.error = error.localizedDescription }
     }
+
     private func save() async {
         guard let settings, !busy else { return }
         busy = true
