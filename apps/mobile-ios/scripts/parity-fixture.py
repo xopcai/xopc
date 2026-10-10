@@ -15,6 +15,7 @@ messages = [{'id':'long-ai','turnId':'turn-1','role':'assistant','content':long_
 row={'key':parent,'agentId':'main','name':'移动端布局检查','status':'active','updatedAt':'2026-10-09T08:00:00Z','messageCount':4}
 record={'agentId':'personal','conversationId':personal,'state':'ready','displayName':'Ada','appearance':'loopi','revision':1,'preferences':{}}
 model={'id':'test/model','name':'Fixture Model','provider':'test','reasoning':True,'vision':False,'thinking':{'options':['off','low','medium','high'],'initialValue':'medium'}}
+outreach={'revision':1,'mode':'balanced','timezone':'Asia/Shanghai','quietStart':22,'quietEnd':8,'dailyMessages':2,'dailyModelCalls':12}
 config={'model':'test/model','thinkingLevel':'medium','configVersion':1}
 w=io.BytesIO()
 with wave.open(w,'wb') as audio:
@@ -23,6 +24,7 @@ with wave.open(w,'wb') as audio:
 def envelope(value): return {'ok':True,'payload':value}
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args): pass
+ def do_PUT(self): self.do_GET()
  def do_POST(self): self.do_GET()
  def do_PATCH(self): self.do_GET()
  def do_GET(self):
@@ -31,6 +33,19 @@ class Handler(BaseHTTPRequestHandler):
   data=None; status=200
   if path=='/api/agents': data=envelope({'defaultId':'main','agents':[{'id':'main','name':'Main','isDefault':True},{'id':'other','name':'Research'}]})
   elif path=='/api/personal-agent': data=envelope(record)
+  elif path=='/api/personal-agent/profile':
+   patch=json.loads(body)
+   if patch['revision']!=record['revision']: status=409;data={'ok':False,'error':'Settings changed'}
+   else: record.update(patch);record['revision']+=1;data=envelope(record)
+  elif path=='/api/personal-agent/proactivity':
+   if body:
+    patch=json.loads(body)
+    if patch['revision']!=outreach['revision']: status=409;data={'ok':False,'error':'Settings changed'}
+    else: outreach.update(patch);outreach['revision']+=1
+   if data is None: data=envelope(outreach)
+  elif path=='/api/personal-agent/avatar': data=envelope({'agentId':record['agentId']})
+  elif path=='/api/voice/realtime/status': data=envelope({'tts':{'provider':'fixture','model':'tts'}})
+  elif path=='/api/voice/tts-voices': data=envelope({'voices':[{'id':'fixture-voice','name':'Fixture voice'}]})
   elif path=='/api/models': data=envelope({'defaultId':'test/model','models':[model]})
   elif path=='/api/sessions':
    items=[dict(row,key='draft',name='新对话',messageCount=0),row]

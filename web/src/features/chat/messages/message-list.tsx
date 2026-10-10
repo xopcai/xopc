@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode, type RefObject } from 'react';
 
 import { ChatWelcomeSpotlight } from '@/features/chat/chat-welcome-spotlight';
 import { MessageBubble } from '@/features/chat/messages/message-bubble';
@@ -51,6 +51,7 @@ export const MessageList = memo(function MessageList({
   showAssistantWorkLog = true,
   hideAssistantActions = false,
   trailingContent,
+  replySpaceRef,
 }: {
   messages: Message[];
   personal?: boolean;
@@ -86,6 +87,7 @@ export const MessageList = memo(function MessageList({
   hideAssistantActions?: boolean;
   /** Ephemeral UI rendered after the latest transcript message; never persisted as a message. */
   trailingContent?: ReactNode;
+  replySpaceRef?: RefObject<HTMLDivElement | null>;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -199,6 +201,7 @@ export const MessageList = memo(function MessageList({
         );
         })}
         {trailingContent}
+        {replySpaceRef && <div ref={replySpaceRef} className="-mt-8 shrink-0" aria-hidden data-chat-reply-space />}
       </div>
     </InlinePreviewSchedulerProvider>
   );

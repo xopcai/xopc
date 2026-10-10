@@ -17,6 +17,7 @@ import { SessionManager } from '@/features/chat/session/session-manager';
 
 interface VoiceSessionClientOptions {
   signal?: AbortSignal;
+  timingMetrics?: readonly string[];
   purpose: 'dictation' | 'conversation';
   mode?: VoiceMode;
   conversationId?: string;
@@ -54,15 +55,17 @@ export class VoiceSessionClient {
   private constructor(
     private readonly socket: WebSocket,
     readonly session: CreateVoiceSessionResponse,
+    private readonly timingMetrics: readonly string[] = [],
   ) { this.receive = new VoiceReceiveState(session); }
 
-  static async preflight(options: Pick<VoiceSessionClientOptions, 'purpose' | 'mode' | 'conversationId' | 'signal'>): Promise<void> {
+  static async preflight(options: Pick<VoiceSessionClientOptions, 'purpose' | 'mode' | 'conversationId' | 'signal'>): Promise<string[]> {
     if (options.purpose === 'conversation' && options.conversationId) await new SessionManager().materialize(options.conversationId, 'voice');
-    await fetchJson(apiUrl('/api/voice/realtime/preflight'), {
+    const result = await fetchJson<{ timingMetrics?: string[] }>(apiUrl('/api/voice/realtime/preflight'), {
       method: 'POST', signal: options.signal,
       body: JSON.stringify({ purpose: options.purpose, mode: options.mode, conversationId: options.conversationId,
         supportedProtocolVersions: [VOICE_REALTIME_PROTOCOL_VERSION], mediaPreferences: ['websocket-pcm'] }),
     });
+    return result.timingMetrics ?? [];
   }
 
   static async connect(options: VoiceSessionClientOptions): Promise<VoiceSessionClient> {
@@ -85,7 +88,7 @@ export class VoiceSessionClient {
     options.signal?.throwIfAborted();
     const socket = new WebSocket(websocketUrl(session.websocketPath));
     socket.binaryType = 'arraybuffer';
-    const client = new VoiceSessionClient(socket, session);
+    const client = new VoiceSessionClient(socket, session, options.timingMetrics);
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -162,7 +165,8 @@ export class VoiceSessionClient {
     this.inputRemainder = pending.slice(offset);
   }
 
-  reportMetric(responseId: string, metric: 'speech_end_to_audio_received' | 'local_stop', durationMs: number): void {
+  reportMetric(responseId: string, metric: 'speech_end_to_audio_received' | 'speech_end_to_audio_scheduled' | 'local_stop', durationMs: number): void {
+    if (metric === 'speech_end_to_audio_scheduled' && !this.timingMetrics.includes(metric)) return;
     this.sendControl('session.metric', { responseId, metric, durationMs: Math.min(600_000, Math.max(0, durationMs)) });
   }
 

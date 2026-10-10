@@ -98,7 +98,8 @@ final class AssistantState {
         delivery: MessageDelivery = .next,
         to conversation: ConversationSelection,
         using gateway: any GatewayServing,
-        onMaterialized: ((ConversationSelection) -> Void)? = nil
+        onMaterialized: ((ConversationSelection) -> Void)? = nil,
+        onEnqueued: ((String) -> Void)? = nil
     ) async -> ConversationSelection? {
         let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty || !attachments.isEmpty || !references.isEmpty, !isSending else { return nil }
@@ -113,6 +114,7 @@ final class AssistantState {
         let optimisticText = content.isEmpty
             ? Self.payloadSummary(attachments: attachments, references: references)
             : content
+        onEnqueued?(optimisticID)
         messages.append(.init(id: optimisticID, role: "user", text: optimisticText, isPending: true, turnId: nil))
 
         do {

@@ -105,6 +105,23 @@ describe('home workbench', () => {
     expect(workbench.background.map((item) => item.kind)).toEqual(['running', 'scheduled', 'scheduled']);
   });
 
+  it('localizes known system failures while preserving arbitrary task details', () => {
+    const model = {
+      task: {
+        id: 'task-1', title: '查询 Connector', phase: 'active' as const, priority: 'normal' as const,
+        source: 'user' as const, locale: 'en' as const, latestContractVersion: 1, boardRank: 1024,
+        version: 2, createdAt: 100, updatedAt: 200,
+      },
+      operationalState: 'idle' as const,
+      attention: [{ kind: 'run_failed' as const, summary: 'Agent run returned no result or evidence', sourceId: 'run-1' }],
+      allowedCommands: [],
+    };
+    expect(decisionFromTask(model, undefined, 'zh-CN')?.detail).toBe('本次执行没有返回结果或依据，请重试。');
+    expect(decisionFromTask(model, undefined, 'en')?.detail).toBe('Agent run returned no result or evidence');
+    model.attention[0]!.summary = 'Connector authentication expired';
+    expect(decisionFromTask(model, undefined, 'zh')?.detail).toBe('Connector authentication expired');
+  });
+
   it('turns a completed manual task into a review decision', () => {
     const decision = decisionFromTask({
       task: {

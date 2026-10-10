@@ -52,6 +52,9 @@ final class RealtimeVoiceCall {
     private var reconnectAttempt = 0
     private var connectedAt: Date?
     private var responseDone = false
+    private var supportedTimingMetrics: Set<String> = []
+    private var firstAudioTiming = RealtimeVoiceFirstAudioTiming()
+    private var speakingUtteranceIDs: Set<String> = []
     private var receivedMilliseconds = 0
     private var playedMilliseconds = 0
     private var congested = false
@@ -161,8 +164,9 @@ final class RealtimeVoiceCall {
             guard status.enabled, availability.available else {
                 throw RealtimeVoiceCallError.unavailable(availability.reasonCode ?? "VOICE_DISABLED")
             }
-            try await gateway.preflightRealtimeVoice(conversationID: conversationID, mode: mode)
+            let metrics = try await gateway.preflightRealtimeVoice(conversationID: conversationID, mode: mode)
             guard generation == current else { return }
+            supportedTimingMetrics = Set(metrics)
             let session = try await gateway.createRealtimeVoiceSession(conversationID: conversationID, mode: mode)
             guard generation == current else {
                 try? await gateway.cancelRealtimeVoiceSession(session)
@@ -308,6 +312,9 @@ final class RealtimeVoiceCall {
         receivedMilliseconds = 0
         playedMilliseconds = 0
         responseDone = false
+        firstAudioTiming.reset()
+        supportedTimingMetrics.removeAll()
+        speakingUtteranceIDs.removeAll()
         responseID = ""
         responseStage = ""
         taskID = ""
@@ -361,6 +368,13 @@ private extension RealtimeVoiceCall {
             await handleResponse(event.type, payload: payload)
         } else if event.type.hasPrefix("task.") {
             handleTask(event.type, payload: payload)
+        } else if event.type == "input.speech_started", !muted, !congested, clarification == nil, approval == nil {
+            if let id = payload.utteranceId { speakingUtteranceIDs.insert(id) }
+            firstAudioTiming.speechStarted()
+        } else if event.type == "input.speech_stopped", !muted, !congested, clarification == nil, approval == nil {
+            if let id = payload.utteranceId, speakingUtteranceIDs.remove(id) != nil, speakingUtteranceIDs.isEmpty {
+                firstAudioTiming.speechStopped(Self.monotonicMilliseconds)
+            }
         } else if event.type == "input.transcript.final" {
             userText = payload.text ?? ""
         }
@@ -429,6 +443,7 @@ private extension RealtimeVoiceCall {
                 return
             }
             responseID = payload.responseId ?? ""
+            firstAudioTiming.created(responseID)
             assistantText = ""
             activity = ""
             responseStage = "thinking"
@@ -478,12 +493,38 @@ private extension RealtimeVoiceCall {
 
     func handle(_ frame: RealtimeVoiceDownlinkFrame) async {
         guard !responseID.isEmpty, frame.responseID == responseID else { return }
+        let receivedMs = firstAudioTiming.received(frame.responseID, now: Self.monotonicMilliseconds)
         receivedMilliseconds += 20
         responseStage = playedMilliseconds > 0 ? "speaking" : "buffering"
         do {
             try audio.enqueue(responseID: frame.responseID, pcm: frame.audio)
+            let bufferedMs = firstAudioTiming.buffered(frame.responseID, now: Self.monotonicMilliseconds)
+            reportFirstAudioMetrics(id: frame.responseID, receivedMs: receivedMs, bufferedMs: bufferedMs)
         } catch {
             await pause(reason: "PLAYBACK_FAILED")
+        }
+    }
+
+    static var monotonicMilliseconds: Double { ProcessInfo.processInfo.systemUptime * 1000 }
+
+    func reportFirstAudioMetrics(id: String, receivedMs: Double?, bufferedMs: Double?) {
+        guard receivedMs != nil || bufferedMs != nil else { return }
+        let current = generation
+        let bufferedMs = supportedTimingMetrics.contains("speech_end_to_audio_buffered") ? bufferedMs : nil
+        // Scheduling is already complete; telemetry must not hold the next audio frame.
+        Task {
+            guard generation == current, phase == .connected else { return }
+            if let receivedMs {
+                try? await transport.send("session.metric", payload: .init(
+                    responseId: id, metric: "speech_end_to_audio_received", durationMs: min(600_000, max(0, receivedMs))
+                ))
+            }
+            guard generation == current, phase == .connected else { return }
+            if let bufferedMs {
+                try? await transport.send("session.metric", payload: .init(
+                    responseId: id, metric: "speech_end_to_audio_buffered", durationMs: min(600_000, max(0, bufferedMs))
+                ))
+            }
         }
     }
 
@@ -502,6 +543,7 @@ private extension RealtimeVoiceCall {
     }
 
     func finishResponse() {
+        firstAudioTiming.finish(responseID)
         responseID = ""
         responseStage = ""
         activity = ""

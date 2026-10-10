@@ -59,18 +59,6 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
 @Composable
-private fun AgentPreferenceChoice(label: String, value: String,
-  options: List<Pair<String, String>>, onSelect: (String) -> Unit) {
-  Text(label, style = MaterialTheme.typography.titleSmall)
-  Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-    options.forEach { (id, title) ->
-      FilterChip(selected = value == id, onClick = { onSelect(id) }, label = { Text(title) })
-    }
-  }
-}
-
-@Composable
 internal fun UnpairedPersonalScreen(insets: PaddingValues, onOpenSettings: () -> Unit,
   onConnect: () -> Unit) {
   val settingsLabel = stringResource(R.string.settings_title)
@@ -108,36 +96,12 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
   onOpenAgent: () -> Unit = {},
   onLoadAgentVoices: () -> Unit = {},
   onUpdateAgentProfile: (String, String, Map<String, String>, String?) -> Unit = { _, _, _, _ -> },
+  onLoadProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
+  onSaveProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
+  onUploadAvatar: suspend (ByteArray) -> Unit = {}, onModel: () -> Unit = {},
   bottomChromeHeight: Dp = 0.dp) {
   var agentEditorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
-  var agentName by rememberSaveable(state.gatewayId) { mutableStateOf("") }
-  var agentAppearance by rememberSaveable(state.gatewayId) { mutableStateOf("loopi") }
-  var agentAddress by rememberSaveable(state.gatewayId) { mutableStateOf("") }
-  var agentWarmth by rememberSaveable(state.gatewayId) { mutableStateOf("balanced") }
-  var agentSupport by rememberSaveable(state.gatewayId) { mutableStateOf("untangle") }
-  var agentDetail by rememberSaveable(state.gatewayId) { mutableStateOf("balanced") }
-  var agentProactivity by rememberSaveable(state.gatewayId) { mutableStateOf("decisions") }
-  var agentHumor by rememberSaveable(state.gatewayId) { mutableStateOf("none") }
-  var agentVoice by rememberSaveable(state.gatewayId) { mutableStateOf("") }
-  var agentSaveRevision by rememberSaveable(state.gatewayId) { mutableStateOf(0) }
-  fun openAgentEditor() {
-    val agent = state.agent ?: return
-    agentName = agent.displayName
-    agentAppearance = agent.appearance
-    agentAddress = agent.preferences["addressAs"].orEmpty()
-    agentWarmth = agent.preferences["warmth"] ?: "balanced"
-    agentSupport = agent.preferences["supportMode"] ?: "untangle"
-    agentDetail = agent.preferences["detailLevel"] ?: "balanced"
-    agentProactivity = agent.preferences["proactivity"] ?: "decisions"
-    agentHumor = agent.preferences["humor"] ?: "none"
-    agentVoice = agent.voicePreference?.voice ?: ""
-    agentSaveRevision = state.agentProfileSavedRevision
-    agentEditorOpen = true
-    onLoadAgentVoices()
-  }
-  LaunchedEffect(state.agentProfileSavedRevision, agentSaveRevision, agentEditorOpen) {
-    if (agentEditorOpen && state.agentProfileSavedRevision > agentSaveRevision) agentEditorOpen = false
-  }
+  fun openAgentEditor() { if (state.agent != null) agentEditorOpen = true }
   var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var editingId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var title by rememberSaveable(state.gatewayId) { mutableStateOf("") }
@@ -218,66 +182,8 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
     }
     Spacer(Modifier.height(bottomChromeHeight + 24.dp))
   }
-  if (agentEditorOpen) ModalBottomSheet(onDismissRequest = {
-    if (!state.agentProfileSaving) agentEditorOpen = false
-  }, modifier = Modifier.testTag("personal-agent-profile-sheet")) {
-    Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())
-      .padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      Text(stringResource(R.string.personal_agent_configure), style = MaterialTheme.typography.headlineSmall)
-      OutlinedTextField(agentName, { agentName = it.take(60) }, Modifier.fillMaxWidth(),
-        label = { Text(stringResource(R.string.personal_agent_name)) })
-      OutlinedTextField(agentAddress, { agentAddress = it.take(60) }, Modifier.fillMaxWidth(),
-        label = { Text(stringResource(R.string.personal_agent_address)) })
-      AgentPreferenceChoice(stringResource(R.string.personal_agent_appearance), agentAppearance,
-        listOf("loopi" to "Loopi", "loopi-curious" to stringResource(R.string.personal_agent_curious),
-          "loopi-care" to stringResource(R.string.personal_agent_caring)) +
-          if (agentAppearance == "custom") listOf("custom" to stringResource(R.string.personal_agent_custom))
-          else emptyList(), { agentAppearance = it })
-      AgentPreferenceChoice(stringResource(R.string.personal_agent_warmth), agentWarmth,
-        listOf("reserved" to stringResource(R.string.personal_agent_reserved),
-          "balanced" to stringResource(R.string.personal_agent_balanced),
-          "gentle" to stringResource(R.string.personal_agent_gentle)), { agentWarmth = it })
-      AgentPreferenceChoice(stringResource(R.string.personal_agent_support), agentSupport,
-        listOf("listen" to stringResource(R.string.personal_agent_listen),
-          "untangle" to stringResource(R.string.personal_agent_untangle),
-          "solutions" to stringResource(R.string.personal_agent_solutions)), { agentSupport = it })
-      AgentPreferenceChoice(stringResource(R.string.personal_agent_detail), agentDetail,
-        listOf("brief" to stringResource(R.string.personal_agent_brief),
-          "balanced" to stringResource(R.string.personal_agent_balanced),
-          "detailed" to stringResource(R.string.personal_agent_detailed)), { agentDetail = it })
-      AgentPreferenceChoice(stringResource(R.string.personal_agent_proactivity), agentProactivity,
-        listOf("decisions" to stringResource(R.string.personal_agent_decisions),
-          "important" to stringResource(R.string.personal_agent_important),
-          "open" to stringResource(R.string.personal_agent_open_suggestions)), { agentProactivity = it })
-      AgentPreferenceChoice(stringResource(R.string.personal_agent_humor), agentHumor,
-        listOf("none" to stringResource(R.string.personal_agent_none),
-          "occasional" to stringResource(R.string.personal_agent_occasional),
-          "playful" to stringResource(R.string.personal_agent_playful)), { agentHumor = it })
-      state.agentVoiceChoices?.takeIf { it.voices.isNotEmpty() }?.let { choices ->
-        AgentPreferenceChoice(stringResource(R.string.personal_agent_voice), agentVoice,
-          listOf("" to stringResource(R.string.personal_agent_default_voice)) +
-            choices.voices.map { it.id to it.name }, { agentVoice = it })
-      } ?: Text(stringResource(R.string.personal_agent_voice_unavailable),
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-      if (state.agentProfileError) Text(stringResource(R.string.personal_agent_save_error),
-        color = MaterialTheme.colorScheme.error)
-      Button(onClick = {
-        val preferences = state.agent?.preferences.orEmpty().toMutableMap().apply {
-          put("addressAs", agentAddress)
-          put("warmth", agentWarmth)
-          put("supportMode", agentSupport)
-          put("detailLevel", agentDetail)
-          put("proactivity", agentProactivity)
-          put("humor", agentHumor)
-        }
-        onUpdateAgentProfile(agentName.trim(), agentAppearance, preferences,
-          agentVoice.takeIf { state.agentVoiceChoices != null })
-      }, enabled = !state.agentProfileSaving && agentName.isNotBlank(),
-        modifier = Modifier.fillMaxWidth().testTag("personal-agent-profile-save")) {
-        Text(stringResource(R.string.personal_agent_save))
-      }
-    }
-  }
+  if (agentEditorOpen) PersonalAgentProfileSheet(state, { agentEditorOpen = false }, onLoadAgentVoices,
+    onUpdateAgentProfile, onLoadProactivity, onSaveProactivity, onUploadAvatar, { agentEditorOpen = false; onModel() })
   if (editorOpen) ModalBottomSheet(onDismissRequest = { if (!state.savingGoal) editorOpen = false },
     modifier = Modifier.testTag("personal-goal-sheet")) {
     Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())

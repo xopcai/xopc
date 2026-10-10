@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import type { StreamingSttSession, StreamingSttEvent } from '../../media-understanding/types.js';
 import { createLogger } from '../../utils/logger.js';
-import { speakStream, type SpeakStreamResult } from '../tts/speak-core.js';
+import { prepareSpeechStreamSession, speakStream, type SpeakStreamResult } from '../tts/speak-core.js';
+import type { SpeechStreamSession } from '../tts/speech-provider-types.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
 import { TurnCoordinator } from './turnPolicy.js';
 import { PlaybackEchoCandidates } from './playback-echo.js';
@@ -13,6 +14,7 @@ import type { VoiceEngine, VoiceEventSink } from './engine.js';
 const log = createLogger('Voice:Agent');
 const AGENT_TTS_MAX_SEGMENT_CHARACTERS = 180;
 const AGENT_TTS_MIN_SEGMENT_CHARACTERS = 24;
+const FIRST_PHRASE_WAIT_MS = 300;
 const PLAYBACK_ECHO_TAIL_MS = 3_000;
 const TASK_UPDATE_QUIET_MS = 1_500;
 
@@ -41,6 +43,11 @@ interface ActiveVoiceResponse {
   inputReceivedAtMs: number;
   turnCommittedAtMs: number;
   firstTextAtMs?: number;
+  firstPhraseAtMs?: number;
+  firstSynthesisAtMs?: number;
+  firstSubmitAtMs?: number;
+  firstPhraseTimer?: ReturnType<typeof setTimeout>;
+  preparedSpeech?: Promise<{ session: SpeechStreamSession } | { error: unknown }>;
   awaitingClarification: boolean;
   taskId?: string;
   taskDone: boolean;
@@ -111,6 +118,7 @@ export function createAgentVoiceEngine(options: {
       recentPlayback = { responseId: response.id, text: response.audibleText, expiresAt: Date.now() + PLAYBACK_ECHO_TAIL_MS };
     }
     activeResponse = undefined;
+    clearTimeout(response.firstPhraseTimer);
     response.abortController.abort(reason);
     send('response.cancelled', { responseId: response.id, reason });
     const conversationId = claim.request.conversationId;
@@ -130,6 +138,31 @@ export function createAgentVoiceEngine(options: {
 
   function openSpeech(response: ActiveVoiceResponse, job: SpeechJob): SpeechOpening {
     if (job.opening) return job.opening;
+    if (response.firstSynthesisAtMs === undefined) {
+      response.firstSynthesisAtMs = Date.now();
+      log.info({ sessionId: claim.sessionId, responseId: response.id, conversationId: claim.request.conversationId,
+        phase: 'first_synthesis_requested',
+        textToSynthesisMs: response.firstTextAtMs === undefined ? undefined : response.firstSynthesisAtMs - response.firstTextAtMs,
+      }, 'Realtime voice first synthesis requested');
+    }
+    if (response.preparedSpeech) {
+      job.opening = response.preparedSpeech.then(async prepared => {
+        if ('error' in prepared) return prepared;
+        response.abortController.signal.throwIfAborted();
+        if (response.firstSubmitAtMs === undefined) {
+          response.firstSubmitAtMs = Date.now();
+          log.info({ sessionId: claim.sessionId, responseId: response.id, conversationId: claim.request.conversationId,
+            phase: 'first_tts_text_submitted',
+            phraseToSubmitMs: response.firstPhraseAtMs === undefined ? undefined : response.firstSubmitAtMs - response.firstPhraseAtMs,
+          }, 'Realtime voice first TTS text submitted');
+        }
+        const result = await prepared.session.synthesize(job.phrase);
+        return { result: { ...result, provider: claim.tts!.config.provider,
+          release: result.release ?? (async () => {}),
+          ttsText: job.phrase, wasPreprocessed: false, wasSummarized: false } };
+      }).catch((error: unknown) => ({ error }));
+      return job.opening;
+    }
     job.opening = speakStream(job.phrase, claim.tts!.config, {
       appConfig: claim.config,
       parseDirectives: false,
@@ -140,6 +173,8 @@ export function createAgentVoiceEngine(options: {
   }
 
   function prefetchNextSpeech(response: ActiveVoiceResponse): void {
+    // A reusable connection accepts the next segment only after response.done.
+    if (response.preparedSpeech) return;
     const next = response.speechQueue[0];
     if (!next || next.opening || response.abortController.signal.aborted) return;
     openSpeech(response, next);
@@ -173,6 +208,9 @@ export function createAgentVoiceEngine(options: {
             phase: 'first_response_audio',
             latencyMs: Date.now() - response.startedAt,
             inputToAudioMs: Date.now() - response.inputReceivedAtMs,
+            submitToAudioMs: response.firstSubmitAtMs === undefined ? undefined : Date.now() - response.firstSubmitAtMs,
+            synthesisToAudioMs: response.firstSynthesisAtMs === undefined ? undefined : Date.now() - response.firstSynthesisAtMs,
+            phraseToAudioMs: response.firstPhraseAtMs === undefined ? undefined : Date.now() - response.firstPhraseAtMs,
             textToAudioMs: response.firstTextAtMs === undefined ? undefined : Date.now() - response.firstTextAtMs,
           }, 'Realtime voice first audio ready');
           send('response.audio.started', {
@@ -180,7 +218,7 @@ export function createAgentVoiceEngine(options: {
             format: { encoding: 'pcm_s16le', sampleRate: 24_000, channels: 1 },
           });
         }
-        // Half-second frames keep acknowledgements flowing within the playback window.
+        // Small frames keep first playback and acknowledgements responsive.
         for (const frame of response.pcm.push(item.value)) {
           await response.playback.reserve(frame.byteLength, response.abortController.signal);
           if (activeResponse !== response || closed) return;
@@ -248,6 +286,14 @@ export function createAgentVoiceEngine(options: {
   function queuePhrases(response: ActiveVoiceResponse, phrases: string[]): void {
     for (const phrase of phrases) {
       if (response.speechError || response.abortController.signal.aborted) return;
+      if (response.firstPhraseAtMs === undefined) {
+        response.firstPhraseAtMs = Date.now();
+        clearTimeout(response.firstPhraseTimer);
+        log.info({ sessionId: claim.sessionId, responseId: response.id, conversationId: claim.request.conversationId,
+          phase: 'first_speech_phrase', characters: phrase.length,
+          textToPhraseMs: response.firstTextAtMs === undefined ? undefined : response.firstPhraseAtMs - response.firstTextAtMs,
+        }, 'Realtime voice first speech phrase ready');
+      }
       if (response.queuedSpeechCharacters + phrase.length > 8_000) {
         response.speechError = new Error('Voice synthesis queue limit reached');
         return;
@@ -295,6 +341,16 @@ export function createAgentVoiceEngine(options: {
     activeResponse = response;
     send('response.created', { responseId: response.id });
     try {
+      const opening = prepareSpeechStreamSession(claim.tts.config, {
+        appConfig: claim.config, signal: response.abortController.signal, allowFallback: false,
+      });
+      if (opening) {
+        response.preparedSpeech = opening.then(session => {
+          log.info({ sessionId: claim.sessionId, responseId: response.id, conversationId: claim.request.conversationId,
+            phase: 'response_tts_ready', setupMs: Date.now() - response.startedAt }, 'Realtime voice TTS prepared');
+          return { session };
+        }, (error: unknown) => ({ error }));
+      }
       await interruptionWrites;
       if (response.abortController.signal.aborted || closed) return taskUpdateExposed();
       if (!claim.conversationSessionId) throw new Error('Conversation identity is unavailable');
@@ -329,6 +385,14 @@ export function createAgentVoiceEngine(options: {
           response.text += event.payload.delta;
           send('response.text.delta', { responseId: response.id, delta: event.payload.delta });
           queuePhrases(response, response.segmenter.push(event.payload.delta));
+          if (response.firstPhraseAtMs === undefined && response.firstPhraseTimer === undefined) {
+            response.firstPhraseTimer = setTimeout(() => {
+              response.firstPhraseTimer = undefined;
+              if (activeResponse === response && !response.abortController.signal.aborted) {
+                queuePhrases(response, response.segmenter.flushFirstPhrase());
+              }
+            }, FIRST_PHRASE_WAIT_MS);
+          }
         }
         if (event.type === 'tool_start') {
           // Agents commonly announce a tool without punctuation. Do not hold that
@@ -413,7 +477,11 @@ export function createAgentVoiceEngine(options: {
       if (activeResponse === response) activeResponse = undefined;
       return taskUpdateExposed();
     } finally {
+      clearTimeout(response.firstPhraseTimer);
       await waitForSpeech(response);
+      response.abortController.abort('response_finished');
+      const prepared = await response.preparedSpeech;
+      if (prepared && 'session' in prepared) await prepared.session.close();
     }
   }
 

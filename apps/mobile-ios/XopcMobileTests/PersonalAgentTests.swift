@@ -40,4 +40,17 @@ struct PersonalAgentTests {
         )
         #expect(failure.error?.message == "No compatible model")
     }
+    @Test func proactiveSettingsRetainVersionAndDailyLimitsWhenEditingQuietHours() throws {
+        let decoded = try JSONDecoder().decode(PersonalProactivitySettings.self, from: Data(#"{"revision":9,"mode":"balanced","timezone":"Asia/Shanghai","quietStart":22,"quietEnd":8,"dailyMessages":4,"dailyModelCalls":20}"#.utf8))
+        var edited = decoded
+        edited.quietStart = 0
+        edited.timezone = "UTC"
+        let body = try JSONSerialization.jsonObject(with: JSONEncoder().encode(edited)) as? [String: Any]
+        #expect(body?["revision"] as? Int == 9)
+        #expect(body?["dailyMessages"] as? Int == 4)
+        #expect(body?["dailyModelCalls"] as? Int == 20)
+        #expect(body?["quietStart"] as? Int == 0)
+        #expect(body?["timezone"] as? String == "UTC")
+    }
+
 }
