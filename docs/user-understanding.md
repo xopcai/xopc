@@ -38,3 +38,11 @@ Every turn selects a bounded set of relevant context after scope, validity, sens
 Relevant sources and context-selection audits remain inspectable. Helpful/irrelevant feedback affects retrieval priority, not factual confidence.
 
 Conversations, work folders, and connectors retain separate access controls. Local-only processing policy and temporary conversations continue to apply. Backup and state locations are described in [Data and file locations](./workspace.md).
+
+## Refresh authorized sources
+
+In the understanding panel, choose **Update understanding** for one source or **Update all** in the header. Work starts immediately; closing the panel does not cancel it. Status distinguishes queued work, reading, waiting for desktop collection, analysis and the final result.
+
+Check the last update and result, then correct inaccurate understanding. Restore authorization if a source is disconnected and keep the desktop app online when native collection is required. Manual refresh does not expand the read scope or replace automatic maintenance.
+
+See [Personal AI follow-ups](./personal-agent-proactivity.md) for continued attention to a topic.

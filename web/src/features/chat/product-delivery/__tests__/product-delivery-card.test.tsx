@@ -214,6 +214,38 @@ describe('AssistantResultTail product deliveries', () => {
     expect(container.querySelectorAll('[data-product-delivery="task"] button')).toHaveLength(1);
   });
 
+  it.each([
+    ['queued', 'Starting soon', '即将开始'],
+    ['running', 'In progress', '正在进行'],
+    ['verifying', 'Checking the result', '正在核对结果'],
+    ['waiting', 'Waiting', '暂时等待'],
+    ['blocked', 'Needs attention', '需要处理'],
+    ['completed', 'Completed', '已完成'],
+  ])('updates the %s task status when the interface language changes', (status, en, zh) => {
+    const delivery: ProductDeliveryEnvelope = {
+      version: 2,
+      operation: 'started',
+      primary: {
+        kind: 'task', id: `localized-${status}`, title: 'English Weekly Plan — One Page',
+        status, capabilities: ['open'],
+      },
+    };
+    useLocaleStore.setState({ language: 'en' });
+    act(() => root.render(<MemoryRouter>{renderDelivery(delivery)}</MemoryRouter>));
+    const row = container.querySelector('[data-product-delivery="task"]');
+    expect(row?.textContent).toContain(en);
+    expect(row?.textContent).not.toContain(zh);
+
+    act(() => useLocaleStore.setState({ language: 'zh' }));
+    expect(row?.textContent).toContain(zh);
+    expect(row?.textContent).not.toContain(en);
+    expect(row?.textContent).toContain('English Weekly Plan — One Page');
+
+    act(() => useLocaleStore.setState({ language: 'en' }));
+    expect(row?.textContent).toContain(en);
+    expect(row?.textContent).not.toContain(zh);
+  });
+
   it('opens a delegated task in the modal over the Personal AI conversation', () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 2,

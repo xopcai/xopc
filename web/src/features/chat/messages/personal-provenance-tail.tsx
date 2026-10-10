@@ -6,12 +6,15 @@ import { PersonalProvenanceDetailSchema, type PersonalFeedback, type PersonalPro
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
 type Envelope = { ok: boolean; payload?: unknown; error?: string };
 
 export function PersonalProvenanceTail({ provenance }: { provenance: PersonalProvenance }) {
-  const zh = useLocaleStore(state => state.language) === 'zh';
+  const language = useLocaleStore(state => state.language);
+  const zh = language === 'zh';
+  const errors = messages(language).chat.provenanceErrors;
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<PersonalProvenanceDetail>();
   const [error, setError] = useState('');
@@ -25,11 +28,11 @@ export function PersonalProvenanceTail({ provenance }: { provenance: PersonalPro
     let active = true;
     setDetail(undefined); setError('');
     void fetchJson<Envelope>(apiUrl(`/api/personal-agent/outreach/${provenance.outreachId}/provenance`)).then(response => {
-      if (!response.ok) throw new Error(response.error ?? 'Unable to load provenance');
+      if (!response.ok) throw new Error(response.error ?? errors.load);
       if (active) setDetail(PersonalProvenanceDetailSchema.parse(response.payload));
     }).catch(cause => { if (active) setError(String(cause)); });
     return () => { active = false; };
-  }, [open, provenance.outreachId, revision]);
+  }, [open, provenance.outreachId, revision, errors.load]);
   async function feedback(kind: PersonalFeedback['kind'], extra: Partial<PersonalFeedback> = {}) {
     setBusy(true); setError('');
     try {
@@ -37,7 +40,7 @@ export function PersonalProvenanceTail({ provenance }: { provenance: PersonalPro
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), kind, scope: 'thread', ...extra }),
       });
-      if (!response.ok) throw new Error(response.error ?? 'Unable to save feedback');
+      if (!response.ok) throw new Error(response.error ?? errors.save);
       setAdjust(false); setRevision(value => value + 1);
     } catch (cause) { setError(String(cause)); }
     finally { setBusy(false); }
@@ -51,7 +54,7 @@ export function PersonalProvenanceTail({ provenance }: { provenance: PersonalPro
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ versionId: latest.id, revision: detail.thread.revision, idempotencyKey: crypto.randomUUID() }),
       });
-      if (!response.ok) throw new Error(response.error ?? 'Unable to undo strategy');
+      if (!response.ok) throw new Error(response.error ?? errors.undo);
       setAdjust(false); setRevision(value => value + 1);
     } catch (cause) { setError(String(cause)); }
     finally { setBusy(false); }

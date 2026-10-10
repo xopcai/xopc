@@ -1,5 +1,85 @@
 {
   "chat": {
+    "referenceFallback": "引用",
+    "reviewCard": {
+      "running": "正在审查修改",
+      "finished": "代码审查已完成",
+      "collecting": "正在收集修改",
+      "assistant": "审查助手",
+      "basedOn": "基于 {{target}}",
+      "preparing": "正在准备独立的审查上下文…",
+      "checking": "审查助手正在检查修改…",
+      "error": "审查助手未能完成：{{error}}",
+      "noModelFindings": "未生成模型审查结果。",
+      "noFindings": "未发现问题。",
+      "correctness": {
+        "patch is correct": "修改正确",
+        "patch is incorrect": "修改有误",
+        "unknown": "尚未确定"
+      }
+    },
+    "provenanceErrors": {
+      "load": "无法加载消息依据",
+      "save": "无法保存反馈",
+      "undo": "无法撤销跟进调整"
+    },
+    "productDelivery": {
+    "heading": "本轮交付结果",
+    "partialResults": "仅显示部分结果",
+    "diffPreview": "编辑预览",
+    "proposedChanges": "建议修改（尚未应用）",
+    "replaceRange": "替换范围",
+    "partialDiff": "仅显示部分内容，请查看完整工具结果。",
+    "loadingAppPreview": "正在加载应用预览",
+    "previewTimeout": "预览未在 7 秒内就绪。",
+      "kinds": {
+        "task": "任务",
+        "project": "项目",
+        "note": "笔记",
+        "workflow_definition": "工作流",
+        "workflow_run": "工作流运行",
+        "automation": "自动化",
+        "scene": "智能关注",
+        "local_app": "应用",
+        "chat_preview": "对话预览",
+        "file": "文件",
+        "session": "对话",
+        "settings": "设置"
+      },
+      "operations": {
+        "created": "已创建",
+        "updated": "已更新",
+        "opened": "已就绪",
+        "started": "已启动",
+        "completed": "已完成",
+        "failed": "失败"
+      },
+      "statuses": {
+        "active": "运行中",
+        "completed": "已完成",
+        "disabled": "已停用",
+        "enabled": "已启用",
+        "failed": "失败",
+        "inbox": "收件箱",
+        "paused": "已暂停",
+        "ready": "已就绪",
+        "running": "运行中"
+      },
+      "taskStates": {
+        "queued": "即将开始",
+        "running": "正在进行",
+        "verifying": "正在核对结果",
+        "waiting": "暂时等待",
+        "blocked": "需要处理",
+        "completed": "已完成",
+        "closed": "已结束",
+        "failed": "遇到问题",
+        "assigned": "已交办",
+        "ready": "待开始"
+      },
+      "continue": "继续",
+      "continuePrompt": "继续处理{{kind}}「{{title}}」（ID: {{id}}）："
+    },
     "taskTrigger": {
       "about": "关于",
       "progress": "有新进展", "question": "有个问题需要处理",
@@ -611,6 +691,7 @@
     "attachmentPreviewOpenLocalFailed": "无法使用本地应用打开此表格",
     "attachmentPreviewImage": "预览图片",
     "turnOutcome": {
+    "evidenceCount": "{{count}} 项验证",
       "heading": "本轮结果",
       "statusPartial": "部分完成",
       "checkedRevision": "检查版本",

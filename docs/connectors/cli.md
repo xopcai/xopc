@@ -1,6 +1,6 @@
 # Managed CLI connectors
 
-Feishu, WeCom and WPS 365 use the same managed CLI runtime. MCP and Composio remain available for their existing integrations. The unused Feishu and three WPS MCP definitions have been removed; there is no credential migration or fallback.
+Connect Feishu, WeCom or WPS 365 so your Agent can use supported office data and actions. xopc installs and verifies the required CLI and keeps each account isolated. These connectors are Beta.
 
 ## Connect
 
@@ -32,23 +32,14 @@ A timed-out, interrupted or malformed write response is **unknown**, because the
 
 Runtime files live under `<state>/connectors/cli/runtimes/<adapter>/<version>/<platform>/`. Credentials, child home directories and result artifacts live under `<state>/connectors/cli/contexts/<contextId>/`. CLI-specific credential storage remains owned by the CLI. The host environment's unrelated credentials are not forwarded.
 
-## Add another CLI
+## Verify and troubleshoot
 
-Implement `CliAdapter` in `src/connectors/cli/types.ts`, then register a trusted packaged adapter. It specifies pinned distributions, isolated configuration variables, curated scopes, schema/result decoding, literal argv construction, identity verification and authorization steps. Shortcuts without machine-readable schemas can supply version-pinned `staticActions`. Trusted adapters may supply constant `environment` values and SHA-256 verified `configAssets`; manifests cannot override these. Assets are atomically installed without replacing credentials, and mismatched specs fail closed.
+After connecting, use **Check connection**, then ask the assistant to read a document, event or todo you recognize. Verify the selected account and returned content. Successful login does not establish every enterprise permission.
 
-A connector definition references `runtime: { type: 'cli', adapterId, adapterVersion, binaryVersion }` and `auth: { mode: 'cli' }`. Store manifests must reference an already registered exact adapter version. They cannot provide code, an executable path, commands, environment overrides or credential setup fields.
+- Missing content: check the selected account, resource sharing and application scopes.
+- Authorization failure: inspect the dialog's reason; administrator approval or subscription limits require administrator action.
+- Download or startup failure: check the Gateway host's network, supported platform and `tar`.
+- Unknown write result: read the remote state before attempting another creation.
+- Revoke access: disconnect in xopc, then revoke authorization in the upstream account settings.
 
-A third deterministic adapter is exercised by `src/connectors/cli/__tests__/execution.test.ts` without modifying the runtime, provider, approval code or dialog. Distribution tests verify that a failed new version leaves the old pinned version usable. Supporting another vendor version requires updating its packaged adapter and fixtures; ordinary manifests cannot override supported versions.
-
-Validation commands:
-
-```sh
-pnpm vitest run src/connectors/cli/__tests__
-pnpm vitest run src/gateway/hono/routes/__tests__/cli-connectors-http.test.ts
-pnpm exec tsx scripts/cli-connectors-browser-smoke.mts
-pnpm exec tsx scripts/wps365-cli-smoke.mts
-```
-
-The browser smoke uses Chrome at its standard macOS path, overridable with `XOPC_SMOKE_BROWSER`. Real-account validation must separately cover token refresh, multiple-account isolation, upstream identity semantics and explicitly approved test writes.
-
-The WPS binary smoke downloads and verifies the pinned official release, exercises all 14 commands with dry runs and a local HTTP fixture, and checks that missing user credentials do not trigger application-token fallback. It does not authorize a real account or validate enterprise entitlements.
+A Feishu messaging bot and an office connector are separate entries. See [Feishu channel](../channels/feishu.md) for messaging, and [Connectors](./index.md) for other connection methods.

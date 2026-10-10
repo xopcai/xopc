@@ -1,47 +1,49 @@
-# Personal AI 主动联系
+# Personal AI follow-ups
 
-Personal AI 可以持续关注明确交代的事情，以及有充分上下文的讨论。在有值得交流的内容时，它会在个人聊天里留下消息。用户不活跃不会单独触发问候或催促。
+Personal AI can keep track of a topic you ask it to follow and leave a useful update in your personal conversation. Being inactive alone does not trigger greetings or reminders.
 
-## 使用方式
+## Ask for a follow-up
 
-可以在聊天里说“帮我继续关注这个方向，下周跟进一下”。Personal AI 使用 `personal_attention` 保存跟进；检查是内部安排，只有内容有价值且时机合适时才联系。准确的固定提醒继续使用定时自动化。
+In your Personal AI conversation, try:
 
-也可以说“明天下午再检查一下，如果有值得补充的建议，主动在这里告诉我”。明确的跟进不要求特定关键词；“明天下午”默认按主动联系设置中的时区安排在 15:00 检查，Agent 应在保存成功后确认实际检查时间。后台由 Gateway 调度，不需要用户回来触发，也不需要额外创建自动化。保存失败不能声称已安排或已写入记忆；没有新内容时保持安静。
+```text
+Check this direction again tomorrow afternoon. If you have a useful suggestion,
+tell me here. Keep the follow-up within the sources I have already authorized.
+```
 
-主动消息下方有一行小提示，例如“延续之前的讨论”。点击后查看为什么关注、为什么现在联系，以及可访问的相关对话。推断关注会明确标记，不能被解释为用户已经委托了工作。
+Wait for the assistant to confirm the saved follow-up and actual check time. “Tomorrow afternoon” is interpreted as 15:00 in the proactive-message timezone. A check time is not a guaranteed delivery time: preparation and queues can delay it, and there may be no message when nothing useful has changed. Use an [Automation](./automations.md) for a fixed scheduled reminder.
 
-面板中可以延后、停止关注，或要求以后先准备完整。也可以直接在聊天里表达反馈；指代不明确时应先澄清。停止过的主题不会由自动提取重新创建，恢复关注需要明确指令。
+## Control when it contacts you
 
-## 设置与运行条件
+Open Personal AI's preferences and find **Proactive messages**:
 
-在 Personal AI 的偏好面板中设置主动联系：关闭、仅明确跟进、适度主动；可以调整静默时间和时区。默认采用适度主动，静默时间为 22:00–08:00，时区取已保存的用户时区或运行主机时区。关闭主动联系不影响已有明确请求的结果交付。
+| Mode | Behavior |
+| --- | --- |
+| Off | Disables proactive contact; results from existing explicit requests can still be delivered |
+| Explicit follow-ups only | Follows the topics you deliberately delegate |
+| Thoughtful participation | Also considers sufficiently supported discussion context |
 
-本地 Gateway 必须保持运行。系统约每分钟检查到期事项，排队和内容准备可能增加延迟。离线恢复后合并检查，过期内容不会集中补发。
+The default is thoughtful participation, with quiet hours from 22:00 to 08:00. Review the timezone and quiet hours, especially when your Gateway runs on another machine.
 
-后台处理遵循用户理解开关、会话访问模式和写入策略。首版在 local-only 用户理解处理策略下暂停后台模型调用；没有配置可用模型时不会宣称已完成准备。
+Your current conversation takes priority. Proactive updates wait while you are speaking, have input queued, or are awaiting an explicitly requested result.
 
-首版仅在 Personal conversation 中发布。外部渠道通知、长期兴趣发现和隐式策略实验尚未启用。成长体现在明确反馈改变后续协作方式，不会自动修改人格原则、工具权限或外部动作授权。
+## Review and change a topic
 
-## 数据与可靠性
+Open the small explanation below a proactive message to see why the assistant followed the topic and why it contacted you now. Inferred attention is labeled; it does not mean you authorized work or external actions.
 
-关注、来源、唤醒、草稿、发布记录和反馈保存在现有 SQLite 中，设置使用同一数据库的 namespaced durable state。`SOUL.md` 继续表达稳定身份，不需要新增 `GROWTH.md`。
+You can delay or stop the topic, ask for more complete preparation or shorter updates, and undo the latest topic adjustment. These choices apply to that topic, rather than changing every conversation. A stopped topic requires an explicit request to resume. Expired or inaccessible sources cannot be restarted through undo.
 
-用户正在对话、输入排队、语音交流或明确请求成果等待交付时，主动联系让位。生成期间的新输入、停止关注、来源删除和策略变化会阻止旧草稿发布。同步失败只重试同一消息，不重复执行准备工作。
+You can also ask in chat: “Stop following this topic” or “Prepare a complete answer before contacting me about this again.” Name the topic when several discussions are active.
 
-已发布消息的缘由绑定当时实际使用的来源。来源删除、修改或失去访问条件后，详情不再披露旧依据；这不会自动删除已经送达的消息正文。
+## Runtime and privacy
 
-实现细节见 [技术方案](./design/personal-agent-proactivity-technical.md)。
+- Keep the local Gateway running and configure a working model. Due items are checked roughly once a minute; this is not a delivery guarantee.
+- After an offline period, checks are combined rather than sending a backlog of outdated messages.
+- User-understanding, session-access and write policies still apply. Background model preparation is paused under the local-only understanding policy in the current release.
+- Updates are delivered in the Personal AI conversation. External channel notifications are not enabled by this feature.
+- You can ask what long-term interests the assistant has inferred. Interest candidates remain silent and do not automatically start follow-ups.
+- Deleting or revoking a source prevents further disclosure of that evidence; it does not erase message text already delivered.
 
-## 主题反馈、版本与撤销
+If nothing arrives, check the selected mode, quiet hours, timezone, model availability and Gateway connection. Ask the assistant to show the saved topic before creating another follow-up.
 
-主动消息的小尾巴详情中可以选择“以后先准备完整”或“以后简短一点”，并查看调整记录、撤销最近调整。停止关注和主题级延后也记录调整前后的状态；撤销是用户明确发起的新版本，不删除旧记录。过期或失去来源的事项不能通过撤销重新启动，过时版本需要刷新后再操作。
-
-聊天中也可以明确说“这个主题以后准备完整再告诉我”或“撤销刚才的调整”。Personal AI 使用 `personal_attention` 的 `feedback`、`rollback` 命令；指代不明确时先确认主题。单条消息的有用、无关或延后反馈不会自动变成全局偏好，也不会暂停整个主题。下一次后台判断和准备使用当前有效的主题策略，策略过期后恢复按内容判断。
-
-## 长期兴趣的静默验证
-
-后台在既有提取预算内发现兴趣候选，结合最近 30 天最多 24 条较早的用户表达。至少两条不同用户表达、跨两个本地日期的证据才能保存；重复文本、助手发言和明确跟进请求不能充当独立兴趣证据。模型还需排除一次性任务、旅行和临时情绪；跨天门槛只能降低误判，不能证明一定是长期兴趣。
-
-候选保存来源、摘要、按独立表达和日期计算的置信度，以及最近支持时间和失效时间。置信度是用于静默验证的启发式分数，不代表用户确认。候选始终保持 `candidate`，没有检查时间，不进入主动消息调度；30 天没有新支持会失效。停止的同一主题不会由自动提取复活。
-
-可以在聊天里问“你推断我有哪些长期兴趣”，由 `personal_attention(command="interests")` 按需查看；本地调试可使用已认证的 `GET /api/personal-agent/interests`。本阶段不新增兴趣管理页面，不开放兴趣推断式主动联系或自主准备计划。
+See [Understanding and memory](./user-understanding.md) for correction and deletion, and [Projects, Tasks, and Notes](./projects-tasks-notes.md) for work with a verifiable result.

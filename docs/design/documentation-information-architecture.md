@@ -59,33 +59,11 @@ Store the following under `docs/design/`:
 
 Store durable decisions under `docs/adr/`. Both directories are excluded from the public VitePress build through `srcExclude`.
 
-## Migration map
+## Current placement
 
-| Previous public page | New location or treatment |
-| --- | --- |
-| `architecture.md` | `design/technical/architecture.md` |
-| `memory-architecture.md` | `design/technical/memory-architecture.md` |
-| `realtime.md` | `design/technical/realtime.md` |
-| `agent-capabilities.md` | `design/technical/agent-capabilities.md` |
-| `agent-configuration.md` | `design/technical/agent-configuration.md`; public Agent guidance stays in `routing-system.md` |
-| `concepts/system-prompt.md` | `design/technical/concepts/system-prompt.md` |
-| `skills-testing.md` | `design/technical/skills-testing.md` |
-| `mobile-build-release.md` | `design/release/mobile-build-release.md` |
-| `documentation-quality.md` | `design/process/documentation-quality-legacy.md` |
-| Agent configuration internals | `design/technical/agent-configuration.md`; the public configuration page remains task-oriented |
-| Previous tool schema reference | `design/technical/tools-reference-legacy.md`; the public page now focuses on selection, permission, and diagnosis |
-| Previous Skill authoring/test reference | `design/technical/skills-reference-legacy.md`; the public page now focuses on install, trust, and use |
-| Previous MCP API reference | `design/technical/mcp-reference-legacy.md`; the public page now covers connection and Agent access |
-| Previous extension SDK reference | `design/technical/extensions-reference-legacy.md`; the public page now covers install and operation |
-| Previous Gateway API page | `design/technical/gateway-api-legacy.md`; the public page now covers running and accessing the Gateway |
-| Previous model catalog dump | `design/technical/models-reference-legacy.md`; the public page points to the live catalog |
-| Previous progress event design | `design/technical/progress-feedback-legacy.md`; the public page explains visible states |
-| Memory and user model internals | `design/technical/memory-architecture.md`; the public page explains review and privacy |
-| Previous image API reference | `design/technical/image-provider-upgrade-plan-2026-10-09.md`; the public page explains setup and safe use |
-| Previous desktop pet manifest | `design/technical/desktop-pets-authoring-legacy.md`; the public page explains selection and guided creation |
-| Previous tunnel implementation notes | `design/technical/tunnel-security-implementation-legacy.md`; the public page keeps only risk and operating guidance |
+Public guides remain at their user URLs. Runtime architecture, protocols, implementation plans, security deployment evidence, product requirements and mobile acceptance records live under `docs/design/`; durable decisions live under `docs/adr/`. Both are excluded from the site. Local `docs/mobile-reference/` screenshot and device evidence is also excluded.
 
-Existing user URLs are retained when the topic is useful but their content is rewritten around user outcomes. Developer-only pages are removed from public navigation and build output.
+The public guides replace the former `*-legacy.md` reference snapshots. Those obsolete copies were removed; use Git history when investigating a past release. The desktop-pet authoring reference remains because it has contributor content not covered by the public pet guide.
 
 ## Rewrite coverage
 
