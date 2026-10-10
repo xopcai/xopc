@@ -18,10 +18,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -36,8 +36,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -76,7 +74,8 @@ internal fun LoopiIcon(extent: Dp, active: Boolean, compact: Boolean = false,
   val scope = rememberCoroutineScope()
   var greetingJob by remember { mutableStateOf<Job?>(null) }
   val label = stringResource(R.string.tab_assistant)
-  val touchModifier = if (interactive) Modifier.clip(CircleShape).clickable(role = Role.Button,
+  val touchModifier = if (interactive) Modifier.clip(CircleShape).clickable(
+    interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button,
     onClickLabel = label) {
     if (motionActive) {
       greetingJob?.cancel()
@@ -142,31 +141,25 @@ private fun CompactLoopiArtwork(extent: Dp) {
 private fun LoopiArtwork(extent: Dp, ringLift: Float, faceLift: Float,
   ringAngle: Float, eyeOpen: Float) {
   val extentPx = with(LocalDensity.current) { extent.toPx() }
-  val face = MaterialTheme.colorScheme.surface.copy(red = 0.96f, green = 0.95f, blue = 0.91f)
   Box(modifier = Modifier.size(extent), contentAlignment = Alignment.Center) {
-    Image(painterResource(R.drawable.brand_mark), contentDescription = null,
+    Image(painterResource(R.drawable.loopi_ring), contentDescription = null,
       modifier = Modifier.size(extent).graphicsLayer {
         rotationZ = ringAngle
         translationY = ringLift * extentPx / 304f
       })
-    Canvas(modifier = Modifier.size(extent * 0.28f).graphicsLayer {
-      translationY = faceLift * extentPx / 200f
-    }) {
-      val width = size.width
-      val height = size.height
-      drawOval(face, topLeft = Offset(width * 0.03f, height * 0.09f),
-        size = Size(width * 0.94f, height * 0.82f))
-      val ink = Color(0xFF293438)
-      val eyeHeight = height * 0.14f * eyeOpen.coerceIn(0.08f, 1f)
-      listOf(0.35f, 0.65f).forEach { x ->
-        drawOval(ink, topLeft = Offset(width * x - width * 0.035f, height * 0.48f - eyeHeight / 2f),
-          size = Size(width * 0.07f, eyeHeight))
+    Box(Modifier.size(extent).graphicsLayer { translationY = faceLift * extentPx / 200f },
+      contentAlignment = Alignment.Center) {
+      Image(painterResource(R.drawable.loopi_core), contentDescription = null, modifier = Modifier.size(extent))
+      Canvas(modifier = Modifier.size(extent * (52f / 304f)).graphicsLayer {
+        translationY = -2f * extentPx / 304f
+      }) {
+        val eyeHeight = size.width * (12.4f / 52f) * eyeOpen.coerceIn(0.08f, 1f)
+        listOf(5f / 52f, 47f / 52f).forEach { x ->
+          drawOval(Color(0xFF293438),
+            topLeft = Offset(size.width * x - size.width * (4.4f / 52f), size.height / 2f - eyeHeight / 2f),
+            size = Size(size.width * (8.8f / 52f), eyeHeight))
+        }
       }
-      val smile = Path().apply {
-        moveTo(width * 0.44f, height * 0.67f)
-        quadraticTo(width * 0.5f, height * 0.75f, width * 0.56f, height * 0.67f)
-      }
-      drawPath(smile, ink, style = Stroke(width = width * 0.025f))
     }
   }
 }

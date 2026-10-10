@@ -344,6 +344,7 @@ data class ConnectionUiState(
   val queueBusy: Boolean = false,
   val queueError: Boolean = false,
   val agents: List<ConversationAgent> = emptyList(),
+  val agentAvatars: Map<String, Bitmap> = emptyMap(),
   val selectedAgentId: String = "",
   val defaultAgentId: String = "main",
   val agentsLoading: Boolean = false,
@@ -2926,7 +2927,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       modelConfigVersion = null,
       modelsLoading = false, modelSaving = false, modelError = false,
       queuedInputs = emptyList(), queuePositionOffset = 0, queueLoading = false,
-      queueBusy = false, queueError = false, agents = emptyList(),
+      queueBusy = false, queueError = false, agents = emptyList(), agentAvatars = emptyMap(),
       selectedAgentId = "", agentsLoading = false, agentError = false) }
     mutableState.update { it.copy(context = null, contextLoading = false, contextError = false,
       connectionWait = ConnectionWaitUiState(it.profile?.gatewayId, id),
@@ -3210,8 +3211,10 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     val current = mutableState.value
     val gatewayId = current.profile?.gatewayId ?: return
     val id = current.selectedConversationId ?: return
-    if (file.kind == "directory" || current.contextPanel.saving || current.sending ||
-      current.pendingInput != null || current.draftAttachments.any {
+    if (file.kind != "file" || current.contextPanel.saving || current.contextPanel.loading || current.sending ||
+      current.attachmentLoading || current.draftAttachments.size >= 10 ||
+      current.contextPanel.gatewayId != gatewayId || current.contextPanel.conversationId != id ||
+      current.contextPanel.files.none { it == file } || current.pendingInput != null || current.draftAttachments.any {
         it.workspaceRelativePath == file.relativePath
       }) return
     if (file.size !in 1..(10 * 1024 * 1024) ||
@@ -3290,13 +3293,26 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private fun loadAgents(id: String) {
     if (mutableState.value.selectedConversationId != id) return
     agentJob?.cancel()
-    mutableState.update { it.copy(agentsLoading = true, agentError = false) }
+    mutableState.update { it.copy(agentsLoading = true, agentError = false, agentAvatars = emptyMap()) }
+    val catalogGatewayId = mutableState.value.profile?.gatewayId
     agentJob = viewModelScope.launch {
       try {
         val catalog = runInterruptible(Dispatchers.IO) { conversations.agents() }
-        if (mutableState.value.selectedConversationId == id) mutableState.update { it.copy(
+        if (mutableState.value.selectedConversationId == id && mutableState.value.profile?.gatewayId == catalogGatewayId) mutableState.update { it.copy(
           agents = catalog.agents, defaultAgentId = catalog.defaultId, agentsLoading = false,
           selectedAgentId = it.selectedAgentId.ifBlank { catalog.defaultId }) }
+        val gatewayId = catalogGatewayId
+        val ordered = catalog.agents.sortedBy { it.id != mutableState.value.selectedAgentId }
+        for (agent in ordered) {
+          if (mutableState.value.selectedConversationId != id || mutableState.value.profile?.gatewayId != gatewayId) break
+          val bitmap = try {
+            runInterruptible(Dispatchers.IO) {
+              conversations.agentAvatar(agent)?.let { bytes -> android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
+            }
+          } catch (error: CancellationException) { throw error } catch (_: Exception) { null }
+          if (bitmap != null && mutableState.value.selectedConversationId == id && mutableState.value.profile?.gatewayId == gatewayId)
+            mutableState.update { it.copy(agentAvatars = it.agentAvatars + (agent.id to bitmap)) }
+        }
       } catch (error: CancellationException) {
         throw error
       } catch (_: Exception) {
@@ -3637,6 +3653,28 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  suspend fun sendQuickVoiceRecording(bytes: ByteArray, durationSeconds: Int) {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: error("NOT_PAIRED")
+    check(!current.quickSending && !current.quickAttachmentLoading && !current.creatingConversation &&
+      !current.sending && current.quickAttachments.size < 10 &&
+      current.realtimeStatus == "connected") { "COMPOSER_BUSY" }
+    mutableState.update { it.copy(quickAttachmentLoading = true, quickAttachmentError = false) }
+    try {
+      val items = runInterruptible(Dispatchers.IO) {
+        conversations.addQuickVoice(gatewayId, bytes, durationSeconds)
+        conversations.quickAttachments()
+      }
+      check(mutableState.value.profile?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
+      mutableState.update { it.copy(quickAttachments = items, quickAttachmentLoading = false) }
+      submitQuickDraft()
+    } finally {
+      if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+        it.copy(quickAttachmentLoading = false)
+      }
+    }
+  }
+
   suspend fun sendVoiceRecording(bytes: ByteArray, durationSeconds: Int) {
     val current = mutableState.value
     val gatewayId = current.profile?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
@@ -3841,7 +3879,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   }
 
   fun createConversationForReference(kind: String) {
-    if (kind !in setOf("note", "task")) return
+    if (kind !in setOf("note", "task", "file")) return
     createConversationFor(mutableState.value.selectedAgentId.ifBlank { mutableState.value.defaultAgentId },
       false, kind)
   }
@@ -3998,7 +4036,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           mutableState.update { it.copy(selectedConversationId = null, messages = emptyList(), draftText = "",
             historyLoading = false, draftModelLoading = false, draftModelReady = true,
             activeRunId = null, liveText = "", liveMessageId = null, pendingInput = null,
-            models = emptyList(), selectedModelId = "", agents = emptyList(), selectedAgentId = "",
+            models = emptyList(), selectedModelId = "", agents = emptyList(), agentAvatars = emptyMap(), selectedAgentId = "",
             context = null, contextLoading = false, taskWelcome = null, projectWelcome = null) }
         }
         mutableState.update { it.copy(discardingDraftId = null) }
@@ -4191,7 +4229,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           mutableState.update { it.copy(selectedConversationId = null, messages = emptyList(), draftText = "",
             executionMessageId = null, executionDetail = null, executionLoading = false, executionError = false,
             historyLoading = false, activeRunId = null, liveText = "", liveMessageId = null,
-            pendingInput = null, models = emptyList(), selectedModelId = "", agents = emptyList(),
+            pendingInput = null, models = emptyList(), selectedModelId = "", agents = emptyList(), agentAvatars = emptyMap(),
             selectedAgentId = "", context = null, contextLoading = false,
             taskWelcome = null, projectWelcome = null) }
         }

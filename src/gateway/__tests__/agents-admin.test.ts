@@ -12,6 +12,7 @@ import {
   listAgentProfileFiles,
   listGatewayAgents,
   readAgentProfileFile,
+  resolveAgentAvatarImage,
   updateGatewayAgent,
 } from '../agents-admin.js';
 
@@ -39,6 +40,21 @@ describe('agents admin', () => {
     if (originalStateDir === undefined) delete process.env.XOPC_STATE_DIR;
     else process.env.XOPC_STATE_DIR = originalStateDir;
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it('renders deterministic generated avatars and preserves custom names across locales', async () => {
+    const first = await resolveAgentAvatarImage('main');
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.data.contentType).toBe('image/png');
+    expect(first.data.buffer.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    const again = await resolveAgentAvatarImage('main');
+    expect(again.ok && again.data.buffer.equals(first.data.buffer)).toBe(true);
+    await updateGatewayAgent('main', { profile: { name: '我的助手', avatar: 'xopc:dicebear:bottts:Joyce' } });
+    const configured = await resolveAgentAvatarImage('main');
+    expect(configured.ok && configured.data.buffer.equals(first.data.buffer)).toBe(false);
+    expect((await listGatewayAgents({ locale: 'en' })).agents[0]?.name).toBe('我的助手');
+    expect((await resolveAgentAvatarImage('missing')).ok).toBe(false);
   });
 
   it('creates a minimal agent that inherits every global capability', async () => {

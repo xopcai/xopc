@@ -38,6 +38,12 @@ importers:
       '@composio/core':
         specifier: 0.21.0
         version: 0.21.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(ws@8.21.0)(zod@4.4.3)
+      '@dicebear/collection':
+        specifier: 9.4.2
+        version: 9.4.2(@dicebear/core@9.4.2)
+      '@dicebear/core':
+        specifier: 9.4.2
+        version: 9.4.2
       '@earendil-works/pi-agent-core':
         specifier: 0.87.0
         version: 0.87.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)
