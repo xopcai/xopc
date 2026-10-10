@@ -61,6 +61,8 @@ function reviewLocation(finding: ReviewContent['findings'][number]): string {
 }
 
 function ReviewBlock({ review }: { review: ReviewContent }) {
+  const language = useLocaleStore(state => state.language);
+  const t = messages(language).chat.reviewCard;
   const isRunning = review.status === 'preparing' || review.status === 'reviewing';
   const isPreparing = review.status === 'preparing';
   const modelReviewIncomplete = review.source === 'local' && review.overallCorrectness === 'unknown';
@@ -75,33 +77,33 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
       <div className="flex flex-wrap items-center gap-2">
         {isRunning ? <Loader2 className="size-4 animate-spin text-accent" aria-hidden /> : null}
         <div className="text-sm font-semibold text-fg-primary">
-          {isRunning ? 'Reviewing changes' : 'Code review finished'}
+          {isRunning ? t.running : t.finished}
         </div>
         {isRunning ? (
           <div className="rounded-md border border-edge bg-surface-inset px-1.5 py-0.5 text-[11px] font-medium text-fg-secondary">
-            {isPreparing ? 'Collecting changes' : 'Review assistant'}
+            {isPreparing ? t.collecting : t.assistant}
           </div>
         ) : (
           <div className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-medium', correctnessTone)}>
-            {review.overallCorrectness}
+            {t.correctness[review.overallCorrectness]}
           </div>
         )}
       </div>
-      <div className="mt-1 text-xs text-fg-tertiary">Based on {review.target}</div>
+      <div className="mt-1 text-xs text-fg-tertiary">{t.basedOn.replace('{{target}}', review.target)}</div>
       {isRunning && !review.analysisMarkdown ? (
         <div className="mt-3 text-sm text-fg-secondary">
-          {isPreparing ? 'Preparing an isolated review context…' : 'The review assistant is checking the changes…'}
+          {isPreparing ? t.preparing : t.checking}
         </div>
       ) : null}
       {review.analysisMarkdown ? (
         <div className="mt-3 rounded-md border border-edge-subtle bg-surface px-2.5 py-2">
-          <div className="mb-1 text-xs font-medium text-fg-secondary">Review assistant</div>
+          <div className="mb-1 text-xs font-medium text-fg-secondary">{t.assistant}</div>
           <MarkdownView content={review.analysisMarkdown} compact />
         </div>
       ) : null}
       {review.status === 'error' && review.errorMessage ? (
         <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 px-2.5 py-2 text-sm text-warning">
-          The review assistant could not complete: {review.errorMessage}
+          {t.error.replace('{{error}}', review.errorMessage)}
         </div>
       ) : null}
       {!isRunning ? <>
@@ -111,7 +113,7 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
       <div className="mt-3 space-y-2">
         {review.findings.length === 0 ? (
           <div className="text-sm text-fg-secondary">
-            {modelReviewIncomplete ? 'No model findings were produced.' : 'No findings.'}
+            {modelReviewIncomplete ? t.noModelFindings : t.noFindings}
           </div>
         ) : (
           review.findings.map((finding, index) => {

@@ -9,7 +9,7 @@ export default defineConfig({
   base,
   // Product documentation is published here. Engineering plans and ADRs stay
   // in the repository, but are deliberately excluded from the user site.
-  srcExclude: ['design/**', 'adr/**'],
+  srcExclude: ['design/**', 'adr/**', 'mobile-reference/**'],
   // esbuild 0.28+ errors when downleveling destructuring for Vite's legacy
   // default dev target. Apply the feature override to both Vite transforms and
   // dependency pre-bundling, because docs:dev fails during optimizeDeps.
@@ -78,13 +78,15 @@ export default defineConfig({
             text: 'Daily use',
             items: [
               { text: 'User understanding', link: '/user-understanding' },
+              { text: 'Personal AI follow-ups', link: '/personal-agent-proactivity' },
               { text: 'Chat and sessions', link: '/session' },
               { text: 'Share a conversation', link: '/session-sharing' },
               { text: 'Agents', link: '/routing-system' },
               { text: 'Projects, Tasks & Notes', link: '/projects-tasks-notes' },
               { text: 'Workflows', link: '/workflows' },
               { text: 'Automations', link: '/automations' },
-              { text: 'Browser automations', link: '/browser-workflows' },
+              { text: 'Browser automations', link: '/browser-automations' },
+              { text: 'Computer Use preview', link: '/computer-use' },
               { text: 'Voice (STT/TTS)', link: '/voice' },
               { text: 'Images and vision', link: '/image-multimodal' }
             ]
@@ -121,7 +123,7 @@ export default defineConfig({
               { text: 'Mobile app', link: '/mobile-app' },
               { text: 'Chrome extension', link: '/browser-extension' },
               { text: 'Remote access', link: '/remote-access' },
-              { text: 'Heartbeat', link: '/heartbeat' },
+              { text: 'Desktop pets', link: '/desktop-pets' },
               { text: 'Back up and restore', link: '/backup' },
               { text: 'Updates', link: '/update' }
             ]
@@ -190,13 +192,15 @@ export default defineConfig({
             text: '日常使用',
             items: [
               { text: '用户理解', link: '/zh/user-understanding' },
+              { text: 'Personal AI 持续跟进', link: '/zh/personal-agent-proactivity' },
               { text: '聊天与会话', link: '/zh/session' },
               { text: '分享会话', link: '/zh/session-sharing' },
               { text: 'Agent', link: '/zh/routing-system' },
               { text: 'Project、Task 与笔记', link: '/zh/projects-tasks-notes' },
               { text: '工作流', link: '/zh/workflows' },
               { text: '自动化', link: '/zh/automations' },
-              { text: '浏览器自动化', link: '/zh/browser-workflows' },
+              { text: '浏览器自动化', link: '/zh/browser-automations' },
+              { text: '电脑控制预览', link: '/zh/computer-use' },
               { text: '语音（STT/TTS）', link: '/zh/voice' },
               { text: '图像与视觉', link: '/zh/image-multimodal' }
             ]
@@ -233,7 +237,7 @@ export default defineConfig({
               { text: '手机端', link: '/zh/mobile-app' },
               { text: 'Chrome 浏览器扩展', link: '/zh/browser-extension' },
               { text: '远程访问', link: '/zh/remote-access' },
-              { text: '心跳检查', link: '/zh/heartbeat' },
+              { text: '桌面宠物', link: '/zh/desktop-pets' },
               { text: '备份与恢复', link: '/zh/backup' },
               { text: '更新', link: '/zh/update' }
             ]

@@ -47,3 +47,14 @@ For a product release:
 6. Close a Task after reviewing the result, not just after an Agent run stops.
 
 Continue with [The Task Loop](./concepts/loops.md), [Workflows](./workflows.md), and [Automations](./automations.md).
+
+## Review results and retry from the workbench
+
+Open a Task card to inspect its result, artifacts, evidence and remaining work. A stopped execution and an accepted Task are separate states.
+
+1. Expand the review area of a Task awaiting review and check each acceptance criterion against the result.
+2. Choose **Mark passed** or **Mark failed** based on the evidence. Leave unsupported claims unverified.
+3. Choose **Accept task** once all criteria pass, there are no pending waits, and the current Task allows closing.
+4. If the latest execution failed, inspect its record and cause before choosing **Retry**. Retry retains that execution's executor; it does not prove an earlier external write never happened.
+
+If the Task state has changed, refresh before acting again. Resolve requests for information or authorization before continuing work.

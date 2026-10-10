@@ -10,6 +10,8 @@ import {
   type MessageSegment,
 } from '@/features/chat/messages/user-message-segments.parse';
 import type { MessageContextRef } from '@/features/chat/messages/messages.types';
+import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
 
 type RenderableSegment = MessageSegment | { kind: 'context_ref'; refId: string; ref?: MessageContextRef };
@@ -58,6 +60,8 @@ export const UserMessageSegments = memo(function UserMessageSegments({
   document?: UserTurnDocument;
   contextRefs?: MessageContextRef[];
 }) {
+  const language = useLocaleStore(state => state.language);
+  const referenceLabel = messages(language).chat.referenceFallback;
   const parts = useMemo<RenderableSegment[]>(() => {
     if (!document) return parseMessageSegments(text);
     const refs = new Map(contextRefs?.flatMap(ref => ref.refId ? [[ref.refId, ref] as const] : []) ?? []);
@@ -113,10 +117,10 @@ export const UserMessageSegments = memo(function UserMessageSegments({
             data-ref-kind={p.ref?.kind ?? ''}
             data-file-kind={p.ref?.fileKind ?? ''}
             title={p.ref?.title}
-            aria-label={p.ref?.title ?? 'reference'}
+            aria-label={p.ref?.title ?? referenceLabel}
           >
             <ContextRefIcon contextRef={p.ref} />
-            <span className="min-w-0 truncate">{p.ref?.title ?? 'reference'}</span>
+            <span className="min-w-0 truncate">{p.ref?.title ?? referenceLabel}</span>
           </span>
         ) : p.text ? (
           <div
