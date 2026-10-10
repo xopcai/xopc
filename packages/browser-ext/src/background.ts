@@ -1,3 +1,5 @@
+import { recordingCommand, acceptRecordingEvent, setRecordingClaim, syncRecordings } from './recording/controller';
+import { BROWSER_RECORDING_ENDPOINT_DESCRIPTOR } from '@xopcai/browser-control-contract';
 import {
   BROWSER_CONTROL_ENDPOINT_DESCRIPTOR,
   BROWSER_EXTENSION_PROTOCOL_VERSION,
@@ -45,7 +47,7 @@ function scheduleReconnectAlarm(): void {
 
 const browserToolRegistry = new EndpointToolRegistry([{
   descriptor: BROWSER_CONTROL_ENDPOINT_DESCRIPTOR as unknown as EndpointToolDescriptor,
-  execute: async (args) => {
+  execute: async (args, context) => {
     const input = args.input;
     if (!input || typeof input !== 'object') throw new TypeError('Browser control input is required');
     const result = await executeBrowserCommand({
@@ -55,9 +57,12 @@ const browserToolRegistry = new EndpointToolRegistry([{
       input: input as BrowserActionInput,
       timeoutMs: typeof args.timeoutMs === 'number' ? args.timeoutMs : 30_000,
       visualFallback: args.visualFallback !== false,
-    });
+    }, context.signal);
     return { content: [{ type: 'json', value: fitBrowserControlResultToFrame(result.result) }] };
   },
+}, {
+  descriptor: BROWSER_RECORDING_ENDPOINT_DESCRIPTOR as unknown as EndpointToolDescriptor,
+  execute: async (args) => ({ content: [{ type: 'json', value: await recordingCommand(String(args.operation)) }] }),
 }]);
 
 const endpointHost = new EndpointToolHostController({
@@ -118,6 +123,7 @@ async function connect(generation: number): Promise<void> {
     createHello: () => createBrowserEndpointHello(browserToolRegistry.descriptors()),
     onReady: ({ endpointId, turnToken }) => {
       endpointClaim = { endpointId, token: turnToken };
+      setRecordingClaim(endpointClaim);
       lastConnectionError = undefined;
       clearReconnectAlarm();
       endpointHost.connect((message) => client.sendEndpointMessage(message));
@@ -127,6 +133,7 @@ async function connect(generation: number): Promise<void> {
     onMessage: (message) => { void endpointHost.handleMessage(message); },
     onDisconnected: () => {
       endpointClaim = undefined;
+      setRecordingClaim(undefined);
       endpointHost.disconnect();
       scheduleReconnectAlarm();
     },
@@ -161,10 +168,17 @@ function connectWithLogging(): void {
 
 type BrowserRuntimeMessage = {
   type: string;
+  operation?: string;
+  tabId?: number;
 };
 
 chrome.runtime.onMessage.addListener((message: BrowserRuntimeMessage, sender, sendResponse) => {
-  if (message.type === 'browser/get-status') {
+  if (message.type === 'browser/recording-event') {
+    void acceptRecordingEvent(message as never, sender).then(() => sendResponse({ ok: true })).catch((error) => sendResponse({ ok: false, error: String(error) }));
+  } else if (message.type === 'browser/recording-command') {
+    if (!sender.url?.startsWith(`chrome-extension://${chrome.runtime.id}/`) || sender.tab) { sendResponse({ ok: false, error: 'Invalid recording control source.' }); return true; }
+    void recordingCommand(message.operation ?? 'status', message.tabId).then((value) => sendResponse({ ok: true, value })).catch((error) => sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+  } else if (message.type === 'browser/get-status') {
     sendResponse({ connected: Boolean(endpointClaim), transport: 'gateway-realtime', error: lastConnectionError });
   } else if (message.type === 'browser/get-endpoint-claim') {
     sendResponse({ claim: endpointClaim, error: lastConnectionError });
@@ -229,3 +243,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 connectWithLogging();
+
+chrome.alarms.create('xopc-recording-sync', { periodInMinutes: 0.5 });
+chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === 'xopc-recording-sync') void syncRecordings(); });

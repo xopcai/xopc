@@ -829,6 +829,8 @@
       "completedDesc": "任务成功完成时通知。",
       "failedRuns": "任务失败",
       "failedRunsDesc": "任务执行失败时通知。",
+      "needsInput": "需要判断或授权",
+      "needsInputDesc": "助手需要你回答问题或授权时通知。",
       "testTitle": "xopc 通知已就绪",
       "testBody": "后台任务结束时会通知你。",
       "testShown": "测试通知已发送。",

@@ -44,6 +44,7 @@ export type AutomationAction =
   | {
       kind: 'browser_automation';
       automationId: string;
+      revision?: number;
       inputs?: Record<string, unknown>;
       timeoutSeconds?: number;
     }
@@ -361,11 +362,13 @@ export interface AutomationDeps {
   prepareAgentSession?: (input: PrepareAutomationAgentSessionInput) => Promise<void>;
   workflowRunService?: WorkflowRunServiceLike;
   browserAutomationService?: {
+    get(id: string): { revision: number; verified: boolean } | null;
+    versions(id: string): { revision: number; verified: boolean }[];
     runAndWait(
       automationId: string,
       inputs: Record<string, unknown>,
       signal?: AbortSignal,
-      context?: { triggerEvent?: AutomationEvent },
+      context?: { triggerEvent?: AutomationEvent; revision?: number; clientRequestId?: string },
     ): Promise<{
       id: string;
       status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';

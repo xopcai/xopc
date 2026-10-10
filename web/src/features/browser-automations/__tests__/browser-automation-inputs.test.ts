@@ -7,6 +7,7 @@ import {
 } from '../browser-automation-input-utils';
 
 const automation: BrowserAutomation = {
+  verified: false, revision: 1,
   id: 'order-lookup',
   name: 'Order lookup',
   enabled: true,

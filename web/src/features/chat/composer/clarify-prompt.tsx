@@ -149,6 +149,7 @@ function ClarifyPromptBody({
 
   return (
     <section
+      data-clarification-id={prompt.requestId}
       ref={regionRef}
       tabIndex={-1}
       aria-label={labels.clarifyRegionAria}

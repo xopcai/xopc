@@ -95,6 +95,7 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('browser_automation'),
     automationId: nonEmptyString.max(100),
+    revision: z.number().int().positive().optional(),
     inputs: z.record(z.string(), z.unknown()).optional(),
     timeoutSeconds: z.number().int().min(1).max(86400).optional(),
   }).strict(),

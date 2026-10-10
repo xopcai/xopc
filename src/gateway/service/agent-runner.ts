@@ -519,6 +519,7 @@ export class GatewayAgentRunner {
       suggestedAnswer: request.suggestedAnswer,
       approvalKey: request.approvalKey,
     });
+    this.opts.emit('clarification.created', wait);
     const event: ClarificationStreamEvent = {
       type: 'clarify_request',
       requestId: wait.id,

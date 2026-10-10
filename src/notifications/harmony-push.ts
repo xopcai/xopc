@@ -6,7 +6,7 @@ import type { NotificationTarget } from '@xopcai/gateway-contract';
 type ServiceAccount = { project_id: string; key_id: string; sub_account: string; private_key: string };
 type PushCategory = 'WORK' | 'IM' | 'MARKETING';
 export type HarmonyPushConfig = { accountFile: string; category: PushCategory; testMessage: boolean };
-export type HarmonyNotification = { pushToken: string; eventId: string; title: string; body?: string; gatewayId?: string; target?: NotificationTarget };
+export type HarmonyNotification = { pushToken: string; eventId: string; title: string; body?: string; gatewayId?: string; target?: NotificationTarget; expiresAt?: number };
 
 export function harmonyPushConfig(env: NodeJS.ProcessEnv = process.env): HarmonyPushConfig | undefined {
   const accountFile = env.XOPC_HARMONY_PUSH_SERVICE_ACCOUNT?.trim();
@@ -54,6 +54,8 @@ export async function sendHarmonyPush(
   const navigation = notification.gatewayId && notification.target ? Buffer.from(JSON.stringify({
     gatewayId: notification.gatewayId, eventId: notification.eventId, target: notification.target,
   })).toString('base64url') : undefined;
+  const ttl = notification.expiresAt === undefined ? 86400 : Math.min(86400, Math.floor((notification.expiresAt - Date.now()) / 1000));
+  if (ttl <= 0) throw new Error('Notification expired before delivery');
   const response = await fetchImpl(`https://push-api.cloud.huawei.com/v3/${account.project_id}/messages:send`, {
     method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}`, 'push-type': '0' },
@@ -63,7 +65,7 @@ export async function sendHarmonyPush(
         clickAction: navigation ? { actionType: 1, uri: `xopc://notification#p=${navigation}` } : { actionType: 0 },
         foregroundShow: false, notifyId } },
       target: { token: [notification.pushToken] },
-      pushOptions: { testMessage: config.testMessage, ttl: 86400 },
+      pushOptions: { testMessage: config.testMessage, ttl },
     }),
   });
   if (!response.ok) throw new Error(`Harmony push request failed (${response.status})`);
