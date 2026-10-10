@@ -1,0 +1,34 @@
+{
+  "providers": {
+    "dashscope-cn": {
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api": "openai-completions",
+      "models": [
+        {
+          "id": "qwen3.7-flash-2026-07-15",
+          "name": "Qwen3.7 Flash (2026-07-15)",
+          "reasoning": true,
+          "input": [
+            "text",
+            "image"
+          ],
+          "contextWindow": 1000000,
+          "maxTokens": 131072,
+          "cost": {
+            "input": 0.028,
+            "output": 0.11,
+            "cacheRead": 0.006,
+            "cacheWrite": 0.034
+          },
+          "compat": {
+            "thinkingFormat": "qwen",
+            "supportsReasoningEffort": false,
+            "supportsDeveloperRole": false,
+            "supportsStore": false,
+            "supportsStrictMode": false
+          }
+        }
+      ]
+    }
+  }
+}

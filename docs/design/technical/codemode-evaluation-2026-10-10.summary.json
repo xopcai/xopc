@@ -1,0 +1,405 @@
+{
+  "manifest": {
+    "version": 2,
+    "model": "dashscope-cn/qwen3.7-flash-2026-07-15",
+    "modelDefinition": {
+      "id": "qwen3.7-flash-2026-07-15",
+      "name": "Qwen3.7 Flash (2026-07-15)",
+      "api": "openai-completions",
+      "provider": "dashscope-cn",
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.028,
+        "output": 0.11,
+        "cacheRead": 0.006,
+        "cacheWrite": 0.034
+      },
+      "contextWindow": 1000000,
+      "maxTokens": 4096,
+      "compat": {
+        "thinkingFormat": "qwen",
+        "supportsReasoningEffort": false,
+        "supportsDeveloperRole": false,
+        "supportsStore": false,
+        "supportsStrictMode": false
+      }
+    },
+    "modelDefinitionHash": "21afc6a9d4b5c28bb50a928e22c89158198acc7e9edd5bef74f171e8fc8af9db",
+    "thinking": "off",
+    "maxTokens": 4096,
+    "pricing": {
+      "input": 0.028,
+      "output": 0.11,
+      "cacheRead": 0.006,
+      "cacheWrite": 0.034
+    },
+    "repeats": 3,
+    "concurrency": 3,
+    "timeoutMs": 120000,
+    "caseIds": [
+      "files-0",
+      "files-1",
+      "files-2",
+      "files-3",
+      "files-4",
+      "files-5",
+      "files-6",
+      "files-7",
+      "search-0",
+      "knowledge-0",
+      "search-1",
+      "knowledge-1",
+      "search-2",
+      "knowledge-2",
+      "search-3",
+      "knowledge-3",
+      "projects-0",
+      "projects-1",
+      "projects-2",
+      "projects-3",
+      "projects-4",
+      "projects-5",
+      "git-0",
+      "git-1",
+      "git-2",
+      "git-3",
+      "mcp-2",
+      "mcp-6",
+      "missing",
+      "denied"
+    ],
+    "gitRevision": "36b7a551d34eb8b09213a67ee4eeaf0411a52531",
+    "fixtureHash": "8b5b349699f6651254a85159df7e42c2773bc19aae5033d87ecf44c94e9d456e",
+    "harnessHash": "2f665b4239d2c6f11d704ab7615fc82b14c4db605966a5fec2bc59b4d04ccf25",
+    "runtimeHash": "a34f3f96076dbd3e9cddd026865044c70c2b98240adc643afe0c3fb4ab82019c",
+    "systemPrompt": "You are a read-only evaluation assistant. Inspect the supplied sources with tools; never answer from a guessed value. Return only JSON {\"answer\":number|null,\"sources\":[string],\"status\":\"ok\"|\"partial\"|\"denied\"}. Cite exact workspace-relative paths, knowledge:<canonicalKey>, or the specified Git/MCP source strings. Never expose restricted content. For missing sources use partial; for refused access use denied. Do not try to bypass tool refusals. Keep tool outputs focused. Codemode has no shell API; use ordinary data_batch/exec_command for Git. For one read, use the original tool directly. Do not use store/load across independent tasks.",
+    "modeInstructions": {
+      "direct": "For independent reads, use original tools directly; avoid data_batch. Multiple direct calls may be issued together.",
+      "batch": "For independent reads, prefer data_batch in groups of at most eight. Use original tools when a single/dependent read is needed.",
+      "codemode": "For combinable independent reads, prefer Codemode with parallel calls and compact evidence output. Use original tools for single reads and ordinary tools for operations unavailable in scripts."
+    },
+    "workload": "Synthetic snapshots, real model/embedded SDK/QuickJS/tools/SQLite knowledge/MCP; no personal data",
+    "schedule": "Rotating strategy order for each task/repeat, shared bounded concurrency, fresh conversations"
+  },
+  "completed": 270,
+  "expected": 270,
+  "audit": {
+    "pooledRunners": 0,
+    "mcpRuntimes": 0,
+    "integrity": [
+      {
+        "integrity_check": "ok"
+      }
+    ]
+  },
+  "auditPassed": true,
+  "byMode": {
+    "direct": {
+      "samples": 90,
+      "passed": 74,
+      "successRate": 0.8222222222222222,
+      "sourcesComplete": 75,
+      "medianMs": 4153,
+      "p95Ms": 11849,
+      "requests": 320,
+      "input": 205465,
+      "output": 36987,
+      "cacheRead": 1206656,
+      "cacheWrite": 0,
+      "costUsd": 0.017061525999999997,
+      "maxInputTokens": 9048,
+      "toolCalls": 550,
+      "nestedCalls": 0,
+      "usedCodemode": 0,
+      "timeouts": 0,
+      "forbiddenAccesses": 0,
+      "stateLeaks": 0
+    },
+    "batch": {
+      "samples": 90,
+      "passed": 78,
+      "successRate": 0.8666666666666667,
+      "sourcesComplete": 78,
+      "medianMs": 3836,
+      "p95Ms": 7385,
+      "requests": 249,
+      "input": 160399,
+      "output": 27546,
+      "cacheRead": 894976,
+      "cacheWrite": 0,
+      "costUsd": 0.012891088000000004,
+      "maxInputTokens": 7254,
+      "toolCalls": 195,
+      "nestedCalls": 0,
+      "usedCodemode": 0,
+      "timeouts": 0,
+      "forbiddenAccesses": 0,
+      "stateLeaks": 0
+    },
+    "codemode": {
+      "samples": 90,
+      "passed": 74,
+      "successRate": 0.8222222222222222,
+      "sourcesComplete": 75,
+      "medianMs": 5200,
+      "p95Ms": 13414,
+      "requests": 285,
+      "input": 399689,
+      "output": 40473,
+      "cacheRead": 1045632,
+      "cacheWrite": 0,
+      "costUsd": 0.021917113999999994,
+      "maxInputTokens": 11237,
+      "toolCalls": 289,
+      "nestedCalls": 68,
+      "usedCodemode": 35,
+      "timeouts": 0,
+      "forbiddenAccesses": 0,
+      "stateLeaks": 0
+    }
+  },
+  "byCategory": {
+    "files": {
+      "direct": {
+        "samples": 24,
+        "passed": 16,
+        "medianMs": 6402,
+        "p95Ms": 14293,
+        "input": 563037,
+        "costUsd": 0.007435528000000001
+      },
+      "batch": {
+        "samples": 24,
+        "passed": 17,
+        "medianMs": 3069,
+        "p95Ms": 5602,
+        "input": 216232,
+        "costUsd": 0.0030349520000000005
+      },
+      "codemode": {
+        "samples": 24,
+        "passed": 18,
+        "medianMs": 4473,
+        "p95Ms": 15629,
+        "input": 370029,
+        "costUsd": 0.00586619
+      }
+    },
+    "search": {
+      "direct": {
+        "samples": 12,
+        "passed": 9,
+        "medianMs": 4947,
+        "p95Ms": 9976,
+        "input": 204358,
+        "costUsd": 0.0021374759999999997
+      },
+      "batch": {
+        "samples": 12,
+        "passed": 12,
+        "medianMs": 4197,
+        "p95Ms": 6404,
+        "input": 177181,
+        "costUsd": 0.0018379260000000001
+      },
+      "codemode": {
+        "samples": 12,
+        "passed": 10,
+        "medianMs": 5324,
+        "p95Ms": 9460,
+        "input": 253446,
+        "costUsd": 0.0029644480000000006
+      }
+    },
+    "knowledge": {
+      "direct": {
+        "samples": 12,
+        "passed": 11,
+        "medianMs": 2330,
+        "p95Ms": 4022,
+        "input": 104296,
+        "costUsd": 0.001058516
+      },
+      "batch": {
+        "samples": 12,
+        "passed": 11,
+        "medianMs": 2201,
+        "p95Ms": 4472,
+        "input": 99965,
+        "costUsd": 0.00099766
+      },
+      "codemode": {
+        "samples": 12,
+        "passed": 7,
+        "medianMs": 2643,
+        "p95Ms": 5327,
+        "input": 120103,
+        "costUsd": 0.001410318
+      }
+    },
+    "projects": {
+      "direct": {
+        "samples": 18,
+        "passed": 17,
+        "medianMs": 3749,
+        "p95Ms": 8502,
+        "input": 180079,
+        "costUsd": 0.002373524
+      },
+      "batch": {
+        "samples": 18,
+        "passed": 17,
+        "medianMs": 4144,
+        "p95Ms": 5767,
+        "input": 173158,
+        "costUsd": 0.0027547500000000003
+      },
+      "codemode": {
+        "samples": 18,
+        "passed": 15,
+        "medianMs": 9337,
+        "p95Ms": 16572,
+        "input": 298545,
+        "costUsd": 0.004800122
+      }
+    },
+    "git": {
+      "direct": {
+        "samples": 12,
+        "passed": 10,
+        "medianMs": 4153,
+        "p95Ms": 9621,
+        "input": 154974,
+        "costUsd": 0.0017719819999999999
+      },
+      "batch": {
+        "samples": 12,
+        "passed": 11,
+        "medianMs": 5075,
+        "p95Ms": 7716,
+        "input": 191873,
+        "costUsd": 0.0020988
+      },
+      "codemode": {
+        "samples": 12,
+        "passed": 12,
+        "medianMs": 5560,
+        "p95Ms": 15234,
+        "input": 238378,
+        "costUsd": 0.003641047999999999
+      }
+    },
+    "mcp": {
+      "direct": {
+        "samples": 6,
+        "passed": 5,
+        "medianMs": 7111,
+        "p95Ms": 11849,
+        "input": 136929,
+        "costUsd": 0.0016961619999999998
+      },
+      "batch": {
+        "samples": 6,
+        "passed": 5,
+        "medianMs": 7007,
+        "p95Ms": 9950,
+        "input": 150814,
+        "costUsd": 0.001745328
+      },
+      "codemode": {
+        "samples": 6,
+        "passed": 6,
+        "medianMs": 6335,
+        "p95Ms": 6871,
+        "input": 91764,
+        "costUsd": 0.0020736
+      }
+    },
+    "failure": {
+      "direct": {
+        "samples": 6,
+        "passed": 6,
+        "medianMs": 1644,
+        "p95Ms": 4278,
+        "input": 68448,
+        "costUsd": 0.000588338
+      },
+      "batch": {
+        "samples": 6,
+        "passed": 5,
+        "medianMs": 1250,
+        "p95Ms": 4559,
+        "input": 46152,
+        "costUsd": 0.00042167199999999994
+      },
+      "codemode": {
+        "samples": 6,
+        "passed": 6,
+        "medianMs": 2383,
+        "p95Ms": 7592,
+        "input": 73056,
+        "costUsd": 0.001161388
+      }
+    }
+  },
+  "comparisons": {
+    "direct": {
+      "combinationTasks": 23,
+      "combinationMedianRatio": 1.1927899686520376,
+      "medianRatio95CI": [
+        0.90313986679353,
+        1.496193461710703
+      ],
+      "combinationInputRatio": 0.9531353135313532,
+      "overallP95Ratio": 1.1320786564267027,
+      "overallSuccessDifference": 0
+    },
+    "batch": {
+      "combinationTasks": 23,
+      "combinationMedianRatio": 1.4059118500923726,
+      "medianRatio95CI": [
+        1.2298682284040996,
+        1.6571760604299826
+      ],
+      "combinationInputRatio": 1.3982904306117803,
+      "overallP95Ratio": 1.8163845633039946,
+      "overallSuccessDifference": -0.04444444444444451
+    }
+  },
+  "noViolations": true,
+  "sampleGate": true,
+  "infrastructureFailures": 0,
+  "validComparison": true,
+  "modelEvaluationGatePassed": false,
+  "policy": "Keep opt-in until model evaluation gates, deterministic checks and a scoped daily-use pilot all pass.",
+  "failureAnalysis": {
+    "direct": {
+      "noParseableJson": 11,
+      "citations": 3,
+      "answerOrStatus": 2
+    },
+    "batch": {
+      "citations": 3,
+      "noParseableJson": 8,
+      "answerOrStatus": 1
+    },
+    "codemode": {
+      "noParseableJson": 13,
+      "answerOrStatus": 3
+    }
+  },
+  "evidence": {
+    "samplesSha256": "1ac5cef3e235149cc3309b1f8b3b747f43fbc1d9b4a19c3aa664f48d95e20b3b",
+    "rawDirectory": ".test/codemode-evaluation-qwen-final",
+    "requests": 854,
+    "estimatedCostUsd": 0.05186972800000002,
+    "deniedWithAttempt": 8,
+    "deniedSamples": 9,
+    "decision": "Keep Codemode and tool discovery opt-in; do not change Agent defaults."
+  }
+}

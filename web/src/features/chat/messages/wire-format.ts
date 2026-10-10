@@ -45,6 +45,8 @@ export interface WireMessage {
   toolCallId?: string;
   isError?: boolean;
   details?: unknown;
+  nestedCalls?: unknown;
+  durationMs?: number;
 }
 
 /** Tool-related blocks in session wire format (tool_use / OpenAI / pi toolCall). */

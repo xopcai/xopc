@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["../evaluate-codemode.mts", "./*.ts"],
+  "exclude": ["../../node_modules", "../../dist"]
+}

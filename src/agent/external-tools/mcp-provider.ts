@@ -62,13 +62,16 @@ function toAgentToolResult(params: {
       }];
   return {
     content: normalizedContent,
+    ...(params.result.structuredContent !== undefined ? {
+      structuredContent: params.result.structuredContent as AgentToolResult<Record<string, unknown>>['structuredContent'],
+    } : {}),
     details: {
       mcpServer: params.serverName,
       mcpTool: params.toolName,
       ...(params.result.structuredContent !== undefined
         ? { structuredContent: params.result.structuredContent }
         : {}),
-      ...(params.result.isError === true ? { status: 'error' } : {}),
+      ...(params.result.isError === true ? { status: 'failed' } : {}),
     },
   };
 }
@@ -134,6 +137,8 @@ export class McpToolProvider implements ExternalToolProvider {
         summary,
         description: summary,
         inputSchema: tool.inputSchema as Record<string, unknown>,
+        outputSchema: tool.outputSchema as Record<string, unknown> | undefined,
+        annotations: tool.annotations,
       };
     });
   }

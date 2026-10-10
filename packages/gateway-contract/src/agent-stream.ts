@@ -7,6 +7,12 @@ export interface AgentStreamProgressState {
   petFeedback?: PetFeedback;
 }
 
+/** Optional nested-call identity and authoritative execution timing. */
+export type AgentStreamToolExecutionMetadata = {
+  parentToolCallId?: string;
+  durationMs?: number;
+};
+
 /** Audio persisted after a text run has finished; delivered on the sessions topic. */
 export interface SessionAudioReadyEvent {
   conversationId: string;

@@ -8,6 +8,7 @@ export type McpServerCatalog = {
   toolCount: number;
   resourceCount: number;
   promptCount: number;
+  instructions?: string;
   error?: { code: 'MCP_AUTHORIZATION_REQUIRED' | 'MCP_CONNECTION_FAILED'; message: string };
 };
 
@@ -18,6 +19,7 @@ export type McpCatalogTool = {
   title?: string;
   description?: string;
   inputSchema: JsonSchemaType;
+  outputSchema?: JsonSchemaType;
   annotations?: ToolAnnotations;
   fallbackDescription: string;
 };
@@ -58,6 +60,7 @@ export type SessionMcpRuntime = {
   activeLeases?: number;
   acquireLease?: () => () => void;
   getCatalog: () => Promise<McpToolCatalog>;
+  onCatalogInvalidated?: (listener: () => void) => void;
   markUsed: () => void;
   callTool: (
     serverName: string,
