@@ -80,7 +80,8 @@ function buildSystemPrompt(locale: HomeContextSnapshot['locale']): string {
     'Prefer outcomes over feature promotion. Mention a connector or skill only when it materially enables the outcome.',
     'When useful work remains possible without a missing capability, provide degradedActionPrompt using only supplied evidence.',
     'External writes always require user confirmation.',
-    `Write only user-visible prose values such as title, rationale, steps, and prompts in ${locale === 'zh' ? 'Simplified Chinese' : 'English'}. Machine values listed above must remain in English.`,
+    `Write all user-visible prose values (title, outcome, rationale, proposedSteps, verification, actionPrompt, degradedActionPrompt, question, and option labels) in ${locale === 'zh' ? 'Simplified Chinese' : 'English'}. Machine values listed above must remain in English. Translate English source material into the requested language; keep technical identifiers and proper names intact.`,
+    'Use plain text in prose values. Do not HTML-encode characters or include HTML markup.',
   ].join('\n');
 }
 
@@ -99,6 +100,50 @@ function parseJson(raw: string): unknown {
     try { return JSON.parse(candidate); } catch { /* try the next representation */ }
   }
   throw new Error('Home intelligence model did not return valid JSON');
+}
+
+function decodeProse(value: string): string {
+  const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+  return value.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (entity, code: string) => {
+    if (!code.startsWith('#')) return named[code.toLowerCase()] ?? entity;
+    const point = code.toLowerCase().startsWith('#x') ? parseInt(code.slice(2), 16) : Number(code.slice(1));
+    return point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff)
+      ? String.fromCodePoint(point) : entity;
+  });
+}
+
+/** Check prose rather than identifiers so English evidence cannot override Chinese output. */
+export function isHomeProseLocalized(values: readonly string[], locale: HomeContextSnapshot['locale']): boolean {
+  return locale !== 'zh' || values.every((value) => !/[a-z]/i.test(value) || /\p{Script=Han}/u.test(value));
+}
+
+function parseLocalizedResult(raw: string, locale: HomeContextSnapshot['locale']): HomeModelResult {
+  const result = HomeModelResultSchema.parse(parseJson(raw));
+  const prose: string[] = [];
+  if (result.state === 'ready') {
+    for (const candidate of result.candidates) {
+      candidate.title = decodeProse(candidate.title);
+      candidate.outcome = decodeProse(candidate.outcome);
+      candidate.rationale = decodeProse(candidate.rationale);
+      candidate.proposedSteps = candidate.proposedSteps.map(decodeProse);
+      candidate.verification = candidate.verification.map(decodeProse);
+      candidate.actionPrompt = decodeProse(candidate.actionPrompt);
+      if (candidate.degradedActionPrompt) candidate.degradedActionPrompt = decodeProse(candidate.degradedActionPrompt);
+      prose.push(candidate.title, candidate.outcome, candidate.rationale, candidate.actionPrompt);
+      // Short technical checks may consist solely of a command or identifier.
+      prose.push(...[...candidate.proposedSteps, ...candidate.verification, candidate.degradedActionPrompt ?? '']
+        .filter((value) => (value.match(/[a-z]+/gi)?.length ?? 0) >= 3));
+    }
+  } else if (result.state === 'clarification') {
+    result.question = decodeProse(result.question);
+    result.options = result.options.map((option) => ({ ...option, label: decodeProse(option.label) }));
+    prose.push(result.question, ...result.options.map((option) => option.label)
+      .filter((value) => (value.match(/[a-z]+/gi)?.length ?? 0) >= 3));
+  }
+  if (!isHomeProseLocalized(prose, locale)) {
+    throw new Error('User-visible prose must be in Simplified Chinese; translate English source material while preserving identifiers and evidence IDs');
+  }
+  return result;
 }
 
 function validationSummary(error: unknown): string {
@@ -193,7 +238,7 @@ export class HomeAdviceGenerator {
     const raw = extractHomeResponseText(response);
     let result: HomeModelResult;
     try {
-      result = HomeModelResultSchema.parse(parseJson(raw));
+      result = parseLocalizedResult(raw, snapshot.locale);
     } catch (firstError) {
       const correction: UserMessage = {
         role: 'user',
@@ -214,7 +259,7 @@ export class HomeAdviceGenerator {
       }, { maxTokens: 3_000, temperature: 0, signal: requestSignal }, undefined,
       { operation: 'home.generate_advice', trigger: 'retry' });
       try {
-        result = HomeModelResultSchema.parse(parseJson(extractHomeResponseText(corrected)));
+        result = parseLocalizedResult(extractHomeResponseText(corrected), snapshot.locale);
       } catch (correctionError) {
         throw new Error(`Home intelligence model returned invalid structured JSON after correction: ${validationSummary(correctionError)}`);
       }

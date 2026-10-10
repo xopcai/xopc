@@ -1,6 +1,6 @@
 # XOPC Cloud 公共模型服务方案
 
-日期：2026-10-10。状态：云端已迁移并部署（提交 14ac999）；客户端启动迁移已实现、验证，尚未发布 npm。
+日期：2026-10-10。状态：云端公共服务与 i18n 已迁移并部署（提交 14ac999、68a5e30、3b046d3）；客户端启动迁移已实现、验证，尚未发布 npm。
 
 发布策略：一次性切换。云端一次迁移后仅支持公共模型入口和原有 Codex；xopc 用户升级到最新版后，由启动迁移自动修复旧引用。不保留双目录、客户端版本分流或旧模型 ID 调用兼容。
 
@@ -16,11 +16,12 @@
 | 语音识别 | stt | xopc-cloud/stt | stt | 是 |
 | 语音合成 | tts | xopc-cloud/tts | tts | 是 |
 | 实时语音对话 | realtime | xopc-cloud/realtime | omni | 是 |
+| 电脑操作 | computer | xopc-cloud/computer | language + computerUse | 专用设置选择 |
 | Codex | 当前 ID | 当前引用 | 当前类型 | 当前规则 |
 
 客户端 provider 为 xopc-cloud，云端请求仅携带表中的 model ID。保留内部 kind=omni，避免把对外命名调整扩大为协议类型迁移。图片生成和编辑通过 operation 区分。
 
-电脑操作不并入 auto；若继续对外提供，增加 computer 公共入口，保持专用 profile 和固定部署限制。它是额外专用能力，不进入普通聊天选项。
+电脑操作通过 computer 公共入口继续提供原 Computer Use · GUI-Plus Preview 服务，保持专用 profile、固定部署和现有价格/限额。它是独立专用能力，不进入普通聊天或普通视觉推荐。
 
 ## 现有代码与设计约束
 
@@ -58,6 +59,14 @@
 - 同一次流式响应固定实际目标；已经向客户端输出内容后不自动切换目标重放。
 - JSON 与流式响应中的 model 返回请求的公共 ID，底层身份保存在内部诊断。
 - 文件：platform app.ts、model-services.ts、model-catalog.ts、adaptive-routing.ts、canonical-protocol.ts 及相关序列化代码。
+
+### 电脑操作 computer
+
+- 原服务 `computer-gui-plus-preview` 的已发布目标、密钥池、价格和限额迁移到 `computer`；旧服务归档。对外仅返回 `xopc-cloud/computer`。
+- 目录保留 `capabilities.computerUse.profile` 和 `computerLimits`，客户端在 Computer Use 设置独立选择该服务。
+- `computerDeployment` 对外仅保留不透明的 `revision`；不公开实际供应商、模型或上游 origin。客户端允许缺省 origin，仍将 revision 放入 `x-xopc-computer-deployment` 请求头。
+- 执行时验证固定部署的 revision；目标或发布版本变化后返回 409，客户端重新拉取目录并打开会话。不取消版本校验，也不对 GUI 操作自动换目标重放。
+- 客户端升级将 `computerUse` 模型字段以及旧云端 `computer-gui-plus-preview` / `gui-plus-2026-02-26` 引用迁移到 `xopc-cloud/computer`；提示词、历史正文与第三方模型引用保持原样。
 
 ### 图片 image
 
@@ -164,6 +173,21 @@ DB 修改在事务中完成并更新 revision。xopc.json 等文件使用备份�
 
 目录缓存纳入 schemaVersion：新版启动迁移作废旧云端缓存并拉取新目录，迁移配置本身不依赖联网。旧缓存保留备份但不重新注册为可用模型。离线或授权失效时配置迁移仍可完成，能力处于未就绪状态，联网/授权恢复后自动获取新目录。运行前要保证公共目录已就绪，避免旧缓存仍显示真实模型或首轮使用尚未加载的 auto。
 
+## 显示名称与 i18n
+
+模型在 `/v1/models` 的 `xopc.displayNames` 返回 `zh-CN` / `en`，原 `displayName` 保留作为回退名称。音色在 voice manifest 和 `/v1/audio/voices` 的条目上返回 `displayNames`，默认音色 ID 始终为 `default`。
+
+| 服务 | 中文名称 | 英文名称 |
+| --- | --- | --- |
+| image | XOPC 云端图片 | XOPC Cloud Image |
+| stt | XOPC 云端语音识别 | XOPC Cloud Transcription |
+| tts | XOPC 云端语音合成 | XOPC Cloud Speech |
+| realtime | XOPC 云端实时语音 | XOPC Cloud Realtime |
+| computer | XOPC 云端电脑操作 | XOPC Cloud Computer |
+| 默认音色 | 默认音色 | Default voice |
+
+Gateway 语音目录保留翻译字段，界面在渲染时按当前语言选取名称；切换语言不需要重新拉取目录。缺少翻译时回退 `name`，本地配置与调用始终保存稳定 ID。云端补充名称作为新发布修订，保留已有自定义翻译和未发布草稿的路由修改。
+
 ## 实施与一次性发布
 
 开发和验证可分步骤，生产切换只有一次：
@@ -207,4 +231,5 @@ DB 修改在事务中完成并更新 revision。xopc.json 等文件使用备份�
 - 客户端新增 `src/migrations/cloud-public-models.ts`，在应用启动、严格加载配置之前运行，备份 JSON/SQLite、转换旧引用、清除旧目录缓存并写入一次性完成标记。工作流通过现有 Catalog 保存为新修订；历史修订与会话正文保持原样。
 - 客户端专项测试 29 项通过，TypeScript 检查通过。云端专项测试、控制台测试通过；全量测试中的 2 个并行超时用单 worker 重跑通过。
 - i18n 补充：云端提交 `68a5e30`，公共能力名称通过 `xopc.displayNames` 返回 `zh-CN`/`en`，音色通过 `displayNames` 返回“默认音色 / Default voice”。客户端透传元数据，按界面语言在渲染时选择名称，缺少翻译时回退 `name`，调用 ID 不变。线上目录和音色接口验证通过。
+- Computer Use 修复：云端提交 `3b046d3` 已部署，目录返回不透明部署 revision；客户端允许不返回上游 origin。真实认证接口验证：缺失 revision 返回 409，带正确 revision 的 `computer` 请求返回 200，GUI-Plus 正确识别合成图片中的蓝色矩形，响应 model 为 `computer`。客户端专项测试、云端 Gateway 请求测试、类型检查与客户端构建通过。
 - 客户端尚未发版；用户升级到包含本次实现的新版本后，首次启动自动迁移。

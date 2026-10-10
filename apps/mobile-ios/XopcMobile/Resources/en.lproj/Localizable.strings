@@ -894,3 +894,19 @@
 "收起子对话" = "Collapse Sub-chats";
 "回到最新消息" = "Jump to Latest Message";
 "最新消息" = "Latest Message";
+
+"上传头像" = "Upload avatar";
+"搜索消息" = "Search messages";
+"搜索已加载的消息" = "Search loaded messages";
+"主动联系" = "Proactive messages";
+"主动联系设置" = "Proactive message settings";
+"主动方式" = "Participation";
+"关闭主动联系" = "Off";
+"仅明确跟进" = "Requested follow-ups";
+"适度主动" = "Thoughtful participation";
+"静默开始" = "Quiet from";
+"静默结束" = "Quiet until";
+"时区" = "Timezone";
+"保存主动联系设置" = "Save proactive settings";
+"重新加载设置" = "Reload settings";
+"有值得交流的进展时，在聊天里留下消息。明确请求的结果会照常交付。" = "Useful developments appear in this chat. Requested results are delivered as usual.";

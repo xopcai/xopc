@@ -109,6 +109,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
   @Volatile private var responseId = ""
   private var responseDone = false
   private var receivedBytes = 0L
+  private val firstAudioTiming = VoiceFirstAudioTiming()
   private val pendingReply = VoiceDeferredReplies<PendingVoiceReply>()
   @Volatile private var bufferedBytes = 0L
   private var responseStartFrame = 0L
@@ -275,18 +276,23 @@ internal class RealtimeVoiceController(private val context: Context, private val
       }
       "input.transcript.final" -> userText = payload.optString("text")
       "input.speech_started" -> if (!captureMuted) {
+        firstAudioTiming.speechStarted()
         speakingUtterances.add(payload.optString("utteranceId"))
         if (connection?.bargeIn == true && responseId.isNotEmpty() && receivedBytes > 0)
           fadePlayback(0.25f, 60L)
       }
       "input.speech_stopped" -> if (!captureMuted &&
         speakingUtterances.remove(payload.optString("utteranceId")) &&
-        speakingUtterances.isEmpty()) fadePlayback(1f, 120L)
+        speakingUtterances.isEmpty()) {
+        firstAudioTiming.speechStopped(SystemClock.elapsedRealtime())
+        fadePlayback(1f, 120L)
+      }
       "session.pong" -> lastPongAt = SystemClock.elapsedRealtime()
       "response.created" -> {
         when (voiceReplyDisposition(responseId, responseDone, incomingId,
           pendingReply.responseId)) {
           VoiceReplyDisposition.DEFER -> {
+            firstAudioTiming.created(incomingId)
             pendingReply.begin(incomingId)
             deferReply(PendingVoiceReply.Event(event), event.toString().length * 2)
             return
@@ -297,6 +303,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
           }
           VoiceReplyDisposition.START -> Unit
         }
+        firstAudioTiming.created(incomingId)
         responseId = incomingId
         hasReply = incomingId.isNotEmpty()
         assistantText = ""; bufferedBytes = 0; receivedBytes = 0; responseDone = false
@@ -347,14 +354,26 @@ internal class RealtimeVoiceController(private val context: Context, private val
 
   private fun handleAudio(id: String, bytes: ByteArray) {
     if (pendingReply.responseId.isNotEmpty() && id == pendingReply.responseId) {
+      firstAudioTiming.received(id, SystemClock.elapsedRealtime())?.let {
+        reportFirstAudioMetric(id, "speech_end_to_audio_received", it)
+      }
       deferReply(PendingVoiceReply.Audio(id, bytes), bytes.size)
       return
     }
     if (id != responseId || responseDone) return
+    firstAudioTiming.received(id, SystemClock.elapsedRealtime())?.let {
+      reportFirstAudioMetric(id, "speech_end_to_audio_received", it)
+    }
     if (receivedBytes == 0L && speakingUtterances.isNotEmpty() && connection?.bargeIn == true)
       fadePlayback(0.25f, 60L)
     receivedBytes += bytes.size
     require(playbackQueue.trySend(id to bytes).isSuccess) { "AUDIO_QUEUE_FULL" }
+  }
+
+  private fun reportFirstAudioMetric(id: String, metric: String, durationMs: Long) {
+    if (metric != "speech_end_to_audio_received" && connection?.timingMetrics?.contains(metric) != true) return
+    send("session.metric", JSONObject().put("responseId", id).put("metric", metric)
+      .put("durationMs", durationMs.coerceIn(0, 600_000)))
   }
 
   private fun deferReply(item: PendingVoiceReply, size: Int) {
@@ -362,6 +381,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
   }
 
   private fun finishResponse() {
+    firstAudioTiming.finish(responseId)
     fadePlayback(1f, 0L)
     speakingUtterances.clear()
     responseId = ""; responseDone = false; receivedBytes = 0; bufferedBytes = 0
@@ -391,13 +411,16 @@ internal class RealtimeVoiceController(private val context: Context, private val
     audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
     recorder = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, 16_000,
       AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(inputMin, 2560))
-    player = AudioTrack(voiceAttributes,
-      AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(24_000)
-        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build(), maxOf(outputMin, 3840),
-      AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE)
+    player = AudioTrack.Builder().setAudioAttributes(voiceAttributes)
+      .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+        .setSampleRate(24_000).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+      .setBufferSizeInBytes(maxOf(outputMin, 3840)).setTransferMode(AudioTrack.MODE_STREAM)
+      .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY).build()
     require(recorder?.state == AudioRecord.STATE_INITIALIZED && player?.state == AudioTrack.STATE_INITIALIZED) {
       "AUDIO_UNAVAILABLE"
     }
+    // Preserve buffering capacity while allowing the first 20 ms frame to start playback.
+    if (Build.VERSION.SDK_INT >= 31) runCatching { player?.setStartThresholdInFrames(480) }
     recorder?.startRecording(); player?.play()
     captureJob = scope.launch(Dispatchers.IO) {
       val bytes = ByteArray(640)
@@ -466,7 +489,10 @@ internal class RealtimeVoiceController(private val context: Context, private val
           if (written <= 0) break
           offset += written
           bufferedBytes += written
-          withContext(Dispatchers.Main.immediate) { speaking = true }
+          firstAudioTiming.buffered(id, SystemClock.elapsedRealtime())?.let {
+            reportFirstAudioMetric(id, "speech_end_to_audio_buffered", it)
+          }
+          if (bufferedBytes == written.toLong()) withContext(Dispatchers.Main.immediate) { speaking = true }
           send("response.audio.played", JSONObject().put("responseId", id)
             .put("playedDurationMs", bufferedBytes / 48))
         }
@@ -670,6 +696,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
     responseId = ""; responseDone = false; receivedBytes = 0; bufferedBytes = 0
     hasReply = false
     pendingReply.reset()
+    firstAudioTiming.reset()
     congestionMuted = false; captureMuted = false
     taskId = ""; taskCancelling = false; activity = ""; clarification = null; approval = null
     eventSequence = 0; audioSequence = 0

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ts from 'typescript';
+import { chatReplySpaceBudget, consumeChatReplySpace } from '../entry/src/main/ets/common/chatReplySpace.ets';
 
 const source = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', import.meta.url), 'utf8');
 const methods = source.slice(source.indexOf('  onMessageChange(): void'), source.indexOf('  private async loadOlder()'))
@@ -8,7 +9,8 @@ const methods = source.slice(source.indexOf('  onMessageChange(): void'), source
 const compiled = ts.transpileModule(`class ScrollHandlers { ${methods} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const Handler = new Function('Edge', 'ScrollAlign', `${compiled}; return ScrollHandlers;`)({ Bottom: 'bottom' }, { END: 'end' });
+const Handler = new Function('Edge', 'ScrollAlign', 'chatReplySpaceBudget', 'consumeChatReplySpace', `${compiled}; return ScrollHandlers;`)(
+  { Bottom: 'bottom' }, { END: 'end' }, chatReplySpaceBudget, consumeChatReplySpace);
 
 function setup() {
   vi.useFakeTimers();
@@ -17,12 +19,45 @@ function setup() {
     chat: { loading: false, cachedHistory: false }, scrollTimer: -1,
     layoutScrollAnimating: false, layout: { reduceMotion: false }, presentationRows: [{ id: 'last' }],
     messagesScroller: { scrollEdge: vi.fn(), scrollToIndex: vi.fn(), isAtEnd: () => false },
+    replyAnchorId: '', replySpaceHeight: 0, replyBudget: 0, messageViewportHeight: 720,
+    bottomRegionHeight: 96, replyRowHeights: new Map(),
   });
 }
 
 afterEach(() => { vi.useRealTimers(); });
 
 describe('chat keyboard viewport following', () => {
+  it('moves a bottom-following send up, consumes reply growth, and freezes when reading history', () => {
+    const view = setup();
+    view.presentationRows = [{ id: 'question' }];
+    view.reserveReplySpace('question', 'next');
+    expect(view.replySpaceHeight).toBe(60);
+    view.presentationRows.push({ id: 'reply' });
+    view.recordReplyRowHeight('reply', 20);
+    expect(view.replySpaceHeight).toBe(20);
+    view.atBottom = false;
+    view.recordReplyRowHeight('reply', 300);
+    expect(view.replySpaceHeight).toBe(20);
+    view.reserveReplySpace('history-question', 'next');
+    expect(view.replyAnchorId).toBe('question');
+    view.atBottom = true;
+    view.updateReplySpace();
+    expect(view.replySpaceHeight).toBe(0);
+  });
+
+  it('does not reserve space for queued follow-ups or disturb a short completed reply', () => {
+    const view = setup();
+    view.chat.runId = 'running';
+    view.reserveReplySpace('queued', 'next');
+    expect(view.replySpaceHeight).toBe(0);
+    view.chat.runId = '';
+    view.presentationRows = [{ id: 'question' }];
+    view.reserveReplySpace('question', 'next');
+    view.presentationRows.push({ id: 'reply' });
+    view.recordReplyRowHeight('reply', 20);
+    view.onMessageChange();
+    expect(view.replySpaceHeight).toBe(20);
+  });
   it('follows the bottom after keyboard resize without requiring new messages', () => {
     const view = setup();
     view.onMessageViewportChange({ width: 375, height: 700 }, { width: 375, height: 420 });
@@ -68,7 +103,7 @@ describe('chat keyboard viewport following', () => {
     expect(view.messagesScroller.scrollEdge).not.toHaveBeenCalled();
     expect(source).toContain("@Monitor('bottomRegionHeight')");
     expect(source).toContain('.onAreaChange((previous: Area, current: Area): void => { this.onMessageViewportChange(previous, current); })');
-    expect(source).toContain('.contentEndOffset(this.bottomRegionHeight + 24)');
+    expect(source).toContain('.contentEndOffset(this.bottomRegionHeight + 24 + this.replySpaceHeight)');
   });
 
   it('does not interrupt a keyboard animation for every streaming token', () => {

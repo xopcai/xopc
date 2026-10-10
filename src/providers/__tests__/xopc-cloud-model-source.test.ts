@@ -6,7 +6,7 @@ import { XopcCloudModelError, XopcCloudModelSource } from '../xopc-cloud-model-s
 describe('XopcCloudModelSource', () => {
   it('preserves GUI capabilities without recommending a GUI actor for vision', async () => {
     const source = new XopcCloudModelSource({ routerUrl: 'https://router.test/v1', credentials: { resolveApiKey: async () => 'fixture' },
-      fetchImpl: async () => Response.json({ xopc: { defaults: { vision: 'gui' } }, data: [{ id: 'gui', xopc: {
+      fetchImpl: async () => Response.json({ xopc: { defaults: { vision: 'computer' } }, data: [{ id: 'computer', xopc: {
         capabilities: { input: ['text', 'image'], computerUse: { profile: 'gui-plus-2026-02-26' } },
       } }] }),
     });

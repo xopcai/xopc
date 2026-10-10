@@ -79,6 +79,16 @@ describe('voice realtime protocol', () => {
     expect(message.type).toBe('session.start');
   });
 
+  it('accepts both received and scheduled first-audio timing samples', () => {
+    for (const metric of ['speech_end_to_audio_received', 'speech_end_to_audio_scheduled', 'speech_end_to_audio_buffered']) {
+      expect(parseVoiceClientMessage({
+        protocolVersion: VOICE_REALTIME_PROTOCOL_VERSION,
+        messageId: crypto.randomUUID(), type: 'session.metric', sentAt: Date.now(),
+        payload: { responseId: 'resp_1', metric, durationMs: 123.5 },
+      }).type).toBe('session.metric');
+    }
+  });
+
   it('parses the terminal response event', () => {
     const event = parseVoiceServerEvent({
       protocolVersion: VOICE_REALTIME_PROTOCOL_VERSION,

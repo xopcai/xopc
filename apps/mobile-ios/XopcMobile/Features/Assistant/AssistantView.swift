@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 // swiftlint:disable file_length
 // swiftlint:disable:next type_body_length
@@ -35,6 +36,8 @@ struct AssistantView<Dock: View>: View {
     @State private var isActionPanelExpanded = false
     @State private var showingSessionActions = false
     @State private var showingPersonalProfile = false
+    @State private var showingMessageSearch = false
+    @State private var messageSearchQuery = ""
     @State private var executionPresentation: ExecutionActivityPresentation?
     @State private var handledQuickChatID: UUID?
     @State private var readAloud = ChatReadAloud()
@@ -45,6 +48,13 @@ struct AssistantView<Dock: View>: View {
     @State private var isAtBottom = true
     @State private var pendingStart: PendingConversationStart?
     @State private var bottomDockHeight: CGFloat = 0
+    @State private var messageViewportHeight: CGFloat = 0
+    @State private var replySpace = ChatReplySpace()
+    @State private var replyRowHeights: [String: CGFloat] = [:]
+    @State private var replyUserText: String?
+    @State private var activityHeight: CGFloat = 0
+    @State private var followingBottom = true
+    @State private var userScrollingMessages = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -66,9 +76,32 @@ struct AssistantView<Dock: View>: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bottomDockHeight = $0 }
         }
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-        .navigationTitle(conversationNavigationTitle)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { messageViewportHeight = $0 }
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
+        .sheet(isPresented: $showingMessageSearch) {
+            NavigationStack {
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("搜索消息").font(.headline)
+                        Spacer()
+                        Button("完成") { showingMessageSearch = false }
+                            .accessibilityIdentifier("chat-search-close")
+                    }.padding(.horizontal).padding(.top)
+                    TextField("搜索消息", text: $messageSearchQuery)
+                        .textFieldStyle(.roundedBorder).padding(.horizontal)
+                        .accessibilityIdentifier("chat-message-search-input")
+                    List {
+                        Text("搜索已加载的消息").foregroundStyle(.secondary)
+                        ForEach(state.messages.filter { !messageSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            && $0.text.localizedCaseInsensitiveContains(messageSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)) }) { message in
+                            Text(message.text).textSelection(.enabled)
+                        }
+                    }.accessibilityIdentifier("chat-message-search-sheet")
+                }.toolbar(.hidden, for: .navigationBar)
+            }
+        }
         .sheet(isPresented: $showingPersonalProfile) {
             if let personalAgent, let conversation {
                 PersonalAgentProfileView(configuration: configuration, record: personalAgent,
@@ -100,6 +133,11 @@ struct AssistantView<Dock: View>: View {
             assistantAudio.stop()
             executionPresentation = nil
             isAtBottom = true
+            followingBottom = true
+            replySpace = ChatReplySpace()
+            replyRowHeights = [:]
+            replyUserText = nil
+            activityHeight = 0
             if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
                 state.select(agent)
             }
@@ -303,6 +341,9 @@ struct AssistantView<Dock: View>: View {
                                 previewEligible: message.id != state.messages.last?.id,
                                 onReuseUserText: { draft = $0 }
                             )
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                                recordReplyRowHeight(message.id, height: height)
+                            }
                         }
                         if state.isRunActive {
                             AssistantActivityView(
@@ -317,13 +358,18 @@ struct AssistantView<Dock: View>: View {
                                     )
                                 }
                             )
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                                activityHeight = height
+                                updateReplySpace()
+                            }
                         }
                         Color.clear.frame(height: 1)
                             .id("chat-bottom")
                             .onGeometryChange(for: CGFloat.self) { proxy in
                                 proxy.frame(in: .named("chat-scroll")).maxY
                             } action: { bottom in
-                                isAtBottom = bottom <= viewport.size.height - bottomDockHeight + 32
+                                isAtBottom = bottom <= viewport.size.height - bottomDockHeight - replySpace.remaining + 32
+                                if userScrollingMessages { followingBottom = isAtBottom }
                             }
                     }
                     .padding(.horizontal, 12)
@@ -332,16 +378,39 @@ struct AssistantView<Dock: View>: View {
                     .frame(maxWidth: .infinity)
                 }
                 .defaultScrollAnchor(.bottom)
-                .contentMargins(.bottom, bottomDockHeight + 24, for: .scrollContent)
+                .contentMargins(.bottom, bottomDockHeight + 24 + replySpace.remaining, for: .scrollContent)
                 .coordinateSpace(name: "chat-scroll")
                 .onChange(of: state.messages.last) {
-                    if isAtBottom {
+                    updateReplySpace()
+                    if followingBottom {
                         scroller.scrollTo("chat-bottom", anchor: .bottom)
                     }
                 }
+                .onChange(of: replySpace.remaining) {
+                    if followingBottom { scroller.scrollTo("chat-bottom", anchor: .bottom) }
+                }
+                .onChange(of: bottomDockHeight) {
+                    updateReplySpace()
+                    if followingBottom { scroller.scrollTo("chat-bottom", anchor: .bottom) }
+                }
+                .onChange(of: viewport.size.height) {
+                    updateReplySpace()
+                    if followingBottom { scroller.scrollTo("chat-bottom", anchor: .bottom) }
+                }
+                .modifier(ChatScrollInteraction(onStart: {
+                    userScrollingMessages = true
+                    followingBottom = false
+                }, onEnd: {
+                    followingBottom = isAtBottom
+                    userScrollingMessages = false
+                    updateReplySpace()
+                }))
                 .overlay(alignment: .bottom) {
                     if state.isRunActive || !isAtBottom {
                         Button {
+                            userScrollingMessages = false
+                            followingBottom = true
+                            updateReplySpace()
                             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
                                 scroller.scrollTo("chat-bottom", anchor: .bottom)
                             }
@@ -366,6 +435,39 @@ struct AssistantView<Dock: View>: View {
                 }
             }
         }
+    }
+
+    func reserveReplySpace(_ rowID: String) {
+        guard followingBottom else { return }
+        replyRowHeights = [:]
+        replyUserText = nil
+        activityHeight = 0
+        replySpace.begin(anchorID: rowID, availableHeight: messageViewportHeight - bottomDockHeight - 24,
+                         following: followingBottom)
+    }
+
+    private func recordReplyRowHeight(_ rowID: String, height: CGFloat) {
+        guard replySpace.anchorID != nil, replySpace.remaining > 0,
+              replyRowHeights[rowID] != height else { return }
+        replyRowHeights[rowID] = height
+        updateReplySpace()
+    }
+
+    private func updateReplySpace() {
+        if replySpace.anchorID != nil,
+           !state.messages.contains(where: { $0.id == replySpace.anchorID }),
+           let replyUserText,
+           let confirmed = state.messages.last(where: { $0.role == "user" && $0.text == replyUserText }) {
+            replySpace.reanchor(confirmed.id)
+        }
+        guard let anchor = state.messages.firstIndex(where: { $0.id == replySpace.anchorID }) else { return }
+        replyUserText = state.messages[anchor].text
+        let replyRows = state.messages.dropFirst(anchor + 1)
+        let replyHeight = replyRows.reduce(CGFloat.zero) { height, row in
+            height + (replyRowHeights[row.id] ?? 0) + 14
+        } + (state.isRunActive ? activityHeight + 14 : 0)
+        replySpace.consume(replyHeight: replyHeight, availableHeight: messageViewportHeight - bottomDockHeight - 24,
+                           following: followingBottom)
     }
 
     private var conversationNavigationTitle: String {
@@ -576,49 +678,45 @@ struct AssistantView<Dock: View>: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            Menu {
-                if state.agents.isEmpty {
-                    Text("暂无助手")
-                } else {
-                    ForEach(state.agents) { agent in
-                        Button {
-                            requestConversation(agent.id)
-                        } label: {
-                            if agent.id == state.selectedAgentID {
-                                Label(agent.displayName, systemImage: "checkmark")
-                            } else {
-                                Text(agent.displayName)
-                            }
-                        }
+            if isPersonalConversation {
+                Button { showingPersonalProfile = true } label: {
+                    HStack(spacing: 8) {
+                        PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 36, active: isActive)
+                        Text(currentAgentName).font(.system(size: 16, weight: .medium)).lineLimit(1).fixedSize(horizontal: true, vertical: false)
                     }
+                    .padding(.leading, 6).padding(.trailing, 14).frame(height: 48)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
+                }.buttonStyle(.plain).accessibilityLabel("配置助手").fixedSize(horizontal: true, vertical: false)
+            } else {
+                Menu {
+                    ForEach(state.agents) { agent in
+                        Button(agent.displayName) { requestConversation(agent.id) }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.crop.circle").font(.system(size: 28))
+                        Text(conversationNavigationTitle).font(.system(size: 16, weight: .medium)).lineLimit(1)
+                    }.padding(.horizontal, 12).frame(height: 48)
+                        .background(.ultraThinMaterial, in: Capsule())
                 }
-            } label: {
-                Label(
-                    currentAgentName,
-                    systemImage: "person.crop.circle"
-                )
-            }
-            .accessibilityLabel(AppLocalization.resolve("当前助手：\(currentAgentName)", locale: locale))
-        }
-
-        ToolbarItem(placement: .topBarTrailing) {
-            if personalAgent?.isReady == true,
-               conversation?.id == personalAgent?.conversationId
-            {
-                Button("配置助手", systemImage: "slider.horizontal.3") {
-                    showingPersonalProfile = true
-                }
             }
         }
-
         ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showingSessionActions = true
-            } label: {
-                Image(systemName: "ellipsis").font(.system(size: 20)).frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("会话选项")
-            .accessibilityIdentifier("assistant-options")
+            HStack(spacing: 0) {
+                Button {
+                    messageSearchQuery = ""; showingMessageSearch = true
+                } label: { Image(systemName: "magnifyingglass").font(.system(size: 22)).frame(width: 44, height: 44) }
+                    .accessibilityLabel("搜索消息").accessibilityIdentifier("chat-header-search")
+                Button {
+                    if isPersonalConversation { showingPersonalProfile = true }
+                    else { showingSessionActions = true }
+                } label: { Image(systemName: "gearshape").font(.system(size: 22)).frame(width: 44, height: 44) }
+                    .accessibilityLabel(isPersonalConversation ? "配置助手" : "会话选项")
+                    .accessibilityIdentifier("assistant-options")
+            }.buttonStyle(.plain).padding(.horizontal, 4).frame(height: 48)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
         }
     }
 }
@@ -642,6 +740,10 @@ struct PersonalAgentProfileView: View {
     @State private var voiceProvider: String?
     @State private var voiceModel: String?
     @State private var voiceOptions: [PersonalVoiceOption] = []
+    @State private var avatarItem: PhotosPickerItem?
+    @State private var avatarPreview: UIImage?
+    @State private var uploadingAvatar = false
+    @State private var loadingVoices = true
     @State private var saving = false
     @State private var error: String?
 
@@ -655,7 +757,7 @@ struct PersonalAgentProfileView: View {
         _name = State(initialValue: record.displayName)
         _appearance = State(initialValue: record.appearance)
         let preferences = record.preferences ?? [:]
-        _addressAs = State(initialValue: preferences["addressAs"] ?? "")
+        _addressAs = State(initialValue: record.userCallName ?? preferences["addressAs"] ?? "")
         _warmth = State(initialValue: preferences["warmth"] ?? "balanced")
         _supportMode = State(initialValue: preferences["supportMode"] ?? "untangle")
         _detailLevel = State(initialValue: preferences["detailLevel"] ?? "balanced")
@@ -665,9 +767,21 @@ struct PersonalAgentProfileView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        let preview = avatarPreview
+        let currentRecord = record
+        return NavigationStack {
             Form {
                 Section("助手") {
+                    PhotosPicker(selection: $avatarItem, matching: .images) {
+                        HStack {
+                            if let preview {
+                                Image(uiImage: preview).resizable().scaledToFill().frame(width: 64, height: 64).clipShape(Circle())
+                            } else {
+                                PersonalAgentAvatar(configuration: configuration, agent: currentRecord, size: 64, active: true)
+                            }
+                            Text("上传头像")
+                        }
+                    }.disabled(uploadingAvatar || saving)
                     TextField("名称", text: $name)
                         .textInputAutocapitalization(.words)
                     Picker("形象", selection: $appearance) {
@@ -726,7 +840,9 @@ struct PersonalAgentProfileView: View {
                     }
                 }
                 Section("通话声音") {
-                    if voiceOptions.isEmpty {
+                    if loadingVoices {
+                        Text("通话声音").redacted(reason: .placeholder)
+                    } else if voiceOptions.isEmpty {
                         Text("当前没有可用音色，请先在 Gateway 配置语音服务。")
                             .foregroundStyle(.secondary)
                     } else {
@@ -735,12 +851,27 @@ struct PersonalAgentProfileView: View {
                             ForEach(voiceOptions) { option in
                                 Text(option.name).tag(option.id)
                             }
+                            if let current = record.voicePreference, !voiceOptions.contains(where: { $0.id == current.voice }) {
+                                Text(current.voice).tag(current.voice)
+                            }
                         }
+                        .accessibilityIdentifier("personal-agent-voice-choice")
+                    }
+                }
+                PersonalProactivitySection(configuration: configuration)
+                Section {
+                    NavigationLink("会话选项") {
+                        AssistantOptionsView(configuration: configuration, conversation: conversation, onSave: { _ in })
                     }
                 }
                 if let error {
                     Text(error).foregroundStyle(.red)
+                    Button("重新加载设置") { Task { await reloadProfile() } }
                 }
+            }
+            .disabled(saving)
+            .onChange(of: avatarItem) {
+                Task { await uploadAvatar() }
             }
             .task {
                 do {
@@ -752,6 +883,7 @@ struct PersonalAgentProfileView: View {
                 } catch {
                     self.error = error.localizedDescription
                 }
+                loadingVoices = false
             }
             .navigationTitle("配置我的助手")
             .navigationBarTitleDisplayMode(.inline)
@@ -761,10 +893,31 @@ struct PersonalAgentProfileView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") { Task { await save() } }
-                        .disabled(saving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(saving || uploadingAvatar || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
+    }
+
+    private func reloadProfile() async {
+        do {
+            if let updated = try await GatewayClient(configuration: configuration).fetchPersonalAgent() {
+                record = updated; onSaved(updated); error = nil
+            }
+        } catch { self.error = error.localizedDescription }
+    }
+
+    private func uploadAvatar() async {
+        guard let avatarItem, !uploadingAvatar else { return }
+        uploadingAvatar = true
+        defer { uploadingAvatar = false }
+        do {
+            guard let data = try await avatarItem.loadTransferable(type: Data.self), let image = UIImage(data: data),
+                  let jpeg = image.jpegData(compressionQuality: 0.8), jpeg.count <= 512 * 1024
+            else { throw GatewayClientError.server("头像不能超过 512 KB") }
+            try await GatewayClient(configuration: configuration).uploadPersonalAvatar(data: jpeg)
+            avatarPreview = image; appearance = "custom"
+        } catch { self.error = error.localizedDescription }
     }
 
     private func save() async {
@@ -778,7 +931,9 @@ struct PersonalAgentProfileView: View {
         preferences["detailLevel"] = detailLevel
         preferences["proactivity"] = proactivity
         preferences["humor"] = humor
-        let voicePreference: PersonalVoicePreference? = if let voiceProvider, let voiceModel {
+        let voicePreference: PersonalVoicePreference? = if selectedVoice == record.voicePreference?.voice {
+            record.voicePreference
+        } else if let voiceProvider, let voiceModel {
             selectedVoice.isEmpty ? nil : PersonalVoicePreference(
                 provider: voiceProvider, model: voiceModel, voice: selectedVoice
             )
@@ -895,4 +1050,61 @@ private extension AssistantView {
 private enum PendingConversationStart {
     case agent(String)
     case scoped(ProjectRecord?, String?, String)
+}
+
+private struct PersonalProactivitySection: View {
+    let configuration: GatewayConfiguration
+    @State private var settings: PersonalProactivitySettings?
+    @State private var loading = true
+    @State private var busy = false
+    @State private var saved = false
+    @State private var error: String?
+
+    var body: some View {
+        Section("主动联系") {
+            if loading {
+                Text("主动联系设置").redacted(reason: .placeholder)
+            } else if settings != nil {
+                Picker("主动方式", selection: binding(\.mode, fallback: "balanced")) {
+                    Text("关闭主动联系").tag("off")
+                    Text("仅明确跟进").tag("follow_up")
+                    Text("适度主动").tag("balanced")
+                }
+                Picker("静默开始", selection: binding(\.quietStart, fallback: 22)) {
+                    ForEach(0..<24, id: \.self) { hour in Text(String(format: "%02d:00", hour)).tag(hour) }
+                }
+                Picker("静默结束", selection: binding(\.quietEnd, fallback: 8)) {
+                    ForEach(0..<24, id: \.self) { hour in Text(String(format: "%02d:00", hour)).tag(hour) }
+                }
+                Picker("时区", selection: binding(\.timezone, fallback: "Asia/Shanghai")) {
+                    ForEach(Array(Set(TimeZone.knownTimeZoneIdentifiers + [settings?.timezone ?? "UTC", "UTC"])).sorted(), id: \.self) { zone in
+                        Text(zone.replacingOccurrences(of: "_", with: " ")).tag(zone)
+                    }
+                }
+                Text("有值得交流的进展时，在聊天里留下消息。明确请求的结果会照常交付。")
+                    .font(.caption).foregroundStyle(.secondary)
+                Button(saved ? "已保存" : "保存主动联系设置") { Task { await save() } }.disabled(busy)
+            }
+            if let error {
+                Text(error).foregroundStyle(.red)
+                Button("重新加载设置") { Task { await load() } }
+            }
+        }.disabled(busy).task { await load() }
+    }
+    private func binding<Value>(_ path: WritableKeyPath<PersonalProactivitySettings, Value>, fallback: Value) -> Binding<Value> {
+        Binding(get: { settings?[keyPath: path] ?? fallback }, set: { settings?[keyPath: path] = $0; saved = false })
+    }
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        do { settings = try await GatewayClient(configuration: configuration).fetchPersonalProactivity(); error = nil }
+        catch { self.error = error.localizedDescription }
+    }
+    private func save() async {
+        guard let settings, !busy else { return }
+        busy = true
+        defer { busy = false }
+        do { self.settings = try await GatewayClient(configuration: configuration).updatePersonalProactivity(settings); error = nil; saved = true }
+        catch { self.error = error.localizedDescription }
+    }
 }

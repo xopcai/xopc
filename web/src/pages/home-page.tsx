@@ -19,7 +19,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 
 import { Button } from '@/components/ui/button';
@@ -34,14 +34,13 @@ import { newChatAutoSendHref } from '@/features/chat/session/composer-handoff-pa
 import {
   acknowledgeWorkAttention,
   actOnHomeOpportunity,
-  fetchHome,
   refreshHomeAdvisor,
   respondToWorkDecision,
   retryWorkAttention,
   submitHomeOpportunityFeedback,
   undoHomeOpportunityFeedback,
-  type HomeResponse,
 } from '@/features/tasks/home-api';
+import { useHomeSnapshot } from '@/features/tasks/use-home-snapshot';
 import { HomeQuickComposer } from '@/features/tasks/home-quick-composer';
 import { HomeAdvisorCard, type HomeAdvisorReceipt } from '@/features/tasks/home-advisor-card';
 import { HomeAdvisorHistoryDialog } from '@/features/tasks/home-advisor-history-dialog';
@@ -193,11 +192,10 @@ export function HomePage() {
   const t = msg.projectsPage;
   const copy = taskCopy(language);
   const navigate = useNavigate();
+  const location = useLocation();
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
-  const [home, setHome] = useState<HomeResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { home, loading, loadError, setLoadError, load } = useHomeSnapshot(language, location.key);
   const [conversationOpen, setConversationOpen] = useState(false);
   const [intent, setIntent] = useState('');
   const actionPendingRef = useRef(false);
@@ -234,50 +232,11 @@ export function HomePage() {
     retryVoiceInput,
   } = voice;
 
-  const load = useCallback(async (showSkeleton = false) => {
-    if (showSkeleton) setLoading(true);
-    setLoadError(null);
-    try {
-      const snapshot = await fetchHome(language);
-      setHome(snapshot);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setLoading(false);
-    }
-  }, [language]);
-
-  useEffect(() => {
-    void load(true);
-  }, [load]);
-
   useEffect(() => {
     if (!advisorUndo) return;
     const timer = window.setTimeout(() => setAdvisorUndo(undefined), 8_000);
     return () => window.clearTimeout(timer);
   }, [advisorUndo]);
-
-  useEffect(() => {
-    let refreshTimer: number | undefined;
-    const scheduleRefresh = (delayMs: number) => {
-      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(() => {
-        refreshTimer = undefined;
-        void load();
-      }, delayMs);
-    };
-    const refreshSoon = () => scheduleRefresh(100);
-    const refreshAfterSessionSettles = () => scheduleRefresh(750);
-    const immediateEvents = ['session-created', 'agent-run-started', 'agent-run-ended', 'automation-run-completed', 'workflow-run-updated', 'workflow-run-error', 'home-advisor-updated'];
-    const noisySessionEvents = ['session-updated', 'session-transcript-updated'];
-    immediateEvents.forEach((name) => window.addEventListener(name, refreshSoon));
-    noisySessionEvents.forEach((name) => window.addEventListener(name, refreshAfterSessionSettles));
-    return () => {
-      immediateEvents.forEach((name) => window.removeEventListener(name, refreshSoon));
-      noisySessionEvents.forEach((name) => window.removeEventListener(name, refreshAfterSessionSettles));
-      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
-    };
-  }, [load]);
 
   const processAttachmentFiles = useCallback(async (files: File[]) => {
     if (files.length === 0 || attachmentBusy) return;

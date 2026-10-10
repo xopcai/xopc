@@ -106,7 +106,8 @@ export class XopcVoiceCallAudio {
   private async captureLoop(generation: number): Promise<void> {
     const capturer = this.capturer;
     if (!capturer) return;
-    const size = Math.max(640, capturer.getBufferSizeSync());
+    // A 20 ms read prevents a larger hardware buffer from delaying uplink frames.
+    const size = 640;
     try {
       while (generation === this.generation && this.capturing) {
         const data = await capturer.read(size, true);
@@ -164,7 +165,7 @@ export class XopcVoiceCallAudio {
       let offset = 0;
       while (offset < copy.byteLength) {
         if (generation !== this.generation || playbackGeneration !== this.playbackGeneration) return;
-        const remaining = copy.slice(offset);
+        const remaining = offset === 0 ? copy : copy.slice(offset);
         const written = await renderer.write(remaining.buffer);
         if (written <= 0) throw new Error('Incomplete voice playback write');
         offset += written;

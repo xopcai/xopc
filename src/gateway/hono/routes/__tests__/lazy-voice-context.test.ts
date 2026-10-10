@@ -78,7 +78,9 @@ describe('authenticated lazy voice context', () => {
       service: { voiceRealtime: { createSession, preflight } },
       strictRateLimitMiddleware: async (_c, next) => next(),
     } as never);
-    expect((await app.request('/api/voice/realtime/preflight', request('test-token'))).status).toBe(200);
+    const response = await app.request('/api/voice/realtime/preflight', request('test-token'));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, timingMetrics: expect.arrayContaining(['speech_end_to_audio_scheduled', 'speech_end_to_audio_buffered']) });
     expect(preflight).toHaveBeenCalledWith({ purpose: 'dictation', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] });
     expect(createSession).not.toHaveBeenCalled();
 

@@ -1,4 +1,4 @@
-import { voiceSelectionSchema } from '@xopcai/realtime-protocol/voice';
+import { VOICE_TIMING_METRICS, voiceSelectionSchema } from '@xopcai/realtime-protocol/voice';
 import { voiceSettingsCatalog, selectPlatformVoice } from '../../../voice/platform-settings.js';
 /**
  * Voice routes — POST /api/voice/transcriptions (multipart).
@@ -300,7 +300,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       if (preparation && preparation.state !== 'ready') return c.json({ ok: false, error: { code: 'SESSION_PREPARING', message: 'Session environment is not ready' } }, 409);
       if (action === 'preflight') {
         await service.voiceRealtime.preflight(parsed.data);
-        return c.json({ ok: true });
+        return c.json({ ok: true, timingMetrics: VOICE_TIMING_METRICS });
       }
       const principal = getGatewayPrincipal(c);
       const create = () => service.voiceRealtime.createSession(parsed.data, principal.principalId);

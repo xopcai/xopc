@@ -18,6 +18,7 @@ export function migrateCloudModelRef(ref: string, kind: Kind = 'language'): stri
   if (!ref.startsWith('xopc-cloud/')) return ref;
   const id = ref.slice('xopc-cloud/'.length);
   if (PUBLIC_IDS.has(id) || id.startsWith('openai-codex/')) return ref;
+  if (id === 'computer-gui-plus-preview' || id === 'gui-plus-2026-02-26') return 'xopc-cloud/computer';
   const product = kind === 'omni' ? 'realtime' : kind === 'language' ? 'auto' : kind;
   return `xopc-cloud/${product}`;
 }

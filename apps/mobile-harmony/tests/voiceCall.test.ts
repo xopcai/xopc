@@ -23,6 +23,8 @@ type CallHarness = {
   onEvent(event: XopcVoiceServerEvent): void;
   onAudio(frame: XopcVoiceAudioFrame): void;
   played(id: string, milliseconds: number): void;
+  buffered(id: string, milliseconds: number): void;
+  supportedTimingMetrics: string[];
   release(clearSession: boolean): Promise<void>;
 };
 function event(type: string, responseId: string, payload: object = {}): XopcVoiceServerEvent {
@@ -137,6 +139,21 @@ describe('Harmony continuous voice call response handoff', () => {
     expect(mocks.duck).toHaveBeenLastCalledWith(true);
     harness.onEvent(event('input.speech_stopped', '', { utteranceId: 'user' }));
     expect(mocks.duck).toHaveBeenLastCalledWith(false);
+  });
+
+  it.each([false, true])('reports first native buffering only when advertised: %s', supported => {
+    harness.supportedTimingMetrics = supported ? ['speech_end_to_audio_buffered'] : [];
+    harness.onEvent(event('input.speech_started', '', { utteranceId: 'user' }));
+    mocks.now = 1100;
+    harness.onEvent(event('input.speech_stopped', '', { utteranceId: 'user' }));
+    harness.onEvent(event('response.created', 'reply'));
+    mocks.now = 1300; harness.onAudio(frame('reply'));
+    mocks.now = 1350; harness.buffered('reply', 20); harness.buffered('reply', 40);
+    const metrics = mocks.send.mock.calls.filter(([type, payload]) => type === 'session.metric'
+      && payload.metric === 'speech_end_to_audio_buffered');
+    expect(metrics).toEqual(supported ? [['session.metric', {
+      responseId: 'reply', metric: 'speech_end_to_audio_buffered', durationMs: 250,
+    }]] : []);
   });
 
   it('emits receipt latency once and honors disabled barge-in', () => {

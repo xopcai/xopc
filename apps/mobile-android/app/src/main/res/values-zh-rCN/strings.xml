@@ -751,4 +751,18 @@
     <string name="personal_chat_entry_subtitle">一个熟悉的地方，陪你理清思路、推进事情。</string>
     <string name="personal_chat_resume_title">继续与 %1$s 对话</string>
     <string name="personal_chat_resume_subtitle">延续你与专属助手的对话。</string>
+    <string name="chat_personal_model_thinking">对话模型与思考强度</string>
+    <string name="chat_personal_upload_avatar">上传头像</string>
+    <string name="chat_personal_outreach">主动联系</string>
+    <string name="chat_personal_outreach_mode">主动方式</string>
+    <string name="chat_personal_outreach_off">关闭主动联系</string>
+    <string name="chat_personal_outreach_followup">仅明确跟进</string>
+    <string name="chat_personal_outreach_balanced">适度主动</string>
+    <string name="chat_personal_quiet_start">静默开始</string>
+    <string name="chat_personal_quiet_end">静默结束</string>
+    <string name="chat_personal_timezone">IANA 时区，例如 Asia/Shanghai</string>
+    <string name="chat_personal_outreach_save">保存主动联系设置</string>
+    <string name="chat_personal_saved">已保存</string>
+    <string name="chat_personal_search">搜索消息</string>
+    <string name="chat_personal_search_loaded">搜索已加载消息；可加载更早记录</string>
 </resources>

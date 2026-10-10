@@ -23,6 +23,7 @@ import { resolveSpeechProviderChain, resolveSpeechProvider, type ResolvedSpeechP
 import { preprocessText, type PreprocessOptions, type PreprocessResult } from './preprocess.js';
 import type {
   SpeechProviderOverrides,
+  SpeechStreamSession,
   SpeechSynthesisRequest,
   SpeechSynthesisResult,
   SpeechSynthesisStreamRequest,
@@ -518,4 +519,27 @@ function wrapBufferAsStream(result: SpeechSynthesisResult): SpeechSynthesisStrea
     fileExtension: result.fileExtension,
     voiceCompatible: result.voiceCompatible,
   };
+}
+
+/** Prepares a single frozen route while the Agent is generating its first text. */
+export function prepareSpeechStreamSession(
+  config: TTSConfig,
+  options: SpeakStreamOptions,
+): Promise<SpeechStreamSession> | undefined {
+  options.signal?.throwIfAborted();
+  if (!config.enabled) return undefined;
+  const resolved = resolveSpeechProvider(config.provider, config);
+  if (!resolved?.plugin.openStreamSession) return undefined;
+  const request = buildSynthesisRequest(resolved, '', options.tts, undefined,
+    options.appConfig, 'voice-note', options.signal);
+  // Setup and each synthesis have their own provider timeout. Agent thinking
+  // and the combined reply must not inherit a single synthesis deadline.
+  const sessionRequest = { ...request, signal: options.signal ?? new AbortController().signal };
+  return resolved.plugin.openStreamSession(sessionRequest).then(session => ({
+    close: () => session.close(),
+    synthesize: text => session.synthesize(preprocessText(text, {
+      maxLength: config.maxTextLength || 4096, stripMarkdown: true, normalizeWhitespace: true,
+      ...options.preprocess,
+    }).text),
+  }));
 }

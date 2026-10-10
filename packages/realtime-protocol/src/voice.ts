@@ -17,6 +17,10 @@ export const voicePurposeSchema = z.enum(['dictation', 'conversation']);
 export const voiceModeSchema = z.enum(['natural', 'assistant']);
 export const voiceInputModeSchema = z.literal('server_vad');
 export const voiceLanguageSchema = z.enum(['zh', 'en']);
+export const VOICE_TIMING_METRICS = [
+  'speech_end_to_audio_received', 'speech_end_to_audio_scheduled', 'speech_end_to_audio_buffered', 'local_stop',
+] as const;
+
 export const voicePcmFormatSchema = z.strictObject({
   encoding: z.literal('pcm_s16le'),
   sampleRate: z.union([z.literal(16_000), z.literal(24_000)]),
@@ -112,7 +116,7 @@ export const voiceClientMessageSchema = z.discriminatedUnion('type', [
   })),
   clientEnvelope('session.metric', z.strictObject({
     responseId: z.string().min(1).max(160),
-    metric: z.enum(['speech_end_to_audio_received', 'local_stop']),
+    metric: z.enum(VOICE_TIMING_METRICS),
     durationMs: z.number().finite().min(0).max(600_000),
   })),
   clientEnvelope('input.mute', z.strictObject({ muted: z.boolean() })),

@@ -5,6 +5,7 @@ import Foundation
 final class RealtimeVoiceAudio {
     private var engine: AVAudioEngine?
     private var player: AVAudioPlayerNode?
+    private var playbackFormat: AVAudioFormat?
     private var inputContinuation: AsyncStream<Data>.Continuation?
     private var interruptionObserver: NSObjectProtocol?
     private var routeObserver: NSObjectProtocol?
@@ -30,6 +31,8 @@ final class RealtimeVoiceAudio {
         }
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])
+        // A preference: Bluetooth and other routes can select a larger hardware buffer.
+        try? session.setPreferredIOBufferDuration(0.01)
         try session.setActive(true)
 
         let engine = AVAudioEngine()
@@ -51,6 +54,7 @@ final class RealtimeVoiceAudio {
             player.play()
             self.engine = engine
             self.player = player
+            playbackFormat = outputFormat
             self.onPlayed = onPlayed
             self.onInterrupted = onInterrupted
             self.onRoute = onRoute
@@ -101,9 +105,8 @@ final class RealtimeVoiceAudio {
     }
 
     func enqueue(responseID: String, pcm: Data) throws {
-        guard let player else { throw RealtimeVoiceAudioError.notStarted }
+        guard let player, let format = playbackFormat else { throw RealtimeVoiceAudioError.notStarted }
         guard pcm.count == 960 else { throw RealtimeVoiceAudioError.invalidOutputFrame }
-        let format = try Self.pcmFormat(sampleRate: 24000)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 480),
               let samples = buffer.int16ChannelData?[0]
         else { throw RealtimeVoiceAudioError.invalidOutputFrame }
@@ -140,6 +143,7 @@ final class RealtimeVoiceAudio {
         player?.stop()
         engine = nil
         player = nil
+        playbackFormat = nil
         inputContinuation?.finish()
         inputContinuation = nil
         if let interruptionObserver {
@@ -190,7 +194,8 @@ private final class RealtimeVoiceCapture: @unchecked Sendable {
     }
 
     func install(on input: AVAudioInputNode, inputFormat: AVAudioFormat) {
-        input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [self] buffer, _ in
+        let frameCount = AVAudioFrameCount(max(1, inputFormat.sampleRate * 0.02))
+        input.installTap(onBus: 0, bufferSize: frameCount, format: inputFormat) { [self] buffer, _ in
             let capacity = AVAudioFrameCount(ceil(Double(buffer.frameLength) * 16000 / inputFormat.sampleRate)) + 8
             guard let target = AVAudioPCMBuffer(pcmFormat: converter.outputFormat, frameCapacity: capacity) else { return }
             var error: NSError?

@@ -183,7 +183,11 @@ export function decisionFromTask(
     response: { kind: 'task', taskId: task.id, canRetry: reason === 'retry' && model.allowedCommands.includes('start') },
     kind: 'task',
     title: task.title,
-    detail: item.summary,
+    detail: isChinese ? ({
+      'Agent run returned no result or evidence': '本次执行没有返回结果或依据，请重试。',
+      'The latest run failed': '最近一次执行失败，请查看详情后重试。',
+      'Task is overdue': '任务已逾期。',
+    } as Record<string, string>)[item.summary] ?? item.summary : item.summary,
     reason,
     urgency: 'now',
     href: `/tasks/${encodeURIComponent(task.id)}`,
@@ -391,7 +395,7 @@ export class HomeQueryService {
 
   constructor(
     private readonly service: HomeGatewayPort,
-    private readonly getAdvisor: () => HomeAdvisor = () => ({ state: 'quiet', reason: 'no_change' }),
+    private readonly getAdvisor: (locale?: string) => HomeAdvisor = () => ({ state: 'quiet', reason: 'no_change' }),
   ) {}
 
   async getSnapshot(locale?: string): Promise<HomeResponse> {
@@ -528,7 +532,7 @@ export class HomeQueryService {
       ...workbench,
       runningConversations,
       decisions,
-      advisor: this.getAdvisor(),
+      advisor: this.getAdvisor(locale),
       attentionPolicy: governed.policy,
     };
   }

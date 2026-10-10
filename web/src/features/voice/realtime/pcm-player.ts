@@ -90,7 +90,7 @@ export class PcmPlayer {
     }
   }
 
-  enqueue(pcm: ArrayBuffer, onPlayed: () => void, sampleRate = 24_000): void {
+  enqueue(pcm: ArrayBuffer, onPlayed: () => void, sampleRate = 24_000): number | undefined {
     if (pcm.byteLength < 2 || this.context.state === 'closed') return;
     const view = new DataView(pcm);
     const samples = new Float32Array(Math.floor(pcm.byteLength / 2));
@@ -113,6 +113,7 @@ export class PcmPlayer {
       source.disconnect();
       onPlayed();
     };
+    return Math.max(0, startAt - this.context.currentTime) * 1_000;
   }
 
   duck(active: boolean): void {

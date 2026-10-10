@@ -81,6 +81,37 @@ export class SpeakableSegmenter {
     return phrases;
   }
 
+  /** Releases only a complete short phrase; never cuts a word or Markdown construct. */
+  flushFirstPhrase(): string[] {
+    if (this.emitted || this.fence || /^\s*(```|~~~|\|)/.test(this.pending)) return [];
+    let brackets = 0;
+    let parentheses = 0;
+    let inlineCode = false;
+    for (let index = 0; index < this.pending.length; index += 1) {
+      if (/^https?:\/\//.test(this.pending.slice(index))) {
+        const end = this.pending.slice(index).search(/\s/);
+        if (end < 0) return [];
+        index += end - 1;
+        continue;
+      }
+      const char = this.pending[index];
+      if (char === '`') inlineCode = !inlineCode;
+      if (char === '[') brackets += 1;
+      if (char === ']') brackets = Math.max(0, brackets - 1);
+      if (char === '(') parentheses += 1;
+      if (char === ')') parentheses = Math.max(0, parentheses - 1);
+      if (inlineCode || brackets || parentheses) continue;
+      if (index >= 11 && /[，、,\s]/u.test(char)) {
+        const phrase = this.toSpeech(this.pending.slice(0, index + 1));
+        if (!phrase) continue;
+        this.pending = this.pending.slice(index + 1);
+        this.emitted = true;
+        return [phrase];
+      }
+    }
+    return [];
+  }
+
   flush(): string[] {
     const phrase = this.fence || /^\s*(```|~~~)/.test(this.pending) ? '' : this.toSpeech(this.pending);
     this.pending = '';

@@ -36,11 +36,11 @@ describe('chat bottom region composition', () => {
 
   it('shows the jump button only while scrolling back toward the latest message', () => {
     expect(chat).toContain('@Local showJumpBottom: boolean = false;');
-    expect(chat).toContain('if (this.atBottom) this.showJumpBottom = false;');
+    expect(chat).toContain('if (this.atBottom) { this.showJumpBottom = false; this.updateReplySpace(); }');
     expect(chat).toContain('else if (offset > 0) this.showJumpBottom = true;');
     expect(chat).toContain('else if (offset < 0) this.showJumpBottom = false;');
     expect(chat).toContain('if (!this.atBottom && this.showJumpBottom)');
-    expect(chat).toContain('this.atBottom = true; this.showJumpBottom = false; this.messagesScroller.scrollEdge(Edge.Bottom);');
+    expect(chat).toContain('this.atBottom = true; this.showJumpBottom = false; this.updateReplySpace();');
   });
 
   it('replaces the jump arrow with the shared animated mascot while AI is responding', () => {
@@ -62,7 +62,7 @@ describe('chat bottom region composition', () => {
   it('masks content at the lower dock corners while keeping the floating surface transparent', () => {
     expect(chat).toContain('@Local bottomRegionHeight: number = 0;');
     expect(chat).toContain('Stack({ alignContent: Alignment.Bottom })');
-    expect(chat).toContain('.contentEndOffset(this.bottomRegionHeight + 24)');
+    expect(chat).toContain('.contentEndOffset(this.bottomRegionHeight + 24 + this.replySpaceHeight)');
     expect(chat).toContain('this.bottomRegionHeight = Number(current.height);');
     expect(chat).toContain("}.id('chat-content-viewport').width('100%').height('100%')");
     expect(chat).not.toContain('.padding({ bottom: this.bottomRegionHeight }).clip(true)');
@@ -217,13 +217,17 @@ describe('chat bottom region composition', () => {
     expect(sessions).not.toContain("Button('+').id('sessions-new')");
   });
 
-  it('keeps routine Gateway connection progress quiet and renders compact header dots', () => {
+  it('keeps routine Gateway connection progress quiet and renders capsule search and settings actions', () => {
     expect(chat).toContain('if (this.hasConnectionIssue())');
     expect(chat).not.toContain("if (this.chat.connection !== 'connected')");
     expect(chat).toContain("this.chat.connection === 'gateway_update_required' || this.chat.connection.startsWith('error:')");
-    const headerActions = chat.slice(chat.indexOf("Text('···').fontSize(18)"), chat.indexOf(".id('chat-header-actions')"));
-    expect(headerActions).toContain("Text('···').fontSize(18).letterSpacing(-2)");
-    expect(headerActions).not.toContain("Text('•••')");
+    const header = chat.slice(chat.indexOf('if (!this.embedded)'), chat.indexOf('if (this.hasConnectionIssue())'));
+    expect(header).toContain("$r('sys.symbol.gearshape')");
+    expect(header).toContain("$r('sys.symbol.magnifyingglass')");
+    expect(header).toContain(".id('chat-header-actions')");
+    expect(header).toContain(".id('chat-header-search')");
+    expect(header).toContain('this.personalSettingsOpen = true');
+
   });
 
   it('shows the conversation title in the header and keeps model selection in the actions sheet', () => {
@@ -244,7 +248,7 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain("if (this.sheetMode === 'context')");
     expect(chat).toContain("if (this.sheetMode === 'directory')");
     expect(chat).toContain('height: this.sheetHeight');
-    expect(chat).not.toContain("height: '80%'");
+    expect(chat).toContain('.bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight');
     expect(chat).toContain('onMode: (mode: string): void => { this.sheetMode = mode; }');
   });
 

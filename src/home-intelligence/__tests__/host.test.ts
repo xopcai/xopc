@@ -87,6 +87,57 @@ describe('HomeIntelligenceHost', () => {
     db.close();
   });
 
+  it('uses the workbench locale for advice and hides cached advice while switching languages', async () => {
+    const db = database();
+    let now = 1_000;
+    const generate = vi.fn(async (snapshot: Parameters<HomeSnapshotBuilder['build']>[0]) => ({
+      modelRef: 'test/reasoning', usage: {},
+      result: {
+        state: 'ready' as const,
+        candidates: [{
+          kind: 'project_next_step' as const,
+          projectId: 'atlas',
+          title: snapshot.locale === 'zh' ? '检查 Atlas 项目' : 'Review the Atlas project',
+          outcome: snapshot.locale === 'zh' ? '形成计划' : 'Prepare a plan',
+          rationale: snapshot.locale === 'zh' ? '项目需要推进' : 'The project needs attention',
+          evidenceIds: ['project:atlas:v10'], confidence: 'high' as const,
+          urgency: 'today' as const, risk: 'analysis' as const, proposedSteps: ['检查目标'],
+          requiredCapabilities: [], verification: [], actionPrompt: '检查项目。',
+        }],
+      },
+    }));
+    const host = new HomeIntelligenceHost(db, {
+      principal: { ownerId: 'owner', workspaceId: 'workspace' },
+      snapshot: new HomeSnapshotBuilder({
+        projects: () => [{
+          id: 'atlas', name: 'Atlas', slug: 'atlas', status: 'active', health: 'on_track', executionMode: 'local_checkout',
+          successCriteria: [], scope: {}, nonGoals: [], version: 1, createdAt: 1, updatedAt: 10,
+        }],
+        tasks: () => [], knowledge: () => [],
+      }),
+      generator: { generate },
+      capabilities: () => ({ agentId: 'main', connectors: new Set(), skills: new Set() }),
+      resolveCapabilities: resolveReady,
+      notifyOpportunity: vi.fn(), publish: vi.fn(), locale: () => 'en', now: () => now,
+    });
+    host.requestRefresh('project_changed');
+    await vi.waitFor(() => expect(host.getAdvisor()).toMatchObject({ state: 'ready', primary: { title: 'Review the Atlas project' } }));
+
+    now += 1_000;
+    expect(host.getAdvisor('zh-CN')).toMatchObject({ state: 'refreshing' });
+    await vi.waitFor(() => expect(host.getAdvisor('zh')).toMatchObject({ state: 'ready', primary: { title: '检查 Atlas 项目' } }));
+    expect(generate.mock.calls[1]?.[0]).toMatchObject({ locale: 'zh' });
+    host.getAdvisor('zh');
+    expect(generate).toHaveBeenCalledTimes(2);
+
+    now += 1_000;
+    expect(host.getAdvisor('en')).toMatchObject({ state: 'refreshing' });
+    await vi.waitFor(() => expect(host.getAdvisor('en')).toMatchObject({ state: 'ready', primary: { title: 'Review the Atlas project' } }));
+    expect(generate).toHaveBeenCalledTimes(3);
+    host.stop();
+    db.close();
+  });
+
   it('degrades missing model credentials to a quiet state without retrying forever', async () => {
     const db = database();
     const generate = vi.fn(async () => { throw new Error('No API key for provider: test'); });

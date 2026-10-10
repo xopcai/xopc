@@ -320,7 +320,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         if (!isCurrent()) { void player.close(); return; }
       }
       stage = 'session';
-      await wait(VoiceSessionClient.preflight({ purpose, ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}), signal: controller.signal }), 20_000);
+      const timingMetrics = await wait(VoiceSessionClient.preflight({ purpose, ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}), signal: controller.signal }), 20_000);
       if (!isCurrent()) return;
       stage = 'permission';
       const electronSystem = window.electronAPI?.system;
@@ -361,6 +361,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       updatePhase('connecting');
       dictationRef.current.clear();
       const client = await wait(VoiceSessionClient.connect({
+        timingMetrics,
         purpose,
         signal: controller.signal,
         ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}),
@@ -453,12 +454,14 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
           if (!isCurrent()) return;
           const responseId = activeResponseIdRef.current;
           if (!responseId || frameResponseId !== responseId) return;
-          if (!firstAudioRef.current) {
+          const firstAudio = !firstAudioRef.current;
+          const speechStoppedAt = speechStoppedAtRef.current;
+          if (firstAudio) {
             firstAudioRef.current = true;
             if (speechStoppedAtRef.current !== null) clientRef.current?.reportMetric(responseId, 'speech_end_to_audio_received', performance.now() - speechStoppedAtRef.current);
             speechStoppedAtRef.current = null;
           }
-          playerRef.current?.enqueue(audio, () => {
+          const schedulingDelayMs = playerRef.current?.enqueue(audio, () => {
             if (activeResponseIdRef.current !== responseId) return;
             playedBytesRef.current += audio.byteLength;
             clientRef.current?.acknowledgeAudio(responseId, playedBytesRef.current);
@@ -467,6 +470,10 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
               setResponsePhase('idle');
             }
           });
+          if (firstAudio && speechStoppedAt !== null && schedulingDelayMs !== undefined) {
+            clientRef.current?.reportMetric(responseId, 'speech_end_to_audio_scheduled',
+              performance.now() - speechStoppedAt + schedulingDelayMs);
+          }
         },
         onClose: (reason) => { if (isCurrent()) handleSessionClose(reason); },
       }), 20_000, (lateClient) => lateClient.stop('surface_closed'));

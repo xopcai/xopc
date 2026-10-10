@@ -519,6 +519,9 @@ fun MainScreen(
   onOpenPersonalAgent: () -> Unit = {},
   onLoadPersonalVoiceChoices: () -> Unit = {},
   onUpdatePersonalAgentProfile: (String, String, Map<String, String>, String?) -> Unit = { _, _, _, _ -> },
+  onLoadPersonalProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
+  onSavePersonalProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
+  onUploadPersonalAvatar: suspend (ByteArray) -> Unit = {},
   onSavePersonalGoal: (String?, String, String, String, Long?) -> Unit = { _, _, _, _, _ -> },
   onLoadPersonalAssertions: (String, String, Boolean) -> Unit = { _, _, _ -> },
   onOpenPersonalAssertion: (String) -> Unit = {},
@@ -796,6 +799,9 @@ fun MainScreen(
     onOpenPersonalAgent = onOpenPersonalAgent,
     onLoadPersonalVoiceChoices = onLoadPersonalVoiceChoices,
     onUpdatePersonalAgentProfile = onUpdatePersonalAgentProfile,
+    onLoadPersonalProactivity = onLoadPersonalProactivity,
+    onSavePersonalProactivity = onSavePersonalProactivity,
+    onUploadPersonalAvatar = onUploadPersonalAvatar,
     onSavePersonalGoal = onSavePersonalGoal,
     onLoadPersonalAssertions = onLoadPersonalAssertions,
     onOpenPersonalAssertion = onOpenPersonalAssertion,
@@ -1013,6 +1019,9 @@ internal fun MainContent(
   onOpenPersonalAgent: () -> Unit = {},
   onLoadPersonalVoiceChoices: () -> Unit = {},
   onUpdatePersonalAgentProfile: (String, String, Map<String, String>, String?) -> Unit = { _, _, _, _ -> },
+  onLoadPersonalProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
+  onSavePersonalProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
+  onUploadPersonalAvatar: suspend (ByteArray) -> Unit = {},
   onSavePersonalGoal: (String?, String, String, String, Long?) -> Unit = { _, _, _, _, _ -> },
   onLoadPersonalAssertions: (String, String, Boolean) -> Unit = { _, _, _ -> },
   onOpenPersonalAssertion: (String) -> Unit = {},
@@ -1216,6 +1225,7 @@ internal fun MainContent(
     mutableStateOf(TextFieldValue(connection.draftText, selection = TextRange(connection.draftText.length)))
   }
   val assistantComposerFocus = remember(connection.selectedConversationId) { FocusRequester() }
+  var personalModelRequestRevision by remember { mutableIntStateOf(0) }
   var assistantFocusRevision by remember(connection.selectedConversationId) { mutableIntStateOf(0) }
   var assistantReferenceKind by remember(connection.profile?.gatewayId, connection.selectedConversationId) {
     mutableStateOf<String?>(null)
@@ -1521,7 +1531,8 @@ internal fun MainContent(
           }, { assistantFocusRevision++ },
           assistantReferenceKind, { assistantReferenceKind = it },
           assistantReferenceQuery, { assistantReferenceQuery = it },
-          { assistantActionsOpen = it })
+          { assistantActionsOpen = it }, onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
+          onLoadPersonalProactivity, onSavePersonalProactivity, onUploadPersonalAvatar, personalModelRequestRevision, { personalModelRequestRevision = 0 })
         else ConversationsScreen(connection, rootInsets, bottomChromeHeight,
           onConversationSearchChange,
           onRefreshConversations, onLoadMoreConversations, {
@@ -1607,6 +1618,8 @@ internal fun MainContent(
           onOpenAgent = onOpenPersonalAgent,
           onLoadAgentVoices = onLoadPersonalVoiceChoices,
           onUpdateAgentProfile = onUpdatePersonalAgentProfile,
+          onLoadProactivity = onLoadPersonalProactivity, onSaveProactivity = onSavePersonalProactivity,
+          onUploadAvatar = onUploadPersonalAvatar, onModel = { onOpenPersonalAgent(); personalModelRequestRevision++; onSelectTab(HomeTab.Assistant) },
           onOpenSettings = { personalPage = "settings" },
           onOpenAbout = { personalStartSection = "overview"; personalPage = "about" },
           onOpenUnderstanding = { personalStartSection = "understanding"; personalPage = "about" },
@@ -2403,7 +2416,12 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onFocusDraft: () -> Unit,
   referenceKind: String?, onReferenceKindChange: (String?) -> Unit,
   referenceQuery: String, onReferenceQueryChange: (String) -> Unit,
-  onActionsOpenChange: (Boolean) -> Unit) {
+  onActionsOpenChange: (Boolean) -> Unit,
+  onLoadAgentVoices: () -> Unit = {},
+  onUpdateAgentProfile: (String, String, Map<String, String>, String?) -> Unit = { _, _, _, _ -> },
+  onLoadProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
+  onSaveProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
+  onUploadAvatar: suspend (ByteArray) -> Unit = {}, personalModelRequestRevision: Int = 0, onPersonalModelRequestHandled: () -> Unit = {}) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val uriHandler = LocalUriHandler.current
@@ -2421,6 +2439,9 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       connection.messages.isEmpty() && connection.context == null && !connection.contextError) onReloadContext()
   }
   val selected = connection.conversations.firstOrNull { it.id == connection.selectedConversationId }
+  var personalSettingsOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var messageSearchOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var messageSearchQuery by remember(connection.selectedConversationId) { mutableStateOf("") }
   var modelPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var thinkingPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var pendingModelChoice by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
@@ -2451,6 +2472,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   var contextInitialMode by remember(connection.selectedConversationId) { mutableStateOf("context") }
   var contextInitialKind by remember(connection.selectedConversationId) { mutableStateOf("note") }
   var optionsOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  LaunchedEffect(personalModelRequestRevision) {
+    if (personalModelRequestRevision > 0) { optionsOpen = true; onPersonalModelRequestHandled() }
+  }
+
   var sendFlightVisible by remember(connection.selectedConversationId) { mutableStateOf(false) }
   LaunchedEffect(connection.optimisticText, connection.selectedConversationId) {
     sendFlightVisible = connection.optimisticText.isNotBlank()
@@ -2473,11 +2498,54 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   val messageScrollScope = rememberCoroutineScope()
   var positionedAtLatest by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var followBottom by remember(connection.selectedConversationId) { mutableStateOf(true) }
+  var replySpace by remember(connection.selectedConversationId) { mutableStateOf(ChatReplySpace()) }
+  var messageViewportHeight by remember(connection.selectedConversationId) { mutableIntStateOf(0) }
+  var replyAnchorId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
+  var awaitingReplyAnchor by remember(connection.selectedConversationId) { mutableStateOf(false) }
+  var previousReplyUserId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
+  val replyRowHeights = remember(connection.selectedConversationId) {
+    androidx.compose.runtime.mutableStateMapOf<String, Int>()
+  }
+  val density = LocalDensity.current
+  val bottomChromePx = with(density) { bottomChromeHeight.toPx() }
+  val replyGapPx = with(density) { 12.dp.toPx() }
+  val replySpaceHeight = replySpace.remaining.dp
+  var observedSendSequence by remember(connection.selectedConversationId) { mutableStateOf(connection.chatSendSequence) }
+  LaunchedEffect(connection.chatSendSequence) {
+    if (connection.chatSendSequence != observedSendSequence && followBottom && !connection.chatSendQueued) {
+      replySpace = replySpace.begin((messageViewportHeight - bottomChromePx - replyGapPx) / density.density, true)
+      replyRowHeights.clear()
+      previousReplyUserId = connection.chatSendPreviousUserId
+      replyAnchorId = null
+      awaitingReplyAnchor = true
+    }
+    observedSendSequence = connection.chatSendSequence
+  }
+  LaunchedEffect(connection.messages.lastOrNull { it.role == "user" }?.id, awaitingReplyAnchor) {
+    val latestUser = connection.messages.lastOrNull { it.role == "user" }
+    if (awaitingReplyAnchor && latestUser != null && latestUser.id != previousReplyUserId) {
+      replyAnchorId = latestUser.id
+      awaitingReplyAnchor = false
+    }
+  }
+  LaunchedEffect(replyAnchorId, connection.messages, connection.liveText, connection.activeRunId,
+    replyRowHeights.toMap(), messageViewportHeight, bottomChromePx, followBottom) {
+    if (!connection.historyLoadingOlder) {
+      val anchor = connection.messages.indexOfFirst { it.id == replyAnchorId }
+      val replyRows = if (anchor >= 0) connection.messages.drop(anchor + 1) else emptyList()
+      val replyHeight = replyRows.sumOf { replyRowHeights[it.id] ?: 0 }.toFloat() +
+        replyRows.size * replyGapPx +
+        (if (connection.liveText.isNotBlank() && connection.activeRunId != null)
+          (replyRowHeights["live-output"] ?: 0) + replyGapPx else 0f)
+      replySpace = replySpace.consume(replyHeight / density.density,
+        (messageViewportHeight - bottomChromePx - replyGapPx) / density.density, followBottom)
+    }
+  }
   var programmaticMessageScroll by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var olderAnchor by remember(connection.selectedConversationId) { mutableStateOf<Pair<String, Int>?>(null) }
   suspend fun scrollMessagesToBottom() {
-    val lastIndex = connection.messages.lastIndex + (if (connection.historyBefore != null) 1 else 0) +
-      (if (connection.liveText.isNotBlank() && connection.activeRunId != null) 1 else 0)
+    withFrameNanos { }
+    val lastIndex = messageListState.layoutInfo.totalItemsCount - 1
     if (lastIndex < 0) return
     programmaticMessageScroll = true
     try {
@@ -2501,9 +2569,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       }
   }
   LaunchedEffect(connection.selectedConversationId, connection.historyLoading,
-    connection.messages.lastOrNull()?.id, connection.liveText, connection.activeRunId) {
+    connection.messages.lastOrNull()?.id, connection.liveText, connection.activeRunId,
+    connection.optimisticText, replySpace.remaining, messageViewportHeight, bottomChromeHeight) {
     if (!connection.historyLoading && !connection.historyLoadingOlder &&
-      (connection.messages.isNotEmpty() || connection.liveText.isNotBlank()) &&
+      (connection.messages.isNotEmpty() || connection.liveText.isNotBlank() || connection.optimisticText.isNotBlank()) &&
       (!positionedAtLatest || followBottom)) scrollMessagesToBottom()
   }
   LaunchedEffect(connection.messages.firstOrNull()?.id, connection.historyLoadingOlder) {
@@ -2548,16 +2617,34 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       verticalAlignment = Alignment.CenterVertically) {
       val personalAgent = connection.personal.agent?.takeIf { it.state == "ready" &&
         it.conversationId == connection.selectedConversationId }
-      if (personalAgent != null) PersonalAgentAvatar(connection.personal.agentAvatar,
-        personalAgent.appearance, 32.dp, active = true)
-      Text(personalAgent?.displayName ?: selected?.takeUnless { it.isLocalDraft }?.title
-        ?: stringResource(R.string.assistant_new_conversation),
-        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium,
-        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-      IconButton(onClick = { optionsOpen = true },
-        modifier = Modifier.semantics { contentDescription = optionsLabel }.testTag("assistant-options")) {
-        Icon(painterResource(R.drawable.action_more_horizontal), contentDescription = null,
-          tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+      Box(Modifier.weight(1f)) {
+      Row(Modifier.height(48.dp).clip(CircleShape)
+        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f))
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
+        .clickable { if (personalAgent != null) personalSettingsOpen = true else agentPickerOpen = true }
+        .padding(start = 6.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PersonalAgentAvatar(connection.personal.agentAvatar.takeIf { personalAgent != null },
+          personalAgent?.appearance ?: "loopi", 36.dp, active = true)
+        Text(personalAgent?.displayName ?: selected?.takeUnless { it.isLocalDraft }?.title
+          ?: stringResource(R.string.assistant_new_conversation),
+          style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
+          maxLines = 1, overflow = TextOverflow.Ellipsis)
+      }
+      }
+      Spacer(Modifier.width(12.dp))
+      Row(Modifier.height(48.dp).clip(CircleShape)
+        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f))
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
+        .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { messageSearchQuery = ""; messageSearchOpen = true }, modifier = Modifier.testTag("chat-header-search")) {
+          Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.chat_personal_search), modifier = Modifier.size(22.dp))
+        }
+        IconButton(onClick = { if (personalAgent != null) personalSettingsOpen = true else optionsOpen = true },
+          modifier = Modifier.semantics { contentDescription = optionsLabel }.testTag("assistant-options")) {
+          Icon(painterResource(R.drawable.settings_gear), contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
+        }
       }
     }
     if (connection.selectedConversationId == null) {
@@ -2601,7 +2688,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       } else if (!connection.historyLoading && connection.messages.isEmpty() &&
         connection.historyBefore == null && connection.activeRunId == null &&
         connection.liveText.isBlank() && connection.optimisticText.isBlank()) {
-        Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()
+          .onSizeChanged { messageViewportHeight = it.height }, contentAlignment = Alignment.Center) {
           AssistantWelcome(if (connection.contextLoading) null else
             taskRecommendation(connection.taskWelcome) ?: projectRecommendation(connection.projectWelcome)) { prompt ->
             onActionsOpenChange(false)
@@ -2609,9 +2697,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             onFocusDraft()
           }
         }
-      } else LazyColumn(modifier = Modifier.weight(1f).testTag("assistant-message-list"),
+      } else LazyColumn(modifier = Modifier.weight(1f).testTag("assistant-message-list")
+        .onSizeChanged { messageViewportHeight = it.height },
         state = messageListState,
-        contentPadding = PaddingValues(bottom = bottomChromeHeight + if (showConnectionWait) 104.dp else 12.dp),
+        contentPadding = PaddingValues(bottom = bottomChromeHeight + replySpaceHeight + if (showConnectionWait) 104.dp else 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (connection.historyBefore != null) item(key = "assistant-older") {
           Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -2632,6 +2721,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           it.role == "user" || it.role == "assistant"
         }?.id
         items(connection.messages, key = { it.id }) { message ->
+          Box(Modifier.onSizeChanged { replyRowHeights[message.id] = it.height }) {
           ChatMessageCard(message, onMore = { messageActionsId = message.id },
             onOpenTarget = onOpenMessageTarget,
             onOpenPreview = { media, gallery ->
@@ -2646,6 +2736,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
               { onOpenExecution(message.id) }
             } else null,
             loadMedia = { media -> onLoadMessageMedia(connection.selectedConversationId, media) })
+          }
         }
         if (connection.optimisticText.isNotBlank()) item(key = "send-flight") {
           AnimatedVisibility(visible = sendFlightVisible && connection.optimisticText.isNotBlank(),
@@ -2659,7 +2750,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           }
         }
         if (connection.liveText.isNotBlank() && connection.activeRunId != null) item(key = "live-output") {
-          Card(modifier = Modifier.fillMaxWidth().testTag("assistant-live-output"),
+          Card(modifier = Modifier.fillMaxWidth().testTag("assistant-live-output")
+            .onSizeChanged { replyRowHeights["live-output"] = it.height },
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(18.dp)) {
             MarkdownContent(connection.liveText, modifier = Modifier.fillMaxWidth()
@@ -2774,6 +2866,24 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     optionsOpen = false; contextOpen = false; modelPickerOpen = false
     thinkingPickerOpen = false; agentPickerOpen = false
     pendingModelChoice = null; pendingThinkingChoice = null
+  }
+  if (personalSettingsOpen) PersonalAgentProfileSheet(connection.personal, { personalSettingsOpen = false },
+    onLoadAgentVoices, onUpdateAgentProfile, onLoadProactivity, onSaveProactivity, onUploadAvatar,
+    { personalSettingsOpen = false; optionsOpen = true })
+  if (messageSearchOpen) ModalBottomSheet(onDismissRequest = { messageSearchOpen = false }) {
+    Column(Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      OutlinedTextField(messageSearchQuery, { messageSearchQuery = it }, Modifier.fillMaxWidth(),
+        label = { Text(stringResource(R.string.chat_personal_search)) })
+      Text(stringResource(R.string.chat_personal_search_loaded), style = MaterialTheme.typography.bodySmall)
+      if (connection.historyBefore != null) TextButton(onClick = onLoadOlderHistory, enabled = !connection.historyLoadingOlder) {
+        Text(stringResource(R.string.progress_refresh))
+      }
+      androidx.compose.foundation.lazy.LazyColumn {
+        items(connection.messages.filter { messageSearchQuery.isNotBlank() && it.text.contains(messageSearchQuery.trim(), ignoreCase = true) }, key = { it.id }) { message ->
+          Text(message.text, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
+        }
+      }
+    }
   }
   if (optionsOpen || contextOpen || modelPickerOpen || thinkingPickerOpen || agentPickerOpen)
     ModalBottomSheet(onDismissRequest = closeOptions,

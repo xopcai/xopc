@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocketServer } from 'ws';
 
-import { openDashScopeStreamingTts } from '../streaming-tts-stream.js';
+import { openDashScopeStreamingTts, openDashScopeTtsSession } from '../streaming-tts-stream.js';
 
 describe('DashScope streaming TTS', () => {
   let server: WebSocketServer;
@@ -139,4 +139,87 @@ describe('DashScope streaming TTS', () => {
     expect((await closed)[0]).toBe(1000);
     await stream?.release?.();
   });
+  it('prepares without text and reuses one connection only after response.done', async () => {
+    let connections = 0;
+    let finishResponse!: () => void;
+    const received: string[] = [];
+    server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+    await once(server, 'listening');
+    server.on('connection', socket => {
+      connections += 1;
+      socket.send(JSON.stringify({ type: 'session.created' }));
+      socket.on('message', raw => {
+        const message = JSON.parse(raw.toString());
+        if (message.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+        if (message.type === 'input_text_buffer.append') received.push(message.text);
+        if (message.type === 'input_text_buffer.commit') {
+          socket.send(JSON.stringify({ type: 'response.audio.delta', delta: Buffer.from([1, 2]).toString('base64') }));
+          socket.send(JSON.stringify({ type: 'response.audio.done' }));
+          finishResponse = () => socket.send(JSON.stringify({ type: 'response.done' }));
+        }
+      });
+    });
+    const session = await openDashScopeTtsSession(request());
+    expect(received).toEqual([]);
+    for (const text of ['First', 'Second']) {
+      const stream = await session.synthesize(text);
+      const reader = stream.audioStream.getReader();
+      expect(Array.from((await reader.read()).value!)).toEqual([1, 2]);
+      expect((await reader.read()).done).toBe(true);
+      await expect(session.synthesize('Must not overlap')).rejects.toThrow('already active');
+      let released = false;
+      const release = stream.release!().then(() => { released = true; });
+      await Promise.resolve();
+      expect(released).toBe(false);
+      finishResponse();
+      await release;
+    }
+    expect(connections).toBe(1);
+    expect(received).toEqual(['First', 'Second']);
+    await session.close();
+    await expect(session.synthesize('Late')).rejects.toThrow('closed');
+  });
+
+  it('releases a prepared idle connection without submitting text', async () => {
+    const received: string[] = [];
+    server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+    await once(server, 'listening');
+    const connection = once(server, 'connection');
+    server.on('connection', socket => {
+      socket.send(JSON.stringify({ type: 'session.created' }));
+      socket.on('message', raw => {
+        const message = JSON.parse(raw.toString());
+        received.push(message.type);
+        if (message.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+      });
+    });
+    const session = await openDashScopeTtsSession(request());
+    const [socket] = await connection;
+    const closed = once(socket, 'close');
+    await session.close();
+    await closed;
+    expect(received).toEqual(['session.update', 'session.finish']);
+  });
+
+  it('times out stalled synthesis without replaying text', async () => {
+    let commits = 0;
+    server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+    await once(server, 'listening');
+    server.on('connection', socket => {
+      socket.send(JSON.stringify({ type: 'session.created' }));
+      socket.on('message', raw => {
+        const message = JSON.parse(raw.toString());
+        if (message.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+        if (message.type === 'input_text_buffer.commit') commits += 1;
+      });
+    });
+    const session = await openDashScopeTtsSession(request(undefined, 200));
+    const stream = await session.synthesize('First');
+    await expect(stream.audioStream.getReader().read()).rejects.toThrow('synthesis timed out');
+    await expect(stream.release!()).rejects.toThrow('synthesis timed out');
+    await expect(session.synthesize('Second')).rejects.toThrow('synthesis timed out');
+    expect(commits).toBe(1);
+    await session.close();
+  });
+
 });

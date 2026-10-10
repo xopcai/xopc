@@ -52,8 +52,10 @@ import { chatMessageNeedsPreview, latestChatMessageId } from '../common/chatMess
 import { userTextBubbleWidth } from '../common/chatBubbleLayout';
 import { chatPresentationRows, chatNeedsWideBubble } from '../common/chatPresentation';
 import { XopcBrandLoading } from './MobileComponents';
+import { XopcPersonalAgentSettings } from './PersonalAgentSettings';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
+import { chatReplySpaceBudget, consumeChatReplySpace } from '../common/chatReplySpace';
 
 interface XopcSendFlightRect {
   x: number;
@@ -76,6 +78,11 @@ export struct XopcChatView {
   @Param activePage: boolean = true;
   @Param embedded: boolean = false;
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
+  @Event onPersonalAgentSaved: (record: XopcPersonalAgentRecord) => void = (_record: XopcPersonalAgentRecord): void => {};
+  @Local personalSettingsOpen: boolean = false;
+  @Local personalSettingsNextMode: string = '';
+  @Local searchOpen: boolean = false;
+  @Local searchQuery: string = '';
   @Computed get personalConversation(): boolean {
     return this.personalAgent?.state === 'ready' && this.chat.selectedId === this.personalAgent.conversationId;
   }
@@ -189,6 +196,11 @@ export struct XopcChatView {
   @Local atBottom: boolean = true;
   @Local showJumpBottom: boolean = false;
   @Local bottomRegionHeight: number = 0;
+  @Local replySpaceHeight: number = 0;
+  private replyAnchorId: string = '';
+  private replyBudget: number = 0;
+  private messageViewportHeight: number = 0;
+  private replyRowHeights: Map<string, number> = new Map<string, number>();
   @Local savingNote: boolean = false;
   @Local attention: XopcChatAttentionViewModel = new XopcChatAttentionViewModel();
   @Computed get unseenAttention(): XopcHomeItem[] { return this.attention.unseen(this.attentionItems); }
@@ -301,6 +313,7 @@ export struct XopcChatView {
     clearTimeout(this.draftTimer); this.saveDraft();
     clearTimeout(this.scrollTimer); this.layoutScrollAnimating = false;
     this.initialScrollPending = true; this.atBottom = true; this.showJumpBottom = false; this.palette.close();
+    this.replySpaceHeight = 0; this.replyAnchorId = ''; this.replyRowHeights.clear();
     if (this.reader.continuousConversationId !== this.chat.selectedId) this.reader.leaveForeground();
     this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false; this.firstVisible = 0;
     const generation = ++this.draftGeneration;
@@ -336,6 +349,7 @@ export struct XopcChatView {
 
   @Monitor('chat.rows', 'chat.liveRow', 'chat.liveActivityRow', 'chat.streaming', 'chat.thinking', 'chat.tool', 'chat.loading')
   onMessageChange(): void {
+    this.updateReplySpace();
     if (this.layoutScrollAnimating || !this.visible || (!this.atBottom && !this.initialScrollPending) || this.loadingOlder || (this.chat.loading && !this.chat.cachedHistory)) return;
     clearTimeout(this.scrollTimer);
     this.scrollTimer = setTimeout((): void => {
@@ -346,6 +360,7 @@ export struct XopcChatView {
   }
   @Monitor('bottomRegionHeight')
   onMessageLayoutChange(): void {
+    this.updateReplySpace();
     if (!this.visible || !this.atBottom || this.loadingOlder || this.chat.loading) return;
     if (this.initialScrollPending || this.layout.reduceMotion) { this.onMessageChange(); return; }
     clearTimeout(this.scrollTimer);
@@ -364,10 +379,36 @@ export struct XopcChatView {
     this.onMessageChange();
   }
   private onMessageViewportChange(previous: Area, current: Area): void {
+    this.messageViewportHeight = Number(current.height);
     // Keyboard resize changes the viewport without changing any message rows.
     if (Number(previous.height) !== Number(current.height) || Number(previous.width) !== Number(current.width)) {
       this.onMessageLayoutChange();
     }
+  }
+  private reserveReplySpace(rowId: string, delivery: string): void {
+    if (!this.atBottom || (!!this.chat.runId && delivery === 'next')) return;
+    this.replyAnchorId = rowId;
+    this.replyRowHeights.clear();
+    this.replyBudget = chatReplySpaceBudget(this.messageViewportHeight, this.bottomRegionHeight + 24);
+    this.replySpaceHeight = this.replyBudget;
+    this.onMessageChange();
+  }
+  private recordReplyRowHeight(rowId: string, rowHeight: number): void {
+    if (!this.replyAnchorId || this.replySpaceHeight <= 0) return;
+    this.replyRowHeights.set(rowId, rowHeight);
+    this.updateReplySpace();
+  }
+  private updateReplySpace(): void {
+    if (!this.replyAnchorId || !this.atBottom || this.loadingOlder || this.replySpaceHeight <= 0) return;
+    const rows = this.presentationRows;
+    const anchor = rows.findIndex((row: XopcChatRow): boolean => row.id === this.replyAnchorId);
+    if (anchor < 0) return;
+    let replyHeight = 0;
+    for (let index = anchor + 1; index < rows.length; index++) {
+      replyHeight += (this.replyRowHeights.get(rows[index].id) || 0) + 20;
+    }
+    this.replySpaceHeight = consumeChatReplySpace(this.replyBudget, this.replySpaceHeight, replyHeight,
+      chatReplySpaceBudget(this.messageViewportHeight, this.bottomRegionHeight + 24), this.atBottom);
   }
   private sendFlightRect(area: Area): XopcSendFlightRect {
     return { x: Number(area.globalPosition.x), y: Number(area.globalPosition.y),
@@ -682,6 +723,8 @@ export struct XopcChatView {
   }
   private bindBack(): void { layoutState.dismissChatOverlay = (): boolean => { return this.dismissOverlay(); }; }
   private dismissOverlay(): boolean {
+    if (this.personalSettingsOpen) { this.personalSettingsOpen = false; return true; }
+    if (this.searchOpen) { this.searchOpen = false; return true; }
     if (this.panelOpen) { this.setPanel(false); return true; }
     return false;
   }
@@ -848,6 +891,7 @@ export struct XopcChatView {
       return;
     }
     const sent = await this.chat.send(text, files, delivery, refs, (rowId: string): void => {
+      this.reserveReplySpace(rowId, delivery);
       this.enqueueSendFlight(rowId, text, files, refs, delivery);
       if (this.draft === text) this.draft = '';
       if (this.attachments === files) this.attachments = [];
@@ -904,7 +948,9 @@ export struct XopcChatView {
       if (!this.visible || this.disposed || id !== this.chat.selectedId) return false;
       const context = this.getUIContext().getHostContext();
       let queued = false;
-      this.chat.send('', [attachment], 'next', [], (): void => { queued = true; });
+      this.chat.send('', [attachment], 'next', [], (rowId: string): void => {
+        queued = true; this.reserveReplySpace(rowId, 'next');
+      });
       if (queued && context) seedChatMediaCache(context, attachment, id).catch((_error: Error): void => {});
       return queued;
     });
@@ -1279,10 +1325,12 @@ export struct XopcChatView {
                 onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
             }.width('100%').alignItems(HorizontalAlign.Start)
           }
-        }
+        }.onAreaChange((_previous: Area, current: Area): void => {
+          this.recordReplyRowHeight(item.item.id, Number(current.height));
+        })
       }).key((row: XopcChatRow): string => this.chat.selectedId + ':' + row.id).virtualScroll({ totalCount: this.presentationRows.length })
     }.id('chat-message-list').height('100%').width('100%').padding({ left: 20, right: 20 }).cachedCount(3)
-      .contentEndOffset(this.bottomRegionHeight + 24)
+      .contentEndOffset(this.bottomRegionHeight + 24 + this.replySpaceHeight)
       .onAreaChange((previous: Area, current: Area): void => { this.onMessageViewportChange(previous, current); })
       .onScrollIndex((start: number, end: number): void => {
         this.firstVisible = start;
@@ -1290,7 +1338,7 @@ export struct XopcChatView {
       .onDidScroll((offset: number, state: ScrollState): void => {
         if (this.layoutScrollAnimating || this.initialScrollPending || this.loadingOlder || this.chat.loading || state === ScrollState.Idle) return;
         this.atBottom = this.messagesScroller.isAtEnd();
-        if (this.atBottom) this.showJumpBottom = false;
+        if (this.atBottom) { this.showJumpBottom = false; this.updateReplySpace(); }
         else if (offset > 0) this.showJumpBottom = true;
         else if (offset < 0) this.showJumpBottom = false;
         if (offset < 0 && this.messagesScroller.currentOffset().yOffset < 960 && !this.olderFailed) this.loadOlder();
@@ -1312,7 +1360,10 @@ export struct XopcChatView {
       }.id('chat-jump-bottom').height(36).width(36).padding(0).margin({ bottom: this.bottomRegionHeight + 8 })
         .responseRegion({ x: -4, y: -4, width: 44, height: 44 })
         .backgroundColor(this.colors.grouped).accessibilityText($r('app.string.chat_jump_bottom'))
-        .onClick((): void => { this.atBottom = true; this.showJumpBottom = false; this.messagesScroller.scrollEdge(Edge.Bottom); })
+        .onClick((): void => {
+          this.atBottom = true; this.showJumpBottom = false; this.updateReplySpace();
+          this.messagesScroller.scrollEdge(Edge.Bottom);
+        })
     }
     }.id('chat-message-viewport').layoutWeight(1).width('100%').backgroundColor(Color.Transparent)
     }
@@ -1648,22 +1699,34 @@ export struct XopcChatView {
     Column() {
       if (!this.embedded) {
         Row({ space: 12 }) {
-        Row() {
-          if (this.personalConversation) {
-            XopcPersonalAgentAvatar({ extent: 34, compact: true, activePage: this.activePage,
-              agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi' })
-          }
-          Text(this.personalConversation ? this.personalAgent?.displayName ?? 'Ada' : this.chat.title || $r('app.string.untitled'))
-            .fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.layoutWeight(1).height(44).padding({ left: 8, right: 8 }).alignItems(VerticalAlign.Center)
-        if (this.chat.selectedId) {
           Button({ type: ButtonType.Normal }) {
-            Text('···').fontSize(18).letterSpacing(-2).fontWeight(FontWeight.Medium)
-              .fontColor(this.colors.foreground)
-          }.width(40).height(40).padding(0).backgroundColor(Color.Transparent)
-            .id('chat-header-actions').accessibilityText($r('app.string.chat_actions')).onClick((): void => { this.openSheet('actions'); })
-        }
+            Row({ space: 8 }) {
+              XopcPersonalAgentAvatar({ extent: 36, compact: true, activePage: this.activePage,
+                agentId: this.personalConversation ? this.personalAgent?.agentId ?? '' : this.chat.agentId,
+                appearance: this.personalConversation ? this.personalAgent?.appearance ?? 'loopi' : 'loopi',
+                revision: this.personalAgent?.revision ?? 0 })
+              Text(this.personalConversation ? this.personalAgent?.displayName ?? 'Ada' : this.chat.title || $r('app.string.untitled'))
+                .fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+                .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: 140 })
+            }.padding({ left: 6, right: 14 })
+          }.height(48).borderRadius(24).backgroundColor(this.colors.panel)
+            .border({ width: 1, color: this.colors.border }).onClick((): void => {
+              if (this.personalConversation) this.personalSettingsOpen = true; else this.openSheet('agent');
+            })
+          Blank().layoutWeight(1)
+          Row() {
+            Button({ type: ButtonType.Circle }) {
+              SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(22).fontColor([this.colors.foreground])
+            }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).id('chat-header-search')
+              .accessibilityText($r('app.string.search')).onClick((): void => { this.searchOpen = true; this.searchQuery = ''; })
+            Button({ type: ButtonType.Circle }) {
+              SymbolGlyph($r('sys.symbol.gearshape')).fontSize(22).fontColor([this.colors.foreground])
+            }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).id('chat-header-actions')
+              .accessibilityText($r('app.string.chat_actions')).onClick((): void => {
+                if (this.personalConversation) this.personalSettingsOpen = true; else this.openSheet('actions');
+              })
+          }.height(48).padding({ left: 4, right: 4 }).borderRadius(24).backgroundColor(this.colors.panel)
+            .border({ width: 1, color: this.colors.border })
         }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 6 })
       }
       if (this.hasConnectionIssue()) {
@@ -1689,6 +1752,14 @@ export struct XopcChatView {
         }.padding({ left: 16, right: 16 })
       }
       this.conversation()
+      Column().width('100%').height(0)
+        .bindSheet($$this.personalSettingsOpen, this.personalSettingsSheet, { height: '90%', dragBar: false,
+          showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => {
+            if (this.personalSettingsNextMode) { const mode = this.personalSettingsNextMode; this.personalSettingsNextMode = ''; this.openSheet(mode); }
+          } })
+      Column().width('100%').height(0)
+        .bindSheet($$this.searchOpen, this.messageSearchSheet, { height: '80%', dragBar: true,
+          backgroundColor: this.colors.panel })
       Column().id('chat-image-editor-sheet-host').width('100%').height(0)
         .bindSheet($$this.imageEditorOpen, this.imageEditorSheet, { height: '75%', dragBar: false,
           backgroundColor: this.colors.panel, onDisappear: (): void => { this.imageEditorError = ''; } })
@@ -1812,6 +1883,36 @@ export struct XopcChatView {
       }.width('100%')
       if (this.imageEditorError) { Text($r('app.string.chat_image_edit_failed')).fontSize(13).fontColor(this.colors.danger).width('100%') }
     }.id('chat-image-editor').width('100%').height('100%').padding(20)
+  }
+
+  @Builder
+  personalSettingsSheet() {
+    XopcPersonalAgentSettings({ record: this.personalAgent,
+      onSaved: (record: XopcPersonalAgentRecord): void => { this.onPersonalAgentSaved(record); },
+      onClose: (): void => { this.personalSettingsOpen = false; },
+      onModel: (): void => { this.personalSettingsNextMode = 'model'; this.personalSettingsOpen = false; },
+      onThinking: (): void => { this.personalSettingsNextMode = 'thinking'; this.personalSettingsOpen = false; },
+      onActions: (): void => { this.personalSettingsNextMode = 'actions'; this.personalSettingsOpen = false; } })
+  }
+
+  @Builder
+  messageSearchSheet() {
+    Column({ space: 12 }) {
+      TextInput({ text: this.searchQuery, placeholder: $r('app.string.search') })
+        .onChange((text: string): void => { this.searchQuery = text; })
+      Text(appSettings.effectiveLanguage().startsWith('zh') ? '搜索已加载消息；可加载更早记录' : 'Search loaded messages; load older history for more')
+        .fontSize(12).fontColor(this.colors.secondary)
+      if (this.chat.hasOlder) { Button($r('app.string.refresh')).enabled(!this.chat.loading)
+        .onClick((): void => { void this.chat.loadHistory(true); }) }
+      List({ space: 12 }) {
+        ForEach(this.presentationRows.filter((row: XopcChatRow): boolean => !!this.searchQuery.trim()
+          && row.text.toLowerCase().includes(this.searchQuery.trim().toLowerCase())), (row: XopcChatRow) => {
+          ListItem() { Text(row.text).fontSize(14).fontColor(this.colors.foreground).padding(12)
+            .width('100%').backgroundColor(this.colors.input).borderRadius(12) }
+        }, (row: XopcChatRow): string => row.id)
+      }.layoutWeight(1).width('100%')
+      Button($r('app.string.chat_close')).onClick((): void => { this.searchOpen = false; })
+    }.width('100%').height('100%').padding(20)
   }
 
   @Builder

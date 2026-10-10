@@ -20,7 +20,7 @@ struct PersonalAgentAvatar: View {
                 LoopiIcon(size: size, active: active, interactive: false)
             }
         }
-        .task(id: AvatarLoadKey(configuration: configuration, agentID: agent?.agentId, appearance: agent?.appearance)) {
+        .task(id: AvatarLoadKey(configuration: configuration, agentID: agent?.agentId, appearance: agent?.appearance, revision: agent?.revision)) {
             picture = nil
             guard let agent, agent.appearance == "custom", !agent.agentId.isEmpty else { return }
             guard let encodedID = agent.agentId.addingPercentEncoding(
@@ -42,4 +42,5 @@ private struct AvatarLoadKey: Hashable {
     let configuration: GatewayConfiguration
     let agentID: String?
     let appearance: String?
+    let revision: Int?
 }

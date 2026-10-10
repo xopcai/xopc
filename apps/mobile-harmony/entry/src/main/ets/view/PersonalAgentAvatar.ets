@@ -5,6 +5,7 @@ import { XopcLoopi } from './Loopi';
 export struct XopcPersonalAgentAvatar {
   @Param agentId: string = '';
   @Param appearance: string = 'loopi';
+  @Param revision: number = 0;
   @Param extent: number = 48;
   @Param activePage: boolean = true;
   @Param compact: boolean = false;
@@ -14,7 +15,7 @@ export struct XopcPersonalAgentAvatar {
   aboutToAppear(): void { void this.loadPicture(); }
   aboutToDisappear(): void { this.generation++; }
 
-  @Monitor('agentId', 'appearance')
+  @Monitor('agentId', 'appearance', 'revision')
   async loadPicture(): Promise<void> {
     const generation = ++this.generation;
     this.picture = '';

@@ -15,6 +15,11 @@ import {
   XopcVoiceServerEvent, XopcVoiceSession, XopcVoiceSessionRequest, XopcVoiceStatus, XopcVoicePayload
 } from '../model/voice';
 
+interface XopcVoicePreflight {
+  ok: boolean;
+  timingMetrics?: string[];
+}
+
 interface XopcClarificationBody {
   action: string;
   answer?: string;
@@ -50,6 +55,7 @@ export class XopcVoiceCall {
   @Trace approval?: XopcVoiceApproval;
   private target?: XopcVoiceCallTarget;
   private session?: XopcVoiceSession;
+  private supportedTimingMetrics: string[] = [];
   private transport?: XopcVoiceCallTransport;
   private context?: common.UIAbilityContext;
   private generation: number = 0;
@@ -94,7 +100,8 @@ export class XopcVoiceCall {
       if (!availability.available) throw new Error(availability.reasonCode ?? 'PROVIDER_UNAVAILABLE');
       const request: XopcVoiceSessionRequest = { purpose: 'conversation', conversationId: target.conversationId,
         mode: this.mode, supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] };
-      await gatewaySession.request('/api/voice/realtime/preflight', 'POST', JSON.stringify(request));
+      const preflight = JSON.parse(await gatewaySession.request('/api/voice/realtime/preflight', 'POST', JSON.stringify(request))) as XopcVoicePreflight;
+      this.supportedTimingMetrics = preflight.timingMetrics ?? [];
       const session = (JSON.parse(await gatewaySession.request('/api/voice/realtime/sessions', 'POST',
         JSON.stringify(request))) as XopcVoicePayload<XopcVoiceSession>).payload;
       if (generation !== this.generation) { await this.cancelSession(session); return; }
@@ -178,7 +185,7 @@ export class XopcVoiceCall {
   private onAudio(frame: XopcVoiceAudioFrame): void {
     const durationMs = this.timing.received(frame.responseId, this.now());
     if (durationMs !== undefined) this.transport?.send('session.metric', {
-      responseId: frame.responseId, metric: 'speech_end_to_audio_received', durationMs
+      responseId: frame.responseId, metric: 'speech_end_to_audio_received', durationMs: Math.min(600000, durationMs)
     });
     if (this.pendingResponseId && frame.responseId === this.pendingResponseId) {
       this.deferReply({ frame }, frame.audio.byteLength); return;
@@ -197,7 +204,10 @@ export class XopcVoiceCall {
   }
 
   private buffered(id: string, milliseconds: number): void {
-    this.timing.buffered(id, milliseconds, this.now());
+    const durationMs = this.timing.buffered(id, milliseconds, this.now());
+    if (durationMs !== undefined && this.supportedTimingMetrics.includes('speech_end_to_audio_buffered')) this.transport?.send('session.metric', {
+      responseId: id, metric: 'speech_end_to_audio_buffered', durationMs: Math.min(600000, durationMs)
+    });
     if (id !== this.responseId) return;
     // Ack renderer-owned audio so the server can finish sending; drain still gates the visible reply.
     this.transport?.send('response.audio.played', { responseId: id, playedDurationMs: milliseconds });
@@ -376,7 +386,7 @@ export class XopcVoiceCall {
     ++this.generation;
     clearInterval(this.queueTimer); this.queueTimer = -1;
     this.pendingReply = []; this.pendingResponseId = ''; this.pendingReplyBytes = 0;
-    this.finishResponse('session_released'); this.timing.reset(); this.setSpeechActive(false);
+    this.finishResponse('session_released'); this.supportedTimingMetrics = []; this.timing.reset(); this.setSpeechActive(false);
     this.congested = false; this.appliedMuted = undefined;
     this.taskId = ''; this.taskCancelling = false;
     this.clarification = undefined; this.approval = undefined;
