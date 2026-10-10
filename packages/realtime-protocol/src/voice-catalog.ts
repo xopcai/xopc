@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+export const voiceDisplayNamesSchema = z.strictObject({
+  'zh-CN': z.string().min(1).optional(), en: z.string().min(1).optional(),
+});
+
 export const voiceModeCapabilitySchema = z.enum(['transcription', 'transcription.stream', 'speech', 'speech.stream', 'conversation']);
 export const voiceManifestSchema = z.strictObject({
   protocolVersion: z.literal(1),
@@ -11,7 +15,7 @@ export const voiceManifestSchema = z.strictObject({
   turnDetection: z.array(z.literal('server_vad')),
   bargeIn: z.boolean(), tools: z.boolean(), resumable: z.literal(false),
   voices: z.array(z.strictObject({
-    id: z.string().min(1), name: z.string(), languages: z.array(z.string()),
+    id: z.string().min(1), name: z.string(), displayNames: voiceDisplayNamesSchema.optional(), languages: z.array(z.string()),
     gender: z.enum(['female', 'male']).optional(),
     style: z.string().optional(), description: z.string().optional(),
   })),
@@ -30,7 +34,7 @@ export const voiceSettingsCatalogSchema = z.strictObject({
   revision: z.string().min(1),
   catalogVersion: z.string().nullable(),
   selections: z.array(voiceSelectionSchema),
-  models: z.array(z.strictObject({ id: z.string(), name: z.string(), voice: voiceManifestSchema })),
+  models: z.array(z.strictObject({ id: z.string(), name: z.string(), displayNames: voiceDisplayNamesSchema.optional(), voice: voiceManifestSchema })),
 });
 export type VoiceSettingsCatalog = z.infer<typeof voiceSettingsCatalogSchema>;
 export type VoiceSelection = z.infer<typeof voiceSelectionSchema>;

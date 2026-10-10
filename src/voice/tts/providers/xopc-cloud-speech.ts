@@ -64,7 +64,7 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
   listVoices: async ({ providerConfig }) => {
     const config = readConfig(providerConfig ?? {});
     if (!config.model) return [];
-    return availableModels().find(model => model.id === config.model)?.voice?.voices.map(({id, name}) => ({id, name})) ?? [];
+    return availableModels().find(model => model.id === config.model)?.voice?.voices.map(({id, name, displayNames}) => ({id, name, ...(displayNames ? { displayNames } : {})})) ?? [];
   },
   synthesize: async (request): Promise<SpeechSynthesisResult> => {
     const config = readConfig(request.providerConfig);
