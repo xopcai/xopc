@@ -129,7 +129,7 @@ export class AutomationActionExecutor {
       input.automation, action, input.run, input.signal, input.hooks, input.context,
     ));
     this.register('browser_automation', { mode: 'never' }, (input, action) => this.executeBrowserAutomation(
-      input.automation, action, input.signal, input.hooks, input.context,
+      input.automation, action, input.signal, input.hooks, input.context, input.run.id,
     ));
     this.register('task_command', { mode: 'idempotent', key: 'run_id' },
       (input, action) => this.executeTaskCommand(input, action));
@@ -270,6 +270,7 @@ export class AutomationActionExecutor {
     signal: AbortSignal,
     hooks: AutomationActionExecutionHooks,
     context: AutomationActionExecutionContext,
+    executionRunId: string,
   ): Promise<AutomationActionTask> {
     await hooks.onRunPatch?.({ currentPhase: 'action' });
     const safetyMode = automation.safety?.mode ?? 'auto_apply';
@@ -281,9 +282,13 @@ export class AutomationActionExecutor {
     }
     const service = this.deps.browserAutomationService;
     if (!service) return { status: 'failed', error: 'Browser automation is not available' };
-    const run = context.triggerEvent
-      ? await service.runAndWait(action.automationId, action.inputs ?? {}, signal, { triggerEvent: context.triggerEvent })
-      : await service.runAndWait(action.automationId, action.inputs ?? {}, signal);
+    if (action.revision === undefined || !service.versions(action.automationId).some((item) => item.revision === action.revision && item.verified)) {
+      return { status: 'failed', error: 'The scheduled browser automation version has not been verified.' };
+    }
+    const run = await service.runAndWait(action.automationId, action.inputs ?? {}, signal, {
+      revision: action.revision, clientRequestId: `schedule:${executionRunId}:${action.revision}`,
+      ...(context.triggerEvent ? { triggerEvent: context.triggerEvent } : {}),
+    });
     if (run.status === 'succeeded') {
       return {
         status: 'succeeded',

@@ -3,6 +3,7 @@ export type NotificationPermission = 'granted' | 'denied' | 'unknown';
 export type NotificationLanguage = 'en' | 'zh';
 
 export type NotificationPreferences = {
+  chatNeedsInput: boolean;
   chatCompleted: boolean;
   chatFailed: boolean;
   taskNeedsInput: boolean;
@@ -30,6 +31,7 @@ export type NotificationDevice = {
 };
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  chatNeedsInput: true,
   chatCompleted: true,
   chatFailed: true,
   taskNeedsInput: true,

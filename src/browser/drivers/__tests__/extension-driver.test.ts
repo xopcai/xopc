@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ExtensionBrowserProvider } from '../../providers/extension.js';
+import type { RealtimeExtensionBrowserProvider } from '../../providers/realtime-extension.js';
 import { ExtensionDriver } from '../extension-driver.js';
 
 describe('ExtensionDriver', () => {
@@ -16,7 +16,7 @@ describe('ExtensionDriver', () => {
       start: vi.fn(),
       waitForConnection: vi.fn(),
       send,
-    } as unknown as ExtensionBrowserProvider;
+    } as unknown as RealtimeExtensionBrowserProvider;
     const driver = new ExtensionDriver(provider, 1_000, true, vi.fn());
 
     await driver.navigate('runtime-session', {
@@ -29,6 +29,6 @@ describe('ExtensionDriver', () => {
       action: 'navigate',
       sessionId: 'runtime-session',
       url: 'https://www.google.com/',
-    }, 1_000, true);
+    }, 1_000, true, undefined);
   });
 });

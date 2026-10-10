@@ -1,3 +1,5 @@
+import { recordings } from './recording/store';
+import { browserDom } from '@xopcai/browser-control-contract';
 import type {
   BrowserActionInput,
   BrowserControlResult,
@@ -10,6 +12,8 @@ import { BROWSER_EXTENSION_PROTOCOL_VERSION } from './protocol';
 import * as cdp from './cdp';
 import {
   addTabToAutomationGroup,
+  holdAutomationSession,
+  releaseAutomationSession,
   automationSessions,
   closeSession,
   getActiveTabId,
@@ -28,6 +32,7 @@ interface ObservationState {
 }
 
 const observations = new Map<string, ObservationState>();
+const activeCommands = new Set<string>();
 
 type AttachedTarget = { binding: BrowserTabBinding; tabId: number; stateKey: string };
 
@@ -55,7 +60,7 @@ async function resolveAttachedTarget(input: BrowserActionInput): Promise<Attache
   if (input.action === 'navigate' || input.action === 'tabs' || input.action === 'sequence') {
     return fail('INVALID_INPUT', `${input.action} is unavailable for an attached tab.`);
   }
-  const needsAct = !['observe', 'wait', 'close'].includes(input.action);
+  const needsAct = !['observe', 'resolve', 'wait', 'close'].includes(input.action);
   if (needsAct && binding.mode !== 'act') {
     return fail('INVALID_INPUT', 'This tab is attached in read-only mode. Enable Control tab in the side panel.');
   }
@@ -79,7 +84,7 @@ async function resolveAttachedTarget(input: BrowserActionInput): Promise<Attache
   return { binding, tabId, stateKey: `attached:${binding.id}` };
 }
 
-export async function executeBrowserCommand(command: BrowserWireCommand): Promise<BrowserWireResult> {
+export async function executeBrowserCommand(command: BrowserWireCommand, signal?: AbortSignal): Promise<BrowserWireResult> {
   const startedAt = Date.now();
   if (command.protocolVersion !== BROWSER_EXTENSION_PROTOCOL_VERSION) {
     return {
@@ -91,8 +96,13 @@ export async function executeBrowserCommand(command: BrowserWireCommand): Promis
       ),
     };
   }
+  const lockKey = command.input.target?.kind === 'attached_tab' ? command.input.target.bindingId : command.input.sessionId!;
+  if (activeCommands.has(lockKey)) return { id: command.id, connectionId: command.connectionId, result: fail('INVALID_INPUT', 'This browser page is already executing an action.') };
+  activeCommands.add(lockKey);
+  holdAutomationSession(command.input.sessionId!);
   try {
-    const result = await execute(command.input, command.timeoutMs, command.visualFallback, startedAt);
+    if (signal?.aborted) return { id: command.id, connectionId: command.connectionId, result: fail('ABORTED', 'Operation was cancelled.') };
+    const result = await execute(command.input, command.timeoutMs, command.visualFallback, startedAt, signal);
     return { id: command.id, connectionId: command.connectionId, result };
   } catch (error) {
     return {
@@ -101,12 +111,13 @@ export async function executeBrowserCommand(command: BrowserWireCommand): Promis
       result: {
         ok: false,
         error: {
-          code: /timeout/i.test(String(error)) ? 'TIMEOUT' : 'DRIVER_UNAVAILABLE',
+          code: signal?.aborted ? 'ABORTED' : /timeout/i.test(String(error)) ? 'TIMEOUT' : 'DRIVER_UNAVAILABLE',
           message: error instanceof Error ? error.message : String(error),
         },
       },
     };
   }
+  finally { activeCommands.delete(lockKey); releaseAutomationSession(command.input.sessionId!); }
 }
 
 async function execute(
@@ -114,11 +125,17 @@ async function execute(
   timeoutMs: number,
   visualFallback: boolean,
   startedAt: number,
+  signal?: AbortSignal,
 ): Promise<BrowserControlResult> {
   const sessionId = input.sessionId;
   if (!sessionId) return fail('INVALID_INPUT', 'Extension actions require a session id.');
   const attached = await resolveAttachedTarget(input);
   if (attached && !('binding' in attached)) return attached;
+  if (attached && !['observe', 'resolve', 'wait', 'close'].includes(input.action)) {
+    const activeRecording = (await recordings()).some((item) => item.tabId === attached.tabId && ['recording', 'paused'].includes(item.state));
+    if (activeRecording) return fail('INVALID_INPUT', 'This page is being recorded. Finish recording before running an automation.');
+  }
+  if (signal?.aborted) return fail('ABORTED', 'Operation was cancelled.');
   const stateKey = attached?.stateKey ?? sessionId;
   if (input.action === 'close') {
     if (!attached) await closeSession(sessionId);
@@ -141,6 +158,15 @@ async function execute(
   if (input.action === 'tabs') return tabs(sessionId, input, startedAt, timeoutMs);
   if (input.action === 'sequence') return fail('INVALID_INPUT', 'Sequences are expanded by the browser runtime.');
 
+  if (input.action === 'resolve') {
+    const tabId = attached?.tabId ?? await getActiveTabId(sessionId);
+    const resolved = await cdp.evaluate(tabId, `(${browserDom.toString()})(${JSON.stringify({ operation: 'resolve', target: input.semanticTarget })})`) as { matches: number; node?: BrowserNode };
+    if (resolved.matches !== 1 || !resolved.node) return fail('TARGET_NOT_FOUND', `Semantic target must match exactly one element; matched ${resolved.matches}.`);
+    const observation = await observe(sessionId, 'never', attached);
+    observation.nodes = [resolved.node];
+    observations.get(stateKey)!.nodes = observation.nodes;
+    return success('resolve', 'read', startedAt, observation);
+  }
   const current = observations.get(stateKey);
   if (!current || current.revision !== input.revision) {
     return fail('STALE_OBSERVATION', 'The page changed. Observe it again.', await observe(sessionId, 'never', attached));
@@ -172,6 +198,13 @@ async function execute(
     }`, input.value);
     if (!changed) return fail('TARGET_NOT_FOUND', `Target ${input.ref} was not found.`);
     if (input.submit) await pressKey(tabId, 'Enter');
+  } else if (input.action === 'check') {
+    const changed = await evaluateRef(tabId, input.ref, `(element, checked) => {
+      if (!['checkbox', 'radio'].includes(element.type)) return false;
+      if (element.checked !== checked) element.click();
+      return element.checked === checked;
+    }`, input.checked);
+    if (!changed) return fail('INVALID_INPUT', 'The checkbox could not be set to the requested state.');
   } else if (input.action === 'select') {
     const changed = await evaluateRef(tabId, input.ref, `(element, value) => {
       element.value = value;
@@ -190,7 +223,7 @@ async function execute(
       await cdp.dispatchInput(tabId, 'dispatchMouseEvent', { type: 'mouseWheel', x: 640, y: 360, deltaX: 0, deltaY: input.deltaY });
     }
   } else if (input.action === 'wait') {
-    await wait(tabId, input, timeoutMs);
+    await wait(tabId, input, timeoutMs, signal);
   } else if (input.action === 'upload') {
     const document = await cdp.sendCommand(tabId, 'DOM.getDocument', { depth: 1 }) as { root: { nodeId: number } };
     const query = await cdp.sendCommand(tabId, 'DOM.querySelectorAll', {
@@ -308,10 +341,11 @@ async function tabs(
   };
 }
 
-async function wait(tabId: number, input: Extract<BrowserActionInput, { action: 'wait' }>, defaultTimeout: number): Promise<void> {
+async function wait(tabId: number, input: Extract<BrowserActionInput, { action: 'wait' }>, defaultTimeout: number, signal?: AbortSignal): Promise<void> {
   const timeout = input.timeoutMs ?? defaultTimeout;
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
+    if (signal?.aborted) throw new Error('Operation aborted.');
     if (input.condition === 'page_idle') {
       const tab = await chrome.tabs.get(tabId);
       if (tab.status === 'complete') return;

@@ -829,6 +829,8 @@
       "completedDesc": "Notify when a task completes successfully.",
       "failedRuns": "Failed tasks",
       "failedRunsDesc": "Notify when a task fails.",
+      "needsInput": "Decisions and approvals",
+      "needsInputDesc": "Notify when the assistant needs your answer or authorization.",
       "testTitle": "xopc notifications are ready",
       "testBody": "You will be notified when background tasks finish.",
       "testShown": "A test notification was sent.",

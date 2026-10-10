@@ -169,11 +169,24 @@ export class AutomationService {
       createdAtMs: now,
       updatedAtMs: now,
     }) as Automation;
+    this.pinBrowserVersion(automation);
     if (getAutomation(automation.id)) throw new AutomationAlreadyExistsError(automation.id);
     automation.updatedAtMs = Math.max(automation.updatedAtMs, (getDeletedAutomationRevision(automation.id) ?? -1) + 1);
     automation.state.nextRunAtMs = computeNextAutomationRunAtMs(automation, now);
     saveAutomation(automation);
     return automation;
+  }
+
+  private pinBrowserVersion(automation: Automation): void {
+    if (automation.action.kind !== 'browser_automation') return;
+    const browser = this.deps.browserAutomationService;
+    if (!browser) throw new Error('Browser automation service is unavailable.');
+    const action = automation.action;
+    const version = action.revision === undefined ? browser.get(action.automationId)
+      : browser.versions(action.automationId).find((item) => item.revision === action.revision);
+    if (!version) throw new Error('Browser automation version not found.');
+    if (automation.enabled && !version.verified) throw new Error('Run and verify this browser automation before scheduling it.');
+    action.revision = version.revision;
   }
 
   async list(options?: { projectId?: string }): Promise<Automation[]> {
@@ -215,6 +228,7 @@ export class AutomationService {
         ...(parsed.state ?? {}),
       },
     }) as Automation;
+    this.pinBrowserVersion(next);
     if ('enabled' in parsed || 'trigger' in parsed) {
       next.state.nextRunAtMs = computeNextAutomationRunAtMs(next, now);
     }
@@ -643,7 +657,7 @@ export class AutomationService {
       .map(readAutomationEventFromRunEvent)
       .find((item): item is AutomationEvent => item !== null);
     try {
-      const maxAttempts = Math.max(1, (automation.reliability?.retryCount ?? 0) + 1);
+      const maxAttempts = automation.action.kind === 'browser_automation' ? 1 : Math.max(1, (automation.reliability?.retryCount ?? 0) + 1);
       let task: Awaited<ReturnType<AutomationActionExecutor['execute']>>;
       for (let attempt = 1; ; attempt += 1) {
         run = { ...run, attemptNumber: attempt };

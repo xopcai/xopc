@@ -126,6 +126,7 @@ export class BrowserRuntime {
     }
     if (input.action === 'sequence') return this.executeSequence(driver, session, input, signal);
 
+    if (input.action === 'resolve') return driver.perform(session.id, input, signal);
     const target = findActionTarget(input, session.observation);
     const risk = classifyBrowserRisk(input, target);
     if (input.action === 'upload') {
@@ -133,8 +134,13 @@ export class BrowserRuntime {
       if (invalidPath) return failure('INVALID_INPUT', invalidPath);
     }
     if (this.actionDenied(input, risk)) return failure('INVALID_INPUT', `Browser action is denied by policy (${risk}).`);
+    if (input.action === 'click' && target?.href) {
+      const blocked = this.validateUrl(target.href);
+      if (blocked) return failure('BLOCKED_URL', blocked);
+      if (this.crossDomainPolicy(session.observation?.url, target.href) === 'deny') return failure('BLOCKED_URL', 'Cross-domain navigation is denied by policy.');
+    }
     const result = await driver.perform(session.id, input, signal);
-    return withRisk(result, risk);
+    return withRisk(this.validateRedirect(session.observation?.url ?? '', result), risk);
   }
 
   private async executeSequence(

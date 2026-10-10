@@ -1,12 +1,14 @@
-import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { localizeNotification, type ProductNotificationType } from '@xopcai/gateway-contract';
+
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
 import { createLogger } from '../utils/logger.js';
 
-import { listDeliverableNotificationDevices } from './device-store.js';
+import { getNotificationDevice, listDeliverableNotificationDevices } from './device-store.js';
 import { notificationPlanFromGatewayEvent, type NotificationPlan } from './planner.js';
 import {
   createNotificationEvent,
+  cancelNotificationDelivery,
   deferNotificationDelivery,
   expireUndeliverableNotificationDeliveries,
   listDueNotificationDeliveries,
@@ -20,13 +22,14 @@ import type { NotificationPreferences } from './types.js';
 import type { NotificationDomainDelivery } from './domain-delivery.js';
 import { sendHarmonyPush } from './harmony-push.js';
 import { getOrCreateGatewayIdentity } from '../storage/sqlite/gateway-identity-repository.js';
+import { flushClarificationNotifications, isClarificationNotificationActionable } from './clarification.js';
 
 const log = createLogger('Notifications');
 const MAX_DELIVERY_ATTEMPTS = 5;
 const RETRY_DELAYS_MS = [30_000, 120_000, 600_000, 3_600_000, 21_600_000];
 
 const STANDARD_PREFERENCES: Partial<Record<ProductNotificationType, keyof NotificationPreferences | true>> = {
-  'chat.completed': 'chatCompleted', 'chat.failed': 'chatFailed',
+  'chat.needs_input': 'chatNeedsInput', 'chat.completed': 'chatCompleted', 'chat.failed': 'chatFailed',
   'task.needs_input': 'taskNeedsInput', 'task.blocked': 'taskBlocked',
   'task.failed': 'taskFailed', 'task.completed': 'taskCompleted',
   'automation.completed': 'automationCompleted', 'automation.failed': 'automationFailed',
@@ -71,6 +74,10 @@ export class NotificationService {
 
   handleGatewayEvent(type: string, payload: unknown): void {
     try {
+      if (type === 'clarification.created') {
+        void this.drain();
+        return;
+      }
       const notification = this.persistGatewayEvent(type, payload);
       if (!notification) return;
       this.options.publish('notification.created', notification);
@@ -119,6 +126,7 @@ export class NotificationService {
         pruneNotificationEvents(now - 30 * 24 * 60 * 60 * 1_000);
         this.lastMaintenanceAt = now;
       }
+      for (const notification of flushClarificationNotifications(plan => this.persistPlan(plan))) this.options.publish('notification.created', notification);
       for (const notification of this.options.domainDelivery?.flush((plan) => this.persistPlan(plan)) ?? []) this.options.publish('notification.created', notification);
       await this.deliverPending();
       await this.options.domainDelivery?.drain();
@@ -139,8 +147,16 @@ export class NotificationService {
   }
 
   private async send(delivery: NotificationDelivery): Promise<void> {
+    if (!isClarificationNotificationActionable(delivery.event)) {
+      cancelNotificationDelivery(delivery.event.id, delivery.deviceId);
+      return;
+    }
     if (this.options.allowsNotification?.(delivery.event) === false) {
       markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Notification policy changed');
+      return;
+    }
+    if (delivery.event.type === 'chat.needs_input' && !getNotificationDevice(delivery.deviceId)?.preferences.chatNeedsInput) {
+      cancelNotificationDelivery(delivery.event.id, delivery.deviceId);
       return;
     }
     const domain = this.options.domainDelivery?.owns(delivery.event.type) ? this.options.domainDelivery : undefined;
@@ -166,6 +182,8 @@ export class NotificationService {
         gatewayId: getOrCreateGatewayIdentity().id, target: delivery.event.target,
         title: preview.title,
         body: preview.body,
+        ...(delivery.event.type === 'chat.needs_input' && typeof delivery.event.payload.expiresAt === 'number'
+          ? { expiresAt: delivery.event.payload.expiresAt } : {}),
       }, fetchImpl);
       // Huawei Push Kit V3 exposes provider acceptance but no device delivery receipt.
       markNotificationDeliveryAccepted(delivery.event.id, delivery.deviceId, ticket, Number.MAX_SAFE_INTEGER);

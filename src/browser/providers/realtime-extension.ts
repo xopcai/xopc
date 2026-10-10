@@ -40,7 +40,7 @@ export class RealtimeExtensionBrowserProvider {
     }
   }
 
-  async send(input: BrowserActionInput, timeoutMs = this.commandTimeout, visualFallback = true): Promise<BrowserWireResult> {
+  async send(input: BrowserActionInput, timeoutMs = this.commandTimeout, visualFallback = true, signal?: AbortSignal): Promise<BrowserWireResult> {
     const endpoint = this.endpointForInput(input);
     if (!endpoint) {
       if (input.target?.kind === 'endpoint') {
@@ -55,6 +55,9 @@ export class RealtimeExtensionBrowserProvider {
     if (!tool) throw new Error('Connected browser extension does not support authenticated Realtime browser control. Reload or update the extension.');
     const id = crypto.randomUUID();
     const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) controller.abort();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await this.runtime.invocations.invoke({
@@ -72,6 +75,7 @@ export class RealtimeExtensionBrowserProvider {
       return { id, connectionId: endpoint.endpointId, result: value.value as BrowserWireResult['result'] };
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
     }
   }
 

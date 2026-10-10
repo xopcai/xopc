@@ -27,6 +27,10 @@ export interface AutomationSession {
 
 // ── State ────────────────────────────────────────────────────────────
 
+const busySessions = new Set<string>();
+export function holdAutomationSession(id: string) { busySessions.add(id); }
+export function releaseAutomationSession(id: string) { busySessions.delete(id); resetWindowIdleTimer(id); }
+
 export const automationSessions = new Map<string, AutomationSession>();
 export const initScripts = new Map<number, string[]>();
 export const networkListeners = new Map<
@@ -47,6 +51,7 @@ export function resetWindowIdleTimer(workspace: string = DEFAULT_WORKSPACE): voi
   session.idleTimer = setTimeout(async () => {
     const current = automationSessions.get(workspace);
     if (!current) return;
+    if (busySessions.has(workspace)) { resetWindowIdleTimer(workspace); return; }
     try {
       const tabs = await chrome.tabs.query({ groupId: current.groupId });
       for (const t of tabs) {

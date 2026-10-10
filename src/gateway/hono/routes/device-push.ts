@@ -27,7 +27,7 @@ function parsePreferences(value: unknown): Partial<NotificationPreferences> | nu
   const source = value as Record<string, unknown>;
   const result: Partial<NotificationPreferences> = {};
   for (const key of [
-    'chatCompleted', 'chatFailed', 'taskNeedsInput', 'taskBlocked', 'taskFailed',
+    'chatNeedsInput', 'chatCompleted', 'chatFailed', 'taskNeedsInput', 'taskBlocked', 'taskFailed',
     'taskCompleted', 'automationCompleted', 'automationFailed', 'homeOpportunity',
   ] as const) {
     if (source[key] === undefined) continue;

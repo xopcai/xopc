@@ -17,6 +17,8 @@ export interface BrowserAutomation {
   name: string;
   description?: string;
   enabled: boolean;
+  verified: boolean;
+  revision: number;
   risk: BrowserAutomationRisk;
   domains: string[];
   inputs: Record<string, BrowserAutomationInput>;
@@ -27,6 +29,8 @@ export interface BrowserAutomation {
 export interface BrowserAutomationRun {
   id: string;
   automationId: string;
+  businessOutcome?: 'completed' | 'verified' | 'unknown';
+  automationRevision: number;
   status: BrowserAutomationRunStatus;
   inputs: Record<string, unknown>;
   result?: unknown;
@@ -40,6 +44,8 @@ export interface BrowserAutomationRun {
 interface BrowserAutomationRecord {
   id: string;
   status: 'enabled' | 'disabled';
+  verified: boolean;
+  revision: number;
   definition: {
     name: string;
     description?: string;
@@ -51,11 +57,18 @@ interface BrowserAutomationRecord {
   updatedAtMs: number;
 }
 
+export interface BrowserRecordingAvailability {
+  state: 'ready' | 'choose_browser' | 'connect_required' | 'update_required';
+  endpoints: Array<{ endpointId: string; displayName: string }>;
+}
+
 function present(record: BrowserAutomationRecord): BrowserAutomation {
   return {
     id: record.id,
     name: record.definition.name,
     description: record.definition.description,
+    verified: record.verified,
+    revision: record.revision,
     enabled: record.status === 'enabled',
     risk: record.definition.risk,
     domains: record.definition.allowedDomains,
@@ -66,6 +79,8 @@ function present(record: BrowserAutomationRecord): BrowserAutomation {
 }
 
 export const browserAutomationApi = {
+  recordingAvailability: () => fetchJson<BrowserRecordingAvailability>(apiUrl('/api/browser/recordings/availability')),
+  recording: (operation: string, endpointId?: string) => fetchJson<{ value: any; endpointId: string }>(apiUrl('/api/browser/recordings/control'), { method: 'POST', body: JSON.stringify({ operation, endpointId }) }),
   list: async () => {
     const response = await fetchJson<{ automations: BrowserAutomationRecord[] }>(apiUrl('/api/browser/automations'));
     return { automations: response.automations.map(present) };
@@ -80,7 +95,7 @@ export const browserAutomationApi = {
   remove: (id: string) => fetchJson<{ removed: boolean }>(apiUrl(`/api/browser/automations/${encodeURIComponent(id)}`), { method: 'DELETE' }),
   run: (id: string, inputs: Record<string, unknown>) => fetchJson<{ run: BrowserAutomationRun }>(apiUrl(`/api/browser/automations/${encodeURIComponent(id)}/run`), {
     method: 'POST',
-    body: JSON.stringify({ inputs }),
+    body: JSON.stringify({ inputs, clientRequestId: crypto.randomUUID() }),
   }),
   getRun: (id: string) => fetchJson<{ run: BrowserAutomationRun }>(apiUrl(`/api/browser/automation-runs/${encodeURIComponent(id)}`)),
   listRuns: (automationId: string) => fetchJson<{ runs: BrowserAutomationRun[] }>(apiUrl(`/api/browser/automation-runs?automationId=${encodeURIComponent(automationId)}`)),

@@ -43,6 +43,8 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path === '/api/personal-agent' || path.startsWith('/api/personal-agent/')) {
     return methodScope(method, 'sessions.read', 'sessions.write');
   }
+  if (path.startsWith('/api/browser/recordings/')) return 'device.self';
+  if (path.startsWith('/api/browser/automations') || path.startsWith('/api/browser/automation-runs')) return methodScope(method, 'automations.read', 'automations.write');
   if (path.startsWith('/api/browser/tab-bindings')) {
     return methodScope(method, 'sessions.read', 'sessions.write');
   }

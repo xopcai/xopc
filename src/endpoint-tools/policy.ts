@@ -2,8 +2,11 @@ import Ajv2020 from 'ajv/dist/2020.js';
 import { COMPUTER_INPUT_SCHEMA, COMPUTER_OUTPUT_SCHEMA } from '@xopcai/computer-control-contract';
 
 import {
+  BROWSER_CONTROL_ENDPOINT_DESCRIPTOR,
   BROWSER_CONTROL_ENDPOINT_INPUT_SCHEMA,
   BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA,
+  BROWSER_RECORDING_ENDPOINT_INPUT_SCHEMA,
+  BROWSER_RECORDING_ENDPOINT_DESCRIPTOR,
 } from '@xopcai/browser-control-contract';
 import {
   ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA,
@@ -91,6 +94,7 @@ const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
     [],
     BROWSER_CONTROL_ENDPOINT_INPUT_SCHEMA,
   ),
+  'browser.recording': contract('browser.control', BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA, ['json'], ['browser-control'], [], BROWSER_RECORDING_ENDPOINT_INPUT_SCHEMA),
 };
 
 export class EndpointToolPolicy {
@@ -184,7 +188,8 @@ export class EndpointToolPolicy {
         if (descriptor.requiredPermissions.length !== 1
           || descriptor.requiredPermissions[0] !== 'browser-control'
           || descriptor.timeoutMs !== 120_000
-          || descriptor.maxConcurrency !== 4
+          || descriptor.maxConcurrency !== (descriptor.name === BROWSER_RECORDING_ENDPOINT_DESCRIPTOR.name
+            ? BROWSER_RECORDING_ENDPOINT_DESCRIPTOR.maxConcurrency : BROWSER_CONTROL_ENDPOINT_DESCRIPTOR.maxConcurrency)
           || descriptor.supportsCancellation !== true
           || descriptor.idempotent !== false) {
           throw new EndpointToolPolicyError(`Browser tool ${descriptor.name} violates its trusted policy`);

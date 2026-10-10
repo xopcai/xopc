@@ -1,16 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { BROWSER_CONTROL_ENDPOINT_DESCRIPTOR } from '@xopcai/browser-control-contract';
+import { BROWSER_CONTROL_ENDPOINT_DESCRIPTOR, BROWSER_RECORDING_ENDPOINT_DESCRIPTOR } from '@xopcai/browser-control-contract';
 
 import {
   ENDPOINT_CONTACT_OUTPUT_SCHEMA,
   ENDPOINT_TEXT_OUTPUT_SCHEMA,
+  endpointHelloPayloadSchema,
 } from '@xopcai/endpoint-tools-protocol';
 
 import { EndpointToolPolicy } from '../policy.js';
+import { EndpointRegistry } from '../registry.js';
 
 const policy = new EndpointToolPolicy();
 
 describe('EndpointToolPolicy', () => {
+  it('registers the real browser control and recording catalog with their individual concurrency limits', () => {
+    const registry = new EndpointRegistry();
+    const hello = endpointHelloPayloadSchema.parse({
+      principalId: 'chrome-device', endpointId: 'chrome-extension',
+      connectionInstanceId: '11111111-1111-4111-8111-111111111111',
+      displayName: 'Chrome', kind: 'browser', platform: 'chrome', appVersion: 'test',
+      availability: 'foreground', nonce: 'test-nonce', signedAt: Date.now(), signature: 'test-signature-placeholder',
+      tools: [BROWSER_CONTROL_ENDPOINT_DESCRIPTOR, BROWSER_RECORDING_ENDPOINT_DESCRIPTOR],
+    });
+    const registered = registry.register(hello, 'connection', { readyState: 1, send: () => {}, close: () => {} });
+    expect(registered.connection.tools.map((tool) => [tool.descriptor.name, tool.descriptor.maxConcurrency]))
+      .toEqual([['browser.control', 4], ['browser.recording', 1]]);
+    expect(registry.verifyTurnClaim(hello.endpointId, registered.turnToken)).toBe(true);
+  });
+
+  it.each([
+    { descriptor: BROWSER_CONTROL_ENDPOINT_DESCRIPTOR, maxConcurrency: 1 },
+    { descriptor: BROWSER_RECORDING_ENDPOINT_DESCRIPTOR, maxConcurrency: 4 },
+  ])('rejects modified concurrency for $descriptor.name', ({ descriptor, maxConcurrency }) => {
+    expect(() => policy.validateDescriptor('browser', { ...descriptor, maxConcurrency } as never)).toThrow('violates its trusted policy');
+  });
+
   it('accepts only the trusted internal browser-control transport contract', () => {
     expect(() => policy.validateDescriptor(
       'browser',
