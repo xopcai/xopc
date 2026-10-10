@@ -313,7 +313,6 @@
     <string name="progress_task_missing">Task unavailable. Refresh and try again.</string>
     <string name="progress_summary">%1$d need you · %2$d moving</string>
     <string name="progress_action_required">Action required</string>
-    <string name="progress_hint">Things that need your attention and work in progress.</string>
     <string name="progress_frequent_tools">Frequent work</string>
     <string name="progress_projects">Projects</string>
     <string name="progress_automations">Automations</string>

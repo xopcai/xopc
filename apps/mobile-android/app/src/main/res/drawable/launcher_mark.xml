@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Compensate for adaptive-icon cropping to match Harmony's visible ring size. -->
+<!-- Fit Harmony's complete artwork into the visible 72dp of Android's 108dp canvas. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/brand_mark"
-    android:inset="8%" />
+    android:inset="16.666667%">
+    <bitmap
+        android:src="@drawable/launcher_artwork"
+        android:gravity="fill"
+        android:filter="true" />
+</inset>

@@ -1,30 +1,26 @@
 <p align="center">
-  <a href="README.md">English</a> |
-  <a href="README.zh-CN.md">简体中文</a>
+  <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
   <strong>Keep what matters moving.</strong><br />
-  Personal AI for the one-person company.<br />
-  Remember your goals and context, take action across your tools,<br />
-  and pick up where you left off.
+  Open-source, local-first personal AI that remembers your context and helps you move work forward.<br />
+  Chat with Ada, delegate a task, or work directly with files and projects.<br />
+  Review the result and keep refining it.
 </p>
 
 <p align="center">
-  <a href="https://xopc.ai"><img src="https://img.shields.io/badge/website-xopc.ai-0ea5e9?style=flat-square" alt="xopc.ai"></a>
-  <a href="https://www.npmjs.com/package/@xopcai/xopc"><img src="https://img.shields.io/npm/v/@xopcai/xopc?label=npm&amp;color=teal" alt="npm version"></a>
-  <img src="https://img.shields.io/badge/node.js-%E2%89%A522-339933?logo=nodedotjs&amp;logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License">
-  <img src="https://img.shields.io/badge/LLM_providers-20%2B-5865F2" alt="LLM providers">
-  <a href="https://github.com/xopcai/xopc/stargazers"><img src="https://img.shields.io/github/stars/xopcai/xopc?style=flat-square&amp;color=gold" alt="GitHub Stars"></a>
+  <a href="https://www.npmjs.com/package/@xopcai/xopc"><img src="https://img.shields.io/npm/v/@xopcai/xopc" alt="npm version"></a>
+  <img src="https://img.shields.io/badge/license-MIT-yellow" alt="MIT License">
+  <a href="https://github.com/xopcai/xopc/stargazers"><img src="https://img.shields.io/github/stars/xopcai/xopc?style=flat-square" alt="GitHub Stars"></a>
 </p>
 
 <p align="center">
   <a href="https://xopc.ai/en#download"><strong>Download the desktop app →</strong></a> ·
-  <a href="#quick-start"><strong>Install in 30 seconds</strong></a> ·
-  <a href="https://xopcai.github.io/xopc/">Read the docs</a>
+  <a href="https://xopcai.github.io/xopc/">Read the docs</a> ·
+  <a href="https://xopc.ai/en/learn">Watch demos and tutorials</a>
 </p>
 
 <p align="center">
@@ -33,44 +29,36 @@
   </a>
 </p>
 
-> After setup, try: **“One thing I want to move forward this week is ____. Help me find the smallest credible next step.”**
+## Two ways to start in one xopc
 
-<details>
-<summary><strong>Table of Contents</strong></summary>
+**Talk with Ada.** Ada is the personal Agent inside xopc; no separate installation is needed. Share your background, response preferences, and a goal. Delegate a task when you need a hand, keep talking, then return to the result. [Meet Ada](https://xopcai.github.io/xopc/personal-ai).
 
-- [Why try xopc](#why-try-xopc)
-- [Get started](#get-started)
-- [Where to chat](#where-to-chat)
-- [Channels](#channels)
-- [Extensions &amp; skills](#extensions--skills)
-- [Configuration](#configuration)
-- [Documentation](#documentation)
-- [Community](#community)
-- [FAQ](#faq)
-- [Security](#security)
-- [Contributing](#contributing)
+**Open your workspace.** Bring files and a goal to organize material, analyze data, change code, or prepare a report. Keep conversations, deliverables, and project context together so you can continue later. [Workspace guide](https://xopcai.github.io/xopc/workspace-guide).
 
-</details>
+Built for independent workers, creators, developers, and anyone who wants less repeated explanation and execution overhead.
 
----
+## Finish something real
 
-## Why try xopc
+| Your goal | Try this | Check the result |
+| --- | --- | --- |
+| Resume a project | “Use this project's notes and tasks to explain what is blocked and suggest the next step.” | Sources, unresolved decisions, and next action |
+| Turn material into a report | “Combine these sales files into a summary. Keep sources, calculations, and exceptions.” | Saved file, totals, and exceptions |
+| Delegate and keep talking | “Turn this week's plan into a one-page file and tell me when it is ready. Let's keep discussing next week.” | Task card, actual file, and revisions |
 
-- **Start before it is organized.** Drop in text, voice, files, links, or a thought you cannot explain clearly yet.
-- **Stop repeating yourself.** Sessions, projects, tasks, and correctable user understanding keep the context that matters.
-- **Move beyond advice.** xopc can use tools, run workflows, verify results, and continue the work later.
-- **Reduce the burden, not your agency.** Let xopc carry repeatable execution while you keep intent, judgment, creativity, and final decisions.
-- **Stay in control.** It is local-first, sources are authorized separately, and high-impact actions such as sending or deleting require confirmation.
+File work requires the relevant access, tools, or skills. Voice, image generation, browser access, and external services need their own setup. [Delegate and receive results](https://xopcai.github.io/xopc/task-delegation) · [Practical tutorials](https://xopc.ai/en/learn) (videos and detailed walkthroughs are currently in Chinese).
 
-**Your context, carried forward.** xopc keeps context, the next action, evidence, and follow-up together, so important work does not disappear when a chat ends. Built for one, it helps you operate with more continuity and capability without giving up control.
+## Core capabilities
 
-xopc works from desktop, web, terminal, mobile, Telegram, WeChat, and Feishu/Lark, with your choice of cloud or local models.
+| Capability | What it helps you do |
+| --- | --- |
+| **Context and memory** | Keep conversations, project background, and understanding you can review, correct, or delete |
+| **Delegation and delivery** | Delegate tasks, answer follow-up questions, receive artifacts, and check acceptance criteria |
+| **Files and projects** | Work with authorized material and retain files, notes, execution records, and next actions |
+| **Follow-ups** | Follow a topic, repeat a process with Workflows, or trigger work with Automations |
+| **Tools and connections** | Enable skills, MCP, connectors, browser automations, images, and voice as needed |
+| **Access across devices** | Desktop, web, terminal, mobile, Telegram, WeChat, and Feishu/Lark |
 
-Use xopc independently, or connect it to XOPC Cloud or a privately deployed XOPC Platform for centrally published services and runtime scheduling. Connecting is opt-in and does not upload the local database or workspace. See [XOPC Platform](https://xopcai.github.io/xopc/platform).
-
-For the full product philosophy, trust model, and roadmap, read [Product philosophy](https://xopcai.github.io/xopc/product).
-
----
+[Computer Use](https://xopcai.github.io/xopc/computer-use) is currently a macOS desktop preview requiring a compatible GUI model and native permissions. Mobile capabilities vary by platform and version; the Agent runs on the connected computer.
 
 <a id="desktop-app"></a>
 <a id="get-started"></a>
@@ -78,159 +66,56 @@ For the full product philosophy, trust model, and roadmap, read [Product philoso
 
 ## Get started
 
-### Easiest start: desktop app
+### Desktop app
 
-For most users, the **desktop app** is the easiest way to start: install the app, finish model setup in the UI, then chat in the built-in console. It starts the local gateway for you.
+1. [Download xopc](https://xopc.ai/en#download) for macOS, Windows, or Linux.
+2. Connect XOPC Cloud, your own provider API key, or a local model service.
+3. Open the personal Agent or Chat. Try a small request, then bring in real material.
 
-1. Open **[xopc.ai](https://xopc.ai/en#download)** and choose macOS, Windows, or Linux.
-2. Open xopc and complete model setup.
-3. Start chatting.
+[Desktop installation](https://xopcai.github.io/xopc/desktop-app) · [Model setup](https://xopcai.github.io/xopc/how-to/configure-first-model).
 
-See **[Desktop app](https://xopcai.github.io/xopc/desktop-app)** for install notes, first-run guidance, and build-from-source commands.
+### Terminal installation
 
-### One-liner (30-second start — recommended)
-
-**Linux, macOS, WSL2, Termux**
+macOS, Linux, WSL:
 
 ```bash
 curl -fsSL https://xopc.ai/install.sh | bash
+xopc onboard --quick
+xopc
 ```
 
-**Windows (native, PowerShell)**
-
-> **Heads up:** Native Windows runs xopc without WSL — CLI, gateway, TUI, and tools all work natively. Prefer WSL2? Use the bash one-liner above there too.
+Windows PowerShell:
 
 ```powershell
-iex (irm https://xopc.ai/install.ps1)
-```
-
-The installer detects your OS, installs **Node.js ≥ 22.22.3** when needed, and installs **`@xopcai/xopc`**. China mirror: add `--cn` (bash) or `-Cn` (PowerShell), or pass `--registry https://registry.npmmirror.com`.
-
-Then chat immediately:
-
-```bash
+irm https://xopc.ai/install.ps1 | iex
 xopc onboard --quick
-xopc                    # opens the local TUI
+xopc
 ```
 
-### npm (already have Node.js 22.22.3+)
+With Node.js **22.22.3+** already installed, use `pnpm add -g @xopcai/xopc`. The [terminal quick start](https://xopcai.github.io/xopc/first-5-minutes) includes mirror and troubleshooting guidance.
 
-```bash
-npm install -g @xopcai/xopc
-```
+### Continue on mobile
 
-Or with pnpm: `pnpm add -g @xopcai/xopc` · China mirror: `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
+See [distribution channels and pairing](https://xopcai.github.io/xopc/mobile-app). Scan the code and approve the connection on your computer, then review progress and send instructions. Keep the computer awake and xopc running.
 
-Large optional integrations are installed only when you enable the related feature:
+## Data and control
 
-```bash
-npm install -g @composio/core@0.18.1
-npm install -g @larksuiteoapi/node-sdk@1.66.0 playwright-core@1.60.0
-```
+Core state lives under `~/.xopc/` on your machine by default. Use cloud or local models; cloud services process the request context, images, or audio sent to them. Connecting to XOPC Cloud does not automatically upload your entire local database or workspace.
 
-Use the same command without `-g` when xopc is installed as a project dependency.
+Authorize sources, tools, and channels as needed. Execution confirmation depends on tool policy and the scope you authorize; browser control does not prompt for every click. Define boundaries and ask to review before sending, deleting, purchasing, or changing an account. [Privacy and memory](https://xopcai.github.io/xopc/user-understanding) · [Browser automations](https://xopcai.github.io/xopc/browser-automations).
 
-Speech-to-text is disabled by default. xopc does not bundle a local STT engine; connect a cloud provider or install an extension that integrates your own local/OpenAI-compatible transcription service.
+## Find your guide
 
-### More commands
-
-```bash
-xopc agent -i                               # interactive CLI
-xopc agent -m "Summarize the last 5 commits"  # one-shot
-xopc gateway                                # web server + React console
-xopc gateway service install                # OS service
-```
-
-**From source** (installer or pnpm workspace):
-
-```bash
-# installer — clone, build, and add ~/.local/bin/xopc wrapper
-curl -fsSL https://xopc.ai/install.sh | bash -s -- --install-method git
-
-# or manual checkout
-git clone https://github.com/xopcai/xopc.git && cd xopc
-corepack enable && pnpm install && pnpm run build
-pnpm exec xopc onboard
-```
-
-Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1))) -InstallMethod git`
-
-**Requirements:** Node.js **≥ 22** (the one-liner handles this). Use **pnpm** when hacking from a git clone. More install options on **[xopc.ai](https://xopc.ai)** and **[Getting started](https://xopcai.github.io/xopc/getting-started)**.
-
----
-
-## Where to chat
-
-| Surface | How | Best for |
-| --- | --- | --- |
-| **Desktop app** | [Download from xopc.ai](https://xopc.ai/en#download) | Easiest start: native app + embedded gateway console |
-| **TUI** | `xopc` or `xopc tui` (remote: `xopc tui --url …`) | Full keyboard, streaming, fastest terminal path |
-| **CLI** | `xopc agent -i` / `xopc agent -m "…"` | Scripts and minimal TTY |
-| **Web** | `xopc gateway` → open console URL | Chat, settings, logs in the browser |
-| **Mobile** | [native Android and iOS apps](./docs/design/release/mobile-build-release.md) + QR gateway pairing ([mobile app](https://xopcai.github.io/xopc/mobile-app), [remote access](https://xopcai.github.io/xopc/remote-access)) | Chat, record notes, and capture ideas from iOS/Android while the agent keeps running on your computer |
-| **Messengers** | `channels.*` + gateway | Telegram, WeChat, Feishu/Lark |
-
----
-
-## Channels
-
-Configure under **`channels.*`** in **`~/.xopc/xopc.json`**. IM bots need a running gateway; WeChat login runs on the gateway host.
-
-| Channel | Config | Notes |
-| --- | --- | --- |
-| **Telegram** | `channels.telegram` | Multi-account, streaming, policies |
-| **WeChat** | `channels.weixin` | QR login on gateway host |
-| **Feishu / Lark** | `channels.feishu` | Bot / webhook per docs |
-
-Full reference: **[Channels](https://xopcai.github.io/xopc/channels)** · **[Configuration](https://xopcai.github.io/xopc/configuration)**.
-
----
-
-## Extensions & skills
-
-```bash
-xopc skills install <name>       # SKILL.md domains
-xopc extensions install store:<id>  # or npm:<package> / ./local-directory
-xopc extensions dev ./my-extension
-```
-
-Guides: **[Extensions](https://xopcai.github.io/xopc/extensions)** · **[Skills](https://xopcai.github.io/xopc/skills)**. Gateway UI extensions: **`@xopcai/xopc/extension-ui-sdk`** (`packages/extension-ui-sdk/`).
-
----
-
-## Configuration
-
-Default: **`~/.xopc/xopc.json`**. A minimal skeleton:
-
-```json
-{
-  "providers": { "deepseek": "${DEEPSEEK_API_KEY}" },
-  "agents": { "default": "main", "list": [{ "id": "main", "models": { "roles": { "deep": { "model": "deepseek/deepseek-v4-flash" } } } }] }
-}
-```
-
-Full reference: **[Configuration](https://xopcai.github.io/xopc/configuration)**. Add **`channels.*`** for IM, or browser tools (Playwright Chromium) when needed.
-
----
-
-## Documentation
-
-| Guide | Description |
+| You want to… | Read |
 | --- | --- |
-| [Getting started](https://xopcai.github.io/xopc/getting-started) | Install, onboard, first chat |
-| [The Continuous Work Model](https://xopcai.github.io/xopc/concepts/loops) | How state, execution, and triggers form resumable, inspectable work loops |
-| [Projects, Tasks, and Notes](https://xopcai.github.io/xopc/projects-tasks-notes) | Keep long-running work in one verified Task model with optional shared project context |
-| [Share a conversation](https://xopcai.github.io/xopc/session-sharing) | Publish a reviewed, read-only Session snapshot with expiration and view limits |
-| [Configuration](https://xopcai.github.io/xopc/configuration) | `xopc.json` reference |
-| [XOPC Platform](https://xopcai.github.io/xopc/platform) | Standalone and connected modes, discovery, and runtime registration |
-| [CLI](https://xopcai.github.io/xopc/cli) | Commands and flags |
-| [Channels](https://xopcai.github.io/xopc/channels) | Telegram, WeChat, Feishu |
-| [Architecture](https://xopcai.github.io/xopc/architecture) | How pieces fit together |
-| [Workflows](https://xopcai.github.io/xopc/workflows) | Fan-out subagents, board UI, scripts |
-
-Also: [Tools](https://xopcai.github.io/xopc/tools) · [Mobile app](https://xopcai.github.io/xopc/mobile-app) · [Voice](https://xopcai.github.io/xopc/voice) · [Remote access](https://xopcai.github.io/xopc/remote-access)
-
----
+| Set up your personal assistant | [Meet Ada](https://xopcai.github.io/xopc/personal-ai) |
+| Delegate and refine a result | [Task delivery](https://xopcai.github.io/xopc/task-delegation) |
+| Work with files and projects | [Workspace](https://xopcai.github.io/xopc/workspace-guide) |
+| Review results and retry | [Task acceptance](https://xopcai.github.io/xopc/task-review) |
+| Save reusable website actions | [Browser recording and automations](https://xopcai.github.io/xopc/browser-automations) |
+| Add services and capabilities | [Models](https://xopcai.github.io/xopc/models) · [Skills](https://xopcai.github.io/xopc/skills) · [MCP](https://xopcai.github.io/xopc/mcp) · [Connectors](https://xopcai.github.io/xopc/connectors/) |
+| Configure and extend an instance | [Configuration](https://xopcai.github.io/xopc/configuration) · [Extensions](https://xopcai.github.io/xopc/extensions) · [XOPC Platform](https://xopcai.github.io/xopc/platform) |
+| See recent changes | [What's new](https://xopcai.github.io/xopc/whats-new) · [GitHub Releases](https://github.com/xopcai/xopc/releases) |
 
 ## Community
 
@@ -261,7 +146,7 @@ Read the [community guide](https://xopcai.github.io/xopc/community) and [Code of
 
 **How is this different from another chat UI?** — Chat is only one surface. xopc preserves understanding, long-term goals, projects, tasks, decisions, and run history so the same assistant can continue working across time and surfaces.
 
-**Can I use it from my phone or messengers?** — Yes. Pair the [native mobile app](./docs/design/release/mobile-build-release.md) by QR code, or configure Telegram, WeChat, or Feishu/Lark via the gateway.
+**Can I use it from my phone or messengers?** — Yes. Pair the [mobile app](https://xopcai.github.io/xopc/mobile-app) by QR code, or configure Telegram, WeChat, or Feishu/Lark via the gateway.
 
 **Have a question?** — Ask on [GitHub Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a).
 

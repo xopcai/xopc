@@ -10,7 +10,7 @@ macOS、Linux、WSL2 或 Termux：
 curl -fsSL https://xopc.ai/install.sh | bash
 ```
 
-如果已经安装 Node.js 22 或更高版本：
+如果已经安装 Node.js 22.22.3 或更高版本：
 
 ```bash
 npm install -g @xopcai/xopc

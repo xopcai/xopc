@@ -10,7 +10,7 @@ On macOS, Linux, WSL2, or Termux:
 curl -fsSL https://xopc.ai/install.sh | bash
 ```
 
-If Node.js 22 or newer is already installed:
+If Node.js 22.22.3 or newer is already installed:
 
 ```bash
 npm install -g @xopcai/xopc

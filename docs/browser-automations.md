@@ -1,6 +1,6 @@
 # Browser automations
 
-Browser automations let xopc repeat a web task that you have already completed successfully with the assistant. You describe the result in everyday language; xopc handles the browser steps and saves the reusable version.
+Browser automations let xopc repeat website actions. Record your own actions, or create and test reusable steps with the assistant. You describe the result in everyday language; xopc handles the browser steps and saves the reusable version.
 
 You do not need to write YAML, selectors, or automation code.
 
@@ -14,6 +14,20 @@ These two features work together, but solve different problems:
 | [Automation](./automations.md) | When the task starts | Run that order lookup every weekday at 09:00 |
 
 Create a browser automation first when you want to reuse a sequence of actions on a website. Add it to an Automation only when it also needs a schedule or another trigger.
+
+## Record your own actions
+
+Use a Chrome extension build with recording support and a compatible Gateway. Update and connect both, then grant the target site access through the [extension guide](./browser-extension.md). Update an older extension if its recording panel is missing.
+
+1. Open **Browser recording** in the extension side panel and select the target website tab.
+2. Sign in first, then choose **Start recording** and perform a small task, such as entering an order number and looking up its status.
+3. Use **Pause** for actions you do not want recorded and **Resume** when ready.
+4. Choose **Finish and save**, wait for event synchronization, and confirm that the saved automation appears.
+5. Inspect its input parameters, enter a test value, choose **Run**, and check the actual website result.
+
+Recorded fill and select values become reusable inputs and may include the original values as defaults. Do not record passwords, verification codes, payment details, or other sensitive input. Saving confirms stored steps; it does not establish a verified replay.
+
+Recording covers common clicks, fills, selections, checkboxes, key presses, and navigation. Not every website control is supported. If events are missing, a target is unsupported, or recording is interrupted, inspect the error and record a smaller task. If a run's outcome is uncertain, inspect the website before repeating an external write.
 
 ## Create one with the assistant
 
@@ -92,3 +106,7 @@ For extension installation, permissions, and connection diagnostics, see the [Ch
 - [Automations](./automations.md) — run work manually, on a schedule, or from a webhook
 - [Chrome extension](./browser-extension.md) — install, connect, grant site access, and troubleshoot the browser bridge
 - [Tools](./tools.md) — configure browser access for an Agent
+
+## Execution permissions
+
+Browser control does not ask for confirmation on every click. Recording operates a real website, and replay can change real data. Test a small scope first and define boundaries for sending, deleting, purchasing, or account changes. A risk label does not replace checking the actual actions.

@@ -143,7 +143,7 @@ We recommend a single project board with columns: **Backlog → Ready → In Pro
 ## Pull requests
 
 1. Fork and branch from `main`.
-2. Use **pnpm** only (`pnpm install`, `pnpm run test:all`, `pnpm run lint`). Requires **Node.js ≥ 22**.
+2. Use **pnpm** only (`pnpm install`, `pnpm run test:all`, `pnpm run lint`). Requires **Node.js ≥ 22.22.3**.
 3. Reference issues in the PR body: `Fixes #123` or `Closes #123`.
 4. Keep PRs focused; mention breaking changes and config updates in the description.
 5. Follow **[AGENTS.md](./AGENTS.md)** for code style, logging, and session/transcript rules.
@@ -168,6 +168,10 @@ Both are required for `electron:build` on macOS (DMG packaging needs `electron-b
 PRs that touch specific paths may receive automatic `area:*` labels from the [labeler workflow](./.github/workflows/labeler.yml).
 
 ---
+
+## Release summaries
+
+Before publishing a release, use [the release notes template](./.github/RELEASE_TEMPLATE.md) to describe user-visible changes, relevant guides, fixes, and upgrade requirements. Check each claim against the previous tag. Core and native mobile versions are separate; do not imply that a core release installs updated mobile or browser clients. Update the English and Chinese [What's new](./docs/whats-new.md) guides when a new user flow becomes available.
 
 ## Security
 
