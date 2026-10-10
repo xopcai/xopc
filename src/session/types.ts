@@ -24,6 +24,8 @@ export interface Message {
   toolName?: string;
   isError?: boolean;
   details?: unknown;
+  nestedCalls?: import('@earendil-works/pi-ai').ToolResultMessage['nestedCalls'];
+  durationMs?: number;
   name?: string;
   /** Token usage from the LLM response (assistant messages only). */
   usage?: {

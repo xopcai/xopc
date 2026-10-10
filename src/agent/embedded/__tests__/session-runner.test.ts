@@ -38,6 +38,11 @@ describe('EmbeddedSessionRunner fingerprint', () => {
     expect(d).not.toBe(a);
     expect(e).not.toBe(a);
     expect(buildEmbeddedRunnerFingerprint({ ...base, toolContracts: ['read-v2', 'write-v1'] })).not.toBe(a);
+    const codemode = { enabled: true, timeoutMs: 60_000, maxConcurrentCalls: 4, maxCalls: 32, maxOutputTokens: 4000 };
+    const enabled = buildEmbeddedRunnerFingerprint({ ...base, codemode });
+    expect(enabled).not.toBe(a);
+    expect(buildEmbeddedRunnerFingerprint({ ...base, codemode: { ...codemode, enabled: false } })).not.toBe(enabled);
+    expect(buildEmbeddedRunnerFingerprint({ ...base, codemode: { ...codemode, maxCalls: 2 } })).not.toBe(enabled);
   });
 
   it('is stable for identical inputs regardless of tool order', () => {

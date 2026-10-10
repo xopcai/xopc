@@ -19,6 +19,7 @@ export const ELECTRON_PACKAGED_DEPENDENCIES = [
   'silk-wasm',
   'node-pty',
   '@trycua/cua-driver',
+  'quickjs-wasi',
 ];
 
 /** Security overrides required by the isolated Electron runtime install. */

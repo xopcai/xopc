@@ -51,6 +51,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { messages } from '@/i18n/messages';
 import { WorkflowCard, type WorkflowCardLabels } from '@/features/chat/workflow/workflow-card';
 import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
+import { CodemodeOutputLink, codemodeOutputPath } from './codemode-output-link';
 
 export interface AssistantActivityWorkflowOptions {
   labels: WorkflowCardLabels;
@@ -608,6 +609,8 @@ function StepRow({
     ? toolFailureSummary(block, stepLabels.toolError, cardLabels)
     : '';
   const resultText = toolResultText;
+  const outputLanguage = useLocaleStore(state => state.language);
+  const retainedOutput = block.name === 'codemode' ? codemodeOutputPath(resultText ?? '') : undefined;
   const liveOutputText = isStreaming && block.details && typeof block.details === 'object'
     && !Array.isArray(block.details) && typeof (block.details as { text?: unknown }).text === 'string'
     ? (block.details as { text: string }).text
@@ -682,7 +685,7 @@ function StepRow({
   const showRawDetails = !isStreaming && showRawToolData;
 
   return (
-    <div className="min-w-0">
+    <div className={block.parentToolCallId ? 'ml-4 min-w-0 border-l border-edge pl-3' : 'min-w-0'}>
       <div className="min-w-0 space-y-1.5">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
           <span className="inline-flex max-w-full min-w-0 break-words text-sm text-fg-muted [overflow-wrap:anywhere]">
@@ -726,6 +729,8 @@ function StepRow({
             {liveOutputText}
           </pre>
         ) : null}
+        {retainedOutput ? <CodemodeOutputLink path={retainedOutput} conversationId={conversationId}
+          label={outputLanguage === 'zh' ? '查看完整输出' : 'View full output'} /> : null}
         {showRawDetails ? (
           <details className="group min-w-0 text-xs">
             <summary className="cursor-pointer select-none text-fg-subtle underline-offset-2 hover:text-fg-muted group-open:text-fg-muted">

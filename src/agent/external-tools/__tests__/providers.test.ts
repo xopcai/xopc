@@ -7,6 +7,7 @@ function seedConversationFixtures(): void {
   ensureFixtureConversation("6d9217fe-77c7-411d-8cc9-92aabe81a2d0", '', {"agentId":"main","sourceChannel":"main","sourceChatId":"","sessionType":"chat","routing":{"agentId":"main","source":"main","accountId":"default","peerKind":"direct","peerId":""}});
 }
 import type { AgentTool } from '@earendil-works/pi-agent-core';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { describe, expect, it, vi } from 'vitest';
 
 import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
@@ -66,8 +67,9 @@ describe('external tool providers', () => {
 
   it('discovers and executes MCP tools without materializing model-visible tools', async () => {
     seedConversationFixtures();
-    const callTool = vi.fn(async () => ({
+    const callTool = vi.fn(async (): Promise<CallToolResult> => ({
       content: [{ type: 'text' as const, text: 'mcp-ok' }],
+      structuredContent: { records: 7 },
     }));
     const runtime = {
       markUsed: vi.fn(),
@@ -89,6 +91,8 @@ describe('external tool providers', () => {
             required: ['id'],
           },
           fallbackDescription: 'lookup',
+          outputSchema: { type: 'object', properties: { records: { type: 'number' } } },
+          annotations: { readOnlyHint: true },
         }],
       })),
       callTool,
@@ -107,14 +111,19 @@ describe('external tool providers', () => {
     })]);
     await expect(provider.describe('mcp:demo-server:lookup')).resolves.toMatchObject({
       inputSchema: { type: 'object' },
+      outputSchema: { type: 'object', properties: { records: { type: 'number' } } },
+      annotations: { readOnlyHint: true },
     });
     await expect(provider.execute(
       'mcp:demo-server:lookup',
       { id: '42' },
       undefined,
       { toolCallId: 'call-mcp' },
-    )).resolves.toMatchObject({ content: [{ text: 'mcp-ok' }] });
+    )).resolves.toMatchObject({ content: [{ text: 'mcp-ok' }], structuredContent: { records: 7 } });
     expect(callTool).toHaveBeenCalledWith('demo server', 'lookup', { id: '42' }, undefined);
+    callTool.mockResolvedValueOnce({ content: [{ type: 'text', text: 'lookup failed' }], isError: true });
+    await expect(provider.execute('mcp:demo-server:lookup', { id: '42' }, undefined,
+      { toolCallId: 'failed-mcp' })).resolves.toMatchObject({ details: { status: 'failed' } });
   });
 
   it('turns a plugin MCP tool authorization challenge into a connection request', async () => {

@@ -9,6 +9,7 @@ import {
   sessionInputCommandSchema,
   canonicalSessionCommand,
   type AgentStreamRunEndPayload,
+  type AgentStreamToolExecutionMetadata,
   type ToolActivity,
   type TurnOutcome,
   type AppContextEnvelope,
@@ -258,6 +259,7 @@ export type MessagingCallbacks = {
     toolCallId: string | undefined,
     startedAt: number,
     activity: ToolActivity | undefined,
+    metadata?: AgentStreamToolExecutionMetadata,
   ) => void;
   onToolEnd: (
     toolName: string,
@@ -266,6 +268,7 @@ export type MessagingCallbacks = {
     toolCallId: string | undefined,
     completedAt: number,
     activity: ToolActivity | undefined,
+    metadata?: AgentStreamToolExecutionMetadata,
   ) => void;
   /**
    * Mid-execution structured update for a tool whose `partialResult` carried
@@ -741,6 +744,7 @@ export class MessageSender {
           toolCallId,
           protocolTimestamp(parsed.timestamp),
           payload.activity as ToolActivity | undefined,
+          toolExecutionMetadata(payload),
         );
         break;
       }
@@ -759,6 +763,7 @@ export class MessageSender {
           typeof payload.toolCallId === 'string' ? payload.toolCallId : undefined,
           protocolTimestamp(parsed.timestamp),
           payload.activity as ToolActivity | undefined,
+          toolExecutionMetadata(payload),
         );
         break;
       case 'review_start':
@@ -918,6 +923,13 @@ function serializeProtocolPayload(result: unknown): unknown {
   } catch {
     return String(result);
   }
+}
+
+function toolExecutionMetadata(payload: Record<string, unknown>): AgentStreamToolExecutionMetadata {
+  return {
+    ...(typeof payload.parentToolCallId === 'string' ? { parentToolCallId: payload.parentToolCallId } : {}),
+    ...(typeof payload.durationMs === 'number' ? { durationMs: payload.durationMs } : {}),
+  };
 }
 
 function protocolTimestamp(value: unknown): number {
