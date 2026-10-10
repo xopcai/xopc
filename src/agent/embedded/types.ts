@@ -13,7 +13,7 @@ import type { AgentTurnPolicy } from '../orchestration/agent-turn-policy.js';
 
 export type EmbeddedStreamEvent =
   | { type: 'agent_start'; runId?: string }
-  | { type: 'agent_end'; runId?: string }
+  | { type: 'agent_end'; runId?: string; aborted?: boolean }
   | { type: 'message_start'; runId?: string; message: AgentMessage }
   | {
       type: 'message_update';
@@ -38,6 +38,7 @@ export type EmbeddedStreamEvent =
       toolName: string;
       result: AgentToolResult<any>;
       isError: boolean;
+      durationMs?: number;
     }
   | { type: 'progress'; runId?: string; stage: string; message: string }
   | { type: 'error'; runId?: string; content: string }

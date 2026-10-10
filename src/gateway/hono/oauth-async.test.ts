@@ -1,12 +1,15 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import type { GatewayService } from '../service.js';
 import { ConfigSchema } from '../../config/schema.js';
+import { CredentialResolver } from '../../auth/credentials.js';
+import { openaiOAuthProvider } from '../../auth/oauth/openai.js';
 import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import {
   buildDesktopOAuthReturnUrl,
   buildOAuthCompletionReadiness,
+  createOAuthAsyncHandler,
   normalizeDesktopOAuthReturnPath,
   refreshModelCatalogAfterOAuth,
   resolveOAuthLoginMethodPreference,
@@ -14,6 +17,58 @@ import {
 
 beforeAll(() => initializeTestAgentCatalog());
 afterAll(() => closeXopcDatabase());
+
+describe('OpenAI OAuth manual callback', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const service = () => ({ currentConfig: ConfigSchema.parse({}) }) as GatewayService;
+
+  it('waits for the submitted callback instead of passing an empty code', async () => {
+    const save = vi.spyOn(CredentialResolver.prototype, 'saveOAuthCredentials').mockResolvedValue();
+    const received = vi.fn();
+    vi.spyOn(openaiOAuthProvider, 'login').mockImplementation(async callbacks => {
+      callbacks.onAuth({ url: 'https://auth.openai.com/example' });
+      const code = await callbacks.onPrompt({ message: 'Paste callback URL', signal: callbacks.signal });
+      received(code);
+      return { access: 'access', refresh: 'refresh', expires: Date.now() + 3600_000, clientId: 'issued-client' };
+    });
+    const handler = createOAuthAsyncHandler(service());
+    const started = await handler.request('/start', { method: 'POST', body: JSON.stringify({ provider: 'openai' }) });
+    const { payload: { sessionId } } = await started.json() as { payload: { sessionId: string } };
+    const status = async () => {
+      const { payload } = await (await handler.request(`/${sessionId}/status`)).json() as { payload: { status: string } };
+      return payload.status;
+    };
+    await vi.waitFor(async () => expect(await status()).toBe('waiting_code'));
+    expect(received).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    const callback = 'http://127.0.0.1:1455/auth/callback?code=issued-code&client_id=issued-client';
+    expect((await handler.request(`/${sessionId}/code`, { method: 'POST', body: JSON.stringify({ code: callback }) })).status).toBe(200);
+    await vi.waitFor(async () => expect(await status()).toBe('completed'));
+    expect(received).toHaveBeenCalledWith(callback);
+    expect(save).toHaveBeenCalledWith('openai', expect.objectContaining({ clientId: 'issued-client' }));
+  });
+
+  it('releases the waiting prompt on cancellation without saving credentials', async () => {
+    const save = vi.spyOn(CredentialResolver.prototype, 'saveOAuthCredentials').mockResolvedValue();
+    const finished = vi.fn();
+    vi.spyOn(openaiOAuthProvider, 'login').mockImplementation(async callbacks => {
+      callbacks.onAuth({ url: 'https://auth.openai.com/example' });
+      try {
+        await callbacks.onPrompt({ message: 'Paste callback URL', signal: callbacks.signal });
+        throw new Error('Cancelled prompt unexpectedly resolved');
+      } finally { finished(); }
+    });
+    const handler = createOAuthAsyncHandler(service());
+    const started = await handler.request('/start', { method: 'POST', body: JSON.stringify({ provider: 'openai' }) });
+    const { payload: { sessionId } } = await started.json() as { payload: { sessionId: string } };
+    await handler.request(`/${sessionId}/cancel`, { method: 'POST' });
+    await vi.waitFor(() => expect(finished).toHaveBeenCalledOnce());
+    const { payload } = await (await handler.request(`/${sessionId}/status`)).json() as { payload: { status: string } };
+    expect(payload.status).toBe('cancelled');
+    expect(save).not.toHaveBeenCalled();
+  });
+});
 
 describe('buildDesktopOAuthReturnUrl', () => {
   it('uses a dedicated Electron callback for tunnel authorization', () => {

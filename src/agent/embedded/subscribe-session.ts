@@ -10,6 +10,10 @@ export function subscribeEmbeddedSessionEvents(
   onAgentEvent?: (event: AgentEvent) => void,
 ): () => void {
   return session.subscribe((event: AgentSessionEvent) => {
+    if (event.type === 'agent_settled') {
+      onEvent({ type: 'agent_end', aborted: event.aborted });
+      return;
+    }
     const base = event as AgentEvent;
     onAgentEvent?.(base);
     switch (base.type) {
@@ -17,7 +21,6 @@ export function subscribeEmbeddedSessionEvents(
         onEvent({ type: 'agent_start' });
         break;
       case 'agent_end':
-        onEvent({ type: 'agent_end' });
         break;
       case 'message_start': {
         const m = (base as Extract<AgentEvent, { type: 'message_start' }>).message;
@@ -56,6 +59,7 @@ export function subscribeEmbeddedSessionEvents(
           toolCallId: t.toolCallId,
           isError: t.isError,
           result: t.result,
+          durationMs: t.durationMs,
         });
         break;
       }

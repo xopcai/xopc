@@ -9,6 +9,7 @@ import {
 
 import { CredentialResolver, type OAuthToken } from './credentials.js';
 import { withOAuthProviderLock } from './oauth-provider-lock.js';
+import { assertCurrentModelProvider, isRetiredModelProvider } from '../providers/provider-policy.js';
 
 type OAuthCredentialRepository = Pick<
   CredentialResolver,
@@ -80,6 +81,7 @@ export class XopcModelCredentialStore implements CredentialStore {
   ): Promise<Credential | undefined> {
     options?.signal?.throwIfAborted();
     const normalizedProvider = normalizeProviderId(providerId);
+    if (isRetiredModelProvider(normalizedProvider)) return undefined;
     const runtimeApiKey = this.runtimeApiKeys.get(normalizedProvider);
     if (runtimeApiKey) return runtimeApiKey;
     const token = await this.repository.loadOAuthTokenRecord(normalizedProvider);
@@ -94,6 +96,7 @@ export class XopcModelCredentialStore implements CredentialStore {
 
     const credentials = new Map<string, CredentialInfo>();
     for (const token of oauthTokens) {
+      if (isRetiredModelProvider(token.provider)) continue;
       credentials.set(normalizeProviderId(token.provider), {
         providerId: normalizeProviderId(token.provider),
         type: 'oauth',
@@ -111,6 +114,7 @@ export class XopcModelCredentialStore implements CredentialStore {
     options?: AuthOperationOptions,
   ): Promise<Credential | undefined> {
     const normalizedProvider = normalizeProviderId(providerId);
+    assertCurrentModelProvider(normalizedProvider);
     return withOAuthProviderLock(normalizedProvider, async () => {
       options?.signal?.throwIfAborted();
       const persisted = await this.repository.loadOAuthTokenRecord(normalizedProvider);

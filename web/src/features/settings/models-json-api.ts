@@ -45,7 +45,6 @@ export const API_TYPE_OPTIONS: { value: ApiType; label: string }[] = [
   { value: 'google-generative-ai', label: 'Google Generative AI' },
   { value: 'azure-openai-responses', label: 'Azure OpenAI' },
   { value: 'bedrock-converse-stream', label: 'AWS Bedrock' },
-  { value: 'openai-codex-responses', label: 'OpenAI Codex' },
   { value: 'google-gemini-cli', label: 'Google Gemini CLI' },
   { value: 'google-vertex', label: 'Google Vertex AI' },
 ];

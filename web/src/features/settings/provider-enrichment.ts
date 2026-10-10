@@ -217,7 +217,7 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     aliases: ['openrouter', 'open router'],
     envVars: ['OPENROUTER_API_KEY'],
   },
-  'azure-openai-responses': {
+  azure: {
     apiKeyUrl: 'https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/OpenAI',
     pricingUrl: 'https://azure.microsoft.com/en-us/pricing/details/cognitive-services/openai-service/',
     docsUrl: 'https://learn.microsoft.com/en-us/azure/ai-services/openai/',

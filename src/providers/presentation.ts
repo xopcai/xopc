@@ -109,15 +109,13 @@ const PROVIDER_HINTS: Record<string, string> = {
   'zhipu-coding-cn': 'Zhipu GLM coding-plan China endpoint.',
   minimax: 'MiniMax text models; Anthropic-compatible endpoint is preferred for agent workflows.',
   'minimax-cn': 'MiniMax China endpoint for domestic access.',
-  'openai-codex': 'OpenAI Codex models through OAuth.',
   'google-gemini-cli': 'Gemini through Google Cloud Code Assist OAuth.',
   'google-antigravity': 'Gemini/Antigravity OAuth model access.',
 };
 
 const RECOMMENDED_MODEL_PATTERNS: Record<string, RegExp[]> = {
   'xopc-cloud': [/^auto$/],
-  openai: [/^gpt-5\.6$/i, /^gpt-5\.6-sol$/i, /^gpt-5\.6-terra$/i, /^gpt-5\.6-luna$/i, /^gpt-5\.5$/i, /^gpt-5\.5-pro$/i],
-  'openai-codex': [/^gpt-5\.6-sol$/i, /^gpt-5\.6-terra$/i, /^gpt-5\.6-luna$/i, /^gpt-5\.5$/i],
+  openai: [/^gpt-6-sol$/i, /^gpt-6-luna$/i, /^gpt-6-astra$/i, /^gpt-5\.6-sol$/i, /^gpt-5\.6-terra$/i, /^gpt-5\.6-luna$/i, /^gpt-5\.5$/i, /^gpt-5\.5-pro$/i],
   anthropic: [/^claude-sonnet-5$/i, /^claude-opus-4-8$/i, /^claude-fable-5$/i, /^claude-sonnet-4-6$/i, /^claude-sonnet-4-5$/i],
   google: [/^gemini-3\.5-flash$/i, /^gemini-3\.1-pro-preview$/i, /^gemini-3-flash-preview$/i, /^gemini-3-pro-preview$/i],
   'google-vertex': [/^gemini-3\.5-flash$/i, /^gemini-3\.1-pro-preview$/i, /^gemini-3-flash-preview$/i, /^gemini-3-pro-preview$/i],

@@ -46,6 +46,14 @@ xopc models auth login --provider <provider>
 
 Keep provider keys out of `xopc.json` when the credential store, auth profile, or environment variable can be used instead.
 
+## pi 1.1 provider changes
+
+Use `openai` for both API keys and **Sign in with ChatGPT**. Subscription users must sign in again with `xopc models auth login --provider openai`; old `openai-codex` credentials are not reused. A stored API key profile takes precedence over OAuth; remove that profile when choosing subscription access. An environment key is used when no stored profile or OAuth credential exists.
+
+Use `azure` as the Azure provider ID. The `azure-openai-responses` API protocol and `AZURE_OPENAI_*` environment variables remain valid. Update Agent defaults, model intents, Workflows and session overrides that reference the old provider ID. Removed provider identities fail explicitly and do not select another model.
+
+Model IDs come from the current catalog. The local `gpt-5.6` alias has been removed; select an actual listed ID, such as `openai/gpt-6-sol`. Historical conversations remain stored. Codemode and pi's built-in MCP extensions are not enabled by this dependency upgrade.
+
 ## Use a local model
 
 1. Install and start a supported server such as Ollama, LM Studio, or vLLM.

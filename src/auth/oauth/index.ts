@@ -12,6 +12,6 @@ export * from './kimi-coding.js';
 export * from './github-copilot.js';
 export * from './google-gemini-cli.js';
 export * from './google-antigravity.js';
-export * from './openai-codex.js';
+export * from './openai.js';
 export * from './xopc-cloud.js';
 export * from './registry.js';

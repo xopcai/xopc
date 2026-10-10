@@ -12,6 +12,7 @@ import {
 } from '../config/paths.js';
 import type { Config } from '../config/schema.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
+import { assertCurrentModelProvider } from '../providers/provider-policy.js';
 
 import type { AuthProfilesFile, ApiKeyProfile, OAuthToken } from './credentials.js';
 import { isOAuthOnlyProvider } from './oauth/registry.js';
@@ -111,6 +112,7 @@ function readOAuthAccessTokenSync(provider: string): string | undefined {
  */
 export function resolveProviderApiKeySync(provider: string): string | undefined {
   const normalized = provider.toLowerCase();
+  assertCurrentModelProvider(normalized);
   if (isOAuthOnlyProvider(normalized)) return readOAuthAccessTokenSync(normalized);
   const agentPath = resolveAgentAuthProfilesPath(getDefaultAgentId());
   const fromAgent = readApiKeyFromProfilesFile(agentPath, normalized);
@@ -127,6 +129,7 @@ export function resolveProviderApiKeyForAgentSync(
   _config?: Config,
 ): string | undefined {
   const normalized = provider.toLowerCase();
+  assertCurrentModelProvider(normalized);
   if (isOAuthOnlyProvider(normalized)) return readOAuthAccessTokenSync(normalized);
   if (agentId?.trim()) {
     const fromAgent = readApiKeyFromProfilesFile(
@@ -145,6 +148,7 @@ export function resolveProviderApiKeyForAgentSync(
  * matching async CredentialResolver resolution (excluding env — callers check env separately).
  */
 export function hasProviderAuthOnDiskSync(provider: string): boolean {
+  assertCurrentModelProvider(provider.toLowerCase());
   if (isOAuthOnlyProvider(provider.toLowerCase())) return hasOAuthTokenSync(provider);
   const agentPath = resolveAgentAuthProfilesPath(getDefaultAgentId());
   if (hasApiKeyInProfilesFile(agentPath, provider)) {
