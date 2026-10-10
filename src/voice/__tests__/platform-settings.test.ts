@@ -5,8 +5,8 @@ import { getModelCatalogStore, resetModelCatalogStore } from '../../providers/mo
 import { selectPlatformVoice, voiceSettingsCatalog } from '../platform-settings.js';
 import { requirePlatformVoiceModel } from '../platform-catalog.js';
 
-const voice = voiceManifestSchema.parse({ protocolVersion:1, serviceVersion:3, modes:['transcription','transcription.stream','speech','speech.stream','conversation'], transport:'websocket-pcm', inputFormat:{encoding:'pcm_s16le',sampleRate:16000,channels:1}, outputFormat:{encoding:'pcm_s16le',sampleRate:24000,channels:1}, turnDetection:['server_vad'], bargeIn:true,tools:false,resumable:false, voices:[{id:'new-voice',name:'New Voice',languages:['zh']}], limits:{maxFrameBytes:65536,maxSessionSeconds:1800} });
-beforeEach(() => getModelCatalogStore().saveSource('xopc-cloud', {providerId:'xopc-cloud',baseUrl:'https://example.test/v1',api:'openai-completions',etag:'v3',recommendedModel:null,lastSuccessAt:1,models:[{id:'future-provider-model',name:'Future provider',availability:'available',kind:'omni',input:['audio'],output:['audio','text'],operations:['audio.conversation'],contextWindow:128000,maxOutputTokens:null,reasoning:false,voice}]}));
+const voice = voiceManifestSchema.parse({ protocolVersion:1, serviceVersion:3, modes:['transcription','transcription.stream','speech','speech.stream','conversation'], transport:'websocket-pcm', inputFormat:{encoding:'pcm_s16le',sampleRate:16000,channels:1}, outputFormat:{encoding:'pcm_s16le',sampleRate:24000,channels:1}, turnDetection:['server_vad'], bargeIn:true,tools:false,resumable:false, voices:[{id:'new-voice',name:'New Voice',displayNames:{'zh-CN':'默认音色',en:'Default voice'},languages:['zh']}], limits:{maxFrameBytes:65536,maxSessionSeconds:1800} });
+beforeEach(() => getModelCatalogStore().saveSource('xopc-cloud', {providerId:'xopc-cloud',baseUrl:'https://example.test/v1',api:'openai-completions',etag:'v3',recommendedModel:null,lastSuccessAt:1,models:[{id:'future-provider-model',name:'Future provider',displayNames:{'zh-CN':'XOPC 云端实时语音',en:'XOPC Cloud Realtime'},availability:'available',kind:'omni',input:['audio'],output:['audio','text'],operations:['audio.conversation'],contextWindow:128000,maxOutputTokens:null,reasoning:false,voice}]}));
 afterEach(resetModelCatalogStore);
 describe('shared platform voice settings', () => {
   it('configures every mode from a newly discovered model without vendor switches', () => {
@@ -17,6 +17,11 @@ describe('shared platform voice settings', () => {
     expect(state.selections.find(item => item.mode === 'conversation')?.voice).toBe('new-voice');
     expect(config.voice.realtime.enabled).toBe(true);
     expect(config.messages?.tts?.trigger).toBe('off');
+  });
+  it('preserves localized model and voice names in the settings catalog', () => {
+    const catalog = voiceSettingsCatalog(ConfigSchema.parse({}));
+    expect(catalog.models[0]?.displayNames).toEqual({'zh-CN':'XOPC 云端实时语音',en:'XOPC Cloud Realtime'});
+    expect(catalog.models[0]?.voice.voices[0]).toMatchObject({id:'new-voice',displayNames:{'zh-CN':'默认音色',en:'Default voice'}});
   });
   it('preserves prior configuration and detects concurrent setting changes', () => {
     const original = ConfigSchema.parse({}); const before = voiceSettingsCatalog(original);

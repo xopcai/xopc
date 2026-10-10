@@ -12,6 +12,7 @@
 export interface VoiceModel {
   id: string;
   name: string;
+  displayNames?: Partial<Record<'zh-CN' | 'en', string>>;
   description?: string;
   gender?: string;
   style?: string;
