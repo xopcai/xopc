@@ -4,6 +4,10 @@ import { BrowserAutomationDefinitionSchema } from './schema.js';
 import { resolveBrowserAutomationInputs } from './runner.js';
 import {
   appendBrowserAutomationRunEvent,
+  getBrowserAutomationVersion,
+  listBrowserAutomationVersions,
+  findBrowserAutomationRunByRequest,
+  verifyBrowserAutomationRun,
   deleteBrowserAutomation,
   getBrowserAutomation,
   getBrowserAutomationRun,
@@ -23,7 +27,8 @@ export type BrowserAutomationExecutor = (input: {
   inputs: Record<string, unknown>;
   signal: AbortSignal;
   onStep: (event: unknown) => void;
-}) => Promise<{ ok: boolean; result?: unknown; error?: string }>;
+  runId: string;
+}) => Promise<{ ok: boolean; result?: unknown; error?: string; businessOutcome?: BrowserAutomationRun['businessOutcome'] }>;
 
 export class BrowserAutomationService {
   private activeRuns = new Map<string, AbortController>();
@@ -33,23 +38,26 @@ export class BrowserAutomationService {
   constructor(private readonly executor: BrowserAutomationExecutor, private readonly emit?: (type: string, payload: unknown) => void) {
     for (const run of listActiveBrowserAutomationRuns()) {
       const endedAtMs = Date.now();
-      saveBrowserAutomationRun({ ...run, status: 'failed', error: 'Gateway stopped before the run completed.', endedAtMs, durationMs: run.startedAtMs ? endedAtMs - run.startedAtMs : undefined });
+      saveBrowserAutomationRun({ ...run, status: 'failed', businessOutcome: 'unknown', error: 'Gateway stopped before the run completed. Check the business result before running again.', endedAtMs, durationMs: run.startedAtMs ? endedAtMs - run.startedAtMs : undefined });
     }
   }
 
   list() { return listBrowserAutomations(); }
   get(id: string) { return getBrowserAutomation(id); }
+  versions(id: string) { return listBrowserAutomationVersions(id); }
   listRuns(automationId?: string) { return listBrowserAutomationRuns(automationId); }
   getRun(id: string) { return getBrowserAutomationRun(id); }
   listRunEvents(id: string) { return listBrowserAutomationRunEvents(id); }
   validate(definition: unknown) { return BrowserAutomationDefinitionSchema.safeParse(definition); }
 
-  save(input: { definition: unknown; status?: BrowserAutomationStatus; expectedId?: string }): BrowserAutomation {
+  save(input: { definition: unknown; status?: BrowserAutomationStatus; expectedId?: string; expectedRevision?: number }): BrowserAutomation {
     const parsed = BrowserAutomationDefinitionSchema.parse(input.definition);
     if (input.expectedId && parsed.id !== input.expectedId) throw new Error('Browser automation id cannot change.');
     const existing = getBrowserAutomation(parsed.id);
+    if (input.expectedRevision !== undefined && existing?.revision !== input.expectedRevision) throw new Error('Browser automation revision changed. Reload before saving.');
+    const changed = !existing || canonical(existing.definition) !== canonical(parsed);
     const now = Date.now();
-    const automation: BrowserAutomation = { id: parsed.id, revision: (existing?.revision ?? 0) + 1, status: input.status ?? existing?.status ?? 'enabled', definition: parsed, createdAtMs: existing?.createdAtMs ?? now, updatedAtMs: now };
+    const automation: BrowserAutomation = { id: parsed.id, verified: !changed && !!existing?.verified, revision: (existing?.revision ?? 0) + (changed ? 1 : 0), status: input.status ?? existing?.status ?? 'enabled', definition: parsed, createdAtMs: existing?.createdAtMs ?? now, updatedAtMs: now };
     saveBrowserAutomation(automation);
     return automation;
   }
@@ -64,12 +72,22 @@ export class BrowserAutomationService {
     inputs: Record<string, unknown>,
     context?: BrowserAutomationExecutionContext,
   ): BrowserAutomationRun {
-    const automation = getBrowserAutomation(automationId);
+    const requestId = context?.clientRequestId;
+    if (requestId) {
+      const previous = findBrowserAutomationRunByRequest(requestId);
+      if (previous) {
+        const contextualInputs = mergeBrowserAutomationTriggerInputs(previous.definition, inputs, context);
+        if (previous.automationId !== automationId || (context?.revision !== undefined && context.revision !== previous.automationRevision)
+          || canonical(previous.inputs) !== canonical(resolveBrowserAutomationInputs(previous.definition, contextualInputs))) throw new Error('Run request id was reused with a different automation, revision or inputs.');
+        return previous;
+      }
+    }
+    const automation = context?.revision !== undefined ? getBrowserAutomationVersion(automationId, context.revision) : getBrowserAutomation(automationId);
     if (!automation) throw new Error('Browser automation not found.');
     if (automation.status !== 'enabled') throw new Error('Browser automation is disabled.');
     const contextualInputs = mergeBrowserAutomationTriggerInputs(automation.definition, inputs, context);
     const resolvedInputs = resolveBrowserAutomationInputs(automation.definition, contextualInputs);
-    const run: BrowserAutomationRun = { id: randomUUID(), automationId, automationRevision: automation.revision, definition: automation.definition, status: 'queued', inputs: resolvedInputs, createdAtMs: Date.now() };
+    const run: BrowserAutomationRun = { clientRequestId: requestId, id: randomUUID(), automationId, automationRevision: automation.revision, definition: automation.definition, status: 'queued', inputs: resolvedInputs, createdAtMs: Date.now() };
     saveBrowserAutomationRun(run);
     this.addEvent(run.id, 'run.queued', { automationId });
     const execution = this.execute(run);
@@ -88,6 +106,8 @@ export class BrowserAutomationService {
     context?: BrowserAutomationExecutionContext,
   ): Promise<BrowserAutomationRun> {
     const run = this.startRun(automationId, inputs, context);
+    const terminal = this.getRun(run.id);
+    if (terminal && !['queued', 'running'].includes(terminal.status)) return terminal;
     return new Promise((resolve) => {
       const complete = (value: BrowserAutomationRun) => { signal?.removeEventListener('abort', onAbort); resolve(value); };
       const onAbort = () => this.cancel(run.id);
@@ -113,14 +133,15 @@ export class BrowserAutomationService {
     saveBrowserAutomationRun(current);
     this.addEvent(run.id, 'run.started');
     try {
-      const outcome = await this.executor({ definition: run.definition, inputs: run.inputs, signal: controller.signal, onStep: (event) => this.addEvent(run.id, 'step', event) });
+      const outcome = await this.executor({ runId: run.id, definition: run.definition, inputs: run.inputs, signal: controller.signal, onStep: (event) => this.addEvent(run.id, 'step', event) });
       const endedAtMs = Date.now();
-      current = { ...current, status: controller.signal.aborted ? 'cancelled' : outcome.ok ? 'succeeded' : 'failed', result: outcome.result, error: outcome.error, endedAtMs, durationMs: endedAtMs - startedAtMs };
+      current = { ...current, status: controller.signal.aborted ? 'cancelled' : outcome.ok ? 'succeeded' : 'failed', result: outcome.result, error: outcome.error, businessOutcome: outcome.businessOutcome ?? (!outcome.ok && run.definition.steps.some((step) => ['click', 'press', 'fill', 'select', 'check'].includes(step.action)) ? 'unknown' : 'completed'), endedAtMs, durationMs: endedAtMs - startedAtMs };
     } catch (error) {
       const endedAtMs = Date.now();
-      current = { ...current, status: controller.signal.aborted ? 'cancelled' : 'failed', error: error instanceof Error ? error.message : String(error), endedAtMs, durationMs: endedAtMs - startedAtMs };
+      current = { ...current, status: controller.signal.aborted ? 'cancelled' : 'failed', businessOutcome: 'unknown', error: error instanceof Error ? error.message : String(error), endedAtMs, durationMs: endedAtMs - startedAtMs };
     }
     saveBrowserAutomationRun(current);
+    verifyBrowserAutomationRun(current);
     this.addEvent(run.id, 'run.completed', { status: current.status, error: current.error });
     this.activeRuns.delete(run.id);
     for (const waiter of this.waiters.get(run.id) ?? []) waiter(current);
@@ -129,6 +150,8 @@ export class BrowserAutomationService {
 }
 
 export interface BrowserAutomationExecutionContext {
+  revision?: number;
+  clientRequestId?: string;
   triggerEvent?: {
     type: string;
     source?: string;
@@ -155,4 +178,9 @@ export function mergeBrowserAutomationTriggerInputs(
     if (merged[name] === undefined && candidates[name] !== undefined) merged[name] = candidates[name];
   }
   return merged;
+}
+
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
+    ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
 }

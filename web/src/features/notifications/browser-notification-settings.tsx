@@ -62,6 +62,7 @@ export function BrowserNotificationSettings() {
             ['enabled', copy.enabled, copy.enabledDesc],
             ['completed', copy.completed, copy.completedDesc],
             ['failed', copy.failedRuns, copy.failedRunsDesc],
+            ['needsInput', copy.needsInput, copy.needsInputDesc],
           ] as const).map(([key, label, description]) => (
             <label key={key} className="flex items-center justify-between gap-3 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
               <span>

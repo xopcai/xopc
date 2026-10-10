@@ -15,7 +15,8 @@ export type ProductNotificationPresentation = {
   body: string;
   route: string;
   target: NotificationTarget;
-  status: 'success' | 'error';
+  waitId?: string;
+  status: 'success' | 'error' | 'attention';
   source: 'chat' | 'task' | 'automation' | 'scene' | 'understanding' | 'home';
 };
 
@@ -49,7 +50,8 @@ export function presentProductNotification(
     body: localized.localizedBody ?? localized.localizedTitle,
     route: notificationTargetRoute(notification.target, 'web'),
     target: notification.target,
-    status: failed ? 'error' : 'success',
+    ...(notification.type === 'chat.needs_input' && typeof notification.payload.waitId === 'string' ? { waitId: notification.payload.waitId } : {}),
+    status: notification.type === 'chat.needs_input' || notification.type === 'task.needs_input' ? 'attention' : failed ? 'error' : 'success',
     source,
   };
 }

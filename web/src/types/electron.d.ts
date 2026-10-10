@@ -558,6 +558,7 @@ export interface ElectronSystemSettingsAPI {
     title: string;
     body: string;
     target: import('@xopcai/gateway-contract').NotificationTarget;
+    allowWhenFocused?: boolean;
   }): Promise<
     { ok: true; outcome: 'shown' | 'suppressed-focused' }
     | { ok: false; error: string }

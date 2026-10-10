@@ -9,6 +9,7 @@ import type { AutomationRun } from '../automations/domain/types.js';
 import { markdownNotificationPreview } from './plain-text.js';
 
 export type NotificationPlan = {
+  createdAt?: number;
   dedupeKey: string;
   notification: Omit<ProductNotification, 'schemaVersion' | 'id' | 'createdAt'>;
 };

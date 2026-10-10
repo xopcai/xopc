@@ -1,3 +1,4 @@
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { Hono } from 'hono';
 
 import type { BrowserAutomationRun } from '../../../browser/automations/index.js';
@@ -7,6 +8,8 @@ function presentRun(run: BrowserAutomationRun) {
   return {
     id: run.id,
     automationId: run.automationId,
+    automationRevision: run.automationRevision,
+    businessOutcome: run.businessOutcome,
     status: run.status,
     inputs: run.inputs,
     result: run.result,
@@ -27,12 +30,17 @@ function parseStatus(value: unknown): 'enabled' | 'disabled' | undefined {
 export function registerBrowserAutomationRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const service = deps.service.browserAutomations;
   authenticated.get('/api/browser/automations', (c) => c.json({ automations: service.list() }));
+  authenticated.post('/api/browser/automations/validate', async (c) => {
+    const parsed = service.validate((await c.req.json()).definition);
+    return c.json({ valid: parsed.success, issues: parsed.success ? [] : parsed.error.issues });
+  });
+  authenticated.get('/api/browser/automations/:id/versions', (c) => c.json({ versions: service.versions(c.req.param('id')) }));
   authenticated.post('/api/browser/automations', deps.strictRateLimitMiddleware, async (c) => {
     try {
       const body = await c.req.json();
       return c.json({ automation: service.save({ definition: body.definition, status: parseStatus(body.status) }) }, 201);
     } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, /revision changed|reused/.test(String(error)) ? 409 : 400);
     }
   });
   authenticated.get('/api/browser/automations/:id', (c) => {
@@ -44,23 +52,23 @@ export function registerBrowserAutomationRoutes(authenticated: Hono, deps: Authe
       const current = service.get(c.req.param('id'));
       if (!current) return c.json({ error: 'Browser automation not found.' }, 404);
       const body = await c.req.json();
-      return c.json({ automation: service.save({ definition: body.definition ?? current.definition, status: parseStatus(body.status) ?? current.status, expectedId: current.id }) });
+      return c.json({ automation: service.save({ definition: body.definition ?? current.definition, status: parseStatus(body.status) ?? current.status, expectedId: current.id, expectedRevision: body.expectedRevision }) });
     } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, /revision changed|reused/.test(String(error)) ? 409 : 400);
     }
   });
   authenticated.delete('/api/browser/automations/:id', deps.strictRateLimitMiddleware, (c) => {
     try { return c.json({ removed: service.remove(c.req.param('id')) }); }
     catch (error) { return c.json({ error: error instanceof Error ? error.message : String(error) }, 409); }
   });
-  authenticated.post('/api/browser/automations/:id/run', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/browser/automations/:id/:operation{run|test}', deps.strictRateLimitMiddleware, async (c) => {
     try {
       const body = await c.req.json().catch(() => ({}));
       const inputs = body.inputs ?? {};
       if (!inputs || typeof inputs !== 'object' || Array.isArray(inputs)) return c.json({ error: 'inputs must be an object.' }, 400);
-      return c.json({ run: presentRun(service.startRun(c.req.param('id'), inputs)) }, 202);
+      return c.json({ run: presentRun(service.startRun(c.req.param('id'), inputs, { revision: body.revision, clientRequestId: typeof body.clientRequestId === 'string' ? `${getGatewayPrincipal(c).kind === 'device' ? getGatewayPrincipal(c).deviceId : 'owner'}:${body.clientRequestId}` : undefined })) }, 202);
     } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, /revision changed|reused/.test(String(error)) ? 409 : 400);
     }
   });
   authenticated.get('/api/browser/automation-runs', (c) => c.json({ runs: service.listRuns(c.req.query('automationId')).map(presentRun) }));

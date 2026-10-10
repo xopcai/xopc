@@ -71,3 +71,16 @@ export async function acknowledgeProductNotification(id: string): Promise<void> 
     }),
   }).catch(() => null);
 }
+
+export async function isNotificationActionable(event: ProductNotification): Promise<boolean> {
+  if (event.type !== 'chat.needs_input') return true;
+  if (event.target.kind !== 'chat' || typeof event.payload.waitId !== 'string') return false;
+  const response = await apiFetch(`/api/sessions/${encodeURIComponent(event.target.conversationId)}/clarification`);
+  if (response.status === 404) return false;
+  if (!response.ok) throw new Error('Could not refresh clarification notification');
+  const body = await response.json() as { payload: { transcriptId?: string; clarification?: { id?: string; status?: string; expiresAt?: number } } };
+  const snapshot = body.payload;
+  return snapshot.transcriptId === event.payload.transcriptId && snapshot.clarification?.id === event.payload.waitId
+    && snapshot.clarification.status === 'open'
+    && (snapshot.clarification.expiresAt === undefined || snapshot.clarification.expiresAt > Date.now());
+}

@@ -46,6 +46,16 @@ describe('HarmonyOS V3 push adapter', () => {
     expect(body).toMatchObject({ target: { token: [message.pushToken] }, payload: { notification: { category: 'WORK', foregroundShow: false } }, pushOptions: { testMessage: true, ttl: 86400 } });
     expect(body.payload.notification.notifyId).toBe(JSON.parse(fetchMock.mock.calls[1]![1]?.body as string).payload.notification.notifyId);
   });
+  it('limits provider retention to the remaining approval lifetime', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ code: '80000000', requestId: 'request-1' })));
+    const expiresAt = Date.now() + 45_000;
+    await sendHarmonyPush({ ...message, expiresAt }, fetchMock, config());
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string);
+    expect(body.pushOptions.ttl).toBeGreaterThan(0);
+    expect(body.pushOptions.ttl).toBeLessThanOrEqual(45);
+    await expect(sendHarmonyPush({ ...message, expiresAt: Date.now() - 1 }, fetchMock, config())).rejects.toThrow('expired');
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
   it('does not mistake partial acceptance for success or leak response tokens in errors', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ code: '80100000', msg: message.pushToken })));
     await expect(sendHarmonyPush(message, fetchMock, config())).rejects.toThrow('Harmony push rejected (80100000)');

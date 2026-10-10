@@ -3,7 +3,7 @@ import {
   markNotificationDelivered,
   wasNotificationDelivered,
 } from '@/features/notifications/notification-delivery-history';
-import { decideNotification, isPersonalNotificationViewed } from '@/features/notifications/notification-policy';
+import { decideNotification, isPersonalNotificationViewed, isClarificationNotificationViewed } from '@/features/notifications/notification-policy';
 import { isElectron } from '@/lib/electron-env';
 
 export async function deliverElectronNotification(notification: ProductNotificationPresentation): Promise<boolean> {
@@ -19,7 +19,7 @@ export async function deliverElectronNotification(notification: ProductNotificat
       failed: true,
     },
     permissionGranted: true,
-    appFocused: isPersonalNotificationViewed(notification),
+    appFocused: notification.waitId ? isClarificationNotificationViewed(notification) : isPersonalNotificationViewed(notification),
     alreadyDelivered: wasNotificationDelivered(notification.id),
   });
   if (!decision.notify) return false;
@@ -28,6 +28,7 @@ export async function deliverElectronNotification(notification: ProductNotificat
     title: notification.title,
     body: notification.body,
     target: notification.target,
+    ...(notification.waitId && !isClarificationNotificationViewed(notification) ? { allowWhenFocused: true } : {}),
   }).catch(() => null);
   if (result?.ok && result.outcome === 'shown') {
     markNotificationDelivered(notification.id);
