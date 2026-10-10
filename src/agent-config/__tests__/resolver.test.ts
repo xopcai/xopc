@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AgentDefaults, AgentEntry } from '../schema.js';
+import { RuntimePolicySchema, type AgentDefaults, type AgentEntry } from '../schema.js';
 import { resolveEffectiveAgentConfig } from '../resolver.js';
 
 const defaults: AgentDefaults = {
@@ -25,6 +25,16 @@ function agent(patch: Partial<AgentEntry> = {}): AgentEntry {
 }
 
 describe('resolveEffectiveAgentConfig', () => {
+  it('inherits Codemode limits and lets an agent turn the pilot off atomically', () => {
+    const runtime = RuntimePolicySchema.parse({ codemode: { enabled: true, maxCalls: 8 } });
+    const global = { ...defaults, runtime };
+    expect(resolveEffectiveAgentConfig({ defaults: global, agent: agent() }).config.runtime.codemode)
+      .toMatchObject({ enabled: true, maxCalls: 8 });
+    const off = RuntimePolicySchema.parse({ codemode: { enabled: false } });
+    const effective = resolveEffectiveAgentConfig({ defaults: global, agent: agent({ runtime: off }) });
+    expect(effective.config.runtime.codemode?.enabled).toBe(false);
+    expect(effective.sources['runtime.codemode.enabled']).toBe('agent');
+  });
   it('lets an agent fix its thinking level without changing global runtime defaults', () => {
     const result = resolveEffectiveAgentConfig({ defaults, agent: agent({ runtime: { thinkingLevel: 'off' } }) });
     expect(result.config.runtime).toMatchObject({ thinkingLevel: 'off', timeoutMs: 60_000, maxTurns: 20 });

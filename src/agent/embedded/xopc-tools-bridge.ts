@@ -1,6 +1,7 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { withDataToolPermissions } from '../tools/dataBatch.js';
+import { getXopcToolMetadata } from './tool-metadata.js';
 
 const APPLY_PATCH_BEGIN_MARKER = '*** Begin Patch';
 const APPLY_PATCH_END_MARKER = '*** End Patch';
@@ -127,6 +128,7 @@ export function xopcToolsToDefinitions(tools: AgentTool[]): ToolDefinition[] {
   return tools.map((tool) => {
     const promptHints = TOOL_PROMPT_HINTS[tool.name];
     const def = {
+      ...getXopcToolMetadata(tool),
       name: tool.name,
       label: tool.label ?? tool.name,
       description: tool.description ?? tool.name,

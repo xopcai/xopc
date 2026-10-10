@@ -22,9 +22,10 @@ export type EmbeddedStreamEvent =
       assistantMessageEvent?: AssistantMessageEvent;
     }
   | { type: 'message_end'; runId?: string; message: AgentMessage }
-  | { type: 'tool_execution_start'; runId?: string; toolCallId: string; toolName: string; args: unknown }
+  | { type: 'tool_execution_start'; runId?: string; toolCallId: string; parentToolCallId?: string; toolName: string; args: unknown }
   | {
       type: 'tool_execution_update';
+      parentToolCallId?: string;
       runId?: string;
       toolCallId: string;
       toolName: string;
@@ -33,6 +34,7 @@ export type EmbeddedStreamEvent =
     }
   | {
       type: 'tool_execution_end';
+      parentToolCallId?: string;
       runId?: string;
       toolCallId: string;
       toolName: string;
@@ -63,6 +65,8 @@ export type RunXopcEmbeddedTurnParams = {
   thinkingLevel?: ThinkingLevel;
   compactionPolicy?: import('../memory/compaction-policy.js').ResolvedCompactionPolicy;
   promptCachePolicy?: import('../../providers/prompt-cache-plan.js').PromptCachePolicy;
+  codemode?: import('./codemode-extension.js').CodemodePolicy;
+  toolDiscovery?: import('./session-runner.js').ToolDiscoveryPolicy;
   workspaceDir: string;
   sessionStore?: SessionStore;
   transcriptRuntime?: EmbeddedTranscriptRuntime;

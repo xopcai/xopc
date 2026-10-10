@@ -8,6 +8,13 @@ function mapper() {
 }
 
 describe('ChatStreamMapper', () => {
+  it('keeps nested call identity and authoritative duration through realtime mapping', () => {
+    const m = mapper();
+    const start = m.map({ type: 'tool_execution_start', toolCallId: 'script/1', parentToolCallId: 'script', toolName: 'read_file', args: {} });
+    expect(start[0]).toMatchObject({ type: 'tool_start', payload: { parentToolCallId: 'script' } });
+    const end = m.map({ type: 'tool_execution_end', toolCallId: 'script/1', parentToolCallId: 'script', toolName: 'read_file', durationMs: 13, isError: false, result: { content: [], details: {} } });
+    expect(end[0]).toMatchObject({ type: 'tool_end', payload: { parentToolCallId: 'script', durationMs: 13, status: 'success' } });
+  });
   it('includes safe task provenance on an unsolicited run start', () => {
     const taskTrigger = { entryId: 'entry', taskId: 'task', taskTitle: 'Check prices', kind: 'result' as const };
     const m = new ChatStreamMapper({ runId: 'task-run', conversationId: 'sk', channel: 'webchat',

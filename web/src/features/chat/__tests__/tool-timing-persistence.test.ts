@@ -16,6 +16,25 @@ function firstTool(content: MessageContent[]): ToolUseContent {
 }
 
 describe('tool activity timing', () => {
+  it('keeps nested identity and uses execution duration instead of realtime transit time', () => {
+    const content: MessageContent[] = [];
+    appendToolStart(content, 'read_file', {}, 'script/1', 1000, undefined, { parentToolCallId: 'script' });
+    completeTool(content, 'read_file', false, 'ok', 'script/1', 4000, undefined, { parentToolCallId: 'script', durationMs: 13 });
+    expect(firstTool(content)).toMatchObject({ parentToolCallId: 'script', durationMs: 13 });
+  });
+
+  it('reconstructs child audit rows without inventing model toolResult messages', () => {
+    const messages = sessionWireToUiMessages([
+      { role: 'assistant', timestamp: 1000, rawContent: [{ type: 'tool_use', id: 'script', name: 'codemode', input: { code: '' } }] },
+      { role: 'toolResult', toolCallId: 'script', timestamp: 2000, durationMs: 900, content: 'done',
+        nestedCalls: { calls: [{ id: 'script/1', name: 'read_file', status: 'ok', durationMs: 13, arguments: { path: 'note.txt' } }], complete: true } },
+    ]);
+    expect(messages).toHaveLength(1);
+    expect(messages[0].content).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'codemode', durationMs: 900 }),
+      expect.objectContaining({ parentToolCallId: 'script', name: 'read_file', status: 'done', durationMs: 13 }),
+    ]));
+  });
   it('keeps run lifecycle timestamps on the live tool block', () => {
     const content: MessageContent[] = [];
     appendToolStart(content, 'web_search', { query: 'xopc' }, 'call-1', 1_000);

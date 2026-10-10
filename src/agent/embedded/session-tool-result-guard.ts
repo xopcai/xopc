@@ -53,6 +53,7 @@ export type BeforeMessageWriteHookResult =
   | undefined;
 
 export interface ToolResultGuardOptions {
+  persistCustomTypes?: readonly string[];
   /** Optional session key for transcript update broadcasts. */
   conversationId?: string;
   /** Optional transform applied to any message before persistence. */
@@ -135,6 +136,7 @@ export function guardSessionManager(
     missingToolResultText?: string;
     allowedToolNames?: Iterable<string>;
     transformMessageForPersistence?: (message: AgentMessage) => AgentMessage;
+    persistCustomTypes?: readonly string[];
   },
 ): GuardedPiTranscriptManager {
   if (typeof (sessionManager as GuardedPiTranscriptManager).flushPendingToolResults === 'function') {
@@ -143,6 +145,7 @@ export function guardSessionManager(
 
   const result = installSessionToolResultGuard(sessionManager, {
     conversationId: opts?.conversationId,
+    persistCustomTypes: opts?.persistCustomTypes,
     transformMessageForPersistence: opts?.transformMessageForPersistence,
     allowSyntheticToolResults: opts?.allowSyntheticToolResults,
     missingToolResultText: opts?.missingToolResultText,
@@ -509,6 +512,17 @@ class ToolResultGuard {
   attach(): void {
     const bound = this.guardedAppend.bind(this);
     this.sessionManager.appendMessage = bound as SessionManager['appendMessage'];
+    if (this.opts.conversationId && this.opts.persistCustomTypes?.length) {
+      const appendCustom = this.sessionManager.appendCustomEntry.bind(this.sessionManager);
+      this.sessionManager.appendCustomEntry = (customType, data) => {
+        const id = appendCustom(customType, data);
+        if (this.opts.persistCustomTypes?.includes(customType)) {
+          emitSessionTranscriptUpdate({ conversationId: this.opts.conversationId,
+            customEntry: { customType, data, timestamp: new Date().toISOString() }, messageId: id });
+        }
+        return id;
+      };
+    }
   }
 
   setActiveTurnId(turnId: string | null): void {

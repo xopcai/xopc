@@ -1,4 +1,5 @@
 import { createPersonalAttentionTool } from './personal-attention-tool.js';
+import { markCodemodeCoreRead } from './codemode-permissions.js';
 import type { SceneAccess } from '../../scenes/httpServices.js';
 import { resolveEffectiveAgentConfigForAgent } from '../../config/agent-profile.js';
 /**
@@ -790,7 +791,7 @@ export class AgentToolsFactory {
         allowHostGit: () => getCommandIsolation()?.mode !== 'docker',
       }));
     }
-    return filterToolsByDisabledSet(core, disabled)
+    return filterToolsByDisabledSet(core.map(markCodemodeCoreRead), disabled)
       .filter(tool => (!allowed || allowed.has(tool.name)) && !(personalToolsConfigured && tool.name === 'clarify'))
       .map(tool => personalToolsConfigured && PERSONAL_TOOL_DESCRIPTIONS[tool.name]
         ? { ...tool, description: PERSONAL_TOOL_DESCRIPTIONS[tool.name] } : tool);

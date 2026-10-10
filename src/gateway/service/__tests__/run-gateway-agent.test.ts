@@ -324,7 +324,7 @@ describe('runGatewayAgent', () => {
     expect(completedTopics).toEqual(['run:run-setup-failure']);
   });
 
-  it.each(['throws', 'consumer_stops'])('reports cancellation and clears session ownership when %s', async (mode) => {
+  it.each(['throws', 'consumer_stops', 'embedded_abort'])('reports cancellation and clears session ownership when %s', async (mode) => {
     const conversationId = "1f0d2f37-a857-4724-82d9-3eee13a09dff";
     const controller = new AbortController();
     const emitted: Array<{ type: string; payload: unknown }> = [];
@@ -339,6 +339,12 @@ describe('runGatewayAgent', () => {
         turnDispatcher: { processDirectStreaming: async function* () {
           const message = { role: 'assistant', content: [] };
           yield { type: 'message_start', message };
+          if (mode === 'embedded_abort') {
+            yield { type: 'turn_outcome', outcome: { version: 1, outcomeId: 'internal-abort',
+              runId: 'internal-abort', turnId: 'internal-abort', status: 'partial', summary: 'aborted',
+              deliverables: [], evidence: [], createdAt: new Date().toISOString() } };
+            return;
+          }
           if (mode === 'throws') { controller.abort(); throw new DOMException('Interrupted', 'AbortError'); }
           yield { type: 'message_update', message, assistantMessageEvent: { type: 'text_delta', delta: 'Hello' } };
           if (!controller.signal.aborted) await new Promise<void>((resolve) => controller.signal.addEventListener('abort', () => resolve(), { once: true }));

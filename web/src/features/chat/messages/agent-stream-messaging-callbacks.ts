@@ -184,17 +184,17 @@ export function createAgentStreamMessagingCallbacks(opts: {
         finalizeStreamingThinking(msg.content);
       });
     },
-    onToolStart: (toolName, args, toolCallId, startedAt, activity) => {
+    onToolStart: (toolName, args, toolCallId, startedAt, activity, metadata) => {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
-        appendToolStart(msg.content, toolName, args, toolCallId, startedAt, activity);
+        appendToolStart(msg.content, toolName, args, toolCallId, startedAt, activity, metadata);
       });
       store().setSessionFlags(chatId, { streaming: true });
     },
-    onToolEnd: (toolName, isErr, result, toolCallId, completedAt, activity) => {
+    onToolEnd: (toolName, isErr, result, toolCallId, completedAt, activity, metadata) => {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
-        completeTool(msg.content, toolName, isErr, result, toolCallId, completedAt, activity);
+        completeTool(msg.content, toolName, isErr, result, toolCallId, completedAt, activity, metadata);
       });
     },
     onToolUpdate: (toolName, toolCallId, details) => {

@@ -77,4 +77,25 @@ describe('openSqliteHydratingSessionManager', () => {
     expect(sm.buildSessionContext().messages).toEqual(loadLlmMessagesForSession(CONVERSATION_ID));
   });
 
+  it('keeps Codemode state on the branch across a compaction boundary without adding it to LLM messages', () => {
+    const created = ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: 'main' });
+    appendTranscriptEntry(CONVERSATION_ID, { type: 'custom', customType: 'codemode-store', data: { set: { note: 'durable' }, delete: [] } });
+    appendTranscriptEntry(CONVERSATION_ID, { type: 'custom', customType: 'xopc-tool-discovery', data: { loaded: [{ name: 'mcp__docs__search', contract: 'approved-current-contract' }] } });
+    appendTranscriptEntry(CONVERSATION_ID, {
+      type: 'compaction', at: new Date().toISOString(), baseSeq: 1, plannerVersion: 3,
+      summaryModelRef: 'test/model', qualityAudit: 'disabled',
+      handover: { version: 1, sourceThroughSeq: 1, items: [] },
+      audit: { status: 'disabled', mode: 'structural', missingItemsFound: 0, repaired: false },
+      summary: 'compacted context', messages: [{ role: 'user', content: 'kept request', timestamp: 1 }],
+      firstKeptIndex: 0, tokensBefore: 100, tokensAfter: 10,
+    });
+    const sm = openSqliteHydratingSessionManager({ conversationId: CONVERSATION_ID, transcriptId: created.transcriptId!, cwd: CWD });
+    expect(sm.getBranch()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'custom', customType: 'codemode-store', data: { set: { note: 'durable' }, delete: [] } }),
+      expect.objectContaining({ type: 'custom', customType: 'xopc-tool-discovery', data: { loaded: [{ name: 'mcp__docs__search', contract: 'approved-current-contract' }] } }),
+    ]));
+    expect(JSON.stringify(sm.buildSessionContext().messages)).not.toContain('durable');
+    expect(JSON.stringify(loadLlmMessagesForSession(CONVERSATION_ID))).not.toContain('codemode-store');
+  });
+
 });

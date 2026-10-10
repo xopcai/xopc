@@ -43,6 +43,8 @@ function descriptorRevision(descriptor: Omit<VersionedExternalToolDescriptor, 'r
       toolRef: descriptor.toolRef,
       description: descriptor.description,
       inputSchema: descriptor.inputSchema,
+      outputSchema: descriptor.outputSchema,
+      annotations: descriptor.annotations,
       batchRead: descriptor.batchRead === true,
     }))
     .digest('hex')

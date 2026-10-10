@@ -1,4 +1,4 @@
-import type { ToolActivity, TurnOutcome } from '@xopcai/gateway-contract';
+import type { AgentStreamToolExecutionMetadata, ToolActivity, TurnOutcome } from '@xopcai/gateway-contract';
 import type { TaskUpdateTrigger } from '../../storage/sqlite/session-input-repository.js';
 
 export type ChatStreamStatus = 'success' | 'error' | 'cancelled' | 'suspended';
@@ -42,11 +42,11 @@ export type ThinkingDeltaEvent = ChatStreamEnvelope<'thinking_delta', { messageI
 export type ThinkingEndEvent = ChatStreamEnvelope<'thinking_end', { messageId: string }>;
 export type ToolStartEvent = ChatStreamEnvelope<
   'tool_start',
-  { messageId: string; toolCallId: string; toolName: string; args?: unknown; activity: ToolActivity }
+  { messageId: string; toolCallId: string; toolName: string; args?: unknown; activity: ToolActivity } & AgentStreamToolExecutionMetadata
 >;
 export type ToolUpdateEvent = ChatStreamEnvelope<
   'tool_update',
-  { messageId: string; toolCallId: string; toolName: string; details?: unknown; textDelta?: string }
+  { messageId: string; toolCallId: string; toolName: string; details?: unknown; textDelta?: string } & AgentStreamToolExecutionMetadata
 >;
 export type ToolEndEvent = ChatStreamEnvelope<
   'tool_end',
@@ -59,7 +59,7 @@ export type ToolEndEvent = ChatStreamEnvelope<
     result?: { content?: unknown[]; details?: unknown; text?: string };
     deliveries?: import('@xopcai/gateway-contract').ProductDeliveryEnvelope[];
     errorMessage?: string;
-  }
+  } & AgentStreamToolExecutionMetadata
 >;
 export type CommandStartedEvent = ChatStreamEnvelope<
   'command_started',

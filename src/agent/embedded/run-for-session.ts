@@ -25,6 +25,7 @@ import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
 import { AgentRunSupervisor } from '../orchestration/agent-run-supervisor.js';
 import { projectTurnOutcome } from '../../session/turn-outcome-projector.js';
 import { appendDynamicPromptSection } from '../prompt/cache-boundary.js';
+import { materializeDeferredMcpTools } from './mcp-discovery.js';
 
 const log = createLogger('EmbeddedTurnForSession');
 
@@ -163,7 +164,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       await mm.applyModelForSession(agent, conversationId);
     }
     agentManager.setModelForSession(conversationId, modelRef);
-    const tools = agent.state.tools;
+    const tools = [...agent.state.tools];
     const turnPolicy = agentManager.createAgentTurnPolicy(conversationId);
     const baseSystemPrompt = [agent.state.systemPrompt ?? '', params.presentation === 'voice' ? voicePresentationPrompt : '']
       .filter(Boolean).join('\n\n');
@@ -195,6 +196,11 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     }
     const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
     const workspaceDir = agentManager.getResolvedWorkspaceForSession(conversationId);
+    const toolDiscovery = config ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.toolDiscovery : undefined;
+    if (toolDiscovery?.enabled && toolDiscovery.mcpServer) {
+      tools.push(...await materializeDeferredMcpTools({ conversationId, workspaceDir, config,
+        server: toolDiscovery.mcpServer, tools }));
+    }
     const promptCachePolicy = resolvePromptCachePolicy(
       config
         ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.promptCache
@@ -301,6 +307,8 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
             tools,
             systemPrompt,
             thinkingLevel,
+            codemode: config ? resolveEffectiveAgentProfileForSession(conversationId).config.runtime.codemode : undefined,
+            toolDiscovery,
             promptCachePolicy,
             compactionPolicy: resolveCompactionPolicy(config),
             workspaceDir,

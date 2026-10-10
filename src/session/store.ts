@@ -649,6 +649,9 @@ export class SessionStore {
       if (update.message && isAppendOnlyLlmTranscriptMessage(update.message)) {
         appendTranscriptEntry(conversationId, update.message as AgentMessage);
       }
+      if (update.customEntry) {
+        appendTranscriptEntry(conversationId, { type: 'custom', ...update.customEntry });
+      }
     });
   }
 
@@ -1374,6 +1377,8 @@ export class SessionStore {
         tool_call_id: (m.tool_call_id as string | undefined) || (m.toolCallId as string | undefined),
         tool_calls: m.tool_calls as Message['tool_calls'],
         name: m.name as string | undefined,
+        ...(m.role === 'toolResult' && m.nestedCalls ? { nestedCalls: m.nestedCalls as Message['nestedCalls'] } : {}),
+        ...(m.role === 'toolResult' && typeof m.durationMs === 'number' ? { durationMs: m.durationMs } : {}),
       };
       if (Array.isArray(m.media) && m.media.length > 0) {
         row.media = m.media as Message['media'];

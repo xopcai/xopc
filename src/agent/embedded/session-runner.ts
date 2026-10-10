@@ -22,6 +22,14 @@ import {
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
 import { applySystemPromptOverrideToSession } from './system-prompt-override.js';
+import { createXopcCodemodeExtension, type CodemodePolicy } from './codemode-extension.js';
+import { isCodemodeCoreRead } from '../tools/codemode-permissions.js';
+import { deferredToolContract, getXopcToolMetadata } from './tool-metadata.js';
+import { createXopcToolSearchExtension, TOOL_DISCOVERY_STATE } from './tool-search-extension.js';
+
+export type ToolDiscoveryPolicy = { enabled: boolean; mcpServer?: string };
+const toolContract = (tool: AgentTool) => JSON.stringify([tool.name, tool.parameters, tool.description,
+  isCodemodeCoreRead(tool), getXopcToolMetadata(tool)]);
 
 const log = createLogger('EmbeddedSessionRunner');
 
@@ -36,6 +44,8 @@ export type EmbeddedRunnerFingerprintInput = {
   systemPrompt: string;
   thinkingLevel: string;
   credentialRevision: string;
+  codemode?: CodemodePolicy;
+  toolDiscovery?: ToolDiscoveryPolicy;
 };
 
 function providerCredentialRevision(providerId: string): string {
@@ -54,6 +64,8 @@ export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintI
     input.systemPrompt,
     input.thinkingLevel,
     input.credentialRevision,
+    JSON.stringify(input.codemode ?? null),
+    JSON.stringify(input.toolDiscovery ?? null),
   ].join('\0')).digest('base64url');
 }
 
@@ -78,6 +90,8 @@ export type AcquireEmbeddedSessionRunnerParams = {
   systemPrompt: string;
   thinkingLevel: ThinkingLevel;
   transcriptRuntime: EmbeddedTranscriptRuntime;
+  codemode?: CodemodePolicy;
+  toolDiscovery?: ToolDiscoveryPolicy;
 };
 
 export type AcquiredEmbeddedSessionRunner = {
@@ -180,10 +194,12 @@ export class EmbeddedSessionRunnerPool {
       workspaceDir: params.workspaceDir,
       modelRef: params.modelRef,
       toolNames: params.tools.map((t) => t.name),
-      toolContracts: params.tools.map(tool => JSON.stringify([tool.name, tool.parameters])),
+      toolContracts: params.tools.map(toolContract),
       systemPrompt: params.systemPrompt,
       thinkingLevel: params.thinkingLevel ?? 'medium',
       credentialRevision: providerCredentialRevision(params.model.provider),
+      codemode: params.codemode,
+      toolDiscovery: params.toolDiscovery,
     });
 
     const reuseEnabled = this.isEnabledFn();
@@ -249,11 +265,12 @@ export class EmbeddedSessionRunnerPool {
     this.clearIdleTimer(entry);
     this.pool.delete(runtimeId);
     this.stats.evictions += 1;
-    try {
-      entry.piSm.flushPendingToolResults?.();
-    } catch {
-      /* ignore */
-    }
+    void Promise.resolve(entry.session.abort?.()).catch(err => {
+      log.warn({ err, runtimeId }, 'Embedded runner abort failed');
+    }).finally(() => {
+      try { entry.piSm.flushPendingToolResults?.(); }
+      finally { entry.session.dispose?.(); }
+    }).catch(err => log.warn({ err, runtimeId }, 'Embedded runner disposal failed'));
     log.debug({ runtimeId, reason }, 'Embedded session runner evicted');
   }
 
@@ -266,6 +283,7 @@ export class EmbeddedSessionRunnerPool {
       params.transcriptRuntime.openSessionManager(workspaceDir),
       {
         conversationId: params.transcriptRuntime.persistent ? runtimeId : undefined,
+        persistCustomTypes: ['codemode-store', TOOL_DISCOVERY_STATE],
         contextWindowTokens: model.contextWindow ?? 128_000,
         transformMessageForPersistence: params.transcriptRuntime.persistent
           ? (message) => transformUserMessageForPersistence(runtimeId, message)
@@ -274,7 +292,17 @@ export class EmbeddedSessionRunnerPool {
     );
 
     const toolDefs = xopcToolsToDefinitions(tools);
-    const toolNames = tools.map((t) => t.name);
+    const toolNames = tools.filter(tool => getXopcToolMetadata(tool)?.exposure !== 'deferred').map(tool => tool.name);
+    const discoveryState = piSm.getBranch().findLast(entry => entry.type === 'custom' && entry.customType === TOOL_DISCOVERY_STATE);
+    const saved = discoveryState?.type === 'custom' ? discoveryState.data as { loaded?: { name: string; contract: string }[] } : undefined;
+    const restored = new Map((saved?.loaded ?? []).map(tool => [tool.name, tool.contract]));
+    toolNames.push(...tools.filter(tool => getXopcToolMetadata(tool)?.exposure === 'deferred'
+      && restored.get(tool.name) === deferredToolContract(tool)).map(tool => tool.name));
+    let boundSession: AgentSession | undefined;
+    const codemode = params.codemode?.enabled ? params.codemode : undefined;
+    if (codemode) toolNames.push('codemode');
+    const discovery = params.toolDiscovery?.enabled;
+    if (discovery) toolNames.push('tool_search');
 
     const modelRuntime = await createEmbeddedModelRuntime(model.provider);
 
@@ -283,6 +311,11 @@ export class EmbeddedSessionRunnerPool {
       agentDir: getAgentDir(),
       settingsManager,
       noContextFiles: true,
+      noExtensions: true,
+      extensionFactories: [
+        ...(codemode ? [createXopcCodemodeExtension(codemode, tools, () => boundSession)] : []),
+        ...(discovery ? [createXopcToolSearchExtension(tools)] : []),
+      ],
     });
     await resourceLoader.reload();
 
@@ -296,8 +329,13 @@ export class EmbeddedSessionRunnerPool {
       resourceLoader,
       noTools: 'builtin',
       customTools: toolDefs,
-      tools: toolNames,
+      // The SDK's tools option also filters registration once it contains an MCP name.
+      // Keep the authorization set complete; apply the narrower model loadout separately.
+      tools: [...new Set([...tools.map(tool => tool.name), ...toolNames])],
     });
+    boundSession = session;
+    if (codemode || discovery) await session.bindExtensions({});
+    if (discovery) session.setActiveToolsByName(toolNames);
 
     applySystemPromptOverrideToSession(session, systemPrompt);
     const baseStreamFn = wrapStreamFnForXopcExtensions(session.agent.streamFunction);
@@ -307,11 +345,13 @@ export class EmbeddedSessionRunnerPool {
       transcriptId,
       workspaceDir,
       modelRef: params.modelRef,
-      toolNames,
-      toolContracts: tools.map(tool => JSON.stringify([tool.name, tool.parameters])),
+      toolNames: tools.map(tool => tool.name),
+      toolContracts: tools.map(toolContract),
       systemPrompt,
       thinkingLevel: thinkingLevel ?? 'medium',
       credentialRevision: providerCredentialRevision(model.provider),
+      codemode: params.codemode,
+      toolDiscovery: params.toolDiscovery,
     });
 
     return {

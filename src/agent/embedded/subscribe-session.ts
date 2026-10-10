@@ -15,6 +15,8 @@ export function subscribeEmbeddedSessionEvents(
       return;
     }
     const base = event as AgentEvent;
+    const parent = 'parentToolCallId' in event && event.parentToolCallId
+      ? { parentToolCallId: event.parentToolCallId } : {};
     onAgentEvent?.(base);
     switch (base.type) {
       case 'agent_start':
@@ -45,6 +47,7 @@ export function subscribeEmbeddedSessionEvents(
         const t = base as Extract<AgentEvent, { type: 'tool_execution_start' }>;
         onEvent({
           type: 'tool_execution_start',
+          ...parent,
           toolName: t.toolName,
           toolCallId: t.toolCallId,
           args: t.args,
@@ -55,6 +58,7 @@ export function subscribeEmbeddedSessionEvents(
         const t = base as Extract<AgentEvent, { type: 'tool_execution_end' }>;
         onEvent({
           type: 'tool_execution_end',
+          ...parent,
           toolName: t.toolName,
           toolCallId: t.toolCallId,
           isError: t.isError,
@@ -67,6 +71,7 @@ export function subscribeEmbeddedSessionEvents(
         const t = base as Extract<AgentEvent, { type: 'tool_execution_update' }>;
         onEvent({
           type: 'tool_execution_update',
+          ...parent,
           toolName: t.toolName,
           toolCallId: t.toolCallId,
           args: t.args,
