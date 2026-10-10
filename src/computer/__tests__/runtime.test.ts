@@ -72,13 +72,15 @@ describe('agent to broker desktop lifecycle', () => {
   });
   it('uses managed service ceilings without presenting them as account balances', async () => {
     const f = fixture();
-    vi.mocked(resolveModel).mockReturnValueOnce({ id: 'gui', provider: 'xopc-cloud', api: 'openai-completions', input: ['text', 'image'], maxTokens: 4096,
+    vi.mocked(resolveModel).mockReturnValueOnce({ id: 'computer', provider: 'xopc-cloud', api: 'openai-completions', input: ['text', 'image'], maxTokens: 4096,
       baseUrl: 'https://model.test/v1', computerUse: { profile: 'gui-plus-2026-02-26' } } as any);
-    f.fetch.mockResolvedValueOnce(Response.json({ data: [{ id: 'gui', xopc: { computerDeployment: { revision: 'a'.repeat(64), origin: 'https://dashscope.aliyuncs.com' },
+    f.fetch.mockResolvedValueOnce(Response.json({ data: [{ id: 'computer', xopc: { computerDeployment: { revision: 'a'.repeat(64) },
       computerLimits: { maxOutputTokens: 512, requestsPerDay: 20, requestsPerMinute: 5 } } }] }));
     expect(await f.open(await f.discover())).toMatchObject({ budget: { serviceLimits: { maxOutputTokens: 512, requestsPerDay: 20 } } });
     await f.runtime.execute('owner', { op: 'step', goal: 'Click' });
-    expect(JSON.parse((f.fetch.mock.calls as any)[1][1].body).max_tokens).toBe(512);
+    const request = (f.fetch.mock.calls as any)[1][1];
+    expect(JSON.parse(request.body)).toMatchObject({model:'computer',max_tokens:512});
+    expect(new Headers(request.headers).get('x-xopc-computer-deployment')).toBe('a'.repeat(64));
   });
   it('accepts an explicit absent-session acknowledgement after a desktop restart', async () => {
     const f = fixture(); await f.open(await f.discover());

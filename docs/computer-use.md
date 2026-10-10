@@ -7,10 +7,16 @@ Use the macOS desktop app to ask xopc to read or operate one application window.
 1. Install a signed macOS desktop build that includes Computer Use.
 2. Open **Settings → Integrations → Computer use** (`#/settings/computer-use`). Enable computer control and grant macOS Accessibility and Screen Recording permissions to xopc.
 3. Allow the applications you intend to use. Start with individual applications rather than unrestricted app access.
-4. Choose a compatible GUI model from the connected catalog and save it. For your own key, connect the appropriate provider first; for XOPC Cloud, sign in and refresh the catalog. Ordinary chat selection does not configure this capability.
+4. Choose a compatible GUI model from the connected catalog and save it. For your own key, connect the appropriate provider first; for XOPC Cloud, sign in, refresh the catalog, and select `xopc-cloud/computer` (XOPC Cloud Computer / XOPC 云端电脑操作). Ordinary chat selection does not configure this capability.
 5. In desktop Chat, ask: `Read the current page in Feishu; do not click.` If the app needs to be opened, explicitly ask: `Open Feishu and read the current page.`
 
 Verify that the answer matches the intended application and window before authorizing changes. If several windows or processes match, select the intended one rather than guessing.
+
+## XOPC Cloud service
+
+The hosted `computer` service retains the GUI-Plus Preview capability and its published limits. Upgrading to a client containing the public-service migration converts `xopc-cloud/computer-gui-plus-preview` to `xopc-cloud/computer`. Your own provider model references remain unchanged. `auto` and `advanced` do not replace this dedicated GUI model.
+
+The public catalog supplies the Computer Use profile, service limits, and an opaque deployment revision. The client pins that revision for each computer session. If the deployment changes, refresh the catalog and reopen the session; stale requests are rejected before being sent to the model. Actual supplier model IDs and origins remain internal to the cloud service.
 
 ## Give a clear task
 

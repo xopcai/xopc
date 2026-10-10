@@ -39,6 +39,8 @@ export interface UseChatScrollViewportResult {
   registerListContentRef: (el: HTMLDivElement | null) => void;
   scrollToBottom: (smooth?: boolean) => void;
   onScroll: () => void;
+  replySpaceRef: RefObject<HTMLDivElement | null>;
+  reserveReplySpace: (messageRenderKey: string) => void;
 }
 
 /**
@@ -62,7 +64,14 @@ export function useChatScrollViewport({
   const scrollRef = useRef<HTMLDivElement>(null);
   const listContentRef = useRef<HTMLDivElement | null>(null);
   const followingRef = useRef(true);
+  const replySpaceRef = useRef<HTMLDivElement>(null);
+  const replyAnchorRef = useRef<string | null>(null);
+  const replyAnchorElementRef = useRef<HTMLElement | null>(null);
+  const pendingReplyAnchorRef = useRef<string | null>(null);
+  const replyBudgetRef = useRef(0);
+  const replyRemainingRef = useRef(0);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const resizeFrameRef = useRef<number | null>(null);
   const measuredScrollHeightRef = useRef(0);
   const measuredClientHeightRef = useRef(0);
 
@@ -79,6 +88,38 @@ export function useChatScrollViewport({
 
   const setFollowing = useCallback((next: boolean) => {
     followingRef.current = next;
+  }, []);
+
+  const reserveReplySpace = useCallback((messageRenderKey: string) => {
+    if (!followingRef.current) return;
+    pendingReplyAnchorRef.current = messageRenderKey;
+  }, []);
+
+  const updateReplySpace = useCallback(() => {
+    const el = scrollRef.current;
+    const spacer = replySpaceRef.current;
+    if (!el || !spacer || !followingRef.current) return;
+    if (!pendingReplyAnchorRef.current && replyRemainingRef.current <= 0) return;
+    const key = pendingReplyAnchorRef.current ?? replyAnchorRef.current;
+    if (!key) return;
+    const row = !pendingReplyAnchorRef.current && replyAnchorElementRef.current?.isConnected
+      ? replyAnchorElementRef.current
+      : Array.from(el.querySelectorAll<HTMLElement>('[data-chat-message-row]'))
+        .find((element) => element.dataset.messageRenderKey === key || element.dataset.clientSubmissionId === key);
+    if (!row) return;
+    if (pendingReplyAnchorRef.current) {
+      replyAnchorRef.current = key;
+      replyAnchorElementRef.current = row;
+      pendingReplyAnchorRef.current = null;
+      replyBudgetRef.current = Math.min(64, Math.max(0, el.clientHeight) * 0.1);
+      replyRemainingRef.current = replyBudgetRef.current;
+    }
+    const replyHeight = Math.max(0, spacer.getBoundingClientRect().top - row.getBoundingClientRect().bottom);
+    // Keep the unused space after short answers; completion must not collapse the viewport.
+    const remaining = Math.max(0, Math.min(replyRemainingRef.current,
+      Math.min(replyBudgetRef.current, Math.min(64, Math.max(0, el.clientHeight) * 0.1)) - replyHeight));
+    replyRemainingRef.current = remaining;
+    if (spacer.style.height !== `${remaining}px`) spacer.style.height = `${remaining}px`;
   }, []);
 
   const scrollToEnd = useCallback(
@@ -114,6 +155,7 @@ export function useChatScrollViewport({
   const onResize = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
+    updateReplySpace();
     const grew = el.scrollHeight > measuredScrollHeightRef.current;
     const viewportShrank = el.clientHeight < measuredClientHeightRef.current;
     measuredScrollHeightRef.current = el.scrollHeight;
@@ -123,7 +165,16 @@ export function useChatScrollViewport({
     if (grew || viewportShrank) scrollToEnd();
     // Resizing the composer or keyboard must not re-enable following for history readers.
     setAtBottom(isNearChatBottom(el));
-  }, [scrollToEnd]);
+  }, [scrollToEnd, updateReplySpace]);
+
+  const scheduleResize = useCallback(() => {
+    if (resizeFrameRef.current !== null) return;
+    // Updating an observed column's spacer inside ResizeObserver causes a feedback warning.
+    resizeFrameRef.current = requestAnimationFrame(() => {
+      resizeFrameRef.current = null;
+      onResize();
+    });
+  }, [onResize]);
 
   const registerListContentRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -136,16 +187,20 @@ export function useChatScrollViewport({
       if (!el) return;
 
       // Correct the tail before paint and remeasure after rows grow or collapse.
-      const ro = new ResizeObserver(onResize);
+      const ro = new ResizeObserver(scheduleResize);
       ro.observe(el);
       resizeObserverRef.current = ro;
     },
-    [onResize],
+    [scheduleResize],
   );
 
   useEffect(() => {
     return () => {
       resizeObserverRef.current?.disconnect();
+      if (resizeFrameRef.current !== null) {
+        cancelAnimationFrame(resizeFrameRef.current);
+        resizeFrameRef.current = null;
+      }
     };
   }, []);
 
@@ -156,11 +211,12 @@ export function useChatScrollViewport({
     const near = isNearChatBottom(el);
     setFollowing(near);
     setAtBottom(near);
+    if (near) updateReplySpace();
 
     if (el.scrollTop < 100 && !near && hasMore && !loadingMore) {
       void loadMoreMessages();
     }
-  }, [setFollowing, hasMore, loadingMore, loadMoreMessages]);
+  }, [setFollowing, hasMore, loadingMore, loadMoreMessages, updateReplySpace]);
 
   const scrollToBottom = useCallback(
     (smooth = true) => {
@@ -187,12 +243,23 @@ export function useChatScrollViewport({
     prevMessageCountRef.current = 0;
     measuredScrollHeightRef.current = 0;
     measuredClientHeightRef.current = 0;
+    replyAnchorRef.current = null;
+    replyAnchorElementRef.current = null;
+    replyRemainingRef.current = 0;
+    if (!Array.from(scrollRef.current?.querySelectorAll<HTMLElement>('[data-chat-message-row]') ?? [])
+      .some((element) => element.dataset.messageRenderKey === pendingReplyAnchorRef.current
+        || element.dataset.clientSubmissionId === pendingReplyAnchorRef.current)) {
+      pendingReplyAnchorRef.current = null;
+    }
+    if (replySpaceRef.current) replySpaceRef.current.style.height = '0px';
     setFollowing(true);
     scrollToEnd({ force: true });
   }, [conversationId, hasToken, showSessionLoading, setFollowing, scrollToEnd]);
 
   useLayoutEffect(() => {
     if (showSessionLoading) return;
+
+    updateReplySpace();
 
     const count = chatMessages.length;
     const prevCount = prevMessageCountRef.current;
@@ -201,7 +268,7 @@ export function useChatScrollViewport({
     if (count > prevCount && followingRef.current) {
       scrollToEnd();
     }
-  }, [chatMessages.length, showSessionLoading, scrollToEnd]);
+  }, [chatMessages, showSessionLoading, scrollToEnd, updateReplySpace]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -225,7 +292,7 @@ export function useChatScrollViewport({
     const root = scrollRef.current;
     if (!root) return;
 
-    const viewportObserver = new ResizeObserver(onResize);
+    const viewportObserver = new ResizeObserver(scheduleResize);
     viewportObserver.observe(root);
 
     const onWheel = (e: WheelEvent) => {
@@ -269,7 +336,7 @@ export function useChatScrollViewport({
       root.removeEventListener('touchstart', onTouchStart);
       root.removeEventListener('touchmove', onTouchMove);
     };
-  }, [hasToken, showSessionLoading, stopFollowing, onResize]);
+  }, [hasToken, showSessionLoading, stopFollowing, scheduleResize]);
 
   return {
     scrollRef,
@@ -277,5 +344,7 @@ export function useChatScrollViewport({
     registerListContentRef,
     scrollToBottom,
     onScroll,
+    replySpaceRef,
+    reserveReplySpace,
   };
 }

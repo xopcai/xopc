@@ -18,6 +18,7 @@ import { applyUserProfilePatch, getUserProfileSnapshot } from '../../user-model/
 import { SessionConfigService } from '../../agent/session/session-config-service.js';
 import { SessionConfigStore } from '../../session/config-store.js';
 import type { MessageBus } from '../../infra/bus/index.js';
+import * as agentsAdmin from '../../gateway/agents-admin.js';
 import { createHonoApp } from '../../gateway/hono/app.js';
 import type { GatewayService } from '../../gateway/service.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
@@ -147,10 +148,27 @@ describe('personal Agent identity', () => {
         headers: { authorization: `Bearer ${phoneToken}`, 'content-type': 'application/json' }, body: '{}' });
       expect(phoneCreate.status).toBe(200);
       expect(await phoneCreate.json()).toMatchObject({ ok: true, payload: { conversationId: first.conversationId } });
+      const avatarWriter = vi.spyOn(agentsAdmin, 'writeAgentAvatarFromBase64').mockResolvedValue({ ok: true,
+        data: { agentId: first.agentId, path: '/fixture/avatar.png' } });
+      try {
+        const avatarBody = JSON.stringify({ base64: 'fixture-base64', mimeType: 'image/png' });
+        const avatarUrl = `${url}/avatar`;
+        expect((await fetch(avatarUrl, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: avatarBody })).status).toBe(401);
+        const phoneHeaders = { authorization: `Bearer ${phoneToken}`, 'content-type': 'application/json' };
+        const uploaded = await fetch(avatarUrl, { method: 'PUT', headers: phoneHeaders, body: avatarBody });
+        expect(uploaded.status).toBe(200);
+        expect(await uploaded.json()).toMatchObject({ ok: true, payload: { agentId: first.agentId } });
+        expect(avatarWriter).toHaveBeenCalledWith(first.agentId, 'fixture-base64', 'image/png');
+        expect((await fetch(avatarUrl, { method: 'PUT', headers: phoneHeaders,
+          body: JSON.stringify({ base64: 'fixture-base64', mimeType: 'image/png', agentId: 'other' }) })).status).toBe(400);
+        expect((await fetch(`${url.replace('/personal-agent', '')}/agents/other/avatar`, { method: 'PUT', headers: phoneHeaders, body: avatarBody })).status).toBe(403);
+        expect(avatarWriter).toHaveBeenCalledTimes(1);
+      } finally { avatarWriter.mockRestore(); }
       createDevice({ id: 'personal-extension', displayName: 'Extension', platform: 'chrome',
         extensionId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', publicKeyJwk: { kty: 'EC' }, scopes: [...DEFAULT_MOBILE_SCOPES] });
       const extensionToken = issueDeviceTokenPair('personal-extension').accessToken;
       expect((await fetch(url, { headers: { authorization: `Bearer ${extensionToken}` } })).status).toBe(403);
+      expect((await fetch(`${url}/avatar`, { method: 'PUT', headers: { authorization: `Bearer ${extensionToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ base64: 'fixture', mimeType: 'image/png' }) })).status).toBe(403);
       expect((await fetch(onboardingUrl, { headers: { authorization: `Bearer ${extensionToken}` } })).status).toBe(403);
       expect((await fetch(onboardingUrl, { method: 'PUT', headers,
         body: JSON.stringify({ step: 'voice', draft: { displayName: 'Other' } }) })).status).toBe(409);

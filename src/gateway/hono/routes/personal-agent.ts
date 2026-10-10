@@ -2,6 +2,7 @@ import { registerProactivityRoutes } from '../../../personal-agent/proactivity/r
 import type { Hono } from 'hono';
 import { z } from 'zod';
 
+import { writeAgentAvatarFromBase64 } from '../../agents-admin.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
 import { markPersonalRead, personalUnreadSnapshot } from '../../../personal-agent/unread.js';
@@ -15,6 +16,11 @@ import {
   PersonalAppearanceSchema, PersonalPreferencesSchema,
 } from '../../../personal-agent/service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+
+const AvatarSchema = z.object({
+  base64: z.string().min(1).max(700_000),
+  mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp']),
+}).strict();
 
 const CreateSchema = z.object({
   model: z.string().trim().min(3).optional(),
@@ -48,6 +54,18 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
   };
 
   registerProactivityRoutes(authenticated, deps, owner);
+  authenticated.put('/api/personal-agent/avatar', deps.strictRateLimitMiddleware, async c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const record = getPersonalAgent(ownerId);
+    if (!record || record.state !== 'ready') return c.json({ ok: false, error: 'Personal AI is not ready' }, 409);
+    const input = AvatarSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ ok: false, error: 'Invalid avatar' }, 400);
+    const result = await writeAgentAvatarFromBase64(record.agentId, input.data.base64, input.data.mimeType);
+    if (result.ok === false) return c.json({ ok: false, error: result.error }, result.status ?? 400);
+    return c.json({ ok: true, payload: { agentId: record.agentId } });
+  });
+
 
   authenticated.get('/api/personal-agent', async c => {
     const ownerId = owner(c);

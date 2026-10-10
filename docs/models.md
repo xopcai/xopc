@@ -87,13 +87,18 @@ Use `xopc logs tail` to find the provider's first error. Do not post full reques
 
 ## XOPC Cloud public services
 
-After signing in to XOPC Cloud, choose `xopc-cloud/auto` for ordinary chat or `xopc-cloud/advanced` for the advanced tier. Images, recognition, synthesis and realtime voice use the public `image`, `stt`, `tts` and `realtime` entries. Availability depends on the signed-in catalog and account permissions. Codex retains its separate authorization and catalog entries.
+After signing in to XOPC Cloud, choose `xopc-cloud/auto` for ordinary chat or `xopc-cloud/advanced` for the advanced tier. Images, recognition, synthesis and realtime voice use the public `image`, `stt`, `tts` and `realtime` entries. Computer Use has its own `xopc-cloud/computer` entry; select it in Computer Use settings, separately from chat. Availability depends on the signed-in catalog and account permissions. Codex retains its separate authorization and catalog entries.
 
 1. Sign in through Model settings and wait for the catalog to load.
 2. Select a chat service and send a test message.
 3. Check Image and Voice settings separately; successful chat does not establish availability of every capability.
-4. Review displayed usage and limits before batch generation or long calls.
+4. For desktop Computer Use, select `xopc-cloud/computer` and complete the [native setup](./computer-use.md).
+5. Review displayed usage and limits before batch generation or long calls.
 
 New installations default to `xopc-cloud/auto`, which still requires authorization. You can choose your own API key or a local service instead. After upgrading and loading the cloud catalog, previous cloud references migrate by capability; third-party model choices are preserved. For an unavailable model, update the app, reload the catalog and explicitly select an available service instead of entering an old supplier model ID.
+
+Model and voice labels follow the interface language (`zh-CN` or `en`), with the original name as a fallback. Localized labels do not change model IDs. The hosted voice ID is `default`, displayed as “默认音色” or “Default voice”.
+
+The previous cloud Computer Use ID `computer-gui-plus-preview` migrates to `computer`; the GUI-Plus capability stays available through the dedicated entry.
 
 A public service name does not promise a fixed underlying supplier. Submitted context follows the cloud service's data boundary; connecting does not automatically upload the entire local database. See [XOPC Platform](./platform.md) for platform connection and private deployments.

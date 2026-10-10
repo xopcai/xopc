@@ -107,6 +107,7 @@ struct RealtimeVoiceEvent: Decodable, Sendable {
         let toolName: String?
         let status: String?
         let text: String?
+        let utteranceId: String?
         let delta: String?
         let audio: Bool?
         let reason: String?
@@ -129,6 +130,8 @@ struct RealtimeVoiceControlPayload: Encodable, Sendable {
     var playedDurationMs: Int?
     var taskId: String?
     var reason: String?
+    var metric: String?
+    var durationMs: Double?
 }
 
 struct RealtimeVoiceControlMessage: Encodable, Sendable {
@@ -155,4 +158,38 @@ struct RealtimeVoiceApproval: Decodable, Sendable {
 
 struct RealtimeVoiceApprovals: Decodable, Sendable {
     let approvals: [RealtimeVoiceApproval]
+}
+
+/// Monotonic reply timing. All mutations belong to the call's MainActor.
+struct RealtimeVoiceFirstAudioTiming: Sendable {
+    private struct Reply: Sendable {
+        let stoppedAt: Double?
+        var received = false
+        var buffered = false
+    }
+    private var stoppedAt: Double?
+    private var replies: [String: Reply] = [:]
+
+    mutating func speechStarted() { stoppedAt = nil }
+    mutating func speechStopped(_ now: Double) { stoppedAt = now }
+    mutating func created(_ id: String) {
+        guard !id.isEmpty, replies[id] == nil else { return }
+        // Only one response is accepted by the native call at a time.
+        replies = [id: Reply(stoppedAt: stoppedAt)]
+        stoppedAt = nil
+    }
+    mutating func received(_ id: String, now: Double) -> Double? {
+        guard var reply = replies[id], !reply.received else { return nil }
+        reply.received = true
+        replies[id] = reply
+        return reply.stoppedAt.map { max(0, now - $0) }
+    }
+    mutating func buffered(_ id: String, now: Double) -> Double? {
+        guard var reply = replies[id], reply.received, !reply.buffered else { return nil }
+        reply.buffered = true
+        replies[id] = reply
+        return reply.stoppedAt.map { max(0, now - $0) }
+    }
+    mutating func finish(_ id: String) { replies.removeValue(forKey: id) }
+    mutating func reset() { stoppedAt = nil; replies.removeAll() }
 }

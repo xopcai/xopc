@@ -94,7 +94,14 @@ export class RepositoryInstructions {
       try {
         const canonical = await realpath(file);
         if (!inside(this.root, canonical)) throw new Error(`Instruction file escapes repository: ${file}`);
-        if ((await stat(canonical)).size > 32_768) throw new Error(`Instruction file is too large; read it explicitly: ${file}`);
+        const metadata = await stat(canonical);
+        if (metadata.size > 32_768) {
+          const revision = `oversized:${canonical}:${metadata.size}:${metadata.mtimeMs}:${metadata.ctimeMs}`;
+          if (this.seen.get(file) === revision) continue;
+          this.pending.set(file, revision);
+          sections.push(`Instructions for ${dir} and its descendants (${file}):\nThis instruction file exceeds the 32 KiB automatic inclusion limit (${metadata.size} bytes). Read ${file} explicitly with read_file, in successive chunks if needed, until the entire file has been read. Apply its instructions before working in this scope.`);
+          continue;
+        }
         const content = await readFile(canonical, 'utf8');
         if (this.seen.get(file) === content) continue;
         this.pending.set(file, content);
