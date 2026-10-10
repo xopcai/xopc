@@ -4,14 +4,14 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  send: vi.fn(), listener: undefined as undefined | ((value: any) => void), snapshot: {} as any,
+  bind: vi.fn(), send: vi.fn(), listener: undefined as undefined | ((value: any) => void), snapshot: {} as any,
   capture: vi.fn(), activeTab: vi.fn(), screenshot: vi.fn(), store: undefined as any,
   storageChanged: undefined as undefined | ((changes: Record<string, any>, area: string) => void),
 }));
 vi.mock('./chat-client', () => ({ BrowserChatClient: class {
   subscribe(listener: (value: unknown) => void) { mocks.listener = listener; listener(mocks.snapshot); return () => {}; }
   get currentConversationId() { return mocks.snapshot.conversationId; }
-  async start() {} stop() {} async refreshInputs() {} send = mocks.send;
+  async start() {} stop() {} async refreshInputs() {} send = mocks.send; bindActiveTab = mocks.bind;
 } }));
 vi.mock('./page-context', async importOriginal => ({ ...await importOriginal<object>(), captureTabWithPermission: mocks.capture, activeTabId: mocks.activeTab }));
 vi.mock('./voice-input', () => ({ VoiceInput: () => null }));
@@ -42,6 +42,7 @@ function button(label: string) { return container.querySelector<HTMLButtonElemen
 beforeEach(async () => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   mocks.send.mockReset().mockResolvedValue('sent');
+  mocks.bind.mockReset().mockResolvedValue(undefined);
   mocks.screenshot.mockReset();
   mocks.capture.mockReset(); mocks.activeTab.mockReset();
   mocks.store = new ComposerDrafts(vi.fn(), vi.fn().mockResolvedValue(undefined));
@@ -55,6 +56,22 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 
 describe('browser composer interactions', () => {
+  it.each([undefined, { id: 'old-read', mode: 'read' }])('offers one tab action that enables control, including old read bindings', async (tabBinding) => {
+    await act(async () => emit({ tabBinding }));
+    await act(async () => button('addContext').click());
+    expect(container.textContent).not.toContain('readThisTab');
+    const useTab = Array.from(container.querySelectorAll('button')).find(item => item.textContent?.includes('useThisTab'))!;
+    await act(async () => useTab.click());
+    expect(mocks.bind).toHaveBeenCalledWith('act');
+  });
+
+  it('does not display approval clarifications as user questions', async () => {
+    await act(async () => emit({ clarification: { id: 'approval', kind: 'approval', question: 'Approve operation?' } }));
+    expect(container.textContent).not.toContain('Approve operation?');
+    await act(async () => emit({ clarification: { id: 'question', kind: 'input', question: 'Which account?' } }));
+    expect(container.textContent).toContain('Which account?');
+  });
+
   it('isolates unsent drafts between pairing identities on the same gateway', async () => {
     await act(async () => text('first device draft'));
     await act(async () => root.render(<ChatPanel key="other-device" gatewayId="gateway-one" deviceId="device-two" />));

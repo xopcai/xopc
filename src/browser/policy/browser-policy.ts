@@ -24,7 +24,3 @@ export function classifyBrowserRisk(input: BrowserActionInput, target?: BrowserN
   if (EXTERNAL_EFFECT_PATTERN.test(label)) return 'external_effect';
   return 'draft';
 }
-
-export function browserRiskNeedsApproval(risk: BrowserRiskLevel): boolean {
-  return risk === 'external_effect' || risk === 'destructive' || risk === 'sensitive';
-}

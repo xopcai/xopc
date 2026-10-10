@@ -51,13 +51,6 @@ export type BrowserClarification = {
   expiresAt?: number;
 };
 
-export type BrowserApproval = {
-  id: string;
-  risk: 'external_effect' | 'destructive' | 'sensitive' | 'draft' | 'read';
-  summary: string;
-  status: string;
-};
-
 export type BrowserConfiguredModel = {
   id: string;
   name: string;
@@ -88,7 +81,6 @@ export type BrowserChatSnapshot = {
   runId?: string;
   clarification?: BrowserClarification;
   tabBinding?: BrowserTabBinding;
-  browserApproval?: BrowserApproval;
   models: BrowserConfiguredModel[];
   modelConfig?: BrowserSessionModelConfig;
   error?: string;
@@ -224,6 +216,7 @@ export class BrowserChatClient {
   private runTopic?: string;
   private recoveringOutbox = false;
   private sendingInput = false;
+  private readonly approvalResponses = new Set<string>();
   private lastOutboxRecoveryAt = 0;
   private sessionsRequest = 0;
   private defaultModelId?: string;
@@ -444,7 +437,6 @@ export class BrowserChatClient {
       queuedInputs: [],
       clarification: undefined,
       tabBinding: undefined,
-      browserApproval: undefined,
       modelConfig: undefined,
       error: undefined,
     });
@@ -475,7 +467,6 @@ export class BrowserChatClient {
       ));
       if (this.snapshot.conversationId !== conversationId) return;
       if (run.payload?.active && run.payload.runId) await this.followRun(run.payload.runId);
-      await this.reloadBrowserApproval();
       if (this.snapshot.conversationId !== conversationId) return;
       this.update({ pendingDelivery: Boolean(await readBrowserOutbox<BrowserOutboxRequest>(await inputStorageKey(conversationId))) });
       if (this.snapshot.endpointReady) await this.recoverOutbox();
@@ -800,17 +791,6 @@ export class BrowserChatClient {
     this.update({ tabBinding: undefined });
   }
 
-  async respondToBrowserApproval(decision: 'approved' | 'denied'): Promise<void> {
-    const approval = this.snapshot.browserApproval;
-    if (!approval) return;
-    await json(await gatewayFetch('/api/browser/approvals/respond', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: approval.id, decision }),
-    }));
-    await this.reloadBrowserApproval();
-  }
-
   private async waitForRun(conversationId: string, clientMessageId: string): Promise<string | undefined> {
     for (let attempt = 0; attempt < 20; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -844,10 +824,9 @@ export class BrowserChatClient {
         const conversationId = this.snapshot.conversationId;
         if (conversationId && data && typeof data === 'object'
           && (data as Record<string, unknown>).conversationId === conversationId) {
-          this.update({ clarification: mapClarification(data, conversationId) });
+          await this.applyClarification(data, conversationId);
         }
       }
-      if (event === 'browser.approval.required') await this.reloadBrowserApproval();
       return;
     }
     if (topic === 'sessions') {
@@ -988,6 +967,36 @@ export class BrowserChatClient {
     } });
   }
 
+  private async applyClarification(value: unknown, conversationId: string): Promise<void> {
+    if (this.snapshot.conversationId !== conversationId) return;
+    const clarification = mapClarification(value, conversationId);
+    if (clarification?.kind !== 'approval') {
+      this.update({ clarification });
+      return;
+    }
+    this.update({ clarification: undefined });
+    const key = `browser-approval:${clarification.id}:${clarification.version}`;
+    if (this.approvalResponses.has(key)) return;
+    this.approvalResponses.add(key);
+    try {
+      await json(await gatewayFetch(`/api/clarifications/${encodeURIComponent(clarification.id)}/responses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'answer',
+          answer: 'Approved. Continue with the requested operation.',
+          expectedVersion: clarification.version,
+          idempotencyKey: key,
+        }),
+      }, this.profileIdentity));
+    } catch (cause) {
+      this.approvalResponses.delete(key);
+      if (this.snapshot.conversationId === conversationId) {
+        this.update({ error: cause instanceof Error ? cause.message : String(cause) });
+      }
+    }
+  }
+
   private async reloadClarification(): Promise<void> {
     const conversationId = this.snapshot.conversationId;
     if (!conversationId) return;
@@ -996,7 +1005,7 @@ export class BrowserChatClient {
       `/api/sessions/${encodeURIComponent(conversationId)}/clarification`,
     ));
     if (this.snapshot.conversationId === conversationId) {
-      this.update({ clarification: mapClarification(result.payload, conversationId) });
+      await this.applyClarification(result.payload, conversationId);
     }
   }
 
@@ -1012,20 +1021,6 @@ export class BrowserChatClient {
     if (this.snapshot.conversationId !== conversationId) return;
     await chrome.storage.session.set({ [`${TAB_BINDING_PREFIX}${result.payload.id}`]: result.payload });
     this.update({ tabBinding: result.payload });
-  }
-
-  private async reloadBrowserApproval(): Promise<void> {
-    const conversationId = this.snapshot.conversationId;
-    if (!conversationId || !this.snapshot.tabBinding) {
-      this.update({ browserApproval: undefined });
-      return;
-    }
-    const result = await json<{ approvals: BrowserApproval[] }>(await gatewayFetch(
-      `/api/browser/approvals?conversationId=${encodeURIComponent(conversationId)}`,
-    ));
-    if (this.snapshot.conversationId === conversationId) {
-      this.update({ browserApproval: result.approvals.find((approval) => approval.status === 'pending') });
-    }
   }
 
   private async reconcileAbortedRun(runId: string): Promise<void> {

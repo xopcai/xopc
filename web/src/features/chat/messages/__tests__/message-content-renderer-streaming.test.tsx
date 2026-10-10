@@ -224,7 +224,7 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.querySelector('button[aria-expanded]')?.getAttribute('aria-expanded')).toBe(String(manual));
   });
 
-  it.each(['off', 'on', 'stream'] as const)('keeps browser approvals visible in %s mode', (mode) => {
+  it.each(['off', 'on', 'stream'] as const)('does not render obsolete browser approval controls in %s mode', (mode) => {
     const tool = {
       type: 'tool_use', id: 'approval', name: 'browser_use', status: 'done',
       details: { kind: 'browser_approval_required', error: { approval: {
@@ -234,7 +234,8 @@ describe('streaming assistant Markdown rendering', () => {
     render([], false, false, {
       items: [tool], active: false, status: 'completed', expandedByDefault: false, compact: mode === 'off',
     });
-    expect(container.textContent).toContain('Confirm publishing the article');
+    expect(container.textContent).not.toContain('Approve once');
+    expect(container.textContent).not.toContain('仅批准本次');
     expect(container.querySelector('.assistant-steps-scroll')).toBeNull();
   });
 

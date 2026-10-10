@@ -17,7 +17,7 @@ beforeEach(() => vi.stubGlobal('chrome', { i18n: i18n() }));
 afterEach(() => vi.unstubAllGlobals());
 
 describe('captureVisibleScreenshot', () => {
-  it('requests all URLs synchronously before capturing from the side panel', async () => {
+  it('captures using installation permissions without another prompt', async () => {
     const request = vi.fn().mockResolvedValue(true);
     const captureVisibleTab = vi.fn().mockResolvedValue('data:image/png;base64,AAAA');
     vi.stubGlobal('chrome', {
@@ -36,15 +36,15 @@ describe('captureVisibleScreenshot', () => {
 
     const pending = captureVisibleScreenshot();
 
-    expect(request).toHaveBeenCalledWith({ origins: ['<all_urls>'] });
+    expect(request).not.toHaveBeenCalled();
     const screenshot = await pending;
 
-    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).not.toHaveBeenCalled();
     expect(captureVisibleTab).toHaveBeenCalledWith(2, { format: 'png' });
     expect(screenshot).toMatchObject({ type: 'image', mimeType: 'image/png' });
   });
 
-  it('does not capture a different tab after the permission prompt', async () => {
+  it('does not capture a different tab after switching tabs', async () => {
     const remove = vi.fn().mockResolvedValue(true);
     const query = vi.fn()
       .mockResolvedValueOnce([{ id: 7, windowId: 2, url: 'https://xopc.ai/zh' }])
@@ -68,19 +68,18 @@ describe('captureVisibleScreenshot', () => {
     expect(remove).not.toHaveBeenCalled();
   });
 
-  it('does not capture when screenshot permission is denied', async () => {
-    const captureVisibleTab = vi.fn();
+  it('reports Chrome capture failures without requesting another permission', async () => {
+    const request = vi.fn();
     vi.stubGlobal('chrome', {
-      i18n: i18n(),
-      permissions: { request: vi.fn().mockResolvedValue(false) },
+      i18n: i18n(), permissions: { request },
       tabs: {
-        query: vi.fn().mockResolvedValue([{ id: 7 }]),
-        captureVisibleTab,
+        query: vi.fn().mockResolvedValue([{ id: 7, windowId: 2, url: 'https://example.com' }]),
+        get: vi.fn().mockResolvedValue({ id: 7, windowId: 2, url: 'https://example.com' }),
+        captureVisibleTab: vi.fn().mockRejectedValue(new Error('Capture blocked by Chrome')),
       },
     });
-
-    await expect(captureVisibleScreenshot()).rejects.toThrow('Screenshot permission required');
-    expect(captureVisibleTab).not.toHaveBeenCalled();
+    await expect(captureVisibleScreenshot()).rejects.toThrow('Capture blocked by Chrome');
+    expect(request).not.toHaveBeenCalled();
   });
 
   it('handles an empty active tab query', async () => {

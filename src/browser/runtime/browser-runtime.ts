@@ -13,8 +13,7 @@ import type {
 import type { Config } from '../../config/schema.js';
 import { checkPostRedirectUrl, assertBrowserUrlAllowed, containsApiKeyPattern } from '../url-policy.js';
 import type { BrowserDriver, BrowserPrimitiveInput } from '../drivers/browser-driver.js';
-import { createBrowserApproval, consumeBrowserApproval } from '../policy/approval-store.js';
-import { browserRiskNeedsApproval, classifyBrowserRisk } from '../policy/browser-policy.js';
+import { classifyBrowserRisk } from '../policy/browser-policy.js';
 
 export interface BrowserRuntimeOptions {
   getConfig: () => Config['browser'];
@@ -109,13 +108,6 @@ export class BrowserRuntime {
       if (blocked) return failure('BLOCKED_URL', blocked);
       const crossDomainPolicy = this.crossDomainPolicy(session.observation?.url, input.url);
       if (crossDomainPolicy === 'deny') return failure('BLOCKED_URL', 'Cross-domain navigation is denied by policy.');
-      const authorization = this.authorize(
-        session.taskKey,
-        input,
-        crossDomainPolicy === 'ask' ? 'external_effect' : 'read',
-        crossDomainPolicy,
-      );
-      if (authorization) return authorization;
       const result = await driver.navigate(session.id, input, signal);
       return this.validateRedirect(input.url, result);
     }
@@ -125,13 +117,6 @@ export class BrowserRuntime {
         if (blocked) return failure('BLOCKED_URL', blocked);
         const crossDomainPolicy = this.crossDomainPolicy(session.observation?.url, input.url);
         if (crossDomainPolicy === 'deny') return failure('BLOCKED_URL', 'Cross-domain navigation is denied by policy.');
-        const authorization = this.authorize(
-          session.taskKey,
-          input,
-          crossDomainPolicy === 'ask' ? 'external_effect' : 'read',
-          crossDomainPolicy,
-        );
-        if (authorization) return authorization;
       }
       const result = await driver.tabs(session.id, input, signal);
       if (!input.url || !result.ok) return result;
@@ -147,8 +132,7 @@ export class BrowserRuntime {
       const invalidPath = this.invalidUploadPath(input.paths);
       if (invalidPath) return failure('INVALID_INPUT', invalidPath);
     }
-    const authorization = this.authorize(session.taskKey, input, risk, undefined, target);
-    if (authorization) return authorization;
+    if (this.actionDenied(input, risk)) return failure('INVALID_INPUT', `Browser action is denied by policy (${risk}).`);
     const result = await driver.perform(session.id, input, signal);
     return withRisk(result, risk);
   }
@@ -172,8 +156,7 @@ export class BrowserRuntime {
       const risk = classifyBrowserRisk(step as BrowserActionInput, target);
       if (riskRank(risk) > riskRank(highestRisk)) highestRisk = risk;
     }
-    const authorization = this.authorize(session.taskKey, input, highestRisk);
-    if (authorization) return authorization;
+    if (this.actionDenied(input, highestRisk)) return failure('INVALID_INPUT', `Browser action is denied by policy (${highestRisk}).`);
 
     for (const step of input.steps) {
       const primitive = { ...step, sessionId: session.id, revision } as BrowserPrimitiveInput;
@@ -195,28 +178,10 @@ export class BrowserRuntime {
     };
   }
 
-  private authorize(
-    conversationId: string,
-    input: BrowserActionInput,
-    risk: BrowserRiskLevel,
-    explicitPolicy?: 'allow' | 'ask' | 'deny',
-    target?: BrowserObservation['nodes'][number],
-  ): BrowserControlResult | null {
+  private actionDenied(input: BrowserActionInput, risk: BrowserRiskLevel): boolean {
     const security = this.options.getConfig().security;
-    const policy = explicitPolicy ?? (input.action === 'upload' ? security.uploads : security.consequentialActions);
-    if (!browserRiskNeedsApproval(risk) || policy === 'allow') return null;
-    if (policy === 'deny') return failure('APPROVAL_REQUIRED', `Browser action is denied by policy (${risk}).`);
-    if (consumeBrowserApproval(input.approvalId, conversationId, input)) return null;
-    const approval = createBrowserApproval(conversationId, input, risk, browserApprovalSummary(input, target));
-    this.options.emit?.('browser.approval.required', approval);
-    return {
-      ok: false,
-      error: {
-        code: 'APPROVAL_REQUIRED',
-        message: 'This browser action needs local-owner approval before it can run.',
-        approval: { id: approval.id, risk, summary: approval.summary, expiresAt: approval.expiresAt },
-      },
-    };
+    const policy = input.action === 'upload' ? security.uploads : security.consequentialActions;
+    return policy === 'deny' && ['external_effect', 'destructive', 'sensitive'].includes(risk);
   }
 
   private validateUrl(url: string): string | null {
@@ -251,7 +216,7 @@ export class BrowserRuntime {
     }
   }
 
-  private crossDomainPolicy(currentUrl: string | undefined, nextUrl: string): 'allow' | 'ask' | 'deny' {
+  private crossDomainPolicy(currentUrl: string | undefined, nextUrl: string): 'allow' | 'deny' {
     if (!currentUrl || currentUrl === 'about:blank') return 'allow';
     try {
       if (new URL(currentUrl).hostname === new URL(nextUrl).hostname) return 'allow';
@@ -359,40 +324,6 @@ function findActionTarget(
       ? observation?.focused
       : undefined;
   return ref ? observation?.nodes.find((node) => node.ref === ref) : undefined;
-}
-
-function browserApprovalSummary(
-  input: BrowserActionInput,
-  target: BrowserObservation['nodes'][number] | undefined,
-): string {
-  const targetName = target?.name.trim() ? ` “${target.name.slice(0, 120)}”` : '';
-  switch (input.action) {
-    case 'navigate':
-      return `Navigate to ${safeUrlLabel(input.url)}.`;
-    case 'tabs':
-      return input.url ? `Open a tab at ${safeUrlLabel(input.url)}.` : `Change browser tabs (${input.operation}).`;
-    case 'click':
-      return `Click${targetName || ` element ${input.ref}`}.`;
-    case 'fill':
-      return `${target?.states.includes('sensitive') ? 'Fill a sensitive field' : 'Fill field'}${targetName || ` ${input.ref}`}${input.submit ? ' and submit the form' : ''}.`;
-    case 'upload':
-      return `Upload ${input.paths.length} file${input.paths.length === 1 ? '' : 's'}${targetName ? ` using${targetName}` : ''}.`;
-    case 'press':
-      return `Press ${input.key}${targetName ? ` on${targetName}` : ''}.`;
-    case 'sequence':
-      return `Run ${input.steps.length} browser actions as one sequence.`;
-    default:
-      return `Run browser action “${input.action}”${targetName ? ` on${targetName}` : ''}.`;
-  }
-}
-
-function safeUrlLabel(raw: string): string {
-  try {
-    const url = new URL(raw);
-    return `${url.origin}${url.pathname}`.slice(0, 240);
-  } catch {
-    return 'the requested URL';
-  }
 }
 
 function withoutVisual<T>(value: T): T {

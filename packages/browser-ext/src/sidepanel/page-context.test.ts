@@ -50,23 +50,14 @@ function stubChrome(options: {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('captureTabWithPermission', () => {
-  it('requests and retains a site permission after a successful capture', async () => {
+  it('captures with installation permissions without requesting site access', async () => {
     const { executeScript, remove, request } = stubChrome({ alreadyGranted: false });
 
     const context = await captureTabWithPermission(7, 'page');
 
     expect(context).toMatchObject({ kind: 'browser_page', title: 'Example', text: 'Page body' });
     expect(executeScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 7, allFrames: true } }));
-    expect(request).toHaveBeenCalledWith({ origins: ['https://example.com/*'] });
-    expect(remove).not.toHaveBeenCalled();
-  });
-
-  it('does not capture when site access is denied', async () => {
-    const { executeScript, remove } = stubChrome({ alreadyGranted: false, requestGranted: false });
-
-    await expect(captureTabWithPermission(7, 'page'))
-      .rejects.toThrow('Allow xopc to access example.com');
-    expect(executeScript).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
     expect(remove).not.toHaveBeenCalled();
   });
 
@@ -79,7 +70,7 @@ describe('captureTabWithPermission', () => {
     expect(remove).not.toHaveBeenCalled();
   });
 
-  it('removes a newly granted permission if capture fails', async () => {
+  it('reports withheld Chrome access without revoking permissions', async () => {
     const { remove } = stubChrome({
       alreadyGranted: false,
       executeError: new Error('Cannot access contents of url "https://example.com/article"'),
@@ -87,7 +78,7 @@ describe('captureTabWithPermission', () => {
 
     await expect(captureTabWithPermission(7, 'page'))
       .rejects.toThrow("Check xopc's site access");
-    expect(remove).toHaveBeenCalledWith({ origins: ['https://example.com/*'] });
+    expect(remove).not.toHaveBeenCalled();
   });
 
   it('rejects browser-internal pages before requesting access', async () => {

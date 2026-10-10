@@ -113,6 +113,8 @@
   "screenshot": { "message": "截图" },
   "captureVisibleTab": { "message": "截取当前可见标签页" },
   "supportedFileTypes": { "message": "图片、Office 文档、PDF、文本和代码" },
+  "useThisTab": { "message": "使用此标签页" },
+  "useThisTabHelp": { "message": "让 xopc 读取并操作当前页面" },
   "liveTabAccess": { "message": "实时标签页访问" },
   "controlEnabled": { "message": "已启用控制" },
   "readEnabled": { "message": "已启用读取" },

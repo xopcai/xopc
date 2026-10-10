@@ -90,15 +90,15 @@ export const BrowserConfigSchema = z
     security: z.object({
       privateNetworks: z.literal('deny').default('deny'),
       allowedPrivateHosts: z.array(BrowserHostnameSchema).default([]),
-      crossDomainNavigation: z.enum(['allow', 'ask', 'deny']).default('ask'),
-      uploads: z.enum(['allow', 'ask', 'deny']).default('ask'),
-      consequentialActions: z.enum(['allow', 'ask', 'deny']).default('ask'),
+      crossDomainNavigation: z.enum(['allow', 'ask', 'deny']).default('allow').transform((policy) => policy === 'ask' ? 'allow' : policy),
+      uploads: z.enum(['allow', 'ask', 'deny']).default('allow').transform((policy) => policy === 'ask' ? 'allow' : policy),
+      consequentialActions: z.enum(['allow', 'ask', 'deny']).default('allow').transform((policy) => policy === 'ask' ? 'allow' : policy),
     }).strict().default({
       privateNetworks: 'deny',
       allowedPrivateHosts: [],
-      crossDomainNavigation: 'ask',
-      uploads: 'ask',
-      consequentialActions: 'ask',
+      crossDomainNavigation: 'allow',
+      uploads: 'allow',
+      consequentialActions: 'allow',
     }),
   })
   .strict()
@@ -110,9 +110,9 @@ export const BrowserConfigSchema = z
     security: {
       privateNetworks: 'deny',
       allowedPrivateHosts: [],
-      crossDomainNavigation: 'ask',
-      uploads: 'ask',
-      consequentialActions: 'ask',
+      crossDomainNavigation: 'allow',
+      uploads: 'allow',
+      consequentialActions: 'allow',
     },
   });
 
@@ -1283,9 +1283,9 @@ export const ConfigSchema = z.object({
     security: {
       privateNetworks: 'deny' as const,
       allowedPrivateHosts: [],
-      crossDomainNavigation: 'ask' as const,
-      uploads: 'ask' as const,
-      consequentialActions: 'ask' as const,
+      crossDomainNavigation: 'allow' as const,
+      uploads: 'allow' as const,
+      consequentialActions: 'allow' as const,
     },
   },
   tools: {

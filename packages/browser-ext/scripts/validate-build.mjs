@@ -70,12 +70,9 @@ const manifestPermissions = new Set(manifest.permissions ?? []);
 if (!manifestPermissions.has('scripting') || !manifestPermissions.has('tabs')) {
   errors.push('manifest must include scripting and tabs permissions for page context capture');
 }
-const optionalHostPermissions = new Set(manifest.optional_host_permissions ?? []);
-if (!optionalHostPermissions.has('<all_urls>')) {
-  errors.push('manifest must allow optional <all_urls> access for side panel screenshots');
-}
-if (!optionalHostPermissions.has('http://*/*') || !optionalHostPermissions.has('https://*/*')) {
-  errors.push('manifest must allow optional per-site http(s) access for page context capture');
+const hostPermissions = new Set(manifest.host_permissions ?? []);
+if (!hostPermissions.has('<all_urls>')) {
+  errors.push('manifest must declare <all_urls> access for page context and screenshots');
 }
 
 if (manifest.default_locale !== 'en') {

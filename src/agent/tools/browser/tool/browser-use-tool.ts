@@ -76,7 +76,7 @@ function presentResult(result: BrowserControlResult) {
     content: contentWithVisual(text, observation),
     details: {
       ok: false,
-      kind: result.error.code === 'APPROVAL_REQUIRED' ? 'browser_approval_required' : 'browser_error',
+      kind: 'browser_error',
       error: stripVisual(result.error),
     },
   };

@@ -1,11 +1,10 @@
-/** Browser Control status, approvals, and driver diagnostics. */
+/** Browser Control status and driver diagnostics. */
 import { getConnInfo } from '@hono/node-server/conninfo';
 import type { Context, Hono } from 'hono';
 import { browserTabBindingRequestSchema } from '@xopcai/gateway-contract';
 import { BROWSER_EXTENSION_PROTOCOL_VERSION, BROWSER_CONTROL_ENDPOINT_TOOL_NAME } from '@xopcai/browser-control-contract';
 
 import { createBrowserDriver } from '../../../browser/drivers/create-driver.js';
-import { decideBrowserApproval, listBrowserApprovals } from '../../../browser/policy/approval-store.js';
 import { checkBrowserReadiness } from '../../../browser/readiness.js';
 import { isLoopbackClientIp } from '../../security/loopback.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -326,31 +325,6 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
     }
-  });
-
-  authenticated.get('/api/browser/approvals', (c) => {
-    const conversationId = c.req.query('conversationId');
-    if (!isLocalOwnerRequest(c, service) && (!conversationId || !canManageBrowserSession(c, service, conversationId))) {
-      return c.json({ ok: false, error: 'Local owner access required.' }, 403);
-    }
-    return c.json({ ok: true, approvals: listBrowserApprovals(conversationId) });
-  });
-
-  authenticated.post('/api/browser/approvals/respond', strictRateLimitMiddleware, async (c) => {
-    const body = await c.req.json().catch(() => null) as { id?: unknown; decision?: unknown } | null;
-    const approval = typeof body?.id === 'string'
-      ? listBrowserApprovals().find((candidate) => candidate.id === body.id)
-      : undefined;
-    if (!isLocalOwnerRequest(c, service)
-      && (!approval || !canManageBrowserSession(c, service, approval.conversationId))) {
-      return c.json({ ok: false, error: 'Local owner access required.' }, 403);
-    }
-    if (typeof body?.id !== 'string' || (body.decision !== 'approved' && body.decision !== 'denied')) {
-      return c.json({ ok: false, error: 'id and decision are required.' }, 400);
-    }
-    const decided = decideBrowserApproval(body.id, body.decision);
-    if (!decided) return c.json({ ok: false, error: 'Approval not found.' }, 404);
-    return c.json({ ok: true, approval: decided });
   });
 
   authenticated.get('/api/browser/playwright/doctor', async (c) => {
