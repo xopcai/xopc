@@ -5,7 +5,7 @@ import { googleGeminiCliOAuthProvider } from './google-gemini-cli.js';
 import { kimiCodingOAuthProvider } from './kimi-coding.js';
 import { minimaxCnOAuthProvider } from './minimax-cn.js';
 import { minimaxOAuthProvider } from './minimax.js';
-import { openaiCodexOAuthProvider } from './openai-codex.js';
+import { openaiOAuthProvider } from './openai.js';
 import { xopcCloudOAuthProvider, xopcShareOAuthProvider, xopcTunnelOAuthProvider } from './xopc-cloud.js';
 import type { OAuthProviderInterface } from './types.js';
 
@@ -46,7 +46,7 @@ export const OAUTH_PROVIDER_DEFINITIONS: Readonly<Record<string, OAuthProviderDe
   'github-copilot': definition(githubCopilotOAuthProvider, 'models'),
   'google-gemini-cli': definition(googleGeminiCliOAuthProvider, 'models'),
   'google-antigravity': definition(googleAntigravityOAuthProvider, 'models'),
-  'openai-codex': definition(openaiCodexOAuthProvider, 'models'),
+  openai: definition(openaiOAuthProvider, 'models'),
 };
 
 export function getOAuthProviderDefinition(provider: string): OAuthProviderDefinition | undefined {

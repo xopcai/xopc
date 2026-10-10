@@ -13,6 +13,7 @@ import type { Config } from '../config/schema.js';
 import { getOAuthProviderDefinition } from './oauth/registry.js';
 import type { OAuthCredentials } from './oauth/types.js';
 import { withOAuthProviderLock } from './oauth-provider-lock.js';
+import { assertCurrentModelProvider } from '../providers/provider-policy.js';
 
 const log = createLogger('Credentials');
 const warnedExpiredOAuthTokens = new Set<string>();
@@ -62,25 +63,6 @@ function toOAuthCredentials(token: OAuthToken): OAuthCredentials {
   } as OAuthCredentials;
 }
 
-function normalizeLegacyOAuthToken(token: OAuthToken): OAuthToken {
-  if (token.provider !== 'google-gemini-cli' && token.provider !== 'google-antigravity') return token;
-  let access = token.access;
-  let projectId = (token as PersistedOAuthToken).projectId;
-  for (let depth = 0; depth < 5; depth += 1) {
-    try {
-      const legacy = JSON.parse(access) as { token?: unknown; projectId?: unknown };
-      if (typeof legacy.token !== 'string' || !legacy.token) break;
-      access = legacy.token;
-      if (typeof projectId !== 'string' && typeof legacy.projectId === 'string') {
-        projectId = legacy.projectId;
-      }
-    } catch {
-      break;
-    }
-  }
-  return access === token.access ? token : { ...token, access, projectId } as PersistedOAuthToken;
-}
-
 export type CredentialProfile = ApiKeyProfile;
 
 export interface AuthProfilesFile {
@@ -122,6 +104,7 @@ export class CredentialResolver {
    */
   async resolveApiKey(provider: string): Promise<string | null> {
     const normalizedProvider = provider.toLowerCase();
+    assertCurrentModelProvider(normalizedProvider);
     const oauthDefinition = getOAuthProviderDefinition(normalizedProvider);
 
     if (oauthDefinition?.oauthOnly) {
@@ -178,6 +161,7 @@ export class CredentialResolver {
     provider: string,
   ): Promise<'agent' | 'global' | 'oauth' | 'env' | null> {
     const normalizedProvider = provider.toLowerCase();
+    assertCurrentModelProvider(normalizedProvider);
 
     if (getOAuthProviderDefinition(normalizedProvider)?.oauthOnly) {
       return await this.hasUsableOAuthTokenRecord(normalizedProvider) ? 'oauth' : null;
@@ -247,6 +231,7 @@ export class CredentialResolver {
     } = {}
   ): Promise<void> {
     const normalizedProvider = provider.toLowerCase();
+    assertCurrentModelProvider(normalizedProvider);
     if (getOAuthProviderDefinition(normalizedProvider)?.oauthOnly) {
       throw new Error(`${normalizedProvider} only supports OAuth credentials`);
     }
@@ -359,7 +344,7 @@ export class CredentialResolver {
     try {
       const content = await readFile(oauthPath, 'utf-8');
       const token = JSON.parse(content) as PersistedOAuthToken;
-      return token.provider === normalizedProvider ? normalizeLegacyOAuthToken(token) : null;
+      return token.provider === normalizedProvider ? token : null;
     } catch {
       return null;
     }

@@ -14,7 +14,7 @@ export const PROVIDER_ENV_MAP: Record<string, string[]> = {
 	cerebras: ['CEREBRAS_API_KEY'],
 	mistral: ['MISTRAL_API_KEY'],
 	openrouter: ['OPENROUTER_API_KEY'],
-	'azure-openai-responses': ['AZURE_OPENAI_API_KEY', 'AZURE_OPENAI_BASE_URL'],
+	azure: ['AZURE_OPENAI_API_KEY', 'AZURE_OPENAI_BASE_URL'],
 	'amazon-bedrock': ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_REGION'],
 	'cloudflare-ai-gateway': ['CLOUDFLARE_API_KEY'],
 	'cloudflare-workers-ai': ['CLOUDFLARE_API_KEY'],
