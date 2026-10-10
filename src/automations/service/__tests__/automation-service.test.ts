@@ -713,7 +713,7 @@ describe('AutomationService', () => {
       status: 'succeeded' as const,
       result: { title: 'Example' },
     }));
-    service.setDeps({ browserAutomationService: { runAndWait } });
+    service.setDeps({ browserAutomationService: { runAndWait, get: () => ({ revision: 1, verified: true }), versions: () => [{ revision: 1, verified: true }] } });
     const automation = await service.create({
       name: 'Collect page title',
       trigger: { kind: 'manual' },
@@ -730,7 +730,7 @@ describe('AutomationService', () => {
       'collect-title',
       { query: 'xopc' },
       expect.any(AbortSignal),
-      { triggerEvent: expect.objectContaining({ type: 'automation.manual.requested' }) },
+      expect.objectContaining({ revision: 1, clientRequestId: expect.stringContaining('schedule:'), triggerEvent: expect.objectContaining({ type: 'automation.manual.requested' }) }),
     );
     expect(runs.find((item) => item.id === queued.id)?.summary).toContain('"title":"Example"');
   });

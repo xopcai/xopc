@@ -39,6 +39,7 @@ function parsePreferences(raw: string): Partial<NotificationPreferences> {
 
 function normalizePreferences(input?: Partial<NotificationPreferences>): NotificationPreferences {
   return {
+    chatNeedsInput: input?.chatNeedsInput ?? DEFAULT_NOTIFICATION_PREFERENCES.chatNeedsInput,
     chatCompleted: input?.chatCompleted ?? DEFAULT_NOTIFICATION_PREFERENCES.chatCompleted,
     chatFailed: input?.chatFailed ?? DEFAULT_NOTIFICATION_PREFERENCES.chatFailed,
     taskNeedsInput: input?.taskNeedsInput ?? DEFAULT_NOTIFICATION_PREFERENCES.taskNeedsInput,

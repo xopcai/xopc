@@ -15,12 +15,15 @@ const TargetSchema = Type.Object({
   role: Type.String(),
   name: Type.Optional(Type.String()),
   nameIncludes: Type.Optional(Type.String()),
+  testId: Type.Optional(Type.String()),
+  scope: Type.Optional(Type.Object({ role: Type.String(), name: Type.String() }, { additionalProperties: false })),
 }, { additionalProperties: false });
 
 const StepSchema = Type.Union([
   Type.Object({ action: Type.Literal('navigate'), url: Type.String(), expect: Type.Optional(ExpectationSchema) }, { additionalProperties: false }),
   Type.Object({ action: Type.Literal('click'), target: TargetSchema, expect: Type.Optional(ExpectationSchema) }, { additionalProperties: false }),
   Type.Object({ action: Type.Literal('fill'), target: TargetSchema, value: Type.String(), submit: Type.Optional(Type.Boolean()), expect: Type.Optional(ExpectationSchema) }, { additionalProperties: false }),
+  Type.Object({ action: Type.Literal('check'), target: TargetSchema, checked: Type.Boolean() }, { additionalProperties: false }),
   Type.Object({ action: Type.Literal('select'), target: TargetSchema, value: Type.String(), expect: Type.Optional(ExpectationSchema) }, { additionalProperties: false }),
   Type.Object({ action: Type.Literal('press'), target: Type.Optional(TargetSchema), key: Type.String(), expect: Type.Optional(ExpectationSchema) }, { additionalProperties: false }),
   Type.Object({ action: Type.Literal('scroll'), target: Type.Optional(TargetSchema), deltaY: Type.Number(), expect: Type.Optional(ExpectationSchema) }, { additionalProperties: false }),
@@ -34,7 +37,7 @@ const StepSchema = Type.Union([
 const BrowserAutomationToolSchema = Type.Object({
   action: Type.Union([
     Type.Literal('list'), Type.Literal('get'), Type.Literal('save'), Type.Literal('enable'),
-    Type.Literal('disable'), Type.Literal('delete'), Type.Literal('run'),
+    Type.Literal('disable'), Type.Literal('delete'), Type.Literal('run'), Type.Literal('test'), Type.Literal('validate'),
   ]),
   automationId: Type.Optional(Type.String()),
   definition: Type.Optional(Type.Object({
@@ -51,8 +54,17 @@ const BrowserAutomationToolSchema = Type.Object({
       choices: Type.Optional(Type.Array(Type.Union([Type.String(), Type.Number(), Type.Boolean()]))),
     }, { additionalProperties: false })),
     steps: Type.Array(StepSchema),
+    successCriteria: Type.Optional(Type.Array(Type.Object({
+      target: Type.Optional(TargetSchema), field: Type.Union(['text', 'value', 'url', 'title', 'checked'].map((field) => Type.Literal(field))),
+      equals: Type.Optional(Type.Union([Type.String(), Type.Boolean()])), includes: Type.Optional(Type.String()),
+    }, { additionalProperties: false }))),
+    outputs: Type.Optional(Type.Record(Type.String(), Type.Object({ target: Type.Optional(TargetSchema),
+      field: Type.Union(['text', 'value', 'url', 'title', 'href'].map((field) => Type.Literal(field))),
+    }, { additionalProperties: false }))),
   }, { additionalProperties: false })),
   inputs: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+  revision: Type.Optional(Type.Integer({ minimum: 1 })),
+  expectedRevision: Type.Optional(Type.Integer({ minimum: 1 })),
 }, { additionalProperties: false });
 
 type BrowserAutomationToolInput = Static<typeof BrowserAutomationToolSchema>;
@@ -72,10 +84,14 @@ export function createBrowserAutomationTool(deps: {
         const automations = service.list();
         return output(automations.length ? automations.map((item) => `- ${item.id}: ${item.definition.name} (${item.status}, ${item.definition.risk})`).join('\n') : 'No browser automations.', { ok: true, automations });
       }
+      if (params.action === 'validate') {
+        const parsed = service.validate(params.definition);
+        return output(parsed.success ? 'Definition is valid; it has not been executed.' : JSON.stringify(parsed.error.issues), { ok: parsed.success });
+      }
       if (params.action === 'save') {
         if (!params.definition) return output('definition is required.', { ok: false });
         try {
-          const automation = service.save({ definition: params.definition });
+          const automation = service.save({ definition: params.definition, expectedRevision: params.expectedRevision });
           return output(`Saved browser automation: ${automation.definition.name}`, { ok: true, automation });
         } catch (error) {
           return output(`Could not save browser automation: ${message(error)}`, { ok: false, error: message(error) });
@@ -95,7 +111,7 @@ export function createBrowserAutomationTool(deps: {
         catch (error) { return output(`Could not delete browser automation: ${message(error)}`, { ok: false, error: message(error) }); }
       }
       try {
-        const run = await service.runAndWait(id, params.inputs ?? {}, signal);
+        const run = await service.runAndWait(id, params.inputs ?? {}, signal, { revision: params.revision, clientRequestId: _toolCallId });
         return output(run.status === 'succeeded' ? `Browser automation ${id} completed.` : `Browser automation ${id} ${run.status}: ${run.error ?? 'No details'}`, { ok: run.status === 'succeeded', run });
       } catch (error) {
         return output(`Browser automation failed: ${message(error)}`, { ok: false, error: message(error) });

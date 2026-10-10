@@ -15,6 +15,7 @@ import {
   setAutoConnectEnabled,
   type BrowserGatewayProfile,
 } from './auth';
+import { RecordingPanel } from './recording-panel';
 import { ChatPanel } from './chat-panel';
 import {
   CheckIcon,
@@ -298,7 +299,7 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
             </div>
           </div>
         ) : null}
-      </section> : <ChatPanel key={JSON.stringify([profile!.gatewayId, profile!.gatewayUrl, profile!.deviceId])} gatewayId={profile!.gatewayId} deviceId={profile!.deviceId} />}
+      </section> : <><RecordingPanel /><ChatPanel key={JSON.stringify([profile!.gatewayId, profile!.gatewayUrl, profile!.deviceId])} gatewayId={profile!.gatewayId} deviceId={profile!.deviceId} /></>}
     </main>
   );
 }

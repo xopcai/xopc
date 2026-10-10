@@ -44,7 +44,7 @@ type ElectronShellPreferences = {
 export type ElectronThemePreference = 'light' | 'dark' | 'system';
 
 type EndpointNotificationInput = { title: string; body: string };
-type ProductNotificationInput = EndpointNotificationInput & { id: string; target: NotificationTarget };
+type ProductNotificationInput = EndpointNotificationInput & { id: string; target: NotificationTarget; allowWhenFocused?: boolean };
 
 const defaultPrefs: ElectronShellPreferences = {
   runInBackground: process.platform === 'darwin',
@@ -202,20 +202,21 @@ function parseEndpointNotificationInput(input: unknown): EndpointNotificationInp
 }
 
 function parseProductNotificationInput(input: unknown): ProductNotificationInput | undefined {
-  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length !== 4) {
+  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['id', 'title', 'body', 'target', 'allowWhenFocused'].includes(key))) {
     return undefined;
   }
-  const { id, title, body, target } = input as Record<string, unknown>;
+  const { id, title, body, target, allowWhenFocused } = input as Record<string, unknown>;
   const text = parseEndpointNotificationInput({ title, body });
   const parsedTarget = NotificationTargetSchema.safeParse(target);
   if (
     !text
+    || (allowWhenFocused !== undefined && typeof allowWhenFocused !== 'boolean')
     || !parsedTarget.success
     || typeof id !== 'string'
     || !id.trim()
     || id.length > 160
   ) return undefined;
-  return { id, target: parsedTarget.data, ...text };
+  return { id, target: parsedTarget.data, ...text, ...(allowWhenFocused === true ? { allowWhenFocused: true } : {}) };
 }
 
 function mapMediaStatusWhenAvailable(type: 'microphone' | 'screen' | 'camera'): TccTriState {
@@ -794,7 +795,7 @@ export function registerSystemSettingsIpc(
       const notificationInput = parseProductNotificationInput(input);
       if (!notificationInput) return { ok: false, error: 'INVALID_ARGUMENTS' };
       if (!prefs.notifyEnabled) return { ok: false, error: 'NOTIFICATIONS_DISABLED' };
-      if (options?.isMainWindowFocused?.()) return { ok: true, outcome: 'suppressed-focused' };
+      if (options?.isMainWindowFocused?.() && !notificationInput.allowWhenFocused) return { ok: true, outcome: 'suppressed-focused' };
       if (!Notification.isSupported()) return { ok: false, error: 'NOTIFICATIONS_UNSUPPORTED' };
       if (!isShellNotificationGranted() && await probeNotificationAccess() !== 'granted') {
         return { ok: false, error: 'PERMISSION_DENIED' };
