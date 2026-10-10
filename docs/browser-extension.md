@@ -232,3 +232,7 @@ Voice input uses Chrome's microphone consent. If Chrome cannot show the prompt i
 - Current-tab control requires a Session binding and remains subject to URL and upload path restrictions. Browser actions execute without approval cards.
 
 For reusable browser tasks, continue with [Browser automations](./browser-automations.md). The implementation and threat model are recorded in the repository's [Chrome extension Side Panel design](https://github.com/xopcai/xopc/blob/main/docs/design/chrome-extension-side-panel-chat.md).
+
+## Record and replay
+
+The extension side panel offers browser recording: select a website, start or pause recording, finish saving, then inspect inputs and test replay. This requires a recording-capable extension and compatible Gateway. See [Browser automations](./browser-automations.md#record-your-own-actions) for the steps and boundaries.

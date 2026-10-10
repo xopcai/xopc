@@ -1,6 +1,16 @@
 # Get started with xopc
 
-Personal AI for the one-person company. Start with the desktop app, connect one model, and let xopc remember your context and help you find the next credible step.
+xopc is open-source, local-first personal AI. Start with the desktop app, connect one model, then chat with Ada or work directly with files and projects.
+
+## Choose a model and a starting point
+
+| Model route | What you need |
+| --- | --- |
+| XOPC Cloud | Sign in and select a service available in the current catalog |
+| Your API key | Connect a supported provider and choose a model |
+| Local model | Start and connect a compatible local model service such as Ollama |
+
+Once the model works, [talk with Ada](./personal-ai.md) or go directly to [files and projects](./workspace-guide.md). Voice, images, and Computer Use need their own compatible services; ordinary chat setup does not enable every capability.
 
 ## Choose how to start
 
@@ -78,3 +88,7 @@ xopc config show
 ```
 
 `config show` masks sensitive values. Never paste API keys, Gateway tokens, or bot tokens into an issue or screenshot.
+
+## Start from the current experience
+
+[Meet Ada](./personal-ai.md) · [Delegate and receive results](./task-delegation.md) · [Work with files and projects](./workspace-guide.md) · [Task acceptance](./task-review.md).

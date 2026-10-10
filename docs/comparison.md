@@ -1,6 +1,6 @@
 # Where xopc fits
 
-xopc is personal AI for the one-person company. It sits between a personal knowledge system, a long-running work manager, and an agent runtime—but its product is not any one of those parts. It develops a reviewable understanding of one person and helps that person move important work forward across conversations, tools, and time.
+xopc is open-source, local-first personal AI with Ada and a workspace for files and projects. It sits between a personal knowledge system, a long-running work manager, and an agent runtime—but its product is not any one of those parts. It develops a reviewable understanding of one person and helps that person move important work forward across conversations, tools, and time.
 
 This page explains product boundaries rather than ranking vendors.
 

@@ -33,10 +33,10 @@ body:
     id: node-version
     attributes:
       label: Node.js version
-      description: Output of `node --version` (requires Node ≥ 22.22.3)
+      description: For CLI/source installations, output of `node --version` (requires Node ≥ 22.22.3). Desktop and mobile users can leave this blank.
       placeholder: "v22.x.x"
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: os
@@ -60,6 +60,10 @@ body:
         - TUI (`xopc tui`)
         - Gateway web UI (browser console)
         - Electron desktop app
+        - Android app
+        - iOS app
+        - HarmonyOS app
+        - Chrome extension
         - Telegram channel
         - WeChat (Weixin) channel
         - Feishu / Lark channel
@@ -67,6 +71,25 @@ body:
         - Other
     validations:
       required: true
+
+  - type: input
+    id: client-version
+    attributes:
+      label: Client version (if different from xopc)
+      description: Mobile app or browser extension version; include the connected desktop/Gateway version above
+
+  - type: dropdown
+    id: feature
+    attributes:
+      label: Feature (optional)
+      options:
+        - Personal Agent / Ada
+        - Task delegation / delivery / acceptance
+        - Files / workspace / projects
+        - Browser recording / automation
+        - Voice call / dictation
+        - Models / XOPC Cloud
+        - Other
 
   - type: input
     id: model

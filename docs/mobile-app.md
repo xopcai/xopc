@@ -2,6 +2,16 @@
 
 Run xopc on your own computer and continue the same work from your phone. The computer owns the workspace and conversations; the phone lets you review progress and send instructions.
 
+## Downloads and platform differences
+
+| Platform | Distribution |
+| --- | --- |
+| Android | Use the [website's mobile download](https://xopc.ai/en#mobile-download) or an APK from [Android Releases](https://github.com/xopcai/xopc/releases?q=mobile-android); the release includes checksums |
+| iOS | Follow the [current distribution channel](https://xopc.ai/en#mobile-download); this does not imply general App Store availability |
+| HarmonyOS | Currently marked as beta on the website; public downloads are not open |
+
+Update both phone and computer. Recording, calls, background behavior, and media support vary by platform and version; pairing does not establish feature parity. The phone connects to an existing xopc instance. Computer sleep or Gateway shutdown interrupts the connection.
+
 ## Connect your work computer
 
 1. Open xopc on the computer and choose **Connect phone** in the sidebar.

@@ -29,7 +29,7 @@ const [aiMarkSegment, humanMarkSegment] = markSegments;
 
 const check = process.argv.includes('--check');
 const requestedTarget = process.argv.find((argument) => argument.startsWith('--target='))?.slice('--target='.length);
-const validTargets = new Set(['all', 'web', 'docs', 'harmony', 'ios', 'electron', 'browser-ext']);
+const validTargets = new Set(['all', 'web', 'docs', 'harmony', 'android', 'ios', 'electron', 'browser-ext']);
 const target = requestedTarget ?? 'all';
 
 if (!validTargets.has(target)) {
@@ -590,6 +590,7 @@ queue(
 
 // Preserve the mobile artwork, compensating for Android's adaptive viewport.
 queue('harmony', 'apps/mobile-harmony/AppScope/resources/base/media/app_icon.png', renderPng('harmony-app-light', 1024));
+queue('android', 'apps/mobile-android/app/src/main/res/drawable-nodpi/launcher_artwork.png', renderPng('harmony-app-light', 1024));
 queue('harmony', 'apps/mobile-harmony/agc-locales/zh-CN/app-icon-1024.png', renderPng('harmony-app-light', 1024));
 for (const [appearance, qualifier] of [['light', 'base'], ['dark', 'dark']]) {
   queue('harmony', `apps/mobile-harmony/entry/src/main/resources/${qualifier}/media/brand_logo.svg`,
