@@ -66,7 +66,7 @@ describe('ModelCatalogPersistence', () => {
     const { persistence, path } = createPersistence();
     await persistence.save(fixture());
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
-    raw.schemaVersion = 2;
+    raw.schemaVersion = 1;
     writeFileSync(path, JSON.stringify(raw));
     expect(persistence.loadSync()).toBeUndefined();
 
