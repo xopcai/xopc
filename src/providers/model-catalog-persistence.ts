@@ -84,7 +84,7 @@ const catalogModelSchema = z.object({
 }).strict();
 
 const persistedCatalogSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   providerId: z.literal('xopc-cloud'),
   catalogVersion: z.string().nullable(),
   fetchedAt: z.number().int().nonnegative(),
@@ -129,7 +129,7 @@ export class ModelCatalogPersistence {
       throw new Error(`Cannot persist catalog for provider ${source.providerId}`);
     }
     const payload = persistedCatalogSchema.parse({
-      schemaVersion: 1,
+      schemaVersion: 2,
       providerId: source.providerId,
       catalogVersion: source.etag,
       fetchedAt: source.lastSuccessAt,
