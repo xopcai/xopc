@@ -7,7 +7,7 @@ The extension requires a running xopc Gateway. It does not call a model directly
 ## What is included
 
 - Persistent conversations, recent Session selection, streaming responses, stop, retry, and recovery after the side panel is closed and reopened.
-- Markdown, code blocks, links, copy actions, tool activity, errors, and the essential approval states needed to complete a turn.
+- Markdown, code blocks, links, copy actions, tool activity, errors, and questions needed to complete a turn.
 - Files, screenshots, PDFs, the current page, selected text, and explicit tab mentions as conversation context.
 - Browser control through the authenticated Gateway Realtime connection.
 - Light and dark themes aligned with the Gateway console.
@@ -124,25 +124,25 @@ A Gateway running on another computer or server does not receive local auto-appr
 1. Expose the Gateway through a protected route such as Tailscale or HTTPS. See [Remote access](./remote-access.md).
 2. Open **Settings → Device access → Connect browser extension** in the Gateway owner interface.
 3. Copy the one-time invitation shown by Device access.
-4. Open the xopc side panel in Chrome, paste the invitation into **One-time invitation**, and select **Connect**. Allow access to the listed Gateway addresses when Chrome asks.
+4. Open the xopc side panel in Chrome, paste the invitation into **One-time invitation**, and select **Connect**. Gateway access uses the permissions granted during extension installation.
 5. Return to Device access, compare the confirmation code, and approve the request.
 
-The extension requests access only to the selected Gateway origin. Keep the browser online while using the extension driver. For unattended server automation, prefer Playwright or a configured remote browser instead of depending on a user's Chrome session.
+The extension uses its installation permissions to reach the selected Gateway origin. Keep the browser online while using the extension driver. For unattended server automation, prefer Playwright or a configured remote browser instead of depending on a user's Chrome session.
 
 ## Page and site permissions
 
-Installing the extension does not give xopc permanent access to every page.
+The extension declares website access during installation so ordinary use does not prompt for each site, screenshot, or Gateway connection. Chrome can still restrict site access in extension settings.
 
 | Action | Permission behavior |
 | --- | --- |
 | Chat without page context | Does not read the current page |
-| Attach current page or selection from the side panel | Requests access to that page's origin when needed |
+| Attach current page or selection from the side panel | Uses installation permissions without another prompt |
 | Ask about selected text from the context menu | Uses Chrome's selection without requesting page access |
-| Mention another tab | Requests access to the selected tab's origin when needed |
-| Attach/control the current tab | Creates an explicit Session-to-tab binding and applies Gateway browser policy |
-| High-impact action | Still follows configured approval policy even when site access is granted |
+| Mention another tab | Uses installation permissions without another prompt |
+| Attach/control the current tab | Use this tab creates a control binding in one action; no read/control choice is required |
+| High-impact action | Executes directly without per-action approval |
 
-The manifest contains optional HTTP/HTTPS host permissions so Chrome can grant one origin at a time. You do not need to select **On all sites** for normal use. Chrome internal pages, the Chrome Web Store, extension pages, and other restricted schemes cannot be read or controlled.
+The manifest declares `<all_urls>` host access for page reading, screenshots, and Gateway connections. Chrome internal pages, the Chrome Web Store, extension pages, and other restricted schemes cannot be read or controlled.
 
 Page text is captured only after an explicit action. Password fields, one-time codes, payment fields, forms, scripts, and hidden content are excluded from the basic page snapshot. If the main page has no text, xopc tries a permitted embedded frame. A selected passage can come from a permitted frame or an ordinary text field. Captured page content is treated as untrusted input and cannot grant itself additional permissions.
 
@@ -185,15 +185,15 @@ The extension manifest version is synchronized with the core xopc version during
 
 ### Chrome reports “Extension manifest must request permission to access this host”
 
-Current releases declare HTTP/HTTPS as optional host permissions and request the exact origin during an explicit page action. If this message appears:
+Current releases declare website access at installation and do not request origin permissions during page actions. If this message appears:
 
 1. Update xopc and reinstall the extension files.
 2. Reload xopc from `chrome://extensions`; an older loaded service worker may still be running the previous manifest.
-3. Open the extension's **Details → Site access** and make sure access is not blocked for the site. Prefer **On click** or the specific site instead of all sites.
+3. Open the extension's **Details → Site access** and make sure access is not blocked for the site. Use **On all sites** to avoid manual site access steps.
 4. Refresh the target page and try **Attach page** again.
 5. Confirm the page is a normal `http://` or `https://` page, not a Chrome internal or Web Store page.
 
-If a newly requested permission is denied or a capture fails immediately after granting it, xopc removes that newly granted origin and asks again on the next explicit attempt.
+A capture failure does not revoke site access. If Chrome blocks a site, adjust extension site access and retry.
 
 ### The assistant reports `DRIVER_UNAVAILABLE`
 
@@ -214,7 +214,13 @@ xopc `v0.0.268` fixed a case where an unbound browser action added `target: unde
 
 ### Chat works but browser control does not
 
-Chat and browser control share the Gateway but use different authorization checks. Verify the extension status says **Gateway Realtime**, the browser endpoint is connected, and the current Session is explicitly attached to the intended tab. Granting site access alone does not attach a Session or approve consequential actions.
+Chat and browser control share the Gateway but use different authorization checks. Verify the extension status says **Gateway Realtime**, the browser endpoint is connected, and the current Session is explicitly attached to the intended tab. Granting site access alone does not attach a Session. Browser actions run directly once the Session has tab control.
+
+## Questions and microphone access
+
+The side panel automatically answers Gateway approval clarifications and continues the task. Repeated events use an idempotent response, and ordinary questions still appear for the user to answer. Browser actions have no per-action approval cards.
+
+Voice input uses Chrome's microphone consent. If Chrome cannot show the prompt in the side panel, opening the microphone authorization page starts the system request immediately; there is no additional xopc authorization button to click before the request.
 
 ## Security summary
 
@@ -222,7 +228,7 @@ Chat and browser control share the Gateway but use different authorization check
 - Gateway access uses a scope-limited browser device credential; Realtime browser control also requires a signed endpoint identity and short-lived turn token.
 - Local auto-enrollment is limited to a fixed extension ID, loopback Gateway, native issuer, key fingerprint, nonce, and short lifetime.
 - Remote/self-hosted enrollment accepts only a signed, short-lived invitation copied from Device access and still requires owner approval with a matching confirmation code.
-- Page access is optional and origin-scoped; page content is untrusted data.
-- Current-tab control requires a Session binding and remains subject to URL, risk, upload, and approval policy.
+- Website access is granted at installation; page content remains untrusted data.
+- Current-tab control requires a Session binding and remains subject to URL and upload path restrictions. Browser actions execute without approval cards.
 
 For reusable browser tasks, continue with [Browser automations](./browser-automations.md). The implementation and threat model are recorded in the repository's [Chrome extension Side Panel design](https://github.com/xopcai/xopc/blob/main/docs/design/chrome-extension-side-panel-chat.md).

@@ -1,5 +1,8 @@
 # Chrome 扩展 Side Panel 对话技术方案
 
+> 2026-10-10 权限流程更新：网站访问统一使用安装时声明的 `<all_urls>`，不再逐站点、截图或连接 Gateway 时调用权限申请。侧栏通过一次“使用此标签页”建立 act binding；浏览器动作无需审批，通用 approval clarification 自动回复继续，普通 input 问题保留。麦克风授权页自动发起 Chrome 系统请求。本机自动配对和远程设备身份验证保持有效。下文的逐站点授权、read/act 选择和 inline approval 描述属于历史设计。
+
+
 日期：2026-09-11，2026-09-12 更新。状态：P0–P4 核心链路已实现，随 `v0.0.268` 发布，并通过完整回归与真实 Gateway/Chrome 链路验证。面向用户的安装、权限与排障说明见[Chrome 浏览器扩展](../zh/browser-extension.md)。
 
 实现取舍：遵循 KISS，不额外抽象 `chat-client-core`，扩展只复用稳定协议包；站点授权由带 origin、documentId、TTL 和 read/act mode 的 session-tab binding 表达，不再叠加第二套长期站点授权状态。P4 已实现标签页 mention、截图、PDF/文件附件以及 Chrome、Chromium、Edge、Brave 的 macOS/Linux Native Messaging manifests；YouTube 专用字幕不进入核心范围；2026-09-15 补齐语音转文字和 Composer 可靠性。
