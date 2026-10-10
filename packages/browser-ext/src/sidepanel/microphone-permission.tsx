@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { t } from '../i18n';
 
@@ -6,7 +6,7 @@ import { t } from '../i18n';
 export function MicrophonePermission() {
   const requesting = useRef(false);
   const [state, setState] = useState<'idle' | 'pending' | 'granted' | 'denied'>('idle');
-  async function authorize() {
+  const authorize = useCallback(async () => {
     if (requesting.current) return;
     requesting.current = true;
     setState('pending');
@@ -19,10 +19,11 @@ export function MicrophonePermission() {
     } finally {
       requesting.current = false;
     }
-  }
+  }, []);
+  useEffect(() => { void authorize(); }, [authorize]);
   return <main className="microphone-permission">
     <h1>{t('voicePermissionOpen')}</h1>
-    <p role="status">{t(state === 'granted' ? 'voicePermissionGranted' : state === 'denied' ? 'voicePermissionFailed' : 'voicePermissionHelp')}</p>
-    {state !== 'granted' ? <button type="button" disabled={state === 'pending'} onClick={() => void authorize()}>{t(state === 'pending' ? 'voiceStarting' : 'voicePermissionOpen')}</button> : null}
+    <p role="status">{t(state === 'granted' ? 'voicePermissionGranted' : state === 'denied' ? 'voicePermissionFailed' : 'voiceStarting')}</p>
+    {state === 'denied' ? <button type="button" onClick={() => void authorize()}>{t('voicePermissionOpen')}</button> : null}
   </main>;
 }

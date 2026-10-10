@@ -39,7 +39,7 @@ describe('browser config API', () => {
       security: {
         privateNetworks: 'deny',
         allowedPrivateHosts: ['localhost'],
-        crossDomainNavigation: 'ask',
+        crossDomainNavigation: 'allow',
         uploads: 'deny',
         consequentialActions: 'allow',
       },

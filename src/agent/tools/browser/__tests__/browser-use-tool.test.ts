@@ -60,7 +60,6 @@ describe('browser_use tool', () => {
     await tool.execute('call-strict', {
       action: 'navigate',
       sessionId: '',
-      approvalId: '',
       revision: 0,
       ref: '',
       expect: {

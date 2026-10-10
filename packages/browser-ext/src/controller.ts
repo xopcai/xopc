@@ -57,7 +57,7 @@ async function resolveAttachedTarget(input: BrowserActionInput): Promise<Attache
   }
   const needsAct = !['observe', 'wait', 'close'].includes(input.action);
   if (needsAct && binding.mode !== 'act') {
-    return fail('APPROVAL_REQUIRED', 'This tab is attached in read-only mode. Enable Control tab in the side panel.');
+    return fail('INVALID_INPUT', 'This tab is attached in read-only mode. Enable Control tab in the side panel.');
   }
   const tabId = Number(binding.tabId);
   const tab = Number.isInteger(tabId) ? await chrome.tabs.get(tabId).catch(() => null) : null;

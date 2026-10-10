@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { BrowserControlResult, BrowserObservation } from '@xopcai/browser-control-contract';
+import type { BrowserActionInput, BrowserControlResult, BrowserObservation } from '@xopcai/browser-control-contract';
 
-import type { Config } from '../../config/schema.js';
+import { BrowserConfigSchema } from '../../config/schema.js';
 import type { BrowserDriver } from '../drivers/browser-driver.js';
-import { decideBrowserApproval } from '../policy/approval-store.js';
 import { BrowserRuntime } from '../runtime/browser-runtime.js';
 
 function observation(url: string, revision = 1): BrowserObservation {
@@ -25,7 +24,7 @@ function setup(crossDomainNavigation: 'allow' | 'ask' | 'deny') {
     navigate: navigate as BrowserDriver['navigate'], observe: vi.fn(async () => observation('about:blank')),
     perform: vi.fn(), tabs: vi.fn(),
   };
-  const browser = {
+  const browser = BrowserConfigSchema.parse({
     enabled: true, driver: { kind: 'playwright', headless: true },
     observation: { maxNodes: 180, maxCharacters: 12_000, visualFallback: true },
     limits: { actionTimeoutMs: 30_000, sessionTimeoutMs: 1_800_000, maxSequenceLength: 10 },
@@ -33,9 +32,9 @@ function setup(crossDomainNavigation: 'allow' | 'ask' | 'deny') {
       privateNetworks: 'deny', allowedPrivateHosts: [], crossDomainNavigation,
       uploads: 'ask', consequentialActions: 'ask',
     },
-  } as Config['browser'];
+  });
   const runtime = new BrowserRuntime({ getConfig: () => browser, createDriver: async () => driver });
-  return { runtime, navigate, browser };
+  return { runtime, navigate, browser, driver };
 }
 
 describe('BrowserRuntime', () => {
@@ -109,18 +108,42 @@ describe('BrowserRuntime', () => {
     expect(navigate).toHaveBeenCalledTimes(1);
   });
 
-  it('binds one-time approval to the exact action arguments', async () => {
-    const { runtime, navigate } = setup('ask');
+  it('normalizes old ask policies and navigates across domains without approval', async () => {
+    const { runtime, navigate, browser } = setup('ask');
+    expect(browser.security).toMatchObject({ crossDomainNavigation: 'allow', uploads: 'allow', consequentialActions: 'allow' });
     await runtime.execute('task-a', { action: 'navigate', url: 'https://one.example' });
-    const pending = await runtime.execute('task-a', { action: 'navigate', url: 'https://two.example/path' });
-    if (pending.ok || !pending.error.approval) throw new Error('Expected approval');
-    decideBrowserApproval(pending.error.approval.id, 'approved');
-    expect(await runtime.execute('task-a', {
-      action: 'navigate', url: 'https://two.example/other', approvalId: pending.error.approval.id,
-    })).toMatchObject({ ok: false, error: { code: 'APPROVAL_REQUIRED' } });
-    expect((await runtime.execute('task-a', {
-      action: 'navigate', url: 'https://two.example/path', approvalId: pending.error.approval.id,
-    })).ok).toBe(true);
+    expect((await runtime.execute('task-a', { action: 'navigate', url: 'https://two.example/path' })).ok).toBe(true);
     expect(navigate).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['extension', 'playwright'] as const)('executes consequential, sensitive, upload and sequence actions directly with %s', async (kind) => {
+    const { browser, driver } = setup('ask');
+    driver.kind = kind;
+    const observed = { ...observation('https://example.com'), nodes: [
+      { ref: 'search', role: 'textbox', name: 'Search', states: [] },
+      { ref: 'publish', role: 'button', name: 'Publish', states: ['submit'] },
+      { ref: 'delete', role: 'button', name: 'Delete', states: [] },
+      { ref: 'password', role: 'textbox', name: 'Password', states: ['sensitive'] },
+    ] };
+    driver.observe = vi.fn(async () => observed);
+    driver.perform = vi.fn(async (_sessionId, input) => ({
+      ok: true, receipt: { action: input.action, risk: 'draft', durationMs: 1, verified: true, observation: observed },
+    }));
+    const emit = vi.fn();
+    const runtime = new BrowserRuntime({ getConfig: () => browser, createDriver: async () => driver, allowedUploadRoots: ['/tmp'], emit });
+    await runtime.execute('task-a', { action: 'observe' });
+    const actions: BrowserActionInput[] = [
+      { action: 'fill', revision: 1, ref: 'search', value: 'news', submit: true },
+      { action: 'click', revision: 1, ref: 'publish' },
+      { action: 'click', revision: 1, ref: 'delete' },
+      { action: 'fill', revision: 1, ref: 'password', value: 'value' },
+      { action: 'upload', revision: 1, ref: 'search', paths: ['/tmp/file.txt'] },
+      { action: 'sequence', revision: 1, steps: [{ action: 'click', ref: 'publish' }] },
+    ];
+    for (const input of actions) {
+      expect((await runtime.execute('task-a', input)).ok).toBe(true);
+    }
+    expect(driver.perform).toHaveBeenCalledTimes(actions.length);
+    expect(emit.mock.calls.some(([event]) => event === 'browser.approval.required')).toBe(false);
   });
 });
