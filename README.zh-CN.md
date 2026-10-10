@@ -1,30 +1,26 @@
 <p align="center">
-  <a href="README.md">English</a> |
-  <a href="README.zh-CN.md">简体中文</a>
+  <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
   <strong>让重要的事持续向前。</strong><br />
-  为超级个体打造的个人 AI。<br />
-  记住你的目标与上下文，连接工具采取行动，<br />
-  并随时从上次停下的地方继续。
+  开源、本地优先的个人 AI，记住你的上下文，与你一起推进工作。<br />
+  和 Ada 理清想法、交办任务，或直接在工作空间处理文件与项目，<br />
+  查看并继续打磨成果。
 </p>
 
 <p align="center">
-  <a href="https://xopc.ai"><img src="https://img.shields.io/badge/官网-xopc.ai-0ea5e9?style=flat-square" alt="xopc.ai"></a>
-  <a href="https://www.npmjs.com/package/@xopcai/xopc"><img src="https://img.shields.io/npm/v/@xopcai/xopc?label=npm&amp;color=teal" alt="npm version"></a>
-  <img src="https://img.shields.io/badge/node.js-%E2%89%A522-339933?logo=nodedotjs&amp;logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License">
-  <img src="https://img.shields.io/badge/大模型厂商-20%2B-5865F2" alt="大模型厂商">
-  <a href="https://github.com/xopcai/xopc/stargazers"><img src="https://img.shields.io/github/stars/xopcai/xopc?style=flat-square&amp;color=gold" alt="GitHub Stars"></a>
+  <a href="https://www.npmjs.com/package/@xopcai/xopc"><img src="https://img.shields.io/npm/v/@xopcai/xopc" alt="npm version"></a>
+  <img src="https://img.shields.io/badge/license-MIT-yellow" alt="MIT License">
+  <a href="https://github.com/xopcai/xopc/stargazers"><img src="https://img.shields.io/github/stars/xopcai/xopc?style=flat-square" alt="GitHub Stars"></a>
 </p>
 
 <p align="center">
   <a href="https://xopc.ai/zh#download"><strong>下载桌面应用 →</strong></a> ·
-  <a href="#quick-start"><strong>30 秒终端安装</strong></a> ·
-  <a href="https://xopcai.github.io/xopc/zh/">查看文档</a>
+  <a href="https://xopcai.github.io/xopc/zh/">使用文档</a> ·
+  <a href="https://xopc.ai/zh/learn">观看演示与实战教程</a>
 </p>
 
 <p align="center">
@@ -33,44 +29,36 @@
   </a>
 </p>
 
-> 安装后可以直接告诉它：**“这周我最想推进的一件事是 ____。帮我找到最小但可信的下一步。”**
+## 两种方式，从同一个 xopc 开始
 
-<details>
-<summary><strong>目录</strong></summary>
+**先和 Ada 聊聊。** Ada 是 xopc 中的个人 Agent，无需单独安装。告诉它你的背景、回复偏好和想做的事；需要时交办任务，继续对话，再回来查看结果。[认识 Ada](https://xopcai.github.io/xopc/zh/personal-ai)。
 
-- [为什么值得试试](#为什么值得试试)
-- [快速开始](#快速开始)
-- [在哪里聊](#在哪里聊)
-- [内置频道](#内置频道)
-- [扩展与技能](#扩展与技能)
-- [配置示例](#配置示例)
-- [文档](#文档)
-- [社区交流](#社区交流)
-- [常见问题](#常见问题)
-- [安全](#安全)
-- [参与贡献](#参与贡献)
+**直接进入工作空间。** 带入文件和目标，处理资料、分析数据、修改代码或制作汇报。把对话、成果与项目留在一起，稍后接着做。[工作空间指南](https://xopcai.github.io/xopc/zh/workspace-guide)。
 
-</details>
+适合独立工作者、创作者、开发者，以及希望减少重复解释和执行负担的人。
 
----
+## 先完成一件实际的事
 
-## 为什么值得试试
+| 你想做什么 | 可以这样开始 | 检查什么 |
+| --- | --- | --- |
+| 继续上次的项目 | “结合这个项目的笔记与任务，告诉我目前卡在哪里，先给出下一步建议。” | 背景来源、未决事项和下一步 |
+| 把资料做成报告 | “把这些销售文件整理为汇总表，保留来源、计算依据和异常项。” | 保存的文件、汇总数字和异常项 |
+| 交办后继续聊 | “把本周计划整理成一页文件，做好后告诉我；我们继续讨论下周的重点。” | 任务卡、实际文件和修改结果 |
 
-- **不用先整理好。** 直接丢给它文字、语音、文件、链接，或者一句模糊的想法。
-- **不用反复解释。** 会话、Project、Task 和可纠正的用户理解会保留真正有用的背景。
-- **不只给建议。** 它可以调用工具、运行工作流、验证结果，并在之后继续推进。
-- **减轻负担，而不是削弱你的主体性。** 让 xopc 接住重复执行，把意图、判断、创造和最终决定留给你。
-- **始终由你控制。** 本地优先，数据源单独授权，发送、删除等高影响操作需要确认。
+资料处理需要相应文件访问权限、工具或技能；语音、图像、浏览器和外部服务也需要各自配置。[交办与接收结果](https://xopcai.github.io/xopc/zh/task-delegation) · [实战教程](https://xopc.ai/zh/learn)。
 
-**让你的上下文持续积累。** xopc 把背景、下一步、结果证据和后续跟进留在一起，让重要的事情不会随着一次对话结束而消失。为一个人而生，帮你在保留掌控的同时，获得更持续、更强大的工作能力。
+## 核心能力
 
-xopc 可以在桌面、网页、终端、手机、Telegram、微信和飞书中使用；你也可以选择自己的云端模型或本地模型。
+| 能力 | 用途 |
+| --- | --- |
+| **上下文与记忆** | 保存会话、项目背景和可查看、纠正、删除的用户理解 |
+| **委派与交付** | 交办任务、处理补充问题、接收成果，并按验收条件检查结果 |
+| **文件与项目** | 处理授权资料，保留文件、笔记、执行记录和下一步 |
+| **持续跟进** | 关注指定主题；用 Workflow 重复流程，用 Automation 定时或按事件启动 |
+| **工具与连接** | 技能、MCP、连接器、浏览器自动化、图像和语音；按需启用 |
+| **多端访问** | 桌面、网页、终端、手机，以及 Telegram、微信、飞书/Lark |
 
-xopc 可以完全独立使用，也可以按需连接 XOPC Cloud 或企业独立部署的 XOPC Platform，使用平台统一发布的服务和 runtime 调度。连接是显式选择，不会自动上传本地数据库或工作区。详见 [XOPC Platform](https://xopcai.github.io/xopc/zh/platform)。
-
-想了解完整的产品理念、信任模型和下一阶段方向，请阅读[产品理念](https://xopcai.github.io/xopc/zh/product)。
-
----
+[电脑控制](https://xopcai.github.io/xopc/zh/computer-use)目前是 macOS 桌面预览能力，需要兼容的 GUI 模型和系统权限。移动端能力随平台与版本变化，Agent 仍在连接的电脑上运行。
 
 <a id="desktop-app"></a>
 <a id="get-started"></a>
@@ -78,159 +66,56 @@ xopc 可以完全独立使用，也可以按需连接 XOPC Cloud 或企业独立
 
 ## 快速开始
 
-### 最省心的开始方式：桌面应用
+### 桌面应用
 
-对大多数用户来说，**桌面应用**是最容易上手的方式：安装应用，在界面里完成模型设置，然后直接在内置控制台聊天。它会自动启动本地 gateway。
+1. [下载 xopc](https://xopc.ai/zh#download)，选择 macOS、Windows 或 Linux。
+2. 连接 XOPC Cloud、自己的模型 API Key，或本地模型服务。
+3. 打开个人 Agent 或聊天，先发送一个小请求，再带入真实资料。
 
-1. 打开 **[xopc.ai](https://xopc.ai/zh#download)**，选择 macOS、Windows 或 Linux。
-2. 打开 xopc，完成模型设置。
-3. 开始聊天。
+[桌面安装说明](https://xopcai.github.io/xopc/zh/desktop-app) · [模型设置](https://xopcai.github.io/xopc/zh/how-to/configure-first-model)。
 
-详见 **[桌面应用](https://xopcai.github.io/xopc/zh/desktop-app)**：安装说明、首次使用指引和源码打包命令。
+### 终端安装
 
-### 一键安装（30 秒启动 — 推荐）
-
-**Linux、macOS、WSL2、Termux**
+macOS、Linux、WSL：
 
 ```bash
 curl -fsSL https://xopc.ai/install.sh | bash
+xopc onboard --quick
+xopc
 ```
 
-**Windows（原生 PowerShell）**
-
-> **提示：** 原生 Windows 无需 WSL 即可运行 xopc——CLI、网关、TUI 与工具均可在本机使用。若更习惯 WSL2，在 WSL 里执行上面的 bash 命令即可。
+Windows PowerShell：
 
 ```powershell
-iex (irm https://xopc.ai/install.ps1)
-```
-
-安装脚本会自动识别系统、在需要时安装 **Node.js ≥ 22.22.3**，并安装 **`@xopcai/xopc`**。国内镜像：bash 加 `--cn`，PowerShell 加 `-Cn`，或指定 `--registry https://registry.npmmirror.com`。
-
-然后直接开聊：
-
-```bash
+irm https://xopc.ai/install.ps1 | iex
 xopc onboard --quick
-xopc                    # 打开本地 TUI
+xopc
 ```
 
-### npm（已具备 Node.js 22.22.3+）
+已具备 Node.js **22.22.3+** 时，也可执行 `pnpm add -g @xopcai/xopc`。[终端快速开始](https://xopcai.github.io/xopc/zh/first-5-minutes)包含镜像与排障说明。
 
-```bash
-npm install -g @xopcai/xopc
-```
+### 在手机上继续
 
-也可用 pnpm：`pnpm add -g @xopcai/xopc` · 国内：`npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
+[下载渠道与连接步骤](https://xopcai.github.io/xopc/zh/mobile-app)。扫码并在电脑上批准配对后，查看进展、发送指令；保持电脑唤醒且 xopc 正在运行。
 
-大体积的可选集成只在启用对应功能时安装：
+## 数据与控制
 
-```bash
-npm install -g @composio/core@0.18.1
-npm install -g @larksuiteoapi/node-sdk@1.66.0 playwright-core@1.60.0
-```
+核心状态默认存储在本机 `~/.xopc/`。可使用云模型或本地模型；选择云服务时，相关请求上下文、图片或音频会由对应提供商处理。连接 XOPC Cloud 不会自动上传整个本地数据库或工作空间。
 
-如果 xopc 是项目依赖，请使用不带 `-g` 的相同命令。
+数据源、工具和频道按需授权。执行确认取决于工具策略和你的授权范围；浏览器控制不会为每次点击弹出确认。先明确任务范围，涉及发送、删除、购买或账号变更时，要求先展示结果并等待你确认。[隐私与记忆](https://xopcai.github.io/xopc/zh/user-understanding) · [浏览器自动化](https://xopcai.github.io/xopc/zh/browser-automations)。
 
-语音转文字（STT）默认关闭。xopc 不再内置本地 STT 引擎；你可以连接云服务商，或安装扩展来接入自己的本地/OpenAI 兼容转写服务。
+## 找到对应指南
 
-### 更多命令
-
-```bash
-xopc agent -i                    # 交互式 CLI
-xopc agent -m "总结最近 5 条提交"  # 只问一句
-xopc gateway                     # 网页服务 + React 控制台
-xopc gateway service install     # OS 系统服务
-```
-
-**从源码**（安装脚本或 pnpm workspace）：
-
-```bash
-# 安装脚本 — 克隆、构建，并写入 ~/.local/bin/xopc 包装命令
-curl -fsSL https://xopc.ai/install.sh | bash -s -- --install-method git
-
-# 或手动克隆
-git clone https://github.com/xopcai/xopc.git && cd xopc
-corepack enable && pnpm install && pnpm run build
-pnpm exec xopc onboard
-```
-
-Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps1))) -InstallMethod git`
-
-**环境：** Node.js **≥ 22**（一键脚本会自动处理）。从源码开发本仓库时请使用 **pnpm**。更多安装方式见 **[xopc.ai](https://xopc.ai)** 与 **[快速开始](https://xopcai.github.io/xopc/zh/getting-started)**。
-
----
-
-## 在哪里聊
-
-| 方式 | 怎么用 | 适合 |
-| --- | --- | --- |
-| **桌面应用** | [前往 xopc.ai 下载](https://xopc.ai/zh#download) | 最省心的开始方式：原生应用 + 内嵌 gateway 控制台 |
-| **TUI** | `xopc` 或 `xopc tui`（远程：`xopc tui --url …`） | 全键盘、流式输出，最快终端路径 |
-| **CLI** | `xopc agent -i` / `xopc agent -m "…"` | 脚本、最小终端环境 |
-| **网页** | `xopc gateway` → 打开控制台地址 | 聊天、设置、日志 |
-| **手机** | [原生 Android 与 iOS App](./docs/design/release/mobile-build-release.md) + 网关扫码配对（[移动端 App](https://xopcai.github.io/xopc/zh/mobile-app)、[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 在 iOS/Android 上继续对话，记录文字、语音、图片和附件；Agent 仍运行在你的电脑或本地环境里 |
-| **即时通讯** | 配置 `channels.*` 并启动网关 | Telegram、微信、飞书/Lark |
-
----
-
-## 内置频道
-
-在 **`~/.xopc/xopc.json`** 里配置 **`channels.*`**。即时通讯需要网关常驻；微信需要在**运行网关的机器**上扫码登录。
-
-| 频道 | 配置项 | 说明 |
-| --- | --- | --- |
-| **Telegram** | `channels.telegram` | 多账号、流式、访问策略 |
-| **微信** | `channels.weixin` | 网关主机扫码 |
-| **飞书 / Lark** | `channels.feishu` | 机器人 / Webhook，见文档 |
-
-完整说明：**[频道](https://xopcai.github.io/xopc/zh/channels)** · **[配置](https://xopcai.github.io/xopc/zh/configuration)**。
-
----
-
-## 扩展与技能
-
-```bash
-xopc skills install <名称>       # SKILL.md 领域技能
-xopc extensions install <包名>    # 工具、频道、UI 面板
-xopc extensions dev ./my-extension
-```
-
-详见 **[扩展](https://xopcai.github.io/xopc/zh/extensions)** · **[技能](https://xopcai.github.io/xopc/zh/skills)**。网关 UI 扩展：**`@xopcai/xopc/extension-ui-sdk`**（`packages/extension-ui-sdk/`）。
-
----
-
-## 配置示例
-
-默认路径：**`~/.xopc/xopc.json`**。一个最小骨架：
-
-```json
-{
-  "providers": { "deepseek": "${DEEPSEEK_API_KEY}" },
-  "agents": { "default": "main", "list": [{ "id": "main", "models": { "roles": { "deep": { "model": "deepseek/deepseek-v4-flash" } } } }] }
-}
-```
-
-完整参考：**[配置](https://xopcai.github.io/xopc/zh/configuration)**。需要即时通讯时再补 **`channels.*`**，可选工具（如浏览器）默认关闭。
-
----
-
-## 文档
-
-| 指南 | 说明 |
+| 你想做什么 | 指南 |
 | --- | --- |
-| [快速开始](https://xopcai.github.io/xopc/zh/getting-started) | 安装、向导、第一次对话 |
-| [持续工作模型](https://xopcai.github.io/xopc/zh/concepts/loops) | 状态、执行与触发如何组成可恢复、可检查的工作闭环 |
-| [Project、Task 与笔记](https://xopcai.github.io/xopc/zh/projects-tasks-notes) | 用唯一且可验证的 Task 模型推进长期工作，并按需增加 Project 上下文 |
-| [分享会话](https://xopcai.github.io/xopc/zh/session-sharing) | 发布经过检查、带有效期和访问上限的只读 Session 快照 |
-| [配置](https://xopcai.github.io/xopc/zh/configuration) | `xopc.json` 字段 |
-| [XOPC Platform](https://xopcai.github.io/xopc/zh/platform) | 独立与连接模式、Discovery 和 runtime 注册 |
-| [CLI](https://xopcai.github.io/xopc/zh/cli) | 命令与参数 |
-| [频道](https://xopcai.github.io/xopc/zh/channels) | Telegram、微信、飞书 |
-| [架构](https://xopcai.github.io/xopc/zh/architecture) | 整体结构 |
-| [工作流](https://xopcai.github.io/xopc/zh/workflows) | 扇出子 Agent、看板、脚本 |
-
-更多：[工具](https://xopcai.github.io/xopc/zh/tools) · [移动端 App](https://xopcai.github.io/xopc/zh/mobile-app) · [语音](https://xopcai.github.io/xopc/zh/voice) · [远程访问](https://xopcai.github.io/xopc/zh/remote-access)
-
----
+| 设置个人助手 | [认识 Ada](https://xopcai.github.io/xopc/zh/personal-ai) |
+| 交办并修改成果 | [任务交付](https://xopcai.github.io/xopc/zh/task-delegation) |
+| 处理文件与项目 | [工作空间](https://xopcai.github.io/xopc/zh/workspace-guide) |
+| 检查结果与重试 | [任务验收](https://xopcai.github.io/xopc/zh/task-review) |
+| 保存可重复的网页操作 | [浏览器录制与自动化](https://xopcai.github.io/xopc/zh/browser-automations) |
+| 增加服务和能力 | [模型](https://xopcai.github.io/xopc/zh/models) · [技能](https://xopcai.github.io/xopc/zh/skills) · [MCP](https://xopcai.github.io/xopc/zh/mcp) · [连接器](https://xopcai.github.io/xopc/zh/connectors/) |
+| 配置实例与扩展 | [配置](https://xopcai.github.io/xopc/zh/configuration) · [扩展](https://xopcai.github.io/xopc/zh/extensions) · [XOPC Platform](https://xopcai.github.io/xopc/zh/platform) |
+| 查看更新 | [近期变化](https://xopcai.github.io/xopc/zh/whats-new) · [GitHub Releases](https://github.com/xopcai/xopc/releases) |
 
 ## 社区交流
 
@@ -261,7 +146,7 @@ xopc extensions dev ./my-extension
 
 **它和普通聊天 UI 有什么区别？** — 聊天只是入口。xopc 会把对你的理解、长期目标、项目、Task、决定和执行记录保留下来，让同一个助手可以跨越时间和入口继续工作。
 
-**能在手机或即时通讯里用吗？** — 可以。用 [原生移动端 App](./docs/design/release/mobile-build-release.md) 扫码连接，或配置 Telegram、微信、飞书/Lark。
+**能在手机或即时通讯里用吗？** — 可以。用 [移动端 App](https://xopcai.github.io/xopc/zh/mobile-app) 扫码连接，或配置 Telegram、微信、飞书/Lark。
 
 **还有问题？** — 去 [GitHub Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a) 提问。
 

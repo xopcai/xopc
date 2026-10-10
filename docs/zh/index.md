@@ -1,10 +1,23 @@
 ---
 layout: home
+head:
+  - - meta
+    - property: og:title
+      content: xopc — 让重要的事持续向前。
+  - - meta
+    - property: og:description
+      content: 开源、本地优先的个人 AI。和 Ada 聊聊、交办任务，或直接处理文件与项目。
+  - - meta
+    - name: twitter:title
+      content: xopc — 让重要的事持续向前。
+  - - meta
+    - name: twitter:description
+      content: 开源、本地优先的个人 AI。和 Ada 聊聊、交办任务，或直接处理文件与项目。
 
 hero:
   name: xopc
   text: 让重要的事持续向前。
-  tagline: "为超级个体打造的个人 AI。记住你的目标与上下文，连接工具采取行动，并随时从上次停下的地方继续。"
+  tagline: "开源、本地优先的个人 AI。和 Ada 理清想法、交办任务，或直接处理文件与项目，查看并继续打磨成果。"
   image:
     src: /logo.svg
     alt: xopc
@@ -20,27 +33,28 @@ hero:
       link: /zh/getting-started
 
 features:
-  - title: 不用先整理好
-    details: 直接丢给它文字、语音、文件、链接，或者一句还没想清楚的话。
-    link: /zh/concepts/loops
-  - title: 不用反复解释
-    details: Session、Project、Task 和可纠正的用户理解会保留真正有用的背景。
+  - title: 先和 Ada 聊聊
+    details: 说说背景和目标，需要时交办任务，再回来查看并修改结果。
+    link: /zh/personal-ai
+  - title: 直接处理资料
+    details: 带入文件和目标，分析数据、整理资料，把成果留在项目中。
+    link: /zh/workspace-guide
+  - title: 从已有进展继续
+    details: 查看任务、结果和下一步，在电脑或连接的手机上接着做。
+    link: /zh/task-delegation
+  - title: 掌握数据与权限
+    details: 核心状态本地保存，记忆可以纠正，工具和云模型按需选择。
     link: /zh/user-understanding
-  - title: 不只给建议
-    details: 调用工具、运行 Workflow、验证结果，并在一次对话结束后继续推进。
-    link: /zh/projects-tasks-notes
-  - title: 始终由你控制
-    details: 本地优先、数据源单独授权，高影响操作继续保留人工确认。
-    link: /zh/product#信任本身就是产品界面
+
 ---
 
 <video src="/xopc-desktop.mp4" controls muted autoplay loop playsinline width="100%" aria-label="xopc 桌面应用演示"></video>
 
-## 从一件重要的事开始
+## 从一个实际结果开始
 
 1. [下载桌面应用](https://xopc.ai/zh#download)，或按照[终端快速开始](./first-5-minutes.md)操作。
 2. [连接一个模型](./how-to/configure-first-model.md)。
-3. 告诉 xopc：**“这周我最想推进的一件事是 ____。帮我找到最小但可信的下一步。”**
+3. 告诉 xopc：**“把这份计划整理成一页文件，标出三个下一步和未决问题，保存后给我查看。”**
 
 **让你的上下文持续积累。** xopc 把背景、下一步、结果证据和后续跟进留在一起，让重要的事情不会随着一次对话结束而消失。[了解 Task 闭环](./concepts/loops.md)。
 
@@ -48,6 +62,11 @@ features:
 
 | 你想做什么 | 阅读 |
 | --- | --- |
+| 设置个人助手 | [认识 Ada](./personal-ai.md) |
+| 交办并修改成果 | [任务交付](./task-delegation.md) |
+| 处理文件与项目 | [工作空间](./workspace-guide.md) |
+| 检查结果与重试 | [任务验收](./task-review.md) |
+| 查看近期功能 | [近期变化](./whats-new.md) |
 | 了解 xopc 正在成为怎样的产品 | [产品理念](./product.md) |
 | 查看或纠正 xopc 对你的理解 | [用户理解](./user-understanding.md) |
 | 开始对话并稍后继续 | [聊天与 Session](./session.md) |
@@ -66,3 +85,5 @@ features:
 | 修复设置问题 | [故障排查](./how-to/diagnose-broken-setup.md) |
 
 完整的产品故事和信任模型见[产品理念](./product.md)。
+
+实战演示与练习见[官网教程](https://xopc.ai/zh/learn)。Ada 是 xopc 中的个人 Agent，无需另外安装。

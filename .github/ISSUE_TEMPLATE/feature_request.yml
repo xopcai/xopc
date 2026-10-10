@@ -35,6 +35,11 @@ body:
     attributes:
       label: Primary area
       options:
+        - Personal Agent / Ada
+        - Tasks / delivery / acceptance
+        - Files / workspace / projects
+        - Mobile apps
+        - Browser extension / recording / automation
         - Agent / tools / memory
         - Gateway / APIs
         - Web console (UI)

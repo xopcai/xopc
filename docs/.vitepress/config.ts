@@ -5,7 +5,7 @@ const base = '/xopc/'
 
 export default defineConfig({
   title: 'xopc',
-  description: 'Personal AI for the one-person company. It remembers your goals and context, acts across your tools, and picks up where you left off.',
+  description: 'Open-source, local-first personal AI. Chat with Ada, delegate tasks, and work with files and projects using cloud or local models.',
   base,
   // Product documentation is published here. Engineering plans and ADRs stay
   // in the repository, but are deliberately excluded from the user site.
@@ -33,13 +33,13 @@ export default defineConfig({
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }],
     ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}apple-touch-icon.png` }],
     ['meta', { property: 'og:title', content: 'xopc — Keep what matters moving.' }],
-    ['meta', { property: 'og:description', content: 'Personal AI for the one-person company. It remembers your goals and context, acts across your tools, and picks up where you left off.' }],
-    ['meta', { property: 'og:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
+    ['meta', { property: 'og:description', content: 'Open-source, local-first personal AI. Chat with Ada, delegate tasks, and work with files and projects using cloud or local models.' }],
+    ['meta', { property: 'og:image', content: `https://xopcai.github.io${base}social-preview.png` }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:title', content: 'xopc — Keep what matters moving.' }],
-    ['meta', { name: 'twitter:description', content: 'Personal AI for the one-person company. It remembers your goals and context, acts across your tools, and picks up where you left off.' }],
-    ['meta', { name: 'twitter:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
+    ['meta', { name: 'twitter:description', content: 'Open-source, local-first personal AI. Chat with Ada, delegate tasks, and work with files and projects using cloud or local models.' }],
+    ['meta', { name: 'twitter:image', content: `https://xopcai.github.io${base}social-preview.png` }],
   ],
   locales: {
     root: {
@@ -56,7 +56,7 @@ export default defineConfig({
           { text: 'Download', link: 'https://xopc.ai/en#download' },
           { text: 'Get started', link: '/getting-started' },
           { text: 'Product', link: '/product' },
-          { text: 'Guides', link: '/session' },
+          { text: 'Guides', link: '/workspace-guide' },
           { text: 'Community', link: '/community' },
           { text: 'Configuration', link: '/configuration' }
         ],
@@ -77,6 +77,10 @@ export default defineConfig({
           {
             text: 'Daily use',
             items: [
+              { text: 'Meet Ada', link: '/personal-ai' },
+              { text: 'Delegate and receive results', link: '/task-delegation' },
+              { text: 'Work with files and projects', link: '/workspace-guide' },
+              { text: 'Review and accept a Task', link: '/task-review' },
               { text: 'User understanding', link: '/user-understanding' },
               { text: 'Personal AI follow-ups', link: '/personal-agent-proactivity' },
               { text: 'Chat and sessions', link: '/session' },
@@ -136,7 +140,9 @@ export default defineConfig({
               { text: 'Configuration reference', link: '/reference/configuration' },
               { text: 'Data and file locations', link: '/workspace' },
               { text: 'Tool runtimes', link: '/runtime-tools' },
+              { text: 'Voice runtime', link: '/reference/voice-runtime' },
               { text: 'Templates', link: '/reference/templates' },
+              { text: 'What’s new', link: '/whats-new' },
               { text: 'Release channels', link: '/releases' }
             ]
           },
@@ -158,6 +164,7 @@ export default defineConfig({
     zh: {
       label: '简体中文',
       lang: 'zh-CN',
+      description: '开源、本地优先的个人 AI。和 Ada 聊聊、交办任务，或直接处理文件与项目，使用云端或本地模型。',
       link: '/zh/',
       themeConfig: {
         siteTitle: 'xopc',
@@ -170,7 +177,7 @@ export default defineConfig({
           { text: '下载', link: 'https://xopc.ai/zh#download' },
           { text: '快速开始', link: '/zh/getting-started' },
           { text: '产品理念', link: '/zh/product' },
-          { text: '使用指南', link: '/zh/session' },
+          { text: '使用指南', link: '/zh/workspace-guide' },
           { text: '社区', link: '/zh/community' },
           { text: '配置', link: '/zh/configuration' }
         ],
@@ -191,6 +198,10 @@ export default defineConfig({
           {
             text: '日常使用',
             items: [
+              { text: '认识 Ada', link: '/zh/personal-ai' },
+              { text: '交办与接收结果', link: '/zh/task-delegation' },
+              { text: '处理文件与项目', link: '/zh/workspace-guide' },
+              { text: '检查与验收任务', link: '/zh/task-review' },
               { text: '用户理解', link: '/zh/user-understanding' },
               { text: 'Personal AI 持续跟进', link: '/zh/personal-agent-proactivity' },
               { text: '聊天与会话', link: '/zh/session' },
@@ -250,7 +261,9 @@ export default defineConfig({
               { text: '配置参考', link: '/zh/reference/configuration' },
               { text: '数据与文件位置', link: '/zh/workspace' },
               { text: '工具运行环境', link: '/zh/runtime-tools' },
+              { text: '语音技术参考', link: '/zh/reference/voice-runtime' },
               { text: '模板文件', link: '/zh/reference/templates' },
+              { text: '近期变化', link: '/zh/whats-new' },
               { text: '发布通道', link: '/zh/releases' }
             ]
           },
