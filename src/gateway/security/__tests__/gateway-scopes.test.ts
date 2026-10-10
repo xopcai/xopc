@@ -84,7 +84,7 @@ describe('gateway scopes', () => {
     expect(hasGatewayScope(['gateway.admin'], 'sessions.write')).toBe(true);
   });
 
-  it('limits browser extensions to chat and device capabilities', () => {
+  it('limits browser extensions to chat, device, and automation capabilities', () => {
     expect(DEFAULT_BROWSER_EXTENSION_SCOPES).toEqual([
       'gateway.status',
       'agents.read',
@@ -92,6 +92,8 @@ describe('gateway scopes', () => {
       'sessions.read',
       'sessions.write',
       'device.self',
+      'automations.read',
+      'automations.write',
     ]);
     expect(hasGatewayScope(DEFAULT_BROWSER_EXTENSION_SCOPES, 'workspace.read')).toBe(false);
     expect(hasGatewayScope(DEFAULT_BROWSER_EXTENSION_SCOPES, 'gateway.admin')).toBe(false);
