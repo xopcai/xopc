@@ -11,3 +11,5 @@ Download the current desktop app from [xopc.ai](https://xopc.ai/en#download). Re
 Before changing channels or moving across several versions, read the intervening release notes for migrations, new permissions, and extension compatibility.
 
 See [Update xopc](./update.md) for commands and post-update checks.
+
+See [What’s new](./whats-new.md) for recent capabilities and their user guides.

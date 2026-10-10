@@ -1,6 +1,16 @@
 # 开始使用 xopc
 
-为超级个体打造的个人 AI。从桌面应用开始，连接一个模型，让 xopc 记住你的上下文，并帮你找到下一个可信行动。
+开源、本地优先的个人 AI。从桌面应用开始，连接一个模型，让 xopc 记住你的上下文，并帮你找到下一个可信行动。
+
+## 选择模型与开始方式
+
+| 模型方式 | 需要什么 |
+| --- | --- |
+| XOPC Cloud | 登录账号，选择当前目录中可用的服务 |
+| 自带 API Key | 连接支持的提供商并选择模型 |
+| 本地模型 | 启动并连接兼容的本地模型服务，例如 Ollama |
+
+模型可用后，打开[个人 Agent](./personal-ai.md)和 Ada 聊聊，或直接[处理文件与项目](./workspace-guide.md)。语音、图像和电脑控制需要分别配置兼容服务，普通聊天设置不会自动启用全部能力。
 
 ## 选择开始方式
 
@@ -78,3 +88,7 @@ xopc config show
 ```
 
 `config show` 会隐藏已识别的敏感值。不要把 API Key、Gateway Token 或机器人 Token 放入 Issue 或截图。
+
+## 从当前界面开始
+
+[认识 Ada](./personal-ai.md) · [交办与接收结果](./task-delegation.md) · [处理文件与项目](./workspace-guide.md) · [任务验收](./task-review.md)。

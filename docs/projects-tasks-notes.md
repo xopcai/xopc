@@ -58,3 +58,7 @@ Open a Task card to inspect its result, artifacts, evidence and remaining work. 
 4. If the latest execution failed, inspect its record and cause before choosing **Retry**. Retry retains that execution's executor; it does not prove an earlier external write never happened.
 
 If the Task state has changed, refresh before acting again. Resolve requests for information or authorization before continuing work.
+
+## Start from the current experience
+
+[Meet Ada](./personal-ai.md) · [Delegate and receive results](./task-delegation.md) · [Work with files and projects](./workspace-guide.md) · [Task acceptance](./task-review.md).
