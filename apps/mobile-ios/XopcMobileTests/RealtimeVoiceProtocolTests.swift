@@ -32,7 +32,7 @@ struct RealtimeVoiceProtocolTests {
     @Test func encodesNativePlaybackSubmissionMetric() throws {
         let data = try JSONEncoder().encode(RealtimeVoiceControlMessage(
             type: "session.metric", payload: .init(responseId: "reply",
-                metric: "speech_end_to_audio_buffered", durationMs: 123.5)
+                                                   metric: "speech_end_to_audio_buffered", durationMs: 123.5)
         ))
         let message = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let payload = try #require(message["payload"] as? [String: Any])
