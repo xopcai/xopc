@@ -250,19 +250,6 @@ async function verifyGateway(publicKey: string, payload: string, signature: stri
   }
 }
 
-function requestGatewayOriginPermissions(origins: string[]): Promise<boolean> {
-  const patterns = origins
-    .filter((origin) => {
-      const url = new URL(origin);
-      return !(url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname));
-    })
-    .map(origin => `${new URL(origin).origin}/*`);
-  if (!patterns.length) return Promise.resolve(true);
-  // This call must happen synchronously inside the Connect click handler. Chrome
-  // rejects optional permission prompts after any awaited work loses the gesture.
-  return chrome.permissions.request({ origins: patterns });
-}
-
 async function hasGatewayOriginPermission(origin: string): Promise<boolean> {
   const url = new URL(origin);
   if (url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname)) return true;
@@ -449,8 +436,6 @@ export async function pairGateway(
   const payload = parseBrowserPairingInvitation(invitation, true);
   const origins = [...new Set(payload.routes.map(route => new URL(route.url).origin))];
   const selectedOrigin = requestedOrigin && origins.includes(requestedOrigin) ? requestedOrigin : origins[0]!;
-  const permissionTask = requestGatewayOriginPermissions([selectedOrigin]);
-  if (!await permissionTask) throw new Error('Gateway site permission was not granted');
   const permittedOrigins = (await Promise.all(origins.map(async origin => ({
     origin,
     permitted: await hasGatewayOriginPermission(origin),

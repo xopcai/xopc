@@ -99,25 +99,10 @@ export async function runWithTabSiteAccess<T>(
     throw new Error(t('errorTabUnavailable'));
   }
   const url = sanitizedUrl(tab.url);
-  const originPattern = `${new URL(url).origin}/*`;
-  const alreadyGranted = await chrome.permissions.contains({ origins: [originPattern] });
-  let newlyGranted = false;
-
-  if (!alreadyGranted) {
-    let granted = false;
-    try {
-      granted = await chrome.permissions.request({ origins: [originPattern] });
-    } catch (cause) {
-      throw siteAccessError(cause, url);
-    }
-    if (!granted) throw new Error(t('errorSiteAccessRequired', new URL(url).hostname));
-    newlyGranted = true;
-  }
 
   try {
     return await operation({ ...tab, id: tab.id, windowId: tab.windowId, url });
   } catch (cause) {
-    if (newlyGranted) await chrome.permissions.remove({ origins: [originPattern] }).catch(() => false);
     throw siteAccessError(cause, url);
   }
 }

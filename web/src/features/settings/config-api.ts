@@ -19,9 +19,9 @@ export interface BrowserSettingsState {
   sessionTimeoutMs: number;
   maxSequenceLength: number;
   allowedPrivateHosts: string;
-  crossDomainNavigation: 'allow' | 'ask' | 'deny';
-  uploads: 'allow' | 'ask' | 'deny';
-  consequentialActions: 'allow' | 'ask' | 'deny';
+  crossDomainNavigation: 'allow' | 'deny';
+  uploads: 'allow' | 'deny';
+  consequentialActions: 'allow' | 'deny';
 }
 
 const defaults: BrowserSettingsState = {
@@ -41,9 +41,9 @@ const defaults: BrowserSettingsState = {
   sessionTimeoutMs: 900_000,
   maxSequenceLength: 5,
   allowedPrivateHosts: '',
-  crossDomainNavigation: 'ask',
-  uploads: 'ask',
-  consequentialActions: 'ask',
+  crossDomainNavigation: 'allow',
+  uploads: 'allow',
+  consequentialActions: 'allow',
 };
 
 export function parseBrowserSettings(config: unknown): BrowserSettingsState {
@@ -128,4 +128,4 @@ export async function patchBrowserSettings(state: BrowserSettingsState): Promise
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function stringValue(value: unknown, fallback: string): string { return typeof value === 'string' ? value : fallback; }
 function numberValue(value: unknown, fallback: number): number { return typeof value === 'number' && Number.isFinite(value) ? value : fallback; }
-function policy(value: unknown): 'allow' | 'ask' | 'deny' { return value === 'allow' || value === 'deny' ? value : 'ask'; }
+function policy(value: unknown): 'allow' | 'deny' { return value === 'deny' ? 'deny' : 'allow'; }

@@ -13,7 +13,6 @@ import { messageText } from './chat-message-model';
 import { extensionLocale, t } from '../i18n';
 import {
   BrowserChatClient,
-  type BrowserApproval,
   type BrowserChatSnapshot,
 } from './chat-client';
 import {
@@ -85,14 +84,6 @@ function formatSessionDate(timestamp?: string | number): string {
   if (date.toDateString() === now.toDateString()) return formatMessageTime(date.getTime());
   return new Intl.DateTimeFormat(extensionLocale(), { month: 'short', day: 'numeric' }).format(date);
 }
-
-const RISK_MESSAGE_KEYS: Record<BrowserApproval['risk'], string> = {
-  external_effect: 'riskExternalEffect',
-  destructive: 'riskDestructive',
-  sensitive: 'riskSensitive',
-  draft: 'riskDraft',
-  read: 'riskRead',
-};
 
 function formatFileSize(size?: number): string {
   if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return '';
@@ -681,19 +672,9 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
         }}
       >
         {draggingFiles ? <div className="file-drop-overlay"><PaperclipIcon /><span>{t('dropFiles')}</span></div> : null}
-        {snapshot.browserApproval ? (
-          <section className="request-card browser-approval" aria-label={t('browserApproval')}>
-            <div className="request-card-title"><AlertIcon /><strong>{t('browserApproval')} · {t(RISK_MESSAGE_KEYS[snapshot.browserApproval.risk])}</strong></div>
-            <p>{snapshot.browserApproval.summary}</p>
-            <div className="request-actions">
-              <button className="request-primary" type="button" onClick={() => void runControlAction(() => client.respondToBrowserApproval('approved'))}>{t('allowOnce')}</button>
-              <button type="button" onClick={() => void runControlAction(() => client.respondToBrowserApproval('denied'))}>{t('deny')}</button>
-            </div>
-          </section>
-        ) : null}
-        {snapshot.clarification ? (
+        {snapshot.clarification?.kind === 'input' ? (
           <section className="request-card" aria-label={t('agentQuestion')}>
-            <div className="request-card-title"><SparkleIcon /><strong>{snapshot.clarification.kind === 'approval' ? t('approvalRequired') : t('xopcNeedsInput')}</strong></div>
+            <div className="request-card-title"><SparkleIcon /><strong>{t('xopcNeedsInput')}</strong></div>
             <p>{snapshot.clarification.question}</p>
             {snapshot.clarification.choices?.length ? <div className="choice-list">{snapshot.clarification.choices.map((choice) => (
               <button key={choice} type="button" disabled={clarificationSubmitting} onClick={() => void respondToClarification('answer', choice)}>{choice}</button>
@@ -883,15 +864,11 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
                 </div>
                 <div className="tools-menu-section tab-access-section">
                   <span className="tools-menu-label">{t('liveTabAccess')}</span>
-                  {snapshot.tabBinding ? (
+                  {snapshot.tabBinding?.mode === 'act' ? (
                     <button type="button" className="active-access" onClick={() => { setToolsOpen(false); void runControlAction(() => client.unbindActiveTab()); }}>
-                      {snapshot.tabBinding.mode === 'act' ? <CursorIcon /> : <EyeIcon />}
-                      <span><strong>{snapshot.tabBinding.mode === 'act' ? t('controlEnabled') : t('readEnabled')}</strong><small>{t('stopAccess')}</small></span><CloseIcon />
+                      <CursorIcon /><span><strong>{t('controlEnabled')}</strong><small>{t('stopAccess')}</small></span><CloseIcon />
                     </button>
-                  ) : <>
-                    <button type="button" onClick={() => { setToolsOpen(false); void runControlAction(() => client.bindActiveTab('read')); }}><EyeIcon /><span><strong>{t('readThisTab')}</strong><small>{t('keepPageAvailable')}</small></span></button>
-                    <button type="button" onClick={() => { setToolsOpen(false); void runControlAction(() => client.bindActiveTab('act')); }}><CursorIcon /><span><strong>{t('controlThisTab')}</strong><small>{t('controlSafeguards')}</small></span></button>
-                  </>}
+                  ) : <button type="button" onClick={() => { setToolsOpen(false); void runControlAction(() => client.bindActiveTab('act')); }}><CursorIcon /><span><strong>{t('useThisTab')}</strong><small>{t('useThisTabHelp')}</small></span></button>}
                 </div>
               </div> : null}
             </div>

@@ -113,6 +113,8 @@
   "screenshot": { "message": "Screenshot" },
   "captureVisibleTab": { "message": "Capture the visible tab" },
   "supportedFileTypes": { "message": "Images, Office documents, PDF, text, and code" },
+  "useThisTab": { "message": "Use this tab" },
+  "useThisTabHelp": { "message": "Let xopc read and operate this page" },
   "liveTabAccess": { "message": "Live tab access" },
   "controlEnabled": { "message": "Control enabled" },
   "readEnabled": { "message": "Read enabled" },

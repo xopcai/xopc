@@ -98,7 +98,6 @@ export interface BrowserExpectation {
 
 export interface BrowserInputBase {
   sessionId?: string;
-  approvalId?: string;
   target?: BrowserTarget;
 }
 
@@ -172,11 +171,11 @@ export interface BrowserTabsInput extends BrowserInputBase {
 }
 
 export type BrowserSequenceStep =
-  | Omit<BrowserClickInput, 'sessionId' | 'revision' | 'approvalId'>
-  | Omit<BrowserFillInput, 'sessionId' | 'revision' | 'approvalId'>
-  | Omit<BrowserSelectInput, 'sessionId' | 'revision' | 'approvalId'>
-  | Omit<BrowserPressInput, 'sessionId' | 'revision' | 'approvalId'>
-  | Omit<BrowserScrollInput, 'sessionId' | 'revision' | 'approvalId'>;
+  | Omit<BrowserClickInput, 'sessionId' | 'revision'>
+  | Omit<BrowserFillInput, 'sessionId' | 'revision'>
+  | Omit<BrowserSelectInput, 'sessionId' | 'revision'>
+  | Omit<BrowserPressInput, 'sessionId' | 'revision'>
+  | Omit<BrowserScrollInput, 'sessionId' | 'revision'>;
 
 export interface BrowserSequenceInput extends BrowserInputBase {
   action: 'sequence';
@@ -265,7 +264,6 @@ export interface BrowserActionReceipt {
 export interface BrowserControlError {
   code:
     | 'ABORTED'
-    | 'APPROVAL_REQUIRED'
     | 'BLOCKED_URL'
     | 'DRIVER_UNAVAILABLE'
     | 'EXPECTATION_FAILED'
@@ -277,12 +275,6 @@ export interface BrowserControlError {
     | 'UNSUPPORTED_PAGE';
   message: string;
   observation?: BrowserObservation;
-  approval?: {
-    id: string;
-    risk: BrowserRiskLevel;
-    summary: string;
-    expiresAt: string;
-  };
 }
 
 export type BrowserControlResult =

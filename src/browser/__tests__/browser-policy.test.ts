@@ -12,7 +12,7 @@ const node = (states: string[]): BrowserNode => ({
 });
 
 describe('browser action risk policy', () => {
-  it('requires consequential approval for submit actions', () => {
+  it('classifies submit actions as external effects', () => {
     expect(classifyBrowserRisk({ action: 'fill', revision: 1, ref: 'e1', value: 'hello', submit: true }, node([])))
       .toBe('external_effect');
     expect(classifyBrowserRisk({ action: 'click', revision: 1, ref: 'e1' }, node(['submit'])))
@@ -21,7 +21,7 @@ describe('browser action risk policy', () => {
       .toBe('external_effect');
   });
 
-  it('requires sensitive approval for protected fields', () => {
+  it('classifies protected fields as sensitive', () => {
     expect(classifyBrowserRisk({ action: 'fill', revision: 1, ref: 'e1', value: '123' }, node(['sensitive'])))
       .toBe('sensitive');
   });

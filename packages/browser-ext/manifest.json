@@ -19,13 +19,7 @@
     "debugger"
   ],
   "host_permissions": [
-    "http://127.0.0.1/*",
-    "http://localhost/*"
-  ],
-  "optional_host_permissions": [
-    "<all_urls>",
-    "http://*/*",
-    "https://*/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "dist/background.js",

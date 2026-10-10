@@ -34,9 +34,6 @@ async function reconnectBrowserBridge(): Promise<void> {
 
 function pairingErrorMessage(cause: unknown): string {
   const message = cause instanceof Error ? cause.message : String(cause);
-  if (message === 'Gateway site permission was not granted') {
-    return t('errorGatewayPermissionHelp');
-  }
   if (message === 'PAIRING_EXPIRED' || message === 'Pairing expired' || message === 'Pairing invitation has expired') {
     return t('errorInvitationExpiredHelp');
   }

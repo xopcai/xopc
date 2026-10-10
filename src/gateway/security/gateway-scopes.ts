@@ -43,8 +43,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path === '/api/personal-agent' || path.startsWith('/api/personal-agent/')) {
     return methodScope(method, 'sessions.read', 'sessions.write');
   }
-  if (path.startsWith('/api/browser/tab-bindings')
-    || path.startsWith('/api/browser/approvals')) {
+  if (path.startsWith('/api/browser/tab-bindings')) {
     return methodScope(method, 'sessions.read', 'sessions.write');
   }
   if (method === 'GET' && path === '/api/connectors/approvals') return 'sessions.read';

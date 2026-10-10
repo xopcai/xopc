@@ -41,8 +41,6 @@ import {
 import { parseToolResult } from '@/features/chat/tool-results/parse-tool-result';
 import { useDevViewStore } from '@/stores/dev-view-store';
 import { formatStepRoundDuration } from '@/features/chat/time/step-round-duration';
-import { BrowserApprovalCard } from '@/features/chat/tool-results/browser-approval-card';
-import { parseBrowserApproval } from '@/features/chat/tool-results/browser-approval';
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
@@ -554,11 +552,6 @@ function StepRow({
     }
   }, [block]);
 
-  const browserApproval = useMemo(() => {
-    if (block.type !== 'tool_use' || block.status === 'running' || block.name !== 'browser_use') return null;
-    return parseBrowserApproval(block.details);
-  }, [block]);
-
   if (block.type === 'text') {
     const text = block.text.trim();
     if (!text) return null;
@@ -682,7 +675,6 @@ function StepRow({
   if (surfaceOnly) {
     return <>
       {!isStreaming && !isError ? <ToolUseWidgetSlot toolName={block.name} toolResult={block.result} /> : null}
-      {!isStreaming && browserApproval ? <BrowserApprovalCard key={browserApproval.id} approval={browserApproval} conversationId={conversationId} /> : null}
     </>;
   }
 

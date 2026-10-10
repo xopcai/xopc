@@ -70,14 +70,7 @@ export async function fileToBrowserAttachment(file: File): Promise<BrowserAttach
 }
 
 export async function captureVisibleScreenshot(): Promise<BrowserAttachment> {
-  // Site access alone cannot authorize captureVisibleTab. Request while still
-  // in the click handler: clicking inside a side panel does not grant activeTab.
-  const tabPromise = chrome.tabs.query({ active: true, currentWindow: true });
-  const [granted, [activeTab]] = await Promise.all([
-    chrome.permissions.request({ origins: ['<all_urls>'] }),
-    tabPromise,
-  ]);
-  if (!granted) throw new Error(t('errorScreenshotPermissionRequired'));
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (activeTab?.id === undefined) throw new Error(t('errorNoActivePage'));
   const dataUrl = await runWithTabSiteAccess(activeTab.id, async (accessibleTab) => {
     const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });

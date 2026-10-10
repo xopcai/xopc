@@ -4,13 +4,7 @@ export type { BrowserDriver, BrowserPrimitiveInput } from './drivers/browser-dri
 export { PlaywrightDriver, type PlaywrightDriverOptions } from './drivers/playwright-driver.js';
 export { ExtensionDriver } from './drivers/extension-driver.js';
 export { formatBrowserObservation } from './observation/format.js';
-export { classifyBrowserRisk, browserRiskNeedsApproval } from './policy/browser-policy.js';
-export {
-  createBrowserApproval,
-  consumeBrowserApproval,
-  decideBrowserApproval,
-  listBrowserApprovals,
-} from './policy/approval-store.js';
+export { classifyBrowserRisk } from './policy/browser-policy.js';
 export { verifyBrowserExpectation } from './verification/expectation.js';
 export {
   BrowserNotReadyError,

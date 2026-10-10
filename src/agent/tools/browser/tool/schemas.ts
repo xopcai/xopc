@@ -2,7 +2,6 @@ import type { BrowserActionInput } from '@xopcai/browser-control-contract';
 import { Type, type Static, type TSchema } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 
-const ApprovalId = Type.Optional(Type.String({ description: 'One-time local-owner approval id for this exact action.' }));
 const SessionId = Type.Optional(Type.String({ description: 'Browser session id returned by the previous observation.' }));
 const Revision = Type.Number({ description: 'Observation revision used to resolve element refs.' });
 const Ref = Type.String({ minLength: 1, description: 'Ephemeral element ref from the latest observation.' });
@@ -20,7 +19,6 @@ function action<T extends string, P extends Record<string, TSchema>>(name: T, pr
   return Type.Object({
     action: Type.Literal(name),
     sessionId: SessionId,
-    approvalId: ApprovalId,
     ...properties,
   }, { additionalProperties: false });
 }
@@ -122,7 +120,6 @@ export const BrowserUseSchema = Type.Object({
     Type.Literal('close'),
   ]),
   sessionId: SessionId,
-  approvalId: ApprovalId,
   revision: Type.Optional(Revision),
   ref: Type.Optional(Ref),
   expect: Type.Optional(ExpectationSchema),
@@ -184,7 +181,6 @@ export function decodeBrowserUseInput(value: unknown): BrowserActionInput | null
 
   const candidate: Record<string, unknown> = { action: value.action };
   copyNonEmptyString(value, candidate, 'sessionId');
-  copyNonEmptyString(value, candidate, 'approvalId');
 
   for (const field of ACTION_FIELDS[value.action]) {
     const fieldValue = value[field];
