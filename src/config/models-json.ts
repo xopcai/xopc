@@ -12,6 +12,7 @@ import { existsSync, readFileSync } from 'fs';
 import { writeTextAtomicSync } from '../infra/write-file-atomic.js';
 import { resolveModelsJsonPath } from './paths.js';
 import { isComputerModel } from '../computer/model-policy.js';
+import { assertCurrentModelProvider } from '../providers/provider-policy.js';
 
 // Re-export for convenience
 export { resolveModelsJsonPath as getModelsJsonPath } from './paths.js';
@@ -136,7 +137,6 @@ export const CustomModelSchema = z.object({
 		'google-generative-ai',
 		'azure-openai-responses',
 		'bedrock-converse-stream',
-		'openai-codex-responses',
 		'google-gemini-cli',
 		'google-vertex',
 	]).optional(),
@@ -191,7 +191,6 @@ export const ProviderConfigSchema = z.object({
 		'google-generative-ai',
 		'azure-openai-responses',
 		'bedrock-converse-stream',
-		'openai-codex-responses',
 		'google-gemini-cli',
 		'google-vertex',
 	]).optional(),
@@ -249,11 +248,11 @@ export interface ValidationResult {
 const PROVIDER_ID_REGEX = /^[a-z0-9]([a-z0-9-_]*[a-z0-9])?$/;
 /** pi-ai KnownProvider ids — overriding in models.json requires baseUrl (see validation below). */
 const RESERVED_PROVIDER_IDS = new Set([
-	'amazon-bedrock', 'anthropic', 'azure-openai-responses', 'cerebras',
+	'amazon-bedrock', 'anthropic', 'azure', 'cerebras',
 	'cloudflare-ai-gateway', 'cloudflare-workers-ai', 'dashscope', 'deepseek', 'fal', 'fireworks', 'github-copilot',
 	'google', 'google-antigravity', 'google-gemini-cli', 'google-vertex', 'groq',
 	'huggingface', 'kimi-coding', 'minimax', 'minimax-cn', 'mistral', 'moonshotai', 'moonshotai-cn',
-	'openai', 'openai-codex', 'opencode', 'opencode-go', 'openrouter',
+	'openai', 'opencode', 'opencode-go', 'openrouter',
 	'together', 'vercel-ai-gateway', 'xai', 'xiaomi', 'xiaomi-token-plan-ams', 'xiaomi-token-plan-cn',
 	'xiaomi-token-plan-sgp', 'zai',
 ]);
@@ -282,6 +281,12 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 
 	// Additional validation rules
 	for (const [providerName, providerConfig] of Object.entries(data.providers)) {
+		try {
+			assertCurrentModelProvider(providerName);
+		} catch (error) {
+			errors.push({ path: `providers.${providerName}`, message: (error as Error).message, severity: 'error' });
+			continue;
+		}
 		if (providerName === 'xopc-cloud') {
 			errors.push({
 				path: 'providers.xopc-cloud',

@@ -26,19 +26,16 @@ import {
 } from './model-supplements.js';
 import { splitProviderModelRef } from './model-ref.js';
 import { getProviderRegistry } from './plugin-registry.js';
+import { assertCurrentModelProvider, isRetiredModelProvider } from './provider-policy.js';
 import { resolveProviderApiKey } from './provider-auth-service.js';
 import type { ProviderModelDefinition } from '../extensions/types/providers.js';
 
 export { EXTENSION_PROVIDER_BASE_URL } from './constants.js';
 export { getApiKeyFromEnv, PROVIDER_ENV_MAP } from './env-keys.js';
-const OPENAI_CODEX_CANONICAL_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 
 function normalizeProviderModel(model: Model<Api>): Model<Api> {
-	const correctedModel = applyOfficialModelMetadataCorrections(model);
-	if (model.provider === 'openai-codex' && model.api === 'openai-codex-responses') {
-		return { ...correctedModel, baseUrl: OPENAI_CODEX_CANONICAL_BASE_URL } as Model<Api>;
-	}
-	return correctedModel;
+	assertCurrentModelProvider(model.provider);
+	return applyOfficialModelMetadataCorrections(model);
 }
 
 /** Map a plugin registry model to the pi-ai {@link Model} shape. */
@@ -67,6 +64,7 @@ export function pluginModelToModel(providerId: string, definition: ProviderModel
  * Use this for Agent's getApiKey callback which must be synchronous.
  */
 export function getApiKeySync(provider: string): string | undefined {
+  assertCurrentModelProvider(provider);
   const pluginRegistry = getProviderRegistry();
   if (pluginRegistry.has(provider)) return 'extension-managed';
 
@@ -91,6 +89,8 @@ export function resolveModel(ref: string): Model<Api> {
 			'No default model configured. Choose a model in onboarding or update global Agent defaults.',
 		);
 	}
+	const requestedProvider = splitProviderModelRef(trimmedRef)?.provider;
+	if (requestedProvider) assertCurrentModelProvider(requestedProvider);
 
 	// First try ModelRegistry (includes custom models)
 	const registry = getModelRegistry();
@@ -118,6 +118,7 @@ export function resolveModel(ref: string): Model<Api> {
 	}
 
 	for (const provider of getPiAiProviders()) {
+		if (isRetiredModelProvider(provider)) continue;
 		try {
 			const models = getPiAiModels(provider);
 			const found = models.find(m => m.id === trimmedRef);
@@ -140,6 +141,7 @@ export function resolveModel(ref: string): Model<Api> {
 }
 
 export function getModelsByProvider(provider: string): readonly Model<Api>[] {
+	assertCurrentModelProvider(provider);
 	const registry = getModelRegistry();
 	const fromRegistry = registry.getAll().filter(m => m.provider === provider).map(normalizeProviderModel);
 	const existingIds = new Set(fromRegistry.map(m => m.id));
@@ -158,12 +160,12 @@ export function getAllProviders(): string[] {
 
 	// Add built-in providers
 	for (const p of getPiAiProviders()) {
-		providers.add(p);
+		if (!isRetiredModelProvider(p)) providers.add(p);
 	}
 
 	// Add custom providers from registry
 	for (const m of registry.getAll()) {
-		providers.add(m.provider);
+		if (!isRetiredModelProvider(m.provider)) providers.add(m.provider);
 	}
 
 	for (const plugin of getProviderRegistry().listAll()) {
@@ -181,6 +183,7 @@ export async function getApiKey(
 	provider: string,
 	credentialOptions?: CredentialResolverOptions,
 ): Promise<string | undefined> {
+	assertCurrentModelProvider(provider);
 	if (getProviderRegistry().has(provider)) return 'extension-managed';
 
 	// Use the shared auth service first so OAuth refresh and persistence stay unified.
@@ -205,6 +208,7 @@ export async function getApiKey(
  * Only checks environment variables and registry, not credential system
  */
 export function isProviderConfiguredSync(provider: string): boolean {
+	assertCurrentModelProvider(provider);
 	if (getProviderRegistry().has(provider)) return true;
 
 	// Check registry for custom providers
@@ -221,6 +225,7 @@ export function isProviderConfiguredSync(provider: string): boolean {
 }
 
 export async function isProviderConfigured(provider: string): Promise<boolean> {
+  assertCurrentModelProvider(provider);
   if (getProviderRegistry().has(provider)) return true;
 
   // Check registry first for custom providers (from models.json)
@@ -358,7 +363,7 @@ export interface ProviderMeta {
 
 export const PROVIDER_META: Record<string, ProviderMeta> = {
   'xopc-cloud': { name: 'XOPC Model Service', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
-  'openai': { name: 'OpenAI', category: 'common', supportsApiKey: true },
+  'openai': { name: 'OpenAI', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'anthropic': { name: 'Anthropic', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'deepseek': { name: 'DeepSeek', category: 'domestic', supportsApiKey: true },
   'google': { name: 'Google AI', category: 'common', supportsApiKey: true },
@@ -403,11 +408,10 @@ export const PROVIDER_META: Record<string, ProviderMeta> = {
   /** International GLM (api.z.ai). Auth: API key (ZAI_API_KEY); no published OAuth for this HTTP API. */
   'zai': { name: 'Zhipu GLM (International · z.ai)', category: 'domestic', supportsApiKey: true },
   'amazon-bedrock': { name: 'Amazon Bedrock', category: 'enterprise', supportsApiKey: true },
-  'azure-openai-responses': { name: 'Azure OpenAI', category: 'enterprise', supportsApiKey: true },
+  'azure': { name: 'Azure', category: 'enterprise', supportsApiKey: true },
   'google-vertex': { name: 'Google Vertex AI', category: 'enterprise', supportsApiKey: true },
   'vercel-ai-gateway': { name: 'Vercel AI Gateway', category: 'enterprise', supportsApiKey: true },
   'github-copilot': { name: 'GitHub Copilot (OAuth)', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
-  'openai-codex': { name: 'OpenAI Codex (OAuth)', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
   'google-gemini-cli': { name: 'Google Gemini CLI (OAuth)', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
   'google-antigravity': { name: 'Google Antigravity (OAuth)', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
 };

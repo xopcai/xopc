@@ -1,6 +1,7 @@
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 import { getOAuthProviderDefinition } from '../auth/oauth/registry.js';
+import { isRetiredModelProvider } from './provider-policy.js';
 import {
   getModelCatalogStore,
   type CatalogSource,
@@ -51,6 +52,7 @@ export function registerRuntimeProviders(
   catalog: ModelCatalogSnapshot = getModelCatalogStore().load(),
 ): void {
   for (const source of Object.values(catalog.sources)) {
+    if (isRetiredModelProvider(source.providerId)) continue;
     registerRuntimeProvider(modelRuntime, source);
   }
 
