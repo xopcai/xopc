@@ -457,22 +457,28 @@ async function runOAuthFlow(
         );
       }
     },
-    onPrompt: async (prompt: { message: string; deviceCode?: string; verificationUri?: string }) => {
+    onPrompt: async (prompt: { message: string; deviceCode?: string; verificationUri?: string; signal?: AbortSignal }) => {
       session.status = 'waiting_code';
       session.deviceCode = prompt.deviceCode;
       session.verificationUri = prompt.verificationUri;
       session.message = prompt.message;
       
-      // For device code flow, wait for manual input
-      manualCodePromise = new Promise((resolve, reject) => {
+      // Keep the prompt pending until code submission or cancellation.
+      manualCodePromise ??= new Promise((resolve, reject) => {
         manualCodeResolve = resolve;
         manualCodeReject = reject;
       });
       session.manualCodeResolve = manualCodeResolve;
       session.manualCodeReject = manualCodeReject;
       
-      // Return empty for now, will be resolved by manual code submission
-      return '';
+      const cancel = () => manualCodeReject?.(new Error('OAuth prompt cancelled'));
+      prompt.signal?.addEventListener('abort', cancel, { once: true });
+      try {
+        if (prompt.signal?.aborted) cancel();
+        return await manualCodePromise;
+      } finally {
+        prompt.signal?.removeEventListener('abort', cancel);
+      }
     },
     onProgress: (message: string) => {
       log.debug({ sessionId: session.id, message }, 'OAuth progress');

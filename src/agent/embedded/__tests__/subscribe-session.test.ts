@@ -20,4 +20,17 @@ describe('embedded runtime events', () => {
     expect(runtime.mock.calls.map(([event]) => event)).toEqual(events);
     expect(stream).toHaveBeenCalledWith(expect.objectContaining({ type: 'tool_execution_end', isError: true }));
   });
+
+  it('emits the session end only after recovery has settled, including cancellation', () => {
+    let publish!: (event: any) => void;
+    const session = { subscribe: (listener: typeof publish) => { publish = listener; return () => {}; } };
+    const stream = vi.fn();
+    subscribeEmbeddedSessionEvents(session as unknown as AgentSession, stream);
+    publish({ type: 'agent_end', messages: [], willRetry: true });
+    publish({ type: 'agent_start' });
+    publish({ type: 'agent_end', messages: [], willRetry: false });
+    expect(stream.mock.calls.map(([event]) => event.type)).toEqual(['agent_start']);
+    publish({ type: 'agent_settled', aborted: true });
+    expect(stream).toHaveBeenLastCalledWith({ type: 'agent_end', aborted: true });
+  });
 });

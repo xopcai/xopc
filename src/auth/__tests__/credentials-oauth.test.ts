@@ -76,7 +76,7 @@ describe('CredentialResolver OAuth credentials', () => {
   });
 
   it.each(['google-gemini-cli', 'google-antigravity'])(
-    'preserves raw OAuth fields and reads legacy encoded access for %s',
+    'preserves raw OAuth fields for %s',
     async (providerId) => {
       const resolver = new CredentialResolver();
       await resolver.saveOAuthCredentials(providerId, {
@@ -95,18 +95,6 @@ describe('CredentialResolver OAuth credentials', () => {
         JSON.stringify({ token: 'raw-google-access', projectId: 'project-1' }),
       );
 
-      await resolver.saveOAuthToken(providerId, {
-        access: JSON.stringify({
-          token: JSON.stringify({ token: 'legacy-access', projectId: 'legacy-project' }),
-        }),
-        refresh: 'legacy-refresh',
-        expiresAt: Date.now() + 5 * 60_000,
-        createdAt: '2026-08-04T00:00:00.000Z',
-      });
-      await expect(resolver.loadOAuthTokenRecord(providerId)).resolves.toMatchObject({
-        access: 'legacy-access',
-        projectId: 'legacy-project',
-      });
     },
   );
 

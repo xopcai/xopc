@@ -53,9 +53,6 @@ const PROVIDER_CAPABILITIES: Record<string, Partial<ProviderCapabilities>> = {
   openai: {
     providerFamily: "openai",
   },
-  "openai-codex": {
-    providerFamily: "openai",
-  },
   openrouter: {
     openAiCompatTurnValidation: false,
     geminiThoughtSignatureSanitization: true,

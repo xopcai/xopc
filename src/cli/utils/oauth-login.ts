@@ -69,8 +69,8 @@ export function buildCliOAuthCallbacks(params: {
       input({
         message: prompt.message,
         validate: prompt.allowEmpty ? undefined : (value: string) => value.trim().length > 0 || 'Required',
-      }),
-    onManualCodeInput: params.provider.usesCallbackServer && params.provider.id !== 'openai-codex' ? promptForManualCode : undefined,
+      }, { signal: prompt.signal }),
+    onManualCodeInput: params.provider.usesCallbackServer && params.provider.id !== 'openai' ? promptForManualCode : undefined,
     onProgress: (message) => {
       params.onProgress?.(message);
     },

@@ -32,7 +32,6 @@ export type ApiType =
   | 'google-generative-ai'
   | 'azure-openai-responses'
   | 'bedrock-converse-stream'
-  | 'openai-codex-responses'
   | 'google-gemini-cli'
   | 'google-vertex';
 
