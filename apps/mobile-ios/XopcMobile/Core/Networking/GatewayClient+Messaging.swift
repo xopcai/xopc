@@ -70,13 +70,13 @@ extension GatewayClient {
         else {
             throw GatewayClientError.server("会话配置尚未就绪")
         }
-        return try encoder.encode(AppendMessageCommand(
+        return try await encoder.encode(AppendMessageCommand(
             clientMessageId: clientMessageID,
             expectedTranscriptId: transcriptID,
             configVersion: configVersion,
             delivery: delivery.rawValue,
-            input: await inputCommand(text: text, attachments: attachments, references: references),
-            origin: try await DeviceEndpointPool.shared.origin(for: self)
+            input: inputCommand(text: text, attachments: attachments, references: references),
+            origin: DeviceEndpointPool.shared.origin(for: self)
         ))
     }
 
@@ -94,7 +94,7 @@ extension GatewayClient {
         let thinking = conversation.thinkingLevel
             ?? catalog.models.first(where: { $0.id == model })?.thinking?.initialValue
             ?? "off"
-        return try encoder.encode(StartMessageCommand(
+        return try await encoder.encode(StartMessageCommand(
             clientMessageId: clientMessageID,
             creation: .init(
                 agentId: conversation.agentId,
@@ -104,8 +104,8 @@ extension GatewayClient {
                 model: model,
                 thinkingLevel: thinking
             ),
-            input: await inputCommand(text: text, attachments: attachments, references: references),
-            origin: try await DeviceEndpointPool.shared.origin(for: self)
+            input: inputCommand(text: text, attachments: attachments, references: references),
+            origin: DeviceEndpointPool.shared.origin(for: self)
         ))
     }
 

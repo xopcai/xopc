@@ -45,7 +45,6 @@ private struct AvatarLoadKey: Hashable {
     let revision: Int?
 }
 
-
 struct ConfiguredAgentAvatar: View {
     let configuration: GatewayConfiguration
     let agent: AgentSummary?
