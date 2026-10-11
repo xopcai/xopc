@@ -3,6 +3,7 @@ import type { StreamingSttSession, StreamingSttEvent } from '../../media-underst
 import { createLogger } from '../../utils/logger.js';
 import { prepareSpeechStreamSession, speakStream, type SpeakStreamResult } from '../tts/speak-core.js';
 import type { SpeechStreamSession } from '../tts/speech-provider-types.js';
+import { PlatformVoiceError } from '../platform-streams.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
 import { TurnCoordinator } from './turnPolicy.js';
 import { PlaybackEchoCandidates } from './playback-echo.js';
@@ -553,8 +554,9 @@ export function createAgentVoiceEngine(options: {
     if (event.type === 'error') {
       turn.reset();
       echoCandidates.clear();
-      log.warn({ err: event.error, sessionId: claim.sessionId, provider: stt!.route.provider }, 'Realtime STT failed');
-      send('session.error', { code: 'PROVIDER_ERROR', message: 'Streaming transcription failed', recoverable: false });
+      const message = event.error instanceof PlatformVoiceError ? event.error.clientMessage : 'Streaming transcription failed';
+      log.warn({ err: event.error, sessionId: claim.sessionId, provider: stt!.route.provider }, `Realtime STT failed: ${message}`);
+      send('session.error', { code: 'PROVIDER_ERROR', message, recoverable: false });
       void options.onClose('provider_error', true);
       return;
     }

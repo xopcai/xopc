@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { StreamingSttEvent, StreamingSttSession } from '../../../media-understanding/types.js';
 import { createAgentVoiceEngine } from '../agentEngine.js';
+import { PlatformVoiceError } from '../../platform-streams.js';
 
 function setup() {
   let onEvent!: (event: StreamingSttEvent) => void;
@@ -22,6 +23,19 @@ function setup() {
 }
 
 describe('Agent voice engine lifecycle', () => {
+  it('sends the Cloud quota recovery message instead of a generic transcription failure', async () => {
+    const test = setup();
+    const starting = test.engine.start();
+    test.resolve(test.session);
+    await starting;
+    const error = new PlatformVoiceError('Platform voice rejected connection (402)', 402, 'realtime_quota_workspace_budget');
+    test.emit({ type: 'error', error });
+    expect(test.send).toHaveBeenCalledWith('session.error', {
+      code: 'PROVIDER_ERROR', message: error.clientMessage, recoverable: false,
+    });
+    test.engine.close();
+  });
+
   it('releases an upstream session that resolves after close', async () => {
     const test = setup();
     const starting = test.engine.start();

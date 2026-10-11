@@ -8,6 +8,7 @@ import { WebSocket } from 'ws';
 
 import { ConfigSchema } from '../../../config/schema.js';
 import { alibabaTranscriptionProvider } from '../../stt/providers/alibaba-transcription.js';
+import { PlatformVoiceError } from '../../platform-streams.js';
 import { VoiceRealtimeRuntime } from '../runtime.js';
 
 vi.mock('../../../gateway/security/device-request-proof.js', () => ({ verifyDeviceConnectionProof: () => true }));
@@ -23,9 +24,15 @@ describe('VoiceRealtimeRuntime media frames', () => {
     vi.restoreAllMocks();
   });
 
-  async function start(websocketPath?: string) {
+  async function start(websocketPath?: string, startupFailure?: Error) {
     const appendAudio = vi.fn();
-    vi.spyOn(alibabaTranscriptionProvider, 'openAudioStream').mockImplementation(async () => ({ appendAudio, abort: vi.fn(), commit: vi.fn(async () => {}) }));
+    vi.spyOn(alibabaTranscriptionProvider, 'openAudioStream').mockImplementation(async request => {
+      if (startupFailure) {
+        request.onEvent({ type: 'error', error: startupFailure });
+        throw startupFailure;
+      }
+      return { appendAudio, abort: vi.fn(), commit: vi.fn(async () => {}) };
+    });
     const config = ConfigSchema.parse({ voice: { realtime: { enabled: true } }, tools: { media: { audio: {
       enabled: true, provider: 'alibaba', providers: { alibaba: { apiKey: 'test' } },
     } } } });
@@ -41,9 +48,19 @@ describe('VoiceRealtimeRuntime media frames', () => {
     await once(socket, 'open');
     socket.send(JSON.stringify({ protocolVersion: VOICE_REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), sentAt: Date.now(),
       type: 'session.start', payload: { sessionId: session.sessionId, ticket: session.ticket } }));
-    await vi.waitFor(() => expect(events.some(value => value.type === 'session.ready')).toBe(true));
+    await vi.waitFor(() => expect(events.some(value => value.type === (startupFailure ? 'session.error' : 'session.ready'))).toBe(true));
     return { appendAudio, events, session };
   }
+
+  it('delivers the Cloud billing reason through the gateway before session readiness', async () => {
+    const error = new PlatformVoiceError('Platform voice rejected connection (402)', 402, 'realtime_quota_user_credits');
+    const { events } = await start(undefined, error);
+    await vi.waitFor(() => expect(socket.readyState).toBe(WebSocket.CLOSED));
+    expect(events.filter(event => event.type === 'session.error')).toEqual([
+      expect.objectContaining({ payload: { code: 'PROVIDER_ERROR', message: error.clientMessage, recoverable: false } }),
+    ]);
+    expect(events.some(event => event.type === 'session.ready')).toBe(false);
+  });
 
   it('accepts ordered 20 ms uplink frames and ignores exact replays', async () => {
     const { appendAudio, session } = await start();

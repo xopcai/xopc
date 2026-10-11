@@ -3,7 +3,23 @@ import type { StreamingSttOpenRequest, StreamingSttSession } from '../media-unde
 import type { SpeechSynthesisStreamResult } from './tts/speech-provider-types.js';
 
 const MAX_BUFFERED_BYTES = 512 * 1024;
-type Event = { type: string; session?: { input_sample_rate?: number; output_sample_rate?: number }; item_id?: string; text?: string; delta?: string; error?: { message?: string } };
+const MAX_ERROR_BODY_BYTES = 16 * 1024;
+type Event = { type: string; session?: { input_sample_rate?: number; output_sample_rate?: number }; item_id?: string; text?: string; delta?: string; error?: { message?: string; code?: string } };
+
+export class PlatformVoiceError extends Error {
+  constructor(message: string, readonly status?: number, readonly code?: string) {
+    super(message);
+    this.name = 'PlatformVoiceError';
+  }
+
+  get clientMessage(): string {
+    if (this.code === 'realtime_quota_workspace_budget') return 'XOPC Cloud voice workspace budget is exhausted. Increase the workspace budget or choose another voice provider.';
+    if (this.status === 402 || this.code === 'realtime_quota_user_credits') return 'XOPC Cloud voice has insufficient Credit or quota. Check your Cloud balance and workspace budget, or choose another voice provider.';
+    if (this.status === 401 || this.status === 403) return 'XOPC Cloud voice authorization failed. Sign in again and check your access to this voice model.';
+    if (this.status === 429 || this.code?.startsWith('realtime_quota_')) return 'XOPC Cloud voice quota or rate limit reached. Try again later or choose another voice provider.';
+    return 'XOPC Cloud voice is unavailable. Try again later or choose another voice provider.';
+  }
+}
 
 function connect(url: string, token: string, signal: AbortSignal, onEvent: (event: Event) => void, onFailure: (error: Error) => void) {
   signal.throwIfAborted();
@@ -25,11 +41,35 @@ function connect(url: string, token: string, signal: AbortSignal, onEvent: (even
       if (binary) throw new Error('Unexpected platform binary event');
       const event = JSON.parse(raw.toString()) as Event;
       if (!event || typeof event.type !== 'string') throw new Error('Invalid platform voice event');
-      if (event.type === 'error') throw new Error(event.error?.message ?? 'Platform voice failed');
+      if (event.type === 'error') throw new PlatformVoiceError(event.error?.message ?? 'Platform voice failed', undefined, event.error?.code);
       onEvent(event);
     } catch (error) { fail(error instanceof Error ? error : new Error('Invalid platform voice event')); }
   });
-  socket.on('unexpected-response', (_request, response) => { response.resume(); fail(new Error(`Platform voice rejected connection (${response.statusCode})`)); });
+  socket.on('unexpected-response', (_request, response) => {
+    const fallback = `Platform voice rejected connection (${response.statusCode})`;
+    let bytes = 0;
+    const chunks: Buffer[] = [];
+    const reject = () => {
+      let detail: { message?: unknown; code?: unknown } | undefined;
+      try { detail = JSON.parse(Buffer.concat(chunks).toString('utf8'))?.error; } catch { /* Use the HTTP status for non-JSON responses. */ }
+      const code = typeof detail?.code === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(detail.code) ? detail.code : undefined;
+      const message = typeof detail?.message === 'string' ? detail.message.slice(0, 1_000) : undefined;
+      fail(new PlatformVoiceError(`${fallback}${code ? `: ${code}` : ''}${message ? `: ${message}` : ''}`, response.statusCode, code));
+    };
+    response.on('data', (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes > MAX_ERROR_BODY_BYTES) {
+        chunks.length = 0;
+        reject();
+        response.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    response.once('end', reject);
+    response.once('error', reject);
+    response.once('aborted', reject);
+  });
   socket.on('error', fail);
   socket.on('close', () => fail(new Error('Platform voice disconnected before completion')));
   return { socket, close, fail,
