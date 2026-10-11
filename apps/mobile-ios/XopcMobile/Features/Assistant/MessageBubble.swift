@@ -126,7 +126,7 @@ struct MessageBubble: View {
             .frame(width: 44, height: 44)
             .contentShape(.rect)
             .accessibilityIdentifier("chat-save-note-\(message.id)")
-            if !message.attachments.contains(where: \.isAudio) && !ChatSpeechText.chunks(from: message.text).isEmpty {
+            if !message.attachments.contains(where: \.isAudio), !ChatSpeechText.chunks(from: message.text).isEmpty {
                 Button {
                     readAloud.toggle(id: message.id, text: message.text, locale: locale, gateway: GatewayClient(configuration: configuration))
                 } label: {
@@ -134,9 +134,9 @@ struct MessageBubble: View {
                         Text(readAloud.sourceID == message.id && readAloud.state == .playing
                             ? LocalizedStringResource("暂停朗读")
                             : readAloud.sourceID == message.id && readAloud.state == .paused
-                                ? LocalizedStringResource("继续朗读") : LocalizedStringResource("朗读"))
+                            ? LocalizedStringResource("继续朗读") : LocalizedStringResource("朗读"))
                     } icon: {
-                        if readAloud.sourceID == message.id && readAloud.state == .loading {
+                        if readAloud.sourceID == message.id, readAloud.state == .loading {
                             ProgressView().controlSize(.mini)
                         } else {
                             Image(systemName: readAloud.sourceID == message.id && readAloud.state == .playing
