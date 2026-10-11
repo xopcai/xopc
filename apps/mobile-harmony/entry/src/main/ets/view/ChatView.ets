@@ -1332,6 +1332,7 @@ export struct XopcChatView {
         })
       }).key((row: XopcChatRow): string => this.chat.selectedId + ':' + row.id).virtualScroll({ totalCount: this.presentationRows.length })
     }.id('chat-message-list').height('100%').width('100%').padding({ left: 20, right: 20 }).cachedCount(3)
+      .contentStartOffset(this.embedded ? 0 : 72)
       .contentEndOffset(this.bottomRegionHeight + 24 + this.replySpaceHeight)
       .onAreaChange((previous: Area, current: Area): void => { this.onMessageViewportChange(previous, current); })
       .onScrollIndex((start: number, end: number): void => {
@@ -1699,6 +1700,57 @@ export struct XopcChatView {
   build() {
     Stack({ alignContent: Alignment.Start }) {
     Column() {
+      if (this.hasConnectionIssue() || this.chat.cachedHistory || this.chat.error) {
+      Column() {
+      if (this.hasConnectionIssue()) {
+        Row({ space: 8 }) {
+          Text(this.chat.connection === 'unauthorized' ? $r('app.string.connection_revoked')
+            : this.chat.connection === 'client_update_required' ? $r('app.string.client_update_required')
+            : this.chat.connection === 'gateway_update_required' ? $r('app.string.gateway_update_required')
+            : this.chat.connection)
+            .fontSize(12).fontColor(this.colors.secondary).layoutWeight(1)
+          if (this.chat.connection === 'client_update_required' || this.chat.connection === 'gateway_update_required') {
+            Button($r('app.string.refresh')).height(36).onClick((): void => { this.chat.reconnect(); })
+          }
+        }.width('100%').padding(8).alignItems(VerticalAlign.Center)
+      }
+      if (this.chat.cachedHistory) {
+        Text($r('app.string.chat_cached_history')).id('chat-cached-history').fontSize(12).fontColor(this.colors.secondary)
+          .padding({ left: 16, right: 16, bottom: 6 })
+      }
+      if (this.chat.error) {
+        Row({ space: 8 }) {
+          Text(userErrorMessage(this.chat.error, 'generic')).fontSize(12).fontColor(this.colors.secondary).layoutWeight(1).maxLines(3)
+          Button($r('app.string.refresh')).height(44).onClick((): void => { this.chat.retryHistory(); })
+        }.padding({ left: 16, right: 16 })
+      }
+      }.width('100%').padding({ top: this.embedded ? 0 : 62 })
+      }
+      this.conversation()
+      Column().width('100%').height(0)
+        .bindSheet($$this.personalSettingsOpen, this.personalSettingsSheet, { height: '90%', dragBar: false,
+          showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => {
+            if (this.personalSettingsNextMode) { const mode = this.personalSettingsNextMode; this.personalSettingsNextMode = ''; this.openSheet(mode); }
+          } })
+      Column().id('chat-image-editor-sheet-host').width('100%').height(0)
+        .bindSheet($$this.imageEditorOpen, this.imageEditorSheet, { height: '75%', dragBar: false,
+          backgroundColor: this.colors.panel, onDisappear: (): void => { this.imageEditorError = ''; } })
+      Column().id('chat-message-detail-sheet-host').width('100%').height(0)
+        .bindSheet($$this.messageDetailOpen, this.messageDetailSheet, { height: '94%', dragBar: false,
+          showClose: false, backgroundColor: this.colors.panel,
+          onDisappear: (): void => {
+            if (this.messageDetailContentTimer !== -1) clearTimeout(this.messageDetailContentTimer);
+            this.messageDetailContentTimer = -1;
+            this.messageDetailContentReady = false;
+          } })
+      Column().id('chat-assistant-menu-sheet-host').width('100%').height(0)
+        .bindSheet($$this.assistantMenuOpen, this.assistantMessageMenuSheet, {
+          height: 112 + this.assistantMenuActionCount * 56,
+          dragBar: true, showClose: false, backgroundColor: this.colors.panel,
+          onDisappear: (): void => { this.finishAssistantMenu(); }
+        })
+    }.width('100%').height('100%').backgroundColor(this.colors.surface)
+      .bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight, dragBar: true, showClose: false, backgroundColor: this.colors.panel })
       if (!this.embedded) {
         Row({ space: 12 }) {
           Button({ type: ButtonType.Normal }) {
@@ -1731,55 +1783,9 @@ export struct XopcChatView {
               })
           }.height(48).padding({ left: 4, right: 4 }).borderRadius(24).backgroundColor(this.colors.panel)
             .border({ width: 1, color: this.colors.border })
-        }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 6 })
+        }.id('chat-floating-header').width('100%').padding({ left: 20, right: 20, top: 8, bottom: 6 })
+          .align(Alignment.TopStart).backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.Transparent)
       }
-      if (this.hasConnectionIssue()) {
-        Row({ space: 8 }) {
-          Text(this.chat.connection === 'unauthorized' ? $r('app.string.connection_revoked')
-            : this.chat.connection === 'client_update_required' ? $r('app.string.client_update_required')
-            : this.chat.connection === 'gateway_update_required' ? $r('app.string.gateway_update_required')
-            : this.chat.connection)
-            .fontSize(12).fontColor(this.colors.secondary).layoutWeight(1)
-          if (this.chat.connection === 'client_update_required' || this.chat.connection === 'gateway_update_required') {
-            Button($r('app.string.refresh')).height(36).onClick((): void => { this.chat.reconnect(); })
-          }
-        }.width('100%').padding(8).alignItems(VerticalAlign.Center)
-      }
-      if (this.chat.cachedHistory) {
-        Text($r('app.string.chat_cached_history')).id('chat-cached-history').fontSize(12).fontColor(this.colors.secondary)
-          .padding({ left: 16, right: 16, bottom: 6 })
-      }
-      if (this.chat.error) {
-        Row({ space: 8 }) {
-          Text(userErrorMessage(this.chat.error, 'generic')).fontSize(12).fontColor(this.colors.secondary).layoutWeight(1).maxLines(3)
-          Button($r('app.string.refresh')).height(44).onClick((): void => { this.chat.retryHistory(); })
-        }.padding({ left: 16, right: 16 })
-      }
-      this.conversation()
-      Column().width('100%').height(0)
-        .bindSheet($$this.personalSettingsOpen, this.personalSettingsSheet, { height: '90%', dragBar: false,
-          showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => {
-            if (this.personalSettingsNextMode) { const mode = this.personalSettingsNextMode; this.personalSettingsNextMode = ''; this.openSheet(mode); }
-          } })
-      Column().id('chat-image-editor-sheet-host').width('100%').height(0)
-        .bindSheet($$this.imageEditorOpen, this.imageEditorSheet, { height: '75%', dragBar: false,
-          backgroundColor: this.colors.panel, onDisappear: (): void => { this.imageEditorError = ''; } })
-      Column().id('chat-message-detail-sheet-host').width('100%').height(0)
-        .bindSheet($$this.messageDetailOpen, this.messageDetailSheet, { height: '94%', dragBar: false,
-          showClose: false, backgroundColor: this.colors.panel,
-          onDisappear: (): void => {
-            if (this.messageDetailContentTimer !== -1) clearTimeout(this.messageDetailContentTimer);
-            this.messageDetailContentTimer = -1;
-            this.messageDetailContentReady = false;
-          } })
-      Column().id('chat-assistant-menu-sheet-host').width('100%').height(0)
-        .bindSheet($$this.assistantMenuOpen, this.assistantMessageMenuSheet, {
-          height: 112 + this.assistantMenuActionCount * 56,
-          dragBar: true, showClose: false, backgroundColor: this.colors.panel,
-          onDisappear: (): void => { this.finishAssistantMenu(); }
-        })
-    }.width('100%').height('100%').backgroundColor(this.colors.surface)
-      .bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight, dragBar: true, showClose: false, backgroundColor: this.colors.panel })
     if (this.sendFlightActive) {
       Text(this.sendFlightText).fontSize(16).lineHeight(20).fontColor(this.colors.foreground)
         .maxLines(4).textOverflow({ overflow: TextOverflow.Ellipsis })
