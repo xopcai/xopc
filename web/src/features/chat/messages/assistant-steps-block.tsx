@@ -51,7 +51,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { messages } from '@/i18n/messages';
 import { WorkflowCard, type WorkflowCardLabels } from '@/features/chat/workflow/workflow-card';
 import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
-import { CodemodeOutputLink, codemodeOutputPath } from './codemode-output-link';
+import { CodemodeOutputLink } from './codemode-output-link';
+import { codemodeOutputPath } from './codemode-output-path';
 
 export interface AssistantActivityWorkflowOptions {
   labels: WorkflowCardLabels;
@@ -532,6 +533,7 @@ function StepRow({
   workflowOptions: AssistantActivityWorkflowOptions;
 }) {
   const showRawToolData = useDevViewStore((s) => s.showRawToolData);
+  const outputLanguage = useLocaleStore(state => state.language);
   const toolResultText = useMemo(() => {
     if (block.type !== 'tool_use') {
       return '';
@@ -609,7 +611,6 @@ function StepRow({
     ? toolFailureSummary(block, stepLabels.toolError, cardLabels)
     : '';
   const resultText = toolResultText;
-  const outputLanguage = useLocaleStore(state => state.language);
   const retainedOutput = block.name === 'codemode' ? codemodeOutputPath(resultText ?? '') : undefined;
   const liveOutputText = isStreaming && block.details && typeof block.details === 'object'
     && !Array.isArray(block.details) && typeof (block.details as { text?: unknown }).text === 'string'
