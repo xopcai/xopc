@@ -221,7 +221,7 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain('if (this.hasConnectionIssue())');
     expect(chat).not.toContain("if (this.chat.connection !== 'connected')");
     expect(chat).toContain("this.chat.connection === 'gateway_update_required' || this.chat.connection.startsWith('error:')");
-    const header = chat.slice(chat.indexOf('if (!this.embedded)'), chat.indexOf('if (this.hasConnectionIssue())'));
+    const header = chat.slice(chat.indexOf('if (!this.embedded)'), chat.indexOf('if (this.sendFlightActive)'));
     expect(header).toContain("$r('sys.symbol.gearshape')");
     expect(header).toContain("$r('sys.symbol.magnifyingglass')");
     expect(header).toContain(".id('chat-header-actions')");
@@ -231,7 +231,7 @@ describe('chat bottom region composition', () => {
   });
 
   it('shows the conversation title in the header and keeps model selection in the actions sheet', () => {
-    const header = chat.slice(chat.indexOf('if (!this.embedded)'), chat.indexOf('if (this.hasConnectionIssue())'));
+    const header = chat.slice(chat.indexOf('if (!this.embedded)'), chat.indexOf('if (this.sendFlightActive)'));
     expect(header).toContain("this.personalConversation ? this.personalAgent?.displayName ?? 'Ada' : this.chat.title || $r('app.string.untitled')");
     expect(header).not.toContain("$r('sys.symbol.line_3_horizontal')");
     expect(header).not.toContain("this.options.modelName(appSettings.effectiveLanguage())");
