@@ -62,6 +62,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
@@ -1513,7 +1518,7 @@ internal fun MainContent(
   ) { insets ->
     val rootInsets = if (showBottomChrome) PaddingValues(
       start = insets.calculateLeftPadding(layoutDirection),
-      top = insets.calculateTopPadding(),
+      top = if (selectedTab == HomeTab.Assistant) 0.dp else insets.calculateTopPadding(),
       end = insets.calculateRightPadding(layoutDirection)) else insets
     if (connection.profile == null && personalPage == "home") {
       PairingScreen(stringResource(R.string.pairing_title), connection, onPair, onCancelPairing,
@@ -2653,6 +2658,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     R.string.assistant_model_error -> onReloadModels
     else -> { { connection.selectedConversationId?.let(onSelectConversation) } }
   }
+  val chatTopInset = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
   Box(modifier = Modifier.fillMaxSize().padding(insets)
     .pointerInput(focusManager, keyboardController) {
       awaitPointerEventScope {
@@ -2665,10 +2671,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         }
       }
     }.testTag("assistant-content-area")) {
-  Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 16.dp),
+  Column(modifier = Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, bottom = 16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (connection.selectedConversationId == null) {
-      Spacer(Modifier.height(60.dp))
+      Spacer(Modifier.height(chatTopInset + 76.dp))
       Text(stringResource(R.string.assistant_choose_conversation), style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
       if (connection.conversationsLoading) BrandLoadingPanel()
@@ -2676,7 +2682,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         ConversationCard(conversation, onClick = { onSelectConversation(conversation.id) })
       }
     } else {
-      if (statusIssue != null) Row(modifier = Modifier.fillMaxWidth().padding(top = 60.dp),
+      if (statusIssue != null) Row(modifier = Modifier.fillMaxWidth().padding(top = chatTopInset + 76.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(statusIssue), modifier = Modifier.weight(1f),
           style = MaterialTheme.typography.bodySmall,
@@ -2686,7 +2692,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         }
       }
       if (reader.state.phase != "idle") Row(modifier = Modifier.fillMaxWidth()
-        .padding(top = if (statusIssue == null) 60.dp else 0.dp)
+        .padding(top = if (statusIssue == null) chatTopInset + 76.dp else 0.dp)
         .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
         .padding(horizontal = 8.dp).testTag("assistant-read-aloud-controls"),
         verticalAlignment = Alignment.CenterVertically) {
@@ -2706,13 +2712,13 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         }
       }
       if (connection.historyLoading && connection.messages.isEmpty()) {
-        Box(modifier = Modifier.weight(1f).padding(top = 72.dp)) { AssistantHistorySkeleton() }
+        Box(modifier = Modifier.weight(1f).padding(top = chatTopInset + 88.dp)) { AssistantHistorySkeleton() }
       } else if (!connection.historyLoading && connection.messages.isEmpty() &&
         connection.historyBefore == null && connection.activeRunId == null &&
         connection.liveText.isBlank() && connection.optimisticText.isBlank()) {
         BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()
           .onSizeChanged { messageViewportHeight = it.height }
-          .padding(bottom = bottomChromeHeight).testTag("assistant-welcome-viewport")) {
+          .padding(top = chatTopInset, bottom = bottomChromeHeight).testTag("assistant-welcome-viewport")) {
           AssistantWelcome(maxHeight, if (connection.contextLoading) null else
             taskRecommendation(connection.taskWelcome) ?: projectRecommendation(connection.projectWelcome)) { prompt ->
             onActionsOpenChange(false)
@@ -2723,7 +2729,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       } else LazyColumn(modifier = Modifier.weight(1f).testTag("assistant-message-list")
         .onSizeChanged { messageViewportHeight = it.height },
         state = messageListState,
-        contentPadding = PaddingValues(top = 72.dp,
+        contentPadding = PaddingValues(top = chatTopInset + 88.dp,
           bottom = bottomChromeHeight + replySpaceHeight + if (showConnectionWait) 104.dp else 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (connection.historyBefore != null) item(key = "assistant-older") {
@@ -2811,13 +2817,14 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     }
   }
     Row(modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
+      .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
       .padding(horizontal = 20.dp, vertical = 16.dp).testTag("chat-floating-header"), horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically) {
       val personalAgent = connection.personal.agent?.takeIf { it.state == "ready" &&
         it.conversationId == connection.selectedConversationId }
       Box(Modifier.weight(1f)) {
       Row(Modifier.height(48.dp).clip(CircleShape)
-        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f))
+        .background(MaterialTheme.colorScheme.surfaceContainer)
         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
         .clickable { if (personalAgent != null) personalSettingsOpen = true else agentPickerOpen = true }
         .padding(start = 6.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically,
@@ -2835,7 +2842,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       }
       Spacer(Modifier.width(12.dp))
       Row(Modifier.height(48.dp).clip(CircleShape)
-        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f))
+        .background(MaterialTheme.colorScheme.surfaceContainer)
         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
         .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { messageSearchOpen = true }, modifier = Modifier.testTag("chat-header-search")) {

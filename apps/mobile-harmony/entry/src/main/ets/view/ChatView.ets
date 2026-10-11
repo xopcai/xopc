@@ -85,6 +85,9 @@ export struct XopcChatView {
   @Local searchQuery: string = '';
   @Local searchCategory: string = 'messages';
   private searchInput: TextInputController = new TextInputController();
+  @Computed get chatTopInset(): number {
+    return this.embedded ? 0 : this.getUIContext().px2vp(this.layout.systemTopInsetPx);
+  }
   @Computed get personalConversation(): boolean {
     return this.personalAgent?.state === 'ready' && this.chat.selectedId === this.personalAgent.conversationId;
   }
@@ -392,7 +395,7 @@ export struct XopcChatView {
     if (!this.atBottom || (!!this.chat.runId && delivery === 'next')) return;
     this.replyAnchorId = rowId;
     this.replyRowHeights.clear();
-    this.replyBudget = chatReplySpaceBudget(this.messageViewportHeight, this.bottomRegionHeight + 48 + (this.embedded ? 0 : 72));
+    this.replyBudget = chatReplySpaceBudget(this.messageViewportHeight, this.bottomRegionHeight + 48 + (this.embedded ? 0 : 72 + this.chatTopInset));
     this.replySpaceHeight = this.replyBudget;
     this.onMessageChange();
   }
@@ -426,7 +429,7 @@ export struct XopcChatView {
       replyHeight += (this.replyRowHeights.get(rows[index].id) || 0) + 20;
     }
     this.replySpaceHeight = consumeChatReplySpace(this.replyBudget, this.replySpaceHeight, replyHeight,
-      chatReplySpaceBudget(this.messageViewportHeight, this.bottomRegionHeight + 48 + (this.embedded ? 0 : 72)), this.atBottom);
+      chatReplySpaceBudget(this.messageViewportHeight, this.bottomRegionHeight + 48 + (this.embedded ? 0 : 72 + this.chatTopInset)), this.atBottom);
   }
   private sendFlightRect(area: Area): XopcSendFlightRect {
     return { x: Number(area.globalPosition.x), y: Number(area.globalPosition.y),
@@ -1354,7 +1357,7 @@ export struct XopcChatView {
         if (Number(previous.height) !== Number(current.height)) this.onMessageChange();
       })
     }.id('chat-message-list').height('100%').width('100%').padding({ left: 20, right: 20 }).cachedCount(3)
-      .contentStartOffset(this.embedded ? 0 : 72)
+      .contentStartOffset(this.embedded ? 0 : 72 + this.chatTopInset)
       .onAreaChange((previous: Area, current: Area): void => { this.onMessageViewportChange(previous, current); })
       .onScrollIndex((start: number, end: number): void => {
         this.firstVisible = start;
@@ -1741,7 +1744,7 @@ export struct XopcChatView {
           Button($r('app.string.refresh')).height(44).onClick((): void => { this.chat.retryHistory(); })
         }.padding({ left: 16, right: 16 })
       }
-      }.width('100%').padding({ top: this.embedded ? 0 : 62 })
+      }.width('100%').padding({ top: this.embedded ? 0 : 62 + this.chatTopInset })
       }
       this.conversation()
       Column().width('100%').height(0)
@@ -1800,7 +1803,7 @@ export struct XopcChatView {
               })
           }.height(48).padding({ left: 4, right: 4 }).borderRadius(24).backgroundColor(this.colors.panel)
             .border({ width: 1, color: this.colors.border })
-        }.id('chat-floating-header').width('100%').padding({ left: 20, right: 20, top: 8, bottom: 6 })
+        }.id('chat-floating-header').width('100%').padding({ left: 20, right: 20, top: this.chatTopInset + 8, bottom: 6 })
           .align(Alignment.TopStart).backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.Transparent)
       }
     if (this.sendFlightActive) {
@@ -1815,6 +1818,7 @@ export struct XopcChatView {
     }
     if (this.searchOpen) { this.messageSearchSheet() }
     }.width('100%').height('100%')
+      .expandSafeArea([SafeAreaType.SYSTEM], this.embedded || this.layout.systemTopInsetPx <= 0 ? [] : [SafeAreaEdge.TOP])
       .onAreaChange((_previous: Area, current: Area): void => { this.sendFlightRoot = this.sendFlightRect(current); })
       .bindSheet($$this.executionOpen, this.executionDetailSheet, { height: '92%', dragBar: false,
         showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => { this.closeExecutionDetail(); } })
@@ -2009,7 +2013,7 @@ export struct XopcChatView {
             .accessibilityText($r('app.string.chat_close')).onClick((): void => { this.closeMessageSearch(); })
         }.width('100%')
       }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
-    }.id('chat-message-search-screen').width('100%').height('100%').backgroundColor(this.colors.surface)
+    }.id('chat-message-search-screen').width('100%').height('100%').padding({ top: this.chatTopInset }).backgroundColor(this.colors.surface)
       .onAppear((): void => {
         layoutState.chatActionsOpen = true;
         setTimeout((): void => { if (this.searchOpen) this.getUIContext().getFocusController().requestFocus('chat-message-search-input'); }, 50);

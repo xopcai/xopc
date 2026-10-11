@@ -5,11 +5,13 @@ import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,11 +39,17 @@ class MainActivity : ComponentActivity() {
       var appearanceMode by remember { mutableStateOf(AppearancePreference.read(this)) }
       var colorScheme by remember { mutableStateOf(AppearancePreference.readScheme(this)) }
       val systemDark = isSystemInDarkTheme()
-      XopcTheme(darkTheme = when (appearanceMode) {
+      val darkTheme = when (appearanceMode) {
         "dark" -> true
         "light" -> false
         else -> systemDark
-      }, scheme = colorScheme) {
+      }
+      SideEffect {
+        enableEdgeToEdge(statusBarStyle = SystemBarStyle.auto(
+          android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
+        ) { darkTheme })
+      }
+      XopcTheme(darkTheme = darkTheme, scheme = colorScheme) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
           MainNavigation(appearanceMode, { mode ->
             AppearancePreference.write(this, mode); appearanceMode = mode

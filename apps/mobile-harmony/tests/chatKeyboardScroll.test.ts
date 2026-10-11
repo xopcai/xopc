@@ -21,7 +21,7 @@ function setup() {
     layoutScrollAnimating: false, layout: { reduceMotion: false }, presentationRows: [{ id: 'last' }],
     messagesScroller: { scrollEdge: vi.fn(), scrollToIndex: vi.fn(), isAtEnd: () => false },
     replyAnchorId: '', replySpaceHeight: 0, replyBudget: 0, messageViewportHeight: 720,
-    bottomRegionHeight: 96, replyRowHeights: new Map(),
+    bottomRegionHeight: 96, chatTopInset: 0, replyRowHeights: new Map(),
   });
 }
 
@@ -59,6 +59,16 @@ describe('chat keyboard viewport following', () => {
     view.onMessageChange();
     expect(view.replySpaceHeight).toBeCloseTo(186.8);
   });
+  it('reserves the actual status bar inset only for full-screen chats', () => {
+    const view = setup();
+    view.chatTopInset = 32;
+    view.reserveReplySpace('last', 'next');
+    expect(view.replySpaceHeight).toBeCloseTo(212.4);
+    view.embedded = true;
+    view.reserveReplySpace('last', 'next');
+    expect(view.replySpaceHeight).toBeCloseTo(259.2);
+  });
+
   it('corrects late streamed row growth even after the temporary reply space is exhausted', () => {
     const view = setup();
     view.replySpaceHeight = 0;
