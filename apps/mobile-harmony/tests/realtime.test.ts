@@ -1,3 +1,4 @@
+import { DEVICE_TOOL_CATALOG_JSON } from '../entry/src/main/ets/common/deviceToolCatalog';
 import { describe, expect, it } from 'vitest';
 import { endpointHelloSigningPayload } from '../../../packages/endpoint-tools-protocol/src/index';
 import { endpointProof, XopcCursors } from '../entry/src/main/ets/common/realtimeProtocol';
@@ -10,6 +11,8 @@ describe('Harmony realtime protocol', () => {
       availability: 'foreground' as const, nonce: 'nonce', signedAt: 123, signature: 'ignored', tools: [],
     };
     expect(endpointProof(hello)).toBe(endpointHelloSigningPayload(hello));
+    const withTools = { ...hello, tools: JSON.parse(DEVICE_TOOL_CATALOG_JSON) };
+    expect(endpointProof(withTools)).toBe(endpointHelloSigningPayload(withTools));
   });
 
   it('retains reconnect cursors and suppresses duplicates and unsolicited topics', () => {

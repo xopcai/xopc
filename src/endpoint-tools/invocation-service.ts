@@ -109,6 +109,10 @@ export class EndpointInvocationService {
     if (tool.revision !== params.descriptorRevision) {
       return Promise.reject(this.error('TOOL_REVISION_MISMATCH', 'Endpoint tool contract changed'));
     }
+    if (params.toolName.endsWith('.device.get_location')) {
+      const validateInput = this.ajv.compile(tool.descriptor.inputSchema);
+      if (!validateInput(params.arguments)) return Promise.reject(this.error('INVALID_ARGUMENTS', 'Invalid location task request'));
+    }
     let confirmationRequired: boolean;
     try {
       confirmationRequired = this.policy.evaluate(tool.descriptor, endpoint.availability).confirmationRequired;
@@ -202,6 +206,7 @@ export class EndpointInvocationService {
         clearTimeout(pending.receiptTimer);
         return;
       case 'tool.progress':
+        if (pending.toolName.endsWith('.device.get_location')) return;
         if (pending.state !== 'running') return;
         pending.onProgress?.({
           ...(message.payload.message === undefined ? {} : { message: message.payload.message }),
@@ -219,7 +224,7 @@ export class EndpointInvocationService {
         } catch (error) {
           this.fail(invocationId, this.error(
             'PROTOCOL_ERROR',
-            error instanceof Error ? error.message : String(error),
+            pending.toolName.endsWith('.device.get_location') ? 'Invalid location result' : error instanceof Error ? error.message : String(error),
           ));
           return;
         }
@@ -229,7 +234,7 @@ export class EndpointInvocationService {
         });
         return;
       case 'tool.error':
-        this.fail(invocationId, this.error(message.payload.code, message.payload.message));
+        this.fail(invocationId, this.error(message.payload.code, pending.toolName.endsWith('.device.get_location') ? `Location request failed: ${message.payload.code}` : message.payload.message));
         return;
       case 'tool.cancelled':
         this.fail(invocationId, this.error('TOOL_CANCELLED', 'Endpoint cancelled the tool call'));

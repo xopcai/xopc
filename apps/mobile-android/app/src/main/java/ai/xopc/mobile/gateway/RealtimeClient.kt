@@ -17,7 +17,7 @@ import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class TurnClaim(val endpointId: String, val token: String) {
+data class TurnClaim(val endpointId: String, val token: String, val supportsDeviceContext: Boolean = false) {
   fun json(): JSONObject = JSONObject().put("type", "endpoint").put("endpointId", endpointId).put("token", token)
 }
 
@@ -47,8 +47,9 @@ data class RunStreamEvent(val runId: String, val conversationId: String, val typ
 }
 
 /** A ViewModel-owned realtime connection. The caller owns this suspending loop and its cancellation. */
-class RealtimeClient(
+internal class RealtimeClient(
   private val gateway: GatewaySession,
+  private val deviceTools: DeviceTools? = null,
   private val identity: DeviceIdentity = DeviceIdentity("xopc.gateway.endpoint.p256.v1"),
   private val http: OkHttpClient = OkHttpClient.Builder().followRedirects(false).build(),
 ) {
@@ -87,6 +88,7 @@ class RealtimeClient(
       } catch (error: CancellationException) {
         throw error
       } catch (_: Exception) {
+        DeviceLocation.cancelAll()
         claim = null
         onState("reconnecting")
         delay((1_000L shl attempt.coerceAtMost(4)).coerceAtMost(30_000L))
@@ -102,6 +104,10 @@ class RealtimeClient(
     val displayName = "xopc Android"
     val registration = JSONObject().put("principalId", profile.deviceId).put("displayName", displayName)
       .put("kind", "mobile").put("platform", "android").put("publicKey", identity.publicKeyDer())
+    val compatibility = runInterruptible(Dispatchers.IO) { JSONObject(gateway.request("/api/endpoint-tools/compatibility")) }
+    val supportsLocationTools = compatibility.optJSONObject("payload")?.optBoolean("deviceLocationTasksV1") == true
+    val supportsDeviceTools = compatibility.optJSONObject("payload")?.optBoolean("deviceStateToolsV1") == true
+    val supportsDeviceContext = compatibility.optJSONObject("payload")?.optBoolean("turnDeviceContextV1") == true
     val ticketResponse = runInterruptible(Dispatchers.IO) {
       val registered = JSONObject(gateway.request("/api/endpoint-tools/principals", "POST", registration.toString()))
       require(registered.optBoolean("ok")) { "ENDPOINT_REGISTRATION_FAILED" }
@@ -111,7 +117,7 @@ class RealtimeClient(
     val ticketPayload = ticketResponse.getJSONObject("payload")
     require(ticketResponse.optBoolean("ok") && ticketPayload.getJSONObject("realtime").getInt("minVersion") <= 2 &&
       ticketPayload.getJSONObject("realtime").getInt("maxVersion") >= 2) { "INVALID_REALTIME_TICKET" }
-    val endpoint = runInterruptible(Dispatchers.IO) { endpointHello(profile.deviceId, clientId, displayName) }
+    val endpoint = runInterruptible(Dispatchers.IO) { endpointHello(profile.deviceId, clientId, displayName, supportsDeviceTools, supportsLocationTools) }
     val origin = runInterruptible(Dispatchers.IO) { gateway.activeVerifiedOrigin() }
     val events = Channel<String>(Channel.BUFFERED)
     val listener = object : WebSocketListener() {
@@ -141,7 +147,7 @@ class RealtimeClient(
       require(endpointReady.getString("endpointId") == clientId && endpointReady.getString("turnToken").length >= 32) {
         "MISSING_ENDPOINT_CLAIM"
       }
-      claim = TurnClaim(clientId, endpointReady.getString("turnToken"))
+      claim = TurnClaim(clientId, endpointReady.getString("turnToken"), supportsDeviceContext)
       synchronized(this) {
         readySocket = socket
         watchedRunTopic?.let { subscribe(socket, it, watchedRunSeq) }
@@ -160,6 +166,13 @@ class RealtimeClient(
         val message = JSONObject(raw)
         require(message.getInt("protocolVersion") == 2) { "INVALID_REALTIME_FRAME" }
         when (message.getString("kind")) {
+          "endpoint.message" -> {
+            val inner = message.getJSONObject("payload")
+            when (inner.getString("type")) {
+              "tool.invoke" -> deviceTools?.invoke(inner.getJSONObject("payload")) { kind, payload -> socket.send(endpointFrame(kind, payload)) }
+              "tool.cancel" -> DeviceLocation.cancel(inner.getJSONObject("payload").getString("invocationId"))
+            }
+          }
           "realtime.event" -> {
             val payload = message.getJSONObject("payload")
             val topic = payload.getString("topic")
@@ -195,28 +208,39 @@ class RealtimeClient(
       }
       throw IllegalStateException("REALTIME_DISCONNECTED")
     } finally {
-      claim = null
+      DeviceLocation.cancelAll()
+        claim = null
       synchronized(this) { if (readySocket === socket) readySocket = null }
       socket.close(1000, "Closing")
       events.close()
     }
   }
 
-  private fun endpointHello(principalId: String, endpointId: String, displayName: String): JSONObject {
+  private fun endpointHello(principalId: String, endpointId: String, displayName: String, supportsDeviceTools: Boolean, supportsLocationTools: Boolean): JSONObject {
     val unsigned = JSONObject().put("appVersion", "1.0").put("availability", "foreground")
       .put("connectionInstanceId", UUID.randomUUID().toString()).put("displayName", displayName)
       .put("endpointId", endpointId).put("kind", "mobile").put("nonce", UUID.randomUUID().toString())
       .put("platform", "android").put("principalId", principalId).put("signedAt", System.currentTimeMillis())
-      .put("tools", JSONArray())
-    val canonical = listOf("appVersion", "availability", "connectionInstanceId", "displayName", "endpointId", "kind",
-      "nonce", "platform", "principalId", "signedAt", "tools")
-      .joinToString(",", "{", "}") { key -> JSONObject.quote(key) + ":" + unsigned.get(key).let {
-        if (it is String) JSONObject.quote(it) else it.toString()
-      } }
+      .put("tools", if (supportsDeviceTools) deviceTools?.catalog(supportsLocationTools) ?: JSONArray() else JSONArray())
+    val canonical = canonicalEndpointJson(unsigned)
     return unsigned.put("signature", identity.sign(canonical))
   }
+
+  private fun endpointFrame(kind: String, payload: JSONObject): String = frame("endpoint.message", JSONObject()
+    .put("protocolVersion", 2).put("messageId", UUID.randomUUID().toString()).put("type", kind)
+    .put("sentAt", System.currentTimeMillis()).put("payload", payload))
 
   private fun frame(kind: String, payload: JSONObject): String = JSONObject().put("protocolVersion", 2)
     .put("messageId", UUID.randomUUID().toString()).put("kind", kind)
     .put("sentAt", System.currentTimeMillis()).put("payload", payload).toString()
+}
+
+private fun canonicalEndpointJson(value: Any?): String = when (value) {
+  is JSONObject -> value.keys().asSequence().toList().sorted().joinToString(",", "{", "}") {
+    JSONObject.quote(it) + ":" + canonicalEndpointJson(value.get(it))
+  }
+  is JSONArray -> (0 until value.length()).joinToString(",", "[", "]") { canonicalEndpointJson(value.get(it)) }
+  is String -> JSONObject.quote(value)
+  null, JSONObject.NULL -> "null"
+  else -> value.toString()
 }

@@ -1,5 +1,6 @@
 {
   "string": [
+    { "name": "location_reason", "value": "仅在你允许本次查询时使用位置，查询天气或附近地点。" },
     { "name": "personal_chat_entry_title", "value": "Meet your personal AI" },
     { "name": "personal_chat_entry_subtitle", "value": "A familiar place to think aloud and get things moving." },
     { "name": "personal_chat_resume_title", "value": "Continue with %s" },

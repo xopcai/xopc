@@ -19,6 +19,11 @@ import ai.xopc.mobile.theme.LanguagePreference
 import ai.xopc.mobile.theme.XopcTheme
 
 class MainActivity : ComponentActivity() {
+  private val locationPermissions = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) {
+    ai.xopc.mobile.gateway.DeviceLocation.permissionsChanged()
+  }
+  override fun onResume() { super.onResume(); ai.xopc.mobile.gateway.DeviceLocation.attach(this, locationPermissions) }
+  override fun onStop() { ai.xopc.mobile.gateway.DeviceLocation.detach(this); super.onStop() }
   override fun attachBaseContext(newBase: Context) {
     super.attachBaseContext(LanguagePreference.localizedContext(newBase))
   }

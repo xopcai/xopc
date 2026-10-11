@@ -1,5 +1,6 @@
 import {
   browserPageContextsInputSchema,
+  endpointContextSchema,
   parseUserTurnDocument,
   userTurnDocumentRefIds,
   type ModelThinkingValue,
@@ -7,6 +8,7 @@ import {
 import { endpointTurnClaimSchema } from '@xopcai/endpoint-tools-protocol';
 import type { Context } from 'hono';
 
+import { deviceTurnSourceContext, endpointClaimBelongsToPrincipal } from '../../../endpoint-tools/turn-context.js';
 import { withModelConfigLock } from '../../../session/model-config-lock.js';
 import { getModelThinking } from '../../../providers/model-thinking.js';
 import { resolveModel } from '../../../providers/index.js';
@@ -87,6 +89,11 @@ export async function submitSessionInput(
   if (!deps.service.endpointTools.registry.verifyTurnClaim(origin.data.endpointId, origin.data.token)) {
     return c.json({ ok: false, error: { code: 'INVALID_ENDPOINT', message: 'Endpoint connection is not active' } }, 401);
   }
+  if (!endpointClaimBelongsToPrincipal(deps.service.endpointTools.registry, origin.data.endpointId, getGatewayPrincipal(c))) {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Endpoint does not belong to the authenticated device' } }, 403);
+  }
+  const environment = endpointContextSchema.optional().safeParse(body.endpointContext);
+  if (!environment.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid device context' } }, 400);
   if (browserContexts.data.length
     && deps.service.endpointTools.registry.get(origin.data.endpointId)?.kind !== 'browser') {
     return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Browser context requires a browser endpoint' } }, 403);
@@ -112,7 +119,8 @@ export async function submitSessionInput(
         return c.json({ ok: false, error: { code: 'MODEL_UNAVAILABLE', message: `Model unavailable: ${selection.model}` } }, 409);
       }
     }
-    const sourceContexts = browserContexts.data.map(browserPageContextToAgentContext);
+    const endpoint = deps.service.endpointTools.registry.get(origin.data.endpointId)!;
+    const sourceContexts = [deviceTurnSourceContext(endpoint, environment.data), ...browserContexts.data.map(browserPageContextToAgentContext)];
     if (body.appContext !== undefined) {
       try {
         sourceContexts.push(await deps.service.prepareSessionAppContext(
@@ -185,6 +193,10 @@ export async function replaceLatestSessionTurn(
   if (!origin.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid endpoint origin' } }, 400);
   if (!deps.service.endpointTools.registry.verifyTurnClaim(origin.data.endpointId, origin.data.token)) {
     return c.json({ ok: false, error: { code: 'INVALID_ENDPOINT', message: 'Endpoint connection is not active' } }, 401);
+  }
+
+  if (!endpointClaimBelongsToPrincipal(deps.service.endpointTools.registry, origin.data.endpointId, getGatewayPrincipal(c))) {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Endpoint does not belong to the authenticated device' } }, 403);
   }
 
   return withModelConfigLock(conversationId, async () => {
