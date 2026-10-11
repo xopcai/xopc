@@ -83,6 +83,13 @@ struct AssistantView<Dock: View>: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .top) {
+            Color(uiColor: .systemGroupedBackground)
+                .frame(height: chatTopInset)
+                .offset(y: -chatTopInset)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+        .overlay(alignment: .top) {
             floatingHeader.padding(.horizontal, 20).padding(.top, 8)
         }
         .fullScreenCover(isPresented: $showingMessageSearch) {

@@ -149,11 +149,15 @@ internal class RealtimeVoiceController(private val context: Context, private val
       val session = create(conversationId, selectedMode)
       if (current != generation) { cancel(session); return }
       connection = session
-      try { connect(session, session.websocketPath, current) }
+      val started = AtomicBoolean(false)
+      val path = if (!fresh && reconnectAttempt % 2 == 1) VOICE_PROXY_WS_PATH else session.websocketPath
+      try { connect(session, path, current, started) }
       catch (failure: CancellationException) { throw failure }
-      catch (_: Exception) {
+      catch (failure: Exception) {
         if (current != generation) return
-        connect(session, VOICE_PROXY_WS_PATH, current)
+        // A session.start may consume the ticket even if session.ready never arrives.
+        if (started.get() || path == VOICE_PROXY_WS_PATH || failure.message == "PROTOCOL_ERROR") throw failure
+        connect(session, VOICE_PROXY_WS_PATH, current, started)
       }
       if (current != generation) return
       startAudio(current)
@@ -185,10 +189,10 @@ internal class RealtimeVoiceController(private val context: Context, private val
         }
       }
     } catch (failure: CancellationException) { throw failure }
-    catch (failure: Exception) { fail(failure.message ?: "VOICE_UNAVAILABLE", current) }
+    catch (failure: Exception) { fail(if (failure is java.io.IOException) "NETWORK" else failure.message ?: "VOICE_UNAVAILABLE", current) }
   }
 
-  private suspend fun connect(session: VoiceCallConnection, path: String, current: Int) {
+  private suspend fun connect(session: VoiceCallConnection, path: String, current: Int, started: AtomicBoolean) {
     val ready = CompletableDeferred<Unit>()
     val url = session.origin.trimEnd('/').replaceFirst("https://", "wss://") + path
     require(url.startsWith("wss://")) { "SECURE_ROUTE_REQUIRED" }
@@ -198,6 +202,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
       override fun onOpen(webSocket: WebSocket, response: Response) {
         if (current != generation || attemptClosed.get()) return
         socketForAttempt = webSocket
+        started.set(true)
         webSocket.send(voiceClientEvent("session.start", JSONObject()
           .put("sessionId", session.sessionId).put("ticket", session.ticket)))
       }
@@ -248,7 +253,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
     val attempt = client.newWebSocket(Request.Builder().url(url).build(), listener)
     socketForAttempt = attempt
     socket = attempt
-    try { withTimeout(15_000) { ready.await() } }
+    try { awaitVoiceReady(ready) }
     catch (failure: Exception) {
       attemptClosed.set(true)
       attempt.cancel()

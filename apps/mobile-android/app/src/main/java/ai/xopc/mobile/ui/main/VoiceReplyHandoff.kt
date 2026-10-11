@@ -1,9 +1,18 @@
 package ai.xopc.mobile.ui.main
 
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
+
+internal suspend fun awaitVoiceReady(ready: Deferred<Unit>, timeoutMs: Long = 30_000) {
+  try { withTimeout(timeoutMs) { ready.await() } }
+  catch (failure: TimeoutCancellationException) { throw IllegalStateException("CONNECT_TIMEOUT", failure) }
+}
+
 internal enum class VoiceReplyDisposition { START, DEFER, REJECT }
 
 internal fun voiceReconnectDelay(reason: String, attempt: Int): Long? {
-  if (reason !in setOf("NETWORK", "route_lost", "CAPTURE_FAILED", "PLAYBACK_FAILED",
+  if (reason !in setOf("NETWORK", "CONNECT_TIMEOUT", "route_lost", "CAPTURE_FAILED", "PLAYBACK_FAILED",
       "PLAYBACK_STALLED", "CAPTURE_INTERRUPTED", "OMNI_CONNECTION_CLOSED",
       "OMNI_CONNECTION_FAILED") || attempt !in 0..4) return null
   return longArrayOf(500, 1000, 2000, 4000, 8000)[attempt]

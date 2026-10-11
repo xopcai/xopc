@@ -37,6 +37,94 @@ describe('Harmony realtime voice transport diagnostics', () => {
   let socket: FakeSocket;
   beforeEach(() => { vi.clearAllMocks(); mocks.now = 1000; socket = new FakeSocket(); mocks.create.mockReturnValue(socket); });
 
+  it('does not reuse a consumed ticket when the socket closes before ready', async () => {
+    const transport = new XopcVoiceCallTransport({ onEvent: vi.fn(), onAudio: vi.fn(), onClose: vi.fn(), onRtt: vi.fn() });
+    const connected = transport.connect('https://gateway.example', {
+      sessionId: 'voice-session', ticket: 'ticket', ticketExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      websocketPath: '/api/voice/realtime/v3/ws', protocolVersion: 3, connectionEpoch: 7,
+      purpose: 'conversation', mode: 'natural', inputMode: 'continuous', bargeIn: true,
+      inputFormat: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1 },
+      media: { transport: 'websocket-pcm', codec: 'pcm_s16le', frameDurationMs: 20 },
+      limits: { maxBinaryFrameBytes: 65536, maxSessionMs: 60000, idleTimeoutMs: 30000 }, route: { engine: 'omni' },
+    });
+    const result = expect(connected).rejects.toThrow('NETWORK');
+    await vi.waitFor(() => expect(socket.send).toHaveBeenCalledTimes(1));
+    socket.listeners.get('close')?.({ code: 0 }, { code: 1006 });
+    await result;
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+    await transport.close();
+  });
+
+  it('falls back before session.start and ignores stale callbacks from the first socket', async () => {
+    const first = socket;
+    const second = new FakeSocket();
+    let staleOpen: ((...args: any[]) => void) | undefined;
+    let staleClose: ((...args: any[]) => void) | undefined;
+    first.connect.mockImplementation(async () => {
+      staleOpen = first.listeners.get('open'); staleClose = first.listeners.get('close');
+      throw new Error('handshake failed');
+    });
+    mocks.create.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const close = vi.fn();
+    const transport = new XopcVoiceCallTransport({ onEvent: vi.fn(), onAudio: vi.fn(), onClose: close, onRtt: vi.fn() });
+    const connected = transport.connect('https://gateway.example', {
+      sessionId: 'voice-session', ticket: 'ticket', ticketExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      websocketPath: '/api/voice/realtime/v3/ws', protocolVersion: 3, connectionEpoch: 7,
+      purpose: 'conversation', mode: 'natural', inputMode: 'continuous', bargeIn: true,
+      inputFormat: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1 },
+      media: { transport: 'websocket-pcm', codec: 'pcm_s16le', frameDurationMs: 20 },
+      limits: { maxBinaryFrameBytes: 65536, maxSessionMs: 60000, idleTimeoutMs: 30000 }, route: { engine: 'omni' },
+    });
+    await vi.waitFor(() => expect(second.send).toHaveBeenCalledTimes(1));
+    staleOpen?.({ code: 0 }, {}); staleClose?.({ code: 0 }, { code: 1006 });
+    expect(first.send).not.toHaveBeenCalled();
+    expect(second.send).toHaveBeenCalledTimes(1);
+    second.event(1, 'session.ready', { connectionEpoch: 7, route: { engine: 'omni' } });
+    await connected;
+    expect(close).not.toHaveBeenCalled();
+    await transport.close();
+  });
+
+  it('preserves fatal errors received during setup instead of retrying their ticket', async () => {
+    const close = vi.fn();
+    const transport = new XopcVoiceCallTransport({ onEvent: vi.fn(), onAudio: vi.fn(), onClose: close, onRtt: vi.fn() });
+    const connected = transport.connect('https://gateway.example', {
+      sessionId: 'voice-session', ticket: 'ticket', ticketExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      websocketPath: '/api/voice/realtime/v3/ws', protocolVersion: 3, connectionEpoch: 7,
+      purpose: 'conversation', mode: 'natural', inputMode: 'continuous', bargeIn: true,
+      inputFormat: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1 },
+      media: { transport: 'websocket-pcm', codec: 'pcm_s16le', frameDurationMs: 20 },
+      limits: { maxBinaryFrameBytes: 65536, maxSessionMs: 60000, idleTimeoutMs: 30000 }, route: { engine: 'omni' },
+    });
+    const result = expect(connected).rejects.toThrow('PROVIDER_UNAVAILABLE');
+    await vi.waitFor(() => expect(socket.send).toHaveBeenCalledTimes(1));
+    socket.event(1, 'session.error', { code: 'PROVIDER_UNAVAILABLE', recoverable: false });
+    await result;
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+    await transport.close();
+  });
+
+  it('returns a retryable timeout without resending session.start', async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = new XopcVoiceCallTransport({ onEvent: vi.fn(), onAudio: vi.fn(), onClose: vi.fn(), onRtt: vi.fn() });
+    const connected = transport.connect('https://gateway.example', {
+      sessionId: 'voice-session', ticket: 'ticket', ticketExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      websocketPath: '/api/voice/realtime/v3/ws', protocolVersion: 3, connectionEpoch: 7,
+      purpose: 'conversation', mode: 'natural', inputMode: 'continuous', bargeIn: true,
+      inputFormat: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1 },
+      media: { transport: 'websocket-pcm', codec: 'pcm_s16le', frameDurationMs: 20 },
+      limits: { maxBinaryFrameBytes: 65536, maxSessionMs: 60000, idleTimeoutMs: 30000 }, route: { engine: 'omni' },
+    });
+      const result = expect(connected).rejects.toThrow('CONNECT_TIMEOUT');
+      await vi.advanceTimersByTimeAsync(30000);
+      await result;
+      expect(mocks.create).toHaveBeenCalledTimes(1);
+      await transport.close();
+    } finally { vi.useRealTimers(); }
+  });
+
   it('preserves a fatal server error code and logs the transport shutdown reason', async () => {
     const close = vi.fn();
     const transport = new XopcVoiceCallTransport({ onEvent: vi.fn(), onAudio: vi.fn(), onClose: close, onRtt: vi.fn() });

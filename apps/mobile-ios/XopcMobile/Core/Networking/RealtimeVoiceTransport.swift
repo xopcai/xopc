@@ -28,19 +28,22 @@ actor RealtimeVoiceTransport {
     private var utteranceID = UUID().uuidString.lowercased()
     private var remainder = Data()
     private var pendingBytes = 0
+    private var sessionStartSent = false
     private var ready = false
     private var closed = true
     private var lastPong = Date()
     private var lastPing: Date?
     private var streamEpoch = 0
 
-    func connect(origin: URL, session: RealtimeVoiceSession) throws -> AsyncThrowingStream<RealtimeVoiceIncoming, Error> {
+    func connect(origin: URL, session: RealtimeVoiceSession, preferProxy: Bool = false) throws -> AsyncThrowingStream<RealtimeVoiceIncoming, Error> {
         guard session.supportsNativePCM else { throw RealtimeVoiceTransportError.protocolMismatch }
-        let routes = try Self.webSocketRoutes(origin: origin, session: session)
+        let availableRoutes = try Self.webSocketRoutes(origin: origin, session: session)
+        let routes = preferProxy ? Array(availableRoutes.reversed()) : availableRoutes
         close()
         streamEpoch += 1
         let currentEpoch = streamEpoch
         self.session = session
+        sessionStartSent = false
         eventSequence = 0
         audioSequence = 0
         inputSequence = 0
@@ -51,7 +54,7 @@ actor RealtimeVoiceTransport {
         closed = false
         return AsyncThrowingStream<RealtimeVoiceIncoming, Error> { continuation in
             self.continuation = continuation
-            self.receiveTask = Task { await self.run(routes: routes, session: session) }
+            self.receiveTask = Task { await self.run(routes: routes, session: session, epoch: currentEpoch) }
             continuation.onTermination = { @Sendable _ in
                 Task { await self.close(ifEpoch: currentEpoch) }
             }
@@ -91,10 +94,11 @@ actor RealtimeVoiceTransport {
             )
             inputStarted = true
             pendingBytes += frame.count
+            let currentEpoch = streamEpoch
             let previous = audioQueue
             audioQueue = Task {
                 await previous?.value
-                await self.transmit(frame)
+                await self.transmit(frame, epoch: currentEpoch)
             }
         }
         return pendingBytes / 32
@@ -130,19 +134,22 @@ actor RealtimeVoiceTransport {
         close()
     }
 
-    private func run(routes: [URL], session: RealtimeVoiceSession) async {
+    private func run(routes: [URL], session: RealtimeVoiceSession, epoch: Int) async {
         for route in routes {
-            guard !Task.isCancelled, !closed else { return }
+            guard !Task.isCancelled, !closed, streamEpoch == epoch else { return }
             do {
-                try await receive(route: route, session: session)
+                try await receive(route: route, session: session, epoch: epoch)
+                guard streamEpoch == epoch else { return }
                 close()
                 return
             } catch {
+                guard streamEpoch == epoch, !closed else { return }
                 readyTimeoutTask?.cancel()
                 readyTimeoutTask = nil
                 socket?.cancel(with: .goingAway, reason: nil)
                 socket = nil
-                if ready || route == routes.last {
+                // Once sent, the single-use ticket cannot authenticate a second socket.
+                if sessionStartSent || ready || error as? RealtimeVoiceTransportError == .protocolMismatch || route == routes.last {
                     continuation?.finish(throwing: error)
                     close()
                     return
@@ -153,20 +160,26 @@ actor RealtimeVoiceTransport {
         }
     }
 
-    private func receive(route: URL, session: RealtimeVoiceSession) async throws {
+    private func receive(route: URL, session: RealtimeVoiceSession, epoch: Int) async throws {
         var request = URLRequest(url: route)
         request.timeoutInterval = 15
         let socket = URLSession.shared.webSocketTask(with: request)
         self.socket = socket
         socket.resume()
         readyTimeoutTask = Task {
-            try? await Task.sleep(for: .seconds(15))
+            try? await Task.sleep(for: .seconds(30))
             guard !Task.isCancelled, !ready, !closed, self.socket === socket else { return }
             socket.cancel(with: .goingAway, reason: nil)
         }
-        try await send("session.start", payload: .init(sessionId: session.sessionId, ticket: session.ticket))
+        let start = RealtimeVoiceControlMessage(type: "session.start", payload: .init(sessionId: session.sessionId, ticket: session.ticket))
+        let data = try JSONEncoder().encode(start)
+        guard let text = String(data: data, encoding: .utf8) else { throw RealtimeVoiceProtocolError.invalidEvent }
+        try await socket.send(.string(text))
+        guard streamEpoch == epoch, !closed else { throw CancellationError() }
+        sessionStartSent = true
         while !Task.isCancelled, !closed {
             let message = try await socket.receive()
+            guard streamEpoch == epoch, !closed else { throw CancellationError() }
             switch message {
             case let .string(text):
                 let event = try RealtimeVoiceProtocol.decodeEvent(Data(text.utf8))
@@ -228,17 +241,22 @@ actor RealtimeVoiceTransport {
         }
     }
 
-    private func transmit(_ frame: Data) async {
-        defer { pendingBytes = max(0, pendingBytes - frame.count) }
+    private func transmit(_ frame: Data, epoch: Int) async {
+        guard streamEpoch == epoch else { return }
+        defer { if streamEpoch == epoch { pendingBytes = max(0, pendingBytes - frame.count) } }
         guard let socket, !closed else { return }
         do {
             try await socket.send(.data(frame))
         } catch {
+            guard streamEpoch == epoch else { return }
             continuation?.finish(throwing: error)
             close()
         }
     }
 
+}
+
+extension RealtimeVoiceTransport {
     static func webSocketRoutes(origin: URL, session: RealtimeVoiceSession) throws -> [URL] {
         guard let scheme = origin.scheme?.lowercased(), let host = origin.host?.lowercased() else {
             throw RealtimeVoiceTransportError.secureRouteRequired

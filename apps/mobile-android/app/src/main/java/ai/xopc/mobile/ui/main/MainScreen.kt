@@ -2816,6 +2816,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       }
     }
   }
+    Spacer(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(chatTopInset)
+      .background(MaterialTheme.colorScheme.background).testTag("chat-status-bar-background"))
     Row(modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
       .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
       .padding(horizontal = 20.dp, vertical = 16.dp).testTag("chat-floating-header"), horizontalArrangement = Arrangement.SpaceBetween,

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { xopcVoiceShouldReconnect } from '../entry/src/main/ets/common/voiceRecovery.ets';
 
 describe('Harmony realtime voice recovery policy', () => {
-  it.each(['NETWORK', 'OMNI_CONNECTION_CLOSED', 'OMNI_CONNECTION_FAILED'])(
+  it.each(['NETWORK', 'CONNECT_TIMEOUT', 'OMNI_CONNECTION_CLOSED', 'OMNI_CONNECTION_FAILED'])(
     'reconnects after transient failure %s', (reason) => {
       expect(xopcVoiceShouldReconnect(reason)).toBe(true);
     });

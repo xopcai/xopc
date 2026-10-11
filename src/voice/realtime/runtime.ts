@@ -486,23 +486,29 @@ export class VoiceRealtimeRuntime {
       sockets?.delete(socket);
       if (sockets?.size === 0) this.socketsByPrincipal.delete(claim.principalId);
     };
-    const shutdown = async (reason: string, notify: boolean) => {
-      if (closed) return;
+    let shutdownCompletion: Promise<void> | undefined;
+    const shutdown = (reason: string, notify: boolean): Promise<void> => {
+      if (shutdownCompletion) return shutdownCompletion;
+      if (closed) return Promise.resolve();
       closed = true;
-      if (claim && this.activeSessions.get(claim.sessionId)?.socket === socket) {
-        this.activeSessions.delete(claim.sessionId);
-      }
-      unsubscribeMemory?.(); unsubscribeSession?.();
-      clearTimeout(startTimer);
-      clearInterval(lifecycleTimer);
-      try { await engine?.close(); }
-      catch (err) { log.error({ err, sessionId: claim?.sessionId }, 'Voice cleanup failed'); }
-      finally { abortController.abort(reason); }
-      if (notify) send('session.closed', { reason });
-      detachPrincipal();
-      if (claim) this.releaseConversationReservation(claim);
-      this.preauthBudget.release(clientIp);
-      if (socket.readyState === WebSocketState.OPEN) socket.close(1000, reason.slice(0, 120));
+      shutdownCompletion = (async () => {
+        unsubscribeMemory?.(); unsubscribeSession?.();
+        clearTimeout(startTimer);
+        clearInterval(lifecycleTimer);
+        try { await engine?.close(); }
+        catch (err) { log.error({ err, sessionId: claim?.sessionId }, 'Voice cleanup failed'); }
+        finally { abortController.abort(reason); }
+        if (notify) send('session.closed', { reason });
+        detachPrincipal();
+        // Retain cancellation ownership until transcript/audio cleanup releases the reservation.
+        if (claim && this.activeSessions.get(claim.sessionId)?.socket === socket) {
+          this.activeSessions.delete(claim.sessionId);
+        }
+        if (claim) this.releaseConversationReservation(claim);
+        this.preauthBudget.release(clientIp);
+        if (socket.readyState === WebSocketState.OPEN) socket.close(1000, reason.slice(0, 120));
+      })();
+      return shutdownCompletion;
     };
 
     const startTimer = setTimeout(() => socket.close(4401, 'Voice session start timeout'), VOICE_REALTIME_START_TIMEOUT_MS);

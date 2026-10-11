@@ -155,8 +155,8 @@ final class RealtimeVoiceCall {
         generation += 1
         let current = generation
         phase = recovering ? .recovering : .connecting
+        connectedAt = nil
         errorCode = nil
-        scheduleConnectTimeout(for: current)
         do {
             let status = try await gateway.fetchRealtimeVoiceStatus()
             guard generation == current else { return }
@@ -185,27 +185,28 @@ final class RealtimeVoiceCall {
             if speaker {
                 try? audio.setSpeaker(true)
             }
-            let stream = try await transport.connect(origin: gateway.configuration.baseURL, session: session)
+            scheduleConnectTimeout(for: current)
+            let stream = try await transport.connect(origin: gateway.configuration.baseURL, session: session,
+                                                     preferProxy: recovering && reconnectAttempt % 2 == 1)
             guard generation == current else { await release(); return }
             captureTask = Task { await capture(input, generation: current) }
             receiveTask = Task { await consume(stream, generation: current) }
         } catch {
             guard generation == current else { return }
-            errorCode = (error as? RealtimeVoiceCallError)?.code
+            let reason = (error as? RealtimeVoiceCallError)?.code
                 ?? (error as? RealtimeVoiceAudioError)?.code
-                ?? error.localizedDescription
-            await release()
-            phase = .paused
+                ?? (error is URLError || error as? GatewayClientError == .transport ? "NETWORK" : error.localizedDescription)
+            await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
         }
     }
 
     private func scheduleConnectTimeout(for current: Int) {
         connectTimeoutTask?.cancel()
         connectTimeoutTask = Task {
-            try? await Task.sleep(for: .seconds(15))
+            try? await Task.sleep(for: .seconds(65))
             guard !Task.isCancelled, generation == current,
                   phase == .connecting || phase == .recovering else { return }
-            await pause(reason: "CONNECT_TIMEOUT")
+            await pause(reason: "CONNECT_TIMEOUT", reconnect: true)
         }
     }
 
@@ -256,8 +257,8 @@ final class RealtimeVoiceCall {
             }
         } catch {
             if generation == self.generation, phase != .idle, phase != .ending {
-                let reason = error is RealtimeVoiceTransportError
-                    && (error as? RealtimeVoiceTransportError) == .protocolMismatch ? "PROTOCOL_ERROR" : "NETWORK"
+                let reason = error is RealtimeVoiceProtocolError
+                    || error as? RealtimeVoiceTransportError == .protocolMismatch ? "PROTOCOL_ERROR" : "NETWORK"
                 await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
             }
         }
@@ -265,7 +266,7 @@ final class RealtimeVoiceCall {
 
     private func pause(reason: String, reconnect: Bool = false) async {
         guard phase != .idle, phase != .ending else { return }
-        if releaseInProgress || phase == .recovering && reconnect {
+        if releaseInProgress {
             return
         }
         if let connectedAt, Date().timeIntervalSince(connectedAt) >= 30 {
@@ -292,15 +293,13 @@ final class RealtimeVoiceCall {
     }
 
     private func release() async {
-        connectTimeoutTask?.cancel()
+        // The task invoking release must finish cancelling the server reservation first.
+        let tasks = [connectTimeoutTask, approvalTask, limitTask, captureTask, receiveTask]
+        defer { for task in tasks { task?.cancel() } }
         connectTimeoutTask = nil
-        approvalTask?.cancel()
         approvalTask = nil
-        limitTask?.cancel()
         limitTask = nil
-        captureTask?.cancel()
         captureTask = nil
-        receiveTask?.cancel()
         receiveTask = nil
         await transport.close()
         audio.stop()
@@ -411,7 +410,11 @@ private extension RealtimeVoiceCall {
             }
         case "session.error":
             let reason = payload.code ?? "SERVICE_UNAVAILABLE"
-            await pause(reason: reason, reconnect: phase == .connected && VoiceRecoveryPolicy.shouldReconnect(reason))
+            if payload.recoverable == true {
+                errorCode = reason
+            } else {
+                await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
+            }
         case "session.closed":
             let reason = errorCode ?? payload.reason ?? "NETWORK"
             await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
@@ -566,7 +569,7 @@ private enum RealtimeVoiceCallError: Error {
 
 enum VoiceRecoveryPolicy {
     static func shouldReconnect(_ reason: String) -> Bool {
-        ["NETWORK", "network", "route_lost", "CAPTURE_FAILED", "PLAYBACK_FAILED", "CAPTURE_INTERRUPTED",
+        ["NETWORK", "network", "CONNECT_TIMEOUT", "route_lost", "CAPTURE_FAILED", "PLAYBACK_FAILED", "CAPTURE_INTERRUPTED",
          "OMNI_CONNECTION_CLOSED", "OMNI_CONNECTION_FAILED"].contains(reason)
     }
 }
