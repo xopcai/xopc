@@ -661,7 +661,8 @@ export struct XopcHomeView {
           onConversationChange: (id: string): void => {
             this.activeChatId = id;
             if (this.pendingChatId === id) this.pendingChatId = '';
-          } }) }
+          } }) }.height(LayoutPolicy.matchParent)
+          .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP])
         TabContent() { XopcSessionsView({ embedded: true, bottomInset: this.secondaryBottomRegionHeight, activePage: this.tab === 1 && !this.detailVisible,
           currentId: this.activeChatId, personalAgent: this.personalAgent.record, personalBusy: this.personalAgent.creating,
           onOpenPersonal: (): void => { void this.openPersonalChat(); },
@@ -683,9 +684,10 @@ export struct XopcHomeView {
       }.scrollable(false).barHeight(0).barMode(BarMode.Fixed)
         .animationDuration(0)
         .onChange((index: number): void => { this.tab = index; })
-        .width('100%').layoutWeight(1)
+        .width('100%').height(LayoutPolicy.matchParent)
+        .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], this.tab === 0 ? [LayoutSafeAreaEdge.TOP] : [])
       }.id('home-tab-viewport').width('100%').height('100%')
-        .clip(true)
+        .clip(this.tab !== 0)
       if (this.tab === 0 && this.pendingChatId) {
         Column() {
           XopcBrandLoading({ reduceMotion: this.layout.reduceMotion })
