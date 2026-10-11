@@ -40,23 +40,6 @@ export function AgentDefaultsRuntimePanel({
     <div className="space-y-5">
       <section className="rounded-xl bg-surface-hover/20 p-5">
         <label className="flex cursor-pointer items-start gap-3">
-          <input type="checkbox" checked={draft.runtime.toolDiscovery?.enabled ?? false}
-            onChange={event => setDraft({ ...draft, runtime: { ...draft.runtime,
-              toolDiscovery: { ...draft.runtime.toolDiscovery, enabled: event.target.checked } } })}
-            className="mt-1 size-4 accent-[var(--color-accent)]" />
-          <span><span className="block text-base font-semibold text-fg">{zh ? '按需工具发现' : 'On-demand tool discovery'}</span>
-            <span className="mt-1 block text-sm text-fg-muted">{zh ? '先搜索所选 MCP 服务，再载入需要的工具。默认关闭。' : 'Search the selected MCP server and load tools when needed. Off by default.'}</span>
-          </span>
-        </label>
-        <label className="mt-4 block max-w-xl text-xs font-medium text-fg-muted">{zh ? '试点 MCP 服务名称' : 'Pilot MCP server name'}
-          <input value={draft.runtime.toolDiscovery?.mcpServer ?? ''} placeholder={zh ? '已配置的服务名称' : 'Configured server name'}
-            onChange={event => setDraft({ ...draft, runtime: { ...draft.runtime, toolDiscovery: {
-              enabled: draft.runtime.toolDiscovery?.enabled ?? false, mcpServer: event.target.value.trim() || undefined } } })}
-            className={`${inputClass} mt-2`} />
-        </label>
-      </section>
-      <section className="rounded-xl bg-surface-hover/20 p-5">
-        <label className="flex cursor-pointer items-start gap-3">
           <input type="checkbox" checked={draft.runtime.codemode?.enabled ?? false}
             onChange={event => setDraft({ ...draft, runtime: { ...draft.runtime,
               codemode: { ...draft.runtime.codemode, enabled: event.target.checked } } })}

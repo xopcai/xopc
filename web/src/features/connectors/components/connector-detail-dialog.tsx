@@ -1,6 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { CheckCircle2, KeyRound, Loader2, PackagePlus, Server, Wrench, X } from 'lucide-react';
-import { useState } from 'react';
+import { CheckCircle2, KeyRound, PackagePlus, Server, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { ConnectorsSettingsMessages } from '@/i18n/messages';
@@ -8,10 +7,8 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
 import {
-  previewConnector,
   type ConnectorCapability,
   type ConnectorDefinition,
-  type ConnectorHealthResult,
 } from '../connectors-api';
 import { connectorBenefitsFor } from '../utils/connector-benefits';
 import { connectorDescription } from '../utils/connector-copy';
@@ -39,29 +36,6 @@ function authLabel(connector: ConnectorDefinition, t: ConnectorsSettingsMessages
   return t.connectorAuthNone;
 }
 
-function CapabilityPreviewList({
-  title,
-  items,
-}: {
-  title: string;
-  items: Array<{ id: string; title: string; description?: string }>;
-}) {
-  if (items.length === 0) return null;
-  return (
-    <section>
-      <h4 className="mb-2 text-xs font-medium text-fg-muted">{title}</h4>
-      <div className="divide-y divide-edge-subtle overflow-hidden rounded-lg border border-edge bg-surface-panel">
-        {items.slice(0, 12).map((item) => (
-          <div key={item.id} className="px-3 py-2.5">
-            <p className="break-words font-mono text-xs font-medium text-fg">{item.title}</p>
-            {item.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{item.description}</p> : null}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 export function ConnectorDetailDialog({
   connector,
   installed,
@@ -75,10 +49,7 @@ export function ConnectorDetailDialog({
   onInstall: (connector: ConnectorDefinition) => void;
   t: ConnectorsSettingsMessages;
 }) {
-  const [previewLoading, setPreviewLoading] = useState(false);
   const description = connectorDescription(connector, t);
-  const [previewResult, setPreviewResult] = useState<ConnectorHealthResult | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
   const benefits = connectorBenefitsFor(connector);
   const requiredInputs = [
     ...(connector.setup.secrets ?? []).filter((field) => field.required),
@@ -87,19 +58,6 @@ export function ConnectorDetailDialog({
   const capabilities = connector.capabilities.filter((capability) => (
     !capability.startsWith('runtime.') && !capability.startsWith('auth.')
   ));
-
-  const runPreview = async () => {
-    setPreviewLoading(true);
-    setPreviewError(null);
-    try {
-      setPreviewResult(await previewConnector(connector));
-    } catch (error) {
-      setPreviewResult(null);
-      setPreviewError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
 
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -194,27 +152,7 @@ export function ConnectorDetailDialog({
                     ))}
                   </div>
                 ) : null}
-                <Button variant="secondary" disabled={previewLoading} onClick={() => void runPreview()}>
-                  {previewLoading ? <Loader2 className="size-4 animate-spin" /> : <Wrench className="size-4" />}
-                  {t.connectorPreviewButton}
-                </Button>
-                {previewError ? <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600">{previewError}</p> : null}
-                {previewResult ? (
-                  <div className="space-y-4">
-                    <CapabilityPreviewList
-                      title={t.detailTools}
-                      items={previewResult.tools.map((tool) => ({ id: tool.name, title: tool.shortName ?? tool.name, description: tool.description }))}
-                    />
-                    <CapabilityPreviewList
-                      title={t.detailResources}
-                      items={previewResult.resources.map((resource) => ({ id: resource.uri, title: resource.title ?? resource.name ?? resource.uri, description: resource.description }))}
-                    />
-                    <CapabilityPreviewList
-                      title={t.detailPrompts}
-                      items={previewResult.prompts.map((prompt) => ({ id: prompt.name, title: prompt.title ?? prompt.name, description: prompt.description }))}
-                    />
-                  </div>
-                ) : null}
+
               </div>
             </details>
           </div>

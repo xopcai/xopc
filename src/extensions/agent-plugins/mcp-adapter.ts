@@ -12,8 +12,6 @@ export function materializePluginServers(plugin: InstalledAgentPlugin, store = n
       const origin = { id: plugin.id, serverName: name, rootDir: root, dataDir: data, revision: plugin.receipt.revision };
       const raw = server.type !== 'stdio' ? {
         ...server, xopcPlugin: origin,
-        ...(server.type === 'streamable-http' && !Object.keys(server.headers ?? {}).some(key => key.toLowerCase() === 'authorization')
-          ? { auth: { type: 'oauth' }, xopcAutoAuth: true } : {}),
       } : {
         type: 'stdio', xopcPlugin: origin,
         command: server.command.startsWith('./') ? containedPath(root, resolve(root, server.command)) : server.command,

@@ -16,7 +16,6 @@ export type ConnectorCapability =
   | 'auth.apiKey'
   | 'auth.oauth'
   | 'runtime.mcp.stdio'
-  | 'runtime.mcp.sse'
   | 'runtime.mcp.streamableHttp';
 
 export type ConnectorSecretField = {
@@ -530,20 +529,6 @@ export async function installConnector(
   );
   void revalidateGatewayConfig();
   return requirePayload(response, 'Could not install connector.').instance;
-}
-
-export async function previewConnector(
-  connector: ConnectorDefinition,
-  input: Omit<ConnectorInstallInput, 'definition'> = {},
-): Promise<ConnectorHealthResult> {
-  const response = await fetchJson<ApiEnvelope<{ preview: ConnectorHealthResult }>>(
-    apiUrl('/api/connectors/preview'),
-    {
-      method: 'POST',
-      body: JSON.stringify({ ...input, definition: connector }),
-    },
-  );
-  return requirePayload(response, 'Could not preview connector capabilities.').preview;
 }
 
 export async function updateConnectorConfig(

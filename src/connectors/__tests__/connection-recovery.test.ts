@@ -22,7 +22,6 @@ import { resolveConnectionCandidate } from '../connection-candidates.js';
 import { installConnectorDefinition } from '../install.js';
 import type { ConnectorDefinition } from '../types.js';
 import type { ComposioSessionsAdapter } from '../composio-sessions.js';
-import type { PluginMcpRecovery } from '../plugin-mcp-recovery.js';
 
 const conversationId = "f04efcc8-b008-406b-8c54-760428488f0a";
 const need = resolveConnectionCandidate('composio-gmail');
@@ -358,34 +357,6 @@ describe('durable connection recovery', () => {
     expect(first.summary).toContain('last week');
     expect(JSON.stringify(first)).not.toContain('https:');
   });
-  it('connects a plugin MCP account and resumes the preserved objective', async () => {
-    const target = { type: 'plugin-mcp' as const, pluginId: 'oauth-demo', serverId: 'plugin/oauth-demo/local-oauth', serverName: 'local-oauth' };
-    const status = vi.fn(async () => ({ configured: true, status: 'connected' as const }));
-    const pluginMcp: PluginMcpRecovery = {
-      availability: () => ({ available: true }),
-      status,
-      start: vi.fn(async () => ({ configured: true, status: 'authorizing' as const,
-        session: { id: 'oauth-attempt', serverId: target.serverId, serverUrl: 'http://127.0.0.1/mcp', status: 'waiting_browser' as const,
-          authorizationUrl: 'https://example.test/authorize', createdAt: Date.now(), expiresAt: Date.now() + 60_000 } })),
-      verify: vi.fn(async () => ({ ready: true })),
-      submitCallback: vi.fn(),
-    };
-    recovery = new ConnectionRecoveryService({ getConfig: () => config, saveConfig: vi.fn(async () => ({ saved: true })), drain,
-      adapter: { syncConnections: vi.fn(async () => []) } as unknown as ComposioSessionsAdapter, pluginMcp });
-    requireSessionConnection({ conversationId, principalId: 'local-owner', agentId: 'main', summary: 'Verify my Demo identity',
-      needs: [{ key: target.serverId, target, label: 'oauth-demo', capabilities: [`mcp.tools:${target.serverId}`] }] });
-    expect(recovery.snapshot(conversationId).wait?.needs[0]).toMatchObject({ phase: 'connect', authorizationMode: 'desktop' });
-    const connected = await recovery.act(conversationId, action('connect', { needKey: target.serverId }));
-    expect(connected.authorizationUrl).toBe('https://example.test/authorize');
-    expect(connected.snapshot.wait?.needs[0].phase).toBe('authorizing');
-    const callbackUrl = 'http://127.0.0.1/callback?code=demo&state=oauth-attempt';
-    const checked = await recovery.act(conversationId, action('submit_callback', { needKey: target.serverId, callbackUrl }));
-    expect(checked.snapshot.wait?.phase).toBe('queued');
-    expect(pluginMcp.submitCallback).toHaveBeenCalledWith(target, callbackUrl);
-    expect(status).toHaveBeenCalled();
-    expect(pluginMcp.verify).toHaveBeenCalled();
-    expect(drain).toHaveBeenCalledOnce();
-  });
   it('verifies an exact Store installation and immediately queues the preserved objective', async () => {
     const definition: ConnectorDefinition = {
       id: 'store-demo',
@@ -401,7 +372,7 @@ describe('durable connection recovery', () => {
       runtime: {
         type: 'mcp',
         serverId: 'store_demo',
-        serverTemplate: { url: 'https://mcp.example.com/mcp', transport: 'streamable-http' },
+        serverTemplate: { url: 'https://mcp.example.com/mcp', type: 'http' },
       },
       provenance: {
         packageName: '@xopc-connectors/store-demo',

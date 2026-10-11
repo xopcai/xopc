@@ -16,7 +16,6 @@ import { randomUUID } from 'node:crypto';
 
 import type { AgentService } from '../../agent/service.js';
 import type { CompactionResult } from '../../agent/memory/compaction.js';
-import { retireSessionMcpRuntimeForConversationId } from '../../agent/mcp/bundle-mcp-tools.js';
 import { SessionIndex } from '../../session/index.js';
 import type { ExportFormat, SessionListQuery } from '../../session/types.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
@@ -297,7 +296,6 @@ export class GatewaySessionsApi {
     if (result) {
       await deleteMediaUris(collectMediaUrisFromValues(transcriptRows));
       this.opts.getAgentService().evictSessionAgent(key);
-      await retireSessionMcpRuntimeForConversationId({ conversationId: key, reason: 'session-delete' });
     }
     return { deleted: result };
   }

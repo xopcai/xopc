@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { scanLocal } from '../scanner.js';
 import { readTree } from '../files.js';
+import { inspectMcp } from '../compatibility.js';
 let home: string;
 beforeEach(() => { home = mkdtempSync(join(tmpdir(), 'xopc-import-')); });
 afterEach(() => rmSync(home, { force: true, recursive: true }));
@@ -70,4 +71,12 @@ it('retains both Claude project instruction locations and Codex override precede
   writeFileSync(join(projectRoot, 'AGENTS.override.md'), 'Preferred rules');
   const codex = await scanLocal({ source: 'codex', home, projectRoot, projectOnly: true });
   expect(codex.candidates.filter(c => c.kind === 'rule').map(c => c.content)).toEqual(['Preferred rules']);
+});
+
+it('projects imported HTTP and timeout fields to native pi and blocks unsupported SSE', () => {
+  const base = { id: 'docs', source: 'codex' as const, scope: 'user' as const, location: 'config.toml', shared: true };
+  expect(inspectMcp(base, 'docs', { type: 'http', url: 'https://example.com/mcp', tool_timeout_sec: 30 }))
+    .toMatchObject({ compatibility: 'needs_setup', mcp: { type: 'http', url: 'https://example.com/mcp', timeout: 30 } });
+  expect(inspectMcp(base, 'events', { type: 'sse', url: 'https://example.com/sse' }).compatibility).toBe('blocked');
+  expect(inspectMcp(base, 'startup', { command: 'node', startup_timeout_sec: 30 }).compatibility).toBe('blocked');
 });

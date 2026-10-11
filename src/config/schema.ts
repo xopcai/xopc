@@ -1058,76 +1058,41 @@ const ConnectorSecretReferenceSchema = z.object({
   }),
 });
 
-const McpConfigScalarSchema = z.union([z.string(), z.number(), z.boolean(), ConnectorSecretReferenceSchema]);
-
-export const McpOAuthConfigSchema = z
-  .object({
-    type: z.literal('oauth'),
-    /** Optional public client id for authorization servers without dynamic registration. */
-    clientId: z.string().min(1).optional(),
-  })
-  .strict();
-
-export const McpServerSchema = z
-  .object({
-    command: z.string().optional(),
-    args: z.array(z.string()).optional(),
-    env: z.record(z.string(), McpConfigScalarSchema).optional(),
-    cwd: z.string().optional(),
-    workingDirectory: z.string().optional(),
-    url: McpHttpUrlSchema.optional(),
-    transport: z.enum(['sse', 'streamable-http']).optional(),
-    headers: z.record(z.string(), McpConfigScalarSchema).optional(),
-    auth: McpOAuthConfigSchema.optional(),
-    connectionTimeoutMs: z.number().finite().positive().optional(),
-    requestTimeoutMs: z.number().finite().positive().optional(),
-  })
-  .catchall(z.unknown())
-  .superRefine((value, ctx) => {
-    const hasCommand = typeof value.command === 'string' && value.command.trim().length > 0;
-    const hasUrl = typeof value.url === 'string' && value.url.trim().length > 0;
-    if (hasCommand && hasUrl) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'MCP server cannot define both command and url',
-      });
-    }
-    if (value.auth && !hasUrl) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['auth'],
-        message: 'MCP OAuth requires an HTTP server URL',
-      });
-    }
-    if (value.auth && value.transport === 'sse') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['auth'],
-        message: 'MCP OAuth currently supports streamable HTTP only',
-      });
-    }
-    if (value.auth && value.headers) {
-      const authorizationHeader = Object.keys(value.headers).find(
-        (key) => key.toLowerCase() === 'authorization',
-      );
-      if (authorizationHeader) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['headers', authorizationHeader],
-          message: 'MCP OAuth cannot be combined with a static Authorization header',
-        });
-      }
-    }
-  });
-
-export const McpConfigSchema = z
-  .object({
-    servers: z.record(z.string(), McpServerSchema).optional(),
-    sessionIdleTtlMs: z.number().finite().min(0).optional(),
-  })
-  .strict()
-  .optional();
-
+const McpConfigScalarSchema = z.union([z.string(), ConnectorSecretReferenceSchema]);
+const McpExposureSchema = z.enum(['codemode', 'deferred', 'direct', 'hidden']);
+export const McpOAuthConfigSchema = z.object({
+  clientId: z.string().min(1).optional(), clientSecret: z.string().optional(),
+  callbackPort: z.number().int().min(1).max(65535).optional(), callbackUrl: z.string().url().optional(),
+  scope: z.string().optional(), clientName: z.string().optional(),
+  clientRegistration: z.enum(['dcr', 'cimd']).optional(), authServerMetadataUrl: z.string().url().optional(),
+}).strict();
+export const McpServerSchema = z.object({
+  type: z.enum(['stdio', 'http', 'streamable-http']).optional(),
+  command: z.string().min(1).optional(), args: z.array(z.string()).optional(),
+  env: z.record(z.string(), McpConfigScalarSchema).optional(), cwd: z.string().optional(),
+  url: McpHttpUrlSchema.optional(), headers: z.record(z.string(), McpConfigScalarSchema).optional(),
+  oauth: McpOAuthConfigSchema.optional(), auth: z.object({ provider: z.string().min(1) }).strict().optional(),
+  timeout: z.number().finite().positive().optional(), enabled: z.boolean().optional(),
+  exposure: McpExposureSchema.optional(), toolExposure: z.record(z.string(), McpExposureSchema).optional(),
+  description: z.string().optional(),
+  transport: z.never().optional(), workingDirectory: z.never().optional(),
+  connectionTimeoutMs: z.never().optional(), requestTimeoutMs: z.never().optional(),
+}).catchall(z.unknown()).superRefine((value, ctx) => {
+  if (Boolean(value.command) === Boolean(value.url)) ctx.addIssue({ code: 'custom', message: 'MCP server requires exactly one command or url' });
+  if (value.type === 'stdio' && !value.command) ctx.addIssue({ code: 'custom', message: 'stdio requires command' });
+  if ((value.type === 'http' || value.type === 'streamable-http') && !value.url) ctx.addIssue({ code: 'custom', message: 'HTTP requires url' });
+  if ((value.oauth || value.auth) && !value.url) ctx.addIssue({ code: 'custom', message: 'MCP authentication requires HTTP' });
+});
+export const McpConfigSchema = z.object({
+  servers: z.record(z.string().regex(/^[a-zA-Z0-9_-]+$/), McpServerSchema).optional(),
+}).strict().superRefine((value, ctx) => {
+  const names = new Set<string>();
+  for (const name of Object.keys(value.servers ?? {})) {
+    const normalized = name.replace(/-/g, '_');
+    if (names.has(normalized)) ctx.addIssue({ code: 'custom', path: ['servers', name], message: 'MCP names differing only by hyphens and underscores collide' });
+    names.add(normalized);
+  }
+}).optional();
 export type McpServerConfig = z.infer<typeof McpServerSchema>;
 export type McpOAuthConfig = z.infer<typeof McpOAuthConfigSchema>;
 export type McpConfig = z.infer<typeof McpConfigSchema>;

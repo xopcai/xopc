@@ -26,6 +26,13 @@ function memoryStore(): EndpointSessionBindingStore {
 }
 
 export class EndpointBindingService {
+  private readonly changeListeners = new Set<(conversationId: string) => void>();
+
+  onChange(listener: (conversationId: string) => void): () => void {
+    this.changeListeners.add(listener);
+    return () => { this.changeListeners.delete(listener); };
+  }
+
   constructor(
     private readonly registry: EndpointRegistry,
     private readonly store: EndpointSessionBindingStore = memoryStore(),
@@ -35,7 +42,9 @@ export class EndpointBindingService {
     const normalizedConversationId = this.normalizeConversationId(conversationId);
     if (!this.registry.get(endpointId)) throw new Error('Endpoint is offline');
     const binding = { conversationId: normalizedConversationId, endpointId, boundAt: now };
-    return this.store.set(binding);
+    const stored = this.store.set(binding);
+    for (const listener of this.changeListeners) listener(normalizedConversationId);
+    return stored;
   }
 
   get(conversationId: string): EndpointSessionBinding | undefined {
@@ -48,7 +57,10 @@ export class EndpointBindingService {
   }
 
   unbind(conversationId: string): boolean {
-    return this.store.delete(this.normalizeConversationId(conversationId));
+    const normalized = this.normalizeConversationId(conversationId);
+    const removed = this.store.delete(normalized);
+    if (removed) for (const listener of this.changeListeners) listener(normalized);
+    return removed;
   }
 
   private normalizeConversationId(conversationId: string): string {

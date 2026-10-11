@@ -7,7 +7,7 @@ import { expect, it, vi } from 'vitest';
 import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
-import { PLUGIN_SCHEMA, MCP_SCHEMA } from '../../extensions/agent-plugins/validation.js';
+import { PLUGIN_SCHEMA, MCP_SCHEMA, pluginServerId } from '../../extensions/agent-plugins/validation.js';
 import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 
@@ -45,11 +45,17 @@ it('installs, activates, updates and removes through real authenticated HTTP and
     expect((await request(`${path}/activation`, 'POST', { enabled: true })).payload.active).toBe(true);
     expect((await request('/api/extensions', 'GET')).extensions).toHaveLength(1);
     expect((await request(path, 'GET')).payload.components.skills).toEqual([]);
-    await request(`${path}/mcp/main/auth`, 'PUT', { mode: 'oauth' });
-    const mcpPath = `/api/mcp/servers/${encodeURIComponent('plugin/http-fixture/main')}`;
-    expect((await request(`${mcpPath}/oauth`, 'GET')).payload.status).toBe('disconnected');
-    expect((await request(`${mcpPath}/test`, 'POST', {}, 409)).code).toBe('MCP_AUTHORIZATION_REQUIRED');
-    await request(`${mcpPath}/oauth/callback`, 'POST', { callbackUrl: 'http://127.0.0.1/oauth/callback?code=unexpected' }, 400);
+    await request(`${path}/mcp/main/auth`, 'PUT', { mode: 'auto' });
+    const mcpPath = `/api/mcp/servers/${pluginServerId('http-fixture', 'main')}`;
+    expect((await fetch(base + '/api/mcp/servers')).status).toBe(401);
+    const nativeServers = await request('/api/mcp/servers', 'GET');
+    expect(JSON.stringify(nativeServers)).toContain(pluginServerId('http-fixture', 'main'));
+    for (const [suffix, method] of [['oauth', 'GET'], ['test', 'POST'], ['oauth/callback', 'POST']]) {
+      const response = await fetch(`${base}${mcpPath}/${suffix}`, {
+        method, headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.status).toBe(404);
+    }
     writeFileSync(join(source, 'note.txt'), 'new revision');
     await request(`${path}/update`, 'POST', { source });
     await request(`${path}/rollback`, 'POST');

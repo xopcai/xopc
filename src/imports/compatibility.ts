@@ -64,18 +64,17 @@ export function inspectMcp(base: Pick<ImportCandidate, 'id' | 'source' | 'scope'
   const item: ImportCandidate = { ...base, kind: 'mcp', name, description: 'MCP connection draft', files: [], hash: '', compatibility: 'needs_setup', findings: [], requiredEnv: [] };
   const value = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
   const draft: Record<string, unknown> = {};
-  const supported = new Set(['command', 'args', 'cwd', 'url', 'type', 'env', 'headers', 'http_headers', 'startup_timeout_sec', 'tool_timeout_sec']);
+  const supported = new Set(['command', 'args', 'cwd', 'url', 'type', 'env', 'headers', 'http_headers', 'tool_timeout_sec', 'timeout', 'exposure', 'toolExposure', 'description', 'enabled']);
   for (const [key, v] of Object.entries(value)) {
     if (!supported.has(key)) { item.compatibility = 'blocked'; item.findings.push(`Unsupported MCP field: ${key}`); continue; }
     if (['env', 'headers', 'http_headers'].includes(key)) {
       if (v && typeof v === 'object') item.requiredEnv.push(...Object.keys(v));
       item.findings.push(`${key} values omitted; configure them in xopc`);
     } else if (key === 'type') {
-      if (v === 'http') draft.transport = 'streamable-http';
-      else if (v === 'sse') draft.transport = 'sse';
-      else if (v !== 'stdio') { item.compatibility = 'blocked'; item.findings.push('Unsupported MCP transport'); }
-    } else if (key === 'startup_timeout_sec' || key === 'tool_timeout_sec') {
-      if (typeof v === 'number') draft[key === 'startup_timeout_sec' ? 'connectionTimeoutMs' : 'requestTimeoutMs'] = v * 1000;
+      if (v === 'http' || v === 'streamable-http' || v === 'stdio') draft.type = v;
+      else { item.compatibility = 'blocked'; item.findings.push('Unsupported MCP transport'); }
+    } else if (key === 'tool_timeout_sec') {
+      if (typeof v === 'number') draft.timeout = v;
       else { item.compatibility = 'blocked'; item.findings.push('Invalid MCP timeout'); }
     } else draft[key] = v;
   }

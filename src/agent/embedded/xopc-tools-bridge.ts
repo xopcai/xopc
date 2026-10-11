@@ -127,8 +127,10 @@ function invalidApplyPatchEnvelopeResult(error: ApplyPatchEnvelopeError) {
 export function xopcToolsToDefinitions(tools: AgentTool[]): ToolDefinition[] {
   return tools.map((tool) => {
     const promptHints = TOOL_PROMPT_HINTS[tool.name];
+    const metadata = getXopcToolMetadata(tool);
     const def = {
-      ...getXopcToolMetadata(tool),
+      exposure: metadata?.exposure, namespace: metadata?.namespace,
+      annotations: metadata?.annotations, outputSchema: metadata?.outputSchema,
       name: tool.name,
       label: tool.label ?? tool.name,
       description: tool.description ?? tool.name,

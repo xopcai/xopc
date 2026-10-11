@@ -10,7 +10,6 @@ import { writeTextAtomicSync } from '../../infra/write-file-atomic.js';
 import { createLogger } from '../../utils/logger.js';
 import { computeExtensionDirectoryIntegrity } from '../lockfile.js';
 import { containedPath, inspectAgentPlugin, pluginName, type PluginInspection } from './validation.js';
-import { readPluginMcpHealth } from './health.js';
 import type { AgentPluginSourceProvenance } from './sources.js';
 
 const provenanceSchema = z.strictObject({
@@ -70,9 +69,7 @@ export class AgentPluginStore {
       const inspection = inspectAgentPlugin(rootDir, this.dataDir(id));
       const valid = computeExtensionDirectoryIntegrity(rootDir) === receipt.integrity;
       if (!valid) inspection.diagnostics.push({ component: 'package', message: 'Installed files differ from the reviewed package' });
-      const health = Object.keys(inspection.servers).map(name => readPluginMcpHealth(id, name, receipt.revision, this.stateDir));
-      const readiness = !valid ? 'blocked' : inspection.diagnostics.length || health.includes('error') ? 'degraded'
-        : health.some(status => status !== 'ready') ? 'setup_required' : 'ready';
+      const readiness = !valid ? 'blocked' : inspection.diagnostics.length ? 'degraded' : 'ready';
       return { ...inspection, id, receipt, format: 'agent-plugin', readiness };
     } catch (error) {
       return { id, receipt, format: 'agent-plugin', readiness: 'blocked', rootDir,

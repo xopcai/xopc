@@ -9,11 +9,10 @@ import { isDangerousHostEnvVarName } from '../../infra/host-env-security.js';
 import { resolveStateDir } from '../../config/paths-state.js';
 import { AgentPluginStore } from './store.js';
 import { pluginName, type PluginServer } from './validation.js';
-import { clearPluginMcpHealth } from './health.js';
 
 const bindingSchema = z.strictObject({
   serverName: z.string(),
-  mode: z.enum(['auto', 'oauth', 'api-key', 'none']),
+  mode: z.enum(['auto', 'api-key']),
   identityScope: z.literal('owner'), endpointFingerprint: z.string(),
   fields: z.array(z.strictObject({ target: z.enum(['headers', 'env']), key: z.string(), provider: z.string(), prefix: z.string() })),
 });
@@ -40,7 +39,6 @@ export async function savePluginAuthBinding(store: AgentPluginStore, id: string,
   const plugin = store.get(id);
   const server = plugin?.servers[name];
   if (!server || plugin?.readiness === 'blocked') throw new Error('Plugin MCP server unavailable');
-  if (input.mode === 'oauth' && server.type !== 'streamable-http') throw new Error('OAuth requires streamable HTTP');
   const endpointFingerprint = pluginEndpointFingerprint(server);
   const fields: PluginAuthBinding['fields'] = [];
   const resolver = new CredentialResolver(store.stateDir === resolveStateDir() ? {} : { stateDir: store.stateDir });
@@ -63,16 +61,10 @@ export async function savePluginAuthBinding(store: AgentPluginStore, id: string,
   // Keep only references in the host binding, never values in package files or config.
   const binding = bindingSchema.parse({ serverName: name, mode: input.mode, identityScope: 'owner', endpointFingerprint, fields });
   await writeTextAtomic(bindingPath(store, id, name), JSON.stringify(binding));
-  clearPluginMcpHealth(id, name, store.stateDir);
 }
 export function applyPluginAuthBinding(raw: Record<string, unknown>, binding: PluginAuthBinding | undefined): Record<string, unknown> {
   if (!binding) return raw;
   const result = { ...raw };
-  if (binding.mode === 'none' || binding.mode === 'api-key') { delete result.auth; delete result.xopcAutoAuth; }
-  if (binding.mode === 'oauth') {
-    result.auth = { type: 'oauth' }; delete result.xopcAutoAuth;
-    result.headers = Object.fromEntries(Object.entries(result.headers as Record<string, unknown> ?? {}).filter(([key]) => key.toLowerCase() !== 'authorization'));
-  }
   for (const field of binding.fields) {
     const values = { ...result[field.target] as Record<string, unknown> };
     const insensitive = field.target === 'headers' || process.platform === 'win32';

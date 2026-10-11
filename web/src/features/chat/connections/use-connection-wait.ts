@@ -7,7 +7,7 @@ import { readLocalSessionDraft } from '@/features/chat/session/local-session-dra
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { closeOAuthAuthorizationWindow, openOAuthAuthorizationUrl, reserveOAuthAuthorizationWindow } from '@/features/settings/oauth-authorization-window';
 
-export type ConnectionActionName = 'install_complete' | 'connect' | 'check' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source' | 'submit_callback';
+export type ConnectionActionName = 'install_complete' | 'connect' | 'check' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source';
 export function useConnectionWait(conversationId: string) {
   const path = `/api/sessions/${encodeURIComponent(conversationId)}/connection-wait`;
   const localDraft = useChatSessionStore((s) => s.sessions[conversationId]?.localDraft);
@@ -21,7 +21,7 @@ export function useConnectionWait(conversationId: string) {
   const locked = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const act = useCallback(async (action: ConnectionActionName, needKey?: string, accountId?: string, candidateRef?: string, callbackUrl?: string, instanceId?: string): Promise<boolean> => {
+  const act = useCallback(async (action: ConnectionActionName, needKey?: string, accountId?: string, candidateRef?: string, instanceId?: string): Promise<boolean> => {
     const snapshot = current.current;
     const wait = snapshot?.wait;
     if (!wait || locked.current) return false;
@@ -31,7 +31,7 @@ export function useConnectionWait(conversationId: string) {
     const popup = action === 'connect' ? reserveOAuthAuthorizationWindow() : null;
     try {
       const response = await fetchJson<{ payload: { snapshot: ConnectionWaitSnapshot; authorizationUrl?: string } }>(apiUrl(`${path}/actions`), {
-        method: 'POST', body: JSON.stringify({ action, needKey, accountId, candidateRef, callbackUrl, instanceId, waitId: wait.id,
+        method: 'POST', body: JSON.stringify({ action, needKey, accountId, candidateRef, instanceId, waitId: wait.id,
           expectedTranscriptId: snapshot.transcriptId, expectedVersion: wait.version, idempotencyKey: crypto.randomUUID() }),
       });
       const next = response.payload.snapshot;

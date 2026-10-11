@@ -1,7 +1,6 @@
 import type { AgentService } from '../agent/service.js';
 import { isPersonalConversation } from '../personal-agent/repository.js';
 import { abortEmbeddedRun } from '../agent/embedded/runs.js';
-import { retireSessionMcpRuntimeForConversationId } from '../agent/mcp/bundle-mcp-tools.js';
 import type { SessionIndex } from '../session/index.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -43,7 +42,6 @@ export async function performSessionReset(
   try {
     const agent = deps.getAgentService();
     agent.evictSessionAgent(key);
-    await retireSessionMcpRuntimeForConversationId({ conversationId: key, reason: 'session-reset' });
   } catch (err) {
     const em = err instanceof Error ? err.message : String(err);
     log.warn({ err, conversationId: key, errorMessage: em }, `Session reset runtime cleanup failed: ${em}`);

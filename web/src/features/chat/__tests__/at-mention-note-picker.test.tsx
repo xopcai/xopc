@@ -52,7 +52,7 @@ describe('@ mention Note picker', () => {
           recentLabel="Recent"
           sectionLabels={{
             file: 'Files', note: 'Notes', session: 'Chats', skill: 'Skills', agent: 'Agents',
-            browser_tab: 'Browser tabs', mcp_server: 'MCP servers', mcp_resource: 'MCP resources',
+            browser_tab: 'Browser tabs',
           }}
           ariaLabel="Search references"
           onSelectItem={onSelectItem}

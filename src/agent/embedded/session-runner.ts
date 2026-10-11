@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
+import { join } from 'node:path';
 
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import {
   createAgentSession,
   DefaultResourceLoader,
-  getAgentDir,
+  createMcpExtension,
+  type LoadedMcpConfig,
   SettingsManager,
   type AgentSession,
 } from '@earendil-works/pi-coding-agent';
@@ -21,13 +23,13 @@ import {
 } from './model-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
-import { applySystemPromptOverrideToSession } from './system-prompt-override.js';
 import { createXopcCodemodeExtension, type CodemodePolicy } from './codemode-extension.js';
 import { isCodemodeCoreRead } from '../tools/codemode-permissions.js';
 import { deferredToolContract, getXopcToolMetadata } from './tool-metadata.js';
 import { createXopcToolSearchExtension, TOOL_DISCOVERY_STATE } from './tool-search-extension.js';
+import { getNativePiAgentDir } from '../mcp/native-mcp.js';
+import { abortEmbeddedRun } from './runs.js';
 
-export type ToolDiscoveryPolicy = { enabled: boolean; mcpServer?: string };
 const toolContract = (tool: AgentTool) => JSON.stringify([tool.name, tool.parameters, tool.description,
   isCodemodeCoreRead(tool), getXopcToolMetadata(tool)]);
 
@@ -45,7 +47,7 @@ export type EmbeddedRunnerFingerprintInput = {
   thinkingLevel: string;
   credentialRevision: string;
   codemode?: CodemodePolicy;
-  toolDiscovery?: ToolDiscoveryPolicy;
+  mcp?: LoadedMcpConfig;
 };
 
 function providerCredentialRevision(providerId: string): string {
@@ -65,7 +67,7 @@ export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintI
     input.thinkingLevel,
     input.credentialRevision,
     JSON.stringify(input.codemode ?? null),
-    JSON.stringify(input.toolDiscovery ?? null),
+    JSON.stringify(input.mcp ?? null),
   ].join('\0')).digest('base64url');
 }
 
@@ -78,6 +80,7 @@ type PooledRunner = {
   baseStreamFn: AgentSession['agent']['streamFunction'];
   lastUsedAt: number;
   idleTimer: ReturnType<typeof setTimeout> | null;
+  releaseInvalidations: Array<() => void>;
 };
 
 export type AcquireEmbeddedSessionRunnerParams = {
@@ -91,7 +94,7 @@ export type AcquireEmbeddedSessionRunnerParams = {
   thinkingLevel: ThinkingLevel;
   transcriptRuntime: EmbeddedTranscriptRuntime;
   codemode?: CodemodePolicy;
-  toolDiscovery?: ToolDiscoveryPolicy;
+  mcp?: LoadedMcpConfig;
 };
 
 export type AcquiredEmbeddedSessionRunner = {
@@ -144,6 +147,9 @@ export interface EmbeddedSessionRunnerPoolOptions {
  * Owns the per-runtime pool of pi `AgentSession` runners.
  */
 export class EmbeddedSessionRunnerPool {
+  private readonly shutdowns = new Set<Promise<unknown>>();
+  async drainShutdowns(): Promise<void> { await Promise.allSettled([...this.shutdowns]); }
+
   private readonly pool = new Map<string, PooledRunner>();
   private readonly isEnabledFn: () => boolean;
   private readonly getIdleTtlMsFn: () => number;
@@ -165,10 +171,7 @@ export class EmbeddedSessionRunnerPool {
   }
 
   resetForTest(): void {
-    for (const entry of this.pool.values()) {
-      this.clearIdleTimer(entry);
-    }
-    this.pool.clear();
+    this.evictAll('test_reset');
     this.stats = { acquires: 0, reuses: 0, creates: 0, evictions: 0 };
   }
 
@@ -199,7 +202,7 @@ export class EmbeddedSessionRunnerPool {
       thinkingLevel: params.thinkingLevel ?? 'medium',
       credentialRevision: providerCredentialRevision(params.model.provider),
       codemode: params.codemode,
-      toolDiscovery: params.toolDiscovery,
+      mcp: params.mcp,
     });
 
     const reuseEnabled = this.isEnabledFn();
@@ -214,7 +217,6 @@ export class EmbeddedSessionRunnerPool {
       entry.lastUsedAt = Date.now();
       reused = true;
       this.stats.reuses += 1;
-      applySystemPromptOverrideToSession(entry.session, params.systemPrompt);
       entry.session.agent.streamFunction = entry.baseStreamFn;
       log.debug({ runtimeId: params.runtimeId }, 'Reusing pooled embedded session runner');
     } else {
@@ -263,14 +265,21 @@ export class EmbeddedSessionRunnerPool {
 
   private disposePooledRunner(runtimeId: string, entry: PooledRunner, reason: string): void {
     this.clearIdleTimer(entry);
+    for (const release of entry.releaseInvalidations) release();
     this.pool.delete(runtimeId);
     this.stats.evictions += 1;
-    void Promise.resolve(entry.session.abort?.()).catch(err => {
+    const shutdown = Promise.resolve(entry.session.abort?.()).catch(err => {
       log.warn({ err, runtimeId }, 'Embedded runner abort failed');
-    }).finally(() => {
-      try { entry.piSm.flushPendingToolResults?.(); }
-      finally { entry.session.dispose?.(); }
+    }).then(async () => {
+      try {
+        await entry.session.extensionRunner?.emit({ type: 'session_shutdown', reason: 'quit' });
+      } finally {
+        try { entry.piSm.flushPendingToolResults?.(); }
+        finally { entry.session.dispose?.(); }
+      }
     }).catch(err => log.warn({ err, runtimeId }, 'Embedded runner disposal failed'));
+    this.shutdowns.add(shutdown);
+    void shutdown.finally(() => this.shutdowns.delete(shutdown));
     log.debug({ runtimeId, reason }, 'Embedded session runner evicted');
   }
 
@@ -299,22 +308,29 @@ export class EmbeddedSessionRunnerPool {
     toolNames.push(...tools.filter(tool => getXopcToolMetadata(tool)?.exposure === 'deferred'
       && restored.get(tool.name) === deferredToolContract(tool)).map(tool => tool.name));
     let boundSession: AgentSession | undefined;
-    const codemode = params.codemode?.enabled ? params.codemode : undefined;
+    const mcp = params.mcp;
+    const hasMcp = Boolean(mcp?.servers.length);
+    const usesMcpCodemode = mcp?.servers.some(server => server.config.enabled !== false
+      && [server.config.exposure ?? 'codemode', ...Object.values(server.config.toolExposure ?? {})].includes('codemode'));
+    const codemode = params.codemode?.enabled ? params.codemode : usesMcpCodemode
+      ? { enabled: true, timeoutMs: 60_000, maxConcurrentCalls: 4, maxCalls: 32, maxOutputTokens: 4000 } : undefined;
     if (codemode) toolNames.push('codemode');
-    const discovery = params.toolDiscovery?.enabled;
+    const discovery = hasMcp || tools.some(tool => getXopcToolMetadata(tool)?.exposure === 'deferred');
     if (discovery) toolNames.push('tool_search');
 
     const modelRuntime = await createEmbeddedModelRuntime(model.provider);
 
     const resourceLoader = new DefaultResourceLoader({
       cwd: workspaceDir,
-      agentDir: getAgentDir(),
+      agentDir: getNativePiAgentDir(),
       settingsManager,
+      systemPrompt,
       noContextFiles: true,
       noExtensions: true,
       extensionFactories: [
         ...(codemode ? [createXopcCodemodeExtension(codemode, tools, () => boundSession)] : []),
         ...(discovery ? [createXopcToolSearchExtension(tools)] : []),
+        ...(mcp ? [createMcpExtension({ loadConfig: () => mcp, logPath: join(getNativePiAgentDir(), 'mcp.log') })] : []),
       ],
     });
     await resourceLoader.reload();
@@ -329,15 +345,12 @@ export class EmbeddedSessionRunnerPool {
       resourceLoader,
       noTools: 'builtin',
       customTools: toolDefs,
-      // The SDK's tools option also filters registration once it contains an MCP name.
-      // Keep the authorization set complete; apply the narrower model loadout separately.
-      tools: [...new Set([...tools.map(tool => tool.name), ...toolNames])],
+
     });
     boundSession = session;
-    if (codemode || discovery) await session.bindExtensions({});
-    if (discovery) session.setActiveToolsByName(toolNames);
+    session.setActiveToolsByName(toolNames);
+    if (codemode || discovery || mcp) await session.bindExtensions({});
 
-    applySystemPromptOverrideToSession(session, systemPrompt);
     const baseStreamFn = wrapStreamFnForXopcExtensions(session.agent.streamFunction);
     session.agent.streamFunction = baseStreamFn;
 
@@ -351,7 +364,7 @@ export class EmbeddedSessionRunnerPool {
       thinkingLevel: thinkingLevel ?? 'medium',
       credentialRevision: providerCredentialRevision(model.provider),
       codemode: params.codemode,
-      toolDiscovery: params.toolDiscovery,
+      mcp: params.mcp,
     });
 
     return {
@@ -363,6 +376,15 @@ export class EmbeddedSessionRunnerPool {
       baseStreamFn,
       lastUsedAt: Date.now(),
       idleTimer: null,
+      releaseInvalidations: tools.flatMap(tool => {
+        const subscribe = getXopcToolMetadata(tool)?.subscribeInvalidation;
+        if (!subscribe) return [];
+        return [subscribe(() => {
+          if (this.pool.get(runtimeId)?.session !== session) return;
+          void abortEmbeddedRun(runtimeId);
+          this.evict(runtimeId, 'external_tool_catalog_changed');
+        })];
+      }),
     };
   }
 }
@@ -389,4 +411,8 @@ export function acquireEmbeddedSessionRunner(
   params: AcquireEmbeddedSessionRunnerParams,
 ): Promise<AcquiredEmbeddedSessionRunner> {
   return defaultEmbeddedSessionRunnerPool.acquire(params);
+}
+
+export function drainEmbeddedSessionRunnerShutdowns(): Promise<void> {
+  return defaultEmbeddedSessionRunnerPool.drainShutdowns();
 }

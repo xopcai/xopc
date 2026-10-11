@@ -1,4 +1,4 @@
-import { AppWindow, Bot, Database, FileText, Folder, Loader2, MessagesSquare, NotebookPen, Plug, Sparkles } from 'lucide-react';
+import { AppWindow, Bot, FileText, Folder, Loader2, MessagesSquare, NotebookPen, Sparkles } from 'lucide-react';
 import {
   Fragment,
   memo,
@@ -288,10 +288,6 @@ export const AtMentionPicker = memo(function AtMentionPicker({
                         <Bot className="size-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden />
                       ) : item.kind === 'browser_tab' ? (
                         <AppWindow className="size-3.5 text-blue-600 dark:text-blue-400" aria-hidden />
-                      ) : item.kind === 'mcp_server' ? (
-                        <Plug className="size-3.5 text-orange-600 dark:text-orange-400" aria-hidden />
-                      ) : item.kind === 'mcp_resource' ? (
-                        <Database className="size-3.5 text-orange-600 dark:text-orange-400" aria-hidden />
                       ) : item.isBrowseUp ? (
                         <Folder className="size-3.5 text-fg-muted" aria-hidden />
                       ) : item.isDirectory ? (

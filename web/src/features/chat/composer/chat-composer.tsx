@@ -779,8 +779,6 @@ export const ChatComposer = memo(function ChatComposer({
               skill: m.chat.atMention.skills,
               agent: m.chat.atMention.agents,
               browser_tab: m.chat.atMention.browserTabs,
-              mcp_server: m.chat.atMention.mcpServers,
-              mcp_resource: m.chat.atMention.mcpResources,
             }}
             ariaLabel={m.chat.atMention.placeholder}
             onSelectItem={pickers.applyAtMention}

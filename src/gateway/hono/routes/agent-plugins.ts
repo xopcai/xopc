@@ -5,14 +5,14 @@ import { agentPluginInventoryRow } from '../../../extensions/agent-plugins/inven
 import { savePluginAuthBinding } from '../../../extensions/agent-plugins/auth.js';
 import { removePluginCredentials } from '../../../extensions/agent-plugins/credentials.js';
 import { withAgentPluginSource } from '../../../extensions/agent-plugins/sources.js';
-import { disposeAllSessionMcpRuntimes } from '../../../agent/mcp/bundle-mcp-runtime.js';
+import { evictAllEmbeddedSessionRunners } from '../../../agent/embedded/session-runner.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const sourceBody = z.strictObject({ source: z.string().min(1), reviewHash: z.string().optional() });
 export function registerAgentPluginRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
   const store = new AgentPluginStore();
   const refresh = async () => {
-    await disposeAllSessionMcpRuntimes();
+    evictAllEmbeddedSessionRunners();
     deps.service.marketplace.reloadSkills();
   };
   app.post('/api/extensions/inspect', deps.strictRateLimitMiddleware, async c => {
@@ -58,7 +58,7 @@ export function registerAgentPluginRoutes(app: Hono, deps: AuthenticatedRouteDep
   });
   app.put('/api/extensions/agent-plugins/:id/mcp/:server/auth', deps.strictRateLimitMiddleware, async c => {
     try {
-      const body = z.strictObject({ mode: z.enum(['auto', 'oauth', 'api-key', 'none']), secrets: z.array(z.strictObject({ target: z.enum(['headers', 'env']), key: z.string(), value: z.string(), prefix: z.string().optional() })).max(20).optional() }).parse(await c.req.json());
+      const body = z.strictObject({ mode: z.enum(['auto', 'api-key']), secrets: z.array(z.strictObject({ target: z.enum(['headers', 'env']), key: z.string(), value: z.string(), prefix: z.string().optional() })).max(20).optional() }).parse(await c.req.json());
       await savePluginAuthBinding(store, c.req.param('id'), c.req.param('server'), body);
       await refresh();
       return c.json({ ok: true });
@@ -67,7 +67,7 @@ export function registerAgentPluginRoutes(app: Hono, deps: AuthenticatedRouteDep
   app.delete('/api/extensions/agent-plugins/:id', deps.strictRateLimitMiddleware, async c => {
     try {
       const body = z.strictObject({ removeData: z.boolean().optional(), removeCredentials: z.boolean().optional() }).parse(await c.req.json());
-      await disposeAllSessionMcpRuntimes();
+      evictAllEmbeddedSessionRunners();
       if (body.removeCredentials) await removePluginCredentials(store, c.req.param('id'));
       store.remove(c.req.param('id'), body.removeData);
       deps.service.marketplace.reloadSkills();

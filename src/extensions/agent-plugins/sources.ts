@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Config } from '../../config/schema.js';
-import { createPluginHttpFetch } from '../../agent/mcp/plugin-http-fetch.js';
+import { createPluginSourceFetch } from './source-http-fetch.js';
 import AdmZip from 'adm-zip';
 
 export interface AgentPluginSourceProvenance {
@@ -67,7 +67,7 @@ export async function withAgentPluginSource<T>(source: string, config: Config | 
     };
   } else {
     const url = new URL(source);
-    const response = await createPluginHttpFetch(url, {})(url, { signal: AbortSignal.timeout(30000) });
+    const response = await createPluginSourceFetch(url, {})(url, { signal: AbortSignal.timeout(30000) });
     if (!response.ok || !response.body) throw new Error(`Plugin download failed (${response.status})`);
     const reader = response.body.getReader(); const chunks: Buffer[] = []; let size = 0;
     try {

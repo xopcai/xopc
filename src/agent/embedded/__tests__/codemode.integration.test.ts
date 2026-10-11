@@ -32,6 +32,16 @@ import { createDataBatchTool } from '../../tools/dataBatch.js';
 import { createAgentTurnPolicy } from '../../orchestration/agent-turn-policy.js';
 import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnParams } from '../types.js';
 import { setXopcToolMetadata } from '../tool-metadata.js';
+import { getXopcToolMetadata } from '../tool-metadata.js';
+import { materializeNativeExternalTools } from '../external-tool-discovery.js';
+import { createDefaultExternalToolGatewayTools } from '../../external-tools/index.js';
+import { EndpointRegistry } from '../../../endpoint-tools/registry.js';
+import { EndpointBindingService } from '../../../endpoint-tools/binding-service.js';
+import { EndpointInvocationService } from '../../../endpoint-tools/invocation-service.js';
+import type { EndpointToolRuntime } from '../../../endpoint-tools/runtime.js';
+import { ENDPOINT_PROTOCOL_VERSION, ENDPOINT_TEXT_OUTPUT_SCHEMA, type EndpointHelloPayload, type ServerEndpointMessage } from '@xopcai/endpoint-tools-protocol';
+import { requireXopcDatabase } from '../../../storage/sqlite/connection.js';
+import { getEmbeddedSessionRunnerStats } from '../session-runner.js';
 
 const model = { id: 'gpt-6-sol', name: 'Test', provider: 'openai', api: 'openai-completions' as const,
   baseUrl: 'https://example.invalid', reasoning: false, input: ['text' as const], contextWindow: 128000,
@@ -130,24 +140,23 @@ text(await tools.data_batch({operations:[{id:"git",kind:"git_recent"}]})); text(
 it('loads deferred MCP declarations on search, restores authorized tools and drops removed tools', async () => {
   const { params } = await fixture();
   const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'MCP search evidence' }], details: {} }));
-  const deferred = setXopcToolMetadata({ name: 'mcp__docs__search', label: 'Docs search', description: 'Search documentation records',
+  const deferred = setXopcToolMetadata({ name: 'extension__docs__search', label: 'Docs search', description: 'Search documentation records',
     parameters: Type.Object({ query: Type.String() }), execute }, {
-    exposure: 'deferred', namespace: { name: 'mcp__docs', description: 'Documentation service' },
-    annotations: { readOnlyHint: true }, external: { toolRef: 'mcp:docs:search', revision: 'v1', readOnly: false },
+    exposure: 'deferred', namespace: { name: 'extension__docs', description: 'Documentation service' },
+    annotations: { readOnlyHint: true }, external: { toolRef: 'extension:docs:search', revision: 'v1', readOnly: false },
   });
   params.tools.push(deferred);
-  const secondRead = setXopcToolMetadata({ ...deferred, name: 'mcp__docs__lookup', description: 'Lookup archived records' }, {
-    exposure: 'deferred', namespace: { name: 'mcp__docs' },
-    external: { toolRef: 'mcp:docs:lookup', revision: 'v1', readOnly: true },
+  const secondRead = setXopcToolMetadata({ ...deferred, name: 'extension__docs__lookup', description: 'Lookup archived records' }, {
+    exposure: 'deferred', namespace: { name: 'extension__docs' },
+    external: { toolRef: 'extension:docs:lookup', revision: 'v1', readOnly: true },
   });
   params.tools.push(secondRead);
-  params.toolDiscovery = { enabled: true, mcpServer: 'docs' };
   const loaded = await runScript(params, '', 'tool_search', { query: 'documentation', limit: 1 });
-  expect(JSON.stringify(loaded.calls[0])).not.toContain('mcp__docs__search');
-  expect(JSON.stringify(loaded.calls[1])).toContain('mcp__docs__search');
+  expect(JSON.stringify(loaded.calls[0])).not.toContain('extension__docs__search');
+  expect(JSON.stringify(loaded.calls[1])).toContain('extension__docs__search');
   expect(JSON.stringify(loaded.result)).toContain('Loaded 1 tool');
   expect(execute).not.toHaveBeenCalled();
-  const guessed = await runScript({ ...params, runId: crypto.randomUUID() }, 'text(ALL_TOOLS); await tools.mcp__docs__search({query:"notes"});');
+  const guessed = await runScript({ ...params, runId: crypto.randomUUID() }, 'text(ALL_TOOLS); await tools.extension__docs__search({query:"notes"});');
   expect(JSON.stringify(guessed.result)).not.toContain('Documentation service');
   expect(execute).not.toHaveBeenCalled();
   evictEmbeddedSessionRunner(params.conversationId);
@@ -157,8 +166,8 @@ it('loads deferred MCP declarations on search, restores authorized tools and dro
   expect(JSON.stringify(restored.calls[0])).toContain(deferred.name);
   expect(execute).toHaveBeenCalledTimes(1);
   expect(authorize.mock.calls[0][0]).toMatchObject({ toolCall: { name: 'xopc_tool_execute' },
-    args: { toolRef: 'mcp:docs:search', revision: 'v1', arguments: { query: 'notes' } } });
-  const stillDeferred = await runScript({ ...params, runId: crypto.randomUUID() }, 'text(await tools.mcp__docs__lookup({query:"notes"}));');
+    args: { toolRef: 'extension:docs:search', revision: 'v1', arguments: { query: 'notes' } } });
+  const stillDeferred = await runScript({ ...params, runId: crypto.randomUUID() }, 'text(await tools.extension__docs__lookup({query:"notes"}));');
   expect(JSON.stringify(stillDeferred.calls[0])).not.toContain(secondRead.name);
   expect(JSON.stringify(stillDeferred.result)).toContain('MCP search evidence');
   expect(execute).toHaveBeenCalledTimes(2);
@@ -171,25 +180,109 @@ it('loads deferred MCP declarations on search, restores authorized tools and dro
 it('allows host-approved MCP reads in scripts with structured output and gateway policy checks', async () => {
   const { params } = await fixture();
   const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'plain content' }], details: {}, structuredContent: { records: 7 } }));
-  params.tools.push(setXopcToolMetadata({ name: 'mcp__docs__search', label: 'Docs search', description: 'Search documentation',
-    parameters: Type.Object({}), execute }, { exposure: 'deferred', namespace: { name: 'mcp__docs' },
+  params.tools.push(setXopcToolMetadata({ name: 'extension__docs__search', label: 'Docs search', description: 'Search documentation',
+    parameters: Type.Object({}), execute }, { exposure: 'deferred', namespace: { name: 'extension__docs' },
     outputSchema: Type.Object({ records: Type.Number() }),
-    external: { toolRef: 'mcp:docs:search', revision: 'v1', readOnly: true } }));
-  params.toolDiscovery = { enabled: true, mcpServer: 'docs' };
+    external: { toolRef: 'extension:docs:search', revision: 'v1', readOnly: true } }));
   const authorize = vi.fn(async (_context: BeforeToolCallContext) => undefined);
   params.turnPolicy = createAgentTurnPolicy({ authorizeToolCall: authorize });
-  const result = await runScript(params, 'text(await searchTools("documentation")); text(await tools.mcp__docs__search({}));');
+  const result = await runScript(params, 'text(await searchTools("documentation")); text(await tools.extension__docs__search({}));');
   expect(JSON.stringify(result.result.content)).toContain('records');
   expect(JSON.stringify(result.result.content)).toContain('7');
   expect(JSON.stringify(result.result.content)).not.toContain('plain content');
-  expect(result.result.nestedCalls).toMatchObject({ calls: [expect.objectContaining({ name: 'mcp__docs__search', status: 'ok' })] });
+  expect(result.result.nestedCalls).toMatchObject({ calls: [expect.objectContaining({ name: 'extension__docs__search', status: 'ok' })] });
   expect(authorize.mock.calls.some(([context]) => context.toolCall.name === 'xopc_tool_execute'
     && (context.args as { readOnly?: boolean }).readOnly === true)).toBe(true);
   params.turnPolicy = createAgentTurnPolicy({ authorizeToolCall: async context => context.toolCall.name === 'xopc_tool_execute'
     ? { block: true, reason: 'MCP policy revoked' } : undefined });
-  const denied = await runScript({ ...params, runId: crypto.randomUUID() }, 'await tools.mcp__docs__search({});');
+  const denied = await runScript({ ...params, runId: crypto.randomUUID() }, 'await tools.extension__docs__search({});');
   expect(JSON.stringify(denied.result)).toContain('MCP policy revoked');
   expect(execute).toHaveBeenCalledTimes(1);
+}, 20_000);
+
+it('discovers and calls real device services through pi, keeps confirmation and invalidates loaded declarations on reconnect', async () => {
+  requireXopcDatabase();
+  const { params, cwd } = await fixture();
+  const registry = new EndpointRegistry();
+  const bindings = new EndpointBindingService(registry);
+  const audit = { started: vi.fn(), finished: vi.fn() };
+  const invocations = new EndpointInvocationService(registry, { audit });
+  const sent: ServerEndpointMessage[] = [];
+  let invalidOutput = false;
+  const descriptor = { name: 'mobile.device.get_info', title: 'Device information', description: 'Read phone device information',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false }, outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+    policyId: 'public.background-read', sensitivity: 'public' as const, effect: 'read' as const, confirmation: 'never' as const,
+    requiresForeground: false, requiredPermissions: [], timeoutMs: 1000, maxConcurrency: 1,
+    supportsCancellation: true, idempotent: true, resultKinds: ['text' as const] };
+  const hello: EndpointHelloPayload = { principalId: 'owner', endpointId: 'phone', connectionInstanceId: crypto.randomUUID(),
+    displayName: 'Phone', kind: 'mobile', platform: 'android', appVersion: '1', availability: 'foreground',
+    nonce: 'fixture', signedAt: Date.now(), signature: 'fixture-signature', tools: [descriptor,
+      { ...descriptor, name: 'mobile.clipboard.write', title: 'Write clipboard', description: 'Write text to the device clipboard',
+        inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
+        policyId: 'user.foreground-write', sensitivity: 'personal', effect: 'write', confirmation: 'always',
+        requiresForeground: true, requiredPermissions: ['clipboard-write'] },
+    ] };
+  const socket = { readyState: 1, close: vi.fn(), send(value: string) {
+    const message: ServerEndpointMessage = JSON.parse(value);
+    sent.push(message);
+    if (message.type !== 'tool.invoke') return;
+    queueMicrotask(() => {
+      const envelope = { protocolVersion: ENDPOINT_PROTOCOL_VERSION, messageId: crypto.randomUUID(), sentAt: Date.now() };
+      invocations.handleMessage('phone', { ...envelope, type: 'tool.received', payload: { invocationId: message.payload.invocationId } });
+      if (message.payload.toolName === 'mobile.clipboard.write') {
+        invocations.handleMessage('phone', { ...envelope, type: 'tool.error',
+          payload: { invocationId: message.payload.invocationId, code: 'USER_DENIED', message: 'Device confirmation denied' } });
+      } else {
+        invocations.handleMessage('phone', { ...envelope, type: 'tool.result', payload: { invocationId: message.payload.invocationId,
+          content: invalidOutput ? [{ type: 'json', value: 'invalid' }] : [{ type: 'text', text: 'Device SDK evidence' }] } });
+      }
+    });
+  } };
+  registry.register(hello, 'connection-1', socket);
+  const endpointTools = { registry, bindings, invocations } as unknown as EndpointToolRuntime;
+  const gateway = createDefaultExternalToolGatewayTools({ workspace: cwd, getConfig: () => undefined,
+    getCurrentContext: () => ({ conversationId: params.conversationId, channel: 'webchat', chatId: 'chat',
+      origin: { type: 'endpoint', endpointId: 'phone' } }), endpointTools, canAccessMemory: () => false });
+  const native = await materializeNativeExternalTools({ conversationId: params.conversationId, tools: gateway });
+  const read = native.find(tool => getXopcToolMetadata(tool)?.external?.readOnly)!;
+  const write = native.find(tool => getXopcToolMetadata(tool)?.external?.readOnly === false)!;
+  params.tools.push(...native);
+  // Native device discovery works without the MCP pilot configuration.
+  const found = await runScript(params, '', 'tool_search', { query: 'phone device information', limit: 1 });
+  expect(JSON.stringify(found.calls[0])).not.toContain(read.name);
+  expect(JSON.stringify(found.calls[1])).toContain(read.name);
+  expect(sent).toHaveLength(0);
+  const direct = await runScript({ ...params, runId: crypto.randomUUID() }, '', read.name, {});
+  expect(JSON.stringify(direct.result)).toContain('Device SDK evidence');
+  expect(audit.started).toHaveBeenCalledWith(expect.objectContaining({ toolName: descriptor.name, confirmationRequired: false }));
+  const script = await runScript({ ...params, runId: crypto.randomUUID() }, `text(await tools.${read.name}({}));`);
+  expect(JSON.stringify(script.result)).toContain('Device SDK evidence');
+  const beforeWrites = sent.length;
+  const guessed = await runScript({ ...params, runId: crypto.randomUUID() }, `await tools.${write.name}({text:"guess"});`);
+  expect(JSON.stringify(guessed.result)).toMatch(/not found|not authorized|not a function|does not exist/i);
+  expect(sent).toHaveLength(beforeWrites);
+  await runScript({ ...params, runId: crypto.randomUUID() }, '', 'tool_search', { query: 'Write clipboard', limit: 1 });
+  const denied = await runScript({ ...params, runId: crypto.randomUUID() }, '', write.name, { text: 'request' });
+  expect(JSON.stringify(denied.result)).toContain('no effect was applied');
+  expect(audit.finished).toHaveBeenCalledWith(expect.objectContaining({ errorCode: 'USER_DENIED' }));
+  expect(sent.find(message => message.type === 'tool.invoke' && message.payload.toolName === 'mobile.clipboard.write'))
+    .toMatchObject({ payload: { confirmationRequired: true } });
+  invalidOutput = true;
+  const invalid = await runScript({ ...params, runId: crypto.randomUUID() }, `text(await tools.${read.name}({}));`);
+  expect(JSON.stringify(invalid.result)).toContain('does not match its contract');
+  const evictions = getEmbeddedSessionRunnerStats().evictions;
+  registry.register({ ...hello, connectionInstanceId: crypto.randomUUID() }, 'connection-2', socket);
+  expect(getEmbeddedSessionRunnerStats().evictions).toBe(evictions + 1);
+  const replacement = await materializeNativeExternalTools({ conversationId: params.conversationId, tools: gateway });
+  params.tools = params.tools.filter(tool => !native.includes(tool)).concat(replacement);
+  const reloaded = await runScript({ ...params, runId: crypto.randomUUID() }, '', 'tool_search', { query: 'device information', limit: 1 });
+  expect(JSON.stringify(reloaded.calls[0])).not.toContain(read.name);
+  expect(JSON.stringify(reloaded.calls[1])).toContain(read.name);
+  const reboundEvictions = getEmbeddedSessionRunnerStats().evictions;
+  bindings.bind(params.conversationId, 'phone');
+  expect(getEmbeddedSessionRunnerStats().evictions).toBe(reboundEvictions + 1);
+  registry.remove('phone', 'connection-2');
+  expect(await materializeNativeExternalTools({ conversationId: params.conversationId, tools: gateway })).toEqual([]);
 }, 20_000);
 
 it('blocks policy refusals and enforces concurrency and source-resistant call/output budgets', async () => {

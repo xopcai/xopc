@@ -8,13 +8,14 @@ import { CliToolProvider } from './cliProvider.js';
 import { ComposioToolProvider } from './composio-provider.js';
 import { ExtensionToolProvider } from './extension-provider.js';
 import { createExternalToolGatewayTools } from './gateway-tools.js';
-import { McpToolProvider } from './mcp-provider.js';
 import { MemoryToolProvider } from './memory-provider.js';
 import { EndpointToolProvider } from './endpoint-provider.js';
 import type { ExternalToolProvider, ExternalToolTurnContext } from './types.js';
 import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { withExternalReadPolicy } from './read-policy.js';
 import { getEmbeddedExecutionSession } from '../embedded/execution-context.js';
+import { getExternalToolRegistry } from './tool-registry.js';
+import { parseExternalToolRef } from './refs.js';
 
 export interface DefaultExternalToolGatewayDeps {
   workspace: string;
@@ -34,13 +35,6 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
   const getConversationId = () => getEmbeddedExecutionSession() ?? deps.getCurrentContext()?.conversationId;
   const providers: ExternalToolProvider[] = [
     new CliToolProvider({ getConfig: deps.getConfig, getCurrentContext: deps.getCurrentContext, agentId: deps.agentId }),
-    new McpToolProvider({
-      workspace: deps.workspace,
-      getConfig: deps.getConfig,
-      getConversationId,
-      agentId: deps.agentId,
-      hookRunner: deps.hookRunner,
-    }),
     new ComposioToolProvider({
       getConfig: deps.getConfig,
       getCurrentContext: deps.getCurrentContext,
@@ -50,14 +44,14 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
     new ExtensionToolProvider({
       registry: deps.extensionRegistry,
       disabledTools: deps.disabledTools,
-      getConversationId: () => deps.getCurrentContext()?.conversationId,
+      getConversationId,
       hookRunner: deps.hookRunner,
       toolExecutorConfig: deps.toolExecutorConfig,
     }),
     new MemoryToolProvider({
       getMemoryManager: deps.getMemoryManager,
       disabledTools: deps.disabledTools,
-      getConversationId: () => deps.getCurrentContext()?.conversationId,
+      getConversationId,
       canAccess: deps.canAccessMemory,
       hookRunner: deps.hookRunner,
       toolExecutorConfig: deps.toolExecutorConfig,
@@ -66,17 +60,37 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
   if (deps.endpointTools) {
     providers.push(new EndpointToolProvider({
       runtime: deps.endpointTools,
-      getCurrentContext: deps.getCurrentContext,
+      getCurrentContext: () => {
+        const conversationId = getConversationId();
+        if (!conversationId) return null;
+        const context = deps.getCurrentContext();
+        return context?.conversationId === conversationId ? context : {
+          conversationId, channel: 'internal', chatId: conversationId,
+          origin: { type: 'system', source: 'internal' },
+        };
+      },
     }));
   }
-  return createExternalToolGatewayTools(providers.map(provider => withExternalReadPolicy(provider, toolRef => {
+  const tools = createExternalToolGatewayTools(providers.map(provider => withExternalReadPolicy(provider, toolRef => {
     const config = deps.getConfig();
     if (!config) return undefined;
     const conversationId = getConversationId();
     const profile = conversationId ? resolveEffectiveAgentConfigForSession(conversationId)
       : deps.agentId ? resolveEffectiveAgentConfigForAgent(deps.agentId) : resolveEffectiveAgentConfigForSession(undefined);
     return profile.config.tools[toolRef];
-  })), deps.getCurrentContext, deps.getConfig, getConversationId);
+  })), deps.getCurrentContext, deps.getConfig, getConversationId, ['endpoint', 'extension', 'memory'], deps.toolExecutorConfig);
+  const registry = getExternalToolRegistry(tools);
+  if (registry && deps.endpointTools) {
+    const endpoints = deps.endpointTools;
+    registry.subscribeInvalidation = (conversationId, ref, listener) => {
+      const parsed = parseExternalToolRef(ref, 'endpoint');
+      if (!parsed) return () => {};
+      const releaseEndpoint = endpoints.registry.onChange(id => { if (id === parsed?.namespace) listener(); });
+      const releaseBinding = endpoints.bindings.onChange(id => { if (id === conversationId) listener(); });
+      return () => { releaseEndpoint(); releaseBinding(); };
+    };
+  }
+  return tools;
 }
 
 export { ExternalToolService } from './service.js';

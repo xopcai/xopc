@@ -66,7 +66,7 @@ export type RunXopcEmbeddedTurnParams = {
   compactionPolicy?: import('../memory/compaction-policy.js').ResolvedCompactionPolicy;
   promptCachePolicy?: import('../../providers/prompt-cache-plan.js').PromptCachePolicy;
   codemode?: import('./codemode-extension.js').CodemodePolicy;
-  toolDiscovery?: import('./session-runner.js').ToolDiscoveryPolicy;
+  mcp?: import('@earendil-works/pi-coding-agent').LoadedMcpConfig;
   workspaceDir: string;
   sessionStore?: SessionStore;
   transcriptRuntime?: EmbeddedTranscriptRuntime;

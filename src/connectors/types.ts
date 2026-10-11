@@ -15,7 +15,6 @@ export type ConnectorCapability =
   | 'auth.apiKey'
   | 'auth.oauth'
   | 'runtime.mcp.stdio'
-  | 'runtime.mcp.sse'
   | 'runtime.mcp.streamableHttp';
 
 export type ConnectorAuthMode = 'none' | 'apiKey' | 'oauth' | 'cli';
