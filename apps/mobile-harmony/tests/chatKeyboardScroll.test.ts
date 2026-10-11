@@ -9,8 +9,9 @@ const methods = source.slice(source.indexOf('  onMessageChange(): void'), source
 const compiled = ts.transpileModule(`class ScrollHandlers { ${methods} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const Handler = new Function('Edge', 'ScrollAlign', 'chatReplySpaceBudget', 'consumeChatReplySpace', `${compiled}; return ScrollHandlers;`)(
-  { Bottom: 'bottom' }, { END: 'end' }, chatReplySpaceBudget, consumeChatReplySpace);
+const Handler = new Function('Edge', 'ScrollAlign', 'chatReplySpaceBudget', 'consumeChatReplySpace', 'ScrollSource', 'ScrollState', `${compiled}; return ScrollHandlers;`)(
+  { Bottom: 'bottom' }, { END: 'end' }, chatReplySpaceBudget, consumeChatReplySpace,
+  { SCROLLER: 'scroller', SCROLLER_ANIMATION: 'animation', DRAG: 'drag' }, { Idle: 'idle' });
 
 function setup() {
   vi.useFakeTimers();
@@ -31,13 +32,13 @@ describe('chat keyboard viewport following', () => {
     const view = setup();
     view.presentationRows = [{ id: 'question' }];
     view.reserveReplySpace('question', 'next');
-    expect(view.replySpaceHeight).toBe(60);
+    expect(view.replySpaceHeight).toBeCloseTo(226.8);
     view.presentationRows.push({ id: 'reply' });
     view.recordReplyRowHeight('reply', 20);
-    expect(view.replySpaceHeight).toBe(20);
+    expect(view.replySpaceHeight).toBeCloseTo(186.8);
     view.atBottom = false;
     view.recordReplyRowHeight('reply', 300);
-    expect(view.replySpaceHeight).toBe(20);
+    expect(view.replySpaceHeight).toBeCloseTo(186.8);
     view.reserveReplySpace('history-question', 'next');
     expect(view.replyAnchorId).toBe('question');
     view.atBottom = true;
@@ -56,14 +57,40 @@ describe('chat keyboard viewport following', () => {
     view.presentationRows.push({ id: 'reply' });
     view.recordReplyRowHeight('reply', 20);
     view.onMessageChange();
-    expect(view.replySpaceHeight).toBe(20);
+    expect(view.replySpaceHeight).toBeCloseTo(186.8);
   });
+  it('corrects late streamed row growth even after the temporary reply space is exhausted', () => {
+    const view = setup();
+    view.replySpaceHeight = 0;
+    view.recordReplyRowHeight('last', 500);
+    vi.runAllTimers();
+    expect(view.messagesScroller.scrollEdge).toHaveBeenCalledOnce();
+    view.atBottom = false;
+    view.recordReplyRowHeight('last', 700);
+    vi.runAllTimers();
+    expect(view.messagesScroller.scrollEdge).toHaveBeenCalledOnce();
+  });
+
+  it('keeps following through controller scrolls and stops when the reader scrolls away', () => {
+    const view = setup();
+    view.onMessageScrollSource('scroller');
+    view.onMessageScroll(20, 'fling');
+    expect(view.atBottom).toBe(true);
+    view.onMessageScrollSource('animation');
+    view.onMessageScroll(20, 'fling');
+    expect(view.atBottom).toBe(true);
+    view.onMessageScrollSource('drag');
+    view.onMessageScroll(20, 'scroll');
+    expect(view.atBottom).toBe(false);
+    expect(view.showJumpBottom).toBe(true);
+  });
+
   it('follows the bottom after keyboard resize without requiring new messages', () => {
     const view = setup();
     view.onMessageViewportChange({ width: 375, height: 700 }, { width: 375, height: 420 });
     expect(view.messagesScroller.scrollEdge).not.toHaveBeenCalled();
     vi.runAllTimers();
-    expect(view.messagesScroller.scrollToIndex).toHaveBeenCalledExactlyOnceWith(0, true, 'end');
+    expect(view.messagesScroller.scrollToIndex).toHaveBeenCalledExactlyOnceWith(1, true, 'end');
   });
 
   it('coalesces viewport and composer changes and follows keyboard dismissal', () => {
@@ -103,7 +130,7 @@ describe('chat keyboard viewport following', () => {
     expect(view.messagesScroller.scrollEdge).not.toHaveBeenCalled();
     expect(source).toContain("@Monitor('bottomRegionHeight')");
     expect(source).toContain('.onAreaChange((previous: Area, current: Area): void => { this.onMessageViewportChange(previous, current); })');
-    expect(source).toContain('.contentEndOffset(this.bottomRegionHeight + 24 + this.replySpaceHeight)');
+    expect(source).toContain(".id('chat-reply-clearance')");
   });
 
   it('does not interrupt a keyboard animation for every streaming token', () => {
@@ -122,6 +149,6 @@ describe('chat keyboard viewport following', () => {
     expect(view.messagesScroller.scrollToIndex).not.toHaveBeenCalled();
     view.layout.reduceMotion = false; view.chat.hasOlder = true;
     view.onMessageLayoutChange(); vi.runAllTimers();
-    expect(view.messagesScroller.scrollToIndex).toHaveBeenCalledWith(1, true, 'end');
+    expect(view.messagesScroller.scrollToIndex).toHaveBeenCalledWith(2, true, 'end');
   });
 });
