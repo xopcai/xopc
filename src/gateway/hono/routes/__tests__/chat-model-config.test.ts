@@ -4,12 +4,19 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../../../providers/index.js', () => ({ resolveModel: () => ({ provider: 'test', id: 'one', reasoning: true }) }));
 import { patchChatModelConfig } from '../chat-model-config.js';
 import { submitSessionInput } from '../session-input-handler.js';
+import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
+import { useTestDatabase } from '../../../../storage/sqlite/__tests__/test-database.js';
+
+useTestDatabase();
 
 function fixture() {
   let config = { model: 'test/one', thinkingLevel: 'high', configVersion: 1, fixedModel: true };
   let pending = false;
   const service = {
-    endpointTools: { registry: { verifyTurnClaim: () => true } },
+    endpointTools: { registry: { verifyTurnClaim: () => true, get: () => ({
+      endpointId: 'tab-1', principalId: 'owner', displayName: 'Browser tab',
+      platform: 'chrome', kind: 'browser', connectionId: 'connection',
+    }) } },
     sessions: {
       getAgentConfig: vi.fn(async () => config),
       getActiveRun: () => ({ active: false }),
@@ -23,6 +30,10 @@ function fixture() {
     submitSessionInput: vi.fn(async () => { pending = true; return { ok: true, state: {} }; }),
   };
   const app = new Hono();
+  app.use('*', async (c, next) => {
+    setGatewayPrincipal(c, { kind: 'owner', principalId: 'owner', scopes: ['gateway.admin'] });
+    await next();
+  });
   app.patch('/config', async (c) => patchChatModelConfig(c, service as never, 'chat', await c.req.json()));
   app.post('/input', (c) => submitSessionInput(c, { service } as never, 'chat'));
   const patch = (version = 1) => app.request('/config', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: 'test/two', thinkingLevel: 'low', configVersion: version }) });

@@ -239,7 +239,7 @@ it('discovers and calls real device services through pi, keeps confirmation and 
     });
   } };
   registry.register(hello, 'connection-1', socket);
-  const endpointTools = { registry, bindings, invocations } as unknown as EndpointToolRuntime;
+  const endpointTools = { registry, bindings, grants: { find: () => undefined, candidates: () => [] }, invocations } as unknown as EndpointToolRuntime;
   const gateway = createDefaultExternalToolGatewayTools({ workspace: cwd, getConfig: () => undefined,
     getCurrentContext: () => ({ conversationId: params.conversationId, channel: 'webchat', chatId: 'chat',
       origin: { type: 'endpoint', endpointId: 'phone' } }), endpointTools, canAccessMemory: () => false });
