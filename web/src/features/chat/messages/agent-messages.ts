@@ -342,10 +342,19 @@ function buildUserMessage(m: WireMessage): Message {
     content: blocks,
     attachments: wireAttachmentsFromMessage(m),
     contextRefs: normalizeMessageContextRefs(m.metadata),
+    sourceDevice: normalizeSourceDevice(m.metadata),
     userTurnDocument: normalizeUserTurnDocument(m.metadata),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     usage: m.usage as Message['usage'],
   };
+}
+
+function normalizeSourceDevice(metadata: unknown): Message['sourceDevice'] {
+  const rows = asRecord(metadata)?.sourceContexts;
+  if (!Array.isArray(rows)) return undefined;
+  const source = rows.map(asRecord).find(row => row?.kind === 'device_context');
+  return source && typeof source.sourceId === 'string' && typeof source.title === 'string'
+    ? { endpointId: source.sourceId, name: source.title } : undefined;
 }
 
 function normalizeMessageContextRefs(metadata: unknown): Message['contextRefs'] {

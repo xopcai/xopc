@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ShieldOff, X } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
@@ -15,11 +15,13 @@ export function DeviceDetailDrawer({
   busy,
   onClose,
   onRevoke,
+  onRename,
 }: {
   device: ManagedDevice | null;
   busy: boolean;
   onClose: () => void;
   onRevoke: (device: ManagedDevice) => void;
+  onRename?: (device: ManagedDevice, nickname: string) => Promise<void>;
 }) {
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).endpointToolsSettings;
@@ -63,6 +65,7 @@ export function DeviceDetailDrawer({
 
           {device ? (
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+              {device.principal && status !== 'revoked' && onRename ? <DeviceNickname key={`${device.id}:${device.settingsRevision ?? 0}`} device={device} zh={language === 'zh'} onRename={onRename} /> : null}
               <dl className="grid grid-cols-2 gap-3 rounded-xl bg-surface-hover/40 p-4">
                 <Detail label={copy.statusLabel} value={copy.status[status]} />
                 <Detail label={copy.lastSeen} value={device.lastSeenAt ? formatter.format(device.lastSeenAt) : copy.never} />
@@ -95,9 +98,9 @@ export function DeviceDetailDrawer({
                       <div className="mt-3 space-y-2">
                         {endpoint.tools.map(({ descriptor }) => (
                           <div key={descriptor.name} className="rounded-lg bg-surface-hover/50 px-3 py-2">
-                            <p className="break-all text-xs font-medium text-fg">{descriptor.name}</p>
+                            <p className="break-all text-xs font-medium text-fg">{descriptor.title}</p>
                             <p className="mt-0.5 break-words text-xs text-fg-subtle">
-                              {descriptor.requiredPermissions.join(', ') || copy.noPermissions}
+                              {descriptor.requiresForeground ? (language === 'zh' ? '需要设备在前台 · ' : 'Requires foreground · ') : ''}{descriptor.confirmation === 'always' ? (language === 'zh' ? '每次确认' : 'Confirm each time') : (language === 'zh' ? '按已授权范围调用' : 'Uses the authorized scope')}
                             </p>
                           </div>
                         ))}
@@ -109,7 +112,8 @@ export function DeviceDetailDrawer({
 
               <section>
                 <h3 className="text-sm font-semibold text-fg">{copy.identityTitle}</h3>
-                <dl className="mt-2 rounded-xl border border-edge-subtle bg-surface-base p-3 text-xs">
+                {device.principal && status !== 'revoked' && onRename ? <DeviceNickname key={`${device.id}:${device.settingsRevision ?? 0}`} device={device} zh={language === 'zh'} onRename={onRename} /> : null}
+              <dl className="mt-2 rounded-xl border border-edge-subtle bg-surface-base p-3 text-xs">
                   <Detail label={copy.identityId} value={device.id} breakAll />
                   <div className="mt-3"><Detail label={copy.createdAt} value={formatter.format(device.createdAt)} /></div>
                 </dl>
@@ -143,4 +147,24 @@ function Detail({ label, value, breakAll = false }: { label: string; value: stri
       <dd className={cn('mt-1 text-sm text-fg', breakAll && 'break-all font-mono text-xs')}>{value}</dd>
     </div>
   );
+}
+
+function DeviceNickname({ device, zh, onRename }: { device: ManagedDevice; zh: boolean; onRename: (device: ManagedDevice, nickname: string) => Promise<void> }) {
+  const [nickname, setNickname] = useState(device.displayName);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
+  return <form className="space-y-2" onSubmit={async event => {
+    event.preventDefault(); if (saving || !nickname.trim()) return;
+    setSaving(true); setError(false);
+    try { await onRename(device, nickname.trim()); } catch { setError(true); } finally { setSaving(false); }
+  }}>
+    <label className="block text-sm text-fg">{zh ? '设备名称' : 'Device name'}
+      <input value={nickname} maxLength={80} onChange={event => setNickname(event.target.value)}
+        className="mt-2 h-10 w-full rounded-lg border border-edge bg-surface-inset px-3 text-fg" />
+    </label>
+    <Button type="submit" variant="secondary" disabled={saving || !nickname.trim() || nickname.trim() === device.displayName}>
+      {saving ? (zh ? '保存中…' : 'Saving…') : (zh ? '保存名称' : 'Save name')}
+    </Button>
+    {error ? <p role="alert" className="text-sm text-danger">{zh ? '保存失败，请刷新设备信息后重试。' : 'Unable to save. Refresh device information and retry.'}</p> : null}
+  </form>;
 }

@@ -29,6 +29,7 @@ targets:
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: false
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: true
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "仅在你允许本次查询时使用位置，查询天气或附近地点。"
         INFOPLIST_KEY_NSCameraUsageDescription: "用于拍摄并发送给助手的图片。"
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "用于实时语音、语音助手、语音消息和语音笔记。"
         INFOPLIST_KEY_UIBackgroundModes: audio

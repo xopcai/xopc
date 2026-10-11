@@ -409,7 +409,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   private val personalRepository = PersonalRepository(session)
   private val personalAgentRepository = PersonalAgentRepository(session)
   private val noteDraftStore = NoteDraftStore(application)
-  private val realtime = RealtimeClient(session)
+  private val realtime = RealtimeClient(session, ai.xopc.mobile.gateway.DeviceTools(application))
   private val mutableState = MutableStateFlow(ConnectionUiState())
   val state = mutableState.asStateFlow()
   private var listRevision = 0

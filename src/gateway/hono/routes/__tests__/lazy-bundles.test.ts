@@ -6,6 +6,11 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps single-call device authorization routes without capturing adjacent devices', () => {
+    for (const path of ['/api/endpoint-tools/target-authorizations', '/api/endpoint-tools/target-authorizations/grant']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('device-authorizations');
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/target-authorizations-extra')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/devices/id')?.id).toBe('device-settings');
+  });
   it('maps recording and automation lifecycle routes before the general browser bundle', () => {
     for (const path of ['/api/browser/recordings/availability', '/api/browser/recordings/control', '/api/browser/recordings/id/events', '/api/browser/recordings/id/finish']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('browser-recordings');
     for (const path of ['/api/browser/automations/validate', '/api/browser/automations/id/test', '/api/browser/automations/id/versions']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('browser-automations');
@@ -154,6 +159,12 @@ describe('lazy route bundles', () => {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('connectors');
     }
     expect(findAuthenticatedLazyRouteBundle('/api/connectors-other')).toBeUndefined();
+  });
+  it('maps device settings without intercepting revoke or device list', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/devices/phone')?.id).toBe('device-settings');
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/devices/revoke')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/devices')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/devices-other/phone')).toBeUndefined();
   });
   it('maps the compatibility preflight without intercepting endpoint core routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/compatibility')?.id).toBe('endpoint-compatibility');

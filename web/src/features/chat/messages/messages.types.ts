@@ -154,6 +154,7 @@ export interface Message {
   taskResultDelivery?: TaskResultDelivery;
   personalProvenance?: PersonalProvenance;
   contextRefs?: MessageContextRef[];
+  sourceDevice?: { endpointId: string; name: string };
   /** Authored ordering of explicit @ references within the user message. */
   userTurnDocument?: UserTurnDocument;
   usage?: {

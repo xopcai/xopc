@@ -1,9 +1,11 @@
+import { z } from 'zod';
 import {
   endpointPrincipalRegistrationSchema,
   endpointSessionBindingRequestSchema,
 } from '@xopcai/endpoint-tools-protocol';
 import type { Hono } from 'hono';
 
+import { getEndpointDeviceSettings, renameEndpointDevice } from '../../../storage/sqlite/endpoint-device-settings-repository.js';
 import {
   createEndpointPrincipal,
   getDevice,
@@ -70,13 +72,16 @@ export function registerEndpointToolRoutes(
     const devicesById = new Map(listDevices().map((device) => [device.id, device]));
     const principalsById = new Map(listEndpointPrincipals().map((principal) => [principal.id, principal]));
     const ids = new Set([...devicesById.keys(), ...principalsById.keys()]);
-    const devices = [...ids].map((id) => {
+    const actor = getGatewayPrincipal(c);
+    const devices = [...ids].filter(id => actor.kind !== 'device' || id === actor.deviceId).map((id) => {
       const access = devicesById.get(id);
       const principal = principalsById.get(id);
+      const settings = principal ? getEndpointDeviceSettings(id) : undefined;
       const lastSeenAt = Math.max(access?.lastSeenAt ?? 0, principal?.lastSeenAt ?? 0) || undefined;
       return {
         id,
-        displayName: principal?.displayName ?? access?.displayName ?? id,
+        displayName: settings?.nickname ?? principal?.displayName ?? access?.displayName ?? id,
+        settingsRevision: settings?.revision ?? 0,
         kind: principal?.kind ?? (access?.platform === 'chrome' ? 'browser' : 'mobile'),
         platform: principal?.platform ?? access?.platform ?? 'unknown',
         createdAt: Math.min(access?.createdAt ?? Number.POSITIVE_INFINITY, principal?.createdAt ?? Number.POSITIVE_INFINITY),
@@ -299,4 +304,23 @@ export function registerEndpointToolRoutes(
     const body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
     return c.body(body);
   });
+}
+
+export function registerDeviceSettingsRoutes(authenticated: Hono): void {
+  authenticated.patch('/api/endpoint-tools/devices/:principalId', async c => {
+    const parsed = z.strictObject({ nickname: z.string().trim().min(1).max(80),
+      expectedRevision: z.number().int().nonnegative() }).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid device settings' } }, 400);
+    const actor = getGatewayPrincipal(c);
+    const id = c.req.param('principalId');
+    if (actor.kind !== 'owner' && !(actor.kind === 'device' && actor.deviceId === id)) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Device settings are not accessible' } }, 403);
+    }
+    const principal = getEndpointPrincipal(id);
+    if (!principal || principal.revokedAt) return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Device is unavailable' } }, 404);
+    const settings = renameEndpointDevice(id, parsed.data.nickname, parsed.data.expectedRevision);
+    if (!settings) return c.json({ ok: false, error: { code: 'CONFLICT', message: 'Device settings changed. Refresh before saving.' } }, 409);
+    return c.json({ ok: true, payload: settings });
+  });
+
 }

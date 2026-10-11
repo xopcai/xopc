@@ -45,6 +45,7 @@ struct MessageInputCommand: Encodable {
     let content: String
     let attachments: [MessageAttachmentCommand]?
     let contextRefs: [ContextReferenceCommand]?
+    var endpointContext: DeviceTurnEnvironment? = nil
 }
 
 struct MessageAttachmentCommand: Encodable {
@@ -59,12 +60,6 @@ struct ContextReferenceCommand: Encodable {
     let kind: String
     let sourceId: String
     let expectedVersion: String
-    let title: String
-}
-
-struct MessageOriginCommand: Encodable {
-    let type: String
-    let source: String
 }
 
 struct StartMessageCommand: Encodable {
@@ -72,7 +67,7 @@ struct StartMessageCommand: Encodable {
     let clientMessageId: String
     let creation: SessionCreationCommand
     let input: MessageInputCommand
-    let origin: MessageOriginCommand
+    let origin: DeviceEndpointOrigin
 }
 
 struct MaterializeVoiceCommand: Encodable {
@@ -88,7 +83,7 @@ struct AppendMessageCommand: Encodable {
     let configVersion: Int
     let delivery: String
     let input: MessageInputCommand
-    let origin: MessageOriginCommand
+    let origin: DeviceEndpointOrigin
 }
 
 struct AbortCommand: Encodable {
@@ -125,3 +120,10 @@ struct QueuedInputUpdateCommand: Encodable {
 struct EmptyCommand: Encodable {}
 
 struct IgnoredResponse: Decodable {}
+
+struct DeviceTurnEnvironment: Encodable, Sendable {
+    let version = 1
+    let capturedAt: Int64
+    let timezone: String
+    let locale: String
+}
