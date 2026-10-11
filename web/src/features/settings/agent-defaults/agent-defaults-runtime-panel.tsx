@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { creditDecimal, parseCreditDecimal } from '@xopcai/gateway-contract';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,36 @@ const inputClass = 'w-full rounded-lg border border-edge bg-surface-panel px-3 p
 function positiveInt(value: string): number | undefined {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function CreditRunLimit({ draft, setDraft, zh }: { draft: AgentDefaults; setDraft: (draft: AgentDefaults) => void; zh: boolean }) {
+  const [value, setValue] = useState(() => draft.runtime.cloudCreditLimitPerRunMicro
+    ? creditDecimal(draft.runtime.cloudCreditLimitPerRunMicro) : '');
+  const [invalid, setInvalid] = useState(false);
+  return <label className="block text-xs font-medium text-fg-muted">
+    {zh ? '每次运行的 Cloud 消费上限（Credits）' : 'Cloud spend limit per run (Credits)'}
+    <input type="text" inputMode="decimal" value={value} aria-invalid={invalid}
+      placeholder={zh ? '不设置额外上限' : 'No additional limit'} className={`${inputClass} mt-2`}
+      onChange={event => {
+        const next = event.target.value;
+        setValue(next);
+        try {
+          const micro = next === '' ? undefined : parseCreditDecimal(next);
+          if (micro === '0' || (micro && micro.length > 15)) throw new Error('Invalid limit');
+          setInvalid(false);
+          setDraft({ ...draft, runtime: { ...draft.runtime, cloudCreditLimitPerRunMicro: micro } });
+        } catch { setInvalid(true); }
+      }}
+      onBlur={() => {
+        if (invalid) setValue(draft.runtime.cloudCreditLimitPerRunMicro ? creditDecimal(draft.runtime.cloudCreditLimitPerRunMicro) : '');
+        setInvalid(false);
+      }} />
+    <span className={`mt-2 block font-normal ${invalid ? 'text-danger' : 'text-fg-subtle'}`}>
+      {invalid
+        ? (zh ? '请输入大于零、最多四位小数的 Credits。无效输入不会保存。' : 'Enter positive Credits with up to four decimals. Invalid input is not saved.')
+        : (zh ? '模型、图片和文件语音调用共享上限；不支持实时语音或 Cloud 电脑控制，不包含运行前后的后台调用。达到上限后停止，调整后需手动继续。' : 'Shared by model, image and file audio calls during a run. Does not support realtime voice or Cloud computer use; excludes background calls outside the run. Stops at the limit; continue manually after adjusting it.')}
+    </span>
+  </label>;
 }
 
 export function AgentDefaultsRuntimePanel({
@@ -53,6 +84,7 @@ export function AgentDefaultsRuntimePanel({
         <h2 className="text-base font-semibold text-fg">{zh ? '执行限制' : 'Execution limits'}</h2>
         <p className="mt-1 text-sm text-fg-muted">{zh ? '为所有智能体设置安全上限；留空时使用系统默认值。' : 'Set safe upper bounds for every agent. Empty fields use system defaults.'}</p>
         <div className="mt-5 grid gap-4 md:grid-cols-3">
+          <CreditRunLimit draft={draft} setDraft={setDraft} zh={zh} />
           <label className="block text-xs font-medium text-fg-muted">{zh ? '每次运行最多轮数' : 'Maximum turns per run'}<input type="number" min={1} value={draft.runtime.maxTurns ?? ''} placeholder={zh ? '系统默认' : 'System default'} onChange={(event) => setDraft({ ...draft, runtime: { ...draft.runtime, maxTurns: positiveInt(event.target.value) } })} className={`${inputClass} mt-2`} /></label>
           <label className="block text-xs font-medium text-fg-muted">{zh ? '单轮超时（毫秒）' : 'Turn timeout (ms)'}<input type="number" min={1} value={draft.runtime.timeoutMs ?? ''} placeholder={zh ? '系统默认' : 'System default'} onChange={(event) => setDraft({ ...draft, runtime: { ...draft.runtime, timeoutMs: positiveInt(event.target.value) } })} className={`${inputClass} mt-2`} /></label>
           <label className="block text-xs font-medium text-fg-muted">{zh ? '每轮最多工具失败次数' : 'Maximum tool failures per turn'}<input type="number" min={1} value={draft.runtime.maxToolFailuresPerTurn ?? ''} placeholder={zh ? '系统默认' : 'System default'} onChange={(event) => setDraft({ ...draft, runtime: { ...draft.runtime, maxToolFailuresPerTurn: positiveInt(event.target.value) } })} className={`${inputClass} mt-2`} /></label>

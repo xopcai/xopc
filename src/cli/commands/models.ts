@@ -25,6 +25,8 @@ import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors } from '../utils/colors.js';
 import { runCliOAuthLogin } from '../utils/oauth-login.js';
 import { disconnectProvider } from '../../providers/provider-disconnect.js';
+import { XopcCloudAccountService } from '../../providers/xopc-cloud-account-service.js';
+import { creditDecimal } from '@xopcai/gateway-contract';
 
 const IMAGE_GENERATION_IDS = new Set(listImageProviderSpecs().flatMap(provider => provider.models.map(model => model.id)));
 
@@ -300,6 +302,35 @@ function createModelsCommand(_ctx: CLIContext): Command {
     .action(async (model: string) => {
       await runModelsSet(model);
     });
+
+  const cloud = cmd.command('cloud').description('Inspect XOPC Cloud Credit usage');
+  cloud.command('balance').option('--json', 'Output the versioned Credit summary').action(async (options) => {
+    const summary = await new XopcCloudAccountService().getSummary();
+    if (!summary) throw new Error('XOPC Cloud is not configured');
+    if (options.json) { console.log(JSON.stringify(summary, null, 2)); return; }
+    console.log(`Available: ${creditDecimal(summary.balance.availableCreditMicro)} Credits`);
+    console.log(`Reserved: ${creditDecimal(summary.balance.usageReservedCreditMicro)} Credits`);
+    console.log(`Last 7 days: ${creditDecimal(summary.usage.chargedCreditMicro)} Credits`);
+    console.log(`Details: ${summary.links.details}`);
+  });
+  cloud.command('receipt <requestId>').option('--json', 'Output the billing receipt').action(async (requestId, options) => {
+    const receipt = await new XopcCloudAccountService().getReceipt(requestId);
+    if (!receipt) throw new Error('XOPC Cloud is not configured');
+    if (options.json) { console.log(JSON.stringify(receipt, null, 2)); return; }
+    console.log(`State: ${receipt.state}`);
+    console.log(`Charged: ${receipt.chargedCreditMicro === null ? 'pending' : `${creditDecimal(receipt.chargedCreditMicro)} Credits`}`);
+    console.log(`Reserved: ${creditDecimal(receipt.reservedCreditMicro)} Credits`);
+    console.log(`Released: ${creditDecimal(receipt.releasedCreditMicro)} Credits`);
+  });
+  cloud.command('budget <id>').option('--json', 'Output the budget contract').action(async (id, options) => {
+    const budget = await new XopcCloudAccountService().getBudget(id);
+    if (!budget) throw new Error('XOPC Cloud is not configured');
+    if (options.json) { console.log(JSON.stringify(budget, null, 2)); return; }
+    console.log(`Limit: ${creditDecimal(budget.limitCreditMicro)} Credits`);
+    console.log(`Charged: ${creditDecimal(budget.chargedCreditMicro)} Credits`);
+    console.log(`Reserved: ${creditDecimal(budget.reservedCreditMicro)} Credits`);
+    console.log(`Remaining: ${creditDecimal(budget.remainingCreditMicro)} Credits`);
+  });
 
   const auth = cmd.command('auth').description('Manage model provider auth');
 

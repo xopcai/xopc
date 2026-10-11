@@ -22,6 +22,7 @@ export function pricingSnapshot(model: AiUsageModel): AiPricingSnapshot {
 }
 
 export function classifyCostSource(model: AiUsageModel): AiUsageCostSource {
+  if (model.provider === 'xopc-cloud') return 'unknown';
   if (isLocalBaseUrl(model.baseUrl)) return 'local';
   const prices = Object.values(pricingSnapshot(model));
   return prices.some(price => price > 0) ? 'model_catalog' : 'unknown';

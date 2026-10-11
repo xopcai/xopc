@@ -6,9 +6,11 @@ import {
   listAiUsageEvents,
   listAiUsageTrace,
   summarizeAiUsage,
+  pendingAiUsageCloudReceiptIds,
   type AiUsageQuery,
 } from '../../../storage/sqlite/ai-usage-repository.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { reconcileCloudUsageReceipt } from '../../../usage/cloud-receipts.js';
 
 const MAX_RANGE_MS = 366 * 24 * 60 * 60 * 1_000;
 const DEFAULT_RANGE_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -50,14 +52,23 @@ export function registerUsageRoutes(authenticated: Hono, _deps: AuthenticatedRou
     }
     throw error;
   });
-  app.get('/summary', c => c.json(summarizeAiUsage(parseFilters(c.req.query()))));
-  app.get('/events', c => {
+  const refreshReceipts = async (query: AiUsageQuery) => {
+    await Promise.all(pendingAiUsageCloudReceiptIds(query).map(reconcileCloudUsageReceipt));
+  };
+  app.get('/summary', async c => {
+    const query = parseFilters(c.req.query());
+    await refreshReceipts(query);
+    return c.json(summarizeAiUsage(query));
+  });
+  app.get('/events', async c => {
     const limit = z.coerce.number().int().min(1).max(200).optional().parse(c.req.query('limit'));
-    return c.json(listAiUsageEvents({
+    const query = {
       ...parseFilters(c.req.query()),
       limit,
       before: parseCursor(c.req.query('cursor')),
-    }));
+    };
+    await refreshReceipts(query);
+    return c.json(listAiUsageEvents(query));
   });
   app.get('/events/:id', c => {
     const event = getAiUsageEventView(c.req.param('id'));

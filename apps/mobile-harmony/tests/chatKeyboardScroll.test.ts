@@ -54,7 +54,7 @@ describe('chat keyboard viewport following', () => {
 
   it('restores a cancelled follow operation on reactivation but preserves an intentional history position', () => {
     const view = setup();
-    Object.assign(view, { activePage: true, attention: { activate: vi.fn() }, bindBack: vi.fn(),
+    Object.assign(view, { activePage: true, bindBack: vi.fn(),
       onHistoryReady: vi.fn(), options: { resume: vi.fn() }, prompt: { resume: vi.fn() } });
     view.chat.activate = vi.fn();
     view.visible = false; view.onActivityChange(); vi.runAllTimers();

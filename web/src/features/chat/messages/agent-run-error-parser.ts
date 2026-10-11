@@ -8,6 +8,7 @@ export type AgentRunErrorKind =
   | 'billing'
   | 'xopc_quota_exhausted'
   | 'xopc_platform_limit'
+  | 'xopc_credit_budget_exhausted'
   | 'session_not_found'
   | 'unknown'
   | 'send_failed';

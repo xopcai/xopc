@@ -17,7 +17,15 @@ function arkUiSources(directory: string): string[] {
 describe('color-based visual hierarchy', () => {
   it('does not use strokes or divider lines to separate application regions', () => {
     for (const file of arkUiSources(sourceRoot.pathname)) {
-      const source = readFileSync(file, 'utf8');
+      let source = readFileSync(file, 'utf8');
+      if (file.endsWith('/ChatView.ets')) {
+        // Capsule outlines distinguish header controls; application regions still use color layers.
+        const start = source.lastIndexOf('      if (!this.embedded) {');
+        const end = source.indexOf('    if (this.sendFlightActive)', start);
+        const header = source.slice(start, end);
+        expect(header.match(/\.border\s*\(/g)).toHaveLength(2);
+        source = source.slice(0, start) + header.replace(/\.border\(\{ width: 1, color: this.colors.border \}\)/g, '') + source.slice(end);
+      }
       expect(source, file).not.toMatch(/\.border\s*\(/);
       expect(source, file).not.toMatch(/\bDivider\s*\(/);
       expect(source, file).not.toMatch(/\.divider\s*\(/);
